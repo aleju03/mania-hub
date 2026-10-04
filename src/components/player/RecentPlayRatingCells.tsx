@@ -17,7 +17,7 @@ export function RecentPlayRatingCells({ rating, keyCount, hideDan, compact = fal
   return <>
     {!hideDan && <div className={cell}>
       {dan ? <DanMark label={dan.label ?? dan.rawDan.toFixed(1)} keyCount={keyCount} side={dan.side} compact={compact} />
-        : <RatingStatus axis={t`Dan`} reason={rating?.missing?.dan} rating={rating} compact={compact} />}
+        : <RatingStatus axis={t`Dan`} dan reason={rating?.missing?.dan} rating={rating} compact={compact} />}
     </div>}
     <div className={cell}>
       {rating?.msd != null ? <>
@@ -28,8 +28,9 @@ export function RecentPlayRatingCells({ rating, keyCount, hideDan, compact = fal
   </>;
 }
 
-function RatingStatus({ axis, reason, rating, compact }: {
+function RatingStatus({ axis, dan = false, reason, rating, compact }: {
   axis: string;
+  dan?: boolean;
   reason?: LiveRecentRatingMissingReason;
   rating?: RecentPlayRatingView | null;
   compact: boolean;
@@ -42,6 +43,10 @@ function RatingStatus({ axis, reason, rating, compact }: {
   const label = loading ? t`Loading…` : rating?.loadError ? t`Retry` : pending ? t`Pending` : t`Unavailable`;
   const explanation = pending
     ? t`Analysis is scheduled. This rating will update here automatically when the result is ready. Some plays may not qualify for a rating.`
+    : dan && reason === "not_retained" ? t`This attempt is no longer stored, so its dan credit cannot be checked.`
+    : dan && reason === "below_bar" ? t`This play is under the accuracy that credits a dan on this chart.`
+    : dan && reason === "excluded" ? t`This play does not count toward dan.`
+    : dan && reason === "failed_play" ? t`Failed plays do not credit a dan.`
     : reason === "not_retained" ? t`This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating.`
     : reason === "below_floor" ? t`This play is below the accuracy needed for an MSD rating.`
     : reason === "excluded" ? t`This play is excluded from skill ratings.`

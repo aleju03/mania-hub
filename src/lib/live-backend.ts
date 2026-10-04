@@ -2005,7 +2005,7 @@ export async function fetchLivePlayerUnratedPlaysDirect(
   });
 }
 
-/** A recent play's own MSD (null unless the skill pool rated it) and its chart's dan at the played rate. */
+/** A recent play's own MSD (null unless the skill pool rated it) and the dan it credits under the clear rules. */
 export interface LiveRecentPlayRating {
   msd: number | null;
   /** What the play adds to its keymode's Overall rating, present with `msd`. */
@@ -2017,7 +2017,7 @@ export interface LiveRecentPlayRating {
   jobs?: Array<{ id: number; runAfter: string }>;
 }
 
-export type LiveRecentRatingMissingReason = "pending" | "not_retained" | "below_floor" | "excluded" | "not_analyzed" | "unsupported" | "failed_play" | "chart_changed";
+export type LiveRecentRatingMissingReason = "pending" | "not_retained" | "below_floor" | "below_bar" | "excluded" | "not_analyzed" | "unsupported" | "failed_play" | "chart_changed";
 
 export interface LiveRecentPlayRatingRequest {
   scoreId: number;

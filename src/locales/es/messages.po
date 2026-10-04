@@ -6727,6 +6727,10 @@ msgid "Failed"
 msgstr "Falló"
 
 #: src/components/player/RecentPlayRatingCells.tsx
+msgid "Failed plays do not credit a dan."
+msgstr "Las plays fallidas no dan crédito de dan."
+
+#: src/components/player/RecentPlayRatingCells.tsx
 msgid "Failed plays do not receive an MSD rating."
 msgstr "Las jugadas fallidas no reciben una valoración MSD."
 
@@ -10348,6 +10352,10 @@ msgstr "Nombrar preset"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Named {0}"
 msgstr "Guardado como {0}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Near clear"
+msgstr "Casi clear"
 
 #: src/routes/recommendations.tsx
 msgid "nearby players outscore you"
@@ -15758,8 +15766,12 @@ msgid "Skillset clears"
 msgstr "Clears por skillset"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
-msgstr "Los charts de práctica de skillset hacen lo mismo para un solo skill. Pasar <0>Volcanic ~ Delta ~</0> con el mínimo pone tu dan de speed en 4K en <1>delta</1>, sin los cuatro pases que normalmente necesita un skill. Todas las escalas los tienen menos 6K."
+msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+msgstr "Los charts de práctica de skillset hacen lo mismo para un solo skill. Pasar <0>Volcanic ~ Delta ~</0> con el mínimo pone tu dan de speed en 4K en <1>delta</1>, y hasta un punto por debajo en <2>delta-</2>, sin los cuatro pases que normalmente necesita un skill. Por debajo de eso cuenta como cualquier otra play. Todas las escalas los tienen menos 6K."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
+#~ msgstr "Los charts de práctica de skillset hacen lo mismo para un solo skill. Pasar <0>Volcanic ~ Delta ~</0> con el mínimo pone tu dan de speed en 4K en <1>delta</1>, sin los cuatro pases que normalmente necesita un skill. Todas las escalas los tienen menos 6K."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -17979,6 +17991,10 @@ msgstr ""
 msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
 msgstr "Este intento no tiene un MSD guardado. Las valoraciones de habilidad conservan jugadas seleccionadas, por lo que un intento repetido de menor nivel puede no tener valoración."
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This attempt is no longer stored, so its dan credit cannot be checked."
+msgstr "Este intento ya no está guardado, así que no se puede revisar su crédito de dan."
+
 #: src/lib/replay-export/errors.ts
 msgid "This browser can't encode the audio track for this format."
 msgstr "Este navegador no puede codificar la pista de audio para este formato."
@@ -18169,12 +18185,20 @@ msgid "This play counts for nothing on the dan estimate."
 msgstr "Esta jugada no cuenta para nada en la estimación de dan."
 
 #: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play does not count toward dan."
+msgstr "Esta play no cuenta para el dan."
+
+#: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is below the accuracy needed for an MSD rating."
 msgstr "La precisión de esta jugada es inferior a la necesaria para una valoración MSD."
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is excluded from skill ratings."
 msgstr "Esta jugada está excluida de las valoraciones de habilidad."
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play is under the accuracy that credits a dan on this chart."
+msgstr "Esta play está por debajo de la precisión que da crédito de dan en este chart."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play is under the minimum accuracy required for dan credit."

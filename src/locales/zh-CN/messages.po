@@ -6736,6 +6736,10 @@ msgid "Failed"
 msgstr "失败"
 
 #: src/components/player/RecentPlayRatingCells.tsx
+msgid "Failed plays do not credit a dan."
+msgstr "失败的成绩不计入段位。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
 msgid "Failed plays do not receive an MSD rating."
 msgstr "未通过的成绩不会获得 MSD 评级。"
 
@@ -10357,6 +10361,10 @@ msgstr "为预设命名"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Named {0}"
 msgstr "已命名为 {0}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Near clear"
+msgstr "差一点通过"
 
 #: src/routes/recommendations.tsx
 msgid "nearby players outscore you"
@@ -15767,8 +15775,12 @@ msgid "Skillset clears"
 msgstr "技能组通过记录"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
-msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Volcanic ~ Delta ~</0>，就会把你的 4K 速度段位设为 <1>delta</1>，无需一个技能通常要求的四次通过。除 6K 外每个段位表都有练习谱面。"
+msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Volcanic ~ Delta ~</0>，就会把你的 4K 速度段位设为 <1>delta</1>，低于通过线一个百分点以内则设为 <2>delta-</2>，无需一个技能通常要求的四次通过。再低就和其他成绩一样计算。除 6K 外每个段位表都有练习谱面。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
+#~ msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Volcanic ~ Delta ~</0>，就会把你的 4K 速度段位设为 <1>delta</1>，无需一个技能通常要求的四次通过。除 6K 外每个段位表都有练习谱面。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -17988,6 +18000,10 @@ msgstr ""
 msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
 msgstr "这次尝试没有保存的 MSD。能力评级只保留选定的成绩，因此较弱的重复尝试可能没有评级。"
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This attempt is no longer stored, so its dan credit cannot be checked."
+msgstr "这次游玩已不再保存，无法核对它的段位计入。"
+
 #: src/lib/replay-export/errors.ts
 msgid "This browser can't encode the audio track for this format."
 msgstr "此浏览器无法为该格式编码音频轨道。"
@@ -18178,12 +18194,20 @@ msgid "This play counts for nothing on the dan estimate."
 msgstr "这次成绩不计入段位估算。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play does not count toward dan."
+msgstr "这个成绩不计入段位。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is below the accuracy needed for an MSD rating."
 msgstr "这次成绩的准确率未达到 MSD 评级要求。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is excluded from skill ratings."
 msgstr "这次成绩不计入能力评级。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play is under the accuracy that credits a dan on this chart."
+msgstr "这个成绩低于这张谱面计入段位所需的准确率。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play is under the minimum accuracy required for dan credit."

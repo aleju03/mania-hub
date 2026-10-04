@@ -248,6 +248,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
         id: "all",
         skillsetClear: undefined as LivePlayerDanCourseEvidence | undefined,
         verified: false,
+        nearClear: false,
         label: t`All clears`,
         color,
         dan: evidence.dan,
@@ -262,6 +263,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
           skillsetClear: skillset.skillsetClear,
           // A run just under the bar lifts the tile without being a clear.
           verified: skillset.skillsetClear != null && skillset.skillsetClear.accuracy + 1e-9 >= skillset.skillsetClear.bar,
+          nearClear: skillset.skillsetClear != null && skillset.skillsetClear.accuracy + 1e-9 < skillset.skillsetClear.bar,
           label: meta ? i18n._(meta.labelMsg) : skillset.id,
           color: meta?.color ?? color,
           dan: skillset.dan,
@@ -304,13 +306,19 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // of half of one - otherwise the only reading in the window hugs the left
   // edge on phones, where the columns wrap two to a row.
   const columnBasis = (count: number) => (count === 1 ? "basis-full" : "basis-1/2");
+  // The near-clear run that set a tile, when it is also one of the rows: that
+  // row reads what the run gave the tile, not its ordinary chart credit.
+  const nearClearRunOf = (section: (typeof sections)[number]) => section.nearClear && section.skillsetClear
+    ? section.plays.find((clear) => clear.play.beatmapId === section.skillsetClear!.beatmapId
+      && Math.abs(clear.clearAccuracy - section.skillsetClear!.accuracy) < 1e-6) ?? null
+    : null;
   const renderClears = (section: (typeof sections)[number]) => (
     <>
       {/* Only when the clear itself is not in the list under it: a stored
           play of the practice chart already carries the credential in its
           own row. */}
-      {section.skillsetClear && !section.plays.some((clear) =>
-        clear.play.beatmapId === section.skillsetClear!.beatmapId) ? (
+      {section.skillsetClear && !(section.nearClear ? nearClearRunOf(section) : section.plays.some((clear) =>
+        clear.play.beatmapId === section.skillsetClear!.beatmapId)) ? (
         <CredentialRow
           credential={section.skillsetClear}
           color={section.color}
@@ -322,6 +330,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
         <ClearRow
           key={`${section.id}:${clear.play.beatmapId}:${clear.play.rate}:${clear.play.scoreId ?? index}`}
           clear={clear}
+          nearCredential={clear === nearClearRunOf(section) ? section.skillsetClear : undefined}
           position={index + 1}
           color={section.color}
           formatDan={formatDan}
@@ -631,7 +640,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                   </span>
                                 )}
                                 <span className="text-[11px] tabular-nums text-osu-f1">
-                                  {section.verified ? t`Verified clear` : t`${section.clears} plays`}
+                                  {section.verified ? t`Verified clear` : section.nearClear ? t`Near clear` : t`${section.clears} plays`}
                                 </span>
                                 {open ? (
                                   <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
@@ -689,8 +698,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                 {/* Under the averaging window the count reads as
                                     progress toward it: this dan is averaged from
                                     fewer plays than it wants. */}
-                                {section.verified ? t`Verified clear` : t`${section.clears} plays`}
-                                {!section.verified && section.weightedClears < averageWindow ? (
+                                {section.verified ? t`Verified clear` : section.nearClear ? t`Near clear` : t`${section.clears} plays`}
+                                {!section.verified && !section.nearClear && section.weightedClears < averageWindow ? (
                                   <span className="ml-1">
                                     {t`· ${(Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")}/${averageWindow} counted`}
                                   </span>
@@ -705,7 +714,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                       </div>
                       {/* Shown only while some column is short of the window, so a
                           filled-out breakdown carries no caveat at all. */}
-                      {sections.some((section) => !section.verified && section.weightedClears < averageWindow) ? (
+                      {sections.some((section) => !section.verified && !section.nearClear && section.weightedClears < averageWindow) ? (
                         <div className="px-2 pt-2 text-[11px] text-osu-f1">
                           <Trans>
                             Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count.
@@ -968,6 +977,7 @@ function CredentialRow({
 
 function ClearRow({
   clear,
+  nearCredential,
   position,
   color,
   formatDan,
@@ -975,6 +985,8 @@ function ClearRow({
   onPrefetch,
 }: {
   clear: LivePlayerDanEvidencePlay;
+  // The practice-chart run within a point of its bar that set this tile.
+  nearCredential?: LivePlayerDanCourseEvidence;
   position: number;
   color: string;
   formatDan: (label: string) => string;
@@ -992,6 +1004,8 @@ function ClearRow({
   // numbers that set the estimate keep their own column.
   const played = play.playedAt ? formatTimeAgo(play.playedAt, locale) : null;
   const reduced = clear.creditedDan < clear.chartDan;
+  const level = nearCredential ? formatDan(nearCredential.level) : "";
+  const credited = nearCredential ? formatDan(nearCredential.label) : "";
   return (
     <button
       type="button"
@@ -1002,7 +1016,9 @@ function ClearRow({
         clear.ignoredAsStray ? "opacity-45" : clear.countsTowardDan ? "" : "opacity-60"
       }`}
       title={`${play.artist} - ${play.title} [${play.version}]${played ? ` · ${played}` : ""}${
-        clear.credential
+        nearCredential
+          ? ` · ${t`The ${level} chart of this skillset ladder: a run within one point of the bar sets ${credited}, and a higher estimate is kept`}`
+        : clear.credential
           ? ` · ${t`The ${formatDan(clear.credential.level)} chart of this skillset ladder: the clear sets that level, whatever the estimator reads the file as`}`
           : reduced
             ? ` · ${t`Below the full-clear requirement: reduced credit, even if the dan label stays the same`}`
@@ -1029,7 +1045,11 @@ function ClearRow({
       >
         {formatAccuracy(clear.clearAccuracy)}
       </span>
-      {clear.creditedDanLabel !== clear.chartDanLabel ? (
+      {nearCredential ? (
+        <span className="shrink-0 text-right text-[10px] tabular-nums text-osu-f1">
+          {formatDan(nearCredential.level)}
+        </span>
+      ) : clear.creditedDanLabel !== clear.chartDanLabel ? (
         <span className="shrink-0 text-right text-[10px] tabular-nums text-osu-f1">
           {formatDan(clear.chartDanLabel)}
         </span>
@@ -1055,7 +1075,7 @@ function ClearRow({
         className={`w-16 shrink-0 text-right text-[11px] font-black sm:w-20 ${clear.ignoredAsStray ? "line-through" : ""}`}
         style={{ color }}
       >
-        {formatDan(clear.creditedDanLabel)}
+        {formatDan(nearCredential?.label ?? clear.creditedDanLabel)}
       </span>
     </button>
   );

@@ -480,8 +480,9 @@ function DanEstimatesPage() {
                 search={{ map: 4969890 } as never}
                 className="text-osu-pink-light transition-colors hover:text-white"
               >Volcanic ~ Delta ~</Link>{' '}
-              at the bar sets your 4K speed dan to <B>delta</B>, without the four passes a skill
-              normally needs. Every ladder has them except 6K.
+              at the bar sets your 4K speed dan to <B>delta</B>, and up to one point under it to{' '}
+              <B>delta-</B>, without the four passes a skill normally needs. Below that it counts like
+              any other play. Every ladder has them except 6K.
             </Trans>
           </P>
           <p className="text-[17px] font-bold leading-7 text-white">

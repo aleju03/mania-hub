@@ -6758,6 +6758,10 @@ msgid "Failed"
 msgstr "Failed"
 
 #: src/components/player/RecentPlayRatingCells.tsx
+msgid "Failed plays do not credit a dan."
+msgstr "Failed plays do not credit a dan."
+
+#: src/components/player/RecentPlayRatingCells.tsx
 msgid "Failed plays do not receive an MSD rating."
 msgstr "Failed plays do not receive an MSD rating."
 
@@ -10387,6 +10391,10 @@ msgstr "Name preset"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Named {0}"
 msgstr "Named {0}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Near clear"
+msgstr "Near clear"
 
 #: src/routes/recommendations.tsx
 msgid "nearby players outscore you"
@@ -15801,8 +15809,12 @@ msgid "Skillset clears"
 msgstr "Skillset clears"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
-msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
+msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
+#~ msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -18030,6 +18042,10 @@ msgstr "This account is not in the Companella beta."
 msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
 msgstr "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This attempt is no longer stored, so its dan credit cannot be checked."
+msgstr "This attempt is no longer stored, so its dan credit cannot be checked."
+
 #: src/lib/replay-export/errors.ts
 msgid "This browser can't encode the audio track for this format."
 msgstr "This browser can't encode the audio track for this format."
@@ -18220,12 +18236,20 @@ msgid "This play counts for nothing on the dan estimate."
 msgstr "This play counts for nothing on the dan estimate."
 
 #: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play does not count toward dan."
+msgstr "This play does not count toward dan."
+
+#: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is below the accuracy needed for an MSD rating."
 msgstr "This play is below the accuracy needed for an MSD rating."
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is excluded from skill ratings."
 msgstr "This play is excluded from skill ratings."
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play is under the accuracy that credits a dan on this chart."
+msgstr "This play is under the accuracy that credits a dan on this chart."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play is under the minimum accuracy required for dan credit."

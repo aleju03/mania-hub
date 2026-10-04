@@ -336,7 +336,7 @@ export function ScoreRow({
           {score.companella && <CompanellaMark app={score.companella.app} />}
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
-        <span className="text-[11px] text-osu-f1">
+        <span className="block truncate text-[11px] text-osu-f1">
           {player ? <><span className="font-semibold text-osu-l2">{player.username}</span> &middot;{" "}</> : null}
           {score.beatmapset?.artist} &middot;{" "}
           {/* Fresh scores are minutes old, so this half drifts between SSR and
@@ -354,6 +354,13 @@ export function ScoreRow({
             {formatTimeAgo(getScoreTimestamp(score), locale)}
           </span>
         </span>
+        {/* Between sm and lg the rating columns would squeeze the title to a
+            sliver, so they ride under it until the row is wide enough. */}
+        {showRating && (
+          <div className="mt-1 hidden items-center gap-3 sm:flex lg:hidden">
+            <RecentPlayRatingCells rating={rating} keyCount={ratingKeyCount} hideDan={noDans} compact />
+          </div>
+        )}
         {/* Mobile-only metadata row */}
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
           <div className="flex max-w-full flex-shrink-0 flex-wrap items-center gap-1">
@@ -398,7 +405,7 @@ export function ScoreRow({
           </div>
         )}
         {showRating && (
-          <div className="flex flex-shrink-0 items-center justify-end gap-2">
+          <div className="hidden flex-shrink-0 items-center justify-end gap-2 lg:flex">
             <RecentPlayRatingCells rating={rating} keyCount={ratingKeyCount} hideDan={noDans} />
           </div>
         )}
