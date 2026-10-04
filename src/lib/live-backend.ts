@@ -841,7 +841,25 @@ export const fetchLiveBackendStorageBreakdown = createServerFn({ method: "GET" }
     return { storage: body.storage ?? null, scanning: !!body.scanning, stale: !!body.stale };
   });
 
-export type LiveBackendSweepStatus = "done" | "running" | "pending" | "unknown";
+export type LiveBackendSweepStatus = "done" | "running" | "stalled" | "pending" | "unknown";
+
+// Live progress of a cursor chain, read from its job rows (see
+// live-backend/src/features/sweeps-status.ts readChainProgress).
+export interface LiveBackendSweepChain {
+  cursor: number;
+  pass: string | null;
+  passIndex: number | null;
+  passCount: number | null;
+  unit: string | null;
+  done: number | null;
+  total: number | null;
+  ratePerHour: number | null;
+  etaAt: string | null;
+  startedAt: string | null;
+  lastChunkAt: string | null;
+  chunksLastHour: number;
+  inFlight: number;
+}
 
 export interface LiveBackendSweep {
   id: string;
@@ -852,6 +870,7 @@ export interface LiveBackendSweep {
   progress?: Record<string, number>;
   updatedAt?: string | null;
   detail?: string | null;
+  chain?: LiveBackendSweepChain | null;
 }
 
 export interface LiveBackendSweepsResponse {
