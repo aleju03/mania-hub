@@ -38,7 +38,6 @@ interface OAuthStatePayload {
 
 interface OsuTokenResponse {
   access_token?: string;
-  refresh_token?: string;
   token_type?: string;
   expires_in?: number;
 }
@@ -488,10 +487,6 @@ export async function exchangeOsuCodeForViewer(code: string, redirectUri: string
   }
 
   await reportLoginToBackend(me);
-  if (me.is_restricted && isLoginSuggestedHost(hostnameOf(redirectUri))) {
-    void probeRestrictedScores(id, token.access_token);
-    void saveRestrictedProbeToken(id, me.username, token);
-  }
 
   return {
     id,
@@ -499,75 +494,6 @@ export async function exchangeOsuCodeForViewer(code: string, redirectUri: string
     avatarUrl: me.avatar_url ?? "",
     countryCode: me.country_code ?? null,
   };
-}
-
-function hostnameOf(url: string): string {
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return "";
-  }
-}
-
-/* TEMPORARY, ninja only: checks whether a restricted player's own token can
-   read the scores osu! hides from public lookups. Logs one line per list and
-   stores nothing; remove once answered. */
-async function probeRestrictedScores(userId: number, accessToken: string): Promise<void> {
-  for (const type of ["recent", "best"] as const) {
-    try {
-      const response = await fetchWithTimeout(
-        `https://osu.ppy.sh/api/v2/users/${userId}/scores/${type}?mode=mania&include_fails=1&limit=5`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: "application/json",
-            "x-api-version": OSU_API_VERSION,
-          },
-        },
-        OSU_OAUTH_TIMEOUT_MS,
-      );
-      const text = await response.text().catch(() => "");
-      if (!response.ok) {
-        console.info(`[restricted-probe] user=${userId} ${type} status=${response.status} body=${text.slice(0, 200)}`);
-        continue;
-      }
-      const scores = JSON.parse(text) as Array<Record<string, unknown>>;
-      const first = scores[0];
-      const sample = first
-        ? JSON.stringify({
-            id: first.id,
-            beatmap_id: (first.beatmap as { id?: number } | undefined)?.id,
-            accuracy: first.accuracy,
-            statistics: first.statistics,
-            pp: first.pp,
-            passed: first.passed,
-            has_replay: first.has_replay ?? first.replay,
-            ended_at: first.ended_at,
-          })
-        : "none";
-      console.info(`[restricted-probe] user=${userId} ${type} status=200 count=${scores.length} sample=${sample}`);
-    } catch (error) {
-      console.info(`[restricted-probe] user=${userId} ${type} failed`, error);
-    }
-  }
-}
-
-/* TEMPORARY, ninja only: keeps the restricted player's token in a private file
-   outside the release folders so more score endpoints can be tried by hand
-   over SSH. Delete the folder along with this code. */
-async function saveRestrictedProbeToken(userId: number, username: string, token: OsuTokenResponse): Promise<void> {
-  try {
-    const { mkdir, writeFile } = await import("node:fs/promises");
-    const { homedir } = await import("node:os");
-    const { join } = await import("node:path");
-    const dir = join(homedir(), "restricted-probe-tokens");
-    await mkdir(dir, { recursive: true, mode: 0o700 });
-    const body = JSON.stringify({ userId, username, savedAt: new Date().toISOString(), ...token });
-    await writeFile(join(dir, `${userId}.json`), body, { mode: 0o600 });
-    console.info(`[restricted-probe] user=${userId} token saved refresh=${Boolean(token.refresh_token)}`);
-  } catch (error) {
-    console.info(`[restricted-probe] user=${userId} token save failed`, error);
-  }
 }
 
 /* /me is the one osu! answer that still describes a restricted account (every
