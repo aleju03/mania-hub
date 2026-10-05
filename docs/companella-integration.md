@@ -111,9 +111,7 @@ to client authors, with the spec and the reference client served beside it.
 `/companella/usage` (`src/routes/companella_.usage.tsx`) shows that usage to the
 site admins and Companella's developer, whose osu! id is listed in
 `src/lib/companella-usage.ts`; the server function re-checks the signed-in id on
-any host and everyone else gets a 404. The same JSON is at `GET /api/companella/usage?days=7|30|90`
-for whoever sends `Authorization: Bearer <COMPANELLA_USAGE_API_KEY>`, a
-frontend env var; unset, the endpoint answers 404.
+any host and everyone else gets a 404.
 
 ## Connecting an installation
 
