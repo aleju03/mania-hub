@@ -37,6 +37,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-05", text: "You can now submit plays through Companella if you're playing offline or on a private server, more info on settings -> preferences -> integrations", bold: "Companella", to: "/settings" },
   { date: "2026-10-05", text: "Added Map info, Player info and Custom media overlays to replays.", to: "/replay" },
   { date: "2026-10-05", text: "Map info can also show Live BPM, Time left, a Progress bar and an Audio wave.", to: "/replay" },
   { date: "2026-10-05", text: "You can now Bring to front or Send to back replay overlays from the right-click menu.", to: "/replay" },
