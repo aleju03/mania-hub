@@ -123,6 +123,9 @@ export interface MapDetailPlayContext {
   // stretching it (DT/HT); true as well when the play's mods are no longer
   // known, where the rate is all there is to go on.
   rateMod: { acronym: string; rate: number; pitched: boolean } | null;
+  /** A rate edit's own speed against the official chart it was matched to, on top of any
+   *  speed mod. Kept apart from `rateMod` because no mod was played, so no badge shows it. */
+  chartRate?: number;
   playedAt: string | null;
   source: "top" | "tracked";
   /** Replaces the source line under the play's time, for plays from neither list. */
@@ -845,7 +848,7 @@ export function MapDetailModal({
 
   // The rate the opening play was set at, and only while that play's own diff
   // is the active one: the set's other diffs were not the ones played.
-  const playedRate = play && active && play.beatmapId === active.beatmapId ? play.rateMod?.rate ?? 1 : 1;
+  const playedRate = play && active && play.beatmapId === active.beatmapId ? (play.rateMod?.rate ?? 1) * (play.chartRate ?? 1) : 1;
   // Without a play, the chart can be read at DT or HT: the preview plays at
   // that speed and the MSD and dan are rated there.
   const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(initialRate);
@@ -1241,6 +1244,8 @@ export function MapDetailModal({
                   moves the links. */}
               <div className="shrink-0 border-t border-white/5 p-3.5">
                 <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+                  {/* A local chart nobody matched has no osu! page to open. */}
+                  {setKnown || active.beatmapId > 0 ? (
                   <a
                     href={setKnown ? osuBeatmapUrl(active) : `https://osu.ppy.sh/beatmaps/${active.beatmapId}`}
                     target="_blank"
@@ -1254,6 +1259,7 @@ export function MapDetailModal({
                       <line x1="10" y1="14" x2="21" y2="3" />
                     </svg>
                   </a>
+                  ) : null}
                   {/* Both need the set id, which a chart outside the catalog
                       does not have; the osu! link above resolves it instead. */}
                   {setKnown ? (
