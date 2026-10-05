@@ -160,11 +160,12 @@ function NotifyToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) =
         on ? "text-white" : "text-osu-f1 hover:text-white"
       }`}
     >
+      {/* Scaled rather than clip-path animated: a transform stays on the compositor, a clip-path repaints every frame. */}
       <motion.span
         aria-hidden="true"
-        className="absolute inset-0 bg-osu-pink"
+        className="absolute left-[17px] top-1/2 -ml-[120px] -mt-[120px] size-[240px] rounded-full bg-osu-pink"
         initial={false}
-        animate={{ clipPath: on ? "circle(160% at 17px 50%)" : "circle(0% at 17px 50%)" }}
+        animate={{ scale: on ? 1 : 0 }}
         transition={{ duration: reduceMotion ? 0 : 0.4, ease }}
       />
       <span ref={bell} aria-hidden="true" className="relative grid origin-[50%_15%] place-items-center">
@@ -205,15 +206,27 @@ function barHeight(count: number): number {
 export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useLingui();
   const locale = useLocale();
-  const notify = useChangelogNotify();
+  const storedNotify = useChangelogNotify();
   const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
+  // The toggle flips locally and reaches the store once its animation is over: any store
+  // write re-serializes the whole persisted cache, which stalls a phone mid-animation.
+  const [notify, setNotifyLocal] = useState(storedNotify);
+  const notifyTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (notifyTimer.current === null) setNotifyLocal(storedNotify);
+  }, [storedNotify]);
   // Says where the notification shows up, right after turning it on, until the modal closes.
   const [showNotifyHint, setShowNotifyHint] = useState(false);
   const setNotify = (next: boolean) => {
     // Turning it on counts what is already here as read, so the dot waits for the next update.
     if (next) markChangelogSeen();
-    setChangelogNotify(next);
+    setNotifyLocal(next);
     setShowNotifyHint(next);
+    if (notifyTimer.current !== null) window.clearTimeout(notifyTimer.current);
+    notifyTimer.current = window.setTimeout(() => {
+      notifyTimer.current = null;
+      setChangelogNotify(next);
+    }, 800);
   };
 
   const [selected, setSelected] = useState(NEWEST_DATE);
@@ -322,7 +335,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.99 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="modal-card-mobile-safe relative z-10 flex h-[min(720px,calc(100vh-2rem))] w-[min(720px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+            className="modal-card-mobile-safe relative z-10 flex h-[min(720px,calc(100dvh-2rem))] w-[min(720px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
           >
             <div className="flex h-[52px] shrink-0 items-center gap-2 px-4">
               {searching ? (
@@ -372,14 +385,15 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
               </button>
             </div>
 
+            {/* Only faded, never grown: animating its height reflowed the strip below on every frame. */}
             <AnimatePresence initial={false}>
               {showNotifyHint ? (
                 <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0, transition: { duration: 0 } }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="shrink-0 overflow-hidden border-t border-white/[0.07]"
+                  className="shrink-0 border-t border-white/[0.07]"
                 >
                   <p className="px-4 py-2.5 text-[12px] leading-snug text-osu-c2/85">
                     <Trans>
