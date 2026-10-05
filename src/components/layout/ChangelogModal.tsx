@@ -426,9 +426,11 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
             {/* One bar per release day, oldest on the left, height by how much shipped, split by kind. */}
             <div
               ref={stripRef}
-              className="shrink-0 overflow-x-auto overflow-y-hidden border-t border-white/[0.07] bg-osu-b5/40 px-4 pb-2 pt-7 [scrollbar-width:none]"
+              className="shrink-0 overflow-x-auto overflow-y-hidden border-t border-white/[0.07] bg-osu-b5/40 pb-2 pt-7 [scrollbar-width:none]"
             >
-              <div className="flex min-w-full gap-[3px]" role="listbox" aria-label={t`Release days`}>
+              {/* The side padding lives on the row, not the scroller: Chrome leaves a scroller's
+                  end padding out of the scroll width, so the newest bar would touch the edge. */}
+              <div className="flex w-max min-w-full gap-[3px] px-4" role="listbox" aria-label={t`Release days`}>
                 {STRIP.map((day, stripIndex) => {
                   const active = day.date === current?.date;
                   const available = matches.has(day.date);
