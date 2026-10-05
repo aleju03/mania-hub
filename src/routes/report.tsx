@@ -684,24 +684,27 @@ function ReporterThread({
           ? formatTimeAgo(new Date(message.createdAt).toISOString(), locale)
           : null;
         const spacing = opensRun && index > 0 ? "pt-2.5" : "";
-        const screenshots = message.screenshotCount > 0
-          ? (
-            <div className={`mt-1.5 flex ${admin ? "" : "justify-end"}`}>
-              <ReporterScreenshots
-                reportId={report.id}
-                messageId={message.id}
-                count={message.screenshotCount}
-                onOpen={onOpenImage}
-                align={admin ? "start" : "end"}
-              />
-            </div>
-          )
-          : null;
+        const hasText = message.body.trim().length > 0;
+        const content = (
+          <>
+            {hasText ? <MessageText text={message.body} /> : null}
+            {message.screenshotCount > 0 ? (
+              <div className={hasText ? "mt-2" : ""}>
+                <ReporterScreenshots
+                  reportId={report.id}
+                  messageId={message.id}
+                  count={message.screenshotCount}
+                  onOpen={onOpenImage}
+                  align="start"
+                />
+              </div>
+            ) : null}
+          </>
+        );
         if (!admin) {
           return (
             <div key={message.id} className={spacing}>
-              <MessageBubble mine time={time}><MessageText text={message.body} /></MessageBubble>
-              {screenshots}
+              <MessageBubble mine time={time}>{content}</MessageBubble>
             </div>
           );
         }
@@ -716,8 +719,7 @@ function ReporterThread({
                   {REPLY_AUTHOR.username}
                 </span>
               ) : null}
-              <MessageBubble mine={false} time={time}><MessageText text={message.body} /></MessageBubble>
-              {screenshots}
+              <MessageBubble mine={false} time={time}>{content}</MessageBubble>
             </div>
           </div>
         );

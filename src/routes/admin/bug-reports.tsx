@@ -359,6 +359,7 @@ function AdminThreadMessage({
   const admin = message.author === "admin";
   const [editing, setEditing] = useState(false);
   const editable = admin && message.id !== "legacy-admin-reply";
+  const hasText = message.body.trim().length > 0;
 
   // A saved edit comes back as new words or a new stamp, which is the signal
   // to put the bubble back.
@@ -405,22 +406,22 @@ function AdminThreadMessage({
               />
             </div>
           ) : (
-            <>
-              <p className={`w-fit max-w-full whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-[12.5px] leading-relaxed text-osu-l1 ${
-                admin
-                  ? "rounded-br-md bg-osu-pink/[0.12] ring-1 ring-inset ring-osu-pink/20"
-                  : "rounded-bl-md bg-osu-b4/60 ring-1 ring-inset ring-osu-b3/20"
-              }`}>
-                <MessageText text={message.body} embedClassName="mt-1.5" />
-              </p>
+            <div className={`w-fit max-w-full whitespace-pre-wrap break-words rounded-2xl text-[12.5px] leading-relaxed text-osu-l1 ${
+              hasText ? "px-3 py-2" : "p-1.5"
+            } ${
+              admin
+                ? "rounded-br-md bg-osu-pink/[0.12] ring-1 ring-inset ring-osu-pink/20"
+                : "rounded-bl-md bg-osu-b4/60 ring-1 ring-inset ring-osu-b3/20"
+            }`}>
+              {hasText ? <MessageText text={message.body} embedClassName="mt-1.5" /> : null}
               <Screenshots
                 reportId={report.id}
                 messageId={message.id}
                 count={message.screenshotKeys.length}
-                className="mt-1.5"
+                className={hasText ? "mt-2" : ""}
                 size="h-20"
               />
-            </>
+            </div>
           )}
         </div>
       </div>
