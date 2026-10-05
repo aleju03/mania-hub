@@ -3924,6 +3924,7 @@ msgstr "BPM"
 msgid "BPM Breakdown"
 msgstr "BPM 分布"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -4387,6 +4388,7 @@ msgstr "请选择另一位收藏者收礼。"
 msgid "Chordjack"
 msgstr "大叠"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
@@ -8577,6 +8579,7 @@ msgstr "意大利语"
 msgid "Italic"
 msgstr "斜体"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -15889,6 +15892,18 @@ msgstr "单项"
 msgid "Single focus"
 msgstr "单项聚焦"
 
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Single-note jacks {singleText}, chord jacks {chordText}"
+#~ msgstr "单键叠 {singleText}，和弦叠 {chordText}"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Single-note jacks {singleText}, chordjacks {chordText}"
+msgstr "单点叠 {singleText}，大叠 {chordText}"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Single-note streams {singleText}, chordstreams {chordText}"
+msgstr "单点切 {singleText}，大切 {chordText}"
+
 #: src/routes/skins.tsx
 msgid "size"
 msgstr "大小"
@@ -16299,6 +16314,7 @@ msgstr "观战中"
 msgid "Spectators"
 msgstr "观众"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Speed"
 msgstr "速度"
@@ -17263,6 +17279,10 @@ msgstr "按 Etterna 评定玩家的方式取最好的 {best} 个技能组的平�
 #: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets as Etterna rates players."
 #~ msgstr "按 Etterna 评定玩家的方式取最好的 {best} 个技能组的平均值。"
+
+#: src/components/player/OverallMethodToggle.tsx
+msgid "The average of the best {best} skillsets, with LN added as one more skillset."
+msgstr "取最好的 {best} 个技能组的平均值，并把 LN 作为额外的一个技能组加入。"
 
 #: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets, with LN counted as a skillset. This is how Etterna rates players."

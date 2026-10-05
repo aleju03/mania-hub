@@ -215,7 +215,7 @@ function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: bool
         : i18n._(msg`rated from ${plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded`),
   ];
   const version = mode.minaCalc;
-  if (version && withVersion) parts.push(i18n._(msg`MinaCalc ${version}`));
+  if (version && withVersion) parts.push(version.startsWith("prism") ? "Prism" : i18n._(msg`MinaCalc ${version}`));
   const pending = skills.pendingPlays;
   if (pending > 0) parts.push(i18n._(msg`${pending} still analyzing`));
   if (skills.baseline) parts.push(i18n._(msg`percentiles are among tracked players`));
@@ -574,7 +574,9 @@ export function SkillModePanel({
           <div className="mb-1 flex items-center gap-2">
             <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>{mode.keyCount}K skill rating</Trans></span>
-            {version ? (
+            {version?.startsWith("prism") ? (
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">Prism</span>
+            ) : version ? (
               <span className="cursor-help text-[11px] font-semibold uppercase tracking-wide text-osu-f1" title={t`MinaCalc is Etterna's difficulty calculator`}>
                 {i18n._(msg`MinaCalc ${version}`)}
               </span>

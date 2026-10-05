@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { usesPrism } from "#dan/prism/switch";
 import { qualifyingSkillModes, lnPlayShare, skillModeEntries, skillAxisMeta, DAN_SKILLSET_META, topSharePercent, etternaOverallFromRatings, modeOverall } from "./skill-axes";
 
 describe.each(Array.from({ length: 15 }, (_, i) => i + 4))("%iK LN presentation", keyCount => {
@@ -59,7 +60,15 @@ describe("skillModeEntries", () => {
     }
   });
 
-  it("keeps a 6K/7K card on the MSD skillsets until three patterns are rated", () => {
+  it.runIf(usesPrism(7))("keeps a Prism card on its own skillsets whatever patterns are rated", () => {
+    const thin = { keyCount: 7, analyzedPlays: 13, ratings, patterns: [{ id: "tech", rating: 4, plays: 4 }, { id: "chordstream", rating: 7, plays: 3 }] };
+    const rated = { ...thin, patterns: [...thin.patterns, { id: "jack", rating: 6, plays: 3 }] };
+    for (const mode of [thin, rated]) {
+      expect(skillModeEntries(mode).map(entry => entry.key)).toEqual(["Jumpstream", "Stamina", "Handstream", "Chordjack", "Technical"]);
+    }
+  });
+
+  it.skipIf(usesPrism(7))("keeps a 6K/7K card on the MSD skillsets until three patterns are rated", () => {
     const thin = { keyCount: 7, analyzedPlays: 13, ratings, patterns: [{ id: "tech", rating: 4, plays: 4 }, { id: "chordstream", rating: 7, plays: 3 }] };
     expect(skillModeEntries(thin).map(entry => entry.key)).toEqual(["Jumpstream", "Stream", "Stamina", "Handstream", "JackSpeed", "Chordjack"]);
     const rated = { ...thin, patterns: [...thin.patterns, { id: "jack", rating: 6, plays: 3 }] };
@@ -82,7 +91,8 @@ describe("Etterna Overall", () => {
     expect(etternaOverallFromRatings(4, { ...rice, "pattern:ln": 30 })).toBe(36.5);
     expect(etternaOverallFromRatings(4, { ...rice, "pattern:ln": 40 })).toBe(37.5);
     expect(etternaOverallFromRatings(9, rice)).toBe(37);
-    expect(etternaOverallFromRatings(7, rice)).toBe(0);
+    expect(etternaOverallFromRatings(7, rice)).toBe(usesPrism(7) ? 36.6 : 0);
+    expect(etternaOverallFromRatings(7, { Overall: 25, "pattern:ln": 24 })).toBe(0);
   });
 
   it("falls back to Legacy where the payload has no Etterna Overall", () => {

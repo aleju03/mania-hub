@@ -9,6 +9,7 @@ import type { ReactElement, ReactNode } from "react";
 import { I18nProvider } from "@lingui/react";
 import { getI18n } from "../../lib/i18n";
 import type { MyDataInsights, MyDataSkillMode } from "../../lib/my-data";
+import { usesPrism } from "#dan/prism/switch";
 import { JudgementCard, PlayDietCard, SessionShapeCard } from "./MyStatsInsights";
 
 const I18nWrap = ({ children }: { children: ReactNode }) => (
@@ -44,7 +45,8 @@ const insights: MyDataInsights = {
   generatedAt: "2026-09-09T00:00:00Z",
 };
 
-it("puts each pattern's share of the plays next to the rating from the same tag", () => {
+// 7K's ratings are Prism skillsets once Prism is on, not the pattern tags.
+it.skipIf(usesPrism(7))("puts each pattern's share of the plays next to the rating from the same tag", () => {
   const { container } = render(<PlayDietCard insights={insights} mode={mode} />);
   const text = container.textContent ?? "";
   expect(text).toContain("41%");

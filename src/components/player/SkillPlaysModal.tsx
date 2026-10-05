@@ -13,7 +13,7 @@ import {
   type LivePlayerSkillPlay,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
-import { MSD_SKILLSET_META } from "../../lib/skill-axes";
+import { msdSkillsetMeta } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { ModBadge } from "../ui/ModBadge";
 import { MapDetailModal } from "../maps/MapDetailModal";
@@ -415,7 +415,7 @@ function SkillPlayRow({
   // a different skillset actually drove the play, its chip says so; only on
   // MSD axes - the pattern lists already require charts made of the pattern.
   const topSkillsetMeta = !axis.startsWith("pattern:") && play.topSkillset && play.topSkillset !== axis
-    ? MSD_SKILLSET_META.find((meta) => meta.key === play.topSkillset) ?? null
+    ? msdSkillsetMeta(play.keyCount).find((meta) => meta.key === play.topSkillset) ?? null
     : null;
   // The metadata line is plain text split by hairlines: no keymode pill (the
   // header names it once) and no per-row rating label (the title does).

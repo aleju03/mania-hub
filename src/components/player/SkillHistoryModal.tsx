@@ -269,7 +269,7 @@ function HistoryEntry({ entry, keyCount }: { entry: LivePlayerSkillHistoryEntry 
           <motion.div id={detailsId} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
             <div className="flex flex-wrap gap-x-4 gap-y-1 bg-osu-b5/30 px-4 py-2 text-[11px]">
               {axes.map((axis) => {
-                const meta = skillAxisMeta(axis);
+                const meta = skillAxisMeta(axis, keyCount);
                 const value = snapshot.ratings[axis];
                 const old = previous!.ratings[axis];
                 const change = value != null && old != null ? Number((value - old).toFixed(2)) : null;
