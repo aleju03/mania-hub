@@ -751,7 +751,6 @@ msgstr "{0} players"
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
-#: src/components/player/SkillPlaysModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/rankings.tsx
@@ -1774,6 +1773,10 @@ msgstr "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice s
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "{target} packs opened"
 #~ msgstr "{target} packs opened"
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{total, plural, one {# play} other {# plays}}"
+msgstr "{total, plural, one {# play} other {# plays}}"
 
 #: src/components/farm-helper/FarmersList.tsx
 msgid "{total, plural, one {# player farmed this} other {# players farmed this}}"
@@ -7291,6 +7294,10 @@ msgstr "Flip horizontal"
 msgid "Flip vertical"
 msgstr "Flip vertical"
 
+#: src/lib/replay-overlays.ts
+msgid "Flipped"
+msgstr "Flipped"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Flowing ribbons of teal and violet."
 #~ msgstr "Flowing ribbons of teal and violet."
@@ -9927,6 +9934,10 @@ msgstr "Map shape"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "map unavailable"
+
+#: src/routes/replay.tsx
+msgid "mapped by"
+msgstr "mapped by"
 
 #. placeholder {0}: bm.creator
 #. placeholder {0}: entry.creator

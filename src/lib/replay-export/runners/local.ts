@@ -21,6 +21,7 @@ import {
   REPLAY_EXPORT_ADMISSION,
   REPLAY_EXPORT_WORKING_MEMORY_BUDGET,
   checkExportAdmission,
+  exportCustomMediaBudget,
 } from "../limits";
 import { createExportRenderer } from "../renderer";
 import type { ReplayExportSpecV1 } from "../render-spec";
@@ -129,7 +130,7 @@ export async function runLocalExport(options: LocalExportRunOptions): Promise<Re
   let committed = false;
 
   try {
-    renderer = await createExportRenderer(spec, resources, signal);
+    renderer = await createExportRenderer(spec, resources, signal, exportCustomMediaBudget(admission.heldBytes));
     throwIfAborted(signal);
 
     if (plan.audioCodec) {

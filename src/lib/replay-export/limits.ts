@@ -79,6 +79,18 @@ export const REPLAY_EXPORT_ADMISSION: Record<ReplayExportDestinationKind, Replay
  */
 export const REPLAY_EXPORT_WORKING_MEMORY_BUDGET = 256 * 1024 * 1024;
 
+/**
+ * Most the custom media overlay's file and decoded frames may take. It gets
+ * what the admitted job leaves of the working budget, up to this, so a big
+ * video or a long GIF shortens its frame cache (or is left out) instead of
+ * running the tab out of memory.
+ */
+export const REPLAY_EXPORT_CUSTOM_MEDIA_BUDGET = 128 * 1024 * 1024;
+
+export function exportCustomMediaBudget(heldBytes: number): number {
+  return Math.max(0, Math.min(REPLAY_EXPORT_CUSTOM_MEDIA_BUDGET, REPLAY_EXPORT_WORKING_MEMORY_BUDGET - heldBytes));
+}
+
 /** One second of PCM at a time, with a small bounded lookahead. */
 export const AUDIO_BLOCK_SECONDS = 1;
 export const AUDIO_BLOCK_LOOKAHEAD = 2;
@@ -120,7 +132,7 @@ export type ReplayExportAdmissionInput = {
 };
 
 export type ReplayExportAdmissionVerdict =
-  | { ok: true; estimatedBytes: number }
+  | { ok: true; estimatedBytes: number; /** Working set the job holds, output buffer included. */ heldBytes: number }
   | { ok: false; reason: "duration" | "size" | "memory"; estimatedBytes: number; limit: number };
 
 export function checkExportAdmission(input: ReplayExportAdmissionInput): ReplayExportAdmissionVerdict {
@@ -139,7 +151,7 @@ export function checkExportAdmission(input: ReplayExportAdmissionInput): ReplayE
   if (heldBytes > REPLAY_EXPORT_WORKING_MEMORY_BUDGET) {
     return { ok: false, reason: "memory", estimatedBytes, limit: REPLAY_EXPORT_WORKING_MEMORY_BUDGET };
   }
-  return { ok: true, estimatedBytes };
+  return { ok: true, estimatedBytes, heldBytes };
 }
 
 /**

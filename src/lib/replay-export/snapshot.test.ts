@@ -281,6 +281,21 @@ describe("resolveReplayExportResources", () => {
       .rejects.toMatchObject({ code: "asset_load_failed" });
   });
 
+  it("draws the map card's local art from its own copy, not the route's blob: URL", async () => {
+    const createObjectURL = vi.fn(() => "blob:https://mania-tracker.com/job-card");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", Object.assign(class extends URL {}, { createObjectURL, revokeObjectURL }));
+    const map = { title: "A Song", artist: "Someone", version: "Hard", creator: "Mapper", stars: 4, lengthMs: 90_000, bpm: 180, keyCount: 4, od: 8, backgroundUrl: "blob:https://mania-tracker.com/osz-bg" };
+    const capture = makeCapture({ replayInfo: { map, player: null } });
+    const resources = await resolveReplayExportResources(capture, buildReplayExportSpec(capture, options), new AbortController().signal);
+    expect(fetch).toHaveBeenCalledWith("blob:https://mania-tracker.com/osz-bg", expect.anything());
+    expect(resources.replayInfo?.map?.backgroundUrl).toBe("blob:https://mania-tracker.com/job-card");
+    // The capture keeps the route's URL; only the job's copy is swapped.
+    expect(capture.replayInfo?.map?.backgroundUrl).toBe("blob:https://mania-tracker.com/osz-bg");
+    resources.release();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:https://mania-tracker.com/job-card");
+  });
+
   it("does not touch the network when the export has no audio", async () => {
     const capture = makeCapture({ audioEnabled: false });
     const spec = buildReplayExportSpec(capture, options);

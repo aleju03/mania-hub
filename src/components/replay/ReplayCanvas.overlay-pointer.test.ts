@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ManiaReplayRenderer } from "./ReplayCanvas";
-import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
+import { DEFAULT_REPLAY_OVERLAY_SETTINGS, restackReplayOverlay, type ReplayOverlayId, type ReplayOverlaySettings } from "../../lib/replay-overlays";
 
 type Box = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
 type PointerRenderer = {
@@ -141,5 +141,34 @@ describe("compact lazer leaderboard interaction", () => {
     expect(internal.isLazerLeaderboardExpanded()).toBe(false);
     internal.lazerLeaderboardFrameTime = 1000;
     expect(internal.isLazerLeaderboardExpanded()).toBe(false);
+  });
+});
+
+describe("overlay stacking under the pointer", () => {
+  it("picks the overlay drawn on top, not the one pushed last", () => {
+    const { internal } = viewer();
+    const shared = { x: 20, y: 20, width: 100, height: 60 };
+    // Hit error draws after the leaderboard, which draws after the art.
+    internal.overlayHitboxes = [{ id: "healthBar", ...shared }, { id: "hitError", ...shared }, { id: "leaderboard", ...shared }];
+    expect(internal.getOverlayAtPoint(50, 50)?.id).toBe("hitError");
+    internal.overlaySettings = { ...internal.overlaySettings, leaderboard: { ...internal.overlaySettings.leaderboard, layer: 1 } };
+    expect(internal.getOverlayAtPoint(50, 50)?.id).toBe("leaderboard");
+    internal.overlaySettings = { ...internal.overlaySettings, leaderboard: { ...internal.overlaySettings.leaderboard, layer: -1 } };
+    internal.overlayHitboxes = [{ id: "healthBar", ...shared }, { id: "leaderboard", ...shared }];
+    expect(internal.getOverlayAtPoint(50, 50)?.id).toBe("leaderboard");
+  });
+});
+
+describe("custom media under another overlay", () => {
+  it("leaves the media on top by default and covers it once it is sent back", () => {
+    const renderer = new ManiaReplayRenderer(document.createElement("canvas"), [], 4, [], {});
+    renderers.push(renderer);
+    const internal = renderer as unknown as { isCustomMediaCovered(): boolean };
+    const media = { ...DEFAULT_REPLAY_OVERLAY_SETTINGS.media, enabled: true };
+    const accuracy = { ...DEFAULT_REPLAY_OVERLAY_SETTINGS.accuracy, enabled: true };
+    renderer.setOverlaySettings({ ...DEFAULT_REPLAY_OVERLAY_SETTINGS, media, accuracy });
+    expect(internal.isCustomMediaCovered()).toBe(false);
+    renderer.setOverlaySettings(restackReplayOverlay({ ...DEFAULT_REPLAY_OVERLAY_SETTINGS, media, accuracy }, "media", false));
+    expect(internal.isCustomMediaCovered()).toBe(true);
   });
 });

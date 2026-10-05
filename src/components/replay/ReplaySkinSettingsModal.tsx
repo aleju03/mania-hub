@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -4342,18 +4342,32 @@ function HitErrorOverlayPreview({ style }: { style: ReplayHitErrorStyle }) {
 
 // Only the horizontal arrangement is drawn; the vertical one has its own
 // capture in REPLAY_OVERLAY_PREVIEWS.
-function JudgementsOverlayPreview() {
+const JUDGEMENT_COUNT_PREVIEW_ITEMS = [
+  { label: "MAX", value: "1204", color: "#b3f5ff" },
+  { label: "300", value: "318", color: "#ffcc22" },
+  { label: "200", value: "27", color: "#88da20" },
+  { label: "100", value: "9", color: "#5a8fff" },
+  { label: "50", value: "2", color: "#cc8800" },
+  { label: "MISS", value: "4", color: "#ff4444" },
+  { label: "UR", value: "71", color: "#b3f5ff" },
+];
+
+function JudgementsOverlayPreview({ layout }: { layout: ReplayJudgementLayout }) {
+  if (layout === "flipped") {
+    return (
+      <div className="relative grid h-full w-full content-center justify-center gap-x-2 gap-y-[3px] [grid-template-columns:auto_auto]" aria-hidden="true">
+        {JUDGEMENT_COUNT_PREVIEW_ITEMS.map((item) => (
+          <Fragment key={item.label}>
+            <div className="text-right text-[9px] font-bold leading-none text-white/90 tabular-nums">{item.value}</div>
+            <div className="text-[9px] font-bold leading-none" style={{ color: item.color }}>{item.label}</div>
+          </Fragment>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="relative flex h-full w-full items-center justify-center gap-2.5 px-3" aria-hidden="true">
-      {[
-        { label: "MAX", value: "1204", color: "#b3f5ff" },
-        { label: "300", value: "318", color: "#ffcc22" },
-        { label: "200", value: "27", color: "#88da20" },
-        { label: "100", value: "9", color: "#5a8fff" },
-        { label: "50", value: "2", color: "#cc8800" },
-        { label: "MISS", value: "4", color: "#ff4444" },
-        { label: "UR", value: "71", color: "#b3f5ff" },
-      ].map((item) => (
+      {JUDGEMENT_COUNT_PREVIEW_ITEMS.map((item) => (
         <div key={item.label} className="text-center">
           <div className="text-[9px] font-bold leading-none" style={{ color: item.color }}>{item.label}</div>
           <div className="mt-1 text-[9px] font-bold leading-none text-white/90 tabular-nums">{item.value}</div>
@@ -4401,8 +4415,8 @@ function ReplayOverlaySettingsRow({
   const enabled = placement.enabled;
   const toggle = () => onChange({ enabled: !enabled });
   // The judgement capture only shows the stacked arrangement, so the
-  // horizontal one falls through to a drawn preview.
-  const previewSrc = id === "judgements" && normalizeReplayJudgementLayout(placement.style) === "horizontal"
+  // flipped and horizontal ones fall through to a drawn preview.
+  const previewSrc = id === "judgements" && normalizeReplayJudgementLayout(placement.style) !== "vertical"
     ? undefined
     : REPLAY_OVERLAY_PREVIEWS[id];
   return (
@@ -4437,7 +4451,7 @@ function ReplayOverlaySettingsRow({
           ) : id === "hitError" ? (
             <HitErrorOverlayPreview style={normalizeReplayHitErrorStyle(placement.style)} />
           ) : id === "judgements" ? (
-            <JudgementsOverlayPreview />
+            <JudgementsOverlayPreview layout={normalizeReplayJudgementLayout(placement.style)} />
           ) : id === "mapInfo" || id === "playerInfo" ? (
             <InfoCardOverlayPreview id={id} placement={placement} render={renderInfoCardPreview} />
           ) : id === "media" ? (

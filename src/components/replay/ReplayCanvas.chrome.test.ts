@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ManiaReplayRenderer } from "./ReplayCanvas";
-import type { ReplayOverlayId } from "../../lib/replay-overlays";
+import { DEFAULT_REPLAY_OVERLAY_SETTINGS, type ReplayOverlayId } from "../../lib/replay-overlays";
 
 type Box = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
 type ChromeRenderer = {
@@ -30,7 +30,7 @@ function chromeRenderer(boxes: Box[] = []): ChromeRenderer {
       hasPointerCapture: (id: number) => captures.has(id),
       releasePointerCapture: (id: number) => captures.delete(id),
     },
-    overlayHitboxes: boxes, overlayCloseButtons: [],
+    overlayHitboxes: boxes, overlayCloseButtons: [], overlaySettings: DEFAULT_REPLAY_OVERLAY_SETTINGS,
     selectedOverlayIds: new Set<ReplayOverlayId>(), activeOverlayPointers: new Map(),
     draggingOverlay: null, resizingOverlay: null, selectingOverlays: null, pinchingOverlay: null,
     missThumbTagPress: null, canEditOverlays: () => true, render: vi.fn(),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayColumnStatStyle, normalizeReplayColumnStatMetric, normalizeReplayMissStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings, REPLAY_OVERLAY_IDS, getReplayOverlayStackIndex, isReplayOverlayStackable, restackReplayOverlay, normalizeReplayCustomMediaUrl, guessReplayCustomMediaKind, measureReplayCustomMedia } from "./replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayColumnStatStyle, normalizeReplayColumnStatMetric, normalizeReplayMissStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings, REPLAY_OVERLAY_IDS, REPLAY_OVERLAY_DEFAULT_STACK, getReplayOverlayStackIndex, isReplayOverlayStackable, restackReplayOverlay, normalizeReplayCustomMediaUrl, guessReplayCustomMediaKind, measureReplayCustomMedia } from "./replay-overlays";
 
 describe("replay overlay settings", () => {
   it("preserves and copies authored geometry through normalization and storage", () => {
@@ -293,6 +293,25 @@ describe("overlay stacking", () => {
     }
     const back = normalizeReplayOverlaySettings(restackReplayOverlay(settings, "replayMaster", false));
     expect(getReplayOverlayStackIndex(back, "replayMaster")).toBeLessThan(getReplayOverlayStackIndex(back, "keypresses"));
+  });
+});
+
+describe("default overlay stacking", () => {
+  it("lists every overlay once and keeps the panels under the readouts", () => {
+    expect([...REPLAY_OVERLAY_DEFAULT_STACK].sort()).toEqual([...REPLAY_OVERLAY_IDS].sort());
+    const order = REPLAY_OVERLAY_IDS.filter(isReplayOverlayStackable)
+      .sort((a, b) => getReplayOverlayStackIndex(DEFAULT_REPLAY_OVERLAY_SETTINGS, a) - getReplayOverlayStackIndex(DEFAULT_REPLAY_OVERLAY_SETTINGS, b));
+    // Bottom to top, as the stage drew them before each overlay had a layer.
+    expect(order.slice(0, 2)).toEqual(["leaderboard", "replayMaster"]);
+    expect(order.indexOf("hitError")).toBeGreaterThan(order.indexOf("progress"));
+    expect(order.indexOf("accuracy")).toBeGreaterThan(order.indexOf("keypresses"));
+  });
+
+  it("keeps a layer the viewer saved ahead of the default order", () => {
+    const settings = normalizeReplayOverlaySettings(JSON.parse(JSON.stringify(restackReplayOverlay(DEFAULT_REPLAY_OVERLAY_SETTINGS, "leaderboard", true))));
+    expect(getReplayOverlayStackIndex(settings, "leaderboard")).toBeGreaterThan(getReplayOverlayStackIndex(settings, "media"));
+    const back = restackReplayOverlay(DEFAULT_REPLAY_OVERLAY_SETTINGS, "hitError", false);
+    expect(getReplayOverlayStackIndex(back, "hitError")).toBeLessThan(getReplayOverlayStackIndex(back, "leaderboard"));
   });
 });
 

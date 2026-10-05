@@ -13,7 +13,7 @@ import { ensureReplayFontStyle } from "../../lib/replay-fonts";
 import { withTimeout } from "../../lib/promise-timeout";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayMinY, getReplayOverlayPlacement, isReplayStageArtOverlay, updateReplayOverlayPlacement, normalizeReplayColumnStatMetric, normalizeReplayColumnStatStyle, normalizeReplayHandAccuracyStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, measureReplayCustomMedia, normalizeReplayCustomMedia, normalizeReplayMapInfoOptions, normalizeReplayMissStyle, getReplayOverlayStackIndex, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayMinY, getReplayOverlayPlacement, isReplayStageArtOverlay, updateReplayOverlayPlacement, normalizeReplayColumnStatMetric, normalizeReplayColumnStatStyle, normalizeReplayHandAccuracyStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, measureReplayCustomMedia, normalizeReplayCustomMedia, normalizeReplayMapInfoOptions, normalizeReplayMissStyle, getReplayOverlayStackIndex, hasReplayCustomMediaSource, isReplayOverlayStackable, REPLAY_OVERLAY_IDS, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlayReference, ReplayOverlaySettings, ReplayOverlaySizeReference, ReplayThumbHand } from "../../lib/replay-overlays";
 import { replayOverlayCenteredY, replayOverlayLayoutScale, replayOverlayRegion, replayOverlayX } from "../../lib/replay-overlay-layout";
 import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "../../lib/replay-master-overlay";
@@ -469,6 +469,9 @@ interface RendererOptions {
   showHealthBar?: boolean;
   skinSettings?: ReplaySkinSettings;
   overlaySettings?: ReplayOverlaySettings;
+  // An export's share of its memory budget for the custom media's file and
+  // decoded frames.
+  customMediaBudgetBytes?: number;
   // Which hand owns the middle lane of an odd keymode in per-hand stats.
   missThumbHand?: ReplayThumbHand;
   onOverlaySettingsChange?: (settings: ReplayOverlaySettings) => void;
@@ -962,6 +965,11 @@ export class ManiaReplayRenderer {
   // viewer has one; an export reproduces a captured viewport and skips it.
   private customMediaLayer: ReplayCustomMediaLayer | null = null;
   private customMediaFrame: ReplayOverlayFrame | null = null;
+  // An element over the canvas cannot sit under another overlay, so once one
+  // is stacked above the media the live viewer draws it on the stage at its
+  // own layer, like an export, and hides the element.
+  private customMediaLive: ReplayCustomMediaExportSource | null = null;
+  private customMediaLiveTimer: ReturnType<typeof setTimeout> | null = null;
   // An export draws the media on the stage itself, timed from its first frame.
   private customMediaExport: ReplayCustomMediaExportSource | null = null;
   private customMediaSprite: Sprite | null = null;
@@ -1162,7 +1170,7 @@ export class ManiaReplayRenderer {
       });
       this.syncCustomMedia();
     } else if (this.renderViewport) {
-      this.customMediaExport = new ReplayCustomMediaExportSource();
+      this.customMediaExport = new ReplayCustomMediaExportSource({ budgetBytes: options?.customMediaBudgetBytes });
       this.syncCustomMedia();
     }
     this.overlaySettingsInputSignature = JSON.stringify(this.overlaySettings);
@@ -2760,6 +2768,34 @@ export class ManiaReplayRenderer {
     const media = placement.enabled ? normalizeReplayCustomMedia(placement.media) : null;
     this.customMediaLayer?.setMedia(media);
     this.customMediaExport?.setMedia(media);
+    if (!this.customMediaLayer) return;
+    const covered = media && hasReplayCustomMediaSource(media) && this.isCustomMediaCovered() ? media : null;
+    if (covered) this.customMediaLive ??= new ReplayCustomMediaExportSource({ live: true });
+    this.customMediaLive?.setMedia(covered);
+    if (covered) {
+      void this.customMediaLive!.ready().then(() => {
+        if (!this.destroyed && !this._isPlaying) this.render();
+      });
+    }
+  }
+
+  // Whether another overlay that is on stacks above the media.
+  private isCustomMediaCovered(): boolean {
+    const media = getReplayOverlayStackIndex(this.overlaySettings, "media");
+    return REPLAY_OVERLAY_IDS.some((id) => id !== "media" && isReplayOverlayStackable(id)
+      && this.getOverlayPlacement(id).enabled && getReplayOverlayStackIndex(this.overlaySettings, id) > media);
+  }
+
+  // A paused stage only redraws on demand, so an animated media drawn on it
+  // asks for its next frame.
+  private scheduleCustomMediaFrame(delayMs: number | null) {
+    if (this.customMediaLiveTimer != null) clearTimeout(this.customMediaLiveTimer);
+    this.customMediaLiveTimer = null;
+    if (delayMs == null) return;
+    this.customMediaLiveTimer = setTimeout(() => {
+      this.customMediaLiveTimer = null;
+      if (!this.destroyed && !this._isPlaying) this.render();
+    }, delayMs);
   }
 
   setEmptyMediaLabel(label: string) {
@@ -3038,9 +3074,20 @@ export class ManiaReplayRenderer {
     };
   }
 
+  // Topmost first: the stack order the layers draw in, so a click lands on
+  // the overlay that is visibly on top. Skin stage art draws under every
+  // overlay; among equals the later hitbox wins, as it draws later.
+  private getOverlayHitboxesTopFirst(): ReplayOverlayHitbox[] {
+    const rank = (id: ReplayOverlayId) => (isReplayStageArtOverlay(id) ? -Infinity : getReplayOverlayStackIndex(this.overlaySettings, id));
+    return this.overlayHitboxes
+      .map((box, index) => ({ box, index, rank: rank(box.id) }))
+      .sort((a, b) => (b.rank - a.rank) || (b.index - a.index))
+      .map(({ box }) => box);
+  }
+
   private getOverlayAtPoint(x: number, y: number, pointerType = "mouse"): ReplayOverlayHitbox | null {
-    for (let index = this.overlayHitboxes.length - 1; index >= 0; index -= 1) {
-      const box = this.overlayHitboxes[index];
+    const boxes = this.getOverlayHitboxesTopFirst();
+    for (const box of boxes) {
       const frame = this.getOverlayInteractionFrame(box);
       if (x >= frame.x && x <= frame.x + frame.width && y >= frame.y && y <= frame.y + frame.height) {
         return box;
@@ -3054,8 +3101,7 @@ export class ManiaReplayRenderer {
       const minHeight = OVERLAY_TOUCH_TARGET_PX * this.cssHeight / Math.max(1, rect.height);
       let closest: ReplayOverlayHitbox | null = null;
       let closestDistance = Infinity;
-      for (let index = this.overlayHitboxes.length - 1; index >= 0; index -= 1) {
-        const box = this.overlayHitboxes[index];
+      for (const box of boxes) {
         const dx = Math.max(box.x - x, 0, x - box.x - box.width);
         const dy = Math.max(box.y - y, 0, y - box.y - box.height);
         if (dx > Math.max(0, (minWidth - box.width) / 2) || dy > Math.max(0, (minHeight - box.height) / 2)) continue;
@@ -3823,6 +3869,7 @@ export class ManiaReplayRenderer {
     // gameplay passes, well before the HUD's.
     this.overlayHitboxes = [];
     this.customMediaFrame = null;
+    if (this.customMediaSprite) this.customMediaSprite.visible = false;
     this.missThumbTagHitbox = null;
     this.stageArtOverlayIds.clear();
     this.stageArtOriginOffsets.clear();
@@ -5312,13 +5359,14 @@ export class ManiaReplayRenderer {
     if (frame) overlays.drawPlayer(player, { x: frame.x, y: frame.y, scale }, this.getOverlayLayer("playerInfo").root);
   }
 
-  // Live, this reserves the frame the element over the canvas draws into; in
-  // an export the decoded media is drawn here.
+  // Live, this reserves the frame the element over the canvas draws into,
+  // unless another overlay is stacked above the media; then, and in an
+  // export, the decoded media is drawn here.
   private renderCustomMediaOverlay(layout: Layout) {
-    if (this.customMediaSprite) this.customMediaSprite.visible = false;
     const placement = this.getOverlayPlacement("media");
     const layer = this.customMediaLayer;
-    const exported = this.customMediaExport?.texture ? this.customMediaExport : null;
+    const live = layer && this.customMediaLive?.texture && this.isCustomMediaCovered() ? this.customMediaLive : null;
+    const exported = live ?? (this.customMediaExport?.texture ? this.customMediaExport : null);
     if ((!layer && !exported) || !placement.enabled) return;
     const media = normalizeReplayCustomMedia(placement.media);
     const scale = this.getOverlayScale(layout, "media");
@@ -5341,13 +5389,17 @@ export class ManiaReplayRenderer {
       });
       return;
     }
-    const size = layer ? layer.measure(media) : measureReplayCustomMedia(media, exported!.aspect);
+    const size = layer && !live ? layer.measure(media) : measureReplayCustomMedia(media, exported!.aspect);
     const frame = this.getOverlayFrame(layout, "media", size.width * scale, size.height * scale);
-    if (layer) {
+    if (layer && !live) {
       this.customMediaFrame = frame;
       return;
     }
     if (!frame) return;
+    if (live) {
+      live.drawLive();
+      this.scheduleCustomMediaFrame(live.nextFrameDelayMs());
+    }
     const root = this.getOverlayLayer("media").root;
     const sprite = this.customMediaSprite ??= new Sprite();
     if (sprite.parent !== root) root.addChild(sprite);
@@ -5956,7 +6008,8 @@ export class ManiaReplayRenderer {
     // Horizontal stacks each count under its own label and runs the cells
     // left to right. Cell width comes from a fixed four-digit span, not the
     // live counts, so a rolling total never resizes a placed overlay.
-    if (normalizeReplayJudgementLayout(this.getOverlayPlacement("judgements").style) === "horizontal") {
+    const judgementLayout = normalizeReplayJudgementLayout(this.getOverlayPlacement("judgements").style);
+    if (judgementLayout === "horizontal") {
       const labelSpan = Math.max(...items.map((item) => this.measureTextWidth(item.label, fontSize, "700")));
       const digitSpan = Math.max(...Array.from({ length: 10 }, (_, digit) =>
         this.measureTextWidth(String(digit).repeat(4), fontSize, "700"),
@@ -5975,6 +6028,30 @@ export class ManiaReplayRenderer {
           fontWeight: "700",
           anchorX: 0.5,
         });
+      });
+      return;
+    }
+
+    // Flipped right-aligns the counts in a fixed four-digit column so the
+    // labels line up after them and a rolling total never shifts them.
+    if (judgementLayout === "flipped") {
+      const labelSpan = Math.max(...items.map((item) => this.measureTextWidth(item.label, fontSize, "700")));
+      const digitSpan = Math.max(...Array.from({ length: 10 }, (_, digit) =>
+        this.measureTextWidth(String(digit).repeat(4), fontSize, "700"),
+      ));
+      const gap = 6 * scale;
+      const frame = this.getOverlayFrame(layout, "judgements", digitSpan + gap + labelSpan, 108 * scale);
+      if (!frame) return;
+      items.forEach((item, index) => {
+        const y = frame.y + index * 15.5 * scale;
+        this.addText(item.value, frame.x + digitSpan, y, {
+          fontSize,
+          fill: "#ffffff",
+          alpha: 0.88,
+          fontWeight: "700",
+          anchorX: 1,
+        });
+        this.addText(item.label, frame.x + digitSpan + gap, y, { fontSize, fill: item.color, fontWeight: "700" });
       });
       return;
     }
@@ -8839,6 +8916,9 @@ export class ManiaReplayRenderer {
     this.removeOverlayPointerHandlers();
     this.customMediaLayer?.destroy();
     this.customMediaLayer = null;
+    this.scheduleCustomMediaFrame(null);
+    this.customMediaLive?.destroy();
+    this.customMediaLive = null;
     if (this.customMediaSprite) this.customMediaSprite.texture = Texture.EMPTY;
     this.customMediaExport?.destroy();
     this.customMediaExport = null;

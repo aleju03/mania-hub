@@ -58,6 +58,7 @@ export async function createExportRenderer(
   spec: ReplayExportSpecV1,
   resources: LocalExportResources,
   signal: AbortSignal,
+  customMediaBudgetBytes?: number,
 ): Promise<ReplayExportRendererHandle> {
   const width = spec.output.width;
   const height = spec.output.height;
@@ -137,6 +138,7 @@ export async function createExportRenderer(
         lifeBarFrames: resources.lifeBarFrames,
         skinSettings: spec.visual.skinSettings,
         overlaySettings: spec.visual.overlaySettings,
+        customMediaBudgetBytes,
         missThumbHand: spec.visual.missThumbHand,
         inputOverlayOnly: spec.visual.inputOverlayOnly,
         inputOverlayColor: spec.visual.inputOverlayColor,

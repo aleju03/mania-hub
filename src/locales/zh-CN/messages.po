@@ -742,7 +742,6 @@ msgstr "{0} 名玩家"
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
-#: src/components/player/SkillPlaysModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/rankings.tsx
@@ -1760,6 +1759,10 @@ msgstr "有 {stacks} 次额外的 Mod 使用来自叠加 Mod 的成绩（例如 
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "{target} packs opened"
 #~ msgstr "已开启 {target} 个卡包"
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{total, plural, one {# play} other {# plays}}"
+msgstr "{total, plural, other {# 次游玩}}"
 
 #: src/components/farm-helper/FarmersList.tsx
 msgid "{total, plural, one {# player farmed this} other {# players farmed this}}"
@@ -7269,6 +7272,10 @@ msgstr "水平翻转"
 msgid "Flip vertical"
 msgstr "垂直翻转"
 
+#: src/lib/replay-overlays.ts
+msgid "Flipped"
+msgstr "翻转"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Flowing ribbons of teal and violet."
 #~ msgstr "流动的青绿与紫色光带。"
@@ -9897,6 +9904,10 @@ msgstr "谱面构成"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "谱面不可用"
+
+#: src/routes/replay.tsx
+msgid "mapped by"
+msgstr "谱师"
 
 #. placeholder {0}: bm.creator
 #. placeholder {0}: entry.creator

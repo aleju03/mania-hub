@@ -21,6 +21,8 @@ export interface ReplayMapInfo {
   audioWave?: ReplayAudioWave;
   /** The chart's dan estimate at the play's rate. */
   dan?: ReplayMapDan | null;
+  /** "mapped by", translated by the page; the canvas has no catalog of its own. */
+  mappedByLabel?: string;
 }
 
 export interface ReplayMapDan {

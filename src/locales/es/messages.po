@@ -733,7 +733,6 @@ msgstr "{0} jugadores"
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
-#: src/components/player/SkillPlaysModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/rankings.tsx
@@ -1751,6 +1750,10 @@ msgstr "{stacks} usos de mods extra de plays que combinan mods (p. ej., DT+MR). 
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "{target} packs opened"
 #~ msgstr "{target} packs abiertos"
+
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{total, plural, one {# play} other {# plays}}"
+msgstr "{total, plural, one {# play} other {# plays}}"
 
 #: src/components/farm-helper/FarmersList.tsx
 msgid "{total, plural, one {# player farmed this} other {# players farmed this}}"
@@ -7260,6 +7263,10 @@ msgstr "Voltear horizontalmente"
 msgid "Flip vertical"
 msgstr "Voltear verticalmente"
 
+#: src/lib/replay-overlays.ts
+msgid "Flipped"
+msgstr "Invertido"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Flowing ribbons of teal and violet."
 #~ msgstr "Cintas ondulantes de turquesa y violeta."
@@ -9888,6 +9895,10 @@ msgstr "Forma del mapa"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "mapa no disponible"
+
+#: src/routes/replay.tsx
+msgid "mapped by"
+msgstr "mapeado por"
 
 #. placeholder {0}: bm.creator
 #. placeholder {0}: entry.creator

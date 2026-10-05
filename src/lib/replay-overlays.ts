@@ -152,11 +152,13 @@ export function normalizeReplayHitErrorStyle(value: unknown): ReplayHitErrorStyl
 
 // The judgement counts stack under the score block by default; laid out in a
 // row they fit the strips along the top and bottom of the stage instead.
-export const REPLAY_JUDGEMENT_LAYOUTS = ["vertical", "horizontal"] as const;
+// Flipped is the stack with each count before its label.
+export const REPLAY_JUDGEMENT_LAYOUTS = ["vertical", "flipped", "horizontal"] as const;
 export type ReplayJudgementLayout = typeof REPLAY_JUDGEMENT_LAYOUTS[number];
 export const DEFAULT_REPLAY_JUDGEMENT_LAYOUT: ReplayJudgementLayout = "vertical";
 export const REPLAY_JUDGEMENT_LAYOUT_LABELS: Record<ReplayJudgementLayout, MessageDescriptor> = {
   vertical: msg`Vertical`,
+  flipped: msg`Flipped`,
   horizontal: msg`Horizontal`,
 };
 
@@ -385,9 +387,19 @@ export function isReplayOverlayStackable(id: ReplayOverlayId): boolean {
   return !isReplayStageArtOverlay(id);
 }
 
-/** Draw order: the saved layer, then the registry order for ties. */
+// Bottom to top, the order overlays stack in until the viewer restacks one.
+// The panels sit under the readouts, as they did before each overlay had its
+// own layer, and the info cards join them; custom media starts on top, where
+// the live element over the canvas first put it.
+export const REPLAY_OVERLAY_DEFAULT_STACK: readonly ReplayOverlayId[] = [
+  "leaderboard", "replayMaster", "mapInfo", "playerInfo",
+  "keypresses", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "progress", "hitError",
+  "media", "stageLeft", "stageRight", "stageBottom", "healthBar",
+];
+
+/** Draw order: the saved layer, then the default stack for ties. */
 export function getReplayOverlayStackIndex(settings: ReplayOverlaySettings, id: ReplayOverlayId): number {
-  return (settings[id]?.layer ?? 0) * REPLAY_OVERLAY_IDS.length + REPLAY_OVERLAY_IDS.indexOf(id);
+  return (settings[id]?.layer ?? 0) * REPLAY_OVERLAY_IDS.length + REPLAY_OVERLAY_DEFAULT_STACK.indexOf(id);
 }
 
 /** Moves one overlay above (or below) every other stackable overlay. */

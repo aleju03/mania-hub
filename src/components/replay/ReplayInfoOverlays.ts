@@ -261,7 +261,8 @@ class LazerMapCard implements InfoCard<ReplayMapCardInput> {
     x += this.version.width;
     this.mappedBy.visible = this.creator.visible = options.mapper && !!map.creator;
     if (this.creator.visible) {
-      this.mappedBy.text = map.version ? " mapped by " : "mapped by ";
+      const mappedBy = map.mappedByLabel || "mapped by";
+      this.mappedBy.text = map.version ? ` ${mappedBy} ` : `${mappedBy} `;
       this.mappedBy.position.set(x, rows.line);
       x += this.mappedBy.width;
       this.creator.position.set(x, rows.line);

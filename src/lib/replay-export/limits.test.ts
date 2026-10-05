@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   REPLAY_EXPORT_ADMISSION,
   REPLAY_EXPORT_AUDIO_BITRATE,
+  REPLAY_EXPORT_CUSTOM_MEDIA_BUDGET,
   REPLAY_EXPORT_PRESETS,
   REPLAY_EXPORT_WORKING_MEMORY_BUDGET,
   checkExportAdmission,
   estimateOutputBytes,
+  exportCustomMediaBudget,
   pcmByteLength,
   reservedPacketCounts,
 } from "./limits";
@@ -129,6 +131,22 @@ describe("admission", () => {
         workingMemoryBytes: 8 * 1024 * 1024,
       }).ok).toBe(true);
     }
+  });
+
+  it("gives the custom media only what the admitted job leaves of the working budget", () => {
+    const verdict = checkExportAdmission({
+      destination: "buffer",
+      outputSeconds: 60,
+      videoBitrate: 4_000_000,
+      audioBitrate: 0,
+      workingMemoryBytes: 150 * 1024 * 1024,
+    });
+    if (!verdict.ok) throw new Error("expected the clip to be admitted");
+    // The song plus the 37.5 MB output budget.
+    expect(verdict.heldBytes).toBe(150 * 1024 * 1024 + 37_500_000);
+    expect(exportCustomMediaBudget(verdict.heldBytes)).toBe(REPLAY_EXPORT_WORKING_MEMORY_BUDGET - verdict.heldBytes);
+    expect(exportCustomMediaBudget(0)).toBe(REPLAY_EXPORT_CUSTOM_MEDIA_BUDGET);
+    expect(exportCustomMediaBudget(REPLAY_EXPORT_WORKING_MEMORY_BUDGET + 1)).toBe(0);
   });
 
   it("lets the streaming path run far longer than the in-memory one", () => {

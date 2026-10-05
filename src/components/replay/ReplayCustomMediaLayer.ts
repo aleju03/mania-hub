@@ -3,7 +3,9 @@
 // element laid over the canvas. The canvas still owns
 // its placement: it reserves the frame, takes the drags and draws the
 // selection outline, and the element follows that frame without ever taking
-// a pointer event.
+// a pointer event. An element over the canvas is above every overlay, so once
+// another overlay is stacked above the media the canvas draws it instead and
+// this element hides (ReplayCustomMediaExport.ts, in live mode).
 import { resolveReplayCustomMediaUrl } from "../../lib/replay-custom-media";
 import { hasReplayCustomMediaSource, measureReplayCustomMedia, type ReplayCustomMedia } from "../../lib/replay-overlays";
 
@@ -63,10 +65,13 @@ export class ReplayCustomMediaLayer {
     if (!frame) {
       if (this.placed !== "hidden") {
         element.style.display = "none";
+        // A hidden video would keep decoding frames nobody sees.
+        if (element instanceof HTMLVideoElement) element.pause();
         this.placed = "hidden";
       }
       return;
     }
+    if (this.placed === "hidden" && element instanceof HTMLVideoElement) void element.play().catch(() => {});
     const scaleX = this.canvas.clientWidth / Math.max(1, stageWidth);
     const scaleY = this.canvas.clientHeight / Math.max(1, stageHeight);
     const left = this.canvas.offsetLeft + frame.x * scaleX;

@@ -3332,6 +3332,8 @@ function ReplayViewer({
 
   // The cover fallback is cross-origin; the card reads it through the proxy.
   const cardBackgroundUrl = getInlineBackgroundUrl(bgSrc && bgSrc === coverUrl ? coverProxyUrl : bgSrc) ?? undefined;
+  // Between the difficulty and the mapper on the map info card: "Insane mapped by peppy".
+  const mappedByLabel = t`mapped by`;
   const replayInfo = useMemo<ReplayInfoData>(() => {
     const summaryUser = playerSummary?.key === playerStatsKey ? playerSummary.summary?.user : undefined;
     const userId = playerStatsUserId ?? summaryUser?.id;
@@ -3342,6 +3344,7 @@ function ReplayViewer({
         ...(cardBackgroundUrl ? { backgroundUrl: cardBackgroundUrl } : {}),
         ...(audioWave && audioWave.url === waveSourceUrl ? { audioWave: audioWave.wave } : {}),
         ...(shownMapDan ? { dan: shownMapDan } : {}),
+        mappedByLabel,
       },
       player: buildReplayPlayerInfo(
         leaderboardPlayerName,
@@ -3350,7 +3353,7 @@ function ReplayViewer({
         userCoverProxyUrl(summaryUser?.cover_url),
       ),
     };
-  }, [scoreInfo, beatmap, replayMods, starRating, replay.keyCount, cardBackgroundUrl, audioWave, waveSourceUrl, shownMapDan, leaderboardPlayerName, playerSummary, playerStatsKey, playerStatsUserId]);
+  }, [scoreInfo, beatmap, replayMods, starRating, replay.keyCount, cardBackgroundUrl, audioWave, waveSourceUrl, shownMapDan, mappedByLabel, leaderboardPlayerName, playerSummary, playerStatsKey, playerStatsUserId]);
   const replayInfoRef = useRef(replayInfo);
   const renderInfoCardPreview = useCallback(
     (id: "mapInfo" | "playerInfo", placement: ReplayOverlayPlacement) => rendererRef.current?.captureInfoCardPreview?.(id, placement) ?? null,

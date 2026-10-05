@@ -291,6 +291,14 @@ async function loadOwnedBackground(
   return null;
 }
 
+// The map info card's art is a `blob:` URL when the map came from a local
+// .osz. Read before anything else is awaited, so the route revoking it on
+// unmount cannot reach the job; null for any other URL or a failed read.
+function readBlobUrl(url: string | undefined, signal: AbortSignal): Promise<Blob | null> {
+  if (!url?.startsWith("blob:")) return Promise.resolve(null);
+  return fetchOwnedBlob(url, signal).catch(() => null);
+}
+
 /**
  * Takes ownership of the job's input bytes. Runs once, during the job's
  * preparation phase, and everything it returns lives until `release()`.
@@ -300,6 +308,8 @@ export async function resolveReplayExportResources(
   spec: ReplayExportSpecV1,
   signal: AbortSignal,
 ): Promise<LocalExportResources> {
+  const cardArtUrl = capture.replayInfo?.map?.backgroundUrl;
+  const cardArt = readBlobUrl(cardArtUrl, signal);
   let songFile: Blob | null = null;
   if (spec.audio.songEnabled && capture.songUrl) {
     try {
@@ -316,6 +326,17 @@ export async function resolveReplayExportResources(
 
   const backgroundImage = await loadOwnedBackground(capture.backgroundUrls, signal);
 
+  // The card draws from a URL the job made from its own copy of the bytes.
+  let replayInfo = capture.replayInfo;
+  let ownedCardArtUrl: string | null = null;
+  if (replayInfo?.map && cardArtUrl?.startsWith("blob:")) {
+    const blob = await cardArt;
+    if (signal.aborted) throw new ReplayExportError("export_interrupted");
+    ownedCardArtUrl = blob ? URL.createObjectURL(blob) : null;
+    const { backgroundUrl: _revocable, ...map } = replayInfo.map;
+    replayInfo = { ...replayInfo, map: ownedCardArtUrl ? { ...map, backgroundUrl: ownedCardArtUrl } : map };
+  }
+
   let released = false;
   const resources: LocalExportResources = {
     replayFrames: capture.replayFrames,
@@ -329,7 +350,7 @@ export async function resolveReplayExportResources(
     leaderboard: capture.leaderboard,
     leaderboardPlayerName: capture.leaderboardPlayerName,
     leaderboardOptions: capture.leaderboardOptions ? { ...capture.leaderboardOptions } : undefined,
-    replayInfo: capture.replayInfo,
+    replayInfo,
     storyboard: capture.storyboard,
     songFile,
     backgroundImage,
@@ -347,6 +368,7 @@ export async function resolveReplayExportResources(
       resources.hitsoundSamples = new Map();
       resources.storyboard = null;
       resources.leaderboard = [];
+      if (ownedCardArtUrl) URL.revokeObjectURL(ownedCardArtUrl);
     },
   };
   return resources;

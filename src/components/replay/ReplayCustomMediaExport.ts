@@ -1,23 +1,40 @@
-// The custom media overlay inside an exported video. The live viewer lays a
+// The custom media overlay drawn on the stage itself. The live viewer lays a
 // real element over the stage, which a recording of the canvas never sees,
 // so an export decodes the media itself and draws it on the stage like any
 // other overlay: every frame of a GIF up front, a video one seek per frame.
+// The live viewer uses the same source, in live mode, once another overlay is
+// stacked above the media: a GIF runs on the wall clock and a video plays on
+// its own, drawn whenever it shows a new frame.
 // The bytes are fetched first, so a link only works when its site allows
 // other pages to read it; a local file always works.
 import { Texture } from "pixi.js";
-import { resolveReplayCustomMediaUrl } from "../../lib/replay-custom-media";
+import { loadReplayCustomMediaBlob } from "../../lib/replay-custom-media";
 import { hasReplayCustomMediaSource, type ReplayCustomMedia } from "../../lib/replay-overlays";
 
-// Frames are kept at most this big on their long side, and all of them
-// together within this many bytes.
+// Frames are kept at most this big on their long side.
 const MAX_FRAME_SIDE = 960;
-const FRAME_BUDGET_BYTES = 400 * 1024 * 1024;
+// What the live viewer lets the file and its decoded frames take, halved on
+// phones and other small-memory devices. An export passes its own share of
+// the job's budget.
+const LIVE_FRAME_BUDGET_BYTES = 128 * 1024 * 1024;
 // A video is sampled at this rate; the cache holds what fits the budget.
 const VIDEO_SAMPLE_FPS = 30;
 // Browsers play a GIF frame that claims no delay at 100 ms.
 const MIN_GIF_FRAME_MS = 20;
 const DEFAULT_GIF_FRAME_MS = 100;
 const SEEK_TIMEOUT_MS = 3000;
+
+function liveCustomMediaFrameBudget(): number {
+  const memory = typeof navigator === "undefined" ? undefined : (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return memory != null && memory <= 4 ? LIVE_FRAME_BUDGET_BYTES / 2 : LIVE_FRAME_BUDGET_BYTES;
+}
+
+export interface ReplayCustomMediaSourceOptions {
+  /** Plays on the wall clock for the live viewer instead of being sought by an export. */
+  live?: boolean;
+  /** Bytes the fetched file and its decoded frames may take together. */
+  budgetBytes?: number;
+}
 
 interface AnimatedFrame {
   bitmap: ImageBitmap;
@@ -40,6 +57,14 @@ export class ReplayCustomMediaExportSource {
   private videoCacheLimit = 0;
   private drawn = "";
   private naturalAspect: number | null = null;
+  private readonly live: boolean;
+  private readonly budgetBytes: number;
+  private liveStart = 0;
+
+  constructor(options: ReplayCustomMediaSourceOptions = {}) {
+    this.live = options.live ?? false;
+    this.budgetBytes = Math.max(0, options.budgetBytes ?? liveCustomMediaFrameBudget());
+  }
 
   get texture(): Texture | null {
     return this.frameTexture;
@@ -83,25 +108,45 @@ export class ReplayCustomMediaExportSource {
     this.draw(`f${index}`, this.frames[index].bitmap);
   }
 
+  /** Live mode: draws the frame showing now. */
+  drawLive(now = performance.now()) {
+    if (!this.frameTexture) return;
+    const video = this.video;
+    if (!video) {
+      void this.seek(now - this.liveStart);
+      return;
+    }
+    // Only a new video frame is uploaded again.
+    if (video.readyState >= 2) this.draw(`t${video.currentTime}`, video);
+  }
+
+  /** Live mode: how long the current frame stays up, or null for a still picture. */
+  nextFrameDelayMs(now = performance.now()): number | null {
+    if (!this.frameTexture) return null;
+    if (this.video) return 1000 / VIDEO_SAMPLE_FPS;
+    if (this.frames.length < 2 || this.loopMs <= 0) return null;
+    const at = (((now - this.liveStart) % this.loopMs) + this.loopMs) % this.loopMs;
+    const next = this.frames.find((frame) => frame.endMs > at);
+    return Math.max(MIN_GIF_FRAME_MS, (next?.endMs ?? this.loopMs) - at);
+  }
+
   destroy() {
     this.key = "";
     this.dispose();
   }
 
   private async load(media: ReplayCustomMedia, generation: number) {
-    const resolved = await resolveReplayCustomMediaUrl(media);
-    if (!resolved) return;
-    let blob: Blob;
-    try {
-      const response = await fetch(resolved.url, { mode: "cors", credentials: "omit", referrerPolicy: "no-referrer" });
-      if (!response.ok) return;
-      blob = await response.blob();
-    } finally {
-      if (resolved.objectUrl) URL.revokeObjectURL(resolved.url);
-    }
-    if (generation !== this.generation) return;
+    const blob = await loadReplayCustomMediaBlob(media);
+    // The file itself counts against the budget; one that leaves no room for
+    // a frame is not drawn at all.
+    if (!blob || generation !== this.generation || blob.size >= this.budgetBytes) return;
     if (media.kind === "video") await this.loadVideo(blob, generation);
     else await this.loadImage(blob, generation);
+    this.liveStart = performance.now();
+  }
+
+  private frameLimit(fileBytes: number, frameBytes: number): number {
+    return Math.floor(Math.max(0, this.budgetBytes - fileBytes) / Math.max(1, frameBytes));
   }
 
   private async loadImage(blob: Blob, generation: number) {
@@ -120,7 +165,7 @@ export class ReplayCustomMediaExportSource {
             const { image } = await decoder.decode({ frameIndex: index });
             try {
               const size = fitFrame(image.displayWidth, image.displayHeight);
-              if (index === 0) limit = Math.min(count, Math.max(1, Math.floor(FRAME_BUDGET_BYTES / (size.width * size.height * 4))));
+              if (index === 0) limit = Math.min(count, Math.max(1, this.frameLimit(blob.size, size.width * size.height * 4)));
               const delay = (image.duration ?? 0) / 1000;
               endMs += delay >= MIN_GIF_FRAME_MS ? delay : DEFAULT_GIF_FRAME_MS;
               frames.push({ bitmap: await createImageBitmap(image, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "high" }), endMs });
@@ -156,6 +201,7 @@ export class ReplayCustomMediaExportSource {
     video.muted = true;
     video.playsInline = true;
     video.preload = "auto";
+    video.loop = this.live;
     const url = URL.createObjectURL(blob);
     video.src = url;
     try {
@@ -174,8 +220,10 @@ export class ReplayCustomMediaExportSource {
     this.video = video;
     this.videoUrl = url;
     const size = fitFrame(video.videoWidth, video.videoHeight);
-    this.videoCacheLimit = Math.floor(FRAME_BUDGET_BYTES / (size.width * size.height * 4));
+    // Live playback draws the playing element; only an export's seeks are cached.
+    this.videoCacheLimit = this.live ? 0 : this.frameLimit(blob.size, size.width * size.height * 4);
     this.createTarget(size.width, size.height);
+    if (this.live) void video.play().catch(() => {});
   }
 
   private async seekVideo(ms: number) {
