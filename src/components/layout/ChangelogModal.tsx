@@ -208,13 +208,36 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
   const locale = useLocale();
   const storedNotify = useChangelogNotify();
   const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
-  // The toggle flips locally and reaches the store once its animation is over: any store
-  // write re-serializes the whole persisted cache, which stalls a phone mid-animation.
+  // The toggle stays local while the modal is open and reaches the store when it closes:
+  // a store write wakes every subscriber and re-serializes the persisted cache, which
+  // made the activity strip blink on phones.
   const [notify, setNotifyLocal] = useState(storedNotify);
-  const notifyTimer = useRef<number | null>(null);
+  const pendingNotify = useRef<boolean | null>(null);
+  const commitNotify = () => {
+    if (pendingNotify.current === null) return;
+    setChangelogNotify(pendingNotify.current);
+    pendingNotify.current = null;
+  };
   useEffect(() => {
-    if (notifyTimer.current === null) setNotifyLocal(storedNotify);
+    if (pendingNotify.current === null) setNotifyLocal(storedNotify);
   }, [storedNotify]);
+  useEffect(() => {
+    if (!open) {
+      commitNotify();
+      return;
+    }
+    // Leaving the page with the modal still open must not drop the choice. Capture on
+    // window runs before the store's own pagehide/visibilitychange flush.
+    const onHide = () => {
+      if (document.visibilityState === "hidden") commitNotify();
+    };
+    window.addEventListener("pagehide", commitNotify, true);
+    window.addEventListener("visibilitychange", onHide, true);
+    return () => {
+      window.removeEventListener("pagehide", commitNotify, true);
+      window.removeEventListener("visibilitychange", onHide, true);
+    };
+  }, [open]);
   // Says where the notification shows up, right after turning it on, until the modal closes.
   const [showNotifyHint, setShowNotifyHint] = useState(false);
   const setNotify = (next: boolean) => {
@@ -222,11 +245,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
     if (next) markChangelogSeen();
     setNotifyLocal(next);
     setShowNotifyHint(next);
-    if (notifyTimer.current !== null) window.clearTimeout(notifyTimer.current);
-    notifyTimer.current = window.setTimeout(() => {
-      notifyTimer.current = null;
-      setChangelogNotify(next);
-    }, 800);
+    pendingNotify.current = next;
   };
 
   const [selected, setSelected] = useState(NEWEST_DATE);
