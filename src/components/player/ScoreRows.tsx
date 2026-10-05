@@ -333,7 +333,8 @@ export function ScoreRow({
               {keymodeLabel}
             </span>
           )}
-          {score.companella && <CompanellaMark app={score.companella.app} />}
+          {score.companella ? <CompanellaMark app={score.companella.app} />
+            : score.companellaTimed ? <CompanellaMark app={score.companellaTimed.app} /> : null}
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
         <span className="block truncate text-[11px] text-osu-f1">
@@ -585,7 +586,8 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
                       {keymodeLabel}
                     </span>
                   )}
-                  {score.companella && <CompanellaMark app={score.companella.app} />}
+                  {score.companella ? <CompanellaMark app={score.companella.app} />
+                    : score.companellaTimed ? <CompanellaMark app={score.companellaTimed.app} /> : null}
                   <DanBadge score={score} />
                 </div>
                 <div className="mt-0.5 truncate text-[11px] text-osu-f1">

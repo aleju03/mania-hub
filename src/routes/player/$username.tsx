@@ -603,6 +603,7 @@ function getScoreListSignature(scores: OsuScore[]): string {
       score.pp ?? "",
       score.accuracy ?? "",
       getScoreTimeMs(score),
+      score.companellaTimed ? "timed" : "",
     ].join(":"))
     .join("|");
 }

@@ -475,6 +475,10 @@ still decides that the play exists and counts.
   press p99 0.89 pp and LN p99 1.87 pp where the judge reproduced the header
   exactly (1.75 / 4.31 pp over every replay). An edited replay gains the band
   at most. The play is stored with `replayTimed: true`.
+- **Where it shows.** The profile Recent tab's osu! rows that a claim pairs
+  with carry `companellaTimed: { app }` (`tagCompanellaTimedScores`, the same
+  match), and draw the measuring app's mark like an import's row. Rows that
+  arrive live carry it from the next load.
 - **What removes it.** An owner delete leaves the row, so deleting the imports
   that measured low changes nothing. A withdrawal (`discardLocalScore`) drops
   it; a review hold (`setReviewState`, the restricted-pp removal) sets `held`

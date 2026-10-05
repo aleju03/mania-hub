@@ -240,6 +240,8 @@ export interface OsuScore {
   type?: string;
   weight?: { percentage: number; pp: number };
   companella?: CompanellaScoreMark;
+  /** An osu! play whose skill ratings use the key-press timing an app import measured for the same run. */
+  companellaTimed?: Pick<CompanellaScoreMark, "app">;
 }
 
 // Only the user fields the rankings and home pages actually read. The raw
