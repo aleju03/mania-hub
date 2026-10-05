@@ -11,6 +11,7 @@ import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { getBeatmapFile } from "../../lib/osu";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
+import type { ManiaBeatmap } from "../../lib/beatmap-parser";
 import { calculateManiaStarRating } from "../../lib/mania-star-rating";
 import { PatternRadar } from "./PatternRadar";
 import { danScaleContextFor, getDanTierImageSrc } from "../../lib/dan-images";
@@ -491,6 +492,28 @@ function DanEstimateBadge({ dan, other = null, keyCount }: { dan: DanBadgeVerdic
   );
 }
 
+interface ChartFileStats {
+  bpm: number;
+  length: number;
+  lnCount: number;
+  od: number;
+  stars: number | null;
+}
+
+// The modal's stat row off a chart's own .osu, for a chart the catalog does
+// not have. Length is first note to last release, as osu! counts it.
+function chartFileStats(beatmap: ManiaBeatmap, rate: number): ChartFileStats {
+  const first = beatmap.notes[0]?.time ?? 0;
+  const stars = calculateManiaStarRating(beatmap.notes, beatmap.keyCount, rate);
+  return {
+    bpm: beatmap.stableScrollBpm ?? beatmap.bpm,
+    length: beatmap.totalLength > first ? Math.floor((beatmap.totalLength - first) / 1000) : 0,
+    lnCount: beatmap.notes.filter((note) => note.isHold).length,
+    od: beatmap.od,
+    stars: stars > 0 ? stars : null,
+  };
+}
+
 export function MsdBlock({
   entry,
   msdLn,
@@ -789,7 +812,8 @@ export function MapDetailModal({
   // of them: the modal is the exhaustive view, unlike the cards' capped strip.
   // Just the primary: the modal's Pattern profile already lists every family
   // with its number, so secondary chips here would say it twice.
-  const familyTags = useMemo(() => (active ? [active.primaryPattern] : []), [active]);
+  // A stub has no pattern, which would leave an empty chip.
+  const familyTags = useMemo(() => (active?.primaryPattern ? [active.primaryPattern] : []), [active]);
   const subTags = useMemo(
     () => (active ? subPatternTags([active], familyTags, Infinity) : []),
     [active, familyTags],
@@ -858,7 +882,10 @@ export function MapDetailModal({
   // demand by the backend and cached there; keyed by rate as well as beatmap so
   // switching diffs mid-modal cannot show one diff's numbers under another's.
   const [rateAnalysisByKey, setRateAnalysisByKey] = useState<Record<string, LiveRateChartAnalysis | null>>({});
-  const rateKey = playRate !== 1 && active ? `${active.beatmapId}:${ratePercent}` : null;
+  // A chart the catalog never indexed has no stored analysis at any rate, so
+  // it is rated from its own .osu at the rate played, 1.0x included.
+  const offCatalog = status === "missing" && active != null && active.beatmapId > 0;
+  const rateKey = (playRate !== 1 || offCatalog) && active ? `${active.beatmapId}:${ratePercent}` : null;
   const needsRateFetch = rateKey != null && (entryDt == null || (active?.keyCount === 4 && (activeAnalysis?.lnRatio ?? 0) > 0));
   useEffect(() => {
     if (!needsRateFetch || rateKey == null) return;
@@ -897,7 +924,24 @@ export function MapDetailModal({
   }, [rateStarsByKey, starsKey]);
   const rateStars = starsKey != null ? rateStarsByKey[starsKey] : undefined;
   const starsPending = starsKey != null && rateStars === undefined;
-  const shownStars = active ? rateStars ?? active.stars : 0;
+  // Off the catalog the stats come from the .osu as well: the file's own BPM,
+  // length, LN count, OD and star rating at the rate played.
+  const [fileStatsById, setFileStatsById] = useState<Record<number, ChartFileStats | null>>({});
+  const fileStatsId = offCatalog && active ? active.beatmapId : null;
+  useEffect(() => {
+    if (fileStatsId == null || fileStatsById[fileStatsId] !== undefined) return;
+    getBeatmapFile({ data: { beatmapId: fileStatsId, beatmapsetId: setKnown ? entry.beatmapsetId : null } })
+      .then((result) => {
+        const beatmap = parseCachedManiaBeatmap(fileStatsId, result.content);
+        setFileStatsById((prev) => ({ ...prev, [fileStatsId]: chartFileStats(beatmap, playRate) }));
+      })
+      .catch(() => {
+        setFileStatsById((prev) => ({ ...prev, [fileStatsId]: null }));
+      });
+  }, [entry, fileStatsById, fileStatsId, playRate, setKnown]);
+  const fileStats = fileStatsId != null ? fileStatsById[fileStatsId] : undefined;
+  const fileStatsPending = fileStatsId != null && fileStats === undefined;
+  const shownStars = active ? rateStars ?? fileStats?.stars ?? active.stars : 0;
 
   if (typeof document === "undefined") return null;
 
@@ -955,6 +999,8 @@ export function MapDetailModal({
                             : active.status}
                         </span>
                       </>
+                    ) : fileStats?.stars ? (
+                      <StarRatingBadge stars={shownStars} />
                     ) : pending ? (
                       // A skeleton's tint is invisible against the banner art,
                       // so the star badge's place is held in the banner's own
@@ -1032,7 +1078,20 @@ export function MapDetailModal({
                 )}
 
                 {/* Stats */}
-                {numbersKnown || pending ? (
+                {fileStats || fileStatsPending ? (
+                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:grid-cols-4 sm:gap-2">
+                    {fileStats ? (
+                      <>
+                        <Stat label={t`BPM`} value={String(Math.round(fileStats.bpm))} />
+                        <Stat label={t`Length`} value={formatDuration(fileStats.length)} />
+                        <Stat label={t`LN notes`} value={formatNumber(fileStats.lnCount)} />
+                        <Stat label={t`OD`} value={fileStats.od.toFixed(1)} />
+                      </>
+                    ) : (
+                      [t`BPM`, t`Length`, t`LN notes`, t`OD`].map((label) => <PendingStat key={label} label={label} />)
+                    )}
+                  </div>
+                ) : numbersKnown || pending ? (
                   <div className="flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:grid-cols-5 sm:gap-2">
                     {numbersKnown ? (
                       <>
@@ -1061,7 +1120,7 @@ export function MapDetailModal({
 
                 {/* The catalog entry brought nothing back: say so where its
                     numbers would have been, the osu! link below still works. */}
-                {status === "missing" || status === "error" ? (
+                {(status === "missing" && fileStats === null && !rateMsd && !ratePending) || status === "error" ? (
                   <span className="text-[11.5px] text-osu-f1">
                     {status === "missing"
                       ? t`This chart is not in the map catalog, so there is nothing to show beyond the play itself.`
@@ -1071,25 +1130,25 @@ export function MapDetailModal({
 
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
-                {active.msd || activeAnalysis?.msd ? (
+                {active.msd || activeAnalysis?.msd || (offCatalog && rateMsd) ? (
                   // While a rate loads, the 1.0x block stays up dimmed, so
                   // the panel keeps its height instead of dropping to a skeleton.
                   <div className={`transition-opacity ${ratePending ? "opacity-50" : ""}`} aria-busy={ratePending}>
                     <MsdBlock
                       entry={active}
                       msdLn={activeAnalysis?.msdLn ?? null}
-                      analysisMsd={activeAnalysis?.msd}
-                      analysisDan={activeAnalysis?.status === "ready" ? activeAnalysis.primaryDan : undefined}
+                      analysisMsd={offCatalog && playRate === 1 ? rateMsd : activeAnalysis?.msd}
+                      analysisDan={offCatalog && playRate === 1 ? rateDan : activeAnalysis?.status === "ready" ? activeAnalysis.primaryDan : undefined}
                       analysisLnIdentity={activeAnalysis?.lnIdentity}
                       rate={playRate}
                       rateMsd={rateMsd}
                       rateDan={rateDan}
-                      secondaryDan={activeAnalysis?.secondaryDan ?? null}
+                      secondaryDan={(offCatalog && playRate === 1 ? rateAnalysis?.secondaryDan : activeAnalysis?.secondaryDan) ?? null}
                       rateSecondaryDan={rateAnalysis?.secondaryDan ?? null}
-                      vibroAnalysis={playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
+                      vibroAnalysis={offCatalog ? rateAnalysis?.vibroAnalysis : playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
                     />
                   </div>
-                ) : pending ? <PendingMsdBlock /> : null}
+                ) : pending || (offCatalog && ratePending) ? <PendingMsdBlock /> : null}
                 <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
                 {/* The card's filled primary chip (the index's family verdict)
