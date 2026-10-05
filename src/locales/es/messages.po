@@ -1123,13 +1123,25 @@ msgstr "{count, plural, one {# jugada trackeada} other {# jugadas trackeadas}}"
 msgid "{count} 7K top plays"
 msgstr "{count} top plays de 7K"
 
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "{count} changed"
+#~ msgstr "{count} cambiados"
+
 #: src/lib/streak-game.ts
 msgid "{count} DT top plays"
 msgstr "{count} top plays de DT"
 
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "{count} fixed"
+#~ msgstr "{count} arreglados"
+
 #: src/lib/streak-game.ts
 msgid "{count} followers"
 msgstr "{count} seguidores"
+
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "{count} new"
+#~ msgstr "{count} nuevos"
 
 #: src/lib/streak-game.ts
 msgid "{count} replay views"
@@ -3048,6 +3060,10 @@ msgstr "Todas las filas"
 msgid "All time"
 msgstr "Todo el tiempo"
 
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "All updates"
+#~ msgstr "Todas las novedades"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "All uploads"
 msgstr "Todas las subidas"
@@ -4161,6 +4177,10 @@ msgstr "Cambiar nombre el {0}"
 msgid "change player"
 msgstr "cambiar jugador"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "Changed"
+msgstr "Cambios"
+
 #: src/routes/__root.tsx
 msgid "changelog"
 msgstr "novedades"
@@ -4437,6 +4457,7 @@ msgstr "Quitar marcas"
 msgid "Clear player filter"
 msgstr "Quitar filtro de jugador"
 
+#: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayBrowseView.tsx
@@ -7242,6 +7263,10 @@ msgstr "Ajusta los overlays a un formato 16:9."
 msgid "fixed"
 msgstr "arreglado"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "Fixed"
+msgstr "Arreglos"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "flat"
 msgstr "plano"
@@ -8908,6 +8933,11 @@ msgstr "Más tarde"
 msgid "Latest"
 msgstr "Más recientes"
 
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog"
+msgid "Latest"
+msgstr "Última"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next."
 msgstr "El play más reciente completo (rank, mods, judgements, pp), con los anteriores debajo. Se pagina con Prev y Next."
@@ -10513,6 +10543,11 @@ msgstr "nuevo"
 msgid "New"
 msgstr "Nuevo"
 
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog kind"
+msgid "New"
+msgstr "Nuevo"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "New binder"
 #~ msgstr "Nueva carpeta"
@@ -10572,6 +10607,11 @@ msgstr "hay algo nuevo"
 
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
+msgid "Newer"
+msgstr "Más reciente"
+
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog"
 msgid "Newer"
 msgstr "Más reciente"
 
@@ -11224,6 +11264,10 @@ msgstr "Aún no hay jugadas sin clasificar aquí."
 msgid "No unrated plays on this keymode"
 msgstr "No hay jugadas sin clasificar en este keymode"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "No updates match."
+msgstr "Ninguna novedad coincide."
+
 #: src/components/player/VibroLeaguePanel.tsx
 #~ msgid "No vibro plays yet."
 #~ msgstr ""
@@ -11728,6 +11772,11 @@ msgstr "pb viejo"
 #: src/lib/streak-game.ts
 msgid "Older"
 msgstr "Más antiguo"
+
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog"
+msgid "Older"
+msgstr "Anterior"
 
 #: src/routes/skins.tsx
 msgid "oldest"
@@ -13980,6 +14029,10 @@ msgstr "Release"
 #~ msgid "Release Chords"
 #~ msgstr "Acordes de suelta"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "Release days"
+msgstr "Días de actualización"
+
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
 #~ msgstr "Recargar ahora"
@@ -15001,6 +15054,10 @@ msgstr "Busca por título, artista, mapper o dificultad"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Search title, artist, mapper, or filter: keys=7 stars>5 status=ranked"
 msgstr "Busca por título, artista, mapper o filtro: keys=7 stars>5 status=ranked"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Search updates"
+msgstr "Buscar novedades"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Search your servers"

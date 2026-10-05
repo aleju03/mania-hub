@@ -1,20 +1,53 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion, stagger, useAnimate, useReducedMotion } from "framer-motion";
-import { Bell, BellRing, ChevronRight, X } from "lucide-react";
+import { Bell, BellRing, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 
 import { UPDATES, WIP, type ChangelogUpdate } from "#/data/changelog";
-import { formatReleaseAge, groupUpdatesByDay } from "#/lib/changelog";
-import { formatDate } from "#/lib/format";
+import {
+  changelogKind,
+  formatReleaseAge,
+  groupUpdatesByDay,
+  markChangelogSeen,
+  type ChangelogKind,
+} from "#/lib/changelog";
+import { formatDate, intlLocaleTag } from "#/lib/format";
+import { formatDateTime } from "#/lib/intl-formatters";
+import { useLocale } from "#/lib/locale-context";
+import type { AppLocale } from "#/lib/locale";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { markChangelogSeen } from "#/lib/changelog";
 import { useAppStore, useChangelogNotify } from "#/store";
 
 const DAYS = groupUpdatesByDay(UPDATES);
-/** Newest day only: it is the one the reader came for, and every other day
-    stays a one-line row so the whole history fits without scrolling. */
-const DEFAULT_OPEN_DAYS = DAYS.slice(0, 1).map((day) => day.date);
+const NEWEST_DATE = DAYS[0]?.date ?? "";
+const KINDS: ChangelogKind[] = ["new", "change", "fix"];
+const KIND_DOT: Record<ChangelogKind, string> = {
+  new: "bg-osu-pink",
+  change: "bg-osu-blue",
+  fix: "bg-osu-green-light",
+};
+
+/** Oldest first, so the strip reads left to right like time does. */
+const STRIP = [...DAYS].reverse();
+const BIGGEST_DAY = Math.max(1, ...DAYS.map((day) => day.updates.length));
+const KIND_COUNTS = new Map(
+  DAYS.map((day) => [
+    day.date,
+    KINDS.map((kind) => day.updates.filter((update) => changelogKind(update) === kind).length),
+  ]),
+);
+
+/** "Oct 5", with the year only once the history reaches into another one. */
+function formatShortDay(date: string, locale: AppLocale): string {
+  const sameYear = date.slice(0, 4) === NEWEST_DATE.slice(0, 4);
+  return formatDateTime(new Date(`${date}T00:00:00Z`), intlLocaleTag(locale), {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+    timeZone: "UTC",
+  });
+}
 
 function UpdateText({ update }: { update: ChangelogUpdate }) {
   const reduceMotion = useReducedMotion();
@@ -160,9 +193,18 @@ function NotifyToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) =
   );
 }
 
+function KindDot({ kind }: { kind: ChangelogKind }) {
+  return <span aria-hidden="true" className={`inline-block size-1.5 shrink-0 rounded-full ${KIND_DOT[kind]}`} />;
+}
+
+/** Bar height in px: a square-root-ish curve, so one huge release day does not flatten the rest. */
+function barHeight(count: number): number {
+  return Math.round(6 + Math.pow(count / BIGGEST_DAY, 0.7) * 38);
+}
+
 export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useLingui();
-  const [openDays, setOpenDays] = useState<string[]>(DEFAULT_OPEN_DAYS);
+  const locale = useLocale();
   const notify = useChangelogNotify();
   const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
   // Says where the notification shows up, right after turning it on, until the modal closes.
@@ -174,27 +216,73 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
     setShowNotifyHint(next);
   };
 
-  // Each visit starts from the newest day again: a day left open two sessions
-  // ago is not a preference, it is leftover state.
+  const [selected, setSelected] = useState(NEWEST_DATE);
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState("");
+  const detailRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const barRefs = useRef(new Map<string, HTMLButtonElement>());
+
+  // Each visit starts from the newest day with no search: a search left over
+  // from last time would hide the update the reader came for.
   useEffect(() => {
-    if (open) setOpenDays(DEFAULT_OPEN_DAYS);
-    else setShowNotifyHint(false);
+    if (open) {
+      setSelected(NEWEST_DATE);
+      setQuery("");
+      setSearching(false);
+    } else setShowNotifyHint(false);
   }, [open]);
 
-  const toggleDay = useCallback((date: string) => {
-    setOpenDays((current) =>
-      current.includes(date) ? current.filter((value) => value !== date) : [...current, date],
-    );
-  }, []);
+  // The newest bar sits at the right edge, which a narrow strip has scrolled out of view.
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => {
+      if (stripRef.current) stripRef.current.scrollLeft = stripRef.current.scrollWidth;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
+
+  const needle = query.trim().toLowerCase();
+  const matches = useMemo(() => {
+    const result = new Map<string, ChangelogUpdate[]>();
+    for (const day of DAYS) {
+      const shown = needle ? day.updates.filter((update) => update.text.toLowerCase().includes(needle)) : day.updates;
+      if (shown.length > 0) result.set(day.date, shown);
+    }
+    return result;
+  }, [needle]);
+  const reachable = DAYS.filter((day) => matches.has(day.date));
+  const current = matches.has(selected) ? DAYS.find((day) => day.date === selected) : reachable[0];
+  const position = current ? reachable.indexOf(current) : -1;
+  const newer = reachable[position - 1];
+  const older = reachable[position + 1];
+
+  const select = (date: string) => {
+    setSelected(date);
+    detailRef.current?.scrollTo({ top: 0 });
+    barRefs.current.get(date)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  };
 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement) {
+        if (event.key === "Escape") {
+          setQuery("");
+          setSearching(false);
+        }
+        return;
+      }
       if (event.key === "Escape") onClose();
+      const target = event.key === "ArrowLeft" ? older : event.key === "ArrowRight" ? newer : undefined;
+      if (target) {
+        event.preventDefault();
+        select(target.date);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -206,6 +294,13 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
   }, [open]);
 
   if (typeof document === "undefined") return null;
+
+  const kindLabel: Record<ChangelogKind, string> = {
+    new: t({ message: "New", context: "changelog kind" }),
+    change: t`Changed`,
+    fix: t`Fixed`,
+  };
+  const shown = current ? matches.get(current.date) ?? [] : [];
 
   return createPortal(
     <AnimatePresence>
@@ -227,10 +322,45 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.99 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="modal-card-mobile-safe relative z-10 flex max-h-[min(560px,calc(100vh-2rem))] w-[min(460px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+            className="modal-card-mobile-safe relative z-10 flex h-[min(720px,calc(100vh-2rem))] w-[min(720px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
           >
-            <div className="flex items-center gap-3 border-b border-osu-b3/50 px-4 py-3">
-              <div className="text-sm font-bold text-white">{t`What's new`}</div>
+            <div className="flex h-[52px] shrink-0 items-center gap-2 px-4">
+              {searching ? (
+                <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg bg-osu-b6/70 px-2.5 text-osu-f1 focus-within:text-white">
+                  <Search className="h-3.5 w-3.5 shrink-0" />
+                  <input
+                    type="search"
+                    autoFocus
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={t`Search updates`}
+                    className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-osu-f1 [&::-webkit-search-cancel-button]:hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery("");
+                      setSearching(false);
+                    }}
+                    aria-label={t`Clear search`}
+                    className="cursor-pointer text-osu-f1 hover:text-white"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </label>
+              ) : (
+                <>
+                  <div className="text-sm font-bold text-white">{t`What's new`}</div>
+                  <button
+                    type="button"
+                    onClick={() => setSearching(true)}
+                    aria-label={t`Search updates`}
+                    className="cursor-pointer rounded-md p-1 text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white"
+                  >
+                    <Search className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
               <NotifyToggle on={notify} onChange={setNotify} />
               <button
                 type="button"
@@ -249,7 +379,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="shrink-0 overflow-hidden border-b border-white/[0.07]"
+                  className="shrink-0 overflow-hidden border-t border-white/[0.07]"
                 >
                   <p className="px-4 py-2.5 text-[12px] leading-snug text-osu-c2/85">
                     <Trans>
@@ -260,93 +390,183 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
               ) : null}
             </AnimatePresence>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
-              {DAYS.map((day) => {
-                const expanded = openDays.includes(day.date);
-                return (
-                  <div key={day.date} className="border-b border-osu-b3/30 last:border-b-0">
+            {/* One bar per release day, oldest on the left, height by how much shipped, split by kind. */}
+            <div
+              ref={stripRef}
+              className="shrink-0 overflow-x-auto overflow-y-hidden border-t border-white/[0.07] bg-osu-b5/40 px-4 pb-2 pt-7 [scrollbar-width:none]"
+            >
+              <div className="flex min-w-full gap-[3px]" role="listbox" aria-label={t`Release days`}>
+                {STRIP.map((day, stripIndex) => {
+                  const active = day.date === current?.date;
+                  const available = matches.has(day.date);
+                  const counts = KIND_COUNTS.get(day.date) ?? [0, 0, 0];
+                  const total = counts.reduce((sum, value) => sum + value, 0);
+                  const previous = STRIP[stripIndex - 1];
+                  const newMonth = !previous || previous.date.slice(0, 7) !== day.date.slice(0, 7);
+                  const edge = stripIndex < 3 ? "left-0" : stripIndex > STRIP.length - 4 ? "right-0" : "left-1/2 -translate-x-1/2";
+                  return (
                     <button
+                      key={day.date}
+                      ref={(node) => {
+                        if (node) barRefs.current.set(day.date, node);
+                        else barRefs.current.delete(day.date);
+                      }}
                       type="button"
-                      onClick={() => toggleDay(day.date)}
-                      aria-expanded={expanded}
-                      className="flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-osu-b3/25"
+                      role="option"
+                      aria-selected={active}
+                      aria-label={`${formatDate(day.date, "UTC", locale)}, ${total}`}
+                      disabled={!available}
+                      onClick={() => select(day.date)}
+                      className="group relative flex h-[60px] min-w-[5px] flex-1 cursor-pointer flex-col justify-end disabled:cursor-default"
                     >
-                      <ChevronRight
-                        className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${
-                          expanded ? "rotate-90" : ""
-                        }`}
-                      />
-                      {/* Age comes off the clock, so server and client can disagree by a day at
-                          a UTC boundary; keep the server's text rather than letting a text
-                          mismatch trigger a hydration recovery render. */}
                       <span
-                        className="text-[11px] font-semibold uppercase tracking-wider text-osu-c2/85"
-                        title={formatDate(day.date)}
-                        suppressHydrationWarning
+                        className={`flex w-full flex-col-reverse overflow-hidden rounded-[2px] transition-opacity ${
+                          active ? "opacity-100" : available ? "opacity-50 group-hover:opacity-85" : "opacity-10"
+                        }`}
+                        style={{ height: barHeight(total) }}
                       >
-                        {formatReleaseAge(day.date)}
+                        {KINDS.map((kind, kindIndex) =>
+                          counts[kindIndex] > 0 ? (
+                            <span key={kind} className={KIND_DOT[kind]} style={{ flexGrow: counts[kindIndex] }} />
+                          ) : null,
+                        )}
                       </span>
-                      <span className="ml-auto text-[11px] tabular-nums text-osu-f1">
-                        {day.updates.length}
+                      <span
+                        aria-hidden="true"
+                        className={`mt-1.5 h-0.5 w-full rounded-full ${active ? "bg-white" : "bg-transparent"}`}
+                      />
+                      <span
+                        aria-hidden="true"
+                        className={`absolute top-[60px] mt-1 whitespace-nowrap text-[11px] leading-none text-osu-f1 ${newMonth ? (stripIndex > STRIP.length - 4 ? "right-0" : "left-0") : "hidden"}`}
+                      >
+                        {newMonth
+                          ? formatDateTime(new Date(`${day.date}T00:00:00Z`), intlLocaleTag(locale), { month: "short", timeZone: "UTC" })
+                          : null}
                       </span>
-                    </button>
-
-                    <AnimatePresence initial={false}>
-                      {expanded ? (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.16, ease: "easeOut" }}
-                          className="overflow-hidden"
+                      {available ? (
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none absolute -top-6 hidden whitespace-nowrap rounded bg-osu-b6 px-1.5 py-0.5 text-[11px] font-semibold text-white group-hover:block ${edge}`}
                         >
-                          <div className="pb-1.5">
-                            {day.updates.map((update) => {
-                              const row =
-                                "flex items-baseline gap-2.5 py-1.5 pl-[2.375rem] pr-4 text-[13px] leading-snug text-osu-c2/85";
-                              const bullet = (
-                                <span className="mt-[-2px] size-1 shrink-0 rounded-full bg-osu-f1/60" />
-                              );
-                              if (!update.to || update.reference) {
-                                return (
-                                  <div key={update.text} className={row}>
-                                    {bullet}
-                                    <span className="min-w-0"><UpdateText update={update} /></span>
-                                  </div>
-                                );
-                              }
+                          {formatShortDay(day.date, locale)}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="h-4" />
+            </div>
+
+            <div ref={detailRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-white/[0.07] px-5 pb-8 pt-5 md:px-8 md:pt-6">
+              {current ? (
+                <>
+                  <div className="flex items-baseline gap-2 text-[12px] text-osu-f1">
+                    <span suppressHydrationWarning>{formatReleaseAge(current.date, Date.now(), locale)}</span>
+                    {current.date === NEWEST_DATE ? (
+                      <span className="font-semibold text-osu-pink">
+                        <Trans context="changelog">Latest</Trans>
+                      </span>
+                    ) : null}
+                  </div>
+                  <h2 className="mt-0.5 text-2xl font-bold text-white">{formatDate(current.date, "UTC", locale)}</h2>
+
+                  {KINDS.map((kind) => {
+                    const lines = shown.filter((update) => changelogKind(update) === kind);
+                    if (lines.length === 0) return null;
+                    return (
+                      <section key={kind} className="mt-6">
+                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
+                          <KindDot kind={kind} />
+                          {kindLabel[kind]}
+                          <span className="tabular-nums text-osu-f1/70">{lines.length}</span>
+                        </div>
+                        <div className="mt-1.5">
+                          {lines.map((update) => {
+                            const row = "group flex items-baseline gap-2 py-1.5 text-[14.5px] leading-relaxed text-osu-c2/90";
+                            const image = update.image ? (
+                              <img
+                                src={update.image.src}
+                                alt={update.image.alt}
+                                width={update.image.width}
+                                height={update.image.height}
+                                loading="lazy"
+                                decoding="async"
+                                className="mb-3 mt-1.5 h-auto max-w-full rounded-lg"
+                              />
+                            ) : null;
+                            if (!update.to || update.reference) {
                               return (
+                                <div key={update.text}>
+                                  <div className={row}>
+                                    <span className="min-w-0 flex-1"><UpdateText update={update} /></span>
+                                  </div>
+                                  {image}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={update.text}>
                                 <Link
-                                  key={update.text}
                                   to={update.to}
                                   search={update.search}
                                   onClick={onClose}
-                                  className={`${row} transition-colors hover:bg-osu-b3/30 hover:text-white`}
+                                  className={`${row} -mx-2 rounded-md px-2 transition-colors hover:bg-white/[0.04] hover:text-white`}
                                 >
-                                  {bullet}
-                                  <span className="min-w-0"><UpdateText update={update} /></span>
+                                  <span className="min-w-0 flex-1"><UpdateText update={update} /></span>
+                                  <ChevronRight className="relative top-[3px] h-3.5 w-3.5 shrink-0 self-start text-osu-f1 opacity-0 transition-opacity group-hover:opacity-100" />
                                 </Link>
-                              );
-                            })}
-                          </div>
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
+                                {image}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </>
+              ) : (
+                <p className="py-10 text-center text-[13px] text-osu-f1">
+                  <Trans>No updates match.</Trans>
+                </p>
+              )}
+
+              {WIP.length > 0 ? (
+                <div className="mt-8 border-t border-white/[0.07] pt-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
+                    <Trans>working on next</Trans>
                   </div>
-                );
-              })}
+                  <div className="mt-1 text-[13px] leading-relaxed text-osu-c2/80">
+                    {WIP.map((item) => (
+                      <div key={item}>{item}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
-            {WIP.length > 0 ? (
-              <div className="border-t border-osu-b3/50 bg-black/20 px-4 py-3">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
-                  <Trans>working on next</Trans>
-                </div>
-                <div className="mt-1 text-[12.5px] leading-relaxed text-osu-c2/80">
-                  {WIP.map((item) => (
-                    <div key={item}>{item}</div>
-                  ))}
-                </div>
+            {current ? (
+              <div className="flex shrink-0 items-center gap-3 border-t border-white/[0.07] px-4 py-2.5">
+                <button
+                  type="button"
+                  disabled={!older}
+                  onClick={() => older && select(older.date)}
+                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-osu-b3/60 pl-2 pr-3 text-[12px] font-semibold text-osu-c2 transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-40 disabled:hover:brightness-100"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <Trans context="changelog">Older</Trans>
+                  {older ? <span className="font-normal text-osu-f1">{formatShortDay(older.date, locale)}</span> : null}
+                </button>
+                <button
+                  type="button"
+                  disabled={!newer}
+                  onClick={() => newer && select(newer.date)}
+                  className="ml-auto inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-osu-b3/60 pl-3 pr-2 text-[12px] font-semibold text-osu-c2 transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-40 disabled:hover:brightness-100"
+                >
+                  {newer ? <span className="font-normal text-osu-f1">{formatShortDay(newer.date, locale)}</span> : null}
+                  <Trans context="changelog">Newer</Trans>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
               </div>
             ) : null}
           </motion.div>

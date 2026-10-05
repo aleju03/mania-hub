@@ -1146,13 +1146,25 @@ msgstr "{count, plural, one {# tracked play} other {# tracked plays}}"
 msgid "{count} 7K top plays"
 msgstr "{count} 7K top plays"
 
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "{count} changed"
+#~ msgstr "{count} changed"
+
 #: src/lib/streak-game.ts
 msgid "{count} DT top plays"
 msgstr "{count} DT top plays"
 
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "{count} fixed"
+#~ msgstr "{count} fixed"
+
 #: src/lib/streak-game.ts
 msgid "{count} followers"
 msgstr "{count} followers"
+
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "{count} new"
+#~ msgstr "{count} new"
 
 #: src/lib/streak-game.ts
 msgid "{count} replay views"
@@ -3075,6 +3087,10 @@ msgstr "All rows"
 msgid "All time"
 msgstr "All time"
 
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "All updates"
+#~ msgstr "All updates"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "All uploads"
 msgstr "All uploads"
@@ -4188,6 +4204,10 @@ msgstr "Change name on {0}"
 msgid "change player"
 msgstr "change player"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "Changed"
+msgstr "Changed"
+
 #: src/routes/__root.tsx
 msgid "changelog"
 msgstr "changelog"
@@ -4464,6 +4484,7 @@ msgstr "Clear marks"
 msgid "Clear player filter"
 msgstr "Clear player filter"
 
+#: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayBrowseView.tsx
@@ -7273,6 +7294,10 @@ msgstr "Fits the overlays to a 16:9 frame."
 msgid "fixed"
 msgstr "fixed"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "Fixed"
+msgstr "Fixed"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "flat"
 msgstr "flat"
@@ -8947,6 +8972,11 @@ msgstr "Later"
 msgid "Latest"
 msgstr "Latest"
 
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog"
+msgid "Latest"
+msgstr "Latest"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next."
 msgstr "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next."
@@ -10552,6 +10582,11 @@ msgstr "new"
 msgid "New"
 msgstr "New"
 
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog kind"
+msgid "New"
+msgstr "New"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "New binder"
 #~ msgstr "New binder"
@@ -10611,6 +10646,11 @@ msgstr "new updates"
 
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
+msgid "Newer"
+msgstr "Newer"
+
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog"
 msgid "Newer"
 msgstr "Newer"
 
@@ -11263,6 +11303,10 @@ msgstr "No unrated plays here yet."
 msgid "No unrated plays on this keymode"
 msgstr "No unrated plays on this keymode"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "No updates match."
+msgstr "No updates match."
+
 #: src/components/player/VibroLeaguePanel.tsx
 #~ msgid "No vibro plays yet."
 #~ msgstr "No vibro plays yet."
@@ -11765,6 +11809,11 @@ msgstr "old pb"
 
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
+msgid "Older"
+msgstr "Older"
+
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog"
 msgid "Older"
 msgstr "Older"
 
@@ -14019,6 +14068,10 @@ msgstr "Release"
 #~ msgid "Release Chords"
 #~ msgstr "Release Chords"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "Release days"
+msgstr "Release days"
+
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
 #~ msgstr "Reload now"
@@ -15040,6 +15093,10 @@ msgstr "Search title, artist, mapper, or difficulty"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Search title, artist, mapper, or filter: keys=7 stars>5 status=ranked"
 msgstr "Search title, artist, mapper, or filter: keys=7 stars>5 status=ranked"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Search updates"
+msgstr "Search updates"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Search your servers"

@@ -61,6 +61,21 @@ export function formatReleaseAge(
   return years === 1 ? i18n._(msg`last year`) : i18n._(msg`${years} years ago`);
 }
 
+export type ChangelogKind = "new" | "change" | "fix";
+
+/**
+ * What an entry is, for the filter chips: read off its first words, since the
+ * house style already opens a fix with "Fixed" and an addition with "Added",
+ * "New" or "You can now". Anything else is a change. `kind` on the entry wins
+ * when the wording misleads.
+ */
+export function changelogKind(update: ChangelogUpdate): ChangelogKind {
+  if (update.kind) return update.kind;
+  if (/^Fixed\b/.test(update.text)) return "fix";
+  if (/^(Added|New|You can now)\b/.test(update.text)) return "new";
+  return "change";
+}
+
 export interface ChangelogDay {
   date: string;
   updates: ChangelogUpdate[];

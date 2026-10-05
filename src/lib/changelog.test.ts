@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { changelogSeenMarker, formatReleaseAge, groupUpdatesByDay, hasUnseenChangelog } from "./changelog";
+import { changelogKind, changelogSeenMarker, formatReleaseAge, groupUpdatesByDay, hasUnseenChangelog } from "./changelog";
 import { UPDATES, WIP } from "../data/changelog";
 
 const NOW = Date.parse("2026-07-29T09:00:00Z");
@@ -134,5 +134,20 @@ describe("hasUnseenChangelog", () => {
     expect(hasUnseenChangelog(updates, "2026-09-25:3")).toBe(false);
     expect(hasUnseenChangelog(updates, "2026-09-26:1")).toBe(false);
     expect(hasUnseenChangelog([], null)).toBe(false);
+  });
+});
+
+describe("changelogKind", () => {
+  it("reads the kind off the opening words", () => {
+    expect(changelogKind({ date: "2026-01-01", text: "Fixed a thing" })).toBe("fix");
+    expect(changelogKind({ date: "2026-01-01", text: "Added a thing" })).toBe("new");
+    expect(changelogKind({ date: "2026-01-01", text: "New replay overlay" })).toBe("new");
+    expect(changelogKind({ date: "2026-01-01", text: "You can now sort" })).toBe("new");
+    expect(changelogKind({ date: "2026-01-01", text: "Newer maps load faster" })).toBe("change");
+    expect(changelogKind({ date: "2026-01-01", text: "Map previews start sooner" })).toBe("change");
+  });
+
+  it("lets an explicit kind win", () => {
+    expect(changelogKind({ date: "2026-01-01", text: "Fixed a thing", kind: "change" })).toBe("change");
   });
 });

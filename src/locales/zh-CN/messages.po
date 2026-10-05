@@ -1132,13 +1132,25 @@ msgstr "{count} 个追踪成绩"
 msgid "{count} 7K top plays"
 msgstr "{count} 个 7K 最佳成绩"
 
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "{count} changed"
+#~ msgstr "{count} 项改动"
+
 #: src/lib/streak-game.ts
 msgid "{count} DT top plays"
 msgstr "{count} 个 DT 最佳成绩"
 
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "{count} fixed"
+#~ msgstr "{count} 项修复"
+
 #: src/lib/streak-game.ts
 msgid "{count} followers"
 msgstr "{count} 名关注者"
+
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "{count} new"
+#~ msgstr "{count} 项新增"
 
 #: src/lib/streak-game.ts
 msgid "{count} replay views"
@@ -3057,6 +3069,10 @@ msgstr "全部记录"
 msgid "All time"
 msgstr "全部时间"
 
+#: src/components/layout/ChangelogModal.tsx
+#~ msgid "All updates"
+#~ msgstr "全部更新"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "All uploads"
 msgstr "全部上传"
@@ -4170,6 +4186,10 @@ msgstr "{0} 可更改名字"
 msgid "change player"
 msgstr "更换玩家"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "Changed"
+msgstr "改动"
+
 #: src/routes/__root.tsx
 msgid "changelog"
 msgstr "更新日志"
@@ -4446,6 +4466,7 @@ msgstr "清除标记"
 msgid "Clear player filter"
 msgstr "清除玩家筛选"
 
+#: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayBrowseView.tsx
@@ -7251,6 +7272,10 @@ msgstr "将叠加组件调整到 16:9 画面中。"
 msgid "fixed"
 msgstr "已修复"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "Fixed"
+msgstr "修复"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "flat"
 msgstr "纯色"
@@ -8917,6 +8942,11 @@ msgstr "更晚"
 msgid "Latest"
 msgstr "最新"
 
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog"
+msgid "Latest"
+msgstr "最新"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next."
 msgstr "完整显示最近一次成绩(评级、Mod、判定、pp)，下方是更早的成绩。用 Prev 和 Next 翻页。"
@@ -10522,6 +10552,11 @@ msgstr "新"
 msgid "New"
 msgstr "新建"
 
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog kind"
+msgid "New"
+msgstr "新增"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "New binder"
 #~ msgstr "新建卡夹"
@@ -10583,6 +10618,11 @@ msgstr "有新更新"
 #: src/lib/streak-game.ts
 msgid "Newer"
 msgstr "更新"
+
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog"
+msgid "Newer"
+msgstr "较新"
 
 #: src/routes/communities.tsx
 #: src/routes/skins.tsx
@@ -11233,6 +11273,10 @@ msgstr "这里还没有未评分成绩。"
 msgid "No unrated plays on this keymode"
 msgstr "该键数没有未评分成绩"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "No updates match."
+msgstr "没有匹配的更新。"
+
 #: src/components/player/VibroLeaguePanel.tsx
 #~ msgid "No vibro plays yet."
 #~ msgstr ""
@@ -11737,6 +11781,11 @@ msgstr "旧 PB"
 #: src/lib/streak-game.ts
 msgid "Older"
 msgstr "更早"
+
+#: src/components/layout/ChangelogModal.tsx
+msgctxt "changelog"
+msgid "Older"
+msgstr "较早"
 
 #: src/routes/skins.tsx
 msgid "oldest"
@@ -13989,6 +14038,10 @@ msgstr "放手"
 #~ msgid "Release Chords"
 #~ msgstr "同时松键"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "Release days"
+msgstr "更新日期"
+
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
 #~ msgstr "立即刷新"
@@ -15010,6 +15063,10 @@ msgstr "搜索标题、艺术家、谱师或难度"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Search title, artist, mapper, or filter: keys=7 stars>5 status=ranked"
 msgstr "搜索标题、艺术家、谱师，或使用筛选：keys=7 stars>5 status=ranked"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Search updates"
+msgstr "搜索更新"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Search your servers"

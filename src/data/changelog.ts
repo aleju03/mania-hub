@@ -26,6 +26,12 @@ export interface ChangelogUpdate {
   label?: string;
   /** Link a named reference inside the text to its original source. */
   reference?: { text: string; href: string };
+  /** Overrides the kind read off the first word (see `changelogKind`). */
+  kind?: "new" | "change" | "fix";
+  /** A picture shown under the line. Files live in public/images/changelog/ under a
+      new name each time, since the service worker serves /images/ cache-first.
+      width and height are the display size in CSS pixels. */
+  image?: { src: string; alt: string; width: number; height: number };
   /** Optional in-app path, which makes the whole row clickable. */
   to?: string;
   /** Query parameters belong in Link.search, never inside its pathname. */
@@ -37,8 +43,8 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-10-05", text: "You can now submit plays through Companella if you're playing offline or on a private server, more info on settings -> preferences -> integrations", bold: "Companella", to: "/settings" },
-  { date: "2026-10-05", text: "Added Map info, Player info and Custom media overlays to replays.", to: "/replay" },
+  { date: "2026-10-05", text: "You can now submit plays through Companella if you're playing offline or on a private server, more info on settings -> preferences -> integrations", bold: "Companella", to: "/settings", image: { src: "/images/changelog/2026-10-05-companella-play.webp", alt: "A recent play row with the Companella mark", width: 387, height: 88 } },
+  { date: "2026-10-05", text: "Added Map info, Player info and Custom media overlays to replays.", to: "/replay", image: { src: "/images/changelog/2026-10-05-replay-info-cards.webp", alt: "Player info and Map info overlays", width: 465, height: 247 } },
   { date: "2026-10-05", text: "Map info can also show Live BPM, Time left, a Progress bar and an Audio wave.", to: "/replay" },
   { date: "2026-10-05", text: "You can now Bring to front or Send to back replay overlays from the right-click menu.", to: "/replay" },
   { date: "2026-10-05", text: "Fixed buzzy bass in exported DT and HT replays.", to: "/replay" },
@@ -47,7 +53,7 @@ export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-10-05", text: "Map previews now start right away and the song joins once it loads.", to: "/maps" },
   { date: "2026-10-05", text: "Fixed recent plays showing the map's dan instead of the dan the play counts for." },
   { date: "2026-10-05", text: "The dan window now marks skillsets set by a near clear.", to: "/dan-estimates" },
-  { date: "2026-10-05", text: "Dan + and - steps are now drawn into the badge." },
+  { date: "2026-10-05", text: "Dan + and - steps are now drawn into the badge.", image: { src: "/images/changelog/2026-10-05-dan-badge-steps.webp", alt: "Dan badges from -- to ++", width: 522, height: 260 } },
   { date: "2026-10-05", text: "5K and up maps with jumptrills now show as Unrateable." },
   { date: "2026-09-30", text: "Farm helper is now Recommendations, with a skills tab that picks maps for each of your skills.", bold: "Recommendations", label: "skills", to: "/recommendations" },
   { date: "2026-09-30", text: "4K LN MSD and dans are hidden while the new LN model is being tested, turn on Experimental LN model in settings if you wanna see it.", to: "/settings" },
@@ -254,17 +260,17 @@ export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-07-31", text: "New farm helper board, easier to read and quicker to pick from", to: "/farm-helper" },
   { date: "2026-07-31", text: "Mark a map too hard or too easy to steer what the board suggests", to: "/farm-helper" },
   { date: "2026-07-31", text: "Fewer maps wrongly labelled chordjack outside 4K", to: "/maps" },
-  { date: "2026-07-30", text: "Sort your album shelves, and they stay that way next visit", to: "/packs" },
-  { date: "2026-07-30", text: "The pp gain on your top plays is right again", to: "/top-plays" },
-  { date: "2026-07-29", text: "Maps search can hide patterns and keymodes, not just filter for them", to: "/maps" },
-  { date: "2026-07-29", text: "Packs open smoother on slower phones", to: "/packs" },
-  { date: "2026-07-27", text: "The tracker picks up scores the live feed misses", to: "/tracker" },
-  { date: "2026-07-26", text: "Updated maps show the new chart, not the old one" },
-  { date: "2026-07-25", text: "Skins is open to everyone, with previews and .osk downloads", to: "/skins" },
-  { date: "2026-07-25", text: "Live pp counter in the replay viewer, plus what-if re-judging", to: "/replay" },
-  { date: "2026-07-24", text: "Random map rerolls are faster", to: "/maps" },
-  { date: "2026-07-21", text: "The card album works properly on phones", to: "/packs" },
-  { date: "2026-07-19", text: "New maps search with filter chips and a beat preview", to: "/maps" },
-  { date: "2026-07-18", text: "Skill ratings for each keymode", to: "/my-stats" },
-  { date: "2026-07-16", text: "Compare two replays side by side on one clock", to: "/replay" },
+  { date: "2026-07-30", text: "You can now sort your album shelves, and the order is saved.", to: "/packs" },
+  { date: "2026-07-30", text: "Fixed the pp gain on top plays.", to: "/top-plays" },
+  { date: "2026-07-29", text: "You can now hide patterns and keymodes in maps search.", to: "/maps" },
+  { date: "2026-07-29", text: "Packs now open smoother on slower phones.", to: "/packs" },
+  { date: "2026-07-27", text: "Fixed the tracker missing some scores.", to: "/tracker" },
+  { date: "2026-07-26", text: "Fixed updated maps showing the old chart." },
+  { date: "2026-07-25", text: "Skins is now open to everyone, with previews and .osk downloads.", to: "/skins" },
+  { date: "2026-07-25", text: "Added a live pp counter to replays, and you can now re-judge a replay as if it was played on the other client.", to: "/replay" },
+  { date: "2026-07-24", text: "Random map rerolls are now faster.", to: "/maps" },
+  { date: "2026-07-21", text: "Fixed the card album on phones.", to: "/packs" },
+  { date: "2026-07-19", text: "Redesigned maps search with filter chips and a beat preview.", to: "/maps" },
+  { date: "2026-07-18", text: "Added skill ratings for each keymode.", to: "/my-stats" },
+  { date: "2026-07-16", text: "You can now compare two replays side by side.", to: "/replay" },
 ];
