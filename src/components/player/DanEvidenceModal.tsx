@@ -318,12 +318,16 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
           own row. */}
       {section.skillsetClear && !(section.nearClear ? nearClearRunOf(section) : section.plays.some((clear) =>
         clear.play.beatmapId === section.skillsetClear!.beatmapId)) ? (
-        <CredentialRow
-          credential={section.skillsetClear}
-          color={section.color}
-          formatDan={formatDan}
-          onOpen={onOpenCourseScore ? () => onOpenCourseScore(section.skillsetClear!) : undefined}
-        />
+        // Split off from the numbered list: it sets the tile, it is not one
+        // of the clears the tile averages.
+        <div className="mb-1 border-b border-white/[0.07] pb-1">
+          <CredentialRow
+            credential={section.skillsetClear}
+            color={section.color}
+            formatDan={formatDan}
+            onOpen={onOpenCourseScore ? () => onOpenCourseScore(section.skillsetClear!) : undefined}
+          />
+        </div>
       ) : null}
       {section.plays.map((clear, index) => (
         <ClearRow
@@ -954,10 +958,12 @@ function CredentialRow({
         <span className="ml-1.5 text-[10px] font-normal text-osu-f1">[{credential.version}]</span>
       </span>
       <span
-        className="w-12 shrink-0 text-right text-[11px] tabular-nums text-osu-l2"
+        className={`${passed ? "w-12" : ""} shrink-0 text-right text-[11px] tabular-nums text-osu-l2`}
         title={t`Accuracy this clear was judged on, against its ${formatAccuracy(credential.bar)} bar` + currency}
       >
         {formatAccuracy(credential.accuracy)}
+        {/* A run under the bar says so on its face. */}
+        {passed ? null : <span className="text-osu-f1">{` / ${Number((credential.bar * 100).toFixed(2))}%`}</span>}
       </span>
       <span className="w-16 shrink-0 text-right text-[11px] font-black sm:w-20" style={{ color }}>
         {formatDan(credential.label)}

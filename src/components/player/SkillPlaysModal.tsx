@@ -1,5 +1,5 @@
 import { skillPlaySharePath } from "../../lib/skill-play-share";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -264,16 +264,27 @@ export function SkillPlaysModal({
             exit={{ opacity: 0, y: 8, scale: 0.985 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
           >
-            <header className="relative shrink-0 overflow-hidden border-b border-osu-b3/25 bg-osu-b4 px-4 py-4 sm:px-6 sm:py-5">
-              <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: color }} />
+            {/* Same header as the dan window: no panel, bar, eyebrow or
+                subtitle, and the play count sits beside the keymode instead
+                of in a footer. */}
+            <header className="relative shrink-0 px-4 pb-3 pt-4 sm:px-6 sm:pt-5">
               <div className="pr-10">
-                <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-osu-f1"><Trans>{keyCount}K skillset</Trans></div>
+                <div className="flex items-center text-[12px] text-osu-f1">
+                  <span>{keyCount}K</span>
+                  {!loading && total > 0 ? (
+                    <>
+                      <span className="mx-2 h-3 w-px bg-white/15" aria-hidden="true" />
+                      <span className="tabular-nums">
+                        {items.length < total
+                          ? t`${items.length.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} plays`
+                          : t`${total.toLocaleString("en-US")} plays`}
+                      </span>
+                    </>
+                  ) : null}
+                </div>
                 <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">
                   <Trans>{username}'s top <span style={{ color }}>{label}</span> plays</Trans>
                 </h2>
-                <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-osu-f1 sm:text-xs">
-                  <Trans>Ranked by {label} skill rating from the plays behind this profile rating, including tracked history.</Trans>
-                </p>
               </div>
               <button
                 type="button"
@@ -285,9 +296,9 @@ export function SkillPlaysModal({
               </button>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 [scrollbar-gutter:stable] sm:px-4 sm:py-3">
+            <div className="min-h-0 flex-1 overflow-y-auto border-t border-white/[0.07] px-2 pb-3 [scrollbar-gutter:stable] sm:px-4">
               {loading ? (
-                <div className="space-y-1.5">
+                <div>
                   {Array.from({ length: 7 }).map((_, index) => <SkillPlaySkeleton key={index} />)}
                 </div>
               ) : items.length === 0 ? (
@@ -309,7 +320,7 @@ export function SkillPlaysModal({
                   ) : null}
                 </div>
               ) : (
-                <div className="space-y-1.5">
+                <div>
                   {items.map((play, index) => (
                     <SkillPlayRow
                       key={`${play.beatmapId}:${play.rate}:${play.scoreId ?? play.playedAt ?? index}`}
@@ -326,7 +337,7 @@ export function SkillPlaysModal({
               )}
 
               {error && items.length > 0 ? (
-                <div className="mt-3 rounded-lg border border-osu-red-light/20 bg-osu-red-light/5 px-3 py-2 text-center text-[11px] text-osu-red-light">
+                <div className="mt-3 text-center text-[11px] text-osu-red-light">
                   {error}
                 </div>
               ) : null}
@@ -337,7 +348,7 @@ export function SkillPlaysModal({
                     type="button"
                     onClick={() => void showMore()}
                     disabled={loadingMore}
-                    className="rounded-lg border border-osu-b3/30 bg-osu-b4 px-5 py-2 text-xs font-semibold text-osu-l2 transition-colors hover:border-osu-pink/30 hover:bg-osu-b3/50 hover:text-white disabled:cursor-wait disabled:opacity-60"
+                    className="rounded-lg bg-osu-b4 px-5 py-2 text-xs font-semibold text-osu-l2 transition hover:text-white hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
                   >
                     {loadingMore ? t`Loading…` : t`Show more`}
                   </button>
@@ -345,11 +356,6 @@ export function SkillPlaysModal({
               ) : null}
             </div>
 
-            {!loading && total > 0 ? (
-              <footer className="shrink-0 border-t border-osu-b3/20 bg-osu-b4/70 px-4 py-2.5 text-center text-[10px] text-osu-f1">
-                Showing {items.length.toLocaleString("en-US")} of {total.toLocaleString("en-US")} rated {label} {total === 1 ? "play" : "plays"}
-              </footer>
-            ) : null}
           </motion.div>
         </motion.div>
       </AnimatePresence>
@@ -410,17 +416,40 @@ function SkillPlayRow({
   const topSkillsetMeta = !axis.startsWith("pattern:") && play.topSkillset && play.topSkillset !== axis
     ? MSD_SKILLSET_META.find((meta) => meta.key === play.topSkillset) ?? null
     : null;
+  // The metadata line is plain text split by hairlines: no keymode pill (the
+  // header names it once) and no per-row rating label (the title does).
+  const meta: { key: string; node: ReactNode; className?: string }[] = [
+    { key: "artist", node: play.artist, className: "max-w-44 truncate" },
+  ];
+  if (topSkillsetMeta) {
+    meta.push({
+      key: "top",
+      node: (
+        <span className="font-semibold" style={{ color: topSkillsetMeta.color }} title={t`This play's strongest skillset`}>
+          {i18n._(topSkillsetMeta.labelMsg)}
+        </span>
+      ),
+    });
+  }
+  meta.push({ key: "source", node: play.source === "top" ? t`profile top play` : t`tracked history` });
+  if (play.playedAt) {
+    meta.push({
+      key: "played",
+      node: <span title={formatTimeAgoTooltip(play.playedAt, locale)}>{formatTimeAgo(play.playedAt, locale)}</span>,
+      className: "max-sm:hidden",
+    });
+  }
   return (
     <button
       type="button"
       onClick={onOpen}
       onPointerEnter={onPrefetch}
       onFocus={onPrefetch}
-      className="group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-xl border border-transparent bg-osu-b4/55 px-2 py-2 text-left transition-colors hover:border-osu-b3/30 hover:bg-osu-b4 sm:gap-3 sm:px-3"
+      className="group flex w-full min-w-0 cursor-pointer items-center gap-3 border-t border-white/[0.07] px-2 py-2.5 text-left transition-colors first:border-t-0 hover:bg-osu-b4 sm:gap-4 sm:px-3"
       title={t`View map details`}
     >
-      <span className="w-6 shrink-0 text-right text-[11px] font-bold tabular-nums text-osu-f1 sm:w-7 sm:text-xs">{position}.</span>
-      <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded-md bg-osu-b3/35 sm:h-12 sm:w-20">
+      <span className="w-5 shrink-0 text-right text-[12px] tabular-nums text-osu-f1">{position}</span>
+      <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded-md bg-osu-b3/35 sm:h-11 sm:w-[4.5rem]">
         {play.coverUrl ? (
           <img
             src={play.coverUrl}
@@ -430,61 +459,46 @@ function SkillPlayRow({
             onError={(event) => { event.currentTarget.style.display = "none"; }}
           />
         ) : null}
-        <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/[0.06]" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-xs font-semibold text-white sm:text-sm">{play.title}</span>
-          <span className="hidden shrink-0 truncate text-[10px] text-osu-f1 md:inline">[{play.version}]</span>
-        </div>
-        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-osu-f1 sm:text-[10px]">
-          <span className="max-w-44 truncate">
-            {play.artist}<span className="md:hidden"> · [{play.version}]</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-[13px] font-semibold text-osu-l1 group-hover:text-white sm:text-sm">
+            {play.title}
+            <span className="ml-1.5 text-[11px] font-normal text-osu-f1">[{play.version}]</span>
           </span>
-          <span className="rounded bg-osu-b3/35 px-1 py-0.5 font-bold text-osu-yellow">{play.keyCount}K</span>
-          {topSkillsetMeta ? (
-            <span
-              className="rounded bg-osu-b3/35 px-1 py-0.5 font-bold"
-              style={{ color: topSkillsetMeta.color }}
-              title={t`This play's strongest skillset`}
-            >
-              {i18n._(topSkillsetMeta.labelMsg)}
+          <span className="flex shrink-0 items-center"><PlayModBadges play={play} size={0.75} /></span>
+        </div>
+        <div className="mt-1 flex min-w-0 items-center text-[11px] text-osu-f1">
+          {meta.map((item, index) => (
+            <span key={item.key} className={`flex min-w-0 items-center ${item.className ?? ""}`}>
+              {index > 0 ? <span className="mx-2 h-2.5 w-px shrink-0 bg-white/15" aria-hidden="true" /> : null}
+              <span className="min-w-0 truncate">{item.node}</span>
             </span>
-          ) : null}
-          <PlayModBadges play={play} />
-          <span>{play.source === "top" ? t`profile top play` : t`tracked history`}</span>
-          {play.playedAt ? (
-            <span className="hidden sm:inline" title={formatTimeAgoTooltip(play.playedAt, locale)}>{formatTimeAgo(play.playedAt, locale)}</span>
-          ) : null}
+          ))}
         </div>
       </div>
-      <div className="hidden shrink-0 items-end gap-4 text-right sm:flex">
-        {play.accuracy != null ? (
-          <div>
-            <div className="text-xs font-semibold tabular-nums text-osu-l2">{formatAccuracy(play.accuracy)}</div>
-            <div className="mt-0.5 text-[8px] uppercase tracking-wide text-osu-f1">{t`accuracy`}</div>
-          </div>
-        ) : null}
-        {play.pp != null ? (
-          <div>
-            <div className="text-xs font-bold tabular-nums text-osu-pink-light">{formatPP(play.pp)}</div>
-            <div className="mt-0.5 text-[8px] uppercase tracking-wide text-osu-f1">pp</div>
-          </div>
-        ) : null}
-      </div>
-      <div className="w-14 shrink-0 text-right sm:w-16">
-        <div className="text-base font-black leading-none tabular-nums sm:text-lg" style={{ color }}>{play.rating.toFixed(2)}</div>
-        <div className="mt-1 truncate text-[8px] font-semibold uppercase tracking-wide text-osu-f1" title={t`${label} rating`}>{label}</div>
-      </div>
+      <span className="hidden w-14 shrink-0 text-right text-[13px] tabular-nums text-osu-l2 sm:block">
+        {play.accuracy != null ? formatAccuracy(play.accuracy) : null}
+      </span>
+      <span className="hidden w-14 shrink-0 text-right text-[13px] tabular-nums text-osu-f1 sm:block">
+        {play.pp != null ? formatPP(play.pp) : null}
+      </span>
+      <span
+        className="w-14 shrink-0 text-right text-lg font-black leading-none tabular-nums sm:w-16 sm:text-xl"
+        style={{ color }}
+        title={t`${label} rating`}
+      >
+        {play.rating.toFixed(2)}
+      </span>
     </button>
   );
 }
 
 function SkillPlaySkeleton() {
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-osu-b4/55 px-3 py-2">
+    <div className="flex items-center gap-4 border-t border-white/[0.07] px-3 py-2.5 first:border-t-0">
       <Skeleton className="h-3 w-5" />
-      <Skeleton className="h-12 w-20 rounded-md" />
+      <Skeleton className="h-11 w-[4.5rem] rounded-md" />
       <div className="min-w-0 flex-1 space-y-2">
         <Skeleton className="h-3.5 w-2/3" />
         <Skeleton className="h-2.5 w-1/3" />

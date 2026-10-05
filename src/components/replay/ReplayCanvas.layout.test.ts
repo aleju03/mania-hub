@@ -1,3 +1,4 @@
+import { Container } from "pixi.js";
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_REPLAY_SKIN_SETTINGS, getReplaySkinProfile } from "../../lib/replay-skin";
 import { ManiaReplayRenderer } from "./ReplayCanvas";
@@ -109,6 +110,7 @@ function overlayRenderer(settings = DEFAULT_REPLAY_OVERLAY_SETTINGS): OverlayRen
     overlayReferenceLayout: null, ruleset: { accuracyMode: "stable" },
     selectedOverlayIds: new Set<ReplayOverlayId>(),
     render: vi.fn(), onOverlaySettingsChange: vi.fn(),
+    overlayLayers: new Map(), overlayLayerRoot: new Container(),
   });
 }
 

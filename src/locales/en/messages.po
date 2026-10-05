@@ -630,6 +630,12 @@ msgstr "{0} of {1} members counted"
 msgid "{0} of {1} members rated"
 msgstr "{0} of {1} members rated"
 
+#. placeholder {0}: items.length.toLocaleString("en-US")
+#. placeholder {1}: total.toLocaleString("en-US")
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{0} of {1} plays"
+msgstr "{0} of {1} plays"
+
 #. placeholder {0}: formatNumber(activeKeyMode.analyzedPlays)
 #. placeholder {1}: formatNumber(activeKeyMode.totalPlays)
 #: src/components/player/ActivityPanel.tsx
@@ -745,6 +751,7 @@ msgstr "{0} players"
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillPlaysModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/rankings.tsx
@@ -1354,13 +1361,17 @@ msgstr "{hours}h ago"
 msgid "{keyCount}K {sideLabel} dan"
 msgstr "{keyCount}K {sideLabel} dan"
 
+#: src/components/player/SkillHistoryGraph.tsx
+msgid "{keyCount}K Overall over time"
+msgstr "{keyCount}K Overall over time"
+
 #: src/components/player/SkillHistoryModal.tsx
 msgid "{keyCount}K skill history"
 msgstr "{keyCount}K skill history"
 
 #: src/components/player/SkillPlaysModal.tsx
-msgid "{keyCount}K skillset"
-msgstr "{keyCount}K skillset"
+#~ msgid "{keyCount}K skillset"
+#~ msgstr "{keyCount}K skillset"
 
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "{keymodeLabel} only"
@@ -2668,7 +2679,6 @@ msgstr "Account menu"
 
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
-#: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "accuracy"
 
@@ -3235,6 +3245,14 @@ msgstr "any language"
 msgid "any moment now"
 msgstr "any moment now"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Any picture, GIF or video, from a link or a file."
+msgstr "Any picture, GIF or video, from a link or a file."
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#~ msgid "Any picture, GIF, video or web page, from a link or a file."
+#~ msgstr "Any picture, GIF, video or web page, from a link or a file."
+
 #: src/routes/skins.tsx
 msgid "anyone"
 msgstr "anyone"
@@ -3425,6 +3443,10 @@ msgstr "Audio settings apply immediately."
 msgid "Audio URL (mp3)"
 msgstr "Audio URL (mp3)"
 
+#: src/lib/replay-overlays.ts
+msgid "Audio wave"
+msgstr "Audio wave"
+
 #: src/routes/terms.tsx
 msgid "August 23, 2026"
 msgstr "August 23, 2026"
@@ -3577,6 +3599,10 @@ msgstr "backdrop"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Background"
 msgstr "Background"
+
+#: src/lib/replay-overlays.ts
+msgid "Background art"
+msgstr "Background art"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Background colour"
@@ -3910,6 +3936,10 @@ msgstr "Bright"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Brightness"
 msgstr "Brightness"
+
+#: src/routes/replay.tsx
+msgid "Bring to front"
+msgstr "Bring to front"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Browse"
@@ -4812,6 +4842,10 @@ msgstr "Compact while playing"
 msgid "Companella"
 msgstr "Companella"
 
+#: src/routes/news_.companella.tsx
+msgid "Companella also sends the replay of the plays you set on osu!, so your skill ratings use your accuracy based on your hit timings."
+msgstr "Companella also sends the replay of the plays you set on osu!, so your skill ratings use your accuracy based on your hit timings."
+
 #: src/routes/companella.tsx
 #~ msgid "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the connection, and the approval is bound to that connection only."
 #~ msgstr "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the connection, and the approval is bound to that connection only."
@@ -5038,6 +5072,7 @@ msgstr "Could not load more plays."
 msgid "Could not load sets. Try again."
 msgstr "Could not load sets. Try again."
 
+#: src/components/player/SkillHistoryGraph.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Could not load skill history."
 msgstr "Could not load skill history."
@@ -5648,6 +5683,10 @@ msgstr "Custom color hex"
 msgid "Custom cursor"
 msgstr "Custom cursor"
 
+#: src/lib/replay-overlays.ts
+msgid "Custom media"
+msgstr "Custom media"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Custom skin"
 msgstr "Custom skin"
@@ -5698,6 +5737,7 @@ msgstr "dan"
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/lib/replay-overlays.ts
 #: src/routes/rankings.tsx
 msgid "Dan"
 msgstr "Dan"
@@ -5705,6 +5745,16 @@ msgstr "Dan"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Dan (est.)"
 msgstr "Dan (est.)"
+
+#. placeholder {0}: hovered.dan
+#: src/components/player/SkillHistoryGraph.tsx
+msgid "Dan {0}"
+msgstr "Dan {0}"
+
+#. placeholder {0}: danScaleLabel(hoveredBand.level, context)
+#: src/components/player/SkillHistoryGraph.tsx
+#~ msgid "Dan {0} range"
+#~ msgstr "Dan {0} range"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Dan accuracy"
@@ -6737,6 +6787,10 @@ msgstr "Export start time"
 msgid "Export video"
 msgstr "Export video"
 
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "Exported videos can't use this link because its site blocks it. Save the file and pick it instead."
+msgstr "Exported videos can't use this link because its site blocks it. Save the file and pick it instead."
+
 #: src/lib/pattern-labels.ts
 #~ msgid "Exposed Releases"
 #~ msgstr "Exposed Releases"
@@ -6931,6 +6985,7 @@ msgstr "Fewer plays"
 msgid "Fewer plays than the population baseline asks for, so this rating reads as an estimate"
 msgstr "Fewer plays than the population baseline asks for, so this rating reads as an estimate"
 
+#: src/components/replay/ReplayCustomMediaControls.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "File"
 msgstr "File"
@@ -7617,6 +7672,11 @@ msgstr "Gradient"
 msgid "Gradient text"
 msgstr "Gradient text"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgctxt "skill history view"
+msgid "Graph"
+msgstr "Graph"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
 msgid "graveyard"
@@ -7625,7 +7685,6 @@ msgstr "graveyard"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
-#: src/routes/recommendations.tsx
 msgid "Graveyard"
 msgstr "Graveyard"
 
@@ -7705,6 +7764,10 @@ msgstr "Health bar"
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
 msgstr "Hebrew"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+#~ msgid "Height"
+#~ msgstr "Height"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Height of the exported image, in pixels"
@@ -7855,6 +7918,11 @@ msgstr "Hint"
 #: src/components/player/SkillHistoryModal.tsx
 msgid "History"
 msgstr "History"
+
+#: src/routes/player/$username.tsx
+#~ msgctxt "Skills view"
+#~ msgid "History"
+#~ msgstr "History"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "History starts from the first saved card snapshot. Earlier ratings cannot be reconstructed."
@@ -8117,8 +8185,8 @@ msgstr "Hybrid chart: {0}, {1}"
 #~ msgstr "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings."
 
 #: src/routes/news_.companella.tsx
-msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
-msgstr "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
+#~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
+#~ msgstr "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
 
 #: src/routes/news_.companella.tsx
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating still gets you banned from Mania Tracker."
@@ -8139,6 +8207,10 @@ msgstr "If the site has been useful to you, consider supporting it. Donations he
 #: src/routes/snipes.tsx
 msgid "If you already had an older best above them, it doesn't count."
 msgstr "If you already had an older best above them, it doesn't count."
+
+#: src/routes/news_.companella.tsx
+msgid "If you are restricted, you can keep submitting plays this way, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
+msgstr "If you are restricted, you can keep submitting plays this way, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
@@ -8169,6 +8241,10 @@ msgstr "If your plays show a dan course pass, your dan for that side <0>cannot r
 #: src/routes/bbcode.tsx
 msgid "Image"
 msgstr "Image"
+
+#: src/lib/replay-overlays.ts
+msgid "Image or GIF"
+msgstr "Image or GIF"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Image upload failed."
@@ -8980,6 +9056,10 @@ msgstr "Legend"
 msgid "Length"
 msgstr "Length"
 
+#: src/lib/replay-overlays.ts
+msgid "Length, BPM and keys"
+msgstr "Length, BPM and keys"
+
 #: src/components/packs/StreakLeaderboard.tsx
 #: src/routes/communities.tsx
 msgid "less"
@@ -9023,6 +9103,7 @@ msgid "Limitations"
 msgstr "Limitations"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/replay/ReplayCustomMediaControls.tsx
 #: src/routes/bbcode.tsx
 msgid "Link"
 msgstr "Link"
@@ -9054,6 +9135,10 @@ msgstr "listed"
 #: src/components/communities/field-options.tsx
 msgid "Lithuanian"
 msgstr "Lithuanian"
+
+#: src/lib/replay-overlays.ts
+msgid "Live BPM"
+msgstr "Live BPM"
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "Live data is unavailable"
@@ -9354,6 +9439,7 @@ msgid "Loading goals..."
 msgstr "Loading goals..."
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
+#: src/components/player/SkillHistoryGraph.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Loading history…"
 msgstr "Loading history…"
@@ -9461,6 +9547,10 @@ msgstr "Loading..."
 #: src/routes/player/$username.tsx
 msgid "Loading…"
 msgstr "Loading…"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "Local file"
+msgstr "Local file"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "localized vibro detected"
@@ -9574,7 +9664,6 @@ msgstr "loved"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
-#: src/routes/recommendations.tsx
 msgid "Loved"
 msgstr "Loved"
 
@@ -9819,6 +9908,7 @@ msgstr "Map completion percentage."
 #~ msgstr "Map contributions · estimated"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/lib/replay-overlays.ts
 msgid "Map info"
 msgstr "Map info"
 
@@ -9852,6 +9942,10 @@ msgstr "mapped by {0}"
 #: src/components/maps/SearchCard.tsx
 msgid "mapped by {0} · {1} plays"
 msgstr "mapped by {0} · {1} plays"
+
+#: src/lib/replay-overlays.ts
+msgid "Mapper"
+msgstr "Mapper"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/recommendations.tsx
@@ -11049,6 +11143,7 @@ msgstr "No sets found."
 msgid "No skill ratings for this team's members yet."
 msgstr "No skill ratings for this team's members yet."
 
+#: src/components/player/SkillHistoryGraph.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No skill ratings have been recorded yet."
 msgstr "No skill ratings have been recorded yet."
@@ -11519,6 +11614,10 @@ msgid "Nothing qualifies under this filter at the moment, but other reasons stil
 msgstr "Nothing qualifies under this filter at the moment, but other reasons still have maps."
 
 #: src/routes/recommendations.tsx
+#~ msgid "Nothing qualifies under this filter at the moment, but other skills still have maps."
+#~ msgstr "Nothing qualifies under this filter at the moment, but other skills still have maps."
+
+#: src/routes/recommendations.tsx
 msgid "Nothing ranked sits a little above your {axisLabel} rating that you haven't played yet."
 msgstr "Nothing ranked sits a little above your {axisLabel} rating that you haven't played yet."
 
@@ -11838,6 +11937,7 @@ msgstr "Only your two best rate plays on the same chart count toward Dan. This p
 #~ msgstr "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
 
 #: src/components/me/DynamicRendersPanel.tsx
+#: src/components/replay/ReplayCustomMediaControls.tsx
 msgid "Opacity"
 msgstr "Opacity"
 
@@ -12236,6 +12336,7 @@ msgstr "Outside this average's best-clear window"
 #~ msgstr "Outside this average's weighted window"
 
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillHistoryGraph.tsx
 msgid "overall"
 msgstr "overall"
 
@@ -12275,6 +12376,11 @@ msgstr "owner"
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Pack open"
 #~ msgstr "Pack open"
+
+#. placeholder {0}: new Date(pausedUntil).toLocaleString(intlLocaleTag(i18n.locale as AppLocale), { dateStyle: "long", timeStyle: "short" })
+#: src/routes/packs.tsx
+msgid "Pack opening is paused on this account until {0}."
+msgstr "Pack opening is paused on this account until {0}."
 
 #: src/components/layout/Nav.tsx
 #: src/routes/packs.tsx
@@ -12682,6 +12788,10 @@ msgstr "Player"
 msgid "Player details"
 msgstr "Player details"
 
+#: src/lib/replay-overlays.ts
+msgid "Player info"
+msgstr "Player info"
+
 #: src/routes/player/$username.tsx
 msgid "Player not found."
 msgstr "Player not found."
@@ -12711,6 +12821,11 @@ msgstr "players"
 #: src/routes/maps.tsx
 msgid "Players"
 msgstr "Players"
+
+#. placeholder {0}: band.median.toFixed(2)
+#: src/components/player/SkillHistoryGraph.tsx
+#~ msgid "Players at dan {label} have a median Overall of {0}"
+#~ msgstr "Players at dan {label} have a median Overall of {0}"
 
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "players carded"
@@ -13134,6 +13249,7 @@ msgstr "profile"
 msgid "Profile"
 msgstr "Profile"
 
+#: src/components/replay/ReplayPlayerInfoControls.tsx
 #: src/lib/signature-style.ts
 msgid "Profile banner"
 msgstr "Profile banner"
@@ -13159,6 +13275,10 @@ msgstr "profile top play"
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "Profile update"
 #~ msgstr "Profile update"
+
+#: src/lib/replay-overlays.ts
+msgid "Progress bar"
+msgstr "Progress bar"
 
 #. placeholder {0}: nextTier.label
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
@@ -13342,8 +13462,8 @@ msgid "Ranked (PP)"
 msgstr "Ranked (PP)"
 
 #: src/components/player/SkillPlaysModal.tsx
-msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
-msgstr "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
+#~ msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
+#~ msgstr "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
 
 #: src/routes/teams.tsx
 #~ msgid "Ranked Score"
@@ -13387,8 +13507,8 @@ msgid "Rate"
 msgstr "Rate"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "Rate edits detected. Using this difficulty's audio to keep notes in sync."
-msgstr "Rate edits detected. Using this difficulty's audio to keep notes in sync."
+#~ msgid "Rate edits detected. Using this difficulty's audio to keep notes in sync."
+#~ msgstr "Rate edits detected. Using this difficulty's audio to keep notes in sync."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x) and at <2/> or <3/> (0.75x) are all credited against the chart's dan at that exact rate, which the site rates separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. Custom lazer rates like 1.15x do not count toward your dan. The site can rate a chart at any speed on demand, and the map page does exactly that when you open a play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored ones."
@@ -13489,6 +13609,10 @@ msgstr "Rating engines and LN charts"
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Rating history chart"
 msgstr "Rating history chart"
+
+#: src/components/player/SkillHistoryGraph.tsx
+msgid "Rating system update"
+msgstr "Rating system update"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating the plays failed. It retries automatically, check back in a bit."
@@ -13699,15 +13823,14 @@ msgstr "Recently Watched"
 msgid "receptor art"
 msgstr "receptor art"
 
-#: src/components/layout/Nav.tsx
 #: src/routes/recommendations.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "recommendations"
 msgstr "recommendations"
 
 #: src/routes/recommendations.tsx
-msgid "Recommendations"
-msgstr "Recommendations"
+#~ msgid "Recommendations"
+#~ msgstr "Recommendations"
 
 #: src/routes/recommendations.tsx
 msgid "Recommendations need a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
@@ -13716,6 +13839,14 @@ msgstr "Recommendations need a player's top 200, and this account has never been
 #: src/routes/recommendations.tsx
 msgid "Recommendations need the server"
 msgstr "Recommendations need the server"
+
+#: src/components/layout/Nav.tsx
+msgid "recommended maps"
+msgstr "recommended maps"
+
+#: src/routes/recommendations.tsx
+msgid "Recommended maps"
+msgstr "Recommended maps"
 
 #. placeholder {0}: card.copies - 1
 #: src/components/packs/CollectionPanel.tsx
@@ -13947,6 +14078,10 @@ msgstr "Remove all"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Remove color"
 msgstr "Remove color"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "Remove file"
+msgstr "Remove file"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Remove from the collection"
@@ -14373,6 +14508,10 @@ msgstr "Right"
 #: src/routes/replay.tsx
 msgid "Right thumb"
 msgstr "Right thumb"
+
+#: src/routes/replay.tsx
+msgid "Right-click to add media"
+msgstr "Right-click to add media"
 
 #: src/routes/legal.tsx
 msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, ruleset icons, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
@@ -14921,12 +15060,12 @@ msgid "See your pulls"
 msgstr "See your pulls"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "Seeking audio…"
-msgstr "Seeking audio…"
+#~ msgid "Seeking audio…"
+#~ msgstr "Seeking audio…"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "Seeking beyond the clip needs the full song."
-msgstr "Seeking beyond the clip needs the full song."
+#~ msgid "Seeking beyond the clip needs the full song."
+#~ msgstr "Seeking beyond the clip needs the full song."
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Select"
@@ -15008,6 +15147,10 @@ msgstr "Send the chart file when the site does not already have it"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Send to {0}"
 msgstr "Send to {0}"
+
+#: src/routes/replay.tsx
+msgid "Send to back"
+msgstr "Send to back"
 
 #: src/routes/report.tsx
 #~ msgid "Send update"
@@ -15679,10 +15822,10 @@ msgstr "Similar skins"
 msgid "Simulated from the replay's keypresses; score and combo still show the real play. Click to judge with {otherLabel} rules again."
 msgstr "Simulated from the replay's keypresses; score and combo still show the real play. Click to judge with {otherLabel} rules again."
 
-#. placeholder {0}: formatMonth(judgement.since)
-#: src/components/me/MyStatsInsights.tsx
-#~ msgid "since {0}"
-#~ msgstr "since {0}"
+#. placeholder {0}: new Date(points[0].at).toLocaleDateString(locale, { month: "short", day: "numeric", ...(new Date(points[0].at).getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) })
+#: src/components/player/SkillHistoryGraph.tsx
+msgid "since {0}"
+msgstr "since {0}"
 
 #: src/lib/signature-shared.ts
 msgid "Single"
@@ -16227,6 +16370,7 @@ msgid "Standard"
 msgstr "Standard"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/lib/replay-overlays.ts
 #: src/routes/maps.tsx
 #: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
@@ -16286,8 +16430,8 @@ msgid "Start with sound"
 msgstr "Start with sound"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "Starting playback…"
-msgstr "Starting playback…"
+#~ msgid "Starting playback…"
+#~ msgstr "Starting playback…"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
@@ -16836,6 +16980,10 @@ msgstr "That doesn't look like an osu! score link."
 msgid "That file is not an image."
 msgstr "That file is not an image."
 
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "That file is over 200 MB."
+msgstr "That file is over 200 MB."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "That file isn't a supported image."
 msgstr "That file isn't a supported image."
@@ -16881,6 +17029,10 @@ msgstr "That isn't a profile link."
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "That link did not load."
 msgstr "That link did not load."
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "That link does not work here. Use an http or https link."
+msgstr "That link does not work here. Use an http or https link."
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "That link is a page, not an image file."
@@ -17081,6 +17233,10 @@ msgstr "The browser blocked the clipboard. Try Copy BBCode again."
 #: src/routes/privacy.tsx
 msgid "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
 msgstr "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "The browser would not store that file."
+msgstr "The browser would not store that file."
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "The calculation could not run; it will be retried."
@@ -17630,6 +17786,14 @@ msgstr "The player panel can stay here, but this view did not return fresh map d
 msgid "the player's"
 msgstr "the player's"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#~ msgid "The player's avatar, country, rank and pp."
+#~ msgstr "The player's avatar, country, rank and pp."
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "The player's avatar, name and country."
+msgstr "The player's avatar, name and country."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The pool is your osu! top plays plus every play the site tracked for you, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
 #~ msgstr "The pool is your osu! top plays plus every play the site tracked for you, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
@@ -17775,8 +17939,8 @@ msgid "The session changed by {0} points; the map estimates add up to {1}. This 
 msgstr "The session changed by {0} points; the map estimates add up to {1}. This is the difference between them, not a separate bonus."
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "The short audio clip can't be used for this chart."
-msgstr "The short audio clip can't be used for this chart."
+#~ msgid "The short audio clip can't be used for this chart."
+#~ msgstr "The short audio clip can't be used for this chart."
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
@@ -17873,8 +18037,8 @@ msgid "The song file can't be decoded here. Export without audio, or pick a shor
 msgstr "The song file can't be decoded here. Export without audio, or pick a shorter range."
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "The song may need to be downloaded and prepared first."
-msgstr "The song may need to be downloaded and prepared first."
+#~ msgid "The song may need to be downloaded and prepared first."
+#~ msgstr "The song may need to be downloaded and prepared first."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
@@ -18409,6 +18573,10 @@ msgstr "Thursdays"
 msgid "Tier changed to {tierLabel}"
 msgstr "Tier changed to {tierLabel}"
 
+#: src/lib/replay-overlays.ts
+msgid "Time left"
+msgstr "Time left"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Time played"
 msgstr "Time played"
@@ -18438,6 +18606,14 @@ msgstr "title"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Title"
 msgstr "Title"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#~ msgid "Title, artist, difficulty, mapper and star rating."
+#~ msgstr "Title, artist, difficulty, mapper and star rating."
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Title, artist, difficulty, mapper, star rating and dan."
+msgstr "Title, artist, difficulty, mapper, star rating and dan."
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
@@ -18713,6 +18889,7 @@ msgstr "Try a wider range or check back later."
 #: src/components/packs/GiftSpareDialog.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
+#: src/components/player/SkillHistoryGraph.tsx
 #: src/components/player/SkillHistoryModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/settings/LazySettingsPanel.tsx
@@ -19297,6 +19474,10 @@ msgstr "Vibro detected. This play does not count toward skill or dan ratings."
 msgid "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
 msgstr "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
 
+#: src/lib/replay-overlays.ts
+msgid "Video"
+msgstr "Video"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Video bitrate"
 msgstr "Video bitrate"
@@ -19626,6 +19807,14 @@ msgstr "We have no replay-ready plays stored for {0} yet."
 msgid "We have no run by {0} on this map. Paste a link to their score to use it."
 msgstr "We have no run by {0} on this map. Paste a link to their score to use it."
 
+#: src/lib/replay-overlays.ts
+#~ msgid "Web page"
+#~ msgstr "Web page"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+#~ msgid "Web pages don't show in exported videos."
+#~ msgstr "Web pages don't show in exported videos."
+
 #: src/components/packs/GoatPoll.tsx
 msgid "web.archive.org link to their osu! profile"
 msgstr "web.archive.org link to their osu! profile"
@@ -19772,6 +19961,10 @@ msgstr "Whole pool, new cards first"
 #: src/routes/recommendations.tsx
 msgid "why a map shows up"
 msgstr "why a map shows up"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+#~ msgid "Width"
+#~ msgstr "Width"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Width of the exported image, in pixels"
@@ -20228,6 +20421,10 @@ msgstr "Your credit"
 msgid "Your credit: {0}"
 msgstr "Your credit: {0}"
 
+#: src/routes/recommendations.tsx
+msgid "your dan"
+msgstr "your dan"
+
 #: src/routes/dan-estimates.tsx
 msgid "Your dan"
 msgstr "Your dan"
@@ -20408,8 +20605,8 @@ msgid "your showcase"
 msgstr "your showcase"
 
 #: src/routes/news_.companella.tsx
-msgid "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
-msgstr "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
+#~ msgid "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
+#~ msgstr "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Your skin"

@@ -30,6 +30,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
+import { BBCodeDoodles } from "../components/player/bbcode/BBCodeDoodles";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { useAuth } from "../lib/auth-context";
 import { pageSeo } from "../lib/seo";
@@ -187,6 +188,7 @@ function BBCodePage() {
     <div className="relative flex h-[calc(100dvh-60px)] flex-col">
       {/* Same fill as the editor so its column does not read as a cut-out. */}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-clip bg-osu-b4">
+        <BBCodeDoodles />
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/profile.svg" title={t`osu! profile BBCode editor`} />
           {/* Same column as the page header so the toolbar lines up with the title. */}

@@ -158,6 +158,16 @@ const CALLERS: Record<string, OsuCallerLabel> = {
     "The top-100 half of that stored profile refresh.",
     "Profiles",
   ),
+  "job:compute_player_skills:snapshot_mint": job(
+    "Skill ratings: first profile",
+    "Fetches a player's profile the first time their skill ratings are computed, when nothing about them is stored yet.",
+    "My stats",
+  ),
+  "job:compute_player_skills:snapshot_mint:best": job(
+    "Skill ratings: first top plays",
+    "The top-plays half of that first profile fetch.",
+    "My stats",
+  ),
   "job:warm_pack_player": job(
     "Pack card warm-up",
     "Pre-loads a card pool player's profile so opening a pack never waits on osu!.",

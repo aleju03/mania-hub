@@ -1,7 +1,7 @@
 import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
-import { Suspense, useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Suspense, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, RotateCcw, Send, X } from "lucide-react";
+import { BringToFront, Check, ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Repeat2, RotateCcw, Send, SendToBack, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
@@ -12,7 +12,7 @@ import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { loadReplayRenderer, preloadReplayRenderer } from "../lib/replay-renderer-loader";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getModDisplayList, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
-import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
+import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { exitNativeFullscreen, getNativeFullscreenElement, requestNativeFullscreen } from "../lib/fullscreen";
@@ -43,7 +43,7 @@ import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability, isReplayFileMissingError, replayFileMissingMessage } from "../lib/replay-score-availability";
 import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
 import { buildReplayShareUrl } from "../lib/replay-share";
-import { getBeatmapAudioUrl, getBeatmapHitsoundsUrl, getInlineBackgroundUrl } from "../lib/audio-url";
+import { getBeatmapAudioUrl, getBeatmapAudioWaveUrl, getBeatmapHitsoundsUrl, getInlineBackgroundUrl } from "../lib/audio-url";
 import { readReplayAudioClock } from "../lib/replay-audio-clock";
 import { ReplayHitsoundPlayer } from "../lib/replay-hitsounds";
 import { REPLAY_SKIN_SOUNDS_CHANGE_EVENT, readReplaySkinSounds } from "../lib/replay-skin-sounds";
@@ -53,6 +53,8 @@ import {
   REPLAY_OVERLAY_IDS,
   REPLAY_OVERLAY_LABELS,
   isReplayStageArtOverlay,
+  isReplayOverlayStackable,
+  restackReplayOverlay,
   REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
   normalizeReplayOverlaySettings,
   REPLAY_MISS_STYLES,
@@ -77,9 +79,13 @@ import {
   readReplayOverlaySettings,
   writeReplayMissThumbHand,
   writeReplayOverlaySettings,
+  hasReplayCustomMediaSource,
 } from "../lib/replay-overlays";
 import type { ReplayColumnStatMetric, ReplayColumnStatStyle, ReplayHandAccuracyStyle, ReplayHitErrorStyle, ReplayJudgementLayout, ReplayMissStyle, ReplayThumbHand } from "../lib/replay-overlays";
 import { ReplayMasterOverlayControls } from "../components/replay/ReplayMasterOverlayControls";
+import { ReplayMapInfoControls } from "../components/replay/ReplayMapInfoControls";
+import { ReplayCustomMediaControls } from "../components/replay/ReplayCustomMediaControls";
+import { ReplayPlayerInfoControls } from "../components/replay/ReplayPlayerInfoControls";
 import { ReplayLeaderboardControls } from "../components/replay/ReplayLeaderboardControls";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
@@ -90,14 +96,22 @@ import { getCommunityBeatmapAssetUrl, uploadCommunityBeatmapAssets } from "../li
 import type { BeatmapChecksumLookupResult } from "../lib/osu/replay";
 import { startProgressPoll } from "../lib/progress-poll";
 import {
+  fetchLiveChartAnalysis,
   fetchLiveGlobalRankings,
   fetchLivePlayerCachedProfileSnapshotDirect,
+  fetchLiveRateChartAnalysis,
   fetchLivePlayerRecentScoresDirect,
+  fetchLivePlayerSummaryDirect,
   isLiveBackendConfigured,
   openReplayPresenceEventSource,
   type LiveGlobalRankingEntry,
   type LivePlayerProfileSnapshot,
+  type LivePlayerSummary,
 } from "../lib/live-backend";
+import { buildReplayMapInfo, buildReplayPlayerInfo, type ReplayInfoData, type ReplayMapDan } from "../lib/replay-info-overlay";
+import { getDanTierImageSrc } from "../lib/dan-images";
+import { loadReplayAudioWave, type ReplayAudioWave } from "../lib/replay-audio-wave";
+import { userCoverProxyUrl } from "../lib/team-image";
 import { getReplaySpectatorTicket, type ReplaySpectatorTicket } from "../lib/replay-spectator";
 import { useLocale } from "../lib/locale-context";
 import { getReplayExportManager } from "../lib/replay-export/manager";
@@ -168,7 +182,7 @@ import { fetchRestrictedPpReplay, pickRestrictedPpReplayChart } from "../lib/res
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import { avatarImageSrc } from "../components/ui/Avatar";
 import type { ReplaySkinImageAsset, ReplaySkinSettings } from "../lib/replay-skin";
-import type { ReplayOverlayId, ReplayOverlaySettings } from "../lib/replay-overlays";
+import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlaySettings } from "../lib/replay-overlays";
 import type { BeatmapScoreLookupStatus, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
@@ -331,6 +345,28 @@ function isMobileReplayPointer(event: ReactPointerEvent<HTMLElement>) {
     && window.matchMedia("(pointer: coarse)").matches;
 }
 
+
+// The canvas loads card art through Pixi's texture parser, which cannot read
+// an SVG, so the dan badge is drawn once to a PNG first.
+async function rasterizeDanBadge(src: string): Promise<string | null> {
+  try {
+    const image = new Image();
+    image.src = src;
+    await image.decode();
+    const size = 96;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    const scale = Math.min(size / Math.max(1, image.naturalWidth || size), size / Math.max(1, image.naturalHeight || size));
+    const width = (image.naturalWidth || size) * scale;
+    const height = (image.naturalHeight || size) * scale;
+    context.drawImage(image, (size - width) / 2, (size - height) / 2, width, height);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
 
 async function postUploadedReplay(buffer: ArrayBuffer, filename?: string): Promise<ReplayUploadResponse> {
   const response = await fetch("/api/replay-upload", {
@@ -1982,7 +2018,7 @@ function ReplayPage() {
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <ReplayViewer replay={replay} beatmap={beatmap} beatmapFileContent={beatmapFileContent} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} localAssetsAreRemote={localBeatmapAssets.remote} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} ownerUserId={replaySkinOwnerUserId} shareUrl={replayShareUrl} onClear={handleClearReplay}>
+                <ReplayViewer replay={replay} beatmap={beatmap} beatmapFileContent={beatmapFileContent} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} starRating={starRating} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} localAssetsAreRemote={localBeatmapAssets.remote} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} ownerUserId={replaySkinOwnerUserId} shareUrl={replayShareUrl} onClear={handleClearReplay}>
                   {/* Phones scroll the card inside a padded list; on desktop
                       the strip runs edge to edge, flush against the stage. */}
                   <div className="mx-auto w-full max-w-[1200px] px-3 sm:max-w-none sm:px-0">{replayInfoCard}</div>
@@ -2093,6 +2129,7 @@ function ReplayViewer({
   beatmapFileContent,
   scoreInfo,
   replayMods,
+  starRating = null,
   judgeAsLazer,
   sourceIsLazer,
   fallbackBeatmapsetId,
@@ -2113,6 +2150,8 @@ function ReplayViewer({
   beatmapFileContent: string | null;
   scoreInfo: OsuScore | null;
   replayMods?: OsuMod[];
+  /** Mod-adjusted star rating, for the map info overlay; null while unknown. */
+  starRating?: number | null;
   /** Ruleset to judge with; differs from sourceIsLazer while the info bar's
       client what-if toggle is active. */
   judgeAsLazer: boolean;
@@ -2572,15 +2611,36 @@ function ReplayViewer({
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     setOverlayMenu({
-      // Clamped so the menu never spills past the stage edges.
-      x: Math.max(8, Math.min(event.clientX - rect.left, rect.width - 200)),
-      y: Math.max(8, Math.min(event.clientY - rect.top, rect.height - 280)),
+      // The cursor point; the layout effect below fits the menu to the stage
+      // once its real size is known.
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
       targetId: renderer.getOverlayIdAtClientPoint(event.clientX, event.clientY),
       // Which stage art the applied skin actually draws is only known to the
       // renderer, and only once it has drawn a frame.
       stageArtIds: renderer.listStageArtOverlayIds?.() ?? [],
     });
   }, []);
+  // Opens down-right of the cursor like a native menu, flipping up or left
+  // where the stage runs out, and scrolls if the stage is shorter than it.
+  const [overlayMenuPosition, setOverlayMenuPosition] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const menu = overlayMenuRef.current;
+    const stage = menu?.offsetParent as HTMLElement | null | undefined;
+    if (!overlayMenu || !menu || !stage) {
+      setOverlayMenuPosition(null);
+      return;
+    }
+    const margin = 8;
+    const width = menu.offsetWidth;
+    const height = Math.min(menu.scrollHeight, stage.clientHeight - margin * 2);
+    const fit = (point: number, size: number, room: number) => {
+      if (point + size <= room - margin) return point;
+      if (point - size >= margin) return point - size;
+      return Math.max(margin, room - margin - size);
+    };
+    setOverlayMenuPosition({ left: fit(overlayMenu.x, width, stage.clientWidth), top: fit(overlayMenu.y, height, stage.clientHeight) });
+  }, [overlayMenu]);
   useEffect(() => {
     if (!overlayMenu) return;
     const onPointerDown = (event: PointerEvent) => {
@@ -2901,6 +2961,29 @@ function ReplayViewer({
     rendererRef.current?.setLeaderboard?.(rendererLeaderboard, leaderboardPlayerName, leaderboardOptions);
   }, [rendererLeaderboard, leaderboardPlayerName, leaderboardOptions]);
 
+  // The player info overlay's rank and pp come from the stored profile, asked
+  // for only while that overlay is on.
+  const playerInfoEnabled = overlaySettings.playerInfo.enabled;
+  const playerStatsUserId = scoreInfo?.user?.id ?? ownerUserId ?? null;
+  const playerStatsKey = playerStatsUserId != null ? String(playerStatsUserId) : leaderboardPlayerName;
+  const [playerSummary, setPlayerSummary] = useState<{ key: string; summary: LivePlayerSummary | null } | null>(null);
+  const playerSummaryKey = playerSummary?.key;
+  useEffect(() => {
+    if (!playerInfoEnabled || !playerStatsKey || playerSummaryKey === playerStatsKey) return;
+    let cancelled = false;
+    fetchLivePlayerSummaryDirect(playerStatsKey, playerStatsUserId != null ? { lookup: "id" } : {})
+      .then((summary) => {
+        if (!cancelled) setPlayerSummary({ key: playerStatsKey, summary });
+      })
+      .catch(() => {
+        if (!cancelled) setPlayerSummary({ key: playerStatsKey, summary: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [playerInfoEnabled, playerStatsKey, playerStatsUserId, playerSummaryKey]);
+
+
   // Shift+Tab keeps normal focus navigation, and typing fields are left alone.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -3201,6 +3284,88 @@ function ReplayViewer({
       if (coverTimer != null) window.clearTimeout(coverTimer);
     };
   }, [beatmapBackgroundUrl, coverUrl]);
+
+  // The map info card's audio wave: the backend's stored spectrum for this
+  // song, fetched only while the option is on. Songs that came from a local
+  // .osz have no server copy, so they get no wave.
+  const mapInfoWaveOn = overlaySettings.mapInfo.enabled && overlaySettings.mapInfo.mapInfo?.audioWave === true;
+  const waveSourceUrl = !localAudioUrl && effectiveBeatmapsetId && beatmap?.audioFilename
+    ? getBeatmapAudioWaveUrl(effectiveBeatmapsetId, beatmap.audioFilename)
+    : null;
+  const [audioWave, setAudioWave] = useState<{ url: string; wave: ReplayAudioWave } | null>(null);
+  const audioWaveUrl = audioWave?.url;
+  useEffect(() => {
+    if (!mapInfoWaveOn || !waveSourceUrl || audioWaveUrl === waveSourceUrl) return;
+    const controller = new AbortController();
+    loadReplayAudioWave(waveSourceUrl, controller.signal)
+      .then((wave) => setAudioWave({ url: waveSourceUrl, wave }))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [mapInfoWaveOn, waveSourceUrl, audioWaveUrl]);
+
+  // The chart's dan at the play's rate, for the map info card. Fetched only
+  // while the card shows it.
+  const noDans = useNoDans();
+  const danBeatmapId = scoreInfo?.beatmap?.id ?? null;
+  const mapInfoDanOn = !noDans && overlaySettings.mapInfo.enabled && overlaySettings.mapInfo.mapInfo?.dan !== false;
+  const danKey = mapInfoDanOn && danBeatmapId ? `${danBeatmapId}:${Math.round(modRate * 100)}:${replay.keyCount}` : null;
+  const [mapDan, setMapDan] = useState<{ key: string; dan: ReplayMapDan | null } | null>(null);
+  const mapDanKey = mapDan?.key;
+  useEffect(() => {
+    if (!danKey || mapDanKey === danKey || !isLiveBackendConfigured()) return;
+    const [beatmapId, ratePercent, keyCount] = danKey.split(":").map(Number);
+    let cancelled = false;
+    void (async () => {
+      const verdict = ratePercent === 100
+        ? await fetchLiveChartAnalysis(beatmapId).then((detail) => (detail?.status === "ready" ? detail.primaryDan ?? null : null))
+        : await fetchLiveRateChartAnalysis(beatmapId, ratePercent / 100).then((result) => result?.dan ?? null);
+      const src = verdict ? getDanTierImageSrc(verdict.label, verdict.family === "ln" ? "ln" : undefined, keyCount) : null;
+      const imageUrl = src ? await rasterizeDanBadge(src) : null;
+      if (cancelled) return;
+      setMapDan({ key: danKey, dan: verdict ? { label: verdict.label, family: verdict.family, ...(imageUrl ? { imageUrl } : {}) } : null });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [danKey, mapDanKey]);
+  const shownMapDan = danKey && mapDan?.key === danKey ? mapDan.dan : null;
+
+  // The cover fallback is cross-origin; the card reads it through the proxy.
+  const cardBackgroundUrl = getInlineBackgroundUrl(bgSrc && bgSrc === coverUrl ? coverProxyUrl : bgSrc) ?? undefined;
+  const replayInfo = useMemo<ReplayInfoData>(() => {
+    const summaryUser = playerSummary?.key === playerStatsKey ? playerSummary.summary?.user : undefined;
+    const userId = playerStatsUserId ?? summaryUser?.id;
+    const map = buildReplayMapInfo(scoreInfo, beatmap, scoreInfo?.mods ?? replayMods, starRating, replay.keyCount);
+    return {
+      map: map && {
+        ...map,
+        ...(cardBackgroundUrl ? { backgroundUrl: cardBackgroundUrl } : {}),
+        ...(audioWave && audioWave.url === waveSourceUrl ? { audioWave: audioWave.wave } : {}),
+        ...(shownMapDan ? { dan: shownMapDan } : {}),
+      },
+      player: buildReplayPlayerInfo(
+        leaderboardPlayerName,
+        avatarImageSrc(scoreInfo?.user?.avatar_url ?? summaryUser?.avatar_url, userId, { proxy: true }),
+        scoreInfo?.user?.country_code ?? summaryUser?.country_code,
+        userCoverProxyUrl(summaryUser?.cover_url),
+      ),
+    };
+  }, [scoreInfo, beatmap, replayMods, starRating, replay.keyCount, cardBackgroundUrl, audioWave, waveSourceUrl, shownMapDan, leaderboardPlayerName, playerSummary, playerStatsKey, playerStatsUserId]);
+  const replayInfoRef = useRef(replayInfo);
+  const renderInfoCardPreview = useCallback(
+    (id: "mapInfo" | "playerInfo", placement: ReplayOverlayPlacement) => rendererRef.current?.captureInfoCardPreview?.(id, placement) ?? null,
+    [],
+  );
+  useEffect(() => {
+    replayInfoRef.current = replayInfo;
+    rendererRef.current?.setReplayInfo?.(replayInfo);
+  }, [replayInfo]);
+  const emptyMediaLabel = t`Right-click to add media`;
+  const emptyMediaLabelRef = useRef(emptyMediaLabel);
+  useEffect(() => {
+    emptyMediaLabelRef.current = emptyMediaLabel;
+    rendererRef.current?.setEmptyMediaLabel?.(emptyMediaLabel);
+  }, [emptyMediaLabel]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -3776,6 +3941,8 @@ function ReplayViewer({
         renderer.setHitsoundTrigger?.(hitsoundPlayerRef.current);
         renderer.setLeaderboard?.(rendererLeaderboardRef.current, leaderboardPlayerNameRef.current, leaderboardOptionsRef.current);
         renderer.setLeaderboardVisible?.(leaderboardVisibleRef.current);
+        renderer.setReplayInfo?.(replayInfoRef.current);
+        renderer.setEmptyMediaLabel?.(emptyMediaLabelRef.current);
         renderer.setSpectatorCount?.(spectatorCountRef.current);
         renderer.setSpectatorNames?.(spectatorNamesRef.current);
         rendererRef.current = renderer;
@@ -4418,6 +4585,7 @@ function ReplayViewer({
       leaderboardPlayerName: leaderboardPlayerNameRef.current,
       leaderboardOptions: leaderboardOptionsRef.current,
       leaderboardVisible: leaderboardVisibleRef.current,
+      replayInfo: replayInfoRef.current,
       storyboard: storyboardActive ? storyboardRef.current?.data ?? null : null,
       storyboardEnabled: storyboardActive,
 
@@ -4755,8 +4923,8 @@ function ReplayViewer({
         {overlayMenu && (
           <div
             ref={overlayMenuRef}
-            className="absolute z-[40] w-44 overflow-hidden rounded-lg border border-white/10 bg-[#0b0b11]/95 py-1 shadow-[0_10px_40px_rgba(0,0,0,0.65)] backdrop-blur-sm"
-            style={{ left: overlayMenu.x, top: overlayMenu.y }}
+            className={`absolute z-[40] max-h-[calc(100%-16px)] ${overlayMenu.targetId === "media" ? "w-64" : "w-44"} overflow-y-auto overflow-x-hidden overscroll-contain border border-white/10 bg-[#0b0b11] py-1`}
+            style={overlayMenuPosition ?? { left: overlayMenu.x, top: overlayMenu.y, visibility: "hidden" }}
             onContextMenu={(event) => event.preventDefault()}
           >
             {overlayMenu.targetId ? (
@@ -4768,6 +4936,39 @@ function ReplayViewer({
                       onChange={(patch) => {
                         const current = overlaySettingsRef.current;
                         applyOverlaySettings({ ...current, leaderboard: { ...current.leaderboard, ...patch } });
+                      }}
+                    />
+                  </div>
+                )}
+                {overlayMenu.targetId === "playerInfo" && (
+                  <div className="border-b border-white/10 px-3 py-2 text-white/85" onKeyDown={(event) => event.stopPropagation()}>
+                    <ReplayPlayerInfoControls
+                      placement={overlaySettings.playerInfo}
+                      onChange={(patch) => {
+                        const current = overlaySettingsRef.current;
+                        applyOverlaySettings({ ...current, playerInfo: { ...current.playerInfo, ...patch } });
+                      }}
+                    />
+                  </div>
+                )}
+                {overlayMenu.targetId === "mapInfo" && (
+                  <div className="border-b border-white/10 px-3 py-2 text-white/85" onKeyDown={(event) => event.stopPropagation()}>
+                    <ReplayMapInfoControls
+                      placement={overlaySettings.mapInfo}
+                      onChange={(patch) => {
+                        const current = overlaySettingsRef.current;
+                        applyOverlaySettings({ ...current, mapInfo: { ...current.mapInfo, ...patch } });
+                      }}
+                    />
+                  </div>
+                )}
+                {overlayMenu.targetId === "media" && (
+                  <div className="border-b border-white/10 px-3 py-2 text-white/85" onKeyDown={(event) => event.stopPropagation()}>
+                    <ReplayCustomMediaControls
+                      placement={overlaySettings.media}
+                      onChange={(patch) => {
+                        const current = overlaySettingsRef.current;
+                        applyOverlaySettings({ ...current, media: { ...current.media, ...patch } });
                       }}
                     />
                   </div>
@@ -4785,7 +4986,7 @@ function ReplayViewer({
                 )}
                 {overlayMenu.targetId === "handAccuracy" && (
                   <>
-                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Style</Trans></div>
+                    <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-white/45"><Trans>Style</Trans></div>
                     {REPLAY_HAND_ACCURACY_STYLES.map((style) => (
                       <button
                         key={style}
@@ -4805,7 +5006,7 @@ function ReplayViewer({
                 )}
                 {overlayMenu.targetId === "misses" && (
                   <>
-                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Style</Trans></div>
+                    <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-white/45"><Trans>Style</Trans></div>
                     {REPLAY_MISS_STYLES.map((style) => (
                       <button
                         key={style}
@@ -4825,7 +5026,7 @@ function ReplayViewer({
                 )}
                 {overlayMenu.targetId === "columnStats" && (
                   <>
-                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Style</Trans></div>
+                    <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-white/45"><Trans>Style</Trans></div>
                     {REPLAY_COLUMN_STAT_STYLES.map((style) => (
                       <button
                         key={style}
@@ -4840,7 +5041,7 @@ function ReplayViewer({
                         {i18n._(REPLAY_COLUMN_STAT_STYLE_LABELS[style])}
                       </button>
                     ))}
-                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Shows</Trans></div>
+                    <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-white/45"><Trans>Shows</Trans></div>
                     {REPLAY_COLUMN_STAT_METRICS.map((metric) => (
                       <button
                         key={metric}
@@ -4860,7 +5061,7 @@ function ReplayViewer({
                 )}
                 {overlayMenu.targetId === "hitError" && (
                   <>
-                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Style</Trans></div>
+                    <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-white/45"><Trans>Style</Trans></div>
                     {REPLAY_HIT_ERROR_STYLES.map((style) => (
                       <button
                         key={style}
@@ -4880,7 +5081,7 @@ function ReplayViewer({
                 )}
                 {overlayMenu.targetId === "judgements" && (
                   <>
-                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Layout</Trans></div>
+                    <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-white/45"><Trans>Layout</Trans></div>
                     {REPLAY_JUDGEMENT_LAYOUTS.map((style) => (
                       <button
                         key={style}
@@ -4900,7 +5101,7 @@ function ReplayViewer({
                 )}
                 {(overlayMenu.targetId === "misses" || overlayMenu.targetId === "handAccuracy") && thumbLaneAvailable && (
                   <>
-                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Middle lane thumb</Trans></div>
+                    <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-white/45"><Trans>Middle lane thumb</Trans></div>
                     {(["left", "right"] as const).map((hand) => (
                       <button
                         key={hand}
@@ -4945,6 +5146,32 @@ function ReplayViewer({
                     <Trans>Back to skin position</Trans>
                   </button>
                 )}
+                {isReplayOverlayStackable(overlayMenu.targetId) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyOverlaySettings(restackReplayOverlay(overlaySettingsRef.current, overlayMenu.targetId!, true));
+                        setOverlayMenu(null);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <BringToFront className="h-3.5 w-3.5" aria-hidden="true" />
+                      <Trans>Bring to front</Trans>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyOverlaySettings(restackReplayOverlay(overlaySettingsRef.current, overlayMenu.targetId!, false));
+                        setOverlayMenu(null);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <SendToBack className="h-3.5 w-3.5" aria-hidden="true" />
+                      <Trans>Send to back</Trans>
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={() => setOverlayEnabledFromMenu(overlayMenu.targetId!, false)}
@@ -4956,16 +5183,25 @@ function ReplayViewer({
               </>
             ) : (
               <>
-                <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Add overlay</Trans></div>
+                <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-white/45"><Trans>Add overlay</Trans></div>
                 {hiddenOverlayIds.length > 0 ? (
                   hiddenOverlayIds.map((id) => (
                     <button
                       key={id}
                       type="button"
-                      onClick={() => setOverlayEnabledFromMenu(id, true)}
+                      onClick={() => {
+                        // Media has nothing to show until it gets a link or
+                        // file, so the menu stays open on its controls.
+                        if (id === "media" && !hasReplayCustomMediaSource(overlaySettingsRef.current.media.media)) {
+                          const current = overlaySettingsRef.current;
+                          applyOverlaySettings({ ...current, media: { ...current.media, enabled: true } });
+                          setOverlayMenu((menu) => (menu ? { ...menu, targetId: "media" } : menu));
+                          return;
+                        }
+                        setOverlayEnabledFromMenu(id, true);
+                      }}
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
                     >
-                      <Plus className="h-3.5 w-3.5 text-osu-green-light" aria-hidden="true" />
                       {i18n._(REPLAY_OVERLAY_LABELS[id])}
                     </button>
                   ))
@@ -5262,6 +5498,7 @@ function ReplayViewer({
               onSaveOverlays={applyOverlaySettings}
               onAudioSettingsChange={setAudioSettings}
               onClose={() => setSkinSettingsOpen(false)}
+              renderInfoCardPreview={renderInfoCardPreview}
             />
           )}
         </AnimatePresence>

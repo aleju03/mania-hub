@@ -1,9 +1,8 @@
-import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { Trans } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 
 import { getI18n } from "../lib/i18n";
-import { canUseAdminFeatures } from "../lib/auth-shared";
 import { useLocale } from "../lib/locale-context";
 import { PageHeader } from "../components/layout/PageHeader";
 import { ScoreRow } from "../components/player/ScoreRows";
@@ -12,12 +11,10 @@ import { COMPANELLA_DOWNLOAD_URL } from "../lib/companella-integration/shared";
 import type { OsuScore } from "../lib/types";
 
 /*
- * /news/companella: the Companella announcement. Admin preview until the release,
- * like the Companella group in Settings.
+ * /news/companella: the Companella announcement, linked from the Integrations group in Settings.
  */
 
 export const Route = createFileRoute("/news_/companella")({
-  beforeLoad: ({ context }) => { if (!canUseAdminFeatures(context.auth)) throw notFound(); },
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return pageSeo({
@@ -31,7 +28,7 @@ export const Route = createFileRoute("/news_/companella")({
   component: CompanellaAnnouncement,
 });
 
-const PUBLISHED_AT = "2026-09-25T12:00:00Z";
+const PUBLISHED_AT = "2026-10-05T12:00:00Z";
 const LINK = "text-white underline decoration-white/30 underline-offset-2 transition-colors hover:decoration-white";
 
 /** The Recent row a play Companella sent looks like, drawn by the profile's own component. */
@@ -39,7 +36,7 @@ function exampleImport(): OsuScore {
   const cover = "/images/headers/generic.jpg";
   return {
     id: 0, user_id: 0, mode: "mania", accuracy: 0.9784, score: 912_480,
-    max_combo: 1874, passed: true, rank: "S", mods: [], pp: 412,
+    max_combo: 1874, passed: true, rank: "S", mods: [{ acronym: "HR" }, { acronym: "SV2" }], pp: 412,
     statistics: { count_geki: 1620, count_300: 212, count_katu: 31, count_100: 9, count_50: 1, count_miss: 1 },
     ended_at: PUBLISHED_AT, has_replay: false,
     companella: { importId: "example", replay: false },
@@ -111,7 +108,7 @@ function CompanellaAnnouncement() {
             <ScoreRow
               score={exampleImport()}
               position={0}
-              layout={{ modColumns: 0, showPp: true, showReplay: false }}
+              layout={{ modColumns: 2, showPp: true, showReplay: false }}
               onOpenDetails={() => {}}
             />
           </div>
@@ -119,16 +116,15 @@ function CompanellaAnnouncement() {
           <div className="space-y-4 text-[15px] leading-relaxed text-osu-l2">
             <p>
               <Trans>
-                If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the
+                If you are restricted, you can keep submitting plays this way, and your pp is calculated from the
                 ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you
                 banned from Mania Tracker though.
               </Trans>
             </p>
             <p>
               <Trans>
-                Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement
-                counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit
-                each note instead.
+                Companella also sends the replay of the plays you set on osu!, so your skill ratings use your accuracy based on
+                your hit timings.
               </Trans>
             </p>
             <p>

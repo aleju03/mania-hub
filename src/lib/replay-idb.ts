@@ -6,7 +6,7 @@
 // used.
 
 const DB_NAME = "mania-hub-replay";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export const REPLAY_SKIN_SOUNDS_STORE = "skin-sounds";
 // Decoded player skins (image data URLs plus samples), keyed by skin and the
@@ -14,7 +14,10 @@ export const REPLAY_SKIN_SOUNDS_STORE = "skin-sounds";
 // second, which the stage would otherwise spend showing the wrong skin.
 export const REPLAY_OWNER_SKINS_STORE = "owner-skins";
 
-const STORES = [REPLAY_SKIN_SOUNDS_STORE, REPLAY_OWNER_SKINS_STORE];
+// The custom media overlay's local file, kept so it survives a reload.
+export const REPLAY_CUSTOM_MEDIA_STORE = "custom-media";
+
+const STORES = [REPLAY_SKIN_SOUNDS_STORE, REPLAY_OWNER_SKINS_STORE, REPLAY_CUSTOM_MEDIA_STORE];
 
 export function openReplayDatabase(): Promise<IDBDatabase | null> {
   if (typeof window === "undefined" || !window.indexedDB) return Promise.resolve(null);

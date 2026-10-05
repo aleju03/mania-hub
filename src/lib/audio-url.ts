@@ -1,5 +1,12 @@
 import { getLiveBackendUrl } from "./live-backend";
 
+/** The song's precomputed spectrum for the replay map card's audio wave. */
+export function getBeatmapAudioWaveUrl(beatmapsetId: number | string, filename: string): string {
+  const path = `/api/audio-wave?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}&filename=${encodeURIComponent(filename)}`;
+  const liveBackendUrl = getLiveBackendUrl();
+  return liveBackendUrl ? `${liveBackendUrl}${path}` : path;
+}
+
 export function getBeatmapAudioUrl(beatmapsetId: number | string, filename: string): string {
   // The previous Ogg responses are immutable in browser/CDN caches. Request
   // the packet-timestamped version after the backend's lossless repagination.

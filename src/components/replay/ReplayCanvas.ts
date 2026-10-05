@@ -13,7 +13,7 @@ import { ensureReplayFontStyle } from "../../lib/replay-fonts";
 import { withTimeout } from "../../lib/promise-timeout";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayMinY, getReplayOverlayPlacement, isReplayStageArtOverlay, updateReplayOverlayPlacement, normalizeReplayColumnStatMetric, normalizeReplayColumnStatStyle, normalizeReplayHandAccuracyStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, normalizeReplayMissStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayMinY, getReplayOverlayPlacement, isReplayStageArtOverlay, updateReplayOverlayPlacement, normalizeReplayColumnStatMetric, normalizeReplayColumnStatStyle, normalizeReplayHandAccuracyStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, measureReplayCustomMedia, normalizeReplayCustomMedia, normalizeReplayMapInfoOptions, normalizeReplayMissStyle, getReplayOverlayStackIndex, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlayReference, ReplayOverlaySettings, ReplayOverlaySizeReference, ReplayThumbHand } from "../../lib/replay-overlays";
 import { replayOverlayCenteredY, replayOverlayLayoutScale, replayOverlayRegion, replayOverlayX } from "../../lib/replay-overlay-layout";
 import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "../../lib/replay-master-overlay";
@@ -36,6 +36,11 @@ import { peekStoryboardTexture, releaseStoryboardTexture, retainStoryboardTextur
 import { formatPixiRendererType } from "./renderer-debug";
 import { MOD_BADGE_FILE_NAMES, MOD_BADGE_TYPE_COLORS } from "../ui/ModBadge";
 import { LazerReplayLeaderboard } from "./LazerReplayLeaderboard";
+import { getReplayInfoFlagUrl, ReplayInfoOverlays } from "./ReplayInfoOverlays";
+import { EMPTY_REPLAY_INFO, type ReplayInfoData, type ReplayMapInfoLive } from "../../lib/replay-info-overlay";
+import { ReplayCustomMediaLayer } from "./ReplayCustomMediaLayer";
+import { ReplayCustomMediaExportSource } from "./ReplayCustomMediaExport";
+import { sampleReplayAudioWave, type ReplayAudioWave } from "../../lib/replay-audio-wave";
 import { LAZER_LEADERBOARD } from "../../lib/replay-leaderboard";
 import type { ReplayLeaderboardEntry, ReplayLeaderboardOptions } from "../../lib/replay-leaderboard";
 export type { ReplayLeaderboardEntry } from "../../lib/replay-leaderboard";
@@ -658,6 +663,19 @@ type SkinSpriteFramePool = {
   stripTextures: (Texture | null)[];
   cursor: number;
 };
+type TextFramePool = {
+  layer: Container;
+  labels: Text[];
+  cursor: number;
+};
+// One HUD overlay's own slice of the stage, so overlays can be stacked in
+// the order the viewer picks rather than shapes-under-all-text.
+type OverlayLayer = {
+  root: Container;
+  graphics: Graphics;
+  sprites: SkinSpriteFramePool;
+  text: TextFramePool;
+};
 type ReplayRendererMod = string | {
   acronym?: string;
   settings?: Record<string, string | number | boolean>;
@@ -671,6 +689,11 @@ export class ManiaReplayRenderer {
   private gameplayGraphics = new Graphics();
   private inputOverlayGraphics = new Graphics();
   private hudGraphics = new Graphics();
+  private overlayLayerRoot = new Container({ sortableChildren: true });
+  private overlayLayers = new Map<ReplayOverlayId, OverlayLayer>();
+  private activeOverlayText: TextFramePool | null = null;
+  // Above every overlay layer, so a selected overlay's outline is never hidden.
+  private selectionGraphics = new Graphics();
   private graphics = this.gameplayGraphics;
   private textLayer = new Container();
   private textPool: Text[] = [];
@@ -932,6 +955,26 @@ export class ManiaReplayRenderer {
   private lazerLeaderboardFrameTime: number | null = null;
   private lazerLeaderboardHovered = false;
   private leaderboardAvatarLoads = new Map<string, Promise<Texture | null>>();
+  private replayInfo: ReplayInfoData = EMPTY_REPLAY_INFO;
+  private replayInfoOverlays: ReplayInfoOverlays | null = null;
+  private replayInfoImageLoads = new Map<string, Promise<Texture | null>>();
+  // The custom media overlay is an element over the canvas, so only the live
+  // viewer has one; an export reproduces a captured viewport and skips it.
+  private customMediaLayer: ReplayCustomMediaLayer | null = null;
+  private customMediaFrame: ReplayOverlayFrame | null = null;
+  // An export draws the media on the stage itself, timed from its first frame.
+  private customMediaExport: ReplayCustomMediaExportSource | null = null;
+  private customMediaSprite: Sprite | null = null;
+  private customMediaClockStart: number | null = null;
+  // The page passes this in translated; the canvas has no catalog of its own.
+  private emptyMediaLabel = "Right-click to add media";
+  // A second set of cards for the settings gallery, so capturing one never
+  // moves the cards on the stage.
+  private previewInfoOverlays: ReplayInfoOverlays | null = null;
+  private previewInfoRoot: Container | null = null;
+  // Red lines only, for the map info card's live BPM.
+  private bpmTimingPoints: ManiaTimingPoint[] = [];
+  private audioWaveLevels = new Float32Array(0);
   private lazerLeaderboardFadeRaf: number | null = null;
   private leaderboardSlotYs = new Map<string, number>();
   private leaderboardSlotGradients = new Map<string, FillGradient>();
@@ -1073,6 +1116,9 @@ export class ManiaReplayRenderer {
     });
     this.ruleset = getManiaReplayRuleset(options?.isLazer ?? false, [...mods], options?.isConvert ?? false, this.modRate);
 
+    this.bpmTimingPoints = [...(options?.timingPoints ?? [])]
+      .filter((point) => Number.isFinite(point.beatLength) && point.beatLength > 0)
+      .sort((a, b) => a.time - b.time);
     this.backgroundImage = options?.backgroundImage ?? null;
     this.backgroundDim = options?.backgroundDim ?? 80;
     const difficultyAdjustMod = inputMods.find((m) => getModAcronym(m) === "DA");
@@ -1110,6 +1156,15 @@ export class ManiaReplayRenderer {
     this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
     this.overlaySettings = normalizeReplayOverlaySettings(options?.overlaySettings);
+    if (!this.renderViewport && !options?.storyboardOnly && !options?.barePlayfield) {
+      this.customMediaLayer = new ReplayCustomMediaLayer(canvas, () => {
+        if (!this.destroyed && !this._isPlaying) this.render();
+      });
+      this.syncCustomMedia();
+    } else if (this.renderViewport) {
+      this.customMediaExport = new ReplayCustomMediaExportSource();
+      this.syncCustomMedia();
+    }
     this.overlaySettingsInputSignature = JSON.stringify(this.overlaySettings);
     this.missThumbHand = normalizeReplayMissThumbHand(options?.missThumbHand);
     this.onOverlaySettingsChange = options?.onOverlaySettingsChange ?? null;
@@ -1214,8 +1269,9 @@ export class ManiaReplayRenderer {
       if (this.destroyed) return;
       this.textFontRevision++;
       this.lazerLeaderboard?.invalidateFonts();
+      this.replayInfoOverlays?.invalidateFonts();
       this.textWidthCache.clear();
-      for (const label of this.textPool as Array<Text & { __sig?: string }>) {
+      for (const label of [...this.textPool, ...[...this.overlayLayers.values()].flatMap((layer) => layer.text.labels)] as Array<Text & { __sig?: string }>) {
         label.__sig = undefined;
         label.text = "";
       }
@@ -1356,6 +1412,8 @@ export class ManiaReplayRenderer {
     app.stage.addChild(this.hudGraphics);
     app.stage.addChild(this.hudSkinSprites.layer);
     app.stage.addChild(this.textLayer);
+    app.stage.addChild(this.overlayLayerRoot);
+    app.stage.addChild(this.selectionGraphics);
     app.stage.addChild(this.comboTextLayer);
     // Stable's explosion washes out the names as well as the slot beneath.
     this.leaderboardEffectSprites.layer.blendMode = "add";
@@ -1447,6 +1505,41 @@ export class ManiaReplayRenderer {
 
   // Tab toggles the scoreboard, like ingame. Rank tracking stays live while
   // hidden so re-showing it never fires a stale overtake flash.
+  // Map and player details for the info overlays. Images go through the same
+  // refcounted store as the leaderboard avatars.
+  setReplayInfo(info: ReplayInfoData) {
+    this.replayInfo = info;
+    const urls = new Set(this.getReplayInfoImageUrls());
+    for (const src of this.replayInfoImageLoads.keys()) {
+      if (!urls.has(src)) {
+        releaseStoryboardTexture(src);
+        this.replayInfoImageLoads.delete(src);
+      }
+    }
+    for (const src of urls) {
+      if (this.replayInfoImageLoads.has(src)) continue;
+      this.replayInfoImageLoads.set(src, retainStoryboardTexture(src, () => {
+        if (!this.destroyed && !this._isPlaying) this.render();
+      }));
+    }
+    if (!this._isPlaying) this.render();
+  }
+
+  private getReplayInfoImageUrls(): string[] {
+    const { map, player } = this.replayInfo;
+    return [
+      map?.backgroundUrl,
+      map?.dan?.imageUrl,
+      player?.coverUrl,
+      player ? player.avatarUrl ?? LAZER_LEADERBOARD.guestAvatar : undefined,
+      getReplayInfoFlagUrl(player?.countryCode),
+    ].filter((src): src is string => Boolean(src));
+  }
+
+  async replayInfoReady(): Promise<void> {
+    await Promise.allSettled(this.replayInfoImageLoads.values());
+  }
+
   setLeaderboardVisible(visible: boolean) {
     if (this.leaderboardHidden === !visible) return;
     this.leaderboardHidden = !visible;
@@ -2313,7 +2406,13 @@ export class ManiaReplayRenderer {
     this.render(true);
   }
 
-  renderFrameAt(timeMs: number) {
+  async renderFrameAt(timeMs: number) {
+    if (this.customMediaExport?.texture) {
+      // The media runs on the video's clock, so a 1.5x replay does not speed it up.
+      this.customMediaClockStart ??= timeMs;
+      await this.customMediaExport.seek((timeMs - this.customMediaClockStart) / (this.modRate * this.playbackSpeed));
+      if (this.destroyed) return;
+    }
     const previousTime = this.currentTime;
     const wasSuppressed = this.suppressOvertakeFlash;
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
@@ -2652,7 +2751,25 @@ export class ManiaReplayRenderer {
     this.overlayLayoutPrepared = false;
     if (collapseChanged && this.ruleset.accuracyMode === "lazer") this.prepareOverlayLayout();
     this.pruneSelectedOverlays();
+    this.syncCustomMedia();
     if (!this._isPlaying) this.render();
+  }
+
+  private syncCustomMedia() {
+    const placement = this.overlaySettings.media;
+    const media = placement.enabled ? normalizeReplayCustomMedia(placement.media) : null;
+    this.customMediaLayer?.setMedia(media);
+    this.customMediaExport?.setMedia(media);
+  }
+
+  setEmptyMediaLabel(label: string) {
+    if (label === this.emptyMediaLabel) return;
+    this.emptyMediaLabel = label;
+    if (!this._isPlaying) this.render();
+  }
+
+  async customMediaReady(): Promise<void> {
+    await this.customMediaExport?.ready();
   }
 
   private prepareOverlayLayout() {
@@ -3680,6 +3797,7 @@ export class ManiaReplayRenderer {
   private render(forceHudSnapshot = false) {
     if (!this.app) return;
     if (this.lazerLeaderboard) this.lazerLeaderboard.container.visible = false;
+    this.replayInfoOverlays?.hide();
 
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
@@ -3695,6 +3813,8 @@ export class ManiaReplayRenderer {
     this.gameplayGraphics.clear();
     this.inputOverlayGraphics.clear();
     this.hudGraphics.clear();
+    this.selectionGraphics.clear();
+    for (const layer of this.overlayLayers.values()) layer.graphics.clear();
     this.graphics = this.gameplayGraphics;
     this.beginSkinSpriteFrame();
     this.beginTextFrame();
@@ -3702,6 +3822,7 @@ export class ManiaReplayRenderer {
     // Reset before anything draws: stage art registers its hitboxes from the
     // gameplay passes, well before the HUD's.
     this.overlayHitboxes = [];
+    this.customMediaFrame = null;
     this.missThumbTagHitbox = null;
     this.stageArtOverlayIds.clear();
     this.stageArtOriginOffsets.clear();
@@ -3749,7 +3870,10 @@ export class ManiaReplayRenderer {
       if (this.showJudgements) this.renderJudgementPop(layout);
       if (this.showCombo) this.renderCombo(layout);
     }
+    this.graphics = this.selectionGraphics;
     this.renderOverlaySelectionAffordances(layout);
+    this.customMediaLayer?.place(this.customMediaFrame, layout.w, layout.h, this.selectedOverlayIds.has("media"));
+    this.graphics = this.hudGraphics;
     this.finishSkinSpriteFrame();
     this.finishTextFrame();
     this.graphics = this.gameplayGraphics;
@@ -5115,6 +5239,145 @@ export class ManiaReplayRenderer {
     });
   }
 
+  private getReplayInfoOverlays(): ReplayInfoOverlays | null {
+    if (!this.app) return null;
+    if (!this.replayInfoOverlays) {
+      this.replayInfoOverlays = new ReplayInfoOverlays({
+        image: (src) => peekStoryboardTexture(src) ?? Texture.EMPTY,
+        background: () => this.backgroundSprite?.texture ?? null,
+      });
+    }
+    return this.replayInfoOverlays;
+  }
+
+  captureInfoCardPreview(id: "mapInfo" | "playerInfo", placement: ReplayOverlayPlacement): string | null {
+    if (!this.app || this.destroyed) return null;
+    const { map } = this.replayInfo;
+    let { player } = this.replayInfo;
+    if (id === "mapInfo" ? !map : !player) return null;
+    this.previewInfoOverlays ??= new ReplayInfoOverlays({
+      image: (src) => peekStoryboardTexture(src) ?? Texture.EMPTY,
+      background: () => this.backgroundSprite?.texture ?? null,
+    });
+    const root = this.previewInfoRoot ??= new Container();
+    const overlays = this.previewInfoOverlays;
+    const frame = { x: 0, y: 0, scale: 1 };
+    overlays.hide();
+    let size: { width: number; height: number };
+    if (id === "mapInfo" && map) {
+      const options = normalizeReplayMapInfoOptions(placement.mapInfo);
+      const input = { map, options, live: this.getMapInfoLive(options.audioWave ? map.audioWave : undefined) };
+      size = overlays.measureMap(input);
+      overlays.drawMap(input, frame, root);
+    } else {
+      if (placement.playerBanner === false) player = { ...player!, bare: true };
+      size = overlays.measurePlayer(player!);
+      overlays.drawPlayer(player!, frame, root);
+    }
+    if (size.width < 1 || size.height < 1) return null;
+    try {
+      const canvas = this.app.renderer.extract.canvas({
+        target: root,
+        frame: new Rectangle(0, 0, Math.ceil(size.width), Math.ceil(size.height)),
+        resolution: 2,
+      }) as HTMLCanvasElement;
+      return canvas.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  }
+
+  private renderMapInfoOverlay(layout: Layout) {
+    const { map } = this.replayInfo;
+    const placement = this.getOverlayPlacement("mapInfo");
+    const overlays = map && placement.enabled ? this.getReplayInfoOverlays() : null;
+    if (!map || !overlays) return;
+    const options = normalizeReplayMapInfoOptions(placement.mapInfo);
+    const input = { map, options, live: this.getMapInfoLive(options.audioWave ? map.audioWave : undefined) };
+    const scale = this.getOverlayScale(layout, "mapInfo");
+    const size = overlays.measureMap(input);
+    const frame = this.getOverlayFrame(layout, "mapInfo", size.width * scale, size.height * scale);
+    if (frame) overlays.drawMap(input, { x: frame.x, y: frame.y, scale }, this.getOverlayLayer("mapInfo").root);
+  }
+
+  private renderPlayerInfoOverlay(layout: Layout) {
+    let { player } = this.replayInfo;
+    const placement = this.getOverlayPlacement("playerInfo");
+    const overlays = player && placement.enabled ? this.getReplayInfoOverlays() : null;
+    if (!player || !overlays) return;
+    if (placement.playerBanner === false) player = { ...player, bare: true };
+    const scale = this.getOverlayScale(layout, "playerInfo");
+    const size = overlays.measurePlayer(player);
+    const frame = this.getOverlayFrame(layout, "playerInfo", size.width * scale, size.height * scale);
+    if (frame) overlays.drawPlayer(player, { x: frame.x, y: frame.y, scale }, this.getOverlayLayer("playerInfo").root);
+  }
+
+  // Live, this reserves the frame the element over the canvas draws into; in
+  // an export the decoded media is drawn here.
+  private renderCustomMediaOverlay(layout: Layout) {
+    if (this.customMediaSprite) this.customMediaSprite.visible = false;
+    const placement = this.getOverlayPlacement("media");
+    const layer = this.customMediaLayer;
+    const exported = this.customMediaExport?.texture ? this.customMediaExport : null;
+    if ((!layer && !exported) || !placement.enabled) return;
+    const media = normalizeReplayCustomMedia(placement.media);
+    const scale = this.getOverlayScale(layout, "media");
+    if (!media.url && !media.fileId) {
+      // Switched on before anything was picked: an empty box to grab or
+      // right-click, so it never goes on invisibly. Never in an export.
+      if (!layer) return;
+      const empty = measureReplayCustomMedia(media, null);
+      const box = this.getOverlayFrame(layout, "media", empty.width * scale, empty.height * scale);
+      if (!box) return;
+      this.fillRect(box.x, box.y, box.width, box.height, "#000000", 0.45);
+      this.rect(box.x, box.y, box.width, box.height, "#ffffff", 0.3, Math.max(1, scale));
+      this.addText(this.emptyMediaLabel, box.x + box.width / 2, box.y + box.height / 2, {
+        fontSize: 13 * scale,
+        fill: "#ffffff",
+        alpha: 0.7,
+        fontWeight: "600",
+        anchorX: 0.5,
+        anchorY: 0.5,
+      });
+      return;
+    }
+    const size = layer ? layer.measure(media) : measureReplayCustomMedia(media, exported!.aspect);
+    const frame = this.getOverlayFrame(layout, "media", size.width * scale, size.height * scale);
+    if (layer) {
+      this.customMediaFrame = frame;
+      return;
+    }
+    if (!frame) return;
+    const root = this.getOverlayLayer("media").root;
+    const sprite = this.customMediaSprite ??= new Sprite();
+    if (sprite.parent !== root) root.addChild(sprite);
+    sprite.texture = exported!.texture!;
+    sprite.position.set(frame.x, frame.y);
+    sprite.width = frame.width;
+    sprite.height = frame.height;
+    sprite.alpha = media.opacity;
+    sprite.visible = true;
+  }
+
+  private getMapInfoLive(wave: ReplayAudioWave | undefined): ReplayMapInfoLive {
+    const points = this.bpmTimingPoints;
+    let low = 0;
+    let high = points.length - 1;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (points[middle].time <= this.currentTime) low = middle;
+      else high = middle - 1;
+    }
+    const point = points[low];
+    return {
+      bpm: point ? 60000 / point.beatLength * this.modRate : null,
+      timeLeftMs: this.totalDuration > 0 ? Math.max(0, this.totalDuration - this.currentTime) / this.modRate : null,
+      progress: this.totalDuration > 0 ? Math.max(0, Math.min(1, this.currentTime / this.totalDuration)) : 0,
+      wave: wave ? sampleReplayAudioWave(wave, this.currentTime, this.audioWaveLevels.length === wave.bands
+        ? this.audioWaveLevels : (this.audioWaveLevels = new Float32Array(wave.bands))) : null,
+    };
+  }
+
   private renderKpsOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "kps");
     const height = 20 * scale;
@@ -5835,27 +6098,74 @@ export class ManiaReplayRenderer {
     }
   }
 
+  private getOverlayLayer(id: ReplayOverlayId): OverlayLayer {
+    let layer = this.overlayLayers.get(id);
+    if (!layer) {
+      const root = new Container();
+      layer = {
+        root,
+        graphics: new Graphics(),
+        sprites: { layer: new Container(), sprites: [], stripTextures: [], cursor: 0 },
+        text: { layer: new Container(), labels: [], cursor: 0 },
+      };
+      root.addChild(layer.graphics, layer.sprites.layer, layer.text.layer);
+      root.zIndex = getReplayOverlayStackIndex(this.overlaySettings, id);
+      this.overlayLayerRoot.addChild(root);
+      this.overlayLayers.set(id, layer);
+    }
+    return layer;
+  }
+
+  // Draw calls inside `draw` land in this overlay's own layer.
+  private inOverlayLayer(id: ReplayOverlayId, draw: () => void) {
+    const layer = this.getOverlayLayer(id);
+    const graphics = this.graphics;
+    const sprites = this.activeSkinSprites;
+    const text = this.activeOverlayText;
+    this.graphics = layer.graphics;
+    this.activeSkinSprites = layer.sprites;
+    this.activeOverlayText = layer.text;
+    try {
+      draw();
+    } finally {
+      this.graphics = graphics;
+      this.activeSkinSprites = sprites;
+      this.activeOverlayText = text;
+    }
+  }
+
+  private syncOverlayLayerOrder() {
+    for (const [id, layer] of this.overlayLayers) {
+      const zIndex = getReplayOverlayStackIndex(this.overlaySettings, id);
+      if (layer.root.zIndex !== zIndex) layer.root.zIndex = zIndex;
+    }
+  }
+
   private renderHUD(layout: Layout) {
     const { w, h } = layout;
 
     this.renderJudgementPop(layout);
     this.renderCombo(layout);
     this.renderScoreBlock(layout);
-    this.renderLeaderboard(layout);
+    this.syncOverlayLayerOrder();
+    this.inOverlayLayer("leaderboard", () => this.renderLeaderboard(layout));
     if (this.shouldRenderCustomOverlays(layout)) {
-      this.renderReplayMasterOverlay(layout);
-      this.renderKeypressOverlay(layout);
-      this.renderKpsOverlay(layout);
-      this.renderMissOverlay(layout);
-      this.renderAccuracyOverlay(layout);
-      this.renderHandAccuracyOverlay(layout);
-      this.renderColumnStatsOverlay(layout);
-      this.renderPpOverlay(layout);
-      this.renderJudgementOverlay(layout);
-      this.renderProgressOverlay(layout);
+      this.inOverlayLayer("replayMaster", () => this.renderReplayMasterOverlay(layout));
+      this.inOverlayLayer("keypresses", () => this.renderKeypressOverlay(layout));
+      this.inOverlayLayer("kps", () => this.renderKpsOverlay(layout));
+      this.inOverlayLayer("misses", () => this.renderMissOverlay(layout));
+      this.inOverlayLayer("accuracy", () => this.renderAccuracyOverlay(layout));
+      this.inOverlayLayer("handAccuracy", () => this.renderHandAccuracyOverlay(layout));
+      this.inOverlayLayer("columnStats", () => this.renderColumnStatsOverlay(layout));
+      this.inOverlayLayer("pp", () => this.renderPpOverlay(layout));
+      this.inOverlayLayer("judgements", () => this.renderJudgementOverlay(layout));
+      this.inOverlayLayer("progress", () => this.renderProgressOverlay(layout));
+      this.renderMapInfoOverlay(layout);
+      this.renderPlayerInfoOverlay(layout);
+      this.inOverlayLayer("media", () => this.renderCustomMediaOverlay(layout));
     }
 
-    this.renderHitErrorBar(layout);
+    this.inOverlayLayer("hitError", () => this.renderHitErrorBar(layout));
     if (!this.hidePlaybackInfo) {
       this.addText(this.hudCachedTime, 8, h - 8, { fontSize: 11, fill: "#ffffff", alpha: 0.4, anchorY: 1 });
       this.addText(`${this.playbackSpeed * this.modRate}x`, w - 8, h - 8, {
@@ -6303,7 +6613,7 @@ export class ManiaReplayRenderer {
     if (!frame) return;
     if (!this.lazerLeaderboard) {
       this.lazerLeaderboard = new LazerReplayLeaderboard((src) => peekStoryboardTexture(src) ?? Texture.EMPTY);
-      this.app.stage.addChildAt(this.lazerLeaderboard.container, this.app.stage.getChildIndex(this.textLayer));
+      this.getOverlayLayer("leaderboard").root.addChild(this.lazerLeaderboard.container);
     }
     this.lazerLeaderboard.update(this.leaderboardEntries, {
       name: this.leaderboardPlayerName,
@@ -7967,7 +8277,8 @@ export class ManiaReplayRenderer {
       scaleY?: number;
     },
   ) {
-    let label = this.textPool[this.textPoolCursor] as
+    const overlayText = this.activeOverlayText;
+    let label = (overlayText ? overlayText.labels[overlayText.cursor] : this.textPool[this.textPoolCursor]) as
       | (Text & { __sig?: string; __ax?: number; __ay?: number })
       | undefined;
     if (!label) {
@@ -7977,11 +8288,17 @@ export class ManiaReplayRenderer {
           fontFamily: "Torus, sans-serif",
         },
       }) as Text & { __sig?: string; __ax?: number; __ay?: number };
-      this.textPool.push(label);
-      this.textLayer.addChild(label);
+      if (overlayText) {
+        overlayText.labels.push(label);
+        overlayText.layer.addChild(label);
+      } else {
+        this.textPool.push(label);
+        this.textLayer.addChild(label);
+      }
     }
 
-    this.textPoolCursor++;
+    if (overlayText) overlayText.cursor++;
+    else this.textPoolCursor++;
     if (!label.visible) label.visible = true;
 
     const fontFamily = options.fontFamily ?? "Torus, sans-serif";
@@ -8283,14 +8600,17 @@ export class ManiaReplayRenderer {
   }
 
   private beginSkinSpriteFrame() {
-    this.gameplaySkinSprites.cursor = 0;
-    this.hudSkinSprites.cursor = 0;
-    this.leaderboardEffectSprites.cursor = 0;
+    for (const pool of this.getSkinSpritePools()) pool.cursor = 0;
     this.activeSkinSprites = this.gameplaySkinSprites;
   }
 
+  private getSkinSpritePools(): SkinSpriteFramePool[] {
+    return [this.gameplaySkinSprites, this.hudSkinSprites, this.leaderboardEffectSprites,
+      ...[...this.overlayLayers.values()].map((layer) => layer.sprites)];
+  }
+
   private finishSkinSpriteFrame() {
-    for (const pool of [this.gameplaySkinSprites, this.hudSkinSprites, this.leaderboardEffectSprites]) {
+    for (const pool of this.getSkinSpritePools()) {
       for (let i = pool.cursor; i < pool.sprites.length; i++) {
         pool.sprites[i].visible = false;
       }
@@ -8300,11 +8620,15 @@ export class ManiaReplayRenderer {
   private beginTextFrame() {
     this.textPoolCursor = 0;
     this.comboTextPoolCursor = 0;
+    for (const layer of this.overlayLayers.values()) layer.text.cursor = 0;
   }
 
   private finishTextFrame() {
     for (let i = this.textPoolCursor; i < this.textPool.length; i++) {
       this.textPool[i].visible = false;
+    }
+    for (const { text } of this.overlayLayers.values()) {
+      for (let i = text.cursor; i < text.labels.length; i++) text.labels[i].visible = false;
     }
     for (let i = this.comboTextPoolCursor; i < this.comboTextPool.length; i++) {
       this.comboTextPool[i].visible = false;
@@ -8326,7 +8650,7 @@ export class ManiaReplayRenderer {
   }
 
   private clearSkinSprites() {
-    for (const pool of [this.gameplaySkinSprites, this.hudSkinSprites, this.leaderboardEffectSprites]) {
+    for (const pool of this.getSkinSpritePools()) {
       const children = pool.layer.removeChildren();
       for (const child of children) child.destroy();
       for (const strip of pool.stripTextures) {
@@ -8513,6 +8837,11 @@ export class ManiaReplayRenderer {
       this.handleContextRestored = null;
     }
     this.removeOverlayPointerHandlers();
+    this.customMediaLayer?.destroy();
+    this.customMediaLayer = null;
+    if (this.customMediaSprite) this.customMediaSprite.texture = Texture.EMPTY;
+    this.customMediaExport?.destroy();
+    this.customMediaExport = null;
     this.previousBackgroundImage = null;
     this.backgroundTransitionStartedAt = 0;
     this.clearStoryboardSprites();
@@ -8521,6 +8850,8 @@ export class ManiaReplayRenderer {
     this.storyboardData = null;
     for (const src of this.leaderboardAvatarLoads.keys()) releaseStoryboardTexture(src);
     this.leaderboardAvatarLoads.clear();
+    for (const src of this.replayInfoImageLoads.keys()) releaseStoryboardTexture(src);
+    this.replayInfoImageLoads.clear();
     if (this.lazerLeaderboardFadeRaf != null) cancelAnimationFrame(this.lazerLeaderboardFadeRaf);
     this.lazerLeaderboardFadeRaf = null;
     this.storyboardActiveSet = null;
@@ -8532,9 +8863,16 @@ export class ManiaReplayRenderer {
       if (!this.app) return;
       this.lazerLeaderboard?.destroy();
       this.lazerLeaderboard = null;
+      this.replayInfoOverlays?.destroy();
+      this.replayInfoOverlays = null;
+      this.previewInfoOverlays?.destroy();
+      this.previewInfoOverlays = null;
+      this.previewInfoRoot?.destroy({ children: true });
+      this.previewInfoRoot = null;
       this.clearTextLayer();
       this.clearComboTextLayer();
       this.clearSkinSprites();
+      this.overlayLayers.clear();
       for (const gradient of this.receptorBeamGradients.values()) gradient.destroy();
       this.receptorBeamGradients.clear();
       destroyReplayPixiApplication(this.app);

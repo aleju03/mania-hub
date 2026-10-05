@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayColumnStatStyle, normalizeReplayColumnStatMetric, normalizeReplayMissStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "./replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayColumnStatStyle, normalizeReplayColumnStatMetric, normalizeReplayMissStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings, REPLAY_OVERLAY_IDS, getReplayOverlayStackIndex, isReplayOverlayStackable, restackReplayOverlay, normalizeReplayCustomMediaUrl, guessReplayCustomMediaKind, measureReplayCustomMedia } from "./replay-overlays";
 
 describe("replay overlay settings", () => {
   it("preserves and copies authored geometry through normalization and storage", () => {
@@ -279,5 +279,50 @@ describe("judgement overlay layouts", () => {
     const legacy = { enabled: true, x: 0.74, y: 0.07, scale: 1.25, style: "horizontal" };
     expect(normalizeReplayOverlaySettings({ judgements: legacy }).judgements)
       .toEqual({ ...DEFAULT_REPLAY_OVERLAY_SETTINGS.judgements, style: "horizontal" });
+  });
+});
+
+describe("overlay stacking", () => {
+  it("moves one overlay above or below every other and keeps it through normalization", () => {
+    const front = restackReplayOverlay(DEFAULT_REPLAY_OVERLAY_SETTINGS, "replayMaster", true);
+    const settings = normalizeReplayOverlaySettings(JSON.parse(JSON.stringify(front)));
+    for (const id of REPLAY_OVERLAY_IDS) {
+      if (id !== "replayMaster" && isReplayOverlayStackable(id)) {
+        expect(getReplayOverlayStackIndex(settings, "replayMaster")).toBeGreaterThan(getReplayOverlayStackIndex(settings, id));
+      }
+    }
+    const back = normalizeReplayOverlaySettings(restackReplayOverlay(settings, "replayMaster", false));
+    expect(getReplayOverlayStackIndex(back, "replayMaster")).toBeLessThan(getReplayOverlayStackIndex(back, "keypresses"));
+  });
+});
+
+describe("custom media overlay", () => {
+  it("keeps only http(s) links and guesses the kind from the link", () => {
+    expect(normalizeReplayCustomMediaUrl("example.com/cat.gif")).toBe("https://example.com/cat.gif");
+    expect(normalizeReplayCustomMediaUrl("javascript:alert(1)")).toBe("");
+    expect(normalizeReplayCustomMediaUrl("data:image/png;base64,AAAA")).toBe("");
+    expect(guessReplayCustomMediaKind("https://example.com/cat.GIF?x=1")).toBe("image");
+    expect(guessReplayCustomMediaKind("https://example.com/clip.webm")).toBe("video");
+    expect(guessReplayCustomMediaKind("https://example.com/cat")).toBe("image");
+    expect(guessReplayCustomMediaKind("clip", "video/mp4")).toBe("video");
+  });
+
+  it("normalizes stored media and drops the link when a local file is set", () => {
+    const settings = normalizeReplayOverlaySettings({
+      media: { enabled: true, x: 0.5, y: 0.5, scale: 1, media: { kind: "web", url: "https://a.test", width: 99999, opacity: 3 } },
+    });
+    // A stored web page from before the kind was cut falls back to a picture.
+    expect(settings.media.media).toEqual({ kind: "image", url: "https://a.test/", width: 1920, opacity: 1 });
+    const file = normalizeReplayOverlaySettings({ media: { media: { kind: "video", url: "https://a.test", fileId: "abc-123", fileName: "clip.mp4" } } });
+    expect(file.media.media).toMatchObject({ kind: "video", url: "", fileId: "abc-123", fileName: "clip.mp4" });
+    expect(normalizeReplayOverlaySettings({}).media).toMatchObject({ enabled: false, media: { url: "" } });
+  });
+});
+
+describe("measureReplayCustomMedia", () => {
+  const media = { kind: "image" as const, url: "https://a.test/x.gif", width: 320, opacity: 1 };
+  it("keeps the media's own shape, 16:9 until it reports one", () => {
+    expect(measureReplayCustomMedia(media, 2)).toEqual({ width: 320, height: 160 });
+    expect(measureReplayCustomMedia(media, null)).toEqual({ width: 320, height: 180 });
   });
 });

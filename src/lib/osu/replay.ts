@@ -22,6 +22,7 @@ import {
   edgeCache,
   noStore
 } from "./server";
+import { SCORE_LOOKUP_CACHE_TTL } from "./constants";
 import {
   normalizeBeatmapPayload,
   normalizeBeatmapChecksumPayload,
@@ -286,6 +287,7 @@ export const getScore = createServerFn({ method: "GET" })
         if (endpointKind === "modern") {
           const modernScore = await osuFetch<OsuScore>(`/scores/${data.scoreId}`, undefined, {
             caller: "getScore:modern",
+            cacheTtlMs: SCORE_LOOKUP_CACHE_TTL,
             expectedStatuses: [404],
           });
           // The unified /scores/{id} namespace overlaps stable's per-mode
@@ -300,7 +302,7 @@ export const getScore = createServerFn({ method: "GET" })
         const legacyScore = await osuFetch<OsuScore>(
           `/scores/${mode}/${data.scoreId}`,
           undefined,
-          { caller: "getScore:legacy", expectedStatuses: [404] },
+          { caller: "getScore:legacy", cacheTtlMs: SCORE_LOOKUP_CACHE_TTL, expectedStatuses: [404] },
         );
         const resolvedMode = legacyScore.beatmap?.mode ?? mode;
         if (resolvedMode === mode) return legacyScore;

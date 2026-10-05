@@ -18,7 +18,7 @@ import { openSongPcmSource, type SongPcmSource } from "./decode";
 import { HitsoundMixer, buildHitsoundVoices } from "./hitsounds";
 import { SlidingPcmWindow } from "./pcm-window";
 import { Resampler, type PcmWindow } from "./resample";
-import { TimeStretcher } from "./time-stretch";
+import { SignalsmithTimeStretcher } from "./signalsmith";
 
 export type ReplayExportAudioBlock = {
   /** Planar Float32 output, one array per channel. */
@@ -86,9 +86,9 @@ async function createSongStage(
     // which is the behavior this branch exists to avoid.
     const toOutputRate = new Resampler(srcToOut, startSourceFrame);
     const intermediate = createIntermediateWindow(source.window, toOutputRate, outputChannels);
-    let stretcher: TimeStretcher;
+    let stretcher: SignalsmithTimeStretcher;
     try {
-      stretcher = new TimeStretcher(rate, outputChannels, { startFrame: 0 });
+      stretcher = await SignalsmithTimeStretcher.create(rate, outputChannels, timeline.sampleRate, { startFrame: 0 });
     } catch (error) {
       await source.close();
       throw new ReplayExportError(

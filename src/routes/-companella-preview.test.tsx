@@ -62,14 +62,15 @@ async function openPage(path: string, auth: AuthState) {
   render(<RouterProvider router={router} />);
 }
 
-it("lets an admin see Companella in preferences and open About in a production build", async () => {
+it("shows admins both integrations and opens Companella's About in a production build", async () => {
   await openPage("/settings?tab=preferences", {
     ...ANONYMOUS_AUTH_STATE, canUseAdminFeatures: true, isAdmin: true,
     viewer: { id: 1, username: "Admin", avatarUrl: "", countryCode: "CR" },
   });
-  await screen.findByText("Not available yet.");
+  await screen.findAllByText("Not available yet.");
   expect(screen.getByText("Integrations")).toBeTruthy();
-  fireEvent.click(screen.getByRole("link", { name: "About" }));
+  expect(screen.getByText("Mania Bridge")).toBeTruthy();
+  fireEvent.click(screen.getAllByRole("link", { name: "About" })[1]);
   await screen.findByRole("heading", { name: "You can now submit plays through Companella" });
 });
 
@@ -79,12 +80,10 @@ it.each([
     ...ANONYMOUS_AUTH_STATE, canUseDevFeatures: true,
     viewer: { id: 2, username: "Developer", avatarUrl: "", countryCode: "CR" },
   }],
-] as const)("hides the preview and blocks its announcement when %s", async (_label, auth) => {
+] as const)("shows Companella but not Mania Bridge when %s", async (_label, auth) => {
   await openPage("/settings?tab=preferences", auth);
-  await screen.findByText("Hide players");
-  expect(screen.queryByText("Companella")).toBeNull();
-  expect(api.fetchCompanellaAccess).not.toHaveBeenCalled();
-  cleanup();
-  await openPage("/news/companella", auth);
-  await screen.findByText("Not found");
+  await screen.findByText("Companella");
+  expect(screen.queryByText("Mania Bridge")).toBeNull();
+  fireEvent.click(screen.getByRole("link", { name: "About" }));
+  await screen.findByRole("heading", { name: "You can now submit plays through Companella" });
 });

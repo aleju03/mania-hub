@@ -14,6 +14,7 @@
    about where the visitor was headed and we would be guessing. */
 export const SALVAGEABLE_ROUTES = [
   "bbcode",
+  "bridge",
   "communities",
   "companella",
   "dan-estimates",

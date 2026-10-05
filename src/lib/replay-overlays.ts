@@ -23,7 +23,7 @@ export function normalizeReplayMasterScrollSpeed(value: unknown): number {
   return Math.max(REPLAY_MASTER_MIN_SCROLL_SPEED, Math.min(REPLAY_MASTER_MAX_SCROLL_SPEED, value));
 }
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster", "stageLeft", "stageRight", "stageBottom", "healthBar"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster", "mapInfo", "playerInfo", "media", "stageLeft", "stageRight", "stageBottom", "healthBar"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -53,6 +53,9 @@ export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> =
   progress: msg`Progress pie`,
   leaderboard: msg`Leaderboard`,
   replayMaster: msg`Mania Replay Master`,
+  mapInfo: msg`Map info`,
+  playerInfo: msg`Player info`,
+  media: msg`Custom media`,
   stageLeft: msg`Stage art (left)`,
   stageRight: msg`Stage art (right)`,
   stageBottom: msg`Stage art (bottom)`,
@@ -163,6 +166,111 @@ export function normalizeReplayJudgementLayout(value: unknown): ReplayJudgementL
     : DEFAULT_REPLAY_JUDGEMENT_LAYOUT;
 }
 
+// What the map info card shows. The first four cut it down; the rest make it
+// follow the replay instead of describing the map once.
+export const REPLAY_MAP_INFO_OPTIONS = ["background", "stars", "dan", "mapper", "stats", "liveBpm", "timeLeft", "progress", "audioWave"] as const;
+export type ReplayMapInfoOption = typeof REPLAY_MAP_INFO_OPTIONS[number];
+export type ReplayMapInfoOptions = Record<ReplayMapInfoOption, boolean>;
+export const DEFAULT_REPLAY_MAP_INFO_OPTIONS: ReplayMapInfoOptions = {
+  background: true, stars: true, dan: true, mapper: true, stats: true, liveBpm: false, timeLeft: false, progress: false, audioWave: false,
+};
+export const REPLAY_MAP_INFO_OPTION_LABELS: Record<ReplayMapInfoOption, MessageDescriptor> = {
+  background: msg`Background art`,
+  stars: msg`Star rating`,
+  dan: msg`Dan`,
+  mapper: msg`Mapper`,
+  stats: msg`Length, BPM and keys`,
+  liveBpm: msg`Live BPM`,
+  timeLeft: msg`Time left`,
+  progress: msg`Progress bar`,
+  audioWave: msg`Audio wave`,
+};
+
+export function normalizeReplayMapInfoOptions(value: unknown): ReplayMapInfoOptions {
+  const raw = value && typeof value === "object" ? value as Partial<Record<ReplayMapInfoOption, unknown>> : {};
+  return Object.fromEntries(REPLAY_MAP_INFO_OPTIONS.map((option) => [
+    option, typeof raw[option] === "boolean" ? raw[option] : DEFAULT_REPLAY_MAP_INFO_OPTIONS[option],
+  ])) as ReplayMapInfoOptions;
+}
+
+// A picture, GIF or video clip the viewer wants on the stage. A link is
+// stored as is; a local file lives in IndexedDB (replay-custom-media.ts) and
+// is stored here by its id.
+export const REPLAY_CUSTOM_MEDIA_KINDS = ["image", "video"] as const;
+export type ReplayCustomMediaKind = typeof REPLAY_CUSTOM_MEDIA_KINDS[number];
+export const REPLAY_CUSTOM_MEDIA_KIND_LABELS: Record<ReplayCustomMediaKind, MessageDescriptor> = {
+  image: msg`Image or GIF`,
+  video: msg`Video`,
+};
+
+export interface ReplayCustomMedia {
+  kind: ReplayCustomMediaKind;
+  /** An http(s) link; empty when the source is a local file. */
+  url: string;
+  fileId?: string;
+  fileName?: string;
+  /** Width at 100% scale; the height follows the media's own shape. */
+  width: number;
+  opacity: number;
+}
+
+export const REPLAY_CUSTOM_MEDIA_MIN_SIZE = 40;
+export const REPLAY_CUSTOM_MEDIA_MAX_SIZE = 1920;
+export const DEFAULT_REPLAY_CUSTOM_MEDIA: ReplayCustomMedia = { kind: "image", url: "", width: 320, opacity: 1 };
+
+export function normalizeReplayCustomMediaUrl(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+const CUSTOM_MEDIA_VIDEO_EXTENSIONS = /\.(mp4|webm|mov|m4v|ogv)$/i;
+
+/** A best guess from a link or file name (or a file's MIME type); a picture when nothing says otherwise. */
+export function guessReplayCustomMediaKind(nameOrUrl: string, mimeType = ""): ReplayCustomMediaKind {
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("image/")) return "image";
+  let path = nameOrUrl;
+  try {
+    path = new URL(nameOrUrl).pathname;
+  } catch {
+    // A bare file name.
+  }
+  if (CUSTOM_MEDIA_VIDEO_EXTENSIONS.test(path)) return "video";
+  return "image";
+}
+
+export function normalizeReplayCustomMedia(value: unknown): ReplayCustomMedia {
+  const raw = value && typeof value === "object" ? value as Partial<Record<keyof ReplayCustomMedia, unknown>> : {};
+  const fileId = typeof raw.fileId === "string" && /^[\w-]{1,64}$/.test(raw.fileId) ? raw.fileId : undefined;
+  const url = fileId ? "" : normalizeReplayCustomMediaUrl(raw.url);
+  return {
+    kind: REPLAY_CUSTOM_MEDIA_KINDS.includes(raw.kind as ReplayCustomMediaKind)
+      ? raw.kind as ReplayCustomMediaKind
+      : DEFAULT_REPLAY_CUSTOM_MEDIA.kind,
+    url,
+    ...(fileId ? { fileId } : {}),
+    ...(fileId && typeof raw.fileName === "string" && raw.fileName ? { fileName: raw.fileName.slice(0, 200) } : {}),
+    width: Math.round(normalizeNumber(raw.width, DEFAULT_REPLAY_CUSTOM_MEDIA.width, REPLAY_CUSTOM_MEDIA_MIN_SIZE, REPLAY_CUSTOM_MEDIA_MAX_SIZE)),
+    opacity: normalizeNumber(raw.opacity, DEFAULT_REPLAY_CUSTOM_MEDIA.opacity, 0.1, 1),
+  };
+}
+
+export function hasReplayCustomMediaSource(media: ReplayCustomMedia | undefined): boolean {
+  return !!media && (!!media.url || !!media.fileId);
+}
+
+/** Size at 100% scale, at the media's own shape (16:9 until it reports one). */
+export function measureReplayCustomMedia(media: ReplayCustomMedia, aspect: number | null): { width: number; height: number } {
+  return { width: media.width, height: media.width / (aspect && aspect > 0 ? aspect : 16 / 9) };
+}
+
 // An overlay whose default position is a computed anchor rather than a
 // fraction of the stage stores this in x/y until it is first dragged; the
 // stage then keeps drawing it where it always sat.
@@ -209,6 +317,14 @@ export interface ReplayOverlayPlacement {
   followSv?: boolean;
   /** Lazer leaderboard: fold score details away during playback. */
   collapseDuringPlay?: boolean;
+  /** Map info: which parts show and which follow playback. */
+  mapInfo?: ReplayMapInfoOptions;
+  /** Player info: draw the player's profile banner behind the card. */
+  playerBanner?: boolean;
+  /** Custom media: what to show and how big. */
+  media?: ReplayCustomMedia;
+  /** Stacking order among HUD overlays; higher draws on top. */
+  layer?: number;
 }
 
 export interface ReplayOverlaySizeReference {
@@ -264,6 +380,24 @@ export function updateReplayOverlayPlacement(
   };
 }
 
+// Overlays the viewer can restack. Skin stage art stays where the skin draws it.
+export function isReplayOverlayStackable(id: ReplayOverlayId): boolean {
+  return !isReplayStageArtOverlay(id);
+}
+
+/** Draw order: the saved layer, then the registry order for ties. */
+export function getReplayOverlayStackIndex(settings: ReplayOverlaySettings, id: ReplayOverlayId): number {
+  return (settings[id]?.layer ?? 0) * REPLAY_OVERLAY_IDS.length + REPLAY_OVERLAY_IDS.indexOf(id);
+}
+
+/** Moves one overlay above (or below) every other stackable overlay. */
+export function restackReplayOverlay(settings: ReplayOverlaySettings, id: ReplayOverlayId, toFront: boolean): ReplayOverlaySettings {
+  const others = REPLAY_OVERLAY_IDS.filter((other) => other !== id && isReplayOverlayStackable(other))
+    .map((other) => settings[other]?.layer ?? 0);
+  const layer = toFront ? Math.max(0, ...others) + 1 : Math.min(0, ...others) - 1;
+  return { ...settings, [id]: { ...settings[id], layer } };
+}
+
 export const REPLAY_OVERLAY_MIN_SCALE = 0.5;
 export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
 
@@ -288,6 +422,10 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   // the cluster it just left, or toggling it looks like a no-op.
   progress: { enabled: false, x: 0.03, y: 0.1, scale: 1 },
   leaderboard: { enabled: true, x: 0, y: 0.24, scale: 1 },
+  // Stacked in the open space right of the stage, below the judgement counts.
+  playerInfo: { enabled: false, x: 0.7, y: 0.62, scale: 1, playerBanner: true },
+  mapInfo: { enabled: false, x: 0.7, y: 0.76, scale: 1, mapInfo: DEFAULT_REPLAY_MAP_INFO_OPTIONS },
+  media: { enabled: false, x: 0.7, y: 0.05, scale: 1, media: DEFAULT_REPLAY_CUSTOM_MEDIA },
   // Skin art: anchored where the skin puts it until it is dragged.
   stageLeft: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1 },
   stageRight: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1 },
@@ -456,6 +594,19 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
       const rawStyle = raw[id] && typeof raw[id] === "object" ? (raw[id] as { style?: unknown }).style : undefined;
       placement.style = normalizeReplayJudgementLayout(rawStyle);
     }
+    const rawLayer = (raw[id] as { layer?: unknown } | undefined)?.layer;
+    if (typeof rawLayer === "number" && Number.isInteger(rawLayer) && rawLayer !== 0) {
+      placement.layer = Math.max(-1000, Math.min(1000, rawLayer));
+    }
+    if (id === "playerInfo") {
+      placement.playerBanner = (raw[id] as { playerBanner?: unknown } | undefined)?.playerBanner !== false;
+    }
+    if (id === "mapInfo") {
+      placement.mapInfo = normalizeReplayMapInfoOptions((raw[id] as { mapInfo?: unknown } | undefined)?.mapInfo);
+    }
+    if (id === "media") {
+      placement.media = normalizeReplayCustomMedia((raw[id] as { media?: unknown } | undefined)?.media);
+    }
     if (id === "replayMaster") {
       const rawSpeed = raw[id] && typeof raw[id] === "object" ? (raw[id] as { scrollSpeed?: unknown }).scrollSpeed : undefined;
       placement.scrollSpeed = normalizeReplayMasterScrollSpeed(rawSpeed);
@@ -468,7 +619,7 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
       || placementMatches(placement, SCORE_BLOCK_HUD_DEFAULTS[id])
       || (id === "misses" && placementMatches(placement, COMPACT_MISS_OVERLAY_DEFAULT))
       || (id === "accuracy" && PREVIOUS_ACCURACY_OVERLAY_DEFAULTS.some((previous) => placementMatches(placement, previous)))
-      ? { ...DEFAULT_REPLAY_OVERLAY_SETTINGS[id], ...(placement.style ? { style: placement.style } : {}) }
+      ? { ...DEFAULT_REPLAY_OVERLAY_SETTINGS[id], ...(placement.style ? { style: placement.style } : {}), ...(placement.layer ? { layer: placement.layer } : {}) }
       : placement;
     if (id === "leaderboard") {
       settings.leaderboard.collapseDuringPlay = (raw[id] as { collapseDuringPlay?: unknown } | undefined)?.collapseDuringPlay === true;

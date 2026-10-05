@@ -109,6 +109,8 @@ export type ServerPackDrawOutcome =
   | { status: "dealt"; result: ServerPackDrawResult }
   | { status: "insufficient"; reason: "charges" | "shards"; wallet: ServerWalletState | null }
   | { status: "busy"; reason: "write_pressure" | "rate_limited" }
+  /* Opening is paused on this account until `pausedUntil` (ms epoch). */
+  | { status: "paused"; pausedUntil: number }
   | null;
 
 function walletFrom(value: unknown): ServerWalletState | null {
@@ -156,6 +158,12 @@ export const drawServerPack = createServerFn({ method: "POST" })
     if (response.status === 429) {
       const body = await response.json().catch(() => null) as { bucket?: unknown } | null;
       return { status: "busy", reason: body?.bucket === "write_pressure" ? "write_pressure" : "rate_limited" };
+    }
+    if (response.status === 403) {
+      const body = (await response.json().catch(() => null)) as { error?: unknown; pausedUntil?: unknown } | null;
+      const pausedUntil = Math.floor(Number(body?.pausedUntil) || 0);
+      if (body?.error === "pack_opening_paused" && pausedUntil > 0) return { status: "paused", pausedUntil };
+      throw new Error("Pack draw failed (403).");
     }
     if (response.status === 409) {
       const body = (await response.json().catch(() => null)) as

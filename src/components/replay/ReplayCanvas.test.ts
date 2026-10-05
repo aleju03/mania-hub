@@ -134,7 +134,7 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("this.hudCachedPp = `${Math.round(this.getPp())}pp`;");
     expect(source).toContain("counts: { perfect: c[1], great: c[2], good: c[3], ok: c[4], meh: c[5], miss: c[6] },");
     expect(source).toContain("modMultiplier: this.ppModMultiplier,");
-    expect(source).toContain("this.renderPpOverlay(layout);");
+    expect(source).toContain("this.inOverlayLayer(\"pp\", () => this.renderPpOverlay(layout));");
     // The opt-in calculator stays available on unranked maps as a hypothetical value.
     // Skipped where the HUD can never render, unless something outside the
     // canvas is reading the numbers (side by side).
@@ -150,7 +150,7 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("this.rightHandJudgmentCounts[event.judgment]++;");
     expect(source).toContain("calculateReplayAccuracy(\n      this.leftHandJudgmentCounts,\n      this.ruleset.accuracyMode,");
     expect(source).toContain("calculateReplayAccuracy(\n      this.rightHandJudgmentCounts,\n      this.ruleset.accuracyMode,");
-    expect(source).toContain("this.renderHandAccuracyOverlay(layout);");
+    expect(source).toContain("this.inOverlayLayer(\"handAccuracy\", () => this.renderHandAccuracyOverlay(layout));");
   });
 
   it("tags the side owning the middle lane on the L/R miss counter and toggles it on click", () => {
@@ -261,7 +261,7 @@ describe("ManiaReplayRenderer skin customization", () => {
     const bar = /private renderHitErrorBar\(layout: Layout\) \{([\s\S]*?)\n  \}/.exec(source);
 
     expect(hud?.[1]).toBeTruthy();
-    expect(hud![1]).toContain("this.renderHitErrorBar(layout);");
+    expect(hud![1]).toContain("this.inOverlayLayer(\"hitError\", () => this.renderHitErrorBar(layout));");
     expect(bar?.[1]).toBeTruthy();
     expect(bar![1]).toContain("drawBand(this.hitWindows.meh, colors.outer, 0.8);");
     expect(bar![1]).not.toContain('if (this.skinSettings.style !== "circles") {');

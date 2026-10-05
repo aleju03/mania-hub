@@ -1090,7 +1090,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null, i18n:
             ))}
           </div>
           <Footer text={`${farmKeyMode.toUpperCase()} • maniabot`} />
-          <Buttons items={["Recommendations"]} />
+          <Buttons items={["Recommended maps"]} />
         </Embed>
       ),
     },

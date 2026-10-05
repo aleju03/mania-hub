@@ -24,6 +24,15 @@ export interface SkillHistoryNote {
   keyCounts?: readonly number[];
   /** Rendered in place of `{link}`, linking to the map page. */
   mapLink?: { label: string; beatmapId: number };
+  /**
+   * Set when the change moved every rating in its keymodes onto a new scale (a
+   * new calc, a recalibrated accuracy model): the skill analysis version that
+   * shipped it. The graph starts at the newest of these, since a reading from
+   * before it is not comparable with today's, and today's dan ranges drawn
+   * behind it would name a dan the player never had. A version, not the date,
+   * because each player moves to the new scale when they are recomputed.
+   */
+  rescalesFrom?: number;
 }
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
@@ -36,6 +45,7 @@ export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
     date: "2026-09-25",
     text: "Updated MinaCalc to 0.75.0 for 5K and up. 5K and 7K ratings went up the most, and Technical now only shows on 4K and 5K.",
     keyCounts: Array.from({ length: 14 }, (_, i) => i + 5),
+    rescalesFrom: 47,
   },
   {
     date: "2026-09-16",
@@ -70,6 +80,7 @@ export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
     date: "2026-09-13",
     text: "The accuracy estimate behind MSD ratings was recalibrated: it now reads your judgements against your scoring client, OD, playback rate and hold share instead of treating every judgement window the same. Ratings can move up or down, including on LN maps and custom rates.",
+    rescalesFrom: 40,
   },
   {
     date: "2026-09-13",

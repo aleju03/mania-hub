@@ -18,7 +18,6 @@ import {
   getPreviewInitialCombo,
   getPreviewNotes,
   getPreviewScrollVelocities,
-  hasRateEditedAudio,
   resolveInitialChartPreviewAudioMode,
   shouldUseSetPreviewForReplayAudio,
 } from "../../lib/chart-preview";
@@ -40,6 +39,14 @@ const AUDIO_STUCK_RECOVERY_MS = 1200;
 const RENDERER_STUCK_RECOVERY_MS = 1000;
 const AUDIO_CLOCK_ADVANCE_EPSILON_SECONDS = 0.005;
 const RENDERER_ADVANCE_EPSILON_MS = 0.5;
+// The chart never waits on the song. It starts on a wall clock and the song
+// joins at the chart's position once it can play. The grace lets a song that
+// is already cached start with the first note instead of joining a beat late.
+const AUDIO_JOIN_GRACE_MS = 300;
+// How far the joined song may sit from the chart before it is seeked again.
+// The renderer absorbs this much without a visible jump.
+const AUDIO_JOIN_TOLERANCE_MS = 40;
+const AUDIO_JOIN_ATTEMPTS = 3;
 
 type ReplayAudioMode = "set-preview" | "selected-file";
 type AudioLoadStage = "loading" | "seeking" | "buffering" | "starting";
@@ -47,6 +54,13 @@ type AudioLoadStage = "loading" | "seeking" | "buffering" | "starting";
 type ReplayAudioClockSample = {
   seconds: number;
   advancingUntil: number;
+};
+
+// Display ms since the chart start, counted while `startedAtMs` is set. A
+// start in the future holds the clock at `elapsedMs` until then.
+type SilentClock = {
+  elapsedMs: number;
+  startedAtMs: number | null;
 };
 
 type ReplayAudioClockAnchor = {
@@ -112,6 +126,9 @@ export function ChartPreviewPanel({
   const playbackTokenRef = useRef(0);
   const mountedRef = useRef(true);
   const previewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Drives the chart until the song has joined; null once it has (or before
+  // playback starts).
+  const silentClockRef = useRef<SilentClock | null>(null);
 
   // The site's one "Default volume" (settings > viewer), shared with the
   // replay viewer and the search-grid previews.
@@ -132,9 +149,10 @@ export function ChartPreviewPanel({
   const [playing, setPlaying] = useState(false);
   const [ending, setEnding] = useState(false);
   const [ready, setReady] = useState(false);
+  const [clockStarted, setClockStarted] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [audioLoadStage, setAudioLoadStage] = useState<AudioLoadStage | null>(null);
-  const audioLoading = audioLoadStage !== null;
+  const [audioError, setAudioError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const rawPreviewUrl = typeof beatmapset.previewUrl === "string" ? beatmapset.previewUrl : "";
@@ -208,11 +226,14 @@ export function ChartPreviewPanel({
     audioClockSampleRef.current = null;
     audioClockAnchorRef.current = null;
     audioStartSecondsRef.current = 0;
+    silentClockRef.current = null;
     setRequested(false);
     setPlaying(false);
     setEnding(false);
     setReady(false);
+    setClockStarted(false);
     setAudioLoadStage(null);
+    setAudioError(null);
     setPreviewBeatmap(null);
     setChartStartMs(0);
     setChartPlaybackMs(0);
@@ -250,9 +271,11 @@ export function ChartPreviewPanel({
       setChartTimeScale(1);
       setAudioMode("set-preview");
       setReady(false);
+      setClockStarted(false);
       audioReadyRef.current = false;
       audioClockSampleRef.current = null;
       audioClockAnchorRef.current = null;
+      silentClockRef.current = null;
       return;
     }
 
@@ -260,11 +283,13 @@ export function ChartPreviewPanel({
     setPreviewLoading(true);
     setPlaying(false);
     setReady(false);
+    setClockStarted(false);
     setAudioLoadStage(null);
     setError(null);
     audioReadyRef.current = false;
     audioClockSampleRef.current = null;
     audioClockAnchorRef.current = null;
+    silentClockRef.current = null;
 
     getBeatmapFileWithRetry(selectedBeatmap.id, metadataBeatmapsetId)
       .then((selectedResult) => {
@@ -349,6 +374,7 @@ export function ChartPreviewPanel({
     audioClockSampleRef.current = null;
     audioClockAnchorRef.current = null;
     audioStartSecondsRef.current = 0;
+    silentClockRef.current = null;
     setAudioLoadStage(null);
     setPlaying(false);
     setEnding(true);
@@ -359,35 +385,42 @@ export function ChartPreviewPanel({
       setPlaying(false);
       setEnding(false);
       setReady(false);
+      setClockStarted(false);
       setAudioLoadStage(null);
     }, 220);
   }, []);
 
-  const startPreviewAudio = useCallback(async (token: number) => {
+  // Loads the song and brings it in at wherever the silent clock has the
+  // chart by then, then hands the chart over to the song's clock. Nothing
+  // here holds the chart back: a failure leaves it playing silently.
+  const joinAudio = useCallback(async (token: number) => {
     const audio = audioRef.current;
     const isCurrentRequest = () =>
       mountedRef.current &&
       playbackTokenRef.current === token &&
       audioRef.current === audio;
+    const targetSeconds = () =>
+      audioStartSeconds + (Math.min(previewWindowMs, readSilentClockMs(silentClockRef.current)) / 1000) * audioPlaybackRate;
+    const silentClockWaiting = () => {
+      const silent = silentClockRef.current;
+      return silent?.startedAtMs != null && silent.startedAtMs > performance.now();
+    };
 
     if (!audioUrl) {
       if (playbackTokenRef.current === token) {
-        audioStartPendingRef.current = false;
         audioReadyRef.current = false;
         audioClockSampleRef.current = null;
         audioClockAnchorRef.current = null;
         setAudioLoadStage(null);
-        setError(t`Couldn't find chart preview audio`);
+        setAudioError(t`Couldn't find chart preview audio`);
       }
       return;
     }
     if (!audio) return;
 
-    audioStartPendingRef.current = false;
     audioReadyRef.current = false;
-    resetReplayAudioClockSample(audioClockSampleRef, audioStartSeconds);
     audioClockAnchorRef.current = null;
-    setError(null);
+    setAudioError(null);
     audioStartSecondsRef.current = audioStartSeconds;
     audio.pause();
     applyAudioPlaybackSettings(audio);
@@ -414,28 +447,46 @@ export function ChartPreviewPanel({
       // Metadata can arrive after a different chart or seek has taken over.
       if (!isCurrentRequest()) return;
       setAudioLoadStage("seeking");
+      const firstTarget = targetSeconds();
       try {
-        audio.currentTime = audioStartSeconds;
+        audio.currentTime = firstTarget;
       } catch {
         // Metadata may not be ready yet.
       }
       await waitForAudioSeekSettle(
         audio,
-        audioStartSeconds,
+        firstTarget,
         audioMode === "selected-file" ? SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS : AUDIO_SEEK_SETTLE_TIMEOUT_MS,
       );
       // A superseded request must not touch the element: whoever bumped the
       // token (a seek, a restart, the end of the preview) has already put it
       // where it wants it, and the newer request may be playing on it by now.
-      // Resetting here paused that playback at 0:00 and the stall watchdog
-      // then resumed it from there under the newer request's clock anchor.
       if (!isCurrentRequest()) return;
-      if (audioStartSeconds > 0.25 && Math.abs(audio.currentTime - audioStartSeconds) > 1) {
+      if (firstTarget > 0.25 && Math.abs(audio.currentTime - firstTarget) > 1) {
         throw new Error("Chart preview audio seek failed");
       }
       setAudioLoadStage(audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ? "buffering" : "starting");
       await audio.play();
       if (!isCurrentRequest()) return;
+      // The chart kept moving while the song loaded. Seek the song to it,
+      // leading each retry by however long the previous seek took.
+      if (!silentClockWaiting()) {
+        let leadSeconds = 0;
+        for (let attempt = 0; attempt < AUDIO_JOIN_ATTEMPTS; attempt++) {
+          const driftMs = ((audio.currentTime - targetSeconds()) * 1000) / audioPlaybackRate;
+          if (Math.abs(driftMs) <= AUDIO_JOIN_TOLERANCE_MS) break;
+          const seekStartedAt = performance.now();
+          try {
+            audio.currentTime = targetSeconds() + leadSeconds;
+          } catch {
+            break;
+          }
+          await waitForAudioSeeked(audio, SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS);
+          if (!isCurrentRequest()) return;
+          leadSeconds = ((performance.now() - seekStartedAt) / 1000) * audioPlaybackRate;
+        }
+      }
+      silentClockRef.current = null;
       resetReplayAudioClockSample(audioClockSampleRef, audio.currentTime);
       audioClockAnchorRef.current = {
         mediaSeconds: audio.currentTime,
@@ -447,28 +498,47 @@ export function ChartPreviewPanel({
       setAudioLoadStage(null);
     } catch {
       if (isCurrentRequest()) {
+        audio.pause();
         audioReadyRef.current = false;
         audioClockSampleRef.current = null;
         audioClockAnchorRef.current = null;
         setAudioLoadStage(null);
-        setError(t`Couldn't play chart preview audio`);
-        setPlaying(false);
+        setAudioError(t`Couldn't play chart preview audio`);
       }
     }
-  }, [applyAudioPlaybackSettings, audioMode, audioPlaybackRate, audioStartSeconds, audioUrl, volume]);
+  }, [applyAudioPlaybackSettings, audioMode, audioPlaybackRate, audioStartSeconds, audioUrl, previewWindowMs, t]);
+
+  // The song stopped for data mid-play. Put the chart back on the silent
+  // clock from where the song was and let the song join again.
+  const fallBackToSilentClock = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || !audioReadyRef.current || !playing) return;
+    const elapsedMs = ((audio.currentTime - audioStartSecondsRef.current) * 1000) / Math.max(0.1, clockRateDivisor);
+    silentClockRef.current = {
+      elapsedMs: Math.min(previewWindowMs, Math.max(0, elapsedMs)),
+      startedAtMs: performance.now(),
+    };
+    audioReadyRef.current = false;
+    audioClockSampleRef.current = null;
+    audioClockAnchorRef.current = null;
+    const token = playbackTokenRef.current + 1;
+    playbackTokenRef.current = token;
+    void joinAudio(token);
+  }, [clockRateDivisor, joinAudio, playing, previewWindowMs]);
 
   const getChartPlaybackMs = useCallback(() => {
     const baseMs = Math.max(0, chartStartMs);
     const audio = audioRef.current;
-    if (!audio || !audioReadyRef.current) {
-      return Math.min(baseMs, Math.max(0, chartLengthMs));
+    let displayMs: number;
+    if (audio && audioReadyRef.current) {
+      const elapsedMediaMs = Math.max(0, (audio.currentTime - audioStartSecondsRef.current) * 1000);
+      displayMs = elapsedMediaMs / Math.max(0.1, clockRateDivisor);
+    } else {
+      displayMs = Math.min(previewWindowMs, readSilentClockMs(silentClockRef.current));
     }
-
-    const elapsedMediaMs = Math.max(0, (audio.currentTime - audioStartSecondsRef.current) * 1000);
-    const displayMs = elapsedMediaMs / Math.max(0.1, clockRateDivisor);
     const chartMs = baseMs + (displayMs * Math.max(0.1, chartTimeScale));
     return Math.min(Math.max(0, chartMs), Math.max(0, chartLengthMs));
-  }, [chartLengthMs, chartStartMs, chartTimeScale, clockRateDivisor]);
+  }, [chartLengthMs, chartStartMs, chartTimeScale, clockRateDivisor, previewWindowMs]);
 
   useEffect(() => {
     if (!requested || ending) return;
@@ -534,7 +604,12 @@ export function ChartPreviewPanel({
 
   const getClock = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio || !audioReadyRef.current || audio.paused || audio.seeking) {
+    if (!audioReadyRef.current) {
+      const silent = silentClockRef.current;
+      if (!silent || silent.startedAtMs == null) return { time: 0, stalled: true };
+      return { time: Math.min(previewWindowMs, readSilentClockMs(silent)), stalled: false };
+    }
+    if (!audio || audio.paused || audio.seeking) {
       return { time: 0, stalled: true };
     }
     const rate = Math.max(0.1, clockRateDivisor);
@@ -564,6 +639,14 @@ export function ChartPreviewPanel({
     };
   }, [audioPlaybackRate, clockRateDivisor, previewWindowMs]);
 
+  const beginPlayback = useCallback((token: number) => {
+    audioStartPendingRef.current = false;
+    silentClockRef.current = { elapsedMs: 0, startedAtMs: performance.now() + AUDIO_JOIN_GRACE_MS };
+    setClockStarted(true);
+    setPlaying(true);
+    void joinAudio(token);
+  }, [joinAudio]);
+
   const startPreview = useCallback(() => {
     const audio = audioRef.current;
     clearPreviewEndTimer();
@@ -572,8 +655,11 @@ export function ChartPreviewPanel({
     audioReadyRef.current = false;
     resetReplayAudioClockSample(audioClockSampleRef, audioStartSeconds);
     audioClockAnchorRef.current = null;
+    silentClockRef.current = null;
     setPlaying(false);
     setEnding(false);
+    setClockStarted(false);
+    setAudioError(null);
     if (audio) {
       audio.pause();
       try {
@@ -587,16 +673,14 @@ export function ChartPreviewPanel({
     setChartPlaybackMs(chartStartMs);
     setRequested(true);
     audioStartPendingRef.current = true;
-    if (previewBeatmap && ready) {
-      void startPreviewAudio(token);
-    }
-  }, [applyAudioPlaybackSettings, audioPlaybackRate, audioStartSeconds, chartStartMs, clearPreviewEndTimer, previewBeatmap, ready, startPreviewAudio]);
+    if (previewBeatmap && ready) beginPlayback(token);
+  }, [applyAudioPlaybackSettings, audioStartSeconds, beginPlayback, chartStartMs, clearPreviewEndTimer, previewBeatmap, ready]);
 
   useEffect(() => {
     if (requested && previewBeatmap && ready && !previewLoading && audioStartPendingRef.current) {
-      void startPreviewAudio(playbackTokenRef.current);
+      beginPlayback(playbackTokenRef.current);
     }
-  }, [previewBeatmap, previewLoading, ready, requested, startPreviewAudio]);
+  }, [beginPlayback, previewBeatmap, previewLoading, ready, requested]);
 
   const seekChart = useCallback((targetMs: number) => {
     clearPreviewEndTimer();
@@ -605,11 +689,15 @@ export function ChartPreviewPanel({
     audioStartPendingRef.current = true;
     audioClockSampleRef.current = null;
     audioClockAnchorRef.current = null;
+    silentClockRef.current = null;
     resetAudioElement(audioRef.current);
     setPlaying(false);
     setReady(false);
+    setClockStarted(false);
     setEnding(false);
     setError(null);
+    setAudioError(null);
+    setAudioLoadStage(null);
     setRequested(true);
     const nextMs = Math.max(0, Math.round(targetMs));
     setChartPlaybackMs(nextMs);
@@ -620,18 +708,38 @@ export function ChartPreviewPanel({
     setSeekRevision((revision) => revision + 1);
   }, [clearPreviewEndTimer]);
 
-  // A rate switch reloads the chart at the new speed. While it plays, the
-  // audio stops with it and both pick up where they were once it has loaded.
+  // A rate switch reloads the chart at the new speed and picks up where it
+  // was once it has loaded.
   const lastPlaybackRateRef = useRef(previewPlaybackRate);
   useEffect(() => {
     if (lastPlaybackRateRef.current === previewPlaybackRate) return;
     lastPlaybackRateRef.current = previewPlaybackRate;
-    if (playing || audioLoadStage !== null) seekChart(chartPlaybackMs);
-  }, [audioLoadStage, chartPlaybackMs, playing, previewPlaybackRate, seekChart]);
+    if (requested && !ending) seekChart(chartPlaybackMs);
+  }, [chartPlaybackMs, ending, previewPlaybackRate, requested, seekChart]);
 
   const togglePlayback = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio || !audioReadyRef.current) return;
+    if (!clockStarted) return;
+    if (!audioReadyRef.current) {
+      // The song has not joined yet: hold or run the silent clock, and stop
+      // or restart the join with it.
+      const elapsedMs = readSilentClockMs(silentClockRef.current);
+      const token = playbackTokenRef.current + 1;
+      playbackTokenRef.current = token;
+      if (playing) {
+        setChartPlaybackMs(getChartPlaybackMs());
+        silentClockRef.current = { elapsedMs, startedAtMs: null };
+        audio?.pause();
+        setAudioLoadStage(null);
+        setPlaying(false);
+      } else {
+        silentClockRef.current = { elapsedMs, startedAtMs: performance.now() };
+        setPlaying(true);
+        if (!audioError) void joinAudio(token);
+      }
+      return;
+    }
+    if (!audio) return;
     if (playing) {
       setChartPlaybackMs(getChartPlaybackMs());
       audio.pause();
@@ -654,7 +762,7 @@ export function ChartPreviewPanel({
       .catch(() => {
         audioClockAnchorRef.current = null;
       });
-  }, [applyAudioPlaybackSettings, audioPlaybackRate, getChartPlaybackMs, playing]);
+  }, [applyAudioPlaybackSettings, audioError, audioPlaybackRate, clockStarted, getChartPlaybackMs, joinAudio, playing]);
 
   const markReady = useCallback(() => {
     setReady(true);
@@ -711,21 +819,15 @@ export function ChartPreviewPanel({
     if (next !== scrollSpeed) applyScrollSpeed(next);
   }, [applyScrollSpeed, scrollSpeed, scrollSpeedInput]);
 
-  const paused = requested && ready && audioReadyRef.current && !playing && !ending && !audioLoading && !error;
-  const preparing = requested && !ending && !playing && !paused && !audioLoading && !error;
-  const canToggle = requested && !ending && !audioLoading && (playing || ready);
-  const loadingLabel = audioLoadStage === "loading"
-    ? audioMode === "selected-file" ? t`Loading full audio…` : t`Loading audio preview…`
-    : audioLoadStage === "seeking" ? t`Seeking audio…`
-    : audioLoadStage === "buffering" ? t`Buffering audio…`
-    : audioLoadStage === "starting" ? t`Starting playback…`
-    : previewLoading || !previewBeatmap ? t`Loading chart…`
-    : !ready ? null
-    : t`Starting playback…`;
-  const fullAudioReason = audioMode !== "selected-file" ? null
-    : chartScrub ? t`Seeking beyond the clip needs the full song.`
-    : hasRateEditedAudio(maniaBeatmaps) ? t`Rate edits detected. Using this difficulty's audio to keep notes in sync.`
-    : t`The short audio clip can't be used for this chart.`;
+  const paused = requested && clockStarted && !playing && !ending && !error;
+  const preparing = requested && !ending && !clockStarted && !error;
+  const canToggle = requested && !ending && clockStarted;
+  const loadingLabel = previewLoading || !previewBeatmap ? t`Loading chart…` : null;
+  const audioStatus = audioError
+    ?? (audioLoadStage === "loading"
+      ? audioMode === "selected-file" ? t`Loading full audio…` : t`Loading audio preview…`
+      : audioLoadStage !== null ? t`Buffering audio…`
+      : null);
 
   return (
     <div className={`relative min-h-[360px] overflow-hidden rounded-xl border ${flatBackdrop ? "border-transparent bg-transparent" : "border-osu-b3/30 bg-osu-b6"} ${className}`}>
@@ -764,18 +866,24 @@ export function ChartPreviewPanel({
         />
       ) : null}
 
-      {(audioLoading || preparing) && loadingLabel ? (
-        <div className={`pointer-events-none absolute inset-0 z-30 grid place-items-center p-4 ${audioLoading ? "bg-osu-b5/45 backdrop-blur-[1px]" : ""}`}>
+      {preparing && loadingLabel ? (
+        <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center p-4">
           <div role="status" className="flex max-w-64 flex-col items-center gap-2 rounded-lg border border-osu-b3/50 bg-osu-b5/90 px-4 py-3 text-center shadow-lg shadow-black/20">
             <Loader2 className="h-4 w-4 animate-spin text-osu-pink" aria-hidden="true" />
             <span className="text-xs font-medium text-osu-l1">{loadingLabel}</span>
-            {audioLoadStage === "loading" && fullAudioReason ? (
-              <span className="text-[11px] leading-relaxed text-osu-l2">
-                {fullAudioReason}{" "}
-                <Trans>The song may need to be downloaded and prepared first.</Trans>
-              </span>
-            ) : null}
           </div>
+        </div>
+      ) : null}
+
+      {requested && clockStarted && !ending && audioStatus ? (
+        <div role="status" className="pointer-events-none absolute left-3 top-3 z-30 flex items-center gap-1.5 text-[11px] font-medium text-osu-f1">
+          {audioError ? (
+            <VolumeX className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          ) : (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-osu-pink" aria-hidden="true" />
+          )}
+          <span>{audioStatus}</span>
+          {audioError ? null : <ElapsedSeconds />}
         </div>
       ) : null}
 
@@ -914,14 +1022,15 @@ export function ChartPreviewPanel({
             if (audioReadyRef.current) setAudioLoadStage(null);
           }}
           onWaiting={() => {
-            if (requested && audioReadyRef.current && playing) setAudioLoadStage("buffering");
+            if (requested && audioReadyRef.current && playing) fallBackToSilentClock();
           }}
           onSeeking={() => {
             if (requested && audioReadyRef.current && playing) setAudioLoadStage("seeking");
           }}
           onPlaying={(e) => {
             applyAudioPlaybackSettings(e.currentTarget);
-            setAudioLoadStage(null);
+            // Mid-join the song plays before it has been lined up with the chart.
+            if (audioReadyRef.current) setAudioLoadStage(null);
           }}
           onTimeUpdate={(e) => {
             const audio = e.currentTarget;
@@ -929,19 +1038,39 @@ export function ChartPreviewPanel({
             if (audio.currentTime >= maxSeconds) finishPreview();
           }}
           onEnded={finishPreview}
-          onError={() => {
-            setAudioLoadStage(null);
-            setError(t`Couldn't load chart preview audio`);
-            setPlaying(false);
-            audioStartPendingRef.current = false;
+          onError={(e) => {
+            // The chart carries on without the song, from wherever the song had it.
+            const audio = e.currentTarget;
+            if (audioReadyRef.current) {
+              const elapsedMs = ((audio.currentTime - audioStartSecondsRef.current) * 1000) / Math.max(0.1, clockRateDivisor);
+              silentClockRef.current = {
+                elapsedMs: Math.min(previewWindowMs, Math.max(0, elapsedMs)),
+                startedAtMs: playing ? performance.now() : null,
+              };
+            }
+            playbackTokenRef.current += 1;
             audioReadyRef.current = false;
             audioClockSampleRef.current = null;
             audioClockAnchorRef.current = null;
+            setAudioLoadStage(null);
+            setAudioError(t`Couldn't load chart preview audio`);
           }}
         />
       ) : null}
     </div>
   );
+}
+
+// Counts from mount, so it restarts each time the audio status appears.
+function ElapsedSeconds() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const startedAt = performance.now();
+    const id = window.setInterval(() => setSeconds(Math.floor((performance.now() - startedAt) / 1000)), 250);
+    return () => window.clearInterval(id);
+  }, []);
+  if (seconds < 1) return null;
+  return <span className="tabular-nums">{seconds}s</span>;
 }
 
 function ChartPreviewTimeline({
@@ -1269,6 +1398,12 @@ function ChartPreviewRenderer({
   );
 }
 
+function readSilentClockMs(clock: SilentClock | null, now = performance.now()): number {
+  if (!clock) return 0;
+  if (clock.startedAtMs == null) return clock.elapsedMs;
+  return clock.elapsedMs + Math.max(0, now - clock.startedAtMs);
+}
+
 function resetReplayAudioClockSample(sampleRef: { current: ReplayAudioClockSample | null }, seconds: number): void {
   sampleRef.current = {
     seconds,
@@ -1405,6 +1540,21 @@ function waitForAudioSeekSettle(
     audio.addEventListener("error", done);
     timeoutId = window.setTimeout(done, timeoutMs);
     scheduleCheck();
+  });
+}
+
+function waitForAudioSeeked(audio: HTMLAudioElement, timeoutMs: number): Promise<void> {
+  if (!audio.seeking) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      window.clearTimeout(timeoutId);
+      audio.removeEventListener("seeked", done);
+      audio.removeEventListener("error", done);
+      resolve();
+    };
+    const timeoutId = window.setTimeout(done, timeoutMs);
+    audio.addEventListener("seeked", done);
+    audio.addEventListener("error", done);
   });
 }
 

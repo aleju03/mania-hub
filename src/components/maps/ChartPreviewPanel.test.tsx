@@ -85,7 +85,7 @@ afterEach(() => {
 });
 
 describe("chart preview loading", () => {
-  it("labels chart and audio loading, hides renderer preparation, and keeps the pending start on canplay", async () => {
+  it("starts the chart without waiting for the audio and shows the audio status aside", async () => {
     const file = deferred<{ content: string }>();
     const renderer = deferred<void>();
     const playback = deferred<void>();
@@ -95,24 +95,32 @@ describe("chart preview loading", () => {
     const { container } = openPreview();
     expect(screen.getByRole("status").textContent).toContain("Loading chart");
     await act(async () => file.resolve({ content: "chart" }));
-    expect(screen.queryByRole("status")).toBeNull();
     await act(async () => renderer.resolve());
+    // The chart is running: it can be paused while the song still loads.
+    const toggle = screen.getByRole("button", { name: "Pause chart preview" }) as HTMLButtonElement;
+    expect(toggle.disabled).toBe(false);
     expect(screen.getByRole("status").textContent).toContain("Loading full audio");
-    expect(screen.getByRole("status").textContent).toContain("Rate edits detected");
     const audio = container.querySelector("audio")!;
     expect(audio.getAttribute("src")).toBe("/full-audio.mp3");
     expect(audio.playbackRate).toBe(1.25); // The file already contains the difficulty's 0.7x edit.
     await act(async () => metadata(audio));
-    expect(screen.getByRole("status").textContent).toContain("Seeking audio");
-    fireEvent.canPlay(audio);
-    expect(screen.getByRole("status").textContent).toContain("Seeking audio");
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Buffering audio"));
     await act(async () => playback.resolve());
-    expect(screen.queryByRole("status")).toBeNull();
-    fireEvent.waiting(audio);
-    expect(screen.getByRole("status").textContent).toContain("Buffering audio");
-    fireEvent.playing(audio);
-    expect(screen.queryByRole("status")).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    // A buffer underrun puts the chart back on its own clock while the song catches up.
+    vi.mocked(HTMLMediaElement.prototype.play).mockReturnValue(new Promise(() => {}));
+    await act(async () => { fireEvent.waiting(audio); });
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Buffering audio"));
+    expect((screen.getByRole("button", { name: "Pause chart preview" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("keeps the chart playing when the audio fails", async () => {
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValue(new Error("blocked"));
+    const { container } = openPreview(false);
+    const audio = await waitFor(() => container.querySelector("audio")!);
+    await act(async () => metadata(audio, 4));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Couldn't play chart preview audio"));
+    expect((screen.getByRole("button", { name: "Pause chart preview" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("labels short-clip loading and leaves the full song untouched for ordinary sets", async () => {

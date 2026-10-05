@@ -9,7 +9,9 @@ import {
   type LivePlayerSkillHistoryEntry,
   type LivePlayerSkillHistorySnapshot,
 } from "../../lib/live-backend";
-import { etternaOverallFromRatings, skillAxisMeta, usesPatternSkillAxes } from "../../lib/skill-axes";
+import { skillAxisMeta, usesPatternSkillAxes } from "../../lib/skill-axes";
+import { historyOverall } from "./skill-history-overall";
+import { SkillHistoryGraph } from "./SkillHistoryGraph";
 import { useOverallMethod } from "../../lib/overall-method";
 import { OverallMethodToggle } from "./OverallMethodToggle";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
@@ -34,7 +36,7 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [preview, setPreview] = useState<LivePlayerSkillHistoryEntry[] | null>(null);
-  const [mode, setMode] = useState<"history" | "changes">("history");
+  const [mode, setMode] = useState<"history" | "graph" | "changes">("history");
   const reduceMotion = useReducedMotion();
   const visibleItems = preview ?? items;
   const visibleRows = groupSkillHistoryByDay(visibleItems);
@@ -110,7 +112,7 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 4, scale: 0.99 }}
         transition={{ duration: reduceMotion ? 0 : 0.16, ease: "easeOut" }}
-        className="modal-card-mobile-safe relative flex max-h-[min(560px,calc(100dvh-2rem))] w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 text-osu-l2 shadow-2xl"
+        className="modal-card-mobile-safe relative flex max-h-[min(760px,calc(100dvh-2rem))] w-full max-w-[600px] flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 text-osu-l2 shadow-2xl"
       >
         <header className="flex shrink-0 items-center gap-2.5 border-b border-osu-b3/50 px-4 py-3">
           <History className="h-3.5 w-3.5 text-osu-pink-light" aria-hidden="true" />
@@ -121,7 +123,7 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
           </button>
         </header>
         <div role="group" aria-label={t`View`} className="flex shrink-0 gap-5 border-b border-osu-b3/40 px-4">
-          {(["history", "changes"] as const).map((value) => (
+          {(["history", "changes", "graph"] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -129,12 +131,17 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
               onClick={() => setMode(value)}
               className={`-mb-px cursor-pointer border-b-2 py-2.5 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-osu-pink-light ${mode === value ? "border-osu-pink-light text-osu-l1" : "border-transparent text-osu-f1 hover:text-white"}`}
             >
-              {value === "history" ? <Trans>History</Trans> : <Trans>Changes</Trans>}
+              {value === "history" ? <Trans>History</Trans> : value === "graph" ? <Trans context="skill history view">Graph</Trans> : <Trans>Changes</Trans>}
             </button>
           ))}
-          {mode === "history" && !usesPatternSkillAxes(keyCount) ? <OverallMethodToggle keyCount={keyCount} className="ml-auto" /> : null}
+          {mode !== "changes" && !usesPatternSkillAxes(keyCount) ? <OverallMethodToggle keyCount={keyCount} className="ml-auto" /> : null}
         </div>
-        {mode === "changes" ? (
+        {mode === "graph" ? (
+          /* One request for the whole history, apart from the list's pages. */
+          <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-3">
+            <SkillHistoryGraph userId={userId} keyCount={keyCount} height={280} />
+          </div>
+        ) : mode === "changes" ? (
           <div className="min-h-0 overflow-y-auto overscroll-contain py-3">
             {notes.length ? [...new Set(notes.map((note) => note.date))].map((date) => (
               <section key={date} className="mb-3 last:mb-0">
@@ -221,14 +228,6 @@ function changeColor(value: number): string {
   return value > 0 ? "text-osu-green-light" : value < 0 ? "text-osu-red-light" : "text-osu-f1";
 }
 
-// The row's Overall under the reader's method, derived from the snapshot's
-// skillsets so older entries read on the same scale as the card.
-function snapshotOverall(snapshot: LivePlayerSkillHistorySnapshot, keyCount: number, etterna: boolean, hideLn: boolean): number {
-  const ratings = hideLn ? { ...snapshot.ratings, "pattern:ln": 0 } : snapshot.ratings;
-  const derived = etterna ? etternaOverallFromRatings(keyCount, ratings) : 0;
-  return derived > 0 ? derived : snapshot.ratings.Overall ?? 0;
-}
-
 function HistoryEntry({ entry, keyCount }: { entry: LivePlayerSkillHistoryEntry & { day: string }; keyCount: number }) {
   const { i18n, t } = useLingui();
   const locale = useLocale();
@@ -240,8 +239,8 @@ function HistoryEntry({ entry, keyCount }: { entry: LivePlayerSkillHistoryEntry 
   const detailsId = useId();
   const { snapshot, previous } = entry;
   const etterna = useOverallMethod() === "etterna";
-  const overall = snapshotOverall(snapshot, keyCount, etterna, hideLn);
-  const delta = previous ? Number((overall - snapshotOverall(previous, keyCount, etterna, hideLn)).toFixed(2)) : 0;
+  const overall = historyOverall(snapshot.ratings, keyCount, etterna, hideLn);
+  const delta = previous ? Number((overall - historyOverall(previous.ratings, keyCount, etterna, hideLn)).toFixed(2)) : 0;
   const axes = previous ? Array.from(new Set([...Object.keys(snapshot.ratings), ...Object.keys(previous.ratings)]))
     .filter((axis) => axis !== "Overall" && !(hideLn && axis === "pattern:ln") && snapshot.ratings[axis] !== previous.ratings[axis]) : [];
   const formatDan = (side: LivePlayerSkillHistorySnapshot["dan"]["rc"]) => side ? `${side.beyondTable ? "> " : ""}${side.label}` : "—";

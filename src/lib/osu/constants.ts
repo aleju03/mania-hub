@@ -2,7 +2,14 @@
 // Threshold used by the maps page to keep single-player farmed entries out of
 // the board unless the play is actually worth pp.
 export const FARMED_SINGLE_PLAYER_PP_MIN = 500;
-export const RANKINGS_CACHE_TTL = 5 * 60 * 1000;
+// The country pages' osu! leaderboard (pp, rank, online dots). 15 minutes
+// rather than 5: these pages were a steady share of the osu! budget, and
+// rankings move slower than that between plays.
+export const RANKINGS_CACHE_TTL = 15 * 60 * 1000;
+// A score barely changes once set, but a play opened right after it was set
+// can still be waiting on its pp, so this stays short.
+export const SCORE_LOOKUP_CACHE_TTL = 10 * 60 * 1000;
+export const USER_SEARCH_CACHE_TTL = 10 * 60 * 1000;
 // Backend osu!-proxy stale window: how long past its TTL a cached response may
 // still be served when the upstream osu! call fails. Keeps profiles and
 // scoreboards readable through osu! hiccups (the old Turso-era 6h stale-profile

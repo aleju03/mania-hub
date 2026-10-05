@@ -16,6 +16,7 @@ import { getInlineBackgroundUrl } from "../audio-url";
 import type { ReplayOverlaySettings, ReplayThumbHand } from "../replay-overlays";
 import type { ReplaySkinSettings } from "../replay-skin";
 import type { ReplayLeaderboardOptions } from "../replay-leaderboard";
+import type { ReplayInfoData } from "../replay-info-overlay";
 import type { ReplayHitCounts } from "../replay-validation";
 import type { ReplayStoryboardData } from "../storyboard/types";
 import type { ReplayFrame, ReplayLifeBarFrame } from "../types";
@@ -93,6 +94,7 @@ export type ReplayExportCapture = {
   leaderboardPlayerName: string;
   leaderboardOptions?: ReplayLeaderboardOptions;
   leaderboardVisible: boolean;
+  replayInfo?: ReplayInfoData;
   storyboard: ReplayStoryboardData | null;
   storyboardEnabled: boolean;
 
@@ -327,6 +329,7 @@ export async function resolveReplayExportResources(
     leaderboard: capture.leaderboard,
     leaderboardPlayerName: capture.leaderboardPlayerName,
     leaderboardOptions: capture.leaderboardOptions ? { ...capture.leaderboardOptions } : undefined,
+    replayInfo: capture.replayInfo,
     storyboard: capture.storyboard,
     songFile,
     backgroundImage,

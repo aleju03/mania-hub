@@ -67,6 +67,8 @@ import {
 } from "../lib/packs";
 import type { OsuScore } from "../lib/types";
 import { getI18n } from "../lib/i18n";
+import { intlLocaleTag } from "../lib/format";
+import type { AppLocale } from "../lib/locale";
 import { usePacksRevealAll, usePacksSkipAnimations } from "../store";
 import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
@@ -523,7 +525,7 @@ function PackTypeSelector({
 }
 
 function PacksPage() {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const revealAllPreferred = usePacksRevealAll();
   const skipAnimations = usePacksSkipAnimations();
   const reducedMotion = useReducedMotion();
@@ -567,7 +569,9 @@ function PacksPage() {
      finished. Non-null means the viewer already saw the whole grid, so the
      summary skips its enter ceremony and flies the cards into place. */
   const [summaryFlyFrom, setSummaryFlyFrom] = useState<Map<number, FlightRect> | null>(null);
-  const [dealError, setDealError] = useState<"failed" | "write_pressure" | "rate_limited" | null>(null);
+  const [dealError, setDealError] = useState<"failed" | "write_pressure" | "rate_limited" | "paused" | null>(null);
+  // When a paused account can open packs again (ms epoch), for that message.
+  const [pausedUntil, setPausedUntil] = useState(0);
   /* Set by "Open another" on the summary: the next deal skips the pack stage
      and charges itself as soon as it has cards. */
   const autoOpenRef = useRef(false);
@@ -806,6 +810,13 @@ function PacksPage() {
             autoOpenRef.current = false;
             setCutCommitted(false);
             setDealError(outcome.reason);
+            return;
+          }
+          if (outcome.kind === "paused") {
+            autoOpenRef.current = false;
+            setCutCommitted(false);
+            setPausedUntil(outcome.pausedUntil);
+            setDealError("paused");
             return;
           }
           if (outcome.kind === "insufficient") {
@@ -1109,17 +1120,24 @@ function PacksPage() {
                     <Trans>The server is busy. Please try again in a moment. This pack wasn't charged.</Trans>
                   ) : dealError === "rate_limited" ? (
                     <Trans>Please wait a minute before opening another pack. This pack wasn't charged.</Trans>
+                  ) : dealError === "paused" ? (
+                    <Trans>
+                      Pack opening is paused on this account until{" "}
+                      {new Date(pausedUntil).toLocaleString(intlLocaleTag(i18n.locale as AppLocale), { dateStyle: "long", timeStyle: "short" })}.
+                    </Trans>
                   ) : (
                     <Trans>The pack could not be opened. Please try again in a moment.</Trans>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={openAnother}
-                  className="mt-5 rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
-                >
-                  <Trans>Retry</Trans>
-                </button>
+                {dealError !== "paused" && (
+                  <button
+                    type="button"
+                    onClick={openAnother}
+                    className="mt-5 rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
+                  >
+                    <Trans>Retry</Trans>
+                  </button>
+                )}
               </div>
             ) : (
               <AnimatePresence mode="wait">

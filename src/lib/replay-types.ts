@@ -1,8 +1,9 @@
 import type { ReplayHitCounts } from "./replay-validation";
 import type { HitsoundSamplePlay, ReplayHitsoundTrigger } from "./replay-hitsounds";
-import type { ReplayOverlayId, ReplayOverlaySettings, ReplayThumbHand } from "./replay-overlays";
+import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlaySettings, ReplayThumbHand } from "./replay-overlays";
 import type { ReplaySkinSettings } from "./replay-skin";
 import type { ReplayLeaderboardEntry, ReplayLeaderboardOptions } from "./replay-leaderboard";
+import type { ReplayInfoData } from "./replay-info-overlay";
 import type { ReplayStoryboardData } from "./storyboard/types";
 import type { ReplayFrame, ReplayLifeBarFrame, OsuScore } from "./types";
 
@@ -125,6 +126,14 @@ export interface ReplayRendererLike {
   setLeaderboard?: (entries: ReplayLeaderboardEntry[], playerName: string, options?: ReplayLeaderboardOptions) => void;
   leaderboardReady?: () => Promise<void>;
   setLeaderboardVisible?: (visible: boolean) => void;
+  setReplayInfo?: (info: ReplayInfoData) => void;
+  replayInfoReady?: () => Promise<void>;
+  /** The hint an empty custom media box shows, already translated. */
+  setEmptyMediaLabel?: (label: string) => void;
+  /** Settles once an export's custom media has loaded or failed. */
+  customMediaReady?: () => Promise<void>;
+  /** The map or player card as this replay draws it, as an image URL for the settings gallery. */
+  captureInfoCardPreview?: (id: "mapInfo" | "playerInfo", placement: ReplayOverlayPlacement) => string | null;
   setSpectatorCount?: (count: number) => void;
   setSpectatorNames?: (names: string[]) => void;
   setHitsoundTrigger?: (trigger: ReplayHitsoundTrigger | null) => void;

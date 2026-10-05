@@ -639,6 +639,12 @@ msgstr "已统计 {1} 名成员中的 {0} 名"
 msgid "{0} of {1} members rated"
 msgstr "{1} 名成员中有 {0} 名已评分"
 
+#. placeholder {0}: items.length.toLocaleString("en-US")
+#. placeholder {1}: total.toLocaleString("en-US")
+#: src/components/player/SkillPlaysModal.tsx
+msgid "{0} of {1} plays"
+msgstr "{1} 次游玩中的 {0} 次"
+
 #. placeholder {0}: formatNumber(activeKeyMode.analyzedPlays)
 #. placeholder {1}: formatNumber(activeKeyMode.totalPlays)
 #: src/components/player/ActivityPanel.tsx
@@ -736,6 +742,7 @@ msgstr "{0} 名玩家"
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillPlaysModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/rankings.tsx
@@ -1340,13 +1347,17 @@ msgstr "{hours} 小时前"
 msgid "{keyCount}K {sideLabel} dan"
 msgstr "{keyCount}K {sideLabel}段位"
 
+#: src/components/player/SkillHistoryGraph.tsx
+msgid "{keyCount}K Overall over time"
+msgstr "{keyCount}K 综合随时间变化"
+
 #: src/components/player/SkillHistoryModal.tsx
 msgid "{keyCount}K skill history"
 msgstr "{keyCount}K 技能历史"
 
 #: src/components/player/SkillPlaysModal.tsx
-msgid "{keyCount}K skillset"
-msgstr "{keyCount}K 技能组"
+#~ msgid "{keyCount}K skillset"
+#~ msgstr "{keyCount}K 技能组"
 
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "{keymodeLabel} only"
@@ -2654,7 +2665,6 @@ msgstr "账号菜单"
 
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
-#: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "准确率"
 
@@ -3217,6 +3227,14 @@ msgstr "不限语言"
 msgid "any moment now"
 msgstr "随时"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Any picture, GIF or video, from a link or a file."
+msgstr "任意图片、GIF 或视频，来自链接或文件。"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#~ msgid "Any picture, GIF, video or web page, from a link or a file."
+#~ msgstr "任意图片、GIF、视频或网页，来自链接或文件。"
+
 #: src/routes/skins.tsx
 msgid "anyone"
 msgstr "所有人"
@@ -3407,6 +3425,10 @@ msgstr "音频设置立即生效。"
 msgid "Audio URL (mp3)"
 msgstr "音频链接 (mp3)"
 
+#: src/lib/replay-overlays.ts
+msgid "Audio wave"
+msgstr "音频波形"
+
 #: src/routes/terms.tsx
 msgid "August 23, 2026"
 msgstr "2026年8月23日"
@@ -3559,6 +3581,10 @@ msgstr "背景"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Background"
 msgstr "背景"
+
+#: src/lib/replay-overlays.ts
+msgid "Background art"
+msgstr "谱面背景"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Background colour"
@@ -3892,6 +3918,10 @@ msgstr "明亮"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Brightness"
 msgstr "亮度"
+
+#: src/routes/replay.tsx
+msgid "Bring to front"
+msgstr "置于顶层"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Browse"
@@ -4794,6 +4824,10 @@ msgstr "播放时收起"
 msgid "Companella"
 msgstr "Companella"
 
+#: src/routes/news_.companella.tsx
+msgid "Companella also sends the replay of the plays you set on osu!, so your skill ratings use your accuracy based on your hit timings."
+msgstr "Companella 也会上传你在 osu! 上打出的成绩的回放，这样你的技能评分会使用根据你的击打时机算出的准确度。"
+
 #: src/routes/companella.tsx
 #~ msgid "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the connection, and the approval is bound to that connection only."
 #~ msgstr ""
@@ -5020,6 +5054,7 @@ msgstr "无法加载更多成绩。"
 msgid "Could not load sets. Try again."
 msgstr "无法加载卡组，请重试。"
 
+#: src/components/player/SkillHistoryGraph.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Could not load skill history."
 msgstr "无法加载技能历史。"
@@ -5630,6 +5665,10 @@ msgstr "自定义颜色十六进制值"
 msgid "Custom cursor"
 msgstr "自定义光标"
 
+#: src/lib/replay-overlays.ts
+msgid "Custom media"
+msgstr "自定义媒体"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Custom skin"
 msgstr "自定义皮肤"
@@ -5680,6 +5719,7 @@ msgstr "段位"
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/lib/replay-overlays.ts
 #: src/routes/rankings.tsx
 msgid "Dan"
 msgstr "段位"
@@ -5687,6 +5727,16 @@ msgstr "段位"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Dan (est.)"
 msgstr "段位(估算)"
+
+#. placeholder {0}: hovered.dan
+#: src/components/player/SkillHistoryGraph.tsx
+msgid "Dan {0}"
+msgstr "段位 {0}"
+
+#. placeholder {0}: danScaleLabel(hoveredBand.level, context)
+#: src/components/player/SkillHistoryGraph.tsx
+#~ msgid "Dan {0} range"
+#~ msgstr "段位 {0} 区间"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Dan accuracy"
@@ -6715,6 +6765,10 @@ msgstr "导出开始时间"
 msgid "Export video"
 msgstr "导出视频"
 
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "Exported videos can't use this link because its site blocks it. Save the file and pick it instead."
+msgstr "导出的视频无法使用此链接，因为其网站阻止了访问。请保存该文件并选择它。"
+
 #: src/lib/pattern-labels.ts
 #~ msgid "Exposed Releases"
 #~ msgstr "独立松键"
@@ -6909,6 +6963,7 @@ msgstr "更少游玩次数"
 msgid "Fewer plays than the population baseline asks for, so this rating reads as an estimate"
 msgstr "游玩次数少于统计基准所需，因此该评分只是估算值"
 
+#: src/components/replay/ReplayCustomMediaControls.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "File"
 msgstr "文件"
@@ -7595,6 +7650,11 @@ msgstr "渐变"
 msgid "Gradient text"
 msgstr "渐变文字"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgctxt "skill history view"
+msgid "Graph"
+msgstr "图表"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
 msgid "graveyard"
@@ -7603,7 +7663,6 @@ msgstr "坟场"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
-#: src/routes/recommendations.tsx
 msgid "Graveyard"
 msgstr "坟场"
 
@@ -7683,6 +7742,10 @@ msgstr "血条"
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
 msgstr "希伯来语"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+#~ msgid "Height"
+#~ msgstr "高"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Height of the exported image, in pixels"
@@ -7833,6 +7896,11 @@ msgstr "提示条"
 #: src/components/player/SkillHistoryModal.tsx
 msgid "History"
 msgstr "历程"
+
+#: src/routes/player/$username.tsx
+#~ msgctxt "Skills view"
+#~ msgid "History"
+#~ msgstr "历程"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "History starts from the first saved card snapshot. Earlier ratings cannot be reconstructed."
@@ -8087,8 +8155,8 @@ msgstr "混合谱面：{0}，{1}"
 #~ msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，其中 ranked 图的成绩会计入你在排行榜上的 pp。"
 
 #: src/routes/news_.companella.tsx
-msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
-msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，并用与 osu! 相同的算法根据其中 ranked 图的成绩计算你的 pp，所以你仍会出现在排行榜上。不过，作弊仍然可能让你被 Mania Tracker 封禁。"
+#~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
+#~ msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，并用与 osu! 相同的算法根据其中 ranked 图的成绩计算你的 pp，所以你仍会出现在排行榜上。不过，作弊仍然可能让你被 Mania Tracker 封禁。"
 
 #: src/routes/news_.companella.tsx
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating still gets you banned from Mania Tracker."
@@ -8109,6 +8177,10 @@ msgstr "如果这个网站对你有帮助，欢迎支持一下。捐赠用于支
 #: src/routes/snipes.tsx
 msgid "If you already had an older best above them, it doesn't count."
 msgstr "如果你之前已有高于对方的最佳成绩，则不算狙击。"
+
+#: src/routes/news_.companella.tsx
+msgid "If you are restricted, you can keep submitting plays this way, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
+msgstr "如果你被限制了，你仍可以通过这种方式继续上传成绩，并用与 osu! 相同的算法根据其中 ranked 图的成绩计算你的 pp，所以你仍会出现在排行榜上。不过，作弊仍然可能让你被 Mania Tracker 封禁。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
@@ -8139,6 +8211,10 @@ msgstr "如果你的成绩显示你通过了某个段位课程，你在这一侧
 #: src/routes/bbcode.tsx
 msgid "Image"
 msgstr "图片"
+
+#: src/lib/replay-overlays.ts
+msgid "Image or GIF"
+msgstr "图片或 GIF"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Image upload failed."
@@ -8950,6 +9026,10 @@ msgstr "传奇"
 msgid "Length"
 msgstr "长度"
 
+#: src/lib/replay-overlays.ts
+msgid "Length, BPM and keys"
+msgstr "时长、BPM 和键数"
+
 #: src/components/packs/StreakLeaderboard.tsx
 #: src/routes/communities.tsx
 msgid "less"
@@ -8993,6 +9073,7 @@ msgid "Limitations"
 msgstr "限制"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/replay/ReplayCustomMediaControls.tsx
 #: src/routes/bbcode.tsx
 msgid "Link"
 msgstr "链接"
@@ -9024,6 +9105,10 @@ msgstr "收录于"
 #: src/components/communities/field-options.tsx
 msgid "Lithuanian"
 msgstr "立陶宛语"
+
+#: src/lib/replay-overlays.ts
+msgid "Live BPM"
+msgstr "实时 BPM"
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "Live data is unavailable"
@@ -9324,6 +9409,7 @@ msgid "Loading goals..."
 msgstr "目标加载中…"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
+#: src/components/player/SkillHistoryGraph.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Loading history…"
 msgstr "正在加载历史…"
@@ -9431,6 +9517,10 @@ msgstr "加载中..."
 #: src/routes/player/$username.tsx
 msgid "Loading…"
 msgstr "加载中…"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "Local file"
+msgstr "本地文件"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "localized vibro detected"
@@ -9544,7 +9634,6 @@ msgstr "社区喜爱"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
-#: src/routes/recommendations.tsx
 msgid "Loved"
 msgstr "社区喜爱"
 
@@ -9789,6 +9878,7 @@ msgstr "谱面完成度百分比。"
 #~ msgstr ""
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/lib/replay-overlays.ts
 msgid "Map info"
 msgstr "谱面信息"
 
@@ -9822,6 +9912,10 @@ msgstr "谱师 {0}"
 #: src/components/maps/SearchCard.tsx
 msgid "mapped by {0} · {1} plays"
 msgstr "谱师 {0} · {1} 次游玩"
+
+#: src/lib/replay-overlays.ts
+msgid "Mapper"
+msgstr "谱师"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/recommendations.tsx
@@ -11019,6 +11113,7 @@ msgstr "未找到卡组。"
 msgid "No skill ratings for this team's members yet."
 msgstr "这个战队的成员还没有技能评分。"
 
+#: src/components/player/SkillHistoryGraph.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No skill ratings have been recorded yet."
 msgstr "尚未记录任何技能评分。"
@@ -11489,6 +11584,10 @@ msgid "Nothing qualifies under this filter at the moment, but other reasons stil
 msgstr "当前筛选下暂时没有符合的谱面，但其他理由下还有。"
 
 #: src/routes/recommendations.tsx
+#~ msgid "Nothing qualifies under this filter at the moment, but other skills still have maps."
+#~ msgstr "当前筛选下暂时没有符合的谱面，但其他技能下还有。"
+
+#: src/routes/recommendations.tsx
 msgid "Nothing ranked sits a little above your {axisLabel} rating that you haven't played yet."
 msgstr ""
 
@@ -11808,6 +11907,7 @@ msgstr "同一张谱面只有你最好的两个变速成绩计入段位。这个
 #~ msgstr "同一张谱面只有你最好的两个变速成绩计入每条段位表，按技能分组前依据经准确率调整的段位贡献挑选。两个都完整计入。已认证的变速重传共用这个上限，其余变速成绩既不能填满平均，也不能满足通过要求。更好的成绩可以替换其中任意一个。"
 
 #: src/components/me/DynamicRendersPanel.tsx
+#: src/components/replay/ReplayCustomMediaControls.tsx
 msgid "Opacity"
 msgstr "不透明度"
 
@@ -12206,6 +12306,7 @@ msgstr "不在这个平均值的最佳通过范围内"
 #~ msgstr "超出本次平均的加权窗口"
 
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillHistoryGraph.tsx
 msgid "overall"
 msgstr "综合"
 
@@ -12245,6 +12346,11 @@ msgstr "所有者"
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Pack open"
 #~ msgstr "开包"
+
+#. placeholder {0}: new Date(pausedUntil).toLocaleString(intlLocaleTag(i18n.locale as AppLocale), { dateStyle: "long", timeStyle: "short" })
+#: src/routes/packs.tsx
+msgid "Pack opening is paused on this account until {0}."
+msgstr "此账号的开包已暂停，直到 {0}。"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/packs.tsx
@@ -12652,6 +12758,10 @@ msgstr "玩家"
 msgid "Player details"
 msgstr "玩家详情"
 
+#: src/lib/replay-overlays.ts
+msgid "Player info"
+msgstr "玩家信息"
+
 #: src/routes/player/$username.tsx
 msgid "Player not found."
 msgstr "找不到该玩家。"
@@ -12681,6 +12791,11 @@ msgstr "玩家"
 #: src/routes/maps.tsx
 msgid "Players"
 msgstr "玩家"
+
+#. placeholder {0}: band.median.toFixed(2)
+#: src/components/player/SkillHistoryGraph.tsx
+#~ msgid "Players at dan {label} have a median Overall of {0}"
+#~ msgstr "段位 {label} 玩家的综合中位数为 {0}"
 
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "players carded"
@@ -13104,6 +13219,7 @@ msgstr "个人"
 msgid "Profile"
 msgstr "个人资料"
 
+#: src/components/replay/ReplayPlayerInfoControls.tsx
 #: src/lib/signature-style.ts
 msgid "Profile banner"
 msgstr "个人资料横幅"
@@ -13129,6 +13245,10 @@ msgstr "个人最佳成绩"
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "Profile update"
 #~ msgstr ""
+
+#: src/lib/replay-overlays.ts
+msgid "Progress bar"
+msgstr "进度条"
 
 #. placeholder {0}: nextTier.label
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
@@ -13312,8 +13432,8 @@ msgid "Ranked (PP)"
 msgstr "Ranked（PP）"
 
 #: src/components/player/SkillPlaysModal.tsx
-msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
-msgstr "按这份档案评分背后的成绩(含已追踪历史)中的 {label} 技能评分排序。"
+#~ msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
+#~ msgstr "按这份档案评分背后的成绩(含已追踪历史)中的 {label} 技能评分排序。"
 
 #: src/routes/teams.tsx
 #~ msgid "Ranked Score"
@@ -13357,8 +13477,8 @@ msgid "Rate"
 msgstr "速率"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "Rate edits detected. Using this difficulty's audio to keep notes in sync."
-msgstr "检测到变速版本。正在使用当前难度的音频，以保持音符同步。"
+#~ msgid "Rate edits detected. Using this difficulty's audio to keep notes in sync."
+#~ msgstr "检测到变速版本。正在使用当前难度的音频，以保持音符同步。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x) and at <2/> or <3/> (0.75x) are all credited against the chart's dan at that exact rate, which the site rates separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. Custom lazer rates like 1.15x do not count toward your dan. The site can rate a chart at any speed on demand, and the map page does exactly that when you open a play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored ones."
@@ -13459,6 +13579,10 @@ msgstr "评级引擎和 LN 谱面"
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Rating history chart"
 msgstr "评分历史图表"
+
+#: src/components/player/SkillHistoryGraph.tsx
+msgid "Rating system update"
+msgstr "评分系统更新"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating the plays failed. It retries automatically, check back in a bit."
@@ -13669,15 +13793,14 @@ msgstr "最近观看"
 msgid "receptor art"
 msgstr "键位图像"
 
-#: src/components/layout/Nav.tsx
 #: src/routes/recommendations.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "recommendations"
 msgstr "推荐"
 
 #: src/routes/recommendations.tsx
-msgid "Recommendations"
-msgstr "推荐"
+#~ msgid "Recommendations"
+#~ msgstr "推荐"
 
 #: src/routes/recommendations.tsx
 msgid "Recommendations need a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
@@ -13686,6 +13809,14 @@ msgstr "推荐需要玩家的前 200 成绩，而这个账号从未在这里加�
 #: src/routes/recommendations.tsx
 msgid "Recommendations need the server"
 msgstr "推荐需要服务器"
+
+#: src/components/layout/Nav.tsx
+msgid "recommended maps"
+msgstr "推荐谱面"
+
+#: src/routes/recommendations.tsx
+msgid "Recommended maps"
+msgstr "推荐谱面"
 
 #. placeholder {0}: card.copies - 1
 #: src/components/packs/CollectionPanel.tsx
@@ -13917,6 +14048,10 @@ msgstr "全部移除"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Remove color"
 msgstr "移除颜色"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "Remove file"
+msgstr "移除文件"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Remove from the collection"
@@ -14343,6 +14478,10 @@ msgstr "右"
 #: src/routes/replay.tsx
 msgid "Right thumb"
 msgstr "右手拇指"
+
+#: src/routes/replay.tsx
+msgid "Right-click to add media"
+msgstr "右键添加媒体"
 
 #: src/routes/legal.tsx
 msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, ruleset icons, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
@@ -14891,12 +15030,12 @@ msgid "See your pulls"
 msgstr "查看你抽到的卡"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "Seeking audio…"
-msgstr "正在定位音频…"
+#~ msgid "Seeking audio…"
+#~ msgstr "正在定位音频…"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "Seeking beyond the clip needs the full song."
-msgstr "跳转到试听片段以外的位置需要完整歌曲。"
+#~ msgid "Seeking beyond the clip needs the full song."
+#~ msgstr "跳转到试听片段以外的位置需要完整歌曲。"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Select"
@@ -14978,6 +15117,10 @@ msgstr "在本站还没有谱面文件时上传该文件"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Send to {0}"
 msgstr "送给 {0}"
+
+#: src/routes/replay.tsx
+msgid "Send to back"
+msgstr "置于底层"
 
 #: src/routes/report.tsx
 #~ msgid "Send update"
@@ -15645,10 +15788,10 @@ msgstr "相似皮肤"
 msgid "Simulated from the replay's keypresses; score and combo still show the real play. Click to judge with {otherLabel} rules again."
 msgstr "根据回放的按键模拟得出；分数和连击仍然是真实成绩。点击可切回 {otherLabel} 规则判定。"
 
-#. placeholder {0}: formatMonth(judgement.since)
-#: src/components/me/MyStatsInsights.tsx
-#~ msgid "since {0}"
-#~ msgstr "自 {0} 起"
+#. placeholder {0}: new Date(points[0].at).toLocaleDateString(locale, { month: "short", day: "numeric", ...(new Date(points[0].at).getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) })
+#: src/components/player/SkillHistoryGraph.tsx
+msgid "since {0}"
+msgstr "自 {0} 起"
 
 #: src/lib/signature-shared.ts
 msgid "Single"
@@ -16193,6 +16336,7 @@ msgid "Standard"
 msgstr "标准"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/lib/replay-overlays.ts
 #: src/routes/maps.tsx
 #: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
@@ -16252,8 +16396,8 @@ msgid "Start with sound"
 msgstr "带声音开始"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "Starting playback…"
-msgstr "正在开始播放…"
+#~ msgid "Starting playback…"
+#~ msgstr "正在开始播放…"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
@@ -16802,6 +16946,10 @@ msgstr "这看起来不像 osu! 成绩链接。"
 msgid "That file is not an image."
 msgstr "该文件不是图片。"
 
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "That file is over 200 MB."
+msgstr "该文件超过 200 MB。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "That file isn't a supported image."
 msgstr "这个文件不是支持的图片格式。"
@@ -16847,6 +16995,10 @@ msgstr "这不是个人资料链接。"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "That link did not load."
 msgstr "这个链接加载不出来。"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "That link does not work here. Use an http or https link."
+msgstr "该链接无法在这里使用。请使用 http 或 https 链接。"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "That link is a page, not an image file."
@@ -17047,6 +17199,10 @@ msgstr "浏览器拦截了剪贴板。请再次点击复制 BBCode。"
 #: src/routes/privacy.tsx
 msgid "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
 msgstr "浏览器会在 localStorage 里存储偏好和缓存，包括主题设置、所选国家/地区、隐藏的用户、回放查看器偏好、谱面筛选条件，以及类似的客户端状态。你可以通过浏览器的存储控制清除这些数据。"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+msgid "The browser would not store that file."
+msgstr "浏览器无法保存该文件。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "The calculation could not run; it will be retried."
@@ -17588,6 +17744,14 @@ msgstr "玩家面板可以留在这里，但这个视图没有返回新的谱面
 msgid "the player's"
 msgstr "该玩家的"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#~ msgid "The player's avatar, country, rank and pp."
+#~ msgstr "玩家的头像、国家/地区、排名和 pp。"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "The player's avatar, name and country."
+msgstr "玩家的头像、名称和国家/地区。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The pool is your osu! top plays plus every play the site tracked for you, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
 #~ msgstr "池子是你的 osu! 最佳成绩，加上本站为你追踪到的所有成绩，再按每张谱面每个速度只保留你最好的一次去重。追踪的那一半只有在你进了所在国家/地区的名单时才有，名单是该地区前 100 名，再加上自己开了追踪的人，而且从开始追踪那天才算起。被标为 Vibro 的谱面在任何地方都会被丢掉，因为评分算法会把一堵乱搓的音符墙读成极高的密度，评出离谱的数值。"
@@ -17733,8 +17897,8 @@ msgid "The session changed by {0} points; the map estimates add up to {1}. This 
 msgstr "本次游玩的评分变化为 {0} 点，谱面贡献的估算合计为 {1} 点。这里显示的是两者的差额，并非额外加分。"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "The short audio clip can't be used for this chart."
-msgstr "此谱面无法使用试听片段。"
+#~ msgid "The short audio clip can't be used for this chart."
+#~ msgstr "此谱面无法使用试听片段。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
@@ -17831,8 +17995,8 @@ msgid "The song file can't be decoded here. Export without audio, or pick a shor
 msgstr "此浏览器无法解码该音频文件。请关闭音频导出，或选择更短的范围。"
 
 #: src/components/maps/ChartPreviewPanel.tsx
-msgid "The song may need to be downloaded and prepared first."
-msgstr "可能需要先下载并处理歌曲。"
+#~ msgid "The song may need to be downloaded and prepared first."
+#~ msgstr "可能需要先下载并处理歌曲。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
@@ -18367,6 +18531,10 @@ msgstr "周四"
 msgid "Tier changed to {tierLabel}"
 msgstr "等级变更为 {tierLabel}"
 
+#: src/lib/replay-overlays.ts
+msgid "Time left"
+msgstr "剩余时间"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Time played"
 msgstr "游玩时长"
@@ -18396,6 +18564,14 @@ msgstr "标题"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Title"
 msgstr "标题"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#~ msgid "Title, artist, difficulty, mapper and star rating."
+#~ msgstr "标题、艺术家、难度、谱师和星级。"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Title, artist, difficulty, mapper, star rating and dan."
+msgstr "标题、艺术家、难度、谱师、星级和段位。"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
@@ -18671,6 +18847,7 @@ msgstr "试试更大的范围，或稍后再来。"
 #: src/components/packs/GiftSpareDialog.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
+#: src/components/player/SkillHistoryGraph.tsx
 #: src/components/player/SkillHistoryModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/settings/LazySettingsPanel.tsx
@@ -19255,6 +19432,10 @@ msgstr "检测到 vibro。此成绩不计入技能或段位评分。"
 msgid "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
 msgstr "评分已排除 vibro 片段。剩余音符的贡献采用较保守的准确率估算。"
 
+#: src/lib/replay-overlays.ts
+msgid "Video"
+msgstr "视频"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Video bitrate"
 msgstr "视频码率"
@@ -19584,6 +19765,14 @@ msgstr "我们还没有存到 {0} 可用于回放的成绩。"
 msgid "We have no run by {0} on this map. Paste a link to their score to use it."
 msgstr "我们没有 {0} 在这张谱面上的成绩。粘贴其成绩链接就能用。"
 
+#: src/lib/replay-overlays.ts
+#~ msgid "Web page"
+#~ msgstr "网页"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+#~ msgid "Web pages don't show in exported videos."
+#~ msgstr "网页不会出现在导出的视频中。"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "web.archive.org link to their osu! profile"
 msgstr "指向其 osu! 主页的 web.archive.org 链接"
@@ -19730,6 +19919,10 @@ msgstr "整个卡池，新卡优先"
 #: src/routes/recommendations.tsx
 msgid "why a map shows up"
 msgstr "谱面为何出现在这里"
+
+#: src/components/replay/ReplayCustomMediaControls.tsx
+#~ msgid "Width"
+#~ msgstr "宽"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Width of the exported image, in pixels"
@@ -20186,6 +20379,10 @@ msgstr "你的计入值"
 msgid "Your credit: {0}"
 msgstr "你的计入值：{0}"
 
+#: src/routes/recommendations.tsx
+msgid "your dan"
+msgstr "你的段位"
+
 #: src/routes/dan-estimates.tsx
 msgid "Your dan"
 msgstr "你的段位"
@@ -20366,8 +20563,8 @@ msgid "your showcase"
 msgstr "你的展示柜"
 
 #: src/routes/news_.companella.tsx
-msgid "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
-msgstr "你的技能评分会用到你每个成绩的准确度，osu! 上的成绩通常是根据判定数量估算的。如果 Companella 也上传了你在 osu! 上某个成绩的回放，就会改为根据你每个音符按早或按晚了多少来读取。"
+#~ msgid "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
+#~ msgstr "你的技能评分会用到你每个成绩的准确度，osu! 上的成绩通常是根据判定数量估算的。如果 Companella 也上传了你在 osu! 上某个成绩的回放，就会改为根据你每个音符按早或按晚了多少来读取。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Your skin"

@@ -148,9 +148,9 @@ const PRESETS: Preset[] = [
   },
   {
     key: "farm-helper",
-    label: "Recommendations",
+    label: "Recommended maps",
     kind: "farm-helper",
-    title: "Recommendations",
+    title: "Recommended maps",
     subtitle: "Find osu!mania maps worth playing, based on nearby players, missing clears, improvable scores, old PBs and your skillsets.",
     path: "/recommendations",
   },

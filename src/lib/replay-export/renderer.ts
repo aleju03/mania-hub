@@ -152,6 +152,18 @@ export async function createExportRenderer(
     renderer.setBackgroundDim(spec.visual.bgDim);
     renderer.setLeaderboard?.(resources.leaderboard, resources.leaderboardPlayerName, resources.leaderboardOptions);
     renderer.setLeaderboardVisible?.(spec.visual.leaderboardVisible);
+    if (resources.replayInfo) {
+      renderer.setReplayInfo?.(resources.replayInfo);
+      const { mapInfo, playerInfo } = spec.visual.overlaySettings;
+      if (mapInfo?.enabled || playerInfo?.enabled) {
+        await withTimeout(renderer.replayInfoReady?.() ?? Promise.resolve(), RENDERER_READY_TIMEOUT_MS, "Timed out loading map and player images.");
+      }
+    }
+    if (spec.visual.overlaySettings.media?.enabled) {
+      // A link the site will not share, or a file that stalls, leaves the
+      // video without the media rather than failing the export.
+      await withTimeout(renderer.customMediaReady?.() ?? Promise.resolve(), RENDERER_READY_TIMEOUT_MS, "Timed out loading the custom media.").catch(() => {});
+    }
     if (spec.ruleset.isLazer && spec.visual.leaderboardVisible) {
       await withTimeout(renderer.leaderboardReady?.() ?? Promise.resolve(), RENDERER_READY_TIMEOUT_MS, "Timed out loading leaderboard avatars.");
     }

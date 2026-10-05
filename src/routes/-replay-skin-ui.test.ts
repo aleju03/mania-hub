@@ -378,10 +378,11 @@ describe("replay skin settings UI", () => {
     expect(ownerSource).toContain("export async function loadOwnerReplaySkinCached(");
     expect(ownerSource).toContain("readCachedReplaySkin(key)");
     expect(ownerSource).toContain("writeCachedReplaySkin(key,");
-    // One database, one version, both stores in the same upgrade: opening it
+    // One database, one version, every store in the same upgrade: opening it
     // at two versions from two modules fails the lower one outright.
-    expect(idbSource).toContain("const DB_VERSION = 2;");
+    expect(idbSource).toContain("const DB_VERSION = 3;");
     expect(idbSource).toContain('export const REPLAY_OWNER_SKINS_STORE = "owner-skins";');
+    expect(idbSource).toContain('export const REPLAY_CUSTOM_MEDIA_STORE = "custom-media";');
     expect(soundsSource).toContain('import { REPLAY_SKIN_SOUNDS_STORE, withReplayStore } from "./replay-idb";');
     expect(soundsSource).not.toContain("window.indexedDB.open");
   });

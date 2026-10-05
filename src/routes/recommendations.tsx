@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useMatches, useNavigate } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -36,10 +36,12 @@ import {
   type LiveMapSearchEntry,
 } from "../lib/live-backend";
 import { MapDetailModal } from "../components/maps/MapDetailModal";
-import { skillAxisMeta } from "../lib/skill-axes";
+import { DAN_SKILLSET_META, skillAxisMeta } from "../lib/skill-axes";
+import { danScaleContextFor, danScaleImage, danScaleLabel, getDanTierImageSrc } from "../lib/dan-images";
 import { formatCompactCount } from "../lib/format";
+import { beatmapStatusPill } from "../lib/beatmap-status";
 import { useLocale } from "../lib/locale-context";
-import { useExperimentalLn } from "../store";
+import { useExperimentalLn, useNoDans } from "../store";
 import {
   clearMyFarmHelperFeedback,
   getMyFarmHelperFeedback,
@@ -119,7 +121,7 @@ function parseSkillMods(value: unknown): LiveFarmHelperSkillMods | undefined {
 }
 
 function parseSkill(value: unknown): string | undefined {
-  return typeof value === "string" && /^([47]k:)?(pattern:)?[A-Za-z]{2,24}$/.test(value) ? value : undefined;
+  return typeof value === "string" && /^([47]k:)?(pattern:|dan:)?[A-Za-z]{2,24}$/.test(value) ? value : undefined;
 }
 
 function defaultSortForView(view: LiveFarmHelperView): SortMode {
@@ -217,6 +219,30 @@ function latestSkillsSnapshot(
 // While a newly picked skill loads, the held board already knows the pick,
 // so the picker and header label can move to it at once; its anchor is only
 // known once the board lands.
+// Dan axes (`dan:{tile}`) are the player's rice dan per skillset, named and
+// colored like the dan modal's tiles.
+const DAN_AXIS_PREFIX = "dan:";
+
+function isDanAxis(axis: string | null | undefined): boolean {
+  return axis?.startsWith(DAN_AXIS_PREFIX) ?? false;
+}
+
+function farmSkillAxisMeta(axis: string): { labelMsg: MessageDescriptor; color: string } | null {
+  return isDanAxis(axis) ? DAN_SKILLSET_META[axis.slice(DAN_AXIS_PREFIX.length)] ?? null : skillAxisMeta(axis);
+}
+
+// A rice dan level as the course logo in its tier's art ("delta--"), or its
+// ladder name where there is no art. Without a verdict label the level is read
+// off the raw value at the middle tier.
+function DanLevelMark({ value, label: verdict, keyCount, className = "h-5 w-5" }: { value: number; label?: string; keyCount: number; className?: string }) {
+  const context = danScaleContextFor(keyCount, "rc");
+  const label = verdict || danScaleLabel(value, context);
+  const image = verdict ? getDanTierImageSrc(verdict, undefined, keyCount) : danScaleImage(value, context);
+  return image
+    ? <img src={image} alt={label} title={label} className={`${className} shrink-0 object-contain`} />
+    : <span className="tabular-nums">{label}</span>;
+}
+
 function withPickedSkill(board: LiveFarmHelperSkillBoard, skill: string | undefined): LiveFarmHelperSkillBoard {
   if (!skill) return board;
   const match = /^([47])k:(.+)$/.exec(skill);
@@ -299,14 +325,14 @@ export const Route = createFileRoute("/recommendations")({
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return pageSeo({
-      title: i18n._(msg`Recommendations`),
+      title: i18n._(msg`Recommended maps`),
       description: i18n._(
         msg`Find osu!mania maps worth playing, based on nearby players, missing clears, improvable scores, old PBs and your skillsets.`,
       ),
       path: "/recommendations",
       origin: match.context.origin,
       imageKind: "farm-helper",
-      imageTitle: "Recommendations",
+      imageTitle: "Recommended maps",
     });
   },
   component: FarmHelperLayout,
@@ -968,7 +994,7 @@ function FarmHelperPage() {
         <div className="relative z-10 flex flex-1 flex-col">
         <PageHeader
           iconSrc="/images/icons/rankings.svg"
-          title={<Trans>Recommendations</Trans>}
+          title={<Trans>Recommended maps</Trans>}
         />
 
         <div className="mx-auto w-full max-w-[1320px] flex-1 px-4 py-5 sm:px-5">
@@ -1330,7 +1356,7 @@ function SubjectBar({
     : [];
   const mapCount = boardRecs.length;
   const biggest = maxGain(boardRecs);
-  const skillHeadline = skillBoard?.axis ? skillAxisMeta(skillBoard.axis) : null;
+  const skillHeadline = skillBoard?.axis ? farmSkillAxisMeta(skillBoard.axis) : null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-osu-b3/25 bg-osu-b4">
@@ -1400,7 +1426,14 @@ function SubjectBar({
               </div>
             ) : view === "skills" ? (
               <>
-                {skillBoard?.anchor != null ? (
+                {skillBoard?.anchor != null && isDanAxis(skillBoard.axis) && skillBoard.keyCount != null ? (
+                  <div className="flex h-8 items-center justify-end"><DanLevelMark
+                    value={skillBoard.anchor}
+                    label={skillBoard.axes.find((entry) => entry.axis === skillBoard.axis && entry.keyCount === skillBoard.keyCount)?.label}
+                    keyCount={skillBoard.keyCount}
+                    className="h-8 w-8"
+                  /></div>
+                ) : skillBoard?.anchor != null ? (
                   <div className="text-2xl font-black leading-tight tabular-nums text-osu-c1">{skillBoard.anchor.toFixed(2)}</div>
                 ) : skillPending ? (
                   <Skeleton className="mt-1.5 mb-1 h-6 w-20" />
@@ -1408,7 +1441,7 @@ function SubjectBar({
                   <div className="text-2xl font-black leading-tight tabular-nums text-osu-c1">-</div>
                 )}
                 <div className={`text-[11px] tabular-nums text-osu-f1 transition-opacity ${skillPending ? "opacity-40" : ""}`}>
-                  {skillBoard?.anchorSource === "rating" ? <Trans>your rating</Trans> : <Trans>your best plays</Trans>}
+                  {isDanAxis(skillBoard?.axis) ? <Trans>your dan</Trans> : skillBoard?.anchorSource === "rating" ? <Trans>your rating</Trans> : <Trans>your best plays</Trans>}
                   {" · "}
                   <Plural value={skillBoard?.recs.length ?? 0} one="# chart" other="# charts" />
                 </div>
@@ -1799,6 +1832,7 @@ function SkillBoardSection({
 }) {
   const { t, i18n } = useLingui();
   const ln4k = useExperimentalLn();
+  const noDans = useNoDans();
   const detail = useSkillMapDetail();
   if (failed) {
     return (
@@ -1811,8 +1845,8 @@ function SkillBoardSection({
   }
   if (loading || !board) return <SkillBoardSkeleton />;
   // The 4K LN axis follows the same opt-in as the profile's Skills card.
-  const axes = board.axes.filter((entry) => entry.axis !== "pattern:ln" || entry.keyCount !== 4 || ln4k
-    || (entry.axis === board.axis && entry.keyCount === board.keyCount));
+  const axes = board.axes.filter((entry) => (entry.axis !== "pattern:ln" || entry.keyCount !== 4 || ln4k
+    || (entry.axis === board.axis && entry.keyCount === board.keyCount)) && !(noDans && isDanAxis(entry.axis)));
   if (board.keyCount == null || axes.length === 0) {
     return (
       <EmptyNotice
@@ -1831,7 +1865,7 @@ function SkillBoardSection({
   }
   const multiMode = modeGroups.length > 1;
   const listAxis = recsAxis ?? board.axis;
-  const axisLabel = listAxis ? i18n._(skillAxisMeta(listAxis)?.labelMsg ?? msg`skill`) : "";
+  const axisLabel = listAxis ? i18n._(farmSkillAxisMeta(listAxis)?.labelMsg ?? msg`skill`) : "";
   const pageCount = Math.ceil(board.recs.length / PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
   const pageRecs = board.recs.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
@@ -1846,10 +1880,17 @@ function SkillBoardSection({
             {multiMode ? (
               <span className="w-8 shrink-0 pl-1 text-[11px] font-bold tabular-nums text-osu-f1">{group.keyCount}K</span>
             ) : null}
-            {group.axes.map((entry) => {
-              const meta = skillAxisMeta(entry.axis);
+            {group.axes.map((entry, index) => {
+              const meta = farmSkillAxisMeta(entry.axis);
               const active = entry.axis === board.axis && entry.keyCount === board.keyCount;
+              const dan = isDanAxis(entry.axis);
+              // The dan skillsets take their own line under the keymode's
+              // MinaCalc ones, lined up with them.
+              const firstDan = dan && index > 0 && !isDanAxis(group.axes[index - 1]?.axis);
               return (
+                <Fragment key={`${entry.keyCount}:${entry.axis}`}>
+                {firstDan ? <span className="basis-full" aria-hidden="true" /> : null}
+                {firstDan && multiMode ? <span className="w-8 shrink-0" aria-hidden="true" /> : null}
                 <button
                   key={`${entry.keyCount}:${entry.axis}`}
                   type="button"
@@ -1861,8 +1902,11 @@ function SkillBoardSection({
                 >
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: meta?.color ?? "#c9cfdd" }} aria-hidden="true" />
                   {meta ? i18n._(meta.labelMsg) : entry.axis}
-                  <span className="tabular-nums text-osu-f1/70">{entry.rating.toFixed(2)}</span>
+                  {dan
+                    ? <DanLevelMark value={entry.rating} label={entry.label} keyCount={entry.keyCount} className="-my-1.5 h-7 w-7" />
+                    : <span className="tabular-nums text-osu-f1/70">{entry.rating.toFixed(2)}</span>}
                 </button>
+                </Fragment>
               );
             })}
           </div>
@@ -1885,7 +1929,8 @@ function SkillBoardSection({
                 rec={rec}
                 rank={safePage * PAGE_SIZE + index + 1}
                 axisLabel={axisLabel}
-                color={listAxis ? skillAxisMeta(listAxis)?.color ?? null : null}
+                color={listAxis ? farmSkillAxisMeta(listAxis)?.color ?? null : null}
+                dan={isDanAxis(listAxis)}
                 onOpen={() => detail.open(rec)}
               />
             ))}
@@ -1972,17 +2017,21 @@ function SkillRow({
   rank,
   axisLabel,
   color,
+  dan = false,
   onOpen,
 }: {
   rec: LiveFarmHelperSkillRec;
   rank: number;
   axisLabel: string;
   color: string | null;
+  // `msd` is the chart's rice dan, drawn as the course logo.
+  dan?: boolean;
   onOpen: () => void;
 }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const locale = useLocale();
   const cover = rec.listCover || rec.cover;
+  const status = beatmapStatusPill(rec.status);
   return (
     <button
       type="button"
@@ -2009,8 +2058,7 @@ function SkillRow({
         <div className="mt-0.5 flex min-w-0 items-center gap-x-2 text-[11px] leading-tight">
           <span className="shrink-0 tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
           <span className="shrink-0 tabular-nums text-osu-f1">{rec.keys}K</span>
-          {rec.status === "loved" ? <span className="shrink-0 font-semibold text-osu-pink">{t`Loved`}</span> : null}
-          {rec.status === "graveyard" ? <span className="shrink-0 font-semibold text-osu-f1">{t`Graveyard`}</span> : null}
+          {status ? <span className={`shrink-0 rounded px-1 py-0.5 font-bold leading-none ${status.className}`}>{i18n._(status.label)}</span> : null}
           <span className="min-w-0 truncate text-osu-f1">
             {rec.artist}
             {rec.bpm ? ` · ${Math.round(rec.bpm)} bpm` : ""}
@@ -2024,9 +2072,13 @@ function SkillRow({
       </div>
 
       <div className="w-[74px] shrink-0 text-right sm:w-[88px]">
-        <div className="text-[16px] font-black leading-none tabular-nums text-osu-c1" style={color ? { color } : undefined}>
-          {rec.msd.toFixed(2)}
-        </div>
+        {dan ? (
+          <div className="flex justify-end text-[16px] font-black leading-none text-osu-c1"><DanLevelMark value={rec.msd} label={rec.danLabel} keyCount={rec.keys} className="h-8 w-8" /></div>
+        ) : (
+          <div className="text-[16px] font-black leading-none tabular-nums text-osu-c1" style={color ? { color } : undefined}>
+            {rec.msd.toFixed(2)}
+          </div>
+        )}
         <div className="mt-0.5 truncate text-[11px] text-osu-f1">{axisLabel}</div>
       </div>
 

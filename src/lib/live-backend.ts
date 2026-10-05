@@ -1484,6 +1484,36 @@ export async function fetchLivePlayerCachedProfileSnapshotDirect(key: string): P
   return snapshot;
 }
 
+/* The stored identity and headline stats only (cached-snapshot?view=user),
+   for the replay viewer's player info overlay. Never mints or refreshes. */
+export interface LivePlayerSummary {
+  user: {
+    id: number;
+    username: string;
+    avatar_url: string;
+    cover_url?: string;
+    country_code: string;
+    statistics: {
+      pp: number | null;
+      global_rank: number | null;
+      hit_accuracy: number | null;
+      level: { current: number | null; progress: number | null } | null;
+    };
+  };
+}
+
+export async function fetchLivePlayerSummaryDirect(key: string, options: { lookup?: "id" } = {}): Promise<LivePlayerSummary | null> {
+  const trimmed = key.trim().slice(0, 120);
+  const base = getLiveBackendUrl();
+  if (!trimmed || !base) return null;
+  const params = new URLSearchParams({ view: "user" });
+  if (options.lookup === "id") params.set("lookup", "id");
+  const response = await fetch(`${base}/api/profiles/${encodeURIComponent(trimmed)}/cached-snapshot?${params}`, { credentials: "omit" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Server ${response.status}`);
+  return await response.json() as LivePlayerSummary;
+}
+
 /* Slim cached-snapshot view for pack card minting: the same projected best
    scores, trimmed server-side to the fields the maniacard pipeline reads
    (score pp/mods/statistics plus beatmap difficulty numbers, and the user's
@@ -1835,6 +1865,26 @@ export async function fetchLivePlayerSkillHistoryDirect(
   if (options.before != null && (!Number.isSafeInteger(options.before) || options.before <= 0)) throw new Error("Invalid history cursor.");
   const query = new URLSearchParams({ keys: String(keyCount) });
   if (options.before != null) query.set("before", String(options.before));
+  return fetchLiveJson(`/api/profiles/${userId}/skill-history?${query}`, { cache: "no-store", signal: options.signal });
+}
+
+export type {
+  PlayerSkillHistorySeriesPoint as LivePlayerSkillHistorySeriesPoint,
+} from "../../live-backend/src/features/player-skill-history";
+
+export interface LivePlayerSkillHistorySeries {
+  points: import("../../live-backend/src/features/player-skill-history").PlayerSkillHistorySeriesPoint[];
+}
+
+/** The whole keymode history oldest first, for the skill history graph. */
+export async function fetchLivePlayerSkillHistorySeriesDirect(
+  userId: number,
+  keyCount: number,
+  options: { signal?: AbortSignal } = {},
+): Promise<LivePlayerSkillHistorySeries> {
+  if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  if (!Number.isInteger(keyCount) || keyCount < 4 || keyCount > 18) throw new Error("Invalid key count.");
+  const query = new URLSearchParams({ keys: String(keyCount), series: "1" });
   return fetchLiveJson(`/api/profiles/${userId}/skill-history?${query}`, { cache: "no-store", signal: options.signal });
 }
 
@@ -2501,11 +2551,13 @@ export interface LiveFarmHelperSnapshot {
 }
 
 // An axis key is a MinaCalc skillset name or `pattern:{id}`, the same keys
-// skillModeEntries (src/lib/skill-axes.ts) uses.
+// skillModeEntries (src/lib/skill-axes.ts) uses, or `dan:{tile}` for the
+// player's rice dan in one skillset (rating is then the raw dan level).
 export interface LiveFarmHelperSkillAxis {
   keyCount: number;
   axis: string;
   rating: number;
+  label?: string;
 }
 
 export interface LiveFarmHelperSkillRec {
@@ -2525,8 +2577,10 @@ export interface LiveFarmHelperSkillRec {
   bpm: number;
   lengthSec: number;
   mapUrl: string;
-  // The chosen axis' value on the chart at the lane's rate.
+  // The chosen axis' value on the chart at the lane's rate; the chart's rice
+  // dan level on a dan axis.
   msd: number;
+  danLabel?: string;
   playCount: number;
 }
 

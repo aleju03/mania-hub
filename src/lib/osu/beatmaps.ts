@@ -27,7 +27,8 @@ import {
 import {
   COUNTRY_BEATMAP_LOOKUP_CONCURRENCY,
   COUNTRY_BEATMAP_SCORES_CACHE_TTL,
-  COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL
+  COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL,
+  USER_SEARCH_CACHE_TTL
 } from "./constants";
 import {
   clearBeatmapScoreLookupStatus,
@@ -259,7 +260,7 @@ export const searchUsers = createServerFn({ method: "GET" })
         mode: "user",
         query: data.query,
       },
-      { caller: "searchUsers" },
+      { caller: "searchUsers", cacheTtlMs: USER_SEARCH_CACHE_TTL },
     );
     return mergeHonoraryMatches(response, data.query);
   });

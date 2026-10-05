@@ -6,15 +6,16 @@ import { TEAM_IMAGE_PATH_PATTERN } from "./team-image";
 type TeamImage = { buffer: Buffer; contentType: string };
 
 // Widest each image is ever drawn: the flag across the team card's column,
-// the header turned down the card's full height.
-const MAX_WIDTH = { flag: 646, header: 1400 };
+// the header turned down the card's full height, a profile cover across the
+// replay viewer's player card.
+const MAX_WIDTH = { flag: 646, header: 1400, cover: 960 };
 
 /* osu! serves team images as uploaded: a 512px flag PNG runs to hundreds of
    KB and an animated header GIF to a megabyte, where every caller draws one
    still frame. Re-encoded as WebP (first frame only), the card's two images
    drop to tens of KB. Anything sharp cannot read is served as it came. */
 export async function shrinkTeamImage(path: string, image: TeamImage): Promise<TeamImage> {
-  const kind = path.startsWith("teams/header/") ? "header" : "flag";
+  const kind = path.startsWith("user-") ? "cover" : path.startsWith("teams/header/") ? "header" : "flag";
   try {
     const buffer = await sharp(image.buffer)
       .resize({ width: MAX_WIDTH[kind], withoutEnlargement: true })

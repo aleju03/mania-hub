@@ -9,6 +9,9 @@ import type { I18n, MessageDescriptor } from "@lingui/core";
 
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 import { ReplayMasterOverlayControls } from "./ReplayMasterOverlayControls";
+import { ReplayMapInfoControls } from "./ReplayMapInfoControls";
+import { ReplayPlayerInfoControls } from "./ReplayPlayerInfoControls";
+import { ReplayCustomMediaControls, ReplayCustomMediaPreview } from "./ReplayCustomMediaControls";
 import { ReplayLeaderboardControls } from "./ReplayLeaderboardControls";
 import { SelectMenu } from "#/components/ui/SelectMenu";
 import { ensureReplayFontStylesheet } from "../../lib/replay-fonts";
@@ -35,7 +38,7 @@ import {
   normalizeReplayJudgementLayout,
   normalizeReplayOverlaySettings,
 } from "#/lib/replay-overlays";
-import type { ReplayColumnStatMetric, ReplayColumnStatStyle, ReplayHandAccuracyStyle, ReplayHitErrorStyle, ReplayJudgementLayout, ReplayMissStyle, ReplayOverlayId, ReplayOverlaySettings, ReplayStageArtOverlayId } from "#/lib/replay-overlays";
+import type { ReplayColumnStatMetric, ReplayColumnStatStyle, ReplayHandAccuracyStyle, ReplayHitErrorStyle, ReplayJudgementLayout, ReplayMissStyle, ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlaySettings, ReplayStageArtOverlayId } from "#/lib/replay-overlays";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   OSU_MANIA_DEFAULT_COMBO_POSITION,
@@ -397,6 +400,8 @@ interface ReplaySkinSettingsModalProps {
   // The regular editor changes how this browser watches replays. The owner
   // customize flow publishes its primary save for everyone instead.
   saveScope?: "viewer" | "owner";
+  // The map and player cards as this replay draws them, for their gallery previews.
+  renderInfoCardPreview?: (id: "mapInfo" | "playerInfo", placement: ReplayOverlayPlacement) => string | null;
 }
 
 export function ReplaySkinSettingsModal({
@@ -411,6 +416,7 @@ export function ReplaySkinSettingsModal({
   assetSourceName = null,
   assetSourceSkin = null,
   saveScope = "viewer",
+  renderInfoCardPreview,
 }: ReplaySkinSettingsModalProps) {
   useEffect(() => { void ensureReplayFontStylesheet().catch(() => {}); }, []);
   const { t, i18n } = useLingui();
@@ -2391,6 +2397,7 @@ export function ReplaySkinSettingsModal({
                     id={id}
                     placement={overlayDraft[id]}
                     onChange={(patch) => updateOverlay(id, patch)}
+                    renderInfoCardPreview={renderInfoCardPreview}
                   />
                 ))}
               </section>
@@ -4115,6 +4122,9 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayHudOverlayId, MessageDescriptor>
   progress: msg`Map completion percentage.`,
   leaderboard: msg`Ingame scoreboard with live rank climbing. Tab toggles it.`,
   replayMaster: msg`Scrolling judgement-colored notes with actual hit offsets and long-note releases.`,
+  mapInfo: msg`Title, artist, difficulty, mapper, star rating and dan.`,
+  playerInfo: msg`The player's avatar, name and country.`,
+  media: msg`Any picture, GIF or video, from a link or a file.`,
 };
 
 const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayHudOverlayId, string>> = {
@@ -4353,14 +4363,39 @@ function JudgementsOverlayPreview() {
   );
 }
 
+// The map and player cards exactly as this replay draws them, rendered by
+// the stage itself so the toggles below show their effect.
+function InfoCardOverlayPreview({ id, placement, render }: {
+  id: "mapInfo" | "playerInfo";
+  placement: ReplayOverlayPlacement;
+  render?: (id: "mapInfo" | "playerInfo", placement: ReplayOverlayPlacement) => string | null;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!render) return;
+    setSrc(render(id, placement));
+    // Card art can still be loading on first open; take a second picture.
+    const retry = window.setTimeout(() => setSrc(render(id, placement)), 900);
+    return () => window.clearTimeout(retry);
+  }, [render, id, placement]);
+  if (!src) return null;
+  return (
+    <div className="relative flex h-full w-full items-center justify-center p-4" aria-hidden="true">
+      <img src={src} alt="" draggable={false} className="max-h-full max-w-full object-contain" />
+    </div>
+  );
+}
+
 function ReplayOverlaySettingsRow({
   id,
   placement,
   onChange,
+  renderInfoCardPreview,
 }: {
   id: ReplayHudOverlayId;
   placement: ReplayOverlaySettings[ReplayOverlayId];
   onChange: (patch: Partial<ReplayOverlaySettings[ReplayOverlayId]>) => void;
+  renderInfoCardPreview?: (id: "mapInfo" | "playerInfo", placement: ReplayOverlayPlacement) => string | null;
 }) {
   const { i18n, t } = useLingui();
   const enabled = placement.enabled;
@@ -4403,6 +4438,10 @@ function ReplayOverlaySettingsRow({
             <HitErrorOverlayPreview style={normalizeReplayHitErrorStyle(placement.style)} />
           ) : id === "judgements" ? (
             <JudgementsOverlayPreview />
+          ) : id === "mapInfo" || id === "playerInfo" ? (
+            <InfoCardOverlayPreview id={id} placement={placement} render={renderInfoCardPreview} />
+          ) : id === "media" ? (
+            <ReplayCustomMediaPreview media={placement.media} />
           ) : id === "leaderboard" ? (
             <div className="relative flex h-full w-full items-center px-6" aria-hidden="true">
               <div className="w-3/5 space-y-1">
@@ -4513,6 +4552,21 @@ function ReplayOverlaySettingsRow({
       {id === "replayMaster" && (
         <div className="px-3 pb-3 text-osu-l1">
           <ReplayMasterOverlayControls placement={placement} onChange={onChange} />
+        </div>
+      )}
+      {id === "mapInfo" && (
+        <div className="px-3 pb-3 text-osu-l1">
+          <ReplayMapInfoControls placement={placement} onChange={onChange} />
+        </div>
+      )}
+      {id === "playerInfo" && (
+        <div className="px-3 pb-3 text-osu-l1">
+          <ReplayPlayerInfoControls placement={placement} onChange={onChange} />
+        </div>
+      )}
+      {id === "media" && (
+        <div className="px-3 pb-3 text-osu-l1">
+          <ReplayCustomMediaControls placement={placement} onChange={onChange} />
         </div>
       )}
       {id === "replayMaster" && (

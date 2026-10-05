@@ -11,6 +11,7 @@ import type { ReplayHitCounts } from "../replay-validation";
 import type { ReplayStoryboardData } from "../storyboard/types";
 import type { ReplayFrame, ReplayLifeBarFrame } from "../types";
 import type { ReplayLeaderboardEntry, ReplayLeaderboardOptions } from "../replay-leaderboard";
+import type { ReplayInfoData } from "../replay-info-overlay";
 import type { ReplayExportErrorCode } from "./errors";
 import type { ReplayExportDestinationKind } from "./limits";
 import type { ReplayExportSpecV1 } from "./render-spec";
@@ -100,6 +101,8 @@ export type LocalExportResources = {
   leaderboard: ReplayExportLeaderboardEntry[];
   leaderboardPlayerName: string;
   leaderboardOptions?: ReplayLeaderboardOptions;
+  /** Map and player details for the info overlays. */
+  replayInfo?: ReplayInfoData;
   storyboard: ReplayStoryboardData | null;
   /** Encoded song bytes the job owns, independent of the viewer's audio tag. */
   songFile: Blob | null;

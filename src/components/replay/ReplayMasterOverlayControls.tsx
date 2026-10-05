@@ -1,6 +1,7 @@
 import { Trans } from "@lingui/react/macro";
 import { DEFAULT_REPLAY_MASTER_SCROLL_SPEED, REPLAY_MASTER_MAX_SCROLL_SPEED, REPLAY_MASTER_MIN_SCROLL_SPEED, normalizeReplayMasterScrollSpeed } from "#/lib/replay-overlays";
 import type { ReplayOverlayPlacement } from "#/lib/replay-overlays";
+import { ReplayOptionChip, ReplayOptionChips } from "./ReplayOptionChip";
 
 export function ReplayMasterOverlayControls({ placement, onChange }: { placement: ReplayOverlayPlacement; onChange: (patch: Partial<ReplayOverlayPlacement>) => void }) {
   const speed = normalizeReplayMasterScrollSpeed(placement.scrollSpeed);
@@ -27,24 +28,16 @@ export function ReplayMasterOverlayControls({ placement, onChange }: { placement
           <Trans>Reset</Trans>
         </button>
       </div>
-      <label className="flex cursor-pointer items-center gap-2 pt-2">
-        <input
-          type="checkbox"
-          checked={placement.transparentBackground === true}
-          onChange={(event) => onChange({ transparentBackground: event.target.checked })}
-          className="accent-osu-pink"
-        />
-        <Trans>Transparent background</Trans>
-      </label>
-      <label className="flex cursor-pointer items-center gap-2">
-        <input
-          type="checkbox"
-          checked={placement.followSv === true}
-          onChange={(event) => onChange({ followSv: event.target.checked })}
-          className="accent-osu-pink"
-        />
-        <Trans>Follow SV changes</Trans>
-      </label>
+      <div className="pt-2">
+        <ReplayOptionChips>
+          <ReplayOptionChip checked={placement.transparentBackground === true} onChange={(transparentBackground) => onChange({ transparentBackground })}>
+            <Trans>Transparent background</Trans>
+          </ReplayOptionChip>
+          <ReplayOptionChip checked={placement.followSv === true} onChange={(followSv) => onChange({ followSv })}>
+            <Trans>Follow SV changes</Trans>
+          </ReplayOptionChip>
+        </ReplayOptionChips>
+      </div>
     </div>
   );
 }

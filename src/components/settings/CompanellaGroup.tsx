@@ -31,8 +31,8 @@ function freshSnapshot(viewerId: number | null): CompanellaSnapshot | null {
 }
 
 /*
- * The Integrations group in Settings: Mania Bridge and Companella, each with its connected computers and a
- * Revoke. Connecting happens from inside the app.
+ * The Integrations group in Settings: Companella, and Mania Bridge for admins until its release (like /bridge),
+ * each with its connected computers and a Revoke. Connecting happens from inside the app.
  * /companella stays the client developer's test bench.
  */
 export function CompanellaGroup() {
@@ -103,16 +103,18 @@ export function CompanellaGroup() {
 
   return (
     <PanelGroup label={t`Integrations`}>
-      <IntegrationApp
-        name={bridgeApp.name}
-        icon={bridgeApp.icon}
-        aboutTo="/bridge"
-        status={statusFor(bridge, bridgeApp.name)}
-        installations={bridge}
-        busyId={busyId}
-        onRevoke={(installation) => revoke(installation, bridgeApp.name)}
-      />
-      <div className="space-y-3 border-t border-white/[0.07] pt-3">
+      {auth.canUseAdminFeatures && (
+        <IntegrationApp
+          name={bridgeApp.name}
+          icon={bridgeApp.icon}
+          aboutTo="/bridge"
+          status={statusFor(bridge, bridgeApp.name)}
+          installations={bridge}
+          busyId={busyId}
+          onRevoke={(installation) => revoke(installation, bridgeApp.name)}
+        />
+      )}
+      <div className={auth.canUseAdminFeatures ? "space-y-3 border-t border-white/[0.07] pt-3" : "space-y-3"}>
         <IntegrationApp
           name="Companella"
           icon="/images/companella-icon.png"
