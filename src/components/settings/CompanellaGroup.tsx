@@ -118,6 +118,8 @@ export function CompanellaGroup() {
         <IntegrationApp
           name="Companella"
           icon="/images/companella-icon.png"
+          // The Companella art sits in transparent padding (218 of 256px) while Bridge's fills its square.
+          iconClassName="scale-[1.17]"
           status={statusFor(companella, "Companella")}
           aboutTo="/news/companella"
           installations={companella}
@@ -130,9 +132,10 @@ export function CompanellaGroup() {
   );
 }
 
-function IntegrationApp({ name, icon, status, aboutTo, installations, busyId, onRevoke }: {
+function IntegrationApp({ name, icon, iconClassName = "", status, aboutTo, installations, busyId, onRevoke }: {
   name: string;
   icon: string;
+  iconClassName?: string;
   status: string | null;
   aboutTo?: "/news/companella" | "/bridge";
   installations: CompanellaInstallation[];
@@ -161,7 +164,7 @@ function IntegrationApp({ name, icon, status, aboutTo, installations, busyId, on
   );
   return (
     <div className="flex items-start gap-3">
-      <img src={icon} alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-lg" />
+      <img src={icon} alt="" width={32} height={32} className={`h-8 w-8 shrink-0 rounded-lg ${iconClassName}`} />
       <div className="min-w-0 flex-1">
         <div className="flex min-h-8 items-center gap-2">
           <div className="min-w-0 flex-1">
