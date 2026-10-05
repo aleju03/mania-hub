@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { BarChart3, Bug, ChevronDown, Globe, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
+import { GuestAvatar } from "../ui/GuestAvatar";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import { RegionIcon } from "../ui/RegionIcon";
@@ -886,7 +887,7 @@ export function Nav() {
                 {auth.viewer ? (
                   <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={32} />
                 ) : (
-                  <UserRound className="h-4 w-4" strokeWidth={2.1} />
+                  <GuestAvatar className="h-full w-full" />
                 )}
               </button>
               {replyAlert.count ? (

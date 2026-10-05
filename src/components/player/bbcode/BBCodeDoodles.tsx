@@ -3,8 +3,6 @@ import type { ReactNode } from "react";
 const INK = "var(--color-osu-l2)";
 const ACCENT = "var(--color-osu-h1)";
 
-/** Draws its children twice, the second pass nudged and fainter, so lines
-    read as pen strokes gone over twice. */
 function Sketch({ children }: { children: ReactNode }) {
   return (
     <>
@@ -54,7 +52,6 @@ function keyLetter(letter: string, cx: number) {
   }
 }
 
-/** Four keycaps with notes falling onto them, one key held down. */
 function KeysDoodle() {
   return (
     <Doodle viewBox="0 0 230 120" className="left-1/2 top-[12%] w-[min(250px,82%)] -translate-x-1/2 -rotate-3">
@@ -76,13 +73,10 @@ function KeysDoodle() {
             </g>
           );
         })}
-        {/* Press marks around the held key */}
         <path d="M 120 58 L 115 51 M 168 58 L 173 51 M 117 67 L 110 66 M 171 67 L 178 66" strokeWidth={1.4} />
-        {/* Notes */}
         <path d="M 19 26 C 19 23 21 22 24 22 L 51 22.5 C 54 22.5 55 24 55 26 L 55 29 C 55 31 54 32 51 32 L 23 32 C 20 32 19 31 19 29 Z" />
         <path d="M 74 4 C 74 2 75 1 78 1 L 104 1.5 C 107 1.5 108 3 108 5 L 108 8 C 108 10 107 11 104 11 L 77 11 C 75 11 74 10 74 8 Z" />
         <path d="M 182 34 C 182 31 183 30 186 30 L 212 30.5 C 215 30.5 216 32 216 34 L 216 37 C 216 39 215 40 212 40 L 186 40 C 183 40 182 39 182 37 Z" />
-        {/* Hold note ending on the held key */}
         <path
           d="M 135 3 L 153 3.5 L 153.5 50 L 135.5 50 Z"
           stroke={ACCENT}
@@ -90,14 +84,12 @@ function KeysDoodle() {
           fillOpacity={0.12}
         />
         <path d="M 129 50 C 129 48 130 47 133 47 L 155 47 C 158 47 159 48 159 50 L 159 53 C 159 55 158 56 155 56 L 133 56 C 130 56 129 55 129 53 Z" stroke={ACCENT} />
-        {/* Speed lines */}
         <path d="M 30 8 L 30 15 M 44 4 L 44 13 M 194 14 L 194 22 M 206 10 L 206 21" strokeWidth={1.3} />
       </Sketch>
     </Doodle>
   );
 }
 
-/** A bold tag with a looping arrow pointing at the editor. */
 function TagArrowDoodle() {
   return (
     <Doodle viewBox="0 0 200 135" className="left-1/2 top-[66%] w-[min(220px,76%)] -translate-x-[45%] rotate-2">
@@ -117,7 +109,6 @@ function TagArrowDoodle() {
   );
 }
 
-/** A pencil mid-scribble. */
 function PencilDoodle() {
   return (
     <Doodle viewBox="0 0 220 165" className="left-1/2 top-[11%] w-[min(240px,82%)] -translate-x-[55%] rotate-3">
@@ -141,7 +132,6 @@ function PencilDoodle() {
   );
 }
 
-/** Headphones with a loose cable. */
 function HeadphonesDoodle() {
   return (
     <Doodle viewBox="0 0 160 145" className="left-1/2 top-[64%] w-[min(170px,62%)] -translate-x-[45%] -rotate-6">
@@ -160,7 +150,6 @@ function HeadphonesDoodle() {
   );
 }
 
-/** A judgement number with a wavy underline. */
 function JudgementDoodle() {
   return (
     <Doodle viewBox="0 0 150 80" className="left-1/2 top-[40%] w-[min(130px,50%)] -translate-x-[70%] rotate-6">
@@ -177,7 +166,6 @@ function JudgementDoodle() {
   );
 }
 
-/** A mug of something hot. */
 function MugDoodle() {
   return (
     <Doodle viewBox="0 0 140 120" className="left-1/2 top-[38%] w-[min(120px,45%)] -translate-x-[45%] rotate-3">
@@ -192,8 +180,6 @@ function MugDoodle() {
   );
 }
 
-/** Pen doodles in the empty margins either side of the editor column. Only
-    shown when the margins are wide enough to hold them clear of the editor. */
 export function BBCodeDoodles() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 hidden opacity-35 min-[1560px]:block">
