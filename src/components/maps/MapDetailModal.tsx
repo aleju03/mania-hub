@@ -1018,8 +1018,10 @@ export function MapDetailModal({
               </div>
 
               {/* Two tabs only when a score opened the card: the play first,
-                  the map's own detail behind it. */}
-              {play ? (
+                  the map's own detail behind it. A play on a chart with no
+                  osu! id (a Companella import of a local file) has no map
+                  detail to fetch, so the play is the whole card. */}
+              {play && play.beatmapId > 0 ? (
                 <div role="tablist" className="flex shrink-0 items-center gap-1 border-b border-white/5 px-3.5 pt-2.5">
                   {([["score", t`Score`], ["map", t`Map info`]] as const).map(([id, label]) => (
                     <button
@@ -1120,7 +1122,7 @@ export function MapDetailModal({
 
                 {/* The catalog entry brought nothing back: say so where its
                     numbers would have been, the osu! link below still works. */}
-                {(status === "missing" && fileStats === null && !rateMsd && !ratePending) || status === "error" ? (
+                {(status === "missing" && !fileStats && !fileStatsPending && !rateMsd && !ratePending) || status === "error" ? (
                   <span className="text-[11.5px] text-osu-f1">
                     {status === "missing"
                       ? t`This chart is not in the map catalog, so there is nothing to show beyond the play itself.`

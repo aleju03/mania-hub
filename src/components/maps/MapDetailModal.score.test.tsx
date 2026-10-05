@@ -69,3 +69,10 @@ it("shares the score or selected map according to the active tab, preserving the
   expect(screen.getByText("3,228")).toBeTruthy();
   expect(getScore).not.toHaveBeenCalled();
 });
+
+it("drops the Map info tab for a play on a chart with no osu! id, so the play is the whole card", () => {
+  const localEntry = { ...entry, beatmapId: 0, msd: undefined, dan: undefined };
+  render(wrap(<MapDetailModal entry={localEntry} play={{ ...play, beatmapId: 0 }} status="missing" onClose={() => {}} />));
+  expect(screen.queryByRole("tab", { name: "Map info" })).toBeNull();
+  expect(screen.getByText("3,228")).toBeTruthy();
+});
