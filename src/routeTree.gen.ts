@@ -80,6 +80,7 @@ import { Route as CommunitiesReviewRouteImport } from './routes/communities_.rev
 import { Route as CompanellaAuthorizeRouteImport } from './routes/companella_.authorize'
 import { Route as CompanellaDocsRouteImport } from './routes/companella_.docs'
 import { Route as CompanellaTestCallbackRouteImport } from './routes/companella_.test-callback'
+import { Route as CompanellaUsageRouteImport } from './routes/companella_.usage'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as DevRecentRatingsPreviewRouteImport } from './routes/dev.recent-ratings-preview'
 import { Route as FarmHelperSplatRouteImport } from './routes/farm-helper/$'
@@ -95,6 +96,7 @@ import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as ApiCompanellaChartRouteImport } from './routes/api/companella/chart'
 import { Route as ApiCompanellaReplayRouteImport } from './routes/api/companella/replay'
+import { Route as ApiCompanellaUsageRouteImport } from './routes/api/companella/usage'
 import { Route as CompanellaDocsOpenapiDotyamlRouteImport } from './routes/companella_.docs_.openapi[.]yaml'
 import { Route as CompanellaDocsReferenceClientDotmjsRouteImport } from './routes/companella_.docs_.reference-client[.]mjs'
 import { Route as PlayerUsernameAboutRouteImport } from './routes/player/$username/about'
@@ -475,6 +477,11 @@ const CompanellaTestCallbackRoute = CompanellaTestCallbackRouteImport.update({
   path: '/companella/test-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompanellaUsageRoute = CompanellaUsageRouteImport.update({
+  id: '/companella_/usage',
+  path: '/companella/usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
   id: '/dev/opt-in-preview',
   path: '/dev/opt-in-preview',
@@ -548,6 +555,11 @@ const ApiCompanellaChartRoute = ApiCompanellaChartRouteImport.update({
 const ApiCompanellaReplayRoute = ApiCompanellaReplayRouteImport.update({
   id: '/api/companella/replay',
   path: '/api/companella/replay',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCompanellaUsageRoute = ApiCompanellaUsageRouteImport.update({
+  id: '/api/companella/usage',
+  path: '/api/companella/usage',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CompanellaDocsOpenapiDotyamlRoute =
@@ -752,6 +764,7 @@ export interface FileRoutesByFullPath {
   '/companella/authorize': typeof CompanellaAuthorizeRoute
   '/companella/docs': typeof CompanellaDocsRoute
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
+  '/companella/usage': typeof CompanellaUsageRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
@@ -767,6 +780,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
+  '/api/companella/usage': typeof ApiCompanellaUsageRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
@@ -863,6 +877,7 @@ export interface FileRoutesByTo {
   '/companella/authorize': typeof CompanellaAuthorizeRoute
   '/companella/docs': typeof CompanellaDocsRoute
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
+  '/companella/usage': typeof CompanellaUsageRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
@@ -878,6 +893,7 @@ export interface FileRoutesByTo {
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
+  '/api/companella/usage': typeof ApiCompanellaUsageRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
@@ -975,6 +991,7 @@ export interface FileRoutesById {
   '/companella_/authorize': typeof CompanellaAuthorizeRoute
   '/companella_/docs': typeof CompanellaDocsRoute
   '/companella_/test-callback': typeof CompanellaTestCallbackRoute
+  '/companella_/usage': typeof CompanellaUsageRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
@@ -990,6 +1007,7 @@ export interface FileRoutesById {
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
+  '/api/companella/usage': typeof ApiCompanellaUsageRoute
   '/companella_/docs_/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella_/docs_/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
@@ -1088,6 +1106,7 @@ export interface FileRouteTypes {
     | '/companella/authorize'
     | '/companella/docs'
     | '/companella/test-callback'
+    | '/companella/usage'
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
@@ -1103,6 +1122,7 @@ export interface FileRouteTypes {
     | '/api/auth/osu'
     | '/api/companella/chart'
     | '/api/companella/replay'
+    | '/api/companella/usage'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
     | '/player/$username/about'
@@ -1199,6 +1219,7 @@ export interface FileRouteTypes {
     | '/companella/authorize'
     | '/companella/docs'
     | '/companella/test-callback'
+    | '/companella/usage'
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
@@ -1214,6 +1235,7 @@ export interface FileRouteTypes {
     | '/api/auth/osu'
     | '/api/companella/chart'
     | '/api/companella/replay'
+    | '/api/companella/usage'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
     | '/player/$username/about'
@@ -1310,6 +1332,7 @@ export interface FileRouteTypes {
     | '/companella_/authorize'
     | '/companella_/docs'
     | '/companella_/test-callback'
+    | '/companella_/usage'
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
@@ -1325,6 +1348,7 @@ export interface FileRouteTypes {
     | '/api/auth/osu'
     | '/api/companella/chart'
     | '/api/companella/replay'
+    | '/api/companella/usage'
     | '/companella_/docs_/openapi.yaml'
     | '/companella_/docs_/reference-client.mjs'
     | '/player/$username/about'
@@ -1422,6 +1446,7 @@ export interface RootRouteChildren {
   CompanellaAuthorizeRoute: typeof CompanellaAuthorizeRoute
   CompanellaDocsRoute: typeof CompanellaDocsRoute
   CompanellaTestCallbackRoute: typeof CompanellaTestCallbackRoute
+  CompanellaUsageRoute: typeof CompanellaUsageRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
   DevRecentRatingsPreviewRoute: typeof DevRecentRatingsPreviewRoute
   NewsCompanellaRoute: typeof NewsCompanellaRoute
@@ -1436,6 +1461,7 @@ export interface RootRouteChildren {
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
   ApiCompanellaChartRoute: typeof ApiCompanellaChartRoute
   ApiCompanellaReplayRoute: typeof ApiCompanellaReplayRoute
+  ApiCompanellaUsageRoute: typeof ApiCompanellaUsageRoute
   CompanellaDocsOpenapiDotyamlRoute: typeof CompanellaDocsOpenapiDotyamlRoute
   CompanellaDocsReferenceClientDotmjsRoute: typeof CompanellaDocsReferenceClientDotmjsRoute
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
@@ -1948,6 +1974,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CompanellaTestCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/companella_/usage': {
+      id: '/companella_/usage'
+      path: '/companella/usage'
+      fullPath: '/companella/usage'
+      preLoaderRoute: typeof CompanellaUsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dev/opt-in-preview': {
       id: '/dev/opt-in-preview'
       path: '/dev/opt-in-preview'
@@ -2051,6 +2084,13 @@ declare module '@tanstack/react-router' {
       path: '/api/companella/replay'
       fullPath: '/api/companella/replay'
       preLoaderRoute: typeof ApiCompanellaReplayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/companella/usage': {
+      id: '/api/companella/usage'
+      path: '/api/companella/usage'
+      fullPath: '/api/companella/usage'
+      preLoaderRoute: typeof ApiCompanellaUsageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/companella_/docs_/openapi.yaml': {
@@ -2393,6 +2433,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompanellaAuthorizeRoute: CompanellaAuthorizeRoute,
   CompanellaDocsRoute: CompanellaDocsRoute,
   CompanellaTestCallbackRoute: CompanellaTestCallbackRoute,
+  CompanellaUsageRoute: CompanellaUsageRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
   DevRecentRatingsPreviewRoute: DevRecentRatingsPreviewRoute,
   NewsCompanellaRoute: NewsCompanellaRoute,
@@ -2407,6 +2448,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
   ApiCompanellaChartRoute: ApiCompanellaChartRoute,
   ApiCompanellaReplayRoute: ApiCompanellaReplayRoute,
+  ApiCompanellaUsageRoute: ApiCompanellaUsageRoute,
   CompanellaDocsOpenapiDotyamlRoute: CompanellaDocsOpenapiDotyamlRoute,
   CompanellaDocsReferenceClientDotmjsRoute:
     CompanellaDocsReferenceClientDotmjsRoute,

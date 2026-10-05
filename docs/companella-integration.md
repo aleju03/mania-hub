@@ -85,6 +85,7 @@ Backend, all under `live-backend/src/integrations/companella/`:
 | `validation.ts` | Identity, completion and the mod capability matrix. |
 | `replay-timing.ts` | Judges the replay's key presses: the Wife3 goals the rating runs at, and the header check. |
 | `admin-accounts.ts` | The admin list behind the Players tab on `/admin/bridgers`: every account that has used Companella, and one account's plays. |
+| `usage.ts` | Aggregate usage of the Companella app alone (its own client id, never Mania Bridge or the test client) behind `GET /api/admin/companella/usage`, for `/companella/usage`. Names no player. |
 | `account-blocks.ts` | The admin block: an account caught cheating stops connecting and sending plays, and its connections are revoked. |
 | `skill-overlay.ts` | Public skill ratings (MSD, patterns, Dan) for active osu! accounts: checked imports combined with retained official evidence at read time. |
 | `poll-hold.ts` | Holds a player's recent-score polls while Mania Bridge's presence is live, and polls once when it ends. |
@@ -107,6 +108,12 @@ test client), `src/components/companella/`, `src/routes/companella*.tsx`,
 `src/routes/api/integrations/companella/v1/*`, `src/routes/api/companella/*`.
 `/companella/docs` (`src/routes/companella_.docs.tsx`) is the public page sent
 to client authors, with the spec and the reference client served beside it.
+`/companella/usage` (`src/routes/companella_.usage.tsx`) shows that usage to the
+site admins and Companella's developer, whose osu! id is listed in
+`src/lib/companella-usage.ts`; the server function re-checks the signed-in id on
+any host and everyone else gets a 404. The same JSON is at `GET /api/companella/usage?days=7|30|90`
+for whoever sends `Authorization: Bearer <COMPANELLA_USAGE_API_KEY>`, a
+frontend env var; unset, the endpoint answers 404.
 
 ## Connecting an installation
 
