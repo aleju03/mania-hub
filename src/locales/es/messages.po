@@ -8514,6 +8514,10 @@ msgstr "Puede que lo hayan retirado, o que todavía esté esperando aprobación.
 #~ msgid "It only ever raises the number. If your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them."
 #~ msgstr "Solo puede subir el número. Si tus skills ya promedian más alto, se mantiene el promedio. Las filas de skills de abajo no se tocan en ningún caso, y por eso pueden leerse más bajo que el número que tienen encima."
 
+#: src/routes/bridge.tsx
+msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+msgstr "Lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
 #~ msgstr "Antes era el 4º mejor pase entre todos tus skills a la vez, y en la práctica eso era simplemente aquello en lo que te especializas. Medido sobre las 12,974 estimaciones de 4K regular, el número viejo quedaba una mediana de 0.14 niveles por encima del skill más fuerte del jugador, y el 84% de los jugadores estaba a menos de medio nivel del suyo. Medía tu mejor patrón y a eso le decía tu dan. Un dan de verdad no funciona así: te hace pasar una mezcla de una sentada. Promediar hace esa misma pregunta."
@@ -8924,6 +8928,14 @@ msgstr "lazer"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer accuracy is recalculated from the judgements into the stable formula used here: a lazer 95.5% is the same hits as a stable 96%. Both clients are held to the same bar."
 #~ msgstr "La acc de lazer se recalcula a partir de los judgements con la fórmula de stable que se usa aquí: un 95.5% en lazer son los mismos hits que un 96% en stable. Ambos clientes se miden contra el mismo listón."
+
+#: src/routes/bridge.tsx
+#~ msgid "lazer and osu!stable"
+#~ msgstr "lazer y osu!stable"
+
+#: src/routes/bridge.tsx
+msgid "lazer and stable"
+msgstr "lazer y stable"
 
 #: src/routes/skins_.$id.tsx
 msgid "lazer edits"
@@ -9720,12 +9732,16 @@ msgstr "gestor"
 #~ msgstr "Mania Bridge lee osu! a través de tosu, así que tosu tiene que estar abierto. En Linux, lazer necesita la versión de tosu para Linux."
 
 #: src/routes/bridge.tsx
-msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
-msgstr "Mania Bridge lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
+#~ msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+#~ msgstr "Mania Bridge lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
 
 #: src/routes/bridge.tsx
-msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-msgstr "Mania Bridge envía a tu cuenta cada play de mania que terminas en lazer u osu!stable, con su replay, aunque estés restringido en Bancho, juegues offline o en un servidor privado. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
+#~ msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Mania Bridge envía a tu cuenta cada play de mania que terminas en lazer u osu!stable, con su replay, aunque estés restringido en Bancho, juegues offline o en un servidor privado. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
+
+#: src/routes/bridge.tsx
+msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
+msgstr "Mania Bridge envía a tu cuenta cada play de mania que terminas en lazer u osu!stable, con su replay, aunque estés restringido en Bancho, juegues offline o en un servidor privado. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp en Mania Tracker también muestran lo que estás haciendo en osu!."
 
 #: src/routes/bridge.tsx
 #~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
@@ -15138,8 +15154,12 @@ msgid "Sending…"
 msgstr "Enviando…"
 
 #: src/routes/bridge.tsx
-msgid "Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile."
-msgstr "Envía tus plays de osu!mania a Mania Tracker y muestra en tu perfil lo que estás jugando."
+msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
+msgstr "Envía tus plays de osu!mania de lazer u osu!stable a Mania Tracker y muestra en tu perfil y en los rankings lo que estás jugando."
+
+#: src/routes/bridge.tsx
+#~ msgid "Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile."
+#~ msgstr "Envía tus plays de osu!mania a Mania Tracker y muestra en tu perfil lo que estás jugando."
 
 #: src/routes/report.tsx
 msgid "Sent along with it:"

@@ -30,7 +30,7 @@ export const Route = createFileRoute("/bridge")({
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: "Mania Bridge",
-      description: i18n._(msg`Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile.`),
+      description: i18n._(msg`Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings.`),
       path: "/bridge",
       origin: match.context.origin,
       imageTitle: "Mania Bridge",
@@ -166,7 +166,7 @@ function BridgePage() {
             <img src={app.icon} alt="" width={112} height={112} className="h-28 w-28 rounded-full" />
             <h1 className="mt-5 text-3xl font-semibold text-white">{app.name}</h1>
             <p className="mt-2 max-w-sm text-[15px] leading-relaxed text-osu-l2">
-              <Trans>Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile.</Trans>
+              <Trans>Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings.</Trans>
             </p>
 
             <Downloads downloads={downloads} />
@@ -174,6 +174,8 @@ function BridgePage() {
               <span>v{MANIA_BRIDGE_VERSION}</span>
               <span aria-hidden className={DIVIDER} />
               <span>{t`Windows and Linux`}</span>
+              <span aria-hidden className={DIVIDER} />
+              <span>{t`lazer and stable`}</span>
               <span aria-hidden className={DIVIDER} />
               <a
                 href={MANIA_BRIDGE_SOURCE_URL}
@@ -194,8 +196,8 @@ function BridgePage() {
               <p className="mt-2">
                 <Trans>
                   Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With{" "}
-                  <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings also show what
-                  you're doing in osu!.
+                  <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings on Mania Tracker
+                  also show what you're doing in osu!.
                 </Trans>
               </p>
             </section>
@@ -203,7 +205,7 @@ function BridgePage() {
               <h2 className="text-[13px] font-semibold text-white"><Trans>What you need</Trans></h2>
               <p className="mt-2">
                 <Trans>
-                  Mania Bridge reads osu! through tosu, so tosu has to be running. You can download it from{" "}
+                  It reads osu! through tosu, so tosu has to be running. You can download it from{" "}
                   <a href="https://tosu.app" target="_blank" rel="noopener noreferrer" className={LINK}>tosu.app</a>. On Linux, lazer
                   needs tosu's Linux build.
                 </Trans>

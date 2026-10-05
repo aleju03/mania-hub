@@ -8523,6 +8523,10 @@ msgstr "它可能已被下架，或者还在等待审核。"
 #~ msgid "It only ever raises the number. If your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them."
 #~ msgstr "它只会把数字往上抬。如果你的技能平均值本来就更高，就还是用平均值。无论哪种情况，下面那几行技能都不动，这也是为什么它们会比上面的数字低。"
 
+#: src/routes/bridge.tsx
+msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+msgstr "它通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
 #~ msgstr "旧算法会把所有技能混在一起，取第四好的通过成绩；实际结果通常只是你最擅长的谱型。对 12,974 个 4K 单点估算进行测量后，旧数值比玩家最强的单项技能高出 0.14 级（中位数），84% 的玩家与自己的最强技能相差不到半级。它其实是在测你最强的谱型，却把结果叫作你的段位。真正的课题不会这样：它要求你一次打完多种谱型。取平均值问的是同一个问题。"
@@ -8933,6 +8937,14 @@ msgstr "lazer"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer accuracy is recalculated from the judgements into the stable formula used here: a lazer 95.5% is the same hits as a stable 96%. Both clients are held to the same bar."
 #~ msgstr "lazer 的准确率会根据判定数换算成这里使用的 stable 公式：lazer 的 95.5% 和 stable 的 96% 是同一组判定，两个客户端的门槛完全一致。"
+
+#: src/routes/bridge.tsx
+#~ msgid "lazer and osu!stable"
+#~ msgstr "lazer 和 osu!stable"
+
+#: src/routes/bridge.tsx
+msgid "lazer and stable"
+msgstr "lazer 和 stable"
 
 #: src/routes/skins_.$id.tsx
 msgid "lazer edits"
@@ -9729,12 +9741,16 @@ msgstr "管理员"
 #~ msgstr "Mania Bridge 通过 tosu 读取 osu!，所以 tosu 需要保持运行。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
 
 #: src/routes/bridge.tsx
-msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
-msgstr "Mania Bridge 通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
+#~ msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+#~ msgstr "Mania Bridge 通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
 
 #: src/routes/bridge.tsx
-msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-msgstr "Mania Bridge 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+#~ msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Mania Bridge 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+
+#: src/routes/bridge.tsx
+msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
+msgstr "Mania Bridge 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你在 Mania Tracker 上的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
 
 #: src/routes/bridge.tsx
 #~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
@@ -15147,8 +15163,12 @@ msgid "Sending…"
 msgstr "正在发送…"
 
 #: src/routes/bridge.tsx
-msgid "Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile."
-msgstr "将你的 osu!mania 成绩发送到 Mania Tracker，并在你的个人资料上显示你正在玩什么。"
+msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
+msgstr "将你在 lazer 或 osu!stable 上的 osu!mania 成绩发送到 Mania Tracker，并在你的个人资料和排行榜上显示你正在玩什么。"
+
+#: src/routes/bridge.tsx
+#~ msgid "Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile."
+#~ msgstr "将你的 osu!mania 成绩发送到 Mania Tracker，并在你的个人资料上显示你正在玩什么。"
 
 #: src/routes/report.tsx
 msgid "Sent along with it:"
