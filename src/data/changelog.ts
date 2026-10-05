@@ -48,7 +48,7 @@ export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-10-05", text: "Fixed recent plays showing the map's dan instead of the dan the play counts for." },
   { date: "2026-10-05", text: "The dan window now marks skillsets set by a near clear.", to: "/dan-estimates" },
   { date: "2026-10-05", text: "Dan + and - steps are now drawn into the badge." },
-  { date: "2026-10-05", text: "6K and 7K maps with jumptrills now show as Unrateable." },
+  { date: "2026-10-05", text: "5K and up maps with jumptrills now show as Unrateable." },
   { date: "2026-09-30", text: "Farm helper is now Recommendations, with a skills tab that picks maps for each of your skills.", bold: "Recommendations", label: "skills", to: "/recommendations" },
   { date: "2026-09-30", text: "4K LN MSD and dans are hidden while the new LN model is being tested, turn on Experimental LN model in settings if you wanna see it.", to: "/settings" },
   { date: "2026-09-30", text: "Overall now uses Etterna's method, the average of your best skillsets, and you can switch back to Legacy next to Overall.", bold: "Overall", label: "Legacy", to: "/my-stats" },
