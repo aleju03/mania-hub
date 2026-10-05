@@ -37,6 +37,17 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-05", text: "Added Map info, Player info and Custom media overlays to replays.", to: "/replay" },
+  { date: "2026-10-05", text: "Map info can also show Live BPM, Time left, a Progress bar and an Audio wave.", to: "/replay" },
+  { date: "2026-10-05", text: "You can now Bring to front or Send to back replay overlays from the right-click menu.", to: "/replay" },
+  { date: "2026-10-05", text: "Fixed buzzy bass in exported DT and HT replays.", to: "/replay" },
+  { date: "2026-10-05", text: "Added a Graph tab to skill history.", label: "Graph" },
+  { date: "2026-10-05", text: "Recommendations is now Recommended maps, and you can pick maps by dan for each skillset on 4K and 7K.", bold: "Recommended maps", to: "/recommendations" },
+  { date: "2026-10-05", text: "Map previews now start right away and the song joins once it loads.", to: "/maps" },
+  { date: "2026-10-05", text: "Fixed recent plays showing the map's dan instead of the dan the play counts for." },
+  { date: "2026-10-05", text: "The dan window now marks skillsets set by a near clear.", to: "/dan-estimates" },
+  { date: "2026-10-05", text: "Dan + and - steps are now drawn into the badge." },
+  { date: "2026-10-05", text: "6K and 7K maps with jumptrills now show as Unrateable." },
   { date: "2026-09-30", text: "Farm helper is now Recommendations, with a skills tab that picks maps for each of your skills.", bold: "Recommendations", label: "skills", to: "/recommendations" },
   { date: "2026-09-30", text: "4K LN MSD and dans are hidden while the new LN model is being tested, turn on Experimental LN model in settings if you wanna see it.", to: "/settings" },
   { date: "2026-09-30", text: "Overall now uses Etterna's method, the average of your best skillsets, and you can switch back to Legacy next to Overall.", bold: "Overall", label: "Legacy", to: "/my-stats" },
