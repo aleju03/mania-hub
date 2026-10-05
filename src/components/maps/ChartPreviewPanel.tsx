@@ -120,6 +120,9 @@ export function ChartPreviewPanel({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioStartSecondsRef = useRef(0);
   const audioStartPendingRef = useRef(false);
+  // The pending start comes up paused: a rate switch while paused reloads the
+  // chart at the new speed without playing it.
+  const startPausedRef = useRef(false);
   const audioReadyRef = useRef(false);
   const audioClockSampleRef = useRef<ReplayAudioClockSample | null>(null);
   const audioClockAnchorRef = useRef<ReplayAudioClockAnchor | null>(null);
@@ -641,6 +644,14 @@ export function ChartPreviewPanel({
 
   const beginPlayback = useCallback((token: number) => {
     audioStartPendingRef.current = false;
+    if (startPausedRef.current) {
+      startPausedRef.current = false;
+      // Held on the silent clock; resuming starts it and brings the song in.
+      silentClockRef.current = { elapsedMs: 0, startedAtMs: null };
+      setClockStarted(true);
+      setPlaying(false);
+      return;
+    }
     silentClockRef.current = { elapsedMs: 0, startedAtMs: performance.now() + AUDIO_JOIN_GRACE_MS };
     setClockStarted(true);
     setPlaying(true);
@@ -673,6 +684,7 @@ export function ChartPreviewPanel({
     setChartPlaybackMs(chartStartMs);
     setRequested(true);
     audioStartPendingRef.current = true;
+    startPausedRef.current = false;
     if (previewBeatmap && ready) beginPlayback(token);
   }, [applyAudioPlaybackSettings, audioStartSeconds, beginPlayback, chartStartMs, clearPreviewEndTimer, previewBeatmap, ready]);
 
@@ -687,6 +699,7 @@ export function ChartPreviewPanel({
     playbackTokenRef.current += 1;
     audioReadyRef.current = false;
     audioStartPendingRef.current = true;
+    startPausedRef.current = false;
     audioClockSampleRef.current = null;
     audioClockAnchorRef.current = null;
     silentClockRef.current = null;
@@ -709,13 +722,16 @@ export function ChartPreviewPanel({
   }, [clearPreviewEndTimer]);
 
   // A rate switch reloads the chart at the new speed and picks up where it
-  // was once it has loaded.
+  // was once it has loaded, still paused if it was paused.
   const lastPlaybackRateRef = useRef(previewPlaybackRate);
   useEffect(() => {
     if (lastPlaybackRateRef.current === previewPlaybackRate) return;
     lastPlaybackRateRef.current = previewPlaybackRate;
-    if (requested && !ending) seekChart(chartPlaybackMs);
-  }, [chartPlaybackMs, ending, previewPlaybackRate, requested, seekChart]);
+    if (!requested || ending) return;
+    const wasPaused = clockStarted && !playing;
+    seekChart(chartPlaybackMs);
+    startPausedRef.current = wasPaused;
+  }, [chartPlaybackMs, clockStarted, ending, playing, previewPlaybackRate, requested, seekChart]);
 
   const togglePlayback = useCallback(() => {
     const audio = audioRef.current;

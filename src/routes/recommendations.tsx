@@ -227,6 +227,11 @@ function isDanAxis(axis: string | null | undefined): boolean {
   return axis?.startsWith(DAN_AXIS_PREFIX) ?? false;
 }
 
+// A `skill` search param ("4k:dan:stream" or "dan:stream") that picks a dan axis.
+function picksDanAxis(skill: string | undefined): boolean {
+  return isDanAxis(skill?.replace(/^[47]k:/, ""));
+}
+
 function farmSkillAxisMeta(axis: string): { labelMsg: MessageDescriptor; color: string } | null {
   return isDanAxis(axis) ? DAN_SKILLSET_META[axis.slice(DAN_AXIS_PREFIX.length)] ?? null : skillAxisMeta(axis);
 }
@@ -486,6 +491,7 @@ function FarmHelperPage() {
   const navigate = useNavigate();
   const auth = useAuth();
   const liveEnabled = isLiveBackendConfigured();
+  const noDans = useNoDans();
 
   // Seeded from the module cache so returning from a map detail (which unmounts
   // this component) repaints the board it was already showing instead of the
@@ -498,7 +504,8 @@ function FarmHelperPage() {
   const subjectKey = search.user ?? null;
   const keyMode: LiveFarmHelperKeyMode = search.key ?? "any";
   const view: LiveFarmHelperView = search.view ?? "gain";
-  const skill = view === "skills" ? search.skill : undefined;
+  // With dans hidden, a dan axis from the URL falls back to the default axis.
+  const skill = view === "skills" && !(noDans && picksDanAxis(search.skill)) ? search.skill : undefined;
   const skillMods = view === "skills" ? search.mods : undefined;
   const reasonFilter: ReasonFilter = view === "gain" ? (search.reason ?? "all") : "all";
   const sortMode: SortMode = search.sort ?? defaultSortForView(view);
@@ -535,7 +542,7 @@ function FarmHelperPage() {
   const waitingForInitialSnapshot = waitingForCurrentSnapshot && !shellSnapshot;
   const skillsPending = skillsHeld != null && waitingForCurrentSnapshot;
   const skillBoard = view === "skills"
-    ? visibleSnapshot?.skills ?? (skillsHeld?.skills ? withPickedSkill(skillsHeld.skills, skill) : null)
+    ? visibleSnapshot?.skills ?? (skillsHeld?.skills && !(noDans && isDanAxis(skillsHeld.skills.axis)) ? withPickedSkill(skillsHeld.skills, skill) : null)
     : null;
 
   const navigateFarmHelper = (

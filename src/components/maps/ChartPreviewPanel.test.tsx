@@ -56,12 +56,16 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function openPreview(rateEdits = true) {
-  const view = render(
+function panel(rateEdits: boolean, playbackRate: number) {
+  return (
     <I18nProvider i18n={getI18n("en")}>
-      <ChartPreviewPanel beatmapset={setFixture(rateEdits)} selectedBeatmapId={101} playbackRate={1.25} />
-    </I18nProvider>,
+      <ChartPreviewPanel beatmapset={setFixture(rateEdits)} selectedBeatmapId={101} playbackRate={playbackRate} />
+    </I18nProvider>
   );
+}
+
+function openPreview(rateEdits = true) {
+  const view = render(panel(rateEdits, 1.25));
   fireEvent.click(screen.getByRole("button", { name: "chart preview" }));
   return view;
 }
@@ -148,5 +152,26 @@ describe("chart preview loading", () => {
     await waitFor(() => expect(audio.currentTime).toBe(59));
     await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
     expect(HTMLMediaElement.prototype.load).toHaveBeenCalledTimes(loadCount);
+  });
+
+  it("stays paused when the rate changes while paused", async () => {
+    const { container, rerender } = openPreview(false);
+    const audio = await waitFor(() => container.querySelector("audio")!);
+    await act(async () => metadata(audio, 4));
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Pause chart preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Resume chart preview" })).toBeTruthy());
+    const playCount = vi.mocked(HTMLMediaElement.prototype.play).mock.calls.length;
+    const fileCount = mocks.getBeatmapFile.mock.calls.length;
+    rerender(panel(false, 1.5));
+    // The chart reloads at the new rate and comes back paused.
+    expect((screen.getByRole("button", { name: "Resume chart preview" }) as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect((screen.getByRole("button", { name: "Resume chart preview" }) as HTMLButtonElement).disabled).toBe(false));
+    expect(mocks.getBeatmapFile.mock.calls.length).toBeGreaterThan(fileCount);
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(playCount);
+    expect(screen.queryByRole("button", { name: "Pause chart preview" })).toBeNull();
+    // Resuming plays it from there.
+    fireEvent.click(screen.getByRole("button", { name: "Resume chart preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Pause chart preview" })).toBeTruthy());
   });
 });

@@ -2,6 +2,7 @@ import { skillPlaySharePath } from "../../lib/skill-play-share";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
+import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerSkillPlaysDirect,
@@ -277,7 +278,7 @@ export function SkillPlaysModal({
                       <span className="tabular-nums">
                         {items.length < total
                           ? t`${items.length.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} plays`
-                          : t`${total.toLocaleString("en-US")} plays`}
+                          : t`${plural(total, { one: "# play", other: "# plays" })}`}
                       </span>
                     </>
                   ) : null}

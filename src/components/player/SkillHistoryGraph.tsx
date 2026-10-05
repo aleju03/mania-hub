@@ -81,9 +81,12 @@ export function SkillHistoryGraph({ userId, keyCount, height = 200 }: { userId: 
 
   // A removed keymode is recorded as Overall 0; it is a gap, not a fall to zero.
   const notes = useMemo(() => SKILL_HISTORY_NOTES.filter((note) => !note.keyCounts || note.keyCounts.includes(keyCount)), [keyCount]);
-  // Only readings on today's scale: everything from the newest rating-scale
-  // change on (SkillHistoryNote.rescalesFrom). The History tab keeps the rest.
-  const scaleVersion = Math.max(0, ...notes.map((note) => note.rescalesFrom ?? 0));
+  // Only readings on the player's current scale: everything from the newest
+  // rating-scale change (SkillHistoryNote.rescalesFrom) their latest reading
+  // has reached. A player not yet recomputed onto today's scale keeps the
+  // readings since the change before it. The History tab keeps the rest.
+  const latestVersion = Math.max(0, ...(series?.points ?? []).map((point) => point.version));
+  const scaleVersion = Math.max(0, ...notes.map((note) => note.rescalesFrom ?? 0).filter((version) => version <= latestVersion));
   const points = useMemo<Point[]>(() => (series?.points ?? [])
     .filter((point) => !(point.version < scaleVersion))
     .map((point) => ({
