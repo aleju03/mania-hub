@@ -38,6 +38,7 @@ interface OAuthStatePayload {
 
 interface OsuTokenResponse {
   access_token?: string;
+  refresh_token?: string;
   token_type?: string;
   expires_in?: number;
 }
@@ -489,6 +490,7 @@ export async function exchangeOsuCodeForViewer(code: string, redirectUri: string
   await reportLoginToBackend(me);
   if (me.is_restricted && isLoginSuggestedHost(hostnameOf(redirectUri))) {
     void probeRestrictedScores(id, token.access_token);
+    void saveRestrictedProbeToken(id, me.username, token);
   }
 
   return {
@@ -547,6 +549,24 @@ async function probeRestrictedScores(userId: number, accessToken: string): Promi
     } catch (error) {
       console.info(`[restricted-probe] user=${userId} ${type} failed`, error);
     }
+  }
+}
+
+/* TEMPORARY, ninja only: keeps the restricted player's token in a private file
+   outside the release folders so more score endpoints can be tried by hand
+   over SSH. Delete the folder along with this code. */
+async function saveRestrictedProbeToken(userId: number, username: string, token: OsuTokenResponse): Promise<void> {
+  try {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = join(homedir(), "restricted-probe-tokens");
+    await mkdir(dir, { recursive: true, mode: 0o700 });
+    const body = JSON.stringify({ userId, username, savedAt: new Date().toISOString(), ...token });
+    await writeFile(join(dir, `${userId}.json`), body, { mode: 0o600 });
+    console.info(`[restricted-probe] user=${userId} token saved refresh=${Boolean(token.refresh_token)}`);
+  } catch (error) {
+    console.info(`[restricted-probe] user=${userId} token save failed`, error);
   }
 }
 
