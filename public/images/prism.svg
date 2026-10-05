@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="disc"><circle cx="256" cy="256" r="256"/></clipPath>
+    <radialGradient id="b0"><stop offset="0" stop-color="#1a2540"/><stop offset=".45" stop-color="#1a2540" stop-opacity=".8"/><stop offset="1" stop-color="#1a2540" stop-opacity="0"/></radialGradient>
+    <radialGradient id="b1"><stop offset="0" stop-color="#22325a"/><stop offset=".45" stop-color="#22325a" stop-opacity=".8"/><stop offset="1" stop-color="#22325a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="b2"><stop offset="0" stop-color="#121a30"/><stop offset=".45" stop-color="#121a30" stop-opacity=".8"/><stop offset="1" stop-color="#121a30" stop-opacity="0"/></radialGradient>
+    <radialGradient id="b3"><stop offset="0" stop-color="#2c4170"/><stop offset=".45" stop-color="#2c4170" stop-opacity=".8"/><stop offset="1" stop-color="#2c4170" stop-opacity="0"/></radialGradient>
+    <radialGradient id="b4"><stop offset="0" stop-color="#18213c"/><stop offset=".45" stop-color="#18213c" stop-opacity=".8"/><stop offset="1" stop-color="#18213c" stop-opacity="0"/></radialGradient>
+    <filter id="ink" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="15" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+  <g clip-path="url(#disc)">
+    <rect width="512" height="512" fill="#0d1220"/>
+    <circle cx="390" cy="70" r="250" fill="url(#b0)"/>
+    <circle cx="40" cy="190" r="210" fill="url(#b1)"/>
+    <circle cx="455" cy="300" r="170" fill="url(#b2)"/>
+    <circle cx="100" cy="420" r="210" fill="url(#b3)"/>
+    <circle cx="300" cy="480" r="190" fill="url(#b4)"/>
+    <g filter="url(#ink)" stroke="#0d1220" stroke-width="12" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M330 214L520 150L520 172L330 220z" fill="#ffffff" stroke-width="5"/>
+      <path d="M330 220L520 172L520 194L330 226z" fill="#e8f0ff" stroke-width="5"/>
+      <path d="M330 226L520 194L520 216L330 232z" fill="#cfdcff" stroke-width="5"/>
+      <path d="M330 232L520 216L520 238L330 238z" fill="#b3c6fb" stroke-width="5"/>
+      <path d="M330 238L520 238L520 260L330 244z" fill="#95abf0" stroke-width="5"/>
+      <path d="M330 244L520 260L520 282L330 250z" fill="#7a8fe0" stroke-width="5"/>
+      <path d="M330 250L520 282L520 304L330 256z" fill="#6274c8" stroke-width="5"/>
+      <path d="M140 80H290Q392 80 392 196T290 312H232V432H140z" fill="#f4f8ff"/>
+      <path d="M266 146L314 238H218z" fill="#0d1220" stroke-width="9"/>
+    </g>
+  </g>
+</svg>

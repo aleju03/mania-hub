@@ -3897,6 +3897,7 @@ msgstr "BPM"
 msgid "BPM Breakdown"
 msgstr "BPM Breakdown"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -4352,6 +4353,7 @@ msgstr "Choose another collector for your gift."
 msgid "Chordjack"
 msgstr "Chordjack"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
@@ -8491,6 +8493,7 @@ msgstr "Italian"
 msgid "Italic"
 msgstr "Italic"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -15684,6 +15687,18 @@ msgstr "Single"
 msgid "Single focus"
 msgstr "Single focus"
 
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Single-note jacks {singleText}, chord jacks {chordText}"
+#~ msgstr "Single-note jacks {singleText}, chord jacks {chordText}"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Single-note jacks {singleText}, chordjacks {chordText}"
+msgstr "Single-note jacks {singleText}, chordjacks {chordText}"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Single-note streams {singleText}, chordstreams {chordText}"
+msgstr "Single-note streams {singleText}, chordstreams {chordText}"
+
 #: src/routes/skins.tsx
 msgid "size"
 msgstr "size"
@@ -16090,6 +16105,7 @@ msgstr "Spectating"
 msgid "Spectators"
 msgstr "Spectators"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Speed"
 msgstr "Speed"
@@ -17045,6 +17061,10 @@ msgstr "The average of the best {best} skillsets as Etterna rates players, with 
 #: src/components/player/OverallMethodToggle.tsx
 msgid "The average of the best {best} skillsets as Etterna rates players."
 msgstr "The average of the best {best} skillsets as Etterna rates players."
+
+#: src/components/player/OverallMethodToggle.tsx
+msgid "The average of the best {best} skillsets, with LN added as one more skillset."
+msgstr "The average of the best {best} skillsets, with LN added as one more skillset."
 
 #: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets, with LN counted as a skillset. This is how Etterna rates players."

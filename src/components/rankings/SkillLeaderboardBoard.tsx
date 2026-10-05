@@ -101,7 +101,7 @@ export function SkillLeaderboardBoard({
      print the new axis's header and color over the old axis's numbers. */
   const servedAxis = snapshot?.axis ?? requestedAxis;
   const isOverall = overallAxes.includes(servedAxis);
-  const meta = skillAxisMeta(servedAxis);
+  const meta = skillAxisMeta(servedAxis, keys);
   const axisLabel = meta ? i18n._(meta.labelMsg) : servedAxis;
 
   const rows: LeaderboardRow[] = useMemo(() => {
@@ -147,6 +147,7 @@ export function SkillLeaderboardBoard({
           />
         )}
         <AxisPicker
+          keyCount={keys}
           axes={(snapshot?.axes ?? []).filter((info) => !hiddenAxes.has(info.axis))}
           value={requestedAxis}
           onChange={(next) => onNavigate({ axis: next === overallAxis ? undefined : next, page: 1 })}

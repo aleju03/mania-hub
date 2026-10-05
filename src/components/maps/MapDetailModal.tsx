@@ -24,6 +24,8 @@ import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { msdHeadline } from "#dan/msd-headline";
+import { hasLnAxis } from "#dan/ln-axis-keymodes";
+import { usesPrism } from "#dan/prism/switch";
 import { useExperimentalLn, useNoDans } from "../../store";
 import {
   FamilyPatternChip,
@@ -273,7 +275,7 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
               rejected={rejected}
             />
           </div>
-        ) : showSkills ? <PlaySkillRatings play={play} /> : null}
+        ) : showSkills ? <PlaySkillRatings play={play} keyCount={entry?.keyCount} /> : null}
       </div>
       {play.vibroAdjustment && <p className="text-[11px] text-[#ffcf70]"><Trans>Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes.</Trans></p>}
       {play.dan?.rejection ? (
@@ -286,9 +288,9 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
   );
 }
 
-function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
+function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyCount?: number }) {
   const { t, i18n } = useLingui();
-  const skills = MSD_SKILLSETS.map((name) => ({ name, value: play.skillRatings?.[name] ?? 0 }))
+  const skills = msdSkillsetsFor(keyCount).map((name) => ({ name, value: play.skillRatings?.[name] ?? 0 }))
     .filter(({ value }) => Number.isFinite(value) && value >= 1)
     .sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...skills.map(({ value }) => value));
@@ -308,8 +310,8 @@ function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-2.5" aria-label={t`Skill breakdown`}>
           {skills.map(({ name, value }) => (
-            <div key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2">
-              <span className="text-[10px] text-osu-l2">{i18n._(MSD_SKILLSET_LABELS[name])}</span>
+            <div key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2" title={halvesTitle(i18n, name, keyCount, play.skillRatings)}>
+              <span className="text-[10px] text-osu-l2">{skillsetLabel(i18n, name, keyCount)}</span>
               <span className="h-1.5 overflow-hidden rounded-full bg-white/5">
                 <span className="block h-full rounded-full bg-osu-pink/70" style={{ width: `${value / max * 100}%` }} />
               </span>
@@ -400,7 +402,41 @@ const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   Chordjack: msg`Chordjack`,
   Technical: msg`Technical`,
   LN: msg`LN`,
+  Speed: msg`Speed`,
 };
+
+// Prism, the 6K-8K calculator, files its skillsets in MinaCalc's slots, as
+// Etterna's seven-key handler does; these are the names they stand for.
+const PRISM_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
+  Jumpstream: msg`Chordstream`,
+  Handstream: msg`Bracket`,
+  Chordjack: msg`Jack`,
+};
+
+// Prism's Chordstream and Jack take their single-note pattern in; Stream and
+// JackSpeed hold only the single-note halves, shown with the chord halves
+// when hovering the merged skillset.
+function msdSkillsetsFor(keyCount: number | null | undefined): string[] {
+  return usesPrism(keyCount) ? [...MSD_SKILLSETS.filter((name) => name !== "JackSpeed" && name !== "Stream"), "Speed"] : MSD_SKILLSETS;
+}
+
+function halvesTitle(
+  i18n: ReturnType<typeof useLingui>["i18n"], name: string, keyCount: number | null | undefined, values: Record<string, number> | null | undefined,
+): string | undefined {
+  if (!usesPrism(keyCount) || (name !== "Chordjack" && name !== "Jumpstream")) return undefined;
+  const jack = name === "Chordjack";
+  const single = Number(values?.[jack ? "JackSpeed" : "Stream"] ?? 0), chord = Number(values?.[jack ? "ChordjackOnly" : "JumpstreamOnly"] ?? 0);
+  if (!(single >= 1) || !(chord >= 1)) return undefined;
+  const singleText = single.toFixed(2), chordText = chord.toFixed(2);
+  return jack
+    ? i18n._(msg`Single-note jacks ${singleText}, chordjacks ${chordText}`)
+    : i18n._(msg`Single-note streams ${singleText}, chordstreams ${chordText}`);
+}
+
+function skillsetLabel(i18n: ReturnType<typeof useLingui>["i18n"], name: string, keyCount: number | null | undefined): string {
+  const label = (usesPrism(keyCount) ? PRISM_SKILLSET_LABELS[name] : undefined) ?? MSD_SKILLSET_LABELS[name];
+  return label ? i18n._(label) : name;
+}
 
 const BEATMAP_STATUS_LABELS: Record<string, MessageDescriptor> = {
   ranked: msg`Ranked`,
@@ -547,18 +583,19 @@ export function MsdBlock({
   // the index (base msd remains for pre-msdLn cached payloads).
   const msd = rateAdjusted ? rateMsd : msdLn ?? analysisMsd ?? entry.msdLn ?? entry.msd ?? null;
   if (!msd) return null;
-  // Independent LN is 4K-only, including when an older cached artifact
-  // still contains obsolete LN values for another keymode. The backend
+  // An LN number shows on 4K and on the keymodes whose LN axis is published
+  // (hasLnAxis), never from an older cached artifact of another keymode. The backend
   // publishes the LN number on every chart past the hold line, LN identity
   // or not; identity only decides whether LN can be the headline.
   const hasLnIdentity = rateAdjusted
     ? rateDan == null || rateDan.family === "ln"
     : analysisLnIdentity ?? (entry.primaryPattern === "ln" || entry.dan?.family === "ln");
-  // The 4K LN number shows only with the 4K LN model on.
-  const lnShown = entry.keyCount === 4 && showLn;
+  // The 4K LN number shows only with the 4K LN model on; 6K-8K's shows
+  // whenever their LN axis is published (Prism).
+  const lnShown = entry.keyCount === 4 ? showLn : hasLnAxis(entry.keyCount);
   const skillsetNames = lnShown && Number(msd.LN ?? 0) > 0
-    ? [...MSD_SKILLSETS, "LN"]
-    : MSD_SKILLSETS;
+    ? [...msdSkillsetsFor(entry.keyCount), "LN"]
+    : msdSkillsetsFor(entry.keyCount);
   const skillsets = skillsetNames
     .map((name) => ({ name, value: Number(msd[name] ?? 0) }))
     // The 6K/7K calc engine returns ~0 for skillsets it does not rate
@@ -617,7 +654,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <div key={name} className="flex flex-col" title={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : undefined}>
+            <div key={name} className="flex flex-col" title={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTitle(i18n, name, entry.keyCount, msd)}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"
@@ -626,7 +663,7 @@ export function MsdBlock({
                 {value.toFixed(2)}
               </span>
               <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/55">
-                {i18n._(MSD_SKILLSET_LABELS[name] ?? name)}
+                {skillsetLabel(i18n, name, entry.keyCount)}
               </span>
             </div>
           ))}
