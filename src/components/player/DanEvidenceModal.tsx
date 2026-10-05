@@ -18,7 +18,7 @@ import {
   type LivePlayerSkillPlay,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatTimeAgo } from "../../lib/format";
-import { danBareLabel, danScaleContextFor, danTierColor, danTierName, danTierSuffix, getDanImageSrc } from "../../lib/dan-images";
+import { danBareLabel, danScaleContextFor, danTierName, getDanTierImageSrc } from "../../lib/dan-images";
 import { DanStepRail } from "./DanStepRail";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
@@ -224,8 +224,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
     return `https://osu.ppy.sh/scores/${courseClear.soloScoreId}`;
   })();
   const danLabel = dan ? (beyond ? danBareLabel(dan.label) : dan.label) : "";
-  const image = dan ? getDanImageSrc(danBareLabel(danLabel), side === "ln" ? "ln" : undefined, keyCount) : null;
-  const suffix = dan && !beyond ? danTierSuffix(dan.label) : "";
+  const image = dan ? getDanTierImageSrc(danLabel, side === "ln" ? "ln" : undefined, keyCount) : null;
   const minAccuracyPercent = Math.round((evidence?.minAccuracy ?? 0.92) * 100);
   const barAccuracyPercent = Math.round((evidence?.barAccuracy ?? 0.96) * 100);
   const quorum = evidence?.quorum ?? 4;
@@ -506,14 +505,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                   ) : null}
                 </div>
                 {image ? (
-                  <span className="flex shrink-0 items-start gap-[2px] leading-none">
-                    <img src={image} alt={formatDan(danLabel)} className="h-16 w-16 object-contain sm:h-20 sm:w-20" />
-                    {suffix ? (
-                      <span className="mt-1 text-[18px] font-bold leading-none" style={{ color: danTierColor(suffix) ?? undefined }}>
-                        {suffix}
-                      </span>
-                    ) : null}
-                  </span>
+                  <img src={image} alt={formatDan(danLabel)} className="h-16 w-auto max-w-none shrink-0 object-contain sm:h-20" />
                 ) : loading ? (
                   <Skeleton className="h-16 w-16 shrink-0 rounded-full sm:h-20 sm:w-20" />
                 ) : null}
@@ -607,8 +599,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                         <div className="mt-3 flex flex-wrap border-y border-white/[0.07]">
                           {skillsetSections.map((section) => {
                             const open = openSection === section.id;
-                            const bare = section.dan ? danBareLabel(section.dan.label) : null;
-                            const sectionImage = bare ? getDanImageSrc(bare, "ln", keyCount) : null;
+                            const sectionImage = section.dan ? getDanTierImageSrc(section.dan.label, "ln", keyCount) : null;
                             return (
                               <button
                                 key={section.id}
@@ -625,7 +616,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                 </span>
                                 <span className="flex h-12 items-center justify-center">
                                   {sectionImage ? (
-                                    <img src={sectionImage} alt="" className="h-12 w-12 object-contain" />
+                                    <img src={sectionImage} alt="" className="h-12 w-auto max-w-none object-contain" />
                                   ) : (
                                     <span className="text-2xl font-black leading-none text-osu-b3">-</span>
                                   )}
@@ -663,7 +654,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                           const sectionBeyond = section.id === "all" && beyond;
                           const bare = section.dan ? danBareLabel(section.dan.label) : null;
                           const sectionLabel = section.dan ? formatDan(sectionBeyond ? bare! : section.dan.label) : null;
-                          const sectionImage = bare ? getDanImageSrc(bare, side === "ln" ? "ln" : undefined, keyCount) : null;
+                          const sectionImage = section.dan ? getDanTierImageSrc(sectionBeyond ? bare! : section.dan.label, side === "ln" ? "ln" : undefined, keyCount) : null;
                           return (
                             <button
                               key={section.id}
@@ -680,7 +671,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                               </span>
                               <span className="flex h-12 items-center justify-center">
                                 {sectionImage ? (
-                                  <img src={sectionImage} alt="" className="h-12 w-12 object-contain" />
+                                  <img src={sectionImage} alt="" className="h-12 w-auto max-w-none object-contain" />
                                 ) : (
                                   <span className="text-2xl font-black leading-none text-osu-b3">-</span>
                                 )}

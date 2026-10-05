@@ -40,7 +40,7 @@ import {
   modeOverall,
 } from "../../../lib/skill-axes";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../../lib/my-data";
-import { getDanImageSrc } from "../../../lib/dan-images";
+import { getDanTierImageSrc } from "../../../lib/dan-images";
 import { signatureDesign, type SignatureType } from "../../../lib/signature-shared";
 import {
   accentHex,
@@ -1516,40 +1516,42 @@ function formatDanChip(label: string): string {
   return /^\d/.test(label) ? `${label} dan` : label;
 }
 
-/* A dan label carries a band suffix (chart-classifier's TIER_VARIANTS: --, -,
-   +, ++), so a player sits at "9-" or "8++". The artwork is keyed on the bare
-   level, which has no per-band variant, so the suffix has to come off before
-   the lookup or every banded player silently loses their emblem. The text
-   keeps the full label - the band is real information. */
-function danArtworkLabel(label: string): string {
-  return label.replace(/(\+\+|--|\+|-)$/, "");
-}
-
+/* A tier emblem ("9-", "8++") is wider than tall: the badge keeps its size
+   and the marks extend the image to the right, up to about 1.5x. The width
+   rides along so the card can size the box to it instead of shrinking the
+   badge into a square. */
 async function danEmblemDataUrl(
   request: Request,
   label: string,
   family: "rc" | "ln",
   keyCount: number,
-): Promise<string | null> {
+): Promise<{ url: string; aspect: number } | null> {
   // The artwork lookup takes the LN/rice family, and returns null for a label
   // that keymode has no emblem for - which is why the caller falls back to a
   // text-only badge rather than emitting a broken <img>.
-  const src = getDanImageSrc(danArtworkLabel(label), family === "ln" ? "ln" : undefined, keyCount);
+  // A banded label ("9-", "8++") picks the emblem with its tier drawn in.
+  const src = getDanTierImageSrc(label, family === "ln" ? "ln" : undefined, keyCount);
   if (!src) return null;
   try {
     const { getAssetOrigin } = await import("../../../lib/origin");
     const response = await fetch(new URL(src, getAssetOrigin(request)).toString(), { signal: AbortSignal.timeout(5_000) });
     if (!response.ok) return null;
     const body = Buffer.from(await response.arrayBuffer());
-    if (src.endsWith(".svg")) return `data:image/svg+xml;base64,${body.toString("base64")}`;
+    if (src.split("?")[0]!.endsWith(".svg")) {
+      const viewBox = body.toString("utf8").match(/viewBox="[\d.\s-]*?([\d.]+)\s+([\d.]+)"/);
+      const aspect = viewBox ? Number(viewBox[1]) / Number(viewBox[2]) : 1;
+      return { url: `data:image/svg+xml;base64,${body.toString("base64")}`, aspect: Number.isFinite(aspect) && aspect > 0 ? aspect : 1 };
+    }
     /* The 4K bands above 10th dan - alpha through kappa - ship as .webp while
        every other ladder is .svg, and this used to hand satori webp bytes
        labelled image/png. That decodes as nothing, so exactly the players with
        the rarest badge got a card with a hole where it should be. Re-encoding
        is cheaper than trusting either end to agree on webp. */
     const { default: sharp } = await import("sharp");
-    const png = await sharp(body).png().toBuffer();
-    return `data:image/png;base64,${png.toString("base64")}`;
+    const image = sharp(body);
+    const { width, height } = await image.metadata();
+    const png = await image.png().toBuffer();
+    return { url: `data:image/png;base64,${png.toString("base64")}`, aspect: width && height ? width / height : 1 };
   } catch {
     return null;
   }
@@ -1581,10 +1583,15 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
 
   // The square badge also needs room for its label, gap, and 24px frame padding.
   const emblemSize = ctx.design === 3 ? 180 : ctx.design === 2 ? 100 : 118;
-  const emblems = await Promise.all(chosen.map(async (entry) => ({
-    ...entry,
-    url: await danEmblemDataUrl(ctx.request, entry.side.label, entry.id === "ln" ? "ln" : "rc", entry.keyCount),
-  })));
+  // How wide a tier emblem may grow before its height gives way: the badge
+  // card's 300px frame keeps 24px of padding a side, and the row designs keep
+  // room for the label beside it.
+  const emblemMaxWidth = ctx.design === 3 ? 252 : ctx.design === 2 ? 150 : 177;
+  const emblems = await Promise.all(chosen.map(async (entry) => {
+    const emblem = await danEmblemDataUrl(ctx.request, entry.side.label, entry.id === "ln" ? "ln" : "rc", entry.keyCount);
+    const height = emblem ? Math.min(emblemSize, Math.round(emblemMaxWidth / emblem.aspect)) : emblemSize;
+    return { ...entry, url: emblem?.url ?? null, height, width: emblem ? Math.round(height * emblem.aspect) : emblemSize };
+  }));
 
   const sideBlock = (entry: (typeof emblems)[number], vertical: boolean) => h("div", {
     key: entry.id,
@@ -1594,7 +1601,7 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
     },
   }, [
     entry.url
-      ? h("img", { key: "e", src: entry.url, width: emblemSize, height: emblemSize, style: { width: `${emblemSize}px`, height: `${emblemSize}px`, objectFit: "contain" } })
+      ? h("img", { key: "e", src: entry.url, width: entry.width, height: entry.height, style: { width: `${entry.width}px`, height: `${entry.height}px`, objectFit: "contain", flexShrink: 0 } })
       : h("div", { key: "e" }),
     h("div", {
       key: "t",

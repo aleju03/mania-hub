@@ -7,6 +7,7 @@ import { useAuth } from "#/lib/auth-context";
 import { DAN_ESTIMATE_CACHE_VERSION } from "#dan/dan-estimator/cache-version";
 import { fetchLiveDanEstimates, isLiveBackendConfigured } from "#/lib/live-backend";
 import { useLingui } from "@lingui/react/macro";
+import { getDanTierImageSrc } from "#/lib/dan-images";
 
 // ── Batched fetcher ────────────────────────────────────────────────────────────
 
@@ -158,23 +159,6 @@ function useDanEstimate(
   return requestEstimate(beatmapId, starRating, rate);
 }
 
-// ── Dan image resolution ───────────────────────────────────────────────────────
-
-const DAN_IMAGE_EXTENSIONS: Record<string, "webp" | "svg"> = {
-  "1": "svg", "2": "svg", "3": "svg", "4": "svg", "5": "svg",
-  "6": "svg", "7": "svg", "8": "svg", "9": "svg", "10": "svg",
-  alpha: "webp", beta: "webp", gamma: "webp", delta: "webp",
-  epsilon: "webp", zeta: "webp", eta: "webp",
-};
-
-function getDanImageSrc(label: string, family: string): string | null {
-  if (family === "ln" && /^(1[0-6]|[1-9])$/.test(label)) {
-    return `/images/dans/ln/${label}.svg`;
-  }
-  const ext = DAN_IMAGE_EXTENSIONS[label];
-  return ext ? `/images/dans/reform/${label}.${ext}` : null;
-}
-
 // ── Family colors ──────────────────────────────────────────────────────────────
 
 const FAMILY_COLOR: Record<string, string> = {
@@ -192,7 +176,8 @@ const FAMILY_COLOR: Record<string, string> = {
 
 function DanBadgeInner({ estimate }: { estimate: LeanDanEstimate }) {
   const { t } = useLingui();
-  const imgSrc = getDanImageSrc(estimate.label, estimate.family);
+  // The badge art carries the tier, so the variant text only shows without art.
+  const imgSrc = getDanTierImageSrc(estimate.displayName, estimate.family === "ln" ? "ln" : undefined, 4);
   const familyColor = FAMILY_COLOR[estimate.family] ?? "text-white/70";
   const variantText = estimate.variant ?? "";
 
@@ -207,12 +192,12 @@ function DanBadgeInner({ estimate }: { estimate: LeanDanEstimate }) {
         <img
           src={imgSrc}
           alt={estimate.displayName}
-          className="h-5 w-5 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
+          className="h-5 w-auto max-w-none object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
         />
       ) : (
         <span className="text-[9px] font-bold text-white/80 uppercase">{estimate.label}</span>
       )}
-      {variantText && (
+      {!imgSrc && variantText && (
         <span className={`text-[9px] font-bold leading-none ${familyColor}`}>{variantText}</span>
       )}
     </span>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 304 280" role="img" aria-label="7K Azimuth dan">
+  <defs>
+    <pattern id="hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)">
+      <rect width="9" height="9" fill="none"/>
+      <rect width="3.4" height="9" fill="rgba(0,0,0,0.17)"/>
+    </pattern>
+    <radialGradient id="vig" cx="50%" cy="46%" r="56%">
+      <stop offset="0.62" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="1" stop-color="rgba(0,0,0,0.28)"/>
+    </radialGradient>
+    <filter id="gsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+  <filter id="gshm" filterUnits="userSpaceOnUse" x="-280" y="-280" width="1120" height="840"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/></filter>
+  </defs>
+  <circle cx="140" cy="140" r="119" fill="none" stroke="#8e8e95" stroke-width="3" stroke-dasharray="205 169" stroke-dashoffset="55" opacity="0.6"/>
+  <circle cx="140" cy="140" r="96" fill="#503a68"/>
+  <circle cx="140" cy="140" r="96" fill="url(#hatch)"/>
+  <circle cx="140" cy="140" r="96" fill="url(#vig)"/>
+  <circle cx="140" cy="140" r="104" fill="none" stroke="#a8a8af" stroke-width="8"/>
+  <circle cx="140" cy="140" r="99.5" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="2"/>
+  <circle cx="140" cy="140" r="108.5" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.5"/>
+  <rect x="22" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
+  <rect x="246" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
+  <g transform="translate(140 140) scale(1.08)" filter="url(#gsh)">
+    <path d="M-5.2 68.1L-19.1 68.1L-11.7 36.6Q-29.0 35.7-34.8 27.6Q-40.5 19.6-37.3 4.2L-37.3 4.2L-32.4-19.1Q-30.9-25.5-31.5-27.6Q-32.0-29.7-34.8-29.7L-34.8-29.7Q-36.0-29.7-37.5-29.1Q-39.0-28.5-40.3-27.8L-40.3-27.8L-42.0-32.0Q-39.1-34.3-35.5-36.2Q-31.9-38.0-27.8-38.0L-27.8-38.0Q-22.0-38.0-20.0-35.0Q-18.1-32.0-18.5-27.3Q-18.8-22.6-19.9-17.4L-19.9-17.4L-24.3 3.0Q-26.7 14.8-23.2 20.8Q-19.8 26.8-9.6 27.8L-9.6 27.8L12.9-68.1L19.7-68.1L2.2 27.6Q16.5 25.7 24.2 16.8Q32.0 7.8 33.8-5.0L33.8-5.0Q35.0-13.1 33.0-18.3Q31.0-23.6 27.8-26.5Q24.5-29.4 21.5-30.2L21.5-30.2Q22.2-34.2 25.0-36.4Q27.8-38.7 30.9-38.7L30.9-38.7Q36.6-38.7 39.1-34.2Q41.7-29.7 41.9-22.7Q42.2-15.8 41.1-8.2L41.1-8.2Q39.6 2.5 34.8 12.0Q29.9 21.5 21.4 28.1Q12.9 34.7 0.7 36.4L0.7 36.4L-5.2 68.1Z" fill="#fff"/>
+  </g>
+  <g filter="url(#gshm)"><path d="M 256.90 48.00 H 287.70 M 272.30 32.60 V 63.40" fill="none" stroke="#fff" stroke-width="16.80" stroke-linecap="round" stroke-linejoin="round"/></g>
+</svg>

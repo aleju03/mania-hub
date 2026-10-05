@@ -13,7 +13,7 @@ import { Skeleton } from "../../../components/ui/LoadingSkeleton";
 import { ChartPreviewPanel } from "../../../components/maps/ChartPreviewPanel";
 import { FarmersList } from "../../../components/farm-helper/FarmersList";
 import { fetchLiveMapSearchEntry, type LiveFarmHelperKeyMode, type LiveFarmHelperReason, type LiveFarmHelperSpeedBucket, type LiveMapSearchEntry } from "../../../lib/live-backend";
-import { danBareLabel, getDanImageSrc } from "../../../lib/dan-images";
+import { getDanTierImageSrc } from "../../../lib/dan-images";
 import { pageSeo } from "../../../lib/seo";
 import { useExperimentalLn, useNoDans } from "../../../store";
 import { msdHeadline } from "#dan/msd-headline";
@@ -389,13 +389,8 @@ function FarmMapDetailPage() {
                           label={metrics.dan.family === "ln" ? t`LN dan est.` : t`dan est.`}
                           value={
                             metrics.danImage ? (
-                              // The logo IS the number; the +/- tier suffix rides top-right like an exponent.
-                              <span className="flex items-start gap-[2px] leading-none">
-                                <img src={metrics.danImage} alt={metrics.dan.label} className="h-10 w-10 object-contain" />
-                                {danSuffix(metrics.dan.label) ? (
-                                  <span className="mt-0.5 text-[13px] font-bold leading-none">{danSuffix(metrics.dan.label)}</span>
-                                ) : null}
-                              </span>
+                              // The logo IS the number, with the +/- tier drawn in top-right like an exponent.
+                              <img src={metrics.danImage} alt={metrics.dan.label} className="h-10 w-auto max-w-none object-contain" />
                             ) : (
                               metrics.dan.label
                             )
@@ -581,7 +576,7 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
     unrateable: entry?.unrateable === true,
     dan,
     danImage: dan
-      ? getDanImageSrc(danBareLabel(dan.label), dan.family === "ln" ? "ln" : undefined, entry?.keyCount ?? 4)
+      ? getDanTierImageSrc(dan.label, dan.family === "ln" ? "ln" : undefined, entry?.keyCount ?? 4)
       : null,
     radar: entry
       ? RADAR_AXES.map((axis) => ({ label: i18n._(axis.label), value: clamp01(entry.patterns[axis.id] ?? 0) }))
@@ -591,11 +586,6 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
 
 function getFarmSpeedRate(speed: LiveFarmHelperSpeedBucket | undefined): number {
   return speed ? SPEED_RATES[speed] : 1;
-}
-
-/** The +/- tier suffix of a dan verdict ("2--" -> "--"), which badge art can't show. */
-function danSuffix(label: string): string {
-  return label.match(/[+-]+$/)?.[0] ?? "";
 }
 
 function RadarChart({ axes }: { axes: Array<{ label: string; value: number }> }) {

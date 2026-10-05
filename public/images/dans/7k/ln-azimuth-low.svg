@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 364 320" role="img" aria-label="7K LN Azimuth dan">
+  <defs>
+    <pattern id="hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)">
+      <rect width="9" height="9" fill="none"/>
+      <rect width="3.4" height="9" fill="rgba(0,0,0,0.17)"/>
+    </pattern>
+    <radialGradient id="vig" cx="50%" cy="46%" r="56%">
+      <stop offset="0.6" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="1" stop-color="rgba(0,0,0,0.3)"/>
+    </radialGradient>
+    <linearGradient id="fgrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d4d4d8"/>
+      <stop offset="0.5" stop-color="#ababb2"/>
+      <stop offset="1" stop-color="#7e7e86"/>
+    </linearGradient>
+    <clipPath id="discclip"><path d="M 160 44 L 276 160 L 160 276 L 44 160 Z"/></clipPath>
+    <filter id="gsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+  <filter id="gshm" filterUnits="userSpaceOnUse" x="-320" y="-320" width="1280" height="960"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/></filter>
+  </defs>
+  <path d="M 160 12 L 308 160 L 160 308 L 12 160 Z M 160 42 L 278 160 L 160 278 L 42 160 Z" fill="url(#fgrad)" fill-rule="evenodd"/>
+  <path d="M 160 12 L 308 160 L 160 308 L 12 160 Z" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="2"/>
+  <path d="M 160 44 L 276 160 L 160 276 L 44 160 Z" fill="#6b4d8d"/>
+  <g clip-path="url(#discclip)">
+    <rect x="132" y="30" width="56" height="260" fill="rgba(255,255,255,0.09)"/>
+  </g>
+  <path d="M 160 44 L 276 160 L 160 276 L 44 160 Z" fill="url(#hatch)"/>
+  <path d="M 160 44 L 276 160 L 160 276 L 44 160 Z" fill="url(#vig)"/>
+  <path d="M 160 43 L 277 160 L 160 277 L 43 160 Z" fill="none" stroke="rgba(0,0,0,0.4)" stroke-width="3"/>
+  <g transform="translate(160 160) scale(1.08)" filter="url(#gsh)">
+    <path d="M-4.3 55.7L-15.6 55.7L-9.6 30.0Q-23.7 29.2-28.4 22.6Q-33.1 16.0-30.5 3.5L-30.5 3.5L-26.5-15.6Q-25.3-20.8-25.7-22.6Q-26.2-24.3-28.4-24.3L-28.4-24.3Q-29.4-24.3-30.6-23.8Q-31.9-23.3-33.0-22.7L-33.0-22.7L-34.3-26.2Q-32.0-28.1-29.0-29.6Q-26.1-31.1-22.7-31.1L-22.7-31.1Q-18.0-31.1-16.4-28.6Q-14.8-26.2-15.1-22.3Q-15.4-18.5-16.3-14.3L-16.3-14.3L-19.8 2.4Q-21.8 12.1-19.0 17.0Q-16.2 21.9-7.8 22.7L-7.8 22.7L10.6-55.7L16.1-55.7L1.8 22.6Q13.5 21.0 19.8 13.7Q26.1 6.3 27.6-4.1L27.6-4.1Q28.6-10.7 27.0-15.0Q25.4-19.3 22.7-21.7Q20.0-24.1 17.6-24.7L17.6-24.7Q18.1-28.0 20.4-29.8Q22.7-31.6 25.3-31.6L25.3-31.6Q29.9-31.6 32.0-28.0Q34.1-24.3 34.3-18.6Q34.5-12.9 33.6-6.7L33.6-6.7Q32.4 2.0 28.4 9.8Q24.5 17.6 17.5 23.0Q10.6 28.4 0.5 29.7L0.5 29.7L-4.3 55.7Z" fill="#fff"/>
+  </g>
+  <g filter="url(#gshm)"><path d="M 246.10 40.40 H 281.30" fill="none" stroke="#fff" stroke-width="19.20" stroke-linecap="round" stroke-linejoin="round"/><path d="M 310.10 40.40 H 345.30" fill="none" stroke="#fff" stroke-width="19.20" stroke-linecap="round" stroke-linejoin="round"/></g>
+</svg>

@@ -62,6 +62,29 @@ export function getDanImageSrc(label: string, family?: string, keyCount?: number
   return extension ? `/images/dans/reform/${label}.${extension}` : null;
 }
 
+// Each badge has four extra drawings with its tier marks painted in the
+// badge's own style, beside the plain one: "7+" -> 7-mid-high.svg. Mid is the
+// plain badge. The badge keeps its exact size and spot in every drawing and
+// the marks widen the image to the right, so an <img> showing one sets the
+// height and leaves the width auto.
+const DAN_TIER_FILES: Record<string, string> = {
+  "--": "low",
+  "-": "mid-low",
+  "+": "mid-high",
+  "++": "high",
+};
+
+// public/sw.js serves /images/ cache-first and keys on the full URL, so a
+// redrawn tier file needs a bump here or browsers keep the old drawing.
+const DAN_TIER_ART_VERSION = 3;
+
+/** The badge for a full verdict label with its tier drawn in: "7+" -> /images/dans/reform/7-mid-high.svg?v=3. */
+export function getDanTierImageSrc(displayName: string, family?: string, keyCount?: number): string | null {
+  const src = getDanImageSrc(danBareLabel(displayName), family, keyCount);
+  const tier = DAN_TIER_FILES[danTierSuffix(displayName)];
+  return src && tier ? src.replace(/\.(svg|webp)$/, `-${tier}.$1?v=${DAN_TIER_ART_VERSION}`) : src;
+}
+
 /** Strip the tier suffix from a verdict display name: "10--" -> "10", "gamma+" -> "gamma". */
 export function danBareLabel(displayName: string): string {
   return displayName.replace(/[+-]+$/, "").trim().toLowerCase();

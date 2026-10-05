@@ -13,7 +13,7 @@ import { getBeatmapFile } from "../../lib/osu";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
 import { calculateManiaStarRating } from "../../lib/mania-star-rating";
 import { PatternRadar } from "./PatternRadar";
-import { danBareLabel, danScaleContextFor, danTierColor, getDanImageSrc } from "../../lib/dan-images";
+import { danScaleContextFor, danTierSuffix, getDanTierImageSrc } from "../../lib/dan-images";
 import { DanProgressRail } from "./DanProgressRail";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
@@ -440,11 +440,6 @@ function groupDetectedSections(sections: VibroAnalysis["sections"], rate: number
   return ranges;
 }
 
-/** The +/- tier suffix of a dan verdict ("2--" -> "--"), which badge art can't show. */
-function danSuffix(label: string): string {
-  return label.match(/[+-]+$/)?.[0] ?? "";
-}
-
 // MSD skillset breakdown + the classifier's dan verdict, as a compact stat
 // strip in the same value-over-label language as the BPM/LENGTH/PLAYS row.
 // Sorted by value with the top skillset tinted; no bars, the numbers carry it.
@@ -460,38 +455,33 @@ function isJumptrillExclusion(analysis: VibroAnalysis): boolean {
 }
 
 // A rice-and-LN hybrid is one chart with two faces, so it is one badge: the
-// side identity filed it on at full size, the other side riding top-right
-// after the tier suffix, small, the way an exponent does. Nothing overlaps
+// side identity filed it on at full size, the other side riding top-right,
+// small, the way an exponent does. Nothing overlaps
 // the big glyph.
 function DanEstimateBadge({ dan, other = null, keyCount }: { dan: DanBadgeVerdict; other?: DanBadgeVerdict | null; keyCount: number }) {
   const { t } = useLingui();
-  const image = getDanImageSrc(danBareLabel(dan.label), dan.family === "ln" ? "ln" : undefined, keyCount);
-  const otherImage = other ? getDanImageSrc(danBareLabel(other.label), other.family === "ln" ? "ln" : undefined, keyCount) : null;
+  const image = getDanTierImageSrc(dan.label, dan.family === "ln" ? "ln" : undefined, keyCount);
+  const otherImage = other ? getDanTierImageSrc(other.label, other.family === "ln" ? "ln" : undefined, keyCount) : null;
   const sideName = (verdict: DanBadgeVerdict) => verdict.family === "ln" ? t`LN ${verdict.label}` : t`regular ${verdict.label}`;
   return (
     <div className="flex flex-col items-center" title={other ? t`Hybrid chart: ${sideName(dan)}, ${sideName(other)}` : undefined}>
       <span className="flex items-start gap-[2px] leading-none">
         {image ? (
-          <img src={image} alt={dan.label} className="h-10 w-10 object-contain" />
+          <img src={image} alt={dan.label} className="h-10 w-auto max-w-none object-contain" />
         ) : (
           <span className="text-[16px] font-bold leading-none text-osu-l1">{dan.label}</span>
         )}
         {/* The glyph art carries about a quarter of its box as transparent
-            margin on each side, so the suffix and the hybrid chip pull back
-            over that margin to sit against the visible strokes. */}
-        {image && danSuffix(dan.label) ? (
-          <span className="-ml-2 mt-0.5 text-[13px] font-bold leading-none text-osu-l1" style={{ color: danTierColor(danSuffix(dan.label)) ?? undefined }}>{danSuffix(dan.label)}</span>
-        ) : null}
+            margin on each side, so the hybrid chip pulls back over that
+            margin to sit against the visible strokes. A tier drawing ends at
+            its marks, so there it keeps a small gap instead. */}
         {other ? (
-          <span className={`flex items-start ${image && danSuffix(dan.label) ? "-ml-0.5" : "-ml-2"}`}>
+          <span className={`flex items-start ${image && danTierSuffix(dan.label) ? "ml-0.5" : "-ml-2"}`}>
             {otherImage ? (
-              <img src={otherImage} alt={other.label} className="-mt-1 h-6 w-6 object-contain" />
+              <img src={otherImage} alt={other.label} className="-mt-1 h-6 w-auto max-w-none object-contain" />
             ) : (
               <span className="text-[11px] font-bold leading-none text-osu-l1">{other.label}</span>
             )}
-            {otherImage && danSuffix(other.label) ? (
-              <span className="-ml-1 text-[9px] font-bold leading-none text-osu-l1" style={{ color: danTierColor(danSuffix(other.label)) ?? undefined }}>{danSuffix(other.label)}</span>
-            ) : null}
           </span>
         ) : null}
       </span>

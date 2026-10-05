@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 304 280" role="img" aria-label="7K Zenith dan">
+  <defs>
+    <pattern id="hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)">
+      <rect width="9" height="9" fill="none"/>
+      <rect width="3.4" height="9" fill="rgba(0,0,0,0.17)"/>
+    </pattern>
+    <radialGradient id="vig" cx="50%" cy="46%" r="56%">
+      <stop offset="0.62" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="1" stop-color="rgba(0,0,0,0.28)"/>
+    </radialGradient>
+    <filter id="gsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+  <filter id="gshm" filterUnits="userSpaceOnUse" x="-280" y="-280" width="1120" height="840"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/></filter>
+  </defs>
+  <circle cx="140" cy="140" r="119" fill="none" stroke="#8e8e95" stroke-width="3" stroke-dasharray="205 169" stroke-dashoffset="55" opacity="0.6"/>
+  <circle cx="140" cy="140" r="96" fill="#503a68"/>
+  <circle cx="140" cy="140" r="96" fill="url(#hatch)"/>
+  <circle cx="140" cy="140" r="96" fill="url(#vig)"/>
+  <circle cx="140" cy="140" r="104" fill="none" stroke="#a8a8af" stroke-width="8"/>
+  <circle cx="140" cy="140" r="99.5" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="2"/>
+  <circle cx="140" cy="140" r="108.5" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.5"/>
+  <rect x="22" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
+  <rect x="246" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
+  <g transform="translate(140 140) scale(1.08)" filter="url(#gsh)">
+    <path d="M-1.7 72.7L-1.7 72.7L-5.7 69.2Q-1.7 64.9 0.1 61.9Q1.9 58.9 2.5 56.6Q3.0 54.3 3.0 52.1L3.0 52.1Q3.0 48.6 0.5 46.6Q-2.0 44.7-7.4 42.4L-7.4 42.4Q-20.9 36.6-27.2 30.5Q-33.4 24.4-33.4 15.4L-33.4 15.4Q-33.4 6.2-28.6-4.1Q-23.8-14.3-15.2-25.8Q-6.6-37.3 4.8-50.1L4.8-50.1Q-6.0-51.1-11.8-54.9Q-17.6-58.7-16.8-64.3L-16.8-64.3Q-16.2-68.1-14.1-69.8Q-12.0-71.6-9.2-72.2Q-6.4-72.8-4.1-72.6L-4.1-72.6Q-3.6-66.3-0.3-62.2Q2.9-58.0 11.1-57.1L11.1-57.1Q13.8-60.2 16.7-63.2Q19.6-66.3 22.4-69.5L22.4-69.5Q28.3-69.8 31.1-68.0Q33.9-66.2 33.3-62.9L33.3-62.9Q32.6-57.4 27.7-54.4Q22.9-51.4 13.1-50.0L13.1-50.0Q7.1-42.3 1.2-34.1Q-4.6-25.8-9.2-17.6Q-13.9-9.3-16.6-1.6Q-19.4 6.2-19.4 12.9L-19.4 12.9Q-19.4 18.4-16.0 23.0Q-12.6 27.6-2.6 31.6L-2.6 31.6Q5.6 34.8 10.1 38.1Q14.7 41.4 14.7 48.1L14.7 48.1Q14.7 54.3 10.8 59.8Q6.9 65.4-1.7 72.7Z" fill="#fff"/>
+  </g>
+  <g filter="url(#gshm)"><path d="M 256.90 48.00 H 287.70" fill="none" stroke="#fff" stroke-width="16.80" stroke-linecap="round" stroke-linejoin="round"/></g>
+</svg>

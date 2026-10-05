@@ -1,13 +1,13 @@
 import { useLingui } from "@lingui/react/macro";
 
-import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "../../lib/dan-images";
+import { danBareLabel, getDanTierImageSrc } from "../../lib/dan-images";
 
 // One player dan level, drawn once so the profile's dan chips and the /rankings
 // dan board can never render the same estimate two different ways.
 //
-// The course's own logo IS the level, same as the map dan badge; the tier
-// suffix rides top-right like an exponent, colored by where inside the level
-// the estimate sits. Keymodes with no artwork fall back to the text.
+// The course's own logo IS the level, same as the map dan badge, with the
+// tier's +/- marks drawn into the artwork top-right like an exponent.
+// Keymodes with no artwork fall back to the text.
 //
 // Past the ladder's last level the estimator has nothing left to measure with,
 // so the badge reads "> 9th" instead of dressing the ceiling up as a tier
@@ -24,13 +24,8 @@ import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "../..
 export type DanBadgeSize = "sm" | "md";
 
 const IMAGE_CLASS: Record<DanBadgeSize, string> = {
-  sm: "h-7 w-7",
-  md: "h-9 w-9",
-};
-
-const SUFFIX_CLASS: Record<DanBadgeSize, string> = {
-  sm: "text-[11px]",
-  md: "text-[14px]",
+  sm: "h-7 w-auto max-w-none",
+  md: "h-9 w-auto max-w-none",
 };
 
 const APPROX_CLASS: Record<DanBadgeSize, string> = {
@@ -109,8 +104,7 @@ export function DanLevelBadge({
 }) {
   const { t } = useLingui();
   const shown = beyondTable ? danBareLabel(label) : label;
-  const image = getDanImageSrc(danBareLabel(shown), side === "ln" ? "ln" : undefined, keyCount);
-  const suffix = beyondTable ? "" : danTierSuffix(shown);
+  const image = getDanTierImageSrc(shown, side === "ln" ? "ln" : undefined, keyCount);
   const approx = beyondTable ? ">" : "~";
 
   const partial = clearWindow != null && clearWindow.need > 0 && clearWindow.have < clearWindow.need;
@@ -137,19 +131,9 @@ export function DanLevelBadge({
   return (
     <span className="flex items-center gap-0.5">
       {approximate || beyondTable ? <span className={`${APPROX_CLASS[size]} leading-none text-osu-f1`}>{approx}</span> : null}
-      <span className="flex items-start gap-[2px] leading-none">
-        <span className="relative inline-flex">
-          <img src={image} alt={formatLabel(shown)} className={`${IMAGE_CLASS[size]} object-contain`} />
-          {partial ? <ClearWindowRing clearWindow={clearWindow!} size={size} title={windowTitle} /> : null}
-        </span>
-        {suffix ? (
-          <span
-            className={`mt-0.5 ${SUFFIX_CLASS[size]} font-bold leading-none`}
-            style={{ color: danTierColor(suffix) ?? undefined }}
-          >
-            {suffix}
-          </span>
-        ) : null}
+      <span className="relative inline-flex leading-none">
+        <img src={image} alt={formatLabel(shown)} className={`${IMAGE_CLASS[size]} object-contain`} />
+        {partial ? <ClearWindowRing clearWindow={clearWindow!} size={size} title={windowTitle} /> : null}
       </span>
     </span>
   );
