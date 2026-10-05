@@ -12,10 +12,13 @@
   </defs>
   <g filter="url(#shadow)">
     <path d="M507.4 865.1L410.5 864.7L633.9 360.2L427.3 360.2Q402.9 360.2 391.7 371.2Q380.5 382.3 375.7 400.3Q370.9 418.3 364.9 438.7L364.9 438.7Q362.9 446.3 355.8 449.1Q348.8 451.9 342.4 451.9L342.4 451.9Q338.0 451.9 330.0 448.5Q322.0 445.1 322.0 438.3L322.0 438.3L336.0 248.5L711.2 248.5L728.4 263.7L507.4 865.1Z" fill="none" stroke="#050509" stroke-width="104" stroke-linejoin="round"/>
-    <path d="M833.2 348.7L1055.2 348.7L1055.2 419.6L833.2 419.6ZM1135.4 348.7L1357.3 348.7L1357.3 419.6L1135.4 419.6Z" fill="none" stroke="#050509" stroke-width="104" stroke-linejoin="round"/>
+    <path d="M833.2 348.7L1055.2 348.7L1055.2 419.6L833.2 419.6Z" fill="none" stroke="#050509" stroke-width="104" stroke-linejoin="round"/>
+    <path d="M1135.4 348.7L1357.3 348.7L1357.3 419.6L1135.4 419.6Z" fill="none" stroke="#050509" stroke-width="104" stroke-linejoin="round"/>
     <path d="M507.4 865.1L410.5 864.7L633.9 360.2L427.3 360.2Q402.9 360.2 391.7 371.2Q380.5 382.3 375.7 400.3Q370.9 418.3 364.9 438.7L364.9 438.7Q362.9 446.3 355.8 449.1Q348.8 451.9 342.4 451.9L342.4 451.9Q338.0 451.9 330.0 448.5Q322.0 445.1 322.0 438.3L322.0 438.3L336.0 248.5L711.2 248.5L728.4 263.7L507.4 865.1Z" fill="none" stroke="#6f356b" stroke-width="68" stroke-linejoin="round"/>
-    <path d="M833.2 348.7L1055.2 348.7L1055.2 419.6L833.2 419.6ZM1135.4 348.7L1357.3 348.7L1357.3 419.6L1135.4 419.6Z" fill="none" stroke="#6f356b" stroke-width="68" stroke-linejoin="round"/>
+    <path d="M833.2 348.7L1055.2 348.7L1055.2 419.6L833.2 419.6Z" fill="none" stroke="#6f356b" stroke-width="68" stroke-linejoin="round"/>
+    <path d="M1135.4 348.7L1357.3 348.7L1357.3 419.6L1135.4 419.6Z" fill="none" stroke="#6f356b" stroke-width="68" stroke-linejoin="round"/>
     <path d="M507.4 865.1L410.5 864.7L633.9 360.2L427.3 360.2Q402.9 360.2 391.7 371.2Q380.5 382.3 375.7 400.3Q370.9 418.3 364.9 438.7L364.9 438.7Q362.9 446.3 355.8 449.1Q348.8 451.9 342.4 451.9L342.4 451.9Q338.0 451.9 330.0 448.5Q322.0 445.1 322.0 438.3L322.0 438.3L336.0 248.5L711.2 248.5L728.4 263.7L507.4 865.1Z" fill="url(#lnfill)" stroke="#0d0a12" stroke-width="24" stroke-linejoin="round"/>
-    <path d="M833.2 348.7L1055.2 348.7L1055.2 419.6L833.2 419.6ZM1135.4 348.7L1357.3 348.7L1357.3 419.6L1135.4 419.6Z" fill="url(#lnfill)" stroke="#0d0a12" stroke-width="24" stroke-linejoin="round"/>
+    <path d="M833.2 348.7L1055.2 348.7L1055.2 419.6L833.2 419.6Z" fill="url(#lnfill)" stroke="#0d0a12" stroke-width="24" stroke-linejoin="round"/>
+    <path d="M1135.4 348.7L1357.3 348.7L1357.3 419.6L1135.4 419.6Z" fill="url(#lnfill)" stroke="#0d0a12" stroke-width="24" stroke-linejoin="round"/>
   </g>
 </svg>

@@ -31,14 +31,14 @@ describe("dan badge artwork", () => {
 
 describe("getDanTierImageSrc", () => {
   it("picks the drawing with the tier painted in, and the plain badge for mid", () => {
-    expect(getDanTierImageSrc("7--")).toBe("/images/dans/reform/7-low.svg?v=3");
-    expect(getDanTierImageSrc("7-")).toBe("/images/dans/reform/7-mid-low.svg?v=3");
+    expect(getDanTierImageSrc("7--")).toBe("/images/dans/reform/7-low.svg?v=4");
+    expect(getDanTierImageSrc("7-")).toBe("/images/dans/reform/7-mid-low.svg?v=4");
     expect(getDanTierImageSrc("7")).toBe("/images/dans/reform/7.svg");
-    expect(getDanTierImageSrc("7+")).toBe("/images/dans/reform/7-mid-high.svg?v=3");
-    expect(getDanTierImageSrc("Eta++")).toBe("/images/dans/reform/eta-high.webp?v=3");
-    expect(getDanTierImageSrc("12+", "ln")).toBe("/images/dans/ln/12-mid-high.svg?v=3");
-    expect(getDanTierImageSrc("Azimuth-", "ln", 7)).toBe("/images/dans/7k/ln-azimuth-mid-low.svg?v=3");
-    expect(getDanTierImageSrc("Terra++", undefined, 6)).toBe("/images/dans/6k/terra-high.svg?v=3");
+    expect(getDanTierImageSrc("7+")).toBe("/images/dans/reform/7-mid-high.svg?v=4");
+    expect(getDanTierImageSrc("Eta++")).toBe("/images/dans/reform/eta-high.webp?v=4");
+    expect(getDanTierImageSrc("12+", "ln")).toBe("/images/dans/ln/12-mid-high.svg?v=4");
+    expect(getDanTierImageSrc("Azimuth-", "ln", 7)).toBe("/images/dans/7k/ln-azimuth-mid-low.svg?v=4");
+    expect(getDanTierImageSrc("Terra++", undefined, 6)).toBe("/images/dans/6k/terra-high.svg?v=4");
   });
 
   it("stays null where the ladder has no badge", () => {

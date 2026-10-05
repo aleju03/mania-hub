@@ -76,9 +76,9 @@ const DAN_TIER_FILES: Record<string, string> = {
 
 // public/sw.js serves /images/ cache-first and keys on the full URL, so a
 // redrawn tier file needs a bump here or browsers keep the old drawing.
-const DAN_TIER_ART_VERSION = 3;
+const DAN_TIER_ART_VERSION = 4;
 
-/** The badge for a full verdict label with its tier drawn in: "7+" -> /images/dans/reform/7-mid-high.svg?v=3. */
+/** The badge for a full verdict label with its tier drawn in: "7+" -> /images/dans/reform/7-mid-high.svg?v=4. */
 export function getDanTierImageSrc(displayName: string, family?: string, keyCount?: number): string | null {
   const src = getDanImageSrc(danBareLabel(displayName), family, keyCount);
   const tier = DAN_TIER_FILES[danTierSuffix(displayName)];

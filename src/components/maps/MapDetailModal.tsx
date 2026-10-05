@@ -13,7 +13,7 @@ import { getBeatmapFile } from "../../lib/osu";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
 import { calculateManiaStarRating } from "../../lib/mania-star-rating";
 import { PatternRadar } from "./PatternRadar";
-import { danScaleContextFor, danTierSuffix, getDanTierImageSrc } from "../../lib/dan-images";
+import { danScaleContextFor, getDanTierImageSrc } from "../../lib/dan-images";
 import { DanProgressRail } from "./DanProgressRail";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
@@ -473,10 +473,9 @@ function DanEstimateBadge({ dan, other = null, keyCount }: { dan: DanBadgeVerdic
         )}
         {/* The glyph art carries about a quarter of its box as transparent
             margin on each side, so the hybrid chip pulls back over that
-            margin to sit against the visible strokes. A tier drawing ends at
-            its marks, so there it keeps a small gap instead. */}
+            margin to sit against the visible strokes. */}
         {other ? (
-          <span className={`flex items-start ${image && danTierSuffix(dan.label) ? "ml-0.5" : "-ml-2"}`}>
+          <span className="-ml-2 flex items-start">
             {otherImage ? (
               <img src={otherImage} alt={other.label} className="-mt-1 h-6 w-auto max-w-none object-contain" />
             ) : (
