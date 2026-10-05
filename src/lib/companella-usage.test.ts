@@ -3,13 +3,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("./live-backend", () => ({ getServerLiveBackendUrl: () => "http://backend.test" }));
 vi.mock("./live-backend-tokens", () => ({ adminAuthHeaders: () => ({ authorization: "Bearer admin" }) }));
 
-import { handleCompanellaUsageApi } from "./companella-usage";
+async function handleCompanellaUsageApi(request: Request): Promise<Response> {
+  // A fresh module per call site keeps the cache and the rate window per test.
+  return (await import("./companella-usage")).handleCompanellaUsageApi(request);
+}
 
 function request(auth?: string, query = ""): Request {
   return new Request(`https://mania-tracker.com/api/companella/usage${query}`, auth ? { headers: { authorization: auth } } : undefined);
 }
 
 afterEach(() => {
+  vi.resetModules();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -38,5 +42,18 @@ describe("the Companella usage API", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(await response.json()).toEqual({ days: 7 });
     expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toBe("http://backend.test/api/admin/companella/usage?days=7");
+  });
+
+  it("serves a copy for a minute and refuses past 30 requests a minute", async () => {
+    vi.stubEnv("COMPANELLA_USAGE_API_KEY", "right-key");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ days: 30 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i += 1) statuses.push((await handleCompanellaUsageApi(request("Bearer right-key"))).status);
+    expect(statuses.slice(0, 30).every((status) => status === 200)).toBe(true);
+    const limited = await handleCompanellaUsageApi(request("Bearer right-key"));
+    expect(statuses[30]).toBe(429);
+    expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

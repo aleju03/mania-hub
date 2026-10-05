@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 
 import { PageHeader } from "#/components/layout/PageHeader";
 import { Empty, Panel } from "#/components/companella/primitives";
@@ -7,10 +7,12 @@ import { SegmentedControl } from "#/components/ui/SegmentedControl";
 import {
   COMPANELLA_USAGE_WINDOWS,
   fetchCompanellaUsage,
+  fetchCompanellaUsagePlayers,
   type CompanellaUsageDay,
+  type CompanellaUsagePlayer,
   type CompanellaUsageWindow,
 } from "#/lib/companella-usage";
-import { formatNumber } from "#/lib/format";
+import { formatNumber, formatTimeAgo } from "#/lib/format";
 
 /*
  * /companella/usage: how much the Companella app is used, for the site admins
@@ -26,9 +28,12 @@ export const Route = createFileRoute("/companella_/usage")({
   },
   loaderDeps: ({ search }) => ({ days: search.days ?? 30 }),
   loader: async ({ deps }) => {
-    const usage = await fetchCompanellaUsage({ data: { days: deps.days } });
-    if (!usage) throw notFound();
-    return usage;
+    const [usage, players] = await Promise.all([
+      fetchCompanellaUsage({ data: { days: deps.days } }),
+      fetchCompanellaUsagePlayers({ data: { days: deps.days } }),
+    ]);
+    if (!usage || !players) throw notFound();
+    return { ...usage, players: players.players, dailyPlayers: players.daily };
   },
   head: () => ({
     meta: [
@@ -98,33 +103,24 @@ function CompanellaUsagePage() {
 
         <div className="mt-8 space-y-8">
           <Panel title="Plays sent per day">
-            <DailyChart days={usage.daily} />
+            <DailyChart days={usage.daily} players={usage.players} dailyPlayers={usage.dailyPlayers} />
           </Panel>
 
           <div className="grid gap-8 lg:grid-cols-2">
-            <Panel title="Client versions">
-              <UsageTable
-                empty="No plays in this window."
-                head={["Version", "Players", "Sent", "Accepted"]}
-                rows={usage.versions.map((row) => [
-                  <span key="v" className="font-mono text-[12px]">{row.version}</span>,
-                  formatNumber(row.players),
-                  formatNumber(row.received),
-                  percent(row.accepted, row.received),
-                ])}
-              />
-            </Panel>
-            <Panel title="Game">
-              <UsageTable
-                empty="No plays in this window."
-                head={["Game", "Sent", "Accepted"]}
-                rows={usage.gameClients.map((row) => [
-                  row.gameClient === "lazer" ? "osu!lazer" : row.gameClient === "stable" ? "osu!stable" : row.gameClient,
-                  formatNumber(row.received),
-                  percent(row.accepted, row.received),
-                ])}
-              />
-            </Panel>
+            <div className="lg:col-span-2">
+              <Panel title="Client versions">
+                <UsageTable
+                  empty="No plays in this window."
+                  head={["Version", "Players", "Sent", "Accepted"]}
+                  rows={usage.versions.map((row) => [
+                    <span key="v" className="font-mono text-[12px]">{row.version}</span>,
+                    formatNumber(row.players),
+                    formatNumber(row.received),
+                    percent(row.accepted, row.received),
+                  ])}
+                />
+              </Panel>
+            </div>
             <Panel title="Plays not accepted">
               <UsageTable
                 empty="Every play sent in this window was accepted."
@@ -146,27 +142,47 @@ function CompanellaUsagePage() {
                 ] : []}
               />
             </Panel>
-            <Panel title="Active connections by platform">
-              <UsageTable
-                empty="No active connections."
-                head={["Platform", "Connections"]}
-                rows={usage.platforms.map((row) => [row.platform, formatNumber(row.connections)])}
-              />
-            </Panel>
-            <Panel title="Server events">
-              <UsageTable
-                empty="No events in this window."
-                head={["Event", "Severity", "Count"]}
-                rows={usage.securityEvents.map((row) => [
-                  <span key="k" className="font-mono text-[12px]">{row.kind}</span>,
-                  row.severity,
-                  formatNumber(row.count),
-                ])}
-              />
-            </Panel>
           </div>
+
+          <Panel title={`Players (${formatNumber(usage.players.length)})`}>
+            <PlayerList players={usage.players} />
+          </Panel>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PlayerList({ players }: { players: CompanellaUsagePlayer[] }) {
+  if (!players.length) return <Empty>Nobody has connected Companella yet.</Empty>;
+  return (
+    <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
+      {players.map((player) => (
+        <div key={player.userId} className="flex items-center gap-3 border-t border-white/[0.07] py-2.5">
+          {player.avatarUrl ? (
+            <img src={player.avatarUrl} alt="" className="h-9 w-9 flex-shrink-0 rounded-full object-cover" />
+          ) : (
+            <span className="block h-9 w-9 flex-shrink-0 rounded-full bg-osu-b4" />
+          )}
+          <div className="min-w-0 flex-1">
+            <Link
+              to="/player/$username"
+              params={{ username: String(player.userId) }}
+              className="block truncate text-[14px] font-semibold text-white hover:text-osu-pink-light"
+            >
+              {player.username}
+            </Link>
+            <div className="text-[11px] text-osu-f1">
+              {formatNumber(player.plays)} {player.plays === 1 ? "play" : "plays"}
+              {player.lastPlayAt ? `, last played ${formatTimeAgo(player.lastPlayAt)}` : ""}
+              {player.connected ? "" : ", disconnected"}
+            </div>
+          </div>
+          <span className="flex-shrink-0 text-[11px] text-osu-f1" title="Connected">
+            {formatDay(player.connectedAt.slice(0, 10))}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -205,9 +221,20 @@ function UsageTable({ head, rows, empty }: { head: string[]; rows: ReactNode[][]
   );
 }
 
-/* One bar per UTC day, with the day's numbers on hover. */
-function DailyChart({ days }: { days: CompanellaUsageDay[] }) {
+const TOOLTIP_PLAYERS = 8;
+
+/* One bar per UTC day, with the day's numbers and players on hover. */
+function DailyChart({
+  days,
+  players,
+  dailyPlayers,
+}: {
+  days: CompanellaUsageDay[];
+  players: CompanellaUsagePlayer[];
+  dailyPlayers: Record<string, number[]>;
+}) {
   const [hovered, setHovered] = useState<number | null>(null);
+  const byId = useMemo(() => new Map(players.map((player) => [player.userId, player])), [players]);
   const max = Math.max(1, ...days.map((day) => day.received));
   const active = hovered == null ? null : days[hovered];
 
@@ -215,7 +242,7 @@ function DailyChart({ days }: { days: CompanellaUsageDay[] }) {
     <div>
       <div className="relative h-44">
         <div className="pointer-events-none absolute inset-x-0 top-0 border-t border-white/[0.07]" />
-        <span className="pointer-events-none absolute -top-2 right-0 bg-osu-b5 pl-1 text-[11px] tabular-nums text-osu-f1">{formatNumber(max)}</span>
+        <span className="pointer-events-none absolute -top-2 left-0 bg-osu-b5 pr-1 text-[11px] tabular-nums text-osu-f1">{formatNumber(max)}</span>
         <div className="absolute inset-0 flex items-end gap-[2px]" onMouseLeave={() => setHovered(null)}>
           {days.map((day, index) => (
             <div
@@ -232,7 +259,7 @@ function DailyChart({ days }: { days: CompanellaUsageDay[] }) {
         </div>
         {active && hovered != null ? (
           <div
-            className="pointer-events-none absolute top-2 z-10 w-44 rounded-md bg-osu-b3 px-3 py-2 text-[12px] shadow-lg"
+            className="pointer-events-none absolute top-2 z-10 w-52 rounded-md bg-osu-b3 px-3 py-2 text-[12px] shadow-lg"
             style={hovered < days.length / 2
               ? { left: `${((hovered + 1) / days.length) * 100}%` }
               : { right: `${((days.length - hovered) / days.length) * 100}%` }}
@@ -242,6 +269,7 @@ function DailyChart({ days }: { days: CompanellaUsageDay[] }) {
             <TooltipRow label="Accepted" value={active.accepted} />
             <TooltipRow label="Players" value={active.players} />
             <TooltipRow label="New connections" value={active.newConnections} />
+            <DayPlayers ids={dailyPlayers[active.date] ?? []} byId={byId} />
           </div>
         ) : null}
       </div>
@@ -249,6 +277,29 @@ function DailyChart({ days }: { days: CompanellaUsageDay[] }) {
         <span>{days.length ? formatDay(days[0].date) : ""}</span>
         <span>{days.length ? formatDay(days[days.length - 1].date) : ""}</span>
       </div>
+    </div>
+  );
+}
+
+function DayPlayers({ ids, byId }: { ids: number[]; byId: Map<number, CompanellaUsagePlayer> }) {
+  if (!ids.length) return null;
+  const shown = ids.slice(0, TOOLTIP_PLAYERS);
+  return (
+    <div className="mt-2 space-y-1 border-t border-white/[0.07] pt-2">
+      {shown.map((id) => {
+        const player = byId.get(id);
+        return (
+          <div key={id} className="flex items-center gap-2">
+            {player?.avatarUrl ? (
+              <img src={player.avatarUrl} alt="" className="h-5 w-5 flex-shrink-0 rounded-full object-cover" />
+            ) : (
+              <span className="block h-5 w-5 flex-shrink-0 rounded-full bg-osu-b4" />
+            )}
+            <span className="truncate text-white">{player?.username ?? `#${id}`}</span>
+          </div>
+        );
+      })}
+      {ids.length > shown.length ? <div className="text-osu-f1">+{formatNumber(ids.length - shown.length)} more</div> : null}
     </div>
   );
 }
