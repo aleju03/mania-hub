@@ -6,7 +6,7 @@ import type { MyDataSkillBreakdown, MyDataSkillMode, MyDataSkillQueue } from "..
 import { danBareLabel, danTierName } from "../../lib/dan-images";
 import { formatAccuracy, formatNumber } from "../../lib/format";
 import { useLocale } from "../../lib/locale-context";
-import { useExperimentalLn, useNoDans } from "../../store";
+import { useNoDans } from "../../store";
 import { DanLevelBadge } from "./DanLevelBadge";
 import { SkillHistoryButton } from "./SkillHistoryButton";
 import { OverallMethodToggle, RollingOverall } from "./OverallMethodToggle";
@@ -68,9 +68,8 @@ function ProvisionalChip({ mode }: { mode: MyDataSkillMode }) {
 // The independent LN model still needs evidence: retain the cohort size
 // beside the axis so readers can see how much LN work supports the rating.
 function LnShareNote({ mode, className = "" }: { mode: MyDataSkillMode; className?: string }) {
-  const showLn = useExperimentalLn();
   const share = lnPlayShare(mode);
-  if (share == null || !showLn) return null;
+  if (share == null) return null;
   const percent = Math.round(share * 100);
   const lnPlays = (mode.patterns ?? []).find((entry) => entry.id === "ln")?.plays ?? 0;
   const total = mode.analyzedPlays;
@@ -98,7 +97,6 @@ function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode, i18n: I18
 function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side: "rc" | "ln") => void }) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
-  const showLn = useExperimentalLn();
   const dan = mode.dan;
   if (noDans || !dan) return null;
   // A numbered course reads as a level, not a name, so it needs the word;
@@ -122,7 +120,7 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
   }> = [
     { id: "rc", label: msg`Regular`, side: dan.rc },
     // The 4K LN dan shows only with the 4K LN model on.
-    { id: "ln", label: msg`LN`, side: mode.keyCount === 4 && !showLn ? null : dan.ln },
+    { id: "ln", label: msg`LN`, side: dan.ln },
   ];
   const visible = sides.filter((entry) => entry.side != null);
   if (visible.length === 0) return null;
@@ -232,11 +230,10 @@ const QUEUE_AHEAD_SHOWN_MAX = 100;
 export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, userId }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean; onSelectDan?: (side: "rc" | "ln") => void; userId?: number }) {
   const { i18n } = useLingui();
   const overallMethod = useOverallMethod();
-  const showLn = useExperimentalLn();
   const empty = skillEmptyState(skills, mode, own);
   if (empty) return mode?.dan ? <div className="space-y-3">{empty}<DanChips mode={mode} onSelect={onSelectDan} /></div> : empty;
-  const entries = skillModeEntries(mode!, { ln4k: showLn });
-  const { value: overall, percentile: overallPercentile } = modeOverall(mode!, overallMethod, { ln4k: showLn });
+  const entries = skillModeEntries(mode!);
+  const { value: overall, percentile: overallPercentile } = modeOverall(mode!, overallMethod);
   const max = entries[0]?.value ?? 1;
   return (
     <div>
@@ -565,10 +562,9 @@ export function SkillModePanel({
   const { t, i18n } = useLingui();
   const [hovered, setHovered] = useState<string | null>(null);
   const overallMethod = useOverallMethod();
-  const showLn = useExperimentalLn();
-  const entries = skillModeEntries(mode, { ln4k: showLn });
+  const entries = skillModeEntries(mode);
   const accent = entries[0]?.color ?? "#8f6bd8";
-  const { value: overall, percentile: overallPercentile } = modeOverall(mode, overallMethod, { ln4k: showLn });
+  const { value: overall, percentile: overallPercentile } = modeOverall(mode, overallMethod);
   const max = entries[0]?.value ?? 1;
   const version = mode.minaCalc;
   return (
@@ -686,7 +682,6 @@ export function SkillModeOption({ mode, selected, onSelect }: {
   onSelect: () => void;
 }) {
   const overallMethod = useOverallMethod();
-  const showLn = useExperimentalLn();
   return (
     <button
       type="button"
@@ -700,7 +695,7 @@ export function SkillModeOption({ mode, selected, onSelect }: {
         {mode.keyCount}K
       </span>
       <RollingOverall
-        value={modeOverall(mode, overallMethod, { ln4k: showLn }).value}
+        value={modeOverall(mode, overallMethod).value}
         className={`text-[22px] font-bold leading-none tabular-nums transition-colors ${
           selected ? "text-white" : "text-osu-l3 group-hover:text-osu-l1"
         }`}

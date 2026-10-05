@@ -310,8 +310,6 @@ interface AppState {
   themeSaturation: number;
   showDanEstimates: boolean;
   noDans: boolean;
-  /** Shows the 4K LN rating, LN axis and 4K LN dan on skills (off by default). */
-  experimentalLn: boolean;
   packsSkipAnimations: boolean;
   packsRevealAll: boolean;
   recentPlayRatings: boolean;
@@ -339,7 +337,6 @@ interface AppState {
   setThemeSaturation: (sat: number) => void;
   setShowDanEstimates: (show: boolean) => void;
   setNoDans: (hidden: boolean) => void;
-  setExperimentalLn: (shown: boolean) => void;
   setPacksSkipAnimations: (skip: boolean) => void;
   setPacksRevealAll: (revealAll: boolean) => void;
   setRecentPlayRatings: (show: boolean) => void;
@@ -600,7 +597,6 @@ export const useAppStore = create<AppState>()(
       themeSaturation: initialClientThemeSat ?? DEFAULT_THEME_SAT,
       showDanEstimates: false,
       noDans: false,
-      experimentalLn: false,
       packsSkipAnimations: false,
       packsRevealAll: false,
       recentPlayRatings: false,
@@ -642,7 +638,6 @@ export const useAppStore = create<AppState>()(
       },
       setShowDanEstimates: (show) => set({ showDanEstimates: show }),
       setNoDans: (hidden) => set({ noDans: hidden }),
-      setExperimentalLn: (shown) => set({ experimentalLn: shown }),
       setPacksSkipAnimations: (skip) => set({ packsSkipAnimations: skip }),
       setPacksRevealAll: (revealAll) => set({ packsRevealAll: revealAll }),
       setRecentPlayRatings: (show) => set({ recentPlayRatings: show }),
@@ -1011,9 +1006,6 @@ export const useAppStore = create<AppState>()(
           noDans: typeof nextState.noDans === "boolean"
             ? nextState.noDans
             : currentState.noDans,
-          experimentalLn: typeof nextState.experimentalLn === "boolean"
-            ? nextState.experimentalLn
-            : currentState.experimentalLn,
           packsSkipAnimations: typeof nextState.packsSkipAnimations === "boolean"
             ? nextState.packsSkipAnimations
             : currentState.packsSkipAnimations,
@@ -1084,7 +1076,6 @@ export const useAppStore = create<AppState>()(
         selectedCountry: state.selectedCountry,
         showDanEstimates: state.showDanEstimates,
         noDans: state.noDans,
-        experimentalLn: state.experimentalLn,
         packsSkipAnimations: state.packsSkipAnimations,
         packsRevealAll: state.packsRevealAll,
         recentPlayRatings: state.recentPlayRatings,
@@ -1197,15 +1188,6 @@ export function useNoDans(): boolean {
   const noDans = useAppStore((state) => state.noDans);
   const hydrated = useHasHydrated();
   return hydrated && noDans;
-}
-
-// Whether the 4K LN model's numbers show on skills: the LN rating and axis
-// and the 4K LN dan. Off by default, so the SSR render leaves them out and a
-// stored opt-in adds them once the store is in.
-export function useExperimentalLn(): boolean {
-  const shown = useAppStore((state) => state.experimentalLn);
-  const hydrated = useHasHydrated();
-  return hydrated && shown;
 }
 
 // Pack preferences, same hydration rule as useNoDans: the pack surface renders

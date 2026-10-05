@@ -8,7 +8,7 @@ import { ETTERNA_OVERALL_AXIS, ETTERNA_OVERALL_NO_LN_AXIS, skillAxisMeta, usesPa
 import { overallAxisFor, useOverallMethod } from "../../lib/overall-method";
 import { OverallMethodToggle } from "../player/OverallMethodToggle";
 import { formatNumber } from "../../lib/format";
-import { useExperimentalLn, useHiddenUserIds } from "../../store";
+import { useHiddenUserIds } from "../../store";
 import {
   DEFAULT_LEADERBOARD_AXIS,
   LEADERBOARD_PAGE_SIZE,
@@ -43,14 +43,11 @@ export function SkillLeaderboardBoard({
   // Overall method; 6K/7K/8K only have Legacy.
   const overallMethod = useOverallMethod();
   const hasEtterna = !usesPatternSkillAxes(keys);
-  // Without the 4K LN model, 4K reads the Etterna board that leaves LN out
-  // and has no LN board.
-  const showLn = useExperimentalLn();
-  const hideLn = keys === 4 && !showLn;
-  const overallAxis = overallAxisFor(overallMethod, hasEtterna, hideLn);
+  const overallAxis = overallAxisFor(overallMethod, hasEtterna);
+  // An old link to the no-LN Etterna board reads the Overall chip.
   const overallAxes = [DEFAULT_LEADERBOARD_AXIS, ETTERNA_OVERALL_AXIS, ETTERNA_OVERALL_NO_LN_AXIS];
-  const hiddenAxes = new Set([...overallAxes.filter((entry) => entry !== overallAxis), ...(hideLn ? ["pattern:ln"] : [])]);
-  const overallRequested = axis == null || overallAxes.includes(axis) || (hideLn && axis === "pattern:ln");
+  const hiddenAxes = new Set(overallAxes.filter((entry) => entry !== overallAxis));
+  const overallRequested = axis == null || overallAxes.includes(axis);
   const requestedAxis = overallRequested ? overallAxis : axis;
   const request = { country, keys, axis: requestedAxis, page };
   const [snapshot, setSnapshot] = useState<SkillLeaderboardSnapshot | null>(() => peekSkillBoard(request));

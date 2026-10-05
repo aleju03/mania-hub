@@ -5,7 +5,7 @@
 // default, so SSR and hydration agree and a stored Legacy applies right after.
 
 import { useSyncExternalStore } from "react";
-import { ETTERNA_OVERALL_AXIS, ETTERNA_OVERALL_NO_LN_AXIS, OVERALL_AXIS_META, type OverallMethod } from "./skill-axes";
+import { ETTERNA_OVERALL_AXIS, OVERALL_AXIS_META, type OverallMethod } from "./skill-axes";
 
 export { hasEtternaOverall, modeOverall, type OverallMethod } from "./skill-axes";
 
@@ -59,7 +59,7 @@ export function useOverallMethod(): OverallMethod {
 }
 
 /** The leaderboard axis the Overall chip reads under a method. */
-export function overallAxisFor(method: OverallMethod, hasEtterna: boolean, withoutLn = false): string {
+export function overallAxisFor(method: OverallMethod, hasEtterna: boolean): string {
   if (method !== "etterna" || !hasEtterna) return OVERALL_AXIS_META.key;
-  return withoutLn ? ETTERNA_OVERALL_NO_LN_AXIS : ETTERNA_OVERALL_AXIS;
+  return ETTERNA_OVERALL_AXIS;
 }

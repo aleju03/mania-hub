@@ -35,7 +35,7 @@ describe("normalizeSignatureStyle", () => {
     const style = {
       background: "cover", accent: "#3fd4d0", color: "#112233",
       opacity: 40, blur: 12, brightness: 80, imageUrl: null, keyCount: 7, lnKeyCount: 4,
-      watermark: false, ln4k: true,
+      watermark: false,
     };
     expect(normalizeSignatureStyle(style)).toEqual(style);
   });

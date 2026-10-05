@@ -16,7 +16,7 @@ import { useOverallMethod } from "../../lib/overall-method";
 import { OverallMethodToggle } from "./OverallMethodToggle";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
-import { useExperimentalLn, useNoDans } from "../../store";
+import { useNoDans } from "../../store";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { makeSkillHistoryPreview } from "./skill-history-preview";
 import { groupSkillHistoryByDay, loadSkillHistoryDays } from "./skill-history-days";
@@ -232,20 +232,16 @@ function HistoryEntry({ entry, keyCount }: { entry: LivePlayerSkillHistoryEntry 
   const { i18n, t } = useLingui();
   const locale = useLocale();
   const noDans = useNoDans();
-  // Without the 4K LN model, its rating and dan changes stay out of the list.
-  const showLn = useExperimentalLn();
-  const hideLn = keyCount === 4 && !showLn;
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
   const { snapshot, previous } = entry;
   const etterna = useOverallMethod() === "etterna";
-  const overall = historyOverall(snapshot.ratings, keyCount, etterna, hideLn);
-  const delta = previous ? Number((overall - historyOverall(previous.ratings, keyCount, etterna, hideLn)).toFixed(2)) : 0;
+  const overall = historyOverall(snapshot.ratings, keyCount, etterna);
+  const delta = previous ? Number((overall - historyOverall(previous.ratings, keyCount, etterna)).toFixed(2)) : 0;
   const axes = previous ? Array.from(new Set([...Object.keys(snapshot.ratings), ...Object.keys(previous.ratings)]))
-    .filter((axis) => axis !== "Overall" && !(hideLn && axis === "pattern:ln") && snapshot.ratings[axis] !== previous.ratings[axis]) : [];
+    .filter((axis) => axis !== "Overall" && snapshot.ratings[axis] !== previous.ratings[axis]) : [];
   const formatDan = (side: LivePlayerSkillHistorySnapshot["dan"]["rc"]) => side ? `${side.beyondTable ? "> " : ""}${side.label}` : "—";
   const danSides = previous && !noDans ? (["rc", "ln"] as const)
-    .filter((side) => !(hideLn && side === "ln"))
     .filter((side) => formatDan(snapshot.dan[side]) !== formatDan(previous.dan[side])) : [];
   const hasDetails = axes.length > 0 || danSides.length > 0;
   const date = new Date(entry.recordedAt);

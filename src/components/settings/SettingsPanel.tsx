@@ -93,7 +93,7 @@ import {
   writeCursorSettings,
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
-import { useAppStore, useChangelogNotify, useExperimentalLn, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings } from "../../store";
+import { useAppStore, useChangelogNotify, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings } from "../../store";
 import { markChangelogSeen } from "../../lib/changelog";
 import { Switch } from "../ui/Switch";
 import { SETTINGS_TABS as TABS, type SettingsTabId } from "./settings-tabs";
@@ -1030,8 +1030,6 @@ function PreferencesPanel() {
   const { t } = useLingui();
   const noDans = useNoDans();
   const setNoDans = useAppStore((state) => state.setNoDans);
-  const experimentalLn = useExperimentalLn();
-  const setExperimentalLn = useAppStore((state) => state.setExperimentalLn);
   const packsSkipAnimations = usePacksSkipAnimations();
   const setPacksSkipAnimations = useAppStore((state) => state.setPacksSkipAnimations);
   const packsRevealAll = usePacksRevealAll();
@@ -1102,15 +1100,6 @@ function PreferencesPanel() {
             </div>
           </div>
           <Switch checked={noDans} onChange={setNoDans} label={t`No Dans`} />
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold text-osu-l1"><Trans>Experimental LN model</Trans></div>
-            <div className="text-[11px] text-osu-f1">
-              <Trans>Shows the 4K LN MSD, LN axis and 4K LN dan on skills</Trans>
-            </div>
-          </div>
-          <Switch checked={experimentalLn} onChange={setExperimentalLn} label={t`Experimental LN model`} />
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>

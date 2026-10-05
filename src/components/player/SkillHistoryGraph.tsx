@@ -6,7 +6,7 @@ import {
 } from "../../lib/live-backend";
 import { useOverallMethod } from "../../lib/overall-method";
 import { useLocale } from "../../lib/locale-context";
-import { useExperimentalLn, useNoDans } from "../../store";
+import { useNoDans } from "../../store";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { SKILL_HISTORY_NOTES } from "./skill-history-notes";
 import { historyOverall, overallTicks } from "./skill-history-overall";
@@ -43,8 +43,6 @@ export function SkillHistoryGraph({ userId, keyCount, height = 200 }: { userId: 
   const { t } = useLingui();
   const locale = useLocale();
   const noDans = useNoDans();
-  const showLn = useExperimentalLn();
-  const hideLn = keyCount === 4 && !showLn;
   const etterna = useOverallMethod() === "etterna";
   const [series, setSeries] = useState<LivePlayerSkillHistorySeries | null>(null);
   const [error, setError] = useState(false);
@@ -91,10 +89,10 @@ export function SkillHistoryGraph({ userId, keyCount, height = 200 }: { userId: 
     .filter((point) => !(point.version < scaleVersion))
     .map((point) => ({
       at: Date.parse(point.recordedAt),
-      value: historyOverall(point.ratings, keyCount, etterna, hideLn),
+      value: historyOverall(point.ratings, keyCount, etterna),
       dan: point.danRc ? `${point.danRc.beyondTable ? "> " : ""}${point.danRc.label.charAt(0).toUpperCase()}${point.danRc.label.slice(1)}` : null,
     }))
-    .filter((point) => Number.isFinite(point.at) && point.value > 0), [series, keyCount, etterna, hideLn, scaleVersion]);
+    .filter((point) => Number.isFinite(point.at) && point.value > 0), [series, keyCount, etterna, scaleVersion]);
 
   const header = (
     <div className="mb-2 flex min-h-[24px] flex-wrap items-baseline gap-x-2.5 gap-y-1">

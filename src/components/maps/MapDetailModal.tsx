@@ -24,7 +24,7 @@ import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { msdHeadline } from "#dan/msd-headline";
-import { useExperimentalLn, useNoDans } from "../../store";
+import { useNoDans } from "../../store";
 import {
   FamilyPatternChip,
   PATTERN_COLOR,
@@ -523,7 +523,6 @@ export function MsdBlock({
 }) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
-  const showLn = useExperimentalLn();
   // Under a rate mod the chart the play met is not the stored one, so its own
   // MSD and dan replace the 1.0x pair wholesale: a rate-adjusted MSD next to a
   // 1.0x dan badge would describe two different charts. When the rate values
@@ -543,9 +542,7 @@ export function MsdBlock({
   const hasLnIdentity = rateAdjusted
     ? rateDan == null || rateDan.family === "ln"
     : analysisLnIdentity ?? (entry.primaryPattern === "ln" || entry.dan?.family === "ln");
-  // The 4K LN number shows only with the 4K LN model on.
-  const lnShown = entry.keyCount === 4 && showLn;
-  const skillsetNames = lnShown && Number(msd.LN ?? 0) > 0
+  const skillsetNames = entry.keyCount === 4 && Number(msd.LN ?? 0) > 0
     ? [...MSD_SKILLSETS, "LN"]
     : MSD_SKILLSETS;
   const skillsets = skillsetNames
@@ -557,7 +554,7 @@ export function MsdBlock({
   // On a 4K LN chart the headline is the higher of Overall and LN: native
   // Overall never sees a tail, so on its own it prices the rice that is left
   // once the holds are cut off.
-  const overall = msdHeadline(msd, entry.keyCount, hasLnIdentity && (entry.keyCount !== 4 || showLn));
+  const overall = msdHeadline(msd, entry.keyCount, hasLnIdentity);
   const topName = skillsets[0]?.name;
 
   const dan = noDans ? null : rateAdjusted ? rateDan : analysisDan !== undefined ? analysisDan : entry.dan ?? null;

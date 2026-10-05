@@ -8,7 +8,7 @@ import { SkillHistoryGraph } from "./SkillHistoryGraph";
 const fetchSeries = vi.hoisted(() => vi.fn());
 vi.mock("../../lib/live-backend", () => ({ fetchLivePlayerSkillHistorySeriesDirect: fetchSeries }));
 vi.mock("../../lib/overall-method", () => ({ useOverallMethod: () => "mean" }));
-vi.mock("../../store", () => ({ useNoDans: () => false, useExperimentalLn: () => true }));
+vi.mock("../../store", () => ({ useNoDans: () => false }));
 
 beforeAll(async () => {
   await loadLocaleCatalog("en");

@@ -6724,8 +6724,8 @@ msgstr "Salir de pantalla completa"
 
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/settings/SettingsPanel.tsx
-msgid "Experimental LN model"
-msgstr "Modelo LN experimental"
+#~ msgid "Experimental LN model"
+#~ msgstr "Modelo LN experimental"
 
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Experimental local evidence"
@@ -15653,8 +15653,8 @@ msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "Muestra un punto en el enlace de novedades cuando hay algo nuevo"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
-msgstr "Muestra el MSD LN de 4K, el eje LN y el dan LN de 4K en Skills"
+#~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
+#~ msgstr "Muestra el MSD LN de 4K, el eje LN y el dan LN de 4K en Skills"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the MSD and dan of each play in Recent Plays"
@@ -17195,8 +17195,8 @@ msgid "The average of the best {best} skillsets as Etterna rates players, with L
 msgstr "El promedio de los {best} mejores skillsets como Etterna califica a los jugadores, con LN agregado como un skillset más."
 
 #: src/components/player/OverallMethodToggle.tsx
-msgid "The average of the best {best} skillsets as Etterna rates players."
-msgstr "El promedio de los {best} mejores skillsets como Etterna califica a los jugadores."
+#~ msgid "The average of the best {best} skillsets as Etterna rates players."
+#~ msgstr "El promedio de los {best} mejores skillsets como Etterna califica a los jugadores."
 
 #: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets, with LN counted as a skillset. This is how Etterna rates players."

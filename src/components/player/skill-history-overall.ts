@@ -2,9 +2,8 @@ import { etternaOverallFromRatings } from "../../lib/skill-axes";
 
 /** A history snapshot's Overall under the reader's method, derived from its
  * skillsets so older entries read on the same scale as the card. */
-export function historyOverall(ratings: Record<string, number>, keyCount: number, etterna: boolean, hideLn: boolean): number {
-  const counted = hideLn ? { ...ratings, "pattern:ln": 0 } : ratings;
-  const derived = etterna ? etternaOverallFromRatings(keyCount, counted) : 0;
+export function historyOverall(ratings: Record<string, number>, keyCount: number, etterna: boolean): number {
+  const derived = etterna ? etternaOverallFromRatings(keyCount, ratings) : 0;
   return derived > 0 ? derived : ratings.Overall ?? 0;
 }
 

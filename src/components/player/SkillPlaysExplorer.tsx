@@ -41,7 +41,6 @@ import {
 import type { MyDataSkillMode } from "#/lib/my-data";
 import { formatAccuracy, formatAccuracyAgainst, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "#/lib/format";
 import { DAN_SKILLSET_META, OVERALL_AXIS_META, skillModeEntries, type SkillAxisMeta } from "#/lib/skill-axes";
-import { useExperimentalLn } from "#/store";
 import { beatmapStatusPill } from "#/lib/beatmap-status";
 import { Skeleton } from "#/components/ui/LoadingSkeleton";
 import { ModFilterChip } from "#/components/ui/ModFilterChip";
@@ -311,7 +310,6 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   // appearing under the first when the view changes.
   const [axis, setAxis] = useState<string>(storedPrefs.axis);
   const [side, setSide] = useState<"rc" | "ln">(storedPrefs.side);
-  const showLn = useExperimentalLn();
   const [sort, setSort] = useState<"rating" | "recent">(storedPrefs.sort);
   const [hideRanked, setHideRanked] = useState(storedPrefs.hideRanked);
   const [hideGraveyard, setHideGraveyard] = useState(storedPrefs.hideGraveyard);
@@ -423,14 +421,9 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   // that would come back empty. Overall leads: it is the one axis every
   // keymode has, and what a "best plays" list means before anyone narrows it.
   const axisOptions = useMemo<SkillAxisMeta[]>(
-    () => (mode ? [OVERALL_AXIS_META, ...skillModeEntries(mode, { ln4k: showLn })] : [OVERALL_AXIS_META]),
-    [mode, showLn],
+    () => (mode ? [OVERALL_AXIS_META, ...skillModeEntries(mode)] : [OVERALL_AXIS_META]),
+    [mode],
   );
-  // Without the 4K LN model there is no 4K LN dan to list.
-  const lnSideShown = showLn || keyCount !== 4;
-  useEffect(() => {
-    if (!lnSideShown && side === "ln") setSide("rc");
-  }, [lnSideShown, side]);
   useEffect(() => {
     if (!axisOptions.some((option) => axisKeyOf(option) === axis)) setAxis(OVERALL_AXIS_META.key);
   }, [axis, axisOptions]);
@@ -566,7 +559,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
             value={side}
             options={[
               { value: "rc" as const, label: t`Regular`, color: SIDE_COLOR.rc },
-              ...(lnSideShown ? [{ value: "ln" as const, label: t`LN`, color: SIDE_COLOR.ln }] : []),
+              { value: "ln" as const, label: t`LN`, color: SIDE_COLOR.ln },
             ].map((option) => ({
               ...option,
               onPrefetch: () => void loadDanCohort(userId, mode?.keyCount ?? keyCount, option.value, sort).catch(() => {}),

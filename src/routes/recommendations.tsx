@@ -41,7 +41,7 @@ import { danScaleContextFor, danScaleImage, danScaleLabel, getDanTierImageSrc } 
 import { formatCompactCount } from "../lib/format";
 import { beatmapStatusPill } from "../lib/beatmap-status";
 import { useLocale } from "../lib/locale-context";
-import { useExperimentalLn, useNoDans } from "../store";
+import { useNoDans } from "../store";
 import {
   clearMyFarmHelperFeedback,
   getMyFarmHelperFeedback,
@@ -1838,7 +1838,6 @@ function SkillBoardSection({
   onSkill: (skill: string) => void;
 }) {
   const { t, i18n } = useLingui();
-  const ln4k = useExperimentalLn();
   const noDans = useNoDans();
   const detail = useSkillMapDetail();
   if (failed) {
@@ -1851,9 +1850,7 @@ function SkillBoardSection({
     );
   }
   if (loading || !board) return <SkillBoardSkeleton />;
-  // The 4K LN axis follows the same opt-in as the profile's Skills card.
-  const axes = board.axes.filter((entry) => (entry.axis !== "pattern:ln" || entry.keyCount !== 4 || ln4k
-    || (entry.axis === board.axis && entry.keyCount === board.keyCount)) && !(noDans && isDanAxis(entry.axis)));
+  const axes = board.axes.filter((entry) => !(noDans && isDanAxis(entry.axis)));
   if (board.keyCount == null || axes.length === 0) {
     return (
       <EmptyNotice

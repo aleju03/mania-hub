@@ -1,22 +1,13 @@
 // @vitest-environment jsdom
 import { I18nProvider } from "@lingui/react";
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it } from "vitest";
 import { getI18n } from "#/lib/i18n";
 import type { LiveMapSearchEntry } from "#/lib/live-backend";
 import { MsdBlock } from "./MapDetailModal";
 
-// The 4K LN number shows with the 4K LN model on; these read it on unless a
-// test turns it off.
-let showLn = true;
-vi.mock("../../store", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../store")>()),
-  useExperimentalLn: () => showLn,
-}));
-
 afterEach(() => {
   cleanup();
-  showLn = true;
 });
 
 const LN_ENTRY: LiveMapSearchEntry = {
@@ -35,13 +26,6 @@ it("headlines the LN value on a 4K LN chart when it is the hardest axis", () => 
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} /></I18nProvider>);
   expect(headline()).toBe("22.29");
   expect(screen.getByTitle("Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.")).toBeTruthy();
-});
-
-it("headlines native Overall and leaves LN out with the 4K LN model off", () => {
-  showLn = false;
-  render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} /></I18nProvider>);
-  expect(headline()).toBe("21.40");
-  expect(screen.queryByText("22.29")).toBeNull();
 });
 
 it("shows only one LN MSD even when cached values contain Dan family ratings", () => {
