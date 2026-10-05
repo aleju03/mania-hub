@@ -2,9 +2,10 @@ import { useLingui } from "@lingui/react/macro";
 import { motion } from "framer-motion";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MANIA_CARD_TIER_THRESHOLDS, MANIA_TIER_STYLES, getManiaCardTier, type ManiaCardTier, type NextManiaCardTier } from "#/lib/maniacard";
+import { MANIA_CARD_TIER_THRESHOLDS, MANIA_TIER_STYLES, getManiaCardTier, type NextManiaCardTier } from "#/lib/maniacard";
 import { useBodyScrollLock } from "#/lib/use-body-scroll-lock";
 import { ManiacardHistory } from "./ManiacardHistory";
+import { RankKeycap, type LadderTier } from "./RankKeycap";
 
 export const TIER_TEXT_COLOR: Record<string, string> = {
   common: "text-slate-200",
@@ -36,9 +37,9 @@ export const TIER_FILL_COLOR: Record<string, string> = {
 
 // Full tier ladder (lowest -> highest), derived from the shared thresholds so
 // it never drifts from getManiaCardTier. Common has no threshold of its own.
-const TIER_LADDER: Array<{ tier: ManiaCardTier; min: number }> = [
+const TIER_LADDER: Array<{ tier: LadderTier; min: number }> = [
   { tier: "common", min: 0 },
-  ...MANIA_CARD_TIER_THRESHOLDS.map(({ tier, threshold }) => ({ tier, min: threshold })),
+  ...MANIA_CARD_TIER_THRESHOLDS.map(({ tier, threshold }) => ({ tier: tier as LadderTier, min: threshold })),
 ];
 
 export function RatingExplainerModal({
@@ -161,11 +162,10 @@ export function RatingExplainerModal({
           <div role="tabpanel" id={`${titleId}-rank`} aria-labelledby={`${titleId}-rank-tab`} hidden={tab !== "rank"}>
             <div className="relative">
               {/* Spine connecting the rungs. */}
-              <div className="pointer-events-none absolute left-[15px] top-4 bottom-4 w-px bg-osu-b3/40" aria-hidden="true" />
+              <div className="pointer-events-none absolute left-6 top-4 bottom-4 w-px bg-osu-b3/40" aria-hidden="true" />
               <div className="relative space-y-0.5">
                 {rungs.map((rung) => {
-                  const fill = TIER_FILL_COLOR[rung.tier] ?? "rgb(148, 163, 184)";
-                  const achieved = cardRating >= rung.min;
+                                    const achieved = cardRating >= rung.min;
                   const isCurrent = rung.tier === currentTier;
 
                   return (
@@ -173,17 +173,8 @@ export function RatingExplainerModal({
                       key={rung.tier}
                       className={`relative flex items-center gap-3 rounded-lg py-2 pr-3 pl-2 ${isCurrent ? "bg-osu-b3/40" : ""}`}
                     >
-                      <div className="relative z-10 flex w-[11px] justify-center">
-                        <span
-                          className="block rounded-full"
-                          style={
-                            isCurrent
-                              ? { width: 13, height: 13, backgroundColor: fill, boxShadow: "0 0 0 4px rgba(255,255,255,0.1)" }
-                              : achieved
-                                ? { width: 9, height: 9, backgroundColor: fill }
-                                : { width: 9, height: 9, backgroundColor: "transparent", border: "1.5px solid rgba(148,163,184,0.35)" }
-                          }
-                        />
+                      <div className="relative z-10 flex w-8 shrink-0 justify-center">
+                        <RankKeycap tier={rung.tier} size={isCurrent ? 32 : 26} className={achieved ? undefined : "opacity-40 grayscale"} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
