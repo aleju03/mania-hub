@@ -305,18 +305,20 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // of half of one - otherwise the only reading in the window hugs the left
   // edge on phones, where the columns wrap two to a row.
   const columnBasis = (count: number) => (count === 1 ? "basis-full" : "basis-1/2");
-  // The near-clear run that set a tile, when it is also one of the rows: that
-  // row reads what the run gave the tile, not its ordinary chart credit.
+  // The near-clear run that set a tile, when it is also one of the rows: it
+  // moves up into the credential row, so the list does not show it twice.
   const nearClearRunOf = (section: (typeof sections)[number]) => section.nearClear && section.skillsetClear
     ? section.plays.find((clear) => clear.play.beatmapId === section.skillsetClear!.beatmapId
       && Math.abs(clear.clearAccuracy - section.skillsetClear!.accuracy) < 1e-6) ?? null
     : null;
   const renderClears = (section: (typeof sections)[number]) => (
     <>
-      {/* Only when the clear itself is not in the list under it: a stored
-          play of the practice chart already carries the credential in its
-          own row. */}
-      {section.skillsetClear && !(section.nearClear ? nearClearRunOf(section) : section.plays.some((clear) =>
+      {/* A verified clear only when it is not in the list under it: a stored
+          play of the practice chart already carries the credential in its own
+          row. A near clear always leads, lifted out of the list, since it is
+          the whole reason the tile reads above the clears and only this row
+          shows the bar it fell short of. */}
+      {section.skillsetClear && (section.nearClear || !section.plays.some((clear) =>
         clear.play.beatmapId === section.skillsetClear!.beatmapId)) ? (
         // Split off from the numbered list: it sets the tile, it is not one
         // of the clears the tile averages.
@@ -329,11 +331,10 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
           />
         </div>
       ) : null}
-      {section.plays.map((clear, index) => (
+      {section.plays.filter((clear) => clear !== nearClearRunOf(section)).map((clear, index) => (
         <ClearRow
           key={`${section.id}:${clear.play.beatmapId}:${clear.play.rate}:${clear.play.scoreId ?? index}`}
           clear={clear}
-          nearCredential={clear === nearClearRunOf(section) ? section.skillsetClear : undefined}
           position={index + 1}
           color={section.color}
           formatDan={formatDan}
@@ -965,6 +966,9 @@ function CredentialRow({
         {/* A run under the bar says so on its face. */}
         {passed ? null : <span className="text-osu-f1">{` / ${Number((credential.bar * 100).toFixed(2))}%`}</span>}
       </span>
+      {passed ? null : (
+        <span className="shrink-0 text-right text-[10px] tabular-nums text-osu-f1">{level}</span>
+      )}
       <span className="w-16 shrink-0 text-right text-[11px] font-black sm:w-20" style={{ color }}>
         {formatDan(credential.label)}
       </span>
@@ -974,7 +978,6 @@ function CredentialRow({
 
 function ClearRow({
   clear,
-  nearCredential,
   position,
   color,
   formatDan,
@@ -982,8 +985,6 @@ function ClearRow({
   onPrefetch,
 }: {
   clear: LivePlayerDanEvidencePlay;
-  // The practice-chart run within a point of its bar that set this tile.
-  nearCredential?: LivePlayerDanCourseEvidence;
   position: number;
   color: string;
   formatDan: (label: string) => string;
@@ -1001,8 +1002,6 @@ function ClearRow({
   // numbers that set the estimate keep their own column.
   const played = play.playedAt ? formatTimeAgo(play.playedAt, locale) : null;
   const reduced = clear.creditedDan < clear.chartDan;
-  const level = nearCredential ? formatDan(nearCredential.level) : "";
-  const credited = nearCredential ? formatDan(nearCredential.label) : "";
   return (
     <button
       type="button"
@@ -1013,9 +1012,7 @@ function ClearRow({
         clear.ignoredAsStray ? "opacity-45" : clear.countsTowardDan ? "" : "opacity-60"
       }`}
       title={`${play.artist} - ${play.title} [${play.version}]${played ? ` · ${played}` : ""}${
-        nearCredential
-          ? ` · ${t`The ${level} chart of this skillset ladder: a run within one point of the bar sets ${credited}, and a higher estimate is kept`}`
-        : clear.credential
+        clear.credential
           ? ` · ${t`The ${formatDan(clear.credential.level)} chart of this skillset ladder: the clear sets that level, whatever the estimator reads the file as`}`
           : reduced
             ? ` · ${t`Below the full-clear requirement: reduced credit, even if the dan label stays the same`}`
@@ -1042,11 +1039,7 @@ function ClearRow({
       >
         {formatAccuracy(clear.clearAccuracy)}
       </span>
-      {nearCredential ? (
-        <span className="shrink-0 text-right text-[10px] tabular-nums text-osu-f1">
-          {formatDan(nearCredential.level)}
-        </span>
-      ) : clear.creditedDanLabel !== clear.chartDanLabel ? (
+      {clear.creditedDanLabel !== clear.chartDanLabel ? (
         <span className="shrink-0 text-right text-[10px] tabular-nums text-osu-f1">
           {formatDan(clear.chartDanLabel)}
         </span>
@@ -1072,7 +1065,7 @@ function ClearRow({
         className={`w-16 shrink-0 text-right text-[11px] font-black sm:w-20 ${clear.ignoredAsStray ? "line-through" : ""}`}
         style={{ color }}
       >
-        {formatDan(nearCredential?.label ?? clear.creditedDanLabel)}
+        {formatDan(clear.creditedDanLabel)}
       </span>
     </button>
   );
