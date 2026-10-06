@@ -12,6 +12,15 @@
 //   tail counting as failed. Feeds the separate 4K LN rating only.
 // Neither is an independently played Etterna score.
 
+import {
+  WIFE_ACCURACY_COEFFICIENTS,
+  WIFE_BASIS_POWERS,
+  WIFE_HOLD_ANCHORS,
+  WIFE_LN_ACCURACY_COEFFICIENTS,
+  WIFE_LN_COEFFICIENTS,
+  WIFE_ORDINAL_COEFFICIENTS,
+} from "./wife-calibration-model.js";
+
 /** Wife3's miss weight, normalized to a marvelous = 1. */
 export const WIFE3_MISS_POINTS = -2.75;
 
@@ -33,26 +42,6 @@ export interface WifeCalibrationOptions extends TimingWindowOptions {
   /** "press" (default) for native MSD, "ln" for the release-aware LN target. */
   target?: "press" | "ln";
 }
-
-// Fitted model coefficients. They are static arrays produced offline by
-// nonnegative least squares (ridge 0.00001) over replay-reconstructed plays,
-// and are not part of this snapshot.
-//
-// The powers applied to each cumulative bad-judgement share (the docs list
-// 0.5, 1 and 2), three per threshold.
-declare const WIFE_BASIS_POWERS: readonly number[];
-// Hold-share anchors the coefficient rows interpolate between (the docs list
-// 0, 0.15, 0.5 and 1).
-declare const WIFE_HOLD_ANCHORS: readonly number[];
-// Count-based press model: row 0 is the shared tap anchor, rows 1-3 the stable
-// hold contexts, rows 4-6 the lazer ones; each row has 5 thresholds x 3 powers.
-declare const WIFE_ORDINAL_COEFFICIENTS: ReadonlyArray<readonly number[]>;
-// Count-based LN-action model, same layout as WIFE_ORDINAL_COEFFICIENTS.
-declare const WIFE_LN_COEFFICIENTS: ReadonlyArray<readonly number[]>;
-// Accuracy-only press model: rows 0-3 stable anchors, rows 4-7 lazer anchors.
-declare const WIFE_ACCURACY_COEFFICIENTS: ReadonlyArray<readonly number[]>;
-// Accuracy-only LN-action model, same layout as WIFE_ACCURACY_COEFFICIENTS.
-declare const WIFE_LN_ACCURACY_COEFFICIENTS: ReadonlyArray<readonly number[]>;
 
 /**
  * Estimated Wife3 accuracy from the six judgement counts (MAX, 300, 200, 100,

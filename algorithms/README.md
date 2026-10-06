@@ -14,6 +14,7 @@ The code that rates charts and players on [mania-tracker.com](https://mania-trac
 | `msd/` | How MinaCalc is called and how its skillsets become a chart's MSD |
 | `leoblack/` | The wrapper around LeoBlack's estimators and the Companella refinement |
 | `player/` | Accuracy to Wife3 goal, per-play SSRs, skill ratings, dan clears, dan courses |
+| `replay-judge/` | Reading `.osr` replay frames and judging each key press against the chart, for stable and lazer |
 
 ## How it fits together
 
@@ -27,8 +28,6 @@ A play goes through `player/skill-ratings.ts`: its accuracy becomes a Wife3 goal
 
 - **LeoBlack** ([LeoBlackMT/osumania_map_analyser](https://github.com/LeoBlackMT/osumania_map_analyser), MIT): the Mixed, Sunny and LN estimators. Imported here as `leoblack/...`.
 - **MinaCalc** ([Etterna](https://github.com/etternagame/etterna)): the MSD calculator, compiled to wasm. `msd/minacalc.ts` only declares the calls the rest of the code makes.
-
-The Wife3 model coefficients in `player/wife-calibration.ts` are declared but not included.
 
 ## License
 
