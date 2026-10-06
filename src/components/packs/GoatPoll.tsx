@@ -40,7 +40,7 @@ import { GoatPollVotersModal } from "./GoatPollVoters";
    background, and lets the pie be the only thing that moves.
 
    There is no switch in this file on purpose. The poll's dates and its on/off
-   flag live in ONE place, GOAT_POLL in live-backend/src/features/goat-poll.ts,
+   flag live in ONE place, GOAT_POLL in backend/src/features/goat-poll.ts,
    and this widget renders nothing at all when the board read comes back empty —
    which is what a retired poll returns. Two switches would mean two things to
    remember to flip. */

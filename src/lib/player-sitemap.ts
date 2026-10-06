@@ -2,7 +2,7 @@ import { getServerLiveBackendUrl } from "./live-backend";
 
 // One sitemap row per ranked player whose profile page server-renders its
 // stats. The backend decides who qualifies
-// (live-backend/src/features/player-sitemap.ts).
+// (backend/src/features/player-sitemap.ts).
 export interface PlayerSitemapEntry {
   path: string;
   // ISO instant of the profile's last refresh, or null when unknown; the

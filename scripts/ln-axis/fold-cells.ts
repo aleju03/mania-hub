@@ -11,8 +11,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { aggregateSsrs } from "../../live-backend/src/features/player-skills.js";
-import { blendLnTailValues } from "../../live-backend/src/dan/msd.js";
+import { aggregateSsrs } from "../../backend/src/features/player-skills.js";
+import { blendLnTailValues } from "../../backend/src/dan/msd.js";
 
 const REPO = resolve(import.meta.dirname, "../..");
 const args = process.argv.slice(2);
@@ -20,7 +20,7 @@ function argValue(name: string, fallback: string): string {
   const index = args.indexOf(name);
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 }
-const dbPath = resolve(argValue("--db", `${REPO}/live-backend/data/mania-hub-live.db`));
+const dbPath = resolve(argValue("--db", `${REPO}/backend/data/mania-hub-live.db`));
 const outPath = resolve(argValue("--out", `${REPO}/scripts/ln-axis/out/cells.json`));
 // Pre-declared sensitivity refolds (freeze-file.md): rate-1.0 only, top-sourced
 // plays only, and depth truncation to the cell's best LN / overall plays.

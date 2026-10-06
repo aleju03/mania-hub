@@ -1,6 +1,6 @@
 node_modules
 # Maintained separately; never tracked here.
-/live-backend/
+/backend/
 .DS_Store
 dist
 dist-ssr

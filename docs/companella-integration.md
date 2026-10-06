@@ -66,7 +66,7 @@ installation's name.
 
 ## Modules
 
-Backend, all under `live-backend/src/integrations/companella/`:
+Backend, all under `backend/src/integrations/companella/`:
 
 | Module | Responsibility |
 |---|---|
@@ -100,7 +100,7 @@ Backend, all under `live-backend/src/integrations/companella/`:
 | `presence.ts` | Live presence: what a connected player is doing in osu! right now, in memory only. |
 
 The replay judge itself is shared with the replay viewer: one copy under
-`live-backend/src/replay-judge/`, reached from the frontend as `#replay-judge/*`
+`backend/src/replay-judge/`, reached from the frontend as `#replay-judge/*`
 (see the root `AGENTS.md`).
 
 Frontend: `src/lib/companella-integration/` (proxy, server functions, browser
@@ -1080,7 +1080,7 @@ player needs or what the server can take.
 
 ## Testing
 
-`live-backend/tests/companella-*.test.ts`, with generated fixtures in
+`backend/tests/companella-*.test.ts`, with generated fixtures in
 `companella-fixtures.ts`. The LZMA fixture is one real encoder's stream so the
 decoder is exercised against a genuine encoder; everything else is synthetic, so
 no real player's replay is committed.

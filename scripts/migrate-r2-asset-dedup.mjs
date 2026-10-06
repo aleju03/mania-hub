@@ -12,7 +12,7 @@
 //   Dry-run by default: lists what would happen without writing anything.
 //
 // The extension mapping below MUST stay in sync with getBlobExtension in
-// src/lib/r2-cache.ts and live-backend/src/audio/r2-assets.ts, or future cache
+// src/lib/r2-cache.ts and backend/src/audio/r2-assets.ts, or future cache
 // writes will mint blobs at different keys than the migrated ones.
 
 import { readFileSync } from "node:fs";
@@ -42,10 +42,10 @@ if (!KINDS.every((kind) => kind === "audio" || kind === "background")) {
   process.exit(1);
 }
 
-const env = { ...loadEnvFile(path.join(repoRoot, "live-backend/.env")), ...process.env };
+const env = { ...loadEnvFile(path.join(repoRoot, "backend/.env")), ...process.env };
 for (const name of ["R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"]) {
   if (!env[name]) {
-    console.error(`Missing ${name} (looked in live-backend/.env and process env)`);
+    console.error(`Missing ${name} (looked in backend/.env and process env)`);
     process.exit(1);
   }
 }

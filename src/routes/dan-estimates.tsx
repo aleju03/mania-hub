@@ -810,7 +810,7 @@ function P({ children }: { children: ReactNode }) {
 // The registered dan courses, by pack. Kept beside the rule it explains rather
 // than fetched, because it is a list of six ladders that changes when somebody
 // edits the registry by hand - and when they do, both move together:
-// live-backend/src/features/dan-courses.ts is the source of truth for which
+// backend/src/features/dan-courses.ts is the source of truth for which
 // beatmaps count, and this is the reader-facing copy of the same six packs.
 // Pack names are the beatmapsets' own titles, so they stay untranslated.
 const COURSE_PACKS: Array<{ ladder: string; author: string; scoreV2Note?: true; packs: Array<{ name: string; setId: number }> }> = [

@@ -4,9 +4,9 @@
   "type": "module",
   "imports": {
     "#/*": "./src/*",
-    "#dan/*": "./live-backend/src/dan/*",
-    "#leoblack/*": "./live-backend/vendor/leoblack/*",
-    "#replay-judge/*": "./live-backend/src/replay-judge/*"
+    "#dan/*": "./backend/src/dan/*",
+    "#leoblack/*": "./backend/vendor/leoblack/*",
+    "#replay-judge/*": "./backend/src/replay-judge/*"
   },
   "scripts": {
     "postinstall": "node scripts/prune-onnxruntime-web.mjs && node scripts/patch-vite-module-runner.mjs",
@@ -21,8 +21,8 @@
     "dan:benchmark": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/dan-benchmark.ts",
     "validate:mania-sr": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/validate-mania-sr.ts",
     "validate:mania-pp": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/validate-mania-pp.ts",
-    "live-db:sync-from-vps": "npm --prefix live-backend run db:sync-from-vps --",
-    "live-db:update": "npm --prefix live-backend run db:sync-from-vps -- --fresh",
+    "live-db:sync-from-vps": "npm --prefix backend run db:sync-from-vps --",
+    "live-db:update": "npm --prefix backend run db:sync-from-vps -- --fresh",
     "bugs:pull": "node scripts/fetch-prod-bug-reports.mjs",
     "companella:test-client": "node scripts/companella-test-client.mjs",
     "replay:capture-stable": "node --env-file-if-exists=.env scripts/replay-capture-stable.ts",

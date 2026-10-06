@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # live-backend/ is maintained separately and not tracked here. The
+      # backend/ is maintained separately and not tracked here. The
       # frontend build resolves #dan/* and #leoblack/* into it and imports
       # backend types, so check out the matching branch alongside.
       - name: Check out live backend
@@ -46,7 +46,7 @@ jobs:
           chmod 600 ~/.ssh/backend_deploy
           ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
           GIT_SSH_COMMAND='ssh -i ~/.ssh/backend_deploy -o IdentitiesOnly=yes' \
-            git clone --depth 1 --branch main "${{ secrets.BACKEND_REPO }}" live-backend
+            git clone --depth 1 --branch main "${{ secrets.BACKEND_REPO }}" backend
 
       - uses: actions/setup-node@v4
         with:

@@ -8,7 +8,7 @@
 // get a number.
 
 /* How many cards a collector may put in their showcase. The backend holds its
-   own copy (live-backend/src/features/pack-wallets.ts) and that one is what
+   own copy (backend/src/features/pack-wallets.ts) and that one is what
    actually decides; this is what the page counts against while you pick. */
 export const PACK_SHOWCASE_MAX_CARDS = 5;
 

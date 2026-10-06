@@ -6,7 +6,7 @@
    clips never makes the sprite hop. The characters differ in frame size, clip
    set, poses and actions, so everything below is looked up through the roster
    rather than read off a single sheet. Route normalization mirrors
-   live-backend/src/live/mascot.ts and must stay in step with it: the backend
+   backend/src/live/mascot.ts and must stay in step with it: the backend
    matches a session's route against what the overlay reports, so both sides
    have to fold a path the same way. */
 
@@ -559,7 +559,7 @@ const MAX_ROUTE_LENGTH = 200;
 
 /* Lowercased pathname, no query or hash, no trailing slash; a `/*` suffix is
    kept so a session can cover a section. Mirrors normalizeMascotRoute in
-   live-backend/src/live/mascot.ts. */
+   backend/src/live/mascot.ts. */
 export function normalizeMascotRoute(raw: string | null | undefined): string | null {
   if (typeof raw !== "string") return null;
   let value = raw.trim();

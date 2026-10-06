@@ -56,7 +56,7 @@ const STARVATION_CHECK_MS = 15_000;
  * discarded, the browser releases its lock and the next tab in line becomes
  * leader. Takeover is gap-free because every tab tracks the stream cursor
  * (`lastEventId`) from the relay, and a new leader resumes via the backend's
- * `?lastEventId=` replay (see live-backend/src/live/sse.ts).
+ * `?lastEventId=` replay (see backend/src/live/sse.ts).
  *
  * Event types must be relayed by name (EventSource has no catch-all listener),
  * so the constructor takes the full list of names the stream emits.
@@ -140,7 +140,7 @@ export class CrossTabEventSource extends EventTarget implements PoolableEventSou
 
   /** The stream URL, resuming from the tracked cursor when there is one so a
    *  takeover or fallback replays what was missed (see `?lastEventId=` in
-   *  live-backend/src/live/sse.ts). */
+   *  backend/src/live/sse.ts). */
   private resumeUrl(): string {
     const cursor = this.lastEventId;
     if (!cursor) return this.url;

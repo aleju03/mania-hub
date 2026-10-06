@@ -247,7 +247,7 @@ export function getBeatmapAssetStorageKey(kind: BeatmapAssetKind, beatmapsetId: 
 // whose `blobkey` metadata names it. Per-set keys written before this scheme
 // still hold the payload directly and are served as-is until the one-off
 // migration script converts them (scripts/migrate-r2-asset-dedup.mjs). The live
-// backend applies the same scheme to blob/audio/ (live-backend/src/audio/r2-assets.ts).
+// backend applies the same scheme to blob/audio/ (backend/src/audio/r2-assets.ts).
 const BLOB_KEY_METADATA = "blobkey";
 
 export function getBeatmapAssetBlobKey(kind: BeatmapAssetKind, buffer: Buffer, mimeType: string): string {
@@ -562,7 +562,7 @@ export async function putJsonArtifact(storageKey: string, value: unknown): Promi
 // that has already checked the caller is an admin or the reporter themselves.
 //
 // The key shape is fixed and mirrored by the backend's own check
-// (isBugReportScreenshotKey in live-backend/src/features/bug-reports.ts), which
+// (isBugReportScreenshotKey in backend/src/features/bug-reports.ts), which
 // refuses to record anything that does not match. Both sides have to agree, and
 // the backend is the one that fails loudly if they ever drift.
 

@@ -45,7 +45,7 @@ function atlasBytes(character: MascotCharacter): Buffer {
   return readFileSync(fileURLToPath(new URL(`../../public/images/mascot/${character.atlas.file}`, import.meta.url)));
 }
 
-/* Route folding is duplicated in live-backend/src/live/mascot.ts on purpose (the
+/* Route folding is duplicated in backend/src/live/mascot.ts on purpose (the
    two services share no code), so these cases are the contract between them: if
    one side folds a path differently, a session silently reaches nobody. */
 describe("mascot route normalization", () => {
@@ -166,7 +166,7 @@ describe("mascot roster", () => {
   });
 
   it("stays inside the size ceiling the backend clamps to", () => {
-    // mergeVisual in live-backend/src/live/mascot.ts clamps scale to 1..12. A
+    // mergeVisual in backend/src/live/mascot.ts clamps scale to 1..12. A
     // character whose slider went past that would send sizes the backend
     // silently trims, which reads as a stuck slider.
     for (const character of MASCOT_CHARACTER_LIST) {

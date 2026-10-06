@@ -1,15 +1,15 @@
 // Manual one-user skill recompute against the local DB (the same code path the
 // job runner uses), then a before/after view of the LN plays surface.
-// Usage: node --env-file-if-exists=live-backend/.env npx tsx scripts/ln-axis/rerun-player.ts --user 7095193
-import { createDb, exec, parseJson } from "../../live-backend/src/db.js";
-import { readConfig } from "../../live-backend/src/config.js";
-import { OsuApiClient } from "../../live-backend/src/osu/client.js";
-import { JobQueue } from "../../live-backend/src/jobs/queue.js";
+// Usage: node --env-file-if-exists=backend/.env npx tsx scripts/ln-axis/rerun-player.ts --user 7095193
+import { createDb, exec, parseJson } from "../../backend/src/db.js";
+import { readConfig } from "../../backend/src/config.js";
+import { OsuApiClient } from "../../backend/src/osu/client.js";
+import { JobQueue } from "../../backend/src/jobs/queue.js";
 import {
   PLAYER_SKILLS_VERSION,
   computePlayerSkillsJob,
   getPlayerSkillPlays,
-} from "../../live-backend/src/features/player-skills.js";
+} from "../../backend/src/features/player-skills.js";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 

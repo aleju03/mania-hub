@@ -50,7 +50,7 @@ function lanAddress() {
 }
 
 const rootEnv = readEnvFile(new URL("../../.env", import.meta.url));
-const backendEnv = readEnvFile(new URL("../../live-backend/.env", import.meta.url));
+const backendEnv = readEnvFile(new URL("../../backend/.env", import.meta.url));
 const frontendPort = process.env.PORT ?? "3000";
 const backendPort = process.env.LIVE_BACKEND_PORT ?? backendEnv.PORT ?? "7227";
 
@@ -120,7 +120,7 @@ const commands = [
     name: "backend",
     color: "\x1b[35m",
     command: "npm",
-    args: ["--prefix", "live-backend", "run", "dev:watch"],
+    args: ["--prefix", "backend", "run", "dev:watch"],
     env: backendEnvOverrides,
   },
 ];

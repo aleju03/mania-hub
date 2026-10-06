@@ -7,7 +7,7 @@
 
    - three accounts are deleted outright, so the osu! API 404s and their profiles
      are served from checked-in Wayback reconstructions
-     (live-backend/seeds/archived-players);
+     (backend/seeds/archived-players);
    - seven more still exist but were wiped to 0pp and are unranked, so they are
      absent from the global rankings snapshot the pack pool draws from;
    - the rest are still ranked, and some of them rank high enough to sit in
@@ -335,7 +335,7 @@ export function honoraryAvatarUrl(id: number | null | undefined): string | null 
 }
 
 /* Case, spacing and punctuation stripped, so a name typed from memory still
-   finds the player. Mirrors nameKey in live-backend/src/features/goat-poll.ts —
+   finds the player. Mirrors nameKey in backend/src/features/goat-poll.ts —
    the two answer the same question ("is this the same person?") on either side
    of the poll bridge, so keep them in step. */
 function nameKey(name: string): string {
