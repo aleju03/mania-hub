@@ -235,7 +235,7 @@ function HistoryEntry({ entry, keyCount }: { entry: LivePlayerSkillHistoryEntry 
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
   const { snapshot, previous } = entry;
-  const etterna = useOverallMethod() === "etterna";
+  const etterna = useOverallMethod(keyCount) === "etterna";
   const overall = historyOverall(snapshot.ratings, keyCount, etterna);
   const delta = previous ? Number((overall - historyOverall(previous.ratings, keyCount, etterna)).toFixed(2)) : 0;
   const axes = previous ? Array.from(new Set([...Object.keys(snapshot.ratings), ...Object.keys(previous.ratings)]))

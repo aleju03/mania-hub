@@ -8,7 +8,7 @@
     <radialGradient id="b4"><stop offset="0" stop-color="#18213c"/><stop offset=".45" stop-color="#18213c" stop-opacity=".8"/><stop offset="1" stop-color="#18213c" stop-opacity="0"/></radialGradient>
     <filter id="ink" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
       <feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="7"/>
-      <feDisplacementMap in="SourceGraphic" scale="15" xChannelSelector="R" yChannelSelector="G"/>
+      <feDisplacementMap in="SourceGraphic" scale="4" xChannelSelector="R" yChannelSelector="G"/>
     </filter>
   </defs>
   <g clip-path="url(#disc)">

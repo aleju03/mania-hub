@@ -229,7 +229,7 @@ const QUEUE_AHEAD_SHOWN_MAX = 100;
 
 export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, userId }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean; onSelectDan?: (side: "rc" | "ln") => void; userId?: number }) {
   const { i18n } = useLingui();
-  const overallMethod = useOverallMethod();
+  const overallMethod = useOverallMethod(mode?.keyCount);
   const empty = skillEmptyState(skills, mode, own);
   if (empty) return mode?.dan ? <div className="space-y-3">{empty}<DanChips mode={mode} onSelect={onSelectDan} /></div> : empty;
   const entries = skillModeEntries(mode!);
@@ -561,7 +561,7 @@ export function SkillModePanel({
 }) {
   const { t, i18n } = useLingui();
   const [hovered, setHovered] = useState<string | null>(null);
-  const overallMethod = useOverallMethod();
+  const overallMethod = useOverallMethod(mode.keyCount);
   const entries = skillModeEntries(mode);
   const accent = entries[0]?.color ?? "#8f6bd8";
   const { value: overall, percentile: overallPercentile } = modeOverall(mode, overallMethod);
@@ -683,7 +683,7 @@ export function SkillModeOption({ mode, selected, onSelect }: {
   selected: boolean;
   onSelect: () => void;
 }) {
-  const overallMethod = useOverallMethod();
+  const overallMethod = useOverallMethod(mode.keyCount);
   return (
     <button
       type="button"

@@ -40,8 +40,8 @@ export function SkillLeaderboardBoard({
   // specialty the reader wanted. Overall is the first chip on every keymode, so
   // clicking back to it is how you clear a skill selection.
   // The Overall chip reads Etterna's or the Legacy board by the reader's
-  // Overall method; 6K/7K/8K only have Legacy.
-  const overallMethod = useOverallMethod();
+  // Overall method; Prism keymodes always read Prism's.
+  const overallMethod = useOverallMethod(keys);
   const hasEtterna = !usesPatternSkillAxes(keys);
   const overallAxis = overallAxisFor(overallMethod, hasEtterna);
   // An old link to the no-LN Etterna board reads the Overall chip.

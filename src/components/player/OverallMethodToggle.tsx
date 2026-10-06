@@ -18,10 +18,6 @@ function EtternaMark({ className }: { className?: string }) {
   );
 }
 
-// On 6K-8K the average is Prism's own, so the coin shows Prism's mark.
-const PRISM_LOGO_SRC = "/images/prism.svg";
-const PRISM_BLUE = "#4f7fc0";
-
 // The Legacy face is the site's own logo, for the Overall it showed before,
 // turned from its built-in pink (hue 333, the default theme) to the reader's
 // theme the way the home page tints its backdrop.
@@ -33,7 +29,7 @@ const BURST_COUNT = 7;
 
 // A handful of the destination's shapes thrown off the coin on a flip: the
 // logo's triangle going to Etterna, arrowheads going to Legacy.
-function Burst({ to, prism, onDone }: { to: OverallMethod; prism: boolean; onDone: () => void }) {
+function Burst({ to, onDone }: { to: OverallMethod; onDone: () => void }) {
   const [pieces] = useState(() => Array.from({ length: BURST_COUNT }, (_, index) => {
     const angle = (index / BURST_COUNT) * Math.PI * 2 + Math.random() * 0.6;
     const distance = 17 + Math.random() * 9;
@@ -50,7 +46,7 @@ function Burst({ to, prism, onDone }: { to: OverallMethod; prism: boolean; onDon
             height: piece.size,
             marginLeft: -piece.size / 2,
             marginTop: -piece.size / 2,
-            background: to === "etterna" ? (prism ? PRISM_BLUE : ETTERNA_PURPLE) : "var(--color-osu-pink)",
+            background: to === "etterna" ? ETTERNA_PURPLE : "var(--color-osu-pink)",
             clipPath: to === "etterna" ? "polygon(0 0, 100% 0, 0 100%)" : "polygon(0 0, 100% 50%, 0 100%)",
           }}
           initial={{ x: 0, y: 0, rotate: 0, scale: 1.2, opacity: 1 }}
@@ -67,13 +63,17 @@ function Burst({ to, prism, onDone }: { to: OverallMethod; prism: boolean; onDon
 // when the headline switched to Etterna's method can see the one they had.
 // One preference for every surface that shows it. The method is a coin: a
 // click flips it, throws off a few of the new side's shapes, and rolls the
-// word, while every Overall on the page rolls to the other value.
+// word, while every Overall on the page rolls to the other value. Keymodes
+// Prism rates have only Prism's Overall, so they get no toggle.
 export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: number; className?: string }) {
+  return usesPrism(keyCount) ? null : <MethodCoin keyCount={keyCount} className={className} />;
+}
+
+function MethodCoin({ keyCount, className }: { keyCount: number; className: string }) {
   const { t } = useLingui();
   const method = useOverallMethod();
   const reduceMotion = useReducedMotion();
   const classic = method === "classic";
-  const prism = usesPrism(keyCount);
 
   // One spring from 0 (Etterna face) to 1 (Legacy face) drives the flip, the
   // pop and the word, so spamming it retargets instead of queueing. Hover
@@ -104,14 +104,11 @@ export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: nu
     setBursts((current) => [...current.slice(-2), { id, to: next }]);
   };
 
-  // Best 6 of 7 where MinaCalc rates Technical, best 5 of 6 elsewhere, and
-  // best 5 of Prism's 6.
-  const best = prism ? 5 : keyCount === 4 || keyCount === 5 ? 6 : 5;
+  // Best 6 of 7 where MinaCalc rates Technical, best 5 of 6 elsewhere.
+  const best = keyCount === 4 || keyCount === 5 ? 6 : 5;
   const title = classic
     ? t`The previous Overall, which follows the hardest plays in any skillset.`
-    : prism
-      ? t`The average of the best ${best} skillsets, with LN added as one more skillset.`
-      : t`The average of the best ${best} skillsets as Etterna rates players, with LN added as one more skillset.`;
+    : t`The average of the best ${best} skillsets as Etterna rates players, with LN added as one more skillset.`;
 
   return (
     <button
@@ -140,15 +137,9 @@ export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: nu
           className="absolute inset-0 block"
           style={{ rotateY, scale, transformPerspective: 220, transformStyle: "preserve-3d" }}
         >
-          {prism ? (
-            <span className="absolute inset-0 [backface-visibility:hidden]">
-              <img src={PRISM_LOGO_SRC} alt="" draggable={false} className="h-full w-full rounded-full" />
-            </span>
-          ) : (
-            <span className="absolute inset-0 grid place-items-center rounded-full [backface-visibility:hidden]" style={{ background: ETTERNA_PURPLE }}>
-              <EtternaMark className="h-[13px] w-[13px]" />
-            </span>
-          )}
+          <span className="absolute inset-0 grid place-items-center rounded-full [backface-visibility:hidden]" style={{ background: ETTERNA_PURPLE }}>
+            <EtternaMark className="h-[13px] w-[13px]" />
+          </span>
           {/* The filter sits on the inner image so the face itself stays a
               plain 3D participant and its backface still hides. */}
           <span className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)]">
@@ -162,12 +153,12 @@ export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: nu
           </span>
         </motion.span>
         {bursts.map((burst) => (
-          <Burst key={burst.id} to={burst.to} prism={prism} onDone={() => setBursts((current) => current.filter((entry) => entry.id !== burst.id))} />
+          <Burst key={burst.id} to={burst.to} onDone={() => setBursts((current) => current.filter((entry) => entry.id !== burst.id))} />
         ))}
       </motion.span>
       <span className="block overflow-hidden text-[11px] font-semibold uppercase leading-[14px] tracking-wide" style={{ height: WORD_HEIGHT }}>
         <motion.span className="block" style={{ y: wordY }}>
-          <span className={`block transition-[filter] group-hover:brightness-125 ${prism ? "text-[#9fc3ea]" : "text-[#b89be0]"}`}>{prism ? "Prism" : t`Etterna`}</span>
+          <span className="block text-[#b89be0] transition-[filter] group-hover:brightness-125">{t`Etterna`}</span>
           <span className="block text-osu-pink-light transition-[filter] group-hover:brightness-110">{t({ message: "Legacy", context: "overall rating method" })}</span>
         </motion.span>
       </span>

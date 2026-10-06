@@ -43,7 +43,7 @@ export function SkillHistoryGraph({ userId, keyCount, height = 200 }: { userId: 
   const { t } = useLingui();
   const locale = useLocale();
   const noDans = useNoDans();
-  const etterna = useOverallMethod() === "etterna";
+  const etterna = useOverallMethod(keyCount) === "etterna";
   const [series, setSeries] = useState<LivePlayerSkillHistorySeries | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
