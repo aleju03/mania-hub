@@ -1665,7 +1665,7 @@ export interface CompanellaPublicProfile {
 /* What a connected player is doing in osu! right now, sent by Mania
    Bridge. Mirrors CompanellaPresence in live-backend/src/integrations/companella/presence.ts. */
 export type CompanellaPresenceState =
-  | "menu" | "song_select" | "playing" | "results" | "editing" | "spectating" | "multiplayer" | "idle";
+  | "menu" | "song_select" | "playing" | "results" | "editing" | "spectating" | "watching_replay" | "multiplayer" | "idle";
 
 export interface CompanellaPresence {
   user_id: number;
@@ -1687,6 +1687,8 @@ export interface CompanellaPresence {
   mods: string[];
   rate: number | null;
   started_at: string | null;
+  /** Whose play is on screen while spectating or watching a replay. Missing from older backends. */
+  player?: { username: string } | null;
   updated_at: string;
 }
 
