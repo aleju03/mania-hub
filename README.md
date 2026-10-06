@@ -46,3 +46,7 @@ The country list is not fixed in code. Visiting an untracked country queues it f
 Browsers load a snapshot on entry then subscribe to `/api/live`; reconnects replay missed events via `Last-Event-ID`. Authenticated osu! API calls stay server-side behind a rate limiter, heavy artifacts cache in R2.
 
 Endpoints, job types, and per-feature models are in `docs/`. `AGENTS.md` is the condensed guide for coding agents.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Vendored third-party code keeps its own license: LeoBlack ([osumania_map_analyser](https://github.com/LeoBlackMT/osumania_map_analyser), MIT) and MinaCalc ([Etterna](https://github.com/etternagame/etterna)).
