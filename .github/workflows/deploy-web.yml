@@ -13,6 +13,8 @@ on:
     branches: [develop]
     paths-ignore:
       - '**.md'
+      - 'LICENSE'
+      - 'algorithms/**'
   workflow_dispatch:
     inputs:
       restart:
