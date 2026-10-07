@@ -1,12 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { responseStartsWithZipArchive } from "#/lib/beatmap-archive-probe";
-import { mirrorOrderFor, type BeatmapMirrorName } from "#/lib/beatmap-mirrors";
+import { mirrorHas, mirrorOrderFor, type BeatmapMirrorName } from "#/lib/beatmap-mirrors";
 
 // Redirect target for the "osz" download buttons. Mirrors ratelimit and go
 // down independently, and a plain cross-origin download link cannot see the
 // failure, so this route probes the mirrors (small range request) and 302s
 // to the first one that is actually serving archives. The osz bytes never
-// pass through this function.
+// pass through this function. A mirror that charges each request against our
+// IP's download budget (osu.direct) is redirected to unprobed: the browser's
+// own download is the one that should count.
 
 const PROBE_TIMEOUT_MS = 3500;
 const MIRROR_COOLDOWN_MS = 5 * 60 * 1000;
@@ -73,6 +75,7 @@ export const Route = createFileRoute("/api/osz")({
         let browserFallback: string | null = null;
         for (const mirror of order) {
           const target = mirror.url(beatmapsetId);
+          if (mirrorHas(mirror, "skipServerProbe")) return redirectTo(target);
           if ((mirrorCooldowns.get(mirror.name) ?? 0) > now) {
             // Cooldowns reflect the server's IP. A browser may still be able
             // to reach this mirror if every server-side probe fails.

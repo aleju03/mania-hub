@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { BEATMAP_MIRRORS, type BeatmapMirrorName } from "./beatmap-mirrors";
+import { BEATMAP_MIRRORS, mirrorHas, type BeatmapMirror, type BeatmapMirrorName } from "./beatmap-mirrors";
 import { hasOsuFileHeader } from "./osu-file-shape";
 
 const ARCHIVE_CACHE_TTL = 15 * 60 * 1000;
@@ -342,9 +342,41 @@ async function extractArchiveFileByRangeFromUrl(url: string, filename: string, s
   return output;
 }
 
+class ArchiveHttpStatusError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ArchiveHttpStatusError";
+  }
+}
+
+function isRedirectStatus(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+// The URL the range reads go to. A mirror that charges every request against
+// a download budget is asked once, and its redirect target serves the reads.
+async function resolveArchiveRangeUrl(source: BeatmapMirror, beatmapsetId: string, signal: AbortSignal): Promise<string> {
+  const url = source.url(beatmapsetId);
+  if (!mirrorHas(source, "resolveRedirectBeforeRange")) return url;
+
+  const response = await fetch(url, { signal, redirect: "manual", headers: { Range: "bytes=0-0" } });
+  await response.body?.cancel().catch(() => {});
+  if (isRedirectStatus(response.status)) {
+    const location = response.headers.get("location");
+    if (!location) throw new Error("redirect omitted Location");
+    return new URL(location, url).toString();
+  }
+  if (response.status === 206) return url;
+  throw new ArchiveHttpStatusError(response.status, `redirect probe returned ${response.status}`);
+}
+
 async function extractArchiveFileByRange(beatmapsetId: string, filename: string): Promise<Buffer> {
   const errors: string[] = [];
   for (const source of ARCHIVE_SOURCES) {
+    if (mirrorHas(source, "wholeArchiveOnly")) continue;
     if (isArchiveSourceCoolingDown(source.name)) {
       errors.push(`${source.name}: cooling down`);
       continue;
@@ -353,11 +385,14 @@ async function extractArchiveFileByRange(beatmapsetId: string, filename: string)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
     try {
-      return await withArchiveSourceSlot(source.name, () => (
-        extractArchiveFileByRangeFromUrl(source.url(beatmapsetId), filename, controller.signal)
+      return await withArchiveSourceSlot(source.name, async () => (
+        extractArchiveFileByRangeFromUrl(await resolveArchiveRangeUrl(source, beatmapsetId, controller.signal), filename, controller.signal)
       ));
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
+      if (
+        (error instanceof Error && error.name === "AbortError")
+        || (error instanceof ArchiveHttpStatusError && shouldCooldownArchiveSource(error.status))
+      ) {
         cooldownArchiveSource(source.name);
       }
       const message = error instanceof Error ? error.message : String(error);
