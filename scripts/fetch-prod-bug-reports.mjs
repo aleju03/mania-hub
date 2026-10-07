@@ -213,7 +213,7 @@ and one folder per report containing report.md and downloaded images.
   --no-images       Export text and image keys without downloading images
   --remote TARGET   SSH target; defaults to LIVE_DB_SYNC_REMOTE in backend/.env
   --remote-dir DIR  Backend directory; defaults to LIVE_DB_SYNC_REMOTE_DIR or
-                    ~/apps/mania-hub/live-backend
+                    ~/apps/mania-hub/backend
   --frontend-env PATH  Frontend .env on VPS (absolute or relative to backend);
                       defaults to ../.env, then ../../mania-hub-web/.env
 
@@ -231,7 +231,7 @@ Missing images are recorded; exit code 2 means the export has image failures.`);
   catch (error) { if (error.code !== "ENOENT") throw error; }
   const remote = values.remote || process.env.LIVE_DB_SYNC_REMOTE || env.LIVE_DB_SYNC_REMOTE;
   if (!remote) throw new Error("Set LIVE_DB_SYNC_REMOTE in backend/.env or pass --remote USER@HOST.");
-  const remoteDir = values["remote-dir"] || process.env.LIVE_DB_SYNC_REMOTE_DIR || env.LIVE_DB_SYNC_REMOTE_DIR || "~/apps/mania-hub/live-backend";
+  const remoteDir = values["remote-dir"] || process.env.LIVE_DB_SYNC_REMOTE_DIR || env.LIVE_DB_SYNC_REMOTE_DIR || "~/apps/mania-hub/backend";
   console.log("Fetching production bug reports over SSH...");
   const options = { status: values.status, search: values.search, id: values.id, noImages: !!values["no-images"], frontendEnv: values["frontend-env"] };
   const payload = await fetchRemote(remote, remoteDir, options);
