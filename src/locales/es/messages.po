@@ -952,8 +952,8 @@ msgstr "La página me! de {0} está vacía."
 
 #. placeholder {0}: play.username
 #: src/components/maps/MapDetailModal.tsx
-msgid "{0}'s play"
-msgstr "Play de {0}"
+#~ msgid "{0}'s play"
+#~ msgstr "Play de {0}"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
@@ -2674,7 +2674,6 @@ msgstr "Menú de cuenta"
 msgid "accuracy"
 msgstr "Acc"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
@@ -5755,7 +5754,7 @@ msgstr "Dan {0}"
 #~ msgid "Dan {0} range"
 #~ msgstr "Rango de dan {0}"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Dan accuracy"
 msgstr "Precisión para dan"
 
@@ -8662,12 +8661,12 @@ msgstr "Tamaño de los juicios"
 msgid "Judgements"
 msgstr "Juicios"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Judgments"
 msgstr "Juicios"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Judgments unavailable"
 msgstr "Juicios no disponibles"
 
@@ -10047,7 +10046,7 @@ msgstr "Asociando el replay a su beatmap."
 msgid "MAX"
 msgstr "MAX"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Max combo"
 msgstr "Combo máx."
 
@@ -13047,7 +13046,7 @@ msgstr "publicado por"
 msgid "pp"
 msgstr "pp"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
@@ -13307,7 +13306,7 @@ msgstr "Enlace de perfil"
 msgid "Profile stats"
 msgstr "Estadísticas del perfil"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "profile top play"
 msgstr "top play del perfil"
@@ -14796,6 +14795,7 @@ msgid "score"
 msgstr "score"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -18876,7 +18876,7 @@ msgstr "Sigue tus metas de pp y acc y qué tan cerca estás de cada una."
 msgid "Tracked"
 msgstr "Seguidos"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "tracked history"
 msgstr "historial trackeado"

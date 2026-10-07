@@ -3,9 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
 import type { MapsFavouriteBeatmapset } from "../../lib/types";
-import { formatAccuracy, formatDuration, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
-import { getManiaJudgementCounts, getManiaGradeFromAccuracy } from "../../lib/score";
-import { GradeImg } from "../ui/GradeImg";
+import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
@@ -16,10 +14,9 @@ import { calculateManiaStarRating } from "../../lib/mania-star-rating";
 import { PatternRadar } from "./PatternRadar";
 import { danScaleContextFor, getDanTierImageSrc } from "../../lib/dan-images";
 import { DanProgressRail } from "./DanProgressRail";
+import { PlayResults } from "./PlayResults";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
-import { useLocale } from "../../lib/locale-context";
-import type { AppLocale } from "../../lib/locale";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
@@ -159,39 +156,6 @@ export interface MapDetailPlayContext {
   scoreId?: number | null;
 }
 
-// The judgement palette, same values the replay OG card draws its chips with
-// (JUDGEMENT_COLORS in routes/api/og.ts).
-const JUDGEMENT_COLOR: Record<string, string> = {
-  MAX: "#ffcc22",
-  "300": "#66ccff",
-  "200": "#b3d944",
-  "100": "#88b300",
-  "50": "#ff8e5d",
-  Miss: "#ed7887",
-};
-
-// Keep all six cells in place, including zero counts and missing old data.
-function JudgementStrip({ statistics, locale }: { statistics: LivePlayerSkillScoreDetails["statistics"]; locale: AppLocale }) {
-  const { t } = useLingui();
-  const judgements = getManiaJudgementCounts(statistics ?? {});
-  const available = judgements.some(({ value }) => value > 0);
-  return (
-    <div className="grid grid-cols-6 gap-2 border-y border-white/5 py-4" aria-label={available ? t`Judgments` : t`Judgments unavailable`}>
-      {judgements.map(({ label, value }) => (
-        <div key={label} className="flex min-w-0 flex-col">
-          <span
-            className={`text-[15px] font-bold leading-none tabular-nums ${available && value > 0 ? "" : "text-osu-f1/40"}`}
-            style={available && value > 0 ? { color: JUDGEMENT_COLOR[label] } : undefined}
-          >
-            {available ? formatNumber(value, locale) : "—"}
-          </span>
-          <span className="mt-1.5 text-[9px] uppercase tracking-wide text-osu-f1/60">{label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** The DA badge's tail: "OD 9" rather than "OD 9.0" when the value is whole. */
 function formatDaOd(od: number): string {
   return Number.isInteger(od) ? String(od) : od.toFixed(1);
@@ -199,7 +163,7 @@ function formatDaOd(od: number): string {
 
 // The score's mods, as the badge row of a score screen. A play whose full mod
 // list aged out still shows its speed mod, which is all the projection kept.
-function PlayModRow({ play }: { play: MapDetailPlayContext }) {
+export function PlayModRow({ play }: { play: MapDetailPlayContext }) {
   const mods = play.mods && play.mods.length > 0
     ? [...new Set(play.mods.filter((mod) => typeof mod === "string" && mod.length > 0))]
     : play.rateMod
@@ -224,52 +188,17 @@ function PlayModRow({ play }: { play: MapDetailPlayContext }) {
 // Everything displayed here arrives with the play list. Opening a score or
 // switching tabs must not fetch osu! or insert another row after first paint.
 export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; entry?: LiveMapSearchEntry | null }) {
-  const { t } = useLingui();
-  const locale = useLocale();
   const noDans = useNoDans();
-  const score = play.score;
-  const grade = score?.rank || (play.accuracy != null ? getManiaGradeFromAccuracy(play.accuracy, play.mods ?? []) : null);
-  const scoreAccuracy = play.accuracy == null ? null : formatAccuracy(play.accuracy);
-  const danAccuracy = play.dan?.accuracy == null ? null : formatAccuracy(play.dan.accuracy);
   const showRail = !noDans && play.dan != null && play.dan.chartRating != null;
   const rejected = play.dan?.rejection != null;
   const showSkills = !play.dan && play.rating != null;
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className={`grid gap-2.5 ${showRail || showSkills ? "sm:grid-cols-[minmax(0,1fr)_15rem]" : ""}`}>
-        <div className="flex min-w-0 flex-col gap-5 rounded-xl bg-osu-b4/50 p-4 sm:p-5">
-          <div className="flex min-h-5 items-start justify-between gap-3">
-            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`${play.username}'s play`}</span>
-            <PlayModRow play={play} />
-          </div>
-          <div className="flex flex-1 flex-wrap items-center justify-between gap-x-5 gap-y-3 py-1">
-            <div className="flex items-center gap-3">
-              {grade ? <GradeImg grade={grade} size={42} /> : null}
-              <div className="flex flex-col">
-                <span className="text-[36px] font-bold leading-none tabular-nums text-osu-l1">{scoreAccuracy ?? "—"}</span>
-                <span className="mt-1.5 text-[9px] uppercase tracking-wide text-osu-f1/70">{t`Accuracy`}</span>
-              </div>
-            </div>
-            {danAccuracy != null && danAccuracy !== scoreAccuracy && (
-              <Stat label={t`Dan accuracy`} value={danAccuracy} badge={play.dan?.currency ? accuracyCurrencyLabel(play.dan.currency) : undefined} />
-            )}
-          </div>
-          <JudgementStrip statistics={score?.statistics ?? null} locale={locale} />
-          <div className={`grid gap-x-3 gap-y-4 ${play.pp != null ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-3"}`}>
-            <Stat label={t`Max combo`} value={score?.maxCombo != null ? `${formatNumber(score.maxCombo, locale)}x` : "—"} />
-            <Stat label={t`Score`} value={score?.totalScore != null ? formatNumber(score.totalScore, locale) : "—"} />
-            {play.pp != null && <Stat label={t`PP`} value={formatPP(play.pp)} />}
-            <div className="flex flex-col" title={play.playedAt ? formatTimeAgoTooltip(play.playedAt, locale) : undefined}>
-              <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{play.playedAt ? formatTimeAgo(play.playedAt, locale) : "—"}</span>
-              <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">
-                {play.sourceLabel ?? (play.source === "top" ? t`profile top play` : t`tracked history`)}
-              </span>
-            </div>
-          </div>
-        </div>
+      <div className={`grid gap-5 sm:gap-6 ${showRail || showSkills ? "sm:grid-cols-[minmax(0,1fr)_15rem]" : ""}`}>
+        <PlayResults play={play} />
         {showRail && play.dan ? (
-          <div className="rounded-xl bg-osu-b4/50 p-4">
+          <div className="border-t border-white/[0.07] pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
             <DanProgressRail
               context={danScaleContextFor(entry?.keyCount, play.dan.family)}
               chart={play.dan.chartRating}
@@ -299,7 +228,7 @@ function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyC
     .sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...skills.map(({ value }) => value));
   return (
-    <div className="flex flex-col gap-4 rounded-xl bg-osu-b4/50 p-4">
+    <div className="flex flex-col gap-4 border-t border-white/[0.07] pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-wide text-osu-f1/60"><Trans>MSD skill rating</Trans></div>

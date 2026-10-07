@@ -961,8 +961,8 @@ msgstr "{0} 的 me! 页面是空的。"
 
 #. placeholder {0}: play.username
 #: src/components/maps/MapDetailModal.tsx
-msgid "{0}'s play"
-msgstr "{0} 的成绩"
+#~ msgid "{0}'s play"
+#~ msgstr "{0} 的成绩"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
@@ -2683,7 +2683,6 @@ msgstr "账号菜单"
 msgid "accuracy"
 msgstr "准确率"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
@@ -5764,7 +5763,7 @@ msgstr "段位 {0}"
 #~ msgid "Dan {0} range"
 #~ msgstr "段位 {0} 区间"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Dan accuracy"
 msgstr "段位准确率"
 
@@ -8671,12 +8670,12 @@ msgstr "判定图大小"
 msgid "Judgements"
 msgstr "判定"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Judgments"
 msgstr "判定"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Judgments unavailable"
 msgstr "判定数据不可用"
 
@@ -10056,7 +10055,7 @@ msgstr "正在为回放匹配对应谱面。"
 msgid "MAX"
 msgstr "MAX"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Max combo"
 msgstr "最大连击"
 
@@ -13056,7 +13055,7 @@ msgstr "发布者"
 msgid "pp"
 msgstr "pp"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
@@ -13316,7 +13315,7 @@ msgstr "主页链接"
 msgid "Profile stats"
 msgstr "个人资料数据"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "profile top play"
 msgstr "个人最佳成绩"
@@ -14805,6 +14804,7 @@ msgid "score"
 msgstr "成绩"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -18885,7 +18885,7 @@ msgstr "追踪 pp 和准确率目标，以及各自还差多少。"
 msgid "Tracked"
 msgstr "已追踪"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "tracked history"
 msgstr "追踪记录"
