@@ -125,6 +125,9 @@ export interface MapDetailPlayContext {
   // stretching it (DT/HT); true as well when the play's mods are no longer
   // known, where the rate is all there is to go on.
   rateMod: { acronym: string; rate: number; pitched: boolean } | null;
+  /** A rate edit's own speed against the official chart it was matched to, on top of any
+   *  speed mod. Kept apart from `rateMod` because no mod was played, so no badge shows it. */
+  chartRate?: number;
   playedAt: string | null;
   source: "top" | "tracked";
   /** Replaces the source line under the play's time, for plays from neither list. */
@@ -883,7 +886,7 @@ export function MapDetailModal({
 
   // The rate the opening play was set at, and only while that play's own diff
   // is the active one: the set's other diffs were not the ones played.
-  const playedRate = play && active && play.beatmapId === active.beatmapId ? play.rateMod?.rate ?? 1 : 1;
+  const playedRate = play && active && play.beatmapId === active.beatmapId ? (play.rateMod?.rate ?? 1) * (play.chartRate ?? 1) : 1;
   // Without a play, the chart can be read at DT or HT: the preview plays at
   // that speed and the MSD and dan are rated there.
   const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(initialRate);
@@ -1056,8 +1059,10 @@ export function MapDetailModal({
               </div>
 
               {/* Two tabs only when a score opened the card: the play first,
-                  the map's own detail behind it. */}
-              {play ? (
+                  the map's own detail behind it. A play on a chart with no
+                  osu! id (a Companella import of a local file) has no map
+                  detail to fetch, so the play is the whole card. */}
+              {play && play.beatmapId > 0 ? (
                 <div role="tablist" className="flex shrink-0 items-center gap-1 border-b border-white/5 px-3.5 pt-2.5">
                   {([["score", t`Score`], ["map", t`Map info`]] as const).map(([id, label]) => (
                     <button
@@ -1158,7 +1163,7 @@ export function MapDetailModal({
 
                 {/* The catalog entry brought nothing back: say so where its
                     numbers would have been, the osu! link below still works. */}
-                {(status === "missing" && fileStats === null && !rateMsd && !ratePending) || status === "error" ? (
+                {(status === "missing" && !fileStats && !fileStatsPending && !rateMsd && !ratePending) || status === "error" ? (
                   <span className="text-[11.5px] text-osu-f1">
                     {status === "missing"
                       ? t`This chart is not in the map catalog, so there is nothing to show beyond the play itself.`
@@ -1277,6 +1282,8 @@ export function MapDetailModal({
                   moves the links. */}
               <div className="shrink-0 border-t border-white/5 p-3.5">
                 <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+                  {/* A local chart nobody matched has no osu! page to open. */}
+                  {setKnown || active.beatmapId > 0 ? (
                   <a
                     href={setKnown ? osuBeatmapUrl(active) : `https://osu.ppy.sh/beatmaps/${active.beatmapId}`}
                     target="_blank"
@@ -1290,6 +1297,7 @@ export function MapDetailModal({
                       <line x1="10" y1="14" x2="21" y2="3" />
                     </svg>
                   </a>
+                  ) : null}
                   {/* Both need the set id, which a chart outside the catalog
                       does not have; the osu! link above resolves it instead. */}
                   {setKnown ? (

@@ -22,6 +22,8 @@ import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
+import { PresenceDot } from "../components/player/LivePresence";
+import { useCompanellaPresenceMap, usePlayerPresence } from "../lib/companella-presence";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore, CountryTopPlay, LeanRankingEntry } from "../lib/types";
 import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
@@ -156,6 +158,7 @@ const HOME_GLOBAL_POPOFFS_WINDOW_MS = 24 * 60 * 60 * 1000;
 // each render, which React treats as a new type and remounts, replaying the
 // fade-in animation every time another fetch resolves.
 function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankingEntry; index: number; delayStep: number }) {
+  const presence = usePlayerPresence(entry.user.id);
   const navigate = useNavigate();
   const seedPlayerShell = () => {
     if (
@@ -193,7 +196,10 @@ function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankin
     >
       <span className="w-6 shrink-0 text-center text-sm font-bold text-osu-f1 tabular-nums">#{entry.rank}</span>
       <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
-      <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} accent={entry.user.avatar_accent} className="min-w-0 flex-1 truncate text-sm font-medium" />
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} accent={entry.user.avatar_accent} className="min-w-0 truncate text-sm font-medium" />
+        {presence ? <PresenceDot presence={presence} /> : null}
+      </span>
       <span className="flex w-[22px] shrink-0 justify-center">
         <CountryFlag code={entry.user.country_code} size="sm" />
       </span>
@@ -388,6 +394,7 @@ function HomePage() {
   // by pp like any other row. Fetched after hydration, so the SSR paint is
   // the osu! list.
   const restrictedEntries = useRestrictedPpRankings(boardScope ? null : selectedCountry);
+  const presenceByUser = useCompanellaPresenceMap();
   const restrictedUserIds = useMemo(() => new Set(restrictedEntries.map((entry) => entry.user.id)), [restrictedEntries]);
   const ranking = useMemo(
     () => (rankings ? mergeRestrictedPpRanking(rankings.ranking, restrictedEntries, 50) : null),
@@ -767,11 +774,14 @@ function HomePage() {
                       }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
                       <Avatar url={entry.user.avatar_url} size={30} />
-                      <UsernameText
-                        username={entry.user.username}
-                        avatarUrl={entry.user.avatar_url}
-                        className="text-sm font-medium flex-1 truncate"
-                      />
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <UsernameText
+                          username={entry.user.username}
+                          avatarUrl={entry.user.avatar_url}
+                          className="min-w-0 truncate text-sm font-medium"
+                        />
+                        {presenceByUser.has(entry.user.id) ? <PresenceDot presence={presenceByUser.get(entry.user.id)!} /> : null}
+                      </span>
                       <span className="text-xs font-bold text-right">{formatNumber(Math.round(entry.pp))}pp</span>
                     </motion.div>
                   ))}
@@ -786,11 +796,14 @@ function HomePage() {
                       }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
                       <Avatar url={entry.user.avatar_url} size={30} />
-                      <UsernameText
-                        username={entry.user.username}
-                        avatarUrl={entry.user.avatar_url}
-                        className="text-sm font-medium flex-1 truncate"
-                      />
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <UsernameText
+                          username={entry.user.username}
+                          avatarUrl={entry.user.avatar_url}
+                          className="min-w-0 truncate text-sm font-medium"
+                        />
+                        {presenceByUser.has(entry.user.id) ? <PresenceDot presence={presenceByUser.get(entry.user.id)!} /> : null}
+                      </span>
                       <span className="text-xs font-bold text-right">{formatNumber(Math.round(entry.pp))}pp</span>
                     </motion.div>
                   ))}

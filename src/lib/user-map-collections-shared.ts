@@ -3,7 +3,7 @@ import type { LiveMapSearchEntry } from "./live-backend";
 /*
  * Shapes and caps for the collections players build themselves, shared by the
  * browse grid, the editor and the server functions. Mirrors
- * live-backend/src/features/user-map-collections.ts, which is the copy that
+ * backend/src/features/user-map-collections.ts, which is the copy that
  * counts: everything here is a convenience for the form, and the backend
  * normalizes and re-checks whatever arrives.
  *

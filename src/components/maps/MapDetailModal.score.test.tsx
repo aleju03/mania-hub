@@ -6,8 +6,12 @@ import { getI18n } from "#/lib/i18n";
 import type { LiveMapSearchEntry } from "#/lib/live-backend";
 import { MapDetailModal, PlayContextBlock, type MapDetailPlayContext } from "./MapDetailModal";
 
-const { getScore, writeText } = vi.hoisted(() => ({ getScore: vi.fn(), writeText: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("../../lib/osu", () => ({ getScore }));
+const { getScore, getBeatmapFile, writeText } = vi.hoisted(() => ({
+  getScore: vi.fn(),
+  getBeatmapFile: vi.fn().mockRejectedValue(new Error("offline")),
+  writeText: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../../lib/osu", () => ({ getScore, getBeatmapFile }));
 vi.mock("./ChartPreviewPanel", () => ({ ChartPreviewPanel: () => null }));
 vi.mock("../../lib/live-backend", async (original) => ({
   ...await original<typeof import("../../lib/live-backend")>(),
@@ -68,4 +72,18 @@ it("shares the score or selected map according to the active tab, preserving the
   fireEvent.click(screen.getByRole("tab", { name: "Score" }));
   expect(screen.getByText("3,228")).toBeTruthy();
   expect(getScore).not.toHaveBeenCalled();
+});
+
+it("drops the Map info tab for a play on a chart with no osu! id, so the play is the whole card", () => {
+  const localEntry = { ...entry, beatmapId: 0, beatmapsetId: 0, msd: undefined, dan: undefined };
+  render(wrap(<MapDetailModal entry={localEntry} play={{ ...play, beatmapId: 0 }} status="missing" onClose={() => {}} />));
+  expect(screen.queryByRole("tab", { name: "Map info" })).toBeNull();
+  expect(screen.getByText("3,228")).toBeTruthy();
+  expect(screen.queryByRole("link", { name: /osu! web/ })).toBeNull();
+});
+
+it("rates a matched rate edit's chart at the copy's rate without inventing a speed-mod badge", () => {
+  render(wrap(<MapDetailModal entry={entry} play={{ ...play, mods: [], chartRate: 1.05 }} onClose={() => {}} />));
+  expect(screen.queryByText("DT")).toBeNull();
+  expect(screen.getByRole("link", { name: /osu! web/ }).getAttribute("href")).toBe("https://osu.ppy.sh/beatmapsets/10#mania/101");
 });

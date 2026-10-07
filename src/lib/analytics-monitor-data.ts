@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
 import { getServerLiveBackendUrl } from "./live-backend";
-import type { AnalyticsProductResponse } from "../../live-backend/src/shared/analytics-insights";
+import type { AnalyticsProductResponse } from "../../backend/src/shared/analytics-insights";
 import {
   ANALYTICS_COLD_RESPONSE_BUDGET_MS,
   ANALYTICS_DEFAULT_RANGE_HOURS,

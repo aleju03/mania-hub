@@ -46,7 +46,7 @@ const ingest = (title: string, detail: string, surface?: string): OsuCallerLabel
 const admin = (title: string, detail: string, surface?: string): OsuCallerLabel => ({ title, detail, origin: "admin", surface });
 
 const CALLERS: Record<string, OsuCallerLabel> = {
-  // ── Background jobs (live-backend/src/workers.ts and features/*) ──────────
+  // ── Background jobs (backend/src/workers.ts and features/*) ──────────
   "job:refresh_user_top_scores": job(
     "Top plays refresh",
     "A tracked player set a score, so their top 100 is re-read to see whether it landed.",
@@ -189,7 +189,7 @@ const CALLERS: Record<string, OsuCallerLabel> = {
     "Pages through oSC's JSON scores endpoint after a socket outage.",
   ),
 
-  // ── Backend endpoints serving a page (live-backend/src/http) ──────────────
+  // ── Backend endpoints serving a page (backend/src/http) ──────────────
   "api:profile_snapshot": page(
     "Profile page load",
     "Someone opened a player profile the backend had no fresh snapshot for.",

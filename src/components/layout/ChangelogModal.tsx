@@ -160,11 +160,12 @@ function NotifyToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) =
         on ? "text-white" : "text-osu-f1 hover:text-white"
       }`}
     >
+      {/* Scaled rather than clip-path animated: a transform stays on the compositor, a clip-path repaints every frame. */}
       <motion.span
         aria-hidden="true"
-        className="absolute inset-0 bg-osu-pink"
+        className="absolute left-[17px] top-1/2 -ml-[120px] -mt-[120px] size-[240px] rounded-full bg-osu-pink"
         initial={false}
-        animate={{ clipPath: on ? "circle(160% at 17px 50%)" : "circle(0% at 17px 50%)" }}
+        animate={{ scale: on ? 1 : 0 }}
         transition={{ duration: reduceMotion ? 0 : 0.4, ease }}
       />
       <span ref={bell} aria-hidden="true" className="relative grid origin-[50%_15%] place-items-center">
@@ -205,15 +206,46 @@ function barHeight(count: number): number {
 export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useLingui();
   const locale = useLocale();
-  const notify = useChangelogNotify();
+  const storedNotify = useChangelogNotify();
   const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
+  // The toggle stays local while the modal is open and reaches the store when it closes:
+  // a store write wakes every subscriber and re-serializes the persisted cache, which
+  // made the activity strip blink on phones.
+  const [notify, setNotifyLocal] = useState(storedNotify);
+  const pendingNotify = useRef<boolean | null>(null);
+  const commitNotify = () => {
+    if (pendingNotify.current === null) return;
+    setChangelogNotify(pendingNotify.current);
+    pendingNotify.current = null;
+  };
+  useEffect(() => {
+    if (pendingNotify.current === null) setNotifyLocal(storedNotify);
+  }, [storedNotify]);
+  useEffect(() => {
+    if (!open) {
+      commitNotify();
+      return;
+    }
+    // Leaving the page with the modal still open must not drop the choice. Capture on
+    // window runs before the store's own pagehide/visibilitychange flush.
+    const onHide = () => {
+      if (document.visibilityState === "hidden") commitNotify();
+    };
+    window.addEventListener("pagehide", commitNotify, true);
+    window.addEventListener("visibilitychange", onHide, true);
+    return () => {
+      window.removeEventListener("pagehide", commitNotify, true);
+      window.removeEventListener("visibilitychange", onHide, true);
+    };
+  }, [open]);
   // Says where the notification shows up, right after turning it on, until the modal closes.
   const [showNotifyHint, setShowNotifyHint] = useState(false);
   const setNotify = (next: boolean) => {
     // Turning it on counts what is already here as read, so the dot waits for the next update.
     if (next) markChangelogSeen();
-    setChangelogNotify(next);
+    setNotifyLocal(next);
     setShowNotifyHint(next);
+    pendingNotify.current = next;
   };
 
   const [selected, setSelected] = useState(NEWEST_DATE);
@@ -322,7 +354,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.99 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="modal-card-mobile-safe relative z-10 flex h-[min(720px,calc(100vh-2rem))] w-[min(720px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+            className="modal-card-mobile-safe relative z-10 flex h-[min(720px,calc(100dvh-2rem))] w-[min(720px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
           >
             <div className="flex h-[52px] shrink-0 items-center gap-2 px-4">
               {searching ? (
@@ -372,14 +404,15 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
               </button>
             </div>
 
+            {/* Only faded, never grown: animating its height reflowed the strip below on every frame. */}
             <AnimatePresence initial={false}>
               {showNotifyHint ? (
                 <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0, transition: { duration: 0 } }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="shrink-0 overflow-hidden border-t border-white/[0.07]"
+                  className="shrink-0 border-t border-white/[0.07]"
                 >
                   <p className="px-4 py-2.5 text-[12px] leading-snug text-osu-c2/85">
                     <Trans>
@@ -393,9 +426,11 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
             {/* One bar per release day, oldest on the left, height by how much shipped, split by kind. */}
             <div
               ref={stripRef}
-              className="shrink-0 overflow-x-auto overflow-y-hidden border-t border-white/[0.07] bg-osu-b5/40 px-4 pb-2 pt-7 [scrollbar-width:none]"
+              className="shrink-0 overflow-x-auto overflow-y-hidden border-t border-white/[0.07] bg-osu-b5/40 pb-2 pt-7 [scrollbar-width:none]"
             >
-              <div className="flex min-w-full gap-[3px]" role="listbox" aria-label={t`Release days`}>
+              {/* The side padding lives on the row, not the scroller: Chrome leaves a scroller's
+                  end padding out of the scroll width, so the newest bar would touch the edge. */}
+              <div className="flex w-max min-w-full gap-[3px] px-4" role="listbox" aria-label={t`Release days`}>
                 {STRIP.map((day, stripIndex) => {
                   const active = day.date === current?.date;
                   const available = matches.has(day.date);

@@ -9,9 +9,9 @@
     "paths": {
       "#/*": ["./src/*"],
       "@/*": ["./src/*"],
-      "#dan/*": ["./live-backend/src/dan/*"],
-      "#leoblack/*": ["./live-backend/vendor/leoblack/*"],
-      "#replay-judge/*": ["./live-backend/src/replay-judge/*"]
+      "#dan/*": ["./backend/src/dan/*"],
+      "#leoblack/*": ["./backend/vendor/leoblack/*"],
+      "#replay-judge/*": ["./backend/src/replay-judge/*"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],

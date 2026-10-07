@@ -9,8 +9,8 @@ so is an owner decision.
 
 ## Configuration
 
-All backend, all in `live-backend/.env`, all read once at boot through
-`readCompanellaConfig` (`live-backend/src/integrations/companella/config.ts`).
+All backend, all in `backend/.env`, all read once at boot through
+`readCompanellaConfig` (`backend/src/integrations/companella/config.ts`).
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -75,7 +75,7 @@ Nitro server applies with no setting to raise it and the backend pins
 
 ## Turning it on locally
 
-Add to `live-backend/.env`:
+Add to `backend/.env`:
 
 ```
 COMPANELLA_MODE=allowlist
@@ -241,7 +241,7 @@ kind.
 
 | Case | Status |
 |---|---|
-| Protocol, parser, matcher, preview | Covered by `live-backend/tests/companella-*.test.ts` with synthetic fixtures. |
+| Protocol, parser, matcher, preview | Covered by `backend/tests/companella-*.test.ts` with synthetic fixtures. |
 | Rating from key presses | Covered with synthetic inputs, and run over 6,137 cached real stable replays: none held for review, press targets identical to the calibration audit (`local-notes/companella-timing-check/`). |
 | Unpaired-press review rule | Run over 6,128 cached real stable 4K-10K replays: none flagged, at most 0.58 unpaired presses per note and 12.4 per second (`local-notes/companella-anticheat-check/`). |
 | A header edited from NoMod to DT, or from HT to NoMod | Held for review from the frame clock (`replay-rate.ts`). Run over 7,514 cached real stable replays: every relabelled replay held, 0.3% of honest NoMod and 5.8% of honest DT plays held as unreadable, no honest replay read as edited. Respacing the idle frames defeats it. Not yet run on a local `.osr` straight from `Data/r`. |

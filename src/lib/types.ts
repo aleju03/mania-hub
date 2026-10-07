@@ -195,6 +195,8 @@ export interface CompanellaScoreMark {
   replay: boolean;
   /** The client id of the app that sent it ("companella", "mania-bridge"); absent reads as Companella. */
   app?: string;
+  /** A local copy (a rate edit) the backend matched to an official chart: that chart, and the rate this file is against it. */
+  reference?: { beatmapId: number; rate: number };
 }
 
 export interface OsuScore {

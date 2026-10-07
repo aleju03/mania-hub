@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { PACK_FINISH_IDS, packFinishMotif, packFinishSvg } from "./card-finish-art";
 import { cardMotifImageSrc, cardMotifSignature, parseCardMotif } from "./card-motif";
-import { parseCardMotif as parseStoredMotif } from "../../live-backend/src/features/card-motif";
+import { parseCardMotif as parseStoredMotif } from "../../backend/src/features/card-motif";
 import { getCosmicTierPalette } from "./maniacard-cosmic";
 import { MANIA_TIER_STYLES, resolveManiaTierStyle } from "./maniacard";
 import { cardMotifDataUrl } from "./maniacard-art";

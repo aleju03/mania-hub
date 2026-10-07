@@ -41,7 +41,7 @@ async function remoteExport(options) {
   const { parseEnv } = await import("node:util");
   const backend = parseEnv(await readFile(".env", "utf8"));
   const token = backend.LIVE_ADMIN_TOKEN;
-  if (!token) throw new Error("Production live-backend/.env has no LIVE_ADMIN_TOKEN.");
+  if (!token) throw new Error("Production backend/.env has no LIVE_ADMIN_TOKEN.");
   const payload = await collectReports(options, async (path) => {
     const response = await fetch(`http://127.0.0.1:${Number(backend.PORT || 7227)}${path}`, {
       headers: { authorization: `Bearer ${token}` },
@@ -211,9 +211,9 @@ and one folder per report containing report.md and downloaded images.
   --id ID           Fetch exactly one report; ignores status/search
   --search TEXT     Search issue, replies, page, or reporter (max 100 characters)
   --no-images       Export text and image keys without downloading images
-  --remote TARGET   SSH target; defaults to LIVE_DB_SYNC_REMOTE in live-backend/.env
+  --remote TARGET   SSH target; defaults to LIVE_DB_SYNC_REMOTE in backend/.env
   --remote-dir DIR  Backend directory; defaults to LIVE_DB_SYNC_REMOTE_DIR or
-                    ~/apps/mania-hub/live-backend
+                    ~/apps/mania-hub/backend
   --frontend-env PATH  Frontend .env on VPS (absolute or relative to backend);
                       defaults to ../.env, then ../../mania-hub-web/.env
 
@@ -227,11 +227,11 @@ Missing images are recorded; exit code 2 means the export has image failures.`);
   if (!STATUSES.includes(values.status)) throw new Error(`Invalid status: ${values.status}`);
   if (values.search?.length > 100) throw new Error("--search must be at most 100 characters.");
   let env = {};
-  try { env = parseEnv(await readFile(join(ROOT, "live-backend/.env"), "utf8")); }
+  try { env = parseEnv(await readFile(join(ROOT, "backend/.env"), "utf8")); }
   catch (error) { if (error.code !== "ENOENT") throw error; }
   const remote = values.remote || process.env.LIVE_DB_SYNC_REMOTE || env.LIVE_DB_SYNC_REMOTE;
-  if (!remote) throw new Error("Set LIVE_DB_SYNC_REMOTE in live-backend/.env or pass --remote USER@HOST.");
-  const remoteDir = values["remote-dir"] || process.env.LIVE_DB_SYNC_REMOTE_DIR || env.LIVE_DB_SYNC_REMOTE_DIR || "~/apps/mania-hub/live-backend";
+  if (!remote) throw new Error("Set LIVE_DB_SYNC_REMOTE in backend/.env or pass --remote USER@HOST.");
+  const remoteDir = values["remote-dir"] || process.env.LIVE_DB_SYNC_REMOTE_DIR || env.LIVE_DB_SYNC_REMOTE_DIR || "~/apps/mania-hub/backend";
   console.log("Fetching production bug reports over SSH...");
   const options = { status: values.status, search: values.search, id: values.id, noImages: !!values["no-images"], frontendEnv: values["frontend-env"] };
   const payload = await fetchRemote(remote, remoteDir, options);

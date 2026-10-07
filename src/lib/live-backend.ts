@@ -844,7 +844,7 @@ export const fetchLiveBackendStorageBreakdown = createServerFn({ method: "GET" }
 export type LiveBackendSweepStatus = "done" | "running" | "stalled" | "pending" | "unknown";
 
 // Live progress of a cursor chain, read from its job rows (see
-// live-backend/src/features/sweeps-status.ts readChainProgress).
+// backend/src/features/sweeps-status.ts readChainProgress).
 export interface LiveBackendSweepChain {
   cursor: number;
   pass: string | null;
@@ -1663,9 +1663,9 @@ export interface CompanellaPublicProfile {
 }
 
 /* What a connected player is doing in osu! right now, sent by Mania
-   Bridge. Mirrors CompanellaPresence in live-backend/src/integrations/companella/presence.ts. */
+   Bridge. Mirrors CompanellaPresence in backend/src/integrations/companella/presence.ts. */
 export type CompanellaPresenceState =
-  | "menu" | "song_select" | "playing" | "results" | "editing" | "spectating" | "multiplayer" | "idle";
+  | "menu" | "song_select" | "playing" | "results" | "editing" | "spectating" | "watching_replay" | "multiplayer" | "idle";
 
 export interface CompanellaPresence {
   user_id: number;
@@ -1687,6 +1687,8 @@ export interface CompanellaPresence {
   mods: string[];
   rate: number | null;
   started_at: string | null;
+  /** Whose play is on screen while spectating or watching a replay. Missing from older backends. */
+  player?: { username: string } | null;
   updated_at: string;
 }
 
@@ -1829,12 +1831,12 @@ export interface LivePlayerSkillHistorySnapshot {
 export type {
   ManiacardHistoryEntry as LiveManiacardHistoryEntry,
   ManiacardHistoryPage as LiveManiacardHistoryPage,
-} from "../../live-backend/src/features/maniacard-history";
+} from "../../backend/src/features/maniacard-history";
 
 export async function fetchLiveManiacardHistoryDirect(
   userId: number,
   options: { before?: number; signal?: AbortSignal } = {},
-): Promise<import("../../live-backend/src/features/maniacard-history").ManiacardHistoryPage> {
+): Promise<import("../../backend/src/features/maniacard-history").ManiacardHistoryPage> {
   if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   if (options.before != null && (!Number.isSafeInteger(options.before) || options.before <= 0)) throw new Error("Invalid history cursor.");
   const query = new URLSearchParams();
@@ -1870,10 +1872,10 @@ export async function fetchLivePlayerSkillHistoryDirect(
 
 export type {
   PlayerSkillHistorySeriesPoint as LivePlayerSkillHistorySeriesPoint,
-} from "../../live-backend/src/features/player-skill-history";
+} from "../../backend/src/features/player-skill-history";
 
 export interface LivePlayerSkillHistorySeries {
-  points: import("../../live-backend/src/features/player-skill-history").PlayerSkillHistorySeriesPoint[];
+  points: import("../../backend/src/features/player-skill-history").PlayerSkillHistorySeriesPoint[];
 }
 
 /** The whole keymode history oldest first, for the skill history graph. */
@@ -3721,7 +3723,7 @@ export async function fetchLivePackPulledStats(userId: number): Promise<LivePack
 // The pack economy read as a whole rather than as one viewer's shelf. Public
 // and browser-direct, cached for a minute on the backend, so these are plain
 // fetches rather than server functions: every viewer gets the same page.
-// Mirrors live-backend/src/features/pack-community.ts.
+// Mirrors backend/src/features/pack-community.ts.
 
 export interface LivePackCollector {
   userId: number;
@@ -4278,7 +4280,7 @@ async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
 // ---------------------------------------------------------------------------
 // Discord command showcase (real-data backing for the /discord preview page)
 // ---------------------------------------------------------------------------
-// These mirror live-backend/src/discord/showcase.ts. The payload is
+// These mirror backend/src/discord/showcase.ts. The payload is
 // presentation-ready (numbers + formatted strings) so the showcase renders it
 // directly, and every section is nullable: a missing one falls back to the
 // page's synthetic mock rather than breaking the preview.
@@ -4449,7 +4451,7 @@ export interface DiscordShowcase {
   isGlobal: boolean;
   generatedAt: number;
   // Distinct top players, one per player-centric command (see the backend's
-  // index assignment in live-backend/src/discord/showcase.ts).
+  // index assignment in backend/src/discord/showcase.ts).
   players: DiscordShowcasePlayer[];
   topPlays: DiscordShowcaseScore[];
   recent: DiscordShowcaseScore[];

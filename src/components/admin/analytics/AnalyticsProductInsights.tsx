@@ -6,7 +6,7 @@ import {
   type AnalyticsFeatureUsage,
   type AnalyticsProductInsights as ProductData,
   type AnalyticsProductResponse,
-} from "../../../../live-backend/src/shared/analytics-insights";
+} from "../../../../backend/src/shared/analytics-insights";
 import { formatReferrerLabel, type AnalyticsActivityKind } from "../../../lib/analytics-feed";
 import { getAnalyticsProductInsights } from "../../../lib/analytics-monitor-data";
 import { formatNumber } from "../../../lib/format";

@@ -232,7 +232,7 @@ function devForceEternalPull(): boolean {
    like forceEternal: no variant key is claimed, so the
    mint pass lands on the player's ordinary row and nothing is minted or
    synced. The badge and motif mirror PACK_MILESTONES in
-   live-backend/src/features/pack-milestone.ts. */
+   backend/src/features/pack-milestone.ts. */
 function devForcedMilestoneRung(): number {
   if (!import.meta.env.DEV || typeof window === "undefined") return 0;
   const raw = new URLSearchParams(window.location.search).get("forceMilestone");

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, expect, it, vi } from "vitest";
 import { I18nProvider } from "@lingui/react";
 import { getI18n } from "../../../lib/i18n";
-import type { AnalyticsProductInsights as ProductData } from "../../../../live-backend/src/shared/analytics-insights";
+import type { AnalyticsProductInsights as ProductData } from "../../../../backend/src/shared/analytics-insights";
 import { AnalyticsProductInsights } from "./AnalyticsProductInsights";
 
 const { read } = vi.hoisted(() => ({ read: vi.fn() }));

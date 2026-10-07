@@ -16310,6 +16310,10 @@ msgstr "西班牙语"
 msgid "Spectating"
 msgstr "观战中"
 
+#: src/components/player/LivePresence.tsx
+msgid "Spectating {player}"
+msgstr "正在观战 {player}"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Spectators"
 msgstr "观众"
@@ -19854,6 +19858,14 @@ msgstr "用玩家自己的皮肤观看"
 #: src/components/replay/ReplayControls.tsx
 msgid "Watch with the player's own skin ({ownerSkinName})"
 msgstr "用玩家自己的皮肤观看（{ownerSkinName}）"
+
+#: src/components/player/LivePresence.tsx
+msgid "Watching {player}'s replay"
+msgstr "正在观看 {player} 的回放"
+
+#: src/components/player/LivePresence.tsx
+msgid "Watching a replay"
+msgstr "正在观看回放"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Watermark"

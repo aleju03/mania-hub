@@ -9,7 +9,7 @@ import { getRegionDef } from "./regions";
  * Isomorphic on purpose: the route, the review page and the server functions
  * all need the same answer to "can this person review a listing". The backend
  * re-validates everything it is sent
- * (live-backend/src/features/communities.ts); this list is what the UI draws.
+ * (backend/src/features/communities.ts); this list is what the UI draws.
  *
  * The directory itself is open: reading it asks nothing, signed in or not.
  * Posting a server needs an osu! login and a Discord connection, and those are
@@ -43,7 +43,7 @@ export function canModerateCommunities(auth: AuthState | undefined | null): bool
 
 /*
  * The languages a server can say it speaks. Mirrored in
- * live-backend/src/features/communities.ts, which is the list that decides.
+ * backend/src/features/communities.ts, which is the list that decides.
  *
  * "any language" leads, the way "international" leads the country picker and
  * for the same reason: plenty of servers do not run in one language, and the
@@ -127,7 +127,7 @@ export const COMMUNITY_TAG_MAX_LENGTH = 24;
  * Tags are typed by whoever posts the server rather than picked from a list, so
  * they need cleaning before they become a filter everyone else sees. This is the
  * copy the input box uses, to show what will actually be stored as it is typed;
- * normalizeTags in live-backend/src/features/communities.ts is the one that
+ * normalizeTags in backend/src/features/communities.ts is the one that
  * decides, and a client can send anything.
  */
 export function normalizeCommunityTag(value: string): string {
@@ -274,7 +274,7 @@ export const COMMUNITY_ERROR_MESSAGES: Record<string, string> = {
 /* ------------------------------------------------------------- flagging one
  *
  * What someone browsing can say about a listing, sent to the moderators and to
- * nobody else. Mirrored in live-backend/src/features/communities.ts, which is
+ * nobody else. Mirrored in backend/src/features/communities.ts, which is
  * the copy that decides; anything else stored reads back as "other".
  *
  * Five, phrased as the complaint rather than as a rule that was broken: this is
@@ -406,7 +406,7 @@ export function communityInviteExpiryLabel(iso: string | null | undefined): stri
  *
  * A listing may name the places it is for: country codes and the R- region
  * codes from regions.ts, mixed freely, empty meaning everyone. The backend
- * decides who gets an invite (live-backend/src/features/communities.ts); these
+ * decides who gets an invite (backend/src/features/communities.ts); these
  * are only for drawing what was chosen.
  *
  * Worth being plain about in the copy these produce: naming places filters, it

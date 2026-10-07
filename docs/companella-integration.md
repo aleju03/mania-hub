@@ -66,7 +66,7 @@ installation's name.
 
 ## Modules
 
-Backend, all under `live-backend/src/integrations/companella/`:
+Backend, all under `backend/src/integrations/companella/`:
 
 | Module | Responsibility |
 |---|---|
@@ -100,7 +100,7 @@ Backend, all under `live-backend/src/integrations/companella/`:
 | `presence.ts` | Live presence: what a connected player is doing in osu! right now, in memory only. |
 
 The replay judge itself is shared with the replay viewer: one copy under
-`live-backend/src/replay-judge/`, reached from the frontend as `#replay-judge/*`
+`backend/src/replay-judge/`, reached from the frontend as `#replay-judge/*`
 (see the root `AGENTS.md`).
 
 Frontend: `src/lib/companella-integration/` (proxy, server functions, browser
@@ -775,18 +775,25 @@ calls:
 ```
 
 - `state` is one of `menu`, `song_select`, `playing`, `results`, `editing`,
-  `spectating`, `multiplayer`, `idle`; anything else is `400
-  unsupported_state`. There is no pause state: a paused play stays `playing`
+  `spectating`, `watching_replay`, `multiplayer`, `idle`; anything else is
+  `400 unsupported_state`. `watching_replay` is a play on screen that is not
+  live. Older sites refuse it, so the app sends it only when the manifest's
+  `presence.states` lists it, and `spectating` otherwise. Unknown keys are
+  ignored. There is no pause state: a paused play stays `playing`
   with the same `started_at`.
 - `ruleset` is the mode osu! is in: `osu`, `taiko`, `fruits` or `mania`. The
   site shows the map only for `mania`.
-- `beatmap` is read only in `song_select`, `playing`, `results`, `editing` and
-  `spectating`, and `md5` is required when it is present. `beatmap_id` is null
+- `beatmap` is read only in `song_select`, `playing`, `results`, `editing`,
+  `spectating` and `watching_replay`, and `md5` is required when it is present. `beatmap_id` is null
   for a map osu! does not know. When the md5 is a map the site has, the site
   shows its own names for it; otherwise the four text fields as sent, cut to
   256 characters.
 - `mods` is at most 32 acronyms of up to 8 characters; `rate` is 0.5 to 2.0
   or null; `started_at` is read only while `playing`.
+- `player` (`{"username": "…"}`, optional) is whose play is on screen, read
+  only in `spectating` and `watching_replay` and cut to 256 characters. A
+  malformed or empty one is dropped, not refused. The profile names that
+  player, except on a replay of the profile's own player.
 
 Send on every change of state or map, plus the same body every 30 s. The site
 drops a player 90 s after the last send. Keep at least 2 s between sends; a
@@ -1073,7 +1080,7 @@ player needs or what the server can take.
 
 ## Testing
 
-`live-backend/tests/companella-*.test.ts`, with generated fixtures in
+`backend/tests/companella-*.test.ts`, with generated fixtures in
 `companella-fixtures.ts`. The LZMA fixture is one real encoder's stream so the
 decoder is exercised against a genuine encoder; everything else is synthetic, so
 no real player's replay is committed.

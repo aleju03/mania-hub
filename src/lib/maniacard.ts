@@ -1,11 +1,11 @@
 import type { CSSProperties } from "react";
-import { MANIA_CARD_TIER_THRESHOLDS, type ManiaCardTier } from "../../live-backend/src/shared/maniacard";
+import { MANIA_CARD_TIER_THRESHOLDS, type ManiaCardTier } from "../../backend/src/shared/maniacard";
 export {
   computeManiaSkills, computeKeymodePpPrestige, resolveCardGlobalPp,
   getManiaCardTier, MANIA_CARD_TIER_THRESHOLDS,
   HONORARY_TIER, HONORARY_TIER_USER_IDS, AWARDED_TIERS, getHonoraryTier,
   type ManiaSkills, type ManiaCardTier, type KeymodePpWeight,
-} from "../../live-backend/src/shared/maniacard";
+} from "../../backend/src/shared/maniacard";
 
 export interface NextManiaCardTier {
   tier: ManiaCardTier;

@@ -4,7 +4,7 @@ import { mapServerPackDraw, PACK_TYPES } from "./packs";
 import type { ServerPackDrawResult } from "./pack-draw";
 import { consumePendingPackCard, effectivePackDamage, readPendingPack, writePendingPack } from "./pack-pending";
 import * as limits from "./pack-limits";
-import * as serverLimits from "../../live-backend/src/features/pack-limits";
+import * as serverLimits from "../../backend/src/features/pack-limits";
 import { warmLivePackPlayers } from "./live-backend";
 
 const result: ServerPackDrawResult = {

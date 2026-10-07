@@ -11,15 +11,15 @@
    Usage:
      npx tsx scripts/archive/hydrate-archived-player.ts jakads
 
-   Reads  live-backend/seeds/archived-players/<slug>.source.json
-   Writes live-backend/seeds/archived-players/<slug>.snapshot.json
+   Reads  backend/seeds/archived-players/<slug>.source.json
+   Writes backend/seeds/archived-players/<slug>.snapshot.json
 */
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const SEED_DIR = resolve(ROOT, "live-backend/seeds/archived-players");
+const SEED_DIR = resolve(ROOT, "backend/seeds/archived-players");
 
 interface SourceScore {
   rank: number;
@@ -84,7 +84,7 @@ interface SourceFile {
 function requireEnv(): { base: string; token: string } {
   const base = process.env.LIVE_BACKEND_URL ?? "http://localhost:7227";
   const token = process.env.LIVE_ADMIN_TOKEN;
-  if (!token) throw new Error("LIVE_ADMIN_TOKEN is required (source live-backend/.env).");
+  if (!token) throw new Error("LIVE_ADMIN_TOKEN is required (source backend/.env).");
   return { base, token };
 }
 

@@ -2,7 +2,7 @@
 // R-EUROPE = the whole continent) that behave like GLOBAL — synthetic,
 // selectable wherever a country is, and resolved by the live backend as a
 // read-time filter over member countries. The table itself is generated from
-// live-backend/src/regions.ts (the source of truth) together with each
+// backend/src/regions.ts (the source of truth) together with each
 // region's map-silhouette icon path; regenerate with
 // `npm run regions:build-icons`.
 import { REGION_DEFS, REGION_SHAPES, type RegionDef, type RegionShape } from "./regions.generated";

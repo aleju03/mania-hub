@@ -36,7 +36,7 @@ export const PACK_SIZE = 5;
 // osu! API calls a minute). A draw the pool cannot serve fails instead.
 //
 // Signed-in opens no longer roll here at all: drawPackPlayersFromServer asks
-// the backend to deal (POST /api/packs/draw, live-backend/src/features/
+// the backend to deal (POST /api/packs/draw, backend/src/features/
 // pack-draw.ts), which enforces the slice, the odds and duplicate protection
 // where the pool lives and returns the hand with its cards in one response.
 // The paging, dup-replacement and honorary machinery below is the
@@ -286,7 +286,7 @@ export const PACK_TYPES: PackTypeDef[] = [
   // Deals osu! teams instead of players, from its own pool (every team
   // someone has opened on the site) into its own collection. Signed-in only:
   // the server sets a team card's tier, so there is no browser-local draw for
-  // it. Mirrored in live-backend/src/features/pack-teams.ts.
+  // it. Mirrored in backend/src/features/pack-teams.ts.
   {
     id: "teams",
     name: "Teams",

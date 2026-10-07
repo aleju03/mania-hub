@@ -16301,6 +16301,10 @@ msgstr "Español"
 msgid "Spectating"
 msgstr "Espectando"
 
+#: src/components/player/LivePresence.tsx
+msgid "Spectating {player}"
+msgstr "Espectando a {player}"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Spectators"
 msgstr "Espectadores"
@@ -19845,6 +19849,14 @@ msgstr "Ver con la skin del jugador"
 #: src/components/replay/ReplayControls.tsx
 msgid "Watch with the player's own skin ({ownerSkinName})"
 msgstr "Ver con la skin del jugador ({ownerSkinName})"
+
+#: src/components/player/LivePresence.tsx
+msgid "Watching {player}'s replay"
+msgstr "Viendo el replay de {player}"
+
+#: src/components/player/LivePresence.tsx
+msgid "Watching a replay"
+msgstr "Viendo un replay"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Watermark"

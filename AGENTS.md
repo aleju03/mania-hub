@@ -3,7 +3,7 @@
 Mania Tracker (mania-tracker.com) is an osu!mania community site with two cooperating parts:
 
 - **Frontend** (`src/`): TanStack Start + Vite + React 19, SSR via Nitro (node-server preset, self-hosted on the VPS; the Vercel preset only builds when `process.env.VERCEL` is set, kept as a rollback target). File-based routes in `src/routes/`; `src/routeTree.gen.ts` is generated, do not hand-edit.
-- **Live backend** (`live-backend/`, maintained separately and gitignored here, so it has its own commits/branches/pushes): always-on Node service that ingests osu! scores from the score feed (an osu! API recent-scores poller, with a legacy oSC Socket.IO source behind it), keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE (port 7227). It is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is set. Its own guide is `live-backend/AGENTS.md`; read it before working under that directory.
+- **Live backend** (`backend/`, maintained separately and gitignored here, so it has its own commits/branches/pushes): always-on Node service that ingests osu! scores from the score feed (an osu! API recent-scores poller, with a legacy oSC Socket.IO source behind it), keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE (port 7227). It is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is set. Its own guide is `backend/AGENTS.md`; read it before working under that directory.
 
 Countries are dynamic, not hardcoded: the backend keeps a `country_registry` with per-country status (cold -> warm -> active, can pause) and feature tier (`indexed` / `maps_warm` / `live` / `snipes`). Visiting a cold country can activate it (rate-limited). A synthetic `GLOBAL` scope aggregates all tracked countries. Default/home country is `CR`.
 
@@ -25,7 +25,7 @@ Keep one-off audits, investigation notes, and capture reports in `local-notes/` 
 
 - `src/routes/`: file-based routes (`createFileRoute`); shared shell, auth, country context, theme bootstrap, and live-backend bootstrap in `src/routes/__root.tsx`. Search params are validated per route and drive country scope, pagination, and filters. API/proxy routes in `src/routes/api/` (`/api/sync` is the analytics capture proxy into the backend's in-house analytics store, not a live-data fallback); admin pages in `src/routes/admin/`. Files prefixed with `-` are tests, not routes; do not delete them as stale.
 - `src/components/` (feature folders), `src/store.ts` (Zustand store), `src/lib/` (server/data utilities). `src/lib/osu.ts` is a facade over `src/lib/osu/` domain modules (rankings, beatmaps, replay, dan, users, pattern-analysis, plus shared support modules).
-- `live-backend/src/`: `server.ts` (boot), `ingest/`, `osc/`, `jobs/` + `workers.ts`, `features/` (one module per surface), `http/`, `live/` (SSE), `discord/`, `dan/`, `replay-video/`; schema in `migrations/001_initial.sql`, later tables migrated in `db.ts`.
+- `backend/src/`: `server.ts` (boot), `ingest/`, `osc/`, `jobs/` + `workers.ts`, `features/` (one module per surface), `http/`, `live/` (SSE), `discord/`, `dan/`, `replay-video/`; schema in `migrations/001_initial.sql`, later tables migrated in `db.ts`.
 - `scripts/`: replay capture and validation, bug-report export, i18n generators, dev helpers in `scripts/dev/`. Static assets in `public/`.
 
 ## Commands
@@ -33,11 +33,11 @@ Keep one-off audits, investigation notes, and capture reports in `local-notes/` 
 The user usually has dev servers running locally (frontend `3000`, live backend `7227`); do not start dev servers or run builds unprompted.
 
 - Frontend: `npm run dev` / `npm run build` / `npm run test` / `npx tsc --noEmit`. Single test: `npx vitest run path/to/file.test.ts` (`-t "name"` for one case).
-- Backend (inside `live-backend/`): `npm run dev` / `npm test` / `npx tsc --noEmit` / `npm run verify` (tests + build).
+- Backend (inside `backend/`): `npm run dev` / `npm test` / `npx tsc --noEmit` / `npm run verify` (tests + build).
 - Sync prod DB to local (dev PC only, overwrites the local DB, never run on the VPS): `npm run live-db:update` (fresh VPS snapshot) or `npm run live-db:sync-from-vps` (reuses the newest existing backup, `--dry-run` supported). `--with-analytics` also pulls the separate analytics DB; `--analytics-only` pulls just that one.
 - Production bug reports: `npm run bugs:pull` exports open reports, reporter identities, threads, and images to a new gitignored `local-notes/bug-reports/` folder. Use `-- --status all`, `-- --id <id>`, or `-- --search "text"` to narrow/expand; read the printed `README.md` and report files, and inspect local image paths as needed. Read-only; does not mark reports seen. Setup in `docs/admin.md`.
 
-Minimum verification: for live backend changes run `npm test` and `npx tsc --noEmit` inside `live-backend/`; for type-sensitive frontend changes run `npx tsc --noEmit` at the root. Tests are Vitest, colocated as `*.test.ts(x)` next to source (plus the `-`-prefixed files in `src/routes/`).
+Minimum verification: for live backend changes run `npm test` and `npx tsc --noEmit` inside `backend/`; for type-sensitive frontend changes run `npx tsc --noEmit` at the root. Tests are Vitest, colocated as `*.test.ts(x)` next to source (plus the `-`-prefixed files in `src/routes/`).
 
 ## Frontend data flow
 
@@ -51,19 +51,19 @@ Client state: one Zustand store in `src/store.ts`, persisted to localStorage as 
 
 ## Shared dan estimator and replay judge
 
-There is one copy of the dan estimator, at `live-backend/src/dan/dan-estimator/` (features, scoring, family choice, LN subsystem, courses, labels) with `live-backend/src/dan/dan-estimator.ts` as entry, and one copy of the vendored LeoBlack engine at `live-backend/vendor/leoblack`. The frontend reaches them through the `#dan/*` and `#leoblack/*` aliases. Both live under `live-backend/` because the backend compiles with `rootDir: "src"` and prod runs the flat `dist/` layout (`node dist/server.js` plus `dist/maintenance/*.js`), so shared sources cannot sit outside it.
+There is one copy of the dan estimator, at `backend/src/dan/dan-estimator/` (features, scoring, family choice, LN subsystem, courses, labels) with `backend/src/dan/dan-estimator.ts` as entry, and one copy of the vendored LeoBlack engine at `backend/vendor/leoblack`. The frontend reaches them through the `#dan/*` and `#leoblack/*` aliases. Both live under `backend/` because the backend compiles with `rootDir: "src"` and prod runs the flat `dist/` layout (`node dist/server.js` plus `dist/maintenance/*.js`), so shared sources cannot sit outside it.
 
 - Each alias is declared in three places that must move together: `paths` in `tsconfig.json`, `imports` in `package.json`, and `vitest.config.ts` (which deliberately does not load `vite.config.ts`).
-- Tests for the shared estimator live in `live-backend/tests/dan-*.test.ts`, so edits there need the backend suite, and the root `npx tsc --noEmit` covers both sides. The chart classifier (`#dan/chart-classifier`) is shared on the same terms.
-- The mania replay judge is shared on the same terms: `live-backend/src/replay-judge/` (`mania-replay-judgement.ts`, and `stable-frames.ts` for decoding .osr rows), reached as `#replay-judge/*`. The replay viewer draws with it and the backend rates Companella imports from the offsets it finds. Its tests are `live-backend/tests/replay-judge.test.ts`. Keep its imports type-only: the root `replay:*` scripts load it under plain node, which does not map `.js` specifiers onto `.ts`.
+- Tests for the shared estimator live in `backend/tests/dan-*.test.ts`, so edits there need the backend suite, and the root `npx tsc --noEmit` covers both sides. The chart classifier (`#dan/chart-classifier`) is shared on the same terms.
+- The mania replay judge is shared on the same terms: `backend/src/replay-judge/` (`mania-replay-judgement.ts`, and `stable-frames.ts` for decoding .osr rows), reached as `#replay-judge/*`. The replay viewer draws with it and the backend rates Companella imports from the offsets it finds. Its tests are `backend/tests/replay-judge.test.ts`. Keep its imports type-only: the root `replay:*` scripts load it under plain node, which does not map `.js` specifiers onto `.ts`.
 - `companella.ts` is the one deliberately divergent pair: the backend routes MSD through `msd.ts` so MinaCalc stays serialized against the job lanes, so it stays hand-synced.
 
 ## Hard rules
 
-- Chart dan and LN dan classification must stay algorithmic: never add title/artist/creator/beatmap-id/beatmapset-id/filename or any chart-identity shortcut to force what a chart is rated. The one sanctioned identity list is `live-backend/src/features/dan-courses.ts`, the registry of real dan courses, which lives at the player layer on purpose: it rates no chart, it only credits a player with a course they actually passed (see `docs/features.md`).
-- Authenticated osu! API access stays server-side; never put osu! credentials or direct authenticated calls in client components. New backend osu! calls go through the token-bucket client in `live-backend/src/osu/client.ts` (~45/min target, 60/min hard limit).
+- Chart dan and LN dan classification must stay algorithmic: never add title/artist/creator/beatmap-id/beatmapset-id/filename or any chart-identity shortcut to force what a chart is rated. The one sanctioned identity list is `backend/src/features/dan-courses.ts`, the registry of real dan courses, which lives at the player layer on purpose: it rates no chart, it only credits a player with a course they actually passed (see `docs/features.md`).
+- Authenticated osu! API access stays server-side; never put osu! credentials or direct authenticated calls in client components. New backend osu! calls go through the token-bucket client in `backend/src/osu/client.ts` (~45/min target, 60/min hard limit).
 - New SSE event types must be added to `LIVE_EVENT_NAMES` in `src/lib/live-backend.ts` or follower tabs never see them.
-- Backend logs are structured JSON via `live-backend/src/logger.ts` (`logInfo`/`logWarn`), never `console.log`.
+- Backend logs are structured JSON via `backend/src/logger.ts` (`logInfo`/`logWarn`), never `console.log`.
 - Replay video export is on-device only. The ordinary export path must not upload the video, queue a render job, or call `/api/replay-video-job`; the backend's `ENABLE_REPLAY_VIDEO` half stays off and is not a fallback for an unsupported browser. Details in `docs/frontend.md`.
 - Uploaded replays are unlisted, not private: the `.osr` in R2 names no uploader, so every surface that lists or deletes one goes through the `uploaded_replays` owner index via `src/lib/uploaded-replays.ts`, never the R2 key. Details in `docs/features.md`.
 - Private skins stay private end to end: any endpoint that serves a skin goes through `toSkinSummary(row, { asOwner })`, never the raw row, and replay viewers never receive a private `.osk`. Details in `docs/features.md`.
@@ -72,18 +72,18 @@ There is one copy of the dan estimator, at `live-backend/src/dan/dan-estimator/`
 - Several agent sessions share this working tree, so uncommitted changes may be someone else's live work. Never run `git stash`, `git restore`, `git clean` or `git checkout -- <path>` on files you did not author; compare against old code with `git show HEAD:<path>` instead.
 - Pushing `main` (including `git ship`) is a production release; do it only when explicitly asked, each time.
 - Read the prod DB over SSH only as `sqlite3 'file:<path>?immutable=1'`. `-readonly` still blocks WAL checkpoints and once stalled the whole backend. Locally, where processes are writing, use `pragma query_only=1` instead, since `immutable=1` reads torn pages there. The local DB is an old snapshot plus dev activity, not prod truth.
-- Secrets live in `.env` (root) and `live-backend/.env`; never commit them.
+- Secrets live in `.env` (root) and `backend/.env`; never commit them.
 
 ## Config and admin
 
 - Frontend vars: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, R2 vars.
-- Backend (`live-backend/src/config.ts` has the full ~90-var list with defaults): osu!/oSC credentials and endpoints, `TRACKED_COUNTRIES`, `ALLOWED_ORIGINS`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, `LIVE_BACKEND_ROLE` (`all`/`server`/`worker`, opt-in two-process split), and feature flags (`ENABLE_WORKERS`, `ENABLE_OSC_SOCKET`, `ENABLE_OSC_BACKFILL`, `ENABLE_OSU_SCORES_FALLBACK`, `ENABLE_SCHEDULED_REFRESHES`, `ENABLE_DISCORD_BOT`/`ENABLE_DISCORD_FEEDS`).
+- Backend (`backend/src/config.ts` has the full ~90-var list with defaults): osu!/oSC credentials and endpoints, `TRACKED_COUNTRIES`, `ALLOWED_ORIGINS`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, `LIVE_BACKEND_ROLE` (`all`/`server`/`worker`, opt-in two-process split), and feature flags (`ENABLE_WORKERS`, `ENABLE_OSC_SOCKET`, `ENABLE_OSC_BACKFILL`, `ENABLE_OSU_SCORES_FALLBACK`, `ENABLE_SCHEDULED_REFRESHES`, `ENABLE_DISCORD_BOT`/`ENABLE_DISCORD_FEEDS`).
 - Admin UI is at `/admin/live-backend` (frontend) talking to backend `/api/admin/*`. `/admin/r2` browses both R2 buckets (private `mania-hub-replay-cache`, public `mania-hub-public`); their browsable roots and delete warnings are declared once in the `ADMIN_BUCKETS` registry in `src/lib/r2-cache.ts`.
 
 ## Style
 
 - TypeScript, React function components, two-space indent, semicolons, named exports where local style uses them; prefer existing helpers and patterns over parallel abstractions.
-- Frontend imports use `#/*` or `@/*` aliases for `src/*` (match nearby style); the backend uses relative imports within `live-backend/src/`.
+- Frontend imports use `#/*` or `@/*` aliases for `src/*` (match nearby style); the backend uses relative imports within `backend/src/`.
 - Tailwind CSS v4 via `@tailwindcss/vite`; globals and theme CSS variables (hue/saturation, applied before hydration) in `src/styles.css`; a custom `hover` variant avoids stuck hover states on touch devices. Animations use framer-motion; 3D card code uses Three.js under `src/components/player/maniacard3d/`.
 - New pages start from the site shell: `PageHeader` with an osu! line icon from `public/images/icons/`, body `bg-osu-b5`, panels as in `src/components/companella/primitives.tsx`. The dark legal chrome is only for `/privacy` and `/terms`.
 - New or edited Lingui strings: run `npm run i18n:extract` and `npm run i18n:compile`, and commit the compiled `src/locales/*/messages.ts` with the `.po` files (the build does not compile catalogs).

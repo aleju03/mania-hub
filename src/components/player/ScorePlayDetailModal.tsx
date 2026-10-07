@@ -54,7 +54,10 @@ function difficultyAdjustOd(score: OsuScore): number | null {
  *  second tab, the way the skill play lists open theirs. */
 export function ScorePlayDetailModal({ score, username, onClose }: { score: OsuScore; username: string; onClose: () => void }) {
   const { t } = useLingui();
-  const beatmapId = score.beatmap?.id ?? 0;
+  // An import of a local copy (a rate edit) has no id of its own; the card
+  // opens the official chart the backend matched it to, at the copy's rate.
+  const reference = !(score.beatmap?.id) ? score.companella?.reference : undefined;
+  const beatmapId = score.beatmap?.id || reference?.beatmapId || 0;
   const [map, setMap] = useState<{ entry: LiveMapSearchEntry; status: MapStatus }>(() => ({
     entry: scoreMapStub(score, beatmapId),
     status: "pending",
@@ -94,6 +97,7 @@ export function ScorePlayDetailModal({ score, username, onClose }: { score: OsuS
     accuracy: display.accuracy,
     pp: score.pp ?? null,
     rateMod: rateModFor(getScoreRate(score.mods), speedMod),
+    chartRate: reference?.rate,
     playedAt: playedAt || null,
     source: "top",
     sourceLabel: display.isLazer ? t`played on Lazer` : t`played on Stable`,

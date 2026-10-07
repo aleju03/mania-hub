@@ -16344,6 +16344,10 @@ msgstr "Spanish"
 msgid "Spectating"
 msgstr "Spectating"
 
+#: src/components/player/LivePresence.tsx
+msgid "Spectating {player}"
+msgstr "Spectating {player}"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Spectators"
 msgstr "Spectators"
@@ -19896,6 +19900,14 @@ msgstr "Watch with the player's own skin"
 #: src/components/replay/ReplayControls.tsx
 msgid "Watch with the player's own skin ({ownerSkinName})"
 msgstr "Watch with the player's own skin ({ownerSkinName})"
+
+#: src/components/player/LivePresence.tsx
+msgid "Watching {player}'s replay"
+msgstr "Watching {player}'s replay"
+
+#: src/components/player/LivePresence.tsx
+msgid "Watching a replay"
+msgstr "Watching a replay"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Watermark"

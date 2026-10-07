@@ -13,14 +13,14 @@ import viteReact from "@vitejs/plugin-react";
 //
 // "#dan/*", "#leoblack/*" and "#replay-judge/*" reach the dan estimator, the
 // vendored LeoBlack tree and the replay judge, which are single copies owned
-// by live-backend (the backend compiles with rootDir "src", so shared sources
+// by backend/ (the backend compiles with rootDir "src", so shared sources
 // cannot live outside it without moving the dist layout prod runs from). vite.config.ts picks these up through
 // vite-tsconfig-paths; this file has to spell them out because it deliberately
 // does not load that config.
 const src = fileURLToPath(new URL("./src", import.meta.url));
-const dan = fileURLToPath(new URL("./live-backend/src/dan", import.meta.url));
-const leoblack = fileURLToPath(new URL("./live-backend/vendor/leoblack", import.meta.url));
-const replayJudge = fileURLToPath(new URL("./live-backend/src/replay-judge", import.meta.url));
+const dan = fileURLToPath(new URL("./backend/src/dan", import.meta.url));
+const leoblack = fileURLToPath(new URL("./backend/vendor/leoblack", import.meta.url));
+const replayJudge = fileURLToPath(new URL("./backend/src/replay-judge", import.meta.url));
 
 export default defineConfig({
   // The backend has its own config, dependencies and working directory.

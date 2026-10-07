@@ -1,6 +1,6 @@
 // Rasterizes the osu! grade pills and mod glyphs into PNG emoji assets the
 // Discord bot uploads as custom application emojis (see
-// live-backend/src/discord/emojis.ts). Discord only accepts raster emoji
+// backend/src/discord/emojis.ts). Discord only accepts raster emoji
 // (PNG/GIF/JPEG, <=256KB), so the source SVGs are baked here once and the
 // resulting PNGs are committed under public/images/discord/emojis/. The backend
 // fetches them over HTTP from the site origin at registration time.

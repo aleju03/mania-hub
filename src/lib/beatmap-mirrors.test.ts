@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { BEATMAP_MIRRORS, mirrorOrderFor, oszDownloadUrl } from "./beatmap-mirrors";
+import { BEATMAP_MIRRORS, mirrorHas, mirrorOrderFor, oszDownloadUrl } from "./beatmap-mirrors";
+
+const primaries = BEATMAP_MIRRORS.filter((mirror) => !mirrorHas(mirror, "fallback"));
+const fallbacks = BEATMAP_MIRRORS.filter((mirror) => mirrorHas(mirror, "fallback"));
 
 describe("mirrorOrderFor", () => {
   it("returns every mirror exactly once", () => {
@@ -9,20 +12,29 @@ describe("mirrorOrderFor", () => {
     );
   });
 
-  it("starts at the set's deterministic mirror and wraps around", () => {
-    const start = 7 % BEATMAP_MIRRORS.length;
+  it("starts at the set's deterministic primary mirror and puts the fallbacks last", () => {
     const order = mirrorOrderFor(7);
-    expect(order[0]).toBe(BEATMAP_MIRRORS[start]);
-    expect(order[order.length - 1]).toBe(
-      BEATMAP_MIRRORS[(start + BEATMAP_MIRRORS.length - 1) % BEATMAP_MIRRORS.length],
-    );
+    expect(order[0]).toBe(primaries[7 % primaries.length]);
+    expect(order[primaries.length - 1]).toBe(primaries[(7 + primaries.length - 1) % primaries.length]);
+    expect(order.slice(primaries.length).map((m) => m.name).sort()).toEqual(fallbacks.map((m) => m.name).sort());
   });
 
-  it("spreads consecutive set ids across different mirrors", () => {
-    const starts = new Set(
-      [0, 1, 2, 3, 4].map((id) => mirrorOrderFor(id)[0].name),
-    );
-    expect(starts.size).toBe(BEATMAP_MIRRORS.length);
+  it("spreads consecutive set ids across the primary mirrors", () => {
+    const starts = new Set(primaries.map((_, id) => mirrorOrderFor(id)[0].name));
+    expect(starts.size).toBe(primaries.length);
+  });
+});
+
+describe("mirror flags", () => {
+  it("never probes osu.direct from the server and resolves its redirect once for range reads", () => {
+    const osuDirect = BEATMAP_MIRRORS.find((m) => m.name === "osu.direct")!;
+    expect(mirrorHas(osuDirect, "skipServerProbe")).toBe(true);
+    expect(mirrorHas(osuDirect, "resolveRedirectBeforeRange")).toBe(true);
+  });
+
+  it("uses hinai's streaming endpoint, never its redirect", () => {
+    const hinai = BEATMAP_MIRRORS.find((m) => m.name === "hinai")!;
+    expect(hinai.url("1")).not.toContain("redirect=true");
   });
 });
 

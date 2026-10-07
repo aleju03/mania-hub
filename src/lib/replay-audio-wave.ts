@@ -1,5 +1,5 @@
 // The map info card's audio wave. The backend works out a song's spectrum
-// once per distinct song (live-backend/src/audio/audio-wave.ts) and stores it
+// once per distinct song (backend/src/audio/audio-wave.ts) and stores it
 // beside the song's audio; the viewer only fetches that table and reads the
 // levels at the replay's time.
 

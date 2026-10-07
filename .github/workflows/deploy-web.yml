@@ -13,6 +13,8 @@ on:
     branches: [develop]
     paths-ignore:
       - '**.md'
+      - 'LICENSE'
+      - 'algorithms/**'
   workflow_dispatch:
     inputs:
       restart:
@@ -24,22 +26,24 @@ concurrency:
   group: deploy-web-ninja
   cancel-in-progress: false
 
-env:
-  VPS_HOST: ${{ secrets.VPS_HOST }}
-  VPS_USER: ${{ secrets.VPS_USER }}
-  WEB_DIR: /home/${{ secrets.VPS_USER }}/apps/mania-hub-web-ninja
-  # Baked into the browser bundle at build time, so it must be the public
-  # origin - never the loopback address the server itself uses.
-  VITE_LIVE_BACKEND_URL: https://api.mania-tracker.com
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Secrets live on the production environment, which only main and develop
+    # can deploy to, so a workflow pushed from any other branch never sees them.
+    environment: production
     timeout-minutes: 30
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      WEB_DIR: /home/${{ secrets.VPS_USER }}/apps/mania-hub-web-ninja
+      # Baked into the browser bundle at build time, so it must be the public
+      # origin - never the loopback address the server itself uses.
+      VITE_LIVE_BACKEND_URL: https://api.mania-tracker.com
     steps:
       - uses: actions/checkout@v4
 
-      # live-backend/ is maintained separately and not tracked here. The
+      # backend/ is maintained separately and not tracked here. The
       # frontend build resolves #dan/* and #leoblack/* into it and imports
       # backend types, so check out the matching branch alongside.
       - name: Check out live backend
@@ -49,7 +53,7 @@ jobs:
           chmod 600 ~/.ssh/backend_deploy
           ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
           GIT_SSH_COMMAND='ssh -i ~/.ssh/backend_deploy -o IdentitiesOnly=yes' \
-            git clone --depth 1 --branch develop "${{ secrets.BACKEND_REPO }}" live-backend
+            git clone --depth 1 --branch develop "${{ secrets.BACKEND_REPO }}" backend
 
       - uses: actions/setup-node@v4
         with:
