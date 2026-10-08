@@ -2174,12 +2174,14 @@ export interface LiveRecentPlayRating {
   gain?: number;
   dan: { rawDan: number; side: "rc" | "ln"; label: string | null } | null;
   missing?: { msd?: LiveRecentRatingMissingReason; dan?: LiveRecentRatingMissingReason };
+  /** The OD the play's dan ladder needs, beside a `low_od` dan reason. */
+  danMinOd?: number;
   /** A missing value backed by a real analysis job. */
   pending?: true;
   jobs?: Array<{ id: number; runAfter: string }>;
 }
 
-export type LiveRecentRatingMissingReason = "pending" | "not_retained" | "below_floor" | "below_bar" | "excluded" | "not_analyzed" | "unsupported" | "failed_play" | "chart_changed";
+export type LiveRecentRatingMissingReason = "pending" | "not_retained" | "below_floor" | "below_bar" | "low_od" | "excluded" | "not_analyzed" | "unsupported" | "failed_play" | "chart_changed";
 
 export interface LiveRecentPlayRatingRequest {
   scoreId: number;

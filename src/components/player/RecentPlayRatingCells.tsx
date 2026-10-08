@@ -45,6 +45,9 @@ function RatingStatus({ axis, dan = false, reason, rating, compact }: {
     ? t`Analysis is scheduled. This rating will update here automatically when the result is ready. Some plays may not qualify for a rating.`
     : dan && reason === "not_retained" ? t`This attempt is no longer stored, so its dan credit cannot be checked.`
     : dan && reason === "below_bar" ? t`This play is under the accuracy that credits a dan on this chart.`
+    : dan && reason === "low_od" ? (rating?.danMinOd != null
+      ? t`This chart's OD is under the dan minimum (OD ${rating.danMinOd}).`
+      : t`This chart's OD is under the dan minimum.`)
     : dan && reason === "excluded" ? t`This play does not count toward dan.`
     : dan && reason === "failed_play" ? t`Failed plays do not credit a dan.`
     : reason === "not_retained" ? t`This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating.`

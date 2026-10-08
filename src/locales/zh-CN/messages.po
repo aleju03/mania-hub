@@ -18336,6 +18336,15 @@ msgstr "这张谱面在该成绩之后被修改过，因此无法与谱面当前
 msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count."
 msgstr "该谱面在此成绩之后被修改，成绩无法与谱面当前的音符对应，因此不计入。"
 
+#. placeholder {0}: rating.danMinOd
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This chart's OD is under the dan minimum (OD {0})."
+msgstr "这张谱面的 OD 低于段位要求的最低值（OD {0}）。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This chart's OD is under the dan minimum."
+msgstr "这张谱面的 OD 低于段位要求的最低值。"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"
 msgstr "这次通过支撑了估算"

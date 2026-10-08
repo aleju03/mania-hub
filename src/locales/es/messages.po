@@ -18327,6 +18327,15 @@ msgstr "Este chart se editó después de conseguir este play, así que el play n
 msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count."
 msgstr "Este chart se editó después de este play, así que el play no se puede comparar con las notas actuales del chart y no cuenta."
 
+#. placeholder {0}: rating.danMinOd
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This chart's OD is under the dan minimum (OD {0})."
+msgstr "El OD de este chart está por debajo del mínimo para dan (OD {0})."
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This chart's OD is under the dan minimum."
+msgstr "El OD de este chart está por debajo del mínimo para dan."
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"
 msgstr "Este clear respalda la estimación"
