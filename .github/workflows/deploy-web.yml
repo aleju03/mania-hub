@@ -83,8 +83,19 @@ jobs:
 
       # `npm run build` already ends in scripts/verify-build-assets.mjs, which
       # fails the build if the output references an asset that is not there.
+      # The Nitro pass rebundles the whole SSR output in the same process as
+      # the client and SSR builds, and outgrew Node's ~4 GB default heap on
+      # 2026-10-08. /usr/bin/time -v logs the peak RSS ("Maximum resident set
+      # size") so growth shows up before the next OOM.
       - name: Build
-        run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          if [ -x /usr/bin/time ]; then
+            /usr/bin/time -v npm run build
+          else
+            npm run build
+          fi
 
       - name: Fail early if the server bundle is missing
         run: test -f .output/server/index.mjs || { echo "no .output/server/index.mjs - wrong nitro preset?"; exit 1; }
