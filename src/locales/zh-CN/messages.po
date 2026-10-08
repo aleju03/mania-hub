@@ -3223,6 +3223,11 @@ msgstr "已有一个回放视频正在导出，请先完成或取消它。"
 msgid "any"
 msgstr "不限"
 
+#: src/routes/skins.tsx
+msgctxt "key count"
+msgid "any"
+msgstr "不限"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
@@ -4425,6 +4430,7 @@ msgstr "经典"
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 #: src/routes/recommendations.tsx
+#: src/routes/skins.tsx
 msgid "clear"
 msgstr "清除"
 
@@ -6980,8 +6986,8 @@ msgid "Fewer DT"
 msgstr "更少 DT"
 
 #: src/routes/skins.tsx
-msgid "fewer filters"
-msgstr "减少筛选条件"
+#~ msgid "fewer filters"
+#~ msgstr "减少筛选条件"
 
 #: src/lib/streak-game.ts
 msgid "Fewer followers"
@@ -7054,9 +7060,9 @@ msgstr "筛选谱面…"
 msgid "filtered out"
 msgstr "已被筛掉"
 
-#: src/components/settings/SettingsPanel.tsx
-#~ msgid "filters"
-#~ msgstr "筛选"
+#: src/routes/skins.tsx
+msgid "filters"
+msgstr "筛选"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -10283,8 +10289,8 @@ msgid "More DT"
 msgstr "更多 DT"
 
 #: src/routes/skins.tsx
-msgid "more filters"
-msgstr "更多筛选"
+#~ msgid "more filters"
+#~ msgstr "更多筛选"
 
 #: src/lib/streak-game.ts
 msgid "More followers"
@@ -19697,6 +19703,10 @@ msgstr "回放外观编辑器"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Viewing <0>{selectedKeymode}K</0>"
 msgstr "正在查看 <0>{selectedKeymode}K</0>"
+
+#: src/routes/skins.tsx
+msgid "views"
+msgstr "浏览量"
 
 #: src/routes/skins_.$id.tsx
 msgid "Views"

@@ -3214,6 +3214,11 @@ msgstr "Todavía se está exportando otro video. Termínalo o cancélalo primero
 msgid "any"
 msgstr "cualquiera"
 
+#: src/routes/skins.tsx
+msgctxt "key count"
+msgid "any"
+msgstr "todos"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
@@ -4416,6 +4421,7 @@ msgstr "Clásico"
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 #: src/routes/recommendations.tsx
+#: src/routes/skins.tsx
 msgid "clear"
 msgstr "limpiar"
 
@@ -6971,8 +6977,8 @@ msgid "Fewer DT"
 msgstr "Menos DT"
 
 #: src/routes/skins.tsx
-msgid "fewer filters"
-msgstr "menos filtros"
+#~ msgid "fewer filters"
+#~ msgstr "menos filtros"
 
 #: src/lib/streak-game.ts
 msgid "Fewer followers"
@@ -7045,9 +7051,9 @@ msgstr "filtrar mapas..."
 msgid "filtered out"
 msgstr "filtrados"
 
-#: src/components/settings/SettingsPanel.tsx
-#~ msgid "filters"
-#~ msgstr "filtros"
+#: src/routes/skins.tsx
+msgid "filters"
+msgstr "filtros"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -10274,8 +10280,8 @@ msgid "More DT"
 msgstr "Más DT"
 
 #: src/routes/skins.tsx
-msgid "more filters"
-msgstr "más filtros"
+#~ msgid "more filters"
+#~ msgstr "más filtros"
 
 #: src/lib/streak-game.ts
 msgid "More followers"
@@ -19688,6 +19694,10 @@ msgstr "Editor del visor"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Viewing <0>{selectedKeymode}K</0>"
 msgstr "Viendo <0>{selectedKeymode}K</0>"
+
+#: src/routes/skins.tsx
+msgid "views"
+msgstr "vistas"
 
 #: src/routes/skins_.$id.tsx
 msgid "Views"

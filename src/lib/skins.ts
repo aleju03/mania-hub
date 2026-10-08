@@ -154,11 +154,11 @@ export function canModerateSkinKeymodes(userId: number | null | undefined): bool
   return userId != null && SKIN_KEYMODE_MODERATOR_USER_IDS.includes(userId);
 }
 
-// Three sort options, each a pair: the browse page shows one label per pair and
+// Four sort options, each a pair: the browse page shows one label per pair and
 // clicking the active one flips it to the other direction.
-export type SkinsSort = "newest" | "oldest" | "downloads" | "downloads-asc" | "size" | "size-asc";
+export type SkinsSort = "newest" | "oldest" | "downloads" | "downloads-asc" | "views" | "views-asc" | "size" | "size-asc";
 
-const SKINS_SORTS: readonly string[] = ["newest", "oldest", "downloads", "downloads-asc", "size", "size-asc"];
+const SKINS_SORTS: readonly string[] = ["newest", "oldest", "downloads", "downloads-asc", "views", "views-asc", "size", "size-asc"];
 
 export function isSkinsSort(value: unknown): value is SkinsSort {
   return typeof value === "string" && SKINS_SORTS.includes(value);

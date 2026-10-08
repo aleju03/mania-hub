@@ -171,16 +171,23 @@ export function SkinPreviewImage({
 // card fronts that keymode's own render. A note-shape-filtered list can also
 // carry filterKeys, the backend-selected render that proves a mixed skin has
 // the requested notes. The explicit keymode wins when both filters are on.
+// preferScreenshot is the screenshots filter: the card fronts one of the
+// uploader's own shots (the cover, when the cover is one) over any render.
 // showUploader is for the admin private shelf, which mixes every uploader's
 // skins and would otherwise give no way to tell whose is whose.
-export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: { skin: SkinSummary; previewKeys?: number; showUploader?: boolean; onClick?: () => void }) {
+export function SkinCard({ skin, previewKeys, preferScreenshot = false, showUploader = false, onClick }: { skin: SkinSummary; previewKeys?: number; preferScreenshot?: boolean; showUploader?: boolean; onClick?: () => void }) {
   const { t } = useLingui();
   const locale = useLocale();
   const accent = skin.accentColor ?? SKIN_FALLBACK_ACCENT;
   const isPrivate = skin.visibility === "private";
   const selectedPreviewKeys = previewKeys ?? skin.filterKeys ?? undefined;
   const keymodePreview = selectedPreviewKeys != null ? skin.previews.find((preview) => preview.keys === selectedPreviewKeys) : undefined;
-  const preview = keymodePreview
+  const screenshot = preferScreenshot
+    ? skin.screenshots.find((shot) => shot.url === skin.previewUrl) ?? skin.screenshots[0]
+    : undefined;
+  const preview = screenshot
+    ? { url: screenshot.url, width: screenshot.width, height: screenshot.height }
+    : keymodePreview
     ? { url: keymodePreview.url, width: keymodePreview.width, height: keymodePreview.height }
     : { url: skin.previewUrl, width: skin.previewWidth, height: skin.previewHeight };
   // A private skin has no counted download, and a card for one only reaches its

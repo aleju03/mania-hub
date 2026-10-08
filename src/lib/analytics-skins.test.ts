@@ -33,6 +33,7 @@ describe("getSkinsPageviewProperties", () => {
   it("names both directions of every sort toggle", () => {
     expect(getSkinsPageviewProperties(params("sort=oldest")).skins_sort).toBe("oldest");
     expect(getSkinsPageviewProperties(params("sort=downloads-asc")).skins_sort).toBe("least downloaded");
+    expect(getSkinsPageviewProperties(params("sort=views")).skins_sort).toBe("most viewed");
     expect(getSkinsPageviewProperties(params("sort=size")).skins_sort).toBe("largest");
     expect(getSkinsPageviewProperties(params("sort=size-asc")).skins_sort).toBe("smallest");
   });

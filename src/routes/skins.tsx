@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, ChevronDown, Layers, Lock, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Layers, Lock, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -86,13 +86,20 @@ const DEFAULT_SKINS_SEARCH = {
 
 // One entry per sort option, each holding both of its directions: picking an
 // option sorts it descending, clicking it again flips to ascending. Only the
-// date option renames itself, because "oldest" is the word for it; the other
-// two are nouns that read the same either way and let the arrow say which.
+// date option renames itself, because "oldest" is the word for it; the others
+// are nouns that read the same either way and let the arrow say which.
 const SORT_OPTIONS: Array<{ key: string; label: ReturnType<typeof msg>; ascLabel?: ReturnType<typeof msg>; desc: SkinsSort; asc: SkinsSort }> = [
   { key: "newest", label: msg`newest`, ascLabel: msg`oldest`, desc: "newest", asc: "oldest" },
   { key: "downloads", label: msg`downloads`, desc: "downloads", asc: "downloads-asc" },
+  { key: "views", label: msg`views`, desc: "views", asc: "views-asc" },
   { key: "size", label: msg`size`, desc: "size", asc: "size-asc" },
 ];
+
+// Every filter in the rail back at its default; search text and sort stay.
+const CLEARED_FILTERS = {
+  k: 0, special: false, mine: false, cover: false, stage: false, shots: false,
+  lazer: false, stable: false, shape: "" as const, res: "",
+};
 
 // The note-shape chips, labelled by what the notes are called in the wild.
 // "other" is everything the classifier could not call a circle, arrow or bar.
@@ -189,45 +196,101 @@ export const Route = createFileRoute("/skins")({
   component: SkinsPage,
 });
 
-// osu-web beatmapsets-listing filter row: micro-label on the left, options as
-// plain text links, the active one white.
-function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+// The skins page filter rail: one section per axis, a micro-label over its
+// options, hairlines between sections and nothing boxed.
+function RailSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-      <span className="w-14 shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/45">{label}</span>
-      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3.5 gap-y-1">{children}</div>
+    <div className="border-t border-white/[0.07] pt-3">
+      <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1">{label}</div>
+      <div className="flex flex-col">{children}</div>
     </div>
   );
 }
 
-function FilterOption({
+// A pick-one option marks itself with a dot; a `check` option is one of
+// several independent toggles and marks itself with a box.
+function RailOption({
   active,
+  check = false,
   onClick,
-  direction,
   children,
 }: {
   active: boolean;
+  check?: boolean;
   onClick: () => void;
-  // A sort option carries the direction it is currently ordered in; the arrow
-  // only shows while the option is active, so the row still reads as plain text
-  // apart from the one sort in force.
-  direction?: "asc" | "desc";
   children: React.ReactNode;
 }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`group flex items-center gap-2.5 py-[3px] text-left text-[13.5px] transition-colors cursor-pointer ${
+        active ? "font-bold text-white" : "font-medium text-osu-f1 hover:text-osu-pink-light"
+      }`}
+    >
+      {check ? (
+        <span
+          className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] ${
+            active ? "bg-osu-pink" : "border border-osu-f1/40 group-hover:border-osu-pink-light"
+          }`}
+          aria-hidden="true"
+        >
+          {active && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />}
+        </span>
+      ) : (
+        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden="true">
+          <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-osu-pink" : "bg-transparent"}`} />
+        </span>
+      )}
+      {children}
+    </button>
+  );
+}
+
+// Short pick-one values (keymodes, resolutions) sit as a block of cells, the
+// active one filled.
+function RailTile({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-md px-1 py-1 text-center text-[12.5px] tabular-nums transition cursor-pointer ${
+        active ? "bg-osu-pink font-bold text-white hover:brightness-110" : "font-medium text-osu-f1 hover:bg-white/[0.04] hover:text-osu-pink-light"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// The sort options above the grid. The active one is white and underlined,
+// with an arrow for the direction it is ordered in.
+function SortTab({
+  direction,
+  onClick,
+  children,
+}: {
+  direction?: "asc" | "desc";
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const active = direction != null;
   const Arrow = direction === "asc" ? ArrowUp : ArrowDown;
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-baseline gap-0.5 text-[12.5px] tabular-nums transition-colors cursor-pointer ${
-        active ? "font-bold text-white" : "font-medium text-osu-f1/75 hover:text-osu-pink-light"
+      className={`inline-flex items-center gap-1 border-b-2 py-1 text-[14px] transition-colors cursor-pointer ${
+        active ? "border-osu-pink font-bold text-white" : "border-transparent font-medium text-osu-f1 hover:text-osu-pink-light"
       }`}
     >
       {children}
-      {active && direction && (
+      {active && (
         <>
-          <Arrow className="h-3 w-3 self-center" aria-hidden="true" />
+          <Arrow className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="sr-only">{direction === "desc" ? <Trans>descending</Trans> : <Trans>ascending</Trans>}</span>
         </>
       )}
@@ -309,9 +372,9 @@ function SkinsPage() {
   const [privateOpen, setPrivateOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(q);
   const [reloadTick, setReloadTick] = useState(0);
-  // The trait rows (notes, includes, display) fold away, so the browse view
-  // keeps the two short rows it always had and the rest is one click down.
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(traitFiltersActive);
+  // The filter rail is always out from lg up; below that it is a drawer.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFilterCount = traitFilterCount + (k ? 1 : 0) + (mineActive ? 1 : 0);
 
   // The resolutions worth offering are the ones the catalog answers to, which
   // the list ships as a facet. A filter already in the URL joins them either
@@ -331,13 +394,6 @@ function SkinsPage() {
     },
     [navigate, q, sort, k, special, mine, cover, stage, shots, lazer, stable, shape, res],
   );
-
-  // A link into a filtered URL opens the drawer, so nothing narrows the grid
-  // from behind a fold. Collapsing it again is left alone: the toggle counts
-  // what is still on.
-  useEffect(() => {
-    if (traitFiltersActive) setMoreFiltersOpen(true);
-  }, [traitFiltersActive]);
 
   // Debounced text search: typing updates local state, the URL follows.
   useEffect(() => {
@@ -496,12 +552,12 @@ function SkinsPage() {
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/skins.svg" title={t`osu!mania skins`} right={headerAction} />
 
-          {/* Search strip, the beatmapsets-listing pattern: big search box with
-              filter rows as plain text options below it. No surface of its own
-              so the falling notes show through, like the home hero. */}
-          <div className="border-b border-osu-b3/30">
-            <div className="mx-auto w-full max-w-[1200px] px-4 py-3.5 sm:px-5">
-              <div className="relative">
+          <div className="mx-auto w-full max-w-[1200px] flex-1 lg:max-w-[1408px] px-4 py-4 sm:px-5">
+            {/* Search and sort share one bar over everything; the filters
+                moved off it into the rail, so the bar never grows. No
+                surface of its own, so the falling notes show through. */}
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+              <div className="relative min-w-0 flex-1 basis-[300px]">
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -524,257 +580,254 @@ function SkinsPage() {
                   className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4 py-2.5 pl-10 pr-3 text-[14px] text-osu-l1 transition-colors placeholder:text-osu-f1/55 focus:border-osu-pink/50 focus:outline-none"
                 />
               </div>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1" role="group" aria-label={t`sort by`}>
+                {SORT_OPTIONS.map((option) => {
+                  const direction = sort === option.desc ? "desc" as const : sort === option.asc ? "asc" as const : undefined;
+                  return (
+                    <SortTab
+                      key={option.key}
+                      direction={direction}
+                      onClick={() => applySearch({ sort: direction === "desc" ? option.asc : option.desc })}
+                    >
+                      {i18n._(direction === "asc" ? option.ascLabel ?? option.label : option.label)}
+                    </SortTab>
+                  );
+                })}
+              </div>
+            </div>
 
-              <div className="mt-3.5 flex flex-col gap-2">
-                <FilterRow label={t`keys`}>
-                  <FilterOption active={k === 0} onClick={() => applySearch({ k: 0, special: false })}>
-                    <Trans>any</Trans>
-                  </FilterOption>
-                  {KEYMODE_FILTERS.map((option) => {
-                    const active = k === option.k && special === option.special;
-                    return (
-                      <FilterOption
-                        key={option.label}
-                        active={active}
-                        onClick={() => applySearch(active ? { k: 0, special: false } : { k: option.k, special: option.special })}
-                      >
-                        {option.label}
-                      </FilterOption>
-                    );
-                  })}
-                  {/* The trait rows sit behind this, at the end of the first
-                      row rather than on a line of its own: they are the ones
-                      you go looking for, not the ones you browse past. */}
+            <div className="mt-5 lg:grid lg:grid-cols-[176px_minmax(0,1fr)] lg:gap-8">
+              <aside className="scrollbar-hide mb-5 lg:sticky lg:top-[76px] lg:mb-0 lg:max-h-[calc(100svh_-_92px)] lg:self-start lg:overflow-y-auto lg:pb-4">
+                <div className="flex items-baseline gap-3">
+                  <span
+                    className={`text-[22px] font-bold leading-none text-white tabular-nums transition-opacity ${loading ? "opacity-45" : ""}`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {data ? <Plural value={data.total} one="# skin" other="# skins" /> : <Skeleton className="h-5 w-24" />}
+                  </span>
+                  {activeFilterCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => applySearch(CLEARED_FILTERS)}
+                      className="text-[12px] font-medium text-osu-f1 transition-colors cursor-pointer hover:text-osu-pink-light"
+                    >
+                      <Trans>clear</Trans>
+                    </button>
+                  )}
+                  {/* Below lg the rail has no column of its own, so it folds
+                      into a drawer over the grid. */}
                   <button
                     type="button"
-                    onClick={() => setMoreFiltersOpen((open) => !open)}
-                    aria-expanded={moreFiltersOpen}
-                    className="ml-auto inline-flex items-center gap-1 text-[12.5px] font-medium text-osu-f1/75 transition-colors cursor-pointer hover:text-osu-pink-light"
+                    onClick={() => setFiltersOpen((open) => !open)}
+                    aria-expanded={filtersOpen}
+                    className="ml-auto inline-flex items-center gap-1 text-[12.5px] font-medium text-osu-f1 transition-colors cursor-pointer hover:text-osu-pink-light lg:hidden"
                   >
-                    {moreFiltersOpen ? <Trans>fewer filters</Trans> : <Trans>more filters</Trans>}
-                    {!moreFiltersOpen && traitFilterCount > 0 && (
-                      <span className="tabular-nums text-white">{traitFilterCount}</span>
-                    )}
+                    <Trans>filters</Trans>
+                    {activeFilterCount > 0 && <span className="tabular-nums text-white">{activeFilterCount}</span>}
                     <ChevronDown
-                      className={`h-3 w-3 self-center transition-transform ${moreFiltersOpen ? "" : "-rotate-90"}`}
+                      className={`h-3 w-3 self-center transition-transform ${filtersOpen ? "" : "-rotate-90"}`}
                       aria-hidden="true"
                     />
                   </button>
-                </FilterRow>
-                {moreFiltersOpen && (
-                  /* Two columns rather than four more stacked rows: the extra
-                     axes read as one banded group off to the side of the ones
-                     that are always on, instead of extending the same column
-                     of grey words further down the page. */
-                  <div className="mt-1 grid gap-x-12 gap-y-2 border-y border-osu-b3/25 py-2.5 sm:grid-cols-2">
-                    {/* What the tap notes are, classified from each skin's own
-                        note art. One shape at a time; picking the active one
-                        clears it. */}
-                    <FilterRow label={t`notes`}>
-                      <FilterOption active={!shape} onClick={() => applySearch({ shape: "" })}>
-                        <Trans>any</Trans>
-                      </FilterOption>
-                      {NOTE_SHAPE_FILTERS.map((option) => (
-                        <FilterOption
-                          key={option.shape}
-                          active={shape === option.shape}
-                          onClick={() => applySearch({ shape: shape === option.shape ? "" : option.shape })}
-                        >
-                          {i18n._(option.label)}
-                        </FilterOption>
-                      ))}
-                    </FilterRow>
-                    {/* Independent checkboxes: each chip narrows to skins that
-                        ship the thing. */}
-                    <FilterRow label={t`includes`}>
-                      <FilterOption active={cover} onClick={() => applySearch({ cover: !cover })}>
-                        <Trans>lane cover</Trans>
-                      </FilterOption>
-                      <FilterOption active={stage} onClick={() => applySearch({ stage: !stage })}>
-                        <Trans>mania stage</Trans>
-                      </FilterOption>
-                      <FilterOption active={shots} onClick={() => applySearch({ shots: !shots })}>
-                        <Trans>screenshots</Trans>
-                      </FilterOption>
-                    </FilterRow>
-                    {/* Client compatibility is a pick-one axis, not something
-                        the archive "includes". */}
-                    <FilterRow label={t`client`}>
-                      <FilterOption
-                        active={!stable && !lazer}
-                        onClick={() => applySearch({ stable: false, lazer: false })}
+                </div>
+
+                <div className={`${filtersOpen ? "grid" : "hidden"} mt-4 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid lg:grid-cols-1`}>
+                  <RailSection label={t`keys`}>
+                    <div className="grid grid-cols-3 gap-1">
+                      <RailTile active={k === 0} onClick={() => applySearch({ k: 0, special: false })}>
+                        <Trans context="key count">any</Trans>
+                      </RailTile>
+                      {KEYMODE_FILTERS.map((option) => {
+                        const active = k === option.k && special === option.special;
+                        return (
+                          <RailTile
+                            key={option.label}
+                            active={active}
+                            onClick={() => applySearch(active ? { k: 0, special: false } : { k: option.k, special: option.special })}
+                          >
+                            {option.label}
+                          </RailTile>
+                        );
+                      })}
+                    </div>
+                  </RailSection>
+                  {/* What the tap notes are, classified from each skin's own
+                      note art. One shape at a time; picking the active one
+                      clears it. */}
+                  <RailSection label={t`notes`}>
+                    <RailOption active={!shape} onClick={() => applySearch({ shape: "" })}>
+                      <Trans>any</Trans>
+                    </RailOption>
+                    {NOTE_SHAPE_FILTERS.map((option) => (
+                      <RailOption
+                        key={option.shape}
+                        active={shape === option.shape}
+                        onClick={() => applySearch({ shape: shape === option.shape ? "" : option.shape })}
                       >
-                        <Trans>any</Trans>
-                      </FilterOption>
-                      <FilterOption
-                        active={stable}
-                        onClick={() => applySearch({ stable: !stable, lazer: false })}
-                      >
-                        <Trans>stable</Trans>
-                      </FilterOption>
-                      <FilterOption
-                        active={lazer}
-                        onClick={() => applySearch({ lazer: !lazer, stable: false })}
-                      >
-                        <Trans>lazer</Trans>
-                      </FilterOption>
-                    </FilterRow>
-                    {/* The resolution the uploader said the skin is made for,
-                        offered as the ones uploaders have actually answered.
-                        Nobody has answered yet, no row. */}
-                    {resolutionOptions.length > 0 && (
-                      <FilterRow label={t`display`}>
-                        <FilterOption active={!res} onClick={() => applySearch({ res: "" })}>
+                        {i18n._(option.label)}
+                      </RailOption>
+                    ))}
+                  </RailSection>
+                  {/* Client compatibility is a pick-one axis, not something
+                      the archive "includes". */}
+                  <RailSection label={t`client`}>
+                    <RailOption active={!stable && !lazer} onClick={() => applySearch({ stable: false, lazer: false })}>
+                      <Trans>any</Trans>
+                    </RailOption>
+                    <RailOption active={stable} onClick={() => applySearch({ stable: !stable, lazer: false })}>
+                      <Trans>stable</Trans>
+                    </RailOption>
+                    <RailOption active={lazer} onClick={() => applySearch({ lazer: !lazer, stable: false })}>
+                      <Trans>lazer</Trans>
+                    </RailOption>
+                  </RailSection>
+                  {/* Independent checkboxes: each one narrows to skins that
+                      ship the thing, so they wear a box, not a dot. */}
+                  <RailSection label={t`includes`}>
+                    <RailOption check active={cover} onClick={() => applySearch({ cover: !cover })}>
+                      <Trans>lane cover</Trans>
+                    </RailOption>
+                    <RailOption check active={stage} onClick={() => applySearch({ stage: !stage })}>
+                      <Trans>mania stage</Trans>
+                    </RailOption>
+                    <RailOption check active={shots} onClick={() => applySearch({ shots: !shots })}>
+                      <Trans>screenshots</Trans>
+                    </RailOption>
+                  </RailSection>
+                  {/* The resolution the uploader said the skin is made for,
+                      offered as the ones uploaders have actually answered.
+                      Nobody has answered yet, no section. */}
+                  {resolutionOptions.length > 0 && (
+                    <RailSection label={t`display`}>
+                      <div className="grid grid-cols-2 gap-1">
+                        <RailTile active={!res} onClick={() => applySearch({ res: "" })}>
                           <Trans>any</Trans>
-                        </FilterOption>
+                        </RailTile>
                         {resolutionOptions.map((option) => (
-                          <FilterOption
+                          <RailTile
                             key={option}
                             active={res === option}
                             onClick={() => applySearch({ res: res === option ? "" : option })}
                           >
                             {option}
-                          </FilterOption>
+                          </RailTile>
                         ))}
-                      </FilterRow>
+                      </div>
+                    </RailSection>
+                  )}
+                  {/* Only worth a section to someone who has an account to
+                      filter by; signed out there is no "you". */}
+                  {auth.viewer && (
+                    <RailSection label={t`uploader`}>
+                      <RailOption active={!mineActive} onClick={() => applySearch({ mine: false })}>
+                        <Trans>anyone</Trans>
+                      </RailOption>
+                      <RailOption active={mineActive} onClick={() => applySearch({ mine: true })}>
+                        <Trans>you</Trans>
+                      </RailOption>
+                    </RailSection>
+                  )}
+                </div>
+              </aside>
+
+              <div className="min-w-0">
+                {(privateSkins.length > 0 || privatePending > 0) && (
+                  <div className="mb-6">
+                    <h2 className="mb-2">
+                      <button
+                        type="button"
+                        onClick={togglePrivateShelf}
+                        aria-expanded={privateOpen}
+                        className="group inline-flex items-center gap-2 text-left cursor-pointer"
+                      >
+                        <Lock className="h-3.5 w-3.5 shrink-0 text-osu-f1/55" aria-hidden="true" />
+                        {/* An admin's shelf carries every uploader's private skins,
+                            so it says so rather than claiming they are theirs. */}
+                        <span className="text-[13px] font-bold text-white transition-colors group-hover:text-osu-pink-light">
+                          {admin ? "Private skins" : <Trans>Your private skins</Trans>}
+                        </span>
+                        {privateSkins.length > 0 && (
+                          <span className="text-[11px] text-osu-f1 tabular-nums">
+                            {admin
+                              ? privateTotal > privateSkins.length
+                                ? `${privateSkins.length} of ${privateTotal.toLocaleString("en-US")}, every uploader`
+                                : `${privateTotal.toLocaleString("en-US")} across every uploader`
+                              : <Trans>only you can open these</Trans>}
+                          </span>
+                        )}
+                        <ChevronDown
+                          className={`h-3.5 w-3.5 shrink-0 text-osu-f1/55 transition-[transform,color] group-hover:text-osu-pink-light ${privateOpen ? "" : "-rotate-90"}`}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    </h2>
+                    {privateOpen && (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {privateSkins.length > 0
+                          ? privateSkins.map((skin) => <SkinCard key={skin.id} skin={skin} showUploader={admin} />)
+                          : Array.from({ length: privatePending }, (_, index) => <SkinCardSkeleton key={index} />)}
+                      </div>
                     )}
                   </div>
                 )}
-                {/* Only worth a row to someone who has an account to filter
-                    by; signed out there is no "you". */}
-                {auth.viewer && (
-                  <FilterRow label={t`uploader`}>
-                    <FilterOption active={!mineActive} onClick={() => applySearch({ mine: false })}>
-                      <Trans>anyone</Trans>
-                    </FilterOption>
-                    <FilterOption active={mineActive} onClick={() => applySearch({ mine: true })}>
-                      <Trans>you</Trans>
-                    </FilterOption>
-                  </FilterRow>
-                )}
-                <FilterRow label={t`sort by`}>
-                  {SORT_OPTIONS.map((option) => {
-                    const direction = sort === option.desc ? "desc" as const : sort === option.asc ? "asc" as const : undefined;
-                    return (
-                      <FilterOption
-                        key={option.key}
-                        active={direction != null}
-                        direction={direction}
-                        onClick={() => applySearch({ sort: direction === "desc" ? option.asc : option.desc })}
-                      >
-                        {i18n._(direction === "asc" ? option.ascLabel ?? option.label : option.label)}
-                      </FilterOption>
-                    );
-                  })}
-                  {data && (
-                    <span
-                      className={`ml-auto text-[12px] text-osu-f1 tabular-nums transition-opacity ${loading ? "opacity-45" : ""}`}
-                      role="status"
-                      aria-live="polite"
+                {loading && !data ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {Array.from({ length: 9 }, (_, index) => (
+                      <SkinCardSkeleton key={index} />
+                    ))}
+                  </div>
+                ) : failed ? (
+                  <div className="mx-auto max-w-md px-4 py-16 text-center">
+                    <div className="text-sm font-bold text-white"><Trans>Skins are unavailable right now</Trans></div>
+                    <p className="mt-2 text-[12px] leading-relaxed text-osu-f1"><Trans>The skins list could not be loaded.</Trans></p>
+                    <button
+                      type="button"
+                      onClick={() => setReloadTick((tick) => tick + 1)}
+                      className="mt-4 rounded-full bg-osu-pink px-5 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110"
                     >
-                      <Plural value={data.total} one="# skin" other="# skins" />
-                    </span>
-                  )}
-                </FilterRow>
+                      <Trans>Retry</Trans>
+                    </button>
+                  </div>
+                ) : skins.length === 0 ? (
+                  <div className="mx-auto max-w-md px-4 py-16 text-center">
+                    <div className="text-sm font-bold text-white">
+                      {mineActive && !q && !k && !traitFiltersActive
+                        ? <Trans>You have not published a skin yet</Trans>
+                        : q || k || mineActive || traitFiltersActive ? <Trans>No skins match</Trans> : <Trans>No skins yet</Trans>}
+                    </div>
+                    <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
+                      {mineActive && !q && !k && !traitFiltersActive
+                        ? privateSkins.length > 0
+                          ? <Trans>Your private skins are on the shelf above; anything you publish lands here.</Trans>
+                          : <Trans>Upload a skin and it lands here.</Trans>
+                        : q || k || mineActive || traitFiltersActive
+                          ? <Trans>Clear the filters, or upload the skin yourself.</Trans>
+                          : <Trans>The first uploaded skin lands here.</Trans>}
+                    </p>
+                  </div>
+                ) : (
+                  <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {skins.map((skin) => (
+                        // An explicit keymode fronts its own render (7K+1 is the
+                        // 8K one). Without one, SkinCard uses the note-shape
+                        // proof keymode returned for mixed skins by the backend.
+                        <SkinCard key={skin.id} skin={skin} previewKeys={k >= 1 ? k : undefined} preferScreenshot={shots} />
+                      ))}
+                    </div>
+                    <Pagination
+                      page={page}
+                      totalPages={totalPages}
+                      onPageChange={(next) => applySearch({ page: next })}
+                      renderPageLink={isBrowse ? (next, props) => (
+                        <Link {...props} to="/skins" search={{ page: next }} replace />
+                      ) : undefined}
+                    />
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-
-          <div className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 sm:px-5">
-            {(privateSkins.length > 0 || privatePending > 0) && (
-              <div className="mb-6">
-                <h2 className="mb-2">
-                  <button
-                    type="button"
-                    onClick={togglePrivateShelf}
-                    aria-expanded={privateOpen}
-                    className="group inline-flex items-center gap-2 text-left cursor-pointer"
-                  >
-                    <Lock className="h-3.5 w-3.5 shrink-0 text-osu-f1/55" aria-hidden="true" />
-                    {/* An admin's shelf carries every uploader's private skins,
-                        so it says so rather than claiming they are theirs. */}
-                    <span className="text-[13px] font-bold text-white transition-colors group-hover:text-osu-pink-light">
-                      {admin ? "Private skins" : <Trans>Your private skins</Trans>}
-                    </span>
-                    {privateSkins.length > 0 && (
-                      <span className="text-[11px] text-osu-f1 tabular-nums">
-                        {admin
-                          ? privateTotal > privateSkins.length
-                            ? `${privateSkins.length} of ${privateTotal.toLocaleString("en-US")}, every uploader`
-                            : `${privateTotal.toLocaleString("en-US")} across every uploader`
-                          : <Trans>only you can open these</Trans>}
-                      </span>
-                    )}
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 shrink-0 text-osu-f1/55 transition-[transform,color] group-hover:text-osu-pink-light ${privateOpen ? "" : "-rotate-90"}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                </h2>
-                {privateOpen && (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {privateSkins.length > 0
-                      ? privateSkins.map((skin) => <SkinCard key={skin.id} skin={skin} showUploader={admin} />)
-                      : Array.from({ length: privatePending }, (_, index) => <SkinCardSkeleton key={index} />)}
-                  </div>
-                )}
-              </div>
-            )}
-            {loading && !data ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {Array.from({ length: 9 }, (_, index) => (
-                  <SkinCardSkeleton key={index} />
-                ))}
-              </div>
-            ) : failed ? (
-              <div className="mx-auto max-w-md px-4 py-16 text-center">
-                <div className="text-sm font-bold text-white"><Trans>Skins are unavailable right now</Trans></div>
-                <p className="mt-2 text-[12px] leading-relaxed text-osu-f1"><Trans>The skins list could not be loaded.</Trans></p>
-                <button
-                  type="button"
-                  onClick={() => setReloadTick((tick) => tick + 1)}
-                  className="mt-4 rounded-full bg-osu-pink px-5 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110"
-                >
-                  <Trans>Retry</Trans>
-                </button>
-              </div>
-            ) : skins.length === 0 ? (
-              <div className="mx-auto max-w-md px-4 py-16 text-center">
-                <div className="text-sm font-bold text-white">
-                  {mineActive && !q && !k && !traitFiltersActive
-                    ? <Trans>You have not published a skin yet</Trans>
-                    : q || k || mineActive || traitFiltersActive ? <Trans>No skins match</Trans> : <Trans>No skins yet</Trans>}
-                </div>
-                <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-                  {mineActive && !q && !k && !traitFiltersActive
-                    ? privateSkins.length > 0
-                      ? <Trans>Your private skins are on the shelf above; anything you publish lands here.</Trans>
-                      : <Trans>Upload a skin and it lands here.</Trans>
-                    : q || k || mineActive || traitFiltersActive
-                      ? <Trans>Clear the filters, or upload the skin yourself.</Trans>
-                      : <Trans>The first uploaded skin lands here.</Trans>}
-                </p>
-              </div>
-            ) : (
-              <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {skins.map((skin) => (
-                    // An explicit keymode fronts its own render (7K+1 is the
-                    // 8K one). Without one, SkinCard uses the note-shape
-                    // proof keymode returned for mixed skins by the backend.
-                    <SkinCard key={skin.id} skin={skin} previewKeys={k >= 1 ? k : undefined} />
-                  ))}
-                </div>
-                <Pagination
-                  page={page}
-                  totalPages={totalPages}
-                  onPageChange={(next) => applySearch({ page: next })}
-                  renderPageLink={isBrowse ? (next, props) => (
-                    <Link {...props} to="/skins" search={{ page: next }} replace />
-                  ) : undefined}
-                />
-              </div>
-            )}
           </div>
         </div>
       </div>

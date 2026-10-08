@@ -36,7 +36,7 @@ describe("skins search params", () => {
   });
 
   it("accepts both directions of every sort and rejects unknown ones", () => {
-    for (const sort of ["oldest", "downloads", "downloads-asc", "size", "size-asc"]) {
+    for (const sort of ["oldest", "downloads", "downloads-asc", "views", "views-asc", "size", "size-asc"]) {
       expect(parseSkinsSearch({ sort }).sort).toBe(sort);
     }
     expect(parseSkinsSearch({ sort: "newest-asc" }).sort).toBe("newest");

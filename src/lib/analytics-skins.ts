@@ -14,6 +14,8 @@ const SORT_LABELS: Record<string, string> = {
   oldest: "oldest",
   downloads: "most downloaded",
   "downloads-asc": "least downloaded",
+  views: "most viewed",
+  "views-asc": "least viewed",
   size: "largest",
   "size-asc": "smallest",
 };
