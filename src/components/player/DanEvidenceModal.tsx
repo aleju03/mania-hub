@@ -234,7 +234,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // skillsets (headlineAlwaysFromClears on the backend). Skillset columns
   // beside it read as what the number is made of, and a headline above every
   // skillset then looks wrong, so that window opens on the clears themselves
-  // and the skillsets sit under them as a profile.
+  // and the skillsets are only filters over them, with no dan of their own.
   const clearsFirst = side === "ln" && keyCount === 4;
   // Everywhere else the window opens on the breakdown, never on a wall of
   // plays: every row is one dan number, and the clears behind it unfold on
@@ -291,7 +291,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   const stripSections = allInHeader ? skillsetSections : sections;
   // Picked from the profile under the list, so the swapped list starts at
   // its top rather than wherever the old one was scrolled.
-  const showSkillsetClears = (id: string) => {
+  const showSkillsetClears = (id: string | null) => {
     setOpenSection((current) => (current === id ? null : id));
     if (bodyRef.current) bodyRef.current.scrollTop = 0;
   };
@@ -584,68 +584,37 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                   ) : null}
                   {clearsFirst && listSection ? (
                     <>
-                      {listSection.id === "all" ? (
-                        <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
-                      ) : (
-                        <div className="flex items-center gap-2 px-2">
-                          <button
-                            type="button"
-                            onClick={() => setOpenSection(null)}
-                            className="inline-flex cursor-pointer items-center gap-1 rounded-md py-1 pr-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-white"
-                          >
-                            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                            {t`All clears`}
-                          </button>
-                          <span className="text-[13px] font-semibold text-white">{listSection.label}</span>
-                        </div>
-                      )}
-                      <div className="pt-2">{renderClears(listSection)}</div>
+                      {/* The skillsets only filter the list here: a 4K LN skillset
+                          has no dan of its own worth reading, so each is a name
+                          and a play count. */}
                       {skillsetSections.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap border-y border-white/[0.07]">
-                          {skillsetSections.map((section) => {
-                            const open = openSection === section.id;
-                            const sectionImage = section.dan ? getDanTierImageSrc(section.dan.label, "ln", keyCount) : null;
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/[0.07] px-2 pb-2">
+                          {sections.map((section) => {
+                            const active = listSection.id === section.id;
                             return (
                               <button
                                 key={section.id}
                                 type="button"
-                                onClick={() => showSkillsetClears(section.id)}
-                                aria-pressed={open}
-                                title={open ? t`Hide the ${section.label} clears` : t`Show the ${section.label} clears`}
-                                className={`relative flex min-w-0 basis-1/2 flex-col items-center gap-1.5 border-l border-white/[0.07] px-2 py-3 text-center transition-colors first:border-l-0 max-sm:odd:border-l-0 sm:basis-0 sm:flex-1 ${
-                                  open ? "bg-osu-b4" : "hover:bg-osu-b4/50"
+                                onClick={() => showSkillsetClears(section.id === "all" ? null : section.id)}
+                                aria-pressed={active}
+                                className={`relative inline-flex cursor-pointer items-baseline gap-1.5 py-1 text-[12px] font-semibold transition-colors ${
+                                  active ? "text-white" : "text-osu-f1 hover:text-white"
                                 }`}
                               >
-                                <span className="max-w-full truncate text-[12px] font-semibold text-osu-f1">
-                                  {section.label}
-                                </span>
-                                <span className="flex h-12 items-center justify-center">
-                                  {sectionImage ? (
-                                    <img src={sectionImage} alt="" className="h-12 w-auto max-w-none object-contain" />
-                                  ) : (
-                                    <span className="text-2xl font-black leading-none text-osu-b3">-</span>
-                                  )}
-                                </span>
-                                {section.dan ? (
-                                  <span className="max-w-full truncate text-[15px] font-black leading-none text-white">
-                                    {section.verified ? "" : "~"}{formatDan(section.dan.label)}
-                                  </span>
-                                ) : (
-                                  <span className="text-[11px] leading-none text-osu-f1">
-                                    <Trans>needs {quorum}</Trans>
-                                  </span>
-                                )}
-                                <span className="text-[11px] tabular-nums text-osu-f1">
-                                  {section.verified ? t`Verified clear` : section.nearClear ? t`Near clear` : t`${section.clears} plays`}
-                                </span>
-                                {open ? (
-                                  <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
+                                {section.label}
+                                <span className="text-[11px] font-normal tabular-nums text-osu-f1">{section.clears}</span>
+                                {active ? (
+                                  <span className="absolute inset-x-0 -bottom-[9px] h-[2px]" style={{ backgroundColor: section.color }} />
                                 ) : null}
                               </button>
                             );
                           })}
                         </div>
                       ) : null}
+                      {listSection.id === "all" ? (
+                        <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
+                      ) : null}
+                      <div className="pt-2">{renderClears(listSection)}</div>
                     </>
                   ) : (
                     <>
