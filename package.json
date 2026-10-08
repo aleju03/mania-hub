@@ -10,7 +10,7 @@
     "#replay-judge/*": "./backend/src/replay-judge/*"
   },
   "scripts": {
-    "postinstall": "node scripts/prune-onnxruntime-web.mjs && node scripts/patch-vite-module-runner.mjs",
+    "postinstall": "node scripts/prune-onnxruntime-web.mjs && node scripts/patch-vite-module-runner.mjs && node scripts/patch-build-memory-leaks.mjs",
     "predev": "node scripts/patch-vite-module-runner.mjs",
     "dev": "vite dev --port 3000",
     "dev:all": "node scripts/dev/run-dev-stack.mjs",
