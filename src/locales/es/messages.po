@@ -5323,7 +5323,7 @@ msgstr "No se pudieron cargar los resultados de búsqueda. Inténtalo de nuevo."
 
 #: src/routes/recommendations.tsx
 msgid "Couldn't load skill charts"
-msgstr ""
+msgstr "No se pudieron cargar los charts por skillset"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Couldn't load skills right now."
@@ -10243,7 +10243,7 @@ msgstr "moderación"
 
 #: src/routes/recommendations.tsx
 msgid "mods"
-msgstr ""
+msgstr "mods"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
@@ -10807,11 +10807,11 @@ msgstr "Sin cambios en los últimos 7 días"
 
 #: src/routes/recommendations.tsx
 msgid "no charts"
-msgstr ""
+msgstr "sin charts"
 
 #: src/routes/recommendations.tsx
 msgid "No charts in this range"
-msgstr ""
+msgstr "No hay charts en este rango"
 
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "No collections here yet. Post the first one."
@@ -11092,7 +11092,7 @@ msgstr "Aún no hay cambios en el sistema de valoración."
 
 #: src/routes/recommendations.tsx
 msgid "no ratings"
-msgstr ""
+msgstr "sin ratings"
 
 #: src/routes/index.tsx
 msgid "No recent scores"
@@ -11186,7 +11186,7 @@ msgstr "Aún no se han registrado ratings de habilidad."
 
 #: src/routes/recommendations.tsx
 msgid "No skill ratings in this key mode yet"
-msgstr ""
+msgstr "Todavía no hay ratings de skill en este modo de teclas"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "No skin loaded in the editor"
@@ -11659,7 +11659,7 @@ msgstr "Nada cumple este filtro por ahora, pero otras razones todavía tienen ma
 
 #: src/routes/recommendations.tsx
 msgid "Nothing ranked sits a little above your {axisLabel} rating that you haven't played yet."
-msgstr ""
+msgstr "No hay nada ranked un poco por encima de tu rating de {axisLabel} que todavía no hayas jugado."
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Nothing recorded yet."
@@ -15903,7 +15903,7 @@ msgstr "Tamaño"
 
 #: src/routes/recommendations.tsx
 msgid "skill"
-msgstr ""
+msgstr "skillset"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -15926,7 +15926,7 @@ msgstr "Desglose de habilidades no disponible"
 
 #: src/routes/recommendations.tsx
 msgid "Skill charts need rated plays in 4K or 7K."
-msgstr ""
+msgstr "Los charts por skillset necesitan plays con rating en 4K o 7K."
 
 #: src/components/maps/MapSearchSection.tsx
 #~ msgid "Skill detection is less tuned outside 4K."
@@ -15976,7 +15976,7 @@ msgstr "solo skillboost"
 
 #: src/routes/recommendations.tsx
 msgid "skills"
-msgstr ""
+msgstr "skillsets"
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/dan-estimates.tsx
@@ -19569,7 +19569,7 @@ msgstr "Vista"
 #. placeholder {1}: rec.version
 #: src/routes/recommendations.tsx
 msgid "View {0} [{1}]"
-msgstr ""
+msgstr "Ver {0} [{1}]"
 
 #. placeholder {0}: card.player.user.username
 #. placeholder {0}: card.username

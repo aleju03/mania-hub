@@ -5332,7 +5332,7 @@ msgstr "无法加载搜索结果。请重试。"
 
 #: src/routes/recommendations.tsx
 msgid "Couldn't load skill charts"
-msgstr ""
+msgstr "无法加载技能谱面"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Couldn't load skills right now."
@@ -10252,7 +10252,7 @@ msgstr "审核"
 
 #: src/routes/recommendations.tsx
 msgid "mods"
-msgstr ""
+msgstr "Mod"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
@@ -10816,11 +10816,11 @@ msgstr "最近 7 天无变化"
 
 #: src/routes/recommendations.tsx
 msgid "no charts"
-msgstr ""
+msgstr "没有谱面"
 
 #: src/routes/recommendations.tsx
 msgid "No charts in this range"
-msgstr ""
+msgstr "这个范围内没有谱面"
 
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "No collections here yet. Post the first one."
@@ -11101,7 +11101,7 @@ msgstr "评分系统暂无更新。"
 
 #: src/routes/recommendations.tsx
 msgid "no ratings"
-msgstr ""
+msgstr "没有评分"
 
 #: src/routes/index.tsx
 msgid "No recent scores"
@@ -11195,7 +11195,7 @@ msgstr "尚未记录任何技能评分。"
 
 #: src/routes/recommendations.tsx
 msgid "No skill ratings in this key mode yet"
-msgstr ""
+msgstr "这个键位模式还没有技能评分"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "No skin loaded in the editor"
@@ -11668,7 +11668,7 @@ msgstr "当前筛选下暂时没有符合的谱面，但其他理由下还有。
 
 #: src/routes/recommendations.tsx
 msgid "Nothing ranked sits a little above your {axisLabel} rating that you haven't played yet."
-msgstr ""
+msgstr "没有略高于你 {axisLabel} 评分且你还没玩过的 ranked 谱面。"
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Nothing recorded yet."
@@ -15912,7 +15912,7 @@ msgstr "大小"
 
 #: src/routes/recommendations.tsx
 msgid "skill"
-msgstr ""
+msgstr "技能"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -15935,7 +15935,7 @@ msgstr "技能明细不可用"
 
 #: src/routes/recommendations.tsx
 msgid "Skill charts need rated plays in 4K or 7K."
-msgstr ""
+msgstr "技能谱面需要 4K 或 7K 的已评分成绩。"
 
 #: src/components/maps/MapSearchSection.tsx
 #~ msgid "Skill detection is less tuned outside 4K."
@@ -15985,7 +15985,7 @@ msgstr "仅技能提升"
 
 #: src/routes/recommendations.tsx
 msgid "skills"
-msgstr ""
+msgstr "技能"
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/dan-estimates.tsx
@@ -19578,7 +19578,7 @@ msgstr "视图"
 #. placeholder {1}: rec.version
 #: src/routes/recommendations.tsx
 msgid "View {0} [{1}]"
-msgstr ""
+msgstr "查看 {0} [{1}]"
 
 #. placeholder {0}: card.player.user.username
 #. placeholder {0}: card.username
