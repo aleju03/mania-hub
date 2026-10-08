@@ -691,6 +691,8 @@ export class ManiaReplayRenderer {
   private app: Application<WebGLRenderer | CanvasRenderer> | null = null;
   private gameplayGraphics = new Graphics();
   private inputOverlayGraphics = new Graphics();
+  // Above the gameplay skin sprites, so imported notes and keys stay dark too.
+  private flashlightGraphics = new Graphics();
   private hudGraphics = new Graphics();
   private overlayLayerRoot = new Container({ sortableChildren: true });
   private overlayLayers = new Map<ReplayOverlayId, OverlayLayer>();
@@ -1414,6 +1416,7 @@ export class ManiaReplayRenderer {
     app.stage.addChild(this.staticGraphics);
     app.stage.addChild(this.gameplayGraphics);
     app.stage.addChild(this.gameplaySkinSprites.layer);
+    app.stage.addChild(this.flashlightGraphics);
     // Input holds must remain visible over opaque imported LN bodies.
     app.stage.addChild(this.inputOverlayGraphics);
     app.stage.addChild(this.storyboardOverlayRoot);
@@ -3858,6 +3861,7 @@ export class ManiaReplayRenderer {
 
     this.gameplayGraphics.clear();
     this.inputOverlayGraphics.clear();
+    this.flashlightGraphics.clear();
     this.hudGraphics.clear();
     this.selectionGraphics.clear();
     for (const layer of this.overlayLayers.values()) layer.graphics.clear();
@@ -3903,7 +3907,10 @@ export class ManiaReplayRenderer {
       if (!keysUnderNotes) this.renderReceptors(layout);
     }
     this.renderStageFurnitureOver(layout);
-    if (this.hasFlashlightMod) this.renderFlashlightOverlay(layout);
+    if (this.hasFlashlightMod) {
+      this.graphics = this.flashlightGraphics;
+      this.renderFlashlightOverlay(layout);
+    }
 
     // Storyboard Overlay sprites cover the playfield, not the interface. Keep
     // both HUD geometry and imported HUD skin sprites above that layer; text
