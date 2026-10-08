@@ -12,7 +12,7 @@ percentage-point bonus and no tap-only, 4K-only or 1× gate.
 All otherwise eligible native 4K–18K scores use this model, including holds,
 DT/NC, HT/DC and constant custom rates. Existing eligibility rules still
 reject unsupported chart rewrites, variable-rate mods and unverified inputs;
-this calibration does not make those scores reconstructible. 7K Invert uses
+this calibration does not make those scores reconstructible. 4K and 7K Invert use
 the existing transformed-chart path. DA OD and EZ/HR windows are resolved by
 the existing mod policy; calibration does not bypass eligibility gates.
 
