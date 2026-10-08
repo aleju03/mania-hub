@@ -3135,6 +3135,14 @@ function ReplayViewer({
       ? { x: event.clientX, y: event.clientY }
       : null;
     if (!isMobileReplayPointer(event)) return;
+    if (!isCanvasFullscreen) {
+      // A tap on the drawer pins it (touch never hovers); a tap on the stage
+      // releases it, or summons it when the tap lands in the bottom band.
+      inlineChromeHoverRef.current = false;
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (rect.bottom - event.clientY <= INLINE_CHROME_REVEAL_PX) revealInlineChrome();
+      else scheduleInlineChromeHide();
+    }
     if (isCanvasFullscreen && showFullscreenChrome) {
       suppressNextMobileCanvasPointerUpRef.current = true;
       clearFullscreenChromeTimeout();
@@ -3146,7 +3154,7 @@ function ReplayViewer({
       true,
       isCanvasFullscreen ? FULLSCREEN_TAP_CHROME_HIDE_MS : MOBILE_FULLSCREEN_BUTTON_HIDE_MS,
     );
-  }, [clearFullscreenChromeTimeout, isCanvasFullscreen, showFullscreenChrome, showFullscreenChromeTemporarily]);
+  }, [clearFullscreenChromeTimeout, isCanvasFullscreen, revealInlineChrome, scheduleInlineChromeHide, showFullscreenChrome, showFullscreenChromeTemporarily]);
 
   const handleReplayCanvasPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!isCanvasFullscreen || !isMobileReplayPointer(event)) return;
@@ -5401,7 +5409,11 @@ function ReplayViewer({
                     inlineChromeHoverRef.current = true;
                     revealInlineChrome();
                   }}
-                  onPointerLeave={() => {
+                  onPointerLeave={(event) => {
+                    // A lifted finger fires pointerleave after every tap, which
+                    // retracted the drawer and the menu it had just opened.
+                    // Touch stays pinned until a tap on the stage.
+                    if (isMobileReplayPointer(event)) return;
                     inlineChromeHoverRef.current = false;
                     if (!scrubbingRef.current) scheduleInlineChromeHide();
                   }}

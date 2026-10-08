@@ -773,9 +773,15 @@ export function ReplayControls({
         onClick={() => {
           if (!videoMenuOpen && videoMenuRef.current) {
             const bounds = videoMenuRef.current.getBoundingClientRect();
+            // The overlay drawer sits inside the overflow-hidden stage, which
+            // on a short landscape tablet ends well below the window top.
+            let clipTop = 0;
+            for (let node = videoMenuRef.current.parentElement; node; node = node.parentElement) {
+              if (getComputedStyle(node).overflowY !== "visible") clipTop = Math.max(clipTop, node.getBoundingClientRect().top);
+            }
             setVideoMenuLayout({
               alignRight: bounds.left + 208 > window.innerWidth - 8,
-              maxHeight: Math.max(100, Math.min(512, bounds.top - 16)),
+              maxHeight: Math.max(100, Math.min(512, bounds.top - clipTop - 16)),
             });
           }
           setVideoMenuOpen((open) => !open);
@@ -1138,8 +1144,10 @@ export function ReplayControls({
         /* The tall stable-style Visual Settings panel: wordmark on the left,
            labeled sliders and radio-circle toggles spread across it like the
            client's drawer. */
-        <div className="flex min-h-[170px] items-start gap-10 px-6 pb-5 pt-3">
-          <div aria-hidden="true" className="shrink-0 select-none leading-none">
+        <div className="flex min-h-[170px] items-start gap-6 px-6 pb-5 pt-3 xl:gap-10">
+          {/* Below xl (landscape tablets) the wordmark would push the
+              right-hand buttons off the stage. */}
+          <div aria-hidden="true" className="hidden shrink-0 select-none leading-none xl:block">
             <div className="text-[30px] font-bold text-[#8fc7ee] [text-shadow:0_2px_4px_rgba(0,0,0,0.8)]">Visual</div>
             <div className="-mt-1 ml-11 text-[27px] font-bold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.8)]">Settings</div>
           </div>
