@@ -33,6 +33,7 @@ import { CountryFlag } from "../../components/ui/CountryFlag";
 import { SectionCard } from "../../components/admin/SectionCard";
 import { AnalyticsMonitorPanel } from "../../components/admin/analytics/AnalyticsMonitorPanel";
 import { SweepsMonitorPanel, SweepsSummary } from "../../components/admin/sweeps/SweepsMonitorPanel";
+import { VpsMonitorPanel } from "../../components/admin/vps/VpsMonitorPanel";
 
 type ConnectionState = "idle" | "connecting" | "open" | "error";
 type StatusTone = "good" | "warn" | "bad" | "neutral";
@@ -392,7 +393,7 @@ interface LiveEventRow {
 
 const BACKEND_REFRESH_MS = 5_000;
 const DEFAULT_COUNTRY = "CR";
-const MONITORING_TABS = ["backend", "sweeps", "analytics"] as const;
+const MONITORING_TABS = ["backend", "sweeps", "vps", "analytics"] as const;
 type MonitoringTab = (typeof MONITORING_TABS)[number];
 const HIDDEN_WORKER_LANE_NAMES = new Set([
   "dan-estimates",
@@ -776,6 +777,8 @@ function LiveBackendPage() {
             </>
           ) : activeTab === "sweeps" ? (
             <SweepsMonitorPanel />
+          ) : activeTab === "vps" ? (
+            <VpsMonitorPanel />
           ) : (
             <AnalyticsMonitorPanel />
           )}
@@ -804,7 +807,7 @@ function LiveBackendHeader({
 }) {
   const connected = activeTab === "backend" && connectionState === "open";
   const statusLabel = activeTab === "backend" ? (refreshing ? "refreshing..." : connectionState) : activeTab;
-  const contextLabel = activeTab === "analytics" ? "visitor analytics" : backendUrl ?? "not configured";
+  const contextLabel = activeTab === "analytics" ? "visitor analytics" : activeTab === "vps" ? "Hetzner Cloud" : backendUrl ?? "not configured";
   return (
     <div className="bg-osu-d5 border-b border-osu-b3/40">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-3 flex items-center gap-3">
@@ -851,11 +854,12 @@ function MonitoringTabs({ activeTab, onChange }: { activeTab: MonitoringTab; onC
   const tabs: Array<{ value: MonitoringTab; label: string; hint: string }> = [
     { value: "backend", label: "Server", hint: "ingest, SSE, jobs, countries" },
     { value: "sweeps", label: "Sweeps", hint: "background passes and how far along they are" },
+    { value: "vps", label: "VPS", hint: "traffic, the month's bill, CPU and network" },
     { value: "analytics", label: "Analytics", hint: "who is here and what they are doing" },
   ];
   return (
     <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-1.5">
-      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
         {tabs.map((tab) => {
           const active = activeTab === tab.value;
           return (

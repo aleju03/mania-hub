@@ -913,6 +913,116 @@ export const fetchLiveBackendSweeps = createServerFn({ method: "GET" })
     return { sweeps: Array.isArray(body.sweeps) ? body.sweeps : [] };
   });
 
+export interface LiveBackendVpsServer {
+  id: number;
+  name: string;
+  status: string;
+  created: string;
+  type: string;
+  cores: number;
+  memoryGb: number;
+  diskGb: number;
+  cpuType: string | null;
+  architecture: string | null;
+  os: string | null;
+  location: { name: string; city: string | null; country: string | null };
+  ipv4: string | null;
+  ipv6: string | null;
+  backups: boolean;
+  priceMonthly: number;
+  traffic: {
+    outgoingBytes: number | null;
+    ingoingBytes: number | null;
+    includedBytes: number | null;
+    projectedOutgoingBytes: number | null;
+    pricePerTb: number | null;
+  };
+}
+
+export interface LiveBackendVpsCostItem {
+  kind: "server" | "backups" | "ipv4" | "volume" | "snapshots" | "traffic";
+  label: string;
+  monthToDate: number;
+  projected: number;
+}
+
+export type LiveBackendVpsUsage =
+  | {
+    configured: true;
+    fetchedAt: string;
+    currency: string;
+    vatRate: number;
+    period: { start: string; end: string; elapsed: number };
+    servers: LiveBackendVpsServer[];
+    costs: LiveBackendVpsCostItem[];
+    monthToDate: number;
+    projected: number;
+  }
+  | { configured: false };
+
+export type LiveBackendVpsMetricsRange = "24h" | "7d" | "30d";
+
+export type LiveBackendVpsMetrics =
+  | {
+    configured: true;
+    serverId: number;
+    range: LiveBackendVpsMetricsRange;
+    stepSec: number;
+    series: Record<"cpu" | "netIn" | "netOut" | "diskRead" | "diskWrite", Array<[number, number]>>;
+  }
+  | { configured: false };
+
+async function fetchAdminJson<T>(path: string, label: string): Promise<T | null> {
+  const base = getServerLiveBackendUrl();
+  if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+  const headers: HeadersInit = {};
+  if (process.env.LIVE_ADMIN_TOKEN) {
+    headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  }
+  const controller = new AbortController();
+  // The backend waits on the Hetzner API, so allow it a little longer than status.
+  const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS + 10_000);
+  let response: Response;
+  try {
+    response = await fetch(`${base}${path}`, { headers, signal: controller.signal });
+  } catch (err) {
+    if (isAbortError(err)) throw new Error(`${label} timed out.`);
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (response.status === 404) return null;
+  const body = await response.json() as T & { error?: unknown };
+  if (!response.ok) {
+    const message = body && typeof body === "object" && "error" in body
+      ? String((body as { error?: unknown }).error)
+      : `Server ${response.status} for ${path}`;
+    throw new Error(message);
+  }
+  return body;
+}
+
+// Hetzner Cloud usage (traffic, the month's spend, server facts) for the admin
+// VPS tab. Returns null when the backend predates the endpoint.
+export const fetchLiveBackendVps = createServerFn({ method: "GET" })
+  .handler(async (): Promise<LiveBackendVpsUsage | null> => {
+    await requireAdminAccess("VPS usage");
+    return await fetchAdminJson<LiveBackendVpsUsage>("/api/admin/vps", "VPS usage");
+  });
+
+export const fetchLiveBackendVpsMetrics = createServerFn({ method: "GET" })
+  .validator((data: { serverId: number; range: LiveBackendVpsMetricsRange }) => ({
+    serverId: Math.max(0, Math.trunc(Number(data.serverId) || 0)),
+    range: data.range === "7d" || data.range === "30d" ? data.range : "24h" as LiveBackendVpsMetricsRange,
+  }))
+  .handler(async ({ data }): Promise<LiveBackendVpsMetrics | null> => {
+    await requireAdminAccess("VPS metrics");
+    return await fetchAdminJson<LiveBackendVpsMetrics>(
+      `/api/admin/vps/metrics?server=${data.serverId}&range=${data.range}`,
+      "VPS metrics",
+    );
+  });
+
 export interface LiveBackendHonoraryCardOwner {
   userId: number;
   username: string;
