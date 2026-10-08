@@ -11,13 +11,16 @@ import { KNOWN_APPS, knownApp } from "../../lib/companella-integration/shared";
 // app that sent it; a row without one predates the field and was Companella. The icon is full colour on a solid
 // disc, so it is an <img>, not a mask like the mod glyphs. The small mark copies keep a row from pulling the originals.
 // Rows draw their content above a full-row button with pointer events off, so the mark turns them back on for its
-// own hover label and, on a Mania Bridge play, its link to /bridge (admin-only while that page is).
+// own hover label and, on a Mania Bridge play, its link to /bridge. Mania Bridge marks show to admins only until
+// its release, like /bridge itself.
 export function CompanellaMark({ app, className = "h-[18px] w-[18px]" }: { app?: string; className?: string }) {
   const { t } = useLingui();
   const auth = useAuth();
   const known = knownApp(app) ?? KNOWN_APPS.companella;
   const label = t`Sent through ${known.name}`;
   const [tip, setTip] = useState<{ left: number; top: number } | null>(null);
+  const isBridge = app === "mania-bridge";
+  const isAdmin = canUseAdminFeatures(auth);
   const showTip = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType !== "mouse") return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -29,6 +32,8 @@ export function CompanellaMark({ app, className = "h-[18px] w-[18px]" }: { app?:
     window.addEventListener("scroll", hide, true);
     return () => window.removeEventListener("scroll", hide, true);
   }, [tip]);
+
+  if (isBridge && !isAdmin) return null;
 
   const image = (
     <img
@@ -53,7 +58,7 @@ export function CompanellaMark({ app, className = "h-[18px] w-[18px]" }: { app?:
 
   return (
     <>
-      {app === "mania-bridge" && canUseAdminFeatures(auth) ? (
+      {isBridge ? (
         <Link
           to="/bridge"
           onClick={(event) => event.stopPropagation()}
