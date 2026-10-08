@@ -12,6 +12,7 @@ import {
   revokeCompanellaInstallation,
 } from "../../lib/companella-integration/manage-server";
 import { KNOWN_APPS, type CompanellaAccess, type CompanellaInstallation } from "../../lib/companella-integration/shared";
+import { ConfirmModal } from "../ui/ConfirmModal";
 import { PanelGroup } from "./PanelGroup";
 
 interface CompanellaSnapshot {
@@ -45,6 +46,7 @@ export function CompanellaGroup() {
   const [loading, setLoading] = useState(!cached);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [pendingRevoke, setPendingRevoke] = useState<{ installation: CompanellaInstallation; appName: string } | null>(null);
 
   const load = useCallback(async (currentAccess: CompanellaAccess | null) => {
     const result = await fetchCompanellaInstallations().catch(() => ({ installations: [] }));
@@ -91,8 +93,7 @@ export function CompanellaGroup() {
     : connected.length > 0 ? t`${plural(connected.length, { one: "# connected", other: "# connected" })}`
     : t`Not connected. Connect from inside ${appName}.`;
 
-  const revoke = (installation: CompanellaInstallation, appName: string) => {
-    if (!window.confirm(t`Revoke this connection? ${appName} on that computer stops sending plays right away.`)) return;
+  const revoke = (installation: CompanellaInstallation) => {
     setBusyId(installation.id);
     setFailed(false);
     void revokeCompanellaInstallation({ data: { installationId: installation.id } })
@@ -111,7 +112,7 @@ export function CompanellaGroup() {
           status={statusFor(bridge, bridgeApp.name)}
           installations={bridge}
           busyId={busyId}
-          onRevoke={(installation) => revoke(installation, bridgeApp.name)}
+          onRevoke={(installation) => setPendingRevoke({ installation, appName: bridgeApp.name })}
         />
       )}
       <div className={auth.canUseAdminFeatures ? "space-y-3 border-t border-white/[0.07] pt-3" : "space-y-3"}>
@@ -124,10 +125,21 @@ export function CompanellaGroup() {
           aboutTo="/news/companella"
           installations={companella}
           busyId={busyId}
-          onRevoke={(installation) => revoke(installation, "Companella")}
+          onRevoke={(installation) => setPendingRevoke({ installation, appName: "Companella" })}
         />
       </div>
       {failed && <p role="alert" className="text-[11px] text-red-300"><Trans>Could not revoke that connection.</Trans></p>}
+      {pendingRevoke && (
+        <ConfirmModal
+          title={t`Revoke this connection?`}
+          body={t`${pendingRevoke.appName} on that computer stops sending plays right away.`}
+          confirmLabel={t`Revoke`}
+          cancelLabel={t`Cancel`}
+          danger
+          onConfirm={() => revoke(pendingRevoke.installation)}
+          onClose={() => setPendingRevoke(null)}
+        />
+      )}
     </PanelGroup>
   );
 }

@@ -73,6 +73,7 @@ import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiTeamImageRouteImport } from './routes/api/team-image'
+import { Route as BridgeAuthorizeRouteImport } from './routes/bridge_.authorize'
 import { Route as BridgeLatestDotjsonRouteImport } from './routes/bridge_.latest[.]json'
 import { Route as CollectionsIdRouteImport } from './routes/collections_.$id'
 import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
@@ -442,6 +443,11 @@ const ApiTeamImageRoute = ApiTeamImageRouteImport.update({
   path: '/api/team-image',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BridgeAuthorizeRoute = BridgeAuthorizeRouteImport.update({
+  id: '/bridge_/authorize',
+  path: '/bridge/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BridgeLatestDotjsonRoute = BridgeLatestDotjsonRouteImport.update({
   id: '/bridge_/latest.json',
   path: '/bridge/latest.json',
@@ -757,6 +763,7 @@ export interface FileRoutesByFullPath {
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
+  '/bridge/authorize': typeof BridgeAuthorizeRoute
   '/bridge/latest.json': typeof BridgeLatestDotjsonRoute
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
@@ -870,6 +877,7 @@ export interface FileRoutesByTo {
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
+  '/bridge/authorize': typeof BridgeAuthorizeRoute
   '/bridge/latest.json': typeof BridgeLatestDotjsonRoute
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
@@ -984,6 +992,7 @@ export interface FileRoutesById {
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
+  '/bridge_/authorize': typeof BridgeAuthorizeRoute
   '/bridge_/latest.json': typeof BridgeLatestDotjsonRoute
   '/collections_/$id': typeof CollectionsIdRoute
   '/communities_/$id': typeof CommunitiesIdRoute
@@ -1099,6 +1108,7 @@ export interface FileRouteTypes {
     | '/api/signature-preview'
     | '/api/sync'
     | '/api/team-image'
+    | '/bridge/authorize'
     | '/bridge/latest.json'
     | '/collections/$id'
     | '/communities/$id'
@@ -1212,6 +1222,7 @@ export interface FileRouteTypes {
     | '/api/signature-preview'
     | '/api/sync'
     | '/api/team-image'
+    | '/bridge/authorize'
     | '/bridge/latest.json'
     | '/collections/$id'
     | '/communities/$id'
@@ -1325,6 +1336,7 @@ export interface FileRouteTypes {
     | '/api/signature-preview'
     | '/api/sync'
     | '/api/team-image'
+    | '/bridge_/authorize'
     | '/bridge_/latest.json'
     | '/collections_/$id'
     | '/communities_/$id'
@@ -1439,6 +1451,7 @@ export interface RootRouteChildren {
   ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
   ApiSyncRoute: typeof ApiSyncRoute
   ApiTeamImageRoute: typeof ApiTeamImageRoute
+  BridgeAuthorizeRoute: typeof BridgeAuthorizeRoute
   BridgeLatestDotjsonRoute: typeof BridgeLatestDotjsonRoute
   CollectionsIdRoute: typeof CollectionsIdRoute
   CommunitiesIdRoute: typeof CommunitiesIdRoute
@@ -1923,6 +1936,13 @@ declare module '@tanstack/react-router' {
       path: '/api/team-image'
       fullPath: '/api/team-image'
       preLoaderRoute: typeof ApiTeamImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bridge_/authorize': {
+      id: '/bridge_/authorize'
+      path: '/bridge/authorize'
+      fullPath: '/bridge/authorize'
+      preLoaderRoute: typeof BridgeAuthorizeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bridge_/latest.json': {
@@ -2426,6 +2446,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
   ApiSyncRoute: ApiSyncRoute,
   ApiTeamImageRoute: ApiTeamImageRoute,
+  BridgeAuthorizeRoute: BridgeAuthorizeRoute,
   BridgeLatestDotjsonRoute: BridgeLatestDotjsonRoute,
   CollectionsIdRoute: CollectionsIdRoute,
   CommunitiesIdRoute: CommunitiesIdRoute,

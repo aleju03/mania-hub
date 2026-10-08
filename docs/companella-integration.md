@@ -156,7 +156,8 @@ leave a graveyard, and refreshes the stored username. Two different keys on one
 account are two installations, like a second PC.
 
 Lifetimes: consent request 10 minutes, code 2 minutes, access token 5 minutes,
-refresh 90 days absolute / 30 days idle. Refresh credentials are
+refresh 30 days idle with no absolute cap, so a client that refreshes at least
+once a month stays connected. Refresh credentials are
 sender-constrained and **not** rotated: RFC 9700 allows either, and doing both
 means a lost response burns a credential the client never received. The refresh
 grant mints a new access token only and echoes the refresh credential the
@@ -1036,7 +1037,7 @@ sha256)` as the key.
 | Security events | 30 days |
 | Proof ids / grants | pruned on the maintenance sweep |
 | Revoked credentials | 30 days after revocation |
-| Refresh credentials | 30 days after absolute or idle expiry |
+| Refresh credentials | 30 days after idle expiry |
 | Access tokens | 1 day after expiry once a newer one exists; the newest is kept until 30 days after expiry and until the installation has no usable refresh credential |
 
 A pruned credential answers `invalid_token` rather than `token_expired` or

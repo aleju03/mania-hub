@@ -702,6 +702,11 @@ msgstr "{0} of them are on {charts} that changed on osu! and are waiting for a f
 msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
 msgstr "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
 
+#. placeholder {0}: pendingRevoke.appName
+#: src/components/settings/CompanellaGroup.tsx
+msgid "{0} on that computer stops sending plays right away."
+msgstr "{0} on that computer stops sending plays right away."
+
 #. placeholder {0}: [...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} on their own"
@@ -1077,7 +1082,7 @@ msgstr "{acc}% {speed} on {map}"
 msgid "{ALBUM_SEASON} series"
 msgstr "{ALBUM_SEASON} series"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "{appName} needs your Mania Tracker account to send plays to."
 msgstr "{appName} needs your Mania Tracker account to send plays to."
 
@@ -1991,7 +1996,7 @@ msgstr "<0>{0}</0> sounds"
 #~ msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
 #~ msgstr "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "<0>{appName}</0> wants to access your Mania Tracker account"
 msgstr "<0>{appName}</0> wants to access your Mania Tracker account"
 
@@ -3111,7 +3116,7 @@ msgstr "Almost there{elapsedLabel}"
 msgid "already a GOAT"
 msgstr "already a GOAT"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Already answered"
 msgstr "Already answered"
 
@@ -3159,11 +3164,11 @@ msgstr "Always reveal all"
 msgid "amber"
 msgstr "amber"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "an external application"
 msgstr "an external application"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "An external application"
 msgstr "An external application"
 
@@ -3338,6 +3343,7 @@ msgstr "Applying…"
 #~ msgid "Approve a Companella installation for your osu! account."
 #~ msgstr "Approve a Companella installation for your osu! account."
 
+#: src/routes/bridge_.authorize.tsx
 #: src/routes/companella_.authorize.tsx
 msgid "Approve an app for your osu! account."
 msgstr "Approve an app for your osu! account."
@@ -3478,7 +3484,7 @@ msgstr "August 23, 2026"
 #~ msgid "Authorize {appName}"
 #~ msgstr "Authorize {appName}"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Authorize {appNameInline}"
 msgstr "Authorize {appNameInline}"
 
@@ -3486,7 +3492,7 @@ msgstr "Authorize {appNameInline}"
 msgid "Authorize. The bot needs to send messages and embed links."
 msgstr "Authorize. The bot needs to send messages and embed links."
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
 msgstr "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
 
@@ -4054,6 +4060,7 @@ msgstr "By Player"
 msgid "Calculating skills..."
 msgstr "Calculating skills..."
 
+#: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/GoalsPanel.tsx
@@ -4063,10 +4070,10 @@ msgstr "Calculating skills..."
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/settings/CompanellaGroup.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
-#: src/routes/companella_.authorize.tsx
 #: src/routes/report.tsx
 msgid "Cancel"
 msgstr "Cancel"
@@ -4902,6 +4909,7 @@ msgstr "compared to {range} pp"
 #~ msgid "Completion"
 #~ msgstr "Completion"
 
+#: src/routes/bridge_.authorize.tsx
 #: src/routes/companella_.authorize.tsx
 msgid "Connect an app"
 msgstr "Connect an app"
@@ -4960,8 +4968,8 @@ msgstr "Connection"
 msgid "Connection lost; reconnecting."
 msgstr "Connection lost; reconnecting."
 
+#: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
-#: src/routes/companella_.authorize.tsx
 msgid "Connection name"
 msgstr "Connection name"
 
@@ -5178,7 +5186,7 @@ msgstr "Could not reach Discord to check that invite. Try again in a moment."
 msgid "Could not reach the player pool. Try again in a moment."
 msgstr "Could not reach the player pool. Try again in a moment."
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Could not reach the server. Try again."
 msgstr "Could not reach the server. Try again."
 
@@ -6819,7 +6827,7 @@ msgstr "Exported videos can't use this link because its site blocks it. Save the
 #~ msgid "Exposed Releases"
 #~ msgstr "Exposed Releases"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "External application"
 msgstr "External application"
 
@@ -8318,7 +8326,7 @@ msgstr "Import"
 msgid "Import share code"
 msgstr "Import share code"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Import your completed osu!mania plays"
 msgstr "Import your completed osu!mania plays"
 
@@ -8339,7 +8347,7 @@ msgstr "Imported note image height scaling."
 msgid "Imported plays"
 msgstr "Imported plays"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Imported plays that pass the checks show on the tracker and your Mania Tracker profile."
 msgstr "Imported plays that pass the checks show on the tracker and your Mania Tracker profile."
 
@@ -11938,7 +11946,7 @@ msgstr "online"
 msgid "Online"
 msgstr "Online"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Only approve a request you started yourself. If someone sent you this link, close it."
 msgstr "Only approve a request you started yourself. If someone sent you this link, close it."
 
@@ -14545,8 +14553,12 @@ msgstr "Revoke every connection on this account?"
 #~ msgstr "Revoke every installation on this account?"
 
 #: src/components/settings/CompanellaGroup.tsx
-msgid "Revoke this connection? {appName} on that computer stops sending plays right away."
-msgstr "Revoke this connection? {appName} on that computer stops sending plays right away."
+msgid "Revoke this connection?"
+msgstr "Revoke this connection?"
+
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "Revoke this connection? {appName} on that computer stops sending plays right away."
+#~ msgstr "Revoke this connection? {appName} on that computer stops sending plays right away."
 
 #: src/components/settings/CompanellaGroup.tsx
 #~ msgid "Revoke this connection? Companella on that computer stops sending plays right away."
@@ -15223,7 +15235,7 @@ msgstr "Send"
 msgid "Send report"
 msgstr "Send report"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Send the chart file when the site does not already have it"
 msgstr "Send the chart file when the site does not already have it"
 
@@ -15686,7 +15698,7 @@ msgstr "Show the map's storyboard behind (and over) the playfield"
 msgid "Show the site name on the render"
 msgstr "Show the site name on the render"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Show what you are doing in osu! on your profile and the rankings"
 msgstr "Show what you are doing in osu! on your profile and the rankings"
 
@@ -15804,7 +15816,7 @@ msgstr "Sign in and runs like that pay shards."
 #~ msgid "Sign in to connect {appName}"
 #~ msgstr "Sign in to connect {appName}"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Sign in to connect {appNameInline}"
 msgstr "Sign in to connect {appNameInline}"
 
@@ -15842,7 +15854,7 @@ msgstr "Sign in to vote →"
 msgid "Sign in with Discord so we can check the server is yours to post. Discord will share:"
 msgstr "Sign in with Discord so we can check the server is yours to post. Discord will share:"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Sign in with osu!"
 msgstr "Sign in with osu!"
 
@@ -15870,8 +15882,8 @@ msgstr "Sign in with osu! to see who has pulled your card."
 msgid "Sign in with osu! to see your uploads."
 msgstr "Sign in with osu! to see your uploads."
 
+#: src/components/companella/AuthorizePage.tsx
 #: src/components/layout/Nav.tsx
-#: src/routes/companella_.authorize.tsx
 msgid "Signed in as"
 msgstr "Signed in as"
 
@@ -16508,7 +16520,7 @@ msgstr "Start from your live me! page"
 msgid "Start here"
 msgstr "Start here"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Start the connection again from the app."
 msgstr "Start the connection again from the app."
 
@@ -18378,7 +18390,7 @@ msgstr "This collection has no maps in it yet."
 msgid "This collection is gone, or the link is wrong."
 msgstr "This collection is gone, or the link is wrong."
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This connection request has already been answered."
 msgstr "This connection request has already been answered."
 
@@ -18388,7 +18400,7 @@ msgstr "This connection request has already been answered."
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "This country's opt-in list is full right now. Check back later."
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."
 msgstr "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."
 
@@ -18548,19 +18560,19 @@ msgstr "This replay does not include a beatmap checksum."
 msgid "This replay needs its beatmap"
 msgstr "This replay needs its beatmap"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This request expired. Start the connection again from the app."
 msgstr "This request expired. Start the connection again from the app."
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This request has expired"
 msgstr "This request has expired"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This request is not valid any more. Start the connection again from the app."
 msgstr "This request is not valid any more. Start the connection again from the app."
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This request was already answered. Start the connection again from the app."
 msgstr "This request was already answered. Start the connection again from the app."
 
@@ -18641,7 +18653,7 @@ msgstr "This week"
 #~ msgid "This will allow {appName} to"
 #~ msgstr "This will allow {appName} to"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This will allow {appNameInline} to"
 msgstr "This will allow {appNameInline} to"
 
@@ -20457,7 +20469,7 @@ msgstr "your {yourPp}pp · {age} old"
 msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 msgstr "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Your account is not on the list for this beta."
 msgstr "Your account is not on the list for this beta."
 
@@ -20691,7 +20703,7 @@ msgstr "your score"
 msgid "Your server shows up here once it is approved. Until then you can see it, and edit it, in your own listings above."
 msgstr "Your server shows up here once it is approved. Until then you can see it, and edit it, in your own listings above."
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Your session ended. Sign in again, then approve."
 msgstr "Your session ended. Sign in again, then approve."
 

@@ -693,6 +693,11 @@ msgstr "其中 {0} 个成绩所在的 {charts} 在 osu! 上有改动，正在等
 msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
 msgstr "其中 {0} 个成绩所在的 {charts} 在 osu! 上有改动，正在等待重新检查。"
 
+#. placeholder {0}: pendingRevoke.appName
+#: src/components/settings/CompanellaGroup.tsx
+msgid "{0} on that computer stops sending plays right away."
+msgstr "该电脑上的 {0} 会立即停止上传成绩。"
+
 #. placeholder {0}: [...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} on their own"
@@ -1063,7 +1068,7 @@ msgstr "在 {map} 上以 {speed} 打出 {acc}%"
 msgid "{ALBUM_SEASON} series"
 msgstr "{ALBUM_SEASON} 系列"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "{appName} needs your Mania Tracker account to send plays to."
 msgstr "{appName} 需要你的 Mania Tracker 账号来接收成绩。"
 
@@ -1977,7 +1982,7 @@ msgstr "<0>{0}</0> 个音效"
 #~ msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
 #~ msgstr "<0>{0}K 有自己的评分标准。</0>数值比其他键数低，并不代表你在这个键数上更差。"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "<0>{appName}</0> wants to access your Mania Tracker account"
 msgstr "<0>{appName}</0> 请求访问你的 Mania Tracker 账号"
 
@@ -3093,7 +3098,7 @@ msgstr "快好了{elapsedLabel}"
 msgid "already a GOAT"
 msgstr "已经是 GOAT"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Already answered"
 msgstr "已处理"
 
@@ -3141,11 +3146,11 @@ msgstr "始终全部揭晓"
 msgid "amber"
 msgstr "琥珀"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "an external application"
 msgstr "一个外部应用"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "An external application"
 msgstr "一个外部应用"
 
@@ -3320,6 +3325,7 @@ msgstr "应用中…"
 #~ msgid "Approve a Companella installation for your osu! account."
 #~ msgstr ""
 
+#: src/routes/bridge_.authorize.tsx
 #: src/routes/companella_.authorize.tsx
 msgid "Approve an app for your osu! account."
 msgstr "为你的 osu! 账号授权一个应用。"
@@ -3460,7 +3466,7 @@ msgstr "2026年8月23日"
 #~ msgid "Authorize {appName}"
 #~ msgstr ""
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Authorize {appNameInline}"
 msgstr "授权 {appNameInline}"
 
@@ -3468,7 +3474,7 @@ msgstr "授权 {appNameInline}"
 msgid "Authorize. The bot needs to send messages and embed links."
 msgstr "授权。机器人需要发送消息和嵌入链接的权限。"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
 msgstr "授权后将跳转到这台电脑上的 <0>{redirectHost}</0>。"
 
@@ -4036,6 +4042,7 @@ msgstr "按玩家"
 msgid "Calculating skills..."
 msgstr "正在计算技能…"
 
+#: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/GoalsPanel.tsx
@@ -4045,10 +4052,10 @@ msgstr "正在计算技能…"
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/settings/CompanellaGroup.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
-#: src/routes/companella_.authorize.tsx
 #: src/routes/report.tsx
 msgid "Cancel"
 msgstr "取消"
@@ -4884,6 +4891,7 @@ msgstr "对比 {range} pp"
 #~ msgid "Completion"
 #~ msgstr ""
 
+#: src/routes/bridge_.authorize.tsx
 #: src/routes/companella_.authorize.tsx
 msgid "Connect an app"
 msgstr "连接应用"
@@ -4942,8 +4950,8 @@ msgstr ""
 msgid "Connection lost; reconnecting."
 msgstr "连接已断开，正在重连。"
 
+#: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
-#: src/routes/companella_.authorize.tsx
 msgid "Connection name"
 msgstr "连接名称"
 
@@ -5160,7 +5168,7 @@ msgstr "无法连接 Discord 校验这个邀请链接。请稍后再试。"
 msgid "Could not reach the player pool. Try again in a moment."
 msgstr "无法读取玩家池。请稍后再试。"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Could not reach the server. Try again."
 msgstr "无法连接服务器，请重试。"
 
@@ -6797,7 +6805,7 @@ msgstr "导出的视频无法使用此链接，因为其网站阻止了访问。
 #~ msgid "Exposed Releases"
 #~ msgstr "独立松键"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "External application"
 msgstr "外部应用"
 
@@ -8288,7 +8296,7 @@ msgstr "导入"
 msgid "Import share code"
 msgstr "导入分享码"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Import your completed osu!mania plays"
 msgstr "导入你完成的 osu!mania 成绩"
 
@@ -8309,7 +8317,7 @@ msgstr "导入的音符图片高度缩放。"
 msgid "Imported plays"
 msgstr ""
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Imported plays that pass the checks show on the tracker and your Mania Tracker profile."
 msgstr "通过检查的导入成绩会显示在追踪器和你的 Mania Tracker 主页上。"
 
@@ -11908,7 +11916,7 @@ msgstr "在线"
 msgid "Online"
 msgstr "在线"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Only approve a request you started yourself. If someone sent you this link, close it."
 msgstr "只批准你自己发起的请求。如果这个链接是别人发给你的，请关闭它。"
 
@@ -14515,8 +14523,12 @@ msgstr "撤销此账号的所有连接？"
 #~ msgstr ""
 
 #: src/components/settings/CompanellaGroup.tsx
-msgid "Revoke this connection? {appName} on that computer stops sending plays right away."
-msgstr "撤销此连接？该电脑上的 {appName} 会立即停止上传成绩。"
+msgid "Revoke this connection?"
+msgstr "撤销此连接？"
+
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "Revoke this connection? {appName} on that computer stops sending plays right away."
+#~ msgstr "撤销此连接？该电脑上的 {appName} 会立即停止上传成绩。"
 
 #: src/components/settings/CompanellaGroup.tsx
 #~ msgid "Revoke this connection? Companella on that computer stops sending plays right away."
@@ -15193,7 +15205,7 @@ msgstr "发送"
 msgid "Send report"
 msgstr "提交反馈"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Send the chart file when the site does not already have it"
 msgstr "在本站还没有谱面文件时上传该文件"
 
@@ -15656,7 +15668,7 @@ msgstr "在游玩区域后面（和上面）显示谱面的故事板"
 msgid "Show the site name on the render"
 msgstr "在渲染图上显示站点名称"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Show what you are doing in osu! on your profile and the rankings"
 msgstr "在你的资料页和排行榜上显示你在 osu! 中的动态"
 
@@ -15770,7 +15782,7 @@ msgstr "登录后，这样的连胜就能赚碎片。"
 #~ msgid "Sign in to connect {appName}"
 #~ msgstr ""
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Sign in to connect {appNameInline}"
 msgstr "登录以连接 {appNameInline}"
 
@@ -15808,7 +15820,7 @@ msgstr "登录后投票 →"
 msgid "Sign in with Discord so we can check the server is yours to post. Discord will share:"
 msgstr "用 Discord 登录，好让我们确认这个服务器由你来发布。Discord 会提供："
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Sign in with osu!"
 msgstr "使用 osu! 登录"
 
@@ -15836,8 +15848,8 @@ msgstr "用 osu! 登录后即可看到谁抽到了你的卡片。"
 msgid "Sign in with osu! to see your uploads."
 msgstr "用 osu! 登录后即可看到你的上传。"
 
+#: src/components/companella/AuthorizePage.tsx
 #: src/components/layout/Nav.tsx
-#: src/routes/companella_.authorize.tsx
 msgid "Signed in as"
 msgstr "当前登录为"
 
@@ -16474,7 +16486,7 @@ msgstr "从你当前的 me! 页面开始"
 msgid "Start here"
 msgstr "在此开始"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Start the connection again from the app."
 msgstr "请从应用中重新发起连接。"
 
@@ -18336,7 +18348,7 @@ msgstr "这个收藏册里还没有谱面。"
 msgid "This collection is gone, or the link is wrong."
 msgstr "这个收藏册不在了，或者链接不对。"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This connection request has already been answered."
 msgstr "这个连接请求已经处理过了。"
 
@@ -18346,7 +18358,7 @@ msgstr "这个连接请求已经处理过了。"
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "这个国家/地区的加入名额已满。请稍后再来。"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."
 msgstr "这不会把你的 osu! 账号交给该应用。你可以随时在 Mania Tracker 上撤销授权。"
 
@@ -18506,19 +18518,19 @@ msgstr "这个回放里没有谱面校验值。"
 msgid "This replay needs its beatmap"
 msgstr "这个回放需要对应的谱面"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This request expired. Start the connection again from the app."
 msgstr "这个请求已过期，请从应用中重新发起连接。"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This request has expired"
 msgstr "这个请求已过期"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This request is not valid any more. Start the connection again from the app."
 msgstr "这个请求已失效，请从应用中重新发起连接。"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This request was already answered. Start the connection again from the app."
 msgstr "这个请求已经处理过了，请从应用中重新发起连接。"
 
@@ -18599,7 +18611,7 @@ msgstr "本周"
 #~ msgid "This will allow {appName} to"
 #~ msgstr ""
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "This will allow {appNameInline} to"
 msgstr "这将允许 {appNameInline}："
 
@@ -20415,7 +20427,7 @@ msgstr "你的 {yourPp}pp · 已过去 {age}"
 msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 msgstr "你这个 {yourPp}pp 的成绩已经过去 {age}。水平相近的玩家中前四分之一在 {p75}pp。"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Your account is not on the list for this beta."
 msgstr "你的账号不在这次测试的名单中。"
 
@@ -20649,7 +20661,7 @@ msgstr "你的成绩"
 msgid "Your server shows up here once it is approved. Until then you can see it, and edit it, in your own listings above."
 msgstr "审核通过后你的服务器就会出现在这里。在那之前，你可以在上面自己的收录里看到并修改它。"
 
-#: src/routes/companella_.authorize.tsx
+#: src/components/companella/AuthorizePage.tsx
 msgid "Your session ended. Sign in again, then approve."
 msgstr "你的登录已过期。请重新登录后再批准。"
 
