@@ -4643,6 +4643,7 @@ msgstr "客户端"
 #: src/components/ui/ImageLightbox.tsx
 #: src/routes/__root.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/skins.tsx
 msgid "Close"
 msgstr "关闭"
 

@@ -4661,6 +4661,7 @@ msgstr "Client"
 #: src/components/ui/ImageLightbox.tsx
 #: src/routes/__root.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/skins.tsx
 msgid "Close"
 msgstr "Close"
 
