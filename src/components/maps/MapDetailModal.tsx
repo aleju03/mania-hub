@@ -44,21 +44,25 @@ import {
 // The banner art lands after the modal does, so it fades in rather than
 // snapping over the header. The ref check is for a cover already in the browser
 // cache (the play row showed the same set): its load event fires before React
-// attaches onLoad, and without it the banner would sit at zero opacity.
+// attaches onLoad, and without it the banner would sit at zero opacity. Once a
+// cover shows it stays for the set: a play opens on the background its row
+// carried and the catalog entry then names the card art, and swapping to it
+// blanked the banner while the second image loaded. Callers key this by set.
 function BannerCover({ src }: { src: string }) {
-  const [loaded, setLoaded] = useState(false);
+  const [shownSrc, setShownSrc] = useState<string | null>(null);
+  const layer = shownSrc ?? src;
   const markLoaded = useCallback((node: HTMLImageElement | null) => {
-    if (node?.complete && node.naturalWidth > 0) setLoaded(true);
+    if (node?.complete && node.naturalWidth > 0) setShownSrc(node.getAttribute("src"));
   }, []);
   return (
     <img
-      key={src}
+      key={layer}
       ref={markLoaded}
-      src={src}
+      src={layer}
       alt=""
-      onLoad={() => setLoaded(true)}
+      onLoad={() => setShownSrc(layer)}
       onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
-      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${shownSrc ? "opacity-100" : "opacity-0"}`}
     />
   );
 }
@@ -978,7 +982,7 @@ export function MapDetailModal({
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               {/* Header banner */}
               <div className="relative h-[92px] shrink-0">
-                <BannerCover src={mapCoverUrl(entry)} />
+                <BannerCover key={entry.beatmapsetId} src={mapCoverUrl(entry)} />
                 <div className="absolute inset-0 bg-gradient-to-t from-osu-b5 via-osu-b5/70 to-black/40" />
                 <button
                   type="button"
