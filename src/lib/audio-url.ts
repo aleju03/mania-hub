@@ -7,11 +7,29 @@ export function getBeatmapAudioWaveUrl(beatmapsetId: number | string, filename: 
   return liveBackendUrl ? `${liveBackendUrl}${path}` : path;
 }
 
+let mp3InMp4Playable: boolean | null = null;
+
+// The backend serves MP3 songs inside MP4, which Safari cannot play. Firefox
+// answers "" for the mp4a codec ids but "probably" for codecs="mp3", so any of
+// the three counts. The server render keeps the MP4 URL.
+function canPlayMp3InMp4(): boolean {
+  if (typeof document === "undefined") return true;
+  if (mp3InMp4Playable == null) {
+    const probe = document.createElement("audio");
+    mp3InMp4Playable = ["mp4a.6B", "mp4a.69", "mp3"]
+      .some((codec) => probe.canPlayType(`audio/mp4; codecs="${codec}"`) === "probably");
+  }
+  return mp3InMp4Playable;
+}
+
 export function getBeatmapAudioUrl(beatmapsetId: number | string, filename: string): string {
   // The previous Ogg responses are immutable in browser/CDN caches. Request
   // the packet-timestamped version after the backend's lossless repagination.
-  const version = filename.toLowerCase().endsWith(".ogg") ? "&v=ogg-seek-v1" : "";
-  const path = `/api/audio?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}&filename=${encodeURIComponent(filename)}${version}`;
+  const lower = filename.toLowerCase();
+  const variant = lower.endsWith(".ogg")
+    ? "&v=ogg-seek-v1"
+    : lower.endsWith(".mp3") && !canPlayMp3InMp4() ? "&format=mp3" : "";
+  const path = `/api/audio?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}&filename=${encodeURIComponent(filename)}${variant}`;
   const liveBackendUrl = getLiveBackendUrl();
   return liveBackendUrl ? `${liveBackendUrl}${path}` : path;
 }
