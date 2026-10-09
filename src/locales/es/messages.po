@@ -12003,9 +12003,14 @@ msgstr "abierto"
 msgid "Open {0} on osu!"
 msgstr "Abrir {0} en osu!"
 
-#. placeholder {0}: card.player.user.username
 #. placeholder {0}: entry.user.username
+#: src/routes/snipes.tsx
+msgid "Open {0}'s play"
+msgstr "Abrir la jugada de {0}"
+
+#. placeholder {0}: card.player.user.username
 #. placeholder {0}: event.sniper.username
+#. placeholder {0}: event.victim.username
 #: src/components/packs/PackSummary.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx

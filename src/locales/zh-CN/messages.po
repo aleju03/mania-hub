@@ -12012,9 +12012,14 @@ msgstr "待处理"
 msgid "Open {0} on osu!"
 msgstr "在 osu! 上打开 {0}"
 
-#. placeholder {0}: card.player.user.username
 #. placeholder {0}: entry.user.username
+#: src/routes/snipes.tsx
+msgid "Open {0}'s play"
+msgstr "打开 {0} 的成绩"
+
+#. placeholder {0}: card.player.user.username
 #. placeholder {0}: event.sniper.username
+#. placeholder {0}: event.victim.username
 #: src/components/packs/PackSummary.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx

@@ -16,7 +16,7 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
-import type { SnipeEvent } from "../lib/types";
+import type { OsuScore, SnipeEvent } from "../lib/types";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHiddenUserIds, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { pageSeo } from "../lib/seo";
@@ -30,6 +30,7 @@ import { useCountryWarming } from "../lib/use-country-warming";
 import { useWindowActive } from "../lib/window-activity";
 import { useAuth } from "../lib/auth-context";
 import { AddScoreModal } from "../components/player/AddScoreModal";
+import { ScorePlayDetailModal } from "../components/player/ScorePlayDetailModal";
 
 type KeyFilter = SnipesKeyFilter;
 type RangeFilter = SnipesRange;
@@ -1135,6 +1136,7 @@ function SnipeBoard({ event, country }: { event: SnipeEvent; country: string }) 
   const [board, setBoard] = useState<LiveSnipeBoardSnapshot | null>(() => boardCache.get(cacheKey) ?? null);
   const [error, setError] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [opened, setOpened] = useState<LiveSnipeBoardEntry | null>(null);
 
   useEffect(() => {
     const cached = boardCache.get(cacheKey);
@@ -1193,10 +1195,43 @@ function SnipeBoard({ event, country }: { event: SnipeEvent; country: string }) 
             track("snipes_board_all", snipeAnalytics(event));
             setShowAll(true);
           }}
+          onOpen={setOpened}
         />
+      )}
+      {opened && (
+        // The card renders in a portal, whose clicks still bubble through
+        // React to the row that toggles this board.
+        <div onClick={(e) => e.stopPropagation()}>
+          <ScorePlayDetailModal score={boardEntryScore(opened, event)} username={opened.user.username} onClose={() => setOpened(null)} />
+        </div>
       )}
     </div>
   );
+}
+
+/** A board row as the score the play card reads. The board keeps no judgement counts or combo. */
+function boardEntryScore(entry: LiveSnipeBoardEntry, event: SnipeEvent): OsuScore {
+  return {
+    id: entry.scoreId,
+    type: "solo_score",
+    user_id: entry.user.id,
+    user: { id: entry.user.id, username: entry.user.username, avatar_url: entry.user.avatar_url, country_code: "" },
+    accuracy: entry.accuracy,
+    mods: entry.mods.map((acronym) => ({ acronym })),
+    score: entry.totalScore,
+    total_score: entry.totalScore,
+    ...(entry.isLazer ? {} : { legacy_total_score: entry.totalScore }),
+    pp: entry.pp,
+    rank: entry.grade,
+    passed: true,
+    max_combo: 0,
+    statistics: {},
+    has_replay: entry.hasReplay,
+    ended_at: entry.endedAt,
+    created_at: entry.endedAt,
+    beatmap: { id: event.beatmap_id, beatmapset_id: event.beatmapset_id, version: event.beatmap.version, difficulty_rating: event.beatmap.difficulty_rating, cs: event.beatmap.cs, mode: "mania" },
+    beatmapset: { id: event.beatmapset_id, title: event.beatmapset.title, artist: event.beatmapset.artist, covers: { cover: event.beatmapset.cover_url } },
+  } as unknown as OsuScore;
 }
 
 /**
@@ -1208,11 +1243,13 @@ function BoardRows({
   event,
   showAll,
   onShowAll,
+  onOpen,
 }: {
   board: LiveSnipeBoardSnapshot;
   event: SnipeEvent;
   showAll: boolean;
   onShowAll: () => void;
+  onOpen: (entry: LiveSnipeBoardEntry) => void;
 }) {
   // Seeded boards can carry no pp at all; a column of dashes says less than no column.
   const showPp = board.entries.some((row) => row.pp != null && row.pp > 0);
@@ -1226,11 +1263,11 @@ function BoardRows({
   return (
     <div className="mt-1">
       {head.map((entry) => (
-        <SnipeBoardRow key={entry.scoreId} entry={entry} event={event} showPp={showPp} highlight={highlightOf(entry.user.id)} />
+        <SnipeBoardRow key={entry.scoreId} entry={entry} event={event} showPp={showPp} highlight={highlightOf(entry.user.id)} onOpen={onOpen} />
       ))}
       {tail.length > 0 && <div className="py-0.5 pl-2 text-[10px] leading-none text-osu-f1">···</div>}
       {tail.map((entry) => (
-        <SnipeBoardRow key={entry.scoreId} entry={entry} event={event} showPp={showPp} highlight={highlightOf(entry.user.id)} />
+        <SnipeBoardRow key={entry.scoreId} entry={entry} event={event} showPp={showPp} highlight={highlightOf(entry.user.id)} onOpen={onOpen} />
       ))}
       {hidden > 0 && (
         <button
@@ -1252,11 +1289,13 @@ function SnipeBoardRow({
   event,
   showPp,
   highlight,
+  onOpen,
 }: {
   entry: LiveSnipeBoardEntry;
   event: SnipeEvent;
   showPp: boolean;
   highlight: "sniper" | "victim" | null;
+  onOpen: (entry: LiveSnipeBoardEntry) => void;
 }) {
   const { t } = useLingui();
   // Names carry their own accent color, so the two rows this snipe is about are
@@ -1270,11 +1309,11 @@ function SnipeBoardRow({
       <button
         onClick={(e) => {
           e.stopPropagation();
-          track("snipes_link", { ...snipeAnalytics(event), snipe_target: "board", profile_username: entry.user.username });
-          window.location.href = `/player/${encodeURIComponent(entry.user.username)}`;
+          track("snipes_link", { ...snipeAnalytics(event), snipe_target: "board_play", profile_username: entry.user.username });
+          onOpen(entry);
         }}
         className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left"
-        title={t`Open ${entry.user.username}'s profile`}
+        title={t`Open ${entry.user.username}'s play`}
       >
         <Avatar url={entry.user.avatar_url} size={18} />
         <UsernameText
