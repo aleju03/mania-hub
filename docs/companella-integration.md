@@ -85,11 +85,11 @@ Backend, all under `backend/src/integrations/companella/`:
 | `validation.ts` | Identity, completion and the mod capability matrix. |
 | `replay-timing.ts` | Judges the replay's key presses: the Wife3 goals the rating runs at, and the header check. |
 | `admin-accounts.ts` | The admin list behind the Players tab on `/admin/bridgers`: every account that has used Companella, and one account's plays. |
-| `usage.ts` | Aggregate usage of the Companella app alone (its own client id, never Mania Bridge or the test client) behind `GET /api/admin/companella/usage`, for `/companella/usage`. Names no player. |
+| `usage.ts` | Aggregate usage of the Companella app alone (its own client id, never Hashi or the test client) behind `GET /api/admin/companella/usage`, for `/companella/usage`. Names no player. |
 | `account-blocks.ts` | The admin block: an account caught cheating stops connecting and sending plays, and its connections are revoked. |
 | `skill-overlay.ts` | Public skill ratings (MSD, patterns, Dan) for active osu! accounts: checked imports combined with retained official evidence at read time. |
 | `local-charts.ts`, `local-chart-id.ts` | Imports on charts osu! does not have: the eligibility rule, the 1.0x chart analysis job, per-player families, and the map card behind `GET /api/companella/local-charts/<id>`. |
-| `poll-hold.ts` | Holds a player's recent-score polls while Mania Bridge's presence is live, and polls once when it ends. |
+| `poll-hold.ts` | Holds a player's recent-score polls while Hashi's presence is live, and polls once when it ends. |
 | `official-timing.ts` | Stores an import's timing for the official play osu! delivers for the same run, and pairs and clamps it for the skill compute. |
 | `replay-import.ts` | Admin replay imports: a player's `.osr` files dropped on `/admin/bridgers?tab=import`, staged as ordinary submissions and fed to the lane a few at a time (see "Admin replay imports"). |
 | `analysis.ts` | Per-play MSD / SSR / LN / chart-dan through the existing engines. |
@@ -667,7 +667,7 @@ equals one of the same user's `score_events` score ids is skipped, so a play
 osu! also sent is listed once. The row is a lean tracker score with a stable
 negative id derived from the import id and a `companella: { importId, replay, app }`
 mark, where `app` is the sending installation's client id so the row shows that
-app's icon (Companella or Mania Bridge). It uses the official beatmap and set when the import's chart is the exact
+app's icon (Companella or Hashi). It uses the official beatmap and set when the import's chart is the exact
 official file (the priced beatmap id, else the same md5 match
 `resolveExactBeatmap` makes), and otherwise a beatmap built from
 `companella_local_charts` with id 0 and no link. Its stars and BPM are the
@@ -745,7 +745,7 @@ that is withdrawn, held or deleted closes at once.
 
 ## Live presence
 
-For Mania Bridge, the owner's own companion app, which connects with its own
+For Hashi, the owner's own companion app, which connects with its own
 `mania-bridge` client id (same flow and scopes as Companella) so Settings lists
 it as its own integration. Companella itself only submits plays
 and never sends presence, so none of this is in the client guide, the OpenAPI

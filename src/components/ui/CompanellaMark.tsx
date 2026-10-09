@@ -7,11 +7,11 @@ import { useAuth } from "../../lib/auth-context";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { KNOWN_APPS, REPLAY_IMPORT_APP, knownApp } from "../../lib/companella-integration/shared";
 
-// Marks a score row that came from an app import (Companella, Mania Bridge) instead of osu!, with the icon of the
+// Marks a score row that came from an app import (Companella, Hashi) instead of osu!, with the icon of the
 // app that sent it; a row without one predates the field and was Companella. The icon is full colour on a solid
 // disc, so it is an <img>, not a mask like the mod glyphs. The small mark copies keep a row from pulling the originals.
 // Rows draw their content above a full-row button with pointer events off, so the mark turns them back on for its
-// own hover label and, on a Mania Bridge play, its link to /bridge. Mania Bridge marks show to admins only until
+// own hover label and, on a Hashi play, its link to /bridge. Hashi marks show to admins only until
 // its release, like /bridge itself. A play an admin imported from the player's replay files carries no mark.
 export function CompanellaMark({ app, className = "h-[18px] w-[18px]" }: { app?: string; className?: string }) {
   const { t } = useLingui();

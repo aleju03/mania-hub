@@ -6537,7 +6537,7 @@ msgid "Edits stay in this browser. Copy the result and paste it into the me! edi
 msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到你的 osu! 页面的 me! 编辑器中。"
 
 #: src/components/BackendOfflineScreen.tsx
-msgid "Either restarting or under maintenance. Try again in a bit."
+msgid "Either restarting or under maintenance. Try again later."
 msgstr "正在重启或维护中。请稍后再试。"
 
 #: src/lib/packs.ts
@@ -7772,6 +7772,30 @@ msgstr "有害、仇恨内容或诈骗"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Has its own backdrop"
 msgstr "自带背景"
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
+#~ msgstr "Hashi 通过 tosu 读取 osu!，所以 tosu 需要保持运行。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+#~ msgstr "Hashi 通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Hashi 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+
+#: src/routes/bridge.tsx
+msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
+msgstr "Hashi 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你在 Mania Tracker 上的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Hashi 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Hashi 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 Share what I'm playing 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -9788,30 +9812,6 @@ msgstr "马来语"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "manager"
 msgstr "管理员"
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
-#~ msgstr "Mania Bridge 通过 tosu 读取 osu!，所以 tosu 需要保持运行。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
-#~ msgstr "Mania Bridge 通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-#~ msgstr "Mania Bridge 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
-
-#: src/routes/bridge.tsx
-msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
-msgstr "Mania Bridge 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你在 Mania Tracker 上的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-#~ msgstr "Mania Bridge 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
-#~ msgstr "Mania Bridge 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 Share what I'm playing 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
 
 #: src/routes/maps.tsx
 msgid "Mania maps"

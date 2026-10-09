@@ -4,7 +4,7 @@ import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 
 /* Aggregate usage of the Companella app for /companella/usage: Companella's
-   own client id only, never Mania Bridge, and no player is named. Open to the
+   own client id only, never Hashi, and no player is named. Open to the
    site admins and to Companella's developer, on any host, and to whoever holds
    the usage API key (handleCompanellaUsageApi). */
 

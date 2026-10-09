@@ -64,7 +64,7 @@ export function BackendOfflineScreen() {
         <Trans>Temporarily offline</Trans>
       </h1>
       <p className="max-w-md text-sm leading-relaxed text-osu-f1">
-        <Trans>Either restarting or under maintenance. Try again in a bit.</Trans>
+        <Trans>Either restarting or under maintenance. Try again later.</Trans>
       </p>
       <button
         type="button"

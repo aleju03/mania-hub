@@ -6555,8 +6555,8 @@ msgid "Edits stay in this browser. Copy the result and paste it into the me! edi
 msgstr "Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page."
 
 #: src/components/BackendOfflineScreen.tsx
-msgid "Either restarting or under maintenance. Try again in a bit."
-msgstr "Either restarting or under maintenance. Try again in a bit."
+msgid "Either restarting or under maintenance. Try again later."
+msgstr "Either restarting or under maintenance. Try again later."
 
 #: src/lib/packs.ts
 msgid "Elite"
@@ -7794,6 +7794,30 @@ msgstr "Harmful, hateful or a scam"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Has its own backdrop"
 msgstr "Has its own backdrop"
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
+#~ msgstr "Hashi reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+#~ msgstr "Hashi reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+
+#: src/routes/bridge.tsx
+msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
+msgstr "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+
+#: src/routes/bridge.tsx
+#~ msgid "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -9818,30 +9842,6 @@ msgstr "Malay"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "manager"
 msgstr "manager"
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
-#~ msgstr "Mania Bridge reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
-#~ msgstr "Mania Bridge reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-#~ msgstr "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-
-#: src/routes/bridge.tsx
-msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
-msgstr "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-#~ msgstr "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-
-#: src/routes/bridge.tsx
-#~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
-#~ msgstr "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
 
 #: src/routes/maps.tsx
 msgid "Mania maps"

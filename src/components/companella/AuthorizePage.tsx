@@ -14,7 +14,7 @@ import {
 import { knownApp } from "../../lib/companella-integration/shared";
 
 /*
- * The consent screen, served at /companella/authorize and, for Mania Bridge,
+ * The consent screen, served at /companella/authorize and, for Hashi,
  * at /bridge/authorize.
  *
  * Approval is an explicit same-origin POST, never something that happens

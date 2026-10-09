@@ -1,5 +1,5 @@
 /*
- * Mania Bridge release info, read by /bridge and served to the app as /bridge/latest.json.
+ * Hashi release info, read by /bridge and served to the app as /bridge/latest.json.
  * Bump the version when a new build is published on GitHub; the site then serves that release's update file
  * and its installers, and the app offers the update.
  */

@@ -27,7 +27,7 @@ async function load(body: unknown, ok = true) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("the Mania Bridge release file", () => {
+describe("the Hashi release file", () => {
   it("serves the release's file and its installers by system", async () => {
     const release = await load(manifest());
     const read = await release.readManiaBridgeManifest();

@@ -8,7 +8,7 @@ import {
   type CompanellaPresence,
 } from "#/lib/live-backend";
 
-// Live presence from Mania Bridge, one store per tab: the snapshot once,
+// Live presence from Hashi, one store per tab: the snapshot once,
 // then the companella_presence events over the shell's passive live stream.
 // The backend does not log those events, so a reconnect reads the snapshot
 // again instead of replaying them.

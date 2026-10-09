@@ -1,7 +1,7 @@
 import { MANIA_BRIDGE_REPO, MANIA_BRIDGE_VERSION, type ManiaBridgeDownloads } from "./mania-bridge";
 
 /*
- * The current Mania Bridge release's update file, the latest.json the release workflow uploads (Tauri's updater
+ * The current Hashi release's update file, the latest.json the release workflow uploads (Tauri's updater
  * format: version, notes, and a signed installer URL per platform). Server only. Fetched from GitHub and kept for
  * five minutes, a failure included; null while there is no published release (or the repository is private), when
  * /bridge/latest.json falls back to the bare version and the app offers its Download button instead of Update.

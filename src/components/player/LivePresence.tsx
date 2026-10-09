@@ -5,7 +5,7 @@ import { useLingui } from "@lingui/react/macro";
 import type { CompanellaPresence } from "#/lib/live-backend";
 import { ModBadge } from "../ui/ModBadge";
 
-// What a player is doing in osu! right now, from Mania Bridge. The
+// What a player is doing in osu! right now, from Hashi. The
 // profile shows the full line under the name, the rankings a short tag, and
 // the home card a dot that shows the full line on hover or tap.
 

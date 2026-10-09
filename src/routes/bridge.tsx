@@ -13,7 +13,7 @@ import { MANIA_BRIDGE_SOURCE_URL, MANIA_BRIDGE_VERSION, type ManiaBridgeDownload
 import { fetchManiaBridgeDownloads } from "../lib/mania-bridge-server";
 
 /*
- * /bridge: Mania Bridge's download page, and where the app's Download button opens. Admin preview until the
+ * /bridge: Hashi's download page, and where the app's Download button opens. Admin preview until the
  * release, like the Integrations group in Settings.
  */
 
@@ -29,11 +29,11 @@ export const Route = createFileRoute("/bridge")({
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return pageSeo({
-      title: "Mania Bridge",
+      title: "Hashi",
       description: i18n._(msg`Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings.`),
       path: "/bridge",
       origin: match.context.origin,
-      imageTitle: "Mania Bridge",
+      imageTitle: "Hashi",
     });
   },
   component: BridgePage,
@@ -195,7 +195,7 @@ function BridgePage() {
               <h2 className="text-[13px] font-semibold text-white"><Trans>What it does</Trans></h2>
               <p className="mt-2">
                 <Trans>
-                  Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With{" "}
+                  Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With{" "}
                   <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings on Mania Tracker
                   also show what you're doing in osu!.
                 </Trans>

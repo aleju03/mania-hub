@@ -42,7 +42,7 @@ export type AnalysisState = "supported" | "unsupported" | "pending" | "failed_re
  */
 export const KNOWN_APPS: Record<string, { name: string; icon: string; mark: string }> = {
   companella: { name: "Companella", icon: "/images/companella-icon.png", mark: "/images/companella-mark.png" },
-  "mania-bridge": { name: "Mania Bridge", icon: "/images/mania-bridge-logo.png", mark: "/images/mania-bridge-mark.png" },
+  "mania-bridge": { name: "Hashi", icon: "/images/mania-bridge-logo.png", mark: "/images/mania-bridge-mark.png" },
 };
 
 /** The client id of plays an admin imported from the player's replay files; not an app, so not in KNOWN_APPS. */

@@ -32,7 +32,7 @@ function freshSnapshot(viewerId: number | null): CompanellaSnapshot | null {
 }
 
 /*
- * The Integrations group in Settings: Companella, and Mania Bridge for admins until its release (like /bridge),
+ * The Integrations group in Settings: Companella, and Hashi for admins until its release (like /bridge),
  * each with its connected computers and a Revoke. Connecting happens from inside the app.
  * /companella stays the client developer's test bench.
  */
