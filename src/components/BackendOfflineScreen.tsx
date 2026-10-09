@@ -71,9 +71,33 @@ export function BackendOfflineScreen() {
         onClick={() => {
           if (typeof window !== "undefined") window.location.reload();
         }}
-        className="mt-1 rounded-md bg-osu-pink px-4 py-2 text-[13px] font-semibold text-osu-b6 transition hover:brightness-110"
+        className="group relative mt-1 px-6 py-2.5 text-[13px] font-semibold text-osu-pink"
       >
-        <Trans>Try again</Trans>
+        {/* Outlined in the same pencil line as the drawing above it. */}
+        <svg
+          aria-hidden
+          viewBox="0 0 120 40"
+          preserveAspectRatio="none"
+          className="absolute inset-0 h-full w-full overflow-visible"
+          fill="none"
+          stroke={ACCENT}
+          strokeWidth={1.9}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <g filter="url(#offline-doodle-rough)">
+            <Sketch>
+              <path
+                d="M 7 3 C 3 3 2 5 2 9 L 2.5 32 C 2.5 36 4 37.5 8 37.5 L 112 37 C 116 37 118 35 118 31 L 117.5 8 C 117.5 4 116 2.5 112 2.5 Z"
+                fill={ACCENT}
+                className="[fill-opacity:0] transition-[fill-opacity] group-hover:[fill-opacity:0.15]"
+              />
+            </Sketch>
+          </g>
+        </svg>
+        <span className="relative">
+          <Trans>Try again</Trans>
+        </span>
       </button>
     </div>
   );
