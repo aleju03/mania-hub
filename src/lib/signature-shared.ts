@@ -47,7 +47,7 @@ export const SIGNATURE_DESIGNS: Record<SignatureType, SignatureDesign[]> = {
        own 5:7, which is why the numbers are not round. */
     { design: 4, slug: "card-front", label: msg`Card front`, width: 480, height: 672, ownArt: true },
     { design: 1, slug: "banner", label: msg`Banner`, width: 880, height: 200 },
-    { design: 2, slug: "strip", label: msg`Strip`, width: 600, height: 140 },
+    /* Design 2 was the strip, removed unused. Its id stays retired. */
   ],
   goals: [
     { design: 1, slug: "progress-list", label: msg`Progress list`, width: 880, height: 230 },

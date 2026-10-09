@@ -7,7 +7,6 @@
 // already uses for its card art.
 
 import { ImageResponse } from "@vercel/og";
-import { maniaStripElement } from "./-maniacard-strip";
 import { createElement as h } from "react";
 import type { ReactElement, ReactNode } from "react";
 
@@ -17,7 +16,6 @@ import { clamp, loadOgFonts, ogAvatarUrl, ogFontList, ogRenderGate } from "../..
 import {
   cosmicLaurelDataUrl,
   maniaTierCardElement,
-  triangleOverlayDataUrl,
   MANIACARD_H,
   MANIACARD_W,
 } from "../../../lib/maniacard-art";
@@ -397,7 +395,7 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   if (!user || !skills) return renderPlate(ctx, "No ranked mania plays tracked yet.");
 
   const tier = getManiaCardTier(skills.cardPower);
-  const avatarSize = ctx.design === 4 ? 454 : ctx.design === 2 ? 108 : 140;
+  const avatarSize = ctx.design === 4 ? 454 : 140;
   const sourceAvatarUrl = ogAvatarUrl(ctx.request, user.avatar_url, user.id);
   /* resvg does not decode GIFs, so handing an animated osu! avatar straight
      to ImageResponse leaves the card's avatar frame blank. Dynamic renders
@@ -413,33 +411,6 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   const tierBacked = !background.custom && styleUsesTier(ctx.style);
   const statColor = accentHex(ctx.style, "rgba(255,255,255,0.88)");
   const username = clamp(user.username || ctx.resolved.username, 20);
-  if (ctx.design === 2) {
-    const cosmic = getCosmicTierPalette(tier);
-    const summaryBackground: ReactNode[] = [...background.layers];
-    if (tierBacked) {
-      summaryBackground.push(
-        ...(cosmic ? tierLayers(tier, style, spec) : [
-          h("div", { key: "base", style: { position: "absolute", ...FILL, background: style.badgeGradient } }),
-          h("img", {
-            key: "facets", src: triangleOverlayDataUrl(spec.width, spec.height),
-            width: spec.width, height: spec.height,
-            style: { position: "absolute", top: 0, left: 0, width: spec.width, height: spec.height, opacity: 0.5 },
-          }),
-        ]),
-      );
-    }
-    return renderPng(ctx, maniaStripElement({
-      ...spec,
-      username,
-      avatarUrl,
-      tierLabel: style.label,
-      accent: accentHex(ctx.style, "#ffffff"),
-      skills,
-      background: summaryBackground,
-      tierBacked,
-      watermark: ctx.style.watermark,
-    }));
-  }
 
   /* No rank and no pp on the image. Both move on osu! faster than a cached
      snapshot can follow, so an embed showing them is wrong more often than it
