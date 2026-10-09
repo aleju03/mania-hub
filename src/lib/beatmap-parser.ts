@@ -122,7 +122,16 @@ function sampleControlPointAt(points: SampleControlPoint[], time: number): Sampl
 
 function normalizeKeyCount(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 4;
-  return Math.max(1, Math.min(18, Number.isInteger(value) ? value : Math.ceil(value)));
+  return Math.max(1, Math.min(18, roundHalfEven(value)));
+}
+
+/** osu! reads the mania key count as C# Math.Round(CircleSize), which rounds half to even. */
+function roundHalfEven(value: number): number {
+  const floor = Math.floor(value);
+  const diff = value - floor;
+  if (diff > 0.5) return floor + 1;
+  if (diff < 0.5) return floor;
+  return floor % 2 === 0 ? floor : floor + 1;
 }
 
 function clampFloat(value: number, min: number, max: number): number {

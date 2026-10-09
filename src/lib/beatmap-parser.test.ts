@@ -350,8 +350,8 @@ CircleSize:3.3
 511,192,1000,1,0,0:0:0:0:
 `);
 
-    expect(beatmap.keyCount).toBe(4);
-    expect(beatmap.notes[0].column).toBe(3);
+    expect(beatmap.keyCount).toBe(3);
+    expect(beatmap.notes[0].column).toBe(2);
   });
 
   it("keeps od finite when OverallDifficulty fails to parse", () => {
