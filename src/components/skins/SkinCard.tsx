@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Download, Eye, Lock } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { rememberSkinName, skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
@@ -175,7 +175,9 @@ export function SkinPreviewImage({
 // uploader's own shots (the cover, when the cover is one) over any render.
 // showUploader is for the admin private shelf, which mixes every uploader's
 // skins and would otherwise give no way to tell whose is whose.
-export function SkinCard({ skin, previewKeys, preferScreenshot = false, showUploader = false, onClick }: { skin: SkinSummary; previewKeys?: number; preferScreenshot?: boolean; showUploader?: boolean; onClick?: () => void }) {
+// Memoized so pages that hold UI state above a grid (the skins filter drawer)
+// can toggle it without re-rendering every card.
+export const SkinCard = memo(function SkinCard({ skin, previewKeys, preferScreenshot = false, showUploader = false, onClick }: { skin: SkinSummary; previewKeys?: number; preferScreenshot?: boolean; showUploader?: boolean; onClick?: () => void }) {
   const { t } = useLingui();
   const locale = useLocale();
   const accent = skin.accentColor ?? SKIN_FALLBACK_ACCENT;
@@ -340,4 +342,4 @@ export function SkinCard({ skin, previewKeys, preferScreenshot = false, showUplo
       )}
     </div>
   );
-}
+});

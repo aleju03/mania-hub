@@ -1,5 +1,4 @@
 import { createFileRoute, Link, notFound, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "framer-motion";
 import { ArrowDown, ArrowUp, Check, ChevronDown, Layers, Lock, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -376,7 +375,7 @@ function SkinsPage() {
   const [reloadTick, setReloadTick] = useState(0);
   // The filter rail is always out from lg up; below that it is a drawer.
   const [filtersOpen, setFiltersOpen] = useState(false);
-  useBodyScrollLock(filtersOpen);
+  useBodyScrollLock(filtersOpen, { deferred: true });
   // Escape closes the drawer, and so does widening the window into the
   // rail layout, where the drawer has nothing left to do.
   useEffect(() => {
@@ -865,55 +864,51 @@ function SkinsPage() {
         </div>
       </div>
 
-      <AnimatePresence>
-        {filtersOpen && (
-          <div className="lg:hidden">
-            <motion.div
-              className="fixed inset-0 z-[60] bg-black/55"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
+      {/* Always mounted, like the nav drawer: opening only flips a class, so
+          the slide is a CSS transform the compositor runs on its own and no
+          React mount lands on the animation's first frame. */}
+      <div className="lg:hidden">
+        <div
+          className={`fixed inset-0 z-[60] bg-black/55 transition-opacity duration-200 ease-out ${
+            filtersOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+          onClick={() => setFiltersOpen(false)}
+          aria-hidden="true"
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t`filters`}
+          inert={!filtersOpen}
+          className={`fixed left-0 top-0 z-[61] flex h-dvh w-[min(288px,85vw)] flex-col gap-y-4 overflow-y-auto overscroll-contain bg-osu-b5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-4 pt-[max(1rem,env(safe-area-inset-top))] shadow-[8px_0_32px_rgba(0,0,0,0.45)] will-change-[translate] transition-[translate,visibility] duration-200 ease-out ${
+            filtersOpen ? "translate-x-0" : "invisible -translate-x-full"
+          }`}
+        >
+          <div className="flex items-baseline gap-3">
+            <span className={`text-[22px] font-bold leading-none text-white tabular-nums transition-opacity ${loading ? "opacity-45" : ""}`}>
+              {data ? <Plural value={data.total} one="# skin" other="# skins" /> : null}
+            </span>
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={() => applySearch(CLEARED_FILTERS)}
+                className="text-[12px] font-medium text-osu-f1 transition-colors cursor-pointer hover:text-osu-pink-light"
+              >
+                <Trans>clear</Trans>
+              </button>
+            )}
+            <button
+              type="button"
               onClick={() => setFiltersOpen(false)}
-              aria-hidden="true"
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label={t`filters`}
-              className="fixed left-0 top-0 z-[61] flex h-dvh w-[min(288px,85vw)] flex-col gap-y-4 overflow-y-auto overscroll-contain bg-osu-b5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-4 pt-[max(1rem,env(safe-area-inset-top))] shadow-[8px_0_32px_rgba(0,0,0,0.45)]"
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
+              aria-label={t`Close`}
+              className="-m-2 ml-auto self-center p-2 text-osu-f1 transition-colors cursor-pointer hover:text-osu-pink-light"
             >
-              <div className="flex items-baseline gap-3">
-                <span className={`text-[22px] font-bold leading-none text-white tabular-nums transition-opacity ${loading ? "opacity-45" : ""}`}>
-                  {data ? <Plural value={data.total} one="# skin" other="# skins" /> : null}
-                </span>
-                {activeFilterCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => applySearch(CLEARED_FILTERS)}
-                    className="text-[12px] font-medium text-osu-f1 transition-colors cursor-pointer hover:text-osu-pink-light"
-                  >
-                    <Trans>clear</Trans>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setFiltersOpen(false)}
-                  aria-label={t`Close`}
-                  className="-m-2 ml-auto self-center p-2 text-osu-f1 transition-colors cursor-pointer hover:text-osu-pink-light"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-              {railSections}
-            </motion.div>
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
           </div>
-        )}
-      </AnimatePresence>
+          {railSections}
+        </div>
+      </div>
 
       <SkinUploadModal
         open={showUploader && !!auth.viewer}

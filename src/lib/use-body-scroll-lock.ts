@@ -75,12 +75,28 @@ export function acquireBodyScrollLock(): () => void {
 
 /* Holds the lock for as long as `active` is true. Modals that fade out pass
    the state they clear in onExitComplete, so the page stays still until the
-   overlay is actually gone. */
-export function useBodyScrollLock(active: boolean): void {
+   overlay is actually gone.
+
+   `deferred` is for CSS-transitioned drawers: the lock's style writes restyle
+   the whole page, so it acquires and releases two frames late, letting the
+   slide get its first frames on the compositor before that work lands. */
+export function useBodyScrollLock(active: boolean, { deferred = false }: { deferred?: boolean } = {}): void {
   useLayoutEffect(() => {
     if (!active) return;
-    return acquireBodyScrollLock();
-  }, [active]);
+    if (!deferred) return acquireBodyScrollLock();
+    let release: (() => void) | null = null;
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        release = acquireBodyScrollLock();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      if (!release) return;
+      const releaseLock = release;
+      requestAnimationFrame(() => requestAnimationFrame(releaseLock));
+    };
+  }, [active, deferred]);
 }
 
 /* Test-only: module state outlives a component tree, so a suite that renders
