@@ -43,6 +43,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-09", text: "Added region and continent support to Farmed, Most Played, Favourites and Random on maps.", to: "/maps" },
   { date: "2026-10-08", text: "Added a Scores tab to maps that lists every tracked player's best play on the chart, ranked by lazer accuracy.", label: "Scores", to: "/maps", image: { src: "/images/changelog/2026-10-08-map-scores-tab.webp", alt: "The Scores tab on a map", width: 770, height: 286 } },
   { date: "2026-10-08", text: "Redesigned the dynamic renders page.", to: "/dynamic-renders" },
   { date: "2026-10-08", text: "Redesigned the goals page.", to: "/goals" },
