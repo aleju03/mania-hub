@@ -3083,6 +3083,7 @@ msgstr "全部记录"
 #~ msgstr "三次锻造均已用完。每次使用后 24 小时恢复。"
 
 #: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/routes/top-plays.tsx
 msgid "All time"
 msgstr "全部时间"
 
@@ -3246,7 +3247,6 @@ msgstr "不限"
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
-#: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Any"
 msgstr "不限"
@@ -10039,8 +10039,8 @@ msgid "Maps"
 msgstr "谱面"
 
 #: src/routes/maps.tsx
-msgid "Maps boards are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries or switch to Global."
-msgstr "谱面榜单按国家/地区构建，另有一个合并的全球榜单。{countryName} 还没有自己的榜单，请选择其中的某个国家/地区，或切换到全球。"
+#~ msgid "Maps boards are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries or switch to Global."
+#~ msgstr "谱面榜单按国家/地区构建，另有一个合并的全球榜单。{countryName} 还没有自己的榜单，请选择其中的某个国家/地区，或切换到全球。"
 
 #: src/routes/maps.tsx
 msgid "Maps build failed."
@@ -10430,6 +10430,10 @@ msgstr "全球游玩最多"
 #: src/routes/maps.tsx
 msgid "Most played in {countryName}"
 msgstr "{countryName} 游玩最多"
+
+#: src/routes/maps.tsx
+#~ msgid "Most Played, Favourites and Random are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries, switch to Global, or open Farmed."
+#~ msgstr "游玩最多、收藏和随机按国家/地区构建，另有一个合并的全球榜单。{countryName} 还没有自己的榜单，请选择其中的某个国家/地区、切换到全球，或打开刷图热门。"
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most unique cards"
@@ -11128,6 +11132,10 @@ msgstr "还没有 7 天前的排名数据"
 msgid "No ranked players yet."
 msgstr "还没有上榜玩家。"
 
+#: src/routes/top-plays.tsx
+msgid "No rate mod"
+msgstr ""
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "No rated {label} plays found"
 msgstr "没有找到已评分的 {label} 成绩"
@@ -11166,8 +11174,12 @@ msgid "No recent top plays"
 msgstr "暂无最近最佳成绩"
 
 #: src/routes/maps.tsx
-msgid "No region maps boards yet"
-msgstr "还没有区域谱面榜单"
+#~ msgid "No region board for this tab yet"
+#~ msgstr "此标签页还没有区域榜单"
+
+#: src/routes/maps.tsx
+#~ msgid "No region maps boards yet"
+#~ msgstr "还没有区域谱面榜单"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "No regions found"

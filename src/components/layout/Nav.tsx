@@ -582,9 +582,10 @@ export function Nav() {
       return;
     }
     if (location.pathname === "/top-plays") {
+      // Keep the reader's sort and keymode across countries.
       navigate({
         to: "/top-plays",
-        search: { country, range: topPlaysRangeForLink, sort: "recent", dir: "desc", keys: "all" },
+        search: ((prev: Record<string, unknown>) => ({ ...prev, country, range: topPlaysRangeForLink })) as never,
         replace: true,
       });
       return;

@@ -43,6 +43,10 @@ Detected country top plays live in `top_play_events`. When an incoming score is 
 
 Snapshot reads select the requested page's rowids before loading score payloads. Shallow GLOBAL PP/gain pages first try a bounded prefix of the existing sort index; if that cannot establish a complete page, including boundary ties, the query falls back to the time-window scan. Prepared responses share a five-second cache and in-flight work, keyed by scope, filters, page and encoding; a new event invalidates them immediately.
 
+The All time window (`window=all`) does not read the feed, which only starts when tracking did. It ranks ranked, tracked roster members' stored osu! bests (`user_top_scores`) by pp, capped at 1,000, and each row carries its `rank` in that list whatever the page's sort. GLOBAL walks `idx_user_top_scores_pp` and stops at the cap; a country or region reads its roster's rows by primary key and sorts those. The ranked list is cached in memory for 10 minutes per scope, keymode and rate filter, so pages and sorts only load their own rows. Stored bests carry no pp gain, so the gain sort falls back to pp there.
+
+`rates=nm,dt,ht` (any subset) keeps plays with no rate mod, DT/NC or HT/DC, on every window. Both tables carry a promoted `rate_mod` column (1 DT/NC, -1 HT/DC, 0 neither) because the mods only live in the packed score JSON; `backfillTopPlayRateMods` fills rows stored before the column once at boot, and unfilled rows read as no rate mod.
+
 ## Maps
 
 The LN filter dropdown carries an LN share slider (`lnMin`/`lnMax` in percent).

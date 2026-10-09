@@ -307,7 +307,7 @@ export interface LiveTrackerSnapshot {
 export interface LiveTopPlaysSnapshot {
   popoffs: CountryTopPlay[];
   scannedAt: number;
-  window: "24h" | "3d" | "7d" | "30d";
+  window: "24h" | "3d" | "7d" | "30d" | "all";
   total?: number;
   page?: number;
   pageSize?: number;
@@ -2874,6 +2874,7 @@ export async function fetchLiveTopPlaysSnapshot(
     pageSize?: number;
     includePpGains?: boolean;
     userIds?: number[];
+    rates?: ("nm" | "dt" | "ht")[];
   },
 ): Promise<LiveTopPlaysSnapshot> {
   const query = new URLSearchParams({ country, window });
@@ -2885,6 +2886,7 @@ export async function fetchLiveTopPlaysSnapshot(
   if (options?.pageSize != null) query.set("pageSize", String(options.pageSize));
   if (options?.includePpGains) query.set("includePpGains", "1");
   if (options?.userIds && options.userIds.length > 0) query.set("userIds", options.userIds.join(","));
+  if (options?.rates && options.rates.length > 0) query.set("rates", options.rates.join(","));
   return fetchLiveJson(`/api/snapshots/top-plays?${query.toString()}`);
 }
 

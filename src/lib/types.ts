@@ -677,6 +677,8 @@ export interface CountryTopPlay {
   weightedPP: number;
   ppGain: number;
   time: string;
+  /** Position in the all-time pp list; absent on feed events. */
+  rank?: number;
 }
 
 export interface BeatmapScoreLookupStatus {

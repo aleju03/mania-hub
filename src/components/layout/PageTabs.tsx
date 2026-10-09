@@ -28,7 +28,7 @@ export function PageTabs<T extends string>({ items, value, onChange, right }: Pa
             onClick={() => {
               if (value !== item.id) onChange(item.id);
             }}
-            className={`relative px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+            className={`relative shrink-0 whitespace-nowrap px-3 sm:px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] ${
               value === item.id
                 ? "text-osu-c1"
                 : "text-osu-f1 hover:text-osu-l2"

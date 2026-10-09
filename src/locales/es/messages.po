@@ -3074,6 +3074,7 @@ msgstr "Todas las filas"
 #~ msgstr "Ya usaste las tres forjas. Cada una vuelve a estar disponible tras 24 horas."
 
 #: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/routes/top-plays.tsx
 msgid "All time"
 msgstr "Todo el tiempo"
 
@@ -3237,7 +3238,6 @@ msgstr "todos"
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
-#: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Any"
 msgstr "Cualquiera"
@@ -10030,8 +10030,8 @@ msgid "Maps"
 msgstr "Mapas"
 
 #: src/routes/maps.tsx
-msgid "Maps boards are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries or switch to Global."
-msgstr "Los leaderboards de mapas se crean por país, además de uno combinado para Global. Todavía no hay uno para {countryName}, así que elige uno de sus países o cambia a Global."
+#~ msgid "Maps boards are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries or switch to Global."
+#~ msgstr "Los leaderboards de mapas se crean por país, además de uno combinado para Global. Todavía no hay uno para {countryName}, así que elige uno de sus países o cambia a Global."
 
 #: src/routes/maps.tsx
 msgid "Maps build failed."
@@ -10421,6 +10421,10 @@ msgstr "Los más jugados globalmente"
 #: src/routes/maps.tsx
 msgid "Most played in {countryName}"
 msgstr "Los más jugados en {countryName}"
+
+#: src/routes/maps.tsx
+#~ msgid "Most Played, Favourites and Random are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries, switch to Global, or open Farmed."
+#~ msgstr "Más jugados, Favoritos y Aleatorio se crean por país, además de uno combinado para Global. Todavía no hay uno para {countryName}, así que elige uno de sus países, cambia a Global o abre Farmeados."
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most unique cards"
@@ -11119,6 +11123,10 @@ msgstr "Aún no hay datos de ranking de hace 7 días"
 msgid "No ranked players yet."
 msgstr "Aún no hay jugadores ranked."
 
+#: src/routes/top-plays.tsx
+msgid "No rate mod"
+msgstr ""
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "No rated {label} plays found"
 msgstr "No se encontraron plays de {label} calificables"
@@ -11157,8 +11165,12 @@ msgid "No recent top plays"
 msgstr "Sin top plays recientes"
 
 #: src/routes/maps.tsx
-msgid "No region maps boards yet"
-msgstr "Aún no hay boards de mapas por región"
+#~ msgid "No region board for this tab yet"
+#~ msgstr "Todavía no hay board por región para esta pestaña"
+
+#: src/routes/maps.tsx
+#~ msgid "No region maps boards yet"
+#~ msgstr "Aún no hay boards de mapas por región"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "No regions found"

@@ -51,6 +51,7 @@ const RANGE_WIDTH: Record<TimeRange, number> = {
   "3d": 1,
   "7d": 2,
   "30d": 3,
+  all: 4,
 };
 
 function widerWindow(a: TimeRange | null, b: TimeRange): TimeRange {
@@ -64,13 +65,26 @@ type TopPlaysSearch = {
   sort: SortMode;
   dir: SortDirection;
   keys: KeyFilter;
+  /** Rate mods kept, "-"-joined in RATE_FILTERS order; "" keeps all. */
+  rates: string;
 };
+
+// nm: no rate mod, dt: DT/NC, ht: HT/DC.
+type RateFilter = "nm" | "dt" | "ht";
+const RATE_FILTERS: RateFilter[] = ["nm", "dt", "ht"];
+
+function parseRates(value: unknown): RateFilter[] {
+  const picked = new Set(typeof value === "string" ? value.split("-") : []);
+  const rates = RATE_FILTERS.filter((rate) => picked.has(rate));
+  return rates.length === RATE_FILTERS.length ? [] : rates;
+}
 
 const RANGE_MS: Record<TimeRange, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "3d": 3 * 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
+  all: Infinity,
 };
 
 const PAGE_SIZE = 15;
@@ -80,6 +94,7 @@ const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   sort: "recent",
   dir: "desc",
   keys: "all",
+  rates: "",
 };
 
 function hasPopoffsInRange(popoffs: PopOff[], range: TimeRange): boolean {
@@ -111,7 +126,8 @@ export const Route = createFileRoute("/top-plays")({
       search.range === "24h" ||
       search.range === "3d" ||
       search.range === "7d" ||
-      search.range === "30d"
+      search.range === "30d" ||
+      search.range === "all"
         ? search.range
         : DEFAULT_TOP_PLAYS_SEARCH.range,
     country: parseCountrySearchParam(search.country),
@@ -124,6 +140,7 @@ export const Route = createFileRoute("/top-plays")({
       search.keys === "all" || search.keys === "4k" || search.keys === "other"
         ? search.keys
         : DEFAULT_TOP_PLAYS_SEARCH.keys,
+    rates: parseRates(search.rates).join("-"),
   }),
   component: PopOffsPage,
 });
@@ -148,7 +165,8 @@ function preloadPopoffCover(popoff: PopOff): void {
 
 function PopOffsPage() {
   const { t } = useLingui();
-  const { range, country, sort, dir, keys } = Route.useSearch();
+  const { range, country, sort, dir, keys, rates } = Route.useSearch();
+  const rateFilters = useMemo(() => parseRates(rates), [rates]);
   const location = useLocation();
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
@@ -225,11 +243,11 @@ function PopOffsPage() {
 
     navigate({
       to: "/top-plays",
-      search: { range: rememberedRange, country, sort, dir, keys },
+      search: { range: rememberedRange, country, sort, dir, keys, rates },
       replace: true,
       resetScroll: false,
     });
-  }, [country, location.searchStr, navigate, range, rememberedRange, sort, dir, keys]);
+  }, [country, location.searchStr, navigate, range, rememberedRange, sort, dir, keys, rates]);
 
   useEffect(() => {
     if (rememberedRange === range) return;
@@ -252,7 +270,7 @@ function PopOffsPage() {
   useEffect(() => {
     if (!liveBackendEnabled || !windowActive) return;
     const selectedPlayersKey = selectedPlayerIds.join(",");
-    const snapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${page}:${selectedPlayersKey}`;
+    const snapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${rates}:${page}:${selectedPlayersKey}`;
     const cacheNeedsRefresh = shouldRefreshTopPlays({
       fetchedAt: popoffsFetchedAt,
       cachedWindow: popoffsWindow,
@@ -269,7 +287,7 @@ function PopOffsPage() {
     let cancelled = false;
     const requestedCountry = selectedCountry;
     const currentPopoffs = useAppStore.getState().popoffsByCountry[requestedCountry] ?? [];
-    const hasVisibleCache = livePagePopoffs.length > 0 || hasPopoffsInRange(currentPopoffs, range);
+    const hasVisibleCache = livePagePopoffs.length > 0 || (range !== "all" && hasPopoffsInRange(currentPopoffs, range));
     setSettledLiveSnapshotKey(null);
     setLoading(!hasVisibleCache);
     setRefreshing(hasVisibleCache);
@@ -282,6 +300,7 @@ function PopOffsPage() {
       pageSize: PAGE_SIZE,
       includePpGains: true,
       userIds: selectedPlayerIds,
+      rates: rateFilters,
     })
       .then((snapshot) => {
         if (cancelled || currentCountryRef.current !== requestedCountry) return;
@@ -289,6 +308,13 @@ function PopOffsPage() {
         setLivePagePopoffs(snapshot.popoffs);
         setLiveTotal(snapshot.total ?? snapshot.popoffs.length);
         setLivePpGains(snapshot.ppGains ?? []);
+        // All time comes from stored bests with no pp gain; keep it out of
+        // the persisted feed so it cannot overwrite feed rows or widen its window.
+        if (range === "all") {
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
         const cachedPopoffs = useAppStore.getState().popoffsByCountry[requestedCountry] ?? [];
         const cachedWindow = useAppStore.getState().popoffsWindowByCountry[requestedCountry] ?? null;
         setCachedPopoffs(
@@ -308,7 +334,7 @@ function PopOffsPage() {
     return () => {
       cancelled = true;
     };
-  }, [dir, keys, liveBackendEnabled, livePagePopoffs.length, mergePopoffs, page, popoffsFetchedAt, popoffsWindow, range, selectedCountry, selectedPlayerIds, setCachedPopoffs, sort, windowActive]);
+  }, [dir, keys, liveBackendEnabled, livePagePopoffs.length, mergePopoffs, page, popoffsFetchedAt, popoffsWindow, range, rateFilters, selectedCountry, selectedPlayerIds, setCachedPopoffs, sort, windowActive]);
 
   // Stays connected while unfocused so new top plays still appear on a second
   // monitor during play (same rationale as the tracker feed). top_play is
@@ -319,7 +345,7 @@ function PopOffsPage() {
     if (!source) return;
     source.addEventListener("top_play", (event) => {
       const popoff = JSON.parse(event.data) as PopOff;
-      setCachedPopoffs(selectedCountry, mergePopoffs([popoff, ...popoffs]), popoffsWindow ?? range);
+      setCachedPopoffs(selectedCountry, mergePopoffs([popoff, ...popoffs]), popoffsWindow ?? (range === "all" ? "24h" : range));
     });
     source.addEventListener("job_status", () => {
       setRefreshing(false);
@@ -342,7 +368,7 @@ function PopOffsPage() {
   }, []);
 
   const selectedPlayersKey = selectedPlayerIds.join(",");
-  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${page}:${selectedPlayersKey}`;
+  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${rates}:${page}:${selectedPlayersKey}`;
   const hasCurrentLiveSnapshot = currentLiveSnapshotKeyRef.current === liveSnapshotKey;
   const cachedPagePopoffs = useMemo(
     () => selectCachedTopPlaysPage(popoffs, {
@@ -354,8 +380,9 @@ function PopOffsPage() {
       page,
       pageSize: PAGE_SIZE,
       userIds: selectedPlayerIds,
+      rates: rateFilters,
     }),
-    [dir, keys, page, popoffs, popoffsWindow, range, selectedPlayerIds, sort],
+    [dir, keys, page, popoffs, popoffsWindow, range, rateFilters, selectedPlayerIds, sort],
   );
 
   // A server result is authoritative, including an empty page. Before it
@@ -453,9 +480,9 @@ function PopOffsPage() {
     { id: "3d", label: t`3 days` },
     { id: "7d", label: t`7 days` },
     { id: "30d", label: t`30 days` },
+    { id: "all", label: t`All time` },
   ];
   const keymodes: { id: KeyFilter; label: string }[] = [
-    { id: "all", label: t`Any` },
     { id: "4k", label: "4K" },
     { id: "other", label: "≠4K" },
   ];
@@ -504,9 +531,10 @@ function PopOffsPage() {
           value={range}
           onChange={(nextRange) => {
             setTopPlaysRange(selectedCountry, nextRange);
+            const nextSort = nextRange === "all" ? "pp" : sort;
             navigate({
               to: "/top-plays",
-              search: { range: nextRange, country, sort, dir, keys },
+              search: { range: nextRange, country, sort: nextSort, dir: nextRange === "all" ? "desc" : dir, keys, rates },
               replace: true,
               resetScroll: false,
             });
@@ -516,7 +544,7 @@ function PopOffsPage() {
       </div>
 
       <div className="relative z-10 bg-osu-d5/90 border-b border-osu-b3/20 backdrop-blur-[1px]">
-        <div className="max-w-[1200px] mx-auto px-5 py-2 flex items-center justify-between gap-2">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2 flex items-center justify-between gap-2">
           <div className="min-h-7 flex items-center">
             {selectedPlayerIds.length > 0 && (
               <button
@@ -527,36 +555,74 @@ function PopOffsPage() {
               </button>
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="flex rounded-lg overflow-hidden border border-osu-b3/30">
-              {keymodes.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    navigate({
-                      to: "/top-plays",
-                      search: { range, country, sort, dir, keys: item.id },
-                      replace: true,
-                      resetScroll: false,
-                    });
-                    setPage(0);
-                  }}
-                  title={item.id === "other" ? t`Show non-4K plays` : t`Filter by keymode`}
-                  className={`px-2.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] tabular-nums ${
-                    keys === item.id
-                      ? "bg-osu-b3 text-osu-l2"
-                      : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
+          <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+            {/* Nothing picked keeps everything; clicking a picked filter clears it. */}
+            <div className="flex items-center gap-0.5">
+              {keymodes.map((item) => {
+                const active = keys === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      navigate({
+                        to: "/top-plays",
+                        search: { range, country, sort, dir, keys: active ? "all" : item.id, rates },
+                        replace: true,
+                        resetScroll: false,
+                      });
+                      setPage(0);
+                    }}
+                    title={item.id === "other" ? t`Show non-4K plays` : t`Filter by keymode`}
+                    aria-pressed={active}
+                    className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] tabular-nums ${
+                      active ? "bg-osu-b3 text-osu-l2" : "text-osu-f1 hover:text-osu-l2"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
+            <span className="h-4 w-px bg-white/[0.07]" />
+            <div className="flex items-center gap-1">
+              {([
+                ["nm", "NM", t`No rate mod`, "#a8b2bf"],
+                ["dt", "DT", "DT/NC", undefined],
+                ["ht", "HT", "HT/DC", undefined],
+              ] as const).map(([id, mod, title, color]) => {
+                const active = rateFilters.includes(id);
+                const dimmed = rateFilters.length > 0 && !active;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      // Rates combine: DT alone is the best DT plays, NM + DT drops HT.
+                      const next = active ? rateFilters.filter((rate) => rate !== id) : [...rateFilters, id];
+                      navigate({
+                        to: "/top-plays",
+                        search: { range, country, sort, dir, keys, rates: parseRates(next.join("-")).join("-") },
+                        replace: true,
+                        resetScroll: false,
+                      });
+                      setPage(0);
+                    }}
+                    title={title}
+                    aria-pressed={active}
+                    className={`p-0.5 cursor-pointer transition-[opacity,filter] duration-[120ms] hover:brightness-110 ${
+                      dimmed ? "opacity-30 grayscale hover:opacity-60" : "opacity-100"
+                    }`}
+                  >
+                    <ModBadge mod={mod} size={0.9} color={color} plain />
+                  </button>
+                );
+              })}
+            </div>
+            <span className="h-4 w-px bg-white/[0.07]" />
             {([
-              ["recent", t`Recent`],
               ["pp", "PP"],
+              ["recent", t`Recent`],
               ["gain", t`PP Gain`],
-            ] as [SortMode, string][]).map(([id, label]) => (
+            ] as [SortMode, string][]).filter(([id]) => range !== "all" || id !== "gain").map(([id, label]) => (
               <SortPill
                 key={id}
                 active={sort === id}
@@ -565,7 +631,7 @@ function PopOffsPage() {
                   const nextDir: SortDirection = sort === id ? (dir === "desc" ? "asc" : "desc") : "desc";
                   navigate({
                     to: "/top-plays",
-                    search: { range, country, sort: id, dir: nextDir, keys },
+                    search: { range, country, sort: id, dir: nextDir, keys, rates },
                     replace: true,
                     resetScroll: false,
                   });
@@ -661,7 +727,24 @@ function PopOffsPage() {
                       onClick={() => setExpandedId(expandedId === p.score.id ? null : p.score.id)}
                       onPointerEnter={() => preloadPopoffCover(p)}
                     >
+                      {p.rank != null && (
+                        <div
+                          className={`hidden sm:block flex-shrink-0 w-12 text-right text-lg font-bold tabular-nums ${p.rank <= 3 ? "text-osu-l2" : "text-osu-f1"}`}
+                          style={{ fontFamily: "Torus" }}
+                        >
+                          #{p.rank}
+                        </div>
+                      )}
                       <div className="flex-shrink-0 w-12 sm:w-16 text-center">
+                        {/* Phones have no room for the rank column, so it sits above the pp. */}
+                        {p.rank != null && (
+                          <div
+                            className={`sm:hidden text-[11px] font-bold tabular-nums leading-none mb-0.5 ${p.rank <= 3 ? "text-osu-l2" : "text-osu-f1"}`}
+                            style={{ fontFamily: "Torus" }}
+                          >
+                            #{p.rank}
+                          </div>
+                        )}
                         <div className="text-base sm:text-lg font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>
                           {Math.round(p.pp)}
                         </div>

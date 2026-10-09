@@ -1,10 +1,12 @@
 import type { CachedPopoff, TopPlaysRange } from "../store";
+import { getModAcronyms } from "./score";
 
 const RANGE_WIDTH: Record<TopPlaysRange, number> = {
   "24h": 0,
   "3d": 1,
   "7d": 2,
   "30d": 3,
+  all: 4,
 };
 
 const RANGE_MS: Record<TopPlaysRange, number> = {
@@ -12,6 +14,7 @@ const RANGE_MS: Record<TopPlaysRange, number> = {
   "3d": 3 * 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
+  all: Infinity,
 };
 
 type CachedTopPlaysSort = "recent" | "pp" | "gain";
@@ -63,9 +66,12 @@ export function selectCachedTopPlaysPage(
     page: number;
     pageSize: number;
     userIds?: number[];
+    rates?: ("nm" | "dt" | "ht")[];
     now?: number;
   },
 ): CachedPopoff[] {
+  // All time is ranked from stored bests, not the feed this cache holds.
+  if (options.range === "all") return [];
   if (!windowCoversTopPlaysRange(options.cachedWindow, options.range)) return [];
 
   const now = options.now ?? Date.now();
@@ -78,6 +84,13 @@ export function selectCachedTopPlaysPage(
     const playedAt = new Date(popoff.time).getTime();
     if (!Number.isFinite(playedAt) || playedAt < cutoff) return false;
     if (userIds && !userIds.has(popoff.user.id)) return false;
+    if (options.rates?.length) {
+      const acronyms = getModAcronyms(popoff.score.mods).map((acronym) => acronym.toUpperCase());
+      const rate = acronyms.some((acronym) => acronym === "DT" || acronym === "NC") ? "dt"
+        : acronyms.some((acronym) => acronym === "HT" || acronym === "DC") ? "ht"
+        : "nm";
+      if (!options.rates.includes(rate)) return false;
+    }
 
     const rawKeyCount = Number(popoff.score.beatmap?.cs);
     const keyCount = Number.isFinite(rawKeyCount) && rawKeyCount > 0 ? rawKeyCount : null;

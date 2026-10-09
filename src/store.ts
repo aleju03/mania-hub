@@ -288,7 +288,7 @@ export interface CachedPopoff {
   time: string;
 }
 
-export type TopPlaysRange = "24h" | "3d" | "7d" | "30d";
+export type TopPlaysRange = "24h" | "3d" | "7d" | "30d" | "all";
 export type SnipesRange = "24h" | "7d" | "30d";
 export type SnipesKeyFilter = "all" | "4k" | "7k";
 
@@ -392,7 +392,7 @@ function readTopPlaysRangeByCountry(): CountryRecord<TopPlaysRange> {
 
     return Object.fromEntries(
       Object.entries(parsed).filter(([, range]) =>
-        range === "24h" || range === "3d" || range === "7d" || range === "30d",
+        range === "24h" || range === "3d" || range === "7d" || range === "30d" || range === "all",
       ),
     ) as CountryRecord<TopPlaysRange>;
   } catch (error) {
