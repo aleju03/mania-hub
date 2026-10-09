@@ -1148,6 +1148,10 @@ msgstr "{count} seguidores"
 #~ msgid "{count} new"
 #~ msgstr "{count} nuevos"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "{count} plays"
+msgstr "{count} plays"
+
 #: src/lib/streak-game.ts
 msgid "{count} replay views"
 msgstr "{count} vistas de replays"
@@ -2768,8 +2772,12 @@ msgid "across {usageSampleSize} top plays"
 msgstr "en {usageSampleSize} top plays"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "Active"
-msgstr "Activo"
+msgid "active"
+msgstr "activas"
+
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "Active"
+#~ msgstr "Activo"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "active days"
@@ -4501,10 +4509,14 @@ msgstr "Limpia los filtros o sube la skin tú mismo."
 msgid "Clear the search"
 msgstr "Limpiar la búsqueda"
 
-#: src/components/me/GoalsPanel.tsx
 #: src/routes/recommendations.tsx
 msgid "cleared"
 msgstr "Pass"
+
+#: src/components/me/GoalsPanel.tsx
+msgctxt "goal count"
+msgid "cleared"
+msgstr "completadas"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Cleared"
@@ -4515,24 +4527,24 @@ msgid "Cleared {courseName} at {courseAccuracy}."
 msgstr "Superó {courseName} con {courseAccuracy}."
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date}"
-msgstr "completado {date}"
+#~ msgid "cleared {date}"
+#~ msgstr "completado {date}"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date} · {acc}%"
-msgstr "completado {date} · {acc}%"
+#~ msgid "cleared {date} · {acc}%"
+#~ msgstr "completado {date} · {acc}%"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date} · {count} plays"
-msgstr "completado {date} · {count} plays"
+#~ msgid "cleared {date} · {count} plays"
+#~ msgstr "completado {date} · {count} plays"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date} · {pp}pp"
-msgstr "completado {date} · {pp}pp"
+#~ msgid "cleared {date} · {pp}pp"
+#~ msgstr "completado {date} · {pp}pp"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date} · #{rank}"
-msgstr "completado {date} · #{rank}"
+#~ msgid "cleared {date} · #{rank}"
+#~ msgstr "completado {date} · #{rank}"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
@@ -5670,8 +5682,8 @@ msgid "Current backdrop"
 msgstr "Fondo actual"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "current pp"
-msgstr "pp actual"
+#~ msgid "current pp"
+#~ msgstr "pp actual"
 
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Current view"
@@ -7237,6 +7249,10 @@ msgstr "primero en sacar esta carta"
 #~ msgid "First forged card"
 #~ msgstr "Primera carta forjada"
 
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "First goal set {firstSetDate}"
+#~ msgstr ""
+
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "First GOAT"
 #~ msgstr "Primer GOAT"
@@ -7642,6 +7658,10 @@ msgstr "meta cumplida"
 #: src/components/me/GoalsPanel.tsx
 msgid "goal tracker"
 msgstr "Goal Tracker"
+
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "Goal type"
+#~ msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
 msgid "goals"
@@ -8408,8 +8428,8 @@ msgid "in 90d"
 msgstr "en 90d"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "in flight"
-msgstr "en curso"
+#~ msgid "in flight"
+#~ msgstr "en curso"
 
 #: src/components/player/LivePresence.tsx
 msgid "In multiplayer"
@@ -10603,6 +10623,10 @@ msgstr "Nuevos mapas de farm, publicados automáticamente en cualquier canal que
 #~ msgid "New folder"
 #~ msgstr "Nueva carpeta"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "New goal"
+msgstr "Nueva meta"
+
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "New in this build"
 msgstr "Novedades de esta versión"
@@ -11721,6 +11745,10 @@ msgid "now"
 msgstr "ahora"
 
 #: src/components/me/GoalsPanel.tsx
+#~ msgid "Now"
+#~ msgstr ""
+
+#: src/components/me/GoalsPanel.tsx
 msgid "now #{nowRank}"
 msgstr "ahora #{nowRank}"
 
@@ -11878,8 +11906,8 @@ msgstr "En charts de jack de 4K el bono por encima del mínimo se reduce a la mi
 #~ msgstr "En 4K las porciones salen de los ratings de skillset MSD de la propia play, agrupadas según el skillset más fuerte de ese chart: jack (JackSpeed y Chordjack), tech (Technical y Jumpstream), speed (Stream) y stamina (Handstream y Stamina). Jumpstream va con tech a propósito. El Jumpstream de MinaCalc se dispara con el jumptrill denso, que se siente mucho más como tech que como speed, así que juntarlo con Stream ponía charts como Blastix Riotz [GRAVITY] en una casilla etiquetada speed. Comprobado contra un pack de 25 charts de speed gamma real, Stream por sí solo elige los 25 y rechaza los charts de jumptrill por mucho margen."
 
 #: src/components/me/GoalsPanel.tsx
-msgid "on a map"
-msgstr "en un mapa"
+#~ msgid "on a map"
+#~ msgstr "en un mapa"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
@@ -12020,8 +12048,8 @@ msgstr "Opacidad"
 msgid "open"
 msgstr "abierto"
 
-#. placeholder {0}: goal.beatmapLabel ?? describeGoal(goal, i18n)
 #. placeholder {0}: goal.beatmapLabel ?? t`map`
+#. placeholder {0}: goal.beatmapLabel ?? text
 #: src/components/me/GoalsPanel.tsx
 msgid "Open {0} on osu!"
 msgstr "Abrir {0} en osu!"
@@ -13323,8 +13351,8 @@ msgstr "privado · actualizado {updatedAtLabel}"
 #~ msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
-msgid "profile"
-msgstr "perfil"
+#~ msgid "profile"
+#~ msgstr "perfil"
 
 #: src/components/layout/Nav.tsx
 msgid "Profile"
@@ -18891,6 +18919,10 @@ msgstr "Feed de top plays"
 #: src/routes/maps.tsx
 msgid "total plays"
 msgstr "plays totales"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "total pp"
+msgstr "pp totales"
 
 #: src/routes/maps.tsx
 msgid "Tournament"

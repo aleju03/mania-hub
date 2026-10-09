@@ -1157,6 +1157,10 @@ msgstr "{count} 名关注者"
 #~ msgid "{count} new"
 #~ msgstr "{count} 项新增"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "{count} plays"
+msgstr "{count} 个成绩"
+
 #: src/lib/streak-game.ts
 msgid "{count} replay views"
 msgstr "{count} 次回放观看"
@@ -2777,8 +2781,12 @@ msgid "across {usageSampleSize} top plays"
 msgstr "统计自 {usageSampleSize} 个最佳成绩"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "Active"
+msgid "active"
 msgstr "进行中"
+
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "Active"
+#~ msgstr "进行中"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "active days"
@@ -4510,10 +4518,14 @@ msgstr "清除筛选，或者自己上传这个皮肤。"
 msgid "Clear the search"
 msgstr "清除搜索"
 
-#: src/components/me/GoalsPanel.tsx
 #: src/routes/recommendations.tsx
 msgid "cleared"
 msgstr "已通关"
+
+#: src/components/me/GoalsPanel.tsx
+msgctxt "goal count"
+msgid "cleared"
+msgstr "已完成"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Cleared"
@@ -4524,24 +4536,24 @@ msgid "Cleared {courseName} at {courseAccuracy}."
 msgstr "以 {courseAccuracy} 通过了 {courseName}。"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date}"
-msgstr "完成于 {date}"
+#~ msgid "cleared {date}"
+#~ msgstr "完成于 {date}"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date} · {acc}%"
-msgstr "完成于 {date} · {acc}%"
+#~ msgid "cleared {date} · {acc}%"
+#~ msgstr "完成于 {date} · {acc}%"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date} · {count} plays"
-msgstr "完成于 {date} · {count} 个成绩"
+#~ msgid "cleared {date} · {count} plays"
+#~ msgstr "完成于 {date} · {count} 个成绩"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date} · {pp}pp"
-msgstr "完成于 {date} · {pp}pp"
+#~ msgid "cleared {date} · {pp}pp"
+#~ msgstr "完成于 {date} · {pp}pp"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "cleared {date} · #{rank}"
-msgstr "完成于 {date} · 第 {rank} 名"
+#~ msgid "cleared {date} · #{rank}"
+#~ msgstr "完成于 {date} · 第 {rank} 名"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
@@ -5679,8 +5691,8 @@ msgid "Current backdrop"
 msgstr "当前背景"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "current pp"
-msgstr "当前 pp"
+#~ msgid "current pp"
+#~ msgstr "当前 pp"
 
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Current view"
@@ -7246,6 +7258,10 @@ msgstr "史上第一个抽到这张"
 #~ msgid "First forged card"
 #~ msgstr "首张熔铸卡"
 
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "First goal set {firstSetDate}"
+#~ msgstr ""
+
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "First GOAT"
 #~ msgstr "首张 GOAT"
@@ -7651,6 +7667,10 @@ msgstr "目标已完成"
 #: src/components/me/GoalsPanel.tsx
 msgid "goal tracker"
 msgstr "目标追踪器"
+
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "Goal type"
+#~ msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
 msgid "goals"
@@ -8417,8 +8437,8 @@ msgid "in 90d"
 msgstr "90 天内"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "in flight"
-msgstr "进行中"
+#~ msgid "in flight"
+#~ msgstr "进行中"
 
 #: src/components/player/LivePresence.tsx
 msgid "In multiplayer"
@@ -10612,6 +10632,10 @@ msgstr "新的刷分谱面，会自动发到运行过 /subscribe feed:new maps �
 #~ msgid "New folder"
 #~ msgstr "新建文件夹"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "New goal"
+msgstr "新目标"
+
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "New in this build"
 msgstr "本次构建新增"
@@ -11730,6 +11754,10 @@ msgid "now"
 msgstr "当前"
 
 #: src/components/me/GoalsPanel.tsx
+#~ msgid "Now"
+#~ msgstr ""
+
+#: src/components/me/GoalsPanel.tsx
 msgid "now #{nowRank}"
 msgstr "当前第 {nowRank} 名"
 
@@ -11887,8 +11915,8 @@ msgstr "在 4K 叠谱上，通过线以上的加分减半，因为这类谱面�
 #~ msgstr "4K 这边的分项来自成绩本身的 MSD 技能项评分，按谱面上最强的那一项归类：叠(JackSpeed 和 Chordjack)、技(Technical 和 Jumpstream)、速度(Stream)、耐力(Handstream 和 Stamina)。把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密集对拍上会飙得很高，而那种谱面打起来更像技而不是速度，所以一旦把它和 Stream 归在一起，Blastix Riotz [GRAVITY] 这类谱面就会被贴到速度那一格。拿一个装了 25 张真正 gamma 速度谱的谱包来验证，只用 Stream 能把这 25 张全部选中，并且以很大的差距把对拍谱排除掉。"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "on a map"
-msgstr "单图"
+#~ msgid "on a map"
+#~ msgstr "单图"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
@@ -12029,8 +12057,8 @@ msgstr "不透明度"
 msgid "open"
 msgstr "待处理"
 
-#. placeholder {0}: goal.beatmapLabel ?? describeGoal(goal, i18n)
 #. placeholder {0}: goal.beatmapLabel ?? t`map`
+#. placeholder {0}: goal.beatmapLabel ?? text
 #: src/components/me/GoalsPanel.tsx
 msgid "Open {0} on osu!"
 msgstr "在 osu! 上打开 {0}"
@@ -13332,8 +13360,8 @@ msgstr "私有 · 更新于 {updatedAtLabel}"
 #~ msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
-msgid "profile"
-msgstr "个人"
+#~ msgid "profile"
+#~ msgstr "个人"
 
 #: src/components/layout/Nav.tsx
 msgid "Profile"
@@ -18900,6 +18928,10 @@ msgstr "最佳成绩 feed"
 #: src/routes/maps.tsx
 msgid "total plays"
 msgstr "总游玩次数"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "total pp"
+msgstr "总 pp"
 
 #: src/routes/maps.tsx
 msgid "Tournament"

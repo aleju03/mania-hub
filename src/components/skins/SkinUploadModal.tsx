@@ -11,6 +11,7 @@ import { track } from "../../lib/analytics";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import { buildSkinAssetGroups, type SkinAssetGroup } from "../../lib/skin-asset-explorer";
 import { SkinAssetTiles } from "./SkinAssetExplorer";
+import { DriftTriangles } from "../ui/DriftTriangles";
 import { SkinCard } from "./SkinCard";
 import type { SkinBackdropRowPool } from "./SkinBackdropPicker";
 import { useSkinPatternPool, type SkinPatternPool } from "./SkinPatternPicker";
@@ -80,157 +81,6 @@ interface UploadTicket {
 
 function randomPoolPick(pool: SkinBackdropCandidate[]): PreviewBackdrop {
   return pool[Math.floor(Math.random() * pool.length)]?.setId ?? "flat";
-}
-
-// Canvas port of lazer's Triangles drawable (osu.Game/Graphics/Backgrounds/
-// Triangles.cs): a dense field of equilateral triangles, sizes normally
-// distributed around a 100px base, each an opaque shade between a dark and a
-// light colour, drifting up at a speed proportional to size and respawning
-// below the bottom edge. Drag hover swaps in a pinker palette and speeds the
-// drift up. Static under reduced motion.
-const TRI_BASE_SIZE = 100;
-const TRI_BASE_VELOCITY = 50;
-const TRI_EQUILATERAL = 0.866;
-// Global scale: bigger triangles, correspondingly fewer (lazer's TriangleScale).
-const TRI_SCALE = 1.6;
-// Thin the field out versus lazer's default density (its SpawnRatio).
-const TRI_SPAWN_RATIO = 0.4;
-const TRI_MAX_COUNT = 320;
-
-interface DriftTriangle {
-  x: number; // relative 0..1
-  y: number; // relative 0..1, the top vertex
-  scale: number;
-  shade: number; // 0..1 between the dark and light palette colours
-}
-
-function randomNormal(): number {
-  const u1 = 1 - Math.random();
-  const u2 = 1 - Math.random();
-  return Math.sqrt(-2 * Math.log(u1)) * Math.sin(2 * Math.PI * u2);
-}
-
-function DropTriangles({ active }: { active: boolean }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const activeRef = useRef(active);
-
-  useEffect(() => {
-    activeRef.current = active;
-  }, [active]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const host = canvas?.parentElement;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !host || !ctx) return;
-
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // The osu colour tokens are @theme inline (no runtime CSS vars), so the
-    // palettes are rebuilt from the theme hue/sat the way styles.css does.
-    // Resting: shades just above the b4 surface. Dragging: unmistakably pink.
-    const rootStyles = getComputedStyle(document.documentElement);
-    const parsedHue = parseFloat(rootStyles.getPropertyValue("--theme-hue"));
-    const parsedSat = parseFloat(rootStyles.getPropertyValue("--theme-sat"));
-    const hue = Number.isFinite(parsedHue) ? parsedHue : 333;
-    const sat = Number.isFinite(parsedSat) ? parsedSat : 1;
-    const shadeAt = (shade: number, dark: [number, number], light: [number, number]) =>
-      `hsl(${hue}, ${(dark[0] + (light[0] - dark[0]) * shade) * sat}%, ${dark[1] + (light[1] - dark[1]) * shade}%)`;
-    const restingColour = (shade: number) => shadeAt(shade, [10, 17], [13, 23.5]);
-    const draggingColour = (shade: number) => shadeAt(shade, [30, 20], [48, 34]);
-
-    let width = 0;
-    let height = 0;
-    let triangles: DriftTriangle[] = [];
-    let colours: { resting: string; dragging: string }[] = [];
-    let frame = 0;
-    let last = performance.now();
-
-    const createTriangle = (randomY: boolean): DriftTriangle => {
-      const scale = Math.max(TRI_SCALE * (0.5 + 0.16 * randomNormal()), 0.1);
-      // Spawns may sit slightly above the top so the field has no bare edge.
-      const maxOffset = (TRI_BASE_SIZE * scale * TRI_EQUILATERAL) / height;
-      return {
-        x: Math.random(),
-        y: randomY ? -maxOffset + Math.random() * (1 + maxOffset) : 1,
-        scale,
-        shade: Math.random(),
-      };
-    };
-
-    const reset = () => {
-      const aimCount = Math.min(TRI_MAX_COUNT, Math.ceil(((width * height) * 0.002 * TRI_SPAWN_RATIO) / (TRI_SCALE * TRI_SCALE)));
-      triangles = Array.from({ length: aimCount }, () => createTriangle(true));
-      // Large triangles behind, small in front, lazer's draw order.
-      triangles.sort((a, b) => b.scale - a.scale);
-      colours = triangles.map((triangle) => ({
-        resting: restingColour(triangle.shade),
-        dragging: draggingColour(triangle.shade),
-      }));
-    };
-
-    const draw = () => {
-      ctx.clearRect(0, 0, width, height);
-      const dragging = activeRef.current;
-      for (let index = 0; index < triangles.length; index += 1) {
-        const triangle = triangles[index];
-        const size = TRI_BASE_SIZE * triangle.scale;
-        const px = triangle.x * width;
-        const py = triangle.y * height;
-        ctx.fillStyle = dragging ? colours[index].dragging : colours[index].resting;
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(px - size / 2, py + size * TRI_EQUILATERAL);
-        ctx.lineTo(px + size / 2, py + size * TRI_EQUILATERAL);
-        ctx.closePath();
-        ctx.fill();
-      }
-    };
-
-    const resize = () => {
-      const rect = host.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
-      width = rect.width;
-      height = rect.height;
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      reset();
-      draw();
-    };
-
-    const tick = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
-      last = now;
-      const velocity = activeRef.current ? 1.8 : 0.6;
-      const movedDistance = (dt * velocity * TRI_BASE_VELOCITY) / (height * TRI_SCALE);
-      for (const triangle of triangles) {
-        // Speed scales with size: smaller triangles drift more slowly.
-        triangle.y -= Math.max(0.5, triangle.scale) * movedDistance;
-        const bottomY = triangle.y + (TRI_BASE_SIZE * triangle.scale * TRI_EQUILATERAL) / height;
-        if (bottomY < 0) {
-          triangle.y = 1;
-          triangle.x = Math.random();
-        }
-      }
-      draw();
-      frame = requestAnimationFrame(tick);
-    };
-
-    resize();
-    if (!reduceMotion) {
-      last = performance.now();
-      frame = requestAnimationFrame(tick);
-    }
-    const observer = new ResizeObserver(resize);
-    observer.observe(host);
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />;
 }
 
 export function SkinUploadModal({
@@ -1073,7 +923,7 @@ function PickStep({
               : "border-osu-b3/60 bg-osu-b4 cursor-pointer hover:border-osu-pink/45"
         }`}
       >
-        <DropTriangles active={dragActive} />
+        <DriftTriangles active={dragActive} />
         <div className="relative z-10 flex min-h-[240px] flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">
           {reading ? (
             <div className="w-full max-w-[340px]">

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Pencil } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, Pencil } from "lucide-react";
 import { msg } from "@lingui/core/macro";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { useLocation } from "@tanstack/react-router";
 
 import { PageHeader } from "../layout/PageHeader";
-import { COMPOSER_TRIANGLES } from "./GoalToasts";
+import { DriftTriangles } from "../ui/DriftTriangles";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
 import { OsuLogo } from "../ui/OsuLogo";
@@ -252,28 +253,6 @@ function progressPct(goal: UserGoal): number | null {
   return clampPct(goal.progress.pct);
 }
 
-function completedDetail(goal: UserGoal, i18n: I18n): string | null {
-  if (goal.status !== "completed" || !goal.completedAt) return null;
-  const date = new Date(goal.completedAt).toLocaleDateString("en-US");
-  if (goal.kind === "accuracy" && goal.completedValue != null) {
-    const acc = (goal.completedValue * 100).toFixed(2);
-    return i18n._(msg`cleared ${date} · ${acc}%`);
-  }
-  if ((goal.kind === "play_pp" || goal.kind === "reach_pp") && goal.completedValue != null) {
-    const pp = nf(goal.completedValue);
-    return i18n._(msg`cleared ${date} · ${pp}pp`);
-  }
-  if (goal.kind === "play_pp_count" && goal.completedValue != null) {
-    const count = nf(goal.completedValue);
-    return i18n._(msg`cleared ${date} · ${count} plays`);
-  }
-  if (goal.kind === "reach_rank" && goal.completedValue != null) {
-    const rank = nf(goal.completedValue);
-    return i18n._(msg`cleared ${date} · #${rank}`);
-  }
-  return i18n._(msg`cleared ${date}`);
-}
-
 /** Exact set date, one hover away from the compact "set 12d ago" on the card. */
 function setOnTitle(createdAt: number, i18n: I18n): string {
   const at = new Date(createdAt).toLocaleString("en-US");
@@ -329,6 +308,8 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
 
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  // The board view folds the composer away until asked for.
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -490,6 +471,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
   // the same target because they now mean "land another one"; total/count goals move to the next
   // sensible milestone.
   const goAgain = (goal: UserGoal) => {
+    setComposerOpen(true);
     setKind(goal.kind);
     setCreateError(null);
     resetMapPicker();
@@ -560,6 +542,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       setRankTarget("");
       setSpeedBucket("normal");
       resetMapPicker();
+      setComposerOpen(false);
       await load();
     } catch {
       setCreateError(t`Couldn't save that goal. Try again in a moment.`);
@@ -597,7 +580,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       <PageShell>
         <section className="relative rounded-2xl border border-osu-b3/30 bg-osu-b4">
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-            <ComposerTriangles />
+            <DriftTriangles calm />
           </div>
           <div className="relative grid gap-5 p-6 sm:grid-cols-[1fr_auto] sm:items-center sm:p-7">
             <div className="min-w-0">
@@ -650,176 +633,416 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     <PlaceholderToken label={t`a map`} accent={accent} />
   );
 
+  const sentence = (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5 text-[18px] font-semibold text-osu-l2 sm:text-[20px]">
+      {scope === "pp" ? (
+        kind === "reach_pp" ? (
+          <Trans>
+            Reach{" "}
+            <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.reachPpPlaceholder || "15000"} suffix="pp" accent={accent} width="6.5rem" ariaLabel={t`Target total pp`} />{" "}
+            total pp
+          </Trans>
+        ) : (
+          <Trans>
+            Land a play worth{" "}
+            <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.playPpPlaceholder || "300"} suffix="pp" accent={accent} width="5rem" ariaLabel={t`Play worth at least`} />
+          </Trans>
+        )
+      ) : null}
+
+      {scope === "pp-count" ? (
+        <Trans>
+          Have{" "}
+          <NumberToken value={ppCountTarget} onChange={setPpCountTarget} placeholder={suggestions.ppCountPlaceholder} accent={accent} width="4rem" ariaLabel={t`Target play count`} /> plays worth{" "}
+          <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.playPpPlaceholder || "600"} suffix="pp" accent={accent} width="5rem" ariaLabel={t`Minimum pp per play`} /> or more
+        </Trans>
+      ) : null}
+
+      {scope === "rank" ? (
+        <Trans>
+          Reach{" "}
+          <RankScopeToggle value={rankScope} onChange={setRankScope} accent={accent} /> <NumberToken value={rankTarget} onChange={setRankTarget} placeholder={active.placeholder} prefix="#" accent={accent} width="5rem" ariaLabel={t`Target rank`} /> rank
+        </Trans>
+      ) : null}
+
+      {scope === "map-acc" ? (
+        <Trans>
+          Hit{" "}
+          <NumberToken value={accPct} onChange={setAccPct} placeholder={active.placeholder} suffix="%" accent={accent} width="4rem" decimal ariaLabel={t`Target accuracy`} /> <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> accuracy on {mapSlot}
+        </Trans>
+      ) : null}
+
+      {scope === "map" ? (
+        <Trans>
+          Pass <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> on {mapSlot}
+        </Trans>
+      ) : null}
+
+      {scope === "map-fc" ? (
+        <Trans>
+          FC <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> on {mapSlot}
+        </Trans>
+      ) : null}
+
+      {scope === "map-grade" ? (
+        <Trans>
+          Earn <GradeToken value={grade} onChange={setGrade} accent={accent} /> <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> on {mapSlot}
+        </Trans>
+      ) : null}
+    </div>
+  );
+
+  const hintLine = hint ? <div className="mt-2.5 text-[12px] font-semibold text-osu-f1">{hint}</div> : null;
+  const mapSearch = needsMap && !resolved ? (
+    <MapSearchRow
+      pickedSet={pickedSet}
+      mapQuery={mapQuery}
+      results={results}
+      searching={searching}
+      lookupError={mapLookupError}
+      onQueryChange={setMapQuery}
+      onReset={resetMapPicker}
+      onPickSet={pickSet}
+      onResolveDiff={resolveDiff}
+    />
+  ) : null;
+  const errorLine = createError ? <div className="text-[12px] font-semibold text-osu-red-light">{createError}</div> : null;
+  const flatSet = <FlatSetGoalButton canSubmit={canSubmit} creating={creating} accent={accent} onClick={() => void submit()} />;
+  const currentPpLabel = suggestionMetrics.currentPp != null ? nf(suggestionMetrics.currentPp) : "—";
+
   return (
     <PageShell>
-      <section className="relative rounded-2xl border border-osu-b3/30 bg-osu-b4">
-        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-          <ComposerTriangles />
+      <section className="relative overflow-hidden rounded-2xl bg-osu-b4">
+        <div className="pointer-events-none absolute inset-0">
+          <DriftTriangles calm />
         </div>
-
-        <div className="relative">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-5">
-            <img src={viewer.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-osu-b3/45" loading="lazy" />
-            <div className="min-w-0">
-              <div className="truncate text-[13px] font-bold text-white">{viewer.username}</div>
-              <div className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-osu-f1">{t`goal tracker`}</div>
-            </div>
-            <div className="ml-auto flex items-center gap-4 sm:gap-6">
-              <Stat label={t`current pp`} value={suggestionMetrics.currentPp != null ? nf(suggestionMetrics.currentPp) : "—"} tone="pp" />
-              <Stat label={t`in flight`} value={String(open.length)} />
-              <Stat label={t`cleared`} value={String(done.length)} />
-            </div>
-          </div>
-
-          <div className="h-px bg-osu-b3/25" />
-
-          <div className="space-y-4 p-4 sm:p-5">
-            <TypeSelector kind={kind} onSwitch={switchKind} />
-
-            <div className="flex flex-col gap-3.5 lg:flex-row lg:items-start lg:justify-between lg:gap-5">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5 text-[16px] font-semibold text-osu-l2 sm:text-[17px]">
-                  {scope === "pp" ? (
-                    kind === "reach_pp" ? (
-                      <Trans>
-                        Reach{" "}
-                        <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.reachPpPlaceholder || "15000"} suffix="pp" accent={accent} width="6.5rem" ariaLabel={t`Target total pp`} />{" "}
-                        total pp
-                      </Trans>
-                    ) : (
-                      <Trans>
-                        Land a play worth{" "}
-                        <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.playPpPlaceholder || "300"} suffix="pp" accent={accent} width="5rem" ariaLabel={t`Play worth at least`} />
-                      </Trans>
-                    )
-                  ) : null}
-
-                  {scope === "pp-count" ? (
-                    <Trans>
-                      Have{" "}
-                      <NumberToken value={ppCountTarget} onChange={setPpCountTarget} placeholder={suggestions.ppCountPlaceholder} accent={accent} width="4rem" ariaLabel={t`Target play count`} /> plays worth{" "}
-                      <NumberToken value={ppTarget} onChange={setPpTarget} placeholder={suggestions.playPpPlaceholder || "600"} suffix="pp" accent={accent} width="5rem" ariaLabel={t`Minimum pp per play`} /> or more
-                    </Trans>
-                  ) : null}
-
-                  {scope === "rank" ? (
-                    <Trans>
-                      Reach{" "}
-                      <RankScopeToggle value={rankScope} onChange={setRankScope} accent={accent} /> <NumberToken value={rankTarget} onChange={setRankTarget} placeholder={active.placeholder} prefix="#" accent={accent} width="5rem" ariaLabel={t`Target rank`} /> rank
-                    </Trans>
-                  ) : null}
-
-                  {scope === "map-acc" ? (
-                    <Trans>
-                      Hit{" "}
-                      <NumberToken value={accPct} onChange={setAccPct} placeholder={active.placeholder} suffix="%" accent={accent} width="4rem" decimal ariaLabel={t`Target accuracy`} /> <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> accuracy on {mapSlot}
-                    </Trans>
-                  ) : null}
-
-                  {scope === "map" ? (
-                    <Trans>
-                      Pass <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> on {mapSlot}
-                    </Trans>
-                  ) : null}
-
-                  {scope === "map-fc" ? (
-                    <Trans>
-                      FC <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> on {mapSlot}
-                    </Trans>
-                  ) : null}
-
-                  {scope === "map-grade" ? (
-                    <Trans>
-                      Earn <GradeToken value={grade} onChange={setGrade} accent={accent} /> <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} /> on {mapSlot}
-                    </Trans>
-                  ) : null}
+        <div className="relative flex flex-wrap items-end gap-x-6 gap-y-5 p-5 sm:gap-x-10 sm:p-7">
+          <BigStat value={currentPpLabel} label={t`total pp`} accent="#ff8ec4" />
+          <BigStat value={String(open.length)} label={t`active`} />
+          <BigStat value={String(done.length)} label={t({ message: "cleared", context: "goal count" })} />
+          {!composerOpen ? (
+            <button
+              type="button"
+              onClick={() => setComposerOpen(true)}
+              className="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-osu-pink px-5 text-[13px] font-bold text-white transition-[filter] hover:brightness-110 sm:ml-auto sm:w-auto"
+            >
+              <span className="text-[17px] leading-none" aria-hidden="true">+</span>
+              {t`New goal`}
+            </button>
+          ) : null}
+        </div>
+        <AnimatePresence initial={false}>
+          {composerOpen ? (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="relative overflow-hidden"
+            >
+              <div className="space-y-5 border-t border-white/[0.07] p-5 sm:p-7">
+                <TypeRow kind={kind} onSwitch={switchKind} />
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+                  <div className="min-w-0 flex-1">
+                    {sentence}
+                    {hintLine}
+                  </div>
+                  <div className="flex w-full items-center gap-2 lg:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setComposerOpen(false)}
+                      className="h-11 cursor-pointer rounded-xl px-3 text-[13px] font-semibold text-osu-f1 transition-colors hover:text-white"
+                    >
+                      {t`Cancel`}
+                    </button>
+                    {flatSet}
+                  </div>
                 </div>
-                {hint ? <div className="mt-2.5 text-[11.5px] font-semibold text-osu-f1">{hint}</div> : null}
+                {mapSearch}
+                {errorLine}
               </div>
-
-              <SetGoalButton canSubmit={canSubmit} creating={creating} accent={accent} onClick={() => void submit()} />
-            </div>
-
-            {needsMap && !resolved ? (
-              <MapSearchRow
-                pickedSet={pickedSet}
-                mapQuery={mapQuery}
-                results={results}
-                searching={searching}
-                lookupError={mapLookupError}
-                onQueryChange={setMapQuery}
-                onReset={resetMapPicker}
-                onPickSet={pickSet}
-                onResolveDiff={resolveDiff}
-              />
-            ) : null}
-
-            {createError ? <div className="text-[12px] font-semibold text-osu-red-light">{createError}</div> : null}
-          </div>
-        </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </section>
-
-      <GoalSections loading={loading} open={open} done={done} onDelete={remove} onUpdate={update} onAgain={goAgain} />
+      <BoardLists loading={loading} open={open} done={done} onDelete={remove} onUpdate={update} onAgain={goAgain} />
     </PageShell>
   );
 }
 
-function ComposerTriangles() {
-  return (
-    <svg viewBox="0 20 1200 360" preserveAspectRatio="xMidYMid slice" className="h-full w-full text-osu-pink" aria-hidden="true">
-      {COMPOSER_TRIANGLES.map((triangle, index) => (
-        <polygon key={index} points={triangle.p} fill="currentColor" fillOpacity={triangle.o} />
-      ))}
-    </svg>
-  );
-}
+// --- board pieces ---------------------------------------------------------
 
-function Stat({ label, value, tone = "default" }: { label: string; value: string; tone?: "pp" | "default" }) {
+/* The eight goal types as one borderless row, profile climbs then map
+   challenges, split by a hairline rather than two labelled boxes. */
+function TypeRow({ kind, onSwitch }: { kind: GoalKind; onSwitch: (next: GoalKind) => void }) {
+  const { i18n } = useLingui();
   return (
-    <div className="text-right">
-      <div className={`text-[15px] font-extrabold leading-none tabular-nums ${tone === "pp" ? "text-osu-pink-light" : "text-osu-l1"}`}>{value}</div>
-      <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.14em] text-osu-f1">{label}</div>
+    <div className="grid grid-cols-2 gap-1 sm:flex sm:flex-wrap sm:items-center">
+      {GOAL_TYPES.map((type, index) => {
+        const selected = kind === type.kind;
+        const startsMapGroup = index > 0 && type.group !== GOAL_TYPES[index - 1]!.group;
+        return (
+          <span key={type.kind} className="contents">
+            {startsMapGroup ? <span className="mx-2 hidden h-5 w-px bg-white/[0.1] sm:block" aria-hidden="true" /> : null}
+            <button
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSwitch(type.kind)}
+              className={`inline-flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors ${
+                selected ? "text-white" : "text-osu-f1 hover:text-white"
+              }`}
+              style={selected ? { backgroundColor: `${type.accent}29` } : undefined}
+            >
+              <OsuAssetIcon src={type.iconSrc} className="h-4 w-4 shrink-0" style={{ color: type.accent }} />
+              {i18n._(type.label)}
+            </button>
+          </span>
+        );
+      })}
     </div>
   );
 }
 
-// Goal kinds split into two groups so eight types don't read as one undifferentiated strip: the
-// profile climbs (pp / rank, no map) and the per-map challenges. Compact icon+label chips, no
-// per-button example line; the composer sentence below carries the specifics once a type is picked.
-const TYPE_GROUPS: Array<{ key: GoalGroup; label: MessageDescriptor }> = [
-  { key: "profile", label: msg`profile` },
-  { key: "map", label: msg`on a map` },
-];
-
-function TypeSelector({ kind, onSwitch }: { kind: GoalKind; onSwitch: (next: GoalKind) => void }) {
-  const { i18n } = useLingui();
+function FlatSetGoalButton({ canSubmit, creating, accent, onClick }: { canSubmit: boolean; creating: boolean; accent: string; onClick: () => void }) {
+  const { t } = useLingui();
   return (
-    <div className="space-y-2.5">
-      {TYPE_GROUPS.map((group) => (
-        <div key={group.key}>
-          <div className="mb-1.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-osu-f1">{i18n._(group.label)}</div>
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-            {GOAL_TYPES.filter((type) => type.group === group.key).map((type) => {
-              const selected = kind === type.kind;
-              return (
-                <button
-                  key={type.kind}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => onSwitch(type.kind)}
-                  style={selected ? { backgroundColor: `${type.accent}1f`, borderColor: `${type.accent}80`, color: "#fff" } : undefined}
-                  className={`flex w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-[12px] font-bold transition-colors ${
-                    selected ? "" : "border-osu-b3/30 bg-osu-b5/40 text-osu-l2 hover:border-osu-b3/55 hover:bg-osu-b3/25 hover:text-white"
-                  }`}
-                >
-                  <OsuAssetIcon src={type.iconSrc} className="h-3.5 w-3.5 shrink-0" style={{ color: type.accent }} />
-                  {i18n._(type.label)}
-                </button>
-              );
-            })}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!canSubmit}
+      style={canSubmit ? { backgroundColor: accent } : undefined}
+      className="inline-flex h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl px-6 text-[13.5px] font-bold text-white transition-[filter] hover:brightness-110 disabled:cursor-default disabled:bg-white/[0.06] disabled:text-osu-f1 disabled:hover:brightness-100 lg:flex-none"
+    >
+      {creating ? <Spinner /> : <span className="text-[17px] leading-none" aria-hidden="true">+</span>}
+      {t`Set goal`}
+    </button>
+  );
+}
+
+function BigStat({ value, label, accent }: { value: string; label: string; accent?: string }) {
+  return (
+    <div>
+      <div className="text-[26px] font-extrabold leading-none tabular-nums text-white sm:text-[30px]" style={accent ? { color: accent } : undefined}>{value}</div>
+      <div className="mt-1.5 text-[12px] font-semibold text-osu-f1">{label}</div>
+    </div>
+  );
+}
+
+function Hairline() {
+  return <span className="h-3 w-px shrink-0 bg-white/[0.15]" aria-hidden="true" />;
+}
+
+function SectionTitle({ title, count }: { title: string; count: number }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-[15px] font-bold text-white">{title}</span>
+      <span className="text-[13px] font-semibold tabular-nums text-osu-f1">{count}</span>
+    </div>
+  );
+}
+
+function shortDate(at: number): string {
+  return new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** What the clear landed at, without the date: "16,017pp", "96.50%", "#812". */
+function completedValueLabel(goal: UserGoal, i18n: I18n): string | null {
+  const value = goal.completedValue;
+  if (value == null) return null;
+  switch (goal.kind) {
+    case "accuracy":
+      return `${(value * 100).toFixed(2)}%`;
+    case "play_pp":
+    case "reach_pp":
+      return `${nf(value)}pp`;
+    case "play_pp_count": {
+      const count = nf(value);
+      return i18n._(msg`${count} plays`);
+    }
+    case "reach_rank":
+      return `#${nf(value)}`;
+    default:
+      return null;
+  }
+}
+
+function GoalTitle({ goal, className }: { goal: UserGoal; className: string }) {
+  const { i18n, t } = useLingui();
+  const href = beatmapHref(goal.beatmapId);
+  const text = describeGoal(goal, i18n);
+  return href ? (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className={`block truncate transition-colors hover:text-osu-pink-light hover:underline ${className}`}
+      title={t`Open ${goal.beatmapLabel ?? text} on osu!`}
+    >
+      {text}
+    </a>
+  ) : (
+    <div className={`truncate ${className}`} title={text}>{text}</div>
+  );
+}
+
+function GoalActions({ editing, onEdit, onDelete }: { editing: boolean; onEdit: () => void; onDelete: () => void }) {
+  const { t } = useLingui();
+  return (
+    <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+      {!editing ? (
+        <button type="button" onClick={onEdit} aria-label={t`Edit goal`} className="rounded-md p-1.5 text-osu-f1 transition-colors hover:bg-white/[0.08] hover:text-white">
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+      <button type="button" onClick={onDelete} aria-label={t`Delete goal`} className="rounded-md p-1.5 text-osu-f1 transition-colors hover:bg-osu-red/10 hover:text-osu-red-light">
+        <CloseGlyph />
+      </button>
+    </div>
+  );
+}
+
+function ListLoading() {
+  const { t } = useLingui();
+  return (
+    <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-osu-f1">
+      <Spinner />
+      {t`Loading goals...`}
+    </div>
+  );
+}
+
+function ListEmpty() {
+  const { t } = useLingui();
+  return (
+    <div className="py-14 text-center">
+      <div className="text-[15px] font-bold text-osu-l2">{t`No goals tracked yet`}</div>
+      <div className="mx-auto mt-1.5 max-w-sm text-[13px] leading-5 text-osu-f1">{t`Pick a target above. Progress updates as your mania plays land.`}</div>
+    </div>
+  );
+}
+
+/* A cleared goal as one line of a hairline list: what it was, when, what it
+   landed at, how long it took. */
+function ClearedRow({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: () => void; onAgain: () => void }) {
+  const { i18n, t } = useLingui();
+  const took = goalDurationLabel(goal, i18n);
+  const value = completedValueLabel(goal, i18n);
+  const movesToNextMilestone = goal.kind === "reach_pp" || goal.kind === "play_pp_count";
+  return (
+    <article className="group flex items-center gap-3.5 py-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-osu-green/15">
+        {goal.kind === "grade" ? (
+          <GradeImg grade={goal.targetGrade ?? "S"} size={26} className="h-3.5 w-auto" />
+        ) : (
+          <Check className="h-4 w-4 text-osu-green-light" />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <GoalTitle goal={goal} className="text-[14px] font-semibold text-osu-l2" />
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-osu-f1">
+          {goal.completedAt ? <span>{shortDate(goal.completedAt)}</span> : null}
+          {value ? <><Hairline /><span className="font-semibold text-osu-green-light">{value}</span></> : null}
+          {took ? <><Hairline /><span>{took}</span></> : null}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onAgain}
+        className="shrink-0 rounded-md px-2 py-1 text-[12px] font-semibold text-osu-f1 transition-colors hover:bg-white/[0.06] hover:text-white"
+        title={movesToNextMilestone ? t`Set the next milestone` : t`Set this goal again`}
+      >
+        {movesToNextMilestone ? t`aim higher` : t`go again`}
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        aria-label={t`Delete goal`}
+        className="shrink-0 rounded-md p-1.5 text-osu-f1 opacity-100 transition hover:bg-osu-red/10 hover:text-osu-red-light sm:opacity-0 sm:group-hover:opacity-100"
+      >
+        <CloseGlyph />
+      </button>
+    </article>
+  );
+}
+
+function BoardCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () => void; onUpdate: (input: UpdateGoalInput) => Promise<boolean> }) {
+  const { i18n } = useLingui();
+  const meta = goalMeta(goal.kind);
+  const accent = meta.accent;
+  const href = beatmapHref(goal.beatmapId);
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <article className="group relative flex flex-col rounded-2xl bg-osu-b4 p-5">
+      <div className="flex items-start gap-4">
+        <GoalMedia goal={goal} accent={accent} href={href} />
+        {editing ? (
+          <GoalEditor
+            goal={goal}
+            onSave={async (input) => {
+              const ok = await onUpdate(input);
+              if (ok) setEditing(false);
+              return ok;
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <div className="min-w-0 flex-1 pt-1">
+            <div className="flex items-baseline gap-2 text-[12px]">
+              <span className="font-bold" style={{ color: accent }}>{i18n._(meta.label)}</span>
+              <span className="text-osu-f1" title={setOnTitle(goal.createdAt, i18n)}>{goalAgeLabel(goal.createdAt, Date.now(), i18n)}</span>
+            </div>
+            <GoalTitle goal={goal} className="mt-1 text-[17px] font-bold leading-snug text-white" />
+            <div className="mt-2">
+              <GoalReadout goal={goal} />
+            </div>
+          </div>
+        )}
+        <GoalActions editing={editing} onEdit={() => setEditing(true)} onDelete={onDelete} />
+      </div>
+    </article>
+  );
+}
+
+function BoardLists({
+  loading,
+  open,
+  done,
+  onDelete,
+  onUpdate,
+  onAgain,
+}: {
+  loading: boolean;
+  open: UserGoal[];
+  done: UserGoal[];
+  onDelete: (goal: UserGoal) => void;
+  onUpdate: (input: UpdateGoalInput) => Promise<boolean>;
+  onAgain: (goal: UserGoal) => void;
+}) {
+  const { t } = useLingui();
+  if (loading) return <ListLoading />;
+  if (open.length === 0 && done.length === 0) return <ListEmpty />;
+  return (
+    <div className="space-y-8">
+      {open.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {open.map((goal) => (
+            <BoardCard key={goal.id} goal={goal} onDelete={() => onDelete(goal)} onUpdate={onUpdate} />
+          ))}
+        </div>
+      ) : (
+        <div className="py-6 text-center text-[13px] text-osu-f1">{t`Nothing active right now.`}</div>
+      )}
+      {done.length > 0 ? (
+        <div>
+          <SectionTitle title={t`Cleared`} count={done.length} />
+          <div className="mt-1 divide-y divide-white/[0.07]">
+            {done.map((goal) => (
+              <ClearedRow key={goal.id} goal={goal} onDelete={() => onDelete(goal)} onAgain={() => onAgain(goal)} />
+            ))}
           </div>
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }
@@ -997,22 +1220,6 @@ function PlaceholderToken({ label, accent }: { label: string; accent: string }) 
   );
 }
 
-function SetGoalButton({ canSubmit, creating, accent, onClick }: { canSubmit: boolean; creating: boolean; accent: string; onClick: () => void }) {
-  const { t } = useLingui();
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!canSubmit}
-      style={canSubmit ? { backgroundColor: `${accent}24`, borderColor: `${accent}80`, color: "#fff" } : undefined}
-      className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border px-5 text-[13px] font-bold transition hover:brightness-110 disabled:cursor-default disabled:border-osu-b3/30 disabled:bg-osu-b5/40 disabled:text-osu-f1/55 disabled:hover:brightness-100 lg:w-auto"
-    >
-      {creating ? <Spinner /> : <span className="text-[17px] leading-none" aria-hidden="true">+</span>}
-      {t`Set goal`}
-    </button>
-  );
-}
-
 function MapSearchRow({
   pickedSet,
   mapQuery,
@@ -1106,81 +1313,6 @@ function MapSearchRow({
   );
 }
 
-function GoalSections({
-  loading,
-  open,
-  done,
-  onDelete,
-  onUpdate,
-  onAgain,
-}: {
-  loading: boolean;
-  open: UserGoal[];
-  done: UserGoal[];
-  onDelete: (goal: UserGoal) => void;
-  onUpdate: (input: UpdateGoalInput) => Promise<boolean>;
-  onAgain: (goal: UserGoal) => void;
-}) {
-  const { t } = useLingui();
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center gap-2 rounded-2xl border border-osu-b3/25 bg-osu-b4/50 py-16 text-[13px] text-osu-f1">
-        <Spinner />
-        {t`Loading goals...`}
-      </div>
-    );
-  }
-
-  if (open.length === 0 && done.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-osu-b3/35 bg-osu-b4/30 px-5 py-12">
-        <div className="text-center">
-          <div className="text-[14px] font-bold text-osu-l2">{t`No goals tracked yet`}</div>
-          <div className="mx-auto mt-1 max-w-sm text-[12.5px] leading-5 text-osu-f1">{t`Pick a target above. Progress updates as your mania plays land.`}</div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <SectionLabel title={t`Active`} count={open.length} />
-        {open.length > 0 ? (
-          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {open.map((goal) => (
-              <GoalCard key={goal.id} goal={goal} onDelete={() => onDelete(goal)} onUpdate={onUpdate} />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-3 rounded-2xl border border-dashed border-osu-b3/30 bg-osu-b4/30 p-8 text-center text-[12.5px] text-osu-f1">{t`Nothing active right now.`}</div>
-        )}
-      </div>
-
-      {done.length > 0 ? (
-        <div>
-          <SectionLabel title={t`Cleared`} count={done.length} />
-          <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            {done.map((goal) => (
-              <ClearedChip key={goal.id} goal={goal} onDelete={() => onDelete(goal)} onAgain={() => onAgain(goal)} />
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function SectionLabel({ title, count }: { title: string; count: number }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-osu-l2">{title}</span>
-      <span className="rounded-md border border-osu-b3/35 bg-osu-b4 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-osu-f1">{count}</span>
-      <span className="h-px flex-1 bg-osu-b3/25" />
-    </div>
-  );
-}
-
 function GoalRing({ pct, accent, size, stroke, children }: { pct: number | null; accent: string; size: number; stroke: number; children: ReactNode }) {
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -1218,9 +1350,9 @@ function Muted({ children }: { children: ReactNode }) {
 // this just states where you are and how far is left.
 function StatLine({ main, sub }: { main: string; sub?: string | null }) {
   return (
-    <span className="text-[12px] font-semibold tabular-nums text-osu-l2">
+    <span className="inline-flex items-center gap-2 text-[12px] font-semibold tabular-nums text-osu-l2">
       {main}
-      {sub ? <span className="font-normal text-osu-f1"> · {sub}</span> : null}
+      {sub ? <><Hairline /><span className="font-normal text-osu-f1">{sub}</span></> : null}
     </span>
   );
 }
@@ -1392,82 +1524,6 @@ function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; hre
   );
 }
 
-function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () => void; onUpdate: (input: UpdateGoalInput) => Promise<boolean> }) {
-  const { i18n, t } = useLingui();
-  const meta = goalMeta(goal.kind);
-  const accent = meta.accent;
-  const href = beatmapHref(goal.beatmapId);
-  const [editing, setEditing] = useState(false);
-
-  return (
-    <article className="group relative flex items-center gap-3.5 rounded-2xl border border-osu-b3/30 bg-osu-b4 p-3.5">
-      <GoalMedia goal={goal} accent={accent} href={href} />
-
-      {editing ? (
-        <GoalEditor
-          goal={goal}
-          onSave={async (input) => {
-            const ok = await onUpdate(input);
-            if (ok) setEditing(false);
-            return ok;
-          }}
-          onCancel={() => setEditing(false)}
-        />
-      ) : (
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
-              {i18n._(meta.label)}
-            </span>
-            <span className="truncate text-[10px] font-semibold text-osu-f1" title={setOnTitle(goal.createdAt, i18n)}>
-              {goalAgeLabel(goal.createdAt, Date.now(), i18n)}
-            </span>
-          </div>
-          {href ? (
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 block truncate text-[14px] font-bold text-white transition-colors hover:text-osu-pink-light hover:underline"
-              title={t`Open ${goal.beatmapLabel ?? describeGoal(goal, i18n)} on osu!`}
-            >
-              {describeGoal(goal, i18n)}
-            </a>
-          ) : (
-            <div className="mt-1 truncate text-[14px] font-bold text-white" title={describeGoal(goal, i18n)}>
-              {describeGoal(goal, i18n)}
-            </div>
-          )}
-          <div className="mt-1.5">
-            <GoalReadout goal={goal} />
-          </div>
-        </div>
-      )}
-
-      <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-0.5 self-start">
-        {!editing ? (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            aria-label={t`Edit goal`}
-            className="rounded-md p-1 text-osu-f1/60 transition-colors hover:bg-osu-b3/40 hover:text-white"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={onDelete}
-          aria-label={t`Delete goal`}
-          className="rounded-md p-1 text-osu-f1/60 transition-colors hover:bg-osu-red/10 hover:text-osu-red-light"
-        >
-          <CloseGlyph />
-        </button>
-      </div>
-    </article>
-  );
-}
-
 // Inline editor for an open goal. The kind and map are fixed (a different map is a different
 // goal); the targets are the same tokens the composer uses, so the sentence reads identically.
 function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input: UpdateGoalInput) => Promise<boolean>; onCancel: () => void }) {
@@ -1611,67 +1667,5 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
         {error ? <span className="text-[11px] font-semibold text-osu-red-light">{t`Couldn't save. Try again.`}</span> : null}
       </div>
     </div>
-  );
-}
-
-function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: () => void; onAgain: () => void }) {
-  const { i18n, t } = useLingui();
-  const meta = goalMeta(goal.kind);
-  const cover = coverUrl(goal.beatmapsetId);
-  const took = goalDurationLabel(goal, i18n);
-  // reach_pp / play_pp_count can't be repeated (they only go up); "again" prefills the next milestone.
-  const movesToNextMilestone = goal.kind === "reach_pp" || goal.kind === "play_pp_count";
-  return (
-    <article className="group relative flex items-center gap-3 rounded-xl border border-osu-b3/25 bg-osu-b4/50 p-2.5">
-      <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-osu-b5">
-        {cover ? (
-          <img src={cover} alt="" className="h-full w-full object-cover opacity-40 grayscale" loading="lazy" />
-        ) : (
-          <span className="flex h-full w-full items-center justify-center" style={{ backgroundColor: `${meta.accent}1f` }}>
-            <OsuAssetIcon src={meta.iconSrc} className="h-5 w-5 opacity-80" />
-          </span>
-        )}
-        <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-osu-b6 p-0.5 ring-1 ring-osu-b3/50">
-          {goal.kind === "grade" ? <GradeImg grade={goal.targetGrade ?? "S"} size={26} className="h-3.5 w-auto" /> : <OsuLogo className="h-3 w-3 text-osu-green-light" />}
-        </span>
-      </div>
-      <div className="min-w-0 flex-1">
-        {beatmapHref(goal.beatmapId) ? (
-          <a
-            href={beatmapHref(goal.beatmapId) ?? undefined}
-            target="_blank"
-            rel="noreferrer"
-            className="block truncate text-[12.5px] font-bold text-osu-l2 transition-colors hover:text-osu-pink-light hover:underline"
-            title={t`Open ${goal.beatmapLabel ?? describeGoal(goal, i18n)} on osu!`}
-          >
-            {describeGoal(goal, i18n)}
-          </a>
-        ) : (
-          <div className="truncate text-[12.5px] font-bold text-osu-l2" title={describeGoal(goal, i18n)}>
-            {describeGoal(goal, i18n)}
-          </div>
-        )}
-        <div className="mt-0.5 truncate text-[10.5px] font-semibold text-osu-green-light" title={setOnTitle(goal.createdAt, i18n)}>
-          {completedDetail(goal, i18n) ?? "cleared"}
-          {took ? <span className="font-normal text-osu-f1"> · {took}</span> : null}
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onAgain}
-        className="shrink-0 self-start rounded-md px-1.5 py-1 text-[10.5px] font-bold text-osu-f1 transition-colors hover:bg-osu-pink/10 hover:text-osu-pink-light"
-        title={movesToNextMilestone ? t`Set the next milestone` : t`Set this goal again`}
-      >
-        {movesToNextMilestone ? t`aim higher` : t`go again`}
-      </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label={t`Delete goal`}
-        className="shrink-0 self-start rounded-md p-1 text-osu-f1/55 transition-colors hover:bg-osu-red/10 hover:text-osu-red-light"
-      >
-        <CloseGlyph />
-      </button>
-    </article>
   );
 }
