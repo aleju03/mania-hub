@@ -2,13 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, isLocalChartId, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
-import type { MapsFavouriteBeatmapset } from "../../lib/types";
+import type { MapsFavouriteBeatmapset, OsuScore } from "../../lib/types";
 import { formatAccuracy, formatDuration, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { getManiaJudgementCounts, getManiaGradeFromAccuracy } from "../../lib/score";
 import { GradeImg } from "../ui/GradeImg";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
+import { MapScoresBoard, mapScoreEntryScore } from "./MapScoresBoard";
+import { ScorePlayDetailModal } from "../player/ScorePlayDetailModal";
 import { getBeatmapFile } from "../../lib/osu";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
 import type { ManiaBeatmap } from "../../lib/beatmap-parser";
@@ -746,6 +748,7 @@ export function MapDetailModal({
   status = "ready",
   actions,
   initialRate = 1,
+  scoreOnly = false,
 }: {
   entry: LiveMapSearchEntry | null;
   onClose: () => void;
@@ -754,6 +757,8 @@ export function MapDetailModal({
   initialRate?: 1 | 1.5 | 0.75;
   /** Extra buttons for the footer, after Share. */
   actions?: ReactNode;
+  /** Just the play, no tabs: the card was opened from this map's own Scores tab. */
+  scoreOnly?: boolean;
   play?: MapDetailPlayContext | null;
   // "pending" means `entry` is the stub a list already had in hand (title,
   // cover, keys) and the catalog entry is still in flight, so the modal opens
@@ -766,24 +771,28 @@ export function MapDetailModal({
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   // Opened from a play row, the score is what was clicked; the map's own detail
-  // waits behind the second tab. Opened from search there is no score at all,
-  // so the tab bar stays out and the map detail is the whole card.
-  const [tab, setTab] = useState<"score" | "map">("score");
+  // waits behind the second tab. Opened from search there is no score, so the
+  // map detail comes first ("score" then reads as "map").
+  const [tab, setTab] = useState<"score" | "map" | "scores">("score");
+  // A Scores tab row opens its play as a card stacked over this one.
+  const [openedScore, setOpenedScore] = useState<OsuScore | null>(null);
 
   useEffect(() => {
     setSelectedDiffId(entry ? entry.beatmapId : null);
     setShareCopied(false);
     setTab("score");
+    setOpenedScore(null);
   }, [entry?.beatmapId, play?.scoreId, play?.playedAt]);
 
   useEffect(() => {
-    if (!entry) return;
+    // The stacked card closes on its own Escape; this one stays.
+    if (!entry || openedScore) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [entry, onClose]);
+  }, [entry, onClose, openedScore]);
 
   useBodyScrollLock(entry != null);
 
@@ -956,13 +965,50 @@ export function MapDetailModal({
   const fileStatsPending = fileStatsId != null && fileStats === undefined;
   const shownStars = active ? rateStars ?? fileStats?.stars ?? active.stars : 0;
 
-  // Two tabs only when a score opened the card. A local chart whose analysis
-  // has not landed has no map detail to show, so the play is the whole card.
-  const showTabs = play != null && play.beatmapId !== 0 && !(local && status === "missing");
+  // Score and Map info only when a score opened the card. A local chart whose
+  // analysis has not landed has no map detail to show, so the play is the whole card.
+  const showTabs = play != null && !scoreOnly && play.beatmapId !== 0 && !(local && status === "missing");
+  // Tracked plays exist only on charts osu! has.
+  const showScores = !local && active != null && active.beatmapId > 0 && (play == null || showTabs);
+  const tabs = [
+    ...(showTabs ? [["score", t`Score`] as const] : []),
+    ...(showTabs || showScores ? [["map", t`Map info`] as const] : []),
+    ...(showScores ? [["scores", t`Scores`] as const] : []),
+  ];
+  const shownTab = !play && tab === "score" ? "map" : tab;
   const hasBanner = entry != null && (setKnown || Object.keys(entry.covers ?? {}).length > 0);
   // The map's share link opens /maps, which a local chart is not on, so its
   // Share copies the score's link from either tab.
-  const shareScore = play != null && (tab === "score" || local);
+  const shareScore = play != null && (shownTab === "score" || local);
+
+  // Every matching diff of the set, easiest first. Shared by Map info and
+  // Scores, where switching diffs switches the board.
+  const diffPicker = active && diffs.length > 1 ? (
+    <div className="flex flex-wrap gap-1.5">
+      {diffs.map((diff) => {
+        const isActive = diff.beatmapId === active.beatmapId;
+        return (
+          <button
+            key={diff.beatmapId}
+            type="button"
+            onClick={() => setSelectedDiffId(diff.beatmapId)}
+            aria-pressed={isActive}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10.5px] font-semibold cursor-pointer transition-colors ${
+              isActive ? "bg-osu-b3 text-white" : "bg-osu-b4/60 text-osu-l2 hover:bg-osu-b4 hover:text-osu-l1"
+            }`}
+          >
+            <span
+              className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/15"
+              style={{ background: starRatingColor(diff.stars) }}
+            />
+            {mixedKeys && <span className="text-osu-f1">{diff.keyCount}K</span>}
+            <span className="max-w-[180px] truncate">{diff.version}</span>
+            <span className="tabular-nums text-osu-yellow">★{diff.stars.toFixed(2)}</span>
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
 
   if (typeof document === "undefined") return null;
 
@@ -971,6 +1017,7 @@ export function MapDetailModal({
   // translateZ(0) + contain: paint) with an opaque in-layer backdrop, so a
   // dropped frame on phones can't paint the content see-through mid-fade.
   return createPortal(
+    <>
     <AnimatePresence>
       {entry && active && (
         <motion.div
@@ -1044,23 +1091,23 @@ export function MapDetailModal({
                   the map's own detail behind it. A play on a chart with no
                   id at all has no map detail to fetch, so the play is the
                   whole card. */}
-              {play && showTabs ? (
+              {tabs.length > 1 ? (
                 <div role="tablist" className="flex shrink-0 items-center gap-1 border-b border-white/5 px-3.5 pt-2.5">
-                  {([["score", t`Score`], ["map", t`Map info`]] as const).map(([id, label]) => (
+                  {tabs.map(([id, label]) => (
                     <button
                       key={id}
                       type="button"
                       role="tab"
-                      aria-selected={tab === id}
+                      aria-selected={shownTab === id}
                       onClick={() => {
                         // The banner names the diff on screen, so returning to
                         // the score returns the selection to the diff it was set on.
-                        if (id === "score") setSelectedDiffId(play.beatmapId);
+                        if (id === "score" && play) setSelectedDiffId(play.beatmapId);
                         setShareCopied(false);
                         setTab(id);
                       }}
                       className={`-mb-px cursor-pointer border-b-2 px-2.5 pb-2 text-[11.5px] font-bold uppercase tracking-[0.06em] transition-colors ${
-                        tab === id ? "border-osu-pink text-white" : "border-transparent text-osu-f1/70 hover:text-osu-l1"
+                        shownTab === id ? "border-osu-pink text-white" : "border-transparent text-osu-f1/70 hover:text-osu-l1"
                       }`}
                     >
                       {label}
@@ -1070,38 +1117,19 @@ export function MapDetailModal({
               ) : null}
 
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3.5">
-                {play && (tab === "score" || !showTabs) ? (
+                {play && (shownTab === "score" || !showTabs) ? (
                   <PlayContextBlock play={play} entry={playDiff} />
+                ) : shownTab === "scores" ? (
+                  <>
+                    {diffPicker}
+                    <MapScoresBoard
+                      beatmapId={active.beatmapId}
+                      onOpen={(row) => setOpenedScore(mapScoreEntryScore(row, active))}
+                    />
+                  </>
                 ) : (
                   <>
-                {/* Diff picker: every matching diff of the set, easiest first */}
-                {diffs.length > 1 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {diffs.map((diff) => {
-                      const isActive = diff.beatmapId === active.beatmapId;
-                      return (
-                        <button
-                          key={diff.beatmapId}
-                          type="button"
-                          onClick={() => setSelectedDiffId(diff.beatmapId)}
-                          aria-pressed={isActive}
-                          className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10.5px] font-semibold cursor-pointer transition-colors ${
-                            isActive ? "bg-osu-b3 text-white" : "bg-osu-b4/60 text-osu-l2 hover:bg-osu-b4 hover:text-osu-l1"
-                          }`}
-                        >
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/15"
-                            style={{ background: starRatingColor(diff.stars) }}
-                          />
-                          {mixedKeys && <span className="text-osu-f1">{diff.keyCount}K</span>}
-                          <span className="max-w-[180px] truncate">{diff.version}</span>
-                          <span className="tabular-nums text-osu-yellow">★{diff.stars.toFixed(2)}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
+                {diffPicker}
                 {/* Stats */}
                 {fileStats || fileStatsPending ? (
                   <div className="flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:grid-cols-4 sm:gap-2">
@@ -1333,7 +1361,11 @@ export function MapDetailModal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>,
+    </AnimatePresence>
+    {entry && openedScore ? (
+      <ScorePlayDetailModal score={openedScore} username={openedScore.user?.username ?? ""} onClose={() => setOpenedScore(null)} scoreOnly />
+    ) : null}
+    </>,
     document.body,
   );
 }

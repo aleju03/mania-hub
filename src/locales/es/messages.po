@@ -5121,6 +5121,10 @@ msgstr "No se pudieron cargar los detalles del mapa."
 msgid "Could not load the pack stats."
 msgstr "No se pudieron cargar las estadísticas de los packs."
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Could not load the scores."
+msgstr "No se pudieron cargar los scores."
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "Could not load the showcases."
 msgstr "No se pudieron cargar los destacados."
@@ -11267,6 +11271,10 @@ msgstr "Todavía no hay plays trackeadas de los miembros de este equipo."
 msgid "No tracked plays match those controls."
 msgstr "Ninguna play trackeada coincide con esos controles."
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "No tracked plays on this difficulty yet."
+msgstr "Todavía no hay plays trackeadas en esta dificultad."
+
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays. Play some ranked maps and they show up here live, or check your top plays."
 msgstr "No hay plays trackeadas. Juega unos mapas ranked y aparecerán aquí en vivo, o revisa tus top plays."
@@ -12008,6 +12016,7 @@ msgid "Open {0} on osu!"
 msgstr "Abrir {0} en osu!"
 
 #. placeholder {0}: entry.user.username
+#: src/components/maps/MapScoresBoard.tsx
 #: src/routes/snipes.tsx
 msgid "Open {0}'s play"
 msgstr "Abrir la jugada de {0}"
@@ -14850,6 +14859,7 @@ msgstr "Scoreline"
 msgid "ScorePosition"
 msgstr "ScorePosition"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/routes/tracker.tsx
 msgid "Scores"
 msgstr "Scores"

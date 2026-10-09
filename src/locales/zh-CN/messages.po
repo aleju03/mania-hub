@@ -5130,6 +5130,10 @@ msgstr "无法加载谱面详情。"
 msgid "Could not load the pack stats."
 msgstr "无法加载卡包统计。"
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Could not load the scores."
+msgstr "无法加载成绩。"
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "Could not load the showcases."
 msgstr "无法加载展示柜。"
@@ -11276,6 +11280,10 @@ msgstr "这个战队的成员还没有已追踪的游玩记录。"
 msgid "No tracked plays match those controls."
 msgstr "没有符合筛选条件的追踪成绩。"
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "No tracked plays on this difficulty yet."
+msgstr "这个难度还没有追踪成绩。"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays. Play some ranked maps and they show up here live, or check your top plays."
 msgstr "还没有追踪到的成绩。去打几张 ranked 谱面，成绩会实时出现在这里，也可以看看你的最佳成绩。"
@@ -12017,6 +12025,7 @@ msgid "Open {0} on osu!"
 msgstr "在 osu! 上打开 {0}"
 
 #. placeholder {0}: entry.user.username
+#: src/components/maps/MapScoresBoard.tsx
 #: src/routes/snipes.tsx
 msgid "Open {0}'s play"
 msgstr "打开 {0} 的成绩"
@@ -14859,6 +14868,7 @@ msgstr "分数条"
 msgid "ScorePosition"
 msgstr "ScorePosition"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/routes/tracker.tsx
 msgid "Scores"
 msgstr "成绩"

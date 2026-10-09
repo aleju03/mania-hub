@@ -5148,6 +5148,10 @@ msgstr "Could not load the map details."
 msgid "Could not load the pack stats."
 msgstr "Could not load the pack stats."
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Could not load the scores."
+msgstr "Could not load the scores."
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "Could not load the showcases."
 msgstr "Could not load the showcases."
@@ -11306,6 +11310,10 @@ msgstr "No tracked plays from this team's members yet."
 msgid "No tracked plays match those controls."
 msgstr "No tracked plays match those controls."
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "No tracked plays on this difficulty yet."
+msgstr "No tracked plays on this difficulty yet."
+
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays. Play some ranked maps and they show up here live, or check your top plays."
 msgstr "No tracked plays. Play some ranked maps and they show up here live, or check your top plays."
@@ -12047,6 +12055,7 @@ msgid "Open {0} on osu!"
 msgstr "Open {0} on osu!"
 
 #. placeholder {0}: entry.user.username
+#: src/components/maps/MapScoresBoard.tsx
 #: src/routes/snipes.tsx
 msgid "Open {0}'s play"
 msgstr "Open {0}'s play"
@@ -14889,6 +14898,7 @@ msgstr "Scoreline"
 msgid "ScorePosition"
 msgstr "ScorePosition"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/routes/tracker.tsx
 msgid "Scores"
 msgstr "Scores"

@@ -57,7 +57,18 @@ function difficultyAdjustOd(score: OsuScore): number | null {
 
 /** A profile play opened as the map card's Score tab, with the map behind the
  *  second tab, the way the skill play lists open theirs. */
-export function ScorePlayDetailModal({ score, username, onClose }: { score: OsuScore; username: string; onClose: () => void }) {
+export function ScorePlayDetailModal({
+  score,
+  username,
+  onClose,
+  scoreOnly = false,
+}: {
+  score: OsuScore;
+  username: string;
+  onClose: () => void;
+  /** Opened from the map's own Scores tab, which is still open underneath. */
+  scoreOnly?: boolean;
+}) {
   const { t } = useLingui();
   // An import of a local copy (a rate edit) has no id of its own; the card
   // opens the official chart the backend matched it to, at the copy's rate.
@@ -131,6 +142,7 @@ export function ScorePlayDetailModal({ score, username, onClose }: { score: OsuS
       status={map.status}
       onClose={onClose}
       play={play}
+      scoreOnly={scoreOnly}
       actions={canReplay ? (
         <Link
           to="/replay"

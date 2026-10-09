@@ -352,6 +352,32 @@ export interface LiveSnipeBoardSnapshot {
   entries: LiveSnipeBoardEntry[];
 }
 
+export interface LiveMapScoreEntry {
+  position: number;
+  user: { id: number; username: string; avatar_url: string; country_code: string; avatar_accent?: string | null };
+  scoreId: number;
+  soloScoreId: number | null;
+  /** 305-weighted (lazer) accuracy from the judgement counts, for stable plays too. */
+  accuracy: number;
+  grade: string;
+  mods: string[];
+  statistics: OsuScoreStatistics | null;
+  maxCombo: number | null;
+  totalScore: number | null;
+  pp: number | null;
+  isLazer: boolean;
+  hasReplay: boolean;
+  playedAt: string | null;
+}
+
+export interface LiveMapScoresSnapshot {
+  beatmapId: number;
+  total: number;
+  entries: LiveMapScoreEntry[];
+  /** The asking player's best when it is not among `entries`. */
+  self: LiveMapScoreEntry | null;
+}
+
 export type LiveMapsRefreshProgressStatus = "queued" | "running" | "done" | "failed";
 export type LiveMapsRefreshProgressStage = "queued" | "fetching" | "persisting" | "done" | "failed";
 
@@ -2884,6 +2910,13 @@ export async function fetchLiveSnipeBoard(
   if (params.isLazer) query.set("lazer", "1");
   if (params.limit != null) query.set("limit", String(params.limit));
   return fetchLiveJson(`/api/snapshots/snipe-board?${query.toString()}`, options?.signal ? { signal: options.signal } : undefined);
+}
+
+/** The top tracked plays on one chart across every tracked country, by lazer accuracy. */
+export async function fetchLiveMapScores(beatmapId: number, userId?: number | null): Promise<LiveMapScoresSnapshot> {
+  const query = new URLSearchParams({ beatmap: String(beatmapId) });
+  if (userId != null && userId > 0) query.set("user", String(userId));
+  return fetchLiveJson(`/api/snapshots/map-scores?${query.toString()}`);
 }
 
 // The Random tab draws server-side: the filters travel with the request and the
