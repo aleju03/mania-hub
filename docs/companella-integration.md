@@ -90,6 +90,7 @@ Backend, all under `backend/src/integrations/companella/`:
 | `skill-overlay.ts` | Public skill ratings (MSD, patterns, Dan) for active osu! accounts: checked imports combined with retained official evidence at read time. |
 | `poll-hold.ts` | Holds a player's recent-score polls while Mania Bridge's presence is live, and polls once when it ends. |
 | `official-timing.ts` | Stores an import's timing for the official play osu! delivers for the same run, and pairs and clamps it for the skill compute. |
+| `replay-import.ts` | Admin replay imports: a player's `.osr` files dropped on `/admin/bridgers?tab=import`, staged as ordinary submissions and fed to the lane a few at a time (see "Admin replay imports"). |
 | `analysis.ts` | Per-play MSD / SSR / LN / chart-dan through the existing engines. |
 | `preview.ts` | The experimental aggregate, and its deduplication. |
 | `process.ts` | The job body: validate, store, match, analyze, recompute. |
@@ -1023,6 +1024,35 @@ that chart answers `409 chart_environment_conflict` and logs
 `companella_chart_environment_conflict` instead of storing anything. Making
 those charts uploadable would need the table rebuilt with `(environment,
 sha256)` as the key.
+
+## Admin replay imports
+
+When a player sends their replay files directly, an admin drops the folder on
+the Import replays tab of `/admin/bridgers`. The browser posts the `.osr` files
+in batches to `POST /api/admin/companella/replay-imports/<userId>` (admin
+token), and `GET /api/admin/companella/replay-imports?user=` looks the account
+up by id or username with where its imports stand.
+
+- **Installation.** Each account gets one installation under the client id
+  `replay-import`, created on first use. It is not a registered client: it
+  holds no key or credential, nothing can authorize under it, and
+  `listInstallations` leaves it off the player's own connection list.
+  `usage.ts` counts only Companella's client id, so these plays never reach
+  `/companella/usage`. Rows carry no app mark.
+- **Staging.** Each file's header names its chart by md5; the chart has to be
+  in the import pool or the site's own `.osu` cache (no osu! call). A play on
+  a chart the site lacks is skipped and listed as such. Otherwise it becomes a
+  normal submission (`manual_import`, idempotency key from the replay's
+  sha256, so the same file dropped again answers "already imported") with its
+  replay stored, left in `awaiting_assets` for 30 days. The incomplete cap and
+  the byte budgets do not apply to this path. An unfinished submission keeps
+  its replay referenced, so the artifact sweeps leave it alone.
+- **Feeding.** `companella_replay_import_feed` rides the `companella` lane and
+  completes up to 16 plays per account at a time, enqueued at priority 1 so a
+  player's live imports (priority 2) go first. It runs every 10 seconds while
+  anything is waiting or in flight. Processing is the ordinary pipeline, except
+  that the owner's preview is not rebuilt after each play. The feeder rebuilds
+  it and queues a skills recompute once an account's batch drains.
 
 ## Retention and quotas
 

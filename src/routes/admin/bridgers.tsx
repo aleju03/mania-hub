@@ -2,6 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useCallback } from "react";
 
 import { CompanellaFlagsPanel } from "../../components/admin/companella/CompanellaFlagsPanel";
+import { CompanellaImportPanel } from "../../components/admin/companella/CompanellaImportPanel";
 import { CompanellaPlayersPanel } from "../../components/admin/companella/CompanellaPlayersPanel";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { PageTabs } from "../../components/layout/PageTabs";
@@ -9,7 +10,7 @@ import { canUseAdminFeatures } from "../../lib/auth-shared";
 import type { RateFlagFilter } from "../../lib/companella-rate-flags";
 
 interface CompanellaAdminSearch {
-  tab?: "flags";
+  tab?: "flags" | "import";
   filter?: "blocked";
   q?: string;
   user?: number;
@@ -25,7 +26,7 @@ function positiveInteger(value: unknown): number | undefined {
 
 export const Route = createFileRoute("/admin/bridgers")({
   validateSearch: (search: Record<string, unknown>): CompanellaAdminSearch => ({
-    tab: search.tab === "flags" ? "flags" : undefined,
+    tab: search.tab === "flags" || search.tab === "import" ? search.tab : undefined,
     filter: search.filter === "blocked" ? "blocked" : undefined,
     q: typeof search.q === "string" ? search.q.trim().slice(0, 40) || undefined : undefined,
     user: positiveInteger(search.user),
@@ -49,6 +50,7 @@ export const Route = createFileRoute("/admin/bridgers")({
 const TABS = [
   { id: "players", label: "Players" },
   { id: "flags", label: "Flagged plays" },
+  { id: "import", label: "Import replays" },
 ];
 
 function CompanellaAdminPage() {
@@ -65,10 +67,12 @@ function CompanellaAdminPage() {
       <PageTabs
         items={TABS}
         value={tab}
-        onChange={(next) => void navigate({ search: (previous) => ({ ...previous, tab: next === "flags" ? "flags" : undefined }) })}
+        onChange={(next) => void navigate({ search: (previous) => ({ ...previous, tab: next === "flags" || next === "import" ? next : undefined }) })}
       />
       <div className="max-w-[1200px] mx-auto px-3 sm:px-5 py-4 sm:py-5">
-        {tab === "flags" ? (
+        {tab === "import" ? (
+          <CompanellaImportPanel />
+        ) : tab === "flags" ? (
           <CompanellaFlagsPanel
             filter={search.flag ?? "mismatch"}
             page={(search.flagPage ?? 1) - 1}

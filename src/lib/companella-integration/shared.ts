@@ -45,6 +45,9 @@ export const KNOWN_APPS: Record<string, { name: string; icon: string; mark: stri
   "mania-bridge": { name: "Mania Bridge", icon: "/images/mania-bridge-logo.png", mark: "/images/mania-bridge-mark.png" },
 };
 
+/** The client id of plays an admin imported from the player's replay files; not an app, so not in KNOWN_APPS. */
+export const REPLAY_IMPORT_APP = "replay-import";
+
 /** The known app for a client id, or null. Own keys only: a client id like "toString" is not an app. */
 export function knownApp(clientId: string | null | undefined): (typeof KNOWN_APPS)[string] | null {
   return clientId && Object.hasOwn(KNOWN_APPS, clientId) ? KNOWN_APPS[clientId] : null;
