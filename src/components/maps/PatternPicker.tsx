@@ -369,12 +369,12 @@ export function PatternPicker({
 }
 
 // The Patterns flyout, grouped by what the pattern is rather than by analyzer
-// family: jacks, streams, then the rest. Each group keeps only the ids the
-// keymode's vocabulary reaches.
+// family: jacks, then streams. Each group keeps only the ids the keymode's
+// vocabulary reaches. Stamina and tech are left out because the Skill row and
+// the MSD filter already cover them.
 const PATTERN_FLYOUT_GROUPS = [
   ["jack", "chordjack", "speedjack", "handjack", "quadstream"],
   ["stream", "jumpstream", "handstream", "chordstream", "dumpstream", "delay", "bracket"],
-  ["stamina", "tech"],
 ];
 
 // The Search tab's headline row: the rice dan tiles a chart files under (the
@@ -421,9 +421,12 @@ export function SkillPicker({
   const orphanSkills = activeSkills.filter((skill) => !skillOptions.includes(skill));
   const activePatterns = [...new Set([...patterns, ...patternsExcluded])];
   const lnIds = new Set(["ln", ...lnSubs]);
-  // Picks this keymode cannot express (a shared URL, usually) stay listed in
-  // the flyout so an active filter is never invisible.
-  const orphanPatterns = activePatterns.filter((pattern) => !reachablePatterns.has(pattern));
+  // Picks the flyout does not offer (a shared URL, usually) stay listed in it
+  // so an active filter is never invisible.
+  const flyoutPatterns = new Set(patternGroups.flat());
+  const orphanPatterns = activePatterns.filter(
+    (pattern) => !flyoutPatterns.has(pattern) && !(lnIds.has(pattern) && reachablePatterns.has(pattern)),
+  );
   const lnShareActive = lnShare.min > 0 || lnShare.max > 0;
   const lnCount = lnSubs.filter((sub) => activePatterns.includes(sub)).length + (lnShareActive ? 1 : 0);
   const patternCount = activePatterns.filter((pattern) => !lnIds.has(pattern) || !reachablePatterns.has(pattern)).length;
