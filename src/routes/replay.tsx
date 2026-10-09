@@ -1521,9 +1521,9 @@ function ReplayPage() {
     void loadSharedUploadedReplay(uploadId);
   }, [loadedUploadId, loadSharedUploadedReplay, pendingBeatmapUpload, replay, scoreId, uploadId]);
 
-  // A Companella import that counts toward simulated pp opens like a local
-  // .osr: parsed in the browser and charted by its checksum, never through
-  // the upload store. Its link is its own ?importId= URL.
+  // A public Companella import opens like a local .osr: parsed in the
+  // browser and charted by its checksum, never through the upload store. Its
+  // link is its own ?importId= URL.
   const loadImportedReplay = useCallback(async (id: string, signal: AbortSignal) => {
     preloadReplayRenderer();
     setError(null);

@@ -188,8 +188,8 @@ export interface OsuMod {
   settings?: Record<string, string | number | boolean>;
 }
 
-/** A play imported through Companella rather than received from osu!. Only a
- *  restricted player's counted plays (their top 200) have a public replay. */
+/** A play imported through Companella rather than received from osu!. A
+ *  listed play on an official file has a public replay (`replay`). */
 export interface CompanellaScoreMark {
   importId: string;
   replay: boolean;
@@ -245,7 +245,10 @@ export interface OsuScore {
   weight?: { percentage: number; pp: number };
   companella?: CompanellaScoreMark;
   /** An osu! play an app also sent: its import is listed as this row, or its key-press timing rates this play. */
-  companellaTimed?: Pick<CompanellaScoreMark, "app">;
+  companellaTimed?: Pick<CompanellaScoreMark, "app"> & {
+    /** That import, when its replay is public: Watch opens it where osu! kept no replay. */
+    importId?: string;
+  };
 }
 
 // Only the user fields the rankings and home pages actually read. The raw

@@ -52,10 +52,11 @@ export function companellaImportsToScores(rows: LeanTrackerScore[] | null | unde
   return (rows ?? []).filter((row) => row.companella != null).map(companellaRowToOsuScore);
 }
 
-/** The import a row's Watch opens. Only a restricted player's counted plays
- *  have a replay anyone may watch. */
-export function companellaReplayImportId(score: Pick<OsuScore, "companella">): string | undefined {
-  return score.companella?.replay ? score.companella.importId : undefined;
+/** The import a row's Watch opens: a listed import on an official file, or
+ *  the import behind an osu! row when osu! kept no replay of the play. */
+export function companellaReplayImportId(score: Pick<OsuScore, "companella" | "companellaTimed" | "has_replay" | "replay">): string | undefined {
+  if (score.companella?.replay) return score.companella.importId;
+  return score.has_replay ?? score.replay ? undefined : score.companellaTimed?.importId;
 }
 
 /**

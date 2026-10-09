@@ -691,10 +691,12 @@ when the replay has one, else by player, official map and total score within
 5 minutes (a stable replay saved locally carries no id; a lazer one carries
 lazer's own id in its score details). The tracker applies
 the same match to rows arriving live in either order. Nothing is written to `score_events`, a `live_event_log` score ref,
-`users`, rosters or any official projection. Only a restricted player's play in
-their current top-200 list has `replay: true` and a Watch button; every other
-row shows without one, since the site may not have the map's audio or
-background.
+`users`, rosters or any official projection. A listed play whose chart is
+exactly an official file has `replay: true` and a Watch button, since the
+replay page charts it with osu!'s copy of the map; a rate edit or a chart
+osu! does not have shows without one. When the play is listed as its osu!
+row instead, that row's `companellaTimed` mark carries the `importId`, and
+Watch opens the import where osu! kept no replay of its own.
 
 An account osu! itself turned away also shows its imports on its public
 profile, because nothing else can add a play to that page. That means
@@ -731,13 +733,15 @@ null until it has been measured.
 
 Replays live under `integrations/companella/<environment>/replays/<owner>/…` in
 the private replay-cache bucket, behind unguessable content-addressed keys, and
-are read only through the owner-scoped `/api/companella/replay` route, which
+are read through the owner-scoped `/api/companella/replay` route, which
 authorizes before a byte moves and answers `404` for a foreign id (a `403`
 would confirm the score exists). They never enter the public upload flow, the
 community listing, or any shared cache, and the `companella_score` SSE event
-carries the play, never the replay: every private response is `no-store`. The
-exception is a restricted player's play in their current top-200 list (next
-section), whose replay is public.
+carries the play, never the replay: every private response is `no-store`. A
+play with `replay: true` above is also served publicly by
+`GET /api/integrations/companella/public/replays/<id>`
+(`readPublicCompanellaReplayKey`), checked fresh on each request, so a play
+that is withdrawn, held or deleted closes at once.
 
 ## Live presence
 
@@ -947,7 +951,7 @@ Restore makes it eligible again. Existing imports need no reprocessing.
 
 Nothing official is written. `player_skill_ratings`, skill history, pp,
 score ingest, snipes, goals and packs (card snapshots included) keep reading
-osu! plays only. Their imported replays keep the existing privacy rules.
+osu! plays only. Their imported replays follow the rules under "Privacy".
 Restricted accounts retain their existing separate profile/pp window below.
 
 ## Simulated pp for restricted players
@@ -993,8 +997,8 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
   (totals, ranks and the list; the rate flag and review state stay out),
   `GET /api/integrations/companella/public/rankings?country=XX` (the site's
   country board merges these into osu!'s list), and
-  `GET /api/integrations/companella/public/replays/<id>` (the .osr, only for a
-  play in the current top-200 list), opened at `/replay?importId=`.
+  `GET /api/integrations/companella/public/replays/<id>` (the .osr of any
+  listed play on an official file, see "Privacy"), opened at `/replay?importId=`.
 - **Control.** `/admin/banned-users` shows each account's simulated pp and its
   plays, and removes flagged, chosen or all plays (the ordinary `quarantined`
   review hold, reversible) through

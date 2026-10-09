@@ -115,6 +115,13 @@ describe("companellaRowToOsuScore", () => {
       .toBe("import-0001");
   });
 
+  it("opens the import behind an osu! row only when osu! kept no replay", () => {
+    const official = { id: 55, companellaTimed: { app: "mania-bridge", importId: "import-0002" } } as unknown as OsuScore;
+    expect(companellaReplayImportId({ ...official, has_replay: false })).toBe("import-0002");
+    expect(companellaReplayImportId({ ...official, has_replay: true })).toBeUndefined();
+    expect(companellaReplayImportId({ ...official, companellaTimed: { app: "mania-bridge" } })).toBeUndefined();
+  });
+
   it("links an official chart and gives its set the site's background", () => {
     const score = companellaRowToOsuScore(importRow());
     expect(getBeatmapUrl(score)).toBe("https://osu.ppy.sh/beatmaps/100");
