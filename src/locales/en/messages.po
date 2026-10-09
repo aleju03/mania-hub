@@ -4862,6 +4862,10 @@ msgstr "Community Replays"
 msgid "Community server"
 msgstr "Community server"
 
+#: src/components/packs/collections/ShowcaseTab.tsx
+msgid "community showcases"
+msgstr "community showcases"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Community vote for a new GOAT"
 msgstr "Community vote for a new GOAT"
@@ -15737,8 +15741,8 @@ msgid "Showcase"
 msgstr "Showcase"
 
 #: src/components/packs/collections/ShowcaseTab.tsx
-msgid "showcases"
-msgstr "showcases"
+#~ msgid "showcases"
+#~ msgstr "showcases"
 
 #. placeholder {0}: shown.toLocaleString("en-US")
 #. placeholder {1}: total.toLocaleString("en-US")

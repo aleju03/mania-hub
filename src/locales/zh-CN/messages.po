@@ -4844,6 +4844,10 @@ msgstr "社区回放"
 msgid "Community server"
 msgstr "社区服务器"
 
+#: src/components/packs/collections/ShowcaseTab.tsx
+msgid "community showcases"
+msgstr "社区展示柜"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Community vote for a new GOAT"
 msgstr "社区投票选出新的 GOAT"
@@ -15707,8 +15711,8 @@ msgid "Showcase"
 msgstr "展示柜"
 
 #: src/components/packs/collections/ShowcaseTab.tsx
-msgid "showcases"
-msgstr "展示柜"
+#~ msgid "showcases"
+#~ msgstr "展示柜"
 
 #. placeholder {0}: shown.toLocaleString("en-US")
 #. placeholder {1}: total.toLocaleString("en-US")

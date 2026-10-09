@@ -381,7 +381,7 @@ function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPag
   const cardCount = totals?.cardTotal ?? totals?.total ?? 0;
   const header = (
     <div className="flex items-baseline gap-3">
-      <SectionHeading>{t`showcases`}</SectionHeading>
+      <SectionHeading>{t`community showcases`}</SectionHeading>
       <span className="ml-auto shrink-0 text-[11px] text-osu-f1 tabular-nums">
         {totals && cardCount > 0
           ? (cardCount === 1
