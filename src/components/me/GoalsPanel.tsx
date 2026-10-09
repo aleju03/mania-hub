@@ -712,8 +712,9 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
 
   return (
     <PageShell>
-      <section className="relative overflow-hidden rounded-2xl bg-osu-b4">
-        <div className="pointer-events-none absolute inset-0">
+      {/* Only the triangles clip to the card: the map search dropdown has to overhang its bottom edge. */}
+      <section className="relative rounded-2xl bg-osu-b4">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
           <DriftTriangles calm />
         </div>
         <div className="relative flex flex-wrap items-end gap-x-6 gap-y-5 p-5 sm:gap-x-10 sm:p-7">
@@ -734,11 +735,11 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
         <AnimatePresence initial={false}>
           {composerOpen ? (
             <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
+              initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+              animate={{ height: "auto", opacity: 1, transitionEnd: { overflow: "visible" } }}
+              exit={{ height: 0, opacity: 0, overflow: "hidden" }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="relative overflow-hidden"
+              className="relative"
             >
               <div className="space-y-5 border-t border-white/[0.07] p-5 sm:p-7">
                 <TypeRow kind={kind} onSwitch={switchKind} />
