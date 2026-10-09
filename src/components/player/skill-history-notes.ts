@@ -37,6 +37,49 @@ export interface SkillHistoryNote {
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
+    date: "2026-10-07",
+    text: "4K Invert plays now count toward MSD and LN dan.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-10-07",
+    text: "Clearing a rice 4K hybrid now also counts toward LN dan when its LN parts rate at least half a dan higher than the rest.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-10-05",
+    text: "Plays you also sent through Companella use its key timing for the accuracy estimate.",
+  },
+  {
+    date: "2026-10-05",
+    text: "5K and up maps with jumptrills now show as Unrateable and no longer count toward ratings.",
+    keyCounts: Array.from({ length: 14 }, (_, i) => i + 5),
+  },
+  {
+    date: "2026-10-02",
+    text: "Clearing an LN 4K hybrid now also counts toward your rice dan at the rice part's level, but not toward Speed.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-10-02",
+    text: "Supported skillset charts now also count when you finish up to 1% under the accuracy requirement, a bit below that chart's Dan, if your other clears already give you a Dan in that skillset.",
+    keyCounts: [4, 7],
+  },
+  {
+    date: "2026-09-30",
+    text: "Reworked 4K LN ratings and added All-round, Technical, Walls and Speed skillsets to LN.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-30",
+    text: "4K maps with jumptrills now show as Unrateable and no longer count toward ratings.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-30",
+    text: "Overall now uses Etterna's method, the average of your best skillsets.",
+  },
+  {
     date: "2026-09-27",
     text: "Less densejack maps flag as vibro",
     keyCounts: [4],

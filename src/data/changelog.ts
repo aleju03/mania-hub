@@ -43,6 +43,14 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-08", text: "Added a Scores tab to maps that lists every tracked player's best play on the chart, ranked by lazer accuracy.", label: "Scores", to: "/maps", image: { src: "/images/changelog/2026-10-08-map-scores-tab.webp", alt: "The Scores tab on a map", width: 770, height: 286 } },
+  { date: "2026-10-08", text: "Redesigned the dynamic renders page.", to: "/dynamic-renders" },
+  { date: "2026-10-08", text: "Redesigned the goals page.", to: "/goals" },
+  { date: "2026-10-08", text: "Moved the skins filters to the side and added a Views sort.", label: "Views", to: "/skins" },
+  { date: "2026-10-08", text: "Clicking a row on a snipe board now opens the play instead of the player's profile.", to: "/snipes" },
+  { date: "2026-10-08", text: "4K Invert plays now count toward MSD and LN dan." },
+  { date: "2026-10-08", text: "Fixed overlays not dragging on iPad, the export menu closing on tablets, and flashlight not covering imported skin notes.", to: "/replay" },
+  { date: "2026-10-08", text: "Fixed song audio not playing on Safari." },
   { date: "2026-10-05", text: "You can now submit plays through Companella if you're playing offline or on a private server, more info on settings -> preferences -> integrations", bold: "Companella", to: "/settings", image: { src: "/images/changelog/2026-10-05-companella-play.webp", alt: "A recent play row with the Companella mark", width: 387, height: 88 } },
   { date: "2026-10-05", text: "Added Map info, Player info and Custom media overlays to replays.", to: "/replay", image: { src: "/images/changelog/2026-10-05-replay-info-cards.webp", alt: "Player info and Map info overlays", width: 465, height: 247 } },
   { date: "2026-10-05", text: "Map info can also show Live BPM, Time left, a Progress bar and an Audio wave.", to: "/replay" },
