@@ -55,6 +55,13 @@ export function getRegionEffectiveTier(code: string): LiveCountryFeatureTier | n
   return best === "snipes" ? "live" : best;
 }
 
+// Regions are never in the tier cache, so their first render needs the
+// derived tier too, or the nav Snipes tab misses one frame on reload.
+function initialFeatureTier(normalizedCountry: string): LiveCountryFeatureTier | null {
+  if (getRegionDef(normalizedCountry)) return getRegionEffectiveTier(normalizedCountry) ?? "live";
+  return tierCache.get(normalizedCountry) ?? null;
+}
+
 export interface CountryWarmingState {
   /** True while the server is still building this country's first roster. */
   warming: boolean;
@@ -81,7 +88,7 @@ export function useCountryWarming(country: string): CountryWarmingState {
   const [warming, setWarmingState] = useState(() => liveBackendEnabled && warmingCache.has(normalizedCountry));
   const [checking, setChecking] = useState(liveBackendEnabled);
   const [featureTier, setFeatureTier] = useState<LiveCountryFeatureTier | null>(
-    () => tierCache.get(normalizedCountry) ?? null,
+    () => initialFeatureTier(normalizedCountry),
   );
   const warmingFromCache = liveBackendEnabled && warmingCache.has(normalizedCountry);
   const setWarming = (value: boolean) => {
@@ -111,7 +118,7 @@ export function useCountryWarming(country: string): CountryWarmingState {
       // browser waits for its first bootstrap seed.
       setWarming(false);
       setChecking(false);
-      setFeatureTier(getRegionEffectiveTier(normalizedCountry) ?? "live");
+      setFeatureTier(initialFeatureTier(normalizedCountry));
       return;
     }
 
