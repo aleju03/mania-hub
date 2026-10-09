@@ -87,3 +87,52 @@ it("rates a matched rate edit's chart at the copy's rate without inventing a spe
   expect(screen.queryByText("DT")).toBeNull();
   expect(screen.getByRole("link", { name: /osu! web/ }).getAttribute("href")).toBe("https://osu.ppy.sh/beatmapsets/10#mania/101");
 });
+
+const localEntry: LiveMapSearchEntry = {
+  ...entry, beatmapId: -7001, beatmapsetId: 0, status: "local", playCount: 0, rankedDate: null,
+  covers: null, diffCount: 1, diffs: undefined, danDt: null, msdDt: null,
+};
+const localPlay: MapDetailPlayContext = { ...play, beatmapId: -7001, scoreId: null, sharePath: "/player/player/recent?import=abc", score: { ...play.score!, scoreUrl: null } };
+
+it("gives a local chart's play a Map info tab without anything osu! supplies", () => {
+  render(wrap(<MapDetailModal entry={localEntry} play={localPlay} onClose={() => {}} />));
+  fireEvent.click(screen.getByRole("tab", { name: "Map info" }));
+  expect(screen.getByText("BPM")).toBeTruthy();
+  expect(screen.getByText("LN notes")).toBeTruthy();
+  expect(screen.getByText("40.00")).toBeTruthy();
+  expect(screen.queryByText("Plays")).toBeNull();
+  expect(screen.queryByText(/local/i)).toBeNull();
+  expect(screen.queryByRole("link", { name: /osu! web/ })).toBeNull();
+  expect(screen.queryByText("Download .osz")).toBeNull();
+  expect(screen.queryByText("Open in osu!")).toBeNull();
+  expect(screen.queryByTitle("Share map")).toBeNull();
+  expect(document.querySelector('a[href*="osu.ppy.sh"], a[href*="/maps?map="]')).toBeNull();
+});
+
+it("shares a local chart's score link from the Map info tab, never a map link", async () => {
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  render(wrap(<MapDetailModal entry={localEntry} play={localPlay} onClose={() => {}} />));
+  fireEvent.click(screen.getByRole("tab", { name: "Map info" }));
+  fireEvent.click(screen.getByTitle("Share score"));
+  await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(`${window.location.origin}${localPlay.sharePath}`));
+});
+
+it("keeps a local chart's stub out of osu! links even when its row names a declared set", () => {
+  render(wrap(<MapDetailModal entry={{ ...localEntry, beatmapsetId: 55, status: "" }} play={localPlay} status="pending" onClose={() => {}} />));
+  fireEvent.click(screen.getByRole("tab", { name: "Map info" }));
+  expect(screen.queryByText("Plays")).toBeNull();
+  expect(screen.queryByRole("link", { name: /osu! web/ })).toBeNull();
+  expect(screen.queryByText("Download .osz")).toBeNull();
+});
+
+it("leaves a local chart with no analysis yet as the play alone", () => {
+  render(wrap(<MapDetailModal entry={{ ...localEntry, msd: undefined, dan: undefined }} play={localPlay} status="missing" onClose={() => {}} />));
+  expect(screen.queryByRole("tab", { name: "Map info" })).toBeNull();
+  expect(screen.getByText("3,228")).toBeTruthy();
+});
+
+it("does not fetch a local chart's .osu for a rate star rating", () => {
+  render(wrap(<MapDetailModal entry={localEntry} play={{ ...localPlay, rateMod: { acronym: "DT", rate: 1.5, pitched: false } }} onClose={() => {}} />));
+  fireEvent.click(screen.getByRole("tab", { name: "Map info" }));
+  expect(getBeatmapFile).not.toHaveBeenCalled();
+});

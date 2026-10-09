@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
+import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, isLocalChartId, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
 import type { MapsFavouriteBeatmapset } from "../../lib/types";
 import { formatAccuracy, formatDuration, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { getManiaJudgementCounts, getManiaGradeFromAccuracy } from "../../lib/score";
@@ -800,9 +800,13 @@ export function MapDetailModal({
   const playDiff = play ? diffs.find((diff) => diff.beatmapId === play.beatmapId) ?? entry : null;
   const realBpmStat = active ? realBpm(active.bpm, active.noteBpm) : null;
 
+  // A local chart (negative id) is one osu! does not have: an app sent a play
+  // on it and the card is built from the chart itself, so everything osu!
+  // supplies (links, plays, status, other diffs, the map's share link) stays out.
+  const local = entry != null && (isLocalChartId(entry.beatmapId) || entry.status === "local");
   // A tracked play can name a chart the catalog never indexed, and a stub built
   // from a play row may not know the set either; both leave the set id at 0.
-  const setKnown = entry != null && entry.beatmapsetId > 0;
+  const setKnown = entry != null && !local && entry.beatmapsetId > 0;
   // Never from a stub: its diffs carry no star rating, and the panel's own
   // footer would show the map as 0.00 stars.
   const previewSet = useMemo(
@@ -915,7 +919,9 @@ export function MapDetailModal({
   // calculator is run on the .osu here; the badge holds the 1.0x value dimmed
   // until it lands.
   const [rateStarsByKey, setRateStarsByKey] = useState<Record<string, number | null>>({});
-  const starsKey = playRate !== 1 && active ? `${active.beatmapId}:${active.beatmapsetId}:${playRate}` : null;
+  // A local chart's .osu is never served, so off 1.0x it has no star rating to show.
+  const starsKey = playRate !== 1 && active && active.beatmapId > 0 ? `${active.beatmapId}:${active.beatmapsetId}:${playRate}` : null;
+  const starsUnknown = local && playRate !== 1;
   useEffect(() => {
     if (starsKey == null || rateStarsByKey[starsKey] !== undefined) return;
     const [beatmapId, beatmapsetId, rate] = starsKey.split(":").map(Number);
@@ -950,6 +956,14 @@ export function MapDetailModal({
   const fileStatsPending = fileStatsId != null && fileStats === undefined;
   const shownStars = active ? rateStars ?? fileStats?.stars ?? active.stars : 0;
 
+  // Two tabs only when a score opened the card. A local chart whose analysis
+  // has not landed has no map detail to show, so the play is the whole card.
+  const showTabs = play != null && play.beatmapId !== 0 && !(local && status === "missing");
+  const hasBanner = entry != null && (setKnown || Object.keys(entry.covers ?? {}).length > 0);
+  // The map's share link opens /maps, which a local chart is not on, so its
+  // Share copies the score's link from either tab.
+  const shareScore = play != null && (tab === "score" || local);
+
   if (typeof document === "undefined") return null;
 
   // Same enter/exit recipe as the maps tabs' details modal: quick opacity
@@ -982,7 +996,7 @@ export function MapDetailModal({
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               {/* Header banner */}
               <div className="relative h-[92px] shrink-0">
-                <BannerCover key={entry.beatmapsetId} src={mapCoverUrl(entry)} />
+                {hasBanner ? <BannerCover key={local ? entry.beatmapId : entry.beatmapsetId} src={mapCoverUrl(entry)} /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-osu-b5 via-osu-b5/70 to-black/40" />
                 <button
                   type="button"
@@ -999,16 +1013,18 @@ export function MapDetailModal({
                     <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">{active.keyCount}K</span>
                     {numbersKnown ? (
                       <>
-                        <StarRatingBadge stars={shownStars} className={`transition-opacity ${starsPending ? "opacity-50" : ""}`} />
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
-                          {BEATMAP_STATUS_LABELS[active.status.toLowerCase()]
-                            ? i18n._(BEATMAP_STATUS_LABELS[active.status.toLowerCase()])
-                            : active.status}
-                        </span>
+                        {starsUnknown ? null : <StarRatingBadge stars={shownStars} className={`transition-opacity ${starsPending ? "opacity-50" : ""}`} />}
+                        {local ? null : (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                            {BEATMAP_STATUS_LABELS[active.status.toLowerCase()]
+                              ? i18n._(BEATMAP_STATUS_LABELS[active.status.toLowerCase()])
+                              : active.status}
+                          </span>
+                        )}
                       </>
                     ) : fileStats?.stars ? (
                       <StarRatingBadge stars={shownStars} />
-                    ) : pending ? (
+                    ) : pending && !starsUnknown ? (
                       // A skeleton's tint is invisible against the banner art,
                       // so the star badge's place is held in the banner's own
                       // language instead.
@@ -1026,9 +1042,9 @@ export function MapDetailModal({
 
               {/* Two tabs only when a score opened the card: the play first,
                   the map's own detail behind it. A play on a chart with no
-                  osu! id (a Companella import of a local file) has no map
-                  detail to fetch, so the play is the whole card. */}
-              {play && play.beatmapId > 0 ? (
+                  id at all has no map detail to fetch, so the play is the
+                  whole card. */}
+              {play && showTabs ? (
                 <div role="tablist" className="flex shrink-0 items-center gap-1 border-b border-white/5 px-3.5 pt-2.5">
                   {([["score", t`Score`], ["map", t`Map info`]] as const).map(([id, label]) => (
                     <button
@@ -1054,7 +1070,7 @@ export function MapDetailModal({
               ) : null}
 
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3.5">
-                {play && tab === "score" ? (
+                {play && (tab === "score" || !showTabs) ? (
                   <PlayContextBlock play={play} entry={playDiff} />
                 ) : (
                   <>
@@ -1101,12 +1117,12 @@ export function MapDetailModal({
                     )}
                   </div>
                 ) : numbersKnown || pending ? (
-                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:grid-cols-5 sm:gap-2">
+                  <div className={`flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:gap-2 ${local ? "sm:grid-cols-4" : "sm:grid-cols-5"}`}>
                     {numbersKnown ? (
                       <>
                         <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm))} />
                         <Stat label={t`Length`} value={formatDuration(active.length)} />
-                        <Stat label={t`Plays`} value={formatNumber(active.playCount)} />
+                        {local ? null : <Stat label={t`Plays`} value={formatNumber(active.playCount)} />}
                         <Stat label={t`LN notes`} value={formatNumber(active.lnCount)} />
                         {active.od == null && analysisPending ? (
                           <PendingStat label={t`OD`} />
@@ -1115,7 +1131,7 @@ export function MapDetailModal({
                         )}
                       </>
                     ) : (
-                      [t`BPM`, t`Length`, t`Plays`, t`LN notes`, t`OD`].map((label) => <PendingStat key={label} label={label} />)
+                      (local ? [t`BPM`, t`Length`, t`LN notes`, t`OD`] : [t`BPM`, t`Length`, t`Plays`, t`LN notes`, t`OD`]).map((label) => <PendingStat key={label} label={label} />)
                     )}
                     {/* The osu! timing figure, when the note-weighted tempo took
                         the stat. Its own row: inline it would run under the next
@@ -1237,7 +1253,7 @@ export function MapDetailModal({
                     className="h-[300px] rounded-lg"
                     flatBackdrop
                   />
-                ) : pending ? (
+                ) : pending && !local ? (
                   <div className="h-[300px] shrink-0 rounded-lg bg-osu-b4/30" aria-hidden="true" />
                 ) : null}
                   </>
@@ -1249,7 +1265,7 @@ export function MapDetailModal({
               <div className="shrink-0 border-t border-white/5 p-3.5">
                 <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
                   {/* A local chart nobody matched has no osu! page to open. */}
-                  {setKnown || active.beatmapId > 0 ? (
+                  {!local && (setKnown || active.beatmapId > 0) ? (
                   <a
                     href={setKnown ? osuBeatmapUrl(active) : `https://osu.ppy.sh/beatmaps/${active.beatmapId}`}
                     target="_blank"
@@ -1290,10 +1306,10 @@ export function MapDetailModal({
                   ) : null}
                   <button
                     type="button"
-                    disabled={play != null && tab === "score" && !play.sharePath && !play.score?.scoreUrl}
-                    title={play != null && tab === "score" ? t`Share score` : t`Share map`}
+                    disabled={shareScore ? !play?.sharePath && !play?.score?.scoreUrl : local}
+                    title={shareScore ? t`Share score` : t`Share map`}
                     onClick={() => {
-                      const url = play && tab === "score"
+                      const url = play && shareScore
                         ? (play.sharePath ? `${window.location.origin}${play.sharePath}` : play.score?.scoreUrl)
                         : `${window.location.origin}/maps?map=${active.beatmapId}`;
                       if (!url) return;

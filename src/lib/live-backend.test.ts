@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchLiveChartAnalysis,
+  fetchLiveLocalChartEntry,
+  isLocalChartId,
+  loadLiveMapSearchEntry,
   packCollectorLabel,
   packCollectorLookupSpecs,
   packCollectorParam,
@@ -47,5 +51,56 @@ describe("parsePackCollectorParam", () => {
 
   it("continues resolving ordinary usernames by name", () => {
     expect(parsePackCollectorParam("Aleju03")).toEqual({ username: "Aleju03" });
+  });
+});
+
+describe("local chart entries", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  function stubBackend(response: () => Response) {
+    vi.stubEnv("VITE_LIVE_BACKEND_URL", "https://live.test");
+    const fetchMock = vi.fn(async () => response());
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("reads only negative ids as local charts", () => {
+    expect(isLocalChartId(-5)).toBe(true);
+    expect(isLocalChartId(0)).toBe(false);
+    expect(isLocalChartId(101)).toBe(false);
+    expect(isLocalChartId(undefined)).toBe(false);
+    expect(isLocalChartId(Number.NEGATIVE_INFINITY)).toBe(false);
+  });
+
+  it("loads a negative id from the local chart endpoint, not the catalog", async () => {
+    const fetchMock = stubBackend(() => Response.json({ entry: { beatmapId: -7001, status: "local" } }));
+    const entry = await loadLiveMapSearchEntry(-7001);
+    expect(entry).toMatchObject({ beatmapId: -7001, status: "local" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toBe("https://live.test/api/companella/local-charts/-7001");
+    // Memoized: the second read answers from memory.
+    await fetchLiveLocalChartEntry(-7001);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads a 404 from the local chart endpoint as no entry", async () => {
+    stubBackend(() => new Response("{}", { status: 404 }));
+    await expect(fetchLiveLocalChartEntry(-7002)).resolves.toBeNull();
+  });
+
+  it("never asks the local chart endpoint for an official id", async () => {
+    const fetchMock = stubBackend(() => Response.json({ entry: null }));
+    await expect(fetchLiveLocalChartEntry(101)).resolves.toBeNull();
+    await expect(fetchLiveLocalChartEntry(0)).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("skips the stored chart analysis for a local chart", async () => {
+    const fetchMock = stubBackend(() => Response.json({}));
+    await expect(fetchLiveChartAnalysis(-7003)).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

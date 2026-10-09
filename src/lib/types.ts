@@ -197,6 +197,8 @@ export interface CompanellaScoreMark {
   app?: string;
   /** A local copy (a rate edit) the backend matched to an official chart: that chart, and the rate this file is against it. */
   reference?: { beatmapId: number; rate: number };
+  /** A chart osu! does not have, neither an official file nor a copy of one: its synthetic negative beatmap id, for the map card. */
+  localBeatmapId?: number;
 }
 
 export interface OsuScore {

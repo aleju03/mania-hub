@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useLingui } from "@lingui/react/macro";
-import { loadLiveMapSearchEntry, peekLiveMapSearchEntry, type LiveMapSearchEntry } from "../../lib/live-backend";
+import { isLocalChartId, loadLiveMapSearchEntry, peekLiveMapSearchEntry, type LiveMapSearchEntry } from "../../lib/live-backend";
 import {
   getBeatmapKeyCount,
   getModDisplayList,
@@ -23,7 +23,8 @@ type MapStatus = "ready" | "pending" | "missing" | "error";
 function scoreMapStub(score: OsuScore, beatmapId: number): LiveMapSearchEntry {
   return {
     beatmapId,
-    beatmapsetId: score.beatmapset?.id ?? 0,
+    // A local chart's declared set is only where its cover comes from.
+    beatmapsetId: isLocalChartId(beatmapId) ? 0 : score.beatmapset?.id ?? 0,
     title: score.beatmapset?.title ?? "",
     artist: score.beatmapset?.artist ?? "",
     creator: score.beatmapset?.creator ?? "",
@@ -39,6 +40,10 @@ function scoreMapStub(score: OsuScore, beatmapId: number): LiveMapSearchEntry {
     patterns: {},
     covers: score.beatmapset?.covers ? { ...score.beatmapset.covers } : null,
   };
+}
+
+function localChartId(id: number | undefined): number {
+  return isLocalChartId(id) ? Math.floor(id as number) : 0;
 }
 
 function difficultyAdjustOd(score: OsuScore): number | null {
@@ -57,7 +62,10 @@ export function ScorePlayDetailModal({ score, username, onClose }: { score: OsuS
   // An import of a local copy (a rate edit) has no id of its own; the card
   // opens the official chart the backend matched it to, at the copy's rate.
   const reference = !(score.beatmap?.id) ? score.companella?.reference : undefined;
-  const beatmapId = score.beatmap?.id || reference?.beatmapId || 0;
+  // A chart osu! does not have, matched to nothing official, carries its own
+  // negative id; its Map info tab reads the chart's analysis.
+  const localBeatmapId = !(score.beatmap?.id) && !reference ? localChartId(score.companella?.localBeatmapId) : 0;
+  const beatmapId = score.beatmap?.id || reference?.beatmapId || localBeatmapId || 0;
   const [map, setMap] = useState<{ entry: LiveMapSearchEntry; status: MapStatus }>(() => ({
     entry: scoreMapStub(score, beatmapId),
     status: "pending",

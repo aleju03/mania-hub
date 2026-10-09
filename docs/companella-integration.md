@@ -88,6 +88,7 @@ Backend, all under `backend/src/integrations/companella/`:
 | `usage.ts` | Aggregate usage of the Companella app alone (its own client id, never Mania Bridge or the test client) behind `GET /api/admin/companella/usage`, for `/companella/usage`. Names no player. |
 | `account-blocks.ts` | The admin block: an account caught cheating stops connecting and sending plays, and its connections are revoked. |
 | `skill-overlay.ts` | Public skill ratings (MSD, patterns, Dan) for active osu! accounts: checked imports combined with retained official evidence at read time. |
+| `local-charts.ts`, `local-chart-id.ts` | Imports on charts osu! does not have: the eligibility rule, the 1.0x chart analysis job, per-player families, and the map card behind `GET /api/companella/local-charts/<id>`. |
 | `poll-hold.ts` | Holds a player's recent-score polls while Mania Bridge's presence is live, and polls once when it ends. |
 | `official-timing.ts` | Stores an import's timing for the official play osu! delivers for the same run, and pairs and clamps it for the skill compute. |
 | `replay-import.ts` | Admin replay imports: a player's `.osr` files dropped on `/admin/bridgers?tab=import`, staged as ordinary submissions and fed to the lane a few at a time (see "Admin replay imports"). |
@@ -858,10 +859,63 @@ particular, stable +V2 imports carry their actual `scoreV2Accuracy` into the
 
 `skill-overlay.ts` reads accepted, completed native imports with clear review
 state, while the integration admits that account. It shares import placement
-and analysis validation with `restricted-profile.ts`: an exact official file
-or a verified clean rate copy can contribute; unmapped, pending, unsupported
-and vibro-excluded plays cannot. Existing OD, EZ, chart eligibility, accuracy,
-family limits and quorum rules still apply.
+and analysis validation with `restricted-profile.ts`: an exact official file,
+a verified clean rate copy, or a chart osu! does not have at all (below) can
+contribute; pending, unsupported and vibro-excluded plays cannot. Existing
+OD, EZ, chart eligibility, accuracy, family limits and quorum rules still
+apply.
+
+### Charts osu! does not have
+
+An import counts on a "local chart" (a 7K BMS convert, say) when its chart is
+neither the exact file of an official map (priced on one, its md5 in
+`beatmap_osu_files`, or the checksum of the beatmap the file names) nor a copy
+of one: the stored match is exactly `unmatched_in_index` at the current
+matcher version. A match the index found but the play cannot be placed on (a
+padded copy, an ambiguous or deferred lookup, a copy with a gameplay setting
+changed) stays unsupported, since those are edits of official maps. The chart
+must parse as native mania with a key count the imports rate (1K-10K).
+
+`local-charts.ts` analyses such a chart at 1.0x through the function the
+official chart analysis uses (`analyzeChartText` in `chart-analysis.ts`):
+MinaCalc through `dan/msd.ts`, the classifier and lean classification, the
+tail pass, the hybrid LN sections and note BPM. As with the per-play analysis
+it is given no star rating and no difficulty name. The result goes to
+`companella_local_chart_analysis` (keyed by chart sha256 and
+`LOCAL_CHART_ANALYSIS_VERSION`, with the chart's topology, head and tail keys);
+nothing is written to `beatmap_chart_analysis`, `beatmap_chart_families`,
+`map_search_index` or `beatmaps`. The job (`companella_analyze_local_chart`,
+on the `analyze-chart` lane) is queued when an import on an unmatched chart is
+accepted, and `companella_local_chart_backfill`, seeded at boot, queues it for
+charts imported before. Until the analysis is stored the play is pending, not
+unsupported; a chart that cannot be read as a ratable mania file settles as
+unavailable and its plays stay unsupported.
+
+The chart stands on a synthetic negative beatmap id, `-(first 6 bytes of the
+sha256 + 1)` (`localChartBeatmapId`); any beatmap id below 0 means a local
+chart. The play counts at its runtime rate, with the chart's facts (pattern
+tags, dan columns, OD, length, vibro) built from the local analysis by the
+same conversion an official analysis row goes through
+(`chartSkillInfoFromAnalysisRow`). Other rates credit the import's own
+verdict at that rate. Families are drawn per player at read time: that
+player's local charts sharing a topology, head or tail key are one family,
+`local:<smallest sha>`, so a reupload with a few extra notes falls under the
+ordinary two-per-family MSD rule and the Dan family rule instead of filling
+new slots. An upload never joins an official family.
+
+The Skills plays list, Dan evidence and restricted profiles read the chart's
+own title, artist, creator and difficulty name, the art of the set the file
+names (never linked), and no leaderboard status; a list row carries the
+`importId`. The feed's `companella` mark carries `localBeatmapId` for an
+import with no official beatmap and no `reference`.
+`GET /api/companella/local-charts/<id>` (public rate bucket) answers
+`{ entry }` in the map search entry shape, built with the index's own
+derivations: status `local`, set id 0, no play count, ranked date, other
+difficulties or rate sweeps; 404 without a stored analysis. It never serves
+the file. `/api/chart-analysis` and `/api/chart-analysis/rate` take the
+negative id too and read the chart from the integration's storage; a rate
+answer is kept in a small in-memory cache, since no official table may hold
+it.
 
 Retained osu! plays and imports are folded together through the ordinary skill
 fold, MSD and Dan alike. For MSD one chart/effective rate is one slot. When
@@ -970,8 +1024,10 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
   endpoints answer from the checked imports in the same window
   (`restricted-profile.ts`), never from osu! and without queueing anything: an
   import placed on the official beatmap it is (its exact file, or a clean rate
-  copy on the family's lowest id) goes through the official skill fold, plays
-  lists, dan evidence and unrated list with its own SSR and chart dan, and the
+  copy on the family's lowest id, or a chart osu! does not have on its own
+  negative id, see "Charts osu! does not have") goes through the official
+  skill fold, plays lists and dan evidence (local charts are not listed among
+  the unrated plays) with its own SSR and chart dan, and the
   calendar buckets imports by their feed display time. Skill history is empty.
   A beatmap with no official chart analysis takes its dan facts from the
   imports' own analysis (eligibility, OD, the verdict at each played rate), so

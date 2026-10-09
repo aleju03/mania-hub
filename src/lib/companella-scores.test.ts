@@ -144,6 +144,13 @@ describe("companellaRowToOsuScore", () => {
     expect(getBeatmapUrl(score)).toBeFalsy();
   });
 
+  it("keeps a local chart's id on the mark and gives it no map page", () => {
+    const row = unofficialRow();
+    const score = companellaRowToOsuScore({ ...row, companella: { ...row.companella!, localBeatmapId: -7001 } });
+    expect(score.companella?.localBeatmapId).toBe(-7001);
+    expect(getBeatmapUrl({ ...score, beatmap: { ...score.beatmap, id: -7001, url: undefined } } as unknown as OsuScore)).toBeNull();
+  });
+
   it("drops a row the contract does not mark", () => {
     expect(companellaImportsToScores([importRow(), importRow({ companella: undefined })])).toHaveLength(1);
     expect(companellaImportsToScores(undefined)).toEqual([]);

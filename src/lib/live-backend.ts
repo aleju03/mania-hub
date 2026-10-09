@@ -66,6 +66,8 @@ export interface LivePlayerSkillPlay {
   playedAt: string | null;
   source: "top" | "tracked";
   scoreId: number | null;
+  /** The Companella import id when the play is an import (its identity is `companella:<id>`). */
+  importId?: string;
   // The play's highest non-Overall MSD skillset; a skillset list ranks by one
   // component of every play, so this names what actually drove the play.
   // Optional: older backend payloads predate it.
@@ -3122,6 +3124,13 @@ export async function lookupLiveMapSearchEntry(q: string): Promise<LiveMapSearch
   return result.status === "found" && result.entry ? result.entry : null;
 }
 
+// A negative id is a local chart (a chart osu! does not have that an app sent
+// a play on), served from its own analysis by the Companella endpoint, which
+// answers the same entry shape with status "local".
+export function isLocalChartId(beatmapId: number | null | undefined): boolean {
+  return typeof beatmapId === "number" && Number.isFinite(beatmapId) && beatmapId < 0;
+}
+
 // Single set entry for /maps?map=<beatmapId> share links; the requested diff is
 // the representative and `diffs` carries the whole set. Null when the map is
 // unknown to the catalog; throws when the backend could not answer at all, so a
@@ -3129,7 +3138,9 @@ export async function lookupLiveMapSearchEntry(q: string): Promise<LiveMapSearch
 async function requestLiveMapSearchEntry(beatmapId: number): Promise<LiveMapSearchEntry | null> {
   try {
     const result = await fetchLiveJson<{ entry: LiveMapSearchEntry }>(
-      `/api/snapshots/map-search-entry?beatmapId=${Math.floor(beatmapId)}`,
+      isLocalChartId(beatmapId)
+        ? `/api/companella/local-charts/${Math.floor(beatmapId)}`
+        : `/api/snapshots/map-search-entry?beatmapId=${Math.floor(beatmapId)}`,
     );
     return result.entry ?? null;
   } catch (error) {
@@ -3191,6 +3202,11 @@ export function loadLiveMapSearchEntry(beatmapId: number): Promise<LiveMapSearch
     });
   mapSearchEntryInFlight.set(id, request);
   return request;
+}
+
+/** The memoized local chart entry; null for an id that is not a local chart. */
+export function fetchLiveLocalChartEntry(beatmapId: number): Promise<LiveMapSearchEntry | null> {
+  return isLocalChartId(beatmapId) ? loadLiveMapSearchEntry(beatmapId) : Promise.resolve(null);
 }
 
 /** Warm the memo ahead of a click (hover, focus); failures stay silent. */
@@ -3262,6 +3278,8 @@ export interface LiveChartAnalysisDetail {
 }
 
 export async function fetchLiveChartAnalysis(beatmapId: number): Promise<LiveChartAnalysisDetail | null> {
+  // A local chart (negative id) has no stored detail row; its entry carries the MSD and dan.
+  if (!(beatmapId > 0)) return null;
   try {
     return await fetchLiveJson<LiveChartAnalysisDetail>(`/api/chart-analysis?beatmapId=${beatmapId}`, { cache: "no-store" });
   } catch {

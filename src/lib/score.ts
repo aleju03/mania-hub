@@ -486,8 +486,9 @@ export function scoreHasReplay(score: ScoreLike): boolean {
 }
 
 export function getBeatmapUrl(score: ScoreLike): string | null {
+  // A chart with no osu! id (0) or a local chart's own negative id has no page.
   return score.beatmap?.url ?? (
-    score.beatmap?.id != null
+    score.beatmap?.id != null && score.beatmap.id > 0
       ? `https://osu.ppy.sh/beatmaps/${score.beatmap.id}`
       : null
   );

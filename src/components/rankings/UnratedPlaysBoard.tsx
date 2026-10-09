@@ -299,14 +299,8 @@ function MapCell({ entry }: { entry: UnratedPlayEntry }) {
   const status = entry.beatmapStatus ? beatmapStatusPill(entry.beatmapStatus) : null;
   const rateMod = rateModFor(entry.rate, entry.rateMod);
   const mods = entry.mods && entry.mods.length > 0 ? entry.mods : rateMod ? [rateMod.acronym] : [];
-  return (
-    <Link
-      to="/maps"
-      search={{ map: entry.beatmapId } as never}
-      className="flex min-w-0 items-center gap-3"
-      title={t`View map details`}
-      onClick={(event) => event.stopPropagation()}
-    >
+  const body = (
+    <>
       <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded-md bg-osu-b3/35">
         {entry.coverUrl ? (
           <img
@@ -343,6 +337,19 @@ function MapCell({ entry }: { entry: UnratedPlayEntry }) {
           ) : null}
         </div>
       </div>
+    </>
+  );
+  // A local chart (negative id) is not on /maps.
+  if (!(entry.beatmapId > 0)) return <div className="flex min-w-0 items-center gap-3">{body}</div>;
+  return (
+    <Link
+      to="/maps"
+      search={{ map: entry.beatmapId } as never}
+      className="flex min-w-0 items-center gap-3"
+      title={t`View map details`}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {body}
     </Link>
   );
 }
