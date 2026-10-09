@@ -6532,6 +6532,10 @@ msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到<0>
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page."
 msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到你的 osu! 页面的 me! 编辑器中。"
 
+#: src/components/BackendOfflineScreen.tsx
+msgid "Either restarting or under maintenance. Try again in a bit."
+msgstr "正在重启或维护中。请稍后再试。"
+
 #: src/lib/packs.ts
 msgid "Elite"
 msgstr "精英"
@@ -13300,8 +13304,8 @@ msgid "private · updated {updatedAtLabel}"
 msgstr "私有 · 更新于 {updatedAtLabel}"
 
 #: src/components/BackendOfflineScreen.tsx
-msgid "Probably restarting or under maintenance. Try again in a bit."
-msgstr "可能正在重启或维护。请稍后再试。"
+#~ msgid "Probably restarting or under maintenance. Try again in a bit."
+#~ msgstr "可能正在重启或维护。请稍后再试。"
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Processing"

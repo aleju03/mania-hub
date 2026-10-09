@@ -6550,6 +6550,10 @@ msgstr "Edits stay in this browser. Copy the result and paste it into the me! ed
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page."
 msgstr "Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page."
 
+#: src/components/BackendOfflineScreen.tsx
+msgid "Either restarting or under maintenance. Try again in a bit."
+msgstr "Either restarting or under maintenance. Try again in a bit."
+
 #: src/lib/packs.ts
 msgid "Elite"
 msgstr "Elite"
@@ -13330,8 +13334,8 @@ msgid "private · updated {updatedAtLabel}"
 msgstr "private · updated {updatedAtLabel}"
 
 #: src/components/BackendOfflineScreen.tsx
-msgid "Probably restarting or under maintenance. Try again in a bit."
-msgstr "Probably restarting or under maintenance. Try again in a bit."
+#~ msgid "Probably restarting or under maintenance. Try again in a bit."
+#~ msgstr "Probably restarting or under maintenance. Try again in a bit."
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Processing"
