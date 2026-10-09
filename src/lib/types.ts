@@ -242,7 +242,7 @@ export interface OsuScore {
   type?: string;
   weight?: { percentage: number; pp: number };
   companella?: CompanellaScoreMark;
-  /** An osu! play whose skill ratings use the key-press timing an app import measured for the same run. */
+  /** An osu! play an app also sent: its import is listed as this row, or its key-press timing rates this play. */
   companellaTimed?: Pick<CompanellaScoreMark, "app">;
 }
 
