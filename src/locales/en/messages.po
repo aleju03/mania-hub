@@ -2670,7 +2670,7 @@ msgstr "About"
 msgid "Acc"
 msgstr "Acc"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Accent colour"
 msgstr "Accent colour"
 
@@ -3063,6 +3063,10 @@ msgstr "All keymodes"
 msgid "All keys"
 msgstr "All keys"
 
+#: src/components/me/dynamic-renders/GalleryView.tsx
+msgid "All layouts"
+msgstr "All layouts"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "All mods"
 msgstr "All mods"
@@ -3294,7 +3298,7 @@ msgstr "Anyone"
 msgid "Anyone watching your replays sees it. <0>customize it in settings</0>"
 msgstr "Anyone watching your replays sees it. <0>customize it in settings</0>"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Anyone with the link can see it."
 msgstr "Anyone with the link can see it."
 
@@ -3501,7 +3505,7 @@ msgstr "Authorize. The bot needs to send messages and embed links."
 msgid "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
 msgstr "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/lib/signature-style.ts
 msgid "Auto"
 msgstr "Auto"
@@ -3626,7 +3630,7 @@ msgstr "Back to the picker"
 msgid "backdrop"
 msgstr "backdrop"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Background"
 msgstr "Background"
 
@@ -3634,7 +3638,7 @@ msgstr "Background"
 msgid "Background art"
 msgstr "Background art"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Background colour"
 msgstr "Background colour"
 
@@ -3897,7 +3901,7 @@ msgstr "blue"
 msgid "Blue"
 msgstr "Blue"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
 msgstr "Blur"
 
@@ -3963,7 +3967,7 @@ msgstr "Bracket"
 msgid "Bright"
 msgstr "Bright"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Brightness"
 msgstr "Brightness"
 
@@ -5013,7 +5017,7 @@ msgid "Convert hits to notes"
 msgstr "Convert hits to notes"
 
 #: src/components/maps/UserCollectionDetail.tsx
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
@@ -5034,7 +5038,6 @@ msgstr "Copies"
 msgid "copies in circulation"
 msgstr "copies in circulation"
 
-#: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -5067,6 +5070,10 @@ msgstr "Copy link URL"
 msgid "Copy share code"
 msgstr "Copy share code"
 
+#: src/components/me/dynamic-renders/controls.tsx
+msgid "Copy URL"
+msgstr "Copy URL"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copying BBCode..."
 msgstr "Copying BBCode..."
@@ -5095,7 +5102,7 @@ msgstr "Could not deal a blitz run. Try again in a moment."
 #~ msgid "Could not dismiss these gifts. Try again."
 #~ msgstr "Could not dismiss these gifts. Try again."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Could not draw this one."
 msgstr "Could not draw this one."
 
@@ -6333,7 +6340,7 @@ msgstr "drawing covers"
 msgid "Drawing player..."
 msgstr "Drawing player..."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Drawing..."
 msgstr "Drawing..."
 
@@ -6696,7 +6703,7 @@ msgstr "Every farm map the players around your pp actually play, ranked by how m
 msgid "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
 msgstr "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Every image you have already pasted will stop working."
 msgstr "Every image you have already pasted will stop working."
 
@@ -8319,7 +8326,7 @@ msgstr "If your plays show a dan course pass, your dan for that side <0>cannot r
 #~ msgid "If your recorded plays show that you passed a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 #~ msgstr "If your recorded plays show that you passed a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Image"
@@ -8333,7 +8340,7 @@ msgstr "Image or GIF"
 msgid "Image upload failed."
 msgstr "Image upload failed."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/lib/signature-style.ts
 msgid "Image URL"
@@ -9278,7 +9285,7 @@ msgstr "Live updates on"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternRadar.tsx
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
@@ -9815,11 +9822,11 @@ msgstr "Main 4K players only"
 msgid "Main 7K players only"
 msgstr "Main 7K players only"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Make a new link"
 msgstr "Make a new link"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Make a new link?"
 msgstr "Make a new link?"
 
@@ -10643,7 +10650,7 @@ msgstr "New in this build"
 msgid "New invite link"
 msgstr "New invite link"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "New link"
 msgstr "New link"
 
@@ -12043,7 +12050,7 @@ msgstr "Only your two best rate plays on the same chart count toward Dan. This p
 #~ msgid "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
 #~ msgstr "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/replay/ReplayCustomMediaControls.tsx
 msgid "Opacity"
 msgstr "Opacity"
@@ -12720,7 +12727,7 @@ msgstr "Performance rank"
 msgid "Persian"
 msgstr "Persian"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Pick a colour"
 msgstr "Pick a colour"
 
@@ -14067,7 +14074,7 @@ msgstr "Refreshing..."
 msgid "Regions"
 msgstr "Regions"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -15724,7 +15731,7 @@ msgstr "Show the image at its real pixel size"
 msgid "Show the map's storyboard behind (and over) the playfield"
 msgstr "Show the map's storyboard behind (and over) the playfield"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Show the site name on the render"
 msgstr "Show the site name on the render"
 
@@ -16660,7 +16667,7 @@ msgstr "Stop browsing {0}"
 msgid "Stop repeating"
 msgstr "Stop repeating"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Stop sharing this one"
 msgstr "Stop sharing this one"
 
@@ -16733,8 +16740,8 @@ msgid "Strikethrough"
 msgstr "Strikethrough"
 
 #: src/lib/signature-shared.ts
-msgid "Strip"
-msgstr "Strip"
+#~ msgid "Strip"
+#~ msgstr "Strip"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stroke color for circle and arrow notes."
@@ -17081,7 +17088,7 @@ msgstr "Text that reads wrong"
 msgid "Thai"
 msgstr "Thai"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
 msgstr "That address cannot be loaded."
 
@@ -17127,7 +17134,7 @@ msgstr "That file isn't a supported image."
 msgid "That gift is no longer there."
 msgstr "That gift is no longer there."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That image is too large to draw."
 msgstr "That image is too large to draw."
 
@@ -17160,7 +17167,7 @@ msgstr "That is your own listing."
 msgid "That isn't a profile link."
 msgstr "That isn't a profile link."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That link did not load."
 msgstr "That link did not load."
 
@@ -17168,7 +17175,7 @@ msgstr "That link did not load."
 msgid "That link does not work here. Use an http or https link."
 msgstr "That link does not work here. Use an http or https link."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That link is a page, not an image file."
 msgstr "That link is a page, not an image file."
 
@@ -17236,7 +17243,7 @@ msgstr "That server is not listed"
 msgid "That share code could not be imported"
 msgstr "That share code could not be imported"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That site blocks our request. Hosts like imgur or catbox work."
 msgstr "That site blocks our request. Hosts like imgur or catbox work."
 
@@ -19077,7 +19084,7 @@ msgstr "Turkish"
 msgid "Turn a feed on for the current channel (needs Manage Server)."
 msgstr "Turn a feed on for the current channel (needs Manage Server)."
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
 msgstr "Turn off"
 
@@ -19944,7 +19951,7 @@ msgstr "Watching {player}'s replay"
 msgid "Watching a replay"
 msgstr "Watching a replay"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Watermark"
 msgstr "Watermark"
 

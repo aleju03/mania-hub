@@ -2656,7 +2656,7 @@ msgstr "关于"
 msgid "Acc"
 msgstr "准度"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Accent colour"
 msgstr "强调色"
 
@@ -3045,6 +3045,10 @@ msgstr "全部键数"
 msgid "All keys"
 msgstr "全部键数"
 
+#: src/components/me/dynamic-renders/GalleryView.tsx
+msgid "All layouts"
+msgstr "全部布局"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "All mods"
 msgstr "全部 Mod"
@@ -3276,7 +3280,7 @@ msgstr "所有人"
 msgid "Anyone watching your replays sees it. <0>customize it in settings</0>"
 msgstr "看你回放的人都会看到它。<0>在设置里自定义</0>"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Anyone with the link can see it."
 msgstr "拿到链接的人都能看到。"
 
@@ -3483,7 +3487,7 @@ msgstr "授权。机器人需要发送消息和嵌入链接的权限。"
 msgid "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
 msgstr "授权后将跳转到这台电脑上的 <0>{redirectHost}</0>。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/lib/signature-style.ts
 msgid "Auto"
 msgstr "自动"
@@ -3608,7 +3612,7 @@ msgstr "返回选择界面"
 msgid "backdrop"
 msgstr "背景"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Background"
 msgstr "背景"
 
@@ -3616,7 +3620,7 @@ msgstr "背景"
 msgid "Background art"
 msgstr "谱面背景"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Background colour"
 msgstr "背景颜色"
 
@@ -3879,7 +3883,7 @@ msgstr "蓝"
 msgid "Blue"
 msgstr "蓝色"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
 msgstr "模糊"
 
@@ -3945,7 +3949,7 @@ msgstr "衩"
 msgid "Bright"
 msgstr "明亮"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Brightness"
 msgstr "亮度"
 
@@ -4995,7 +4999,7 @@ msgid "Convert hits to notes"
 msgstr "把打击转成音符"
 
 #: src/components/maps/UserCollectionDetail.tsx
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
@@ -5016,7 +5020,6 @@ msgstr "数量"
 msgid "copies in circulation"
 msgstr "流通中的卡片"
 
-#: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -5049,6 +5052,10 @@ msgstr "复制链接地址"
 msgid "Copy share code"
 msgstr "复制分享码"
 
+#: src/components/me/dynamic-renders/controls.tsx
+msgid "Copy URL"
+msgstr "复制链接"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copying BBCode..."
 msgstr "正在复制 BBCode…"
@@ -5077,7 +5084,7 @@ msgstr "无法开始闪电战。请稍后再试。"
 #~ msgid "Could not dismiss these gifts. Try again."
 #~ msgstr "无法清除这些礼物通知。请重试。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Could not draw this one."
 msgstr "这张画不出来。"
 
@@ -6315,7 +6322,7 @@ msgstr "正在抽取封面"
 msgid "Drawing player..."
 msgstr "正在抽取玩家…"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Drawing..."
 msgstr "绘制中…"
 
@@ -6674,7 +6681,7 @@ msgstr "你 pp 附近的玩家实际在打的所有刷分谱面，按持有人�
 msgid "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
 msgstr "每张被收藏的谱面等概率。因此收藏更多的玩家会更常出现。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Every image you have already pasted will stop working."
 msgstr "你已经贴出去的图片都会失效。"
 
@@ -8289,7 +8296,7 @@ msgstr "如果你的成绩显示你通过了某个段位课程，你在这一侧
 #~ msgid "If your recorded plays show that you passed a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 #~ msgstr "如果记录到的成绩表明你通过了某个段位课题，那么无论技能平均值是多少，这一侧的估算都<0>不会低于该课题</0>。通过 EXTRA-EPSILON 后，即使技能平均只有 delta，显示结果也至少是 epsilon。这一页其余部分都在根据你的成绩算出一个数值，而课题会直接给出一个，所以以课题为准。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Image"
@@ -8303,7 +8310,7 @@ msgstr "图片或 GIF"
 msgid "Image upload failed."
 msgstr "图片上传失败。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/lib/signature-style.ts
 msgid "Image URL"
@@ -9248,7 +9255,7 @@ msgstr "实时更新已开启"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternRadar.tsx
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
@@ -9785,11 +9792,11 @@ msgstr "仅 4K 主玩家"
 msgid "Main 7K players only"
 msgstr "仅 7K 主玩家"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Make a new link"
 msgstr "换一个新链接"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Make a new link?"
 msgstr "要换一个新链接吗？"
 
@@ -10613,7 +10620,7 @@ msgstr "本次构建新增"
 msgid "New invite link"
 msgstr "新的邀请链接"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "New link"
 msgstr "新链接"
 
@@ -12013,7 +12020,7 @@ msgstr "同一张谱面只有你最好的两个变速成绩计入段位。这个
 #~ msgid "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
 #~ msgstr "同一张谱面只有你最好的两个变速成绩计入每条段位表，按技能分组前依据经准确率调整的段位贡献挑选。两个都完整计入。已认证的变速重传共用这个上限，其余变速成绩既不能填满平均，也不能满足通过要求。更好的成绩可以替换其中任意一个。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/replay/ReplayCustomMediaControls.tsx
 msgid "Opacity"
 msgstr "不透明度"
@@ -12690,7 +12697,7 @@ msgstr "表现分排名"
 msgid "Persian"
 msgstr "波斯语"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Pick a colour"
 msgstr "选择颜色"
 
@@ -14037,7 +14044,7 @@ msgstr "刷新中..."
 msgid "Regions"
 msgstr "区域"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -15694,7 +15701,7 @@ msgstr "按图片真实像素尺寸显示"
 msgid "Show the map's storyboard behind (and over) the playfield"
 msgstr "在游玩区域后面（和上面）显示谱面的故事板"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Show the site name on the render"
 msgstr "在渲染图上显示站点名称"
 
@@ -16626,7 +16633,7 @@ msgstr "不再浏览 {0}"
 msgid "Stop repeating"
 msgstr "停止循环"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Stop sharing this one"
 msgstr "停止分享这一张"
 
@@ -16699,8 +16706,8 @@ msgid "Strikethrough"
 msgstr "删除线"
 
 #: src/lib/signature-shared.ts
-msgid "Strip"
-msgstr "横条"
+#~ msgid "Strip"
+#~ msgstr "横条"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stroke color for circle and arrow notes."
@@ -17047,7 +17054,7 @@ msgstr "有问题的文本"
 msgid "Thai"
 msgstr "泰语"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
 msgstr "这个地址无法加载。"
 
@@ -17093,7 +17100,7 @@ msgstr "这个文件不是支持的图片格式。"
 msgid "That gift is no longer there."
 msgstr "这份礼物已经不在了。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That image is too large to draw."
 msgstr "这张图片太大，画不出来。"
 
@@ -17126,7 +17133,7 @@ msgstr "这是你自己的条目。"
 msgid "That isn't a profile link."
 msgstr "这不是个人资料链接。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That link did not load."
 msgstr "这个链接加载不出来。"
 
@@ -17134,7 +17141,7 @@ msgstr "这个链接加载不出来。"
 msgid "That link does not work here. Use an http or https link."
 msgstr "该链接无法在这里使用。请使用 http 或 https 链接。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That link is a page, not an image file."
 msgstr "这个链接是网页，不是图片文件。"
 
@@ -17202,7 +17209,7 @@ msgstr "这个服务器没有被收录"
 msgid "That share code could not be imported"
 msgstr "这个分享码无法导入"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "That site blocks our request. Hosts like imgur or catbox work."
 msgstr "这个网站拦截了我们的请求。可以用 imgur 或 catbox 之类的图床。"
 
@@ -19035,7 +19042,7 @@ msgstr "土耳其语"
 msgid "Turn a feed on for the current channel (needs Manage Server)."
 msgstr "为当前频道开启一个 feed(需要「管理服务器」权限)。"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
 msgstr "关闭"
 
@@ -19902,7 +19909,7 @@ msgstr "正在观看 {player} 的回放"
 msgid "Watching a replay"
 msgstr "正在观看回放"
 
-#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/me/dynamic-renders/controls.tsx
 msgid "Watermark"
 msgstr "水印"
 
