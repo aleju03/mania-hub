@@ -136,33 +136,41 @@ export function freshMapsSearch(country: string) {
 
 /* The dev-tools menu, listed once and rendered by both the desktop dropdown
    and the phone drawer (it used to be the same eight links written out twice).
-   Ordered by how often each gets opened rather than by when it was built, and
-   read two at a time, so the pairs above are the ones that matter. `adminOnly`
-   items need real admin; the last two also show in plain dev mode. Kept
-   `as const` for the same reason NAV_LEAVES is. */
+   The dropdown shows each ADMIN_TOOL_GROUPS group as a column; the drawer
+   stacks them, two across within a group. `adminOnly` items need real admin; Chart Patterns and OG preview also
+   show in plain dev mode. Kept `as const` for the same reason NAV_LEAVES is. */
 const ADMIN_TOOLS = [
-  { to: "/admin/live-backend", label: "Monitoring", accent: "#7dd3fc", adminOnly: true },
-  { to: "/valley", label: "Valley", accent: "#86efac", adminOnly: true },
-  { to: "/admin/todos", label: "Todos", accent: "#fde047", adminOnly: true },
-  { to: "/admin/bug-reports", label: "Bug reports", accent: "#fca5a5", adminOnly: true },
-  { to: "/admin/mascot", label: "Ralsei", accent: "#c4b5fd", adminOnly: true },
-  { to: "/admin/r2", label: "R2", accent: "#67e8f9", adminOnly: true, search: { prefix: "replay-cache/" } },
-  { to: "/admin/collections", label: "Collections", accent: "#f9a8d4", adminOnly: true },
-  { to: "/admin/bbcode-images", label: "BBCode images", accent: "#fdba74", adminOnly: true },
-  { to: "/admin/discord", label: "Discord", accent: "#a5b4fc", adminOnly: true },
-  { to: "/admin/translation-reports", label: "Translations", accent: "#5eead4", adminOnly: true },
-  { to: "/admin/dan-classifier", label: "Chart Patterns", accent: "#bef264", adminOnly: false },
-  { to: "/admin/og-preview", label: "OG preview", accent: "#fda4af", adminOnly: false },
-  { to: "/admin/dynamic-renders", label: "Dynamic renders", accent: "#e879f9", adminOnly: true },
-  { to: "/admin/banned-users", label: "Banned users", accent: "#fb7185", adminOnly: true },
-  { to: "/admin/about-pages", label: "About pages", accent: "#fdba74", adminOnly: true },
-  { to: "/admin/bridgers", label: "Bridgers", accent: "#fcd34d", adminOnly: true },
+  { to: "/admin/todos", label: "Todos", accent: "#fde047", adminOnly: true, group: "Reports" },
+  { to: "/admin/bug-reports", label: "Bug reports", accent: "#fca5a5", adminOnly: true, group: "Reports" },
+  { to: "/admin/translation-reports", label: "Translations", accent: "#5eead4", adminOnly: true, group: "Reports" },
+  { to: "/admin/banned-users", label: "Banned users", accent: "#fb7185", adminOnly: true, group: "Players" },
+  { to: "/admin/scores", label: "Remove plays", accent: "#f87171", adminOnly: true, group: "Players" },
+  { to: "/admin/bridgers", label: "Bridgers", accent: "#fcd34d", adminOnly: true, group: "Players" },
+  { to: "/admin/about-pages", label: "About pages", accent: "#fdba74", adminOnly: true, group: "Players" },
+  { to: "/admin/collections", label: "Collections", accent: "#f9a8d4", adminOnly: true, group: "Players" },
+  { to: "/admin/live-backend", label: "Monitoring", accent: "#7dd3fc", adminOnly: true, group: "Site" },
+  { to: "/valley", label: "Valley", accent: "#86efac", adminOnly: true, group: "Site" },
+  { to: "/admin/r2", label: "R2", accent: "#67e8f9", adminOnly: true, group: "Site", search: { prefix: "replay-cache/" } },
+  { to: "/admin/discord", label: "Discord", accent: "#a5b4fc", adminOnly: true, group: "Site" },
+  { to: "/admin/mascot", label: "Ralsei", accent: "#c4b5fd", adminOnly: true, group: "Site" },
+  { to: "/admin/dan-classifier", label: "Chart Patterns", accent: "#bef264", adminOnly: false, group: "Content" },
+  { to: "/admin/bbcode-images", label: "BBCode images", accent: "#fdba74", adminOnly: true, group: "Content" },
+  { to: "/admin/og-preview", label: "OG preview", accent: "#fda4af", adminOnly: false, group: "Content" },
+  { to: "/admin/dynamic-renders", label: "Dynamic renders", accent: "#e879f9", adminOnly: true, group: "Content" },
 ] as const;
+
+const ADMIN_TOOL_GROUPS = ["Reports", "Players", "Site", "Content"] as const;
 
 type AdminTool = (typeof ADMIN_TOOLS)[number];
 
 function adminToolsFor(adminMode: boolean): AdminTool[] {
   return ADMIN_TOOLS.filter((tool) => adminMode || !tool.adminOnly);
+}
+
+function groupAdminTools(tools: AdminTool[]): { group: string; tools: AdminTool[] }[] {
+  return ADMIN_TOOL_GROUPS
+    .map((group) => ({ group, tools: tools.filter((tool) => tool.group === group) }))
+    .filter((entry) => entry.tools.length > 0);
 }
 
 /* The r2 entry is the only one that carries search params, and TanStack types
@@ -829,43 +837,37 @@ export function Nav() {
                   {adminAlertCount ? <UnreadBadge count={adminAlertCount} className="-right-1.5 -top-1.5" /> : null}
                 </button>
                 {adminMenuOpen && (
-                  /* Two columns: eight tools in one column ran most of the way
-                     down the page. The dividers are borders on the cells rather
-                     than a grid gap, because a gap is a hole - the menu's own
-                     background does not paint there and the page reads through
-                     the seams. An odd number of tools would leave the last row
-                     half empty, so the final one takes the whole width and
-                     centers, instead of dangling in the left column. */
+                  /* One column per group, side by side: a single list ran most
+                     of the way down the page, and stacked groups in a grid
+                     read as a wall of cells. */
                   <div
-                    className="absolute right-0 top-full mt-2 w-56 grid grid-cols-2 rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
+                    className="absolute right-0 top-full mt-2 flex rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
                     role="menu"
                   >
-                    {adminTools.map((tool, index) => {
-                      const full = index === adminTools.length - 1 && adminTools.length % 2 === 1;
-                      return (
-                        <Link
-                          key={tool.to}
-                          to={tool.to}
-                          search={adminToolSearch(tool)}
-                          onClick={() => setAdminMenuOpen(false)}
-                          style={{ "--admin-tool-accent": tool.accent } as CSSProperties}
-                          className={`admin-tool-link relative px-3 py-2 text-[11px] font-semibold transition-colors ${
-                            index > 1 ? "border-t border-osu-b3/30" : ""
-                          } ${index % 2 === 1 ? "border-l border-osu-b3/30" : ""} ${
-                            full ? "col-span-2 text-center" : ""
-                          }`}
-                          role="menuitem"
-                        >
-                          {tool.label}
-                          {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
-                            <UnreadBadge count={bugReportAlert.count} className="right-2 top-1/2 -translate-y-1/2" />
-                          ) : null}
-                          {tool.to === "/admin/banned-users" && bannedUsersCount ? (
-                            <UnreadBadge count={bannedUsersCount} className="right-2 top-1/2 -translate-y-1/2" />
-                          ) : null}
-                        </Link>
-                      );
-                    })}
+                    {groupAdminTools(adminTools).map(({ group, tools }, groupIndex) => (
+                      <div key={group} className={`min-w-[132px] py-2 ${groupIndex > 0 ? "border-l border-white/[0.07]" : ""}`}>
+                        <div className="px-3 pb-1 text-[11px] text-osu-f1">{group}</div>
+                        {tools.map((tool) => (
+                          <Link
+                            key={tool.to}
+                            to={tool.to}
+                            search={adminToolSearch(tool)}
+                            onClick={() => setAdminMenuOpen(false)}
+                            style={{ "--admin-tool-accent": tool.accent } as CSSProperties}
+                            className="admin-tool-link relative block whitespace-nowrap px-3 py-1.5 pr-7 text-[12px] font-semibold transition-colors"
+                            role="menuitem"
+                          >
+                            {tool.label}
+                            {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
+                              <UnreadBadge count={bugReportAlert.count} className="right-2 top-1/2 -translate-y-1/2" />
+                            ) : null}
+                            {tool.to === "/admin/banned-users" && bannedUsersCount ? (
+                              <UnreadBadge count={bannedUsersCount} className="right-2 top-1/2 -translate-y-1/2" />
+                            ) : null}
+                          </Link>
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1317,28 +1319,33 @@ export function Nav() {
                   <div className="text-[10px] uppercase tracking-wide text-osu-f1 font-semibold px-1">
                     {devToolsLabel}
                   </div>
-                  {/* Same list, same order, two across: the drawer is already
-                      long by the time it reaches this. */}
-                  <div className="grid grid-cols-2 gap-2">
-                    {adminTools.map((tool) => (
-                      <Link
-                        key={tool.to}
-                        to={tool.to}
-                        search={adminToolSearch(tool)}
-                        onClick={() => setMenuOpen(false)}
-                        style={{ "--admin-tool-accent": tool.accent } as CSSProperties}
-                        className="admin-tool-card relative text-center px-3 py-2 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer border"
-                      >
-                        {tool.label}
-                        {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
-                          <UnreadBadge count={bugReportAlert.count} className="right-1.5 top-1.5" />
-                        ) : null}
-                        {tool.to === "/admin/banned-users" && bannedUsersCount ? (
-                          <UnreadBadge count={bannedUsersCount} className="right-1.5 top-1.5" />
-                        ) : null}
-                      </Link>
-                    ))}
-                  </div>
+                  {/* Same groups, two across: the drawer is already long by
+                      the time it reaches this. */}
+                  {groupAdminTools(adminTools).map(({ group, tools }) => (
+                    <div key={group} className="space-y-1.5">
+                      <div className="px-1 text-[11px] text-osu-f1">{group}</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {tools.map((tool) => (
+                          <Link
+                            key={tool.to}
+                            to={tool.to}
+                            search={adminToolSearch(tool)}
+                            onClick={() => setMenuOpen(false)}
+                            style={{ "--admin-tool-accent": tool.accent } as CSSProperties}
+                            className="admin-tool-card relative text-center px-3 py-2 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer border"
+                          >
+                            {tool.label}
+                            {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
+                              <UnreadBadge count={bugReportAlert.count} className="right-1.5 top-1.5" />
+                            ) : null}
+                            {tool.to === "/admin/banned-users" && bannedUsersCount ? (
+                              <UnreadBadge count={bannedUsersCount} className="right-1.5 top-1.5" />
+                            ) : null}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
       </div>

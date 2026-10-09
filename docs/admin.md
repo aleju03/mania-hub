@@ -16,6 +16,14 @@ What it does delete is every tracking-derived row and public appearance: raw `sc
 
 Left alone deliberately: GOAT poll nominations, since that board is meant to hold banned and deleted players, and another account's Discord tracker row pointed at them, which can never fire again once ingest drops their scores.
 
+## Removing specific plays
+
+`/admin/scores` removes chosen plays of one player, such as cheated scores osu! still serves. The player is looked up with the wipe preview's rules (`POST /api/admin/score-removal/lookup`), which lists their stored top plays, recent tracked plays and earlier removals; score links or ids can also be pasted for plays that are not listed.
+
+`POST /api/admin/score-removal/remove` (`backend/src/features/admin-score-removal.ts`) deletes the play from `score_events`, activity, `user_top_scores`, the profile snapshot, snipe boards (the player's board row falls back to their best remaining personal best) and snipe events they set, `top_play_events`, maps farmed rows, `unrated_plays`, and reopens goals it completed, then queues a skill recompute. The play is kept in `admin_removed_scores` with both of its osu! ids, and every path that writes osu! data back filters against it (`backend/src/shared/admin-removed-scores.ts`): ingest, the top-200 window, profile snapshots, snipe seeds and the skill compute, which also drops the play from retained evidence. `POST /api/admin/score-removal/restore` lifts the tombstone only; the play returns as each surface next refreshes from osu!. Pack cards pulled before the removal keep their snapshot.
+
+Hashi plays for the same player are listed on that page too and go through the Companella Exclude and Remove routes below.
+
 ## Banned users
 
 Nothing deletes a player by itself. When osu! 404s a user id, the worker's missing-user path (`markUserMissing`) only deactivates them, and `/admin/banned-users` lists every inactive, not-purged account so a purge is always a person's call. The admin menu badge counts the ones nobody has marked seen yet (`inactive_user_reviews.reviewed_at`); a later deactivation of an account that was reactivated in between counts as new again, a repeat 404 on an already inactive one does not. A row marked "site user" has signed in on this site at some point (`analytics_viewers` in the analytics DB, matched by osu! id), with its latest sign-in beside it.
