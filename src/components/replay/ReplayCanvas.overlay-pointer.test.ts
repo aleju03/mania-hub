@@ -80,6 +80,22 @@ describe("thin replay overlay gestures", () => {
     expect(renderer.getOverlaySettingsSnapshot().healthBar.scale).toBeCloseTo(2);
   });
 
+  it("cancels an iOS long-press selection on an overlay but not on bare playfield", () => {
+    const { canvas, renderer } = viewer();
+    // jsdom drops the -webkit- properties it does not know.
+    expect(canvas.style.getPropertyValue("user-select")).toBe("none");
+    const touch = (x: number) => {
+      const event = new Event("touchstart", { cancelable: true });
+      Object.defineProperty(event, "changedTouches", { value: [{ clientX: x, clientY: 300 }] });
+      canvas.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(touch(253)).toBe(true);
+    expect(touch(100)).toBe(false);
+    renderer.destroy();
+    expect(canvas.style.getPropertyValue("user-select")).toBe("");
+  });
+
   it("keeps exact hits ahead of touch padding and otherwise picks the closest bar", () => {
     const { internal } = viewer();
     const nearby: Box = { id: "stageRight", x: 258, y: 260, width: 2, height: 85 };

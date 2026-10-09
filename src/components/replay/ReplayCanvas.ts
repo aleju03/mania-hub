@@ -63,6 +63,9 @@ const LEADERBOARD_EXPLOSION_ASSETS: ReplaySkinImageAsset[] = [1, 2].map((part) =
 // reaching for, so the bottom chrome may reveal there (CSS px).
 const OVERLAY_APPROACH_EDGE_PX = 12;
 const OVERLAY_TOUCH_TARGET_PX = 44;
+// Set on the stage canvas so a held finger never starts an iOS text
+// selection or callout.
+const CANVAS_NO_SELECT_STYLES = ["user-select", "-webkit-user-select", "-webkit-touch-callout"];
 // Arrow keys nudge the selected overlays one CSS px at a time, Shift ten, the
 // way every editor with a drag-and-drop canvas does it.
 const OVERLAY_NUDGE_PX = 1;
@@ -876,6 +879,7 @@ export class ManiaReplayRenderer {
   private previousCanvasTouchAction = "";
   private previousCanvasTabIndex: string | null = null;
   private previousCanvasOutline = "";
+  private previousCanvasSelectStyles: Array<[string, string]> = [];
   private draggingOverlay: {
     id: ReplayOverlayId;
     pointerId: number;
@@ -3035,6 +3039,12 @@ export class ManiaReplayRenderer {
     // whole stage.
     this.previousCanvasOutline = this.canvas.style.outline;
     this.canvas.style.outline = "none";
+    // iOS ignores preventDefault on pointerdown for its long-press text
+    // selection and callout, so a held finger on an overlay selected the
+    // whole stage instead of dragging it.
+    this.previousCanvasSelectStyles = CANVAS_NO_SELECT_STYLES.map((name) => [name, this.canvas.style.getPropertyValue(name)]);
+    for (const name of CANVAS_NO_SELECT_STYLES) this.canvas.style.setProperty(name, "none");
+    this.canvas.addEventListener("touchstart", this.handleOverlayTouchStart, { passive: false });
     this.canvas.addEventListener("pointerdown", this.handleOverlayPointerDown);
     this.canvas.addEventListener("pointermove", this.handleOverlayPointerMove);
     this.canvas.addEventListener("pointerup", this.handleOverlayPointerEnd);
@@ -3052,6 +3062,8 @@ export class ManiaReplayRenderer {
   private removeOverlayPointerHandlers() {
     this.canvas.style.touchAction = this.previousCanvasTouchAction;
     this.canvas.style.outline = this.previousCanvasOutline;
+    for (const [name, value] of this.previousCanvasSelectStyles) this.canvas.style.setProperty(name, value);
+    this.canvas.removeEventListener("touchstart", this.handleOverlayTouchStart);
     if (this.previousCanvasTabIndex == null) this.canvas.removeAttribute("tabindex");
     else this.canvas.setAttribute("tabindex", this.previousCanvasTabIndex);
     this.canvas.removeEventListener("pointerdown", this.handleOverlayPointerDown);
@@ -3293,6 +3305,21 @@ export class ManiaReplayRenderer {
       y: Math.max(0, Math.min(maxY, y)),
     };
   }
+
+  // Cancelling the touch is what stops iOS from starting a selection or
+  // callout on a held finger; pointer events still fire. Touches on bare
+  // playfield are left alone.
+  private handleOverlayTouchStart = (event: TouchEvent) => {
+    if (this.hideHud) return;
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const scaleX = this.cssWidth / rect.width;
+    const scaleY = this.cssHeight / rect.height;
+    const onOverlay = this.activeOverlayPointers.size > 0 || Array.from(event.changedTouches).some((touch) => (
+      this.getOverlayAtPoint((touch.clientX - rect.left) * scaleX, (touch.clientY - rect.top) * scaleY, "touch") != null
+    ));
+    if (onOverlay && event.cancelable) event.preventDefault();
+  };
 
   private handleOverlayPointerDown = (event: PointerEvent) => {
     if (event.button !== 0 || this.hideHud) return;
