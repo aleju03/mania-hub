@@ -449,6 +449,13 @@ function DanEstimatesPage() {
               </Li>
               <Li>
                 <Trans>
+                  4K LN is not averaged: its dan is always the average of your 20 best passes overall,
+                  because too few hard charts exist in each of its four skills to fill them. The four
+                  still show their own numbers.
+                </Trans>
+              </Li>
+              <Li>
+                <Trans>
                   With fewer than two rated skills, your dan is the average of your 20 best passes
                   overall.
                 </Trans>

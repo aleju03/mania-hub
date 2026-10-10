@@ -2237,6 +2237,10 @@ msgid "4K LN"
 msgstr "4K LN"
 
 #: src/routes/dan-estimates.tsx
+msgid "4K LN is not averaged: its dan is always the average of your 20 best passes overall, because too few hard charts exist in each of its four skills to fill them. The four still show their own numbers."
+msgstr "4K LN 不取平均：它的段位始终是你全部通过中最好的 20 次的平均，因为它的四项技能各自的高难度谱面太少，填不满。这四项仍然显示各自的数值。"
+
+#: src/routes/dan-estimates.tsx
 msgid "4K regular"
 msgstr "4K 单点"
 

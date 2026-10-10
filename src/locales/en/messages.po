@@ -2251,6 +2251,10 @@ msgid "4K LN"
 msgstr "4K LN"
 
 #: src/routes/dan-estimates.tsx
+msgid "4K LN is not averaged: its dan is always the average of your 20 best passes overall, because too few hard charts exist in each of its four skills to fill them. The four still show their own numbers."
+msgstr "4K LN is not averaged: its dan is always the average of your 20 best passes overall, because too few hard charts exist in each of its four skills to fill them. The four still show their own numbers."
+
+#: src/routes/dan-estimates.tsx
 msgid "4K regular"
 msgstr "4K regular"
 
