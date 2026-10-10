@@ -33,10 +33,12 @@ export function KeymodeControl({
    drift from what a profile would show. The active chip carries the axis's own
    color as a fill; the underline on this page belongs to the tab bar. */
 export function AxisPicker({
+  keyCount,
   axes,
   value,
   onChange,
 }: {
+  keyCount?: number;
   axes: LeaderboardAxisInfo[];
   value: string | null;
   onChange: (axis: string) => void;
@@ -46,7 +48,7 @@ export function AxisPicker({
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide" role="group" aria-label={t`Skill`}>
       {axes.map((info) => {
-        const meta = skillAxisMeta(info.axis);
+        const meta = skillAxisMeta(info.axis, keyCount);
         const label = meta ? i18n._(meta.labelMsg) : info.axis;
         const active = info.axis === value;
         const chip = (

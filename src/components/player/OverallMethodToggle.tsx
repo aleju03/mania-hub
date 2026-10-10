@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { animate, motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 import { setOverallMethod, useOverallMethod, type OverallMethod } from "../../lib/overall-method";
+import { usesPrism } from "#dan/prism/switch";
 
 // Etterna's mark, from its MIT-licensed repo (public/licenses/etterna.txt):
 // the E with its corner cut, and the triangle that fills the cut. The
@@ -62,8 +63,13 @@ function Burst({ to, onDone }: { to: OverallMethod; onDone: () => void }) {
 // when the headline switched to Etterna's method can see the one they had.
 // One preference for every surface that shows it. The method is a coin: a
 // click flips it, throws off a few of the new side's shapes, and rolls the
-// word, while every Overall on the page rolls to the other value.
+// word, while every Overall on the page rolls to the other value. Keymodes
+// Prism rates have only Prism's Overall, so they get no toggle.
 export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: number; className?: string }) {
+  return usesPrism(keyCount) ? null : <MethodCoin keyCount={keyCount} className={className} />;
+}
+
+function MethodCoin({ keyCount, className }: { keyCount: number; className: string }) {
   const { t } = useLingui();
   const method = useOverallMethod();
   const reduceMotion = useReducedMotion();

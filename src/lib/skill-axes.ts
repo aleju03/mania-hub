@@ -13,6 +13,7 @@
 
 import type { MessageDescriptor } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
+import { usesPrism } from "#dan/prism/switch";
 import type { MyDataSkillBreakdown, MyDataSkillMode, MyDataSkillPercentile } from "./my-data";
 
 // Every axis carries both forms of its name: `label` is the English one the
@@ -29,7 +30,8 @@ export interface SkillAxisMeta {
 
 // Etterna's skillset taxonomy (from the MinaCalc analysis), with colors from
 // the same palette the old pattern fingerprint used. Shown for every keymode
-// except 6K and 7K (usesPatternSkillAxes), and Technical only on 4K and 5K.
+// except 6K-8K without Prism (usesPatternSkillAxes), and Technical only where
+// the calc rates it (publishesTechnical).
 export const MSD_SKILLSET_META: SkillAxisMeta[] = [
   { key: "Stream", label: "Stream", labelMsg: msg`Stream`, color: "#8f6bd8" },
   { key: "Jumpstream", label: "Jumpstream", labelMsg: msg`Jumpstream`, color: "#6f87d8" },
@@ -39,6 +41,33 @@ export const MSD_SKILLSET_META: SkillAxisMeta[] = [
   { key: "Chordjack", label: "Chordjack", labelMsg: msg`Chordjack`, color: "#c59a5c" },
   { key: "Technical", label: "Technical", labelMsg: msg`Technical`, color: "#83a86f" },
 ];
+
+// Prism's own skillset, with no MinaCalc slot.
+const PRISM_SPEED_META: SkillAxisMeta = { key: "Speed", label: "Speed", labelMsg: msg`Speed`, color: "#5fb8c9" };
+
+// Prism, the 6K-8K calculator, files its skillsets in MinaCalc's slots, as
+// Etterna's seven-key handler does; these are the names they stand for.
+const PRISM_SKILLSET_NAMES: Record<string, Pick<SkillAxisMeta, "label" | "labelMsg">> = {
+  Jumpstream: { label: "Chordstream", labelMsg: msg`Chordstream` },
+  Handstream: { label: "Bracket", labelMsg: msg`Bracket` },
+  Chordjack: { label: "Jack", labelMsg: msg`Jack` },
+};
+
+/** The skillset axes as a keymode names them. Prism's Chordstream and Jack
+ *  take their single-note pattern in; the Stream and JackSpeed halves are
+ *  not axes. */
+export function msdSkillsetMeta(keyCount: number | null | undefined): SkillAxisMeta[] {
+  if (!usesPrism(keyCount)) return MSD_SKILLSET_META;
+  return [
+    ...MSD_SKILLSET_META.filter((meta) => meta.key !== "JackSpeed" && meta.key !== "Stream").map((meta) => ({ ...meta, ...PRISM_SKILLSET_NAMES[meta.key] })),
+    PRISM_SPEED_META,
+  ];
+}
+
+/** MinaCalc only rates Technical on 4K and 5K; Prism rates it on 6K-8K. */
+export function publishesTechnical(keyCount: number): boolean {
+  return keyCount === 4 || keyCount === 5 || usesPrism(keyCount);
+}
 
 // 6K and 7K axes come from the in-house pattern detector instead (MinaCalc's
 // skillset names mislead there): each value is the aggregate of the
@@ -106,8 +135,10 @@ export const ETTERNA_OVERALL_NO_LN_AXIS = "EtternaOverallNoLn";
 // skillset values and `pattern:ln`. Mirrors etternaOverall in player-skills.ts.
 export function etternaOverallFromRatings(keyCount: number, ratings: Record<string, number>): number {
   if (usesPatternSkillAxes(keyCount)) return 0;
-  const skillsets = MSD_SKILLSET_META.filter((meta) => meta.key !== "Technical" || keyCount === 4 || keyCount === 5);
+  const skillsets = msdSkillsetMeta(keyCount).filter((meta) => meta.key !== "Technical" || publishesTechnical(keyCount));
   const values = skillsets.map((meta) => Number(ratings[meta.key]) || 0).filter((value) => value >= 1);
+  // A snapshot with no skillsets (6K-8K before Prism) has no Etterna Overall.
+  if (values.length === 0) return 0;
   const ln = Number(ratings["pattern:ln"]) || 0;
   if (ln >= 1) values.push(ln);
   const best = values.sort((a, b) => b - a).slice(0, skillsets.length - 1);
@@ -140,13 +171,13 @@ export function hasEtternaOverall(mode: MyDataSkillMode): boolean {
 // Presentation for an axis key that arrived from the backend rather than from a
 // player's own breakdown, which is what the /rankings leaderboards get. Keys are
 // the wire form: a bare MSD skillset name, or `pattern:{id}`.
-export function skillAxisMeta(axis: string): SkillAxisMeta | null {
+export function skillAxisMeta(axis: string, keyCount?: number | null): SkillAxisMeta | null {
   if (axis.startsWith("pattern:")) {
     const id = axis.slice("pattern:".length);
     return PATTERN_RATING_META.find((meta) => meta.key === id) ?? null;
   }
   if (axis === OVERALL_AXIS_META.key || axis === ETTERNA_OVERALL_AXIS || axis === ETTERNA_OVERALL_NO_LN_AXIS) return OVERALL_AXIS_META;
-  return MSD_SKILLSET_META.find((meta) => meta.key === axis) ?? null;
+  return msdSkillsetMeta(keyCount).find((meta) => meta.key === axis) ?? null;
 }
 
 // Drop trickle keymodes (a few stray plays in an off-keymode) so callers only
@@ -172,7 +203,7 @@ export interface SkillAxisEntry extends SkillAxisMeta {
 // were validated, and 8K speaks the same vocabulary; 5K and 9K-18K tried them
 // and read as inaccurate, so they show what MinaCalc rates, like 4K.
 export function usesPatternSkillAxes(keyCount: number): boolean {
-  return keyCount === 6 || keyCount === 7 || keyCount === 8;
+  return (keyCount === 6 || keyCount === 7 || keyCount === 8) && !usesPrism(keyCount);
 }
 
 // Fewest pattern axes a 6K/7K/8K card switches to. A pattern needs 3 plays of
@@ -192,9 +223,9 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
       .sort((a, b) => b.value - a.value);
     if (patternEntries.length >= PATTERN_ENTRIES_MIN) return patternEntries;
   }
-  const entries: SkillAxisEntry[] = MSD_SKILLSET_META
-    // MinaCalc only rates Technical on 4K and 5K (the backend's publishesMsdSkillset).
-    .filter((meta) => meta.key !== "Technical" || mode.keyCount === 4 || mode.keyCount === 5)
+  const entries: SkillAxisEntry[] = msdSkillsetMeta(mode.keyCount)
+    // The backend's publishesMsdSkillset.
+    .filter((meta) => meta.key !== "Technical" || publishesTechnical(mode.keyCount))
     .map((meta) => ({ ...meta, value: Number(mode.ratings[meta.key] ?? 0), axis: meta.key }))
     // The generic n-key calc engine returns ~0 for skillsets it does not
     // rate; a 0.15 sliver next to 20+ bars is noise, not signal.

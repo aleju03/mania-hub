@@ -215,7 +215,7 @@ function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: bool
         : i18n._(msg`rated from ${plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded`),
   ];
   const version = mode.minaCalc;
-  if (version && withVersion) parts.push(i18n._(msg`MinaCalc ${version}`));
+  if (version && withVersion) parts.push(version.startsWith("prism") ? "Prism" : i18n._(msg`MinaCalc ${version}`));
   const pending = skills.pendingPlays;
   if (pending > 0) parts.push(i18n._(msg`${pending} still analyzing`));
   if (skills.baseline) parts.push(i18n._(msg`percentiles are among tracked players`));
@@ -229,7 +229,7 @@ const QUEUE_AHEAD_SHOWN_MAX = 100;
 
 export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, userId }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean; onSelectDan?: (side: "rc" | "ln") => void; userId?: number }) {
   const { i18n } = useLingui();
-  const overallMethod = useOverallMethod();
+  const overallMethod = useOverallMethod(mode?.keyCount);
   const empty = skillEmptyState(skills, mode, own);
   if (empty) return mode?.dan ? <div className="space-y-3">{empty}<DanChips mode={mode} onSelect={onSelectDan} /></div> : empty;
   const entries = skillModeEntries(mode!);
@@ -561,7 +561,7 @@ export function SkillModePanel({
 }) {
   const { t, i18n } = useLingui();
   const [hovered, setHovered] = useState<string | null>(null);
-  const overallMethod = useOverallMethod();
+  const overallMethod = useOverallMethod(mode.keyCount);
   const entries = skillModeEntries(mode);
   const accent = entries[0]?.color ?? "#8f6bd8";
   const { value: overall, percentile: overallPercentile } = modeOverall(mode, overallMethod);
@@ -574,7 +574,9 @@ export function SkillModePanel({
           <div className="mb-1 flex items-center gap-2">
             <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>{mode.keyCount}K skill rating</Trans></span>
-            {version ? (
+            {version?.startsWith("prism") ? (
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">Prism</span>
+            ) : version ? (
               <span className="cursor-help text-[11px] font-semibold uppercase tracking-wide text-osu-f1" title={t`MinaCalc is Etterna's difficulty calculator`}>
                 {i18n._(msg`MinaCalc ${version}`)}
               </span>
@@ -681,7 +683,7 @@ export function SkillModeOption({ mode, selected, onSelect }: {
   selected: boolean;
   onSelect: () => void;
 }) {
-  const overallMethod = useOverallMethod();
+  const overallMethod = useOverallMethod(mode.keyCount);
   return (
     <button
       type="button"

@@ -40,8 +40,8 @@ export function SkillLeaderboardBoard({
   // specialty the reader wanted. Overall is the first chip on every keymode, so
   // clicking back to it is how you clear a skill selection.
   // The Overall chip reads Etterna's or the Legacy board by the reader's
-  // Overall method; 6K/7K/8K only have Legacy.
-  const overallMethod = useOverallMethod();
+  // Overall method; Prism keymodes always read Prism's.
+  const overallMethod = useOverallMethod(keys);
   const hasEtterna = !usesPatternSkillAxes(keys);
   const overallAxis = overallAxisFor(overallMethod, hasEtterna);
   // An old link to the no-LN Etterna board reads the Overall chip.
@@ -98,7 +98,7 @@ export function SkillLeaderboardBoard({
      print the new axis's header and color over the old axis's numbers. */
   const servedAxis = snapshot?.axis ?? requestedAxis;
   const isOverall = overallAxes.includes(servedAxis);
-  const meta = skillAxisMeta(servedAxis);
+  const meta = skillAxisMeta(servedAxis, keys);
   const axisLabel = meta ? i18n._(meta.labelMsg) : servedAxis;
 
   const rows: LeaderboardRow[] = useMemo(() => {
@@ -144,6 +144,7 @@ export function SkillLeaderboardBoard({
           />
         )}
         <AxisPicker
+          keyCount={keys}
           axes={(snapshot?.axes ?? []).filter((info) => !hiddenAxes.has(info.axis))}
           value={requestedAxis}
           onChange={(next) => onNavigate({ axis: next === overallAxis ? undefined : next, page: 1 })}

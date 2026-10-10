@@ -966,8 +966,8 @@ msgstr "{0} 的 me! 页面是空的。"
 
 #. placeholder {0}: play.username
 #: src/components/maps/MapDetailModal.tsx
-msgid "{0}'s play"
-msgstr "{0} 的成绩"
+#~ msgid "{0}'s play"
+#~ msgstr "{0} 的成绩"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
@@ -2704,7 +2704,6 @@ msgstr "账号菜单"
 msgid "accuracy"
 msgstr "准确率"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
@@ -3959,6 +3958,7 @@ msgstr "BPM"
 msgid "BPM Breakdown"
 msgstr "BPM 分布"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -4427,6 +4427,7 @@ msgstr "请选择另一位收藏者收礼。"
 msgid "Chordjack"
 msgstr "大叠"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
@@ -5824,7 +5825,7 @@ msgstr "段位 {0}"
 #~ msgid "Dan {0} range"
 #~ msgstr "段位 {0} 区间"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Dan accuracy"
 msgstr "段位准确率"
 
@@ -8679,6 +8680,7 @@ msgstr "意大利语"
 msgid "Italic"
 msgstr "斜体"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -8770,12 +8772,12 @@ msgstr "判定图大小"
 msgid "Judgements"
 msgstr "判定"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Judgments"
 msgstr "判定"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Judgments unavailable"
 msgstr "判定数据不可用"
 
@@ -10131,7 +10133,7 @@ msgstr "正在为回放匹配对应谱面。"
 msgid "MAX"
 msgstr "MAX"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Max combo"
 msgstr "最大连击"
 
@@ -13169,7 +13171,7 @@ msgstr "发布者"
 msgid "pp"
 msgstr "pp"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
@@ -13429,7 +13431,7 @@ msgstr "主页链接"
 msgid "Profile stats"
 msgstr "个人资料数据"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "profile top play"
 msgstr "个人最佳成绩"
@@ -14922,6 +14924,7 @@ msgid "score"
 msgstr "成绩"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -16018,6 +16021,18 @@ msgstr "单项"
 msgid "Single focus"
 msgstr "单项聚焦"
 
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Single-note jacks {singleText}, chord jacks {chordText}"
+#~ msgstr "单键叠 {singleText}，和弦叠 {chordText}"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Single-note jacks {singleText}, chordjacks {chordText}"
+msgstr "单点叠 {singleText}，大叠 {chordText}"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Single-note streams {singleText}, chordstreams {chordText}"
+msgstr "单点切 {singleText}，大切 {chordText}"
+
 #: src/routes/skins.tsx
 msgid "size"
 msgstr "大小"
@@ -16432,6 +16447,7 @@ msgstr "正在观战 {player}"
 msgid "Spectators"
 msgstr "观众"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Speed"
 msgstr "速度"
@@ -17396,6 +17412,10 @@ msgstr "按 Etterna 评定玩家的方式取最好的 {best} 个技能组的平�
 #: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets as Etterna rates players."
 #~ msgstr "按 Etterna 评定玩家的方式取最好的 {best} 个技能组的平均值。"
+
+#: src/components/player/OverallMethodToggle.tsx
+#~ msgid "The average of the best {best} skillsets, with LN added as one more skillset."
+#~ msgstr "取最好的 {best} 个技能组的平均值，并把 LN 作为额外的一个技能组加入。"
 
 #: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets, with LN counted as a skillset. This is how Etterna rates players."
@@ -19011,7 +19031,7 @@ msgstr "追踪 pp 和准确率目标，以及各自还差多少。"
 msgid "Tracked"
 msgstr "已追踪"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "tracked history"
 msgstr "追踪记录"

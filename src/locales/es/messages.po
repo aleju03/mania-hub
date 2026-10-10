@@ -957,8 +957,8 @@ msgstr "La página me! de {0} está vacía."
 
 #. placeholder {0}: play.username
 #: src/components/maps/MapDetailModal.tsx
-msgid "{0}'s play"
-msgstr "Play de {0}"
+#~ msgid "{0}'s play"
+#~ msgstr "Play de {0}"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
@@ -2695,7 +2695,6 @@ msgstr "Menú de cuenta"
 msgid "accuracy"
 msgstr "Acc"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
@@ -3950,6 +3949,7 @@ msgstr "BPM"
 msgid "BPM Breakdown"
 msgstr "Desglose de BPM"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -4418,6 +4418,7 @@ msgstr "Elige otro coleccionista para tu regalo."
 msgid "Chordjack"
 msgstr "Chordjack"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
@@ -5815,7 +5816,7 @@ msgstr "Dan {0}"
 #~ msgid "Dan {0} range"
 #~ msgstr "Rango de dan {0}"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Dan accuracy"
 msgstr "Precisión para dan"
 
@@ -8670,6 +8671,7 @@ msgstr "Italiano"
 msgid "Italic"
 msgstr "Cursiva"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -8761,12 +8763,12 @@ msgstr "Tamaño de los juicios"
 msgid "Judgements"
 msgstr "Juicios"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Judgments"
 msgstr "Juicios"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Judgments unavailable"
 msgstr "Juicios no disponibles"
 
@@ -10122,7 +10124,7 @@ msgstr "Asociando el replay a su beatmap."
 msgid "MAX"
 msgstr "MAX"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 msgid "Max combo"
 msgstr "Combo máx."
 
@@ -13160,7 +13162,7 @@ msgstr "publicado por"
 msgid "pp"
 msgstr "pp"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
@@ -13420,7 +13422,7 @@ msgstr "Enlace de perfil"
 msgid "Profile stats"
 msgstr "Estadísticas del perfil"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "profile top play"
 msgstr "top play del perfil"
@@ -14913,6 +14915,7 @@ msgid "score"
 msgstr "score"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -16009,6 +16012,18 @@ msgstr "Individual"
 msgid "Single focus"
 msgstr "Meta única"
 
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Single-note jacks {singleText}, chord jacks {chordText}"
+#~ msgstr "Jacks de una nota {singleText}, jacks en acordes {chordText}"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Single-note jacks {singleText}, chordjacks {chordText}"
+msgstr "Jacks de una nota {singleText}, chordjacks {chordText}"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Single-note streams {singleText}, chordstreams {chordText}"
+msgstr "Streams de una nota {singleText}, chordstreams {chordText}"
+
 #: src/routes/skins.tsx
 msgid "size"
 msgstr "tamaño"
@@ -16423,6 +16438,7 @@ msgstr "Espectando a {player}"
 msgid "Spectators"
 msgstr "Espectadores"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Speed"
 msgstr "Speed"
@@ -17387,6 +17403,10 @@ msgstr "El promedio de los {best} mejores skillsets como Etterna califica a los 
 #: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets as Etterna rates players."
 #~ msgstr "El promedio de los {best} mejores skillsets como Etterna califica a los jugadores."
+
+#: src/components/player/OverallMethodToggle.tsx
+#~ msgid "The average of the best {best} skillsets, with LN added as one more skillset."
+#~ msgstr "El promedio de los {best} mejores skillsets, con LN agregado como un skillset más."
 
 #: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets, with LN counted as a skillset. This is how Etterna rates players."
@@ -19002,7 +19022,7 @@ msgstr "Sigue tus metas de pp y acc y qué tan cerca estás de cada una."
 msgid "Tracked"
 msgstr "Seguidos"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "tracked history"
 msgstr "historial trackeado"

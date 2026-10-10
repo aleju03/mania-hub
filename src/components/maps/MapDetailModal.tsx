@@ -3,9 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, isLocalChartId, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
 import type { MapsFavouriteBeatmapset, OsuScore } from "../../lib/types";
-import { formatAccuracy, formatDuration, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
-import { getManiaJudgementCounts, getManiaGradeFromAccuracy } from "../../lib/score";
-import { GradeImg } from "../ui/GradeImg";
+import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
@@ -18,15 +16,16 @@ import { calculateManiaStarRating } from "../../lib/mania-star-rating";
 import { PatternRadar } from "./PatternRadar";
 import { danScaleContextFor, getDanTierImageSrc } from "../../lib/dan-images";
 import { DanProgressRail } from "./DanProgressRail";
+import { PlayResults } from "./PlayResults";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
-import { useLocale } from "../../lib/locale-context";
-import type { AppLocale } from "../../lib/locale";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { msdHeadline } from "#dan/msd-headline";
+import { hasLnAxis } from "#dan/ln-axis-keymodes";
+import { usesPrism } from "#dan/prism/switch";
 import { useNoDans } from "../../store";
 import {
   FamilyPatternChip,
@@ -163,39 +162,6 @@ export interface MapDetailPlayContext {
   scoreId?: number | null;
 }
 
-// The judgement palette, same values the replay OG card draws its chips with
-// (JUDGEMENT_COLORS in routes/api/og.ts).
-const JUDGEMENT_COLOR: Record<string, string> = {
-  MAX: "#ffcc22",
-  "300": "#66ccff",
-  "200": "#b3d944",
-  "100": "#88b300",
-  "50": "#ff8e5d",
-  Miss: "#ed7887",
-};
-
-// Keep all six cells in place, including zero counts and missing old data.
-function JudgementStrip({ statistics, locale }: { statistics: LivePlayerSkillScoreDetails["statistics"]; locale: AppLocale }) {
-  const { t } = useLingui();
-  const judgements = getManiaJudgementCounts(statistics ?? {});
-  const available = judgements.some(({ value }) => value > 0);
-  return (
-    <div className="grid grid-cols-6 gap-2 border-y border-white/5 py-4" aria-label={available ? t`Judgments` : t`Judgments unavailable`}>
-      {judgements.map(({ label, value }) => (
-        <div key={label} className="flex min-w-0 flex-col">
-          <span
-            className={`text-[15px] font-bold leading-none tabular-nums ${available && value > 0 ? "" : "text-osu-f1/40"}`}
-            style={available && value > 0 ? { color: JUDGEMENT_COLOR[label] } : undefined}
-          >
-            {available ? formatNumber(value, locale) : "—"}
-          </span>
-          <span className="mt-1.5 text-[9px] uppercase tracking-wide text-osu-f1/60">{label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** The DA badge's tail: "OD 9" rather than "OD 9.0" when the value is whole. */
 function formatDaOd(od: number): string {
   return Number.isInteger(od) ? String(od) : od.toFixed(1);
@@ -203,7 +169,7 @@ function formatDaOd(od: number): string {
 
 // The score's mods, as the badge row of a score screen. A play whose full mod
 // list aged out still shows its speed mod, which is all the projection kept.
-function PlayModRow({ play }: { play: MapDetailPlayContext }) {
+export function PlayModRow({ play }: { play: MapDetailPlayContext }) {
   const mods = play.mods && play.mods.length > 0
     ? [...new Set(play.mods.filter((mod) => typeof mod === "string" && mod.length > 0))]
     : play.rateMod
@@ -228,52 +194,17 @@ function PlayModRow({ play }: { play: MapDetailPlayContext }) {
 // Everything displayed here arrives with the play list. Opening a score or
 // switching tabs must not fetch osu! or insert another row after first paint.
 export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; entry?: LiveMapSearchEntry | null }) {
-  const { t } = useLingui();
-  const locale = useLocale();
   const noDans = useNoDans();
-  const score = play.score;
-  const grade = score?.rank || (play.accuracy != null ? getManiaGradeFromAccuracy(play.accuracy, play.mods ?? []) : null);
-  const scoreAccuracy = play.accuracy == null ? null : formatAccuracy(play.accuracy);
-  const danAccuracy = play.dan?.accuracy == null ? null : formatAccuracy(play.dan.accuracy);
   const showRail = !noDans && play.dan != null && play.dan.chartRating != null;
   const rejected = play.dan?.rejection != null;
   const showSkills = !play.dan && play.rating != null;
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className={`grid gap-2.5 ${showRail || showSkills ? "sm:grid-cols-[minmax(0,1fr)_15rem]" : ""}`}>
-        <div className="flex min-w-0 flex-col gap-5 rounded-xl bg-osu-b4/50 p-4 sm:p-5">
-          <div className="flex min-h-5 items-start justify-between gap-3">
-            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`${play.username}'s play`}</span>
-            <PlayModRow play={play} />
-          </div>
-          <div className="flex flex-1 flex-wrap items-center justify-between gap-x-5 gap-y-3 py-1">
-            <div className="flex items-center gap-3">
-              {grade ? <GradeImg grade={grade} size={42} /> : null}
-              <div className="flex flex-col">
-                <span className="text-[36px] font-bold leading-none tabular-nums text-osu-l1">{scoreAccuracy ?? "—"}</span>
-                <span className="mt-1.5 text-[9px] uppercase tracking-wide text-osu-f1/70">{t`Accuracy`}</span>
-              </div>
-            </div>
-            {danAccuracy != null && danAccuracy !== scoreAccuracy && (
-              <Stat label={t`Dan accuracy`} value={danAccuracy} badge={play.dan?.currency ? accuracyCurrencyLabel(play.dan.currency) : undefined} />
-            )}
-          </div>
-          <JudgementStrip statistics={score?.statistics ?? null} locale={locale} />
-          <div className={`grid gap-x-3 gap-y-4 ${play.pp != null ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-3"}`}>
-            <Stat label={t`Max combo`} value={score?.maxCombo != null ? `${formatNumber(score.maxCombo, locale)}x` : "—"} />
-            <Stat label={t`Score`} value={score?.totalScore != null ? formatNumber(score.totalScore, locale) : "—"} />
-            {play.pp != null && <Stat label={t`PP`} value={formatPP(play.pp)} />}
-            <div className="flex flex-col" title={play.playedAt ? formatTimeAgoTooltip(play.playedAt, locale) : undefined}>
-              <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{play.playedAt ? formatTimeAgo(play.playedAt, locale) : "—"}</span>
-              <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">
-                {play.sourceLabel ?? (play.source === "top" ? t`profile top play` : t`tracked history`)}
-              </span>
-            </div>
-          </div>
-        </div>
+      <div className={`grid gap-5 sm:gap-6 ${showRail || showSkills ? "sm:grid-cols-[minmax(0,1fr)_15rem]" : ""}`}>
+        <PlayResults play={play} />
         {showRail && play.dan ? (
-          <div className="rounded-xl bg-osu-b4/50 p-4">
+          <div className="border-t border-white/[0.07] pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
             <DanProgressRail
               context={danScaleContextFor(entry?.keyCount, play.dan.family)}
               chart={play.dan.chartRating}
@@ -283,7 +214,7 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
               rejected={rejected}
             />
           </div>
-        ) : showSkills ? <PlaySkillRatings play={play} /> : null}
+        ) : showSkills ? <PlaySkillRatings play={play} keyCount={entry?.keyCount} /> : null}
       </div>
       {play.vibroAdjustment && <p className="text-[11px] text-[#ffcf70]"><Trans>Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes.</Trans></p>}
       {play.dan?.rejection ? (
@@ -296,14 +227,14 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
   );
 }
 
-function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
+function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyCount?: number }) {
   const { t, i18n } = useLingui();
-  const skills = MSD_SKILLSETS.map((name) => ({ name, value: play.skillRatings?.[name] ?? 0 }))
+  const skills = msdSkillsetsFor(keyCount).map((name) => ({ name, value: play.skillRatings?.[name] ?? 0 }))
     .filter(({ value }) => Number.isFinite(value) && value >= 1)
     .sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...skills.map(({ value }) => value));
   return (
-    <div className="flex flex-col gap-4 rounded-xl bg-osu-b4/50 p-4">
+    <div className="flex flex-col gap-4 border-t border-white/[0.07] pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-wide text-osu-f1/60"><Trans>MSD skill rating</Trans></div>
@@ -318,8 +249,8 @@ function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-2.5" aria-label={t`Skill breakdown`}>
           {skills.map(({ name, value }) => (
-            <div key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2">
-              <span className="text-[10px] text-osu-l2">{i18n._(MSD_SKILLSET_LABELS[name])}</span>
+            <div key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2" title={halvesTitle(i18n, name, keyCount, play.skillRatings)}>
+              <span className="text-[10px] text-osu-l2">{skillsetLabel(i18n, name, keyCount)}</span>
               <span className="h-1.5 overflow-hidden rounded-full bg-white/5">
                 <span className="block h-full rounded-full bg-osu-pink/70" style={{ width: `${value / max * 100}%` }} />
               </span>
@@ -410,7 +341,41 @@ const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   Chordjack: msg`Chordjack`,
   Technical: msg`Technical`,
   LN: msg`LN`,
+  Speed: msg`Speed`,
 };
+
+// Prism, the 6K-8K calculator, files its skillsets in MinaCalc's slots, as
+// Etterna's seven-key handler does; these are the names they stand for.
+const PRISM_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
+  Jumpstream: msg`Chordstream`,
+  Handstream: msg`Bracket`,
+  Chordjack: msg`Jack`,
+};
+
+// Prism's Chordstream and Jack take their single-note pattern in; Stream and
+// JackSpeed hold only the single-note halves, shown with the chord halves
+// when hovering the merged skillset.
+function msdSkillsetsFor(keyCount: number | null | undefined): string[] {
+  return usesPrism(keyCount) ? [...MSD_SKILLSETS.filter((name) => name !== "JackSpeed" && name !== "Stream"), "Speed"] : MSD_SKILLSETS;
+}
+
+function halvesTitle(
+  i18n: ReturnType<typeof useLingui>["i18n"], name: string, keyCount: number | null | undefined, values: Record<string, number> | null | undefined,
+): string | undefined {
+  if (!usesPrism(keyCount) || (name !== "Chordjack" && name !== "Jumpstream")) return undefined;
+  const jack = name === "Chordjack";
+  const single = Number(values?.[jack ? "JackSpeed" : "Stream"] ?? 0), chord = Number(values?.[jack ? "ChordjackOnly" : "JumpstreamOnly"] ?? 0);
+  if (!(single >= 1) || !(chord >= 1)) return undefined;
+  const singleText = single.toFixed(2), chordText = chord.toFixed(2);
+  return jack
+    ? i18n._(msg`Single-note jacks ${singleText}, chordjacks ${chordText}`)
+    : i18n._(msg`Single-note streams ${singleText}, chordstreams ${chordText}`);
+}
+
+function skillsetLabel(i18n: ReturnType<typeof useLingui>["i18n"], name: string, keyCount: number | null | undefined): string {
+  const label = (usesPrism(keyCount) ? PRISM_SKILLSET_LABELS[name] : undefined) ?? MSD_SKILLSET_LABELS[name];
+  return label ? i18n._(label) : name;
+}
 
 const BEATMAP_STATUS_LABELS: Record<string, MessageDescriptor> = {
   ranked: msg`Ranked`,
@@ -567,16 +532,18 @@ export function MsdBlock({
   // the index (base msd remains for pre-msdLn cached payloads).
   const msd = rateAdjusted ? rateMsd : msdLn ?? analysisMsd ?? entry.msdLn ?? entry.msd ?? null;
   if (!msd) return null;
-  // Independent LN is 4K-only, including when an older cached artifact
-  // still contains obsolete LN values for another keymode. The backend
+  // An LN number shows on 4K and on the keymodes whose LN axis is published
+  // (hasLnAxis), never from an older cached artifact of another keymode. The backend
   // publishes the LN number on every chart past the hold line, LN identity
   // or not; identity only decides whether LN can be the headline.
   const hasLnIdentity = rateAdjusted
     ? rateDan == null || rateDan.family === "ln"
     : analysisLnIdentity ?? (entry.primaryPattern === "ln" || entry.dan?.family === "ln");
-  const skillsetNames = entry.keyCount === 4 && Number(msd.LN ?? 0) > 0
-    ? [...MSD_SKILLSETS, "LN"]
-    : MSD_SKILLSETS;
+  // 6K-8K's LN number shows whenever their LN axis is published (Prism).
+  const lnShown = entry.keyCount === 4 || hasLnAxis(entry.keyCount);
+  const skillsetNames = lnShown && Number(msd.LN ?? 0) > 0
+    ? [...msdSkillsetsFor(entry.keyCount), "LN"]
+    : msdSkillsetsFor(entry.keyCount);
   const skillsets = skillsetNames
     .map((name) => ({ name, value: Number(msd[name] ?? 0) }))
     // The 6K/7K calc engine returns ~0 for skillsets it does not rate
@@ -635,7 +602,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <div key={name} className="flex flex-col" title={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : undefined}>
+            <div key={name} className="flex flex-col" title={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTitle(i18n, name, entry.keyCount, msd)}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"
@@ -644,7 +611,7 @@ export function MsdBlock({
                 {value.toFixed(2)}
               </span>
               <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/55">
-                {i18n._(MSD_SKILLSET_LABELS[name] ?? name)}
+                {skillsetLabel(i18n, name, entry.keyCount)}
               </span>
             </div>
           ))}
