@@ -739,6 +739,11 @@ msgstr "{0} 次游玩"
 msgid "{0} players"
 msgstr "{0} 名玩家"
 
+#. placeholder {0}: formatNumber(players)
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "{0} players with a clear"
+msgstr "{0} 名玩家已通过"
+
 #. placeholder {0}: compact(insights.grind.mostPlayed.plays)
 #. placeholder {0}: compact(judgement.plays)
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
@@ -1182,6 +1187,10 @@ msgid "{count} still analyzing, so this estimate can still move."
 msgstr "{count}仍在分析中，因此这个估计仍可能变动。"
 
 #: src/routes/rankings.tsx
+msgid "{countryName} mania dan clears"
+msgstr "{countryName} mania 段位通过"
+
+#: src/routes/rankings.tsx
 msgid "{countryName} mania dan leaderboards"
 msgstr "{countryName} mania 段位排行榜"
 
@@ -1396,6 +1405,7 @@ msgstr "{keys}K 缩略图"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/DanMark.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/team/TeamProfilePage.tsx
 msgid "{label} dan"
@@ -1824,6 +1834,11 @@ msgstr "{typeName} 卡包，{typeBlurb}"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "{USER_COLLECTION_MIN_ITEMS} maps minimum"
 msgstr "至少 {USER_COLLECTION_MIN_ITEMS} 张谱面"
+
+#. placeholder {0}: formatDan(danBareLabel(danLabel))
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{username} is <0>{0}</0>"
+msgstr "{username} 是 <0>{0}</0>"
 
 #. placeholder {0}: danTierName(danLabel, formatDan)
 #: src/components/player/DanEvidenceModal.tsx
@@ -4271,6 +4286,7 @@ msgid "Changing who can see this skin failed. Try again."
 msgstr "修改皮肤可见范围失败。请重试。"
 
 #: src/components/companella/SubmissionDetail.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Chart"
 msgstr "谱面"
@@ -4472,6 +4488,11 @@ msgstr "清除"
 msgid "Clear"
 msgstr "清除"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgctxt "a dan course pass"
+msgid "Clear"
+msgstr "通过"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Clear all"
@@ -4571,6 +4592,10 @@ msgstr "以 {courseAccuracy} 通过了 {courseName}。"
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "cleared {date} · #{rank}"
 #~ msgstr "完成于 {date} · 第 {rank} 名"
+
+#: src/routes/rankings.tsx
+msgid "Clears"
+msgstr "通过"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
@@ -5192,6 +5217,7 @@ msgstr "无法加载这些成绩"
 msgid "Could not load these plays."
 msgstr "无法加载这些成绩。"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -5584,6 +5610,10 @@ msgstr "国家/地区 mania 排行榜"
 #~ msgid "country pride"
 #~ msgstr "国家荣耀"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Course"
+msgstr "课题"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
 #~ msgstr "课题谱面都没有上架，通过与否由维护那张段位表的人来认定。这些都不会以段位的形式从 osu! API 回来，所以本站查不到你的段位，只能看你打过的成绩。"
@@ -5595,6 +5625,10 @@ msgstr "国家/地区 mania 排行榜"
 #: src/routes/dan-estimates.tsx
 msgid "Course packs and allowed mods"
 msgstr "课程图包和允许的 Mod"
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Courses"
+msgstr "课题"
 
 #: src/components/layout/SupportGoalBar.tsx
 msgid "Covered through {covered}"
@@ -5829,6 +5863,7 @@ msgstr "段位 {0}"
 msgid "Dan accuracy"
 msgstr "段位准确率"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Dan course"
 msgstr "段位类型"
@@ -8179,6 +8214,7 @@ msgid "How dan levels are estimated"
 msgstr "段位等级是如何估算的"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "How dans are estimated"
 msgstr "段位是如何估算的"
@@ -9306,6 +9342,7 @@ msgstr "实时更新已开启"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -11424,6 +11461,14 @@ msgstr "这里没有叫这个名字的人。"
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Nobody here has a rated {axisLabel} pool yet."
 msgstr "这里还没有人拥有已评分的{axisLabel}谱面池。"
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Nobody here has a verified {skillsetLabel} clear yet."
+msgstr "这里还没有人有经过验证的 {skillsetLabel} 通过。"
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Nobody here has a verified course clear yet."
+msgstr "这里还没有人有经过验证的课题通过。"
 
 #: src/components/rankings/VibroLeagueBoard.tsx
 #~ msgid "Nobody here has a vibro pool yet."
@@ -14122,6 +14167,7 @@ msgstr "区域"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/team/TeamProfilePage.tsx
 msgid "Regular"
@@ -14978,6 +15024,10 @@ msgstr "带有 {excludedBadges}、改变图键数的键数 mod，或自定义倍
 #: src/routes/dan-estimates.tsx
 msgid "ScoreV2 acc (97%)"
 msgstr "ScoreV2 准确率（97%）"
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "ScoreV2 accuracy"
+msgstr "ScoreV2 准确率"
 
 #: src/components/ui/ImageLightbox.tsx
 msgid "Screenshot"

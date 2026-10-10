@@ -1,9 +1,9 @@
-import { fetchLiveDanLeaderboard, fetchLiveSkillLeaderboard, fetchLiveUnratedPlays } from "./live-backend";
-import type { DanLeaderboardSnapshot, DanSide, SkillLeaderboardSnapshot } from "./skill-leaderboards";
+import { fetchLiveClearLeaderboard, fetchLiveDanLeaderboard, fetchLiveSkillLeaderboard, fetchLiveUnratedPlays } from "./live-backend";
+import type { ClearLeaderboardSnapshot, DanLeaderboardSnapshot, DanSide, SkillLeaderboardSnapshot } from "./skill-leaderboards";
 import type { UnratedPlaysKeys, UnratedPlaysRange, UnratedPlaysSnapshot, UnratedPlaysSort } from "./unrated-plays";
 
 /**
- * Module-level snapshot cache for the /rankings skill, dan and unrated plays boards.
+ * Module-level snapshot cache for the /rankings skill, dan, clears and unrated plays boards.
  *
  * The endpoint carries an HTTP cache, but a browser cache hit still costs a
  * round trip and a repaint: without this, every axis chip and every tab flip
@@ -123,6 +123,11 @@ function danKey(request: DanBoardRequest): string {
   return `dan ${request.country} ${request.keys} ${request.side} ${request.skillset} ${request.page}`;
 }
 
+// Same request shape as the dan board.
+function clearKey(request: DanBoardRequest): string {
+  return `clears ${request.country} ${request.keys} ${request.side} ${request.skillset} ${request.page}`;
+}
+
 /** A settled, still-fresh board, or null. Never triggers a request. */
 export function peekSkillBoard(request: SkillBoardRequest): SkillLeaderboardSnapshot | null {
   return peek<SkillLeaderboardSnapshot | null>(skillKey(request));
@@ -130,6 +135,10 @@ export function peekSkillBoard(request: SkillBoardRequest): SkillLeaderboardSnap
 
 export function peekDanBoard(request: DanBoardRequest): DanLeaderboardSnapshot | null {
   return peek<DanLeaderboardSnapshot | null>(danKey(request));
+}
+
+export function peekClearBoard(request: DanBoardRequest): ClearLeaderboardSnapshot | null {
+  return peek<ClearLeaderboardSnapshot | null>(clearKey(request));
 }
 
 export function peekUnratedBoard(request: UnratedBoardRequest): UnratedPlaysSnapshot | null {
@@ -150,6 +159,10 @@ export function loadSkillBoard(request: SkillBoardRequest): Promise<SkillLeaderb
 
 export function loadDanBoard(request: DanBoardRequest): Promise<DanLeaderboardSnapshot> {
   return load(danKey(request), () => fetchLiveDanLeaderboard(request));
+}
+
+export function loadClearBoard(request: DanBoardRequest): Promise<ClearLeaderboardSnapshot> {
+  return load(clearKey(request), () => fetchLiveClearLeaderboard(request));
 }
 
 export function loadUnratedBoard(request: UnratedBoardRequest): Promise<UnratedPlaysSnapshot> {

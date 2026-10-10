@@ -9,7 +9,7 @@ import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
 import type { MyDataSkillBreakdown } from "./my-data";
 import type { ServerPackCollectionCard, ServerPackCollectionPage } from "./pack-wallet-sync";
 import type { ReplaySpectatorTicket } from "./replay-spectator";
-import { LEADERBOARD_PAGE_SIZE, type DanLeaderboardSnapshot, type DanSide, type SkillLeaderboardSnapshot } from "./skill-leaderboards";
+import { LEADERBOARD_PAGE_SIZE, type ClearLeaderboardSnapshot, type DanLeaderboardSnapshot, type DanSide, type SkillLeaderboardSnapshot } from "./skill-leaderboards";
 import type { UnratedPlaysSnapshot } from "./unrated-plays";
 import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-event-source";
 import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource } from "./shared-event-source";
@@ -3700,6 +3700,26 @@ export async function fetchLiveDanLeaderboard(params: {
     pageSize: String(LEADERBOARD_PAGE_SIZE),
   });
   return fetchLiveJson(`/api/snapshots/dan-leaderboard?${query.toString()}`);
+}
+
+/* The clears board: verified course and practice-chart passes, same query
+   shape as the dan board. */
+export async function fetchLiveClearLeaderboard(params: {
+  country: string;
+  keys: number;
+  side: DanSide;
+  skillset: string;
+  page: number;
+}): Promise<ClearLeaderboardSnapshot> {
+  const query = new URLSearchParams({
+    country: params.country,
+    keys: String(params.keys),
+    side: params.side,
+    skillset: params.skillset,
+    page: String(Math.max(1, Math.floor(params.page))),
+    pageSize: String(LEADERBOARD_PAGE_SIZE),
+  });
+  return fetchLiveJson(`/api/snapshots/clears-leaderboard?${query.toString()}`);
 }
 
 /* The unrated plays board: the plays the skill ratings leave out, one row

@@ -730,6 +730,11 @@ msgstr "{0} play"
 msgid "{0} players"
 msgstr "{0} jugadores"
 
+#. placeholder {0}: formatNumber(players)
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "{0} players with a clear"
+msgstr "{0} jugadores con clear"
+
 #. placeholder {0}: compact(insights.grind.mostPlayed.plays)
 #. placeholder {0}: compact(judgement.plays)
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
@@ -1173,6 +1178,10 @@ msgid "{count} still analyzing, so this estimate can still move."
 msgstr "{count} aún en análisis, así que esta estimación todavía puede cambiar."
 
 #: src/routes/rankings.tsx
+msgid "{countryName} mania dan clears"
+msgstr "Clears de dan de mania de {countryName}"
+
+#: src/routes/rankings.tsx
 msgid "{countryName} mania dan leaderboards"
 msgstr "Rankings de dan de mania de {countryName}"
 
@@ -1387,6 +1396,7 @@ msgstr "Miniatura {keys}K"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/DanMark.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/team/TeamProfilePage.tsx
 msgid "{label} dan"
@@ -1815,6 +1825,11 @@ msgstr "Pack {typeName}, {typeBlurb}"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "{USER_COLLECTION_MIN_ITEMS} maps minimum"
 msgstr "mínimo {USER_COLLECTION_MIN_ITEMS} mapas"
+
+#. placeholder {0}: formatDan(danBareLabel(danLabel))
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{username} is <0>{0}</0>"
+msgstr "{username} es <0>{0}</0>"
 
 #. placeholder {0}: danTierName(danLabel, formatDan)
 #: src/components/player/DanEvidenceModal.tsx
@@ -4262,6 +4277,7 @@ msgid "Changing who can see this skin failed. Try again."
 msgstr "No se pudo cambiar quién puede ver esta skin. Inténtalo de nuevo."
 
 #: src/components/companella/SubmissionDetail.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Chart"
 msgstr "Chart"
@@ -4463,6 +4479,11 @@ msgstr "limpiar"
 msgid "Clear"
 msgstr "Limpiar"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgctxt "a dan course pass"
+msgid "Clear"
+msgstr "Clear"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Clear all"
@@ -4562,6 +4583,10 @@ msgstr "Superó {courseName} con {courseAccuracy}."
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "cleared {date} · #{rank}"
 #~ msgstr "completado {date} · #{rank}"
+
+#: src/routes/rankings.tsx
+msgid "Clears"
+msgstr "Clears"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
@@ -5183,6 +5208,7 @@ msgstr "No se pudieron cargar estas plays"
 msgid "Could not load these plays."
 msgstr "No se pudieron cargar estas plays."
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -5575,6 +5601,10 @@ msgstr "Rankings de mania por país"
 #~ msgid "country pride"
 #~ msgstr "orgullo nacional"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Course"
+msgstr "Dan"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
 #~ msgstr "Los charts de los dans son unranked, y un clear lo verifica la gente que lleva esa escala. Nada de eso vuelve por la API de osu! como un nivel de dan, así que el sitio no puede consultar el tuyo. Solo puede mirar tus plays."
@@ -5586,6 +5616,10 @@ msgstr "Rankings de mania por país"
 #: src/routes/dan-estimates.tsx
 msgid "Course packs and allowed mods"
 msgstr "Packs de cursos y mods permitidos"
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Courses"
+msgstr "Dans"
 
 #: src/components/layout/SupportGoalBar.tsx
 msgid "Covered through {covered}"
@@ -5820,6 +5854,7 @@ msgstr "Dan {0}"
 msgid "Dan accuracy"
 msgstr "Precisión para dan"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Dan course"
 msgstr "Tipo de dan"
@@ -8170,6 +8205,7 @@ msgid "How dan levels are estimated"
 msgstr "Cómo se estiman los niveles de dan"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "How dans are estimated"
 msgstr "Cómo se estiman los dan"
@@ -9297,6 +9333,7 @@ msgstr "Actualizaciones en vivo activas"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -11415,6 +11452,14 @@ msgstr "Aquí no hay nadie con ese nombre."
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Nobody here has a rated {axisLabel} pool yet."
 msgstr "Todavía nadie aquí tiene plays suficientes de {axisLabel}."
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Nobody here has a verified {skillsetLabel} clear yet."
+msgstr "Nadie aquí tiene un clear verificado de {skillsetLabel} todavía."
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Nobody here has a verified course clear yet."
+msgstr "Nadie aquí tiene un clear verificado de un dan todavía."
 
 #: src/components/rankings/VibroLeagueBoard.tsx
 #~ msgid "Nobody here has a vibro pool yet."
@@ -14113,6 +14158,7 @@ msgstr "Regiones"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/team/TeamProfilePage.tsx
 msgid "Regular"
@@ -14969,6 +15015,10 @@ msgstr "No cuentan los scores con {excludedBadges}, con un key mod que cambie la
 #: src/routes/dan-estimates.tsx
 msgid "ScoreV2 acc (97%)"
 msgstr "Acc de ScoreV2 (97%)"
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "ScoreV2 accuracy"
+msgstr "Precisión ScoreV2"
 
 #: src/components/ui/ImageLightbox.tsx
 msgid "Screenshot"

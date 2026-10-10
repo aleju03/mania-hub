@@ -7,7 +7,9 @@
 // the pp board does (fetchLiveSkillLeaderboard / fetchLiveDanLeaderboard in
 // live-backend.ts).
 
-export type LeaderboardTab = "pp" | "skills" | "dan" | "unrated";
+import type { LivePlayerDanCourseEvidence } from "./live-backend";
+
+export type LeaderboardTab = "pp" | "skills" | "dan" | "clears" | "unrated";
 export type DanSide = "rc" | "ln";
 
 // Every keymode MinaCalc rates. Keep this in numeric order: unlike the three
@@ -33,9 +35,12 @@ export const DEFAULT_DAN_SIDE: DanSide = "rc";
 // 6K and 7K rice: jack/tech/speed/stream, 7K LN: its four subtypes), and which
 // ones exist is the backend's call - the picker renders the list it published.
 export const DEFAULT_DAN_SKILLSET = "overall";
+// The clears board's full-course column, and what an unset skillset means
+// there. The other columns are the practice-chart skillsets.
+export const DEFAULT_CLEAR_SKILLSET = "courses";
 
 export function parseLeaderboardTab(value: unknown): LeaderboardTab {
-  return value === "skills" || value === "dan" || value === "unrated" ? value : DEFAULT_LEADERBOARD_TAB;
+  return value === "skills" || value === "dan" || value === "clears" || value === "unrated" ? value : DEFAULT_LEADERBOARD_TAB;
 }
 
 export function parseLeaderboardKeys(value: unknown): LeaderboardKeyCount {
@@ -140,5 +145,39 @@ export interface DanLeaderboardSnapshot extends LeaderboardSnapshotBase {
   sides: Array<{ side: DanSide; players: number }>;
   // Columns with a population in this scope, in the backend's publication
   // order; the picker is this list, never a local copy of it.
+  skillsets: Array<{ skillset: string; players: number }>;
+}
+
+export interface ClearLeaderboardEntry {
+  rank: number;
+  user: LeaderboardUser;
+  // The cleared chart's own level on the ladder; every clear is at or above
+  // the pass bar, so there is no +/- tier to carry.
+  level: number;
+  label: string;
+  // The accuracy the clear was judged on, in the ladder's currency (ScoreV2 on
+  // 4K LN, stable everywhere else).
+  accuracy: number;
+  currency: "stable" | "v2";
+  courseName: string;
+  beatmapId: number;
+  mods: string[];
+  playedAt: string | null;
+  // The run itself, in the dan window's course shape, so a row opens the same
+  // score card.
+  score?: LivePlayerDanCourseEvidence;
+}
+
+export interface ClearLeaderboardSnapshot {
+  keyCount: number;
+  side: DanSide;
+  // DEFAULT_CLEAR_SKILLSET, or a practice skillset id.
+  skillset: string;
+  ranking: ClearLeaderboardEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  fetchedAt: number;
+  sides: Array<{ side: DanSide; players: number }>;
   skillsets: Array<{ skillset: string; players: number }>;
 }

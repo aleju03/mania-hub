@@ -27,6 +27,7 @@ import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry } from "..
 import { PageTabs } from "../components/layout/PageTabs";
 import { SkillLeaderboardBoard } from "../components/rankings/SkillLeaderboardBoard";
 import { DanLeaderboardBoard } from "../components/rankings/DanLeaderboardBoard";
+import { ClearLeaderboardBoard } from "../components/rankings/ClearLeaderboardBoard";
 import { UnratedPlaysBoard } from "../components/rankings/UnratedPlaysBoard";
 import { DEFAULT_UNRATED_PLAYS_KEYS, DEFAULT_UNRATED_PLAYS_RANGE, DEFAULT_UNRATED_PLAYS_SORT, parseUnratedPlaysKeys, parseUnratedPlaysRange, parseUnratedPlaysSort, type UnratedPlaysKeys, type UnratedPlaysRange, type UnratedPlaysSort } from "../lib/unrated-plays";
 import {
@@ -161,7 +162,7 @@ export const Route = createFileRoute("/rankings")({
       page: parseRankingsPage(search.page),
       country: parseCountrySearchParam(search.country),
       tab,
-      keys: tab === "dan"
+      keys: tab === "dan" || tab === "clears"
         ? parseDanLeaderboardKeys(search.keys)
         : tab === "unrated"
           ? parseUnratedPlaysKeys(search.keys)
@@ -199,7 +200,9 @@ export const Route = createFileRoute("/rankings")({
         ? i18n._(msg`${countryName} mania skill leaderboards`)
         : tab === "dan"
           ? i18n._(msg`${countryName} mania dan leaderboards`)
-          : tab === "unrated"
+          : tab === "clears"
+            ? i18n._(msg`${countryName} mania dan clears`)
+            : tab === "unrated"
             ? i18n._(msg`${countryName} mania unrated plays`)
             : i18n._(msg`${countryName} mania rankings`)
       : i18n._(msg`Country mania rankings`);
@@ -235,16 +238,17 @@ function RankingsPage() {
   const { warming } = useCountryWarming(selectedCountry);
   const noDans = useNoDans();
   const requestedTab: LeaderboardTab = search.tab ?? DEFAULT_LEADERBOARD_TAB;
-  const tab: LeaderboardTab = noDans && requestedTab === "dan" ? DEFAULT_LEADERBOARD_TAB : requestedTab;
+  const danTab = requestedTab === "dan" || requestedTab === "clears";
+  const tab: LeaderboardTab = noDans && danTab ? DEFAULT_LEADERBOARD_TAB : requestedTab;
 
   useEffect(() => {
-    if (!noDans || requestedTab !== "dan") return;
+    if (!noDans || !danTab) return;
     void navigate({
       to: "/rankings",
       search: { ...search, tab: DEFAULT_LEADERBOARD_TAB, page: 1 },
       replace: true,
     });
-  }, [navigate, noDans, requestedTab, search]);
+  }, [navigate, noDans, danTab, search]);
 
   /* One tab bar for all four boards, with the per-board status text riding in
      its right slot: PageHeader's own `right` wraps onto a second row on mobile,
@@ -256,8 +260,9 @@ function RankingsPage() {
         { id: "pp" as LeaderboardTab, label: t`Performance` },
         { id: "skills" as LeaderboardTab, label: t`MSD` },
         { id: "dan" as LeaderboardTab, label: t`Dan` },
+        { id: "clears" as LeaderboardTab, label: t`Clears` },
         { id: "unrated" as LeaderboardTab, label: t`Unrated` },
-      ].filter((item) => !noDans || item.id !== "dan")}
+      ].filter((item) => !noDans || (item.id !== "dan" && item.id !== "clears"))}
       value={tab}
       onChange={(next) => navigate({ to: "/rankings", search: { ...search, tab: next, page: 1 }, replace: true })}
       right={right}
@@ -278,7 +283,9 @@ function RankingsPage() {
         iconSrc="/images/icons/rankings.svg"
         title={tab === "dan"
           ? t`${countryName} mania dan leaderboards`
-          : tab === "unrated"
+          : tab === "clears"
+            ? t`${countryName} mania dan clears`
+            : tab === "unrated"
             ? t`${countryName} mania unrated plays`
             : t`${countryName} mania skill leaderboards`}
       />
@@ -303,6 +310,15 @@ function RankingsPage() {
               country={selectedCountry}
               keys={keys}
               axis={search.axis}
+              page={page}
+              onNavigate={(next) => navigate({ to: "/rankings", search: { ...search, ...next, page: next.page ?? 1 }, replace: true })}
+            />
+          ) : tab === "clears" ? (
+            <ClearLeaderboardBoard
+              country={selectedCountry}
+              keys={keys}
+              side={search.side ?? DEFAULT_DAN_SIDE}
+              skillset={search.skillset === DEFAULT_DAN_SKILLSET ? undefined : search.skillset}
               page={page}
               onNavigate={(next) => navigate({ to: "/rankings", search: { ...search, ...next, page: next.page ?? 1 }, replace: true })}
             />

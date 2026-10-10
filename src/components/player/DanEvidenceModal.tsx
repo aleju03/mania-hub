@@ -18,7 +18,7 @@ import {
   type LivePlayerSkillPlay,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatTimeAgo } from "../../lib/format";
-import { danBareLabel, danScaleContextFor, danTierName, getDanTierImageSrc } from "../../lib/dan-images";
+import { danBareLabel, danScaleContextFor, danTierName, danTierSuffix, getDanTierImageSrc } from "../../lib/dan-images";
 import { DanStepRail } from "./DanStepRail";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
@@ -224,6 +224,11 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
     return `https://osu.ppy.sh/scores/${courseClear.soloScoreId}`;
   })();
   const danLabel = dan ? (beyond ? danBareLabel(dan.label) : dan.label) : "";
+  // Clearing a course puts the player at that level's mid, so a headline sitting
+  // there (or under it) on the course they cleared just names the level.
+  const atClearedLevel = dan != null && !beyond && courseClear != null && !courseUnderBar
+    && !danTierSuffix(danLabel).startsWith("+")
+    && danBareLabel(danLabel).toLowerCase() === danBareLabel(courseClear.level).toLowerCase();
   const image = dan ? getDanTierImageSrc(danLabel, side === "ln" ? "ln" : undefined, keyCount) : null;
   const minAccuracyPercent = Math.round((evidence?.minAccuracy ?? 0.92) * 100);
   const barAccuracyPercent = Math.round((evidence?.barAccuracy ?? 0.96) * 100);
@@ -416,6 +421,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                   <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">
                     {dan && beyond ? (
                       <Trans>{username} is beyond <span style={{ color }}>{formatDan(danLabel)}</span></Trans>
+                    ) : dan && atClearedLevel ? (
+                      <Trans>{username} is <span style={{ color }}>{formatDan(danBareLabel(danLabel))}</span></Trans>
                     ) : dan ? (
                       <Trans>{username} is around <span style={{ color }}>{danTierName(danLabel, formatDan)}</span></Trans>
                     ) : (

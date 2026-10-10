@@ -94,20 +94,26 @@ export function DanSkillsetPicker({
   value,
   onChange,
   disabled = false,
+  lead,
+  countTitle,
 }: {
   skillsets: Array<{ skillset: string; players: number }>;
   value: string;
   onChange: (skillset: string) => void;
   disabled?: boolean;
+  /** The column that is not a skill: Overall on the dan board, full courses on the clears board. */
+  lead?: { skillset: string; label: string };
+  countTitle?: (players: number) => string;
 }) {
   const { t, i18n } = useLingui();
   if (skillsets.length < 2) return null;
+  const leadSkillset = lead?.skillset ?? DEFAULT_DAN_SKILLSET;
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide" role="group" aria-label={t`Dan skill`}>
       {skillsets.map((info) => {
-        const overall = info.skillset === DEFAULT_DAN_SKILLSET;
+        const overall = info.skillset === leadSkillset;
         const meta = overall ? OVERALL_AXIS_META : DAN_SKILLSET_META[info.skillset];
-        const label = meta ? i18n._(meta.labelMsg) : info.skillset;
+        const label = overall && lead ? lead.label : meta ? i18n._(meta.labelMsg) : info.skillset;
         const color = overall ? OVERALL_AXIS_META.color : DAN_SKILLSET_META[info.skillset]?.color;
         const active = info.skillset === value;
         const chip = (
@@ -117,7 +123,7 @@ export function DanSkillsetPicker({
             aria-pressed={active}
             disabled={disabled}
             onClick={() => onChange(info.skillset)}
-            title={t`${formatNumber(info.players)} rated players`}
+            title={countTitle ? countTitle(info.players) : t`${formatNumber(info.players)} rated players`}
             className={`flex-shrink-0 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
               disabled ? "cursor-wait" : "cursor-pointer"
             } ${

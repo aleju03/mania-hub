@@ -1,5 +1,5 @@
 import { getManiaAccuracyFromCounts, getManiaGradeFromAccuracy, getScoreSpeedBucket } from "./score";
-import type { LiveKeymodePpPlay } from "./live-backend";
+import type { LiveKeymodePpPlay, LivePlayerDanCourseEvidence } from "./live-backend";
 import type { OsuScore } from "./types";
 
 /** Who the profile belongs to, which is who every tracked play on it is by. */
@@ -89,4 +89,35 @@ export function buildTrackedPlayScore(play: LiveKeymodePpPlay, viewer: TrackedPl
     // Absent fields are absent on purpose (see above), which no full OsuScore
     // shape can express.
   } as unknown as OsuScore;
+}
+
+/** A verified dan course or practice-chart run, as the same score card. */
+export function buildCourseClearScore(course: LivePlayerDanCourseEvidence, keyCount: number, viewer: TrackedPlayViewer): OsuScore {
+  return buildTrackedPlayScore({
+    beatmapId: course.beatmapId,
+    keyCount,
+    // A dan course is loved or graveyard, so the run is worth no pp;
+    // the card reads it as a tracked play, which is what it is.
+    pp: 0,
+    beatmapsetId: course.beatmapsetId,
+    title: course.title,
+    artist: course.artist,
+    version: course.version,
+    // The card is a score card, so it shows the accuracy the player's
+    // own client did. The ladder's number is the window's business.
+    accuracy: course.displayedAccuracy ?? course.accuracy,
+    rank: course.rank,
+    mods: course.mods,
+    playedAt: course.playedAt,
+    maxCombo: course.maxCombo,
+    hasReplay: course.hasReplay,
+    soloScoreId: course.soloScoreId,
+    totalScore: course.totalScore,
+    legacyScoreId: course.legacyScoreId,
+    isLazer: course.isLazer,
+    statistics: course.statistics,
+    creator: null,
+    stars: null,
+    bpm: null,
+  }, viewer);
 }

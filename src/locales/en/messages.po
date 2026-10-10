@@ -748,6 +748,11 @@ msgstr "{0} play"
 msgid "{0} players"
 msgstr "{0} players"
 
+#. placeholder {0}: formatNumber(players)
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "{0} players with a clear"
+msgstr "{0} players with a clear"
+
 #. placeholder {0}: compact(insights.grind.mostPlayed.plays)
 #. placeholder {0}: compact(judgement.plays)
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
@@ -1196,6 +1201,10 @@ msgid "{count} still analyzing, so this estimate can still move."
 msgstr "{count} still analyzing, so this estimate can still move."
 
 #: src/routes/rankings.tsx
+msgid "{countryName} mania dan clears"
+msgstr "{countryName} mania dan clears"
+
+#: src/routes/rankings.tsx
 msgid "{countryName} mania dan leaderboards"
 msgstr "{countryName} mania dan leaderboards"
 
@@ -1410,6 +1419,7 @@ msgstr "{keys}K thumbnail"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/DanMark.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/team/TeamProfilePage.tsx
 msgid "{label} dan"
@@ -1838,6 +1848,11 @@ msgstr "{typeName} pack, {typeBlurb}"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "{USER_COLLECTION_MIN_ITEMS} maps minimum"
 msgstr "{USER_COLLECTION_MIN_ITEMS} maps minimum"
+
+#. placeholder {0}: formatDan(danBareLabel(danLabel))
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{username} is <0>{0}</0>"
+msgstr "{username} is <0>{0}</0>"
 
 #. placeholder {0}: danTierName(danLabel, formatDan)
 #: src/components/player/DanEvidenceModal.tsx
@@ -4289,6 +4304,7 @@ msgid "Changing who can see this skin failed. Try again."
 msgstr "Changing who can see this skin failed. Try again."
 
 #: src/components/companella/SubmissionDetail.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Chart"
 msgstr "Chart"
@@ -4490,6 +4506,11 @@ msgstr "clear"
 msgid "Clear"
 msgstr "Clear"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgctxt "a dan course pass"
+msgid "Clear"
+msgstr "Clear"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Clear all"
@@ -4589,6 +4610,10 @@ msgstr "Cleared {courseName} at {courseAccuracy}."
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "cleared {date} · #{rank}"
 #~ msgstr "cleared {date} · #{rank}"
+
+#: src/routes/rankings.tsx
+msgid "Clears"
+msgstr "Clears"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
@@ -5210,6 +5235,7 @@ msgstr "Could not load these plays"
 msgid "Could not load these plays."
 msgstr "Could not load these plays."
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -5602,6 +5628,10 @@ msgstr "Country mania rankings"
 #~ msgid "country pride"
 #~ msgstr "country pride"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Course"
+msgstr "Course"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
 #~ msgstr "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
@@ -5613,6 +5643,10 @@ msgstr "Country mania rankings"
 #: src/routes/dan-estimates.tsx
 msgid "Course packs and allowed mods"
 msgstr "Course packs and allowed mods"
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Courses"
+msgstr "Courses"
 
 #: src/components/layout/SupportGoalBar.tsx
 msgid "Covered through {covered}"
@@ -5847,6 +5881,7 @@ msgstr "Dan {0}"
 msgid "Dan accuracy"
 msgstr "Dan accuracy"
 
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Dan course"
 msgstr "Dan course"
@@ -8201,6 +8236,7 @@ msgid "How dan levels are estimated"
 msgstr "How dan levels are estimated"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "How dans are estimated"
 msgstr "How dans are estimated"
@@ -9336,6 +9372,7 @@ msgstr "Live updates on"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -11454,6 +11491,14 @@ msgstr "Nobody here by that name."
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Nobody here has a rated {axisLabel} pool yet."
 msgstr "Nobody here has a rated {axisLabel} pool yet."
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Nobody here has a verified {skillsetLabel} clear yet."
+msgstr "Nobody here has a verified {skillsetLabel} clear yet."
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "Nobody here has a verified course clear yet."
+msgstr "Nobody here has a verified course clear yet."
 
 #: src/components/rankings/VibroLeagueBoard.tsx
 #~ msgid "Nobody here has a vibro pool yet."
@@ -14152,6 +14197,7 @@ msgstr "Regions"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/team/TeamProfilePage.tsx
 msgid "Regular"
@@ -15008,6 +15054,10 @@ msgstr "Scores with {excludedBadges}, a key mod that changes the map's key count
 #: src/routes/dan-estimates.tsx
 msgid "ScoreV2 acc (97%)"
 msgstr "ScoreV2 acc (97%)"
+
+#: src/components/rankings/ClearLeaderboardBoard.tsx
+msgid "ScoreV2 accuracy"
+msgstr "ScoreV2 accuracy"
 
 #: src/components/ui/ImageLightbox.tsx
 msgid "Screenshot"

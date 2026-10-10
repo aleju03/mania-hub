@@ -20,6 +20,9 @@ export interface LeaderboardRow {
   value: ReactNode;
   /** One muted line under the name: evidence counts, mostly. */
   detail: ReactNode;
+  /** What clicking the row opens instead of the profile (the clears board's
+   *  score card). The name still links to the profile. */
+  onOpen?: () => void;
 }
 
 function playerPath(username: string): string {
@@ -33,6 +36,7 @@ export function LeaderboardTable({
   emptyMessage,
   valueHeader,
   detailHeader,
+  wideDetail = false,
 }: {
   rows: LeaderboardRow[];
   loading: boolean;
@@ -40,6 +44,8 @@ export function LeaderboardTable({
   emptyMessage: ReactNode;
   valueHeader: string;
   detailHeader: string;
+  /** Room for a name in the detail column (the clears board's chart) rather than a count. */
+  wideDetail?: boolean;
 }) {
   const { t } = useLingui();
   const navigate = useNavigate();
@@ -81,31 +87,76 @@ export function LeaderboardTable({
             </div>
           ))
         ) : (
-          rows.map((row) => (
-            <Link
-              key={row.key}
-              to="/player/$username"
-              params={{ username: row.user.username }}
-              className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <span className="w-8 text-sm font-bold text-osu-f1">#{row.rank}</span>
+          rows.map((row) => {
+            const identity = (
+              <>
                 <Avatar url={row.user.avatar_url} userId={row.user.id} size={36} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <CountryFlag code={row.user.country_code} size="sm" className="flex-shrink-0" />
-                    <UsernameText
-                      username={row.user.username}
-                      avatarUrl={row.user.avatar_url}
-                      className="text-sm font-semibold truncate min-w-0"
-                    />
+                    {row.onOpen ? (
+                      <Link
+                        to="/player/$username"
+                        params={{ username: row.user.username }}
+                        onClick={(event) => event.stopPropagation()}
+                        className="min-w-0 truncate"
+                      >
+                        <UsernameText
+                          username={row.user.username}
+                          avatarUrl={row.user.avatar_url}
+                          className="text-sm font-semibold truncate min-w-0"
+                        />
+                      </Link>
+                    ) : (
+                      <UsernameText
+                        username={row.user.username}
+                        avatarUrl={row.user.avatar_url}
+                        className="text-sm font-semibold truncate min-w-0"
+                      />
+                    )}
                   </div>
                   <div className="mt-0.5 text-[11px] text-osu-f1">{row.detail}</div>
                 </div>
-                <span className="flex-shrink-0 text-right">{row.value}</span>
-              </div>
-            </Link>
-          ))
+              </>
+            );
+            const cardClass = "block w-full rounded-lg bg-osu-b4/50 p-3 text-left cursor-pointer hover:bg-osu-b4 transition-colors";
+            if (row.onOpen) {
+              return (
+                <div
+                  key={row.key}
+                  role="button"
+                  tabIndex={0}
+                  onClick={row.onOpen}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    row.onOpen?.();
+                  }}
+                  className={cardClass}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 text-sm font-bold text-osu-f1">#{row.rank}</span>
+                    {identity}
+                    <span className="flex-shrink-0 text-right">{row.value}</span>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <Link
+                key={row.key}
+                to="/player/$username"
+                params={{ username: row.user.username }}
+                className={cardClass}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-8 text-sm font-bold text-osu-f1">#{row.rank}</span>
+                  {identity}
+                  <span className="flex-shrink-0 text-right">{row.value}</span>
+                </div>
+              </Link>
+            );
+          })
         )}
       </div>
 
@@ -118,8 +169,8 @@ export function LeaderboardTable({
           <colgroup>
             <col className="w-[6%]" />
             <col />
-            <col className="w-[18%]" />
-            <col className="w-[16%]" />
+            <col className={wideDetail ? "w-[38%]" : "w-[18%]"} />
+            <col className={wideDetail ? "w-[20%]" : "w-[16%]"} />
           </colgroup>
           <thead>
             <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
@@ -158,9 +209,9 @@ export function LeaderboardTable({
                   key={row.key}
                   className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
                   style={{ background: index % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
-                  onClick={() => openPlayer(row.user.username)}
+                  onClick={() => (row.onOpen ? row.onOpen() : openPlayer(row.user.username))}
                   onAuxClick={(event) => {
-                    if (event.button !== 1) return;
+                    if (event.button !== 1 || row.onOpen) return;
                     if ((event.target as Element | null)?.closest("a")) return;
                     window.open(playerPath(row.user.username), "_blank", "noopener,noreferrer");
                   }}
@@ -170,7 +221,10 @@ export function LeaderboardTable({
                     <Link
                       to="/player/$username"
                       params={{ username: row.user.username }}
-                      className="flex items-center gap-3 min-w-0"
+                      onClick={(event) => event.stopPropagation()}
+                      // Only as wide as the avatar and name: a full-width link
+                      // swallowed clicks meant for a row that opens something else.
+                      className="inline-flex max-w-full items-center gap-3 min-w-0 align-middle"
                     >
                       <Avatar url={row.user.avatar_url} userId={row.user.id} size={30} />
                       <CountryFlag code={row.user.country_code} size="sm" className="flex-shrink-0" />

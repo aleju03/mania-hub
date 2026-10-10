@@ -67,7 +67,7 @@ import { buildRestrictedBestList, profileRailTotals } from "../../components/pla
 import { companellaImportsToScores, dropCompanellaOsuTwins } from "../../lib/companella-scores";
 import type { OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
-import { buildTrackedPlayScore } from "../../lib/tracked-play-score";
+import { buildCourseClearScore, buildTrackedPlayScore } from "../../lib/tracked-play-score";
 import {
   playedWithinOnlineWindow,
   readPlayerRecentPlay,
@@ -3479,33 +3479,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           keyCount={selectedDan.keyCount}
           side={selectedDan.side}
           onClose={() => setSelectedDan(null)}
-          onOpenCourseScore={(course) => setCourseScore(buildTrackedPlayScore({
-            beatmapId: course.beatmapId,
-            keyCount: selectedDan.keyCount,
-            // A dan course is loved or graveyard, so the run is worth no pp;
-            // the card reads it as a tracked play, which is what it is.
-            pp: 0,
-            beatmapsetId: course.beatmapsetId,
-            title: course.title,
-            artist: course.artist,
-            version: course.version,
-            // The card is a score card, so it shows the accuracy the player's
-            // own client did. The ladder's number is the window's business.
-            accuracy: course.displayedAccuracy ?? course.accuracy,
-            rank: course.rank,
-            mods: course.mods,
-            playedAt: course.playedAt,
-            maxCombo: course.maxCombo,
-            hasReplay: course.hasReplay,
-            soloScoreId: course.soloScoreId,
-            totalScore: course.totalScore,
-            legacyScoreId: course.legacyScoreId,
-            isLazer: course.isLazer,
-            statistics: course.statistics,
-            creator: null,
-            stars: null,
-            bpm: null,
-          }, {
+          onOpenCourseScore={(course) => setCourseScore(buildCourseClearScore(course, selectedDan.keyCount, {
             id: user.id,
             username: user.username,
             avatar_url: user.avatar_url,
