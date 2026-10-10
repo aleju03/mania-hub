@@ -42,7 +42,7 @@ beforeEach(() => {
     lastPlayAt: "2026-09-24T12:00:00Z", blockedAt: null,
   };
   play = {
-    scoreId: SCORE_ID, mods: [], accuracy: 98.5, totalScore: 900000,
+    scoreId: SCORE_ID, mods: [], accuracy: 98.5, totalScore: 900000, pp: null,
     reviewState: "clear", removed: false, rateSuspicious: true,
     chart: { title: "Test chart", artist: "Artist", version: "Hard", keyCount: 4 },
     playedAt: "2026-09-24T12:00:00Z", receivedAt: "2026-09-24T12:01:00Z",

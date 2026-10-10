@@ -29,6 +29,7 @@ export interface CompanellaAccountPlay {
   mods: string[];
   accuracy: number | null;
   totalScore: number;
+  pp: number | null;
   /* "clear" counts; anything else is a review hold. */
   reviewState: string;
   /* Removed by an admin: excluded for good, with its replay gone. */
@@ -67,19 +68,21 @@ export const listCompanellaAccounts = createServerFn({ method: "GET" })
   });
 
 export const listCompanellaAccountPlays = createServerFn({ method: "GET" })
-  .validator((data: { userId?: unknown; limit?: number; offset?: number }) => {
+  .validator((data: { userId?: unknown; limit?: number; offset?: number; query?: unknown; sort?: unknown }) => {
     const userId = Number(data?.userId);
     if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid user id.");
     return {
       userId,
       limit: Math.min(200, Math.max(1, Math.floor(Number(data?.limit) || 20))),
       offset: Math.max(0, Math.floor(Number(data?.offset) || 0)),
+      query: typeof data?.query === "string" ? data.query.slice(0, 80) : "",
+      sort: data?.sort === "pp" ? "pp" as const : "recent" as const,
     };
   })
   .handler(async ({ data }): Promise<Paged<CompanellaAccountPlay>> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("List a Companella player's plays");
-    const query = new URLSearchParams({ limit: String(data.limit), offset: String(data.offset) });
+    const query = new URLSearchParams({ limit: String(data.limit), offset: String(data.offset), q: data.query, sort: data.sort });
     const response = await adminFetch(`/api/admin/companella/accounts/${data.userId}/plays?${query.toString()}`);
     if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/companella/accounts/plays`);
     return await response.json() as Paged<CompanellaAccountPlay>;

@@ -1,4 +1,4 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -72,6 +72,7 @@ function AdminScoresPage() {
   const [list, setList] = useState<PlayList>("top");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pasted, setPasted] = useState("");
+  const [playQuery, setPlayQuery] = useState("");
   const [ask, setAsk] = useState<{ kind: "remove"; ids: number[] } | { kind: "hashi"; play: CompanellaAccountPlay } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,8 +85,6 @@ function AdminScoresPage() {
       const next = await lookupAdminScoreRemoval({ data: { query: lookup } });
       setView(next);
       setSelected(new Set());
-      const hashi = await listCompanellaAccountPlays({ data: { userId: next.user.userId, limit: 200 } }).catch(() => null);
-      setHashiPlays(hashi?.entries.filter((play) => !play.removed) ?? []);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -98,7 +97,23 @@ function AdminScoresPage() {
     void load(value);
   };
 
-  const rows = view ? (list === "top" ? view.topPlays : view.recentPlays) : [];
+  const hashiUserId = view?.user.userId;
+  const [hashiReload, setHashiReload] = useState(0);
+  // Hashi plays are searched on the server: a player can have thousands.
+  useEffect(() => {
+    if (hashiUserId == null) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void listCompanellaAccountPlays({ data: { userId: hashiUserId, limit: 50, query: playQuery.trim(), sort: "pp" } })
+        .then((page) => { if (!cancelled) setHashiPlays(page.entries.filter((play) => !play.removed)); })
+        .catch(() => { if (!cancelled) setHashiPlays([]); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [hashiUserId, playQuery, hashiReload]);
+
+  const needle = playQuery.trim().toLowerCase();
+  const rows = (view ? (list === "top" ? view.topPlays : view.recentPlays) : [])
+    .filter((row) => !needle || chartLabel(row).toLowerCase().includes(needle));
   const pastedIds = useMemo(() => parseScoreIds(pasted), [pasted]);
   const toRemove = useMemo(() => [...new Set([...selected, ...pastedIds])], [selected, pastedIds]);
 
@@ -120,6 +135,7 @@ function AdminScoresPage() {
     try {
       setMessage(await action());
       setPasted("");
+      setHashiReload((count) => count + 1);
       await load(`#${view.user.userId}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -181,12 +197,19 @@ function AdminScoresPage() {
             <>
               <div className="flex items-center gap-3">
                 {view.user.avatarUrl ? <img src={view.user.avatarUrl} alt="" className="h-10 w-10 rounded-full" /> : null}
-                <a href={`https://osu.ppy.sh/users/${view.user.userId}`} target="_blank" rel="noreferrer" className="text-[17px] font-medium text-white hover:underline">
+                <Link to="/player/$username" params={{ username: view.user.username }} className="text-[17px] font-medium text-white hover:underline">
                   {view.user.username}
-                </a>
+                </Link>
                 {view.user.countryCode ? <CountryFlag code={view.user.countryCode} size="xs" decorative /> : null}
                 <span className="text-[12px] text-osu-f1">#{view.user.userId}</span>
               </div>
+
+              <input
+                value={playQuery}
+                onChange={(event) => setPlayQuery(event.target.value)}
+                placeholder="search their plays by map..."
+                className="w-full rounded-md bg-osu-b4/60 border border-osu-b3/30 px-3 py-2 text-[14px] text-white placeholder:text-osu-f1 outline-none focus:border-osu-b3"
+              />
 
               <div className="flex flex-wrap items-center gap-2">
                 <SegmentedControl
@@ -216,7 +239,7 @@ function AdminScoresPage() {
 
               <div>
                 {rows.length === 0 ? (
-                  <p className="py-6 text-center text-[13px] text-osu-f1">No stored plays here.</p>
+                  <p className="py-6 text-center text-[13px] text-osu-f1">{needle ? "No plays match." : "No osu! plays stored for this player."}</p>
                 ) : rows.map((row) => (
                   <ScoreRow key={row.scoreId} row={row} checked={selected.has(row.scoreId)} onToggle={() => toggle(row.scoreId)} />
                 ))}
@@ -258,6 +281,9 @@ function AdminScoresPage() {
                           {play.reviewState !== "clear" ? <span className="text-osu-red-light">Excluded</span> : null}
                         </div>
                       </div>
+                      <span className="text-[15px] font-medium tabular-nums text-osu-l2">
+                        {play.pp != null ? `${Math.round(play.pp)}pp` : ""}
+                      </span>
                       <button disabled={busy} onClick={() => setAsk({ kind: "hashi", play })} className={DANGER_CLASS}>
                         <Trash2 size={13} />
                         Remove
