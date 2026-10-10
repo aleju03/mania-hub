@@ -1281,6 +1281,10 @@ msgstr "{error}. Presiona Enter o haz clic para intentar con el replay #{scoreId
 msgid "{files} files in {groupCount} groups"
 msgstr "{files} archivos en {groupCount} grupos"
 
+#: src/components/layout/SupportGoalBar.tsx
+msgid "{filling} hosting"
+msgstr "Hosting de {filling}"
+
 #: src/components/communities/AccessScopePicker.tsx
 msgid "{firstName} and {others} more"
 msgstr "{firstName} y {others} más"
@@ -8299,6 +8303,10 @@ msgstr "Si ya tenías un mejor score más viejo por encima de ellos, no cuenta."
 msgid "If you are restricted, you can keep submitting plays this way, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
 msgstr "Si estás restringido, puedes seguir enviando plays de esta forma, y tu pp se calcula con las de mapas rankeados de la misma forma que lo calcula osu!, así que sigues saliendo en los rankings. Eso sí, si haces trampa te pueden banear de Mania Tracker."
 
+#: src/routes/privacy.tsx
+msgid "If you donate through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, plus the name and message you gave. These are kept privately to link supporter status to your osu! account and are not shown publicly."
+msgstr "Si donas a través de Ko-fi o lava.top, el sitio recibe el monto, la moneda y la fecha del pago, además del nombre y el mensaje que diste. Se guardan de forma privada para vincular el estado de supporter a tu cuenta de osu! y no se muestran públicamente."
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
 msgstr "Si tienes el mapa, suelta su .osz aquí y el replay se reproduce desde tu copia."
@@ -11800,6 +11808,10 @@ msgstr "Obtenida"
 #: src/components/packs/CardSpotlight.tsx
 msgid "Obtained on {dateText}"
 msgstr "Obtenida el {dateText}"
+
+#: src/routes/privacy.tsx
+msgid "October 9, 2026"
+msgstr "9 de octubre de 2026"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -15359,8 +15371,8 @@ msgid "Sent, thanks."
 msgstr "Enviado, gracias."
 
 #: src/routes/privacy.tsx
-msgid "September 24, 2026"
-msgstr "24 de septiembre de 2026"
+#~ msgid "September 24, 2026"
+#~ msgstr "24 de septiembre de 2026"
 
 #: src/components/communities/field-options.tsx
 msgid "Serbian"

@@ -16,7 +16,7 @@ import { GoalToasts } from "../components/me/GoalToasts";
 import { TrackingToasts } from "../components/me/TrackingToasts";
 import { ReplayExportPanel } from "../components/replay/ReplayExportPanel";
 import { SupportGoalBar } from "../components/layout/SupportGoalBar";
-import { AuthContext } from "../lib/auth-context";
+import { AuthContext, useAuth } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
 import { InitialCountryContext } from "../lib/country-context";
 import { ANONYMOUS_AUTH_STATE } from "../lib/auth-shared";
@@ -526,6 +526,14 @@ function NotFoundPage() {
 
 const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 const LAVA_TIP_URL = "https://app.lava.top/mania-tracker?tabId=donate";
+
+// A signed-in visitor's tip link carries their osu! id, which lava.top hands
+// back on the webhook so the tip counts toward their supporter time (backend
+// features/supporters.ts, LAVA_UTM_PREFIX).
+function lavaTipUrl(viewerId: number | null | undefined): string {
+  if (!viewerId) return LAVA_TIP_URL;
+  return `${LAVA_TIP_URL}&utm_source=mania-tracker&utm_content=osu-${viewerId}`;
+}
 // Countries where Ko-fi cannot take a payment (no PayPal, and local cards do
 // not work abroad), so the popup offers lava.top, which takes ruble cards.
 const LAVA_SUPPORT_COUNTRIES = new Set(["RU", "BY", "IR", "CU", "SY", "KP"]);
@@ -541,6 +549,7 @@ function KofiSupportButton() {
   const { t } = useLingui();
   // getI18n rather than useLingui for the same reason as RootErrorComponent.
   const i = getI18n(useLocale());
+  const viewerId = useAuth().viewer?.id;
   const [open, setOpen] = useState(false);
   // null until the server answers; Ko-fi shows meanwhile only if it says no.
   const [useLava, setUseLava] = useState<boolean | null>(null);
@@ -616,7 +625,7 @@ function KofiSupportButton() {
                   {i._(msg`Can't pay with Ko-fi? You can tip through lava.top.`)}
                 </p>
                 <a
-                  href={LAVA_TIP_URL}
+                  href={lavaTipUrl(viewerId)}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => track("support_lava_open")}

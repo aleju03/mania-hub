@@ -148,6 +148,7 @@ const ADMIN_TOOLS = [
   { to: "/admin/bridgers", label: "Bridgers", accent: "#fcd34d", adminOnly: true, group: "Players" },
   { to: "/admin/about-pages", label: "About pages", accent: "#fdba74", adminOnly: true, group: "Players" },
   { to: "/admin/collections", label: "Collections", accent: "#f9a8d4", adminOnly: true, group: "Players" },
+  { to: "/admin/supporters", label: "Supporters", accent: "#ff66ab", adminOnly: true, group: "Players" },
   { to: "/admin/live-backend", label: "Monitoring", accent: "#7dd3fc", adminOnly: true, group: "Site" },
   { to: "/valley", label: "Valley", accent: "#86efac", adminOnly: true, group: "Site" },
   { to: "/admin/r2", label: "R2", accent: "#67e8f9", adminOnly: true, group: "Site", search: { prefix: "replay-cache/" } },

@@ -19,7 +19,7 @@ export const Route = createFileRoute("/privacy")({
 function PrivacyPage() {
   const { t } = useLingui();
   return (
-    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`September 24, 2026`}>
+    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`October 9, 2026`}>
       <LegalSection title={t`Overview`}>
         <LegalParagraph>
           <Trans>
@@ -54,6 +54,13 @@ function PrivacyPage() {
             (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats
             dashboard does not store anything extra; it only shows you data the site already holds
             about your account.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
+            If you donate through Ko-fi or lava.top, the site receives the amount, currency, and date
+            of the payment, plus the name and message you gave. These are kept privately to
+            link supporter status to your osu! account and are not shown publicly.
           </Trans>
         </LegalParagraph>
         <LegalParagraph>

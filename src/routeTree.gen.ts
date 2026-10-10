@@ -57,6 +57,7 @@ import { Route as AdminMascotRouteImport } from './routes/admin/mascot'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminScoresRouteImport } from './routes/admin/scores'
+import { Route as AdminSupportersRouteImport } from './routes/admin/supporters'
 import { Route as AdminTodosRouteImport } from './routes/admin/todos'
 import { Route as AdminTranslationReportsRouteImport } from './routes/admin/translation-reports'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
@@ -362,6 +363,11 @@ const AdminR2Route = AdminR2RouteImport.update({
 const AdminScoresRoute = AdminScoresRouteImport.update({
   id: '/admin/scores',
   path: '/admin/scores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSupportersRoute = AdminSupportersRouteImport.update({
+  id: '/admin/supporters',
+  path: '/admin/supporters',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminTodosRoute = AdminTodosRouteImport.update({
@@ -760,6 +766,7 @@ export interface FileRoutesByFullPath {
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/scores': typeof AdminScoresRoute
+  '/admin/supporters': typeof AdminSupportersRoute
   '/admin/todos': typeof AdminTodosRoute
   '/admin/translation-reports': typeof AdminTranslationReportsRoute
   '/api/audio': typeof ApiAudioRoute
@@ -876,6 +883,7 @@ export interface FileRoutesByTo {
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/scores': typeof AdminScoresRoute
+  '/admin/supporters': typeof AdminSupportersRoute
   '/admin/todos': typeof AdminTodosRoute
   '/admin/translation-reports': typeof AdminTranslationReportsRoute
   '/api/audio': typeof ApiAudioRoute
@@ -993,6 +1001,7 @@ export interface FileRoutesById {
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/scores': typeof AdminScoresRoute
+  '/admin/supporters': typeof AdminSupportersRoute
   '/admin/todos': typeof AdminTodosRoute
   '/admin/translation-reports': typeof AdminTranslationReportsRoute
   '/api/audio': typeof ApiAudioRoute
@@ -1111,6 +1120,7 @@ export interface FileRouteTypes {
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/scores'
+    | '/admin/supporters'
     | '/admin/todos'
     | '/admin/translation-reports'
     | '/api/audio'
@@ -1227,6 +1237,7 @@ export interface FileRouteTypes {
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/scores'
+    | '/admin/supporters'
     | '/admin/todos'
     | '/admin/translation-reports'
     | '/api/audio'
@@ -1343,6 +1354,7 @@ export interface FileRouteTypes {
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/scores'
+    | '/admin/supporters'
     | '/admin/todos'
     | '/admin/translation-reports'
     | '/api/audio'
@@ -1460,6 +1472,7 @@ export interface RootRouteChildren {
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   AdminR2Route: typeof AdminR2Route
   AdminScoresRoute: typeof AdminScoresRoute
+  AdminSupportersRoute: typeof AdminSupportersRoute
   AdminTodosRoute: typeof AdminTodosRoute
   AdminTranslationReportsRoute: typeof AdminTranslationReportsRoute
   ApiAudioRoute: typeof ApiAudioRoute
@@ -1851,6 +1864,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/scores'
       fullPath: '/admin/scores'
       preLoaderRoute: typeof AdminScoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/supporters': {
+      id: '/admin/supporters'
+      path: '/admin/supporters'
+      fullPath: '/admin/supporters'
+      preLoaderRoute: typeof AdminSupportersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/todos': {
@@ -2471,6 +2491,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   AdminR2Route: AdminR2Route,
   AdminScoresRoute: AdminScoresRoute,
+  AdminSupportersRoute: AdminSupportersRoute,
   AdminTodosRoute: AdminTodosRoute,
   AdminTranslationReportsRoute: AdminTranslationReportsRoute,
   ApiAudioRoute: ApiAudioRoute,
