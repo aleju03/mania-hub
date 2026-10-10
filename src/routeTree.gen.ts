@@ -20,6 +20,7 @@ import { Route as DiscordRouteImport } from './routes/discord'
 import { Route as DynamicRendersRouteImport } from './routes/dynamic-renders'
 import { Route as FarmHelperRouteImport } from './routes/farm-helper'
 import { Route as GoalsRouteImport } from './routes/goals'
+import { Route as HashiRouteImport } from './routes/hashi'
 import { Route as LegalRouteImport } from './routes/legal'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as MyDataRouteImport } from './routes/my-data'
@@ -87,6 +88,8 @@ import { Route as CompanellaUsageRouteImport } from './routes/companella_.usage'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as DevRecentRatingsPreviewRouteImport } from './routes/dev.recent-ratings-preview'
 import { Route as FarmHelperSplatRouteImport } from './routes/farm-helper/$'
+import { Route as HashiAuthorizeRouteImport } from './routes/hashi_.authorize'
+import { Route as HashiLatestDotjsonRouteImport } from './routes/hashi_.latest[.]json'
 import { Route as NewsCompanellaRouteImport } from './routes/news_.companella'
 import { Route as PacksCollectionsRouteImport } from './routes/packs_.collections'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
@@ -178,6 +181,11 @@ const FarmHelperRoute = FarmHelperRouteImport.update({
 const GoalsRoute = GoalsRouteImport.update({
   id: '/goals',
   path: '/goals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HashiRoute = HashiRouteImport.update({
+  id: '/hashi',
+  path: '/hashi',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LegalRoute = LegalRouteImport.update({
@@ -516,6 +524,16 @@ const FarmHelperSplatRoute = FarmHelperSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => FarmHelperRoute,
 } as any)
+const HashiAuthorizeRoute = HashiAuthorizeRouteImport.update({
+  id: '/hashi_/authorize',
+  path: '/hashi/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HashiLatestDotjsonRoute = HashiLatestDotjsonRouteImport.update({
+  id: '/hashi_/latest.json',
+  path: '/hashi/latest.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NewsCompanellaRoute = NewsCompanellaRouteImport.update({
   id: '/news_/companella',
   path: '/news/companella',
@@ -729,6 +747,7 @@ export interface FileRoutesByFullPath {
   '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/goals': typeof GoalsRoute
+  '/hashi': typeof HashiRoute
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/my-data': typeof MyDataRoute
@@ -796,6 +815,8 @@ export interface FileRoutesByFullPath {
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
+  '/hashi/authorize': typeof HashiAuthorizeRoute
+  '/hashi/latest.json': typeof HashiLatestDotjsonRoute
   '/news/companella': typeof NewsCompanellaRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -846,6 +867,7 @@ export interface FileRoutesByTo {
   '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/goals': typeof GoalsRoute
+  '/hashi': typeof HashiRoute
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/my-data': typeof MyDataRoute
@@ -913,6 +935,8 @@ export interface FileRoutesByTo {
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
+  '/hashi/authorize': typeof HashiAuthorizeRoute
+  '/hashi/latest.json': typeof HashiLatestDotjsonRoute
   '/news/companella': typeof NewsCompanellaRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -964,6 +988,7 @@ export interface FileRoutesById {
   '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/goals': typeof GoalsRoute
+  '/hashi': typeof HashiRoute
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/my-data': typeof MyDataRoute
@@ -1031,6 +1056,8 @@ export interface FileRoutesById {
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
+  '/hashi_/authorize': typeof HashiAuthorizeRoute
+  '/hashi_/latest.json': typeof HashiLatestDotjsonRoute
   '/news_/companella': typeof NewsCompanellaRoute
   '/packs_/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -1083,6 +1110,7 @@ export interface FileRouteTypes {
     | '/dynamic-renders'
     | '/farm-helper'
     | '/goals'
+    | '/hashi'
     | '/legal'
     | '/maps'
     | '/my-data'
@@ -1150,6 +1178,8 @@ export interface FileRouteTypes {
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
+    | '/hashi/authorize'
+    | '/hashi/latest.json'
     | '/news/companella'
     | '/packs/collections'
     | '/player/$username'
@@ -1200,6 +1230,7 @@ export interface FileRouteTypes {
     | '/dynamic-renders'
     | '/farm-helper'
     | '/goals'
+    | '/hashi'
     | '/legal'
     | '/maps'
     | '/my-data'
@@ -1267,6 +1298,8 @@ export interface FileRouteTypes {
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
+    | '/hashi/authorize'
+    | '/hashi/latest.json'
     | '/news/companella'
     | '/packs/collections'
     | '/player/$username'
@@ -1317,6 +1350,7 @@ export interface FileRouteTypes {
     | '/dynamic-renders'
     | '/farm-helper'
     | '/goals'
+    | '/hashi'
     | '/legal'
     | '/maps'
     | '/my-data'
@@ -1384,6 +1418,8 @@ export interface FileRouteTypes {
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
+    | '/hashi_/authorize'
+    | '/hashi_/latest.json'
     | '/news_/companella'
     | '/packs_/collections'
     | '/player/$username'
@@ -1435,6 +1471,7 @@ export interface RootRouteChildren {
   DynamicRendersRoute: typeof DynamicRendersRoute
   FarmHelperRoute: typeof FarmHelperRouteWithChildren
   GoalsRoute: typeof GoalsRoute
+  HashiRoute: typeof HashiRoute
   LegalRoute: typeof LegalRoute
   MapsRoute: typeof MapsRoute
   MyDataRoute: typeof MyDataRoute
@@ -1501,6 +1538,8 @@ export interface RootRouteChildren {
   CompanellaUsageRoute: typeof CompanellaUsageRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
   DevRecentRatingsPreviewRoute: typeof DevRecentRatingsPreviewRoute
+  HashiAuthorizeRoute: typeof HashiAuthorizeRoute
+  HashiLatestDotjsonRoute: typeof HashiLatestDotjsonRoute
   NewsCompanellaRoute: typeof NewsCompanellaRoute
   PacksCollectionsRoute: typeof PacksCollectionsRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
@@ -1605,6 +1644,13 @@ declare module '@tanstack/react-router' {
       path: '/goals'
       fullPath: '/goals'
       preLoaderRoute: typeof GoalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hashi': {
+      id: '/hashi'
+      path: '/hashi'
+      fullPath: '/hashi'
+      preLoaderRoute: typeof HashiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal': {
@@ -2076,6 +2122,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FarmHelperSplatRouteImport
       parentRoute: typeof FarmHelperRoute
     }
+    '/hashi_/authorize': {
+      id: '/hashi_/authorize'
+      path: '/hashi/authorize'
+      fullPath: '/hashi/authorize'
+      preLoaderRoute: typeof HashiAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hashi_/latest.json': {
+      id: '/hashi_/latest.json'
+      path: '/hashi/latest.json'
+      fullPath: '/hashi/latest.json'
+      preLoaderRoute: typeof HashiLatestDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/news_/companella': {
       id: '/news_/companella'
       path: '/news/companella'
@@ -2454,6 +2514,7 @@ const rootRouteChildren: RootRouteChildren = {
   DynamicRendersRoute: DynamicRendersRoute,
   FarmHelperRoute: FarmHelperRouteWithChildren,
   GoalsRoute: GoalsRoute,
+  HashiRoute: HashiRoute,
   LegalRoute: LegalRoute,
   MapsRoute: MapsRoute,
   MyDataRoute: MyDataRoute,
@@ -2520,6 +2581,8 @@ const rootRouteChildren: RootRouteChildren = {
   CompanellaUsageRoute: CompanellaUsageRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
   DevRecentRatingsPreviewRoute: DevRecentRatingsPreviewRoute,
+  HashiAuthorizeRoute: HashiAuthorizeRoute,
+  HashiLatestDotjsonRoute: HashiLatestDotjsonRoute,
   NewsCompanellaRoute: NewsCompanellaRoute,
   PacksCollectionsRoute: PacksCollectionsRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,

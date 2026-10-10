@@ -4,7 +4,7 @@ import { MANIA_BRIDGE_REPO, MANIA_BRIDGE_VERSION, type ManiaBridgeDownloads } fr
  * The current Hashi release's update file, the latest.json the release workflow uploads (Tauri's updater
  * format: version, notes, and a signed installer URL per platform). Server only. Fetched from GitHub and kept for
  * five minutes, a failure included; null while there is no published release (or the repository is private), when
- * /bridge/latest.json falls back to the bare version and the app offers its Download button instead of Update.
+ * /hashi/latest.json falls back to the bare version and the app offers its Download button instead of Update.
  * The app installs only builds signed with its own key, so this only decides when an update is offered.
  */
 
@@ -67,4 +67,15 @@ export function maniaBridgeDownloads(manifest: ManiaBridgeManifest | null): Mani
     rpm: url("linux-x86_64-rpm"),
   };
   return downloads.windows || downloads.appImage || downloads.deb || downloads.rpm ? downloads : null;
+}
+
+/** The update check's answer: the release file as published, or the bare version while there is none. */
+export async function maniaBridgeLatestResponse(): Promise<Response> {
+  const manifest = await readManiaBridgeManifest();
+  return new Response(JSON.stringify(manifest ?? { version: MANIA_BRIDGE_VERSION }), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=300",
+    },
+  });
 }

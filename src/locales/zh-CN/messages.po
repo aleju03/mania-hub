@@ -3354,8 +3354,8 @@ msgstr "应用中…"
 #~ msgid "Approve a Companella installation for your osu! account."
 #~ msgstr ""
 
-#: src/routes/bridge_.authorize.tsx
 #: src/routes/companella_.authorize.tsx
+#: src/routes/hashi_.authorize.tsx
 msgid "Approve an app for your osu! account."
 msgstr "为你的 osu! 账号授权一个应用。"
 
@@ -4934,8 +4934,8 @@ msgstr "对比 {range} pp"
 #~ msgid "Completion"
 #~ msgstr ""
 
-#: src/routes/bridge_.authorize.tsx
 #: src/routes/companella_.authorize.tsx
+#: src/routes/hashi_.authorize.tsx
 msgid "Connect an app"
 msgstr "连接应用"
 
@@ -4947,7 +4947,7 @@ msgstr "连接应用"
 msgid "Connect Companella to Mania Tracker and review the plays it imported."
 msgstr ""
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
 msgstr "在应用内将它连接到你的账号。你可以在<0>设置</0>的“偏好”中撤销连接。"
 
@@ -4981,7 +4981,7 @@ msgstr "已连接，最后活动于 {0}"
 msgid "Connected, never seen"
 msgstr "已连接，从未活动"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Connecting"
 msgstr "连接"
 
@@ -6256,7 +6256,7 @@ msgstr "重新下载"
 #~ msgid "Download Companella"
 #~ msgstr "下载 Companella"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Download for {name}"
 msgstr "下载 {name} 版"
 
@@ -7836,7 +7836,7 @@ msgstr "自带背景"
 #~ msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
 #~ msgstr "Hashi 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
 msgstr "Hashi 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你在 Mania Tracker 上的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
 
@@ -8650,7 +8650,7 @@ msgstr "它可能已被下架，或者还在等待审核。"
 #~ msgid "It only ever raises the number. If your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them."
 #~ msgstr "它只会把数字往上抬。如果你的技能平均值本来就更高，就还是用平均值。无论哪种情况，下面那几行技能都不动，这也是为什么它们会比上面的数字低。"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 msgstr "它通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
 
@@ -9074,7 +9074,7 @@ msgstr "lazer"
 #~ msgid "lazer and osu!stable"
 #~ msgstr "lazer 和 osu!stable"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "lazer and stable"
 msgstr "lazer 和 stable"
 
@@ -11536,7 +11536,7 @@ msgstr "此账号暂不可用。"
 msgid "Not available for this account."
 msgstr "此账号不可用。"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Not available yet"
 msgstr "暂未开放"
 
@@ -11973,6 +11973,10 @@ msgstr "查看结算中"
 #: src/routes/report.tsx
 msgid "on the to-do list"
 msgstr "已列入待办"
+
+#: src/routes/hashi.tsx
+msgid "On Windows"
+msgstr "在 Windows 上"
 
 #: src/routes/news_.companella.tsx
 msgid "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
@@ -15340,7 +15344,7 @@ msgstr "正在发送..."
 msgid "Sending…"
 msgstr "正在发送…"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
 msgstr "将你在 lazer 或 osu!stable 上的 osu!mania 成绩发送到 Mania Tracker，并在你的个人资料和排行榜上显示你正在玩什么。"
 
@@ -15524,7 +15528,7 @@ msgstr "设置"
 
 #: src/components/layout/Nav.tsx
 #: src/components/layout/SettingsDrawer.tsx
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 #: src/routes/news_.companella.tsx
 msgid "Settings"
 msgstr "设置"
@@ -16404,7 +16408,7 @@ msgstr "按星级从低到高排序 - 左键清除，右键切换降序"
 #~ msgid "Source code"
 #~ msgstr "源代码"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Source code on GitHub"
 msgstr "GitHub 上的源代码"
 
@@ -17867,6 +17871,10 @@ msgstr "第一个上传的皮肤会出现在这里。"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
 msgstr "图片已上传，但浏览器拦截了剪贴板。请再点一次复制 BBCode。"
+
+#: src/routes/hashi.tsx
+msgid "The installer isn't signed, because Microsoft charges for code signing, so Windows shows a warning before it runs. Click More info, then Run anyway. The <0>source code</0> is on GitHub if you want to check what it does."
+msgstr "安装程序没有签名，因为微软对代码签名收费，所以 Windows 会在运行前显示警告。点击“更多信息”，然后点击“仍要运行”。<0>源代码</0>在 GitHub 上，可以查看它具体做了什么。"
 
 #: src/routes/companella.tsx
 msgid "The integration backend is not reachable right now."
@@ -20036,7 +20044,7 @@ msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或
 msgid "What is it for"
 msgstr "这个服务器是做什么的"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "What it does"
 msgstr "功能"
 
@@ -20064,7 +20072,7 @@ msgstr "哪里看起来不对？"
 #~ msgid "What the number is not"
 #~ msgstr "这个数字不是什么"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "What you need"
 msgstr "需要什么"
 
@@ -20179,7 +20187,7 @@ msgstr "导出图片的宽度，单位像素"
 msgid "Wild"
 msgstr "狂野"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Windows and Linux"
 msgstr "Windows 和 Linux"
 

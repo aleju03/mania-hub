@@ -3345,8 +3345,8 @@ msgstr "Aplicando…"
 #~ msgid "Approve a Companella installation for your osu! account."
 #~ msgstr ""
 
-#: src/routes/bridge_.authorize.tsx
 #: src/routes/companella_.authorize.tsx
+#: src/routes/hashi_.authorize.tsx
 msgid "Approve an app for your osu! account."
 msgstr "Aprueba una app para tu cuenta de osu!."
 
@@ -4925,8 +4925,8 @@ msgstr "comparado con {range} pp"
 #~ msgid "Completion"
 #~ msgstr ""
 
-#: src/routes/bridge_.authorize.tsx
 #: src/routes/companella_.authorize.tsx
+#: src/routes/hashi_.authorize.tsx
 msgid "Connect an app"
 msgstr "Conectar una app"
 
@@ -4938,7 +4938,7 @@ msgstr "Conectar una app"
 msgid "Connect Companella to Mania Tracker and review the plays it imported."
 msgstr ""
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
 msgstr "Conéctala a tu cuenta desde la app. Puedes revocar la conexión en <0>Ajustes</0>, en Preferencias."
 
@@ -4972,7 +4972,7 @@ msgstr "Conectado, visto por última vez {0}"
 msgid "Connected, never seen"
 msgstr "Conectado, nunca visto"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Connecting"
 msgstr "Conectar"
 
@@ -6247,7 +6247,7 @@ msgstr "Descargar de nuevo"
 #~ msgid "Download Companella"
 #~ msgstr "Descargar Companella"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Download for {name}"
 msgstr "Descargar para {name}"
 
@@ -7827,7 +7827,7 @@ msgstr "Tiene su propio fondo"
 #~ msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
 #~ msgstr "Hashi envía a tu cuenta cada play de mania que terminas en lazer u osu!stable, con su replay, aunque estés restringido en Bancho, juegues offline o en un servidor privado. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
 msgstr "Hashi envía a tu cuenta cada play de mania que terminas en lazer u osu!stable, con su replay, aunque estés restringido en Bancho, juegues offline o en un servidor privado. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp en Mania Tracker también muestran lo que estás haciendo en osu!."
 
@@ -8641,7 +8641,7 @@ msgstr "Puede que lo hayan retirado, o que todavía esté esperando aprobación.
 #~ msgid "It only ever raises the number. If your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them."
 #~ msgstr "Solo puede subir el número. Si tus skills ya promedian más alto, se mantiene el promedio. Las filas de skills de abajo no se tocan en ningún caso, y por eso pueden leerse más bajo que el número que tienen encima."
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 msgstr "Lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
 
@@ -9065,7 +9065,7 @@ msgstr "lazer"
 #~ msgid "lazer and osu!stable"
 #~ msgstr "lazer y osu!stable"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "lazer and stable"
 msgstr "lazer y stable"
 
@@ -11527,7 +11527,7 @@ msgstr "Todavía no está disponible para esta cuenta."
 msgid "Not available for this account."
 msgstr "No disponible para esta cuenta."
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Not available yet"
 msgstr "Todavía no está disponible"
 
@@ -11964,6 +11964,10 @@ msgstr "En la pantalla de resultados"
 #: src/routes/report.tsx
 msgid "on the to-do list"
 msgstr "en la lista de pendientes"
+
+#: src/routes/hashi.tsx
+msgid "On Windows"
+msgstr "En Windows"
 
 #: src/routes/news_.companella.tsx
 msgid "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
@@ -15331,7 +15335,7 @@ msgstr "Enviando..."
 msgid "Sending…"
 msgstr "Enviando…"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
 msgstr "Envía tus plays de osu!mania de lazer u osu!stable a Mania Tracker y muestra en tu perfil y en los rankings lo que estás jugando."
 
@@ -15515,7 +15519,7 @@ msgstr "ajustes"
 
 #: src/components/layout/Nav.tsx
 #: src/components/layout/SettingsDrawer.tsx
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 #: src/routes/news_.companella.tsx
 msgid "Settings"
 msgstr "Ajustes"
@@ -16395,7 +16399,7 @@ msgstr "Ordenando del rating de estrellas más bajo al más alto - clic izquierd
 #~ msgid "Source code"
 #~ msgstr "Código fuente"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Source code on GitHub"
 msgstr "Código fuente en GitHub"
 
@@ -17858,6 +17862,10 @@ msgstr "La primera skin que subas aparecerá aquí."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
 msgstr "Las imágenes se subieron, pero el navegador bloqueó el portapapeles. Pulsa Copiar BBCode otra vez."
+
+#: src/routes/hashi.tsx
+msgid "The installer isn't signed, because Microsoft charges for code signing, so Windows shows a warning before it runs. Click More info, then Run anyway. The <0>source code</0> is on GitHub if you want to check what it does."
+msgstr "El instalador no está firmado, porque Microsoft cobra por firmar código, así que Windows muestra un aviso antes de abrirlo. Haz clic en Más información y luego en Ejecutar de todas formas. El <0>código fuente</0> está en GitHub si quieres revisar qué hace."
 
 #: src/routes/companella.tsx
 msgid "The integration backend is not reachable right now."
@@ -20027,7 +20035,7 @@ msgstr "Tipo de mapas, dificultad y orden recomendado para jugarlos."
 msgid "What is it for"
 msgstr "¿Para qué sirve?"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "What it does"
 msgstr "Qué hace"
 
@@ -20055,7 +20063,7 @@ msgstr "¿Qué parece estar mal?"
 #~ msgid "What the number is not"
 #~ msgstr "Lo que el número no es"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "What you need"
 msgstr "Qué necesitas"
 
@@ -20170,7 +20178,7 @@ msgstr "Ancho de la imagen exportada, en píxeles"
 msgid "Wild"
 msgstr "Wild"
 
-#: src/routes/bridge.tsx
+#: src/routes/hashi.tsx
 msgid "Windows and Linux"
 msgstr "Windows y Linux"
 

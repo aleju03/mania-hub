@@ -22,6 +22,7 @@ export const SALVAGEABLE_ROUTES = [
   "dynamic-renders",
   "farm-helper",
   "goals",
+  "hashi",
   "legal",
   "maps",
   "my-data",

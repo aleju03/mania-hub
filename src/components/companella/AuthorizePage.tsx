@@ -15,7 +15,7 @@ import { knownApp } from "../../lib/companella-integration/shared";
 
 /*
  * The consent screen, served at /companella/authorize and, for Hashi,
- * at /bridge/authorize.
+ * at /hashi/authorize.
  *
  * Approval is an explicit same-origin POST, never something that happens
  * because the page loaded or because a browser session already exists. The

@@ -32,7 +32,7 @@ function freshSnapshot(viewerId: number | null): CompanellaSnapshot | null {
 }
 
 /*
- * The Integrations group in Settings: Companella, and Hashi for admins until its release (like /bridge),
+ * The Integrations group in Settings: Companella, and Hashi for admins until its release (like /hashi),
  * each with its connected computers and a Revoke. Connecting happens from inside the app.
  * /companella stays the client developer's test bench.
  */
@@ -108,7 +108,7 @@ export function CompanellaGroup() {
         <IntegrationApp
           name={bridgeApp.name}
           icon={bridgeApp.icon}
-          aboutTo="/bridge"
+          aboutTo="/hashi"
           status={statusFor(bridge, bridgeApp.name)}
           installations={bridge}
           busyId={busyId}
@@ -149,7 +149,7 @@ function IntegrationApp({ name, icon, iconClassName = "", status, aboutTo, insta
   icon: string;
   iconClassName?: string;
   status: string | null;
-  aboutTo?: "/news/companella" | "/bridge";
+  aboutTo?: "/news/companella" | "/hashi";
   installations: CompanellaInstallation[];
   busyId: string | null;
   onRevoke: (installation: CompanellaInstallation) => void;
