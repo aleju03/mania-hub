@@ -142,7 +142,7 @@ const RICE_4K_POPULATION: Array<{ level: string; players: number }> = [
 
 // Set by hand whenever this page's own text changes: the deploy checkout is
 // shallow, so git cannot supply the date at build time.
-const LAST_EDITED = "2026-09-29";
+const LAST_EDITED = "2026-10-09";
 
 function DanEstimatesPage() {
   const { t } = useLingui();
