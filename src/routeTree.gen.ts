@@ -119,6 +119,7 @@ import { Route as ApiIntegrationsCompanellaV1SubmissionsRouteImport } from './ro
 import { Route as ApiIntegrationsCompanellaV1OauthRevokeRouteImport } from './routes/api/integrations/companella/v1/oauth/revoke'
 import { Route as ApiIntegrationsCompanellaV1OauthTokenRouteImport } from './routes/api/integrations/companella/v1/oauth/token'
 import { Route as ApiIntegrationsCompanellaV1SubmissionsIdRouteImport } from './routes/api/integrations/companella/v1/submissions/$id'
+import { Route as ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRouteImport } from './routes/api/integrations/companella/v1/charts/$md5/leaderboard'
 import { Route as ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/beatmap'
 import { Route as ApiIntegrationsCompanellaV1SubmissionsIdCompleteRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/complete'
 import { Route as ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/replay'
@@ -685,6 +686,12 @@ const ApiIntegrationsCompanellaV1SubmissionsIdRoute =
     path: '/$id',
     getParentRoute: () => ApiIntegrationsCompanellaV1SubmissionsRoute,
   } as any)
+const ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute =
+  ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRouteImport.update({
+    id: '/api/integrations/companella/v1/charts/$md5/leaderboard',
+    path: '/api/integrations/companella/v1/charts/$md5/leaderboard',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute =
   ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteImport.update({
     id: '/beatmap',
@@ -815,6 +822,7 @@ export interface FileRoutesByFullPath {
   '/api/integrations/companella/v1/oauth/revoke': typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
   '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
   '/api/integrations/companella/v1/submissions/$id': typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
+  '/api/integrations/companella/v1/charts/$md5/leaderboard': typeof ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute
   '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
   '/api/integrations/companella/v1/submissions/$id/complete': typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
   '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
@@ -930,6 +938,7 @@ export interface FileRoutesByTo {
   '/api/integrations/companella/v1/oauth/revoke': typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
   '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
   '/api/integrations/companella/v1/submissions/$id': typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
+  '/api/integrations/companella/v1/charts/$md5/leaderboard': typeof ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute
   '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
   '/api/integrations/companella/v1/submissions/$id/complete': typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
   '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
@@ -1046,6 +1055,7 @@ export interface FileRoutesById {
   '/api/integrations/companella/v1/oauth/revoke': typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
   '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
   '/api/integrations/companella/v1/submissions/$id': typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
+  '/api/integrations/companella/v1/charts/$md5/leaderboard': typeof ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute
   '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
   '/api/integrations/companella/v1/submissions/$id/complete': typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
   '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
@@ -1163,6 +1173,7 @@ export interface FileRouteTypes {
     | '/api/integrations/companella/v1/oauth/revoke'
     | '/api/integrations/companella/v1/oauth/token'
     | '/api/integrations/companella/v1/submissions/$id'
+    | '/api/integrations/companella/v1/charts/$md5/leaderboard'
     | '/api/integrations/companella/v1/submissions/$id/beatmap'
     | '/api/integrations/companella/v1/submissions/$id/complete'
     | '/api/integrations/companella/v1/submissions/$id/replay'
@@ -1278,6 +1289,7 @@ export interface FileRouteTypes {
     | '/api/integrations/companella/v1/oauth/revoke'
     | '/api/integrations/companella/v1/oauth/token'
     | '/api/integrations/companella/v1/submissions/$id'
+    | '/api/integrations/companella/v1/charts/$md5/leaderboard'
     | '/api/integrations/companella/v1/submissions/$id/beatmap'
     | '/api/integrations/companella/v1/submissions/$id/complete'
     | '/api/integrations/companella/v1/submissions/$id/replay'
@@ -1393,6 +1405,7 @@ export interface FileRouteTypes {
     | '/api/integrations/companella/v1/oauth/revoke'
     | '/api/integrations/companella/v1/oauth/token'
     | '/api/integrations/companella/v1/submissions/$id'
+    | '/api/integrations/companella/v1/charts/$md5/leaderboard'
     | '/api/integrations/companella/v1/submissions/$id/beatmap'
     | '/api/integrations/companella/v1/submissions/$id/complete'
     | '/api/integrations/companella/v1/submissions/$id/replay'
@@ -1499,6 +1512,7 @@ export interface RootRouteChildren {
   ApiIntegrationsCompanellaV1SubmissionsRoute: typeof ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren
   ApiIntegrationsCompanellaV1OauthRevokeRoute: typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
   ApiIntegrationsCompanellaV1OauthTokenRoute: typeof ApiIntegrationsCompanellaV1OauthTokenRoute
+  ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute: typeof ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -2273,6 +2287,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteImport
       parentRoute: typeof ApiIntegrationsCompanellaV1SubmissionsRoute
     }
+    '/api/integrations/companella/v1/charts/$md5/leaderboard': {
+      id: '/api/integrations/companella/v1/charts/$md5/leaderboard'
+      path: '/api/integrations/companella/v1/charts/$md5/leaderboard'
+      fullPath: '/api/integrations/companella/v1/charts/$md5/leaderboard'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/integrations/companella/v1/submissions/$id/beatmap': {
       id: '/api/integrations/companella/v1/submissions/$id/beatmap'
       path: '/beatmap'
@@ -2508,6 +2529,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiIntegrationsCompanellaV1OauthRevokeRoute,
   ApiIntegrationsCompanellaV1OauthTokenRoute:
     ApiIntegrationsCompanellaV1OauthTokenRoute,
+  ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute:
+    ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

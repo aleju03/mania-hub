@@ -11,7 +11,9 @@ official projection, with one exception: an import's key-press timing can stand
 in for the accuracy estimate of the official play osu! delivered for the same
 run (see "Timing for official plays"). Checked imports also count toward
 regular players' public skill ratings (MSD, patterns and Dan) through a
-read-time overlay (see "Skill credit for regular players"). Simulated pp remains limited to accounts
+read-time overlay (see "Skill credit for regular players"), rank on a
+map's Scores board beside osu! plays (see "Map Scores boards"), and count on
+the profile's Activity tab (see "Activity"). Simulated pp remains limited to accounts
 osu! turned away (see "Simulated pp for restricted players"); a public row
 may show the play's own pp beside it. See
 `companella-operations.md` for the rollout switch and
@@ -89,6 +91,7 @@ Backend, all under `backend/src/integrations/companella/`:
 | `account-blocks.ts` | The admin block: an account caught cheating stops connecting and sending plays, and its connections are revoked. |
 | `skill-overlay.ts` | Public skill ratings (MSD, patterns, Dan) for active osu! accounts: checked imports combined with retained official evidence at read time. |
 | `local-charts.ts`, `local-chart-id.ts` | Imports on charts osu! does not have: the eligibility rule, the 1.0x chart analysis job, per-player families, and the map card behind `GET /api/companella/local-charts/<id>`. |
+| `map-board.ts` | The imports on one map's own file for its Scores board, and the map a chart md5 is the current file of. |
 | `poll-hold.ts` | Holds a player's recent-score polls while Hashi's presence is live, and polls once when it ends. |
 | `official-timing.ts` | Stores an import's timing for the official play osu! delivers for the same run, and pairs and clamps it for the skill compute. |
 | `replay-import.ts` | Admin replay imports: a player's `.osr` files dropped on `/admin/bridgers?tab=import`, staged as ordinary submissions and fed to the lane a few at a time (see "Admin replay imports"). |
@@ -742,6 +745,92 @@ play with `replay: true` above is also served publicly by
 `GET /api/integrations/companella/public/replays/<id>`
 (`readPublicCompanellaReplayKey`), checked fresh on each request, so a play
 that is withdrawn, held or deleted closes at once.
+
+## Map Scores boards
+
+The map card's Scores tab (`features/map-scores.ts`, `/api/snapshots/map-scores`)
+lists every tracked player's best play on one map. With the integration on,
+`map-board.ts` adds the imports on that map's own file: a chart whose md5 is
+the checksum osu! gave for the map, the cached file's md5, or an earlier
+revision of that file with the same notes (`same_chart_md5s`). A cached file
+osu! has since replaced is not read, since its notes may differ. Rate edits
+and other copies are different charts and stay off. An import shows under
+the feed's listing rules (see "Privacy"), and its owner must not be an
+inactive account, like the board's osu! plays: the feed's exception for
+accounts osu! turned away is about their own profile.
+
+The board's own rules then apply to an import as to an osu! play: ranked on
+305-weighted accuracy from its judgement counts, HT/DC under the rest, EZ, a
+custom rate and the snipe boards' refused mods off, one row per player. An
+import takes a player's row only by standing higher than their osu! best, so
+a run sent both ways (equal counts) is listed once, as osu!'s row. An import
+row carries the feed's negative score id and a `companella` mark
+(`importId`, `replay`, `app`); the board draws the sending app's icon, and the
+play card opens the import, its replay when the replay is public. Nothing is
+written to `player_activity_maps` or any other table: excluding, holding or
+deleting an import takes it off on the next read (the endpoint is cached for
+a minute).
+
+The native API reads the same board. `GET charts/{md5}/leaderboard`
+(`companella:installation:read`, 60 reads per account per minute) resolves
+the md5 with `resolveMapByMd5`: the cached current file first, else, for a
+chart sent through an app, the map the upload names or the chart matcher tied
+it to, kept only when the md5 is one of that map's file md5s (the set the
+board reads). A map whose file the site never cached and nobody sent stays
+unknown. It answers the top
+50 plus the token's own row as `self` when it falls outside them;
+`unknown_chart` when neither finds the map. An accepted receipt's
+`leaderboard` is the play's standing (`getImportBoardStanding`): the
+player's position, the board's size, and whether this play is their best,
+on the map it was priced on, else the one its md5 resolves to. It is there
+from the moment the receipt is accepted, since the board reads the import
+itself rather than waiting for osu!'s copy (which the poll hold delays until
+the session ends).
+
+### Mod boards
+
+The native board also serves mod boards (`?speed=dt|ht&mods=IN,HO,NR`); the
+site's Scores tab is the usual one. `features/map-board-bests.ts` decides
+which boards a play counts on (`boardPlacementFor`): DT/NC or HT/DC at any
+rate files on the `dt` / `ht` board, a play at a default rate (1, 1.5, 0.75)
+also on the usual mix, each under its exact set of Invert, Hold Off and No
+Release. EZ, Random, Dual Stages, Difficulty Adjust, Constant Speed, the
+rate-changing mods and a foreign key mod keep a play off them all; Mirror and
+the visual mods are ignored. osu! plays come from `map_board_bests`, each
+player's best per map per board (half time under the rest, then accuracy),
+filed at ingest, one row per map, board and player, which the site's Scores
+tab reads too. A one-time boot pass seeded it from the archived day-bests and the
+retained `score_events`; since `player_activity_maps` kept one play per map
+per day (the best by pp), older Invert or half-time plays only appear where
+they were a day's best. Removing a play, an account wipe and deleting a
+country clear its rows. Imports are placed by the same rule at read time and
+merged in per player. A receipt's board is the one the play's own mods
+select: its speed board when it has a speed mod, else the usual mix, under its
+note mods.
+
+## Activity
+
+A regular player's Activity tab (`features/activity.ts`: the year calendar,
+a day's detail and the available years) counts their listed imports beside
+osu!'s plays, read at request time under the feed's listing rules; nothing is
+written to `player_activity_score_refs`, `player_activity_days` or
+`player_activity_maps`. An import counts on the map it is the exact file of,
+else the official map it is a copy of, else its own chart (counted, never
+listed, like on restricted profiles), and always as a passed play.
+
+A run sent both ways counts once, as osu!'s play. An import whose replay
+names an osu! score is paired with that score; each other import on an
+official map is paired with the nearest unpaired passed osu! play of that map
+dated within 5 minutes, one to one, so two quick runs of a short map stay two plays
+and the app's copy drops out once osu!'s arrives (after the poll hold, for a
+Hashi session). A day's detail reads the neighbouring days for this, so a run
+across midnight is still paired. A map played only through the app is listed
+in the day's maps from its best import (pp, then accuracy) and the map's own
+metadata. A player tracked in no country takes their profile's country, so
+someone who only plays through the app still has a calendar, and a year with
+no plays still opens when they have plays in another. Imports are read for
+the asked range only, and the years from a lean per-minute read. Team activity
+(`readActivityForMembers`) reads osu!'s plays only.
 
 ## Live presence
 

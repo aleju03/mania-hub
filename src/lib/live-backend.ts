@@ -276,6 +276,7 @@ export const LIVE_EVENT_NAMES = [
   "goal_completed",
   "pack_pull",
   "goat_poll",
+  "donation_goal",
   "job_status",
 ] as const;
 
@@ -368,6 +369,8 @@ export interface LiveMapScoreEntry {
   isLazer: boolean;
   hasReplay: boolean;
   playedAt: string | null;
+  /** Set on a play sent through an app (Companella, Hashi) instead of osu!; scoreId is then the feed's negative id. */
+  companella?: { importId: string; replay: boolean; app?: string };
 }
 
 export interface LiveMapScoresSnapshot {
@@ -3468,6 +3471,26 @@ export async function fetchGoatPollBoard(limit?: number): Promise<GoatPollBoardP
        can stop asking: once a poll is over, every open packs tab would otherwise
        spend a request on it every 20 seconds for as long as the tab lives. */
     return error instanceof LiveBackendRequestError && error.status === 404 ? GOAT_POLL_OFF : null;
+  }
+}
+
+/* The support popup's monthly goal bar. `month` is the month being filled,
+   which is a later one once the current month is covered; `coveredThrough` is
+   the last covered month, null while the current one is still short. The same
+   shape arrives on the `donation_goal` SSE event whenever a payment lands. */
+export interface LiveDonationGoal {
+  month: string;
+  goalUsdCents: number;
+  raisedUsdCents: number;
+  coveredThrough: string | null;
+}
+
+export async function fetchDonationGoal(): Promise<LiveDonationGoal | null> {
+  if (!isLiveBackendConfigured()) return null;
+  try {
+    return await fetchLiveJson<LiveDonationGoal>("/api/donation-goal", { cache: "no-store" });
+  } catch {
+    return null;
   }
 }
 

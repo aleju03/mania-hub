@@ -25,6 +25,7 @@ export const COMPANELLA_NATIVE_ROUTES = {
   submissionBeatmap: "submissions/:id/beatmap",
   submissionComplete: "submissions/:id/complete",
   presence: "presence",
+  chartLeaderboard: "charts/:md5/leaderboard",
 } as const;
 
 export type SubmissionState =

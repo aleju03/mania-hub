@@ -7,6 +7,7 @@ import { useLocale } from "../../lib/locale-context";
 import { useAuth } from "../../lib/auth-context";
 import type { OsuScore } from "../../lib/types";
 import { Avatar } from "../ui/Avatar";
+import { CompanellaMark } from "../ui/CompanellaMark";
 import { CountryFlag } from "../ui/CountryFlag";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
@@ -34,7 +35,11 @@ export function mapScoreEntryScore(entry: LiveMapScoreEntry, map: LiveMapSearchE
     mods: entry.mods.map((acronym) => ({ acronym })),
     score: entry.totalScore ?? 0,
     total_score: entry.totalScore ?? 0,
-    ...(entry.isLazer ? {} : { legacy_score_id: entry.scoreId, legacy_total_score: entry.totalScore ?? 0 }),
+    // An app import has no osu! score id: its mark carries the import, which
+    // the play card shares and opens the replay of.
+    ...(entry.companella
+      ? { companella: entry.companella, ...(entry.isLazer ? {} : { legacy_total_score: entry.totalScore ?? 0 }) }
+      : entry.isLazer ? {} : { legacy_score_id: entry.scoreId, legacy_total_score: entry.totalScore ?? 0 }),
     pp: entry.pp,
     rank: entry.grade,
     passed: true,
@@ -131,6 +136,7 @@ function MapScoreRow({ entry, own, onOpen }: { entry: LiveMapScoreEntry; own: bo
           accent={entry.user.avatar_accent}
           className="truncate text-[12.5px] font-semibold text-white"
         />
+        {entry.companella ? <CompanellaMark app={entry.companella.app} className="h-[15px] w-[15px]" /> : null}
         {entry.mods.map((mod) => (
           <ModBadge key={mod} mod={mod} size={0.55} />
         ))}

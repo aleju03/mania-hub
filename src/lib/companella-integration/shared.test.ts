@@ -16,8 +16,8 @@ describe("shared contract", () => {
     for (const template of Object.values(COMPANELLA_NATIVE_ROUTES)) {
       expect(template.includes("://")).toBe(false);
       expect(template.startsWith("/")).toBe(false);
-      const placeholders = template.match(/:[a-z]+/g) ?? [];
-      expect(placeholders.every((name) => name === ":id")).toBe(true);
+      const placeholders = template.match(/:[a-z0-9]+/g) ?? [];
+      expect(placeholders.every((name) => name === ":id" || name === ":md5")).toBe(true);
     }
   });
 

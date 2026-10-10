@@ -631,6 +631,7 @@ function SnipeRules({ countryName, isGlobal, seeded, className = "" }: { country
     IN: { name: "Invert", description: t`Turns the notes into hold notes that fill the gaps between them.` },
     NR: { name: "No Release", description: t`Hold notes don't need their release timed.` },
     DS: { name: "Dual Stages", description: t`Doubles the columns into two stages.` },
+    RD: { name: "Random", description: t`Shuffles the columns.` },
     DA: { name: "Difficulty Adjust", description: t`Changes the map's difficulty settings, like OD and HP.` },
     CS: { name: "Constant Speed", description: t`Removes the map's scroll speed changes.` },
     WU: { name: "Wind Up", description: t`Speeds the song up gradually during the map.` },
@@ -644,7 +645,7 @@ function SnipeRules({ countryName, isGlobal, seeded, className = "" }: { country
   );
   const dtBadges = badges(["DT", "NC"]);
   const htBadges = badges(["HT", "DC"]);
-  const excludedBadges = badges(["HO", "IN", "NR", "DS", "DA", "CS", "WU", "WD", "AS"]);
+  const excludedBadges = badges(["HO", "IN", "NR", "DS", "RD", "DA", "CS", "WU", "WD", "AS"]);
   const customRateBadges = badges(["DT", "HT"]);
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
   const open = anchor != null;

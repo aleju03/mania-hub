@@ -123,6 +123,20 @@ describe("native proxy", () => {
     expect(calls[0].url).toBe(`${BACKEND}/api/integrations/companella/native/capabilities`);
   });
 
+  it("carries only a route's own query parameters, and only plain values", async () => {
+    mockBackend(new Response("{}", { status: 200 }));
+    const md5 = "a".repeat(32);
+    const board = (query: string) => new Request(`https://mania-tracker.com/api/integrations/companella/v1/charts/${md5}/leaderboard${query}`);
+    await forwardNativeRequest(board("?speed=dt&mods=IN,HO&user=5&token=x"), "chartLeaderboard", { md5 });
+    expect(calls[0].url).toBe(`${BACKEND}/api/integrations/companella/native/charts/${md5}/leaderboard?speed=dt&mods=IN%2CHO`);
+    mockBackend(new Response("{}", { status: 200 }));
+    await forwardNativeRequest(board("?speed=dt%26user%3D5&mods=../x"), "chartLeaderboard", { md5 });
+    expect(calls[0].url).toBe(`${BACKEND}/api/integrations/companella/native/charts/${md5}/leaderboard`);
+    mockBackend(new Response("{}", { status: 200 }));
+    await forwardNativeRequest(new Request("https://mania-tracker.com/api/integrations/companella/v1/me?speed=dt"), "me");
+    expect(calls[0].url).toBe(`${BACKEND}/api/integrations/companella/native/me`);
+  });
+
   it("does not follow a redirect with credentials attached", async () => {
     mockBackend(new Response(null, { status: 302, headers: { location: "https://evil.example/" } }));
     const request = new Request("https://mania-tracker.com/x");

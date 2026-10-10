@@ -38,7 +38,8 @@ info:
     `integration_unavailable`, in the route's own error shape. All of these are
     retryable.
 
-    Nothing in this API affects public rankings, pp, snipes or rewards.
+    A play sent here can show on its map's Scores board. Nothing in this API
+    affects pp, the rankings, snipes or rewards.
 servers:
   - url: https://mania-tracker.com/api/integrations/companella/v1
     description: Production (enabled per deployment; see /capabilities)
@@ -450,6 +451,91 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /charts/{md5}/leaderboard:
+    get:
+      summary: A map's Scores board, by the md5 of its file
+      description: |
+        The same board the site's map card shows on its Scores tab: every
+        tracked player's best play on the map, osu! plays and plays sent
+        through an app alike, ranked by 305-weighted accuracy from the
+        judgement counts (half-time plays under the rest). EZ, a custom rate
+        and the mods that rewrite notes are off the board. Works for any map
+        status, graveyard included.
+
+        The md5 is the chart file's, as the replay header and tosu give it,
+        in either case. A map is found when the site holds its current file
+        or a play on that file was sent through an app, so a map nobody has
+        played may answer `unknown_chart`. A copy of a map (a rate edit, an edited file) is a
+        different chart and has no board.
+
+        `speed` and `mods` pick a mod board, as song select would. With
+        neither, the board is the site's own. `speed=dt` is DT/NC plays at any
+        rate, custom ones included, and `speed=ht` the same for HT/DC; each
+        entry carries its `rate`. `mods` is any set of `IN`, `HO` and `NR`
+        (any order, any case): only plays with exactly that set, mixed by
+        speed like the site's board when `speed` is absent. Mirror and the
+        visual mods are ignored; EZ, Random, Dual Stages, Difficulty Adjust,
+        Constant Speed, Wind Up/Down, Adaptive Speed and a foreign key mod
+        keep a play off every board. osu! plays reach a mod board from when
+        the site started keeping them per board, plus what it still held of
+        older ones; plays sent through an app are all there.
+
+        Needs `companella:installation:read`, which every connection has.
+        Limited to `limits.leaderboard_reads_per_minute` per account
+        (60); over it the answer is `429 rate_limited` with `Retry-After`.
+      parameters:
+        - name: md5
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9A-Fa-f]{32}$"
+        - name: speed
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [dt, ht]
+        - name: mods
+          in: query
+          required: false
+          description: Comma-separated, any of IN, HO, NR.
+          schema:
+            type: string
+            example: IN,HO
+      responses:
+        "200":
+          description: The board
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChartLeaderboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          description: "`invalid_board`: a `speed` other than dt or ht, or a mod outside IN, HO and NR."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: "`unknown_chart`: the site does not know a map with this file."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: "`rate_limited`."
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   securitySchemes:
     dpop:
@@ -800,4 +886,95 @@ components:
                 family: { type: string, enum: [dan, ln] }
                 raw: { type: number, description: "The level as a number, 2 decimals, for sorting within one keymode and family. 6K and 7K count from 0 (7K gamma is 11). Show `label`, not this." }
                 eligible: { type: boolean, description: "Whether the play can count toward the player's dan." }
+        leaderboard:
+          type: [object, "null"]
+          description: |
+            Only on `GET /submissions/{id}`, once the state is `accepted`:
+            where the player stands on the map's Scores board (see
+            `/charts/{md5}/leaderboard`). It is there as soon as the receipt
+            is accepted. Null when the play does not count for the board (EZ,
+            a custom rate, a mod that rewrites notes, a chart that is not a
+            map's file, a map the site does not know, or a play held for
+            review).
+          properties:
+            beatmap_id: { type: integer }
+            speed:
+              type: [string, "null"]
+              enum: [dt, ht, null]
+              description: |
+                The board the position is on, the one the play's own mods
+                select: `dt` or `ht` for a play with a speed mod (custom rates
+                included), null for the site's own mix.
+            mods:
+              type: array
+              items: { type: string, enum: [HO, IN, NR] }
+              description: The play's note mods, sorted; the board is only plays with exactly these.
+            position:
+              type: integer
+              description: |
+                The player's spot: this play's when it is their best on the
+                board, else where their best sits.
+            total: { type: integer, description: Players on the board. }
+            personal_best:
+              type: boolean
+              description: No play of theirs on the board stands above this one.
+          required: [beatmap_id, speed, mods, position, total, personal_best]
       required: [submission_id, state]
+
+    ChartLeaderboard:
+      type: object
+      properties:
+        beatmap_id: { type: integer }
+        beatmapset_id: { type: integer }
+        artist: { type: [string, "null"] }
+        title: { type: [string, "null"] }
+        version: { type: string }
+        status:
+          type: [string, "null"]
+          description: osu!'s status for the map, e.g. ranked, loved, qualified, pending, graveyard.
+        url: { type: string, description: "The map's page on the site." }
+        speed: { type: [string, "null"], enum: [dt, ht, null], description: The board asked for. }
+        mods:
+          type: array
+          items: { type: string, enum: [HO, IN, NR] }
+          description: The board asked for, sorted.
+        total: { type: integer, description: Players on the board. }
+        entries:
+          type: array
+          description: The top 50.
+          items:
+            $ref: "#/components/schemas/BoardEntry"
+        self:
+          description: The token's own player when they are on the board but outside `entries`; null otherwise.
+          oneOf:
+            - $ref: "#/components/schemas/BoardEntry"
+            - type: "null"
+      required: [beatmap_id, beatmapset_id, version, url, speed, mods, total, entries, self]
+
+    BoardEntry:
+      type: object
+      properties:
+        position: { type: integer }
+        user:
+          type: object
+          properties:
+            id: { type: integer }
+            username: { type: string }
+            avatar_url: { type: string }
+            country_code: { type: string, description: Empty when the site has no record of the player. }
+          required: [id, username, avatar_url, country_code]
+        accuracy: { type: number, description: "305-weighted accuracy from the judgement counts, 0 to 1, for stable and lazer plays alike." }
+        grade: { type: string, description: The grade that accuracy reads as (XH, X, SH, S, A, B, C, D). }
+        mods:
+          type: array
+          items: { type: string }
+        max_combo: { type: [integer, "null"] }
+        total_score: { type: [integer, "null"] }
+        pp: { type: [number, "null"] }
+        is_lazer: { type: boolean }
+        rate: { type: number, description: "The speed the play ran at: 1, 1.5, 0.75, or a custom rate (1.2) on the DT and HT boards." }
+        played_at: { type: [string, "null"], format: date-time }
+        app:
+          type: [string, "null"]
+          description: The client id of the app that sent the play (`companella`, `mania-bridge`), or null for an osu! play.
+      required: [position, user, accuracy, grade, mods, max_combo, total_score, pp, is_lazer, rate, played_at, app]

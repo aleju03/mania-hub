@@ -59,6 +59,8 @@ interface RouteRule {
   /** OAuth endpoints answer in the OAuth error shape, not the envelope. */
   oauth: boolean;
   timeoutMs: number;
+  /** Query parameters carried to the backend, by name; every other one is dropped. */
+  query?: readonly string[];
 }
 
 const ROUTE_RULES: Record<NativeRouteId, RouteRule> = {
@@ -72,6 +74,7 @@ const ROUTE_RULES: Record<NativeRouteId, RouteRule> = {
   submissionBeatmap: { maxBodyBytes: BEATMAP_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: UPLOAD_TIMEOUT_MS },
   submissionComplete: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
   presence: { maxBodyBytes: JSON_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
+  chartLeaderboard: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS, query: ["speed", "mods"] },
 };
 
 function backendBase(): string | null {
@@ -96,6 +99,19 @@ function resolveSubpath(route: NativeRouteId, params: Record<string, string>): s
     resolved = resolved.replace(`:${key}`, value);
   }
   return resolved.includes(":") ? null : resolved;
+}
+
+/** The route's own query parameters, short letters and commas only; nothing else is carried. */
+function forwardedQuery(request: Request, rule: RouteRule): string {
+  if (!rule.query?.length) return "";
+  const incoming = new URL(request.url).searchParams;
+  const out = new URLSearchParams();
+  for (const name of rule.query) {
+    const value = incoming.get(name);
+    if (value != null && /^[A-Za-z,]{0,32}$/.test(value)) out.set(name, value);
+  }
+  const text = out.toString();
+  return text ? `?${text}` : "";
 }
 
 function errorResponse(
@@ -235,7 +251,7 @@ export async function forwardNativeRequest(
       // Required by fetch for a streamed request body.
       init.duplex = "half";
     }
-    const response = await fetch(`${base}/api/integrations/companella/native/${subpath}`, init);
+    const response = await fetch(`${base}/api/integrations/companella/native/${subpath}${forwardedQuery(request, rule)}`, init);
     if (response.status >= 300 && response.status < 400) {
       return errorResponse(502, "integration_unavailable", "The integration backend answered unexpectedly.", { retryable: true, oauth: rule.oauth });
     }
