@@ -1,7 +1,7 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Coffee, Heart, X } from "lucide-react";
+import { Coffee, ExternalLink, Heart, X } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { ChangelogModal } from "../components/layout/ChangelogModal";
@@ -15,6 +15,7 @@ import { StaleBuildNotice } from "../components/layout/StaleBuildNotice";
 import { GoalToasts } from "../components/me/GoalToasts";
 import { TrackingToasts } from "../components/me/TrackingToasts";
 import { ReplayExportPanel } from "../components/replay/ReplayExportPanel";
+import { SupportGoalBar } from "../components/layout/SupportGoalBar";
 import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
 import { InitialCountryContext } from "../lib/country-context";
@@ -524,12 +525,39 @@ function NotFoundPage() {
 }
 
 const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
+const LAVA_TIP_URL = "https://app.lava.top/mania-tracker?tabId=donate";
+// Countries where Ko-fi cannot take a payment (no PayPal, and local cards do
+// not work abroad), so the popup offers lava.top, which takes ruble cards.
+const LAVA_SUPPORT_COUNTRIES = new Set(["RU", "BY", "IR", "CU", "SY", "KP"]);
+
+// Asked when the popup opens rather than rendered into the page, so the
+// visitor's country never ends up in HTML a CDN could cache for someone else.
+const getSupportUsesLava = createServerFn({ method: "GET" }).handler(() => {
+  const country = readEdgeCountry(getRequest().headers);
+  return country != null && LAVA_SUPPORT_COUNTRIES.has(country);
+});
 
 function KofiSupportButton() {
   const { t } = useLingui();
   // getI18n rather than useLingui for the same reason as RootErrorComponent.
   const i = getI18n(useLocale());
   const [open, setOpen] = useState(false);
+  // null until the server answers; Ko-fi shows meanwhile only if it says no.
+  const [useLava, setUseLava] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!open || useLava != null) return;
+    let cancelled = false;
+    getSupportUsesLava()
+      .then((value) => {
+        if (!cancelled) setUseLava(value);
+      })
+      .catch(() => {
+        if (!cancelled) setUseLava(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, useLava]);
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -581,14 +609,36 @@ function KofiSupportButton() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <iframe
-              src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true`}
-              title={t`Support Mania Tracker on Ko-fi`}
-              loading="eager"
-              scrolling="yes"
-              allow="payment *"
-              className="block h-[540px] max-h-[calc(100vh-9rem)] w-full overscroll-contain border-0 bg-[#f9f9f9] [touch-action:auto]"
-            />
+            <SupportGoalBar />
+            {useLava === true ? (
+              <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3">
+                <p className="text-[12px] text-osu-f1">
+                  {i._(msg`Can't pay with Ko-fi? You can tip through lava.top.`)}
+                </p>
+                <a
+                  href={LAVA_TIP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => track("support_lava_open")}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-osu-pink px-4 py-2 text-[12px] font-semibold text-white transition hover:brightness-110"
+                >
+                  {i._(msg`Send a tip`)}
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                </a>
+              </div>
+            ) : null}
+            {useLava != null ? (
+              <iframe
+                src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true`}
+                title={t`Support Mania Tracker on Ko-fi`}
+                loading="eager"
+                scrolling="yes"
+                allow="payment *"
+                className={`block ${useLava ? "h-[480px]" : "h-[540px]"} max-h-[calc(100vh-14rem)] w-full overscroll-contain border-0 bg-[#f9f9f9] [touch-action:auto]`}
+              />
+            ) : (
+              <div className="h-[540px] max-h-[calc(100vh-12rem)]" />
+            )}
           </div>
         </div>,
         document.body,

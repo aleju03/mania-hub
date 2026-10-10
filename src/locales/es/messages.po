@@ -1648,6 +1648,10 @@ msgstr "{progressCounts} cartas"
 #~ msgid "{progressCounts} teams"
 #~ msgstr "{progressCounts} equipos"
 
+#: src/components/layout/SupportGoalBar.tsx
+msgid "{raised} of {target}"
+msgstr "{raised} de {target}"
+
 #: src/routes/maps.tsx
 msgid "{randomPickCount, plural, one {# pick} other {# possible picks}}"
 msgstr "{randomPickCount, plural, one {# opción} other {# opciones posibles}}"
@@ -4054,6 +4058,10 @@ msgstr "Por jugador"
 msgid "Calculating skills..."
 msgstr "Calculando habilidades..."
 
+#: src/routes/__root.tsx
+msgid "Can't pay with Ko-fi? You can tip through lava.top."
+msgstr "¿No puedes pagar con Ko-fi? Puedes dejar una propina por lava.top."
+
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/UserCollectionEditor.tsx
@@ -5573,6 +5581,10 @@ msgstr "Rankings de mania por país"
 #: src/routes/dan-estimates.tsx
 msgid "Course packs and allowed mods"
 msgstr "Packs de cursos y mods permitidos"
+
+#: src/components/layout/SupportGoalBar.tsx
+msgid "Covered through {covered}"
+msgstr "Cubierto hasta {covered}"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none for now."
@@ -15271,6 +15283,10 @@ msgstr "selecciona texto o escríbelo aquí"
 msgid "Send"
 msgstr "Enviar"
 
+#: src/routes/__root.tsx
+msgid "Send a tip"
+msgstr "Enviar una propina"
+
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
@@ -15821,6 +15837,10 @@ msgstr "Las cartas aparecen de una vez, sin la animación completa al abrir el s
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
 msgstr "aleatorio"
+
+#: src/routes/snipes.tsx
+msgid "Shuffles the columns."
+msgstr "Mezcla las columnas."
 
 #: src/components/packs/ShuffleStage.tsx
 msgid "shuffling"

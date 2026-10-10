@@ -1657,6 +1657,10 @@ msgstr "{progressCounts} 张卡牌"
 #~ msgid "{progressCounts} teams"
 #~ msgstr "{progressCounts} 个战队"
 
+#: src/components/layout/SupportGoalBar.tsx
+msgid "{raised} of {target}"
+msgstr "{raised} / {target}"
+
 #: src/routes/maps.tsx
 msgid "{randomPickCount, plural, one {# pick} other {# possible picks}}"
 msgstr "{randomPickCount, plural, other {# 个可抽选项}}"
@@ -4063,6 +4067,10 @@ msgstr "按玩家"
 msgid "Calculating skills..."
 msgstr "正在计算技能…"
 
+#: src/routes/__root.tsx
+msgid "Can't pay with Ko-fi? You can tip through lava.top."
+msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
+
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/UserCollectionEditor.tsx
@@ -5582,6 +5590,10 @@ msgstr "国家/地区 mania 排行榜"
 #: src/routes/dan-estimates.tsx
 msgid "Course packs and allowed mods"
 msgstr "课程图包和允许的 Mod"
+
+#: src/components/layout/SupportGoalBar.tsx
+msgid "Covered through {covered}"
+msgstr "已覆盖至{covered}"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none for now."
@@ -15280,6 +15292,10 @@ msgstr "选中文字，或直接在这里输入"
 msgid "Send"
 msgstr "发送"
 
+#: src/routes/__root.tsx
+msgid "Send a tip"
+msgstr "打赏"
+
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
@@ -15830,6 +15846,10 @@ msgstr "开包时卡片直接淡入，不播放完整的揭晓动画"
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
 msgstr "换一批"
+
+#: src/routes/snipes.tsx
+msgid "Shuffles the columns."
+msgstr "随机打乱轨道。"
 
 #: src/components/packs/ShuffleStage.tsx
 msgid "shuffling"
