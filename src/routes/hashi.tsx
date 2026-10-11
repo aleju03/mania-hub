@@ -149,13 +149,13 @@ function Downloads({ downloads }: { downloads: ManiaBridgeDownloads | null }) {
 }
 
 /** The app and what it shows on the site, so nobody installs it blind. Wide ones are site captures. */
-const SCREENSHOTS: { src: string; alt: MessageDescriptor; wide?: boolean }[] = [
-  { src: "/images/hashi/screenshot-1-main.webp", alt: msg`Hashi's main window with the last plays it sent` },
-  { src: "/images/hashi/screenshot-4-leaderboard.webp", alt: msg`A map's leaderboard in Hashi` },
-  { src: "/images/hashi/screenshot-2-connect.webp", alt: msg`Hashi before connecting to Mania Tracker` },
-  { src: "/images/hashi/screenshot-3-settings.webp", alt: msg`Hashi's settings` },
-  { src: "/images/hashi/profile-live.webp", alt: msg`A profile showing the map its player is playing`, wide: true },
-  { src: "/images/hashi/rankings-live.webp", alt: msg`The rankings showing a player who is playing`, wide: true },
+const SCREENSHOTS: { src: string; width: number; height: number; alt: MessageDescriptor; wide?: boolean }[] = [
+  { src: "/images/hashi/screenshot-1-main.webp", width: 960, height: 1280, alt: msg`Hashi's main window with the last plays it sent` },
+  { src: "/images/hashi/screenshot-4-leaderboard.webp", width: 534, height: 790, alt: msg`A map's leaderboard in Hashi` },
+  { src: "/images/hashi/screenshot-2-connect.webp", width: 960, height: 1280, alt: msg`Hashi before connecting to Mania Tracker` },
+  { src: "/images/hashi/screenshot-3-settings.webp", width: 960, height: 1280, alt: msg`Hashi's settings` },
+  { src: "/images/hashi/profile-live.webp", width: 2540, height: 600, alt: msg`A profile showing the map its player is playing`, wide: true },
+  { src: "/images/hashi/rankings-live.webp", width: 2330, height: 590, alt: msg`The rankings showing a player who is playing`, wide: true },
 ];
 
 function Screenshots() {
@@ -172,7 +172,7 @@ function Screenshots() {
             onClick={() => setOpen(index)}
             className={`cursor-zoom-in overflow-hidden rounded-lg bg-osu-b4 transition hover:brightness-110 ${shot.wide ? "col-span-2 sm:col-span-4" : ""}`}
           >
-            <img src={shot.src} alt={i18n._(shot.alt)} loading="lazy" className="block h-auto w-full" />
+            <img src={shot.src} alt={i18n._(shot.alt)} width={shot.width} height={shot.height} loading="lazy" className="block h-auto w-full" />
           </button>
         ))}
       </div>
@@ -203,7 +203,7 @@ function BridgePage() {
         )}
       />
       <div className="min-h-[80vh] bg-osu-b5 pb-12">
-        <div className="mx-auto max-w-xl px-4 pt-12 sm:pt-16">
+        <div className="mx-auto max-w-xl px-4 pt-6 sm:pt-8">
           <div className="flex flex-col items-center text-center">
             <img src={app.icon} alt="" width={112} height={112} className="h-28 w-28 rounded-full" />
             <h1 className="mt-5 text-3xl font-semibold text-white">{app.name}</h1>
