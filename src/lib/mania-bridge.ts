@@ -5,7 +5,7 @@
  */
 export const MANIA_BRIDGE_VERSION = "0.1.0";
 
-export const MANIA_BRIDGE_REPO = "aleju03/mania-bridge";
+export const MANIA_BRIDGE_REPO = "aleju03/hashi";
 export const MANIA_BRIDGE_SOURCE_URL = `https://github.com/${MANIA_BRIDGE_REPO}`;
 
 /** The installers of the current release, by system. Null where the release has none. */
