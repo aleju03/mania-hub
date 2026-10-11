@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLingui } from "@lingui/react/macro";
+import { Link } from "@tanstack/react-router";
 import { fetchLiveMapScores, type LiveMapScoreEntry, type LiveMapScoresSnapshot, type LiveMapSearchEntry } from "../../lib/live-backend";
 import { formatAccuracy, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { getManiaGradeFromAccuracy } from "../../lib/score";
@@ -120,22 +121,37 @@ function MapScoreRow({ entry, own, onOpen }: { entry: LiveMapScoreEntry; own: bo
   // The grade follows the accuracy shown, so a stable SS with 300s reads as the S it is on this scale.
   const grade = getManiaGradeFromAccuracy(entry.accuracy, entry.mods.map((acronym) => ({ acronym }))) ?? entry.grade;
   return (
-    <button
-      type="button"
+    // A div, not a button, so the player's name can be a link inside it.
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onOpen(entry)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        onOpen(entry);
+      }}
       title={t`Open ${entry.user.username}'s play`}
       className={`grid cursor-pointer grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded border-t border-white/[0.07] py-1.5 pr-1.5 text-left first:border-t-0 hover:bg-white/[0.03] sm:grid-cols-[1.75rem_minmax(0,1fr)_auto_4.5rem] ${own ? "bg-osu-pink/10" : ""}`}
     >
       <span className={`text-right text-[11px] font-bold tabular-nums ${own ? "text-osu-pink-light" : "text-osu-f1"}`}>#{entry.position}</span>
       <span className="flex min-w-0 items-center gap-2">
-        <Avatar url={entry.user.avatar_url} size={24} />
-        <CountryFlag code={entry.user.country_code} size="xs" decorative />
-        <UsernameText
-          username={entry.user.username}
-          avatarUrl={entry.user.avatar_url}
-          accent={entry.user.avatar_accent}
-          className="truncate text-[12.5px] font-semibold text-white"
-        />
+        <Link
+          to="/player/$username"
+          params={{ username: entry.user.username }}
+          onClick={(event) => event.stopPropagation()}
+          title={t`View profile`}
+          className="flex min-w-0 items-center gap-2 hover:brightness-110"
+        >
+          <Avatar url={entry.user.avatar_url} size={24} />
+          <CountryFlag code={entry.user.country_code} size="xs" decorative />
+          <UsernameText
+            username={entry.user.username}
+            avatarUrl={entry.user.avatar_url}
+            accent={entry.user.avatar_accent}
+            className="truncate text-[12.5px] font-semibold text-white hover:underline"
+          />
+        </Link>
         {entry.companella ? <CompanellaMark app={entry.companella.app} video={entry.companella.video} className="h-[15px] w-[15px]" />
           : <ScoreVideoMark ids={[entry.soloScoreId, entry.scoreId]} className="h-[15px] w-[15px]" />}
         {entry.mods.map((mod) => (
@@ -152,6 +168,6 @@ function MapScoreRow({ entry, own, onOpen }: { entry: LiveMapScoreEntry; own: bo
       >
         {entry.playedAt ? formatTimeAgo(entry.playedAt, locale) : ""}
       </span>
-    </button>
+    </div>
   );
 }
