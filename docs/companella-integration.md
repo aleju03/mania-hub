@@ -219,6 +219,9 @@ The response says which assets the server still needs. `needs_beatmap: false`
 is answered only when the exact bytes are verified to exist and are reusable by
 this account, with the stored chart's sha256, md5 and length all equal to the
 manifest's. A metadata row, a matching family, or a beatmap id is not a file.
+The receipt read, an asset `PUT` and completion re-check the same way, so a
+chart that arrived since the reservation is no longer asked for. None of this
+calls osu!.
 
 Concurrent reservations under one idempotency key return the one stored row
 (`created: false` for the others). A quota or incomplete-cap refusal first
@@ -229,6 +232,15 @@ count toward the incomplete cap.
 `PUT …/replay` and `PUT …/beatmap` take raw bytes. No base64, no gzip, no line
 ending or BOM rewriting: the digests were taken over exactly these bytes, and
 the `.osr` header's MD5 is over the chart's original bytes.
+
+`PUT …/{replay|beatmap}/parts/{offset}` takes the same bytes in pieces of up
+to 16 KiB, for clients on networks that stall a connection after its first
+~16 KB. Pieces wait in `companella_upload_parts` keyed by offset (resend
+replaces, overlap is fine, at most twice the declared length is held). Once
+they cover the file from 0 it goes through `putSubmissionReplay` /
+`putSubmissionBeatmap` like a whole upload, and the pieces are dropped unless
+that answer was a quota refusal. The expiry sweep drops pieces of submissions
+no longer awaiting assets.
 
 `POST …/complete` first checks that the replay and the chart are still there:
 the registry rows must be committed, the chart's md5 and length must match the

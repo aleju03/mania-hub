@@ -422,6 +422,83 @@ paths:
         "429":
           $ref: "#/components/responses/UploadQuota"
 
+  /submissions/{id}/{asset}/parts/{offset}:
+    put:
+      summary: Upload one piece of the replay or the chart
+      description: |
+        For networks that stall a connection after its first few KB: the
+        same asset as the whole-file `PUT`, sent as raw bytes starting at
+        `offset`, at most `chunked_upload.max_part_bytes` per piece. Same
+        scope and proof as the whole-file upload of that asset.
+
+        Pieces are keyed by offset, so resending one replaces it, and they may
+        be any size or overlap. Once they cover the whole file from offset 0
+        the server checks and stores it exactly as a whole upload, and the
+        answer is that upload's answer. A `digest_mismatch` drops every piece;
+        start again from 0. A piece for an asset no longer needed is answered
+        `complete: true, stored: false`.
+      parameters:
+        - $ref: "#/components/parameters/SubmissionId"
+        - name: asset
+          in: path
+          required: true
+          schema: { type: string, enum: [replay, beatmap] }
+        - name: offset
+          in: path
+          required: true
+          schema: { type: integer, minimum: 0 }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Piece stored; `upload.complete` once the whole file is stored
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Reservation"
+                  - type: object
+                    properties:
+                      upload:
+                        type: object
+                        properties:
+                          asset: { type: string, enum: [replay, beatmap] }
+                          received_bytes: { type: integer, description: "Bytes held contiguously from offset 0." }
+                          byte_length: { type: integer }
+                          complete: { type: boolean }
+                          stored:
+                            type: boolean
+                            description: "False when the asset was no longer needed and this piece was not kept."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "As the whole-file upload."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: "`payload_too_large`: the piece is over `max_part_bytes`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: "`invalid_part` (empty, or past the declared length), or the whole-file upload's codes once assembled."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          $ref: "#/components/responses/UploadQuota"
+
   /submissions/{id}/complete:
     post:
       summary: Finalize the assets and queue validation
@@ -692,6 +769,11 @@ components:
         rulesets_supported:
           type: array
           items: { type: string, const: mania }
+        chunked_upload:
+          type: object
+          description: Present when an asset may also be sent in parts (`…/parts/{offset}`).
+          properties:
+            max_part_bytes: { type: integer, description: "16384." }
         analysis:
           type: object
           properties:

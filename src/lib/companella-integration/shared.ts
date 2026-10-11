@@ -23,6 +23,8 @@ export const COMPANELLA_NATIVE_ROUTES = {
   submissionRead: "submissions/:id",
   submissionReplay: "submissions/:id/replay",
   submissionBeatmap: "submissions/:id/beatmap",
+  submissionReplayPart: "submissions/:id/replay/parts/:offset",
+  submissionBeatmapPart: "submissions/:id/beatmap/parts/:offset",
   submissionComplete: "submissions/:id/complete",
   presence: "presence",
   chartLeaderboard: "charts/:md5/leaderboard",

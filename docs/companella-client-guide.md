@@ -204,8 +204,9 @@ The response tells you what is still needed:
 ```
 
 `needs_beatmap: false` means the server already holds that exact file (same
-SHA-256, MD5 and length). Only ever follow a path the server returned, and only
-on this origin.
+SHA-256, MD5 and length). It can turn `false` later, when another upload
+brings the same chart, so check the latest receipt before each upload. Only
+ever follow a path the server returned, and only on this origin.
 
 Reserving again under the same idempotency key, even concurrently, returns the
 same submission with `created: false`. The byte budgets count the replay, the
@@ -227,6 +228,16 @@ retrying it over the same slow link will not help. The byte budgets are
 checked again when new bytes arrive (`429 daily_upload_quota_exceeded` /
 `retention_quota_exceeded`, retryable); re-sending bytes the server already
 stored is never refused.
+
+Some networks stall a connection after its first ~16 KB, so a whole upload
+hangs with nothing arriving. When `/capabilities` has `chunked_upload`, a
+client that sees an upload stall can send the same bytes in pieces instead:
+`PUT {upload_path}/parts/{offset}`, at most `chunked_upload.max_part_bytes`
+each (use ~12 KiB so headers fit), each on a new connection. Pieces are keyed
+by offset and can be re-sent; the answer carries `upload.received_bytes` and
+`upload.complete`, and the last piece answers like the whole upload. A
+`digest_mismatch` drops the pieces, so start again from 0. Use pieces only
+after a stall: they cost a connection setup each.
 
 ### Complete
 
@@ -262,6 +273,7 @@ It is null in every other state.
 | `error=access_denied` on the callback | The user declined on the consent screen. Nothing was connected; offer Connect again. |
 | `needs_beatmap: true` | Send the one `.osu`. Not a failure. Maps the site already holds (ranked and most known charts) come back `false` and need no upload. |
 | Connection lost mid-upload | Re-read the receipt, then re-send the same bytes. |
+| Upload stalls with no answer | Re-read the receipt; if the file is still needed, send it in parts on fresh connections. |
 | `409 assets_missing` on complete | Re-read the receipt and send the file it asks for again. |
 | `413 payload_too_large` | Permanent for this file. |
 | `504 integration_unavailable` on an upload | The upload took longer than 4 minutes, or the site could not reach the server. Retry later, not in a tight loop. |
