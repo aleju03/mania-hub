@@ -359,6 +359,22 @@ function msdSkillsetsFor(keyCount: number | null | undefined): string[] {
   return usesPrism(keyCount) ? [...MSD_SKILLSETS.filter((name) => name !== "JackSpeed" && name !== "Stream" && name !== "Stamina"), "Speed"] : MSD_SKILLSETS;
 }
 
+// Prism keeps PRISM_SKILLSET_FLOOR (0.6) of a chart's demand in a skillset
+// whose pattern the chart lacks, so on a one-pattern chart every other
+// skillset sits at one shared value, about half the top. Those read as data;
+// grey them. A floor exists when the lowest skillset is under 62% of the top,
+// and a skillset within 3% of that lowest value sits on it.
+function prismFlooredSkillsets(keyCount: number | null | undefined, skillsets: Array<{ name: string; value: number }>): Set<string> {
+  const floored = new Set<string>();
+  if (!usesPrism(keyCount)) return floored;
+  const rice = skillsets.filter(({ name }) => name !== "LN");
+  if (rice.length < 2) return floored;
+  const top = rice[0].value, low = rice[rice.length - 1].value;
+  if (!(low <= top * 0.62)) return floored;
+  for (const { name, value } of rice) if (value <= low * 1.03) floored.add(name);
+  return floored;
+}
+
 /** The site's hover tip, in place of the browser's title tooltip. Portaled and
  * kept inside the viewport so the modal's scroll box cannot clip it. */
 function HoverTip({ tip, className, children }: { tip: ReactNode; className: string; children: ReactNode }) {
@@ -604,6 +620,7 @@ export function MsdBlock({
   // once the holds are cut off.
   const overall = msdHeadline(msd, entry.keyCount, hasLnIdentity);
   const topName = skillsets[0]?.name;
+  const floored = prismFlooredSkillsets(entry.keyCount, skillsets);
 
   const dan = noDans ? null : rateAdjusted ? rateDan : analysisDan !== undefined ? analysisDan : entry.dan ?? null;
   // "MSD" alone at 1.0x; a rate-modded play names the speed the numbers are
@@ -654,7 +671,7 @@ export function MsdBlock({
             <HoverTip key={name} className="flex flex-col" tip={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTip(i18n, name, entry.keyCount, msd)}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
-                  name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"
+                  name === topName ? "text-osu-pink-light" : value < 1 || floored.has(name) ? "text-osu-f1/45" : "text-osu-l2"
                 }`}
               >
                 {value.toFixed(2)}
