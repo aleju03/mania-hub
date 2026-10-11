@@ -16508,8 +16508,8 @@ msgstr "Ordenando del rating de estrellas más bajo al más alto - clic izquierd
 #~ msgstr "Código fuente"
 
 #: src/routes/hashi.tsx
-msgid "Source code on GitHub"
-msgstr "Código fuente en GitHub"
+#~ msgid "Source code on GitHub"
+#~ msgstr "Código fuente en GitHub"
 
 #: src/components/communities/field-options.tsx
 msgid "Spam or advertising"

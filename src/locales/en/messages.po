@@ -16551,8 +16551,8 @@ msgstr "Sorting lowest star rating first - left click to clear, right click for 
 #~ msgstr "Source code"
 
 #: src/routes/hashi.tsx
-msgid "Source code on GitHub"
-msgstr "Source code on GitHub"
+#~ msgid "Source code on GitHub"
+#~ msgstr "Source code on GitHub"
 
 #: src/components/communities/field-options.tsx
 msgid "Spam or advertising"

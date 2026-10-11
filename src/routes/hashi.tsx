@@ -218,21 +218,10 @@ function BridgePage() {
               <span>{t`Windows and Linux`}</span>
               <span aria-hidden className={DIVIDER} />
               <span>{t`lazer and stable`}</span>
-              <span aria-hidden className={DIVIDER} />
-              <a
-                href={MANIA_BRIDGE_SOURCE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => track("bridge_source_click")}
-                className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
-              >
-                <img src="/images/brands/github.svg" alt="" width={12} height={12} className="h-3 w-3 opacity-70" />
-                <Trans>Source code on GitHub</Trans>
-              </a>
             </div>
           </div>
 
-          <div className="mt-10 flex justify-center">
+          <div className="mt-6 flex justify-center">
             <div className="inline-flex rounded-full bg-osu-b4 p-1">
               {([["about", t`About`], ["screenshots", t`Screenshots`]] as const).map(([id, label]) => (
                 <button
@@ -276,7 +265,7 @@ function BridgePage() {
               <p className="mt-2">
                 <Trans>
                   The installer isn't signed, because Microsoft charges for code signing, so Windows shows a warning before it runs. Click More info, then Run anyway. The{" "}
-                  <a href={MANIA_BRIDGE_SOURCE_URL} target="_blank" rel="noopener noreferrer" className={LINK}>source code</a> is on GitHub if you want to check what it does.
+                  <a href={MANIA_BRIDGE_SOURCE_URL} target="_blank" rel="noopener noreferrer" onClick={() => track("bridge_source_click")} className={LINK}>source code</a> is on GitHub if you want to check what it does.
                 </Trans>
               </p>
             </section>

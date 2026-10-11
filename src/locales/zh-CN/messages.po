@@ -16517,8 +16517,8 @@ msgstr "按星级从低到高排序 - 左键清除，右键切换降序"
 #~ msgstr "源代码"
 
 #: src/routes/hashi.tsx
-msgid "Source code on GitHub"
-msgstr "GitHub 上的源代码"
+#~ msgid "Source code on GitHub"
+#~ msgstr "GitHub 上的源代码"
 
 #: src/components/communities/field-options.tsx
 msgid "Spam or advertising"
