@@ -35,6 +35,8 @@ export interface CompanellaAccountPlay {
   /* Removed by an admin: excluded for good, with its replay gone. */
   removed: boolean;
   rateSuspicious: boolean;
+  /* Header accuracy minus key-press accuracy, in points, when that gap is what held it. */
+  headerGapPp: number | null;
   chart: { title: string | null; artist: string | null; version: string | null; keyCount: number | null };
   playedAt: string | null;
   receivedAt: string;
@@ -68,7 +70,7 @@ export const listCompanellaAccounts = createServerFn({ method: "GET" })
   });
 
 export const listCompanellaAccountPlays = createServerFn({ method: "GET" })
-  .validator((data: { userId?: unknown; limit?: number; offset?: number; query?: unknown; sort?: unknown }) => {
+  .validator((data: { userId?: unknown; limit?: number; offset?: number; query?: unknown; sort?: unknown; excluded?: unknown }) => {
     const userId = Number(data?.userId);
     if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid user id.");
     return {
@@ -77,12 +79,14 @@ export const listCompanellaAccountPlays = createServerFn({ method: "GET" })
       offset: Math.max(0, Math.floor(Number(data?.offset) || 0)),
       query: typeof data?.query === "string" ? data.query.slice(0, 80) : "",
       sort: data?.sort === "pp" ? "pp" as const : "recent" as const,
+      excluded: data?.excluded === true,
     };
   })
   .handler(async ({ data }): Promise<Paged<CompanellaAccountPlay>> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("List a Companella player's plays");
     const query = new URLSearchParams({ limit: String(data.limit), offset: String(data.offset), q: data.query, sort: data.sort });
+    if (data.excluded) query.set("excluded", "1");
     const response = await adminFetch(`/api/admin/companella/accounts/${data.userId}/plays?${query.toString()}`);
     if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/companella/accounts/plays`);
     return await response.json() as Paged<CompanellaAccountPlay>;

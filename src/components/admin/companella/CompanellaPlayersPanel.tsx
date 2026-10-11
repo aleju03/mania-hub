@@ -49,6 +49,13 @@ function plural(count: number, noun: string): string {
   return `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`;
 }
 
+/* Why a held play is held: the header-versus-key-presses gap sets the only automatic hold. */
+function exclusionReason(play: CompanellaAccountPlay): string {
+  if (play.headerGapPp == null) return "Excluded by hand";
+  const gap = Math.abs(play.headerGapPp).toFixed(1);
+  return `Saved result ${gap} points ${play.headerGapPp < 0 ? "below" : "above"} its key presses`;
+}
+
 function When({ iso, prefix }: { iso: string; prefix: string }) {
   return <span title={formatWhen(iso)}>{prefix} {formatTimeAgo(iso)}</span>;
 }
@@ -59,7 +66,9 @@ function AccountRow({
   busy,
   plays,
   playsPage,
+  excludedOnly,
   onToggle,
+  onExcludedOnly,
   onBlock,
   onHold,
   onRemove,
@@ -71,7 +80,9 @@ function AccountRow({
   busy: boolean;
   plays: Loadable<Paged<CompanellaAccountPlay>>;
   playsPage: number;
+  excludedOnly: boolean;
   onToggle: () => void;
+  onExcludedOnly: (excludedOnly: boolean) => void;
   onBlock: () => void;
   onHold: (play: CompanellaAccountPlay, held: boolean) => void;
   onRemove: (play: CompanellaAccountPlay) => void;
@@ -129,6 +140,17 @@ function AccountRow({
             <button disabled={busy} onClick={onBlock} className={blocked ? ACTION_CLASS : DANGER_CLASS}>
               {blocked ? "Unblock Companella" : "Block Companella"}
             </button>
+            {entry.heldPlays > 0 || excludedOnly ? (
+              <SegmentedControl
+                id={`companella-plays-${entry.userId}`}
+                value={excludedOnly ? "excluded" : "all"}
+                options={[
+                  { value: "all", label: "All plays" },
+                  { value: "excluded", label: <>Excluded<span className="ml-1 tabular-nums opacity-70">{formatNumber(entry.heldPlays)}</span></> },
+                ]}
+                onChange={(value) => onExcludedOnly(value === "excluded")}
+              />
+            ) : null}
           </div>
           <PlaysList plays={plays} page={playsPage} busy={busy} onHold={onHold} onRemove={onRemove} onPage={onPlaysPage} onRetry={onRetry} />
         </div>
@@ -196,6 +218,7 @@ function PlaysList({
                   {play.rateSuspicious ? <span className="text-osu-red-light">rate flagged</span> : null}
                   {play.removed ? <span className="text-osu-red-light">Removed</span>
                     : excluded ? <span className="text-amber-300">Excluded</span> : null}
+                  {excluded && !play.removed ? <span>{exclusionReason(play)}</span> : null}
                 </div>
               </div>
               {play.removed ? null : (
@@ -249,6 +272,9 @@ export function CompanellaPlayersPanel({
   const [openId, setOpenId] = useState<number | null>(userId ?? null);
   const [plays, setPlays] = useState<Record<number, Loadable<Paged<CompanellaAccountPlay>>>>({});
   const [playsPage, setPlaysPage] = useState<Record<number, number>>({});
+  const [excludedOnly, setExcludedOnly] = useState<Record<number, boolean>>({});
+  const excludedOnlyRef = useRef(excludedOnly);
+  excludedOnlyRef.current = excludedOnly;
   const [busyId, setBusyId] = useState<number | null>(null);
   const [blockAsk, setBlockAsk] = useState<CompanellaAccount | null>(null);
   const [removeAsk, setRemoveAsk] = useState<{ entry: CompanellaAccount; play: CompanellaAccountPlay } | null>(null);
@@ -283,7 +309,10 @@ export function CompanellaPlayersPanel({
 
   const loadPlays = useCallback(async (userId: number, page: number) => {
     try {
-      const result = await listCompanellaAccountPlays({ data: { userId, limit: PLAYS_PAGE_SIZE, offset: page * PLAYS_PAGE_SIZE } });
+      const excluded = excludedOnlyRef.current[userId] === true;
+      const result = await listCompanellaAccountPlays({
+        data: { userId, limit: PLAYS_PAGE_SIZE, offset: page * PLAYS_PAGE_SIZE, ...(excluded ? { excluded } : {}) },
+      });
       setPlays((current) => ({ ...current, [userId]: result }));
     } catch {
       setPlays((current) => ({ ...current, [userId]: "error" }));
@@ -337,6 +366,14 @@ export function CompanellaPlayersPanel({
       await removeCompanellaPlay({ data: { scoreId: play.scoreId } });
       await loadPlays(entry.userId, playsPage[entry.userId] ?? 0);
     });
+
+  const changeExcludedOnly = (entry: CompanellaAccount, only: boolean) => {
+    excludedOnlyRef.current = { ...excludedOnlyRef.current, [entry.userId]: only };
+    setExcludedOnly(excludedOnlyRef.current);
+    setPlaysPage((current) => ({ ...current, [entry.userId]: 0 }));
+    setPlays((current) => ({ ...current, [entry.userId]: undefined }));
+    void loadPlays(entry.userId, 0);
+  };
 
   const changePlaysPage = (entry: CompanellaAccount, page: number) => {
     setPlaysPage((current) => ({ ...current, [entry.userId]: page }));
@@ -418,7 +455,9 @@ export function CompanellaPlayersPanel({
                 busy={busyId === entry.userId}
                 plays={plays[entry.userId]}
                 playsPage={playsPage[entry.userId] ?? 0}
+                excludedOnly={excludedOnly[entry.userId] === true}
                 onToggle={() => toggle(entry)}
+                onExcludedOnly={(only) => changeExcludedOnly(entry, only)}
                 onBlock={() => entry.blockedAt != null ? void setBlocked(entry, false) : setBlockAsk(entry)}
                 onHold={(play, held) => void hold(entry, play, held)}
                 onRemove={(play) => setRemoveAsk({ entry, play })}

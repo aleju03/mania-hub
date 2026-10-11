@@ -43,7 +43,7 @@ beforeEach(() => {
   };
   play = {
     scoreId: SCORE_ID, mods: [], accuracy: 98.5, totalScore: 900000, pp: null,
-    reviewState: "clear", removed: false, rateSuspicious: true,
+    reviewState: "clear", removed: false, rateSuspicious: true, headerGapPp: null,
     chart: { title: "Test chart", artist: "Artist", version: "Hard", keyCount: 4 },
     playedAt: "2026-09-24T12:00:00Z", receivedAt: "2026-09-24T12:01:00Z",
   };
@@ -167,6 +167,17 @@ describe("Companella admin moderation", () => {
     expect(api.listRateFlags).toHaveBeenLastCalledWith({ data: { filter: "name", offset: 0, limit: 50 } });
     expect(screen.queryByText(/claims/)).toBeNull();
     expect(screen.getByRole("button", { name: /Name mismatch/ }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("lists a player's excluded plays alone, with why each one is held", async () => {
+    account.heldPlays = 1;
+    play.reviewState = "quarantined";
+    play.headerGapPp = -1.01;
+    await openPage("/admin/bridgers?user=12345&q=%2312345");
+    await screen.findByText("Saved result 1.0 points below its key presses");
+    fireEvent.click(screen.getByRole("button", { name: /Excluded/ }));
+    await waitFor(() => expect(api.listCompanellaAccountPlays).toHaveBeenLastCalledWith({ data: { userId: USER_ID, offset: 0, limit: 20, excluded: true } }));
+    await screen.findByText("Saved result 1.0 points below its key presses");
   });
 
   it("keeps account blocks separate from excluding existing plays", async () => {
