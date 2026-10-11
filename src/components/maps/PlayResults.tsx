@@ -29,9 +29,9 @@ function JudgementCount({ label, value, available, locale }: { label: string; va
   );
 }
 
-function ResultStat({ label, value }: { label: string; value: string }) {
+function ResultStat({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
-    <div className="flex min-w-0 flex-col">
+    <div className={`flex min-w-0 flex-col ${className}`}>
       <span className="text-[20px] font-bold leading-none tabular-nums text-osu-l1">{value}</span>
       <span className="mt-1.5 text-[11px] text-osu-f1">{label}</span>
     </div>
@@ -63,11 +63,11 @@ export function PlayResults({ play }: { play: MapDetailPlayContext }) {
   return (
     <div className="min-w-0">
       <div className="flex flex-col gap-6 px-3 pb-2 pt-4 sm:px-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-4">
-            {grade ? <GradeImg grade={grade} size={84} className="shrink-0" /> : null}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            {grade ? <GradeImg grade={grade} size={84} className="size-16 shrink-0 sm:size-[84px]" /> : null}
             <div className="flex min-w-0 flex-col">
-              <span className="text-[52px] font-black leading-none tabular-nums text-white">{accuracy ?? "—"}</span>
+              <span className="text-[40px] font-black leading-none tabular-nums text-white sm:text-[52px]">{accuracy ?? "—"}</span>
               <span
                 className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-osu-l2"
                 title={play.playedAt ? formatTimeAgoTooltip(play.playedAt, locale) : undefined}
@@ -80,7 +80,10 @@ export function PlayResults({ play }: { play: MapDetailPlayContext }) {
               </span>
             </div>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-3">
+          <div className="flex empty:hidden sm:hidden">
+            <PlayModRow play={play} />
+          </div>
+          <div className="hidden shrink-0 flex-col items-end gap-3 sm:flex">
             <PlayModRow play={play} />
             {ratio ? (
               <div className="flex flex-col items-end">
@@ -90,12 +93,14 @@ export function PlayResults({ play }: { play: MapDetailPlayContext }) {
             ) : null}
           </div>
         </div>
-        <div className="grid grid-cols-6 gap-2" aria-label={available ? t`Judgments` : t`Judgments unavailable`}>
+        <div className="grid grid-cols-3 gap-x-2 gap-y-4 sm:grid-cols-6" aria-label={available ? t`Judgments` : t`Judgments unavailable`}>
           {judgements.map(({ label, value }) => (
             <JudgementCount key={label} label={label} value={value} available={available} locale={locale} />
           ))}
         </div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-5 border-t border-white/[0.07] pt-5 sm:grid-flow-col sm:auto-cols-fr sm:grid-cols-none">
+          {/* On a phone the ratio joins this row instead of taking a header row of its own. */}
+          {ratio ? <ResultStat label="MAX:300" value={ratio} className="sm:hidden" /> : null}
           <ResultStat label={t`Max combo`} value={score?.maxCombo != null ? `${formatNumber(score.maxCombo, locale)}x` : "—"} />
           <ResultStat label={t`Score`} value={score?.totalScore != null ? formatNumber(score.totalScore, locale) : "—"} />
           {play.pp != null ? <ResultStat label={t`PP`} value={formatPP(play.pp)} /> : null}
