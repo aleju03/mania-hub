@@ -48,7 +48,7 @@ beforeEach(() => {
     playedAt: "2026-09-24T12:00:00Z", receivedAt: "2026-09-24T12:01:00Z",
   };
   flag = {
-    ...play, reviewState: "clear", userId: USER_ID, username: account.username,
+    ...play, reviewState: "clear", userId: USER_ID, username: account.username, playerName: account.username,
     rateCheck: { verdict: "claimed_rate_too_high", claimedRate: 1.5, measuredRate: 1, windows: 10 },
   };
   api.listCompanellaAccounts.mockImplementation(async () => ({ total: 1, entries: [{ ...account }] }));
@@ -145,6 +145,28 @@ describe("Companella admin moderation", () => {
     expect(api.removeCompanellaPlay).toHaveBeenLastCalledWith({ data: { scoreId: SCORE_ID } });
     expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+  });
+
+  it("removes a flagged play from the flags list after a confirm, excluding it first", async () => {
+    let removed = false;
+    api.listRateFlags.mockImplementation(async () => (removed ? { total: 0, entries: [] } : { total: 1, entries: [{ ...flag }] }));
+    api.removeCompanellaPlay.mockImplementation(async () => { removed = true; });
+    await openPage("/admin/bridgers?tab=flags");
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect(api.removeCompanellaPlay).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
+    await screen.findByText("Nothing flagged.");
+    expect(api.setRateFlagHeld).toHaveBeenLastCalledWith({ data: { scoreId: SCORE_ID, held: true } });
+    expect(api.removeCompanellaPlay).toHaveBeenLastCalledWith({ data: { scoreId: SCORE_ID } });
+  });
+
+  it("lists name mismatches with the name the replay was played under", async () => {
+    api.listRateFlags.mockImplementation(async () => ({ total: 1, entries: [{ ...flag, playerName: "Someone Else", rateCheck: null }] }));
+    await openPage("/admin/bridgers?tab=flags&flag=name");
+    await screen.findByText("Played as Someone Else");
+    expect(api.listRateFlags).toHaveBeenLastCalledWith({ data: { filter: "name", offset: 0, limit: 50 } });
+    expect(screen.queryByText(/claims/)).toBeNull();
+    expect(screen.getByRole("button", { name: /Name mismatch/ }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("keeps account blocks separate from excluding existing plays", async () => {

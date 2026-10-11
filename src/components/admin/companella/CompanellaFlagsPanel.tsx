@@ -1,12 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { RefreshCw, X } from "lucide-react";
+import { RefreshCw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ConfirmModal } from "../../ui/ConfirmModal";
 import { Skeleton } from "../../ui/LoadingSkeleton";
 import { ModBadge } from "../../ui/ModBadge";
 import { Pagination } from "../../ui/Pagination";
 import { SegmentedControl } from "../../ui/SegmentedControl";
-import { listRateFlags, setRateFlagHeld, type RateFlag, type RateFlagFilter } from "../../../lib/companella-rate-flags";
+import { listRateFlags, removeCompanellaPlay, setRateFlagHeld, type RateFlag, type RateFlagFilter } from "../../../lib/companella-rate-flags";
 import { formatNumber, formatTimeAgo } from "../../../lib/format";
 
 const PAGE_SIZE = 50;
@@ -27,6 +28,11 @@ const FILTERS: { value: RateFlagFilter; label: string; hint: string }[] = [
     label: "All",
     hint: "Every import whose frames did not confirm the speed its mods claim. Flagged plays still count until excluded.",
   },
+  {
+    value: "name",
+    label: "Name mismatch",
+    hint: "The name in the replay is not the account's name or its current osu! name.",
+  },
 ];
 
 const MISMATCH = new Set(["claimed_rate_too_high", "inconclusive_low"]);
@@ -37,6 +43,8 @@ const BUTTON_CLASS =
 const ACTION_CLASS = `${BUTTON_CLASS} border-osu-b3/30 bg-osu-b4/60 text-osu-l2 hover:bg-osu-b3/60 hover:text-white`;
 
 const HOLD_CLASS = `${BUTTON_CLASS} border-amber-300/40 bg-amber-300/10 text-amber-200 hover:bg-amber-300/20`;
+
+const DANGER_CLASS = `${BUTTON_CLASS} border-osu-red/40 bg-osu-red/10 text-osu-red-light hover:bg-osu-red/20`;
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "";
@@ -50,7 +58,7 @@ function formatRate(rate: number): string {
 }
 
 /* The verdict in words, under the rate column's numbers. */
-function readingText(check: RateFlag["rateCheck"]): string {
+function readingText(check: NonNullable<RateFlag["rateCheck"]>): string {
   switch (check.verdict) {
     case "too_few_windows":
       return "Too few idle frames to read the speed";
@@ -73,7 +81,7 @@ function readingText(check: RateFlag["rateCheck"]): string {
   }
 }
 
-function RateColumn({ check, mismatch }: { check: RateFlag["rateCheck"]; mismatch: boolean }) {
+function RateColumn({ check, mismatch }: { check: NonNullable<RateFlag["rateCheck"]>; mismatch: boolean }) {
   return (
     <div className="w-[64px] flex-shrink-0 sm:w-[76px]">
       <div
@@ -91,14 +99,21 @@ function RateColumn({ check, mismatch }: { check: RateFlag["rateCheck"]; mismatc
   );
 }
 
-function RateFlagRow({ entry, busy, onHold }: { entry: RateFlag; busy: boolean; onHold: (held: boolean) => void }) {
-  const mismatch = MISMATCH.has(entry.rateCheck.verdict);
+function RateFlagRow({ entry, byName, busy, onHold, onRemove }: {
+  entry: RateFlag;
+  byName: boolean;
+  busy: boolean;
+  onHold: (held: boolean) => void;
+  onRemove: () => void;
+}) {
+  const check = entry.rateCheck;
+  const mismatch = check != null && MISMATCH.has(check.verdict);
   const held = entry.reviewState !== "clear";
   const when = entry.playedAt ?? entry.receivedAt;
   const chartName = [entry.chart.artist, entry.chart.title].filter(Boolean).join(" - ") || "Unknown chart";
   return (
     <div className={`flex items-start gap-3 px-3 py-3 sm:items-center ${held ? "bg-amber-300/[0.04]" : ""}`}>
-      <RateColumn check={entry.rateCheck} mismatch={mismatch} />
+      {byName ? null : check ? <RateColumn check={check} mismatch={mismatch} /> : null}
 
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -126,15 +141,22 @@ function RateFlagRow({ entry, busy, onHold }: { entry: RateFlag; busy: boolean; 
           {entry.chart.version ? <span className="text-osu-f1"> [{entry.chart.version}]</span> : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-osu-f1">
-          <span className={mismatch ? "text-osu-red-light" : undefined}>{readingText(entry.rateCheck)}</span>
+          {byName ? <span className="text-osu-red-light">Played as {entry.playerName || "no name"}</span> : null}
+          {check ? <span className={mismatch ? "text-osu-red-light" : undefined}>{readingText(check)}</span> : null}
           {when ? <span title={formatWhen(when)}>{formatTimeAgo(when)}</span> : null}
           <span className="hidden font-mono sm:inline">{entry.scoreId}</span>
         </div>
       </div>
 
-      <button disabled={busy} onClick={() => onHold(!held)} className={`${held ? ACTION_CLASS : HOLD_CLASS} flex-shrink-0 sm:min-w-[92px]`}>
-        {held ? "Restore" : "Exclude"}
-      </button>
+      <div className="flex flex-shrink-0 items-center gap-1.5">
+        <button disabled={busy} onClick={onRemove} aria-label="Remove" className={`${DANGER_CLASS} sm:min-w-[76px]`}>
+          <Trash2 size={13} />
+          <span className="hidden sm:inline">Remove</span>
+        </button>
+        <button disabled={busy} onClick={() => onHold(!held)} className={`${held ? ACTION_CLASS : HOLD_CLASS} sm:min-w-[92px]`}>
+          {held ? "Restore" : "Exclude"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -151,6 +173,7 @@ export function CompanellaFlagsPanel({ filter, page, onFilterChange, onPageChang
   // Each tab's last known count, so a tab switch never shows one list's count on another's tab.
   const [totals, setTotals] = useState<Partial<Record<RateFlagFilter, number>>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [removeAsk, setRemoveAsk] = useState<RateFlag | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef(0);
 
@@ -179,6 +202,22 @@ export function CompanellaFlagsPanel({ filter, page, onFilterChange, onPageChang
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "That did not go through.");
+    } finally {
+      setBusyId(null);
+    }
+  }, [load]);
+
+  // Removal takes an excluded play, so a clear one is excluded first, as on the play removal page.
+  const remove = useCallback(async (entry: RateFlag) => {
+    setRemoveAsk(null);
+    setBusyId(entry.scoreId);
+    try {
+      if (entry.reviewState === "clear") await setRateFlagHeld({ data: { scoreId: entry.scoreId, held: true } });
+      await removeCompanellaPlay({ data: { scoreId: entry.scoreId } });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That did not go through.");
+      await load();
     } finally {
       setBusyId(null);
     }
@@ -246,8 +285,10 @@ export function CompanellaFlagsPanel({ filter, page, onFilterChange, onPageChang
               <RateFlagRow
                 key={entry.scoreId}
                 entry={entry}
+                byName={filter === "name"}
                 busy={busyId === entry.scoreId}
                 onHold={(held) => void hold(entry, held)}
+                onRemove={() => setRemoveAsk(entry)}
               />
             ))}
           </div>
@@ -255,6 +296,17 @@ export function CompanellaFlagsPanel({ filter, page, onFilterChange, onPageChang
           <Pagination page={Math.floor(offset / PAGE_SIZE)} totalPages={Math.ceil(total / PAGE_SIZE)} onPageChange={changePage} />
         </>
       )}
+
+      {removeAsk ? (
+        <ConfirmModal
+          title="Remove this play?"
+          body="Deletes its replay and ratings and keeps it excluded. This can't be undone."
+          confirmLabel="Remove"
+          danger
+          onConfirm={() => void remove(removeAsk)}
+          onClose={() => setRemoveAsk(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -31,7 +31,7 @@ export const Route = createFileRoute("/admin/bridgers")({
     q: typeof search.q === "string" ? search.q.trim().slice(0, 40) || undefined : undefined,
     user: positiveInteger(search.user),
     page: positiveInteger(search.page),
-    flag: search.flag === "all" || search.flag === "unreadable" ? search.flag : undefined,
+    flag: search.flag === "all" || search.flag === "unreadable" || search.flag === "name" ? search.flag : undefined,
     flagPage: positiveInteger(search.flagPage),
   }),
   head: () => ({
