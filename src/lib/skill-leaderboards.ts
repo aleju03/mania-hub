@@ -162,6 +162,8 @@ export interface ClearLeaderboardEntry {
   courseName: string;
   beatmapId: number;
   mods: string[];
+  // The rate mod's speed when it is a lazer custom one (DT at 1.1x).
+  modRate?: number;
   playedAt: string | null;
   // The run itself, in the dan window's course shape, so a row opens the same
   // score card.

@@ -192,6 +192,8 @@ export interface LivePlayerDanCourseEvidence extends LivePlayerDanCourseClear {
   soloScoreId: number | null;
   legacyScoreId: number | null;
   mods: string[];
+  /** The rate mod's speed when it is a lazer custom one (DT at 1.1x). */
+  modRate?: number;
   statistics: OsuScoreStatistics | null;
   maxCombo: number | null;
   totalScore: number | null;

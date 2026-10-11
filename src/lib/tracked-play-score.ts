@@ -1,6 +1,6 @@
 import { getManiaAccuracyFromCounts, getManiaGradeFromAccuracy, getScoreSpeedBucket } from "./score";
 import type { LiveKeymodePpPlay, LivePlayerDanCourseEvidence } from "./live-backend";
-import type { OsuScore } from "./types";
+import type { OsuMod, OsuScore } from "./types";
 
 /** Who the profile belongs to, which is who every tracked play on it is by. */
 export interface TrackedPlayViewer {
@@ -120,6 +120,13 @@ export function buildCourseClearScore(course: LivePlayerDanCourseEvidence, keyCo
     stars: null,
     bpm: null,
   }, viewer);
+  // A lazer custom speed goes back on its rate mod, so the badge reads 1.10x rather than a bare DT.
+  const modRate = course.modRate;
+  if (modRate != null) {
+    score.mods = course.mods.map((acronym): OsuMod => ["DT", "NC", "HT", "DC"].includes(acronym)
+      ? { acronym, settings: { speed_change: modRate } }
+      : { acronym });
+  }
   // A run sent through an app opens as that import, its replay included when public.
   return course.companella ? { ...score, companella: course.companella } as OsuScore : score;
 }

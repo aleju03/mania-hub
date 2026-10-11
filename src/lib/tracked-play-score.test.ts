@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildTrackedPlayScore, getTrackedPlayRank } from "./tracked-play-score";
+import { buildCourseClearScore, buildTrackedPlayScore, getTrackedPlayRank } from "./tracked-play-score";
+import type { LivePlayerDanCourseEvidence } from "./live-backend";
 import { getManiaJudgementCounts, getScoreUrl, isLazerScore } from "./score";
 import type { LiveKeymodePpPlay } from "./live-backend";
 
@@ -117,5 +118,18 @@ describe("buildTrackedPlayScore", () => {
 
     expect(score.id).toBe(7_245_658_770);
     expect(getScoreUrl(score)).toBe("https://osu.ppy.sh/scores/7245658770");
+  });
+});
+
+describe("buildCourseClearScore", () => {
+  it("puts a lazer custom speed back on the rate mod so the badge shows it", () => {
+    const course = {
+      beatmapId: 2_332_320, beatmapsetId: 1, courseName: "4K LN Dan 15th - Yume", title: "t", artist: "a", version: "v",
+      level: "15", rawDan: 15, label: "15", accuracy: 0.9714, currency: "v2", bar: 0.97, displayedAccuracy: 0.9714,
+      beatmapStatus: "graveyard", scoreId: 1, soloScoreId: 1, legacyScoreId: null, mods: ["DT"], modRate: 1.1,
+      statistics: null, maxCombo: null, totalScore: null, rank: "S", playedAt: null, hasReplay: false, isLazer: true,
+    } as unknown as LivePlayerDanCourseEvidence;
+    expect(buildCourseClearScore(course, 4, viewer).mods).toEqual([{ acronym: "DT", settings: { speed_change: 1.1 } }]);
+    expect(buildCourseClearScore({ ...course, modRate: undefined }, 4, viewer).mods).toEqual([{ acronym: "DT" }]);
   });
 });
