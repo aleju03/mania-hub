@@ -201,6 +201,8 @@ export interface CompanellaScoreMark {
   localBeatmapId?: number;
   /** A play an admin entered by hand: the video it was entered from, when one was given. */
   video?: string;
+  /** The client it was played on. The legacy total cannot say: a stable entry with no score has 0 there too. */
+  client?: "stable" | "lazer";
 }
 
 export interface OsuScore {

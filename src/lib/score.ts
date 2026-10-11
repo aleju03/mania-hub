@@ -249,6 +249,8 @@ export function getDisplayedTotalScore(score: ScoreLike): number | null {
 }
 
 function isLegacySubmittedScore(score: ScoreLike): boolean {
+  const client = (score as { companella?: { client?: string } }).companella?.client;
+  if (client) return client === "stable";
   if (score.type != null && score.type !== "solo_score") {
     return true;
   }
