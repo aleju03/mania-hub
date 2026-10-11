@@ -12,8 +12,10 @@ import {
   parseUnratedPlaysSort,
 } from "./unrated-plays";
 import {
+  DEFAULT_CLEAR_SKILLSET,
   DEFAULT_DAN_SKILLSET,
   DEFAULT_LEADERBOARD_AXIS,
+  parseDanLeaderboardKeys,
   parseDanSide,
   parseDanSkillset,
   parseLeaderboardAxis,
@@ -260,8 +262,8 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     // the path alone cannot tell a shelf from the showcase wall.
     Object.assign(props, getCollectionsPageviewProperties(params));
   } else if (pathname === "/rankings") {
-    // Four boards share the path - the pp table, the MSD skill leaderboard,
-    // the dan one and the unrated plays list - so without the tab the feed
+    // Five boards share the path - the pp table, the MSD skill leaderboard,
+    // the dan one, the clears board and the unrated plays list - so without the tab the feed
     // cannot tell them apart. Every one of these params gets stripped from the
     // URL at its default, so they are normalized rather than read raw: an
     // absent tab is the Performance board, not an unknown one.
@@ -277,6 +279,10 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     } else if (tab === "dan") {
       props.rankings_side = parseDanSide(params.get("side"));
       props.rankings_skillset = parseDanSkillset(params.get("skillset")) ?? DEFAULT_DAN_SKILLSET;
+    } else if (tab === "clears") {
+      props.rankings_keys = String(parseDanLeaderboardKeys(params.get("keys")));
+      props.rankings_side = parseDanSide(params.get("side"));
+      props.rankings_skillset = parseDanSkillset(params.get("skillset")) ?? DEFAULT_CLEAR_SKILLSET;
     } else if (tab === "unrated") {
       // The unrated board's keymode has its own default ("all", every
       // keymode), so the leaderboard parser would read an unset one as 4K.

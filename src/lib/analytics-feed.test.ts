@@ -254,7 +254,7 @@ describe("describeAnalyticsEvent", () => {
     });
   });
 
-  it("tells the four rankings boards apart", () => {
+  it("tells the five rankings boards apart", () => {
     expect(describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "pp", selectedCountry: "CR", rankingsPage: "3" }))).toMatchObject({
       kind: "ranking",
       verb: "browsed",
@@ -272,6 +272,13 @@ describe("describeAnalyticsEvent", () => {
     expect(
       describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "dan", rankingsKeys: "6", rankingsSide: "rc", rankingsSkillset: "overall" })),
     ).toMatchObject({ subject: "the dan leaderboard", detail: "6K Regular" });
+    // The clears board's default column is the full courses.
+    expect(
+      describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "clears", rankingsKeys: "4", rankingsSide: "rc", rankingsSkillset: "courses" })),
+    ).toMatchObject({ kind: "ranking", subject: "the clears leaderboard", detail: "4K Regular" });
+    expect(
+      describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "clears", rankingsKeys: "4", rankingsSide: "rc", rankingsSkillset: "jack", selectedCountry: "CR" })),
+    ).toMatchObject({ subject: "the clears leaderboard", detail: "4K Regular · Jack · Costa Rica" });
     expect(
       describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "unrated", rankingsKeys: "7", rankingsSort: "msd", rankingsRange: "week", selectedCountry: "CR" })),
     ).toMatchObject({ kind: "ranking", subject: "the unrated plays", detail: "7K · MSD · this week · Costa Rica" });

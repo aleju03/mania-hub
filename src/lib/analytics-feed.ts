@@ -6,7 +6,7 @@
 import { getCountryName, isGlobalScope, isSupportedCountryCode } from "./country";
 import { REGION_DEFS } from "./regions.generated";
 import { DAN_SKILLSET_META, skillAxisMeta } from "./skill-axes";
-import { DEFAULT_DAN_SKILLSET } from "./skill-leaderboards";
+import { DEFAULT_CLEAR_SKILLSET, DEFAULT_DAN_SKILLSET } from "./skill-leaderboards";
 
 export type AnalyticsDeviceKind = "mobile" | "desktop" | "unknown";
 
@@ -287,8 +287,8 @@ const RANKINGS_UNRATED_SORT_LABELS: Record<string, string> = { pp: "PP", msd: "M
 /* The dan board's two ladders, named the way its own control names them. */
 const RANKINGS_SIDE_LABELS: Record<string, string> = { rc: "Regular", ln: "LN" };
 
-/* Four boards sit behind /rankings - the pp table, the MSD skill leaderboard,
-   the dan one and the unrated plays list - so the path alone cannot say which
+/* Five boards sit behind /rankings - the pp table, the MSD skill leaderboard,
+   the dan one, the clears board and the unrated plays list - so the path alone cannot say which
    one a visitor is on.
    The tab and its facets ride in the pageview; a row captured before they were
    recorded has none of them, and keeps the old undifferentiated line. */
@@ -315,6 +315,18 @@ function describeRankings(row: AnalyticsRecentEventRow, scope: string | null): A
       kind: "ranking",
       verb: "browsed",
       subject: "the dan leaderboard",
+      detail: joinDetail([[keys, side].filter(Boolean).join(" "), skillset, scope, page]),
+    };
+  }
+  if (row.rankingsTab === "clears") {
+    const side = row.rankingsSide ? RANKINGS_SIDE_LABELS[row.rankingsSide] ?? row.rankingsSide : null;
+    const skillset = !row.rankingsSkillset || row.rankingsSkillset === DEFAULT_CLEAR_SKILLSET
+      ? null
+      : DAN_SKILLSET_META[row.rankingsSkillset]?.label ?? row.rankingsSkillset;
+    return {
+      kind: "ranking",
+      verb: "browsed",
+      subject: "the clears leaderboard",
       detail: joinDetail([[keys, side].filter(Boolean).join(" "), skillset, scope, page]),
     };
   }
