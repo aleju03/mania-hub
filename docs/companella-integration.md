@@ -42,6 +42,7 @@ frontend  /api/integrations/companella/v1/*        (src/routes/api/integrations/
     |  narrow proxy: bridge token + the client's credentials in their own headers
     v
 backend   /api/integrations/companella/native/*    (http/routes/companella.ts)
+          /api/integrations/companella/v1/*        (same handlers, called directly on the API host)
     +-- SQLite: installations, grants, credentials, submissions, scores, previews
     +-- private R2 prefix: replays and contributed charts
     +-- the ordinary job queue: one submission per job, one lane
@@ -49,6 +50,22 @@ backend   /api/integrations/companella/native/*    (http/routes/companella.ts)
     v
 frontend  /companella  (owner-scoped server functions -> …/manage/*)
 ```
+
+The native API is also served on the API host itself, at the public `v1`
+paths, so a client calling it there does not depend on the frontend being up.
+`COMPANELLA_API_ORIGIN` (falling back to `LIVE_PUBLIC_ORIGIN`) names that
+host; `/capabilities` reports it as `api_base_url`, null while it is unset. The
+handlers are the same ones `native/*` runs: the credentials come from the
+standard `Authorization` and `DPoP` headers instead of the proxy's, the proof's
+`htu` must name the API host instead of the site (a proof signed for one host
+is refused on the other), and the country is the edge's own `CF-IPCountry`
+under `TRUST_PROXY_HEADERS`. Nothing the proxy builds is read from outside:
+`x-companella-*` headers on a direct request are ignored, and `manage/*` stays
+behind the bridge. It is routed ahead of the per-IP page budget on its own
+per-IP bucket (`COMPANELLA_NATIVE_RATE_PER_MINUTE`, default 600), with the
+per-account windows as the real throttle, and keeps the proxy's error
+discipline: an unexpected failure answers the envelope's `internal_error` (or
+OAuth's `server_error`), never the exception's text.
 
 The two backend surfaces are disjoint. `native/*` needs the bridge token AND a
 valid DPoP access token with a fresh proof; `manage/*` needs the bridge token

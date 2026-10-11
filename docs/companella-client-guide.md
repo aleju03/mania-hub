@@ -35,6 +35,12 @@ redirect. Start from `GET /api/integrations/companella/v1/capabilities`, which
 tells you the issuer, the authorization and token endpoints, the supported
 scopes and algorithms, and the current limits.
 
+When `/capabilities` has a non-null `api_base_url`, send every API call there
+(token, revoke, submissions, uploads, presence, `/me`, leaderboards) instead of
+the site. It is the same API on the API host, and it keeps answering while the
+site itself is down or restarting. The consent page stays on the site. Keep the
+site's URLs as the fallback for when `api_base_url` is null.
+
 1. Generate a P-256 key pair. Keep the private key non-exportable where the
    platform allows it; this is the client's own responsibility, and the server
    records nothing about how it is stored.
@@ -135,6 +141,8 @@ Every request carries `Authorization: DPoP <access-token>` and a **fresh**
 - Signature: ES256 over `header.payload`, as **raw r||s**, not DER.
 
 `htu` is the public URL your client called. Never a proxy's internal address.
+A proof for the site's URL is refused on the API host, and the other way round,
+so sign the URL of the host you are actually sending the request to.
 
 Timing: a proof may be at most 60 seconds old and at most 30 seconds in the
 future, measured when the request starts. The server checks it before reading
@@ -213,7 +221,7 @@ apply are the ones in `/capabilities`: `limits.max_replay_bytes`,
 `max_beatmap_bytes` and `max_json_bytes` (25 MiB, 8 MiB and 16 KiB by default);
 a file over its limit is `413 payload_too_large`. The site's proxy also has
 outer ceilings (32 MiB per upload, 64 KiB for JSON bodies), which only matter
-if the server is configured above them. An upload must finish within 4
+if the server is configured above them and you call through the site. An upload must finish within 4
 minutes; a slower one is cut off with `504 integration_unavailable`, and
 retrying it over the same slow link will not help. The byte budgets are
 checked again when new bytes arrive (`429 daily_upload_quota_exceeded` /

@@ -24,6 +24,11 @@ info:
     error="use_dpop_nonce"` and a `DPoP-Nonce` header (RFC 9449 section 8).
     Re-sign with the nonce and retry once.
 
+    The same API is served at the site and, when `/capabilities` reports an
+    `api_base_url`, directly on the API host. Both take the same requests;
+    each proof's `htu` names the host it is sent to. The direct host does not
+    depend on the site being up, so prefer it when it is offered.
+
     The size limits that apply are the ones `/capabilities` reports in
     `limits`: `max_replay_bytes`, `max_beatmap_bytes` and `max_json_bytes`
     (25 MiB, 8 MiB and 16 KiB by default). The site's proxy also has outer
@@ -41,8 +46,10 @@ info:
     A play sent here can show on its map's Scores board. Nothing in this API
     affects pp, the rankings, snipes or rewards.
 servers:
+  - url: https://api.mania-tracker.com/api/integrations/companella/v1
+    description: Production, direct to the API host (the `api_base_url` in /capabilities)
   - url: https://mania-tracker.com/api/integrations/companella/v1
-    description: Production (enabled per deployment; see /capabilities)
+    description: Production through the site (enabled per deployment; see /capabilities)
   - url: http://localhost:3000/api/integrations/companella/v1
     description: Local development
 
@@ -662,6 +669,11 @@ components:
         token_endpoint: { type: string }
         revocation_endpoint: { type: string }
         api_prefix: { type: string }
+        api_base_url:
+          type: [string, "null"]
+          description: >-
+            Base URL for calling this API directly on the API host, null while
+            it is not served there. Proofs sent there name this URL as `htu`.
         scopes_supported:
           type: array
           items: { type: string }
