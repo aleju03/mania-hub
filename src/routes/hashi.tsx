@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 
 import { getI18n } from "../lib/i18n";
 import { track } from "../lib/analytics";
 import { canUseAdminFeatures } from "../lib/auth-shared";
 import { pageSeo } from "../lib/seo";
 import { PageHeader } from "../components/layout/PageHeader";
+import { ImageLightbox } from "../components/ui/ImageLightbox";
 import { KNOWN_APPS } from "../lib/companella-integration/shared";
 import { MANIA_BRIDGE_SOURCE_URL, MANIA_BRIDGE_VERSION, type ManiaBridgeDownloads } from "../lib/mania-bridge";
 import { fetchManiaBridgeDownloads } from "../lib/mania-bridge-server";
@@ -17,7 +19,12 @@ import { fetchManiaBridgeDownloads } from "../lib/mania-bridge-server";
  * release, like the Integrations group in Settings.
  */
 
+type BridgeTab = "about" | "screenshots";
+
 export const Route = createFileRoute("/hashi")({
+  validateSearch: (search: Record<string, unknown>): { tab?: BridgeTab } => ({
+    tab: search.tab === "screenshots" ? "screenshots" : undefined,
+  }),
   beforeLoad: ({ context }) => { if (!canUseAdminFeatures(context.auth)) throw notFound(); },
   loader: async () => {
     try {
@@ -141,12 +148,47 @@ function Downloads({ downloads }: { downloads: ManiaBridgeDownloads | null }) {
   );
 }
 
+/** The app and what it shows on the site, so nobody installs it blind. Wide ones are site captures. */
+const SCREENSHOTS: { src: string; alt: MessageDescriptor; wide?: boolean }[] = [
+  { src: "/images/hashi/screenshot-1-main.webp", alt: msg`Hashi's main window with the last plays it sent` },
+  { src: "/images/hashi/screenshot-4-leaderboard.webp", alt: msg`A map's leaderboard in Hashi` },
+  { src: "/images/hashi/screenshot-2-connect.webp", alt: msg`Hashi before connecting to Mania Tracker` },
+  { src: "/images/hashi/screenshot-3-settings.webp", alt: msg`Hashi's settings` },
+  { src: "/images/hashi/profile-live.webp", alt: msg`A profile showing the map its player is playing`, wide: true },
+  { src: "/images/hashi/rankings-live.webp", alt: msg`The rankings showing a player who is playing`, wide: true },
+];
+
+function Screenshots() {
+  const { i18n } = useLingui();
+  const [open, setOpen] = useState<number | null>(null);
+  const urls = SCREENSHOTS.map((shot) => shot.src);
+  return (
+    <div className="mx-auto max-w-4xl px-4">
+      <div className="mt-8 grid grid-cols-2 items-start gap-3 border-t border-white/[0.07] pt-8 sm:grid-cols-4">
+        {SCREENSHOTS.map((shot, index) => (
+          <button
+            key={shot.src}
+            type="button"
+            onClick={() => setOpen(index)}
+            className={`cursor-zoom-in overflow-hidden rounded-lg bg-osu-b4 transition hover:brightness-110 ${shot.wide ? "col-span-2 sm:col-span-4" : ""}`}
+          >
+            <img src={shot.src} alt={i18n._(shot.alt)} loading="lazy" className="block h-auto w-full" />
+          </button>
+        ))}
+      </div>
+      {open != null ? <ImageLightbox urls={urls} index={open} onIndex={setOpen} onClose={() => setOpen(null)} /> : null}
+    </div>
+  );
+}
+
 const LINK = "text-white underline decoration-white/30 underline-offset-2 transition-colors hover:decoration-white";
 
 function BridgePage() {
   const { t } = useLingui();
   const app = KNOWN_APPS["mania-bridge"];
   const downloads = Route.useLoaderData();
+  const tab: BridgeTab = Route.useSearch().tab ?? "about";
+  const navigate = useNavigate();
 
   return (
     <div className="flex-1">
@@ -160,8 +202,8 @@ function BridgePage() {
           </>
         )}
       />
-      <div className="min-h-[80vh] bg-osu-b5">
-        <div className="mx-auto max-w-xl px-4 pt-12 pb-12 sm:pt-16">
+      <div className="min-h-[80vh] bg-osu-b5 pb-12">
+        <div className="mx-auto max-w-xl px-4 pt-12 sm:pt-16">
           <div className="flex flex-col items-center text-center">
             <img src={app.icon} alt="" width={112} height={112} className="h-28 w-28 rounded-full" />
             <h1 className="mt-5 text-3xl font-semibold text-white">{app.name}</h1>
@@ -190,7 +232,25 @@ function BridgePage() {
             </div>
           </div>
 
-          <div className="mt-12 space-y-6 border-t border-white/[0.07] pt-8 text-[15px] leading-relaxed text-osu-l2">
+          <div className="mt-10 flex justify-center">
+            <div className="inline-flex rounded-full bg-osu-b4 p-1">
+              {([["about", t`About`], ["screenshots", t`Screenshots`]] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => navigate({ to: "/hashi", search: id === "about" ? {} : { tab: id }, replace: true, resetScroll: false })}
+                  className={`rounded-full px-5 py-1.5 text-[13px] font-semibold transition-colors ${tab === id ? "bg-white/10 text-white" : "text-osu-f1 hover:text-white"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {tab === "screenshots" ? <Screenshots /> : (
+        <div className="mx-auto max-w-xl px-4">
+          <div className="mt-8 space-y-6 border-t border-white/[0.07] pt-8 text-[15px] leading-relaxed text-osu-l2">
             <section>
               <h2 className="text-[13px] font-semibold text-white"><Trans>What it does</Trans></h2>
               <p className="mt-2">
@@ -230,6 +290,7 @@ function BridgePage() {
             </section>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

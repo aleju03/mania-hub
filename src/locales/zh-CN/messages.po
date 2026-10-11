@@ -2535,6 +2535,10 @@ msgstr "从补充包中抽到的 maniacard。打开你自己的卡包，建立�
 msgid "a map"
 msgstr "某张谱面"
 
+#: src/routes/hashi.tsx
+msgid "A map's leaderboard in Hashi"
+msgstr "Hashi 中的谱面排行榜"
+
 #: src/components/layout/StaleBuildNotice.tsx
 msgid "A new update just came in. Refresh to load it."
 msgstr "刚刚有新更新。刷新以加载。"
@@ -2602,6 +2606,10 @@ msgstr "有一张粘贴的图片已不可用。复制前请重新粘贴。"
 #: src/routes/dan-estimates.tsx
 msgid "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
 msgstr "低于所属段位表最低 OD 的成绩不计分：单点谱面为 5.5，4K LN 为 7，7K LN 为 5。<0/> 永远不计入。"
+
+#: src/routes/hashi.tsx
+msgid "A profile showing the map its player is playing"
+msgstr "显示玩家正在游玩谱面的个人资料"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A quick reminder of what a dan is"
@@ -2671,6 +2679,7 @@ msgstr "A-Z"
 
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/team/TeamProfilePage.tsx
+#: src/routes/hashi.tsx
 #: src/routes/player/$username.tsx
 msgid "About"
 msgstr "关于"
@@ -7873,6 +7882,10 @@ msgstr "有害、仇恨内容或诈骗"
 msgid "Has its own backdrop"
 msgstr "自带背景"
 
+#: src/routes/hashi.tsx
+msgid "Hashi before connecting to Mania Tracker"
+msgstr "连接 Mania Tracker 之前的 Hashi"
+
 #: src/routes/bridge.tsx
 #~ msgid "Hashi reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
 #~ msgstr "Hashi 通过 tosu 读取 osu!，所以 tosu 需要保持运行。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
@@ -7896,6 +7909,14 @@ msgstr "Hashi 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩�
 #: src/routes/bridge.tsx
 #~ msgid "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
 #~ msgstr "Hashi 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 Share what I'm playing 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+
+#: src/routes/hashi.tsx
+msgid "Hashi's main window with the last plays it sent"
+msgstr "Hashi 主窗口，显示最近发送的成绩"
+
+#: src/routes/hashi.tsx
+msgid "Hashi's settings"
+msgstr "Hashi 的设置"
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -15058,6 +15079,7 @@ msgstr "截图"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/hashi.tsx
 msgid "Screenshots"
 msgstr "截图"
 
@@ -18125,6 +18147,10 @@ msgstr "排行榜查询失败。"
 #~ msgid "The rankings lookup is taking a moment"
 #~ msgstr "排行榜查询需要一点时间"
 
+#: src/routes/hashi.tsx
+msgid "The rankings showing a player who is playing"
+msgstr "显示正在游玩的玩家的排行榜"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "The rating may be waiting for a fresh chart-analysis pass."
 msgstr "评分可能在等待新一轮谱面分析。"
@@ -19871,6 +19897,7 @@ msgstr "查看 osu! 主页"
 msgid "View osu! team"
 msgstr "查看 osu! 战队"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/routes/pull/$ownerId/$cardId.tsx

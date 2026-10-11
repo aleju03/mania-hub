@@ -2526,6 +2526,10 @@ msgstr "Una maniacard sacada de un pack booster. Abre tus propios packs y arma u
 msgid "a map"
 msgstr "un mapa"
 
+#: src/routes/hashi.tsx
+msgid "A map's leaderboard in Hashi"
+msgstr "La tabla de un mapa en Hashi"
+
 #: src/components/layout/StaleBuildNotice.tsx
 msgid "A new update just came in. Refresh to load it."
 msgstr "Acaba de llegar una nueva actualización. Recarga para cargarla."
@@ -2593,6 +2597,10 @@ msgstr "Una imagen pegada ya no está disponible. Pégala de nuevo antes de copi
 #: src/routes/dan-estimates.tsx
 msgid "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
 msgstr "Una play por debajo del OD mínimo de su escala no da nada: 5.5 en charts regulares, 7 en 4K LN y 5 en 7K LN. <0/> nunca cuenta."
+
+#: src/routes/hashi.tsx
+msgid "A profile showing the map its player is playing"
+msgstr "Un perfil mostrando el mapa que su jugador está jugando"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A quick reminder of what a dan is"
@@ -2662,6 +2670,7 @@ msgstr "A-Z"
 
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/team/TeamProfilePage.tsx
+#: src/routes/hashi.tsx
 #: src/routes/player/$username.tsx
 msgid "About"
 msgstr "Acerca de"
@@ -7864,6 +7873,10 @@ msgstr "Dañino, ofensivo o una estafa"
 msgid "Has its own backdrop"
 msgstr "Tiene su propio fondo"
 
+#: src/routes/hashi.tsx
+msgid "Hashi before connecting to Mania Tracker"
+msgstr "Hashi antes de conectarse a Mania Tracker"
+
 #: src/routes/bridge.tsx
 #~ msgid "Hashi reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
 #~ msgstr "Hashi lee osu! a través de tosu, así que tosu tiene que estar abierto. En Linux, lazer necesita la versión de tosu para Linux."
@@ -7887,6 +7900,14 @@ msgstr "Hashi envía a tu cuenta cada play de mania que terminas en lazer u osu!
 #: src/routes/bridge.tsx
 #~ msgid "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
 #~ msgstr "Hashi envía a tu cuenta cada play de mania que terminas en osu!stable o lazer, con su replay. Con Share what I'm playing activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
+
+#: src/routes/hashi.tsx
+msgid "Hashi's main window with the last plays it sent"
+msgstr "La ventana principal de Hashi con las últimas jugadas que envió"
+
+#: src/routes/hashi.tsx
+msgid "Hashi's settings"
+msgstr "Los ajustes de Hashi"
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -15049,6 +15070,7 @@ msgstr "capturas"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/hashi.tsx
 msgid "Screenshots"
 msgstr "Capturas"
 
@@ -18116,6 +18138,10 @@ msgstr "No se pudo consultar la clasificación."
 #~ msgid "The rankings lookup is taking a moment"
 #~ msgstr "La consulta de la clasificación está tardando un poco"
 
+#: src/routes/hashi.tsx
+msgid "The rankings showing a player who is playing"
+msgstr "Los rankings mostrando a un jugador que está jugando"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "The rating may be waiting for a fresh chart-analysis pass."
 msgstr "Puede que la calificación espere un nuevo pase de análisis del mapa."
@@ -19862,6 +19888,7 @@ msgstr "Ver perfil de osu!"
 msgid "View osu! team"
 msgstr "Ver equipo de osu!"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/routes/pull/$ownerId/$cardId.tsx
