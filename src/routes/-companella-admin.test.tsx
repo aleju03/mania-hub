@@ -195,6 +195,18 @@ describe("Companella admin moderation", () => {
     expect(api.setCompanellaAccountBlocked).toHaveBeenLastCalledWith({ data: { userId: USER_ID, blocked: false } });
   });
 
+  it("filters players to Hashi and shows how many are on each filter", async () => {
+    api.listCompanellaAccounts.mockImplementation(async () => ({
+      total: 1, counts: { recent: 9, companella: 6, hashi: 4, blocked: 1 }, entries: [{ ...account }],
+    }));
+    const router = await openPage("/admin/bridgers");
+    await screen.findByRole("link", { name: "TestPlayer" });
+    expect(screen.getByRole("button", { name: /^Companella\s*6$/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Hashi\s*4$/ }));
+    await waitFor(() => expect(api.listCompanellaAccounts).toHaveBeenLastCalledWith({ data: { filter: "hashi", query: "", offset: 0, limit: 50 } }));
+    expect(router.state.location.search).toMatchObject({ filter: "hashi" });
+  });
+
   it("resets pagination on search and keeps the blocked filter through a tab switch", async () => {
     const router = await openPage("/admin/bridgers?filter=blocked&page=3");
     await screen.findByRole("link", { name: "TestPlayer" });

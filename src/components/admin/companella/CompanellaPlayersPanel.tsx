@@ -13,6 +13,7 @@ import {
   listCompanellaAccountPlays,
   listCompanellaAccounts,
   type CompanellaAccount,
+  type CompanellaAccountCounts,
   type CompanellaAccountFilter,
   type CompanellaAccountPlay,
   type Paged,
@@ -25,6 +26,8 @@ const PLAYS_PAGE_SIZE = 20;
 
 const FILTERS: { value: CompanellaAccountFilter; label: string }[] = [
   { value: "recent", label: "All players" },
+  { value: "companella", label: "Companella" },
+  { value: "hashi", label: "Hashi" },
   { value: "blocked", label: "Blocked" },
 ];
 
@@ -269,6 +272,7 @@ export function CompanellaPlayersPanel({
   const offset = page * PAGE_SIZE;
   const [entries, setEntries] = useState<CompanellaAccount[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<CompanellaAccountCounts | null>(null);
   const [openId, setOpenId] = useState<number | null>(userId ?? null);
   const [plays, setPlays] = useState<Record<number, Loadable<Paged<CompanellaAccountPlay>>>>({});
   const [playsPage, setPlaysPage] = useState<Record<number, number>>({});
@@ -297,6 +301,7 @@ export function CompanellaPlayersPanel({
       if (request !== requestRef.current) return;
       setEntries(page.entries);
       setTotal(page.total);
+      if (page.counts) setCounts(page.counts);
       setError(null);
     } catch {
       if (request !== requestRef.current) return;
@@ -399,7 +404,15 @@ export function CompanellaPlayersPanel({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <SegmentedControl id="companella-players-filter" value={filter} options={FILTERS} onChange={changeFilter} />
+        <SegmentedControl
+          id="companella-players-filter"
+          value={filter}
+          options={FILTERS.map((option) => ({
+            value: option.value,
+            label: counts ? <>{option.label}<span className="ml-1 tabular-nums opacity-70">{formatNumber(counts[option.value])}</span></> : option.label,
+          }))}
+          onChange={changeFilter}
+        />
         <div className="relative order-3 w-full min-w-0 sm:order-none sm:ml-auto sm:w-[260px]">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
           <input
@@ -442,7 +455,10 @@ export function CompanellaPlayersPanel({
         </div>
       ) : entries.length === 0 ? (
         <div className="rounded-md border border-osu-b3/20 bg-osu-b5/60 px-3 py-6 text-center text-[12px] text-osu-f1">
-          {query ? "Nobody matches." : filter === "blocked" ? "Nobody is blocked." : "Nobody has used Companella yet."}
+          {query ? "Nobody matches." : filter === "blocked" ? "Nobody is blocked."
+            : filter === "hashi" ? "Nobody has connected Hashi yet."
+            : filter === "companella" ? "Nobody has connected Companella yet."
+            : "Nobody has used Companella yet."}
         </div>
       ) : (
         <>

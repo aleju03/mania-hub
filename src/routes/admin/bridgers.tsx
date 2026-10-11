@@ -11,7 +11,7 @@ import type { RateFlagFilter } from "../../lib/companella-rate-flags";
 
 interface CompanellaAdminSearch {
   tab?: "flags" | "import";
-  filter?: "blocked";
+  filter?: "companella" | "hashi" | "blocked";
   q?: string;
   user?: number;
   page?: number;
@@ -27,7 +27,7 @@ function positiveInteger(value: unknown): number | undefined {
 export const Route = createFileRoute("/admin/bridgers")({
   validateSearch: (search: Record<string, unknown>): CompanellaAdminSearch => ({
     tab: search.tab === "flags" || search.tab === "import" ? search.tab : undefined,
-    filter: search.filter === "blocked" ? "blocked" : undefined,
+    filter: search.filter === "companella" || search.filter === "hashi" || search.filter === "blocked" ? search.filter : undefined,
     q: typeof search.q === "string" ? search.q.trim().slice(0, 40) || undefined : undefined,
     user: positiveInteger(search.user),
     page: positiveInteger(search.page),
@@ -86,7 +86,7 @@ function CompanellaAdminPage() {
             page={(search.page ?? 1) - 1}
             userId={search.user}
             onQueryChange={changeQuery}
-            onFilterChange={(filter) => void navigate({ search: (previous) => ({ ...previous, filter: filter === "blocked" ? "blocked" : undefined, user: undefined, page: undefined }), replace: true })}
+            onFilterChange={(filter) => void navigate({ search: (previous) => ({ ...previous, filter: filter === "recent" ? undefined : filter, user: undefined, page: undefined }), replace: true })}
             onPageChange={(page) => void navigate({ search: (previous) => ({ ...previous, page: page > 0 ? page + 1 : undefined, user: undefined }), replace: true })}
           />
         )}
