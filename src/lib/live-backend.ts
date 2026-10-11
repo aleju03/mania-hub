@@ -3498,15 +3498,13 @@ export async function fetchGoatPollBoard(limit?: number): Promise<GoatPollBoardP
   }
 }
 
-/* The support popup's monthly goal bar. `month` is the month being filled,
-   which is a later one once the current month is covered; `coveredThrough` is
-   the last covered month, null while the current one is still short. The same
-   shape arrives on the `donation_goal` SSE event whenever a payment lands. */
+/* The support popup's monthly goal bar: what came in during the current
+   month, past the goal when it was overfunded. The same shape arrives on the
+   `donation_goal` SSE event whenever a payment lands. */
 export interface LiveDonationGoal {
   month: string;
   goalUsdCents: number;
   raisedUsdCents: number;
-  coveredThrough: string | null;
 }
 
 export async function fetchDonationGoal(): Promise<LiveDonationGoal | null> {

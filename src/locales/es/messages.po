@@ -5630,8 +5630,12 @@ msgid "Courses"
 msgstr "Dans"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "Covered through {covered}"
-msgstr "Cubierto hasta {covered}"
+msgid "Covered"
+msgstr "Cubierto"
+
+#: src/components/layout/SupportGoalBar.tsx
+#~ msgid "Covered through {covered}"
+#~ msgstr "Cubierto hasta {covered}"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none for now."
