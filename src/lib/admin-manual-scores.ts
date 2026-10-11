@@ -33,6 +33,8 @@ export interface ManualScoreEntry {
     beatmapId: number;
     playedAt: string;
     accuracy: number;
+    /** Older entries predate the field and were all stable. */
+    client?: "stable" | "lazer";
     mods: string[];
     judgements: ManualScoreJudgements | null;
     maxCombo: number | null;
@@ -50,6 +52,7 @@ export interface ManualScoreInput {
   playedAt: string;
   /** Percent, 0-100. */
   accuracy: number;
+  client: "stable" | "lazer";
   mods: string[];
   judgements: Partial<Record<"count_geki" | "count_300" | "count_katu" | "count_100" | "count_50" | "count_miss", number>> | null;
   maxCombo: number | null;
@@ -61,7 +64,8 @@ const ERRORS: Record<string, string> = {
   invalid_beatmap: "That is not a beatmap id or link.",
   invalid_date: "The date has to be a real day between 2007 and today.",
   invalid_accuracy: "Accuracy has to be above 0 and at most 100.",
-  invalid_mods: "Those mods cannot be played together.",
+  invalid_mods: "Those mods cannot be played together, and Score V2 is stable only.",
+  invalid_client: "The client has to be stable or lazer.",
   invalid_judgements: "The judgements have to be whole numbers, and not all zero.",
   invalid_combo: "Combo has to be a whole number.",
   invalid_score: "Score has to be a whole number up to 1,000,000.",
@@ -115,6 +119,7 @@ export const addManualScore = createServerFn({ method: "POST" })
         beatmap_id: data.beatmapId,
         played_at: data.playedAt,
         accuracy: data.accuracy,
+        client: data.client,
         mods: data.mods,
         judgements: data.judgements,
         max_combo: data.maxCombo,

@@ -78,6 +78,7 @@ const EMPTY_FORM = {
   map: null as LiveMapSearchEntry | null,
   date: "",
   accuracy: "",
+  client: "stable" as "stable" | "lazer",
   mods: [] as string[],
   judgements: {} as Partial<Record<JudgementKey, string>>,
   combo: "",
@@ -151,6 +152,7 @@ export function AddPlaysPanel() {
       beatmapId,
       playedAt: form.date,
       accuracy,
+      client: form.client,
       mods: form.mods,
       judgements: judgements && Object.keys(judgements).length > 0 ? judgements : null,
       maxCombo: optionalNumber(form.combo),
@@ -238,7 +240,7 @@ export function AddPlaysPanel() {
             <Field label="Beatmap">
               <MapPicker value={form.map} onChange={(map) => set("map", map)} />
             </Field>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[170px_130px]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[170px_130px_auto]">
               <Field label="Date">
                 <input
                   type="date"
@@ -260,11 +262,27 @@ export function AddPlaysPanel() {
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-osu-f1">%</span>
                 </div>
               </Field>
+              <Field label="Client">
+                <div className="flex h-[38px] items-center gap-1">
+                  {(["stable", "lazer"] as const).map((client) => (
+                    <button
+                      key={client}
+                      type="button"
+                      aria-pressed={form.client === client}
+                      // Score V2 is a stable mod; lazer always scores that way.
+                      onClick={() => setForm((current) => ({ ...current, client, mods: client === "lazer" ? current.mods.filter((mod) => mod !== "V2") : current.mods }))}
+                      className={`cursor-pointer rounded-md px-3 py-1.5 text-[13px] capitalize transition ${form.client === client ? "bg-white/[0.1] text-white" : "text-osu-f1 hover:text-white"}`}
+                    >
+                      {client}
+                    </button>
+                  ))}
+                </div>
+              </Field>
             </div>
 
             <Field label="Mods">
               <div className="flex flex-wrap gap-1.5">
-                {MOD_GROUPS.flat().map((mod) => {
+                {MOD_GROUPS.flat().filter((mod) => form.client === "stable" || mod !== "V2").map((mod) => {
                   const on = form.mods.includes(mod);
                   return (
                     <button
@@ -493,6 +511,7 @@ function EntryRow({
         <div className="truncate text-[14px] text-white">{chartLabel(entry.beatmap, play.beatmapId)}</div>
         <div className="flex flex-wrap items-center gap-2 text-[12px] text-osu-f1">
           {play.mods.map((mod) => <ModBadge key={mod} mod={mod === "V2" ? "SV2" : mod} size={0.6} />)}
+          {play.client === "lazer" ? <span>lazer</span> : null}
           <span>{formatDay(play.playedAt)}</span>
           {play.maxCombo != null ? <span>{formatNumber(play.maxCombo)}x</span> : null}
           {play.totalScore != null ? <span>{formatNumber(play.totalScore)}</span> : null}

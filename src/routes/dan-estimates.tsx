@@ -823,11 +823,12 @@ function P({ children }: { children: ReactNode }) {
 const COURSE_PACKS: Array<{ ladder: string; author: string; scoreV2Note?: true; packs: Array<{ name: string; setId: number }> }> = [
   {
     ladder: "4K regular",
-    author: "Thaumiel",
+    author: "Thaumiel, Emik03",
     packs: [
       { name: "Dan ~ REFORM ~ 1st Pack", setId: 1079991 },
       { name: "2nd Pack", setId: 1079998 },
       { name: "FINAL", setId: 1156299 },
+      { name: "Zeta Sample Dan v2", setId: 1985457 },
     ],
   },
   {
