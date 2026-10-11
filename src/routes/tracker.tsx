@@ -41,7 +41,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
-import { CompanellaMark } from "../components/ui/CompanellaMark";
+import { CompanellaMark, ScoreVideoMark } from "../components/ui/CompanellaMark";
 import { TRACKER_FEED_SCORE_LIMIT, TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import type { LeanTrackerScore, OsuCovers } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
@@ -2076,7 +2076,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                   {keymodeLabel}
                 </span>
               )}
-              {score.companella && <CompanellaMark app={score.companella.app} />}
+              {score.companella ? <CompanellaMark app={score.companella.app} video={score.companella.video} />
+                : <ScoreVideoMark ids={[score.id, score.legacy_score_id]} />}
               <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
             </div>
           )}

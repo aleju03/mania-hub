@@ -88,6 +88,10 @@ export function uploadedReplayOgImagePath(uploadId: string): string {
   return kindOgImagePath("uploaded-replay", { uploadId });
 }
 
+export function importReplayOgImagePath(importId: string): string {
+  return kindOgImagePath("import-replay", { importId });
+}
+
 /* Pull permalink OG: the pulled maniacard rendered at its minted tier with a
    "pulled by" footer. 720x1080 portrait, like the maniacard OG. */
 export function pullOgImagePath(ownerId: number, cardKey: string | number): string {

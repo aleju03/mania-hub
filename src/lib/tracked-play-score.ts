@@ -93,7 +93,7 @@ export function buildTrackedPlayScore(play: LiveKeymodePpPlay, viewer: TrackedPl
 
 /** A verified dan course or practice-chart run, as the same score card. */
 export function buildCourseClearScore(course: LivePlayerDanCourseEvidence, keyCount: number, viewer: TrackedPlayViewer): OsuScore {
-  return buildTrackedPlayScore({
+  const score = buildTrackedPlayScore({
     beatmapId: course.beatmapId,
     keyCount,
     // A dan course is loved or graveyard, so the run is worth no pp;
@@ -120,4 +120,6 @@ export function buildCourseClearScore(course: LivePlayerDanCourseEvidence, keyCo
     stars: null,
     bpm: null,
   }, viewer);
+  // A run sent through an app opens as that import, its replay included when public.
+  return course.companella ? { ...score, companella: course.companella } as OsuScore : score;
 }

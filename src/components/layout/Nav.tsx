@@ -143,12 +143,9 @@ const ADMIN_TOOLS = [
   { to: "/admin/todos", label: "Todos", accent: "#fde047", adminOnly: true, group: "Reports" },
   { to: "/admin/bug-reports", label: "Bug reports", accent: "#fca5a5", adminOnly: true, group: "Reports" },
   { to: "/admin/translation-reports", label: "Translations", accent: "#5eead4", adminOnly: true, group: "Reports" },
-  { to: "/admin/banned-users", label: "Banned users", accent: "#fb7185", adminOnly: true, group: "Players" },
-  { to: "/admin/scores", label: "Remove plays", accent: "#f87171", adminOnly: true, group: "Players" },
+  { to: "/admin/players", label: "Players", accent: "#fb7185", adminOnly: true, group: "Players" },
   { to: "/admin/bridgers", label: "Bridgers", accent: "#fcd34d", adminOnly: true, group: "Players" },
-  { to: "/admin/about-pages", label: "About pages", accent: "#fdba74", adminOnly: true, group: "Players" },
   { to: "/admin/collections", label: "Collections", accent: "#f9a8d4", adminOnly: true, group: "Players" },
-  { to: "/admin/supporters", label: "Supporters", accent: "#ff66ab", adminOnly: true, group: "Players" },
   { to: "/admin/live-backend", label: "Monitoring", accent: "#7dd3fc", adminOnly: true, group: "Site" },
   { to: "/valley", label: "Valley", accent: "#86efac", adminOnly: true, group: "Site" },
   { to: "/admin/r2", label: "R2", accent: "#67e8f9", adminOnly: true, group: "Site", search: { prefix: "replay-cache/" } },
@@ -862,7 +859,7 @@ export function Nav() {
                             {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
                               <UnreadBadge count={bugReportAlert.count} className="right-2 top-1/2 -translate-y-1/2" />
                             ) : null}
-                            {tool.to === "/admin/banned-users" && bannedUsersCount ? (
+                            {tool.to === "/admin/players" && bannedUsersCount ? (
                               <UnreadBadge count={bannedUsersCount} className="right-2 top-1/2 -translate-y-1/2" />
                             ) : null}
                           </Link>
@@ -1339,7 +1336,7 @@ export function Nav() {
                             {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
                               <UnreadBadge count={bugReportAlert.count} className="right-1.5 top-1.5" />
                             ) : null}
-                            {tool.to === "/admin/banned-users" && bannedUsersCount ? (
+                            {tool.to === "/admin/players" && bannedUsersCount ? (
                               <UnreadBadge count={bannedUsersCount} className="right-1.5 top-1.5" />
                             ) : null}
                           </Link>

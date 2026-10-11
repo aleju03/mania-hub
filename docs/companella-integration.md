@@ -112,6 +112,7 @@ Backend, all under `backend/src/integrations/companella/`:
 | `poll-hold.ts` | Holds a player's recent-score polls while Hashi's presence is live, and polls once when it ends. |
 | `official-timing.ts` | Stores an import's timing for the official play osu! delivers for the same run, and pairs and clamps it for the skill compute. |
 | `replay-import.ts` | Admin replay imports: a player's `.osr` files dropped on `/admin/bridgers?tab=import`, staged as ordinary submissions and fed to the lane a few at a time (see "Admin replay imports"). |
+| `manual-scores.ts` | Plays an admin enters by hand on `/admin/players?tab=add`, with no replay: staged as submissions the ordinary job rates (see "Admin manual entries"). |
 | `analysis.ts` | Per-play MSD / SSR / LN / chart-dan through the existing engines. |
 | `preview.ts` | The experimental aggregate, and its deduplication. |
 | `process.ts` | The job body: validate, store, match, analyze, recompute. |
@@ -777,7 +778,8 @@ inactive account, like the board's osu! plays: the feed's exception for
 accounts osu! turned away is about their own profile.
 
 The board's own rules then apply to an import as to an osu! play: ranked on
-305-weighted accuracy from its judgement counts, HT/DC under the rest, EZ, a
+305-weighted accuracy from its judgement counts (an admin's manual entry
+without counts on its accuracy), HT/DC and NF under the rest, EZ, a
 custom rate and the snipe boards' refused mods off, one row per player. An
 import takes a player's row only by standing higher than their osu! best, so
 a run sent both ways (equal counts) is listed once, as osu!'s row. An import
@@ -814,7 +816,8 @@ also on the usual mix, each under its exact set of Invert, Hold Off and No
 Release. EZ, Random, Dual Stages, Difficulty Adjust, Constant Speed, the
 rate-changing mods and a foreign key mod keep a play off them all; Mirror and
 the visual mods are ignored. osu! plays come from `map_board_bests`, each
-player's best per map per board (half time under the rest, then accuracy),
+player's best per map per board (half time and No Fail under the rest, each
+one more step down, then accuracy),
 filed at ingest, one row per map, board and player, which the site's Scores
 tab reads too. A one-time boot pass seeded it from the archived day-bests and the
 retained `score_events`; since `player_activity_maps` kept one play per map
@@ -1055,6 +1058,14 @@ Dan boards pick up changes on their normal five-minute rebuild. Excluding or
 deleting an import removes its contribution on the next fresh read, and
 Restore makes it eligible again. Existing imports need no reprocessing.
 
+Dan course and practice-chart credentials count imports the same way. A listed
+import on a registered course's exact file (its pinned checksum, else the
+site's copy of the map) is read as a course pass beside the osu! ones
+(`DanClearSources` in `features/dan-courses.ts`), by the overlay, by a
+restricted profile (imports alone) and by the `/rankings` Clears board. The
+stored skill rows read osu! plays only. A clear opens as its import on the
+score card.
+
 Nothing official is written. `player_skill_ratings`, skill history, pp,
 score ingest, snipes, goals and packs (card snapshots included) keep reading
 osu! plays only. Their imported replays follow the rules under "Privacy".
@@ -1105,7 +1116,7 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
   country board merges these into osu!'s list), and
   `GET /api/integrations/companella/public/replays/<id>` (the .osr of any
   listed play on an official file, see "Privacy"), opened at `/replay?importId=`.
-- **Control.** `/admin/banned-users` shows each account's simulated pp and its
+- **Control.** The Banned users tab of `/admin/players` shows each account's simulated pp and its
   plays, and removes flagged, chosen or all plays (the ordinary `quarantined`
   review hold, reversible) through
   `GET`/`POST /api/admin/companella/restricted-pp/<id>`. The same row blocks
@@ -1219,6 +1230,32 @@ up by id or username with where its imports stand.
   anything is waiting or in flight. Processing is the ordinary pipeline, except
   that the owner's preview is not rebuilt after each play. The feeder rebuilds
   it and queues a skills recompute once an account's batch drains.
+
+## Admin manual entries
+
+Plays that cannot be imported at all (old or offline plays that only survive
+as a video) are entered by hand on the Add plays tab of `/admin/players`:
+beatmap, date and accuracy, and optionally mods (none is NoMod), the six
+judgement counts, combo, score and a video link. `POST
+/api/admin/companella/manual-scores/<userId>` (admin token) stages one, `GET
+/api/admin/companella/manual-scores?user=` lists an account's entries, and
+`POST .../<userId>/delete` deletes one.
+
+- **Staging.** The map's row and `.osu` file are stored from osu! when the site
+  lacks them, the file goes into the import pool, and the entry becomes a
+  `queued` submission (capture kind `manual_entry`, which the manifest parser
+  refuses from clients) under the account's `manual-entry` installation, made
+  like the replay import one and left off the player's connection list.
+- **Processing.** `processSubmission` hands it to `runManualPipeline`: the
+  score is the entry itself, completed and clear, with provenance
+  `admin_entered`, no replay and the fingerprint `manual:<submission id>`. It
+  is rated as an official play without a replay is (`calibrateScoreForMsd` on
+  its judgement counts, else its accuracy; Prism's ScoreV2 goal on 6K-8K),
+  priced only when it has counts, and the preview and skills recompute after.
+- **Listing.** It then shows wherever a listed import does. `companella.replay`
+  stays false, so nothing offers Watch, and the row's mark is a link to the
+  video (`companella.video`), or no mark without one. The map Scores board
+  ranks an entry without counts on its accuracy.
 
 ## Retention and quotas
 

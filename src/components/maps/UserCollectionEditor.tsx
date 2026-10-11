@@ -54,9 +54,10 @@ function idQueryLadder(query: string): string[] {
 /*
  * The catalog only holds maps someone here has played, so an id or link that
  * still finds nothing is looked up on osu! and indexed on the spot. Plain text
- * never gets here: it names no map to fetch.
+ * never gets here: it names no map to fetch. The admin Add plays tab picks its
+ * map through this too.
  */
-async function searchPickerMaps(query: string): Promise<LiveMapSearchEntry[]> {
+export async function searchPickerMaps(query: string): Promise<LiveMapSearchEntry[]> {
   for (const attempt of idQueryLadder(query)) {
     const result = await fetchLiveMapSearch(emptySearchParams(attempt));
     if (result.items.length > 0) return result.items;
@@ -94,7 +95,7 @@ function emptySearchParams(query: string): LiveMapSearchParams {
 }
 
 /** The set row's diffs, or the row itself for a set with a single one. */
-function entryDiffs(entry: LiveMapSearchEntry): LiveMapSearchEntry[] {
+export function entryDiffs(entry: LiveMapSearchEntry): LiveMapSearchEntry[] {
   return entry.diffs && entry.diffs.length > 0 ? entry.diffs : [entry];
 }
 

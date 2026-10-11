@@ -102,6 +102,7 @@ import {
   fetchLiveRateChartAnalysis,
   fetchLivePlayerRecentScoresDirect,
   fetchLivePlayerSummaryDirect,
+  fetchPublicCompanellaImport,
   isLiveBackendConfigured,
   openReplayPresenceEventSource,
   type LiveGlobalRankingEntry,
@@ -183,10 +184,10 @@ import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import { avatarImageSrc } from "../components/ui/Avatar";
 import type { ReplaySkinImageAsset, ReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlaySettings } from "../lib/replay-overlays";
-import type { BeatmapScoreLookupStatus, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
+import type { BeatmapScoreLookupStatus, LeanTrackerScore, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
-import { pageSeo, replayOgImagePath, uploadedReplayOgImagePath } from "../lib/seo";
+import { importReplayOgImagePath, pageSeo, replayOgImagePath, uploadedReplayOgImagePath } from "../lib/seo";
 import { withSearchParams } from "../lib/country-search";
 
 interface ReplaySearch {
@@ -468,14 +469,29 @@ function setAudioPreservesPitch(audio: HTMLAudioElement, preservesPitch: boolean
 }
 
 export const Route = createFileRoute("/replay")({
-  loaderDeps: ({ search }) => ({ scoreId: search.scoreId }),
-  loader: async ({ deps }): Promise<{ seoScore: ReplaySeoScore | null; score: OsuScore | null }> => {
-    if (typeof deps.scoreId !== "number") return { seoScore: null, score: null };
+  loaderDeps: ({ search }) => ({ scoreId: search.scoreId, importId: search.importId }),
+  loader: async ({ deps }): Promise<{ seoScore: ReplaySeoScore | null; score: OsuScore | null; importScore: LeanTrackerScore | null }> => {
+    if (deps.importId) {
+      // The import's owner is known (their own client sent it), so the link
+      // names them and the viewer shows their avatar.
+      const importScore = await fetchPublicCompanellaImport(deps.importId).catch(() => null);
+      return {
+        score: null,
+        importScore,
+        seoScore: importScore ? {
+          username: importScore.user?.username ?? "",
+          title: importScore.beatmapset?.title ?? "",
+          version: importScore.beatmap?.version ?? "",
+        } : null,
+      };
+    }
+    if (typeof deps.scoreId !== "number") return { seoScore: null, score: null, importScore: null };
 
     try {
       const score = await getScore({ data: { scoreId: deps.scoreId } });
       return {
         score,
+        importScore: null,
         seoScore: {
           username: score.user?.username ?? "",
           title: score.beatmapset?.title ?? "",
@@ -483,7 +499,7 @@ export const Route = createFileRoute("/replay")({
         },
       };
     } catch {
-      return { seoScore: null, score: null };
+      return { seoScore: null, score: null, importScore: null };
     }
   },
   head: ({ match, loaderData }) => {
@@ -491,7 +507,7 @@ export const Route = createFileRoute("/replay")({
     const hasSharedScore = typeof scoreId === "number";
     const hasSharedUpload = typeof uploadId === "string" && uploadId.length > 0;
     const playerName = typeof player === "string" ? player.trim() : "";
-    // An import link keeps the landing title and card, just unindexed.
+    const sharedImport = importId && loaderData?.importScore ? loaderData.importScore : null;
     const isReplayLanding = !hasSharedScore
       && !hasSharedUpload
       && !importId
@@ -503,13 +519,15 @@ export const Route = createFileRoute("/replay")({
     const i18n = getI18n(match.context.locale);
     const title = hasSharedScore
       ? buildReplaySeoTitle(scoreId, loaderData?.seoScore, playerName)
+      : sharedImport
+        ? buildReplaySeoTitle(0, loaderData?.seoScore, sharedImport.user?.username ?? "")
       : hasSharedUpload
         ? i18n._(msg`Shared replay`)
         : i18n._(REPLAY_LANDING_SEO_TITLE);
 
     return pageSeo({
       title,
-      description: hasSharedScore
+      description: hasSharedScore || sharedImport
         ? ""
         : i18n._(REPLAY_LANDING_SEO_DESCRIPTION),
       path: withSearchParams("/replay", {
@@ -522,6 +540,8 @@ export const Route = createFileRoute("/replay")({
       origin: match.context.origin,
       image: hasSharedScore
         ? replayOgImagePath(scoreId)
+        : sharedImport && importId
+          ? importReplayOgImagePath(importId)
         : hasSharedUpload
           ? uploadedReplayOgImagePath(uploadId)
           : undefined,
@@ -529,7 +549,7 @@ export const Route = createFileRoute("/replay")({
       imageTitle: hasSharedUpload ? "Shared replay" : REPLAY_LANDING_OG_TITLE,
       social: true,
       noindex: !isReplayLanding,
-      appendSiteName: !hasSharedScore,
+      appendSiteName: !hasSharedScore && !sharedImport,
     });
   },
   component: ReplayPage,
@@ -763,9 +783,13 @@ function ReplayPage() {
 
   // The score already embeds the identity and avatar needed by the replay info
   // bar. Avoid a full osu! profile request solely to decorate it with a banner.
-  const scoreUserId = scoreInfo?.user?.id;
-  const scoreUserName = scoreInfo?.user?.username;
-  const scoreUserAvatar = scoreInfo?.user?.avatar_url;
+  // An import has no osu! score, but the backend knows whose it is.
+  const importOwner = importId && loaderData.importScore?.companella?.importId === importId
+    ? loaderData.importScore.user
+    : null;
+  const scoreUserId = scoreInfo?.user?.id ?? importOwner?.id;
+  const scoreUserName = scoreInfo?.user?.username ?? importOwner?.username;
+  const scoreUserAvatar = scoreInfo?.user?.avatar_url ?? importOwner?.avatar_url;
   const playerProfile = useMemo<ReplayPlayerProfile | null>(() => {
     if (!replay) return null;
     return {

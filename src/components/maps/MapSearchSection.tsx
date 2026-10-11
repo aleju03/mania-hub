@@ -34,8 +34,8 @@ import {
 import type { TriStateMode } from "../../lib/maps-random-filter";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useNoDans } from "../../store";
-import { activeMsdKeys, MSD_FILTER_KEYS, MSD_FILTER_MAX, MSD_FILTER_SKILLSET, serializeMsdRanges, type MsdRanges } from "../../lib/map-search-msd";
-import { MSD_SKILLSET_META, OVERALL_AXIS_META, PATTERN_RATING_META } from "../../lib/skill-axes";
+import { activeMsdKeys, MSD_FILTER_MAX, MSD_FILTER_SKILLSET, msdFilterKeysFor, serializeMsdRanges, type MsdRanges } from "../../lib/map-search-msd";
+import { MSD_SKILLSET_META, msdSkillsetMeta, OVERALL_AXIS_META, PATTERN_RATING_META } from "../../lib/skill-axes";
 
 const SEARCH_PAGE_SIZE = 24;
 const SEARCH_INITIAL_SKELETON_COUNT = 12;
@@ -162,6 +162,7 @@ function pruneForKeys(ui: MapSearchUiState, keys: string[]): Partial<MapSearchUi
     patternsExclude: ui.patternsExclude.filter((pattern) => patterns.has(pattern)),
     skills: ui.skills.filter((skill) => skills.has(skill)),
     skillsExclude: ui.skillsExclude.filter((skill) => skills.has(skill)),
+    msd: Object.fromEntries(Object.entries(ui.msd).filter(([key]) => msdFilterKeysFor(keys).includes(key))),
   };
 }
 
@@ -694,10 +695,15 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
 }
 
 const LN_AXIS_META = PATTERN_RATING_META.find((meta) => meta.key === "ln");
-const MSD_FILTER_META = Object.fromEntries(
-  [OVERALL_AXIS_META, ...MSD_SKILLSET_META].map((meta) => [meta.key, meta]),
-);
-if (LN_AXIS_META) MSD_FILTER_META.LN = LN_AXIS_META;
+function msdFilterMeta(skillsets: typeof MSD_SKILLSET_META) {
+  const meta = Object.fromEntries([OVERALL_AXIS_META, ...skillsets].map((entry) => [entry.key, entry]));
+  if (LN_AXIS_META) meta.LN = LN_AXIS_META;
+  return meta;
+}
+const MSD_FILTER_META = msdFilterMeta(MSD_SKILLSET_META);
+// Prism's names (Chordstream, Bracket, Jack, Delay) for a 7K-only key facet.
+const PRISM_MSD_FILTER_META = msdFilterMeta(msdSkillsetMeta(7));
+const msdFilterMetaFor = (keys: readonly string[]) => (msdFilterKeysFor(keys).includes("speed") ? PRISM_MSD_FILTER_META : MSD_FILTER_META);
 
 function formatMsd(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -711,6 +717,14 @@ const SKILL_MSD_FOCUS: Record<string, string> = {
   tech: "technical",
   jack: "jackspeed",
   stream: "stream",
+};
+// The same on a 7K-only key facet, where Prism folds Stream and JackSpeed into
+// Chordstream and Jack and rates Delay instead of Stamina.
+const PRISM_SKILL_MSD_FOCUS: Record<string, string> = {
+  speed: "speed",
+  tech: "technical",
+  jack: "chordjack",
+  stream: "jumpstream",
 };
 
 function msdRangeText(range: { min: number; max: number }): string {
@@ -741,14 +755,16 @@ function msdSkin(color: string, typeHint: string): RangePillSkin {
 function MsdPanel({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   const { t, i18n } = useLingui();
   const active = activeMsdKeys(ui.msd);
-  const keys = MSD_FILTER_KEYS;
+  const keys = msdFilterKeysFor(ui.keys);
+  const filterMeta = msdFilterMetaFor(ui.keys);
   const [focus, setFocus] = useState<string>(() => {
     if (active.length > 0) return active[0];
-    const skill = ui.skills.find((id) => SKILL_MSD_FOCUS[id]);
-    if (skill) return SKILL_MSD_FOCUS[skill];
+    const focusMap = keys.includes("speed") ? PRISM_SKILL_MSD_FOCUS : SKILL_MSD_FOCUS;
+    const skill = ui.skills.find((id) => focusMap[id]);
+    if (skill) return focusMap[skill];
     return ui.patterns.includes("ln") ? "ln" : "overall";
   });
-  const metaFor = (key: string) => MSD_FILTER_META[MSD_FILTER_SKILLSET[key]];
+  const metaFor = (key: string) => filterMeta[MSD_FILTER_SKILLSET[key]];
   const labelFor = (key: string) => {
     const meta = metaFor(key);
     return meta ? i18n._(meta.labelMsg) : key;
@@ -815,7 +831,7 @@ function MsdPicker({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   let summary: ReactNode = <Trans>Any</Trans>;
   if (active.length === 1) {
     const key = active[0];
-    const meta = MSD_FILTER_META[MSD_FILTER_SKILLSET[key]];
+    const meta = msdFilterMetaFor(ui.keys)[MSD_FILTER_SKILLSET[key]];
     summary = `${meta ? i18n._(meta.labelMsg) : key} ${msdRangeText(ui.msd[key])}`;
   } else if (active.length > 1) {
     const count = active.length;

@@ -12,11 +12,15 @@ import {
   scoreHasReplay,
 } from "../../lib/score";
 import { companellaReplayImportId, sharedImportPath } from "../../lib/companella-scores";
+import { usePlayVideo } from "../../lib/score-videos";
 import type { OsuScore } from "../../lib/types";
 import { MapDetailModal, type MapDetailPlayContext } from "../maps/MapDetailModal";
 import { rateModFor } from "./SkillPlaysModal";
 
 type MapStatus = "ready" | "pending" | "missing" | "error";
+
+const ACTION_CLASS =
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:justify-start sm:px-3";
 
 /** What the score already knows about its map, so the card opens on the click
  *  and fills in once the catalog entry lands. */
@@ -108,6 +112,7 @@ export function ScorePlayDetailModal({
   const speedMod = mods.find((mod) => mod === "DT" || mod === "NC" || mod === "HT" || mod === "DC");
   const importId = companellaReplayImportId(score);
   const canReplay = importId != null || scoreHasReplay(score);
+  const video = usePlayVideo(score);
   const playedAt = getScoreTimestamp(score);
 
   const play: MapDetailPlayContext = {
@@ -143,14 +148,24 @@ export function ScorePlayDetailModal({
       onClose={onClose}
       play={play}
       scoreOnly={scoreOnly}
-      actions={canReplay ? (
-        <Link
-          to="/replay"
-          search={importId != null ? { importId } : { scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
-          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:justify-start sm:px-3"
-        >
-          {t`Watch replay`}
-        </Link>
+      actions={canReplay || video ? (
+        <>
+          {canReplay ? (
+            <Link
+              to="/replay"
+              search={importId != null ? { importId } : { scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
+              className={ACTION_CLASS}
+            >
+              {t`Watch replay`}
+            </Link>
+          ) : null}
+          {/* A play an admin entered from a video, or an official play with a proof video. */}
+          {video ? (
+            <a href={video} target="_blank" rel="noreferrer" className={ACTION_CLASS}>
+              {t`Watch video`}
+            </a>
+          ) : null}
+        </>
       ) : null}
     />
   );

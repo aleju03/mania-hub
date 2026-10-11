@@ -22,7 +22,7 @@ import {
   getRankings,
   getScore,
 } from "../../lib/osu";
-import { getServerLiveBackendUrl } from "../../lib/live-backend";
+import { fetchPublicCompanellaImport, getServerLiveBackendUrl } from "../../lib/live-backend";
 import { bridgeAuthHeaders } from "../../lib/live-backend-tokens";
 import { parsePackCardKey } from "../../lib/pack-collection";
 import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCountryScope } from "../../lib/country";
@@ -1211,6 +1211,17 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
     getScore({ data: { scoreId } }),
   ]);
   return renderReplayOgCard(request, scoreReplayOgData(score), regularFont, heavyFont);
+}
+
+// A listed Companella import: the backend's feed row carries the player,
+// the official map and the result, shaped like an osu! score.
+async function renderImportReplayOg(request: Request, importId: string): Promise<Response> {
+  const [[regularFont, heavyFont], score] = await Promise.all([
+    loadOgFonts(request),
+    fetchPublicCompanellaImport(importId),
+  ]);
+  if (!score) throw new OgFallbackError(`no public import for ${importId}`);
+  return renderReplayOgCard(request, scoreReplayOgData(score as unknown as OsuScore), regularFont, heavyFont);
 }
 
 async function renderUploadedReplayOg(request: Request, uploadId: string): Promise<Response> {
@@ -5267,6 +5278,21 @@ export const Route = createFileRoute("/api/og")({
               );
             } catch (err) {
               console.warn("[og] replay render failed, falling back", err);
+            }
+          }
+        }
+
+        if (kind === "import-replay") {
+          const importId = url.searchParams.get("importId") ?? "";
+          if (/^[A-Za-z0-9_-]{8,64}$/.test(importId)) {
+            try {
+              return await serveOg(
+                request,
+                `import-replay:${importId}:v${version}`,
+                () => renderImportReplayOg(request, importId),
+              );
+            } catch (err) {
+              if (!isOgFallbackError(err)) console.warn("[og] import replay render failed, falling back", err);
             }
           }
         }

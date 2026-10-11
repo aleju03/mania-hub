@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, isLocalChartId, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
@@ -249,13 +249,13 @@ function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyC
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-2.5" aria-label={t`Skill breakdown`}>
           {skills.map(({ name, value }) => (
-            <div key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2" title={halvesTitle(i18n, name, keyCount, play.skillRatings)}>
+            <HoverTip key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2" tip={halvesTip(i18n, name, keyCount, play.skillRatings)}>
               <span className="text-[10px] text-osu-l2">{skillsetLabel(i18n, name, keyCount)}</span>
               <span className="h-1.5 overflow-hidden rounded-full bg-white/5">
                 <span className="block h-full rounded-full bg-osu-pink/70" style={{ width: `${value / max * 100}%` }} />
               </span>
               <span className="text-right text-[11px] font-semibold tabular-nums text-osu-l1">{value.toFixed(2)}</span>
-            </div>
+            </HoverTip>
           ))}
           {skills.length === 0 && <p className="text-[11px] text-osu-f1/70"><Trans>Skill breakdown unavailable</Trans></p>}
         </div>
@@ -341,12 +341,12 @@ const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   Chordjack: msg`Chordjack`,
   Technical: msg`Technical`,
   LN: msg`LN`,
-  Speed: msg`Speed`,
 };
 
 // Prism, the 6K-8K calculator, files its skillsets in MinaCalc's slots, as
 // Etterna's seven-key handler does; these are the names they stand for.
 const PRISM_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
+  Speed: msg`Delay`,
   Jumpstream: msg`Chordstream`,
   Handstream: msg`Bracket`,
   Chordjack: msg`Jack`,
@@ -356,20 +356,69 @@ const PRISM_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
 // JackSpeed hold only the single-note halves, shown with the chord halves
 // when hovering the merged skillset.
 function msdSkillsetsFor(keyCount: number | null | undefined): string[] {
-  return usesPrism(keyCount) ? [...MSD_SKILLSETS.filter((name) => name !== "JackSpeed" && name !== "Stream"), "Speed"] : MSD_SKILLSETS;
+  return usesPrism(keyCount) ? [...MSD_SKILLSETS.filter((name) => name !== "JackSpeed" && name !== "Stream" && name !== "Stamina"), "Speed"] : MSD_SKILLSETS;
 }
 
-function halvesTitle(
+/** The site's hover tip, in place of the browser's title tooltip. Portaled and
+ * kept inside the viewport so the modal's scroll box cannot clip it. */
+function HoverTip({ tip, className, children }: { tip: ReactNode; className: string; children: ReactNode }) {
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [left, setLeft] = useState<number | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!anchor || !tipRef.current) return setLeft(null);
+    const width = tipRef.current.offsetWidth;
+    setLeft(Math.min(Math.max(anchor.x - width / 2, 8), window.innerWidth - width - 8));
+  }, [anchor]);
+  useEffect(() => {
+    if (!anchor) return;
+    const close = () => setAnchor(null);
+    window.addEventListener("scroll", close, true);
+    return () => window.removeEventListener("scroll", close, true);
+  }, [anchor]);
+  if (!tip) return <div className={className}>{children}</div>;
+  return (
+    <div
+      className={className}
+      onMouseEnter={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setAnchor({ x: rect.left + rect.width / 2, y: rect.top }); }}
+      onMouseLeave={() => setAnchor(null)}
+    >
+      {children}
+      {anchor && createPortal(
+        <div
+          ref={tipRef}
+          role="tooltip"
+          className="pointer-events-none fixed z-[200] max-w-72 -translate-y-full rounded-lg bg-osu-b3 px-3 py-2 text-xs leading-relaxed text-osu-l2 shadow-xl shadow-black/40"
+          style={{ left: left ?? 0, top: anchor.y - 8, visibility: left == null ? "hidden" : undefined }}
+        >
+          {tip}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+function halvesTip(
   i18n: ReturnType<typeof useLingui>["i18n"], name: string, keyCount: number | null | undefined, values: Record<string, number> | null | undefined,
-): string | undefined {
+): ReactNode {
   if (!usesPrism(keyCount) || (name !== "Chordjack" && name !== "Jumpstream")) return undefined;
   const jack = name === "Chordjack";
   const single = Number(values?.[jack ? "JackSpeed" : "Stream"] ?? 0), chord = Number(values?.[jack ? "ChordjackOnly" : "JumpstreamOnly"] ?? 0);
   if (!(single >= 1) || !(chord >= 1)) return undefined;
-  const singleText = single.toFixed(2), chordText = chord.toFixed(2);
-  return jack
-    ? i18n._(msg`Single-note jacks ${singleText}, chordjacks ${chordText}`)
-    : i18n._(msg`Single-note streams ${singleText}, chordstreams ${chordText}`);
+  const rows = jack
+    ? [[i18n._(msg`Single-note jacks`), single], [i18n._(msg`Chordjacks`), chord]] as const
+    : [[i18n._(msg`Single-note streams`), single], [i18n._(msg`Chordstreams`), chord]] as const;
+  return (
+    <div className="grid grid-cols-[auto_auto] items-baseline gap-x-5 gap-y-1">
+      {rows.map(([label, value]) => (
+        <Fragment key={label}>
+          <span className="text-[11px] text-osu-f1">{label}</span>
+          <span className="text-right text-[13px] font-semibold tabular-nums text-osu-l1">{value.toFixed(2)}</span>
+        </Fragment>
+      ))}
+    </div>
+  );
 }
 
 function skillsetLabel(i18n: ReturnType<typeof useLingui>["i18n"], name: string, keyCount: number | null | undefined): string {
@@ -602,7 +651,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <div key={name} className="flex flex-col" title={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTitle(i18n, name, entry.keyCount, msd)}>
+            <HoverTip key={name} className="flex flex-col" tip={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTip(i18n, name, entry.keyCount, msd)}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"
@@ -613,7 +662,7 @@ export function MsdBlock({
               <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/55">
                 {skillsetLabel(i18n, name, entry.keyCount)}
               </span>
-            </div>
+            </HoverTip>
           ))}
         </div>
       </div>

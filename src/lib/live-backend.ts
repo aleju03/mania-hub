@@ -201,6 +201,8 @@ export interface LivePlayerDanCourseEvidence extends LivePlayerDanCourseClear {
   /** Lazer submissions and stable ones live in different score id spaces, so
    *  this decides which osu! score URL resolves. */
   isLazer: boolean | null;
+  /** A run sent through an app or entered by an admin: the card opens it as that import. */
+  companella?: { importId: string; replay: boolean; app?: string; video?: string };
 }
 
 /** A play on this keymode the rating has not reached yet, with why it waits:
@@ -370,7 +372,7 @@ export interface LiveMapScoreEntry {
   hasReplay: boolean;
   playedAt: string | null;
   /** Set on a play sent through an app (Companella, Hashi) instead of osu!; scoreId is then the feed's negative id. */
-  companella?: { importId: string; replay: boolean; app?: string };
+  companella?: { importId: string; replay: boolean; app?: string; video?: string };
 }
 
 export interface LiveMapScoresSnapshot {
@@ -1843,6 +1845,11 @@ export async function fetchCompanellaPresenceDirect(): Promise<CompanellaPresenc
   }
 }
 
+/* Proof videos an admin attached to official plays; each lists both of the play's ids when known. */
+export async function fetchScoreVideosDirect(): Promise<Array<{ ids: number[]; url: string }>> {
+  return (await fetchLiveJson<{ videos: Array<{ ids: number[]; url: string }> }>("/api/score-videos")).videos;
+}
+
 /* A restricted player's Companella imports, the one public Companella read.
    Null when there is nothing to show: an active account, Companella switched
    off, or no imports. */
@@ -1948,6 +1955,21 @@ export function restrictedPpReplayUrl(scoreId: string): string | null {
   const base = getLiveBackendUrl();
   if (!base || !/^[A-Za-z0-9_-]{8,64}$/.test(scoreId)) return null;
   return `${base}/api/integrations/companella/public/replays/${scoreId}`;
+}
+
+/**
+ * A listed import with a public replay, as a feed row: who played it and on
+ * what. Reads the server-side backend URL during SSR, so the replay page's
+ * head and OG card can use it too.
+ */
+export async function fetchPublicCompanellaImport(importId: string): Promise<LeanTrackerScore | null> {
+  const base = typeof window === "undefined" ? getServerLiveBackendUrl() ?? getLiveBackendUrl() : getLiveBackendUrl();
+  if (!base || !/^[A-Za-z0-9_-]{8,64}$/.test(importId)) return null;
+  const response = await fetch(`${base}/api/integrations/companella/public/imports/${importId}`, { credentials: "omit" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new LiveBackendRequestError(response.status, retryAfterMs(response));
+  const payload = (await response.json()) as { import?: LeanTrackerScore };
+  return payload.import ?? null;
 }
 
 export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<LivePlayerAboutPayload>> {

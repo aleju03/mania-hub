@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, Play, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { LiveKeymodePpPlay } from "../../lib/live-backend";
 import {
@@ -23,7 +23,7 @@ import {
   getScoreUrl,
   scoreHasReplay,
 } from "../../lib/score";
-import { CompanellaMark } from "../ui/CompanellaMark";
+import { CompanellaMark, VideoMark } from "../ui/CompanellaMark";
 import { GradeImg } from "../ui/GradeImg";
 import { UsernameText } from "../ui/UsernameText";
 import { StarRatingBadge } from "../ui/StarRating";
@@ -34,6 +34,7 @@ import { RecentPlayRatingCells } from "./RecentPlayRatingCells";
 import type { RecentPlayRatingView } from "./recent-play-ratings";
 import { useNoDans } from "../../store";
 import { companellaReplayImportId } from "../../lib/companella-scores";
+import { usePlayVideo, useScoreVideo } from "../../lib/score-videos";
 import type { OsuScore } from "../../lib/types";
 import { getTrackedPlayRank } from "../../lib/tracked-play-score";
 import { useLocale } from "../../lib/locale-context";
@@ -158,6 +159,7 @@ export function TrackedScoreRow({
   const mods = getModDisplayList(play.mods.map((acronym) => ({ acronym })));
   const coverUrl = play.beatmapsetId ? `/api/background?beatmapsetId=${play.beatmapsetId}` : null;
   const canReplay = play.hasReplay === true && play.soloScoreId != null;
+  const video = useScoreVideo(play.soloScoreId, play.legacyScoreId);
 
   return (
     <div className="player-score-row relative flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms] cursor-pointer">
@@ -191,6 +193,7 @@ export function TrackedScoreRow({
                 {play.keyCount}K
               </span>
             )}
+            {video ? <VideoMark video={video} /> : null}
           </div>
           <span className="text-[11px] text-osu-f1">
             {play.artist}
@@ -302,6 +305,7 @@ export function ScoreRow({
   const importId = companellaReplayImportId(score);
   const canReplay = importId != null || scoreHasReplay(score);
   const replaySearch = importId != null ? { importId } : { scoreId: score.id, beatmapsetId: score.beatmapset?.id };
+  const video = usePlayVideo(score);
   const display = getScoreDisplayValues(score);
   const hasPp = score.pp != null;
   const noDans = useNoDans();
@@ -333,8 +337,9 @@ export function ScoreRow({
               {keymodeLabel}
             </span>
           )}
-          {score.companella ? <CompanellaMark app={score.companella.app} />
+          {score.companella ? <CompanellaMark app={score.companella.app} video={score.companella.video} />
             : score.companellaTimed ? <CompanellaMark app={score.companellaTimed.app} /> : null}
+          {!score.companella && video ? <VideoMark video={video} /> : null}
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
         <span className="block truncate text-[11px] text-osu-f1">
@@ -504,6 +509,7 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
   const beatmapUrl = getBeatmapUrl(score);
   const importId = companellaReplayImportId(score);
   const canReplay = importId != null || scoreHasReplay(score);
+  const video = usePlayVideo(score);
   const hasPp = score.pp != null;
   const playedAt = getScoreTimestamp(score);
   const viewerTimeZone = useViewerTimeZone();
@@ -711,6 +717,18 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
                     {t`Watch replay`}
                   </Link>
                 )}
+                {/* A play an admin entered from a video, or an official play with a proof video. */}
+                {video ? (
+                  <a
+                    href={video}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] py-1.5 pl-2.5 pr-3 text-[12px] font-semibold text-white transition hover:brightness-125"
+                  >
+                    <Play size={12} className="shrink-0 fill-current" />
+                    {t`Watch video`}
+                  </a>
+                ) : null}
               </div>
             </div>
             {extra}

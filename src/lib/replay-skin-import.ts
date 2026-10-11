@@ -359,7 +359,7 @@ export interface OskImageEntry {
 // customization picker. Paths only; the picker decodes previews lazily.
 export function listOskImageEntries(archive: OskArchive): OskImageEntry[] {
   const entries: OskImageEntry[] = [];
-  for (const file of archive.lookup.values()) {
+  for (const file of new Set(archive.lookup.values())) {
     const path = normalizeZipPath(file.name);
     if (!/\.(png|jpe?g)$/i.test(path)) continue;
     entries.push({ path, name: basename(path) });
@@ -392,14 +392,18 @@ async function extractSkinSounds(lookup: Map<string, JSZip.JSZipObject>): Promis
 }
 
 async function readSkinIni(zip: JSZip): Promise<string | null> {
-  const file = Object.values(zip.files).find((entry) => {
+  const file = findSkinIniEntry(zip);
+  return file ? file.async("string") : null;
+}
+
+function findSkinIniEntry(zip: JSZip): JSZip.JSZipObject | undefined {
+  return Object.values(zip.files).find((entry) => {
     const name = normalizeZipPath(entry.name).toLowerCase();
     return !entry.dir && name === "skin.ini";
   }) ?? Object.values(zip.files).find((entry) => {
     const name = normalizeZipPath(entry.name).toLowerCase();
     return !entry.dir && name.endsWith("/skin.ini");
   });
-  return file ? file.async("string") : null;
 }
 
 interface LazerComboLayout {
@@ -855,11 +859,25 @@ function settingsFromManiaBlock(block: Record<string, string>): Partial<ReplaySk
   return patch;
 }
 
+// skin.ini references resolve from the folder skin.ini sits in. Some .osk
+// files wrap the whole skin in one folder ("My Skin/skin.ini",
+// "My Skin/4K/1.png"), so files under that folder are also keyed by their
+// path relative to it. Full paths stay keyed too: stored replay-skin configs
+// and picker choices name assets by their exact zip path.
 function buildZipLookup(zip: JSZip): Map<string, JSZip.JSZipObject> {
   const lookup = new Map<string, JSZip.JSZipObject>();
+  const iniPath = normalizeZipPath(findSkinIniEntry(zip)?.name ?? "").toLowerCase();
+  const root = iniPath.slice(0, iniPath.lastIndexOf("/") + 1);
   for (const file of Object.values(zip.files)) {
     if (file.dir) continue;
     lookup.set(normalizeZipPath(file.name).toLowerCase(), file);
+  }
+  if (root) {
+    for (const file of Object.values(zip.files)) {
+      if (file.dir) continue;
+      const path = normalizeZipPath(file.name).toLowerCase();
+      if (path.startsWith(root) && !lookup.has(path.slice(root.length))) lookup.set(path.slice(root.length), file);
+    }
   }
   return lookup;
 }

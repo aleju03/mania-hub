@@ -64,7 +64,7 @@ describe("skillModeEntries", () => {
     const thin = { keyCount: 7, analyzedPlays: 13, ratings, patterns: [{ id: "tech", rating: 4, plays: 4 }, { id: "chordstream", rating: 7, plays: 3 }] };
     const rated = { ...thin, patterns: [...thin.patterns, { id: "jack", rating: 6, plays: 3 }] };
     for (const mode of [thin, rated]) {
-      expect(skillModeEntries(mode).map(entry => entry.key)).toEqual(["Jumpstream", "Stamina", "Handstream", "Chordjack", "Technical"]);
+      expect(skillModeEntries(mode).map(entry => entry.key)).toEqual(["Jumpstream", "Handstream", "Chordjack", "Technical"]);
     }
   });
 
@@ -91,7 +91,7 @@ describe("Etterna Overall", () => {
     expect(etternaOverallFromRatings(4, { ...rice, "pattern:ln": 30 })).toBe(36.5);
     expect(etternaOverallFromRatings(4, { ...rice, "pattern:ln": 40 })).toBe(37.5);
     expect(etternaOverallFromRatings(9, rice)).toBe(37);
-    expect(etternaOverallFromRatings(7, rice)).toBe(usesPrism(7) ? 36.6 : 0);
+    expect(etternaOverallFromRatings(7, rice)).toBe(usesPrism(7) ? 36.25 : 0);
     expect(etternaOverallFromRatings(7, { Overall: 25, "pattern:ln": 24 })).toBe(0);
   });
 

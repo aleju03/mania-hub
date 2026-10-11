@@ -5,7 +5,7 @@ import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 
 /* The admin page for About pages restricted players saved here
-   (/admin/about-pages, live-backend features/own-about.ts). Nobody reviews
+   (/admin/players?tab=about, live-backend features/own-about.ts). Nobody reviews
    them before they show, so this is where one gets cleared, and where an image
    pasted into one, which we host under bbcode/ in the public bucket, gets
    deleted. */

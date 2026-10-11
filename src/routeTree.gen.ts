@@ -56,6 +56,7 @@ import { Route as AdminDynamicRendersRouteImport } from './routes/admin/dynamic-
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
 import { Route as AdminMascotRouteImport } from './routes/admin/mascot'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
+import { Route as AdminPlayersRouteImport } from './routes/admin/players'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminScoresRouteImport } from './routes/admin/scores'
 import { Route as AdminSupportersRouteImport } from './routes/admin/supporters'
@@ -361,6 +362,11 @@ const AdminMascotRoute = AdminMascotRouteImport.update({
 const AdminOgPreviewRoute = AdminOgPreviewRouteImport.update({
   id: '/admin/og-preview',
   path: '/admin/og-preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPlayersRoute = AdminPlayersRouteImport.update({
+  id: '/admin/players',
+  path: '/admin/players',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminR2Route = AdminR2RouteImport.update({
@@ -783,6 +789,7 @@ export interface FileRoutesByFullPath {
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/mascot': typeof AdminMascotRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
+  '/admin/players': typeof AdminPlayersRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/scores': typeof AdminScoresRoute
   '/admin/supporters': typeof AdminSupportersRoute
@@ -903,6 +910,7 @@ export interface FileRoutesByTo {
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/mascot': typeof AdminMascotRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
+  '/admin/players': typeof AdminPlayersRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/scores': typeof AdminScoresRoute
   '/admin/supporters': typeof AdminSupportersRoute
@@ -1024,6 +1032,7 @@ export interface FileRoutesById {
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/mascot': typeof AdminMascotRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
+  '/admin/players': typeof AdminPlayersRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/scores': typeof AdminScoresRoute
   '/admin/supporters': typeof AdminSupportersRoute
@@ -1146,6 +1155,7 @@ export interface FileRouteTypes {
     | '/admin/live-backend'
     | '/admin/mascot'
     | '/admin/og-preview'
+    | '/admin/players'
     | '/admin/r2'
     | '/admin/scores'
     | '/admin/supporters'
@@ -1266,6 +1276,7 @@ export interface FileRouteTypes {
     | '/admin/live-backend'
     | '/admin/mascot'
     | '/admin/og-preview'
+    | '/admin/players'
     | '/admin/r2'
     | '/admin/scores'
     | '/admin/supporters'
@@ -1386,6 +1397,7 @@ export interface FileRouteTypes {
     | '/admin/live-backend'
     | '/admin/mascot'
     | '/admin/og-preview'
+    | '/admin/players'
     | '/admin/r2'
     | '/admin/scores'
     | '/admin/supporters'
@@ -1507,6 +1519,7 @@ export interface RootRouteChildren {
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
   AdminMascotRoute: typeof AdminMascotRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
+  AdminPlayersRoute: typeof AdminPlayersRoute
   AdminR2Route: typeof AdminR2Route
   AdminScoresRoute: typeof AdminScoresRoute
   AdminSupportersRoute: typeof AdminSupportersRoute
@@ -1896,6 +1909,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/og-preview'
       fullPath: '/admin/og-preview'
       preLoaderRoute: typeof AdminOgPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/players': {
+      id: '/admin/players'
+      path: '/admin/players'
+      fullPath: '/admin/players'
+      preLoaderRoute: typeof AdminPlayersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/r2': {
@@ -2550,6 +2570,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLiveBackendRoute: AdminLiveBackendRoute,
   AdminMascotRoute: AdminMascotRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
+  AdminPlayersRoute: AdminPlayersRoute,
   AdminR2Route: AdminR2Route,
   AdminScoresRoute: AdminScoresRoute,
   AdminSupportersRoute: AdminSupportersRoute,

@@ -19,6 +19,7 @@ import {
   REPLAY_EXPORT_SAMPLE_RATE,
   REPLAY_EXPORT_CHANNELS,
   REPLAY_EXPORT_PRESETS,
+  REPLAY_EXPORT_FPS_OPTIONS,
   REPLAY_EXPORT_PRESET_ORDER,
   checkExportAdmission,
   exportVideoBitrate,
@@ -780,7 +781,8 @@ export function ReplayControls({
               if (getComputedStyle(node).overflowY !== "visible") clipTop = Math.max(clipTop, node.getBoundingClientRect().top);
             }
             setVideoMenuLayout({
-              alignRight: bounds.left + 208 > window.innerWidth - 8,
+              // Two columns (sm:w-[26rem]) from the sm breakpoint, one (w-52) below it.
+              alignRight: bounds.left + (window.innerWidth >= 640 ? 416 : 208) > window.innerWidth - 8,
               maxHeight: Math.max(100, Math.min(512, bounds.top - clipTop - 16)),
             });
           }
@@ -809,229 +811,253 @@ export function ReplayControls({
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.1 }}
             style={{ maxHeight: videoMenuLayout.maxHeight }}
-            className={`absolute bottom-full z-50 mb-1.5 w-52 overflow-y-auto rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl ${videoMenuLayout.alignRight ? "right-0" : "left-0"}`}
+            className={`absolute bottom-full z-50 mb-1.5 w-52 overflow-y-auto rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl sm:w-[26rem] ${videoMenuLayout.alignRight ? "right-0" : "left-0"}`}
           >
-            <button
-              type="button"
-              onClick={() => {
-                setVideoExportKind("clip");
-                setVideoClipMode(false);
-              }}
-              className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
-                videoExportKind === "clip" ? "text-white" : "text-osu-f0"
-              }`}
-            >
-              <span>{t`${DEFAULT_EXPORT_CLIP_SECONDS}s from here`}</span>
-              <CheckMark on={videoExportKind === "clip"} />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setVideoExportKind("full");
-                setVideoClipMode(false);
-              }}
-              className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
-                videoExportKind === "full" ? "text-white" : "text-osu-f0"
-              }`}
-            >
-              <span>{t`Full play`}</span>
-              <CheckMark on={videoExportKind === "full"} />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setVideoExportKind("custom");
-                setVideoClipMode(true);
-              }}
-              className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
-                videoMarkingActive ? "text-white" : "text-osu-f0"
-              }`}
-            >
-              <span>{t`Custom`}</span>
-              <CheckMark on={videoMarkingActive} />
-            </button>
-            {videoMarkingActive && (
-              <div className="space-y-1.5 px-1 pb-1">
-                <div className="grid grid-cols-2 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVideoCustomStartMs(currentReplayTimeMs());
-                      setVideoClipMode(true);
-                    }}
-                    className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
-                      videoCustomStartMs != null
-                        ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
-                        : "bg-osu-b4 text-osu-f0 hover:text-white"
-                    }`}
-                  >
-                    {t`Start here`}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVideoCustomEndMs(currentReplayTimeMs());
-                      setVideoClipMode(true);
-                    }}
-                    className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
-                      videoCustomEndMs != null
-                        ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
-                        : "bg-osu-b4 text-osu-f0 hover:text-white"
-                    }`}
-                  >
-                    {t`End here`}
-                  </button>
-                </div>
-                <div className="space-y-0.5 rounded bg-osu-b4/60 px-1.5 py-1 text-[11px] leading-tight text-osu-f1">
-                  <label className="flex items-center justify-between gap-2">
-                    <span>{t`Start`}</span>
-                    <ExportTimeInput
-                      valueMs={videoCustomStartMs}
-                      modRate={modRate}
-                      durationMs={replayDurationMs}
-                      label={t`Export start time`}
-                      onCommit={setVideoCustomStartMs}
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-2">
-                    <span>{t`End`}</span>
-                    <ExportTimeInput
-                      valueMs={videoCustomEndMs}
-                      modRate={modRate}
-                      durationMs={replayDurationMs}
-                      label={t`Export end time`}
-                      onCommit={setVideoCustomEndMs}
-                    />
-                  </label>
-                </div>
-                {(videoCustomStartMs != null || videoCustomEndMs != null) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVideoCustomStartMs(null);
-                      setVideoCustomEndMs(null);
-                    }}
-                    className="w-full cursor-pointer rounded bg-osu-b4/70 px-1.5 py-1 text-[10px] font-semibold text-osu-f0 hover:text-white"
-                  >
-                    {t`Clear marks`}
-                  </button>
-                )}
-              </div>
-            )}
-            <div className="my-1 h-px bg-osu-b2" />
-            <fieldset>
-              <legend className="px-1 pb-1.5 text-[10px] font-semibold text-osu-f1">{t`Video layout`}</legend>
-              <div className="grid grid-cols-2 gap-1.5">
-                {(["current", "fullscreen"] as const).map((layout) => {
-                  const selected = videoLayout === layout;
-                  const aspect = layout === "current" ? exportViewport.width / exportViewport.height : 16 / 9;
-                  return (
-                    <button
-                      key={layout}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => setVideoLayout(layout)}
-                      className={`flex cursor-pointer flex-col items-center gap-1 rounded-md border px-1.5 py-1.5 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-osu-pink ${
-                        selected ? "border-osu-pink bg-osu-pink/15 text-white" : "border-osu-b2 bg-osu-b4/40 text-osu-f1 hover:border-osu-f1/50 hover:text-white"
-                      }`}
-                    >
-                      <VideoLayoutGlyph aspect={aspect} />
-                      <span>{layout === "current" ? t`As shown` : t`16:9 video`}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </fieldset>
-            <div className="px-1 py-1 text-[10px] leading-tight text-osu-f1">
-              {videoLayout === "current"
-                ? t`Keeps the layout you're watching.`
-                : t`Fits the overlays to a 16:9 frame.`}
-            </div>
-            <div className="my-1 h-px bg-osu-b2" />
-            <div className="grid grid-cols-2 gap-1">
-              {REPLAY_EXPORT_PRESET_ORDER.map((presetId) => {
-                const preset = REPLAY_EXPORT_PRESETS[presetId];
-                const dimensions = replayExportDimensions(exportViewport, preset, videoLayout);
-                return (
-                  <button
-                    key={presetId}
-                    type="button"
-                    aria-pressed={videoPreset === presetId}
-                    onClick={() => setVideoPreset(presetId)}
-                    className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold tabular-nums transition-colors ${
-                      videoPreset === presetId ? "bg-osu-pink text-white hover:bg-osu-pink-dark" : "text-osu-f0 hover:bg-osu-b4"
-                    }`}
-                  >
-                    <span className="block">{dimensions.width}×{dimensions.height}</span>
-                    <span className="block text-[10px] font-normal opacity-75">{preset.fps} FPS</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="my-1 h-px bg-osu-b2" />
-            <div className="grid grid-cols-2 gap-1">
-              {(["fast", "compact"] as const).map((mode) => (
+            <div className="sm:grid sm:grid-cols-2 sm:gap-x-1.5">
+              <div>
                 <button
-                  key={mode}
                   type="button"
-                  aria-pressed={videoEncodingMode === mode}
-                  disabled={mode === "fast" && fastSupportUnavailable}
-                  onClick={() => setPreferredVideoEncodingMode(mode)}
-                  className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent ${
-                    videoEncodingMode === mode ? "bg-osu-pink text-white hover:bg-osu-pink-dark" : "text-osu-f0 hover:bg-osu-b4"
+                  onClick={() => {
+                    setVideoExportKind("clip");
+                    setVideoClipMode(false);
+                  }}
+                  className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                    videoExportKind === "clip" ? "text-white" : "text-osu-f0"
                   }`}
                 >
-                  {mode === "fast" ? t`Fast export` : t`Smaller file`}
+                  <span>{t`${DEFAULT_EXPORT_CLIP_SECONDS}s from here`}</span>
+                  <CheckMark on={videoExportKind === "clip"} />
                 </button>
-              ))}
-            </div>
-            <div className="px-1 py-1 text-[10px] leading-tight text-osu-f1">
-              {fastSupportUnavailable
-                ? t`Hardware encoding isn't available here. Smaller file uses your CPU.`
-                : videoEncodingMode === "fast"
-                  ? t`Prefers hardware encoding. Larger files.`
-                  : t`Slower export with more CPU use.`}
-            </div>
-            <div className="my-1 h-px bg-osu-b2" />
-            <div className="space-y-1.5 px-1 pb-1 text-[10px] text-osu-f1">
-              <label className="flex cursor-pointer items-center justify-between gap-2">
-                <span>{t`Custom bitrate`}</span>
-                <input
-                  type="checkbox"
-                  className="accent-osu-pink"
-                  checked={customBitrateMbps !== null}
-                  onChange={(event) => setCustomBitrateMbps(event.target.checked ? formatMbps(recommendedVideoBitrate) : null)}
-                />
-              </label>
-              {customBitrateMbps !== null && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      aria-label={t`Video bitrate`}
-                      min={MIN_CUSTOM_VIDEO_BITRATE / 1_000_000}
-                      max={MAX_CUSTOM_VIDEO_BITRATE / 1_000_000}
-                      step={0.25}
-                      value={selectedVideoBitrate / 1_000_000}
-                      onChange={(event) => setCustomBitrateMbps(Number(event.target.value).toFixed(2))}
-                      className={`${sliderClass} min-w-0 flex-1`}
-                    />
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      aria-label={t`Video bitrate (Mbps)`}
-                      value={customBitrateMbps}
-                      onChange={(event) => setCustomBitrateMbps(event.target.value.replace(",", "."))}
-                      onBlur={() => {
-                        if (!customBitrateInvalid && customVideoBitrate !== undefined) setCustomBitrateMbps(formatMbps(customVideoBitrate));
-                      }}
-                      className="w-12 rounded bg-osu-b4 px-1.5 py-1 text-right text-[11px] tabular-nums text-white outline-none focus:ring-1 focus:ring-osu-pink"
-                    />
-                    <span>Mbps</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVideoExportKind("full");
+                    setVideoClipMode(false);
+                  }}
+                  className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                    videoExportKind === "full" ? "text-white" : "text-osu-f0"
+                  }`}
+                >
+                  <span>{t`Full play`}</span>
+                  <CheckMark on={videoExportKind === "full"} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVideoExportKind("custom");
+                    setVideoClipMode(true);
+                  }}
+                  className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                    videoMarkingActive ? "text-white" : "text-osu-f0"
+                  }`}
+                >
+                  <span>{t`Custom`}</span>
+                  <CheckMark on={videoMarkingActive} />
+                </button>
+                {videoMarkingActive && (
+                  <div className="space-y-1.5 px-1 pb-1">
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVideoCustomStartMs(currentReplayTimeMs());
+                          setVideoClipMode(true);
+                        }}
+                        className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
+                          videoCustomStartMs != null
+                            ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
+                            : "bg-osu-b4 text-osu-f0 hover:text-white"
+                        }`}
+                      >
+                        {t`Start here`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVideoCustomEndMs(currentReplayTimeMs());
+                          setVideoClipMode(true);
+                        }}
+                        className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
+                          videoCustomEndMs != null
+                            ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
+                            : "bg-osu-b4 text-osu-f0 hover:text-white"
+                        }`}
+                      >
+                        {t`End here`}
+                      </button>
+                    </div>
+                    <div className="space-y-0.5 rounded bg-osu-b4/60 px-1.5 py-1 text-[11px] leading-tight text-osu-f1">
+                      <label className="flex items-center justify-between gap-2">
+                        <span>{t`Start`}</span>
+                        <ExportTimeInput
+                          valueMs={videoCustomStartMs}
+                          modRate={modRate}
+                          durationMs={replayDurationMs}
+                          label={t`Export start time`}
+                          onCommit={setVideoCustomStartMs}
+                        />
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span>{t`End`}</span>
+                        <ExportTimeInput
+                          valueMs={videoCustomEndMs}
+                          modRate={modRate}
+                          durationMs={replayDurationMs}
+                          label={t`Export end time`}
+                          onCommit={setVideoCustomEndMs}
+                        />
+                      </label>
+                    </div>
+                    {(videoCustomStartMs != null || videoCustomEndMs != null) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVideoCustomStartMs(null);
+                          setVideoCustomEndMs(null);
+                        }}
+                        className="w-full cursor-pointer rounded bg-osu-b4/70 px-1.5 py-1 text-[10px] font-semibold text-osu-f0 hover:text-white"
+                      >
+                        {t`Clear marks`}
+                      </button>
+                    )}
                   </div>
-                  {customBitrateInvalid && <p className="text-osu-yellow">{t`Choose a bitrate from 0.5 to 20 Mbps.`}</p>}
-                </>
-              )}
+                )}
+                <div className="my-1 h-px bg-osu-b2" />
+                <fieldset>
+                  <legend className="px-1 pb-1.5 text-[10px] font-semibold text-osu-f1">{t`Video layout`}</legend>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(["current", "fullscreen"] as const).map((layout) => {
+                      const selected = videoLayout === layout;
+                      const aspect = layout === "current" ? exportViewport.width / exportViewport.height : 16 / 9;
+                      return (
+                        <button
+                          key={layout}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setVideoLayout(layout)}
+                          className={`flex cursor-pointer flex-col items-center gap-1 rounded-md border px-1.5 py-1.5 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-osu-pink ${
+                            selected ? "border-osu-pink bg-osu-pink/15 text-white" : "border-osu-b2 bg-osu-b4/40 text-osu-f1 hover:border-osu-f1/50 hover:text-white"
+                          }`}
+                        >
+                          <VideoLayoutGlyph aspect={aspect} />
+                          <span>{layout === "current" ? t`As shown` : t`16:9 video`}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+                <div className="px-1 py-1 text-[10px] leading-tight text-osu-f1">
+                  {videoLayout === "current"
+                    ? t`Keeps the layout you're watching.`
+                    : t`Fits the overlays to a 16:9 frame.`}
+                </div>
+              </div>
+              <div className="sm:border-l sm:border-osu-b2 sm:pl-1.5">
+                <div className="my-1 h-px bg-osu-b2 sm:hidden" />
+                <div className="grid gap-1">
+                  {REPLAY_EXPORT_PRESET_ORDER.filter((presetId) => REPLAY_EXPORT_PRESETS[presetId].fps === exportPreset.fps).map((presetId) => {
+                    const dimensions = replayExportDimensions(exportViewport, REPLAY_EXPORT_PRESETS[presetId], videoLayout);
+                    return (
+                      <button
+                        key={presetId}
+                        type="button"
+                        aria-pressed={videoPreset === presetId}
+                        onClick={() => setVideoPreset(presetId)}
+                        className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold tabular-nums transition-colors ${
+                          videoPreset === presetId ? "bg-osu-pink text-white hover:bg-osu-pink-dark" : "text-osu-f0 hover:bg-osu-b4"
+                        }`}
+                      >
+                        {dimensions.width}×{dimensions.height}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-1 grid grid-cols-2 gap-1">
+                  {REPLAY_EXPORT_FPS_OPTIONS.map((fps) => {
+                    const presetId = REPLAY_EXPORT_PRESET_ORDER.find((id) =>
+                      REPLAY_EXPORT_PRESETS[id].height === exportPreset.height && REPLAY_EXPORT_PRESETS[id].fps === fps);
+                    return (
+                      <button
+                        key={fps}
+                        type="button"
+                        aria-pressed={exportPreset.fps === fps}
+                        disabled={!presetId}
+                        onClick={() => presetId && setVideoPreset(presetId)}
+                        className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                          exportPreset.fps === fps ? "bg-osu-pink text-white hover:bg-osu-pink-dark" : "text-osu-f0 hover:bg-osu-b4"
+                        }`}
+                      >
+                        {fps} FPS
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="my-1 h-px bg-osu-b2" />
+                <div className="grid grid-cols-2 gap-1">
+                  {(["fast", "compact"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={videoEncodingMode === mode}
+                      disabled={mode === "fast" && fastSupportUnavailable}
+                      onClick={() => setPreferredVideoEncodingMode(mode)}
+                      className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent ${
+                        videoEncodingMode === mode ? "bg-osu-pink text-white hover:bg-osu-pink-dark" : "text-osu-f0 hover:bg-osu-b4"
+                      }`}
+                    >
+                      {mode === "fast" ? t`Fast export` : t`Smaller file`}
+                    </button>
+                  ))}
+                </div>
+                <div className="px-1 py-1 text-[10px] leading-tight text-osu-f1">
+                  {fastSupportUnavailable
+                    ? t`Hardware encoding isn't available here. Smaller file uses your CPU.`
+                    : videoEncodingMode === "fast"
+                      ? t`Prefers hardware encoding. Larger files.`
+                      : t`Slower export with more CPU use.`}
+                </div>
+                <div className="my-1 h-px bg-osu-b2" />
+                <div className="space-y-1.5 px-1 pb-1 text-[10px] text-osu-f1">
+                  <label className="flex cursor-pointer items-center justify-between gap-2">
+                    <span>{t`Custom bitrate`}</span>
+                    <input
+                      type="checkbox"
+                      className="accent-osu-pink"
+                      checked={customBitrateMbps !== null}
+                      onChange={(event) => setCustomBitrateMbps(event.target.checked ? formatMbps(recommendedVideoBitrate) : null)}
+                    />
+                  </label>
+                  {customBitrateMbps !== null && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          aria-label={t`Video bitrate`}
+                          min={MIN_CUSTOM_VIDEO_BITRATE / 1_000_000}
+                          max={MAX_CUSTOM_VIDEO_BITRATE / 1_000_000}
+                          step={0.25}
+                          value={selectedVideoBitrate / 1_000_000}
+                          onChange={(event) => setCustomBitrateMbps(Number(event.target.value).toFixed(2))}
+                          className={`${sliderClass} min-w-0 flex-1`}
+                        />
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          aria-label={t`Video bitrate (Mbps)`}
+                          value={customBitrateMbps}
+                          onChange={(event) => setCustomBitrateMbps(event.target.value.replace(",", "."))}
+                          onBlur={() => {
+                            if (!customBitrateInvalid && customVideoBitrate !== undefined) setCustomBitrateMbps(formatMbps(customVideoBitrate));
+                          }}
+                          className="w-12 rounded bg-osu-b4 px-1.5 py-1 text-right text-[11px] tabular-nums text-white outline-none focus:ring-1 focus:ring-osu-pink"
+                        />
+                        <span>Mbps</span>
+                      </div>
+                      {customBitrateInvalid && <p className="text-osu-yellow">{t`Choose a bitrate from 0.5 to 20 Mbps.`}</p>}
+                    </>
+                  )}
+              </div>
+            </div>
             </div>
             <div className="my-1 h-px bg-osu-b2" />
             <div className="px-1 text-[10px] leading-relaxed text-osu-f1">

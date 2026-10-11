@@ -116,13 +116,16 @@ describe("export codec selection", () => {
     { width: 2370, height: 1080, fps: 30, codec: "av01.0.12M.08" },
     { width: 2370, height: 1080, fps: 60, codec: "av01.0.12M.08" },
     { width: 4096, height: 1080, fps: 60, codec: "av01.0.12M.08" },
+    { width: 2560, height: 1440, fps: 60, codec: "av01.0.12M.08" },
+    { width: 3440, height: 1440, fps: 60, codec: "av01.0.13M.08" },
+    { width: 4096, height: 1440, fps: 60, codec: "av01.0.13M.08" },
   ])("admits native-aspect $width × $height at $fps FPS with the right AV1 level", async ({ width, height, fps, codec }) => {
     expect(await planExportCodecs({ ...request, width, height, fps })).toMatchObject({ videoCodec: "av1" });
     expect(mocks.support).toHaveBeenCalledWith(expect.objectContaining({ codec, width, height, framerate: fps }));
   });
 
   it.each([
-    [4098, 1080, 60], [3840, 2160, 30], [1920, 1080, 120],
+    [4098, 1080, 60], [3840, 2160, 30], [2560, 1442, 60], [1920, 1080, 120],
     [0, 720, 60], [1591, 720, 60], [1590, 720.5, 60],
   ])("rejects unsupported output bounds %i × %i at %i FPS before codec probing", async (width, height, fps) => {
     expect(isOutputSizeAllowed(width, height, fps)).toBe(false);

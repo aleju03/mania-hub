@@ -7,7 +7,7 @@ import { useLocale } from "../../lib/locale-context";
 import { useAuth } from "../../lib/auth-context";
 import type { OsuScore } from "../../lib/types";
 import { Avatar } from "../ui/Avatar";
-import { CompanellaMark } from "../ui/CompanellaMark";
+import { CompanellaMark, ScoreVideoMark } from "../ui/CompanellaMark";
 import { CountryFlag } from "../ui/CountryFlag";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
@@ -136,7 +136,8 @@ function MapScoreRow({ entry, own, onOpen }: { entry: LiveMapScoreEntry; own: bo
           accent={entry.user.avatar_accent}
           className="truncate text-[12.5px] font-semibold text-white"
         />
-        {entry.companella ? <CompanellaMark app={entry.companella.app} className="h-[15px] w-[15px]" /> : null}
+        {entry.companella ? <CompanellaMark app={entry.companella.app} video={entry.companella.video} className="h-[15px] w-[15px]" />
+          : <ScoreVideoMark ids={[entry.soloScoreId, entry.scoreId]} className="h-[15px] w-[15px]" />}
         {entry.mods.map((mod) => (
           <ModBadge key={mod} mod={mod} size={0.55} />
         ))}

@@ -218,6 +218,7 @@ describe("MapSearchSection cold-load fetch", () => {
       patternsExclude: [],
       skills: [],
       skillsExclude: [],
+      msd: {},
       page: 0,
     });
 

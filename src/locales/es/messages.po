@@ -4435,10 +4435,18 @@ msgid "Chordjack"
 msgstr "Chordjack"
 
 #: src/components/maps/MapDetailModal.tsx
+msgid "Chordjacks"
+msgstr "Chordjacks"
+
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
 msgstr "Chordstream"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Chordstreams"
+msgstr "Chordstreams"
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -5975,6 +5983,7 @@ msgstr "predeterminado"
 msgid "Default volume"
 msgstr "Volumen predeterminado"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Delay"
@@ -16063,16 +16072,24 @@ msgid "Single focus"
 msgstr "Meta única"
 
 #: src/components/maps/MapDetailModal.tsx
+msgid "Single-note jacks"
+msgstr "Jacks de una nota"
+
+#: src/components/maps/MapDetailModal.tsx
 #~ msgid "Single-note jacks {singleText}, chord jacks {chordText}"
 #~ msgstr "Jacks de una nota {singleText}, jacks en acordes {chordText}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Single-note jacks {singleText}, chordjacks {chordText}"
-msgstr "Jacks de una nota {singleText}, chordjacks {chordText}"
+#~ msgid "Single-note jacks {singleText}, chordjacks {chordText}"
+#~ msgstr "Jacks de una nota {singleText}, chordjacks {chordText}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Single-note streams {singleText}, chordstreams {chordText}"
-msgstr "Streams de una nota {singleText}, chordstreams {chordText}"
+msgid "Single-note streams"
+msgstr "Streams de una nota"
+
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Single-note streams {singleText}, chordstreams {chordText}"
+#~ msgstr "Streams de una nota {singleText}, chordstreams {chordText}"
 
 #: src/routes/skins.tsx
 msgid "size"
@@ -16488,7 +16505,6 @@ msgstr "Espectando a {player}"
 msgid "Spectators"
 msgstr "Espectadores"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Speed"
 msgstr "Speed"
@@ -20036,6 +20052,12 @@ msgstr "Ver comparativa"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Watch two runs of the same map at once"
 msgstr "Mira dos runs del mismo mapa a la vez"
+
+#: src/components/player/ScorePlayDetailModal.tsx
+#: src/components/player/ScoreRows.tsx
+#: src/components/ui/CompanellaMark.tsx
+msgid "Watch video"
+msgstr "Ver video"
 
 #. placeholder {0}: record.skin.name
 #: src/components/replay/ReplaySideBySideView.tsx

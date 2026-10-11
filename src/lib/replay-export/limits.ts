@@ -4,7 +4,7 @@
 // device that fails below one of these caps is a reason to lower the cap, not
 // to catch the failure somewhere else.
 
-export type ReplayExportPresetId = "720p30" | "720p60" | "1080p30" | "1080p60";
+export type ReplayExportPresetId = "720p30" | "720p60" | "1080p30" | "1080p60" | "1440p30" | "1440p60";
 export type ReplayExportEncodingMode = "fast" | "compact";
 export const DEFAULT_REPLAY_EXPORT_ENCODING_MODE: ReplayExportEncodingMode = "fast";
 export const MIN_CUSTOM_VIDEO_BITRATE = 500_000;
@@ -34,16 +34,21 @@ export const REPLAY_EXPORT_PRESETS: Record<ReplayExportPresetId, ReplayExportPre
   "720p30": { id: "720p30", width: 1280, height: 720, fps: 30, videoBitrate: 1_000_000, fastVideoBitrate: 1_500_000 },
   "1080p60": { id: "1080p60", width: 1920, height: 1080, fps: 60, videoBitrate: 3_000_000, fastVideoBitrate: 4_000_000 },
   "1080p30": { id: "1080p30", width: 1920, height: 1080, fps: 30, videoBitrate: 2_000_000, fastVideoBitrate: 3_000_000 },
+  "1440p60": { id: "1440p60", width: 2560, height: 1440, fps: 60, videoBitrate: 5_000_000, fastVideoBitrate: 7_000_000 },
+  "1440p30": { id: "1440p30", width: 2560, height: 1440, fps: 30, videoBitrate: 3_500_000, fastVideoBitrate: 5_000_000 },
 };
 
 export const DEFAULT_REPLAY_EXPORT_PRESET: ReplayExportPresetId = "720p60";
 
 /** Order the preset picker lists them in. */
-export const REPLAY_EXPORT_PRESET_ORDER: ReplayExportPresetId[] = ["720p60", "720p30", "1080p60", "1080p30"];
+export const REPLAY_EXPORT_PRESET_ORDER: ReplayExportPresetId[] = ["720p60", "720p30", "1080p60", "1080p30", "1440p60", "1440p30"];
 
-/** Legacy wide captures remain readable; new exports fit within 1920×1080. */
+/** The picker shows each resolution once with a shared frame-rate toggle. */
+export const REPLAY_EXPORT_FPS_OPTIONS = [60, 30] as const;
+
+/** Wide captures stay admissible; presets fit within 2560×1440. */
 export const MAX_EXPORT_WIDTH = 4096;
-export const MAX_EXPORT_HEIGHT = 1080;
+export const MAX_EXPORT_HEIGHT = 1440;
 export const MAX_EXPORT_FPS = 60;
 
 export const REPLAY_EXPORT_AUDIO_BITRATE = 128_000;

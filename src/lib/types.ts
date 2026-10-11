@@ -199,6 +199,8 @@ export interface CompanellaScoreMark {
   reference?: { beatmapId: number; rate: number };
   /** A chart osu! does not have, neither an official file nor a copy of one: its synthetic negative beatmap id, for the map card. */
   localBeatmapId?: number;
+  /** A play an admin entered by hand: the video it was entered from, when one was given. */
+  video?: string;
 }
 
 export interface OsuScore {
@@ -298,7 +300,7 @@ export interface LeanHomeScore {
   keyCount: number;
   keymodeLabel?: string;
   beatmapsetId?: number;
-  companella?: Pick<CompanellaScoreMark, "app">;
+  companella?: Pick<CompanellaScoreMark, "app" | "video">;
   user: {
     id: number;
     username: string;

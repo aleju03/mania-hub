@@ -43,7 +43,9 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-10-10", text: "Added a Clears tab to rankings that shows each player's highest dan course and skillset clear, ranked by dan and then accuracy.", label: "Clears", to: "/rankings", search: { tab: "clears" } },
+  { date: "2026-10-10", text: "Added 1440p to Export video.", to: "/replay" },
+  { date: "2026-10-10", text: "Fixed blurry text on the replay Map info, Player info and leaderboard overlays when they are scaled up.", to: "/replay" },
+  { date: "2026-10-10", text: "Added a Clears tab to rankings that shows each player's highest dan course and skillset clear, ranked by dan and then accuracy.", to: "/rankings", search: { tab: "clears" } },
   { date: "2026-10-09", text: "Added an All time tab to top plays that ranks the best 1000 pp plays per country or region, and NM, DT and HT filters.", bold: "All time", to: "/top-plays" },
   { date: "2026-10-09", text: "Added region and continent support to Farmed, Most Played, Favourites and Random on maps.", to: "/maps" },
   { date: "2026-10-08", text: "Added a Scores tab to maps that lists every tracked player's best play on the chart, ranked by lazer accuracy.", label: "Scores", to: "/maps", image: { src: "/images/changelog/2026-10-08-map-scores-tab.webp", alt: "The Scores tab on a map", width: 770, height: 286 } },

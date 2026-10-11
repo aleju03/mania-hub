@@ -14,6 +14,7 @@ export const MSD_FILTER_KEYS = [
   "chordjack",
   "technical",
   "ln",
+  "speed",
 ] as const;
 
 // The MinaCalc skillset each key reads, as named in MSD_SKILLSET_META.
@@ -27,7 +28,17 @@ export const MSD_FILTER_SKILLSET: Record<string, string> = {
   chordjack: "Chordjack",
   technical: "Technical",
   ln: "LN",
+  speed: "Speed",
 };
+
+// The keys the panel offers: Prism's skillsets when the key facet is exactly
+// 7K, MinaCalc's otherwise (empty or mixed facets keep MinaCalc's names).
+const PRISM_FILTER_KEYS = ["overall", "jumpstream", "handstream", "chordjack", "technical", "speed", "ln"];
+const MINACALC_FILTER_KEYS = MSD_FILTER_KEYS.filter((key) => key !== "speed");
+
+export function msdFilterKeysFor(keys: readonly string[]): readonly string[] {
+  return keys.length === 1 && keys[0] === "7k" ? PRISM_FILTER_KEYS : MINACALC_FILTER_KEYS;
+}
 
 export const MSD_FILTER_MAX = 40;
 

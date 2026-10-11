@@ -306,7 +306,7 @@ function TierProgress({
 }) {
   const { t } = useLingui();
   if (!nextTier) return (
-    <div className="mt-4 sm:mt-0 sm:absolute sm:top-1/2 sm:left-full sm:ml-6 sm:-translate-y-1/2 sm:w-[180px]">
+    <div className="mt-4 lg:mt-0 lg:absolute lg:top-1/2 lg:left-full lg:ml-6 lg:-translate-y-1/2 lg:w-[180px]">
       <span className="text-2xl font-bold tabular-nums text-white">{cardRating}</span>
       <div className="mt-2 flex items-center gap-2 text-[11px] text-osu-f1">
         <span>{tierLabel}</span>
@@ -321,7 +321,7 @@ function TierProgress({
   const currentLabel = MANIA_TIER_STYLES[nextTier.currentTier].label;
 
   return (
-    <div className="mt-4 sm:mt-0 sm:absolute sm:top-1/2 sm:left-full sm:ml-6 sm:-translate-y-1/2 sm:w-[180px]">
+    <div className="mt-4 lg:mt-0 lg:absolute lg:top-1/2 lg:left-full lg:ml-6 lg:-translate-y-1/2 lg:w-[180px]">
       <div className="flex items-baseline gap-1.5">
         <span className="text-2xl font-bold text-white tabular-nums">{cardRating}</span>
         <span className="text-xs text-osu-f1 tabular-nums">/ {nextTier.threshold}</span>

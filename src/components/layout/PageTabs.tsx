@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 interface PageTabItem<T extends string> {
   id: T;
-  label: string;
+  label: ReactNode;
 }
 
 interface PageTabsProps<T extends string> {

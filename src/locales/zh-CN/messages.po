@@ -4444,9 +4444,17 @@ msgid "Chordjack"
 msgstr "大叠"
 
 #: src/components/maps/MapDetailModal.tsx
+msgid "Chordjacks"
+msgstr "大叠"
+
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
+msgstr "大切"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Chordstreams"
 msgstr "大切"
 
 #: src/routes/skins.tsx
@@ -5984,6 +5992,7 @@ msgstr "默认"
 msgid "Default volume"
 msgstr "默认音量"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Delay"
@@ -16072,16 +16081,24 @@ msgid "Single focus"
 msgstr "单项聚焦"
 
 #: src/components/maps/MapDetailModal.tsx
+msgid "Single-note jacks"
+msgstr "单点叠"
+
+#: src/components/maps/MapDetailModal.tsx
 #~ msgid "Single-note jacks {singleText}, chord jacks {chordText}"
 #~ msgstr "单键叠 {singleText}，和弦叠 {chordText}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Single-note jacks {singleText}, chordjacks {chordText}"
-msgstr "单点叠 {singleText}，大叠 {chordText}"
+#~ msgid "Single-note jacks {singleText}, chordjacks {chordText}"
+#~ msgstr "单点叠 {singleText}，大叠 {chordText}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Single-note streams {singleText}, chordstreams {chordText}"
-msgstr "单点切 {singleText}，大切 {chordText}"
+msgid "Single-note streams"
+msgstr "单点切"
+
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Single-note streams {singleText}, chordstreams {chordText}"
+#~ msgstr "单点切 {singleText}，大切 {chordText}"
 
 #: src/routes/skins.tsx
 msgid "size"
@@ -16497,7 +16514,6 @@ msgstr "正在观战 {player}"
 msgid "Spectators"
 msgstr "观众"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Speed"
 msgstr "速度"
@@ -20045,6 +20061,12 @@ msgstr "并排观看"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Watch two runs of the same map at once"
 msgstr "同时观看同一张谱面的两份成绩"
+
+#: src/components/player/ScorePlayDetailModal.tsx
+#: src/components/player/ScoreRows.tsx
+#: src/components/ui/CompanellaMark.tsx
+msgid "Watch video"
+msgstr "观看视频"
 
 #. placeholder {0}: record.skin.name
 #: src/components/replay/ReplaySideBySideView.tsx
