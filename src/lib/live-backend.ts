@@ -29,8 +29,8 @@ export interface LivePlayerSkillPlay {
   /** The play's own SSR vector at its accuracy and rate, not base chart MSD. */
   skillRatings?: Record<string, number>;
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
-  /** Turned away because the chart plays as a jumptrill the rating cannot
-   *  follow; shown as unrateable, not vibro. */
+  /** Turned away because the rating cannot follow the chart (a jumptrill, or
+   *  objects stacked on one column); shown as unrateable, not vibro. */
   unrateable?: true;
   beatmapId: number;
   beatmapsetId: number | null;
@@ -3055,7 +3055,7 @@ export interface LiveMapSearchEntry {
   // Vibro-like chart per the classifier; informational while browsing.
   // Player eligibility never hides its ordinary estimate from search.
   vibro?: boolean;
-  // Excluded by the jumptrill rule alone: shown as unrateable, not vibro.
+  // Excluded by the unrateable rules alone: shown as unrateable, not vibro.
   unrateable?: boolean;
   // Search results are one entry per beatmapset: the top-level fields describe
   // the representative diff and `diffs` lists every filter-matching diff of the

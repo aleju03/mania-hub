@@ -489,11 +489,12 @@ function groupDetectedSections(sections: VibroAnalysis["sections"], rate: number
 // ClustersBlock below is where charts speak their own keymode's language.
 type DanBadgeVerdict = { label: string; family: string };
 
-// isJumptrillExclusion in #dan/vibro-sections, kept here so the modal does not
+// isUnrateableExclusion in #dan/vibro-sections, kept here so the modal does not
 // pull the detector into the client bundle.
-function isJumptrillExclusion(analysis: VibroAnalysis): boolean {
+function isUnrateableExclusion(analysis: VibroAnalysis): boolean {
   const reasons = Object.keys(analysis.reasonShares ?? {});
-  return analysis.status === "excluded" && reasons.length > 0 && reasons.every((reason) => reason === "jumptrill");
+  return analysis.status === "excluded" && reasons.length > 0
+    && reasons.every((reason) => reason === "jumptrill" || reason === "stacked_heads");
 }
 
 // A rice-and-LN hybrid is one chart with two faces, so it is one badge: the
@@ -640,7 +641,7 @@ export function MsdBlock({
         {(vibroAnalysis ? vibroAnalysis.status !== "clean" : entry.vibro) && (
           <span className="text-[9.5px] font-semibold text-[#ffcf70]">
             {vibroAnalysis?.status === "adjusted" ? t`localized vibro detected`
-              : (vibroAnalysis ? isJumptrillExclusion(vibroAnalysis) : entry.unrateable) ? t`unrateable chart` : t`vibro chart, estimates unreliable`}
+              : (vibroAnalysis ? isUnrateableExclusion(vibroAnalysis) : entry.unrateable) ? t`unrateable chart` : t`vibro chart, estimates unreliable`}
           </span>
         )}
       </div>
