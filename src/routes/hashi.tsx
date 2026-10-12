@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 
 import { getI18n } from "../lib/i18n";
 import { track } from "../lib/analytics";
-import { canUseAdminFeatures } from "../lib/auth-shared";
 import { pageSeo } from "../lib/seo";
 import { PageHeader } from "../components/layout/PageHeader";
 import { ImageLightbox } from "../components/ui/ImageLightbox";
@@ -15,8 +14,7 @@ import { MANIA_BRIDGE_SOURCE_URL, MANIA_BRIDGE_VERSION, type ManiaBridgeDownload
 import { fetchManiaBridgeDownloads } from "../lib/mania-bridge-server";
 
 /*
- * /hashi: Hashi's download page, and where the app's Download button opens. Admin preview until the
- * release, like the Integrations group in Settings.
+ * /hashi: Hashi's download page, and where the app's Download button opens.
  */
 
 type BridgeTab = "about" | "screenshots";
@@ -25,7 +23,6 @@ export const Route = createFileRoute("/hashi")({
   validateSearch: (search: Record<string, unknown>): { tab?: BridgeTab } => ({
     tab: search.tab === "screenshots" ? "screenshots" : undefined,
   }),
-  beforeLoad: ({ context }) => { if (!canUseAdminFeatures(context.auth)) throw notFound(); },
   loader: async () => {
     try {
       return await fetchManiaBridgeDownloads();
@@ -37,7 +34,7 @@ export const Route = createFileRoute("/hashi")({
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: "Hashi",
-      description: i18n._(msg`Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings.`),
+      description: i18n._(msg`Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu! right now.`),
       path: "/hashi",
       origin: match.context.origin,
       imageTitle: "Hashi",
@@ -208,7 +205,7 @@ function BridgePage() {
             <img src={app.icon} alt="" width={112} height={112} className="h-28 w-28 rounded-full" />
             <h1 className="mt-5 text-3xl font-semibold text-white">{app.name}</h1>
             <p className="mt-2 max-w-sm text-[15px] leading-relaxed text-osu-l2">
-              <Trans>Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings.</Trans>
+              <Trans>Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu! right now.</Trans>
             </p>
 
             <Downloads downloads={downloads} />
@@ -244,10 +241,15 @@ function BridgePage() {
               <h2 className="text-[13px] font-semibold text-white"><Trans>What it does</Trans></h2>
               <p className="mt-2">
                 <Trans>
-                  Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With{" "}
-                  <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings on Mania Tracker
-                  also show what you're doing in osu!.
+                  While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't
+                  keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to
+                  your profile with its replay, and the app shows its place on the map's leaderboard. With{" "}
+                  <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings also show what
+                  you're doing in osu!, like playing, picking or editing a map, or watching a replay.
                 </Trans>
+              </p>
+              <p className="mt-3">
+                <Trans>It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows.</Trans>
               </p>
             </section>
             <section>

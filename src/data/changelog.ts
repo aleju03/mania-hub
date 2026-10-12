@@ -43,6 +43,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-11", text: "Initial release of the Hashi desktop app.", bold: "Hashi", kind: "new", to: "/hashi" },
   { date: "2026-10-10", text: "Added 1440p to Export video.", to: "/replay" },
   { date: "2026-10-10", text: "Fixed blurry text on the replay Map info, Player info and leaderboard overlays when they are scaled up.", to: "/replay" },
   { date: "2026-10-10", text: "Added a Clears tab to rankings that shows each player's highest dan course and skillset clear, ranked by dan and then accuracy.", to: "/rankings", search: { tab: "clears" } },

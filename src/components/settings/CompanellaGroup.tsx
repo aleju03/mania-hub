@@ -32,7 +32,7 @@ function freshSnapshot(viewerId: number | null): CompanellaSnapshot | null {
 }
 
 /*
- * The Integrations group in Settings: Companella, and Hashi for admins until its release (like /hashi),
+ * The Integrations group in Settings: Hashi and Companella,
  * each with its connected computers and a Revoke. Connecting happens from inside the app.
  * /companella stays the client developer's test bench.
  */
@@ -104,18 +104,16 @@ export function CompanellaGroup() {
 
   return (
     <PanelGroup label={t`Integrations`}>
-      {auth.canUseAdminFeatures && (
-        <IntegrationApp
-          name={bridgeApp.name}
-          icon={bridgeApp.icon}
-          aboutTo="/hashi"
-          status={statusFor(bridge, bridgeApp.name)}
-          installations={bridge}
-          busyId={busyId}
-          onRevoke={(installation) => setPendingRevoke({ installation, appName: bridgeApp.name })}
-        />
-      )}
-      <div className={auth.canUseAdminFeatures ? "space-y-3 border-t border-white/[0.07] pt-3" : "space-y-3"}>
+      <IntegrationApp
+        name={bridgeApp.name}
+        icon={bridgeApp.icon}
+        aboutTo="/hashi"
+        status={statusFor(bridge, bridgeApp.name)}
+        installations={bridge}
+        busyId={busyId}
+        onRevoke={(installation) => setPendingRevoke({ installation, appName: bridgeApp.name })}
+      />
+      <div className="space-y-3 border-t border-white/[0.07] pt-3">
         <IntegrationApp
           name="Companella"
           icon="/images/companella-icon.png"
