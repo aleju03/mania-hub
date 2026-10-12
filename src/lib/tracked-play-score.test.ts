@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildCourseClearScore, buildTrackedPlayScore, getTrackedPlayRank } from "./tracked-play-score";
+import { buildActivityMapScore, buildCourseClearScore, buildTrackedPlayScore, getTrackedPlayRank } from "./tracked-play-score";
 import type { LivePlayerDanCourseEvidence } from "./live-backend";
 import { getManiaJudgementCounts, getScoreUrl, isLazerScore } from "./score";
-import type { LiveKeymodePpPlay } from "./live-backend";
+import type { LiveKeymodePpPlay, LivePlayerActivityMap } from "./live-backend";
 
 const viewer = { id: 7, username: "Tester", avatar_url: "https://a/7.png", country_code: "CR" };
 
@@ -131,5 +131,46 @@ describe("buildCourseClearScore", () => {
     } as unknown as LivePlayerDanCourseEvidence;
     expect(buildCourseClearScore(course, 4, viewer).mods).toEqual([{ acronym: "DT", settings: { speed_change: 1.1 } }]);
     expect(buildCourseClearScore({ ...course, modRate: undefined }, 4, viewer).mods).toEqual([{ acronym: "DT" }]);
+  });
+});
+
+describe("buildActivityMapScore", () => {
+  const map: LivePlayerActivityMap = {
+    key: "2026-09-13:42",
+    beatmapId: 42,
+    beatmapsetId: 9,
+    title: "Song",
+    artist: "Artist",
+    version: "[7K] Hard",
+    coverUrl: null,
+    plays: 3,
+    accuracy: 0.9612,
+    pp: null,
+    rank: "S",
+    mods: [{ acronym: "DT", settings: { speed_change: 1.2 } }],
+    keyCount: 7,
+    skills: null,
+    play: {
+      soloScoreId: 900,
+      legacyScoreId: null,
+      isLazer: true,
+      hasReplay: true,
+      maxCombo: 1200,
+      totalScore: 912_345,
+      statistics: { great: 1000, miss: 3 },
+      playedAt: "2026-09-13T03:00:00.000Z",
+    },
+  };
+
+  it("opens the day's best play with its custom rate and no pp on an unranked map", () => {
+    const score = buildActivityMapScore(map, viewer)!;
+    expect(score.id).toBe(900);
+    expect(score.mods).toEqual([{ acronym: "DT", settings: { speed_change: 1.2 } }]);
+    expect(score.pp).toBeNull();
+    expect(score.has_replay).toBe(true);
+  });
+
+  it("has nothing to open when the day kept no play", () => {
+    expect(buildActivityMapScore({ ...map, play: null }, viewer)).toBeNull();
   });
 });

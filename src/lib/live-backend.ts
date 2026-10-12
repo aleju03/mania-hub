@@ -631,8 +631,26 @@ export interface LivePlayerActivityMap {
   accuracy: number | null;
   pp: number | null;
   rank: string | null;
+  /** The mods of the day's best play on the map, as osu! sends them. */
+  mods?: OsuMod[];
   keyCount: number | null;
   skills: LivePlayerActivitySkillVector | null;
+  /** What the day's best play's details card reads; absent where no play was kept. */
+  play?: LivePlayerActivityMapPlay | null;
+}
+
+export interface LivePlayerActivityMapPlay {
+  soloScoreId: number | null;
+  /** Set when the play also has a legacy id, which makes it a stable score. */
+  legacyScoreId: number | null;
+  isLazer: boolean | null;
+  hasReplay: boolean | null;
+  maxCombo: number | null;
+  totalScore: number | null;
+  statistics: OsuScoreStatistics | null;
+  playedAt: string | null;
+  /** Set when the best play came through an app. */
+  companella?: OsuScore["companella"];
 }
 
 export interface LivePlayerActivityTimelineSegment {

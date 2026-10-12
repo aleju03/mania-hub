@@ -1,5 +1,5 @@
-import { getManiaAccuracyFromCounts, getManiaGradeFromAccuracy, getScoreSpeedBucket } from "./score";
-import type { LiveKeymodePpPlay, LivePlayerDanCourseEvidence } from "./live-backend";
+import { getManiaAccuracyFromCounts, getManiaGradeFromAccuracy, getModAcronyms, getScoreSpeedBucket } from "./score";
+import type { LiveKeymodePpPlay, LivePlayerActivityMap, LivePlayerDanCourseEvidence } from "./live-backend";
 import type { OsuMod, OsuScore } from "./types";
 
 /** Who the profile belongs to, which is who every tracked play on it is by. */
@@ -129,4 +129,40 @@ export function buildCourseClearScore(course: LivePlayerDanCourseEvidence, keyCo
   }
   // A run sent through an app opens as that import, its replay included when public.
   return course.companella ? { ...score, companella: course.companella } as OsuScore : score;
+}
+
+/** An Activity day's map, as the card for that day's best play on it. Null
+ *  when the day kept no play to open. */
+export function buildActivityMapScore(map: LivePlayerActivityMap, viewer: TrackedPlayViewer): OsuScore | null {
+  const play = map.play;
+  if (!play) return null;
+  const mods = map.mods ?? [];
+  const score = buildTrackedPlayScore({
+    beatmapId: map.beatmapId,
+    keyCount: map.keyCount ?? 0,
+    pp: map.pp ?? 0,
+    beatmapsetId: map.beatmapsetId,
+    title: map.title,
+    artist: map.artist,
+    version: map.version,
+    accuracy: map.accuracy,
+    rank: map.rank,
+    mods: getModAcronyms(mods),
+    playedAt: play.playedAt,
+    maxCombo: play.maxCombo,
+    hasReplay: play.hasReplay,
+    soloScoreId: play.soloScoreId,
+    totalScore: play.totalScore,
+    legacyScoreId: play.legacyScoreId,
+    isLazer: play.isLazer,
+    statistics: play.statistics,
+    creator: null,
+    stars: null,
+    bpm: null,
+  }, viewer);
+  // The stored mods keep a lazer custom speed, so the badge reads 1.10x rather than a bare DT.
+  score.mods = mods;
+  // An unranked map's play is worth no pp, which the card shows as a dash.
+  score.pp = map.pp;
+  return play.companella ? { ...score, companella: play.companella } as OsuScore : score;
 }
