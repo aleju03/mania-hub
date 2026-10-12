@@ -18,6 +18,7 @@ import {
   getBeatmapUrl,
   getBeatmapKeymodeLabel,
   getModDisplayList,
+  getScoreModDisplayList,
   getScoreDisplayValues,
   getScoreTimestamp,
   getScoreUrl,
@@ -124,7 +125,7 @@ export function getScoreRowLayout(rows: BestListRow[]): ScoreRowLayout {
       continue;
     }
     const { score } = row;
-    layout.modColumns = Math.max(layout.modColumns, getModDisplayList(score.mods).length);
+    layout.modColumns = Math.max(layout.modColumns, getScoreModDisplayList(score).length);
     if (score.pp != null) layout.showPp = true;
     if (scoreHasReplay(score) || companellaReplayImportId(score) != null) layout.showReplay = true;
   }
@@ -337,9 +338,8 @@ export function ScoreRow({
               {keymodeLabel}
             </span>
           )}
-          {score.companella ? <CompanellaMark app={score.companella.app} video={score.companella.video} />
-            : score.companellaTimed ? <CompanellaMark app={score.companellaTimed.app} /> : null}
-          {!score.companella && video ? <VideoMark video={video} /> : null}
+          {score.companella?.video ? <VideoMark video={score.companella.video} />
+            : !score.companella && video ? <VideoMark video={video} /> : null}
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
         <span className="block truncate text-[11px] text-osu-f1">
@@ -371,7 +371,7 @@ export function ScoreRow({
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
           <div className="flex max-w-full flex-shrink-0 flex-wrap items-center gap-1">
             <div className="flex flex-wrap items-center gap-0.5">
-              {getModDisplayList(score.mods).map((m) => (
+              {getScoreModDisplayList(score).map((m) => (
                 <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} size={0.82} />
               ))}
             </div>
@@ -405,7 +405,7 @@ export function ScoreRow({
             className="flex flex-shrink-0 gap-0.5 justify-end"
             style={{ width: layout.modColumns * MOD_BADGE_WIDTH + (layout.modColumns - 1) * MOD_BADGE_GAP }}
           >
-            {getModDisplayList(score.mods).map((m) => (
+            {getScoreModDisplayList(score).map((m) => (
               <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
             ))}
           </div>
@@ -503,7 +503,7 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
      reads as a real score of nothing. The grid is dropped instead. */
   const judgements = getManiaJudgementStats(score);
   const hasJudgements = judgements.some((judgement) => judgement.value > 0);
-  const mods = getModDisplayList(score.mods);
+  const mods = getScoreModDisplayList(score);
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
   const scoreUrl = getScoreUrl(score);
   const beatmapUrl = getBeatmapUrl(score);

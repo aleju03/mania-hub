@@ -16,7 +16,7 @@ import {
   getDisplayedAccuracy,
   getDisplayedRank,
   getDisplayedTotalScore,
-  getModDisplayList,
+  getScoreModDisplayList,
   getScoreIdentity,
   getScoreTimeMs,
   getScoreTimestamp,
@@ -41,7 +41,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
-import { CompanellaMark, ScoreVideoMark } from "../components/ui/CompanellaMark";
+import { ScoreVideoMark, VideoMark } from "../components/ui/CompanellaMark";
 import { TRACKER_FEED_SCORE_LIMIT, TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import type { LeanTrackerScore, OsuCovers } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
@@ -2076,7 +2076,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                   {keymodeLabel}
                 </span>
               )}
-              {score.companella ? <CompanellaMark app={score.companella.app} video={score.companella.video} />
+              {score.companella ? (score.companella.video ? <VideoMark video={score.companella.video} /> : null)
                 : <ScoreVideoMark ids={[score.id, score.legacy_score_id]} />}
               <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
             </div>
@@ -2084,7 +2084,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
           {/* Row 3 (mobile): Mods left, stats right */}
           <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
             <div className="flex items-center gap-1">
-              {getModDisplayList(score.mods).map((m) => (
+              {getScoreModDisplayList(score).map((m) => (
                 <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
               ))}
               <DanBadge score={score} />
@@ -2114,7 +2114,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
         {/* Desktop metadata */}
         <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
           <div className="flex items-center gap-0.5">
-            {getModDisplayList(score.mods).map((m) => (
+            {getScoreModDisplayList(score).map((m) => (
               <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
             ))}
           </div>

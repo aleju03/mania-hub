@@ -135,6 +135,8 @@ export interface MapDetailPlayContext {
   source: "top" | "tracked";
   /** Replaces the source line under the play's time, for plays from neither list. */
   sourceLabel?: string;
+  /** The app an imported play was sent through, named after the source line, and its page when it has one. */
+  sentThrough?: { name: string; to?: "/hashi" | "/news/companella" } | null;
   /** Absent for a play no skill list rated, which leaves the score without a side panel. */
   rating?: number;
   ratingExcluded?: boolean;

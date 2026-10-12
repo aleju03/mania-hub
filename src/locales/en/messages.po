@@ -7921,8 +7921,8 @@ msgstr "Hashi before connecting to Mania Tracker"
 #~ msgstr "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
 
 #: src/routes/hashi.tsx
-msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
-msgstr "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
+#~ msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
+#~ msgstr "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
 
 #: src/routes/bridge.tsx
 #~ msgid "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
@@ -8754,6 +8754,10 @@ msgstr "It may have been taken down, or it is still waiting for approval."
 #: src/routes/hashi.tsx
 msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 msgstr "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+
+#: src/routes/hashi.tsx
+msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
+msgstr "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
@@ -15463,8 +15467,8 @@ msgid "Sending…"
 msgstr "Sending…"
 
 #: src/routes/hashi.tsx
-msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
-msgstr "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
+#~ msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
+#~ msgstr "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
 
 #: src/routes/bridge.tsx
 #~ msgid "Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile."
@@ -15960,6 +15964,10 @@ msgstr "Shows"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "Shows a dot on the changelog link when there are new updates"
+
+#: src/routes/hashi.tsx
+msgid "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu! right now."
+msgstr "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu! right now."
 
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
@@ -19778,6 +19786,11 @@ msgstr "Verified clear"
 msgid "Vertical"
 msgstr "Vertical"
 
+#. placeholder {0}: play.sentThrough.name
+#: src/components/maps/PlayResults.tsx
+msgid "via {0}"
+msgstr "via {0}"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "vibro"
 msgstr "vibro"
@@ -20300,6 +20313,10 @@ msgstr "Which plays are looked at"
 #: src/components/me/MyDataPanel.tsx
 msgid "while tracked"
 msgstr "while tracked"
+
+#: src/routes/hashi.tsx
+msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
+msgstr "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/communities/CommunityEditModal.tsx

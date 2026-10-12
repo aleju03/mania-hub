@@ -10,6 +10,10 @@ import { ScorePlayDetailModal } from "./ScorePlayDetailModal";
 const { loadLiveMapSearchEntry } = vi.hoisted(() => ({ loadLiveMapSearchEntry: vi.fn() }));
 vi.mock("../../lib/osu", () => ({ getScore: vi.fn(), getBeatmapFile: vi.fn().mockRejectedValue(new Error("offline")) }));
 vi.mock("../maps/ChartPreviewPanel", () => ({ ChartPreviewPanel: () => null }));
+vi.mock("@tanstack/react-router", async (original) => ({
+  ...await original<typeof import("@tanstack/react-router")>(),
+  Link: ({ children, className }: { children?: React.ReactNode; className?: string }) => <a className={className}>{children}</a>,
+}));
 vi.mock("../../lib/live-backend", async (original) => ({
   ...await original<typeof import("../../lib/live-backend")>(),
   loadLiveMapSearchEntry,

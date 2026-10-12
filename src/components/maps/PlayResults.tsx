@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useLingui } from "@lingui/react/macro";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { getManiaGradeFromAccuracy, getManiaJudgementCounts } from "../../lib/score";
@@ -77,6 +78,16 @@ export function PlayResults({ play }: { play: MapDetailPlayContext }) {
                 <span>{play.playedAt ? formatTimeAgo(play.playedAt, locale) : "—"}</span>
                 <Hairline />
                 <span>{play.sourceLabel ?? (play.source === "top" ? t`profile top play` : t`tracked history`)}</span>
+                {play.sentThrough ? (
+                  <>
+                    <Hairline />
+                    {play.sentThrough.to ? (
+                      <Link to={play.sentThrough.to} className="hover:text-white hover:underline">{t`via ${play.sentThrough.name}`}</Link>
+                    ) : (
+                      <span>{t`via ${play.sentThrough.name}`}</span>
+                    )}
+                  </>
+                ) : null}
               </span>
             </div>
           </div>

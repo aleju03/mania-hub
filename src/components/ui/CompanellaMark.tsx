@@ -3,8 +3,6 @@ import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { useLingui } from "@lingui/react/macro";
 
-import { useAuth } from "../../lib/auth-context";
-import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { Video } from "lucide-react";
 
 import { KNOWN_APPS, MANUAL_ENTRY_APP, REPLAY_IMPORT_APP, knownApp } from "../../lib/companella-integration/shared";
@@ -14,19 +12,15 @@ import { useScoreVideo } from "../../lib/score-videos";
 // app that sent it; a row without one predates the field and was Companella. The icon is full colour on a solid
 // disc, so it is an <img>, not a mask like the mod glyphs. The small mark copies keep a row from pulling the originals.
 // Rows draw their content above a full-row button with pointer events off, so the mark turns them back on for its
-// own hover label and, on a Hashi play, its link to /hashi. Hashi marks show to admins only until
-// its release, like /hashi itself. A play an admin imported from the player's replay files carries no mark, and
-// one an admin entered by hand carries a link to its video when it has one.
+// own hover label and, on a Hashi play, its link to /hashi. A play an admin imported from the player's replay
+// files carries no mark, and one an admin entered by hand carries a link to its video when it has one.
 export function CompanellaMark({ app, video, className = "h-[18px] w-[18px]" }: { app?: string; video?: string; className?: string }) {
   const { t } = useLingui();
-  const auth = useAuth();
   const known = knownApp(app) ?? KNOWN_APPS.companella;
   const { hover, tooltip } = useMarkTip(t`Sent through ${known.name}`);
   const isBridge = app === "mania-bridge";
-  const isAdmin = canUseAdminFeatures(auth);
 
   if (app === MANUAL_ENTRY_APP) return video ? <VideoMark video={video} className={className} /> : null;
-  if (isBridge && !isAdmin) return null;
   if (app === REPLAY_IMPORT_APP) return null;
 
   const image = (
@@ -59,6 +53,14 @@ export function CompanellaMark({ app, video, className = "h-[18px] w-[18px]" }: 
       {tooltip}
     </>
   );
+}
+
+/** The app a play was sent through, as the details line names it, linked to
+ *  its about page: none for a play an admin entered or imported from replay files. */
+export function sentThrough(app: string | undefined, imported: boolean): { name: string; to: "/hashi" | "/news/companella" } | null {
+  if (!imported || app === MANUAL_ENTRY_APP || app === REPLAY_IMPORT_APP) return null;
+  if (app === "mania-bridge") return { name: KNOWN_APPS["mania-bridge"].name, to: "/hashi" };
+  return { name: (knownApp(app) ?? KNOWN_APPS.companella).name, to: "/news/companella" };
 }
 
 // A link to a play's video: the one an admin entered a play from, or a proof

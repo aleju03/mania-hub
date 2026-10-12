@@ -197,6 +197,23 @@ export function getModDisplayList(mods: OsuMod[] | undefined, excludeCl = true):
   return out;
 }
 
+/** The mods a score row shows. An import of a rate-edited copy of an official
+ *  chart shows the rate it amounts to on that chart, on its speed mod or on one
+ *  added for it, as the skill plays list does. Display only: the replay still
+ *  plays the file at the rate it was played. */
+export function getScoreModDisplayList(score: Pick<ScoreLike, "mods" | "companella">): ModDisplay[] {
+  const mods = getModDisplayList(score.mods);
+  const fileRate = score.companella?.reference?.rate;
+  if (!fileRate || Math.abs(fileRate - 1) < 0.005) return mods;
+  const speed = mods.findIndex((m) => MOD_RATE_DEFAULTS[m.acronym] !== undefined);
+  const played = speed >= 0 ? mods[speed].rate ?? MOD_RATE_DEFAULTS[mods[speed].acronym] : 1;
+  const rate = Math.round(played * fileRate * 100) / 100;
+  const rest = mods.filter((_, index) => index !== speed);
+  if (Math.abs(rate - 1) < 0.005) return rest;
+  const acronym = speed >= 0 && (rate > 1) === (MOD_RATE_DEFAULTS[mods[speed].acronym] > 1) ? mods[speed].acronym : rate > 1 ? "DT" : "HT";
+  return [...rest, { acronym, rate }];
+}
+
 export type ScoreSpeedBucket = "ht" | "normal" | "dt";
 
 /** Bucket a mania score by its effective speed mod. In osu!, HT/DC, NM, and

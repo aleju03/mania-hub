@@ -16,6 +16,7 @@ import { usePlayVideo } from "../../lib/score-videos";
 import type { OsuScore } from "../../lib/types";
 import { MapDetailModal, type MapDetailPlayContext } from "../maps/MapDetailModal";
 import { rateModFor } from "./SkillPlaysModal";
+import { sentThrough as sentThroughOf } from "../ui/CompanellaMark";
 
 type MapStatus = "ready" | "pending" | "missing" | "error";
 
@@ -114,6 +115,8 @@ export function ScorePlayDetailModal({
   const canReplay = importId != null || scoreHasReplay(score);
   const video = usePlayVideo(score);
   const playedAt = getScoreTimestamp(score);
+  const imported = score.companella ?? score.companellaTimed;
+  const sentThrough = sentThroughOf(imported?.app, imported != null);
 
   const play: MapDetailPlayContext = {
     beatmapId,
@@ -125,6 +128,7 @@ export function ScorePlayDetailModal({
     playedAt: playedAt || null,
     source: "top",
     sourceLabel: display.isLazer ? t`played on Lazer` : t`played on Stable`,
+    sentThrough,
     mods,
     daOd: difficultyAdjustOd(score),
     scoreId: score.id,

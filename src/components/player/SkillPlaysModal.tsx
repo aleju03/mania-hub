@@ -45,12 +45,15 @@ export function rateModFor(
 /* Every mod the score carried. A pre-full-mod retained play can still name its
    speed mod from the old projection; a 1.0x play with no `mods` field is
    unknown, not NoMod, because it may have carried MR/DA/etc. before the raw
-   score aged out. */
+   score aged out. A play rated at a rate its mods do not name (an import of
+   a rate-edited file, placed on the official chart at the rate it amounts
+   to) gets the speed mod for that rate, so the rate shows on the row. */
 export function playModAcronyms(play: LivePlayerSkillPlay): string[] | null {
-  if (Array.isArray(play.mods)) {
-    return [...new Set(play.mods.filter((mod) => typeof mod === "string" && mod.length > 0))];
-  }
   const rateMod = rateModFor(play.rate, play.rateMod);
+  if (Array.isArray(play.mods)) {
+    const mods = [...new Set(play.mods.filter((mod) => typeof mod === "string" && mod.length > 0))];
+    return rateMod && !mods.includes(rateMod.acronym) ? [...mods, rateMod.acronym] : mods;
+  }
   return rateMod ? [rateMod.acronym] : null;
 }
 

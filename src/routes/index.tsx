@@ -10,13 +10,13 @@ import { useLocale } from "../lib/locale-context";
 import { isRegionScope } from "../lib/regions";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
-import { getBeatmapKeyCount, getBeatmapKeymodeLabel, getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
+import { getBeatmapKeyCount, getBeatmapKeymodeLabel, getScoreDisplayValues, getScoreModDisplayList, getScoreTimestamp } from "../lib/score";
 import { fetchLiveGlobalRankings, fetchLiveRankingsSnapshot, fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveGlobalRankingEntry } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { Avatar } from "../components/ui/Avatar";
-import { CompanellaMark, ScoreVideoMark } from "../components/ui/CompanellaMark";
+import { ScoreVideoMark, VideoMark } from "../components/ui/CompanellaMark";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
@@ -220,7 +220,7 @@ function trackerScoreToHomeScore(score: LeanTrackerScore): LeanHomeScore {
     displayAcc: display.accuracy,
     displayRank: display.rank,
     isLazer: display.isLazer,
-    mods: getModDisplayList(score.mods),
+    mods: getScoreModDisplayList(score),
     timestamp: getScoreTimestamp(score),
     title: score.beatmapset.title,
     version: score.beatmap.version,
@@ -251,7 +251,7 @@ function countryTopPlayToHomePopoff(play: CountryTopPlay): LeanHomePopoff | null
       displayAcc: display.accuracy,
       displayRank: display.rank,
       isLazer: display.isLazer,
-      mods: getModDisplayList(score.mods),
+      mods: getScoreModDisplayList(score),
       timestamp: getScoreTimestamp(score) || play.time,
       title: score.beatmapset.title,
       version: score.beatmap.version,
@@ -957,7 +957,7 @@ function HomePage() {
                           <span className="text-osu-f1">on</span> {s.title}
                         </Trans>
                       </div>
-                      {s.companella ? <CompanellaMark app={s.companella.app} video={s.companella.video} className="h-4 w-4" />
+                      {s.companella ? (s.companella.video ? <VideoMark video={s.companella.video} className="h-4 w-4" /> : null)
                         : <ScoreVideoMark ids={[s.id]} className="h-4 w-4" />}
                     </div>
                     <div className="mt-0.5 text-[10px] text-osu-f1 min-w-0 truncate">
