@@ -34,7 +34,7 @@ export const Route = createFileRoute("/hashi")({
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: "Hashi",
-      description: i18n._(msg`Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu! right now.`),
+      description: i18n._(msg`Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!.`),
       path: "/hashi",
       origin: match.context.origin,
       imageTitle: "Hashi",
@@ -205,7 +205,7 @@ function BridgePage() {
             <img src={app.icon} alt="" width={112} height={112} className="h-28 w-28 rounded-full" />
             <h1 className="mt-5 text-3xl font-semibold text-white">{app.name}</h1>
             <p className="mt-2 max-w-sm text-[15px] leading-relaxed text-osu-l2">
-              <Trans>Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu! right now.</Trans>
+              <Trans>Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!.</Trans>
             </p>
 
             <Downloads downloads={downloads} />

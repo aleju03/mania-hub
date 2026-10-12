@@ -15936,8 +15936,8 @@ msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "有新更新时在更新日志链接上显示一个圆点"
 
 #: src/routes/hashi.tsx
-msgid "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu! right now."
-msgstr "显示谱面在你当前 mod 下的排行榜，把你的 mania 成绩发送到你的个人资料，还可以显示你此刻在 osu! 里做什么。"
+msgid "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!."
+msgstr "显示谱面在你当前 mod 下的排行榜，把你的 mania 成绩发送到你的个人资料，还可以显示你在 osu! 里做什么。"
 
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
