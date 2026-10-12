@@ -30,6 +30,7 @@ import { UsernameText } from "../ui/UsernameText";
 import { StarRatingBadge } from "../ui/StarRating";
 import { getManiaJudgementStats } from "../ui/ManiaJudgementStats";
 import { ModBadge } from "../ui/ModBadge";
+import { ScoreModBadge } from "../ui/ScoreModBadge";
 import { DanBadge } from "../ui/DanBadge";
 import { RecentPlayRatingCells } from "./RecentPlayRatingCells";
 import type { RecentPlayRatingView } from "./recent-play-ratings";
@@ -372,7 +373,7 @@ export function ScoreRow({
           <div className="flex max-w-full flex-shrink-0 flex-wrap items-center gap-1">
             <div className="flex flex-wrap items-center gap-0.5">
               {getScoreModDisplayList(score).map((m) => (
-                <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} size={0.82} />
+                <ScoreModBadge key={m.acronym} mod={m} size={0.82} />
               ))}
             </div>
             <DanBadge score={score} />
@@ -406,7 +407,7 @@ export function ScoreRow({
             style={{ width: layout.modColumns * MOD_BADGE_WIDTH + (layout.modColumns - 1) * MOD_BADGE_GAP }}
           >
             {getScoreModDisplayList(score).map((m) => (
-              <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+              <ScoreModBadge key={m.acronym} mod={m} />
             ))}
           </div>
         )}
@@ -605,7 +606,7 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
               {mods.length > 0 && (
                 <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1 pb-0.5">
                   {mods.map((m) => (
-                    <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+                    <ScoreModBadge key={m.acronym} mod={m} />
                   ))}
                 </div>
               )}

@@ -12,7 +12,7 @@ vi.mock("#/lib/live-backend", () => ({
 }));
 vi.mock("@tanstack/react-router", () => ({ Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }));
 vi.mock("../maps/MapDetailModal", () => ({ MapDetailModal: () => null }));
-vi.mock("./SkillPlaysModal", () => ({ rateModFor: () => null, stubEntry: () => null }));
+vi.mock("./SkillPlaysModal", () => ({ rateModFor: () => null, stubEntry: () => null, PlayModBadges: () => null }));
 vi.mock("../../lib/locale-context", () => ({ useLocale: () => "en" }));
 
 afterEach(cleanup);

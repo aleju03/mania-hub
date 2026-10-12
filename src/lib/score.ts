@@ -54,6 +54,8 @@ export interface ModDisplay {
   acronym: string;
   /** Custom speed_change when the player picked a non-default rate (lazer only). */
   rate?: number;
+  /** The official difficulty a rate-edited import's rate is measured against. */
+  basedOn?: string;
 }
 
 export function getBeatmapKeyCount(beatmap: Pick<OsuBeatmap, "cs"> | null | undefined): number | null {
@@ -199,11 +201,13 @@ export function getModDisplayList(mods: OsuMod[] | undefined, excludeCl = true):
 
 /** The mods a score row shows. An import of a rate-edited copy of an official
  *  chart shows the rate it amounts to on that chart, on its speed mod or on one
- *  added for it, as the skill plays list does. Display only: the replay still
- *  plays the file at the rate it was played. */
+ *  added for it, as the skill plays list does, with the difficulty that rate is
+ *  measured against. Display only: the replay still plays the file at the rate
+ *  it was played. */
 export function getScoreModDisplayList(score: Pick<ScoreLike, "mods" | "companella">): ModDisplay[] {
   const mods = getModDisplayList(score.mods);
-  const fileRate = score.companella?.reference?.rate;
+  const reference = score.companella?.reference;
+  const fileRate = reference?.rate;
   if (!fileRate || Math.abs(fileRate - 1) < 0.005) return mods;
   const speed = mods.findIndex((m) => MOD_RATE_DEFAULTS[m.acronym] !== undefined);
   const played = speed >= 0 ? mods[speed].rate ?? MOD_RATE_DEFAULTS[mods[speed].acronym] : 1;
@@ -211,7 +215,7 @@ export function getScoreModDisplayList(score: Pick<ScoreLike, "mods" | "companel
   const rest = mods.filter((_, index) => index !== speed);
   if (Math.abs(rate - 1) < 0.005) return rest;
   const acronym = speed >= 0 && (rate > 1) === (MOD_RATE_DEFAULTS[mods[speed].acronym] > 1) ? mods[speed].acronym : rate > 1 ? "DT" : "HT";
-  return [...rest, { acronym, rate }];
+  return [...rest, { acronym, rate, ...(reference?.version ? { basedOn: reference.version } : {}) }];
 }
 
 export type ScoreSpeedBucket = "ht" | "normal" | "dt";

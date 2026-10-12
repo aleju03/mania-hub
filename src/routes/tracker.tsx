@@ -32,7 +32,7 @@ import { CountryFlag } from "../components/ui/CountryFlag";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { FilterField, SegmentedControl } from "../components/ui/SegmentedControl";
-import { ModBadge } from "../components/ui/ModBadge";
+import { ScoreModBadge } from "../components/ui/ScoreModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
 import { StarRatingBadge } from "../components/ui/StarRating";
 import { SortArrow } from "../components/ui/SortArrow";
@@ -2085,7 +2085,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
           <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
             <div className="flex items-center gap-1">
               {getScoreModDisplayList(score).map((m) => (
-                <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+                <ScoreModBadge key={m.acronym} mod={m} />
               ))}
               <DanBadge score={score} />
             </div>
@@ -2115,7 +2115,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
         <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
           <div className="flex items-center gap-0.5">
             {getScoreModDisplayList(score).map((m) => (
-              <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+              <ScoreModBadge key={m.acronym} mod={m} />
             ))}
           </div>
           <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(score))}</span>

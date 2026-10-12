@@ -1701,6 +1701,11 @@ msgstr "{rangeStart}–{pageEnd} of {totalText} cards"
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "{rangeStart}–{pageEnd} of {totalText} players"
 
+#. placeholder {0}: mod.basedOn
+#: src/components/ui/ScoreModBadge.tsx
+msgid "{rate} of {0}"
+msgstr "{rate} of {0}"
+
 #: src/components/team/TeamProfilePage.tsx
 msgid "{rated, plural, one {# member} other {# members}}"
 msgstr "{rated, plural, one {# member} other {# members}}"

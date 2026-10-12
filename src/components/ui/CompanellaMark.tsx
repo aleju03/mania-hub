@@ -93,7 +93,9 @@ export function ScoreVideoMark({ ids, className }: { ids: Array<number | null | 
   return video ? <VideoMark video={video} className={className} /> : null;
 }
 
-function useMarkTip(label: string) {
+/** A hover label in the marks' style, for an element in a row whose content has
+ *  pointer events off: spread `hover` on it and render `tooltip` beside it. */
+export function useMarkTip(label: string) {
   const [tip, setTip] = useState<{ left: number; top: number } | null>(null);
   const showTip = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType !== "mouse") return;

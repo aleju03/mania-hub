@@ -19,7 +19,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { ScoreVideoMark, VideoMark } from "../components/ui/CompanellaMark";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { GradeImg } from "../components/ui/GradeImg";
-import { ModBadge } from "../components/ui/ModBadge";
+import { ScoreModBadge } from "../components/ui/ScoreModBadge";
 import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { PresenceDot } from "../components/player/LivePresence";
@@ -904,7 +904,7 @@ function HomePage() {
                   {p.score.mods.length > 0 && (
                     <div className="mt-3 flex items-center justify-center gap-1 flex-wrap max-w-[26ch]">
                       {p.score.mods.map((m) => (
-                        <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} size={0.8} />
+                        <ScoreModBadge key={m.acronym} mod={m} size={0.8} />
                       ))}
                     </div>
                   )}
@@ -968,7 +968,7 @@ function HomePage() {
                     {s.mods.length > 0 && (
                       <div className="flex items-center gap-0.5">
                         {s.mods.map((m) => (
-                          <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} size={0.8} />
+                          <ScoreModBadge key={m.acronym} mod={m} size={0.8} />
                         ))}
                       </div>
                     )}

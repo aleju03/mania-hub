@@ -1687,6 +1687,11 @@ msgstr "第 {rangeStart}–{pageEnd} 张 / 共 {totalText} 张卡片"
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "第 {rangeStart}–{pageEnd} 名 / 共 {totalText} 名玩家"
 
+#. placeholder {0}: mod.basedOn
+#: src/components/ui/ScoreModBadge.tsx
+msgid "{rate} of {0}"
+msgstr "{0} 的 {rate}"
+
 #: src/components/team/TeamProfilePage.tsx
 msgid "{rated, plural, one {# member} other {# members}}"
 msgstr "{rated, plural, other {# 名成员}}"
