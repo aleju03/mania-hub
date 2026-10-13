@@ -3,7 +3,7 @@
  * Bump the version when a new build is published on GitHub; the site then serves that release's update file
  * and its installers, and the app offers the update.
  */
-export const MANIA_BRIDGE_VERSION = "0.1.2";
+export const MANIA_BRIDGE_VERSION = "0.1.3";
 
 export const MANIA_BRIDGE_REPO = "aleju03/hashi";
 export const MANIA_BRIDGE_SOURCE_URL = `https://github.com/${MANIA_BRIDGE_REPO}`;
