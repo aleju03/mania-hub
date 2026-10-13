@@ -1158,6 +1158,71 @@ export const fetchLiveBackendHonoraryPulls = createServerFn({ method: "GET" })
     return { ...body, cards: Array.isArray(body.cards) ? body.cards : [] };
   });
 
+export interface LiveBackendOsuDirectBudget {
+  family: 4 | 6;
+  ip: string | null;
+  hourly: { limit: number; used: number; remaining: number } | null;
+  daily: { limitBytes: number; usedBytes: number; remainingBytes: number; resetAt: number | null } | null;
+  error: string | null;
+}
+
+export interface LiveBackendMirrorHealth {
+  source: string;
+  served1h: number;
+  failed1h: number;
+  served24h: number;
+  failed24h: number;
+  cooldowns: Array<{ role: string; untilMs: number; reason: string | null }>;
+  lastFailure: { atMs: number; role: string; detail: string | null } | null;
+}
+
+export interface LiveBackendMapDownloads {
+  generatedAt: number;
+  osuDirect: { checkedAt: number; defaultFamily: 4 | 6 | null; budgets: LiveBackendOsuDirectBudget[] };
+  mirrors: LiveBackendMirrorHealth[];
+  songFailures: {
+    last1h: number;
+    last24h: number;
+    recent: Array<{ atMs: number; beatmapsetId: string | null; detail: string | null }>;
+  };
+  osuFileLane: { usedLastMinute: number; targetPerMinute: number; hardPerMinute: number; calls24h: number; failed24h: number };
+}
+
+// The admin "Map downloads" card: osu.direct's per-IP budget, mirror health,
+// songs no mirror served and the .osu download lane. Admin-gated; the token is
+// injected server-side, mirroring fetchLiveBackendHonoraryPulls. Returns null
+// when the backend predates the endpoint.
+export const fetchLiveBackendMapDownloads = createServerFn({ method: "GET" })
+  .handler(async (): Promise<LiveBackendMapDownloads | null> => {
+    await requireAdminAccess("Server map downloads");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${base}/api/admin/map-downloads`, { headers, signal: controller.signal });
+    } catch (err) {
+      if (isAbortError(err)) throw new Error("Map downloads timed out.");
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (response.status === 404) return null;
+    const body = await response.json() as LiveBackendMapDownloads & { error?: unknown };
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Server ${response.status} for /api/admin/map-downloads`;
+      throw new Error(message);
+    }
+    return body;
+  });
+
 export type LiveBackendTableCell = string | number | boolean | null;
 
 export interface LiveBackendTablePreview {
