@@ -293,8 +293,6 @@ msgid "{0, plural, one {map} other {maps}}"
 msgstr "{0, plural, one {mapa} other {mapas}}"
 
 #. placeholder {0}: entry.count
-#. placeholder {0}: map.plays
-#: src/components/player/ActivityPanel.tsx
 #: src/components/player/InsightModals.tsx
 msgid "{0, plural, one {play} other {plays}}"
 msgstr "{0, plural, one {play} other {plays}}"
@@ -560,12 +558,10 @@ msgstr "{0} maniacard"
 
 #. placeholder {0}: maps.length
 #: src/components/player/ActivityPanel.tsx
-msgid "{0} map"
-msgstr "{0} mapa"
+#~ msgid "{0} map"
+#~ msgstr "{0} mapa"
 
 #. placeholder {0}: formatNumber(currentTotal)
-#. placeholder {0}: maps.length
-#: src/components/player/ActivityPanel.tsx
 #: src/routes/maps.tsx
 msgid "{0} maps"
 msgstr "{0} mapas"
@@ -719,7 +715,6 @@ msgstr "{0} personas tienen tu carta"
 msgid "{0} person to pull this card"
 msgstr "{0} persona en sacar esta carta"
 
-#. placeholder {0}: formatNumber(entry.playCount)
 #. placeholder {0}: formatNumber(segment.playCount)
 #: src/components/player/ActivityPanel.tsx
 msgid "{0} play"
@@ -9586,8 +9581,8 @@ msgid "Loaded the built-in skin"
 msgstr "Se cargó la skin integrada"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "loading"
-msgstr "cargando"
+#~ msgid "loading"
+#~ msgstr "cargando"
 
 #. placeholder {0}: skin.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10366,8 +10361,8 @@ msgstr "Falta en tu colección."
 #~ msgstr "Score faltante"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "mixed keys"
-msgstr "teclas mixtas"
+#~ msgid "mixed keys"
+#~ msgstr "teclas mixtas"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Mod filter"
@@ -10581,6 +10576,11 @@ msgstr "MSD y dan en plays recientes"
 msgid "MSD at {0}"
 msgstr "MSD a {0}"
 
+#. placeholder {0}: formatRate(rate)
+#: src/components/maps/MapDetailModal.tsx
+msgid "MSD at {0} with Inverse"
+msgstr "MSD a {0} con Inverse"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "MSD on recent plays"
 msgstr "MSD en plays recientes"
@@ -10592,6 +10592,10 @@ msgstr "Jugadas de MSD"
 #: src/components/maps/MapDetailModal.tsx
 msgid "MSD skill rating"
 msgstr "Valoración de habilidad MSD"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "MSD with Inverse"
+msgstr "MSD con Inverse"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
@@ -15489,8 +15493,8 @@ msgstr "Los servidores no están disponibles por ahora"
 
 #. placeholder {0}: sessionIndex + 1
 #: src/components/player/ActivityPanel.tsx
-msgid "Session {0}"
-msgstr "Sesión {0}"
+#~ msgid "Session {0}"
+#~ msgstr "Sesión {0}"
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Session shape"
@@ -16123,8 +16127,8 @@ msgstr "Jacks de una nota"
 #~ msgstr "Jacks de una nota {singleText}, chordjacks {chordText}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Single-note streams"
-msgstr "Streams de una nota"
+#~ msgid "Single-note streams"
+#~ msgstr "Streams de una nota"
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Single-note streams {singleText}, chordstreams {chordText}"
@@ -16883,6 +16887,10 @@ msgstr "Stream"
 #: src/components/maps/PatternRadar.tsx
 msgid "STREAM"
 msgstr "STREAM"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Streams"
+msgstr "Streams"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Streams broken up by two-note jumps."
@@ -19324,8 +19332,8 @@ msgid "Unable to load settings."
 msgstr "No se pudieron cargar los ajustes."
 
 #: src/components/player/ActivityPanel.tsx
-msgid "Unanalyzed"
-msgstr "Sin analizar"
+#~ msgid "Unanalyzed"
+#~ msgstr "Sin analizar"
 
 #: src/routes/recommendations.tsx
 msgid "unavailable"

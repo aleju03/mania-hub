@@ -7,6 +7,7 @@ import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
+import { invertManiaOsuText } from "#dan/invert-mod";
 import { MapScoresBoard, mapScoreEntryScore } from "./MapScoresBoard";
 import { ScorePlayDetailModal } from "../player/ScorePlayDetailModal";
 import { getBeatmapFile } from "../../lib/osu";
@@ -333,7 +334,8 @@ function PendingMsdBlock({ label }: { label?: string }) {
 // by value, Overall stays the headline.
 const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
 
-// The standard keys are MinaCalc's; LN is Mania Tracker's independent model.
+// The standard keys are MinaCalc's; LN is Mania Tracker's independent model
+// (on Prism key counts LN is Prism's own, so it gets no separate tip).
 const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   Stream: msg`Stream`,
   Jumpstream: msg`Jumpstream`,
@@ -426,7 +428,7 @@ function halvesTip(
   if (!(single >= 1) || !(chord >= 1)) return undefined;
   const rows = jack
     ? [[i18n._(msg`Single-note jacks`), single], [i18n._(msg`Chordjacks`), chord]] as const
-    : [[i18n._(msg`Single-note streams`), single], [i18n._(msg`Chordstreams`), chord]] as const;
+    : [[i18n._(msg`Streams`), single], [i18n._(msg`Chordstreams`), chord]] as const;
   return (
     <div className="grid grid-cols-[auto_auto] items-baseline gap-x-5 gap-y-1">
       {rows.map(([label, value]) => (
@@ -568,6 +570,7 @@ export function MsdBlock({
   secondaryDan = null,
   rateSecondaryDan = null,
   vibroAnalysis,
+  inverse = false,
 }: {
   entry: LiveMapSearchEntry;
   msdLn?: Record<string, number> | null;
@@ -585,6 +588,8 @@ export function MsdBlock({
   secondaryDan?: { label: string; family: string; rawDan: number } | null;
   rateSecondaryDan?: { label: string; family: string; rawDan: number } | null;
   vibroAnalysis?: VibroAnalysis;
+  // The play was set under Invert: the rate values are the inverted chart's.
+  inverse?: boolean;
 }) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
@@ -592,7 +597,7 @@ export function MsdBlock({
   // MSD and dan replace the 1.0x pair wholesale: a rate-adjusted MSD next to a
   // 1.0x dan badge would describe two different charts. When the rate values
   // never landed the whole block falls back to 1.0x and says so.
-  const rateAdjusted = rate !== 1 && rateMsd != null;
+  const rateAdjusted = (rate !== 1 || inverse) && rateMsd != null;
   // The LN-adjusted (tail-aware) values simply ARE the msd shown when the
   // chart has an eligible tail pass, using the release-weighting policy shared
   // with player ratings. Bulk search rows carry them, so the number shows from first
@@ -628,7 +633,9 @@ export function MsdBlock({
   const dan = noDans ? null : rateAdjusted ? rateDan : analysisDan !== undefined ? analysisDan : entry.dan ?? null;
   // "MSD" alone at 1.0x; a rate-modded play names the speed the numbers are
   // for, including when only the 1.0x pair could be shown.
-  const heading = rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
+  const heading = inverse && rateAdjusted
+    ? rate === 1 ? t`MSD with Inverse` : t`MSD at ${formatRate(rate)} with Inverse`
+    : rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
   const sectionRate = rateAdjusted ? rate : 1;
   const displaySections = groupDetectedSections(vibroAnalysis?.sections ?? [], sectionRate);
   const other = rateAdjusted ? (secondaryDan ? rateSecondaryDan : null) : secondaryDan;
@@ -671,7 +678,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <HoverTip key={name} className="flex flex-col" tip={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTip(i18n, name, entry.keyCount, msd)}>
+            <HoverTip key={name} className="flex flex-col" tip={name.startsWith("LN") && !usesPrism(entry.keyCount) ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTip(i18n, name, entry.keyCount, msd)}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 || floored.has(name) ? "text-osu-f1/45" : "text-osu-l2"
@@ -902,6 +909,9 @@ export function MapDetailModal({
   // The rate the opening play was set at, and only while that play's own diff
   // is the active one: the set's other diffs were not the ones played.
   const playedRate = play && active && play.beatmapId === active.beatmapId ? (play.rateMod?.rate ?? 1) * (play.chartRate ?? 1) : 1;
+  // Invert rewrites the chart itself, so a play set under it is described by
+  // the inverted chart: its MSD, dan, stars, LN count and preview.
+  const playedInverse = !!(play && active && play.beatmapId === active.beatmapId && play.mods?.includes("IN"));
   // Without a play, the chart can be read at DT or HT: the preview plays at
   // that speed and the MSD and dan are rated there.
   const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(initialRate);
@@ -931,7 +941,7 @@ export function MapDetailModal({
   const ratePercent = Math.round(playRate * 100);
   // 1.5x is the one rate the catalog already carries (the DT sweep), and it
   // rides on the detail entry, so the common DT/NC play needs no request at all.
-  const entryDt = ratePercent === 150 && entry && active && active.beatmapId === entry.beatmapId && entry.msdDt
+  const entryDt = !playedInverse && ratePercent === 150 && entry && active && active.beatmapId === entry.beatmapId && entry.msdDt
     ? { msd: entry.msdDt, dan: entry.danDt ?? null }
     : null;
   // Every other rate (and a chart the DT sweep never reached) is computed on
@@ -941,14 +951,14 @@ export function MapDetailModal({
   // A chart the catalog never indexed has no stored analysis at any rate, so
   // it is rated from its own .osu at the rate played, 1.0x included.
   const offCatalog = status === "missing" && active != null && active.beatmapId > 0;
-  const rateKey = (playRate !== 1 || offCatalog) && active ? `${active.beatmapId}:${ratePercent}` : null;
+  const rateKey = (playRate !== 1 || offCatalog || playedInverse) && active ? `${active.beatmapId}:${ratePercent}${playedInverse ? ":IN" : ""}` : null;
   const needsRateFetch = rateKey != null && (entryDt == null || (active?.keyCount === 4 && (activeAnalysis?.lnRatio ?? 0) > 0));
   useEffect(() => {
     if (!needsRateFetch || rateKey == null) return;
     if (rateAnalysisByKey[rateKey] !== undefined) return;
-    const [beatmapId, percent] = rateKey.split(":");
+    const [beatmapId, percent, mod] = rateKey.split(":");
     let cancelled = false;
-    void fetchLiveRateChartAnalysis(Number(beatmapId), Number(percent) / 100).then((result) => {
+    void fetchLiveRateChartAnalysis(Number(beatmapId), Number(percent) / 100, mod === "IN").then((result) => {
       if (cancelled) return;
       setRateAnalysisByKey((prev) => ({ ...prev, [rateKey]: result }));
     });
@@ -965,16 +975,21 @@ export function MapDetailModal({
   // until it lands.
   const [rateStarsByKey, setRateStarsByKey] = useState<Record<string, number | null>>({});
   // A local chart's .osu is never served, so off 1.0x it has no star rating to show.
-  const starsKey = playRate !== 1 && active && active.beatmapId > 0 ? `${active.beatmapId}:${active.beatmapsetId}:${playRate}` : null;
+  // An Invert play's LN count is the inverted chart's, read off the same file.
+  const [inverseLnCountByKey, setInverseLnCountByKey] = useState<Record<string, number>>({});
+  const starsKey = (playRate !== 1 || playedInverse) && active && active.beatmapId > 0
+    ? `${active.beatmapId}:${active.beatmapsetId}:${playRate}:${playedInverse ? 1 : 0}` : null;
   const starsUnknown = local && playRate !== 1;
   useEffect(() => {
     if (starsKey == null || rateStarsByKey[starsKey] !== undefined) return;
-    const [beatmapId, beatmapsetId, rate] = starsKey.split(":").map(Number);
+    const [beatmapId, beatmapsetId, rate, inverse] = starsKey.split(":").map(Number);
     getBeatmapFile({ data: { beatmapId, beatmapsetId } })
       .then((result) => {
-        const beatmap = parseCachedManiaBeatmap(beatmapId, result.content);
+        const inverted = inverse ? invertManiaOsuText(result.content) : null;
+        const beatmap = parseCachedManiaBeatmap(beatmapId, inverted ?? result.content);
         const stars = calculateManiaStarRating(beatmap.notes, beatmap.keyCount, rate);
         setRateStarsByKey((prev) => ({ ...prev, [starsKey]: stars > 0 ? stars : null }));
+        if (inverted) setInverseLnCountByKey((prev) => ({ ...prev, [starsKey]: beatmap.notes.filter((note) => note.isHold).length }));
       })
       .catch(() => {
         setRateStarsByKey((prev) => ({ ...prev, [starsKey]: null }));
@@ -1187,7 +1202,7 @@ export function MapDetailModal({
                         <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm))} />
                         <Stat label={t`Length`} value={formatDuration(active.length)} />
                         {local ? null : <Stat label={t`Plays`} value={formatNumber(active.playCount)} />}
-                        <Stat label={t`LN notes`} value={formatNumber(active.lnCount)} />
+                        <Stat label={t`LN notes`} value={formatNumber((starsKey != null ? inverseLnCountByKey[starsKey] : undefined) ?? active.lnCount)} />
                         {active.od == null && analysisPending ? (
                           <PendingStat label={t`OD`} />
                         ) : (
@@ -1234,7 +1249,8 @@ export function MapDetailModal({
                       rateDan={rateDan}
                       secondaryDan={(offCatalog && playRate === 1 ? rateAnalysis?.secondaryDan : activeAnalysis?.secondaryDan) ?? null}
                       rateSecondaryDan={rateAnalysis?.secondaryDan ?? null}
-                      vibroAnalysis={offCatalog ? rateAnalysis?.vibroAnalysis : playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
+                      vibroAnalysis={offCatalog || (playedInverse && !ratePending) ? rateAnalysis?.vibroAnalysis : playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
+                      inverse={playedInverse}
                     />
                   </div>
                 ) : pending || (offCatalog && ratePending) ? <PendingMsdBlock /> : null}
@@ -1312,6 +1328,7 @@ export function MapDetailModal({
                     // longer known keeps the panel's default (pitch follows
                     // rate), which is what NC sounds like.
                     playbackRate={playRate}
+                    inverse={playedInverse}
                     stars={shownStars}
                     preservePitch={playRate !== playedRate ? true : playRate !== 1 && play?.rateMod ? !play.rateMod.pitched : undefined}
                     className="h-[300px] rounded-lg"

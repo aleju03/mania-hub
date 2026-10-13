@@ -1899,6 +1899,17 @@ export interface RestrictedPpPlay {
   creator: string | null;
   keyCount: number | null;
   bpm?: number | null;
+  /** The official map's own figures at 1.0x. Absent on a backend older than the field. */
+  map?: {
+    stars: number;
+    od: number;
+    hp: number;
+    totalLength: number;
+    hitLength: number;
+    circles: number;
+    sliders: number;
+    maxCombo: number | null;
+  } | null;
   mods: string[];
   rate: number;
   starRating: number;
@@ -1931,6 +1942,8 @@ export interface RestrictedPpPlayer {
   playTime?: number;
   rankedScore: number;
   gradeCounts: { ss: number; ssh: number; s: number; sh: number; a: number };
+  /** The 4K and 7K totals, as osu!'s variants. Absent on a backend older than the field. */
+  variants?: { variant: "4k" | "7k"; pp: number }[];
   /** Best play per beatmap, best first, at most 200. */
   best: RestrictedPpPlay[];
 }
@@ -3384,10 +3397,11 @@ export interface LiveRateChartAnalysis {
 }
 
 /** Null covers an unreachable backend and a rate the backend refuses alike. */
-export async function fetchLiveRateChartAnalysis(beatmapId: number, rate: number): Promise<LiveRateChartAnalysis | null> {
+/** `inverse`: the chart as the Invert mod rewrites it, for a play set under it. */
+export async function fetchLiveRateChartAnalysis(beatmapId: number, rate: number, inverse = false): Promise<LiveRateChartAnalysis | null> {
   try {
     return await fetchLiveJson<LiveRateChartAnalysis>(
-      `/api/chart-analysis/rate?beatmapId=${Math.floor(beatmapId)}&rate=${rate.toFixed(2)}`,
+      `/api/chart-analysis/rate?beatmapId=${Math.floor(beatmapId)}&rate=${rate.toFixed(2)}${inverse ? "&mod=IN" : ""}`,
     );
   } catch {
     return null;

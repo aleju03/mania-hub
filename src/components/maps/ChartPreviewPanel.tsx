@@ -5,6 +5,7 @@ import { getBeatmapFile } from "../../lib/osu";
 import { loadReplayRenderer } from "../../lib/replay-renderer-loader";
 import { getBeatmapAudioUrl } from "../../lib/audio-url";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
+import { invertManiaOsuText } from "#dan/invert-mod";
 import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../../lib/replay-scroll-speed";
 import type { ReplaySkinSettings } from "../../lib/replay-skin";
 import { useReplaySkinSettings } from "../../lib/use-replay-skin-settings";
@@ -94,6 +95,7 @@ export function ChartPreviewPanel({
   beatmapset,
   selectedBeatmapId,
   playbackRate = 1,
+  inverse = false,
   stars,
   preservePitch,
   className = "",
@@ -103,6 +105,8 @@ export function ChartPreviewPanel({
   beatmapset: MapsFavouriteBeatmapset;
   selectedBeatmapId: number | null;
   playbackRate?: number;
+  // Show the chart as the Invert mod rewrites it (a play set under it).
+  inverse?: boolean;
   // The selected difficulty's star rating at `playbackRate`, when the caller
   // has it; the 1.0x value from the set otherwise.
   stars?: number;
@@ -298,7 +302,10 @@ export function ChartPreviewPanel({
       .then((selectedResult) => {
         if (cancelled) return;
         const plan = getChartPreviewPlaybackPlan({
-          selectedBeatmap: parseCachedManiaBeatmap(selectedBeatmap.id, selectedResult.content),
+          selectedBeatmap: parseCachedManiaBeatmap(
+            selectedBeatmap.id,
+            (inverse ? invertManiaOsuText(selectedResult.content) : null) ?? selectedResult.content,
+          ),
           usesSetPreviewForAudio,
         });
 
@@ -341,6 +348,7 @@ export function ChartPreviewPanel({
     };
   }, [
     chartScrub,
+    inverse,
     metadataBeatmapsetId,
     previewUrl,
     previewPlaybackRate,

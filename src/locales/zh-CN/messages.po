@@ -302,8 +302,6 @@ msgid "{0, plural, one {map} other {maps}}"
 msgstr "{0, plural, other {张谱面}}"
 
 #. placeholder {0}: entry.count
-#. placeholder {0}: map.plays
-#: src/components/player/ActivityPanel.tsx
 #: src/components/player/InsightModals.tsx
 msgid "{0, plural, one {play} other {plays}}"
 msgstr "{0, plural, other {次游玩}}"
@@ -569,12 +567,10 @@ msgstr "{0} maniacard"
 
 #. placeholder {0}: maps.length
 #: src/components/player/ActivityPanel.tsx
-msgid "{0} map"
-msgstr "{0} 张谱面"
+#~ msgid "{0} map"
+#~ msgstr "{0} 张谱面"
 
 #. placeholder {0}: formatNumber(currentTotal)
-#. placeholder {0}: maps.length
-#: src/components/player/ActivityPanel.tsx
 #: src/routes/maps.tsx
 msgid "{0} maps"
 msgstr "{0} 张谱面"
@@ -728,7 +724,6 @@ msgstr "有 {0} 人持有你的卡片"
 msgid "{0} person to pull this card"
 msgstr "{0} 位抽到这张卡片的人"
 
-#. placeholder {0}: formatNumber(entry.playCount)
 #. placeholder {0}: formatNumber(segment.playCount)
 #: src/components/player/ActivityPanel.tsx
 msgid "{0} play"
@@ -9595,8 +9590,8 @@ msgid "Loaded the built-in skin"
 msgstr "已加载内置皮肤"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "loading"
-msgstr "加载中"
+#~ msgid "loading"
+#~ msgstr "加载中"
 
 #. placeholder {0}: skin.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10375,8 +10370,8 @@ msgstr "你的收藏册里还没有。"
 #~ msgstr "缺失的成绩"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "mixed keys"
-msgstr "混合键数"
+#~ msgid "mixed keys"
+#~ msgstr "混合键数"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Mod filter"
@@ -10590,6 +10585,11 @@ msgstr "在最近成绩中显示 MSD 和段位"
 msgid "MSD at {0}"
 msgstr "{0} 下的 MSD"
 
+#. placeholder {0}: formatRate(rate)
+#: src/components/maps/MapDetailModal.tsx
+msgid "MSD at {0} with Inverse"
+msgstr "{0} Inverse 下的 MSD"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "MSD on recent plays"
 msgstr "在最近成绩中显示 MSD"
@@ -10601,6 +10601,10 @@ msgstr "MSD 成绩"
 #: src/components/maps/MapDetailModal.tsx
 msgid "MSD skill rating"
 msgstr "MSD 技能评级"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "MSD with Inverse"
+msgstr "Inverse 下的 MSD"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
@@ -15498,8 +15502,8 @@ msgstr "服务器列表暂时不可用"
 
 #. placeholder {0}: sessionIndex + 1
 #: src/components/player/ActivityPanel.tsx
-msgid "Session {0}"
-msgstr "第 {0} 场"
+#~ msgid "Session {0}"
+#~ msgstr "第 {0} 场"
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Session shape"
@@ -16132,8 +16136,8 @@ msgstr "单点叠"
 #~ msgstr "单点叠 {singleText}，大叠 {chordText}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Single-note streams"
-msgstr "单点切"
+#~ msgid "Single-note streams"
+#~ msgstr "单点切"
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Single-note streams {singleText}, chordstreams {chordText}"
@@ -16892,6 +16896,10 @@ msgstr "切"
 #: src/components/maps/PatternRadar.tsx
 msgid "STREAM"
 msgstr "切"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Streams"
+msgstr "单点切"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Streams broken up by two-note jumps."
@@ -19333,8 +19341,8 @@ msgid "Unable to load settings."
 msgstr "无法加载设置。"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "Unanalyzed"
-msgstr "未分析"
+#~ msgid "Unanalyzed"
+#~ msgstr "未分析"
 
 #: src/routes/recommendations.tsx
 msgid "unavailable"

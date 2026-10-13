@@ -5,7 +5,6 @@
 // default, so SSR and hydration agree and a stored Legacy applies right after.
 
 import { useSyncExternalStore } from "react";
-import { usesPrism } from "#dan/prism/switch";
 import { ETTERNA_OVERALL_AXIS, OVERALL_AXIS_META, type OverallMethod } from "./skill-axes";
 
 export { hasEtternaOverall, modeOverall, type OverallMethod } from "./skill-axes";
@@ -55,11 +54,15 @@ function getSnapshot(): OverallMethod {
   return current;
 }
 
-// Keymodes Prism rates have no Legacy Overall to show: they always read
-// Prism's average, whatever the reader picked for the MinaCalc keymodes.
+/** Whether a keymode offers the Legacy Overall beside Etterna's: 4K only.
+ *  Every other keymode reads Etterna's, whatever the reader picked on 4K. */
+export function offersOverallMethodChoice(keyCount?: number | null): boolean {
+  return keyCount === 4;
+}
+
 export function useOverallMethod(keyCount?: number | null): OverallMethod {
   const method = useSyncExternalStore(subscribe, getSnapshot, () => "etterna" as const);
-  return usesPrism(keyCount) ? "etterna" : method;
+  return offersOverallMethodChoice(keyCount) ? method : "etterna";
 }
 
 /** The leaderboard axis the Overall chip reads under a method. */
