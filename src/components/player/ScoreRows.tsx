@@ -287,6 +287,7 @@ export function ScoreRow({
   showPlayer = false,
   showRating = false,
   rating,
+  showAppMark = false,
 }: {
   score: OsuScore;
   position: number;
@@ -298,6 +299,8 @@ export function ScoreRow({
      rating loads or when a play has none, so the columns stay lined up. */
   showRating?: boolean;
   rating?: RecentPlayRatingView | null;
+  /* Recent marks an app import (Hashi, Companella) on the map's cover. */
+  showAppMark?: boolean;
 }) {
   const locale = useLocale();
   const { t } = useLingui();
@@ -325,7 +328,14 @@ export function ScoreRow({
         />
       ) : null}
       <GradeImg grade={display.rank} size={28} />
-      <ScoreThumbnail score={score} />
+      {showAppMark && (score.companella || score.companellaTimed) ? (
+        <span className="relative flex-shrink-0">
+          <ScoreThumbnail score={score} />
+          <span className="absolute -bottom-1 -right-1 flex">
+            <CompanellaMark app={(score.companella ?? score.companellaTimed)!.app} className="h-4 w-4" />
+          </span>
+        </span>
+      ) : <ScoreThumbnail score={score} />}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-white truncate">

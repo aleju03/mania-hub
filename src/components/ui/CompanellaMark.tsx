@@ -1,4 +1,4 @@
-import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { useLingui } from "@lingui/react/macro";
@@ -30,7 +30,9 @@ export function CompanellaMark({ app, video, className = "h-[18px] w-[18px]" }: 
       width={48}
       height={48}
       loading="lazy"
-      className={`inline-block rounded-full align-middle ${className}`}
+      // Companella's mark is a dark disc inside a thin ring with a pixel of
+      // margin, so at the same box it reads smaller than Hashi's full-bleed one.
+      className={`inline-block rounded-full align-middle ${isBridge ? "" : "scale-[1.15]"} ${className}`}
     />
   );
 
@@ -102,21 +104,36 @@ export function useMarkTip(label: string) {
     const rect = event.currentTarget.getBoundingClientRect();
     setTip({ left: rect.left + rect.width / 2, top: rect.top });
   };
+  // A tap toggles the label where there is no hover (phones): the next tap
+  // anywhere or a scroll closes it.
+  const tapTip = (event: ReactMouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    if (!label) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setTip((current) => (current ? null : { left: rect.left + rect.width / 2, top: rect.top }));
+  };
   useEffect(() => {
     if (!tip) return;
     const hide = () => setTip(null);
     window.addEventListener("scroll", hide, true);
-    return () => window.removeEventListener("scroll", hide, true);
+    // Deferred, so the tap that opened the label does not close it.
+    const timer = setTimeout(() => window.addEventListener("click", hide, true), 0);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("scroll", hide, true);
+      window.removeEventListener("click", hide, true);
+    };
   }, [tip]);
   const hover = { onPointerEnter: showTip, onPointerLeave: () => setTip(null) };
   const tooltip = tip && typeof document !== "undefined" ? createPortal(
     <div
-      className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-osu-b3 px-3 py-1.5 text-[12px] font-semibold text-white shadow-xl shadow-black/50"
-      style={{ left: tip.left, top: tip.top - 6 }}
+      className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-full w-max max-w-60 text-center rounded-lg bg-osu-b3 px-3 py-1.5 text-[12px] font-semibold text-white shadow-xl shadow-black/50"
+      // Kept off the screen edges on a phone, where a long difficulty name would overflow.
+      style={{ left: Math.min(Math.max(tip.left, 128), window.innerWidth - 128), top: tip.top - 6 }}
     >
       {label}
     </div>,
     document.body,
   ) : null;
-  return { hover, tooltip };
+  return { hover, tapTip, tooltip };
 }

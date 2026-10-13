@@ -10,9 +10,11 @@ import type { OsuGradeCounts, OsuScore, OsuUserStatistics } from "../../lib/type
  *
  * Every play is priced as a stable score, so each one carries a stable total.
  * There is no osu! score behind it: the id stays 0, which keeps the details
- * card on the map rather than on a score page osu! never had. Stars arrive at
- * the played rate while the card reads a map's 1.0x stars, so a rate-modded
- * play drops them, as tracked plays do.
+ * card on the map rather than on a score page osu! never had. The map's own
+ * figures (1.0x stars, OD, HP, length, note counts) come with each play, which
+ * is what the profile card reads; a backend older than them sends only the
+ * stars at the played rate, so a rate-modded play then drops them, as tracked
+ * plays do.
  *
  * Best first, as the profile's rows, filters and insights read a window. Each
  * score carries the Companella mark with its import, which is what the row's
@@ -58,8 +60,17 @@ export function buildRestrictedBestList(plays: RestrictedPpPlay[], owner: Tracke
         convert: false,
         cs: play.keyCount ?? undefined,
         version: play.version,
-        difficulty_rating: getScoreSpeedBucket(play.mods) === "normal" ? play.starRating : undefined,
+        difficulty_rating: play.map?.stars ?? (getScoreSpeedBucket(play.mods) === "normal" ? play.starRating : undefined),
         bpm: play.bpm ?? undefined,
+        ...(play.map ? {
+          accuracy: play.map.od,
+          drain: play.map.hp,
+          total_length: play.map.totalLength,
+          hit_length: play.map.hitLength,
+          count_circles: play.map.circles,
+          count_sliders: play.map.sliders,
+          ...(play.map.maxCombo != null ? { max_combo: play.map.maxCombo } : {}),
+        } : {}),
       },
       beatmapset: {
         id: play.beatmapsetId || undefined,

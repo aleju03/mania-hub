@@ -1100,6 +1100,13 @@ export function PlayerProfilePage({
     [restrictedStanding, user?.avatar_url, user?.country_code, user?.username],
   );
   const storedProfileHidden = restrictedPpPending || restrictedBest != null;
+  // The card reads the profile pp for its prestige, which is the stand-in total here.
+  const maniaCardUser = useMemo(
+    () => user && restrictedStanding && user.statistics
+      ? { ...user, statistics: { ...user.statistics, pp: restrictedStanding.pp } }
+      : user,
+    [restrictedStanding, user],
+  );
   const shownBest = restrictedPpPending ? NO_SCORES : restrictedBest ?? best;
   const restrictedBestFilters = useMemo(
     () => restrictedBest ? buildPlayerBestFilterMetadata(restrictedBest) : null,
@@ -1948,11 +1955,14 @@ export function PlayerProfilePage({
   // The tab strip sits flush on the section edge unless a filter/sort bar
   // follows it, which then needs the breathing room back.
   const hasTabControls = tab === "recent" || (tab === "best" && bestWindowLoaded && shownBest.length > 0);
-  const ppVariants = (stats.variants ?? [])
-    .filter((variant) => variant.mode === "mania" && variant.pp > 0)
-    .sort((a, b) => a.variant.localeCompare(b.variant));
+  // A stand-in standing brings its own 4K and 7K totals, without ranks.
+  const ppVariants: { variant: string; pp: number; global_rank?: number | null; country_rank?: number | null }[] = restrictedStanding
+    ? (restrictedStanding.variants ?? []).filter((variant) => variant.pp > 0)
+    : (stats.variants ?? [])
+      .filter((variant) => variant.mode === "mania" && variant.pp > 0)
+      .sort((a, b) => a.variant.localeCompare(b.variant));
   // A stand-in standing takes osu!'s place in the headline numbers, and the
-  // 90-day trend and per-keymode pp under them describe numbers no longer shown.
+  // 90-day trend under them describes numbers no longer shown.
   const shownGlobalRank = restrictedStanding ? restrictedStanding.globalRank : stats.global_rank;
   const shownCountryRank = restrictedStanding ? restrictedStanding.countryRank : stats.country_rank;
   const shownPp = restrictedStanding ? restrictedStanding.pp : stats.pp;
@@ -2397,7 +2407,7 @@ export function PlayerProfilePage({
               label={t`Performance`}
               value={restrictedPpPending ? heroValueSkeleton : `${formatNumber(Math.round(shownPp))}pp`}
               valueClassName="text-osu-yellow"
-              sub={!storedProfileHidden && ppVariants.length >= 2 ? (
+              sub={!restrictedPpPending && ppVariants.length >= 2 ? (
                 <span className="inline-flex items-center gap-2.5 tabular-nums">
                   {ppVariants.map((variant) => (
                     <span
@@ -2762,10 +2772,10 @@ export function PlayerProfilePage({
                 transition={{ duration: 0.14 }}
               >
                 <ManiaCardPanel
-                  user={user}
-                  scores={best}
-                  precomputedSkills={maniaCardSkills ?? undefined}
-                  loading={!bestWindowLoaded}
+                  user={maniaCardUser ?? user}
+                  scores={restrictedBest ?? best}
+                  precomputedSkills={restrictedBest ? undefined : maniaCardSkills ?? undefined}
+                  loading={restrictedPpPending || (!restrictedBest && !bestWindowLoaded)}
                   isOwnProfile={!!auth.viewer && !!user && auth.viewer.id === user.id}
                   tierOverride={cardTierPreview}
                 />
@@ -2823,6 +2833,7 @@ export function PlayerProfilePage({
                         onOpenDetails={setDetailScore}
                         showRating={showRecentRatings}
                         rating={showRecentRatings ? recentRatings.get(recentPlayRatingKey(row.score)) : undefined}
+                        showAppMark={tab === "recent"}
                       />
                     ) : (
                       <TrackedScoreRow

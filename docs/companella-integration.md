@@ -1107,7 +1107,12 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
   best play per beatmap, weighted 0.95 per place, plus
   (417 - 1/3) x (1 - 0.995^n) over the n distinct maps: osu!'s own aggregate
   (`UserTotalPerformanceAggregateHelper` in osu-queue-score-statistics). The
-  list shows 200; accuracy is osu!'s weighted, normalised accuracy.
+  list shows 200; accuracy is osu!'s weighted, normalised accuracy. The 4K
+  and 7K totals (`variants`, shown under the profile pp as osu!'s are) run
+  the same aggregate over those key counts' plays alone, without ranks. Each
+  listed play carries its map's own 1.0x figures (`map`: stars, OD, HP,
+  length, note counts) from the cached osu! beatmap, which the profile's
+  Maniacard tab reads to draw the card; nothing is minted or snapshotted.
 - **Archive.** When the account comes back (a clean sign-in or the admin
   toggle), every play before that moment stops counting at once and stays
   stored as an ordinary import; a later restriction starts from nothing.
