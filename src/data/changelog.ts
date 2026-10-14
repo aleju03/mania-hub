@@ -43,6 +43,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-13", text: "Added + and - steps to the Dan filter in map search.", to: "/maps", image: { src: "/images/changelog/2026-10-13-map-search-dan-steps.webp", alt: "The Dan filter set from gamma-- to gamma-", width: 465, height: 313 } },
   { date: "2026-10-11", text: "Fixed Recommended maps showing maps you played outside your top 200 as missing.", to: "/recommendations" },
   { date: "2026-10-11", text: "Initial release of the Hashi desktop app.", bold: "Hashi", kind: "new", to: "/hashi" },
   { date: "2026-10-10", text: "Added 1440p to Export video.", to: "/replay" },
