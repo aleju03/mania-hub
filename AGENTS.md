@@ -1,91 +1,82 @@
 # Repository Guidelines
 
-Mania Tracker (mania-tracker.com) is an osu!mania community site with two cooperating parts:
+Mania Tracker (mania-tracker.com), an osu!mania community site in two parts:
 
-- **Frontend** (`src/`): TanStack Start + Vite + React 19, SSR via Nitro (node-server preset, self-hosted on the VPS; the Vercel preset only builds when `process.env.VERCEL` is set, kept as a rollback target). File-based routes in `src/routes/`; `src/routeTree.gen.ts` is generated, do not hand-edit.
-- **Live backend** (`backend/`, maintained separately and gitignored here, so it has its own commits/branches/pushes): always-on Node service that ingests osu! scores from the score feed (an osu! API recent-scores poller, with a legacy oSC Socket.IO source behind it), keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE (port 7227). It is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is set. Its own guide is `backend/AGENTS.md`; read it before working under that directory.
+- **Frontend** (`src/`): TanStack Start + Vite + React 19, SSR via Nitro (node-server preset on the VPS; the Vercel preset, built only when `process.env.VERCEL` is set, is a rollback target). File-based routes in `src/routes/`; `src/routeTree.gen.ts` is generated, never hand-edit it.
+- **Live backend** (`backend/`): a separate repo, gitignored here, with its own commits, branches and pushes. Always-on Node service: ingests osu! scores, keeps SQLite projections, runs a job queue, streams updates over SSE (port 7227). Source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is set. Read `backend/AGENTS.md` before working there.
 
-Countries are dynamic, not hardcoded: the backend keeps a `country_registry` with per-country status (cold -> warm -> active, can pause) and feature tier (`indexed` / `maps_warm` / `live` / `snipes`). Visiting a cold country can activate it (rate-limited). A synthetic `GLOBAL` scope aggregates all tracked countries. Default/home country is `CR`.
+Countries are dynamic: `country_registry` holds each one's status (cold -> warm -> active, can pause) and tier (`indexed` / `maps_warm` / `live` / `snipes`); visiting a cold country can activate it (rate-limited). `GLOBAL` aggregates all tracked countries; the default is `CR`.
 
-## Deep-dive docs
+## Docs
 
-This file is the condensed guide. `docs/` holds the maintained reference; read the file matching the task before working on that area, do not read them all up front.
+`docs/` is the reference; read only the file for your area: `backend.md` (modules, ingest, jobs, HTTP and rate buckets, replay video, retention, caching), `features.md` (per-feature models, uploaded replays, skins privacy), `packs.md` (pack economy, streak/blitz, GOAT poll), `discord.md` (maniabot, `/communities`), `admin.md` (admin surfaces, analytics, `bugs:pull` setup), `frontend.md` (routes, live data flow, client state, replay video export, OG images, BBCode editor), `companella-integration.md` (the off-by-default Companella import beta, with its `companella-*` spec, client guide and runbook).
 
-- `docs/backend.md`: live backend module map, ingest flow, job queue + job types, HTTP surface + rate buckets, replay video export, retention/storage/caching.
-- `docs/features.md`: per-feature models - snipes, top plays, maps, farm helper, activity, dan estimates, chart analysis, profiles/rankings, goals, my data, uploaded replays, skins privacy.
-- `docs/packs.md`: card pack economy, streak/blitz arcade games, GOAT poll.
-- `docs/discord.md`: maniabot Discord bot, `/communities` server directory.
-- `docs/admin.md`: admin surfaces - mascot overlay, todos, analytics, BBCode image audit, `bugs:pull` setup.
-- `docs/frontend.md`: route/component map, live data flow (SSE client, cross-tab sharing), client state, on-device replay video export, OG images, BBCode editor.
-- `docs/companella-integration.md`: the Companella score-import beta (`/companella`), off by default. `docs/companella-api.openapi.yaml`, `docs/companella-client-guide.md` and `docs/companella-operations.md` are its API spec, client contract and runbook.
-
-Keep one-off audits, investigation notes, and capture reports in `local-notes/` (gitignored), not in `docs/`. Do not commit them.
+One-off audits and investigation notes go in `local-notes/` (gitignored), never `docs/`, and are never committed.
 
 ## Structure
 
-- `src/routes/`: file-based routes (`createFileRoute`); shared shell, auth, country context, theme bootstrap, and live-backend bootstrap in `src/routes/__root.tsx`. Search params are validated per route and drive country scope, pagination, and filters. API/proxy routes in `src/routes/api/` (`/api/sync` is the analytics capture proxy into the backend's in-house analytics store, not a live-data fallback); admin pages in `src/routes/admin/`. Files prefixed with `-` are tests, not routes; do not delete them as stale.
-- `src/components/` (feature folders), `src/store.ts` (Zustand store), `src/lib/` (server/data utilities). `src/lib/osu.ts` is a facade over `src/lib/osu/` domain modules (rankings, beatmaps, replay, dan, users, pattern-analysis, plus shared support modules).
-- `backend/src/`: `server.ts` (boot), `ingest/`, `osc/`, `jobs/` + `workers.ts`, `features/` (one module per surface), `http/`, `live/` (SSE), `discord/`, `dan/`, `replay-video/`; schema in `migrations/001_initial.sql`, later tables migrated in `db.ts`.
-- `scripts/`: replay capture and validation, bug-report export, i18n generators, dev helpers in `scripts/dev/`. Static assets in `public/`.
+- `src/routes/`: `__root.tsx` holds the shell, auth, country context and theme/live-backend bootstrap. Search params are validated per route and drive country scope, pagination and filters. `api/` holds API and proxy routes (`/api/sync` proxies analytics capture; it is not a live-data fallback), `admin/` the admin pages. Files prefixed `-` are tests, not routes; don't delete them as stale.
+- `src/components/` (feature folders), `src/store.ts` (Zustand), `src/lib/` (server/data utilities; `osu.ts` is a facade over `osu/`).
+- `backend/src/`: `server.ts`, `ingest/`, `osc/`, `jobs/` + `workers.ts`, `features/`, `http/`, `live/` (SSE), `discord/`, `dan/`, `replay-video/`. Schema in `migrations/001_initial.sql`, later tables in `db.ts`.
+- `scripts/`: replay capture/validation, bug-report export, i18n generators, `dev/` helpers. Static assets in `public/`.
 
 ## Commands
 
-The user usually has dev servers running locally (frontend `3000`, live backend `7227`); do not start dev servers or run builds unprompted.
+The user usually has dev servers running (frontend 3000, backend 7227). Don't start dev servers or run builds unprompted.
 
-- Frontend: `npm run dev` / `npm run build` / `npm run test` / `npx tsc --noEmit`. Single test: `npx vitest run path/to/file.test.ts` (`-t "name"` for one case).
-- Backend (inside `backend/`): `npm run dev` / `npm test` / `npx tsc --noEmit` / `npm run verify` (tests + build).
-- Sync prod DB to local (dev PC only, overwrites the local DB, never run on the VPS): `npm run live-db:update` (fresh VPS snapshot) or `npm run live-db:sync-from-vps` (reuses the newest existing backup, `--dry-run` supported). `--with-analytics` also pulls the separate analytics DB; `--analytics-only` pulls just that one.
-- Production bug reports: `npm run bugs:pull` exports open reports, reporter identities, threads, and images to a new gitignored `local-notes/bug-reports/` folder. Use `-- --status all`, `-- --id <id>`, or `-- --search "text"` to narrow/expand; read the printed `README.md` and report files, and inspect local image paths as needed. Read-only; does not mark reports seen. Setup in `docs/admin.md`.
+- Frontend: `npm run dev` / `build` / `test`, `npx tsc --noEmit`; one test: `npx vitest run <file>` (`-t "name"`).
+- Backend (in `backend/`): `npm run dev` / `npm test` / `npx tsc --noEmit` / `npm run verify` (tests + build).
+- Prod DB to local (dev PC only, overwrites the local DB, never on the VPS): `npm run live-db:update` (fresh snapshot) or `npm run live-db:sync-from-vps` (newest backup, `--dry-run`); add `--with-analytics` or `--analytics-only` for the analytics DB.
+- `npm run bugs:pull` exports open production bug reports (with reporters, threads, images) to a new `local-notes/bug-reports/` folder; `-- --status all`, `-- --id <id>`, `-- --search "text"`. Read-only.
 
-Minimum verification: for live backend changes run `npm test` and `npx tsc --noEmit` inside `backend/`; for type-sensitive frontend changes run `npx tsc --noEmit` at the root. Tests are Vitest, colocated as `*.test.ts(x)` next to source (plus the `-`-prefixed files in `src/routes/`).
+Verify backend changes with `npm test` and `npx tsc --noEmit` in `backend/`, type-sensitive frontend changes with the root `npx tsc --noEmit`. Tests are Vitest, colocated as `*.test.ts(x)`.
 
 ## Frontend data flow
 
-In order of preference for live surfaces:
+Live surfaces, in order of preference:
 
-1. `src/lib/live-backend.ts`: typed snapshot fetchers, `openLiveEventSource()` SSE client, and the country feature-tier bootstrap. One SSE connection per browser, shared across tabs via Web Locks leader election in `src/lib/cross-tab-event-source.ts`. Use this for tracker/top-plays/snipes/maps/rankings/profile data from client routes.
-2. Server functions (`createServerFn`) wrapping the osu! API layer, only for data the backend does not project: user profiles/scores, rank histories, per-beatmap scoreboards (replay browse), beatmap search/files, dan estimates, OG cards. The live surfaces (home, tracker, top plays, snipes, maps) hard-require the live backend and render a "live backend required" notice without `VITE_LIVE_BACKEND_URL`.
-3. Server-side caching lives where each resource lives: osu! API responses are cached inside the backend's `/api/osu/v2` proxy (opt-in per call via `cacheTtlMs`/`staleMs` on `osuFetch`; `staleMs` serves expired data through osu! outages). Heavy computed artifacts (parsed replays, uploaded-replay descriptions, community `.osu` files) are gzipped JSON/text objects in R2 (`src/lib/r2-cache.ts`; growth bounded by Cloudflare lifecycle rules per prefix, not code). The persistent-cache helpers in `src/lib/api.ts` are a per-instance memory tier only.
+1. `src/lib/live-backend.ts`: snapshot fetchers, the `openLiveEventSource()` SSE client, the country tier bootstrap. One SSE connection per browser, shared across tabs (`src/lib/cross-tab-event-source.ts`). Use it for tracker, top plays, snipes, maps, rankings and profile data.
+2. Server functions (`createServerFn`) over the osu! API, only for what the backend doesn't project: profiles and scores, rank histories, per-beatmap scoreboards, beatmap search/files, dan estimates, OG cards. Home, tracker, top plays, snipes and maps require the backend and show a notice without `VITE_LIVE_BACKEND_URL`.
+3. Caching: osu! API responses in the backend's `/api/osu/v2` proxy (opt-in via `cacheTtlMs`/`staleMs` on `osuFetch`; `staleMs` rides out osu! outages); heavy artifacts (parsed replays, uploaded-replay descriptions, community `.osu` files) as gzipped R2 objects (`src/lib/r2-cache.ts`, bounded by R2 lifecycle rules). `src/lib/api.ts` is only a per-instance memory tier.
 
-Client state: one Zustand store in `src/store.ts`, persisted to localStorage as `mania-hub-cache-v5` (bump the version on breaking shape changes). Data is country-keyed with `fetchedAt` + TTL constants from `src/lib/cache.ts`. Persistence is debounced, has quota-eviction handling, and keeps critical prefs (theme, hidden users, avatar accents) in separate storage keys. Check `useHasHydrated()` before trusting persisted state during SSR hydration.
+Client state: one Zustand store persisted to localStorage as `mania-hub-cache-v5`; bump the version on breaking shape changes. Data is country-keyed with `fetchedAt` + TTLs from `src/lib/cache.ts`. Check `useHasHydrated()` before trusting persisted state during hydration.
 
-## Shared dan estimator and replay judge
+## Shared code under backend/
 
-There is one copy of the dan estimator, at `backend/src/dan/dan-estimator/` (features, scoring, family choice, LN subsystem, courses, labels) with `backend/src/dan/dan-estimator.ts` as entry, and one copy of the vendored LeoBlack engine at `backend/vendor/leoblack`. The frontend reaches them through the `#dan/*` and `#leoblack/*` aliases. Both live under `backend/` because the backend compiles with `rootDir: "src"` and prod runs the flat `dist/` layout (`node dist/server.js` plus `dist/maintenance/*.js`), so shared sources cannot sit outside it.
+The dan estimator (`backend/src/dan/`, including the chart classifier), the vendored LeoBlack engine (`backend/vendor/leoblack`) and the replay judge (`backend/src/replay-judge/`) exist once, under `backend/` (it compiles with `rootDir: "src"` to the flat `dist/` prod runs). The frontend imports them as `#dan/*`, `#leoblack/*` and `#replay-judge/*`.
 
-- Each alias is declared in three places that must move together: `paths` in `tsconfig.json`, `imports` in `package.json`, and `vitest.config.ts` (which deliberately does not load `vite.config.ts`).
-- Tests for the shared estimator live in `backend/tests/dan-*.test.ts`, so edits there need the backend suite, and the root `npx tsc --noEmit` covers both sides. The chart classifier (`#dan/chart-classifier`) is shared on the same terms.
-- The mania replay judge is shared on the same terms: `backend/src/replay-judge/` (`mania-replay-judgement.ts`, and `stable-frames.ts` for decoding .osr rows), reached as `#replay-judge/*`. The replay viewer draws with it and the backend rates Companella imports from the offsets it finds. Its tests are `backend/tests/replay-judge.test.ts`. Keep its imports type-only: the root `replay:*` scripts load it under plain node, which does not map `.js` specifiers onto `.ts`.
-- `companella.ts` is the one deliberately divergent pair: the backend routes MSD through `msd.ts` so MinaCalc stays serialized against the job lanes, so it stays hand-synced.
+- Each alias lives in `tsconfig.json` `paths`, `package.json` `imports` and `vitest.config.ts` (which deliberately skips `vite.config.ts`); change all three together.
+- Their tests are in `backend/tests/` (`dan-*`, `replay-judge`): run the backend suite and the root `npx tsc --noEmit`.
+- Keep the replay judge's imports type-only: the root `replay:*` scripts load it under plain node, which doesn't map `.js` to `.ts`.
+- `companella.ts` is the one hand-synced pair (the backend routes MSD through `msd.ts` to serialize MinaCalc against the job lanes).
 
 ## Hard rules
 
-- Chart dan and LN dan classification must stay algorithmic: never add title/artist/creator/beatmap-id/beatmapset-id/filename or any chart-identity shortcut to force what a chart is rated. The one sanctioned identity list is `backend/src/features/dan-courses.ts`, the registry of real dan courses, which lives at the player layer on purpose: it rates no chart, it only credits a player with a course they actually passed (see `docs/features.md`).
-- Authenticated osu! API access stays server-side; never put osu! credentials or direct authenticated calls in client components. New backend osu! calls go through the token-bucket client in `backend/src/osu/client.ts` (~45/min target, 60/min hard limit).
-- New SSE event types must be added to `LIVE_EVENT_NAMES` in `src/lib/live-backend.ts` or follower tabs never see them.
-- Backend logs are structured JSON via `backend/src/logger.ts` (`logInfo`/`logWarn`), never `console.log`.
-- Replay video export is on-device only. The ordinary export path must not upload the video, queue a render job, or call `/api/replay-video-job`; the backend's `ENABLE_REPLAY_VIDEO` half stays off and is not a fallback for an unsupported browser. Details in `docs/frontend.md`.
-- Uploaded replays are unlisted, not private: the `.osr` in R2 names no uploader, so every surface that lists or deletes one goes through the `uploaded_replays` owner index via `src/lib/uploaded-replays.ts`, never the R2 key. Details in `docs/features.md`.
-- Private skins stay private end to end: any endpoint that serves a skin goes through `toSkinSummary(row, { asOwner })`, never the raw row, and replay viewers never receive a private `.osk`. Details in `docs/features.md`.
-- Companella imports are never official data: the integration writes only its own `companella_*` tables (plus the merged rating's `player_skill_history` and `unrated_plays` rows, below) and never feeds the score ingestor, `score_events`, `player_skill_ratings`, `users.pp`, rankings, goals, packs or snipes. Its replays stay outside the upload flow; a listed import on an official file has a public replay, the rest are owner-only. The sanctioned exceptions (restricted accounts' simulated pp, the tracker/Recent feed over the `companella_score` SSE event, the map Scores board (an import on a map's own file ranks there beside osu! plays, read at request time), the profile Activity tab (imports counted beside osu! plays at read time, an import osu! also delivered counted once), every player's skill rating (MSD, patterns, Dan), which for a player with imports is the saved merge of `player_skill_ratings` with them in `companella_skill_merges` (`skill-merge.ts`), read by every skill surface and recorded in `player_skill_history` (pp and the pp rankings stay official), an import's key-press timing standing in for the accuracy estimate of the official play it matches, clamped to a band, Hashi's live presence on profiles and the rankings, kept in memory only, and the recent-score poll hold while that presence is live) are listed in `docs/companella-integration.md`.
-- Some admin controls (reset-local-db, delete-country) are destructive; treat with care.
-- Several agent sessions share this working tree, so uncommitted changes may be someone else's live work. Never run `git stash`, `git restore`, `git clean` or `git checkout -- <path>` on files you did not author; compare against old code with `git show HEAD:<path>` instead.
-- Pushing `main` (including `git ship`) is a production release; do it only when explicitly asked, each time.
-- Read the prod DB over SSH only as `sqlite3 'file:<path>?immutable=1'`. `-readonly` still blocks WAL checkpoints and once stalled the whole backend. Locally, where processes are writing, use `pragma query_only=1` instead, since `immutable=1` reads torn pages there. The local DB is an old snapshot plus dev activity, not prod truth.
-- Secrets live in `.env` (root) and `backend/.env`; never commit them.
+- Dan and LN dan classification stay algorithmic: no title, artist, creator, beatmap(set) id, filename or other chart-identity shortcut. The only identity list is the real-course registry `backend/src/features/dan-courses.ts`, which rates no chart and only credits players with courses they passed.
+- Authenticated osu! API access stays server-side. New backend osu! calls go through `backend/src/osu/client.ts` (~45/min target, 60/min hard).
+- New SSE event types go in `LIVE_EVENT_NAMES` (`src/lib/live-backend.ts`), or follower tabs never see them.
+- Backend logs: structured JSON via `backend/src/logger.ts` (`logInfo`/`logWarn`), never `console.log`.
+- Replay video export is on-device only: never upload the video, queue a render job or call `/api/replay-video-job`. The backend's `ENABLE_REPLAY_VIDEO` stays off and is not a fallback.
+- Uploaded replays are unlisted, not private: the R2 `.osr` names no uploader, so listing or deleting one goes through the `uploaded_replays` owner index (`src/lib/uploaded-replays.ts`), never the R2 key.
+- Private skins stay private: serve skins only through `toSkinSummary(row, { asOwner })`, never the raw row; replay viewers never get a private `.osk`.
+- Companella imports are never official data: they write only `companella_*` tables (plus merged-rating rows in `player_skill_history` and `unrated_plays`) and never feed the ingestor, `score_events`, `player_skill_ratings`, `users.pp`, rankings, goals, packs or snipes. Their replays stay out of the upload flow (public only for a listed import on an official file). The sanctioned exceptions are listed in `docs/companella-integration.md`; read it before touching any.
+- Admin reset-local-db and delete-country are destructive.
+- Several agent sessions share this working tree; uncommitted changes may be someone else's. Never `git stash`, `git restore`, `git clean` or `git checkout -- <path>` files you didn't author; use `git show HEAD:<path>` to compare.
+- Pushing `main` (including `git ship`) is a production release: only when explicitly asked, every time.
+- Prod DB over SSH: only `sqlite3 'file:<path>?immutable=1'` (`-readonly` blocks WAL checkpoints and once stalled the backend). Locally, use `pragma query_only=1` (`immutable=1` reads torn pages while processes write). The local DB is an old snapshot plus dev activity, not prod truth.
+- Secrets live in `.env` and `backend/.env`; never commit them.
 
 ## Config and admin
 
-- Frontend vars: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, R2 vars.
-- Backend (`backend/src/config.ts` has the full ~90-var list with defaults): osu!/oSC credentials and endpoints, `TRACKED_COUNTRIES`, `ALLOWED_ORIGINS`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, `LIVE_BACKEND_ROLE` (`all`/`server`/`worker`, opt-in two-process split), and feature flags (`ENABLE_WORKERS`, `ENABLE_OSC_SOCKET`, `ENABLE_OSC_BACKFILL`, `ENABLE_OSU_SCORES_FALLBACK`, `ENABLE_SCHEDULED_REFRESHES`, `ENABLE_DISCORD_BOT`/`ENABLE_DISCORD_FEEDS`).
-- Admin UI is at `/admin/live-backend` (frontend) talking to backend `/api/admin/*`. `/admin/r2` browses both R2 buckets (private `mania-hub-replay-cache`, public `mania-hub-public`); their browsable roots and delete warnings are declared once in the `ADMIN_BUCKETS` registry in `src/lib/r2-cache.ts`.
+- Frontend vars: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, R2 vars. Backend vars (~90, with defaults): `backend/src/config.ts`.
+- `/admin/live-backend` drives backend `/api/admin/*`. `/admin/r2` browses both R2 buckets (private `mania-hub-replay-cache`, public `mania-hub-public`), declared in `ADMIN_BUCKETS` (`src/lib/r2-cache.ts`).
 
 ## Style
 
-- TypeScript, React function components, two-space indent, semicolons, named exports where local style uses them; prefer existing helpers and patterns over parallel abstractions.
-- Frontend imports use `#/*` or `@/*` aliases for `src/*` (match nearby style); the backend uses relative imports within `backend/src/`.
-- Tailwind CSS v4 via `@tailwindcss/vite`; globals and theme CSS variables (hue/saturation, applied before hydration) in `src/styles.css`; a custom `hover` variant avoids stuck hover states on touch devices. Animations use framer-motion; 3D card code uses Three.js under `src/components/player/maniacard3d/`.
-- New pages start from the site shell: `PageHeader` with an osu! line icon from `public/images/icons/`, body `bg-osu-b5`, panels as in `src/components/companella/primitives.tsx`. The dark legal chrome is only for `/privacy` and `/terms`.
-- New or edited Lingui strings: run `npm run i18n:extract` and `npm run i18n:compile`, and commit the compiled `src/locales/*/messages.ts` with the `.po` files (the build does not compile catalogs).
-- `public/sw.js` serves `/fonts/`, `/images/` and `/favicon` cache-first, and a hard reload does not clear it. A changed file there needs a `CACHE_NAME` bump or, better, a new URL.
-- Always pass a locale to `toLocaleString`/`toLocaleDateString`/`Intl.*` (`"en-US"`, as `src/lib/format.ts` does). A bare call takes Node's locale under SSR and the visitor's on hydration, which is a recoverable-#418 mismatch outside en-US. Enforced by `src/locale-formatting.test.ts`; opt out with `// locale-ok: <why it never renders during SSR>`.
+- TypeScript, React function components, two-space indent, semicolons, named exports where local style uses them; reuse existing helpers over parallel abstractions.
+- Frontend imports use `#/*` or `@/*` for `src/*` (match nearby code); the backend uses relative imports.
+- Tailwind v4; globals and theme variables in `src/styles.css`, including a `hover` variant that avoids stuck hover on touch. framer-motion for animation; Three.js for 3D cards (`src/components/player/maniacard3d/`).
+- New pages use the site shell: `PageHeader` with an osu! line icon from `public/images/icons/`, body `bg-osu-b5`, panels as in `src/components/companella/primitives.tsx`. The dark legal chrome is only for `/privacy` and `/terms`.
+- New or edited Lingui strings: `npm run i18n:extract` then `npm run i18n:compile`, and commit the compiled `src/locales/*/messages.ts` with the `.po` files (the build doesn't compile them).
+- `public/sw.js` serves `/fonts/`, `/images/` and `/favicon` cache-first and survives hard reloads: a changed file there needs a `CACHE_NAME` bump or, better, a new URL.
+- Always pass a locale (`"en-US"`, as `src/lib/format.ts` does) to `toLocaleString`/`toLocaleDateString`/`Intl.*`; a bare call mismatches SSR and hydration (#418). Enforced by `src/locale-formatting.test.ts`; opt out with `// locale-ok: <why it never renders during SSR>`.
