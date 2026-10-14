@@ -908,14 +908,26 @@ export interface AnalyticsSession {
 }
 
 /* Rows arrive newest-first, so sessions come out ordered by most recent
-   activity and each trail reads top-down from latest to earliest. */
-export function buildAnalyticsSessions(rows: AnalyticsRecentEventRow[], now: number): AnalyticsSession[] {
+   activity and each trail reads top-down from latest to earliest.
+
+   Without `slots` a visitor's number is their recency rank, which renumbers
+   and recolours everybody whenever someone else acts. A live view passes one
+   map for its whole lifetime, so a visitor keeps the number they first got. */
+export function buildAnalyticsSessions(
+  rows: AnalyticsRecentEventRow[],
+  now: number,
+  slots?: Map<string, number>,
+): AnalyticsSession[] {
   const sessions = new Map<string, AnalyticsSession>();
   for (const row of rows) {
     const id = row.distinctId || "unknown";
     let session = sessions.get(id);
     if (!session) {
-      const slot = sessions.size;
+      let slot = sessions.size;
+      if (slots) {
+        slot = slots.get(id) ?? slots.size;
+        slots.set(id, slot);
+      }
       session = {
         distinctId: id,
         slot,
