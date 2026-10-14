@@ -392,6 +392,12 @@ function getCardThumbnailRenderSignature(data: ManiaCardReadyData): string {
      but a handful of cards. The leading token is the scatter's own version:
      bump it when drawMotifPattern changes, and only cards with art re-render. */
   if (data.motif) parts.push(`motif4:${cardMotifSignature(data.motif)}`);
+  /* The supporter foil, appended on the same terms: only a supporter's cards
+     change address, and they change back when the status lapses. A supporter's
+     chosen motif and palette already ride the motif segment above. The leading
+     token is the baked foil's version: bump it when drawSupporterFoil (or the
+     shared foil art it draws) changes. */
+  if (data.supporterFoil) parts.push("foil1");
   // A team card's face (the flag rides as avatarUrl already). The leading
   // token is the face's version: bump it when the team face's drawing changes.
   if (data.team) parts.push(`team3:${data.team.tag}:${data.team.coverUrl ?? ""}`);
@@ -465,6 +471,7 @@ export function collectedCardRenderData(card: CollectedCard, skills: NonNullable
     tierOverride: collectedCardTier(card),
     labelOverride: card.customLabel,
     motifOverride: card.motif,
+    supporterLook: card.supporterLook,
   });
 }
 

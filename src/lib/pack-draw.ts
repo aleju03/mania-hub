@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
+import type { SupporterLook } from "./supporter-card-looks";
 import { liveBridgeToken } from "./live-backend-tokens";
 import type { OsuScore } from "./types";
 
@@ -39,6 +40,9 @@ export interface ServerPackDrawSlot {
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
+  /* The player's supporter look, present only while they are an active
+     supporter. Re-parsed in mapServerPackDraw, so the type is not trusted. */
+  supporterLook?: SupporterLook | null;
   /* Dealt by the wishlist's pity roll rather than by the ordinary draw
      (live-backend pack-wishlist.ts), so the reveal can name it. Display-only
      on this side: the slot is an ordinary card either way. */

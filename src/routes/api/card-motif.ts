@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CARD_MOTIF_URL_MAX_CHARS } from "#/lib/card-motif";
 import { sniffImageMime } from "#/lib/image-sniff";
+import { getPublicBucketBaseUrl } from "#/lib/public-image-store";
+import { isCustomMotifUrl } from "#/lib/supporter-card-looks";
 import { bridgeAuthHeaders } from "#/lib/live-backend-tokens";
 
 /* The image a hand-granted maniacard floats in its background, served by us
@@ -73,7 +75,16 @@ async function fetchAllowlist(): Promise<Set<string> | null> {
    re-checks, so a motif granted moments ago starts drawing without waiting out
    the TTL; a URL that was never granted costs at most one refresh per
    ALLOWLIST_MIN_REFRESH_MS however often it is asked for. */
+/* A supporter's converted upload in our own image bucket is safe to serve
+   without the backend's list: it is our bytes on our CDN, and asking the list
+   first would leave a fresh upload blank on the card until the list refreshed. */
+function isOwnSupporterMotif(src: string): boolean {
+  const base = getPublicBucketBaseUrl();
+  return !!base && src.startsWith(`${base}/supporter-motifs/`) && isCustomMotifUrl(src);
+}
+
 async function isAllowedMotifUrl(src: string): Promise<boolean> {
+  if (isOwnSupporterMotif(src)) return true;
   const now = Date.now();
   if (allowedUrls && allowlistExpiresAt > now && allowedUrls.has(src)) return true;
 

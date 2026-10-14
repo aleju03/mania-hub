@@ -14,6 +14,8 @@ import {
 } from "./renderData";
 import type { ManiaCardPanelProps, ManiaCardReadyData } from "./types";
 import { isWindowActive, subscribeWindowActivity } from "#/lib/window-activity";
+import { fetchLiveSupporterLook, peekLiveSupporterLook } from "#/lib/live-backend";
+import { parseSupporterLook, supporterLookSignature, type SupporterLook } from "#/lib/supporter-card-looks";
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -101,6 +103,36 @@ function scheduleRendererStart(callback: () => void) {
   };
 }
 
+/* The player's supporter look for the profile card: the override when the
+   caller passes one (the settings preview; null previews the plain card),
+   else the look fetched for this player. Returned by identity of its content,
+   so a preview passing a fresh object each render does not rebuild the card. */
+function useSupporterLook(userId: number, override: SupporterLook | null | undefined): SupporterLook | null {
+  const overridden = override !== undefined;
+  const [fetched, setFetched] = useState<{ userId: number; look: SupporterLook | null } | null>(null);
+  useEffect(() => {
+    if (overridden || userId <= 0) return;
+    let cancelled = false;
+    void fetchLiveSupporterLook(userId).then((look) => {
+      if (!cancelled) setFetched({ userId, look });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [overridden, userId]);
+  const look = overridden
+    ? override
+    : userId <= 0
+      ? null
+      : fetched?.userId === userId
+        ? fetched.look
+        : peekLiveSupporterLook(userId) ?? null;
+  const key = supporterLookSignature(look);
+  // Keyed on the look's content rather than its object identity.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => parseSupporterLook(look), [key]);
+}
+
 export function ManiaCard3DPanel({
   user,
   scores,
@@ -109,6 +141,7 @@ export function ManiaCard3DPanel({
   isOwnProfile = false,
   tierOverride,
   team,
+  supporterLookOverride,
 }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
@@ -120,11 +153,12 @@ export function ManiaCard3DPanel({
   const [readySignature, setReadySignature] = useState<string | null>(null);
   const [ratingModalOpen, setRatingModalOpen] = useState(false);
   const reducedMotion = useReducedMotion();
+  const supporterLook = useSupporterLook(team ? 0 : user.id, supporterLookOverride);
   const data = useMemo(
     () => precomputedSkills
-      ? buildManiaCardRenderDataFromSkills({ user, skills: precomputedSkills, scores, tierOverride, team })
-      : buildManiaCardRenderData({ user, scores, tierOverride }),
-    [precomputedSkills, scores, team, tierOverride, user],
+      ? buildManiaCardRenderDataFromSkills({ user, skills: precomputedSkills, scores, tierOverride, team, supporterLook })
+      : buildManiaCardRenderData({ user, scores, tierOverride, supporterLook }),
+    [precomputedSkills, scores, team, tierOverride, user, supporterLook],
   );
   const dataSignature = useMemo(() => getManiaCardRenderDataSignature(data), [data]);
   const rendererReady = readySignature === dataSignature;

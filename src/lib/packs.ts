@@ -15,6 +15,7 @@ import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { parsePackTeamCard, teamCardUser, teamPackCardKey, type PackTeamCard } from "./team-cards";
 export { parsePackTeamCard, teamCardFace, teamCardSkills, teamCardUser, teamPackCardKey, type PackTeamCard } from "./team-cards";
 import { parseCardMotif, type CardMotif } from "./card-motif";
+import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import { parsePackCardKey } from "./pack-collection";
 import { HONORARY_PACK_POOL, honoraryPlayerById, isHonoraryPlayer, type HonoraryPlayer } from "./honorary-players";
 import { getUserScoresBestWindow } from "./osu";
@@ -74,6 +75,9 @@ export interface PackPlayer {
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
+  /* The player's supporter look, for every copy of their card. Display-only:
+     it changes how the face is drawn and nothing about the deal. */
+  supporterLook?: SupporterLook | null;
   /* Dealt by the wishlist's pity roll (live-backend pack-wishlist.ts): a
      player this collector named and the pack reached for. Display-only, like
      the flags above - it only decides whether the reveal prints the tag. */
@@ -887,6 +891,8 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
       continue;
     }
     const variant = packPlayerVariantFields(slot);
+    const supporterLook = parseSupporterLook(slot.supporterLook ?? null);
+    const look = supporterLook ? { supporterLook } : {};
     if (typeof slot.isNew === "boolean") {
       isNewByCardKey.set(
         variant.cardKey ?? (slot.honorary ? `${slot.userId}:goat` : slot.eternal ? `${slot.userId}:eternal` : String(slot.userId)),
@@ -895,7 +901,7 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
     }
     if (slot.honorary) {
       const member = honoraryPlayerById(slot.userId);
-      if (member?.cardReady) players.push(honoraryToPackPlayer(member));
+      if (member?.cardReady) players.push({ ...honoraryToPackPlayer(member), ...look });
       continue;
     }
     if (slot.eternal) {
@@ -909,6 +915,7 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
       players.push({
         eternal: true,
         ...variant,
+        ...look,
         user: {
           id: slot.userId,
           username: slot.username || snapshot?.username || `User ${slot.userId}`,
@@ -923,6 +930,7 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
     }
     players.push({
       ...variant,
+      ...look,
       user: {
         id: slot.userId,
         username: slot.username ?? `User ${slot.userId}`,

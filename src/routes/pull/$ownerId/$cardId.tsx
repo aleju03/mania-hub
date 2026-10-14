@@ -24,6 +24,7 @@ import { parsePackTeamCard, parseTeamPackCardKey, teamCardFace, teamCardSkills, 
 import { getI18n } from "../../../lib/i18n";
 import { PACK_TYPE_NAME_LABELS, PACK_TYPES, type PackTypeId } from "../../../lib/packs";
 import { pageSeo, pullOgImagePath } from "../../../lib/seo";
+import { effectiveCardLook } from "../../../lib/supporter-card-looks";
 
 export const Route = createFileRoute("/pull/$ownerId/$cardId")({
   validateSearch: (search: Record<string, unknown>): { pull?: number } => {
@@ -130,7 +131,7 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
     setStaticImage(null);
     const skills = shared.card.skills as ManiaSkills | null;
     if (!skills || !Number.isFinite(skills.cardPower)) {
-      setStaticImage(renderCardSkeletonThumbnail(tier, 600, shared.card.motif ?? null));
+      setStaticImage(renderCardSkeletonThumbnail(tier, 600, effectiveCardLook(shared.card.motif, shared.card.supporterLook).motif));
       return;
     }
     const team = sharedTeamCard(shared);
@@ -153,6 +154,7 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
           tierOverride: tier,
           labelOverride: shared.card.customLabel,
           motifOverride: shared.card.motif,
+          supporterLook: shared.card.supporterLook,
         });
     let cancelled = false;
     // The 2D front renders first so something card-shaped is visible while

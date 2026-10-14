@@ -5,7 +5,7 @@
    junk string is a guaranteed cache miss, an osu! lookup and a render. */
 import { describe, expect, it } from "vitest";
 import { OgRenderGate } from "../lib/og-render";
-import { ogUsernameKey } from "./api/og";
+import { ogUsernameKey, pulledCardLookKeySegment } from "./api/og";
 
 describe("ogUsernameKey", () => {
   it("accepts real osu! usernames and folds case and padding into one key", () => {
@@ -63,5 +63,17 @@ describe("OG render concurrency", () => {
     releases.shift()?.();
     await Promise.all([second, coldFallback]);
     expect(gate.activeCount).toBe(0);
+  });
+});
+
+describe("pull OG cache key", () => {
+  it("leaves ordinary cards on the keys already in R2 and moves a supporter's with their look", () => {
+    expect(pulledCardLookKeySegment({ card: {} })).toBe("");
+    expect(pulledCardLookKeySegment({ card: { supporterLook: null } })).toBe("");
+    const stars = pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", palette: null } } });
+    const gold = pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", palette: "gold" } } });
+    expect(stars).toBe(":sl-stars--");
+    expect(gold).toBe(":sl-stars-gold");
+    expect(pulledCardLookKeySegment({ team: {}, card: { supporterLook: { motif: "stars", palette: null } } })).toBe("");
   });
 });

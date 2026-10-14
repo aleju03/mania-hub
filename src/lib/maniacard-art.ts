@@ -24,6 +24,7 @@ import { packFinishSvg } from "./card-finish-art";
 import { siteAssetMotifPath, type CardMotif } from "./card-motif";
 import { readImageSize, sniffImageMime } from "./image-sniff";
 import { getCosmicTierPalette } from "./maniacard-cosmic";
+import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilSvg } from "./supporter-foil-art";
 import type { CosmicTierPalette } from "./maniacard-cosmic";
 import {
   CARD_CORNER_RADIUS,
@@ -386,6 +387,9 @@ export interface ManiaTierCardArt {
   motif?: CardMotif | null;
   motifUrl?: string | null;
   motifAspect?: number;
+  /* An active supporter's card: the still holographic foil over the art, the
+     same one the in-app thumbnails bake (lib/supporter-foil-art.ts). */
+  foil?: boolean;
   /* Rounds the card's own corners, leaving them transparent. Off by default:
      an embed that sits on an unknown background wants the full rectangle, and
      only the callers that know what is behind the card ask for it. The value
@@ -472,6 +476,21 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
               },
             })
           : null,
+        // The supporter foil, over the art and under everything printed on
+        // it, in the same two passes as the canvas copy: screened so it
+        // lightens without greying, then overlaid so it shows on pale tiers.
+        ...(art.foil
+          ? ([
+              ["foil", SUPPORTER_FOIL_OPACITY, "screen"],
+              ["foilTint", SUPPORTER_FOIL_TINT_OPACITY, "overlay"],
+            ] as const).map(([key, opacity, mixBlendMode]) =>
+              h("img", {
+                key,
+                src: `data:image/svg+xml;base64,${Buffer.from(supporterFoilSvg()).toString("base64")}`,
+                style: { position: "absolute", top: "0", left: "0", width: "100%", height: "100%", opacity, mixBlendMode },
+              }),
+            )
+          : []),
         // Mode badge (top-left).
         h(
           "div",

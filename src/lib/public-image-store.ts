@@ -81,9 +81,9 @@ export function getPublicBucketBaseUrl(): string | null {
 }
 
 /** Content-addressed key for an image, identical for identical bytes. */
-export function getPublicImageKey(buffer: Buffer, mime: SniffedImageMime): string {
+export function getPublicImageKey(buffer: Buffer, mime: SniffedImageMime, prefix = IMAGE_PREFIX): string {
   const hash = crypto.createHash("sha256").update(buffer).digest("hex");
-  return `${IMAGE_PREFIX}${hash}.${imageMimeExtension(mime)}`;
+  return `${prefix}${hash}.${imageMimeExtension(mime)}`;
 }
 
 export interface StoredImage {
@@ -102,6 +102,9 @@ export async function storePublicImage(
   buffer: Buffer,
   mime: SniffedImageMime,
   uploadedBy: string,
+  /* supporter-motifs/ for supporters' card images; bbcode/ otherwise. Same
+     rule for both: permanent, no lifecycle expiry. */
+  prefix = IMAGE_PREFIX,
 ): Promise<StoredImage> {
   const s3 = getClient();
   const bucket = getBucket();
@@ -110,7 +113,7 @@ export async function storePublicImage(
     throw new Error("Image storage is not configured.");
   }
 
-  const key = getPublicImageKey(buffer, mime);
+  const key = getPublicImageKey(buffer, mime, prefix);
   await s3.send(
     new PutObjectCommand({
       Bucket: bucket,

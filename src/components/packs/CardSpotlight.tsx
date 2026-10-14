@@ -17,6 +17,7 @@ import { renderCardSkeletonThumbnail, renderCardThumbnail } from "./cardSnapshot
 import { collectedCardRenderData } from "./cardThumbnailCache";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { rememberTeamName } from "../../lib/analytics-teams";
+import { effectiveCardLook } from "../../lib/supporter-card-looks";
 
 export interface CardSpotlightTarget {
   card: CollectedCard;
@@ -268,7 +269,7 @@ export function CardSpotlight({
   const tier = card ? spotlightCardTier(card) : null;
   const tierLabel = card?.tierLabel ?? (card?.tier ? MANIA_TIER_STYLES[card.tier].label : null);
   const baseImage =
-    target?.thumbnail ?? (tier ? renderCardSkeletonThumbnail(tier, 600, card?.motif ?? null, Boolean(card?.team)) : null);
+    target?.thumbnail ?? (tier ? renderCardSkeletonThumbnail(tier, 600, effectiveCardLook(card?.motif, card?.team ? null : card?.supporterLook).motif, Boolean(card?.team)) : null);
 
   return createPortal(
     <AnimatePresence onExitComplete={onExitComplete}>

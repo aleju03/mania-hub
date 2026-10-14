@@ -31,6 +31,8 @@ export interface AdminSupporterRow {
   firstSupportedAt: number;
   lastDonationAt: number | null;
   active: boolean;
+  /** Their own card motif image, when they uploaded one. */
+  customMotifUrl: string | null;
 }
 
 export interface AdminSupportersView {
@@ -101,3 +103,11 @@ export const importAdminKofiCsv = createServerFn({ method: "POST" })
     return { csv };
   })
   .handler(({ data }) => adminRequest<{ ok: true; rows: number; inserted: number; linked: number }>("/api/admin/supporters/import", data));
+
+export const clearAdminSupporterMotif = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown }) => {
+    const userId = Number(data?.userId);
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Pick a supporter.");
+    return { userId };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; cleared: boolean }>("/api/admin/supporters/clear-motif", data));

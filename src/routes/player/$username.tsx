@@ -63,6 +63,8 @@ import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import { SkillsUntrackedNotice } from "../../components/player/SkillsUntrackedNotice";
+import { SupporterLookPicker } from "../../components/player/SupporterLookPicker";
+import type { SupporterLook } from "../../lib/supporter-card-looks";
 import { buildRestrictedBestList, profileRailTotals } from "../../components/player/restricted-best-scores";
 import { companellaImportsToScores, dropCompanellaOsuTwins } from "../../lib/companella-scores";
 import type { OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
@@ -979,6 +981,8 @@ export function PlayerProfilePage({
   const navigate = useNavigate();
   const hasHydrated = useHasHydrated();
   const cardTierPreview = useCardTierPreview();
+  // The look the card tab previews while its owner picks one; undefined draws the saved look.
+  const [supporterLookPreview, setSupporterLookPreview] = useState<SupporterLook | undefined>(undefined);
   const loaderSnapshot = loaderData?.cachedSnapshot ?? null;
   const loaderBestScores = useMemo(
     () => loaderSnapshot ? dedupeScores(loaderSnapshot.bestScores) : [],
@@ -2768,7 +2772,11 @@ export function PlayerProfilePage({
                   loading={!bestWindowLoaded}
                   isOwnProfile={!!auth.viewer && !!user && auth.viewer.id === user.id}
                   tierOverride={cardTierPreview}
+                  supporterLookOverride={supporterLookPreview}
                 />
+                {!!auth.viewer && !!user && auth.viewer.id === user.id && (
+                  <SupporterLookPicker userId={user.id} onPreview={setSupporterLookPreview} />
+                )}
               </motion.div>
             ) : tab === "activity" ? (
               <motion.div

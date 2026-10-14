@@ -108,6 +108,7 @@ function toSpotlightCard(
     tierLabel: card.tierLabel,
     customLabel: card.player.customLabel ?? null,
     motif: card.player.motif ?? null,
+    ...(card.player.supporterLook ? { supporterLook: card.player.supporterLook } : {}),
     skills: card.skills,
     pp: card.player.pp,
     globalRank: card.player.globalRank,

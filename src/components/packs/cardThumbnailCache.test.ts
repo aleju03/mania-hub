@@ -71,6 +71,30 @@ describe("cardThumbnailKeyForCollectionCard", () => {
     expect(new Set([plain, withArt, rescaled]).size).toBe(3);
   });
 
+  it("gives a supporter's card its own address, keyed on the look", () => {
+    const plain = cardThumbnailKeyForCollectionCard(makeCard());
+    const stars = cardThumbnailKeyForCollectionCard(makeCard({ supporterLook: { motif: "stars", palette: null } }));
+    const hearts = cardThumbnailKeyForCollectionCard(makeCard({ supporterLook: { motif: "hearts", palette: null } }));
+    const gold = cardThumbnailKeyForCollectionCard(makeCard({ supporterLook: { motif: "stars", palette: "gold" } }));
+    expect(new Set([plain, stars, hearts, gold]).size).toBe(4);
+    // A lapsed supporter's card goes back to the address it always had.
+    expect(cardThumbnailKeyForCollectionCard(makeCard({ supporterLook: null }))).toBe(plain);
+  });
+
+  it("keeps a granted motif over the supporter's but still foils the card", () => {
+    const motif = { url: "https://e.com/a.png", scale: 1, opacity: 1 };
+    const granted = cardThumbnailKeyForCollectionCard(makeCard({ motif }));
+    const grantedSupporter = cardThumbnailKeyForCollectionCard(
+      makeCard({ motif, supporterLook: { motif: "hearts", palette: "ember" } }),
+    );
+    const grantedSupporterOtherLook = cardThumbnailKeyForCollectionCard(
+      makeCard({ motif, supporterLook: { motif: "stars", palette: null } }),
+    );
+    expect(grantedSupporter).not.toBe(granted);
+    // The look's motif and palette lose to the grant, so only the foil differs.
+    expect(grantedSupporterOtherLook).toBe(grantedSupporter);
+  });
+
   it("answers from the cache for a card object it has already seen", () => {
     const card = makeCard();
     const first = cardThumbnailKeyForCollectionCard(card);

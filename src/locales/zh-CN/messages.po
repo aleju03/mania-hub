@@ -3501,9 +3501,9 @@ msgstr "音频波形"
 msgid "August 23, 2026"
 msgstr "2026年8月23日"
 
-#: src/components/packs/ForgePanel.tsx
-#~ msgid "Aurora"
-#~ msgstr "极光"
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Aurora"
+msgstr "极光"
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Authorize {appName}"
@@ -4153,6 +4153,10 @@ msgstr "卡片封面"
 #: src/lib/signature-shared.ts
 msgid "Card front"
 msgstr "卡片正面"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Card look"
+msgstr "卡面样式"
 
 #: src/routes/packs.tsx
 msgid "Card Packs"
@@ -5286,6 +5290,10 @@ msgstr "无法撤销这些连接。"
 #~ msgid "Could not revoke the installations."
 #~ msgstr ""
 
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Could not save that."
+msgstr "无法保存。"
+
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "保存失败，请再试一次。"
@@ -5313,6 +5321,10 @@ msgstr ""
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not submit that. Try again."
 msgstr "提交失败，请再试一次。"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Could not upload that image."
+msgstr "无法上传这张图片。"
 
 #: src/routes/recommendations.tsx
 msgid "Couldn't build recommendations"
@@ -6623,9 +6635,9 @@ msgstr "正在重启或维护中。请稍后再试。"
 msgid "Elite"
 msgstr "精英"
 
-#: src/components/packs/ForgePanel.tsx
-#~ msgid "Ember"
-#~ msgstr "余烬"
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Ember"
+msgstr "余烬"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "End"
@@ -7040,6 +7052,10 @@ msgstr "在 {mapSlot} 上 FC（<0/>）"
 #: src/routes/tracker.tsx
 msgid "FC chokes only (1 miss)"
 msgstr "仅 FC 断连（1 miss）"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Feathers"
+msgstr "羽毛"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Feeds"
@@ -7769,6 +7785,7 @@ msgid "Goes by the country on someone's osu! account, and anyone already in can 
 msgstr "以对方 osu! 账号上的国家/地区为准，已经加入的人仍然可以分享邀请链接。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/player/SupporterLookPicker.tsx
 #: src/lib/signature-style.ts
 msgid "Gold"
 msgstr "金色"
@@ -7904,6 +7921,10 @@ msgstr "标题"
 #: src/lib/replay-overlays.ts
 msgid "Health bar"
 msgstr "血条"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Hearts"
+msgstr "爱心"
 
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
@@ -11715,6 +11736,7 @@ msgstr "音符形状"
 msgid "notes"
 msgstr "音符"
 
+#: src/components/player/SupporterLookPicker.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -12816,6 +12838,10 @@ msgstr "表现分排名"
 msgid "Persian"
 msgstr "波斯语"
 
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Petals"
+msgstr "花瓣"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Pick a colour"
 msgstr "选择颜色"
@@ -13416,9 +13442,9 @@ msgstr "上一段试听"
 msgid "Previously"
 msgstr "此前"
 
-#: src/components/packs/ForgePanel.tsx
-#~ msgid "Prismatic"
-#~ msgstr "棱彩"
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Prismatic"
+msgstr "棱彩"
 
 #: src/routes/__root.tsx
 msgid "privacy"
@@ -16087,6 +16113,7 @@ msgstr "单点切 {singleText}，大切 {chordText}"
 msgid "size"
 msgstr "大小"
 
+#: src/components/player/SupporterLookPicker.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Size"
@@ -16640,6 +16667,7 @@ msgstr "星级"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/player/SupporterLookPicker.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -16704,6 +16732,10 @@ msgstr "数据与最佳成绩"
 #: src/routes/maps.tsx
 msgid "Status"
 msgstr "状态"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Stellium"
+msgstr "Stellium"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 1: every chart gets its own dan level"
@@ -16846,6 +16878,10 @@ msgstr "被双押打断的切换。"
 msgid "Streams thickened with three-note hand chords."
 msgstr "加入三押的切换。"
 
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Strength"
+msgstr "强度"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Strikethrough"
@@ -16926,6 +16962,10 @@ msgstr "支持 mania-tracker"
 #: src/routes/player/$username.tsx
 #~ msgid "Supporter"
 #~ msgstr "Supporter"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Supporter until {until}"
+msgstr "支持者到期：{until}"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
@@ -17245,6 +17285,10 @@ msgstr "这个文件不是支持的图片格式。"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "That gift is no longer there."
 msgstr "这份礼物已经不在了。"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "That image is over 5 MB."
+msgstr "图片超过 5 MB。"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That image is too large to draw."
@@ -18835,6 +18879,10 @@ msgstr "周四"
 msgid "Tier changed to {tierLabel}"
 msgstr "等级变更为 {tierLabel}"
 
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Tier colours"
+msgstr "等级配色"
+
 #: src/lib/replay-overlays.ts
 msgid "Time left"
 msgstr "剩余时间"
@@ -19517,9 +19565,14 @@ msgstr "上传皮肤"
 msgid "Upload a skin and it lands here."
 msgstr "上传一个皮肤，它就会出现在这里。"
 
+#: src/components/player/SupporterLookPicker.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Upload another"
 msgstr "再上传一个"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Upload image"
+msgstr "上传图片"
 
 #: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins.tsx
@@ -20746,6 +20799,10 @@ msgstr "你的动态渲染图已被关闭。"
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Your first forge"
 #~ msgstr "你的第一次锻造"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Your image"
+msgstr "你的图片"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."

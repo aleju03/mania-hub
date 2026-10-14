@@ -1,4 +1,5 @@
 import type { CardMotif } from "./card-motif";
+import type { SupporterLook } from "./supporter-card-looks";
 import type { PackTeamCard } from "./team-cards";
 import { AWARDED_TIERS, getManiaCardTier, type ManiaCardTier, type ManiaSkills } from "./maniacard";
 
@@ -38,6 +39,11 @@ export interface CollectedCard {
      floats this image instead of its tier's triangle flecks or starfield.
      Server-side only, exactly like customLabel, so sanitizeCard drops it. */
   motif?: CardMotif | null;
+  /* The player's supporter look (foil, motif, palette), present only while
+     they are an active supporter. It belongs to the player, not the holding,
+     so the server attaches it at read time and sanitizeCard drops it: a
+     lapsed supporter's card must not keep shining out of localStorage. */
+  supporterLook?: SupporterLook | null;
   /* Skills snapshot from the pull, enough to redraw the real card front
      offline (the texture pipeline needs no scores). Null for failed mints
      and cards collected before snapshots existed. */

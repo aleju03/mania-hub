@@ -13,6 +13,9 @@ precision highp float;
 uniform float uTime;
 uniform float uIntensity;
 uniform float uFoil;
+// An active supporter's card: the holo turns into a fine holographic foil,
+// on every tier including common (whose uFoil is 0).
+uniform float uSupporter;
 uniform float uStarfield;
 uniform vec2 uLight;
 uniform vec3 uTierColor;
@@ -192,6 +195,22 @@ vec2 beam(vec2 uv, vec2 axis, float center, float sharpFalloff, float wideFallof
   return vec2(exp(-d * d * sharpFalloff), exp(-d * d * wideFalloff));
 }
 
+/* The supporter foil's surface: a fine diamond lattice (the embossed grid a
+   real holo sheet has) whose facets each catch the light at their own angle,
+   so a few of them flash as the card tilts while the rest stay matte. Cells
+   are square in card pixels. Returns vec2(lattice lines, facet glint). */
+vec2 foilSurface(vec2 uv, vec2 light) {
+  vec2 px = uv * uTextureSize / 14.0;
+  vec2 diag = vec2(px.x + px.y, px.x - px.y) * 0.70710678;
+  vec2 cell = floor(diag);
+  vec2 f = abs(fract(diag) - 0.5);
+  float line = smoothstep(0.40, 0.5, max(f.x, f.y));
+  float facet = random(cell);
+  float angle = facet * 6.28318 + light.x * 7.0 - light.y * 5.0;
+  float glint = pow(max(0.0, cos(angle)), 40.0) * step(0.86, random(cell + vec2(3.1, 7.7)));
+  return vec2(line, glint);
+}
+
 void main() {
   vec2 light = clamp(uLight, vec2(0.0), vec2(1.0));
   vec2 lightOffset = light - 0.5;
@@ -245,19 +264,22 @@ void main() {
   float centerA = restA + lightOffset.y * 0.55 + lightOffset.x * 0.20 + drift1;
   vec2 beamA = beam(vUv, axisA, centerA, 24.0, 5.0);
 
+  // A supporter card always carries the foil, common included.
+  float foilOn = max(uFoil, uSupporter);
+
 #if MC_MEDIUM
-  float bandSharp = beamA.x * uFoil;
-  float bandWide = beamA.y * uFoil;
+  float bandSharp = beamA.x * foilOn;
+  float bandWide = beamA.y * foilOn;
 #else
   // Secondary beam at a contrasting angle so the two cross when the card moves.
   float restB = 0.5 * (axisB.x + axisB.y);
   float centerB = restB + lightOffset.x * 0.55 - lightOffset.y * 0.25 + drift2;
   vec2 beamB = beam(vUv, axisB, centerB, 22.0, 4.5);
 
-  float bandSharp = max(beamA.x, beamB.x * 0.7) * uFoil;
-  float bandWide = max(beamA.y, beamB.y * 0.85) * uFoil;
+  float bandSharp = max(beamA.x, beamB.x * 0.7) * foilOn;
+  float bandWide = max(beamA.y, beamB.y * 0.85) * foilOn;
 #endif
-  glare *= uFoil;
+  glare *= foilOn;
 
   // Hue scrolls along each beam direction so the rainbow visibly shifts as
   // the bands move - that's the Pokemon holo "color flow".
@@ -269,9 +291,33 @@ void main() {
   // otherwise the rainbow reads as a color cast over the tier's own palette.
   rainbow = mix(uTierColor * 1.5 + 0.12, rainbow, uRainbow);
 
+  /* Supporter foil. Not more holo but a finer one: inside the same beams the
+     one broad rainbow is swapped for a pastel spectrum several bands per card
+     width that slides with the light, so tilting the card runs the colours
+     across it, and the sheet gets a texture, the lattice plus the odd facet
+     glinting at its own angle. A faint sheen follows the light everywhere,
+     since a foil sheet is foil edge to edge. Spared on every other card by the
+     uniform, which is constant per draw. */
+  float foilGrain = 1.0;
+  vec3 supporterFoil = vec3(0.0);
+  float supporterAlpha = 0.0;
+  if (uSupporter > 0.5) {
+    vec2 surface = foilSurface(vUv, light);
+    float fineHue = coordA * 4.2 - coordB * 1.6 + light.x * 1.5 - light.y * 1.1 + uTime * 0.03;
+    vec3 spectrum = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + fineHue));
+    spectrum = mix(vec3(0.94), spectrum, 0.62);
+    rainbow = spectrum;
+    foilGrain = 0.74 + 0.26 * surface.x;
+    vec2 sheenBeam = beam(vUv, axisA, centerA, 24.0, 1.4);
+    float sheen = 0.12 + 0.88 * sheenBeam.y;
+    supporterFoil = spectrum * sheen * foilGrain * 0.16 + vec3(surface.y * (0.25 + 0.75 * sheen) * 0.55);
+    supporterAlpha = sheen * foilGrain * 0.05 + surface.y * (0.25 + 0.75 * sheen) * 0.14;
+  }
+
   // Holo: tier-tinted rainbow, lit only where the bands pass.
   vec3 holo = screen(uTierColor * 0.42, rainbow * 0.85)
-              * (triangles * 0.32 + stars * 0.30 + motif * 0.30 + bandWide * 0.75 + 0.10);
+              * (triangles * 0.32 + stars * 0.30 + motif * 0.30 + bandWide * 0.75 + 0.10)
+              * foilGrain;
 
   // Specular streak (white core along the beam).
   vec3 sweep = vec3(bandSharp * 0.62 + glare * 0.22);
@@ -291,11 +337,11 @@ void main() {
   float foilGain = mix(1.0, 0.30, inAvatar);
   float mask = roundedCardMask(vUv);
 
-  vec3 color = (holo + sweep + starGlow + motifGlow) * foilGain;
+  vec3 color = (holo + sweep + starGlow + motifGlow + supporterFoil) * foilGain;
   float alpha = clamp(
-    (triangles * 0.12 + stars * 0.40 + motif * 0.34 + bandWide * 0.30 + bandSharp * 0.26 + glare * 0.12) * foilGain * uIntensity,
+    (triangles * 0.12 + stars * 0.40 + motif * 0.34 + bandWide * 0.30 + bandSharp * 0.26 + glare * 0.12 + supporterAlpha) * foilGain * uIntensity,
     0.0,
-    0.55
+    0.55 + uSupporter * 0.05
   ) * mask;
   gl_FragColor = vec4(color, alpha);
 }

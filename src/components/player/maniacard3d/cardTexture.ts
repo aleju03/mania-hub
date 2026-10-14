@@ -4,6 +4,7 @@ import { buildFaceLayout, TEAM_FLAG_RADIUS, type Rect } from "./textureLayout";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
 import { cardMotifImageSrc, type CardMotif } from "#/lib/card-motif";
+import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilDataUrl } from "#/lib/supporter-foil-art";
 import { getCosmicTierPalette as cosmicPaletteFor, motifKeepsStarfield } from "#/lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
@@ -118,8 +119,11 @@ export async function createCardTextures(
      itself, so the front must not also bake a still copy of it into the
      canvas. Two sets of the same picture, one moving and one nailed down, is
      just clutter. Callers with no shader (thumbnails) leave it off and get the
-     painted copies. */
-  options: { textureScale?: number; frontOnly?: boolean; driftingMotif?: boolean } = {},
+     painted copies.
+
+     shaderFoil is the same arrangement for a supporter's foil: the overlay
+     shader draws it moving, so the front leaves out the still one. */
+  options: { textureScale?: number; frontOnly?: boolean; driftingMotif?: boolean; shaderFoil?: boolean } = {},
 ): Promise<CardTextureSet> {
   // Before measuring, not just before drawing: the username is auto-sized from
   // its measured width, so Arial metrics would size it wrong even if the font
@@ -139,7 +143,8 @@ export async function createCardTextures(
     return front.measureText(text).width;
   };
   const layout = buildFaceLayout(data, measure);
-  const [avatar, laurel, motif, teamCover] = await Promise.all([
+  const bakeFoil = data.supporterFoil === true && options.shaderFoil !== true;
+  const [avatar, laurel, motif, teamCover, foil] = await Promise.all([
     data.avatarUrl ? loadImage(data.avatarUrl).catch(() => loadImage(data.avatarUrl)).catch(() => null) : Promise.resolve(null),
     loadImage("/images/maniacard/laurel-wreath.svg").catch(() => null),
     // A motif that will not load is simply not drawn: the card falls back to
@@ -147,9 +152,11 @@ export async function createCardTextures(
     // ordinary rather than one that looks broken.
     data.motif ? loadImage(cardMotifImageSrc(data.motif)).catch(() => null) : Promise.resolve(null),
     data.team?.coverUrl ? loadImage(data.team.coverUrl).catch(() => null) : Promise.resolve(null),
+    // Inline SVG, so this never waits on the network.
+    bakeFoil ? loadImage(supporterFoilDataUrl()).catch(() => null) : Promise.resolve(null),
   ]);
 
-  drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true, teamCover);
+  drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true, teamCover, foil);
   if (!options.frontOnly) drawBack(back, data, layout, laurel);
 
   const frontTexture = toTexture(frontCanvas);
@@ -217,6 +224,8 @@ function drawFront(
      the motif does here is take the tier's own pattern away. */
   driftingMotif = false,
   teamCover: HTMLImageElement | null = null,
+  /* The still supporter foil, loaded only when this front should bake it. */
+  foil: HTMLImageElement | null = null,
 ) {
   /* A motif takes the place of whichever background pattern this tier would
      have drawn - the triangle flecks below, or the cosmic starfield inside
@@ -240,6 +249,9 @@ function drawFront(
   } else if (!cosmic) {
     drawTrianglePattern(context, 0.18);
   }
+  // Over the card art and under everything printed on it, so the name, the
+  // avatar and the numbers stay as crisp as on any other card.
+  if (foil) drawSupporterFoil(context, foil);
   if (data.team && layout.front.team) {
     dimTeamColumn(context, data, layout);
     drawTeamSpine(context, data, layout, teamCover);
@@ -1187,6 +1199,20 @@ function drawMotifPattern(context: CanvasRenderingContext2D, motif: CardMotif, i
       context.restore();
     }
   }
+  context.restore();
+}
+
+/* The still supporter foil (lib/supporter-foil-art.ts): screened over the
+   card so it lightens without greying the tier's colours, then overlaid once
+   more so it still shows on the pale tiers screening cannot lighten. */
+function drawSupporterFoil(context: CanvasRenderingContext2D, foil: HTMLImageElement) {
+  context.save();
+  context.globalCompositeOperation = "screen";
+  context.globalAlpha = SUPPORTER_FOIL_OPACITY;
+  context.drawImage(foil, 0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+  context.globalCompositeOperation = "overlay";
+  context.globalAlpha = SUPPORTER_FOIL_TINT_OPACITY;
+  context.drawImage(foil, 0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
   context.restore();
 }
 

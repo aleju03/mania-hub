@@ -6,6 +6,7 @@ import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack
 import { fetchPackPlayerScores } from "#/lib/packs";
 import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
 import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
+import { effectiveCardLook } from "#/lib/supporter-card-looks";
 import {
   cardThumbnailKeyForCollectionCard,
   cardThumbnailKeyForData,
@@ -156,12 +157,13 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier, team: fo
      it: turning a page used to paint a frame of bare gradient first, which read
      as a third state between the old page and the new one. */
   const hydrated = useHydrated();
-  const palette = card?.motif?.palette;
+  const skeletonMotif = card ? effectiveCardLook(card.motif, card.team ? null : card.supporterLook).motif : null;
+  const palette = skeletonMotif?.palette;
   const team = Boolean(card?.team) || forcedTeam === true;
   const skeletonKey = `${tier ?? "neutral"}:${palette ?? ""}${team ? ":team" : ""}`;
   let thumbnail = hydrated ? skeletonThumbnailCache.get(skeletonKey) ?? null : null;
   if (hydrated && !thumbnail) {
-    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH, card?.motif ?? null, team);
+    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH, skeletonMotif, team);
     if (thumbnail) skeletonThumbnailCache.set(skeletonKey, thumbnail);
   }
   if (thumbnail) {
@@ -179,7 +181,7 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier, team: fo
      only thing left that ever precedes the sketch. It borrows the tier's wash
      but not the tier's border: that one is a near-white rim, far louder than
      anything on the sketch it hands over to. */
-  const style = tier ? resolveManiaTierStyle(tier, card?.motif ?? null) : null;
+  const style = tier ? resolveManiaTierStyle(tier, skeletonMotif) : null;
   return (
     <div
       className={`relative overflow-hidden rounded-[10px] border border-white/8 bg-gradient-to-br ${

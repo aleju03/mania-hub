@@ -3492,9 +3492,9 @@ msgstr "Onda de audio"
 msgid "August 23, 2026"
 msgstr "23 de agosto de 2026"
 
-#: src/components/packs/ForgePanel.tsx
-#~ msgid "Aurora"
-#~ msgstr "Aurora"
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Aurora"
+msgstr "Aurora"
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Authorize {appName}"
@@ -4144,6 +4144,10 @@ msgstr "portada de carta"
 #: src/lib/signature-shared.ts
 msgid "Card front"
 msgstr "Frente de la carta"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Card look"
+msgstr "Aspecto de la carta"
 
 #: src/routes/packs.tsx
 msgid "Card Packs"
@@ -5277,6 +5281,10 @@ msgstr "No se pudieron revocar las conexiones."
 #~ msgid "Could not revoke the installations."
 #~ msgstr ""
 
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Could not save that."
+msgstr "No se pudo guardar."
+
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "No se pudo guardar. Inténtalo de nuevo."
@@ -5304,6 +5312,10 @@ msgstr ""
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not submit that. Try again."
 msgstr "No se pudo enviar. Inténtalo de nuevo."
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Could not upload that image."
+msgstr "No se pudo subir esa imagen."
 
 #: src/routes/recommendations.tsx
 msgid "Couldn't build recommendations"
@@ -6614,9 +6626,9 @@ msgstr "Se está reiniciando o está en mantenimiento. Inténtalo de nuevo más 
 msgid "Elite"
 msgstr "Élite"
 
-#: src/components/packs/ForgePanel.tsx
-#~ msgid "Ember"
-#~ msgstr "Brasa"
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Ember"
+msgstr "Brasa"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "End"
@@ -7031,6 +7043,10 @@ msgstr "FC <0/> en {mapSlot}"
 #: src/routes/tracker.tsx
 msgid "FC chokes only (1 miss)"
 msgstr "Solo chokes de FC (1 miss)"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Feathers"
+msgstr "Plumas"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Feeds"
@@ -7760,6 +7776,7 @@ msgid "Goes by the country on someone's osu! account, and anyone already in can 
 msgstr "Se basa en el país de la cuenta de osu! de cada quien, y cualquiera que ya esté dentro puede seguir compartiendo la invitación."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/player/SupporterLookPicker.tsx
 #: src/lib/signature-style.ts
 msgid "Gold"
 msgstr "Dorado"
@@ -7895,6 +7912,10 @@ msgstr "Encabezado"
 #: src/lib/replay-overlays.ts
 msgid "Health bar"
 msgstr "Barra de HP"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Hearts"
+msgstr "Corazones"
 
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
@@ -11706,6 +11727,7 @@ msgstr "Forma de las notas"
 msgid "notes"
 msgstr "notas"
 
+#: src/components/player/SupporterLookPicker.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -12807,6 +12829,10 @@ msgstr "Rank de rendimiento"
 msgid "Persian"
 msgstr "Persa"
 
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Petals"
+msgstr "Pétalos"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Pick a colour"
 msgstr "Elige un color"
@@ -13407,9 +13433,9 @@ msgstr "Vista previa anterior"
 msgid "Previously"
 msgstr "Antes"
 
-#: src/components/packs/ForgePanel.tsx
-#~ msgid "Prismatic"
-#~ msgstr "Prismática"
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Prismatic"
+msgstr "Prismática"
 
 #: src/routes/__root.tsx
 msgid "privacy"
@@ -16078,6 +16104,7 @@ msgstr "Streams de una nota {singleText}, chordstreams {chordText}"
 msgid "size"
 msgstr "tamaño"
 
+#: src/components/player/SupporterLookPicker.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Size"
@@ -16631,6 +16658,7 @@ msgstr "estrellas"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/player/SupporterLookPicker.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -16695,6 +16723,10 @@ msgstr "Estadísticas y top play"
 #: src/routes/maps.tsx
 msgid "Status"
 msgstr "Estado"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Stellium"
+msgstr "Stellium"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 1: every chart gets its own dan level"
@@ -16837,6 +16869,10 @@ msgstr "Streams interrumpidos por saltos de dos notas."
 msgid "Streams thickened with three-note hand chords."
 msgstr "Streams engrosados con acordes de tres notas."
 
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Strength"
+msgstr "Intensidad"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Strikethrough"
@@ -16917,6 +16953,10 @@ msgstr "Apoya a mania-tracker"
 #: src/routes/player/$username.tsx
 #~ msgid "Supporter"
 #~ msgstr "Supporter"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Supporter until {until}"
+msgstr "Supporter hasta el {until}"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
@@ -17236,6 +17276,10 @@ msgstr "Ese archivo no es una imagen compatible."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "That gift is no longer there."
 msgstr "Ese regalo ya no está."
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "That image is over 5 MB."
+msgstr "Esa imagen pesa más de 5 MB."
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That image is too large to draw."
@@ -18826,6 +18870,10 @@ msgstr "Jueves"
 msgid "Tier changed to {tierLabel}"
 msgstr "Nuevo nivel: {tierLabel}"
 
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Tier colours"
+msgstr "Colores del tier"
+
 #: src/lib/replay-overlays.ts
 msgid "Time left"
 msgstr "Tiempo restante"
@@ -19508,9 +19556,14 @@ msgstr "Subir una skin"
 msgid "Upload a skin and it lands here."
 msgstr "Sube una skin y aparecerá aquí."
 
+#: src/components/player/SupporterLookPicker.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Upload another"
 msgstr "Subir otra"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Upload image"
+msgstr "Subir imagen"
 
 #: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins.tsx
@@ -20737,6 +20790,10 @@ msgstr "Se desactivaron tus renders dinámicos."
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Your first forge"
 #~ msgstr "Tu primera forja"
+
+#: src/components/player/SupporterLookPicker.tsx
+msgid "Your image"
+msgstr "Tu imagen"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."

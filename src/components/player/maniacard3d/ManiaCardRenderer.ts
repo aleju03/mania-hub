@@ -187,10 +187,13 @@ export class ManiaCardRenderer {
     let textures: CardTextureSet;
     try {
       // driftingMotif: the overlay below floats the granted image, so the
-      // front is painted without a still copy of it underneath.
+      // front is painted without a still copy of it underneath. shaderFoil
+      // likewise: the overlay draws a supporter's foil moving, so the front
+      // does not bake the still one.
       textures = await createCardTextures(data, {
         textureScale: this.quality.textureScale,
         driftingMotif: true,
+        shaderFoil: true,
       });
     } catch (error) {
       if (!this.disposed && requestId === this.dataRequestId) this.onError?.(error);

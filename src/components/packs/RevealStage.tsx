@@ -185,6 +185,7 @@ function buildPackCardRenderData(player: PackPlayer, scores: OsuScore[]) {
     tierOverride: player.eternal ? "eternal" : undefined,
     labelOverride: player.customLabel,
     motifOverride: player.motif,
+    supporterLook: player.supporterLook,
   });
 }
 

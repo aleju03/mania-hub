@@ -74,6 +74,7 @@ import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiOszRouteImport } from './routes/api/osz'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
+import { Route as ApiSupporterMotifRouteImport } from './routes/api/supporter-motif'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiTeamImageRouteImport } from './routes/api/team-image'
 import { Route as BridgeAuthorizeRouteImport } from './routes/bridge_.authorize'
@@ -454,6 +455,11 @@ const ApiSignaturePreviewRoute = ApiSignaturePreviewRouteImport.update({
   path: '/api/signature-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSupporterMotifRoute = ApiSupporterMotifRouteImport.update({
+  id: '/api/supporter-motif',
+  path: '/api/supporter-motif',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSyncRoute = ApiSyncRouteImport.update({
   id: '/api/sync',
   path: '/api/sync',
@@ -801,6 +807,7 @@ export interface FileRoutesByFullPath {
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
+  '/api/supporter-motif': typeof ApiSupporterMotifRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
   '/bridge/authorize': typeof BridgeAuthorizeRoute
@@ -921,6 +928,7 @@ export interface FileRoutesByTo {
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
+  '/api/supporter-motif': typeof ApiSupporterMotifRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
   '/bridge/authorize': typeof BridgeAuthorizeRoute
@@ -1042,6 +1050,7 @@ export interface FileRoutesById {
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
+  '/api/supporter-motif': typeof ApiSupporterMotifRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
   '/bridge_/authorize': typeof BridgeAuthorizeRoute
@@ -1164,6 +1173,7 @@ export interface FileRouteTypes {
     | '/api/osz'
     | '/api/replay-upload'
     | '/api/signature-preview'
+    | '/api/supporter-motif'
     | '/api/sync'
     | '/api/team-image'
     | '/bridge/authorize'
@@ -1284,6 +1294,7 @@ export interface FileRouteTypes {
     | '/api/osz'
     | '/api/replay-upload'
     | '/api/signature-preview'
+    | '/api/supporter-motif'
     | '/api/sync'
     | '/api/team-image'
     | '/bridge/authorize'
@@ -1404,6 +1415,7 @@ export interface FileRouteTypes {
     | '/api/osz'
     | '/api/replay-upload'
     | '/api/signature-preview'
+    | '/api/supporter-motif'
     | '/api/sync'
     | '/api/team-image'
     | '/bridge_/authorize'
@@ -1525,6 +1537,7 @@ export interface RootRouteChildren {
   ApiOszRoute: typeof ApiOszRoute
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
+  ApiSupporterMotifRoute: typeof ApiSupporterMotifRoute
   ApiSyncRoute: typeof ApiSyncRoute
   ApiTeamImageRoute: typeof ApiTeamImageRoute
   BridgeAuthorizeRoute: typeof BridgeAuthorizeRoute
@@ -2022,6 +2035,13 @@ declare module '@tanstack/react-router' {
       path: '/api/signature-preview'
       fullPath: '/api/signature-preview'
       preLoaderRoute: typeof ApiSignaturePreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/supporter-motif': {
+      id: '/api/supporter-motif'
+      path: '/api/supporter-motif'
+      fullPath: '/api/supporter-motif'
+      preLoaderRoute: typeof ApiSupporterMotifRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sync': {
@@ -2568,6 +2588,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiOszRoute: ApiOszRoute,
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
+  ApiSupporterMotifRoute: ApiSupporterMotifRoute,
   ApiSyncRoute: ApiSyncRoute,
   ApiTeamImageRoute: ApiTeamImageRoute,
   BridgeAuthorizeRoute: BridgeAuthorizeRoute,

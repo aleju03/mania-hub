@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avatarImageSrc } from "../../components/ui/Avatar";
 import { SearchInput } from "../../components/ui/SearchInput";
 import {
+  clearAdminSupporterMotif,
   grantAdminSupporterDays,
   importAdminKofiCsv,
   linkAdminDonation,
@@ -122,6 +123,11 @@ function AdminSupportersPage() {
     return `${days > 0 ? "Added" : "Took"} ${Math.abs(days)} days ${days > 0 ? "to" : "from"} ${result.username ?? label}.`;
   });
 
+  const clearMotif = (row: AdminSupporterRow) => run(async () => {
+    await clearAdminSupporterMotif({ data: { userId: row.userId } });
+    return `Removed ${row.username ?? `#${row.userId}`}'s card image.`;
+  });
+
   const importFile = (file: File) => run(async () => {
     const result = await importAdminKofiCsv({ data: { csv: await file.text() } });
     return `Imported ${result.inserted} of ${result.rows} rows, ${result.linked} linked to a player.`;
@@ -191,6 +197,7 @@ function AdminSupportersPage() {
                     busy={busy}
                     onToggle={() => setOpenUser(openUser === row.userId ? null : row.userId)}
                     onGrant={(days) => grant(`#${row.userId}`, days, row.username ?? `#${row.userId}`)}
+                    onClearMotif={() => clearMotif(row)}
                   />
                 ))}
               </AnimatePresence>
@@ -291,6 +298,7 @@ function SupporterTile({
   busy,
   onToggle,
   onGrant,
+  onClearMotif,
 }: {
   row: AdminSupporterRow;
   now: number;
@@ -298,6 +306,7 @@ function SupporterTile({
   busy: boolean;
   onToggle: () => void;
   onGrant: (days: number) => void;
+  onClearMotif: () => void;
 }) {
   const daysLeft = row.active ? (row.expiresAt - now) / DAY_MS : 0;
   const fill = Math.min(1, daysLeft / FULL_RING_DAYS);
@@ -356,6 +365,12 @@ function SupporterTile({
                 <button type="button" disabled={busy} onClick={() => onGrant(-30)} className={CHIP_CLASS}>-30 days</button>
               ) : null}
             </div>
+            {row.customMotifUrl ? (
+              <div className="mt-2.5 flex items-center gap-2">
+                <img src={row.customMotifUrl} alt="" className="h-10 w-10 rounded-md bg-osu-b5 object-contain" />
+                <button type="button" disabled={busy} onClick={onClearMotif} className={CHIP_CLASS}>Remove image</button>
+              </div>
+            ) : null}
             <div className="mt-2.5 space-y-0.5 text-[11px] text-osu-f1">
               <div>{row.active ? `Until ${formatDate(row.expiresAt)}` : `Lapsed ${formatDate(row.expiresAt)}`}</div>
               <div>Supporting since {formatDate(row.firstSupportedAt)}</div>

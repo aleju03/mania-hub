@@ -80,6 +80,8 @@ export function createOverlayMaterial(
       uIntensity: { value: 0.88 },
       // Common cards keep the triangle sparkle but drop the holo/foil sheen.
       uFoil: { value: data.tier === "common" ? 0 : 1 },
+      // A supporter's card foils on every tier, common included.
+      uSupporter: { value: data.supporterFoil ? 1 : 0 },
       // Cosmic tiers trade the triangle sparkle for a drifting starfield.
       uStarfield: { value: cosmic ? 1 : 0 },
       uLight: { value: new Vector2(0.5, 0.38) },

@@ -1,6 +1,7 @@
 import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
+import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
@@ -4318,6 +4319,9 @@ export interface LiveSharedPackCard {
        pattern, for the same reason: a shared card has to look like the card
        its owner holds. Null for every ordinary card. */
     motif: CardMotif | null;
+    /* The player's supporter look, present only while they are an active
+       supporter. Absent on a backend older than supporter looks. */
+    supporterLook?: SupporterLook | null;
     skills: unknown | null;
     pp: number;
     globalRank: number;
@@ -4361,6 +4365,56 @@ export async function fetchLivePackSharedCard(
   const normalizedPullId = Math.floor(Number(pullId) || 0);
   const query = normalizedPullId > 0 ? `?pull=${normalizedPullId}` : "";
   return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${encodeURIComponent(cardKey)}${query}`);
+}
+
+/* A player's supporter card look, for the profile card (collection payloads
+   carry it inline). Null when they are not an active supporter, and on any
+   failure: an ordinary card is the safe fallback. Cached in memory per user id
+   for a few minutes, so moving between profile tabs does not refetch it. */
+const SUPPORTER_LOOK_TTL_MS = 5 * 60_000;
+interface SupporterLookCacheEntry {
+  at: number;
+  look: Promise<SupporterLook | null>;
+  /* Set once the request settles, for peekLiveSupporterLook. */
+  settled?: { value: SupporterLook | null };
+}
+const supporterLookCache = new Map<number, SupporterLookCacheEntry>();
+
+function freshSupporterLookEntry(userId: number): SupporterLookCacheEntry | undefined {
+  const cached = supporterLookCache.get(userId);
+  return cached && Date.now() - cached.at < SUPPORTER_LOOK_TTL_MS ? cached : undefined;
+}
+
+export function fetchLiveSupporterLook(userId: number): Promise<SupporterLook | null> {
+  const id = Math.floor(Number(userId) || 0);
+  if (id <= 0 || !getLiveBackendUrl()) return Promise.resolve(null);
+  const cached = freshSupporterLookEntry(id);
+  if (cached) return cached.look;
+  const entry: SupporterLookCacheEntry = { at: Date.now(), look: Promise.resolve(null) };
+  entry.look = fetchLiveJson<{ look?: unknown }>(`/api/supporters/look/${id}`)
+    .then((body) => {
+      const value = parseSupporterLook(body?.look ?? null);
+      entry.settled = { value };
+      return value;
+    })
+    .catch(() => {
+      if (supporterLookCache.get(id) === entry) supporterLookCache.delete(id);
+      return null;
+    });
+  supporterLookCache.set(id, entry);
+  return entry.look;
+}
+
+/* Drops the cached look, for the settings page after a save, so the next
+   profile card fetches the new one rather than waiting out the TTL. */
+export function forgetLiveSupporterLook(userId: number): void {
+  supporterLookCache.delete(Math.floor(Number(userId) || 0));
+}
+
+/* The look already fetched for this player, without a request, so a card
+   that remounts does not flash plain first. Undefined when not known yet. */
+export function peekLiveSupporterLook(userId: number): SupporterLook | null | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.value;
 }
 
 /* The public pull feed: notable-only by default (high mints and first-ever
