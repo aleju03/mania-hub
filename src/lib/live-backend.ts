@@ -3196,6 +3196,9 @@ export interface LiveMapSearchParams {
   lenMax: number | null;
   danMin: number | null;
   danMax: number | null;
+  // Step on each dan bound, -2..2 for "--" through "++"; null is the whole dan.
+  danMinStep?: number | null;
+  danMaxStep?: number | null;
   // Hold share of the chart's objects, in percent.
   lnMin: number | null;
   lnMax: number | null;
@@ -3267,6 +3270,8 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.lenMax != null) query.set("lenMax", String(params.lenMax));
   if (params.danMin != null) query.set("danMin", String(params.danMin));
   if (params.danMax != null) query.set("danMax", String(params.danMax));
+  if (params.danMin != null && params.danMinStep != null) query.set("danMinStep", String(params.danMinStep));
+  if (params.danMax != null && params.danMaxStep != null) query.set("danMaxStep", String(params.danMaxStep));
   if (params.lnMin != null) query.set("lnMin", String(params.lnMin));
   if (params.lnMax != null) query.set("lnMax", String(params.lnMax));
   if (params.country) query.set("country", params.country);

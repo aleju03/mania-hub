@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -95,6 +95,9 @@ export interface MapSearchUiState {
   lnMax: number;
   danMin: number | null;
   danMax: number | null;
+  // Step on each dan bound, -2..2 for "--" through "++"; null is the whole dan.
+  danMinStep: number | null;
+  danMaxStep: number | null;
   sort: string;
   dir: string;
   page: number;
@@ -145,7 +148,7 @@ function stateKey(s: MapSearchUiState): string {
     [...s.skillsExclude].sort(),
     s.vibro,
     serializeMsdRanges(s.msd),
-    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax,
+    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax, s.danMinStep, s.danMaxStep,
     s.sort, s.dir, s.page,
   ]);
 }
@@ -361,6 +364,29 @@ function danRangeReadout(lo: number, hi: number, context: DanScaleContext, i18n:
   return i18n._(msg`${from} to ${to}`);
 }
 
+// Steps run -2..2 and print as the suffix map cards carry ("Gamma--", "10+").
+const DAN_STEP_SUFFIX: Record<number, string> = { [-2]: "--", [-1]: "-", 0: "", 1: "+", 2: "++" };
+
+function danStepLabel(level: number, step: number, context: DanScaleContext): string {
+  return `${danScaleLabel(level, context)}${DAN_STEP_SUFFIX[step]}`;
+}
+
+// The committed selection's name. With no step set it reads as whole dans,
+// as before; with a step on either bound both ends use the card label form.
+function danSelectionReadout(
+  selection: { lo: number; hi: number; loStep: number | null; hiStep: number | null },
+  context: DanScaleContext,
+  i18n: I18n,
+): string {
+  const { lo, hi, loStep, hiStep } = selection;
+  if (loStep == null && hiStep == null) {
+    return lo === hi ? danReadout(lo, context, i18n) : danRangeReadout(lo, hi, context, i18n);
+  }
+  const from = danStepLabel(lo, loStep ?? -2, context);
+  const to = danStepLabel(hi, hiStep ?? 2, context);
+  return lo === hi && (loStep ?? -2) === (hiStep ?? 2) ? from : i18n._(msg`${from} to ${to}`);
+}
+
 // The badge wall: tap a badge to filter to exactly that dan, tap it again to
 // clear, or drag across badges to paint a range (shift-click extends from the
 // current selection). Unselected badges sit dimmed and desaturated; the
@@ -378,6 +404,7 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   const groups = danLadderGroups(ui);
   const ambiguous = groups.length > 1;
   const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
+  const [hoveredStep, setHoveredStep] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ group: DanLadderGroup; anchor: number; current: number } | null>(null);
   const [hovered, setHovered] = useState<{ group: DanLadderGroup; level: number } | null>(null);
   const dragRef = useRef(drag);
@@ -387,10 +414,10 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
     playPatternHit(lo != null);
     if (ambiguous && lo != null) {
       const keys = [group.keysId];
-      apply({ danMin: lo, danMax: hi, keys, keysExclude: [], ...pruneForKeys(ui, keys), page: 0 });
+      apply({ danMin: lo, danMax: hi, danMinStep: null, danMaxStep: null, keys, keysExclude: [], ...pruneForKeys(ui, keys), page: 0 });
       return;
     }
-    apply({ danMin: lo, danMax: hi, page: 0 });
+    apply({ danMin: lo, danMax: hi, danMinStep: null, danMaxStep: null, page: 0 });
   };
   const toggleSingle = (level: number, group: DanLadderGroup) => {
     // Re-click toggles off only on a single ladder; with both ladders shown the
@@ -521,17 +548,20 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
           })}
         </div>
       ))}
+      {selection != null && drag == null && (
+        <DanStepGauges ui={ui} apply={apply} lo={selection.lo} hi={selection.hi} context={groups[0].context} onHover={setHoveredStep} />
+      )}
       <div className="flex h-4 items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-osu-f1/70">
         <span>
           {hovered != null
             ? describe(hovered.group, hovered.level)
             : drag
               ? describe(drag.group, Math.min(drag.anchor, drag.current), Math.max(drag.anchor, drag.current))
-              : selection
-                ? selection.lo === selection.hi
-                  ? danReadout(selection.lo, groups[0].context, i18n)
-                  : danRangeReadout(selection.lo, selection.hi, groups[0].context, i18n)
-                : t`any`}
+              : hoveredStep != null
+                ? hoveredStep
+                : selection
+                  ? danSelectionReadout({ ...selection, loStep: ui.danMinStep, hiStep: ui.danMaxStep }, groups[0].context, i18n)
+                  : t`any`}
         </span>
         {selection != null && drag == null && (
           <button
@@ -546,6 +576,317 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
       </div>
     </div>
   );
+}
+
+// The step gauges under the wall. A single dan gets one gauge: its badge sits
+// in the bowl of a five-notch arc running "--" on the left to "++" on the
+// right. Tap a notch to filter to that step (the needle swings to it), drag
+// along the arc for a run of steps, tap the lit notch or the badge for the
+// whole dan again. A range gets a gauge per end: the first dan's needle sets
+// where the range starts, the last dan's where it ends. A whole dan shows the
+// bare arc with no needle, so nothing reads as picked until it is.
+function DanStepGauges({
+  ui,
+  apply,
+  lo,
+  hi,
+  context,
+  onHover,
+}: {
+  ui: MapSearchUiState;
+  apply: ApplyFn;
+  lo: number;
+  hi: number;
+  context: DanScaleContext;
+  onHover: (label: string | null) => void;
+}) {
+  // A tap shows on the gauge first and reaches the filter a frame later: the
+  // results grid re-renders in one long task, and sharing that render held
+  // the needle still until it finished.
+  const [pending, setPending] = useState<{ start: number; end: number } | null>(null);
+  useEffect(() => setPending(null), [ui.danMinStep, ui.danMaxStep, lo, hi]);
+  // Notch indexes 0..4 run "--".."++".
+  const start = pending?.start ?? (ui.danMinStep ?? -2) + 2;
+  const end = pending?.end ?? (ui.danMaxStep ?? 2) + 2;
+  // A commit can unmount the hovered gauge before its pointerleave fires.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => onHover(null), [lo, hi]);
+
+  const commit = (minLevel: number, a: number, maxLevel: number, b: number) => {
+    playPatternHit(true);
+    setPending({ start: a, end: b });
+    const patch = {
+      danMin: minLevel,
+      danMax: maxLevel,
+      danMinStep: a === 0 ? null : a - 2,
+      danMaxStep: b === 4 ? null : b - 2,
+      page: 0,
+    };
+    // Two frames: the first starts the needle's transition, the second has
+    // handed it to the compositor before the long render begins.
+    requestAnimationFrame(() => requestAnimationFrame(() => window.setTimeout(() => startTransition(() => apply(patch)), 0)));
+  };
+
+  if (lo === hi) {
+    const whole = start === 0 && end === 4;
+    return (
+      <div className="flex justify-center">
+        <DanStepGauge
+          level={lo}
+          context={context}
+          size={208}
+          lit={whole ? null : [start, end]}
+          needle={!whole && start === end ? start : null}
+          onHover={onHover}
+          onCommit={(a, b) => {
+            if (a === b && start === a && end === a) commit(lo, 0, lo, 4);
+            else commit(lo, a, lo, b);
+          }}
+          onReset={() => commit(lo, 0, lo, 4)}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-end justify-center gap-1">
+      <DanStepGauge
+        level={lo}
+        context={context}
+        size={156}
+        lit={start === 0 ? null : [start, 4]}
+        needle={start === 0 ? null : start}
+        single
+        onHover={onHover}
+        onCommit={(a) => commit(lo, a === start ? 0 : a, hi, end)}
+        onReset={() => commit(lo, 0, hi, end)}
+      />
+      <span className="mb-3 text-[13px] font-black text-osu-f1/40">{hi - lo > 1 ? "…" : ""}</span>
+      <DanStepGauge
+        level={hi}
+        context={context}
+        size={156}
+        lit={end === 4 ? null : [0, end]}
+        needle={end === 4 ? null : end}
+        single
+        onHover={onHover}
+        onCommit={(b) => commit(lo, start, hi, b === end ? 4 : b)}
+        onReset={() => commit(lo, start, hi, 4)}
+      />
+    </div>
+  );
+}
+
+const GAUGE_W = 200;
+const GAUGE_CX = 100;
+const GAUGE_CY = 104;
+const GAUGE_R_IN = 66;
+const GAUGE_R_OUT = 92;
+const GAUGE_GAP_DEG = 2.5;
+
+function gaugePoint(radius: number, deg: number): [number, number] {
+  const rad = (deg * Math.PI) / 180;
+  return [GAUGE_CX + radius * Math.cos(rad), GAUGE_CY - radius * Math.sin(rad)];
+}
+
+// Notch i spans 36 degrees, left to right: 180..144 for "--" down to 36..0.
+function gaugeNotchPath(index: number): string {
+  const from = 180 - index * 36 - GAUGE_GAP_DEG / 2;
+  const to = 180 - (index + 1) * 36 + GAUGE_GAP_DEG / 2;
+  const [x1, y1] = gaugePoint(GAUGE_R_OUT, from);
+  const [x2, y2] = gaugePoint(GAUGE_R_OUT, to);
+  const [x3, y3] = gaugePoint(GAUGE_R_IN, to);
+  const [x4, y4] = gaugePoint(GAUGE_R_IN, from);
+  return `M${x1} ${y1} A${GAUGE_R_OUT} ${GAUGE_R_OUT} 0 0 1 ${x2} ${y2} L${x3} ${y3} A${GAUGE_R_IN} ${GAUGE_R_IN} 0 0 0 ${x4} ${y4} Z`;
+}
+
+function DanStepGauge({
+  level,
+  context,
+  size,
+  lit,
+  needle,
+  single = false,
+  onHover,
+  onCommit,
+  onReset,
+}: {
+  level: number;
+  context: DanScaleContext;
+  size: number;
+  lit: [number, number] | null;
+  needle: number | null;
+  // Ends of a range set one notch each; a lone dan can paint a run.
+  single?: boolean;
+  onHover: (label: string | null) => void;
+  onCommit: (a: number, b: number) => void;
+  onReset: () => void;
+}) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [drag, setDrag] = useState<{ anchor: number; current: number } | null>(null);
+  const src = danScaleImage(level, context);
+  const badgeLabel = danScaleLabel(level, context);
+
+  // Which notch a pointer is over, by angle around the hub; null on the badge.
+  const notchAt = (clientX: number, clientY: number): number | null => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const scale = GAUGE_W / rect.width;
+    const x = (clientX - rect.left) * scale - GAUGE_CX;
+    const y = GAUGE_CY - (clientY - rect.top) * scale;
+    if (Math.hypot(x, y) < GAUGE_R_IN - 12) return null;
+    const deg = Math.max(0, Math.min(180, (Math.atan2(Math.max(y, 0), x) * 180) / Math.PI));
+    return Math.min(4, Math.floor((180 - deg) / 36));
+  };
+
+  const shownLit: [number, number] | null = drag
+    ? single
+      ? [drag.current, drag.current]
+      : [Math.min(drag.anchor, drag.current), Math.max(drag.anchor, drag.current)]
+    : lit;
+  const shownNeedle = drag ? (single || drag.anchor === drag.current ? drag.current : null) : needle;
+  const needleDeg = shownNeedle == null ? null : 180 - shownNeedle * 36 - 18;
+  const stepLabel = (index: number) => danStepLabel(level, index - 2, context);
+
+  const scale = size / GAUGE_W;
+  return (
+    <div className="relative" style={{ width: size }}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${GAUGE_W} ${GAUGE_CY + 8}`}
+        width={size}
+        className="cursor-pointer select-none overflow-visible"
+        style={{ touchAction: "none" }}
+        role="group"
+        aria-label={badgeLabel}
+        onPointerDown={(event) => {
+          if (event.button !== 0 && event.pointerType === "mouse") return;
+          const index = notchAt(event.clientX, event.clientY);
+          if (index == null) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setDrag({ anchor: index, current: index });
+          onHover(stepLabel(index));
+        }}
+        onPointerMove={(event) => {
+          const index = notchAt(event.clientX, event.clientY);
+          if (drag) {
+            if (index != null && index !== drag.current) setDrag({ ...drag, current: index });
+            if (index != null) onHover(stepLabel(index));
+            return;
+          }
+          if (event.pointerType === "mouse") onHover(index == null ? null : stepLabel(index));
+        }}
+        onPointerUp={() => {
+          if (!drag) return;
+          setDrag(null);
+          if (single) onCommit(drag.current, drag.current);
+          else onCommit(Math.min(drag.anchor, drag.current), Math.max(drag.anchor, drag.current));
+        }}
+        onPointerCancel={() => setDrag(null)}
+        onPointerLeave={() => {
+          if (!drag) onHover(null);
+        }}
+      >
+        {[0, 1, 2, 3, 4].map((index) => {
+          const on = shownLit != null && index >= shownLit[0] && index <= shownLit[1];
+          const [tx, ty] = gaugePoint((GAUGE_R_IN + GAUGE_R_OUT) / 2, 180 - index * 36 - 18);
+          const label = stepLabel(index);
+          return (
+            <g key={index}>
+              <path
+                d={gaugeNotchPath(index)}
+                style={{ fill: on ? "color-mix(in srgb, var(--color-osu-pink) 55%, transparent)" : "rgb(255 255 255 / 0.06)" }}
+              />
+              {index === 2 ? (
+                <circle cx={tx} cy={ty} r={2.6} className={on ? "fill-osu-l1" : "fill-osu-f1/60"} />
+              ) : (
+                <text
+                  x={tx}
+                  y={ty}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  className={`pointer-events-none text-[13px] font-black ${on ? "fill-osu-l1" : "fill-osu-f1/60"}`}
+                >
+                  {DAN_STEP_SUFFIX[index - 2]}
+                </text>
+              )}
+              {/* Keyboard path: each notch is a focusable button-like target. */}
+              <path
+                d={gaugeNotchPath(index)}
+                fill="transparent"
+                tabIndex={0}
+                role="button"
+                aria-label={label}
+                aria-pressed={on}
+                className="outline-none focus-visible:stroke-osu-pink-light"
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  onCommit(index, index);
+                }}
+              />
+            </g>
+          );
+        })}
+        {/* The badge is the hub; tapping it returns to the whole dan. */}
+        <g
+          role="button"
+          tabIndex={0}
+          aria-label={badgeLabel}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={onReset}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            onReset();
+          }}
+          className="outline-none"
+        >
+          {src ? (
+            <image href={src} x={GAUGE_CX - 22} y={GAUGE_CY - 40} width={44} height={44} preserveAspectRatio="xMidYMid meet" />
+          ) : (
+            <text x={GAUGE_CX} y={GAUGE_CY - 18} textAnchor="middle" dominantBaseline="central" className="fill-osu-l1 text-[18px] font-black">
+              {badgeLabel}
+            </text>
+          )}
+        </g>
+      </svg>
+      {/* The needle is HTML over the arc, not SVG: a transform on an HTML
+          layer animates on the compositor and keeps swinging through
+          main-thread work, where an SVG transform stalls. It pivots on the
+          hub and runs from the badge out to the arc; it fades out on a
+          whole dan. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute h-0 w-0"
+        style={{
+          left: GAUGE_CX * scale,
+          top: GAUGE_CY * scale,
+          transform: `rotate(${90 - (needleDeg ?? 90)}deg)`,
+          opacity: needleDeg == null ? 0 : 1,
+          transition: "transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 180ms",
+          willChange: "transform",
+        }}
+      >
+        <div
+          className="absolute rounded-full bg-osu-pink-light"
+          style={{
+            left: -2,
+            width: 4,
+            top: -(GAUGE_R_IN - 3) * scale,
+            height: (GAUGE_R_IN - 3 - 42) * scale,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// A step's mark beside a badge: the suffix, or a dot for the plain step.
+function DanStepMark({ step }: { step: number }) {
+  return step === 0
+    ? <span className="-ml-0.5 h-1 w-1 rounded-full bg-current" />
+    : <span className="-ml-1 text-[12px] font-black">{DAN_STEP_SUFFIX[step]}</span>;
 }
 
 // The greek badge webps run up to ~130KB each; fetching and decoding them the
@@ -672,16 +1013,23 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
   const context = danSliderContext(ui);
   const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
   if (inline) return <DanBadgeWall ui={ui} apply={apply} />;
+  // Whole dans keep the bare badges; once a bound has a step both ends show
+  // theirs, so "Gamma--" alone reads as one badge with its mark.
+  const stepped = ui.danMinStep != null || ui.danMaxStep != null;
+  const loStep = stepped ? ui.danMinStep ?? -2 : 0;
+  const hiStep = stepped ? ui.danMaxStep ?? 2 : 0;
   return (
     <FilterPopover
       active={selection != null}
       trigger={selection ? (
         <span className="inline-flex items-center gap-1.5">
           <DanMini level={selection.lo} context={context} />
-          {selection.hi !== selection.lo && (
+          {stepped && <DanStepMark step={loStep} />}
+          {(selection.hi !== selection.lo || loStep !== hiStep) && (
             <>
               <span className="text-[10px] opacity-70"><Trans>to</Trans></span>
               <DanMini level={selection.hi} context={context} />
+              {stepped && <DanStepMark step={hiStep} />}
             </>
           )}
         </span>
@@ -1178,7 +1526,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
 
   useEffect(() => {
     if (!noDans || (uiRef.current.danMin == null && uiRef.current.danMax == null)) return;
-    apply({ danMin: null, danMax: null, page: 0 });
+    apply({ danMin: null, danMax: null, danMinStep: null, danMaxStep: null, page: 0 });
     // `apply` intentionally follows the latest local UI through uiRef.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noDans]);
@@ -1251,6 +1599,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       lnMax: ui.lnMax > 0 ? ui.lnMax : null,
       danMin: noDans ? null : ui.danMin,
       danMax: noDans ? null : ui.danMax,
+      danMinStep: noDans ? null : ui.danMinStep,
+      danMaxStep: noDans ? null : ui.danMaxStep,
       country: null,
       sort: ui.sort,
       dir: ui.dir,
@@ -1340,7 +1690,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       q: "", keys: [], keysExclude: [], statuses: [], statusesExclude: [], patterns: [], patternsExclude: [],
       skills: [], skillsExclude: [], msd: {},
       starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, lenMin: 0, lenMax: 0, lnMin: 0, lnMax: 0,
-      danMin: null, danMax: null,
+      danMin: null, danMax: null, danMinStep: null, danMaxStep: null,
       page: 0,
     });
   };

@@ -53,6 +53,8 @@ const DEFAULT_STATE: MapSearchUiState = {
   lnMax: 0,
   danMin: null,
   danMax: null,
+  danMinStep: null,
+  danMaxStep: null,
   sort: "playcount",
   dir: "desc",
   page: 0,
@@ -177,7 +179,7 @@ describe("MapSearchSection cold-load fetch", () => {
     const view = render(
       withI18n(
         <MapSearchSection
-          state={{ ...DEFAULT_STATE, danMin: 4, danMax: 4 }}
+          state={{ ...DEFAULT_STATE, danMin: 4, danMax: 4, danMinStep: -1 }}
           onChange={onChange}
           liveBackendEnabled={true}
         />,
@@ -187,8 +189,35 @@ describe("MapSearchSection cold-load fetch", () => {
     act(() => useAppStore.getState().setNoDans(true));
 
     expect(view.queryByText("Dan (est.)")).toBeNull();
-    expect(onChange).toHaveBeenLastCalledWith({ danMin: null, danMax: null, page: 0 });
-    expect(fetchMock.mock.calls.at(-1)?.[0]).toMatchObject({ danMin: null, danMax: null });
+    expect(onChange).toHaveBeenLastCalledWith({ danMin: null, danMax: null, danMinStep: null, danMaxStep: null, page: 0 });
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toMatchObject({ danMin: null, danMax: null, danMinStep: null });
+  });
+
+  it("narrows a picked dan to one step and back to the whole dan", async () => {
+    const onChange = vi.fn();
+    const view = render(
+      withI18n(
+        <MapSearchSection
+          state={{ ...DEFAULT_STATE, keys: ["4k"], danMin: 13, danMax: 13 }}
+          onChange={onChange}
+          liveBackendEnabled={true}
+        />,
+      ),
+    );
+    const openPicker = () => {
+      const trigger = view.container.querySelector<HTMLButtonElement>("button[aria-haspopup='dialog'][aria-expanded='false'] img[alt='Gamma']")?.closest("button");
+      if (trigger) fireEvent.click(trigger);
+    };
+    openPicker();
+
+    fireEvent.keyDown(view.getAllByLabelText("Gamma--")[0], { key: "Enter" });
+    // The gauge moves first; the filter lands a frame later.
+    await vi.waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ danMin: 13, danMax: 13, danMinStep: null, danMaxStep: -2, page: 0 }));
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toMatchObject({ danMin: 13, danMax: 13, danMinStep: null, danMaxStep: -2 });
+
+    openPicker();
+    fireEvent.keyDown(view.getAllByLabelText("Gamma--")[0], { key: "Enter" });
+    await vi.waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ danMin: 13, danMax: 13, danMinStep: null, danMaxStep: null, page: 0 }));
   });
 
   it("right-clicking a neutral skill excludes it", () => {

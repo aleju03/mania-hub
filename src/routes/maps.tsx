@@ -182,6 +182,9 @@ type MapsSearch = {
   sLnMax: number;
   sDanMin: number | null;
   sDanMax: number | null;
+  // Step on each dan bound, -2..2 for "--" through "++"; null is the whole dan.
+  sDanMinStep: number | null;
+  sDanMaxStep: number | null;
   sPatterns: string;
   sSkills: string;
   sVibro: "only" | "hide" | "";
@@ -284,6 +287,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sLnMax: 0,
   sDanMin: null,
   sDanMax: null,
+  sDanMinStep: null,
+  sDanMaxStep: null,
   sPatterns: "",
   sSkills: "",
   sVibro: "",
@@ -325,6 +330,16 @@ function clampDanLevel(raw: unknown): number | null {
   const n = Number(raw);
   if (!Number.isFinite(n)) return null;
   return Math.round(Math.min(20, Math.max(0, n)));
+}
+
+// A dan bound's step, -2..2; the bound's own edge (-2 low, 2 high) reads as
+// unset so a whole dan has one URL.
+function clampDanStep(raw: unknown, edge: -2 | 2): number | null {
+  if (raw == null) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  const step = Math.round(Math.min(2, Math.max(-2, n)));
+  return step === edge ? null : step;
 }
 
 // Search facets use Random's signed CSV convention: `value` includes and
@@ -718,6 +733,8 @@ export const Route = createFileRoute("/maps")({
     sLnMax: clampSearchNumber(search.sLnMax, 0, 100),
     sDanMin: clampDanLevel(search.sDanMin),
     sDanMax: clampDanLevel(search.sDanMax),
+    sDanMinStep: search.sDanMin == null ? null : clampDanStep(search.sDanMinStep, -2),
+    sDanMaxStep: search.sDanMax == null ? null : clampDanStep(search.sDanMaxStep, 2),
     sPatterns: sanitizeSearchTriStateCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
     sSkills: sanitizeSearchTriStateCsv(search.sSkills, SEARCH_SKILL_VALUES),
     sVibro: search.sVibro === "only" || search.sVibro === "hide" ? search.sVibro : DEFAULT_MAPS_SEARCH.sVibro,
@@ -1131,6 +1148,8 @@ function MapsPage() {
       lnMax: mapsSearch.sLnMax,
       danMin: mapsSearch.sDanMin,
       danMax: mapsSearch.sDanMax,
+      danMinStep: mapsSearch.sDanMinStep,
+      danMaxStep: mapsSearch.sDanMaxStep,
       sort: mapsSearch.sSort,
       dir: mapsSearch.sDir,
       page: mapsSearch.page,
@@ -1172,6 +1191,8 @@ function MapsPage() {
     if (patch.lnMax !== undefined) next.sLnMax = patch.lnMax;
     if (patch.danMin !== undefined) next.sDanMin = patch.danMin;
     if (patch.danMax !== undefined) next.sDanMax = patch.danMax;
+    if (patch.danMinStep !== undefined) next.sDanMinStep = patch.danMinStep;
+    if (patch.danMaxStep !== undefined) next.sDanMaxStep = patch.danMaxStep;
     if (patch.sort !== undefined) next.sSort = patch.sort;
     if (patch.dir !== undefined) next.sDir = patch.dir;
     if (patch.page !== undefined) next.page = patch.page;
