@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
+import { X } from "lucide-react";
 
 import { useAuth } from "../../lib/auth-context";
 import { formatTimeAgo } from "../../lib/format";
@@ -154,24 +155,23 @@ function IntegrationApp({ name, icon, iconClassName = "", status, aboutTo, insta
 }) {
   const { t } = useLingui();
   const locale = useLocale();
-  const seen = (installation: CompanellaInstallation) => installation.lastSeenAt
-    ? t`last seen ${formatTimeAgo(installation.lastSeenAt, locale)}`
-    : t`never seen`;
+  const [managing, setManaging] = useState(false);
   // One computer folds into the app row; the computer's name defaults to the app's, so it only shows when renamed.
   const single = installations.length === 1 ? installations[0] : null;
+  const multiple = installations.length > 1;
+  const lastSeen = installations.reduce<string | null>(
+    (latest, installation) => installation.lastSeenAt && (!latest || installation.lastSeenAt > latest) ? installation.lastSeenAt : latest,
+    null,
+  );
+  const seenLabel = lastSeen ? t`last seen ${formatTimeAgo(lastSeen, locale)}` : t`never seen`;
   const singleStatus = single && (single.lastSeenAt
     ? t`Connected, last seen ${formatTimeAgo(single.lastSeenAt, locale)}`
     : t`Connected, never seen`);
-  const revokeButton = (installation: CompanellaInstallation, className: string) => (
-    <button
-      type="button"
-      disabled={busyId === installation.id}
-      onClick={() => onRevoke(installation)}
-      className={`shrink-0 cursor-pointer text-[11px] font-semibold text-rose-300 transition-colors hover:text-rose-200 disabled:cursor-default disabled:opacity-40 ${className}`}
-    >
-      <Trans>Revoke</Trans>
-    </button>
-  );
+  const multipleStatus = multiple ? t`${plural(installations.length, { one: "# connection", other: "# connections" })}` : null;
+  // Oldest first, so a connection keeps its number while newer ones arrive.
+  const computers = [...installations].sort((a, b) => a.approvedAt.localeCompare(b.approvedAt));
+  const hairline = <span aria-hidden className="mx-1.5 inline-block h-2.5 w-px translate-y-px bg-white/15" />;
+  const pill = "shrink-0 cursor-pointer rounded-lg bg-osu-b4 px-3 py-1.5 text-[11px] font-semibold transition-colors";
   return (
     <div className="flex items-start gap-3">
       <img src={icon} alt="" width={32} height={32} className={`h-8 w-8 shrink-0 rounded-lg ${iconClassName}`} />
@@ -180,43 +180,61 @@ function IntegrationApp({ name, icon, iconClassName = "", status, aboutTo, insta
           <div className="min-w-0 flex-1">
             <div className="text-[12px] font-semibold text-osu-l1">{name}</div>
             {status ? (
-              <div className="text-[11px] text-osu-f1">
-                {singleStatus ?? status}
-                {single && single.displayName !== name && (
-                  <>
-                    <span aria-hidden className="mx-1.5 inline-block h-2.5 w-px translate-y-px bg-white/15" />
-                    {single.displayName}
-                  </>
-                )}
+              <div className="truncate text-[11px] text-osu-f1">
+                {multipleStatus ?? singleStatus ?? status}
+                {multiple && <>{hairline}{seenLabel}</>}
+                {single && single.displayName !== name && <>{hairline}{single.displayName}</>}
               </div>
             ) : (
               <div className="mt-1 h-3 w-32 animate-pulse rounded bg-osu-b4/60" />
             )}
           </div>
-          {single && revokeButton(single, "rounded-lg bg-osu-b4 px-3 py-1.5 hover:bg-rose-500/20")}
-          {aboutTo && (
-            <Link
-              to={aboutTo}
-              className="shrink-0 rounded-lg bg-osu-b4 px-3 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+          {single && (
+            <button
+              type="button"
+              disabled={busyId === single.id}
+              onClick={() => onRevoke(single)}
+              className={`${pill} text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 disabled:cursor-default disabled:opacity-40`}
             >
+              <Trans>Revoke</Trans>
+            </button>
+          )}
+          {multiple && (
+            <button
+              type="button"
+              aria-expanded={managing}
+              onClick={() => setManaging((open) => !open)}
+              className={`${pill} text-osu-f1 hover:bg-osu-b3 hover:text-white`}
+            >
+              {managing ? <Trans>Done</Trans> : <Trans>Manage</Trans>}
+            </button>
+          )}
+          {aboutTo && (
+            <Link to={aboutTo} className={`${pill} text-osu-f1 hover:bg-osu-b3 hover:text-white`}>
               <Trans>About</Trans>
             </Link>
           )}
         </div>
-        {installations.length > 1 && (
-          <div className="mt-1.5 space-y-1.5">
-            {installations.map((installation) => (
-              <div key={installation.id} className="flex items-center gap-3 text-[11px] text-osu-f1">
-                <div className="min-w-0 flex-1 truncate">
-                  {installation.displayName !== name && (
-                    <>
-                      <span className="font-semibold text-osu-l1">{installation.displayName}</span>
-                      <span aria-hidden className="mx-1.5 inline-block h-2.5 w-px translate-y-px bg-white/15" />
-                    </>
-                  )}
-                  {seen(installation)}
-                </div>
-                {revokeButton(installation, "")}
+        {multiple && managing && (
+          <div className="mt-2 border-t border-white/[0.07] pt-1">
+            {computers.map((installation, index) => (
+              <div key={installation.id} className="flex items-center gap-3 py-1 text-[11px]">
+                <span className="min-w-0 flex-1 truncate font-semibold text-osu-l1">
+                  {installation.displayName !== name ? installation.displayName : t`Connection ${index + 1}`}
+                </span>
+                <span className="shrink-0 text-osu-f1">
+                  {installation.lastSeenAt ? formatTimeAgo(installation.lastSeenAt, locale) : t`never seen`}
+                </span>
+                <button
+                  type="button"
+                  aria-label={t`Revoke`}
+                  title={t`Revoke`}
+                  disabled={busyId === installation.id}
+                  onClick={() => onRevoke(installation)}
+                  className="-mr-1 shrink-0 cursor-pointer rounded-md p-1 text-osu-f1 transition-colors hover:bg-rose-500/20 hover:text-rose-200 disabled:cursor-default disabled:opacity-40"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </button>
               </div>
             ))}
           </div>

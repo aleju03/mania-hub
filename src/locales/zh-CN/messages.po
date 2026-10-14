@@ -140,10 +140,20 @@ msgstr "{0, plural, other {# 张谱面}}"
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, other {# 位收藏者}}"
 
+#. placeholder {0}: installations.length
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "{0, plural, one {# computer} other {# computers}}"
+#~ msgstr "{0, plural, other {# 台电脑}}"
+
 #. placeholder {0}: connected.length
 #: src/components/settings/CompanellaGroup.tsx
 msgid "{0, plural, one {# connected} other {# connected}}"
 msgstr "{0, plural, other {已连接 # 个}}"
+
+#. placeholder {0}: installations.length
+#: src/components/settings/CompanellaGroup.tsx
+msgid "{0, plural, one {# connection} other {# connections}}"
+msgstr "{0, plural, other {# 个连接}}"
 
 #. placeholder {0}: profileInsights.keyPpConverts
 #: src/routes/player/$username.tsx
@@ -4977,6 +4987,11 @@ msgstr "对比 {range} pp"
 #~ msgid "Completion"
 #~ msgstr ""
 
+#. placeholder {0}: index + 1
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "Computer {0}"
+#~ msgstr "电脑 {0}"
+
 #: src/routes/companella_.authorize.tsx
 #: src/routes/hashi_.authorize.tsx
 msgid "Connect an app"
@@ -5031,6 +5046,11 @@ msgstr "连接"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connection"
 msgstr ""
+
+#. placeholder {0}: index + 1
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Connection {0}"
+msgstr "连接 {0}"
 
 #: src/routes/tracker.tsx
 msgid "Connection lost; reconnecting."
@@ -6276,6 +6296,7 @@ msgstr "刷够"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/settings/CompanellaGroup.tsx
 msgid "Done"
 msgstr "完成"
 
@@ -9102,7 +9123,7 @@ msgstr "最后活动于"
 #~ msgid "Last seen"
 #~ msgstr ""
 
-#. placeholder {0}: formatTimeAgo(installation.lastSeenAt, locale)
+#. placeholder {0}: formatTimeAgo(lastSeen, locale)
 #: src/components/settings/CompanellaGroup.tsx
 msgid "last seen {0}"
 msgstr "最后活动于 {0}"
@@ -9952,6 +9973,10 @@ msgstr "正在确认回放是否可用。"
 #: src/components/communities/field-options.tsx
 msgid "Malay"
 msgstr "马来语"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Manage"
+msgstr "管理"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "manager"

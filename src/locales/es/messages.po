@@ -131,10 +131,20 @@ msgstr "{0, plural, one {# chart} other {# charts}}"
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, one {# coleccionista} other {# coleccionistas}}"
 
+#. placeholder {0}: installations.length
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "{0, plural, one {# computer} other {# computers}}"
+#~ msgstr "{0, plural, one {# computadora} other {# computadoras}}"
+
 #. placeholder {0}: connected.length
 #: src/components/settings/CompanellaGroup.tsx
 msgid "{0, plural, one {# connected} other {# connected}}"
 msgstr "{0, plural, one {# conectado} other {# conectados}}"
+
+#. placeholder {0}: installations.length
+#: src/components/settings/CompanellaGroup.tsx
+msgid "{0, plural, one {# connection} other {# connections}}"
+msgstr "{0, plural, one {# conexión} other {# conexiones}}"
 
 #. placeholder {0}: profileInsights.keyPpConverts
 #: src/routes/player/$username.tsx
@@ -4968,6 +4978,11 @@ msgstr "comparado con {range} pp"
 #~ msgid "Completion"
 #~ msgstr ""
 
+#. placeholder {0}: index + 1
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "Computer {0}"
+#~ msgstr "Computadora {0}"
+
 #: src/routes/companella_.authorize.tsx
 #: src/routes/hashi_.authorize.tsx
 msgid "Connect an app"
@@ -5022,6 +5037,11 @@ msgstr "Conectar"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connection"
 msgstr ""
+
+#. placeholder {0}: index + 1
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Connection {0}"
+msgstr "Conexión {0}"
 
 #: src/routes/tracker.tsx
 msgid "Connection lost; reconnecting."
@@ -6267,6 +6287,7 @@ msgstr "suficiente"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/settings/CompanellaGroup.tsx
 msgid "Done"
 msgstr "Listo"
 
@@ -9093,7 +9114,7 @@ msgstr "vista por última vez"
 #~ msgid "Last seen"
 #~ msgstr ""
 
-#. placeholder {0}: formatTimeAgo(installation.lastSeenAt, locale)
+#. placeholder {0}: formatTimeAgo(lastSeen, locale)
 #: src/components/settings/CompanellaGroup.tsx
 msgid "last seen {0}"
 msgstr "vista por última vez {0}"
@@ -9943,6 +9964,10 @@ msgstr "Verificando que el replay esté disponible."
 #: src/components/communities/field-options.tsx
 msgid "Malay"
 msgstr "Malayo"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Manage"
+msgstr "Administrar"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "manager"
