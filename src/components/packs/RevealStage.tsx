@@ -32,6 +32,7 @@ import { MilestoneBurst, MILESTONE_CEREMONY_MS, MILESTONE_IMPACT_S } from "./Mil
 import { GoatBurst } from "./GoatBurst";
 import { SlicedFace } from "./SlicedFace";
 import { TierBurst } from "./TierBurst";
+import { EDITION_COPY, EDITION_TINT } from "#/lib/pack-run";
 
 export interface PackCardState {
   player: PackPlayer;
@@ -169,26 +170,27 @@ function cascadeLayout(count: number, rowWidth: number, heightBudget: number) {
 
 /* A dealt card's face. A team card draws from the numbers the server dealt
    it with; every other card from the player's plays, at an awarded tier for
-   an Eternal. */
-function buildPackCardRenderData(player: PackPlayer, scores: OsuScore[]) {
-  if (player.team) {
-    return buildManiaCardRenderDataFromSkills({
-      user: player.user,
-      skills: teamCardSkills(player.team),
-      tierOverride: player.team.tier,
-      team: teamCardFace(player.team),
-    });
-  }
-  return buildManiaCardRenderData({
-    user: player.user,
-    scores,
-    tierOverride: player.eternal ? "eternal" : undefined,
-    labelOverride: player.customLabel,
-    motifOverride: player.motif,
-  });
+   an Eternal. Exported for the run table, which deals the same faces. */
+export function buildPackCardRenderData(player: PackPlayer, scores: OsuScore[]) {
+  const data = player.team
+    ? buildManiaCardRenderDataFromSkills({
+        user: player.user,
+        skills: teamCardSkills(player.team),
+        tierOverride: player.team.tier,
+        team: teamCardFace(player.team),
+      })
+    : buildManiaCardRenderData({
+        user: player.user,
+        scores,
+        tierOverride: player.eternal ? "eternal" : undefined,
+        labelOverride: player.customLabel,
+        motifOverride: player.motif,
+      });
+  // The copy's edition rides on the render data for the overlay shader only.
+  return data.status === "ready" && player.edition ? { ...data, edition: player.edition } : data;
 }
 
-async function resolveCardScores(card: PackCardState): Promise<OsuScore[] | null> {
+export async function resolveCardScores(card: PackCardState): Promise<OsuScore[] | null> {
   const deadline = Date.now() + CARD_SCORE_WAIT_TIMEOUT_MS;
   const wait = (promise: Promise<OsuScore[] | null>) => {
     const remaining = deadline - Date.now();
@@ -613,7 +615,7 @@ export function RevealStage({
   onCardRevealed,
   onComplete,
 }: RevealStageProps) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const windowActive = useWindowActive();
   const mobileViewport = isMobileViewport();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -1667,6 +1669,20 @@ export function RevealStage({
                 {current.player.wished && (
                   <span className="text-[10px] font-bold uppercase tracking-wide text-osu-pink-light">
                     <Trans>wishlist</Trans>
+                  </span>
+                )}
+                {/* The pack run's roll on this copy, in its own colour. */}
+                {current.player.edition && (
+                  <span
+                    className="text-[12px] font-black uppercase tracking-[0.14em]"
+                    style={{ color: EDITION_TINT[current.player.edition] }}
+                  >
+                    {i18n._(EDITION_COPY[current.player.edition].name)}
+                  </span>
+                )}
+                {current.player.chained && (
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-[#ffd36b]">
+                    <Trans>chain</Trans>
                   </span>
                 )}
                 {current.tierLabel && (

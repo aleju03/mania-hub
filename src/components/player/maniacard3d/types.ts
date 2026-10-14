@@ -69,6 +69,14 @@ export interface ManiaCardReadyData {
   motif: CardMotif | null;
   /* Set on a team card, which draws the banner face instead of the player's. */
   team?: ManiaCardTeamFace | null;
+  /* The pack run's edition on this copy (foil, holo, polychrome). Drawn by the
+     overlay shader only, never into the face texture, so a thumbnail of the
+     card stays the same for every copy of it. */
+  edition?: "foil" | "holo" | "polychrome" | null;
+  /* This copy's mint number and how many the card has minted, stamped on the
+     back. Only the 3D card draws a back, so the shared front thumbnails are
+     untouched. */
+  serial?: { number: number; total: number | null } | null;
 }
 
 export interface ManiaCardEmptyData {

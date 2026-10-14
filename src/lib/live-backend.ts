@@ -4047,6 +4047,27 @@ export async function fetchLivePackCardGifts(ownerUserId: number, cardKey: strin
   return fetchLiveJson(`/api/packs/card-gifts?owner=${ownerUserId}&card=${encodeURIComponent(cardKey)}`);
 }
 
+/* Every edition one collector has pulled, card key to editions (best first).
+   Public like the shelf it decorates (live-backend pack-run.ts). */
+export async function fetchLivePackEditions(userId: number): Promise<Record<string, string[]>> {
+  const body = await fetchLiveJson<{ editions?: Record<string, string[]> }>(`/api/packs/editions/${userId}`);
+  return body.editions && typeof body.editions === "object" ? body.editions : {};
+}
+
+export interface LivePackRunBoardEntry {
+  userId: number;
+  username: string;
+  bestAnte: number;
+  bestHand: number;
+  runsWon: number;
+  level: number;
+}
+
+export async function fetchLivePackRunBoard(): Promise<LivePackRunBoardEntry[]> {
+  const body = await fetchLiveJson<{ entries?: LivePackRunBoardEntry[] }>("/api/packs/run/board");
+  return Array.isArray(body.entries) ? body.entries : [];
+}
+
 /* How the community holds one player's own card ("your card got pulled"). */
 export async function fetchLivePackPulledStats(userId: number): Promise<LivePackPulledStats> {
   return fetchLiveJson(`/api/packs/pulled-stats/${userId}`);

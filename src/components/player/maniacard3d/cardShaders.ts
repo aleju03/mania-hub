@@ -34,6 +34,9 @@ uniform float uAvatarRadius;
 // on every other card.
 uniform vec4 uFlagMask;
 uniform float uFlagRadius;
+// The pack run's edition on this copy: 0 none, 1 foil, 2 holo, 3 polychrome.
+// Laid over everything, the portrait included, and lit even on a common card.
+uniform float uEdition;
 varying vec2 vUv;
 
 float roundedRectMaskPx(vec2 uv, vec4 rectUv, float radiusPx, vec2 textureSize) {
@@ -297,6 +300,34 @@ void main() {
     0.0,
     0.55
   ) * mask;
+
+  if (uEdition > 0.5) {
+    // Read off the unscaled beam so a common card's edition still moves.
+    float edBand = beamA.y;
+    vec3 edColor;
+    float edAlpha;
+    if (uEdition < 1.5) {
+      // Foil: a cold metallic wash with fine brushed lines that catch the beam.
+      float brushed = 0.5 + 0.5 * sin(coordA * 220.0 + coordB * 14.0);
+      float sheen = 0.22 + edBand * 0.95 + beamA.x * 0.6 + brushed * 0.10;
+      edColor = mix(vec3(0.62, 0.74, 0.95), vec3(1.0), clamp(beamA.x, 0.0, 1.0)) * sheen;
+      edAlpha = 0.16 + sheen * 0.24;
+    } else if (uEdition < 2.5) {
+      // Holo: a full spectrum in fine diagonal stripes, whatever the tier.
+      vec3 spectrum = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + hueShift * 1.6));
+      float stripes = 0.5 + 0.5 * sin(coordA * 110.0 + hueShift * 9.0);
+      edColor = spectrum * (0.55 + stripes * 0.55);
+      edAlpha = 0.12 + stripes * 0.18 + edBand * 0.30;
+    } else {
+      // Polychrome: the whole card cycles through hues in broad soft bands.
+      vec3 poly = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + vUv.x * 0.9 - vUv.y * 0.7 + uTime * 0.12 + light.x * 0.3));
+      edColor = mix(poly, vec3(1.0), edBand * 0.35);
+      edAlpha = 0.28 + edBand * 0.22;
+    }
+    float edWeight = clamp(edAlpha * 1.4, 0.0, 1.0);
+    color = mix(color, edColor, edWeight);
+    alpha = max(alpha, clamp(edAlpha * uIntensity, 0.0, 0.62) * mask);
+  }
   gl_FragColor = vec4(color, alpha);
 }
 `;

@@ -792,3 +792,91 @@ html[data-custom-cursor="true"] * {
    containing block for every fixed element (nav, the mascot itself), which snaps
    them out of place for the length of the animation on a scrolled page. */
 :root.mascot-shake main { animation: mascot-shake 600ms ease-in-out; }
+
+/* Pack run editions on a flat card (EditionSheen.tsx). The 3D card draws its
+   own in the overlay shader; these are the same three looks for thumbnails. */
+.edition-sheen { pointer-events: none; position: absolute; inset: 0; border-radius: inherit; }
+.edition-foil {
+  background:
+    repeating-linear-gradient(100deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px),
+    linear-gradient(115deg, transparent 25%, rgba(190, 214, 255, 0.55) 42%, rgba(255, 255, 255, 0.85) 50%, rgba(170, 196, 255, 0.5) 58%, transparent 75%);
+  background-size: 100% 100%, 300% 300%;
+  mix-blend-mode: overlay;
+  animation: edition-sweep 3.6s ease-in-out infinite;
+}
+.edition-holo {
+  background:
+    repeating-linear-gradient(125deg, #ff5f9e 0%, #ffd36b 7%, #7cf2b0 14%, #6bc5ff 21%, #b58cff 28%, #ff5f9e 35%);
+  background-size: 400% 400%;
+  mix-blend-mode: color-dodge;
+  opacity: 0.42;
+  animation: edition-sweep 6s linear infinite;
+}
+.edition-polychrome {
+  background: linear-gradient(140deg, #ff6b8b, #ffd36b, #6be0a0, #6bc5ff, #c58cff, #ff6b8b);
+  background-size: 300% 300%;
+  mix-blend-mode: hue;
+  opacity: 0.75;
+  animation: edition-sweep 8s linear infinite, edition-hue 8s linear infinite;
+}
+@keyframes edition-sweep {
+  0% { background-position: 0% 0%, 0% 50%; }
+  50% { background-position: 0% 0%, 100% 50%; }
+  100% { background-position: 0% 0%, 0% 50%; }
+}
+@keyframes edition-hue {
+  from { filter: hue-rotate(0deg); }
+  to { filter: hue-rotate(360deg); }
+}
+/* The pack run's tally, drawn as a mania playfield (run/HandScore.tsx). */
+@keyframes run-lane-flash {
+  0% { opacity: 0.5; }
+  100% { opacity: 0; }
+}
+.run-lane-flash { animation: run-lane-flash 260ms ease-out forwards; }
+@keyframes run-judge {
+  0% { opacity: 0; transform: translate(-50%, 4px) scale(0.6); }
+  18% { opacity: 1; transform: translate(-50%, -4px) scale(1.15); }
+  60% { opacity: 1; transform: translate(-50%, -10px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -18px) scale(1); }
+}
+.run-judge { animation: run-judge 620ms ease-out forwards; }
+@keyframes run-key {
+  0% { transform: translateY(2px); filter: brightness(1.7); }
+  100% { transform: translateY(0); filter: brightness(1); }
+}
+.run-key { animation: run-key 200ms ease-out; }
+@keyframes run-punch {
+  0% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.run-punch { animation: run-punch 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@keyframes run-stamp {
+  0% { opacity: 0; transform: scale(1.8); letter-spacing: 0.5em; }
+  60% { opacity: 1; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); letter-spacing: 0.18em; }
+}
+.run-stamp { animation: run-stamp 420ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
+@keyframes run-shake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 1px); }
+  50% { transform: translate(2px, -1px); }
+  75% { transform: translate(-1px, 1px); }
+}
+.run-shake { animation: run-shake 160ms linear; }
+@keyframes run-sticker-hop {
+  0% { transform: translateY(0) rotate(0) scale(1); }
+  30% { transform: translateY(-7px) rotate(-8deg) scale(1.15); }
+  60% { transform: translateY(0) rotate(5deg) scale(0.97); }
+  100% { transform: translateY(0) rotate(0) scale(1); }
+}
+.run-sticker-hop { animation: run-sticker-hop 360ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@media (prefers-reduced-motion: reduce) {
+  .edition-foil, .edition-holo, .edition-polychrome { animation: none; }
+  .run-lane-flash, .run-judge, .run-key, .run-punch, .run-stamp, .run-shake, .run-sticker-hop { animation: none; }
+}
+@keyframes run-charm-pulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.14) rotate(-3deg); }
+  100% { transform: scale(1); }
+}

@@ -23,6 +23,11 @@ import {
 import { PackStage } from "../components/packs/PackStage";
 import { StreakGame } from "../components/packs/StreakGame";
 import { PackSummary } from "../components/packs/PackSummary";
+import { RunHud } from "../components/packs/run/RunHud";
+import { RunGlyph } from "../components/packs/run/charmGlyphs";
+import { RunView } from "../components/packs/run/RunView";
+import { usePackRun } from "../components/packs/run/usePackRun";
+import type { PackRunOpenPayload } from "../lib/pack-run";
 import {
   RevealStage,
   type FlightRect,
@@ -74,11 +79,11 @@ import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
 
 export const Route = createFileRoute("/packs")({
-  validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak" | "sets"; album?: string } => {
+  validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak" | "sets" | "run"; album?: string } => {
     const view =
       search.view === "folders"
         ? "sets"
-        : search.view === "album" || search.view === "streak" || search.view === "sets"
+        : search.view === "album" || search.view === "streak" || search.view === "sets" || search.view === "run"
           ? search.view
           : undefined;
     /* Which album is open on the shelf, so one can be linked to. Album codes
@@ -103,7 +108,7 @@ export const Route = createFileRoute("/packs")({
       imageTitle: "Card Packs",
       // The game initially renders a loading board; only the packs landing
       // page should be a search result, not an interactive session entry.
-      noindex: match.search.view === "streak",
+      noindex: match.search.view === "streak" || match.search.view === "run",
     });
   },
   component: PacksPage,
@@ -539,6 +544,13 @@ function PacksPage() {
      foil/card-back canvas work run ahead of the interaction for hundreds of
      milliseconds. The URL still follows after that paint for sharing/back. */
   const [streakOpen, setStreakOpen] = useState(view === "streak");
+  /* The pack run's page (components/packs/run), shown in place of the pack
+     stage between opens. */
+  const [runOpen, setRunOpen] = useState(view === "run");
+  /* Read by the deal, which runs from an effect: only a pack opened while the
+     run's page is up plays the run. */
+  const runOpenRef = useRef(runOpen);
+  runOpenRef.current = runOpen;
   const { countryFeatures } = Route.useRouteContext();
   const navigate = useNavigate();
   const walletApi = usePackWallet();
@@ -623,6 +635,11 @@ function PacksPage() {
      the missing half of. */
   const wishlistEnabled = Boolean(auth.viewer) && walletApi.syncStatus !== "local";
   const wishlistApi = useWishlist(wishlistEnabled);
+  /* The pack run, for a synced collection the backend has released runs to;
+     the view stays null otherwise and nothing of it renders. */
+  const runApi = usePackRun(wishlistEnabled, walletApi.applyServerWallet);
+  /* The run's side of the pack on screen: the tally the summary plays. */
+  const [packRun, setPackRun] = useState<PackRunOpenPayload | null>(null);
   const [collectionPanelReady, setCollectionPanelReady] = useState(!streakOpen);
   const [collectionPanelMounted, setCollectionPanelMounted] = useState(!streakOpen);
   // Holds the last wallet the visible collection rendered. Spending a pack
@@ -658,6 +675,7 @@ function PacksPage() {
   };
   useEffect(() => {
     setStreakOpen(view === "streak");
+    setRunOpen(view === "run");
     setAlbumOpen(albumRequested);
     if (albumRequested) setAlbumMounted(true);
     setBindersOpen(bindersRequested);
@@ -673,6 +691,15 @@ function PacksPage() {
           search: open ? { view: "streak" } : {},
           resetScroll: false,
         });
+      }, 0);
+    });
+  };
+
+  const showRunView = (open: boolean) => {
+    setRunOpen(open);
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        void navigate({ to: "/packs", search: open ? { view: "run" } : {}, resetScroll: false });
       }, 0);
     });
   };
@@ -752,6 +779,7 @@ function PacksPage() {
     setDamage(null);
     setCutCommitted(false);
     setDealError(null);
+    setPackRun(null);
     serverIsNewRef.current = null;
     serverPaidRef.current = false;
     drawIdRef.current = undefined;
@@ -804,7 +832,7 @@ function PacksPage() {
            "unavailable" means the server no longer recognizes the login; the
            browser-local draw below still deals (and charges locally). */
         if (serverDeals()) {
-          const outcome = await drawPackPlayersFromServer(type.id);
+          const outcome = await drawPackPlayersFromServer(type.id, runOpenRef.current && Boolean(runApi.view));
           if (cancelled) return;
           if (outcome.kind === "busy") {
             autoOpenRef.current = false;
@@ -837,6 +865,10 @@ function PacksPage() {
             serverIsNewRef.current = dealt.isNewByCardKey;
             serverPaidRef.current = true;
             if (dealt.wallet) walletApi.applyServerWallet(dealt.wallet.payload, dealt.wallet.rev);
+            if (dealt.run) {
+              setPackRun(dealt.run);
+              runApi.applyView(dealt.run.view);
+            }
             track("pack_open", { pack_type: type.id });
             finishDeal(devApplyForcedEternal(dealt.draw.players), dealt.draw.poolTotal, dealt.scoresByUserId);
             return;
@@ -1007,7 +1039,7 @@ function PacksPage() {
   /* The game owns the page's middle while it is open, so the collection does
      not sit under it: the point of hosting it here is the ticker and the
      wallet, not a second screen's worth of grid to scroll past. */
-  const showCollectionPanel = !streakOpen && (phase === "pack" || (phase === "summary" && collectionPanelReady));
+  const showCollectionPanel = !streakOpen && !(runOpen && runApi.view) && (phase === "pack" || (phase === "summary" && collectionPanelReady));
   const collectionWallet = collectionWalletRef.current;
 
   return (
@@ -1091,6 +1123,21 @@ function PacksPage() {
                   <ArrowUpDown className="h-3 w-3" />
                   {streakOpen ? t`Leave the game` : t`Higher or lower`}
                 </button>
+                {runApi.view && !streakOpen && (
+                  <button
+                    type="button"
+                    onClick={() => showRunView(!runOpen)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
+                      runOpen
+                        ? "border-osu-pink bg-osu-pink/15 text-white"
+                        : "border-osu-b3/40 text-osu-f1 hover:border-osu-pink/50 hover:text-white"
+                    }`}
+                    aria-pressed={runOpen}
+                  >
+                    <RunGlyph size={12} />
+                    {runOpen ? t`Back to packs` : t`Run`}
+                  </button>
+                )}
               </div>
             )}
             {/* Temporary GOAT vote. It owns its own placement (RAIL_LAYOUT in
@@ -1151,6 +1198,7 @@ function PacksPage() {
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.15 }}
                   >
+                    {wallet && runApi.view && runOpen && <RunHud api={runApi} onOpen={() => showRunView(true)} />}
                     {!wallet ? (
                       <div className="py-16 text-center text-[12px] text-osu-f1">
                         <Trans>Loading your collection...</Trans>
@@ -1231,6 +1279,7 @@ function PacksPage() {
                     {phase === "summary" ? (
                       <PackSummary
                         cards={revealed}
+                        run={packRun}
                         reducedMotion={reducedMotion}
                         flyFrom={summaryFlyFrom}
                         onOpenAnother={openAnother}
@@ -1394,6 +1443,14 @@ function PacksPage() {
               </AnimatePresence>
             )}
 
+            {/* The run's page: the stage above plays it, and this is the rest
+                of it (the songs, charms, shop and ladder). */}
+            {!streakOpen && !dealError && runOpen && runApi.view && phase === "pack" && (
+              <div className="mt-12">
+                <RunView api={runApi} shards={shards} />
+              </div>
+            )}
+
             {!streakOpen && !dealError && collectionPanelMounted && collectionWallet && (
               <div className={showCollectionPanel ? "mt-14" : "hidden"}>
                 <div className="mx-auto mb-3 flex w-full max-w-[820px] flex-wrap items-center justify-end gap-1">
@@ -1489,6 +1546,7 @@ function PacksPage() {
                       collectionRevision={collectionRevision}
                       onGiftSent={refreshAfterGift}
                       wishlist={wishlistEnabled ? wishlistApi : undefined}
+                      editionsVersion={runApi.view ? `${runApi.view.state.runId}:${runApi.view.state.packs}` : null}
                     />
                   </div>
                 </div>

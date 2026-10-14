@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
+import type { PackRunOpenPayload, RunEdition } from "./pack-run";
 import { liveBridgeToken } from "./live-backend-tokens";
 import type { OsuScore } from "./types";
 
@@ -54,6 +55,10 @@ export interface ServerPackDrawSlot {
     tier: string;
     skills: Partial<Record<"cardPower" | "fingerControl" | "speed" | "accuracy" | "starAvg" | "mainKeyMode", number>> | null;
   };
+  /* The edition this copy rolled (live-backend pack-run.ts), and whether a
+     chain pull dealt it on top of the pack's own cards. */
+  edition?: RunEdition | null;
+  chained?: boolean;
   /* A team card's mint serial, minted with the draw. */
   mint?: { serial?: number; mintedTotal?: number; isFirstGlobal?: boolean };
   /* A team card's pull log entry, held off the feed until the reveal
@@ -98,6 +103,8 @@ export interface ServerPackDrawResult {
   /* The wallet after the spend: the draw is the purchase, so this is the
      authoritative balance the page should adopt. */
   wallet: ServerWalletState | null;
+  /* The pack run's side of this open, for a collector who has runs. */
+  run?: PackRunOpenPayload;
 }
 
 /* Null when the draw cannot run as this viewer (logged out server-side or no
@@ -120,16 +127,17 @@ function walletFrom(value: unknown): ServerWalletState | null {
 }
 
 export const drawServerPack = createServerFn({ method: "POST" })
-  .validator((input: { packType?: unknown }) => {
+  .validator((input: { packType?: unknown; run?: unknown }) => {
     const packType =
       typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     if (!packType) throw new Error("Invalid pack type.");
-    return { packType };
+    return { packType, run: input?.run === true };
   })
   .handler(async ({ data }): Promise<ServerPackDrawOutcome> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const { readCurrentAuth } = await import("./auth-server");
+    const { canUseAdminFeatures } = await import("./auth-shared");
     const auth = await readCurrentAuth();
     if (!auth.viewer) return null;
     const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
@@ -153,6 +161,11 @@ export const drawServerPack = createServerFn({ method: "POST" })
         viewerUsername: auth.viewer.username,
         viewerAvatarUrl: auth.viewer.avatarUrl,
         viewerCountryCode: auth.viewer.countryCode,
+        // Read off the same verified cookie: runs are admin-only until
+        // released (live-backend PACK_RUNS).
+        viewerIsAdmin: canUseAdminFeatures(auth),
+        // Opened from the run's page, so this pack plays the run.
+        run: data.run,
       }),
     });
     if (response.status === 429) {
@@ -191,6 +204,7 @@ export const drawServerPack = createServerFn({ method: "POST" })
         players,
         cards: Array.isArray(body.cards) ? (body.cards as ServerPackDrawCard[]) : [],
         wallet: walletFrom(body.wallet),
+        ...(body.run && typeof body.run === "object" ? { run: body.run } : {}),
       },
     };
   });

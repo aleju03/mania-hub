@@ -6,6 +6,9 @@ import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack
 import { fetchPackPlayerScores } from "#/lib/packs";
 import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
 import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
+import type { RunEdition } from "#/lib/pack-run";
+import { EditionSheen } from "./run/EditionSheen";
+import { MasteryBadge } from "./run/MasteryBadge";
 import {
   cardThumbnailKeyForCollectionCard,
   cardThumbnailKeyForData,
@@ -220,9 +223,15 @@ export function CollectionCardTile({
   onApplyMint,
   onThumbnailError,
   showCopies = true,
+  edition = null,
+  mastery = false,
 }: {
   card: CollectedCard;
   thumbnail: string | null;
+  /* The best edition this collector has pulled the card in (the pack run). */
+  edition?: RunEdition | null;
+  /* Draw the mastery gem; on for the holder's own shelf while runs are on. */
+  mastery?: boolean;
   /* Repairing a card collected before skills snapshots existed is the holder's
      business and costs an osu! read, so a surface showing somebody else's
      shelf passes false and lives with the sketch face. */
@@ -297,11 +306,17 @@ export function CollectionCardTile({
           }}
         />
       )}
+      {thumbnail && (
+        <span className="absolute inset-0 overflow-hidden rounded-[10px]">
+          <EditionSheen edition={edition} />
+        </span>
+      )}
       {showCopies && card.copies > 1 && (
         <span className="absolute right-1.5 top-1.5 rounded bg-black/70 px-1 py-px text-[10px] font-bold text-white tabular-nums">
           x{card.copies}
         </span>
       )}
+      {mastery && <MasteryBadge copies={card.copies + (card.recycledCopies ?? 0)} />}
     </div>
   );
 }

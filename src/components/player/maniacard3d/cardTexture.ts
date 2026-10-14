@@ -8,6 +8,22 @@ import { getCosmicTierPalette as cosmicPaletteFor, motifKeepsStarfield } from "#
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
 const FONT = "Torus, Arial, sans-serif";
+/* Caveat Brush (SIL OFL, public/fonts/handwriting/), for the serial
+   handwritten on a card's back. Loaded only when a back carries one. */
+const HAND_FONT_FILE = "/fonts/handwriting/CaveatBrush-Regular.ttf";
+const MARKER_FONT = "CardMarker, 'Comic Sans MS', cursive";
+let markerFontLoad: Promise<void> | null = null;
+
+function loadMarkerFont(): Promise<void> {
+  if (typeof document === "undefined" || typeof FontFace === "undefined") return Promise.resolve();
+  markerFontLoad ??= new FontFace("CardMarker", `url(${HAND_FONT_FILE})`)
+    .load()
+    .then((face) => {
+      document.fonts.add(face);
+    })
+    .catch(() => {});
+  return markerFontLoad;
+}
 /* Every weight the faces below draw with.
 
    Canvas text never triggers a webfont download the way DOM text does: it uses
@@ -125,6 +141,7 @@ export async function createCardTextures(
   // its measured width, so Arial metrics would size it wrong even if the font
   // landed in time for the draw.
   await loadCardFonts();
+  if (!options.frontOnly && data.serial) await loadMarkerFont();
   const textureScale = Math.max(0.5, Math.min(1, options.textureScale ?? 1));
   const frontCanvas = createCanvas(textureScale);
   const backCanvas = createCanvas(textureScale);
@@ -430,6 +447,7 @@ function drawBack(
   drawBackEmblem(context, data, layout);
   drawBackSparkles(context);
   drawBackLaurelAndLabel(context, data, layout, laurel);
+  if (data.serial && data.serial.number > 0) drawBackHandSerial(context, data.serial);
   context.restore();
 }
 
@@ -660,6 +678,91 @@ function drawBackBottomPlate(context: CanvasRenderingContext2D) {
   context.strokeStyle = "rgba(255,255,255,0.58)";
   context.lineWidth = 3.5;
   context.stroke();
+  context.restore();
+}
+
+/* Ink for the first three serials, the medals' gold, silver and bronze,
+   as metallic paint-pen gradients. Everything later is white marker. */
+const SERIAL_INKS: Record<number, [string, string, string]> = {
+  1: ["#fff3c4", "#ffd36b", "#c8901f"],
+  2: ["#ffffff", "#d9e1ec", "#8f9bab"],
+  3: ["#ffe1c2", "#e0a06a", "#9c5c2e"],
+};
+
+/* The copy's serial, written on the back by hand the way a collector numbers
+   a card they own: tilted, a little uneven, in the top-right corner inside
+   the frame. The first three are in metallic pen and underlined (#1 twice,
+   with a star scribbled beside it), and a 1/1 gets a ring drawn round it. */
+function drawBackHandSerial(context: CanvasRenderingContext2D, serial: NonNullable<ManiaCardReadyData["serial"]>) {
+  const total = serial.total && serial.total >= serial.number ? serial.total : null;
+  const unique = serial.number === 1 && total === 1;
+  const ink = SERIAL_INKS[serial.number] ?? null;
+  const text = total ? `${serial.number}/${total}` : `#${serial.number}`;
+  context.save();
+  context.translate(712, 250);
+  context.rotate((-8 * Math.PI) / 180);
+  const size = text.length > 8 ? 70 : text.length > 6 ? 80 : 92;
+  context.font = `${size}px ${MARKER_FONT}`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  const width = context.measureText(text).width;
+  const fill = (() => {
+    if (!ink) return "rgba(246,246,252,0.94)";
+    const gradient = context.createLinearGradient(0, -size / 2, 0, size / 2);
+    gradient.addColorStop(0, ink[0]);
+    gradient.addColorStop(0.5, ink[1]);
+    gradient.addColorStop(1, ink[2]);
+    return gradient;
+  })();
+  // A faint bleed a hair off the stroke, then the stroke itself.
+  context.fillStyle = "rgba(255,255,255,0.16)";
+  context.fillText(text, 1.6, 1.4);
+  context.fillStyle = fill;
+  context.fillText(text, 0, 0);
+
+  context.strokeStyle = fill;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  if (ink && !unique) {
+    // Hand-drawn underline, a touch wavy and longer at the end.
+    const underline = (y: number, lift: number) => {
+      context.beginPath();
+      context.moveTo(-width / 2 - 6, y);
+      context.quadraticCurveTo(0, y + lift, width / 2 + 18, y - 4);
+      context.stroke();
+    };
+    context.lineWidth = 6;
+    underline(size * 0.48, 8);
+    if (serial.number === 1) {
+      context.lineWidth = 4.5;
+      underline(size * 0.66, 5);
+    }
+  }
+  if (serial.number === 1) {
+    // A star doodled before the number: its outline only, no crossing
+    // strokes, a little lopsided like a quick hand drawing.
+    const cx = -width / 2 - 52;
+    const cy = -4;
+    const r = size * 0.34;
+    context.lineWidth = 5;
+    context.beginPath();
+    for (let point = 0; point < 10; point += 1) {
+      const angle = -Math.PI / 2 + (point * Math.PI) / 5 + 0.06;
+      const radius = point % 2 === 0 ? r * (point === 4 ? 0.92 : 1) : r * 0.45;
+      const x = cx + Math.cos(angle) * radius;
+      const y = cy + Math.sin(angle) * radius;
+      if (point === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    }
+    context.closePath();
+    context.stroke();
+  }
+  if (unique) {
+    context.lineWidth = 5;
+    context.beginPath();
+    context.ellipse(4, 2, width / 2 + 28, size * 0.6, (-4 * Math.PI) / 180, 0.15, Math.PI * 2 + 0.45);
+    context.stroke();
+  }
   context.restore();
 }
 

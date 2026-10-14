@@ -39,6 +39,8 @@ import { MarkFilters } from "./collections/MarkFilters";
 import { teamImageProxyUrl } from "#/lib/team-image";
 import { useAuth } from "#/lib/auth-context";
 import { rememberTeamName } from "../../lib/analytics-teams";
+import { fetchLivePackEditions } from "#/lib/live-backend";
+import type { RunEdition } from "#/lib/pack-run";
 
 export type { CardMint };
 
@@ -147,6 +149,10 @@ interface CollectionPanelProps {
     toggle: (userId: number) => Promise<void>;
     full: boolean;
   };
+  /* Set while the collector has pack runs: the grid then wears each card's
+     best edition and its mastery gem, and a new value refetches the
+     editions (it moves with every scored pack). */
+  editionsVersion?: string | null;
 }
 
 interface LoadedServerCollectionPage {
@@ -472,10 +478,27 @@ export function CollectionPanel({
   onApplyMint,
   binders,
   wishlist,
+  editionsVersion = null,
 }: CollectionPanelProps) {
   const { t, i18n } = useLingui();
   // Only for the self chip's badge, which wears the collector's own face.
   const viewer = useAuth().viewer;
+  const [editions, setEditions] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    if (editionsVersion === null || !viewer) {
+      setEditions({});
+      return;
+    }
+    let cancelled = false;
+    void fetchLivePackEditions(viewer.id)
+      .then((next) => {
+        if (!cancelled) setEditions(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [editionsVersion, viewer]);
   const [query, setQuery] = useState("");
   // Searching a synced collection is a server round trip per distinct query, so
   // it waits for a pause in typing instead of firing a request per keystroke.
@@ -1683,7 +1706,7 @@ export function CollectionPanel({
                     aria-pressed={cardSelected}
                     aria-label={cardSelected ? t`Deselect ${card.username}` : t`Select ${card.username}`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} edition={(editions[cardKey]?.[0] as RunEdition | undefined) ?? null} mastery={editionsVersion !== null} />
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-[10px] ${
                         cardSelected ? "ring-2 ring-osu-pink" : "bg-black/45"
@@ -1704,6 +1727,7 @@ export function CollectionPanel({
                         card,
                         thumbnail,
                         rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+                        edition: (editions[cardKey]?.[0] as RunEdition | undefined) ?? null,
                       });
                       setLiftedCardKey(cardKey);
                     }}
@@ -1711,7 +1735,7 @@ export function CollectionPanel({
                     style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
                     aria-label={t`View ${card.username}'s card`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} edition={(editions[cardKey]?.[0] as RunEdition | undefined) ?? null} mastery={editionsVersion !== null} />
                   </button>
                 )}
                 {selecting || card.recyclable === false ? null : card.copies > 1 ? (

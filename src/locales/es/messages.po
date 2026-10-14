@@ -208,8 +208,18 @@ msgstr "{0, plural, one {# nueva respuesta} other {# nuevas respuestas}} en tus 
 msgid "{0, plural, one {# other score found, but no replay is available} other {# other scores found, but no replay is available}}"
 msgstr "{0, plural, one {# otro score encontrado, pero no hay replay disponible} other {# otros scores encontrados, pero no hay replay disponible}}"
 
+#. placeholder {0}: blind.packsLeft
+#. placeholder {0}: outcome.blindAfter.packsLeft
+#: src/components/packs/run/HandScore.tsx
+#: src/components/packs/run/RunHud.tsx
+#: src/components/packs/run/RunView.tsx
+msgid "{0, plural, one {# pack left} other {# packs left}}"
+msgstr "{0, plural, one {Queda # pack} other {Quedan # packs}}"
+
+#. placeholder {0}: blindPacks(id, boss)
 #. placeholder {0}: list.length
 #: src/components/maps/MapCollectionsSection.tsx
+#: src/components/packs/run/RunView.tsx
 msgid "{0, plural, one {# pack} other {# packs}}"
 msgstr "{0, plural, one {# pack} other {# packs}}"
 
@@ -227,6 +237,16 @@ msgstr "{0, plural, one {# play} other {# plays}}"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{0, plural, one {# replay available} other {# replays available}}"
 msgstr "{0, plural, one {# replay disponible} other {# replays disponibles}}"
+
+#. placeholder {0}: progress.runsWon
+#: src/components/packs/run/RunView.tsx
+msgid "{0, plural, one {# run cleared} other {# runs cleared}}"
+msgstr "{0, plural, one {# run completada} other {# runs completadas}}"
+
+#. placeholder {0}: progress.runsWon
+#: src/components/packs/run/RunView.tsx
+#~ msgid "{0, plural, one {# run won} other {# runs won}}"
+#~ msgstr "{0, plural, one {# partida ganada} other {# partidas ganadas}}"
 
 #. placeholder {0}: board.total
 #: src/routes/snipes.tsx
@@ -311,6 +331,11 @@ msgstr "{0, plural, one {play} other {plays}}"
 #: src/routes/maps.tsx
 msgid "{0, plural, one {player} other {players}}"
 msgstr "{0, plural, one {jugador} other {jugadores}}"
+
+#. placeholder {0}: entries.length
+#: src/components/packs/run/HandScore.tsx
+msgid "{0, plural, one {Unlocked} other {# unlocks}}"
+msgstr "{0, plural, one {Desbloqueado} other {# desbloqueos}}"
 
 #. placeholder {0}: Number(card.copies)
 #. placeholder {0}: shared.card.copies
@@ -400,7 +425,9 @@ msgid "{0} card"
 msgstr "{0} carta"
 
 #. placeholder {0}: cardCount.toLocaleString("en-US")
+#. placeholder {0}: rung.at.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/packs/run/HandScore.tsx
 msgid "{0} cards"
 msgstr "{0} cartas"
 
@@ -714,6 +741,11 @@ msgstr "Solo {0}"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "{0} pack"
 msgstr "Pack {0}"
+
+#. placeholder {0}: blind.packsLeft
+#: src/components/packs/run/RunHud.tsx
+#~ msgid "{0} packs left"
+#~ msgstr ""
 
 #. placeholder {0}: stats.owners.toLocaleString("en-US")
 #: src/components/packs/PackPulse.tsx
@@ -1696,6 +1728,10 @@ msgstr "{rated, plural, one {# miembro} other {# miembros}}"
 #~ msgid "{releases} release groups"
 #~ msgstr "{releases} grupos de soltadas"
 
+#: src/components/packs/run/RunView.tsx
+msgid "{rerolls, plural, one {# left} other {# left}}"
+msgstr "{rerolls, plural, one {queda #} other {quedan #}}"
+
 #: src/components/packs/CardSpotlight.tsx
 msgid "{rest} others"
 msgstr "otros {rest}"
@@ -1879,9 +1915,17 @@ msgstr "Top {label} plays de {username}"
 msgid "{username}'s top <0>{label}</0> plays"
 msgstr "Top <0>{label}</0> plays de {username}"
 
+#: src/components/packs/run/Credits.tsx
+#~ msgid "{value} credits"
+#~ msgstr ""
+
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "{value} rates per chart"
 #~ msgstr "{value} velocidades por mapa"
+
+#: src/components/packs/run/Shards.tsx
+msgid "{value} shards"
+msgstr "{value} fragmentos"
 
 #: src/components/skins/SkinCard.tsx
 msgid "{viewCountLabel} views"
@@ -1942,11 +1986,133 @@ msgstr "#{grouped}"
 #~ msgid "+ bpm & length"
 #~ msgstr "+ bpm y duración"
 
+#. placeholder {0}: EDITION_EFFECTS.foil.chips
+#: src/lib/pack-run.ts
+#~ msgid "+{0} chips"
+#~ msgstr "+{0} fichas"
+
+#. placeholder {0}: N.freshPaint.chips
+#. placeholder {1}: N.freshPaint.decay
+#: src/lib/pack-run.ts
+#~ msgid "+{0} chips, {1} fewer after every pack."
+#~ msgstr "+{0} fichas, {1} menos después de cada pack."
+
+#. placeholder {0}: EDITION_EFFECTS.holo.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo"
+msgstr "+{0} combo"
+
+#. placeholder {0}: N.homeCrowd.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo for each card from your country."
+msgstr "+{0} combo por cada carta de tu país."
+
+#. placeholder {0}: N.bigStack.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo for each card in the pack."
+msgstr "+{0} combo por cada carta del sobre."
+
+#. placeholder {0}: N.patriot.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo for each card that shares a country with another card in the pack."
+msgstr "+{0} combo por cada carta que comparte país con otra carta del sobre."
+
+#. placeholder {0}: N.newBlood.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo for each new card."
+msgstr "+{0} combo por cada carta nueva."
+
+#. placeholder {0}: N.trio.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo if the pack has a hand."
+msgstr "+{0} combo si el sobre tiene un hand."
+
+#. placeholder {0}: N.duet.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo if the pack has a jump."
+msgstr "+{0} combo si el sobre tiene un jump."
+
+#. placeholder {0}: N.monochrome.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo if the pack has jacks."
+msgstr "+{0} combo si el sobre tiene jacks."
+
+#. placeholder {0}: N.climber.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo if the pack has stairs."
+msgstr "+{0} combo si el sobre tiene stairs."
+
+#. placeholder {0}: N.collector.mult
+#: src/lib/pack-run.ts
+msgid "+{0} combo per collector level."
+msgstr "+{0} combo por nivel de coleccionista."
+
 #. placeholder {0}: formatNumber(hidden)
 #. placeholder {1}: formatNumber(ownersPerCard)
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "+{0} more (list capped at {1})"
 msgstr "+{0} más (lista limitada a {1})"
+
+#. placeholder {0}: EDITION_EFFECTS.holo.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult"
+#~ msgstr "+{0} mult"
+
+#. placeholder {0}: N.homeCrowd.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult for each card from your country."
+#~ msgstr "+{0} mult por cada carta de tu país."
+
+#. placeholder {0}: N.bigStack.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult for each card in the pack."
+#~ msgstr "+{0} mult por cada carta del pack."
+
+#. placeholder {0}: N.patriot.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult for each card that shares a country with another card in the pack."
+#~ msgstr "+{0} mult por cada carta que comparte país con otra carta del pack."
+
+#. placeholder {0}: N.newBlood.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult for each new card."
+#~ msgstr "+{0} mult por cada carta nueva."
+
+#. placeholder {0}: N.monochrome.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult if the pack has a flush."
+#~ msgstr "+{0} mult si el pack tiene color."
+
+#. placeholder {0}: N.climber.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult if the pack has a ladder."
+#~ msgstr "+{0} mult si el pack tiene escalera."
+
+#. placeholder {0}: N.duet.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult if the pack has a pair."
+#~ msgstr "+{0} mult si el pack tiene pareja."
+
+#. placeholder {0}: N.trio.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult if the pack has three of a kind."
+#~ msgstr "+{0} mult si el pack tiene trío."
+
+#. placeholder {0}: N.collector.mult
+#: src/lib/pack-run.ts
+#~ msgid "+{0} mult per collector level."
+#~ msgstr "+{0} mult por nivel de coleccionista."
+
+#. placeholder {0}: EDITION_EFFECTS.foil.chips
+#: src/lib/pack-run.ts
+msgid "+{0} notes"
+msgstr "+{0} notas"
+
+#. placeholder {0}: N.freshPaint.chips
+#. placeholder {1}: N.freshPaint.decay
+#: src/lib/pack-run.ts
+msgid "+{0} notes, {1} fewer after every pack."
+msgstr "+{0} notas, {1} menos después de cada sobre."
 
 #. placeholder {0}: (step.start - rawDan).toFixed(2)
 #: src/components/player/DanStepRail.tsx
@@ -1964,6 +2130,16 @@ msgstr "+{hidden} más"
 #: src/components/player/InsightModals.tsx
 msgid "+{stacks} stacked"
 msgstr "+{stacks} combinadas"
+
+#. placeholder {0}: N.sightread.max
+#: src/lib/pack-run.ts
+msgid "+0 to +{0} combo, rolled each pack."
+msgstr "De +0 a +{0} combo, al azar en cada sobre."
+
+#. placeholder {0}: N.sightread.max
+#: src/lib/pack-run.ts
+#~ msgid "+0 to +{0} mult, rolled each pack."
+#~ msgstr "De +0 a +{0} mult, al azar en cada pack."
 
 #. placeholder {0}: Math.ceil(nextChargeMs / 1000)
 #: src/routes/packs.tsx
@@ -2252,6 +2428,16 @@ msgstr "4. Tu dan es el promedio de tus skills"
 msgid "4K"
 msgstr "4K"
 
+#. placeholder {0}: N.fourKeys.chips
+#: src/lib/pack-run.ts
+#~ msgid "4K cards give +{0} chips."
+#~ msgstr "Las cartas 4K dan +{0} fichas."
+
+#. placeholder {0}: N.fourKeys.chips
+#: src/lib/pack-run.ts
+msgid "4K cards give +{0} notes."
+msgstr "Las cartas 4K dan +{0} notas."
+
 #: src/routes/dan-estimates.tsx
 msgid "4K jack"
 msgstr "4K jack"
@@ -2349,6 +2535,16 @@ msgstr "7 d Global"
 #: src/lib/packs.ts
 msgid "7K"
 msgstr "7K"
+
+#. placeholder {0}: N.sevenKeys.mult
+#: src/lib/pack-run.ts
+msgid "7K cards give +{0} combo."
+msgstr "Las cartas 7K dan +{0} combo."
+
+#. placeholder {0}: N.sevenKeys.mult
+#: src/lib/pack-run.ts
+#~ msgid "7K cards give +{0} mult."
+#~ msgstr "Las cartas 7K dan +{0} mult."
 
 #: src/routes/dan-estimates.tsx
 msgid "7K LN"
@@ -2502,6 +2698,14 @@ msgstr "Una imagen personalizable para tu perfil de osu! que se actualiza sola."
 #~ msgid "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
 #~ msgstr "Algunos pases quedan fuera del promedio: hasta tres en una habilidad que estén más de cinco niveles por debajo del promedio de tus cinco mejores en ella. Suele ser un mapa fácil que jugaste por precisión y no algo que mida tu nivel. Siguen apareciendo en la ventana de dan, marcados como <0>no cuenta</0>. Nunca más de tres, y nunca tantos como para dejar una habilidad por debajo de los cuatro pases que necesita, así que un abanico de pases realmente amplio sigue promediándose entero."
 
+#: src/lib/pack-run.ts
+msgid "A fifth charm slot"
+msgstr "Un quinto espacio de amuleto"
+
+#: src/lib/pack-run.ts
+msgid "A fourth charm slot"
+msgstr "Un cuarto espacio de amuleto"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
 msgstr "Se está calculando una calificación nueva con las últimas jugadas; estos números pueden ajustarse en breve"
@@ -2652,6 +2856,10 @@ msgstr "Un set tiene solo jugadores o solo equipos."
 #: src/components/discord/CommandShowcase.tsx
 msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
 msgstr "Una carta de nivel de habilidad para compartir: control, velocidad y acc bajo un distintivo de nivel, con rating de estrellas."
+
+#: src/lib/pack-run.ts
+msgid "A sixth charm slot"
+msgstr "Un sexto espacio de amuleto"
 
 #: src/routes/snipes.tsx
 #~ msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
@@ -3014,6 +3222,14 @@ msgstr "Admin: llenar la fila con tiradas falsas para previsualizar la animació
 msgid "Advanced"
 msgstr "Avanzado"
 
+#: src/components/packs/run/HandScore.tsx
+#~ msgid "again"
+#~ msgstr "otra vez"
+
+#: src/components/packs/run/HandScore.tsx
+msgid "AGAIN"
+msgstr "OTRA VEZ"
+
 #: src/components/player/BestScoresControls.tsx
 msgid "Age"
 msgstr "Edad"
@@ -3135,6 +3351,10 @@ msgstr "Todas las subidas"
 msgid "All-round"
 msgstr "All-round"
 
+#: src/lib/pack-run.ts
+msgid "Allowance"
+msgstr "Mesada"
+
 #: src/routes/maps.tsx
 msgid "Almost there..."
 msgstr "Casi listo..."
@@ -3150,6 +3370,10 @@ msgstr "ya es un GOAT"
 #: src/components/companella/AuthorizePage.tsx
 msgid "Already answered"
 msgstr "Ya respondida"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Already bought."
+msgstr "Ya lo compraste."
 
 #: src/components/packs/SetsView.tsx
 msgid "Already in set"
@@ -3264,6 +3488,14 @@ msgstr "Otro jugador ya usa ese nombre."
 #: src/lib/replay-export/errors.ts
 msgid "Another replay video is still exporting. Finish or cancel it first."
 msgstr "Todavía se está exportando otro video. Termínalo o cancélalo primero."
+
+#. placeholder {0}: before.ante
+#. placeholder {0}: blind.ante
+#: src/components/packs/run/HandScore.tsx
+#: src/components/packs/run/RunHud.tsx
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Ante {0}"
+#~ msgstr "Ante {0}"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -3427,6 +3659,10 @@ msgstr "Archivados"
 msgid "archived summary"
 msgstr "resumen archivado"
 
+#: src/lib/pack-run.ts
+msgid "Archivist"
+msgstr "Archivista"
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Are you sure?"
 #~ msgstr "¿Seguro?"
@@ -3456,6 +3692,10 @@ msgstr "ascendente"
 msgid "Ascending"
 msgstr "Ascendente"
 
+#: src/lib/pack-run.ts
+msgid "Ascension"
+msgstr "Ascenso"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Aspect ratio locked"
 msgstr "Proporción bloqueada"
@@ -3467,6 +3707,14 @@ msgstr "Proporción desbloqueada"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Assets"
 msgstr "Recursos"
+
+#: src/lib/pack-run.ts
+msgid "At least one card has a finish."
+msgstr "Al menos una carta tiene acabado."
+
+#: src/lib/pack-run.ts
+#~ msgid "At least one card has an edition."
+#~ msgstr "Al menos una carta trae edición."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
@@ -3617,6 +3865,7 @@ msgstr "Volver al menú"
 
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/StreakGame.tsx
+#: src/routes/packs.tsx
 msgid "Back to packs"
 msgstr "Volver a los packs"
 
@@ -3865,6 +4114,16 @@ msgstr "mejor {best}%"
 msgid "best {best}pp"
 msgstr "mejor {best}pp"
 
+#. placeholder {0}: progress.bestAnte
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Best ante {0}"
+#~ msgstr "Mejor ante {0}"
+
+#. placeholder {0}: formatScore(state.over.bestHand)
+#: src/components/packs/run/RunView.tsx
+msgid "Best pack {0}"
+msgstr "Mejor pack {0}"
+
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Best Performance"
@@ -3874,13 +4133,30 @@ msgstr "Mejor rendimiento"
 msgid "Best Scores"
 msgstr "Mejores scores"
 
+#. placeholder {0}: progress.bestAnte
+#: src/components/packs/run/RunView.tsx
+msgid "Best stage {0}"
+msgstr "Mejor etapa {0}"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "BG Dim"
 msgstr "Atenuación"
 
+#: src/lib/pack-run.ts
+#~ msgid "Big blind"
+#~ msgstr "Ciega grande"
+
+#: src/lib/pack-run.ts
+#~ msgid "Big blind cleared"
+#~ msgstr "Ciega grande superada"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Big play"
 msgstr "PP Play"
+
+#: src/lib/pack-run.ts
+msgid "Big Stack"
+msgstr "Pila grande"
 
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Biggest"
@@ -3953,6 +4229,18 @@ msgstr "Aquí no se cuentan los pp de bonificación por número de jugadas, así
 msgid "boosts"
 msgstr "impulsos"
 
+#: src/lib/pack-run.ts
+#~ msgid "Boss beaten"
+#~ msgstr "Jefe derrotado"
+
+#: src/lib/pack-run.ts
+#~ msgid "Boss blind"
+#~ msgstr "Ciega jefe"
+
+#: src/lib/pack-run.ts
+#~ msgid "Bosses have no effect."
+#~ msgstr "Los jefes no tienen efecto."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bottom"
 msgstr "Abajo"
@@ -3960,6 +4248,10 @@ msgstr "Abajo"
 #: src/components/player/InsightModals.tsx
 msgid "bottom pp"
 msgstr "pp más bajo"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Bought"
+msgstr "Comprado"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Box title (empty for SPOILER)"
@@ -4001,6 +4293,14 @@ msgstr "Brillo"
 #: src/routes/replay.tsx
 msgid "Bring to front"
 msgstr "Traer al frente"
+
+#: src/components/packs/run/HandScore.tsx
+#~ msgid "broke"
+#~ msgstr "se rompió"
+
+#: src/components/packs/run/HandScore.tsx
+msgid "BROKE"
+msgstr "ROTO"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Browse"
@@ -4077,6 +4377,15 @@ msgstr "Lista con viñetas"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Burn 5 duplicate {0} copies for one {1} card"
 #~ msgstr "Quema 5 copias duplicadas de {0} por una carta {1}"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Buy"
+msgstr "Comprar"
+
+#. placeholder {0}: offer.cost
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Buy ${0}"
+#~ msgstr "Comprar ${0}"
 
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
@@ -4192,10 +4501,68 @@ msgstr "cartas coleccionadas"
 msgid "Cards found"
 msgstr "Cartas encontradas"
 
+#: src/lib/pack-run.ts
+msgid "Cards from your country score nothing."
+msgstr "Las cartas de tu país no puntúan."
+
+#. placeholder {0}: N.hoarder.chips
+#: src/lib/pack-run.ts
+#~ msgid "Cards give +{0} chips per mastery level."
+#~ msgstr "Las cartas dan +{0} fichas por nivel de maestría."
+
+#. placeholder {0}: N.hoarder.chips
+#: src/lib/pack-run.ts
+msgid "Cards give +{0} notes per mastery level."
+msgstr "Las cartas dan +{0} notas por nivel de maestría."
+
+#: src/components/packs/run/RunView.tsx
+msgid "cards held"
+msgstr "cartas obtenidas"
+
 #. placeholder {0}: picking.name
 #: src/components/packs/SetsView.tsx
 msgid "Cards in {0}"
 msgstr "Cartas en {0}"
+
+#. placeholder {0}: N.oldGuard.rank
+#. placeholder {1}: N.oldGuard.xMult
+#: src/lib/pack-run.ts
+msgid "Cards in the global top {0} give x{1} combo."
+msgstr "Las cartas del top {0} global dan x{1} combo."
+
+#. placeholder {0}: N.oldGuard.rank
+#. placeholder {1}: N.oldGuard.xMult
+#: src/lib/pack-run.ts
+#~ msgid "Cards in the global top {0} give x{1} mult."
+#~ msgstr "Las cartas del top {0} global dan x{1} mult."
+
+#. placeholder {0}: N.topThousand.chips
+#: src/lib/pack-run.ts
+#~ msgid "Cards in the global top 1,000 give +{0} chips."
+#~ msgstr "Las cartas del top 1,000 global dan +{0} fichas."
+
+#. placeholder {0}: N.topThousand.chips
+#: src/lib/pack-run.ts
+msgid "Cards in the global top 1,000 give +{0} notes."
+msgstr "Las cartas del top 1,000 global dan +{0} notas."
+
+#. placeholder {0}: N.gallery.mult
+#: src/lib/pack-run.ts
+msgid "Cards with a finish give +{0} combo."
+msgstr "Las cartas con acabado dan +{0} combo."
+
+#: src/lib/pack-run.ts
+msgid "Cards with a finish score twice."
+msgstr "Las cartas con acabado puntúan dos veces."
+
+#. placeholder {0}: N.gallery.mult
+#: src/lib/pack-run.ts
+#~ msgid "Cards with an edition give +{0} mult."
+#~ msgstr "Las cartas con edición dan +{0} mult."
+
+#: src/lib/pack-run.ts
+#~ msgid "Cards with an edition score twice."
+#~ msgstr "Las cartas con edición puntúan dos veces."
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Cards you hold more than one copy of."
@@ -4213,6 +4580,18 @@ msgstr "Centrar"
 #: src/routes/tracker.tsx
 msgid "Ch"
 msgstr "Ch"
+
+#: src/components/packs/RevealStage.tsx
+msgid "chain"
+msgstr "cadena"
+
+#: src/lib/pack-run.ts
+msgid "Chain Link"
+msgstr "Eslabón"
+
+#: src/lib/pack-run.ts
+msgid "Chain pulls and a third shop slot"
+msgstr "Tiradas en cadena y un tercer espacio en la tienda"
 
 #: src/routes/recommendations.tsx
 msgid "change"
@@ -4294,6 +4673,14 @@ msgstr "No se pudo cambiar la etiqueta del modo de teclas. Inténtalo de nuevo."
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "No se pudo cambiar quién puede ver esta skin. Inténtalo de nuevo."
+
+#: src/components/packs/run/RunView.tsx
+msgid "Charm icons by Lorc, Delapouite and contributors at <0>game-icons.net</0>, CC BY 3.0"
+msgstr "Iconos de amuletos por Lorc, Delapouite y colaboradores en <0>game-icons.net</0>, CC BY 3.0"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Charms"
+msgstr "Amuletos"
 
 #: src/components/companella/SubmissionDetail.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
@@ -4444,6 +4831,10 @@ msgstr "Elige otro coleccionista para tu regalo."
 #~ msgid "Choose the card you want to craft a special edition of."
 #~ msgstr "Elige la carta a la que quieres darle una edición especial."
 
+#: src/lib/pack-run.ts
+msgid "Chord"
+msgstr "Chord"
+
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
@@ -4466,6 +4857,10 @@ msgstr "Chordstream"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Chordstreams"
 msgstr "Chordstreams"
+
+#: src/lib/pack-run.ts
+msgid "Chrome"
+msgstr "Cromo"
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -4506,6 +4901,8 @@ msgstr "limpiar"
 msgid "Clear"
 msgstr "Limpiar"
 
+#: src/components/packs/run/HandScore.tsx
+#: src/components/packs/run/RunView.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 msgctxt "a dan course pass"
 msgid "Clear"
@@ -4688,6 +5085,10 @@ msgstr "cliente"
 msgid "Client"
 msgstr "Cliente"
 
+#: src/lib/pack-run.ts
+msgid "Climber"
+msgstr "Escalador"
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -4800,6 +5201,10 @@ msgstr "coleccionando desde hace más tiempo"
 msgid "Collection"
 msgstr "Colección"
 
+#: src/components/packs/run/RunView.tsx
+msgid "Collection ladder"
+msgstr "Escalera de colección"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Collection not found."
 msgstr "No se encontró la colección."
@@ -4822,6 +5227,10 @@ msgstr "Las colecciones se están reconstruyendo. Vuelve en unos minutos."
 msgid "Collections are unavailable right now. Try again in a bit."
 msgstr "Las colecciones no están disponibles en este momento. Inténtalo de nuevo en un rato."
 
+#: src/lib/pack-run.ts
+msgid "Collector"
+msgstr "Coleccionista"
+
 #. placeholder {0}: formatNumber(history.collectorNumber, locale)
 #. placeholder {1}: formatDate(new Date(history.collector.joinedAt).toISOString(), timeZone, locale)
 #: src/routes/packs_.collections_.history.$collector.tsx
@@ -4831,6 +5240,15 @@ msgstr "Las colecciones no están disponibles en este momento. Inténtalo de nue
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "Collector history"
 #~ msgstr "Historial de coleccionista"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Collector level"
+msgstr "Nivel de coleccionista"
+
+#. placeholder {0}: outcome.levelsGained[outcome.levelsGained.length - 1]
+#: src/components/packs/run/HandScore.tsx
+msgid "Collector level {0}"
+msgstr "Nivel de coleccionista {0}"
 
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "collectors"
@@ -4877,6 +5295,10 @@ msgstr "Inicio de columnas"
 msgid "Column width"
 msgstr "Ancho de columnas"
 
+#: src/components/packs/run/HandScore.tsx
+msgid "combo"
+msgstr "combo"
+
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/top-plays.tsx
@@ -4903,6 +5325,20 @@ msgstr "ComboPosition"
 #: src/components/communities/TagInput.tsx
 msgid "Comma after each one. Up to {COMMUNITY_MAX_TAGS}, and they become filters people browse by, so use words someone would actually search for."
 msgstr "Separados por comas. Hasta {COMMUNITY_MAX_TAGS}, y se convierten en filtros por los que la gente navega, así que usa palabras que alguien de verdad buscaría."
+
+#. placeholder {0}: N.grassroots.chips
+#: src/lib/pack-run.ts
+#~ msgid "Common cards give +{0} chips."
+#~ msgstr "Las cartas comunes dan +{0} fichas."
+
+#. placeholder {0}: N.grassroots.chips
+#: src/lib/pack-run.ts
+msgid "Common cards give +{0} notes."
+msgstr "Las cartas Common dan +{0} notas."
+
+#: src/lib/pack-run.ts
+msgid "Common cards score nothing."
+msgstr "Las cartas comunes no puntúan."
 
 #: src/routes/recommendations.tsx
 msgid "common pick"
@@ -5739,6 +6175,11 @@ msgstr "Acredita"
 msgid "credited by accuracy against a 96% bar"
 msgstr "se acredita según la acc contra un mínimo de 96%"
 
+#. placeholder {0}: N.piggyBank.cap
+#: src/lib/pack-run.ts
+#~ msgid "Credits you hold pay up to {0} a song instead of 5."
+#~ msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
 msgstr "Croata"
@@ -5748,6 +6189,10 @@ msgstr "Croata"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "crop {0}×{1}"
 msgstr "recortar {0}×{1}"
+
+#: src/lib/pack-run.ts
+msgid "Crown"
+msgstr "Corona"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Crystal facets and a rainbow foil rim."
@@ -6295,6 +6740,10 @@ msgstr "Listo"
 msgid "done with it"
 msgstr "suficiente"
 
+#: src/lib/pack-run.ts
+msgid "Double Time"
+msgstr "Double Time"
+
 #: src/routes/snipes.tsx
 msgid "Doubles the columns into two stages."
 msgstr "Duplica las columnas en dos stages."
@@ -6461,6 +6910,10 @@ msgstr "Suelta tu propio archivo .osr"
 msgid "DT/NC"
 msgstr "DT/NC"
 
+#: src/lib/pack-run.ts
+msgid "Duet"
+msgstr "Dúo"
+
 #: src/lib/pattern-labels.ts
 msgid "Dumpstream"
 msgstr "Dumpstream"
@@ -6489,9 +6942,18 @@ msgstr "Renders dinámicos"
 msgid "e.g. 4K jumpstream warmup"
 msgstr "p. ej., calentamiento de jumpstream 4K"
 
+#. placeholder {0}: N.chainLink.chance * 100
+#: src/lib/pack-run.ts
+msgid "Each card has a {0}% chance to deal one more card."
+msgstr "Cada carta tiene un {0}% de probabilidad de dar una carta más."
+
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each dan is the average of the best {averageWindow} clears behind it. A column under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
 #~ msgstr "Cada dan es el promedio de los mejores {averageWindow} clears que tiene detrás. Una columna con menos de {averageWindow} se promedia con lo que tiene, así que se vuelve más precisa a medida que llegan más clears."
+
+#: src/lib/pack-run.ts
+#~ msgid "Each hand type scores only once."
+#~ msgstr "Cada tipo de mano puntúa solo una vez."
 
 #: src/routes/player/$username.tsx
 msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
@@ -6512,6 +6974,10 @@ msgstr "Cada nivel se divide en cinco pasos, así que un chart puede ser 7--, 7-
 #: src/routes/dan-estimates.tsx
 msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long tech chart, counts in both."
 msgstr "Cada pase va al skill que más pide su chart. Un chart que claramente es dos cosas a la vez, como un chart de tech largo, cuenta en ambos."
+
+#: src/lib/pack-run.ts
+msgid "Each pattern scores only once."
+msgstr "Cada patrón puntúa una sola vez."
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
@@ -6557,6 +7023,11 @@ msgstr "Early"
 msgid "Early/late meter with the real hit windows."
 msgstr "Medidor de early/late con las ventanas de acierto reales."
 
+#. placeholder {0}: N.allowance.cash
+#: src/lib/pack-run.ts
+#~ msgid "Earn {0} more credits when a song is cleared."
+#~ msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Earn <0/> <1/>"
 msgstr "Consigue <0/> <1/>"
@@ -6565,9 +7036,18 @@ msgstr "Consigue <0/> <1/>"
 msgid "Earn <0/> <1/> on {mapSlot}"
 msgstr "Logra <0/> <1/> en {mapSlot}"
 
+#. placeholder {0}: N.allowance.cash
+#: src/lib/pack-run.ts
+#~ msgid "Earn ${0} more when a blind is cleared."
+#~ msgstr "Gana ${0} más al superar una ciega."
+
 #: src/routes/recommendations.tsx
 msgid "easy"
 msgstr "fácil"
+
+#: src/lib/pack-run.ts
+msgid "Easy"
+msgstr "Easy"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on."
@@ -6576,6 +7056,10 @@ msgstr "Easy amplió todas las ventanas de acierto, así que esta precisión no 
 #: src/routes/dan-estimates.tsx
 msgid "Easy, No Fail, Random and anything that slows the chart down void a course run. Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are fine. A pass recorded before mod data was stored does not count."
 msgstr "Easy, No Fail, Random y cualquier cosa que haga el chart más lento anulan el curso. Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect y Double Time están bien. Un pase registrado antes de que se guardaran los mods no cuenta."
+
+#: src/lib/pack-run.ts
+msgid "Echo"
+msgstr "Eco"
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
@@ -6640,6 +7124,14 @@ msgstr "Editando"
 #~ msgid "Edition crafted"
 #~ msgstr "Edición creada"
 
+#: src/lib/pack-run.ts
+#~ msgid "Editions are three times as likely."
+#~ msgstr "Las ediciones son tres veces más probables."
+
+#: src/lib/pack-run.ts
+#~ msgid "Editions roll twice as often."
+#~ msgstr "Las ediciones salen el doble de seguido."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
 msgstr "Los cambios quedan en este navegador. Copia el resultado y pégalo en el editor me! de <0>tu página de osu!</0>."
@@ -6660,6 +7152,10 @@ msgstr "Élite"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Ember"
 #~ msgstr "Brasa"
+
+#: src/lib/pack-run.ts
+msgid "Encore"
+msgstr "Bis"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "End"
@@ -6762,6 +7258,31 @@ msgstr "todas las cartas"
 #: src/components/packs/RevealStage.tsx
 msgid "Every card came out in two pieces"
 msgstr "Cada carta salió en dos partes"
+
+#: src/lib/pack-run.ts
+msgid "Every card gives half its notes."
+msgstr "Cada carta da la mitad de sus notas."
+
+#: src/lib/pack-run.ts
+#~ msgid "Every card has the same edition."
+#~ msgstr "Todas las cartas traen la misma edición."
+
+#: src/lib/pack-run.ts
+msgid "Every card has the same finish."
+msgstr "Todas las cartas tienen el mismo acabado."
+
+#. placeholder {0}: N.hotStreak.packs
+#: src/lib/pack-run.ts
+msgid "Every card scores twice for the next {0} packs."
+msgstr "Cada carta puntúa dos veces durante los próximos {0} packs."
+
+#: src/lib/pack-run.ts
+msgid "Every card scores twice."
+msgstr "Cada carta puntúa dos veces."
+
+#: src/components/packs/run/RunView.tsx
+msgid "Every charm slot is full. Sell one first."
+msgstr "Todos los espacios de amuleto están llenos. Vende uno primero."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard is a rough ordering."
@@ -6945,9 +7466,23 @@ msgstr "Aplicación externa"
 #~ msgid "Extra: practice charts set one skill directly"
 #~ msgstr "Extra: los mapas de práctica definen una skill directamente"
 
+#: src/lib/pack-run.ts
+msgid "Fade In"
+msgstr "Fade In"
+
+#: src/components/packs/run/HandScore.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Failed"
 msgstr "Falló"
+
+#. placeholder {0}: outcome.over.ante
+#. placeholder {0}: over.ante
+#. placeholder {0}: state.over.ante
+#: src/components/packs/run/HandScore.tsx
+#: src/components/packs/run/RunHud.tsx
+#: src/components/packs/run/RunView.tsx
+msgid "Failed at stage {0}"
+msgstr "Fallaste en la etapa {0}"
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "Failed plays do not credit a dan."
@@ -7193,6 +7728,10 @@ msgstr "filtros"
 msgid "Filters"
 msgstr "Filtros"
 
+#: src/lib/pack-run.ts
+msgid "Final song"
+msgstr "Canción final"
+
 #. placeholder {0}: target.label
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Find {0} in the Assets tab"
@@ -7286,6 +7825,14 @@ msgstr "buscar jugador..."
 msgid "Finding more replays..."
 msgstr "Buscando más repeticiones..."
 
+#: src/lib/pack-run.ts
+msgid "Finishes are three times as likely."
+msgstr "Los acabados salen tres veces más."
+
+#: src/lib/pack-run.ts
+msgid "Finishes roll twice as often."
+msgstr "Los acabados salen el doble."
+
 #: src/routes/companella_.test-callback.tsx
 msgid "Finishing the connection..."
 msgstr ""
@@ -7335,6 +7882,10 @@ msgstr "Primera página de la colección"
 #: src/components/packs/PackSummary.tsx
 msgid "first ever to pull this"
 msgstr "primero en sacar esta carta"
+
+#: src/lib/pack-run.ts
+msgid "First Find"
+msgstr "Primer hallazgo"
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "first finds"
@@ -7400,6 +7951,14 @@ msgstr "Ajustar"
 msgid "Fits the overlays to a 16:9 frame."
 msgstr "Ajusta los overlays a un formato 16:9."
 
+#: src/lib/pack-run.ts
+msgid "Five cards from the same country."
+msgstr "Cinco cartas del mismo país."
+
+#: src/lib/pack-run.ts
+msgid "Five cards of the same rarity."
+msgstr "Cinco cartas de la misma rareza."
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Five duplicate copies of one tier forge one card of the tier above. Your last copy of a card is never used."
 #~ msgstr "Cinco copias duplicadas de un nivel forjan una carta del nivel superior. Tu última copia de una carta nunca se usa."
@@ -7408,6 +7967,14 @@ msgstr "Ajusta los overlays a un formato 16:9."
 #~ msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 #~ msgstr "El cinco corresponde más o menos a la duración de un dan de verdad. Con exactamente cuatro pases válidos se promedian esos cuatro; un skill en el que tengas menos de cuatro no recibe dan propio, y un lado en el que tengas menos de cuatro se queda sin estimación, en vez de darte una que no se sostiene."
 
+#: src/lib/pack-run.ts
+#~ msgid "Five of a kind"
+#~ msgstr "Repóker"
+
+#: src/lib/pack-run.ts
+msgid "Five rarities in a row."
+msgstr "Cinco rarezas seguidas."
+
 #: src/routes/report.tsx
 msgid "fixed"
 msgstr "arreglado"
@@ -7415,6 +7982,10 @@ msgstr "arreglado"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Fixed"
 msgstr "Arreglos"
+
+#: src/lib/pack-run.ts
+msgid "Flashlight"
+msgstr "Flashlight"
 
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "flat"
@@ -7444,6 +8015,14 @@ msgstr "Invertido"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Flowing ribbons of teal and violet."
 #~ msgstr "Cintas ondulantes de turquesa y violeta."
+
+#: src/lib/pack-run.ts
+#~ msgid "Flush"
+#~ msgstr "Color"
+
+#: src/lib/pack-run.ts
+#~ msgid "Foil"
+#~ msgstr "Foil"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "Folder name"
@@ -7527,6 +8106,10 @@ msgstr "formato copiado - clic derecho en el texto para pegarlo"
 msgid "Found something broken? Describe what happened."
 msgstr "¿Encontraste algo que no funciona? Describe qué pasó."
 
+#: src/lib/pack-run.ts
+msgid "Four cards from the same country."
+msgstr "Cuatro cartas del mismo país."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Four is standing in for the length of a real course. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 #~ msgstr "Se piden cuatro pases porque esa es la cantidad de charts que tiene un dan de verdad. Un skill en el que tengas menos de cuatro pases válidos no recibe dan propio, y un lado en el que tengas menos de cuatro se queda sin estimación, en vez de darte una que no se sostiene."
@@ -7535,10 +8118,19 @@ msgstr "¿Encontraste algo que no funciona? Describe qué pasó."
 #~ msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
 #~ msgstr "El cuatro está en lugar de la duración de un dan real. Si tienes menos de cuatro pases válidos en un lado, no recibes ninguna estimación en vez de una poco fiable. Y si tu 4º mejor pase está en lo más alto de una escala, la insignia cambia de \"~\" a \">\" y se lee como <0>más allá</0> de ese nivel en vez de fijarte en él, porque a la escala se le acabaron los niveles con los que medirte."
 
+#: src/lib/pack-run.ts
+msgid "Four Keys"
+msgstr "Cuatro teclas"
+
+#: src/lib/pack-run.ts
+#~ msgid "Four of a kind"
+#~ msgstr "Póker"
+
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "frames"
 msgstr "cuadros"
 
+#: src/components/packs/run/RunView.tsx
 #: src/routes/packs.tsx
 msgid "free"
 msgstr "gratis"
@@ -7546,6 +8138,10 @@ msgstr "gratis"
 #: src/components/communities/field-options.tsx
 msgid "French"
 msgstr "Francés"
+
+#: src/lib/pack-run.ts
+msgid "Fresh Paint"
+msgstr "Pintura fresca"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Fri"
@@ -7586,6 +8182,10 @@ msgstr "análisis completo"
 msgid "Full combos only (0 misses)"
 msgstr "Solo full combos (0 misses)"
 
+#: src/lib/pack-run.ts
+#~ msgid "Full house"
+#~ msgstr "Full"
+
 #: src/lib/signature-shared.ts
 msgid "Full list"
 msgstr "Lista completa"
@@ -7607,6 +8207,44 @@ msgstr "Ancho completo"
 #: src/routes/replay.tsx
 msgid "Fullscreen"
 msgstr "Pantalla completa"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Furthest stages"
+msgstr "Etapas más lejanas"
+
+#. placeholder {0}: N.snowball.step
+#: src/lib/pack-run.ts
+msgid "Gains +{0} combo every pack with a jump."
+msgstr "Gana +{0} combo con cada sobre que tenga un jump."
+
+#. placeholder {0}: N.snowball.step
+#: src/lib/pack-run.ts
+#~ msgid "Gains +{0} mult every pack with a pair."
+#~ msgstr "Gana +{0} mult en cada pack con pareja."
+
+#. placeholder {0}: N.ascension.step
+#: src/lib/pack-run.ts
+msgid "Gains x{0} combo for every final song cleared."
+msgstr "Gana x{0} combo por cada canción final superada."
+
+#. placeholder {0}: N.archivist.step
+#: src/lib/pack-run.ts
+msgid "Gains x{0} combo for every new card this run."
+msgstr "Gana x{0} combo por cada carta nueva en esta run."
+
+#. placeholder {0}: N.ascension.step
+#: src/lib/pack-run.ts
+#~ msgid "Gains x{0} mult for every boss beaten."
+#~ msgstr "Gana x{0} mult por cada jefe derrotado."
+
+#. placeholder {0}: N.archivist.step
+#: src/lib/pack-run.ts
+#~ msgid "Gains x{0} mult for every new card this run."
+#~ msgstr "Gana x{0} mult por cada carta nueva en esta partida."
+
+#: src/lib/pack-run.ts
+msgid "Gallery"
+msgstr "Galería"
 
 #: src/lib/skill-axes.ts
 msgid "General"
@@ -7635,6 +8273,10 @@ msgstr "Obtener mi enlace"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Getting the map out of osu!"
 msgstr "Sacando el mapa de osu!"
+
+#: src/lib/pack-run.ts
+#~ msgid "Giant Slayer"
+#~ msgstr "Matagigantes"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Gift a card"
@@ -7778,6 +8420,28 @@ msgstr "Metas"
 msgid "Goals ({0} open)"
 msgstr "Metas ({0} abiertas)"
 
+#. placeholder {0}: N.crown.xMult
+#. placeholder {1}: N.crown.highXMult
+#: src/lib/pack-run.ts
+msgid "GOAT and Eternal cards give x{0} combo, Mythic and better x{1}."
+msgstr "Las cartas GOAT y Eternal dan x{0} combo, Mythic o mejor x{1}."
+
+#. placeholder {0}: N.herd.xMult
+#: src/lib/pack-run.ts
+msgid "GOAT and Eternal cards give x{0} combo."
+msgstr "Las cartas GOAT y Eternal dan x{0} combo."
+
+#. placeholder {0}: N.crown.xMult
+#. placeholder {1}: N.crown.highXMult
+#: src/lib/pack-run.ts
+#~ msgid "GOAT and Eternal cards give x{0} mult, Mythic and better x{1}."
+#~ msgstr "Las cartas GOAT y Eternal dan x{0} mult, las Mythic o mejores x{1}."
+
+#. placeholder {0}: N.herd.xMult
+#: src/lib/pack-run.ts
+#~ msgid "GOAT and Eternal cards give x{0} mult."
+#~ msgstr "Las cartas GOAT y Eternal dan x{0} mult."
+
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "GOAT holders"
 msgstr "Dueños de GOAT"
@@ -7807,6 +8471,10 @@ msgstr "Se basa en el país de la cuenta de osu! de cada quien, y cualquiera que
 msgid "Gold"
 msgstr "Dorado"
 
+#: src/lib/pack-run.ts
+msgid "Gold pack"
+msgstr "Pack dorado"
+
 #: src/components/packs/GiftInbox.tsx
 #~ msgid "Got it"
 #~ msgstr "¡Listo!"
@@ -7830,6 +8498,10 @@ msgstr "Texto con degradado"
 msgctxt "skill history view"
 msgid "Graph"
 msgstr "Gráfica"
+
+#: src/lib/pack-run.ts
+msgid "Grassroots"
+msgstr "Raíces"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
@@ -7862,12 +8534,25 @@ msgstr "Cuadrícula"
 msgid "Guess at random"
 msgstr "Adivinar al azar"
 
+#: src/lib/pack-run.ts
+msgid "Half Time"
+msgstr "Half Time"
+
+#: src/lib/pack-run.ts
+msgid "Hand"
+msgstr "Hand"
+
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Hand types"
+#~ msgstr "Tipos de mano"
+
 #: src/lib/pattern-labels.ts
 msgid "Handjack"
 msgstr "Handjack"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/lib/pack-run.ts
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/recommendations/map/$beatmapId.tsx
@@ -7877,6 +8562,10 @@ msgstr "Handstream"
 #: src/routes/recommendations.tsx
 msgid "hard"
 msgstr "difícil"
+
+#: src/lib/pack-run.ts
+msgid "Hard Rock"
+msgstr "Hard Rock"
 
 #: src/components/packs/collections/RecordBoards.tsx
 #~ msgid "hardest cards to find"
@@ -7955,6 +8644,10 @@ msgstr "Ten <0/> plays que valgan <1/> o más"
 msgid "Heading"
 msgstr "Encabezado"
 
+#: src/lib/pack-run.ts
+msgid "Headliner"
+msgstr "Cabeza de cartel"
+
 #: src/lib/replay-overlays.ts
 msgid "Health bar"
 msgstr "Barra de HP"
@@ -7975,12 +8668,17 @@ msgstr "Alto de la imagen exportada, en píxeles"
 #~ msgid "Held-chord Coordination"
 #~ msgstr "Coordinación de acordes mantenidos"
 
+#: src/lib/pack-run.ts
+msgid "Herd"
+msgstr "Rebaño"
+
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "hidden"
 msgstr "oculta"
 
 #: src/components/settings/SettingsPanel.tsx
+#: src/lib/pack-run.ts
 msgid "Hidden"
 msgstr "Oculto"
 
@@ -8073,6 +8771,10 @@ msgstr "Ocultando {label}"
 #~ msgid "High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception."
 #~ msgstr "Una precisión alta nunca anula la exclusión de un mapa que ya es vibro a velocidad normal. Solo las jugadas más rápidas que cumplan los requisitos, en mapas limpios y con evidencia de PP, pueden recibir la excepción por acordes densos."
 
+#: src/lib/pack-run.ts
+#~ msgid "High card"
+#~ msgstr "Carta alta"
+
 #: src/routes/packs.tsx
 msgid "Higher or lower"
 msgstr "Higher or Lower"
@@ -8092,6 +8794,10 @@ msgstr "Los valores más altos mueven los receptores hacia abajo."
 #: src/routes/replay_.community.tsx
 #~ msgid "Highest accuracy"
 #~ msgstr "Mayor precisión"
+
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Highest antes"
+#~ msgstr "Antes más altos"
 
 #: src/routes/replay_.community.tsx
 #~ msgid "Highest difficulty"
@@ -8195,6 +8901,10 @@ msgstr "hitsounds y sonidos de interfaz"
 #~ msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. Regular charts count down to 4% below the bar, while 6K/7K LN charts count down to 1% below it. At those cutoffs, the chart counts as 1.25 levels lower. 4K LN counts down to 94.5%, where the chart is worth 1.5 levels less, and its bonus stops rising at 99.7%:"
 #~ msgstr "Llegar al mínimo de precisión da el crédito completo del nivel del chart. El 1% siguiente por encima del mínimo también da el crédito completo. A partir de ahí empieza el bono. Se mantiene pequeño hasta el 99%, y luego sube más rápido. Las scores por debajo del mínimo todavía cuentan, como un nivel más bajo. Los charts regulares cuentan hasta 4% por debajo del mínimo, y los de 6K/7K LN hasta 1% por debajo. En esos cortes el chart cuenta como 1.25 niveles menos. 4K LN cuenta hasta 94.5%, donde el chart vale 1.5 niveles menos, y su bono deja de subir en 99.7%:"
 
+#: src/lib/pack-run.ts
+msgid "Hoarder"
+msgstr "Acaparador"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
 msgstr "Mantén presionada <0>C</0> y mueve el cursor para dibujar humo, igual que al dibujar a mitad de una play en osu!. Se desvanece solo."
@@ -8243,9 +8953,21 @@ msgstr "Tiene <0>{0}</0> de las <1>{1}</1> cartas coleccionables, <2>{poolPercen
 #~ msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
 #~ msgstr "Tiene <0>{0}</0> de los <1>{1}</1> jugadores que puedes sacar, <2>{poolPercent}%</2>"
 
+#: src/lib/pack-run.ts
+#~ msgid "Holo"
+#~ msgstr "Holo"
+
 #: src/components/layout/Nav.tsx
 msgid "home"
 msgstr "inicio"
+
+#: src/lib/pack-run.ts
+msgid "Home Country"
+msgstr "Tu país"
+
+#: src/lib/pack-run.ts
+#~ msgid "Home Crowd"
+#~ msgstr "Público local"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "Honorary roster"
@@ -8254,6 +8976,10 @@ msgstr "Plantel honorífico"
 #: src/lib/replay-overlays.ts
 msgid "Horizontal"
 msgstr "Horizontal"
+
+#: src/lib/pack-run.ts
+msgid "Hot Streak"
+msgstr "Racha"
 
 #: src/routes/dan-estimates.tsx
 msgid "How a chart's skill is picked"
@@ -8667,6 +9393,11 @@ msgstr "Inspeccionar el maniacard de {0}"
 msgid "Integrations"
 msgstr "Integraciones"
 
+#. placeholder {0}: N.piggyBank.cap
+#: src/lib/pack-run.ts
+#~ msgid "Interest can reach ${0} instead of $5."
+#~ msgstr "El interés puede llegar a ${0} en vez de $5."
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
 msgstr "Idioma de la interfaz"
@@ -8787,6 +9518,14 @@ msgstr "Jack"
 msgid "JACK"
 msgstr "JACK"
 
+#: src/lib/pack-run.ts
+msgid "Jackhammer"
+msgstr "Jackhammer"
+
+#: src/lib/pack-run.ts
+msgid "Jacks"
+msgstr "Jacks"
+
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/recommendations/map/$beatmapId.tsx
@@ -8875,6 +9614,10 @@ msgstr "Juicios"
 msgid "Judgments unavailable"
 msgstr "Juicios no disponibles"
 
+#: src/lib/pack-run.ts
+msgid "Jump"
+msgstr "Jump"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Jump to a page"
 msgstr "Ir a una página"
@@ -8895,6 +9638,10 @@ msgstr "Jumpstream"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "jumpstream, warmup, ..."
 msgstr "jumpstream, calentamiento, ..."
+
+#: src/lib/pack-run.ts
+msgid "Jumptrill"
+msgstr "Jumptrill"
 
 #: src/routes/legal.tsx
 msgid "June 16, 2026"
@@ -9102,6 +9849,10 @@ msgstr "Última página de la colección"
 msgid "Last edited: {0}"
 msgstr "Última edición: {0}"
 
+#: src/lib/pack-run.ts
+msgid "Last Pack"
+msgstr "Último pack"
+
 #: src/components/ui/Pagination.tsx
 msgid "Last page"
 msgstr "Última página"
@@ -9268,6 +10019,14 @@ msgstr "Aviso legal"
 #: src/lib/packs.ts
 msgid "Legend"
 msgstr "Legendario"
+
+#: src/lib/pack-run.ts
+msgid "Legendary and better cards score nothing."
+msgstr "Las cartas Legendary o mejores no puntúan."
+
+#: src/lib/pack-run.ts
+msgid "Legendary charms and endless runs"
+msgstr "Amuletos legendarios y partidas sin fin"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
@@ -9744,6 +10503,10 @@ msgstr "Cargando tu colección..."
 msgid "Loading your data…"
 msgstr "Cargando tus datos…"
 
+#: src/components/packs/run/RunView.tsx
+msgid "Loading your run..."
+msgstr "Cargando tu partida..."
+
 #: src/components/farm-helper/FarmersList.tsx
 msgid "loading..."
 msgstr "cargando..."
@@ -9874,6 +10637,14 @@ msgstr "Buscando el score #{scoreId}"
 msgid "Looking up the score{elapsedLabel}"
 msgstr "Buscando el score{elapsedLabel}"
 
+#: src/lib/pack-run.ts
+#~ msgid "Lose $1 for every card dealt."
+#~ msgstr "Pierdes $1 por cada carta repartida."
+
+#: src/lib/pack-run.ts
+#~ msgid "Lose 1 credit for every card dealt."
+#~ msgstr ""
+
 #: src/components/packs/StreakGame.tsx
 msgid "Lost the run. The board could not be reached."
 msgstr "Perdiste la partida. No se pudo conectar con el leaderboard."
@@ -9904,6 +10675,10 @@ msgstr "PP más bajo primero"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Lowest rarities first. You keep at least one of every card."
 #~ msgstr "Primero las rarezas más bajas. Conservas al menos una copia de cada carta."
+
+#: src/lib/pack-run.ts
+msgid "Lucky Strike"
+msgstr "Golpe de suerte"
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -10220,6 +10995,14 @@ msgstr "marcado fácil"
 msgid "marked hard"
 msgstr "marcado difícil"
 
+#: src/components/packs/run/RunView.tsx
+msgid "Master sets"
+msgstr "Colecciones maestras"
+
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "Mastery {level}: {copies} copies held, next at {next}"
+msgstr "Maestría {level}: {copies} copias obtenidas, la siguiente a las {next}"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
 msgstr "Igualar tamaños a la primera imagen seleccionada"
@@ -10364,10 +11147,15 @@ msgstr "El mínimo para contar para dan es {floorText} {currency}. Esta jugada l
 msgid "Minimum required for dan credit is {floorText}. This play got {accText}."
 msgstr "El mínimo para contar para dan es {floorText}. Esta jugada logró {accText}."
 
+#: src/lib/pack-run.ts
+msgid "Mirror"
+msgstr "Espejo"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Mirror (out and back)"
 msgstr "Espejar (ida y vuelta)"
 
+#: src/components/packs/run/HandScore.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "MISS"
@@ -10437,6 +11225,10 @@ msgstr "mods"
 msgid "Mods"
 msgstr "Mods"
 
+#: src/lib/pack-run.ts
+msgid "Mods have no effect."
+msgstr "Los mods no tienen efecto."
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Mon"
 msgstr "Lun"
@@ -10444,6 +11236,10 @@ msgstr "Lun"
 #: src/components/me/MyDataPanel.tsx
 msgid "Mondays"
 msgstr "Lunes"
+
+#: src/lib/pack-run.ts
+#~ msgid "Monochrome"
+#~ msgstr "Monocromo"
 
 #: src/components/layout/Nav.tsx
 msgid "more"
@@ -10585,6 +11381,14 @@ msgstr "Mover {name} a la derecha"
 msgid "Move down"
 msgstr "Bajar"
 
+#: src/components/packs/run/RunView.tsx
+msgid "Move left"
+msgstr "Mover a la izquierda"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Move right"
+msgstr "Mover a la derecha"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Move up"
 msgstr "Subir"
@@ -10725,6 +11529,10 @@ msgstr "faltan {quorum}"
 msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "Necesita un enlace de web.archive.org a su perfil de osu!."
 
+#: src/lib/pack-run.ts
+msgid "Neon"
+msgstr "Neón"
+
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Never"
 #~ msgstr ""
@@ -10756,6 +11564,14 @@ msgstr "Nuevo"
 #: src/components/packs/BindersView.tsx
 #~ msgid "New binder"
 #~ msgstr "Nueva carpeta"
+
+#: src/lib/pack-run.ts
+msgid "New Blood"
+msgstr "Sangre nueva"
+
+#: src/lib/pack-run.ts
+msgid "New cards score nothing."
+msgstr "Las cartas nuevas no puntúan."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "new collection"
@@ -10797,6 +11613,10 @@ msgstr "Tus jugadas nuevas dejan de registrarse."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "New preset"
 msgstr "Nuevo preset"
+
+#: src/components/packs/run/RunView.tsx
+msgid "New run"
+msgstr "Nueva partida"
 
 #: src/routes/tracker.tsx
 msgid "New scores stream in live over this connection."
@@ -11339,9 +12159,17 @@ msgstr "No hay replays disponibles de jugadores de {countryCode} en esta dificul
 msgid "No replays match your search."
 msgstr "Ninguna repetición coincide con tu búsqueda."
 
+#: src/components/packs/run/RunView.tsx
+msgid "No rerolls left in this shop."
+msgstr "No quedan rerolls en esta tienda."
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "No roster member above you yet."
 #~ msgstr "Todavía no hay nadie por encima de ti en la lista."
+
+#: src/components/packs/run/HandScore.tsx
+#~ msgid "no score"
+#~ msgstr "no puntúa"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No score found at that link."
@@ -11505,6 +12333,14 @@ msgstr "Aún no tienes deseos. Elige un jugador que te falte para empezar."
 msgid "Nobody else can open it. Set it as your replay skin and it plays in your replays."
 msgstr "Nadie más puede abrirla. Configúrala como tu skin de replay y aparecerá en tus replays."
 
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Nobody has beaten an ante yet."
+#~ msgstr "Nadie ha superado un ante todavía."
+
+#: src/components/packs/run/RunView.tsx
+msgid "Nobody has cleared a stage yet."
+msgstr "Nadie ha superado una etapa todavía."
+
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "Nobody has finished a blitz run yet."
 msgstr "Nadie ha terminado una run de Blitz todavía."
@@ -11588,6 +12424,10 @@ msgstr "nominador"
 #: src/components/me/MeScoreRow.tsx
 msgid "nomod"
 msgstr "nomod"
+
+#: src/lib/pack-run.ts
+msgid "Nomod"
+msgstr "Nomod"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "NoMod"
@@ -11687,6 +12527,14 @@ msgstr "no cuenta"
 msgid "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
 msgstr "No cuenta: este clear está más de cinco niveles por debajo de los mejores clears de esta lista, así que queda fuera del promedio"
 
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Not enough cash."
+#~ msgstr "No te alcanza el dinero."
+
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Not enough credits."
+#~ msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "Not enough data near your pp yet"
 msgstr "Aún no hay suficientes datos cerca de tu pp"
@@ -11699,6 +12547,10 @@ msgstr "Aún no hay suficientes clears válidos para una estimación ({0} de {qu
 #: src/components/packs/SetsView.tsx
 msgid "Not enough room"
 msgstr "No hay suficiente espacio"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Not enough shards."
+msgstr "No tienes suficientes fragmentos."
 
 #: src/routes/recommendations.tsx
 msgid "not found"
@@ -11786,6 +12638,7 @@ msgstr "nota sobre esto"
 msgid "Note shape"
 msgstr "Forma de las notas"
 
+#: src/components/packs/run/HandScore.tsx
 #: src/routes/skins.tsx
 msgid "notes"
 msgstr "notas"
@@ -11844,6 +12697,10 @@ msgstr "Todavía no hay nada conectado. Conéctala desde los ajustes de Companel
 #: src/components/communities/CommunitySubmitModal.tsx
 #~ msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
 #~ msgstr "No se publica nada hasta que lo revises y lo envíes, y el acceso termina apenas lo hagas."
+
+#: src/lib/pack-run.ts
+msgid "Nothing lines up."
+msgstr "Nada coincide."
 
 #. placeholder {0}: country === COMMUNITY_INTERNATIONAL ? t`international servers` : displayCountryName(country, locale)
 #: src/routes/communities.tsx
@@ -11994,12 +12851,17 @@ msgid "Off the list, no download. Your replays still play in it."
 msgstr "Fuera de la lista, sin descarga. Tus replays la siguen usando."
 
 #: src/components/packs/GiftInbox.tsx
+#: src/components/packs/run/HandScore.tsx
 msgid "Ok"
 msgstr "Ok"
 
 #: src/components/me/MeScoreRow.tsx
 msgid "old"
 msgstr "antiguo"
+
+#: src/lib/pack-run.ts
+msgid "Old Guard"
+msgstr "Vieja guardia"
 
 #: src/routes/recommendations.tsx
 msgid "old pb"
@@ -12112,6 +12974,10 @@ msgstr "Una copia para un amigo. Te quedas con {remaining}."
 #~ msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 #~ msgstr "Un nivel de dan es amplio, así que cada uno se divide en cinco escalones. Un chart puede ser 7--, 7-, 7, 7+ o 7++, del extremo más fácil del 7º dan al más difícil. Esos sufijos ordenan dentro de un nivel, nada más."
 
+#: src/lib/pack-run.ts
+msgid "One free reroll per shop"
+msgstr "Una renovación gratis por tienda"
+
 #: src/lib/replay-export/errors.ts
 msgid "One of the images can't be recorded into a video because of its origin."
 msgstr "Una de las imágenes no se puede grabar en un video por su origen."
@@ -12127,6 +12993,14 @@ msgstr "Una de las imágenes no se puede grabar en un video por su origen."
 #: src/components/packs/CardSpotlight.tsx
 #~ msgid "One of your copies was a gift from {sendersText}"
 #~ msgstr "Una de tus copias fue un regalo de {sendersText}"
+
+#: src/lib/pack-run.ts
+#~ msgid "One pack to beat it."
+#~ msgstr "Un solo pack para superarla."
+
+#: src/lib/pack-run.ts
+msgid "One pack to clear it."
+msgstr "Un solo sobre para superarla."
 
 #: src/routes/dan-estimates.tsx
 msgid "one skill, no split"
@@ -12546,6 +13420,10 @@ msgstr "otro"
 msgid "Other"
 msgstr "Otro"
 
+#: src/lib/pack-run.ts
+msgid "Other charms sell for everything you paid."
+msgstr "Los otros amuletos se venden por todo lo que pagaste."
+
 #: src/routes/player/$username.tsx
 #~ msgid "Other keymodes"
 #~ msgstr "Otros modos de teclas"
@@ -12709,6 +13587,10 @@ msgstr "Página 1"
 msgid "Page number, 1 to {totalPages}"
 msgstr "Número de página, de 1 a {totalPages}"
 
+#: src/lib/pack-run.ts
+#~ msgid "Pair"
+#~ msgstr "Pareja"
+
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
 msgstr "Analizando el archivo y buscando su beatmap."
@@ -12717,6 +13599,10 @@ msgstr "Analizando el archivo y buscando su beatmap."
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "partial credit"
 #~ msgstr "crédito parcial"
+
+#: src/lib/pack-run.ts
+msgid "Party"
+msgstr "Fiesta"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/tracker.tsx
@@ -12779,6 +13665,10 @@ msgstr "Pegar código para compartir"
 msgid "Paste, drop or pick a screenshot."
 msgstr "Pega, arrastra o elige una captura."
 
+#: src/lib/pack-run.ts
+msgid "Patriot"
+msgstr "Patriota"
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "pattern"
 msgstr "patrón"
@@ -12805,6 +13695,7 @@ msgstr "Gráfico radar de patrones"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternPicker.tsx
+#: src/components/packs/run/RunView.tsx
 msgid "Patterns"
 msgstr "Patrones"
 
@@ -12954,6 +13845,10 @@ msgstr "Elegir un fondo o un patrón vuelve a renderizar ese playfield desde el 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Picking a skin loads it into the editor and saves it as a preset under its name."
 msgstr "Elegir una skin la carga en el editor y la guarda como preset con su nombre."
+
+#: src/lib/pack-run.ts
+#~ msgid "Piggy Bank"
+#~ msgstr "Alcancía"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "pink"
@@ -13242,6 +14137,14 @@ msgstr "puntos"
 msgid "Polish"
 msgstr "Polaco"
 
+#: src/lib/pack-run.ts
+#~ msgid "Polychrome"
+#~ msgstr "Policromo"
+
+#: src/lib/pack-run.ts
+#~ msgid "Polychrome edition"
+#~ msgstr "Edición policroma"
+
 #: src/routes/recommendations.tsx
 msgid "popular"
 msgstr "popular"
@@ -13495,6 +14398,10 @@ msgstr "Antes"
 #~ msgid "Prismatic"
 #~ msgstr "Prismática"
 
+#: src/lib/pack-run.ts
+#~ msgid "Prismatic pack"
+#~ msgstr "Pack prismático"
+
 #: src/routes/__root.tsx
 msgid "privacy"
 msgstr "privacidad"
@@ -13646,6 +14553,10 @@ msgstr "Morado"
 msgid "px"
 msgstr "px"
 
+#: src/lib/pack-run.ts
+msgid "Quad"
+msgstr "Quad"
+
 #: src/lib/pattern-labels.ts
 msgid "Quadstream"
 msgstr "Quadstream"
@@ -13664,6 +14575,18 @@ msgstr "Calificado"
 msgid "queued"
 msgstr "en cola"
 
+#. placeholder {0}: progress.goldTokens
+#. placeholder {1}: progress.prismaticTokens
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Queued: {0} gold, {1} prismatic"
+#~ msgstr "En cola: {0} dorados, {1} prismáticos"
+
+#. placeholder {0}: progress.goldTokens
+#. placeholder {1}: progress.prismaticTokens
+#: src/components/packs/run/RunView.tsx
+msgid "Queued: {0} gold, {1} rainbow"
+msgstr "En cola: {0} dorados, {1} arcoíris"
+
 #: src/routes/bbcode.tsx
 msgid "Quote"
 msgstr "Citar"
@@ -13677,13 +14600,19 @@ msgid "Radar and axes"
 msgstr "Radar y ejes"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/lib/pack-run.ts
 msgid "Rainbow"
 msgstr "Arcoíris"
+
+#: src/lib/pack-run.ts
+msgid "Rainbow pack"
+msgstr "Sobre arcoíris"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Ran out of players to draw."
 msgstr "Se acabaron los jugadores para repartir."
 
+#: src/lib/pack-run.ts
 #: src/routes/maps.tsx
 msgid "Random"
 msgstr "Aleatorio"
@@ -13777,6 +14706,28 @@ msgstr "Los ranks pueden ser distintos a los de osu! porque el pp de algunos equ
 #: src/routes/teams.tsx
 #~ msgid "Ranks can differ from osu! because team pp here only counts tracked members."
 #~ msgstr "Los ranks pueden ser distintos a los de osu! porque el pp de cada equipo aquí solo cuenta a los miembros trackeados."
+
+#. placeholder {0}: N.rareForm.mult
+#: src/lib/pack-run.ts
+msgid "Rare cards give +{0} combo."
+msgstr "Las cartas Rare dan +{0} combo."
+
+#. placeholder {0}: N.rareForm.mult
+#: src/lib/pack-run.ts
+#~ msgid "Rare cards give +{0} mult."
+#~ msgstr "Las cartas raras dan +{0} mult."
+
+#: src/lib/pack-run.ts
+msgid "Rare cards score nothing."
+msgstr "Las cartas raras no puntúan."
+
+#: src/lib/pack-run.ts
+msgid "Rare charms in the shop"
+msgstr "Amuletos raros en la tienda"
+
+#: src/lib/pack-run.ts
+msgid "Rare Form"
+msgstr "En forma"
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "rarest"
@@ -14233,6 +15184,10 @@ msgstr "Actualizando mapas..."
 msgid "Refreshing..."
 msgstr "Actualizando..."
 
+#: src/lib/pack-run.ts
+msgid "Refund"
+msgstr "Reembolso"
+
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/layout/CountrySelector.tsx
 msgid "Regions"
@@ -14608,9 +15563,18 @@ msgstr "reportar este servidor"
 #~ msgid "Representative intervals are shown for each detected pattern."
 #~ msgstr "Se muestran intervalos representativos de cada patrón detectado."
 
+#: src/components/packs/run/RunView.tsx
 #: src/routes/maps.tsx
 msgid "Reroll"
 msgstr "Otra vez"
+
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Reroll ${cost}"
+#~ msgstr "Renovar ${cost}"
+
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Reroll free"
+#~ msgstr "Renovar gratis"
 
 #: src/routes/maps.tsx
 msgid "Reroll settings"
@@ -14871,9 +15835,39 @@ msgstr "estimación aproximada, puede variar"
 msgid "Rules"
 msgstr "Reglas"
 
+#: src/routes/packs.tsx
+msgid "Run"
+msgstr "Partida"
+
+#. placeholder {0}: state.runId
+#: src/components/packs/run/RunView.tsx
+msgid "Run {0}"
+msgstr "Partida {0}"
+
 #: src/routes/communities.tsx
 msgid "Run an osu!mania server? Post it and it shows up here once it is approved."
 msgstr "¿Tienes un servidor de osu!mania? Publícalo y aparecerá aquí cuando se apruebe."
+
+#: src/components/packs/run/HandScore.tsx
+#: src/components/packs/run/RunHud.tsx
+#: src/components/packs/run/RunView.tsx
+msgid "Run cleared"
+msgstr "Run completada"
+
+#. placeholder {0}: outcome.over.ante
+#. placeholder {0}: over.ante
+#. placeholder {0}: state.over.ante
+#: src/components/packs/run/HandScore.tsx
+#: src/components/packs/run/RunHud.tsx
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Run over at ante {0}"
+#~ msgstr "Partida terminada en el ante {0}"
+
+#: src/components/packs/run/HandScore.tsx
+#: src/components/packs/run/RunHud.tsx
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Run won"
+#~ msgstr "Partida ganada"
 
 #: src/components/communities/field-options.tsx
 msgid "Russian"
@@ -15433,6 +16427,15 @@ msgstr "selecciona texto o escríbelo aquí"
 #~ msgid "self"
 #~ msgstr "propia"
 
+#: src/components/packs/run/RunView.tsx
+msgid "Sell"
+msgstr "Vender"
+
+#. placeholder {0}: sellValue(charm)
+#: src/components/packs/run/RunView.tsx
+#~ msgid "Sell ${0}"
+#~ msgstr "Vender ${0}"
+
 #: src/routes/report.tsx
 msgid "Send"
 msgstr "Enviar"
@@ -15671,6 +16674,10 @@ msgstr "Ajustes de {0}"
 msgid "Settings that differ from that file:"
 msgstr ""
 
+#: src/lib/pack-run.ts
+msgid "Seven Keys"
+msgstr "Siete teclas"
+
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/StreakGame.tsx
@@ -15746,6 +16753,14 @@ msgstr "Ajustar matiz ({signedHueShift}°)"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Shifting, irregular patterns that punish bad reading."
 msgstr "Patrones cambiantes e irregulares que castigan la mala lectura."
+
+#: src/lib/pack-run.ts
+msgid "Shine"
+msgstr "Brillo"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Shop"
+msgstr "Tienda"
 
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
@@ -16016,6 +17031,10 @@ msgstr "Lado"
 msgid "Side by Side"
 msgstr "Comparativa"
 
+#: src/lib/pack-run.ts
+msgid "Sightread"
+msgstr "Lectura a primera vista"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Sign in again to send a gift."
 msgstr "Inicia sesión de nuevo para enviar un regalo."
@@ -16122,6 +17141,10 @@ msgstr ""
 #~ msgid "Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
 #~ msgstr ""
 
+#: src/lib/pack-run.ts
+msgid "Silver pack"
+msgstr "Pack plateado"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Sim busy day"
 msgstr "Simular día ocupado"
@@ -16143,6 +17166,7 @@ msgstr "Simulado a partir de las pulsaciones del replay; el score y el combo sig
 msgid "since {0}"
 msgstr "desde {0}"
 
+#: src/lib/pack-run.ts
 #: src/lib/signature-shared.ts
 msgid "Single"
 msgstr "Individual"
@@ -16348,6 +17372,10 @@ msgstr "Skins"
 msgid "Skins are unavailable right now"
 msgstr "Las skins no están disponibles por ahora"
 
+#: src/components/packs/run/HandScore.tsx
+msgid "Skip"
+msgstr "Saltar"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Skip animations"
 msgstr "Omitir animaciones"
@@ -16387,6 +17415,14 @@ msgstr "Baja la velocidad de la canción a 0.75x."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "Pequeño"
+
+#: src/lib/pack-run.ts
+#~ msgid "Small blind"
+#~ msgstr "Ciega pequeña"
+
+#: src/lib/pack-run.ts
+#~ msgid "Small blind cleared"
+#~ msgstr "Ciega pequeña superada"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Smaller file"
@@ -16439,6 +17475,10 @@ msgstr "No se registran snipes para {name}"
 #: src/routes/snipes.tsx
 #~ msgid "Snipes don't apply to Global"
 #~ msgstr "Los snipes no aplican a Global"
+
+#: src/lib/pack-run.ts
+msgid "Snowball"
+msgstr "Bola de nieve"
 
 #: src/lib/signature-style.ts
 msgid "Solid"
@@ -16512,9 +17552,30 @@ msgstr "Algo salió mal."
 msgid "Something went wrong. Try again."
 msgstr "Algo salió mal. Inténtalo de nuevo."
 
+#: src/lib/pack-run.ts
+msgid "Song 1"
+msgstr "Canción 1"
+
+#: src/lib/pack-run.ts
+msgid "Song 1 cleared"
+msgstr "Canción 1 superada"
+
+#: src/lib/pack-run.ts
+msgid "Song 2"
+msgstr "Canción 2"
+
+#: src/lib/pack-run.ts
+msgid "Song 2 cleared"
+msgstr "Canción 2 superada"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Song, artist or mapper"
 msgstr "Canción, artista o mapper"
+
+#. placeholder {0}: N.allowance.shards
+#: src/lib/pack-run.ts
+msgid "Songs you clear pay {0} more shards."
+msgstr "Las canciones que superas pagan {0} fragmentos más."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "soon"
@@ -16672,6 +17733,14 @@ msgstr "Acc con fórmula de stable (96%)"
 msgid "Stage"
 msgstr "Escenario"
 
+#. placeholder {0}: before.ante
+#. placeholder {0}: blind.ante
+#: src/components/packs/run/HandScore.tsx
+#: src/components/packs/run/RunHud.tsx
+#: src/components/packs/run/RunView.tsx
+msgid "Stage {0}"
+msgstr "Etapa {0}"
+
 #: src/lib/replay-overlays.ts
 msgid "Stage art (bottom)"
 msgstr "Arte del escenario (abajo)"
@@ -16684,6 +17753,10 @@ msgstr "Arte del escenario (izquierda)"
 msgid "Stage art (right)"
 msgstr "Arte del escenario (derecha)"
 
+#: src/lib/pack-run.ts
+msgid "Stage cleared"
+msgstr "Etapa superada"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage's left edge, skin.ini ColumnStart."
 msgstr "Borde izquierdo del escenario, ColumnStart del skin.ini."
@@ -16691,6 +17764,10 @@ msgstr "Borde izquierdo del escenario, ColumnStart del skin.ini."
 #: src/lib/pattern-labels.ts
 #~ msgid "Staggered Releases"
 #~ msgstr "Sueltas escalonadas"
+
+#: src/lib/pack-run.ts
+msgid "Stairs"
+msgstr "Stairs"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "STAM"
@@ -16993,6 +18070,10 @@ msgstr "Envía plays a tu cuenta aunque estés offline, en un servidor privado o
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
 msgstr "Subregiones"
+
+#: src/lib/pack-run.ts
+msgid "Sudden Death"
+msgstr "Sudden Death"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sun"
@@ -17303,6 +18384,10 @@ msgstr "Ese ID de beatmap no es una dificultad de mania."
 msgid "That collector is no longer available."
 msgstr "Ese coleccionista ya no está disponible."
 
+#: src/components/packs/run/RunView.tsx
+msgid "That did not go through. Please try again."
+msgstr "No se pudo completar. Inténtalo de nuevo."
+
 #: src/components/packs/GiftInbox.tsx
 msgid "That did not go through. Try again."
 msgstr "No se pudo completar. Inténtalo de nuevo."
@@ -17574,6 +18659,10 @@ msgstr "el promedio de tus skills"
 msgid "The board is not answering right now."
 msgstr "El leaderboard no responde en este momento."
 
+#: src/lib/pack-run.ts
+#~ msgid "The Border"
+#~ msgstr "La frontera"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The browser blocked the clipboard. Try Copy BBCode again."
 msgstr "El navegador bloqueó el portapapeles. Prueba Copiar BBCode de nuevo."
@@ -17605,6 +18694,10 @@ msgstr "La carta sigue siendo tuya hasta que la acepte."
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "The card was recycled, never synced, or the link is wrong."
 msgstr "La carta fue reciclada, nunca se sincronizó o el enlace es incorrecto."
+
+#: src/lib/pack-run.ts
+#~ msgid "The Ceiling"
+#~ msgstr "El techo"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The chart analyzer is rating the top plays right now."
@@ -17891,6 +18984,10 @@ msgstr "el nivel del chart +1.18"
 msgid "the chart's level +1.5"
 msgstr "el nivel del chart +1.5"
 
+#: src/lib/pack-run.ts
+#~ msgid "The Club"
+#~ msgstr "El club"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "The code exchange was refused."
 msgstr ""
@@ -18004,14 +19101,36 @@ msgstr "El archivo .osu exacto también funciona."
 msgid "The export was interrupted before it finished."
 msgstr "La exportación se interrumpió antes de terminar."
 
+#: src/lib/pack-run.ts
+#~ msgid "The Eye"
+#~ msgstr "El ojo"
+
 #. placeholder {0}: chart.declaredBeatmapId
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "The file names beatmap {0}. That is metadata inside the upload, not a verified identity."
 #~ msgstr ""
 
+#. placeholder {0}: N.headliner.xMult
+#: src/lib/pack-run.ts
+msgid "The first Legendary or better card gives x{0} combo."
+msgstr "La primera carta Legendary o mejor da x{0} combo."
+
+#. placeholder {0}: N.headliner.xMult
+#: src/lib/pack-run.ts
+#~ msgid "The first Legendary or better card gives x{0} mult."
+#~ msgstr "La primera carta Legendary o mejor da x{0} mult."
+
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "La primera skin que subas aparecerá aquí."
+
+#: src/lib/pack-run.ts
+#~ msgid "The Flint"
+#~ msgstr "El pedernal"
+
+#: src/lib/pack-run.ts
+#~ msgid "The Fog"
+#~ msgstr "La niebla"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "The forge could not finish. Refresh the ingredients before trying again."
@@ -18028,6 +19147,10 @@ msgstr "La primera skin que subas aparecerá aquí."
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "The forge is not available right now."
 #~ msgstr "La forja no está disponible ahora mismo."
+
+#: src/lib/pack-run.ts
+#~ msgid "The hand type's chips and mult are halved."
+#~ msgstr "Las fichas y el mult del tipo de mano se reducen a la mitad."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
@@ -18069,6 +19192,10 @@ msgstr "Los samples y keysounds del propio mapa, cuando los tiene."
 msgid "The most farmed maps in a country, ranked by activity."
 msgstr "Los mapas con más farm de un país, ordenados por actividad."
 
+#: src/lib/pack-run.ts
+#~ msgid "The Needle"
+#~ msgstr "La aguja"
+
 #. placeholder {0}: droppedKeymodes.map((keys) => `${keys}K`).join(", ")
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "The new file has no {0} block, so those previews are dropped from the skin page."
@@ -18077,6 +19204,10 @@ msgstr "El nuevo archivo no tiene bloque {0}, así que esas vistas previas se qu
 #: src/components/packs/GoatPoll.tsx
 msgid "The new GOAT"
 msgstr "El nuevo GOAT"
+
+#: src/components/packs/run/RunHud.tsx
+msgid "The next pack starts a new run"
+msgstr "El próximo pack empieza una nueva partida"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The next rating pass is next up in the analyzer queue."
@@ -18121,6 +19252,10 @@ msgstr "La página tuvo un error inesperado y no pudo terminar de renderizarse. 
 #: src/routes/player/$username.tsx
 msgid "The page is over osu!'s 60,000 character limit."
 msgstr "La página supera el límite de 60.000 caracteres de osu!."
+
+#: src/lib/pack-run.ts
+msgid "The pattern's notes and combo are halved."
+msgstr "Las notas y el combo del patrón se reducen a la mitad."
 
 #: src/routes/recommendations.tsx
 msgid "The player panel can stay here, but this view did not return fresh map data."
@@ -18179,6 +19314,10 @@ msgstr "No se pudieron actualizar las vistas previas. Inténtalo de nuevo."
 #: src/components/player/OverallMethodToggle.tsx
 msgid "The previous Overall, which follows the hardest plays in any skillset."
 msgstr "El general anterior, que sigue las jugadas más difíciles en cualquier skillset."
+
+#: src/lib/pack-run.ts
+msgid "The Rainbow finish"
+msgstr "El acabado arcoíris"
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "The rankings are here, but this country was added recently. New plays will start showing up once players submit them."
@@ -18286,6 +19425,14 @@ msgstr "Los servidores donde estás, para mostrarte aquellos donde puedes public
 msgid "The session changed by {0} points; the map estimates add up to {1}. This is the difference between them, not a separate bonus."
 msgstr "El rating de la sesión cambió {0} puntos; los aportes estimados de los mapas suman {1}. Esta es la diferencia entre ambos, no un bono adicional."
 
+#: src/components/packs/run/RunView.tsx
+#~ msgid "The shop restocks when a blind is cleared."
+#~ msgstr "La tienda se repone al superar una ciega."
+
+#: src/components/packs/run/RunView.tsx
+msgid "The shop restocks when a song is cleared."
+msgstr "La tienda se repone al superar una canción."
+
 #: src/components/maps/ChartPreviewPanel.tsx
 #~ msgid "The short audio clip can't be used for this chart."
 #~ msgstr "El preview de audio no se puede usar para este mapa."
@@ -18392,6 +19539,14 @@ msgstr "El archivo de audio no se puede decodificar aquí. Exporta sin audio, o 
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 #~ msgstr "La separación importa porque un lado no dice nada del otro. La precisión en un chart LN se gana casi por completo en los holds y los releases, así que pasarlo no es evidencia sobre tu nivel regular, ni al revés."
 
+#: src/lib/pack-run.ts
+msgid "The strongest card in the pack scores twice."
+msgstr "La carta más fuerte del pack puntúa dos veces."
+
+#: src/lib/pack-run.ts
+msgid "The target is twice as high."
+msgstr "El objetivo es el doble."
+
 #: src/routes/teams.tsx
 #~ msgid "The team rankings haven't been loaded from osu! yet."
 #~ msgstr ""
@@ -18399,6 +19554,10 @@ msgstr "El archivo de audio no se puede decodificar aquí. Exporta sin audio, o 
 #: src/components/companella/TestClientPanel.tsx
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
 msgstr ""
+
+#: src/lib/pack-run.ts
+#~ msgid "The Tooth"
+#~ msgstr "El diente"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -18431,6 +19590,14 @@ msgstr "El video se crea en tu dispositivo. Puedes navegar por otras páginas mi
 #: src/components/packs/GoatPoll.tsx
 msgid "The vote just closed."
 msgstr "La votación acaba de cerrar."
+
+#: src/lib/pack-run.ts
+#~ msgid "The Wall"
+#~ msgstr "El muro"
+
+#: src/lib/pack-run.ts
+#~ msgid "The Window"
+#~ msgstr "La ventana"
 
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Their collection"
@@ -18918,6 +20085,18 @@ msgstr "Esas imágenes ya no están disponibles."
 #~ msgid "Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
 #~ msgstr "Esas partidas salen en la pestaña Recientes de tu perfil y en el tracker con el ícono de Companella. Si osu! también tiene la partida, sale una sola vez."
 
+#: src/lib/pack-run.ts
+msgid "Three cards from the same country."
+msgstr "Tres cartas del mismo país."
+
+#: src/lib/pack-run.ts
+msgid "Three from one country and two from another."
+msgstr "Tres de un país y dos de otro."
+
+#: src/lib/pack-run.ts
+#~ msgid "Three of a kind"
+#~ msgstr "Trío"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Thu"
 msgstr "jue"
@@ -19142,6 +20321,10 @@ msgstr "Mejores jugadas"
 msgid "top pp"
 msgstr "top pp"
 
+#: src/lib/pack-run.ts
+msgid "Top Thousand"
+msgstr "Top mil"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Top-play feed"
 msgstr "Feed de top plays"
@@ -19233,6 +20416,10 @@ msgstr "Triángulos"
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Tries before a PB"
 #~ msgstr "Intentos antes de un PB"
+
+#: src/lib/pack-run.ts
+msgid "Trio"
+msgstr "Trío"
 
 #: src/routes/recommendations.tsx
 msgid "Try a different title, artist, or difficulty name."
@@ -19327,6 +20514,22 @@ msgstr "Convierte las notas en hold notes que llenan los espacios entre ellas."
 #~ msgid "Twenty passes are a body of work, not a lucky handful. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 #~ msgstr "Veinte pases son un cuerpo de trabajo, no un puñado con suerte. Con menos de 20 pases válidos se promedia lo que tengas; un skill en el que tengas menos de cuatro no recibe dan propio, y un lado en el que tengas menos de cuatro se queda sin estimación, en vez de darte una que no se sostiene."
 
+#: src/lib/pack-run.ts
+msgid "Twin"
+msgstr "Gemelo"
+
+#: src/lib/pack-run.ts
+msgid "Two cards from the same country."
+msgstr "Dos cartas del mismo país."
+
+#: src/lib/pack-run.ts
+msgid "Two countries with two cards each."
+msgstr "Dos países con dos cartas cada uno."
+
+#: src/lib/pack-run.ts
+#~ msgid "Two pair"
+#~ msgstr "Doble pareja"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
 msgstr "Dos jugadores lado a lado: pp con rank, mejor play y el desglose 4K/7K, y cierra con la diferencia de pp. Deja fuera el primer nombre para comparar desde tu cuenta vinculada."
@@ -19384,6 +20587,10 @@ msgstr "No disponible"
 #: src/components/packs/album/AlbumView.tsx
 msgid "Uncollected GOAT"
 msgstr "GOAT sin coleccionar"
+
+#: src/lib/pack-run.ts
+msgid "Underdog"
+msgstr "Desvalido"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -19453,6 +20660,10 @@ msgstr "Mapa desconocido"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Unknown player"
 msgstr "Jugador desconocido"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Unlocks at 1,000 cards"
+msgstr "Se desbloquea con 1,000 cartas"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
@@ -20466,6 +21677,68 @@ msgstr "Falló la escritura del archivo de video."
 msgid "wrong"
 msgstr "mal"
 
+#. placeholder {0}: EDITION_EFFECTS.polychrome.xMult
+#: src/lib/pack-run.ts
+msgid "x{0} combo"
+msgstr "x{0} combo"
+
+#. placeholder {0}: N.firstFind.xMult
+#: src/lib/pack-run.ts
+msgid "x{0} combo if a card in the pack is the first copy anyone pulled."
+msgstr "x{0} combo si una carta del sobre es la primera copia que alguien sacó."
+
+#. placeholder {0}: N.underdog.xMult
+#: src/lib/pack-run.ts
+msgid "x{0} combo if no card in the pack is better than Rare."
+msgstr "x{0} combo si ninguna carta del sobre es mejor que Rare."
+
+#. placeholder {0}: N.party.xMult
+#: src/lib/pack-run.ts
+msgid "x{0} combo if the pack has a handstream or better."
+msgstr "x{0} combo si el sobre tiene un handstream o mejor."
+
+#. placeholder {0}: N.lastPack.xMult
+#: src/lib/pack-run.ts
+msgid "x{0} combo on the last pack of a song."
+msgstr "x{0} combo en el último sobre de una canción."
+
+#. placeholder {0}: N.luckyStrike.xMult
+#. placeholder {1}: N.luckyStrike.breakOdds
+#: src/lib/pack-run.ts
+msgid "x{0} combo. 1 in {1} chance to break after each pack."
+msgstr "x{0} combo. 1 entre {1} de romperse después de cada sobre."
+
+#. placeholder {0}: EDITION_EFFECTS.polychrome.xMult
+#: src/lib/pack-run.ts
+#~ msgid "x{0} mult"
+#~ msgstr "x{0} mult"
+
+#. placeholder {0}: N.firstFind.xMult
+#: src/lib/pack-run.ts
+#~ msgid "x{0} mult if a card in the pack is the first copy anyone pulled."
+#~ msgstr "x{0} mult si una carta del pack es la primera copia que alguien sacó."
+
+#. placeholder {0}: N.underdog.xMult
+#: src/lib/pack-run.ts
+#~ msgid "x{0} mult if no card in the pack is better than Rare."
+#~ msgstr "x{0} mult si ninguna carta del pack es mejor que Rare."
+
+#. placeholder {0}: N.party.xMult
+#: src/lib/pack-run.ts
+#~ msgid "x{0} mult if the pack has a full house or better."
+#~ msgstr "x{0} mult si el pack tiene full o mejor."
+
+#. placeholder {0}: N.lastPack.xMult
+#: src/lib/pack-run.ts
+#~ msgid "x{0} mult on the last pack of a blind."
+#~ msgstr "x{0} mult en el último pack de una ciega."
+
+#. placeholder {0}: N.luckyStrike.xMult
+#. placeholder {1}: N.luckyStrike.breakOdds
+#: src/lib/pack-run.ts
+#~ msgid "x{0} mult. 1 in {1} chance to break after each pack."
+#~ msgstr "x{0} mult. 1 en {1} de probabilidad de romperse después de cada pack."
+
 #: src/routes/dan-estimates.tsx
 msgid "Yes, this is saragi"
 msgstr "Sí, es saragi"
@@ -20882,6 +22155,10 @@ msgstr "Tu rating más bajo es {0}."
 #: src/routes/recommendations.tsx
 msgid "your marks"
 msgstr "tus marcas"
+
+#: src/components/packs/run/RunView.tsx
+msgid "Your next pack is plain."
+msgstr "Tu próximo pack es normal."
 
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Your official rating has not been computed yet, so the comparison below is incomplete."

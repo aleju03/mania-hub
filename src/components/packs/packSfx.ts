@@ -45,6 +45,7 @@ interface NoiseOptions {
   startFreq: number;
   endFreq?: number;
   q?: number;
+  filter?: BiquadFilterType;
 }
 
 function playNoise(ctx: AudioContext, options: NoiseOptions) {
@@ -56,7 +57,7 @@ function playNoise(ctx: AudioContext, options: NoiseOptions) {
   // Random offset so back-to-back bursts never sound like the same sample.
   source.playbackRate.value = 0.9 + Math.random() * 0.2;
   const filter = ctx.createBiquadFilter();
-  filter.type = "bandpass";
+  filter.type = options.filter ?? "bandpass";
   filter.frequency.setValueAtTime(options.startFreq, t);
   if (options.endFreq) {
     filter.frequency.exponentialRampToValueAtTime(options.endFreq, t + options.duration);
@@ -616,4 +617,166 @@ export function playRecycleClink(gained: number) {
     // Inharmonic partial that makes the tick read as metal instead of a beep.
     playTone(ctx, { at, freq: freq * 2.51, duration: 0.05, gain: 0.028, type: "sine" });
   }
+}
+
+/* The pack run's tally (HandScore.tsx). Rendered cues, not live synth:
+   scripts/audio/pack-run-sfx.py builds each one (plucks for notes, a
+   supersaw stab for combo, a sub boom under a bell for a multiplied combo,
+   a riser into a pumping chord drop for a cleared song, stage or run) and
+   writes public/audio/packs/run/. Notes and combo climb a
+   major scale by playback rate, so a long tally rises the way a held combo
+   feels like it should. Each cue falls back to a small synth patch while its
+   file is still loading or if it never loads. */
+const RUN_SAMPLE_NAMES = [
+  "note-1",
+  "note-2",
+  "combo",
+  "finish",
+  "miss",
+  "tick",
+  "slam",
+  "shards",
+  "clear-song",
+  "clear-stage",
+  "run-cleared",
+  "run-failed",
+] as const;
+type RunSampleName = (typeof RUN_SAMPLE_NAMES)[number];
+/* Bumped whenever scripts/audio/pack-run-sfx.py re-renders the set, so a
+   cached copy of the old file is never decoded. */
+const RUN_SAMPLES_VERSION = 3;
+
+const runSamples = new Map<RunSampleName, SampleSlot>(
+  RUN_SAMPLE_NAMES.map((name) => [name, { url: `/audio/packs/run/${name}.mp3?v=${RUN_SAMPLES_VERSION}`, buffer: null, load: null }]),
+);
+
+/* Decodes every run cue ahead of the tally. Safe before a gesture and to
+   call repeatedly, like the Eternal prefetch. */
+export function prefetchRunSounds(): void {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  for (const slot of runSamples.values()) void loadSample(ctx, slot);
+}
+
+/* Plays a run cue if it is decoded; false sends the caller to its synth. */
+function playRunSample(name: RunSampleName, options: { rate?: number; gain?: number; at?: number } = {}): boolean {
+  const ctx = ensureAudio();
+  const slot = runSamples.get(name);
+  if (!ctx || !slot || !master) return false;
+  if (!slot.buffer) {
+    void loadSample(ctx, slot);
+    return false;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = slot.buffer;
+  source.playbackRate.value = options.rate ?? 1;
+  const gain = ctx.createGain();
+  gain.gain.value = options.gain ?? 0.8;
+  source.connect(gain).connect(master);
+  source.start(ctx.currentTime + (options.at ?? 0));
+  return true;
+}
+
+/* Semitones up a major scale for the nth hit, capped so a long tally stays
+   inside an octave and a half. */
+const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19];
+function runRate(step: number): number {
+  return 2 ** (MAJOR_STEPS[Math.min(MAJOR_STEPS.length - 1, Math.max(0, step))] / 12);
+}
+
+const RUN_SCALE = [523.25, 587.33, 659.25, 698.46, 783.99, 880, 987.77];
+
+function runPitch(step: number): number {
+  const index = Math.max(0, step);
+  const octave = Math.min(2, Math.floor(index / RUN_SCALE.length));
+  return RUN_SCALE[index % RUN_SCALE.length] * 2 ** octave * 0.5;
+}
+
+export function playRunNote(step: number) {
+  if (playRunSample(step % 2 === 0 ? "note-1" : "note-2", { rate: runRate(step), gain: 0.75 })) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const freq = runPitch(step);
+  playNoise(ctx, { duration: 0.035, gain: 0.07, startFreq: 5200, q: 0.9, filter: "highpass" });
+  playTone(ctx, { freq: freq * 2, duration: 0.11, gain: 0.07, type: "triangle" });
+}
+
+export function playRunCombo(step: number) {
+  if (playRunSample("combo", { rate: runRate(step) * 0.9, gain: 0.85 })) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  playNoise(ctx, { duration: 0.05, gain: 0.08, startFreq: 1500, q: 1.1 });
+  playTone(ctx, { freq: runPitch(step + 2) * 2, duration: 0.16, gain: 0.06, type: "square" });
+}
+
+export function playRunFinish() {
+  if (playRunSample("finish", { gain: 0.7 })) {
+    playRunSample("combo", { rate: 0.75, gain: 0.6 });
+    return;
+  }
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  playNoise(ctx, { duration: 0.75, gain: 0.07, startFreq: 6500, q: 0.5, filter: "highpass" });
+  playTone(ctx, { freq: 130, endFreq: 48, duration: 0.32, gain: 0.16, type: "sine", glideFraction: 0.5 });
+}
+
+/* A card that scores nothing. */
+export function playRunMiss() {
+  if (playRunSample("miss", { rate: 0.85, gain: 0.8 })) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  playTone(ctx, { freq: 330, endFreq: 140, duration: 0.2, gain: 0.07, type: "triangle" });
+}
+
+/* Shards in or out. */
+export function playRunCredit(gain: boolean) {
+  if (playRunSample("shards", { rate: gain ? 1 : 0.8, gain: 0.8 })) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  playTone(ctx, { freq: gain ? 1975.53 : 987.77, duration: 0.09, gain: 0.05, type: "square" });
+}
+
+let lastMeterTickAt = 0;
+
+/* One tick of the score meter rolling up; `progress` 0..1 lifts the pitch
+   as it nears the total. Throttled so a fast roll is a buzz, not mush. */
+export function playRunMeterTick(progress: number) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  if (ctx.currentTime - lastMeterTickAt < 0.035) return;
+  lastMeterTickAt = ctx.currentTime;
+  const lift = Math.max(0, Math.min(1, progress));
+  if (playRunSample("tick", { rate: 1 + lift * 0.8, gain: 0.45 })) return;
+  playTone(ctx, { freq: 1400 + lift * 1400, duration: 0.025, gain: 0.025, type: "square" });
+}
+
+/* The total landing on the meter, heavier the more of the song it covered. */
+export function playRunTotal(share: number) {
+  const lift = Math.max(0, Math.min(1, share));
+  if (playRunSample("slam", { rate: 0.9 + lift * 0.2, gain: 0.7 + lift * 0.25 })) {
+    playRunSample("shards", { at: 0.05, gain: 0.5 });
+    return;
+  }
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  playTone(ctx, { freq: 110, endFreq: 55, duration: 0.3, gain: 0.15, type: "sine", glideFraction: 0.4 });
+}
+
+/* A song, a stage (its final song) or the whole run cleared. */
+export function playRunBlindCleared(kind: "song" | "stage" | "run" = "song") {
+  const name = kind === "run" ? "run-cleared" : kind === "stage" ? "clear-stage" : "clear-song";
+  if (playRunSample(name, { gain: 0.8 })) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  [523.25, 659.25, 783.99, 1046.5].forEach((freq, index) => {
+    playTone(ctx, { at: index * 0.06, freq, duration: 0.45, gain: 0.06, type: "triangle" });
+  });
+}
+
+/* A failed run. */
+export function playRunOver() {
+  if (playRunSample("run-failed", { gain: 0.8 })) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  playTone(ctx, { freq: 392, endFreq: 98, duration: 0.9, gain: 0.07, type: "sawtooth", glideFraction: 1 });
 }

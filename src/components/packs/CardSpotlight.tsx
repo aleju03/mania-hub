@@ -15,6 +15,8 @@ import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
 import { CountryFlag } from "../ui/CountryFlag";
 import { renderCardSkeletonThumbnail, renderCardThumbnail } from "./cardSnapshot";
 import { collectedCardRenderData } from "./cardThumbnailCache";
+import { EditionSheen } from "./run/EditionSheen";
+import type { RunEdition } from "#/lib/pack-run";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { rememberTeamName } from "../../lib/analytics-teams";
 
@@ -34,6 +36,9 @@ export interface CardSpotlightTarget {
   /* Who chose to put this card on the showcase wall, where the tiles carry no
      name of their own and finding this out is the point of opening one. */
   showcasedBy?: { userId: number; username: string; avatarUrl: string; countryCode: string | null } | null;
+  /* The pack run finish on this copy (or the best one the viewer holds),
+     drawn by the 3D card's overlay and the sheen over the still. */
+  edition?: RunEdition | null;
 }
 
 /* The WebGL card fills the host's height divided by the renderer's 1.05
@@ -204,7 +209,10 @@ export function CardSpotlight({
     const card = target?.card;
     if (!card?.skills) return;
     let cancelled = false;
-    const data = collectedCardRenderData(card, card.skills);
+    const base = collectedCardRenderData(card, card.skills);
+    const edition = target?.edition ?? null;
+    const serial = card.serial && card.serial > 0 ? { number: card.serial, total: card.mintedTotal ?? null } : null;
+    const data = base.status === "ready" ? { ...base, edition, serial } : base;
     const fallbackTo2d = () => {
       rendererRef.current?.dispose();
       rendererRef.current = null;
@@ -315,13 +323,18 @@ export function CardSpotlight({
             }
           >
             {baseImage ? (
-              <img
-                src={hiResFallback ?? baseImage}
-                alt={t`${card.username} maniacard`}
-                className="h-full w-full rounded-[14px] object-cover shadow-[0_18px_48px_rgba(0,0,0,0.6)]"
+              <span
+                className="relative block h-full w-full overflow-hidden rounded-[14px]"
                 style={{ opacity: canvasReady ? 0 : 1, transition: "opacity 0.2s ease-out" }}
-                draggable={false}
-              />
+              >
+                <img
+                  src={hiResFallback ?? baseImage}
+                  alt={t`${card.username} maniacard`}
+                  className="h-full w-full rounded-[14px] object-cover shadow-[0_18px_48px_rgba(0,0,0,0.6)]"
+                  draggable={false}
+                />
+                <EditionSheen edition={target?.edition} />
+              </span>
             ) : (
               <div className="h-full w-full rounded-[14px] bg-osu-b4 shadow-[0_18px_48px_rgba(0,0,0,0.6)]" />
             )}
