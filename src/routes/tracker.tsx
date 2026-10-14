@@ -16,6 +16,7 @@ import {
   getDisplayedAccuracy,
   getDisplayedRank,
   getDisplayedTotalScore,
+  getScoreDisplayVersion,
   getScoreModDisplayList,
   getScoreIdentity,
   getScoreTimeMs,
@@ -2069,7 +2070,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 ) : (
                   <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
                 )}
-                <span className="text-[11px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
+                <span className="text-[11px] text-osu-f1 truncate">[{getScoreDisplayVersion(score)}]</span>
               </div>
               {keymodeLabel && (
                 <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">

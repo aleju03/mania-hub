@@ -10,8 +10,8 @@ sets it, and nothing in this integration affects snipes, packs, goals or any
 official projection, with one exception: an import's key-press timing can stand
 in for the accuracy estimate of the official play osu! delivered for the same
 run (see "Timing for official plays"). Checked imports also count toward
-regular players' public skill ratings (MSD, patterns and Dan) through a
-read-time overlay (see "Skill credit for regular players"), rank on a
+every player's skill ratings (MSD, patterns and Dan) through a saved merge
+(see "Skill credit for regular players"), rank on a
 map's Scores board beside osu! plays (see "Map Scores boards"), and count on
 the profile's Activity tab (see "Activity"). Simulated pp remains limited to accounts
 osu! turned away (see "Simulated pp for restricted players"); a public row
@@ -982,6 +982,26 @@ accounts, below). In
 particular, stable +V2 imports carry their actual `scoreV2Accuracy` into the
 4K LN ladder's 97% bar; the stable-only accuracy fallback does not apply.
 
+The rating is saved, as any player's is. The skills job keeps
+`player_skill_ratings` osu!-only (it is also the job's working state between
+runs and what the rating sweeps rebuild); for a player with imports, a merge
+step (`skill-merge.ts`) folds them into that row and saves the result in
+`companella_skill_merges`. Every skill surface reads the merged row: the
+profile's Skills, plays list and Dan evidence, the skill and Dan boards, the
+farm helper, teams and My data. The merge also records `player_skill_history`
+(the skills job leaves history to it for such a player, so the two never
+interleave) and rewrites the player's `unrated_plays` rows from the merged
+plays. It runs as the skills job's last step (after the Node compute, and in
+the follow-up after the native one), 30 minutes after an accepted import
+(`companella_skill_merge`, player-skills lane), at once after an owner delete
+or a review decision, and when a view finds the row out of date: its inputs
+fingerprint (the official row's version and update time, and the imports'
+review, deletion, analysis, price and chart-match state) moved, or 12 hours
+passed. A view serves the saved row while the job runs; a read that sees an
+import removed folds at once instead. `companella_skill_merge_seed:<store version>:<skills version>`
+queues a merge for every player with imports once at boot, again after either
+version moves.
+
 `skill-overlay.ts` reads accepted, completed native imports with clear review
 state, while the integration admits that account. It shares import placement
 and analysis validation with `restricted-profile.ts`: an exact official file,
@@ -1074,13 +1094,13 @@ Dan course and practice-chart credentials count imports the same way. A listed
 import on a registered course's exact file (its pinned checksum, else the
 site's copy of the map) is read as a course pass beside the osu! ones
 (`DanClearSources` in `features/dan-courses.ts`), by the overlay, by a
-restricted profile (imports alone) and by the `/rankings` Clears board. The
-stored skill rows read osu! plays only. A clear opens as its import on the
-score card.
+restricted profile (imports alone) and by the `/rankings` Clears board.
+`player_skill_ratings` reads osu! plays only; the merged rating takes the
+app-passed courses in. A clear opens as its import on the score card.
 
-Nothing official is written. `player_skill_ratings`, skill history, pp,
-score ingest, snipes, goals and packs (card snapshots included) keep reading
-osu! plays only. Their imported replays follow the rules under "Privacy".
+Nothing official is written. `player_skill_ratings`, pp, score ingest, snipes,
+goals and packs (card snapshots included) keep reading osu! plays only; skill
+history records the merged rating (see "Skill credit for regular players"). Their imported replays follow the rules under "Privacy".
 Restricted accounts retain their existing separate profile/pp window below.
 
 ## Simulated pp for restricted players
@@ -1159,18 +1179,32 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
   window, priced or not: each chart's length at the played rate. An account
   with no priced play still gets them, with pp 0 and no rank.
 - **Skills and Activity.** For a gone account the profile's Skills and Activity
-  endpoints answer from the checked imports in the same window
-  (`restricted-profile.ts`), never from osu! and without queueing anything: an
+  endpoints answer from the checked imports in the same window. Its merged
+  row (`skill-merge.ts`, see "Skill credit for regular players") has no osu!
+  part: it folds the window's imports alone, and also holds the Activity tab's
+  plays; the Skills, plays, Dan evidence, Unrated and Activity reads serve it,
+  and its history pages like anyone's. A row from an earlier window is never
+  served
+  (`restricted-profile.ts`). Nothing reads osu! or queues osu! work: an
   import placed on the official beatmap it is (its exact file, or a clean rate
   copy on the family's lowest id, or a chart osu! does not have on its own
   negative id, see "Charts osu! does not have") goes through the official
   skill fold, plays lists and dan evidence (local charts are not listed among
   the unrated plays) with its own SSR and chart dan, and the
-  calendar buckets imports by their feed display time. Skill history is empty.
+  calendar buckets imports by their feed display time.
   A beatmap with no official chart analysis takes its dan facts from the
   imports' own analysis (eligibility, OD, the verdict at each played rate), so
   its clears still count; it has no pattern tags. The cached read is dropped by
   every delete, quarantine and restore, as the standings are.
+- **Leaderboards.** Such an account is on the boards like anyone else, from
+  the same read (`readRestrictedBoardPlayers` and friends in
+  `restricted-profile.ts`): the MSD and dan boards (`buildSkillBoard`) and the
+  clears board take it when it is on a country roster, as they take every
+  player, the clears board counting its imports only; the unrated board lists
+  its imports' unrated plays in place of any rows stored before the
+  restriction. The country board's 4K+7K order merges the simulated rows
+  (with their `pp_4k`/`pp_7k`) as Global and regions do. Each board picks the
+  change up on its next rebuild (at most five minutes).
 
 Chart files are different: they are the site's own map data, not a score. A
 reservation first looks for the exact bytes in the pool, then in the site's own

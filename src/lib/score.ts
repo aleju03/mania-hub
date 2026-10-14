@@ -218,6 +218,15 @@ export function getScoreModDisplayList(score: Pick<ScoreLike, "mods" | "companel
   return [...rest, { acronym, rate, ...(reference?.version ? { basedOn: reference.version } : {}) }];
 }
 
+/** The difficulty name a score row shows. An import of a rate-edited copy
+ *  names the official difficulty its rate badge is measured against, so the
+ *  copy's own name ("1.4x") does not read as stacked on that rate. */
+export function getScoreDisplayVersion(score: Pick<ScoreLike, "beatmap" | "companella">): string | undefined {
+  const reference = score.companella?.reference;
+  if (reference?.version && reference.rate && Math.abs(reference.rate - 1) >= 0.005) return reference.version;
+  return score.beatmap?.version;
+}
+
 export type ScoreSpeedBucket = "ht" | "normal" | "dt";
 
 /** Bucket a mania score by its effective speed mod. In osu!, HT/DC, NM, and

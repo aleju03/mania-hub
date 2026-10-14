@@ -33,6 +33,8 @@ export function CompanellaMark({ app, video, className = "h-[18px] w-[18px]" }: 
       // Companella's mark is a dark disc inside a thin ring with a pixel of
       // margin, so at the same box it reads smaller than Hashi's full-bleed one.
       className={`inline-block rounded-full align-middle ${isBridge ? "" : "scale-[1.15]"} ${className}`}
+      // Hashi's mark is drawn in the default pink (hue 333), so it turns with the theme's hue and saturation.
+      style={isBridge ? { filter: "hue-rotate(calc((var(--theme-hue) - 333) * 1deg)) saturate(var(--theme-sat))" } : undefined}
     />
   );
 

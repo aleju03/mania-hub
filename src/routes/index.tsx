@@ -10,7 +10,7 @@ import { useLocale } from "../lib/locale-context";
 import { isRegionScope } from "../lib/regions";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
-import { getBeatmapKeyCount, getBeatmapKeymodeLabel, getScoreDisplayValues, getScoreModDisplayList, getScoreTimestamp } from "../lib/score";
+import { getBeatmapKeyCount, getBeatmapKeymodeLabel, getScoreDisplayValues, getScoreDisplayVersion, getScoreModDisplayList, getScoreTimestamp } from "../lib/score";
 import { fetchLiveGlobalRankings, fetchLiveRankingsSnapshot, fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveGlobalRankingEntry } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
@@ -223,7 +223,7 @@ function trackerScoreToHomeScore(score: LeanTrackerScore): LeanHomeScore {
     mods: getScoreModDisplayList(score),
     timestamp: getScoreTimestamp(score),
     title: score.beatmapset.title,
-    version: score.beatmap.version,
+    version: getScoreDisplayVersion(score) ?? "",
     keyCount: getBeatmapKeyCount(score.beatmap) ?? 0,
     keymodeLabel: getBeatmapKeymodeLabel(score.beatmap) ?? "",
     beatmapsetId: score.beatmapset.id,
@@ -254,7 +254,7 @@ function countryTopPlayToHomePopoff(play: CountryTopPlay): LeanHomePopoff | null
       mods: getScoreModDisplayList(score),
       timestamp: getScoreTimestamp(score) || play.time,
       title: score.beatmapset.title,
-      version: score.beatmap.version,
+      version: getScoreDisplayVersion(score) ?? "",
       keyCount: getBeatmapKeyCount(score.beatmap) ?? 0,
       keymodeLabel: getBeatmapKeymodeLabel(score.beatmap) ?? "",
       beatmapsetId: score.beatmapset.id,

@@ -18,6 +18,7 @@ import {
   getBeatmapUrl,
   getBeatmapKeymodeLabel,
   getModDisplayList,
+  getScoreDisplayVersion,
   getScoreModDisplayList,
   getScoreDisplayValues,
   getScoreTimestamp,
@@ -342,7 +343,7 @@ export function ScoreRow({
             {score.beatmapset?.title || t`Unknown`}
           </span>
           <span className="text-[11px] text-osu-f1 truncate hidden sm:inline">
-            [{score.beatmap?.version}]
+            [{getScoreDisplayVersion(score)}]
           </span>
           {keymodeLabel && (
             <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
@@ -609,7 +610,7 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
                 </div>
                 <div className="mt-0.5 truncate text-[11px] text-osu-f1">
                   {score.beatmapset?.artist}
-                  {score.beatmap?.version ? ` · [${score.beatmap.version}]` : ""}
+                  {getScoreDisplayVersion(score) ? ` · [${getScoreDisplayVersion(score)}]` : ""}
                   {score.beatmapset?.creator ? ` · ${t`mapped by ${score.beatmapset.creator}`}` : ""}
                 </div>
               </div>

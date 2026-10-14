@@ -2024,6 +2024,9 @@ export interface RestrictedPpRankingEntry {
   play_count: number;
   ranked_score: number;
   grade_counts: { ss: number; ssh: number; s: number; sh: number; a: number };
+  /** The 4K and 7K totals, as osu!'s variants. Absent on a backend older than the fields. */
+  pp_4k?: number | null;
+  pp_7k?: number | null;
 }
 
 /** Null when the account is not one osu! turned away, or has nothing priced. */
