@@ -7933,6 +7933,14 @@ msgstr "Hashi before connecting to Mania Tracker"
 #~ msgstr "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
 
 #: src/routes/hashi.tsx
+msgid "Hashi showing a leaderboard for a graveyard map"
+msgstr "Hashi showing a leaderboard for a graveyard map"
+
+#: src/routes/hashi.tsx
+msgid "Hashi showing a map's leaderboard for Double Time"
+msgstr "Hashi showing a map's leaderboard for Double Time"
+
+#: src/routes/hashi.tsx
 msgid "Hashi's main window with the last plays it sent"
 msgstr "Hashi's main window with the last plays it sent"
 
@@ -15979,8 +15987,12 @@ msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "Shows a dot on the changelog link when there are new updates"
 
 #: src/routes/hashi.tsx
-msgid "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!."
-msgstr "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!."
+#~ msgid "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!."
+#~ msgstr "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!."
+
+#: src/routes/hashi.tsx
+msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
+msgstr "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
 
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"

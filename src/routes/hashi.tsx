@@ -34,7 +34,7 @@ export const Route = createFileRoute("/hashi")({
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: "Hashi",
-      description: i18n._(msg`Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!.`),
+      description: i18n._(msg`Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing.`),
       path: "/hashi",
       origin: match.context.origin,
       imageTitle: "Hashi",
@@ -178,6 +178,35 @@ function Screenshots() {
   );
 }
 
+/** Short looping clips of the app at work. Their captions are part of the video. */
+const CLIPS: { src: string; poster: string; label: MessageDescriptor }[] = [
+  { src: "/videos/hashi/hashi-mods.mp4", poster: "/images/hashi/video-mods-poster.webp", label: msg`Hashi showing a map's leaderboard for Double Time` },
+  { src: "/videos/hashi/hashi-graveyard.mp4", poster: "/images/hashi/video-graveyard-poster.webp", label: msg`Hashi showing a leaderboard for a graveyard map` },
+];
+
+function Clips() {
+  const { i18n } = useLingui();
+  return (
+    <div className="space-y-3">
+      {CLIPS.map((clip) => (
+        <video
+          key={clip.src}
+          src={clip.src}
+          poster={clip.poster}
+          width={1280}
+          height={800}
+          autoPlay
+          muted
+          loop
+          playsInline
+          aria-label={i18n._(clip.label)}
+          className="block h-auto w-full rounded-lg bg-osu-b4"
+        />
+      ))}
+    </div>
+  );
+}
+
 const LINK = "text-white underline decoration-white/30 underline-offset-2 transition-colors hover:decoration-white";
 
 function BridgePage() {
@@ -205,7 +234,7 @@ function BridgePage() {
             <img src={app.icon} alt="" width={112} height={112} className="h-28 w-28 rounded-full" />
             <h1 className="mt-5 text-3xl font-semibold text-white">{app.name}</h1>
             <p className="mt-2 max-w-sm text-[15px] leading-relaxed text-osu-l2">
-              <Trans>Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!.</Trans>
+              <Trans>Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing.</Trans>
             </p>
 
             <Downloads downloads={downloads} />
@@ -235,50 +264,53 @@ function BridgePage() {
         </div>
 
         {tab === "screenshots" ? <Screenshots /> : (
-        <div className="mx-auto max-w-xl px-4">
-          <div className="mt-8 space-y-6 border-t border-white/[0.07] pt-8 text-[15px] leading-relaxed text-osu-l2">
-            <section>
-              <h2 className="text-[13px] font-semibold text-white"><Trans>What it does</Trans></h2>
-              <p className="mt-2">
-                <Trans>
-                  While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't
-                  keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to
-                  your profile with its replay, and the app shows its place on the map's leaderboard. With{" "}
-                  <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings also show what
-                  you're doing in osu!, like playing, picking or editing a map, or watching a replay.
-                </Trans>
-              </p>
-              <p className="mt-3">
-                <Trans>It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows.</Trans>
-              </p>
-            </section>
-            <section>
-              <h2 className="text-[13px] font-semibold text-white"><Trans>What you need</Trans></h2>
-              <p className="mt-2">
-                <Trans>
-                  It reads osu! through tosu, so tosu has to be running. You can download it from{" "}
-                  <a href="https://tosu.app" target="_blank" rel="noopener noreferrer" className={LINK}>tosu.app</a>. On Linux, lazer
-                  needs tosu's Linux build.
-                </Trans>
-              </p>
-            </section>
-            <section>
-              <h2 className="text-[13px] font-semibold text-white"><Trans>On Windows</Trans></h2>
-              <p className="mt-2">
-                <Trans>
-                  The installer isn't signed, because Microsoft charges for code signing, so Windows shows a warning before it runs. Click More info, then Run anyway. The{" "}
-                  <a href={MANIA_BRIDGE_SOURCE_URL} target="_blank" rel="noopener noreferrer" onClick={() => track("bridge_source_click")} className={LINK}>source code</a> is on GitHub if you want to check what it does.
-                </Trans>
-              </p>
-            </section>
-            <section>
-              <h2 className="text-[13px] font-semibold text-white"><Trans>Connecting</Trans></h2>
-              <p className="mt-2">
-                <Trans>
-                  Connect it to your account from inside the app. You can revoke the connection in <Link to="/settings" search={{ tab: "preferences" }} className={LINK}>Settings</Link>, under Preferences.
-                </Trans>
-              </p>
-            </section>
+        <div className="mx-auto max-w-xl px-4 lg:max-w-6xl">
+          <div className="mt-8 grid gap-8 border-t border-white/[0.07] pt-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-10">
+            <div className="space-y-6 text-[15px] leading-relaxed text-osu-l2">
+              <section>
+                <h2 className="text-[13px] font-semibold text-white"><Trans>What it does</Trans></h2>
+                <p className="mt-2">
+                  <Trans>
+                    While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't
+                    keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to
+                    your profile with its replay, and the app shows its place on the map's leaderboard. With{" "}
+                    <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings also show what
+                    you're doing in osu!, like playing, picking or editing a map, or watching a replay.
+                  </Trans>
+                </p>
+                <p className="mt-3">
+                  <Trans>It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows.</Trans>
+                </p>
+              </section>
+              <section>
+                <h2 className="text-[13px] font-semibold text-white"><Trans>What you need</Trans></h2>
+                <p className="mt-2">
+                  <Trans>
+                    It reads osu! through tosu, so tosu has to be running. You can download it from{" "}
+                    <a href="https://tosu.app" target="_blank" rel="noopener noreferrer" className={LINK}>tosu.app</a>. On Linux, lazer
+                    needs tosu's Linux build.
+                  </Trans>
+                </p>
+              </section>
+              <section>
+                <h2 className="text-[13px] font-semibold text-white"><Trans>On Windows</Trans></h2>
+                <p className="mt-2">
+                  <Trans>
+                    The installer isn't signed, because Microsoft charges for code signing, so Windows shows a warning before it runs. Click More info, then Run anyway. The{" "}
+                    <a href={MANIA_BRIDGE_SOURCE_URL} target="_blank" rel="noopener noreferrer" onClick={() => track("bridge_source_click")} className={LINK}>source code</a> is on GitHub if you want to check what it does.
+                  </Trans>
+                </p>
+              </section>
+              <section>
+                <h2 className="text-[13px] font-semibold text-white"><Trans>Connecting</Trans></h2>
+                <p className="mt-2">
+                  <Trans>
+                    Connect it to your account from inside the app. You can revoke the connection in <Link to="/settings" search={{ tab: "preferences" }} className={LINK}>Settings</Link>, under Preferences.
+                  </Trans>
+                </p>
+              </section>
+            </div>
+            <Clips />
           </div>
         </div>
         )}

@@ -7911,6 +7911,14 @@ msgstr "连接 Mania Tracker 之前的 Hashi"
 #~ msgstr "Hashi 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 Share what I'm playing 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
 
 #: src/routes/hashi.tsx
+msgid "Hashi showing a leaderboard for a graveyard map"
+msgstr ""
+
+#: src/routes/hashi.tsx
+msgid "Hashi showing a map's leaderboard for Double Time"
+msgstr ""
+
+#: src/routes/hashi.tsx
 msgid "Hashi's main window with the last plays it sent"
 msgstr "Hashi 主窗口，显示最近发送的成绩"
 
@@ -15949,8 +15957,8 @@ msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "有新更新时在更新日志链接上显示一个圆点"
 
 #: src/routes/hashi.tsx
-msgid "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!."
-msgstr "显示谱面在你当前 mod 下的排行榜，把你的 mania 成绩发送到你的个人资料，还可以显示你在 osu! 里做什么。"
+msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
+msgstr "按你当前的 mod 显示排行榜，并把你的 mania 成绩发送到你的个人资料，资料页还能显示你正在玩什么。"
 
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
