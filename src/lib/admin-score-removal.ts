@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 
-/* Removing a player's official plays from every surface (/admin/scores),
+/* Removing a player's official plays from every surface (/admin/players?tab=remove),
    backed by backend features/admin-score-removal.ts. */
 
 export interface AdminScoreRow {

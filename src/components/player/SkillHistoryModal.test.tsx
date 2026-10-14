@@ -136,9 +136,10 @@ describe("skill history", () => {
     expect(view.getAllByRole("link").every((link) => link.getAttribute("href")?.startsWith("/maps?map="))).toBe(true);
     expect(view.queryByText("25.70")).toBeNull();
     expect(view.queryByText(/Adjusted 4K vibro detection/)).toBeNull();
-    const rows = [...view.baseElement.querySelectorAll("li")];
-    expect(rows[0].textContent).toContain("Updated MinaCalc to 0.75.0");
-    expect(rows[1].textContent).toContain("Only your two best rate plays");
+    const rows = [...view.baseElement.querySelectorAll("li")].map((row) => row.textContent ?? "");
+    const minaCalc = rows.findIndex((text) => text.includes("Updated MinaCalc to 0.75.0"));
+    expect(minaCalc).toBeGreaterThanOrEqual(0);
+    expect(rows[minaCalc + 1]).toContain("Only your two best rate plays");
     expect(view.getByText("2026-09-06")).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "History" }));
     expect(view.getByText("25.70")).toBeTruthy();

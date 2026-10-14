@@ -244,33 +244,53 @@ describe("AnalyticsStream", () => {
 });
 
 describe("AnalyticsLiveBoard", () => {
-  it("gives every online visitor a card with their current action", () => {
+  it("gives every online visitor a row with their current action", () => {
     const sessions = buildAnalyticsSessions(ROWS, NOW);
     render(<AnalyticsLiveBoard sessions={sessions} replayMaps={buildAnalyticsReplayMapIndex(ROWS)} now={NOW} />);
     expect(screen.getByText("Camellia - Ghost [4K Insane]")).toBeTruthy();
     expect(screen.getByText("juan's profile")).toBeTruthy();
-    // The visitor with no epoch timestamp can't be proven online, so no card.
+    // The visitor with no epoch timestamp can't be proven online, so no row.
     expect(screen.queryByText("V3")).toBeNull();
   });
 
-  it("keeps the trail area reserved for a visitor with a single step", () => {
+  it("says so when a visitor has no earlier step", () => {
     const sessions = buildAnalyticsSessions([row({ distinctId: "a", ts: NOW - 5_000 })], NOW);
     render(<AnalyticsLiveBoard sessions={sessions} replayMaps={new Map()} now={NOW} />);
-    expect(screen.getByText("no earlier steps")).toBeTruthy();
+    expect(screen.getByText("first step")).toBeTruthy();
   });
 
-  it("holds each visitor's place when a new event reshuffles them", () => {
-    const cardOrder = (container: HTMLElement) =>
+  it("keeps a visitor who went quiet in their row until somebody takes it", () => {
+    const rowOrder = (container: HTMLElement) =>
       Array.from(container.querySelectorAll("[title^='visitor id:']")).map((node) => node.getAttribute("title"));
     const { container, rerender } = render(
       <AnalyticsLiveBoard sessions={buildAnalyticsSessions(ROWS, NOW)} replayMaps={new Map()} now={NOW} />,
     );
-    expect(cardOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
+    expect(rowOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
+
+    // Ten minutes on, a has gone quiet and b and a newcomer are active.
+    const later = NOW + 10 * 60_000;
+    const quiet = [row({ distinctId: "b", ts: later - 1_000 }), ...ROWS];
+    rerender(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(quiet, later)} replayMaps={new Map()} now={later} />);
+    expect(rowOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
+    expect(screen.getByText(/^left .* ago$/)).toBeTruthy();
+
+    const arrival = [row({ distinctId: "n", ts: later - 500 }), ...quiet];
+    rerender(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(arrival, later)} replayMaps={new Map()} now={later} />);
+    expect(rowOrder(container)).toEqual(["visitor id: n", "visitor id: b"]);
+  });
+
+  it("holds each visitor's place when a new event reshuffles them", () => {
+    const rowOrder = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll("[title^='visitor id:']")).map((node) => node.getAttribute("title"));
+    const { container, rerender } = render(
+      <AnalyticsLiveBoard sessions={buildAnalyticsSessions(ROWS, NOW)} replayMaps={new Map()} now={NOW} />,
+    );
+    expect(rowOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
 
     // b is now the most recently active, so the sessions arrive b-first.
     const reshuffled = [row({ distinctId: "b", ts: NOW - 1_000, path: "/maps" }), ...ROWS];
     rerender(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(reshuffled, NOW)} replayMaps={new Map()} now={NOW} />);
-    expect(cardOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
+    expect(rowOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
   });
 
   const searchBox = () => screen.getByLabelText("Find a visitor by country or activity");
@@ -280,7 +300,7 @@ describe("AnalyticsLiveBoard", () => {
     render(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(rows, NOW)} replayMaps={buildAnalyticsReplayMapIndex(rows)} now={NOW} />);
     fireEvent.change(searchBox(), { target: { value: "signed in" } });
     expect(screen.getByText("Signed in")).toBeTruthy();
-    expect(screen.getByText("1 of 3 online visitors match")).toBeTruthy();
+    expect(screen.getByText("1 of 3 match")).toBeTruthy();
     expect(screen.queryByText("Camellia - Ghost [4K Insane]")).toBeNull();
   });
 
@@ -297,7 +317,7 @@ describe("AnalyticsLiveBoard", () => {
     render(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(rows, NOW)} replayMaps={new Map()} now={NOW} />);
     fireEvent.change(searchBox(), { target: { value: "signed in" } });
     expect(screen.getByText('Nobody online matches "signed in".')).toBeTruthy();
-    expect(screen.getByText("1 visitor matched earlier in this range - they are in the activity feed below.")).toBeTruthy();
+    expect(screen.getByText("1 visitor matched earlier in this range - they are in the activity feed.")).toBeTruthy();
   });
 
   it("falls back to a calm empty state when the site is quiet", () => {

@@ -23,6 +23,8 @@ export const COMPANELLA_NATIVE_ROUTES = {
   submissionRead: "submissions/:id",
   submissionReplay: "submissions/:id/replay",
   submissionBeatmap: "submissions/:id/beatmap",
+  submissionReplayPart: "submissions/:id/replay/parts/:offset",
+  submissionBeatmapPart: "submissions/:id/beatmap/parts/:offset",
   submissionComplete: "submissions/:id/complete",
   presence: "presence",
   chartLeaderboard: "charts/:md5/leaderboard",
@@ -48,6 +50,9 @@ export const KNOWN_APPS: Record<string, { name: string; icon: string; mark: stri
 
 /** The client id of plays an admin imported from the player's replay files; not an app, so not in KNOWN_APPS. */
 export const REPLAY_IMPORT_APP = "replay-import";
+
+/** The client id of plays an admin entered by hand (old or offline plays with no replay); not an app either. */
+export const MANUAL_ENTRY_APP = "manual-entry";
 
 /** The known app for a client id, or null. Own keys only: a client id like "toString" is not an app. */
 export function knownApp(clientId: string | null | undefined): (typeof KNOWN_APPS)[string] | null {

@@ -402,7 +402,7 @@ export function SettingsPanel({ variant = "page", onClose, initialTab = "skin" }
             </button>
           ) : null}
         </div>
-        <PageTabs items={tabs} value={activeTab} onChange={setActiveTab} />
+        <PageTabs items={tabs} value={activeTab} onChange={setActiveTab} dense />
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 py-5 sm:px-5 sm:py-6 space-y-6">{body}</div>
         </div>

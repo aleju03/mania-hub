@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { I18nProvider } from "@lingui/react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { getI18n } from "#/lib/i18n";
 import type { LiveMapSearchEntry } from "#/lib/live-backend";
@@ -25,7 +25,8 @@ function headline(): string {
 it("headlines the LN value on a 4K LN chart when it is the hardest axis", () => {
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} /></I18nProvider>);
   expect(headline()).toBe("22.29");
-  expect(screen.getByTitle("Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.")).toBeTruthy();
+  fireEvent.mouseEnter(screen.getByText("22.29", { selector: "span:not(.text-\\[18px\\])" }).parentElement!);
+  expect(screen.getByRole("tooltip").textContent).toBe("Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.");
 });
 
 it("shows only one LN MSD even when cached values contain Dan family ratings", () => {

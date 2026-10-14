@@ -381,6 +381,12 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   const globalTotalPages = Math.max(1, Math.ceil(globalRankingsTotal / GLOBAL_RANKINGS_PAGE_SIZE));
   const restrictedEntries = useRestrictedPpRankings(selectedIsGlobal || selectedIsRegion ? null : selectedCountry);
   const restrictedUserIds = useMemo(() => new Set(restrictedEntries.map((entry) => entry.user.id)), [restrictedEntries]);
+  // The backend's roster page has no row for a simulated player; their own
+  // standing carries the 4K and 7K totals.
+  const restrictedVariantPp = useMemo(
+    () => Object.fromEntries(restrictedEntries.map((entry) => [entry.user.id, { pp_4k: entry.pp_4k ?? null, pp_7k: entry.pp_7k ?? null }])),
+    [restrictedEntries],
+  );
 
   // The osu! pages leave out accounts osu! turned away; their simulated
   // standings go in by pp across both pages, so one entering page 1 pushes
@@ -1272,8 +1278,8 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                         <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatAccuracy(entry.hit_accuracy / 100)}</td>
                         <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatNumber(entry.play_count)}</td>
                         <td className="py-2.5 px-3 text-sm font-bold text-right">{formatNumber(Math.round(entry.pp))}</td>
-                        <td className="py-2.5 px-3 text-sm text-osu-f1 text-right" title={variantPpTitle(countryVariantPp[entry.user.id])}>
-                          {formatCombinedPp(countryVariantPp[entry.user.id])}
+                        <td className="py-2.5 px-3 text-sm text-osu-f1 text-right" title={variantPpTitle(countryVariantPp[entry.user.id] ?? restrictedVariantPp[entry.user.id])}>
+                          {formatCombinedPp(countryVariantPp[entry.user.id] ?? restrictedVariantPp[entry.user.id])}
                         </td>
                         <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "ss" ? "text-white font-semibold" : "text-osu-f1"}`}>
                           {entry.grade_counts.ss + entry.grade_counts.ssh}

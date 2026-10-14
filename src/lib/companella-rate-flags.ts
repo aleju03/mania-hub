@@ -4,11 +4,12 @@ import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 
 /* The admin list of Companella rate flags (/admin/bridgers?tab=flags): imported
-   plays whose replay frames did not confirm the speed their mods claim. A flag
+   plays whose replay frames did not confirm the speed their mods claim, and
+   ("name") plays whose replay names someone other than the account. A flag
    holds nothing back and the player never sees it; holding a play is the
    admin's call from the list, through the ordinary review route. */
 
-export type RateFlagFilter = "all" | "mismatch" | "unreadable";
+export type RateFlagFilter = "all" | "mismatch" | "unreadable" | "name";
 
 export interface RateFlag {
   scoreId: string;
@@ -16,12 +17,15 @@ export interface RateFlag {
   username: string;
   mods: string[];
   reviewState: "clear" | "flagged" | "quarantined";
+  /** The name written in the replay. */
+  playerName: string;
+  /** Null on a name flag whose frames confirmed the speed. */
   rateCheck: {
     verdict: string;
     claimedRate: number;
     measuredRate: number | null;
     windows: number;
-  };
+  } | null;
   chart: { title: string | null; artist: string | null; version: string | null; keyCount: number | null };
   playedAt: string | null;
   receivedAt: string;
@@ -43,7 +47,7 @@ async function adminFetch(path: string, init: RequestInit = {}): Promise<Respons
 
 export const listRateFlags = createServerFn({ method: "GET" })
   .validator((data: { filter?: RateFlagFilter; limit?: number; offset?: number } | undefined) => ({
-    filter: data?.filter === "mismatch" || data?.filter === "unreadable" ? data.filter : "all",
+    filter: data?.filter === "mismatch" || data?.filter === "unreadable" || data?.filter === "name" ? data.filter : "all",
     limit: Math.min(200, Math.max(1, Math.floor(Number(data?.limit) || 50))),
     offset: Math.max(0, Math.floor(Number(data?.offset) || 0)),
   }))

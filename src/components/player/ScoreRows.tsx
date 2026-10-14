@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, Play, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { LiveKeymodePpPlay } from "../../lib/live-backend";
 import {
@@ -18,22 +18,26 @@ import {
   getBeatmapUrl,
   getBeatmapKeymodeLabel,
   getModDisplayList,
+  getScoreDisplayVersion,
+  getScoreModDisplayList,
   getScoreDisplayValues,
   getScoreTimestamp,
   getScoreUrl,
   scoreHasReplay,
 } from "../../lib/score";
-import { CompanellaMark } from "../ui/CompanellaMark";
+import { CompanellaMark, VideoMark } from "../ui/CompanellaMark";
 import { GradeImg } from "../ui/GradeImg";
 import { UsernameText } from "../ui/UsernameText";
 import { StarRatingBadge } from "../ui/StarRating";
 import { getManiaJudgementStats } from "../ui/ManiaJudgementStats";
 import { ModBadge } from "../ui/ModBadge";
+import { ScoreModBadge } from "../ui/ScoreModBadge";
 import { DanBadge } from "../ui/DanBadge";
 import { RecentPlayRatingCells } from "./RecentPlayRatingCells";
 import type { RecentPlayRatingView } from "./recent-play-ratings";
 import { useNoDans } from "../../store";
 import { companellaReplayImportId } from "../../lib/companella-scores";
+import { usePlayVideo, useScoreVideo } from "../../lib/score-videos";
 import type { OsuScore } from "../../lib/types";
 import { getTrackedPlayRank } from "../../lib/tracked-play-score";
 import { useLocale } from "../../lib/locale-context";
@@ -123,7 +127,7 @@ export function getScoreRowLayout(rows: BestListRow[]): ScoreRowLayout {
       continue;
     }
     const { score } = row;
-    layout.modColumns = Math.max(layout.modColumns, getModDisplayList(score.mods).length);
+    layout.modColumns = Math.max(layout.modColumns, getScoreModDisplayList(score).length);
     if (score.pp != null) layout.showPp = true;
     if (scoreHasReplay(score) || companellaReplayImportId(score) != null) layout.showReplay = true;
   }
@@ -158,6 +162,7 @@ export function TrackedScoreRow({
   const mods = getModDisplayList(play.mods.map((acronym) => ({ acronym })));
   const coverUrl = play.beatmapsetId ? `/api/background?beatmapsetId=${play.beatmapsetId}` : null;
   const canReplay = play.hasReplay === true && play.soloScoreId != null;
+  const video = useScoreVideo(play.soloScoreId, play.legacyScoreId);
 
   return (
     <div className="player-score-row relative flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms] cursor-pointer">
@@ -191,6 +196,7 @@ export function TrackedScoreRow({
                 {play.keyCount}K
               </span>
             )}
+            {video ? <VideoMark video={video} /> : null}
           </div>
           <span className="text-[11px] text-osu-f1">
             {play.artist}
@@ -282,6 +288,7 @@ export function ScoreRow({
   showPlayer = false,
   showRating = false,
   rating,
+  showAppMark = false,
 }: {
   score: OsuScore;
   position: number;
@@ -293,6 +300,8 @@ export function ScoreRow({
      rating loads or when a play has none, so the columns stay lined up. */
   showRating?: boolean;
   rating?: RecentPlayRatingView | null;
+  /* Recent marks an app import (Hashi, Companella) on the map's cover. */
+  showAppMark?: boolean;
 }) {
   const locale = useLocale();
   const { t } = useLingui();
@@ -302,6 +311,7 @@ export function ScoreRow({
   const importId = companellaReplayImportId(score);
   const canReplay = importId != null || scoreHasReplay(score);
   const replaySearch = importId != null ? { importId } : { scoreId: score.id, beatmapsetId: score.beatmapset?.id };
+  const video = usePlayVideo(score);
   const display = getScoreDisplayValues(score);
   const hasPp = score.pp != null;
   const noDans = useNoDans();
@@ -319,22 +329,29 @@ export function ScoreRow({
         />
       ) : null}
       <GradeImg grade={display.rank} size={28} />
-      <ScoreThumbnail score={score} />
+      {showAppMark && (score.companella || score.companellaTimed) ? (
+        <span className="relative flex-shrink-0">
+          <ScoreThumbnail score={score} />
+          <span className="absolute -bottom-1 -right-1 flex">
+            <CompanellaMark app={(score.companella ?? score.companellaTimed)!.app} className="h-4 w-4" />
+          </span>
+        </span>
+      ) : <ScoreThumbnail score={score} />}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-white truncate">
             {score.beatmapset?.title || t`Unknown`}
           </span>
           <span className="text-[11px] text-osu-f1 truncate hidden sm:inline">
-            [{score.beatmap?.version}]
+            [{getScoreDisplayVersion(score)}]
           </span>
           {keymodeLabel && (
             <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
               {keymodeLabel}
             </span>
           )}
-          {score.companella ? <CompanellaMark app={score.companella.app} />
-            : score.companellaTimed ? <CompanellaMark app={score.companellaTimed.app} /> : null}
+          {score.companella?.video ? <VideoMark video={score.companella.video} />
+            : !score.companella && video ? <VideoMark video={video} /> : null}
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
         <span className="block truncate text-[11px] text-osu-f1">
@@ -366,8 +383,8 @@ export function ScoreRow({
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
           <div className="flex max-w-full flex-shrink-0 flex-wrap items-center gap-1">
             <div className="flex flex-wrap items-center gap-0.5">
-              {getModDisplayList(score.mods).map((m) => (
-                <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} size={0.82} />
+              {getScoreModDisplayList(score).map((m) => (
+                <ScoreModBadge key={m.acronym} mod={m} size={0.82} />
               ))}
             </div>
             <DanBadge score={score} />
@@ -400,8 +417,8 @@ export function ScoreRow({
             className="flex flex-shrink-0 gap-0.5 justify-end"
             style={{ width: layout.modColumns * MOD_BADGE_WIDTH + (layout.modColumns - 1) * MOD_BADGE_GAP }}
           >
-            {getModDisplayList(score.mods).map((m) => (
-              <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+            {getScoreModDisplayList(score).map((m) => (
+              <ScoreModBadge key={m.acronym} mod={m} />
             ))}
           </div>
         )}
@@ -498,12 +515,13 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
      reads as a real score of nothing. The grid is dropped instead. */
   const judgements = getManiaJudgementStats(score);
   const hasJudgements = judgements.some((judgement) => judgement.value > 0);
-  const mods = getModDisplayList(score.mods);
+  const mods = getScoreModDisplayList(score);
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
   const scoreUrl = getScoreUrl(score);
   const beatmapUrl = getBeatmapUrl(score);
   const importId = companellaReplayImportId(score);
   const canReplay = importId != null || scoreHasReplay(score);
+  const video = usePlayVideo(score);
   const hasPp = score.pp != null;
   const playedAt = getScoreTimestamp(score);
   const viewerTimeZone = useViewerTimeZone();
@@ -592,14 +610,14 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
                 </div>
                 <div className="mt-0.5 truncate text-[11px] text-osu-f1">
                   {score.beatmapset?.artist}
-                  {score.beatmap?.version ? ` · [${score.beatmap.version}]` : ""}
+                  {getScoreDisplayVersion(score) ? ` · [${getScoreDisplayVersion(score)}]` : ""}
                   {score.beatmapset?.creator ? ` · ${t`mapped by ${score.beatmapset.creator}`}` : ""}
                 </div>
               </div>
               {mods.length > 0 && (
                 <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1 pb-0.5">
                   {mods.map((m) => (
-                    <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+                    <ScoreModBadge key={m.acronym} mod={m} />
                   ))}
                 </div>
               )}
@@ -711,6 +729,18 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
                     {t`Watch replay`}
                   </Link>
                 )}
+                {/* A play an admin entered from a video, or an official play with a proof video. */}
+                {video ? (
+                  <a
+                    href={video}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] py-1.5 pl-2.5 pr-3 text-[12px] font-semibold text-white transition hover:brightness-125"
+                  >
+                    <Play size={12} className="shrink-0 fill-current" />
+                    {t`Watch video`}
+                  </a>
+                ) : null}
               </div>
             </div>
             {extra}

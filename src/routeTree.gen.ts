@@ -56,6 +56,7 @@ import { Route as AdminDynamicRendersRouteImport } from './routes/admin/dynamic-
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
 import { Route as AdminMascotRouteImport } from './routes/admin/mascot'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
+import { Route as AdminPlayersRouteImport } from './routes/admin/players'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminScoresRouteImport } from './routes/admin/scores'
 import { Route as AdminSupportersRouteImport } from './routes/admin/supporters'
@@ -128,6 +129,8 @@ import { Route as ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRouteImport } f
 import { Route as ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/beatmap'
 import { Route as ApiIntegrationsCompanellaV1SubmissionsIdCompleteRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/complete'
 import { Route as ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/replay'
+import { Route as ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset'
+import { Route as ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/replay/parts/$offset'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -362,6 +365,11 @@ const AdminMascotRoute = AdminMascotRouteImport.update({
 const AdminOgPreviewRoute = AdminOgPreviewRouteImport.update({
   id: '/admin/og-preview',
   path: '/admin/og-preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPlayersRoute = AdminPlayersRouteImport.update({
+  id: '/admin/players',
+  path: '/admin/players',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminR2Route = AdminR2RouteImport.update({
@@ -740,6 +748,18 @@ const ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute =
     path: '/replay',
     getParentRoute: () => ApiIntegrationsCompanellaV1SubmissionsIdRoute,
   } as any)
+const ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute =
+  ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRouteImport.update({
+    id: '/parts/$offset',
+    path: '/parts/$offset',
+    getParentRoute: () => ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute,
+  } as any)
+const ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRoute =
+  ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRouteImport.update({
+    id: '/parts/$offset',
+    path: '/parts/$offset',
+    getParentRoute: () => ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -789,6 +809,7 @@ export interface FileRoutesByFullPath {
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/mascot': typeof AdminMascotRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
+  '/admin/players': typeof AdminPlayersRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/scores': typeof AdminScoresRoute
   '/admin/supporters': typeof AdminSupportersRoute
@@ -858,9 +879,11 @@ export interface FileRoutesByFullPath {
   '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
   '/api/integrations/companella/v1/submissions/$id': typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
   '/api/integrations/companella/v1/charts/$md5/leaderboard': typeof ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute
-  '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
+  '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteWithChildren
   '/api/integrations/companella/v1/submissions/$id/complete': typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
-  '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
+  '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteWithChildren
+  '/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute
+  '/api/integrations/companella/v1/submissions/$id/replay/parts/$offset': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -910,6 +933,7 @@ export interface FileRoutesByTo {
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/mascot': typeof AdminMascotRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
+  '/admin/players': typeof AdminPlayersRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/scores': typeof AdminScoresRoute
   '/admin/supporters': typeof AdminSupportersRoute
@@ -979,9 +1003,11 @@ export interface FileRoutesByTo {
   '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
   '/api/integrations/companella/v1/submissions/$id': typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
   '/api/integrations/companella/v1/charts/$md5/leaderboard': typeof ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute
-  '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
+  '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteWithChildren
   '/api/integrations/companella/v1/submissions/$id/complete': typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
-  '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
+  '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteWithChildren
+  '/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute
+  '/api/integrations/companella/v1/submissions/$id/replay/parts/$offset': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1032,6 +1058,7 @@ export interface FileRoutesById {
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/mascot': typeof AdminMascotRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
+  '/admin/players': typeof AdminPlayersRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/scores': typeof AdminScoresRoute
   '/admin/supporters': typeof AdminSupportersRoute
@@ -1101,9 +1128,11 @@ export interface FileRoutesById {
   '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
   '/api/integrations/companella/v1/submissions/$id': typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
   '/api/integrations/companella/v1/charts/$md5/leaderboard': typeof ApiIntegrationsCompanellaV1ChartsMd5LeaderboardRoute
-  '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
+  '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteWithChildren
   '/api/integrations/companella/v1/submissions/$id/complete': typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
-  '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
+  '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteWithChildren
+  '/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute
+  '/api/integrations/companella/v1/submissions/$id/replay/parts/$offset': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1155,6 +1184,7 @@ export interface FileRouteTypes {
     | '/admin/live-backend'
     | '/admin/mascot'
     | '/admin/og-preview'
+    | '/admin/players'
     | '/admin/r2'
     | '/admin/scores'
     | '/admin/supporters'
@@ -1227,6 +1257,8 @@ export interface FileRouteTypes {
     | '/api/integrations/companella/v1/submissions/$id/beatmap'
     | '/api/integrations/companella/v1/submissions/$id/complete'
     | '/api/integrations/companella/v1/submissions/$id/replay'
+    | '/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset'
+    | '/api/integrations/companella/v1/submissions/$id/replay/parts/$offset'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1276,6 +1308,7 @@ export interface FileRouteTypes {
     | '/admin/live-backend'
     | '/admin/mascot'
     | '/admin/og-preview'
+    | '/admin/players'
     | '/admin/r2'
     | '/admin/scores'
     | '/admin/supporters'
@@ -1348,6 +1381,8 @@ export interface FileRouteTypes {
     | '/api/integrations/companella/v1/submissions/$id/beatmap'
     | '/api/integrations/companella/v1/submissions/$id/complete'
     | '/api/integrations/companella/v1/submissions/$id/replay'
+    | '/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset'
+    | '/api/integrations/companella/v1/submissions/$id/replay/parts/$offset'
   id:
     | '__root__'
     | '/'
@@ -1397,6 +1432,7 @@ export interface FileRouteTypes {
     | '/admin/live-backend'
     | '/admin/mascot'
     | '/admin/og-preview'
+    | '/admin/players'
     | '/admin/r2'
     | '/admin/scores'
     | '/admin/supporters'
@@ -1469,6 +1505,8 @@ export interface FileRouteTypes {
     | '/api/integrations/companella/v1/submissions/$id/beatmap'
     | '/api/integrations/companella/v1/submissions/$id/complete'
     | '/api/integrations/companella/v1/submissions/$id/replay'
+    | '/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset'
+    | '/api/integrations/companella/v1/submissions/$id/replay/parts/$offset'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1519,6 +1557,7 @@ export interface RootRouteChildren {
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
   AdminMascotRoute: typeof AdminMascotRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
+  AdminPlayersRoute: typeof AdminPlayersRoute
   AdminR2Route: typeof AdminR2Route
   AdminScoresRoute: typeof AdminScoresRoute
   AdminSupportersRoute: typeof AdminSupportersRoute
@@ -1909,6 +1948,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/og-preview'
       fullPath: '/admin/og-preview'
       preLoaderRoute: typeof AdminOgPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/players': {
+      id: '/admin/players'
+      path: '/admin/players'
+      fullPath: '/admin/players'
+      preLoaderRoute: typeof AdminPlayersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/r2': {
@@ -2415,6 +2461,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteImport
       parentRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdRoute
     }
+    '/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset': {
+      id: '/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset'
+      path: '/parts/$offset'
+      fullPath: '/api/integrations/companella/v1/submissions/$id/beatmap/parts/$offset'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRouteImport
+      parentRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
+    }
+    '/api/integrations/companella/v1/submissions/$id/replay/parts/$offset': {
+      id: '/api/integrations/companella/v1/submissions/$id/replay/parts/$offset'
+      path: '/parts/$offset'
+      fullPath: '/api/integrations/companella/v1/submissions/$id/replay/parts/$offset'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRouteImport
+      parentRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
+    }
   }
 }
 
@@ -2486,20 +2546,50 @@ const ApiAuthOsuRouteWithChildren = ApiAuthOsuRoute._addFileChildren(
   ApiAuthOsuRouteChildren,
 )
 
+interface ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteChildren {
+  ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute
+}
+
+const ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteChildren: ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteChildren =
+  {
+    ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute:
+      ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute,
+  }
+
+const ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteWithChildren =
+  ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute._addFileChildren(
+    ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteChildren,
+  )
+
+interface ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteChildren {
+  ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRoute
+}
+
+const ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteChildren: ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteChildren =
+  {
+    ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRoute:
+      ApiIntegrationsCompanellaV1SubmissionsIdReplayPartsOffsetRoute,
+  }
+
+const ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteWithChildren =
+  ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute._addFileChildren(
+    ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteChildren,
+  )
+
 interface ApiIntegrationsCompanellaV1SubmissionsIdRouteChildren {
-  ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
+  ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteWithChildren
   ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
-  ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
+  ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteWithChildren
 }
 
 const ApiIntegrationsCompanellaV1SubmissionsIdRouteChildren: ApiIntegrationsCompanellaV1SubmissionsIdRouteChildren =
   {
     ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute:
-      ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute,
+      ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteWithChildren,
     ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute:
       ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute,
     ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute:
-      ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute,
+      ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteWithChildren,
   }
 
 const ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren =
@@ -2570,6 +2660,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLiveBackendRoute: AdminLiveBackendRoute,
   AdminMascotRoute: AdminMascotRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
+  AdminPlayersRoute: AdminPlayersRoute,
   AdminR2Route: AdminR2Route,
   AdminScoresRoute: AdminScoresRoute,
   AdminSupportersRoute: AdminSupportersRoute,

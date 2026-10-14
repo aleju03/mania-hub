@@ -173,6 +173,12 @@ describe("osu! twins", () => {
     expect(isCompanellaOsuTwin(imported, osuRow({ legacy_total_score: undefined, total_score: 987_654 }))).toBe(true);
   });
 
+  it("matches a lazer import, which carries a legacy total of 0, by its own total", () => {
+    const lazer = { ...imported, legacy_total_score: 0, total_score: 987_654, score: 987_654 };
+    expect(isCompanellaOsuTwin(lazer, osuRow({ legacy_total_score: 0, total_score: 987_654 }))).toBe(true);
+    expect(dropCompanellaOsuTwins([lazer, osuRow({ legacy_total_score: 0, total_score: 987_654 })])).toHaveLength(1);
+  });
+
   it("tells apart plays that only look alike", () => {
     expect(isCompanellaOsuTwin(imported, osuRow({ legacy_total_score: 987_000 }))).toBe(false);
     expect(isCompanellaOsuTwin(imported, osuRow({ beatmap: { id: 101 } as OsuScore["beatmap"] }))).toBe(false);

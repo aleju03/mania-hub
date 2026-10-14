@@ -16,9 +16,17 @@ What it does delete is every tracking-derived row and public appearance: raw `sc
 
 Left alone deliberately: GOAT poll nominations, since that board is meant to hold banned and deleted players, and another account's Discord tracker row pointed at them, which can never fire again once ingest drops their scores.
 
+## Players page
+
+`/admin/players` holds the per-player tools as tabs: Banned users (the default, carrying the unseen count), Remove plays, Add plays, About pages and Supporters, each a panel in `src/components/admin/players/`. The old `/admin/banned-users`, `/admin/scores`, `/admin/about-pages` and `/admin/supporters` links redirect to their tab.
+
+## Adding plays by hand
+
+The Add plays tab (`?tab=add`) enters plays that cannot be imported, such as old offline plays that only survive as a video: beatmap, date and accuracy, with mods, judgements, combo, score and a video link optional. Each one is an import under the player's account and shows and counts wherever imports do; see "Admin manual entries" in `docs/companella-integration.md`.
+
 ## Removing specific plays
 
-`/admin/scores` removes chosen plays of one player, such as cheated scores osu! still serves. The player is looked up with the wipe preview's rules (`POST /api/admin/score-removal/lookup`), which lists their stored top plays, recent tracked plays and earlier removals; score links or ids can also be pasted for plays that are not listed.
+The Remove plays tab (`?tab=remove`) removes chosen plays of one player, such as cheated scores osu! still serves. The player is looked up with the wipe preview's rules (`POST /api/admin/score-removal/lookup`), which lists their stored top plays, recent tracked plays and earlier removals; score links or ids can also be pasted for plays that are not listed.
 
 `POST /api/admin/score-removal/remove` (`backend/src/features/admin-score-removal.ts`) deletes the play from `score_events`, activity, `user_top_scores`, the profile snapshot, snipe boards (the player's board row falls back to their best remaining personal best) and snipe events they set, `top_play_events`, maps farmed rows, `unrated_plays`, and reopens goals it completed, then queues a skill recompute. The play is kept in `admin_removed_scores` with both of its osu! ids, and every path that writes osu! data back filters against it (`backend/src/shared/admin-removed-scores.ts`): ingest, the top-200 window, profile snapshots, snipe seeds and the skill compute, which also drops the play from retained evidence. `POST /api/admin/score-removal/restore` lifts the tombstone only; the play returns as each surface next refreshes from osu!. Pack cards pulled before the removal keep their snapshot.
 
@@ -26,7 +34,7 @@ Hashi plays for the same player are listed on that page too and go through the C
 
 ## Banned users
 
-Nothing deletes a player by itself. When osu! 404s a user id, the worker's missing-user path (`markUserMissing`) only deactivates them, and `/admin/banned-users` lists every inactive, not-purged account so a purge is always a person's call. The admin menu badge counts the ones nobody has marked seen yet (`inactive_user_reviews.reviewed_at`); a later deactivation of an account that was reactivated in between counts as new again, a repeat 404 on an already inactive one does not. A row marked "site user" has signed in on this site at some point (`analytics_viewers` in the analytics DB, matched by osu! id), with its latest sign-in beside it.
+Nothing deletes a player by itself. When osu! 404s a user id, the worker's missing-user path (`markUserMissing`) only deactivates them, and the Banned users tab of `/admin/players` lists every inactive, not-purged account so a purge is always a person's call. The admin menu badge counts the ones nobody has marked seen yet (`inactive_user_reviews.reviewed_at`); a later deactivation of an account that was reactivated in between counts as new again, a repeat 404 on an already inactive one does not. A row marked "site user" has signed in on this site at some point (`analytics_viewers` in the analytics DB, matched by osu! id), with its latest sign-in beside it.
 
 Each row is `restricted` or `missing`. osu! answers a restricted account and a deleted one with the same 404, so the only way to tell them apart is the player signing in: the login callback forwards osu!'s `/me` to `POST /api/session/login` (bridge), and `is_restricted: true` there deactivates them if needed and stamps `restricted_at`. A clean sign-in brings back an account the 404 path deactivated; a manual admin deactivation (`reason` starting `admin:`) and a purge are left alone.
 
@@ -38,7 +46,7 @@ A restricted or missing player can also give their profile a display name from t
 
 The same owner can replace their frozen About page, and any signed-in player (not a wiped one) can link their private server profiles. Save to profile in the BBCode editor posts the source to `POST /api/session/about` (`features/own-about.ts`, 60,000 characters, empty brings back osu!'s last copy); the About endpoint then serves `{ html: null, raw, own: true }`, and keeps serving it after an unrestriction until the player's osu! page has something on it. The page draws it with the editor's own parser, which only emits http(s) links and images and prints tags nested past 64 levels as text. The + after the osu! profile or status pill posts to `POST /api/session/server-link` (`features/server-links.ts`): one link per server from a fixed list, host checked against that server's domains, stored as `https://host/path`, empty removes it. Profile snapshots carry them as `user.server_links`; names and logos live in `src/lib/private-servers.ts` and `public/images/private-servers/` (from osu-server-list.com). Both are bridge-gated with the viewer from the cookie, and the purge deletes both.
 
-Saved About pages show with no review first, so `/admin/about-pages` (`src/lib/own-about-admin.ts`, backend `GET /api/admin/own-about-pages` and `POST .../clear`) lists each one, newest first, with every image it shows and the page itself under View page. Clear page deletes it and the profile goes back to osu!'s last copy; the player can save a new one. Delete file removes an image we host (`bbcode/` in the public bucket) and purges its URL from Cloudflare, even when other pages embed it, and only for files a saved page embeds. The BBCode image audit below counts an image any saved page embeds as in use, and calls nothing unused when the saved pages cannot be read.
+Saved About pages show with no review first, so the About pages tab of `/admin/players` (`src/lib/own-about-admin.ts`, backend `GET /api/admin/own-about-pages` and `POST .../clear`) lists each one, newest first, with every image it shows and the page itself under View page. Clear page deletes it and the profile goes back to osu!'s last copy; the player can save a new one. Delete file removes an image we host (`bbcode/` in the public bucket) and purges its URL from Cloudflare, even when other pages embed it, and only for files a saved page embeds. The BBCode image audit below counts an image any saved page embeds as in use, and calls nothing unused when the saved pages cannot be read.
 
 ## Companella moderation
 

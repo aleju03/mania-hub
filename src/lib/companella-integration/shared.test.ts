@@ -12,12 +12,12 @@ describe("shared contract", () => {
   it("keeps the public prefix and the route table in step with the API document", () => {
     expect(COMPANELLA_API_PREFIX).toBe("/api/integrations/companella/v1");
     // Every route the proxy can reach is a fixed template; no route is built
-    // from anything a caller supplies but the id.
+    // from anything a caller supplies but the id (and a part's offset).
     for (const template of Object.values(COMPANELLA_NATIVE_ROUTES)) {
       expect(template.includes("://")).toBe(false);
       expect(template.startsWith("/")).toBe(false);
       const placeholders = template.match(/:[a-z0-9]+/g) ?? [];
-      expect(placeholders.every((name) => name === ":id" || name === ":md5")).toBe(true);
+      expect(placeholders.every((name) => name === ":id" || name === ":md5" || name === ":offset")).toBe(true);
     }
   });
 

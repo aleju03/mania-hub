@@ -195,10 +195,15 @@ export interface CompanellaScoreMark {
   replay: boolean;
   /** The client id of the app that sent it ("companella", "mania-bridge"); absent reads as Companella. */
   app?: string;
-  /** A local copy (a rate edit) the backend matched to an official chart: that chart, and the rate this file is against it. */
-  reference?: { beatmapId: number; rate: number };
+  /** A local copy (a rate edit) the backend matched to an official chart: that chart, and the rate this file is against it, with that
+   *  chart's difficulty name. */
+  reference?: { beatmapId: number; rate: number; version?: string };
   /** A chart osu! does not have, neither an official file nor a copy of one: its synthetic negative beatmap id, for the map card. */
   localBeatmapId?: number;
+  /** A play an admin entered by hand: the video it was entered from, when one was given. */
+  video?: string;
+  /** The client it was played on. The legacy total cannot say: a stable entry with no score has 0 there too. */
+  client?: "stable" | "lazer";
 }
 
 export interface OsuScore {
@@ -291,14 +296,14 @@ export interface LeanHomeScore {
   displayAcc: number;
   displayRank: string;
   isLazer?: boolean;
-  mods: Array<{ acronym: string; rate?: number }>;
+  mods: Array<{ acronym: string; rate?: number; basedOn?: string }>;
   timestamp: string;
   title: string;
   version: string;
   keyCount: number;
   keymodeLabel?: string;
   beatmapsetId?: number;
-  companella?: Pick<CompanellaScoreMark, "app">;
+  companella?: Pick<CompanellaScoreMark, "app" | "video">;
   user: {
     id: number;
     username: string;

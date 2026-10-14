@@ -1,5 +1,5 @@
 import { ArrowUpRight, Search, X } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   analyticsEventHref,
   describeAnalyticsEvent,
@@ -14,78 +14,68 @@ import { getCountryName } from "../../../lib/country";
 import { formatNumber } from "../../../lib/format";
 import { ACTIVITY_KIND_STYLES, VisitorChip, visitorColor } from "./shared";
 
-/* Everyone who is on the site right now, one card each: what they are doing at
-   this second, how long they have been around, and the last few steps that got
-   them there. The point is peripheral awareness - no clicking required.
+/* Everyone who is on the site right now, one row each: who they are, what
+   they are doing at this second, and the step before it.
 
-   The board sits above a long feed, so its geometry is deliberately frozen:
-   every card reserves room for the most it can say, so it is the same height
-   whether the visitor has one step or four. Cards resizing under every event
-   used to drag a phone reading the feed up the page a few times a minute.
+   The board is a fixed-height panel that scrolls inside itself, and every row
+   is the same height, so nothing that happens on it can move the page. Inside
+   it a visitor keeps their row for as long as they are on the board - see
+   useBoardRows. */
 
-   Positions are frozen the same way - see useStableCells. */
-
-const MAX_CARDS = 12;
-const TRAIL_LENGTH = 3;
 // Searching an activity trail is the expensive half of a match, so only the
-// steps a card could plausibly be recognised by get formatted.
+// steps a row could plausibly be recognised by get formatted.
 const SEARCHED_STEPS = 40;
 
 export function AnalyticsLiveBoard({
   sessions,
   replayMaps,
   now,
+  className = "",
 }: {
   sessions: AnalyticsSession[];
   replayMaps: AnalyticsReplayMapIndex;
   now: number;
+  className?: string;
 }) {
-  const rootRef = useRef<HTMLElement>(null);
   const [search, setSearch] = useState("");
-  useSteadyScrollBelow(rootRef);
 
   const query = search.trim().toLowerCase();
   const online = sessions.filter((session) => session.online);
-  const cells = useStableCells(online);
+  const boardRows = useBoardRows(sessions);
 
   /* Matched against every session in range, not just the online ones: a name
      typed in and found nowhere reads as broken, so a visitor who has just gone
-     quiet still gets accounted for below the board. Keyed off `sessions`
-     rather than `online` so the per-second clock doesn't re-run the trail
-     search. */
+     quiet still gets accounted for. Keyed off `sessions` rather than `online`
+     so the per-second clock doesn't re-run the trail search. */
   const matches = useMemo(() => (query ? rankSessions(sessions, query, replayMaps) : null), [sessions, query, replayMaps]);
   const onlineMatches = matches?.filter((session) => session.online) ?? null;
   const offlineMatches = matches ? matches.length - (onlineMatches?.length ?? 0) : 0;
 
-  const pool = onlineMatches ?? cells;
-  const shown = onlineMatches ? onlineMatches.slice(0, MAX_CARDS) : cells;
-  const overflow = (onlineMatches ? onlineMatches.length : online.length) - shown.length;
+  const shown: Array<AnalyticsSession | null> = onlineMatches ?? boardRows;
 
   const lastSeen = sessions[0];
   const lastSeenAgo = lastSeen && Number.isFinite(lastSeen.lastTs) ? formatAnalyticsAgo(now - lastSeen.lastTs) : null;
-  const subtitle = query
-    ? `${formatNumber(pool.length)} of ${formatNumber(online.length)} online visitor${online.length === 1 ? "" : "s"} match`
-    : online.length > 0
-      ? `${formatNumber(online.length)} visitor${online.length === 1 ? "" : "s"} active in the last 5 minutes`
-      : "nobody active in the last 5 minutes";
+  const countText = query
+    ? `${formatNumber(onlineMatches?.length ?? 0)} of ${formatNumber(online.length)} match`
+    : `${formatNumber(online.length)} online`;
 
   return (
-    <section ref={rootRef} className="space-y-2">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <section className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b4/30 ${className}`}>
+      <div className="flex h-11 flex-shrink-0 items-center gap-2 border-b border-white/[0.07] px-3">
         <h3 className="text-[11px] font-semibold uppercase tracking-wider text-osu-c2">Right now</h3>
-        <span className="text-[10px] text-osu-f1">{subtitle}</span>
-        {sessions.length > 0 ? <VisitorSearch value={search} onChange={setSearch} /> : null}
+        <span className="truncate text-[11px] text-osu-f1" title="visitors active in the last 5 minutes">{countText}</span>
+        <VisitorSearch value={search} onChange={setSearch} />
       </div>
 
       {shown.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-osu-b3/40 bg-osu-b4/20 px-4 py-8 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
           {query ? (
             <>
               <div className="text-[12px] text-osu-l2">Nobody online matches "{search.trim()}".</div>
               {offlineMatches > 0 ? (
                 <div className="mt-1 text-[11px] text-osu-f1">
                   {formatNumber(offlineMatches)} visitor{offlineMatches === 1 ? "" : "s"} matched earlier in this range - they are in
-                  the activity feed below.
+                  the activity feed.
                 </div>
               ) : null}
             </>
@@ -97,19 +87,14 @@ export function AnalyticsLiveBoard({
           )}
         </div>
       ) : (
-        <div>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((session) => (
-              <LiveVisitorCard key={session.distinctId} session={session} replayMaps={replayMaps} now={now} />
-            ))}
-          </div>
-          {overflow > 0 ? (
-            <div className="mt-2 text-center text-[10px] text-osu-f1">
-              {query
-                ? `+ ${formatNumber(overflow)} more match${overflow === 1 ? "" : "es"} hidden`
-                : `+ ${formatNumber(overflow)} more visitor${overflow === 1 ? "" : "s"} online`}
-            </div>
-          ) : null}
+        <div className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]">
+          {shown.map((session, index) =>
+            session ? (
+              <LiveVisitorRow key={session.distinctId} session={session} replayMaps={replayMaps} now={now} />
+            ) : (
+              <div key={`empty-${index}`} className="h-[66px] border-b border-white/[0.07]" aria-hidden="true" />
+            ),
+          )}
         </div>
       )}
     </section>
@@ -178,74 +163,52 @@ function activityText(session: AnalyticsSession, replayMaps: AnalyticsReplayMapI
     .toLowerCase();
 }
 
-/* The board is a wall of cells, not a leaderboard. Sessions arrive ordered by
-   most recent event, so rendering them in that order re-sorted the whole board
-   every time anybody clicked anything - and a browser that scroll-anchors will
-   follow the card it anchored to as it moves, which throws the page around
-   under whoever is reading. So a visitor keeps the cell they were given for as
-   long as they are on the board, a leaver's cell goes to the next arrival, and
-   nothing under the reader moves: cells only ever swap their contents. */
-function useStableCells(online: AnalyticsSession[]): AnalyticsSession[] {
-  const cellsRef = useRef(new Map<string, number>());
-  const cells = cellsRef.current;
+/* A visitor keeps the row they were given for as long as they are on the
+   board. Sessions arrive ordered by most recent event, and rendering them in
+   that order re-sorted the whole board every time anybody clicked anything.
+   Someone who goes quiet stays in their row, dimmed, until the next arrival
+   takes it, so a leaver never pulls the rows under them up either. Only rows
+   at the very end, with nothing below them to move, are dropped. */
+function useBoardRows(sessions: AnalyticsSession[]): Array<AnalyticsSession | null> {
+  const rowsRef = useRef(new Map<string, number>());
+  const rows = rowsRef.current;
+  const byId = new Map(sessions.map((session) => [session.distinctId, session]));
 
-  const present = new Set(online.map((session) => session.distinctId));
-  for (const id of Array.from(cells.keys())) {
-    if (!present.has(id)) cells.delete(id);
+  // Gone from the loaded range entirely (a range or country change).
+  for (const id of Array.from(rows.keys())) {
+    if (!byId.has(id)) rows.delete(id);
   }
 
-  // Visitors already on the board keep their place; free cells go to the most
-  // recently active newcomers, so a busy board does not churn its occupants.
-  const held = online.filter((session) => cells.has(session.distinctId));
-  const arriving = online.filter((session) => !cells.has(session.distinctId));
-  const shown = held.concat(arriving).slice(0, MAX_CARDS);
+  const occupant = new Map<number, string>();
+  rows.forEach((row, id) => occupant.set(row, id));
+  const isOnline = (id: string | undefined) => (id ? byId.get(id)?.online === true : false);
 
-  const taken = new Set(cells.values());
-  for (const session of shown) {
-    if (cells.has(session.distinctId)) continue;
-    let cell = 0;
-    while (taken.has(cell)) cell += 1;
-    taken.add(cell);
-    cells.set(session.distinctId, cell);
+  // Newcomers in recency order, so on a fresh board the latest is on top.
+  for (const session of sessions) {
+    if (!session.online || rows.has(session.distinctId)) continue;
+    let row = 0;
+    while (isOnline(occupant.get(row))) row += 1;
+    const evicted = occupant.get(row);
+    if (evicted != null) rows.delete(evicted);
+    occupant.set(row, session.distinctId);
+    rows.set(session.distinctId, row);
   }
 
-  return shown.sort((a, b) => (cells.get(a.distinctId) ?? 0) - (cells.get(b.distinctId) ?? 0));
-}
+  let length = 0;
+  occupant.forEach((id, row) => {
+    if (isOnline(id)) length = Math.max(length, row + 1);
+  });
+  occupant.forEach((id, row) => {
+    if (row >= length) rows.delete(id);
+  });
 
-/* Cards are a fixed size now, but a visitor arriving or leaving still resizes
-   the board, and the board is metres of page above the feed on a phone.
-   Chromium and Firefox absorb that with scroll anchoring; Safari has none. So
-   when the whole board sits above the fold - everything that moved is behind
-   the reader - hand the scroll position the difference back and they never
-   feel it. Only where the browser is not already doing it: correcting on top
-   of scroll anchoring moved the page by the full difference instead of
-   holding it still. */
-function useSteadyScrollBelow(ref: React.RefObject<HTMLElement | null>) {
-  const bottomRef = useRef<number | null>(null);
-  useLayoutEffect(() => {
-    if (browserAnchorsScroll()) return;
-    const root = ref.current;
-    if (!root) return;
-    const rect = root.getBoundingClientRect();
-    // Document-relative, so the reader scrolling between renders is not
-    // mistaken for the board resizing.
-    const bottom = rect.bottom + window.scrollY;
-    const previous = bottomRef.current;
-    bottomRef.current = bottom;
-    if (previous == null || bottom === previous) return;
-    if (rect.bottom > 0) return;
-    window.scrollBy(0, bottom - previous);
+  return Array.from({ length }, (_, row) => {
+    const id = occupant.get(row);
+    return id ? byId.get(id) ?? null : null;
   });
 }
 
-/* WebKit ships neither the property nor the behaviour, so supporting
-   `overflow-anchor` is the same question as "does this browser hold the scroll
-   position for me". */
-function browserAnchorsScroll(): boolean {
-  return typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("overflow-anchor", "auto");
-}
-
-function LiveVisitorCard({
+function LiveVisitorRow({
   session,
   replayMaps,
   now,
@@ -255,90 +218,69 @@ function LiveVisitorCard({
   now: number;
 }) {
   const color = visitorColor(session.slot);
-  const [current, ...rest] = session.events;
+  const [current, previous] = session.events;
   if (!current) return null;
   const activity = describeAnalyticsEvent(current, replayMaps);
   const style = ACTIVITY_KIND_STYLES[activity.kind];
   const Icon = style.icon;
   const href = analyticsEventHref(current);
-  const trail = rest.slice(0, TRAIL_LENGTH);
-  const hiddenSteps = Math.max(0, session.events.length - 1 - trail.length);
+  const step = previous ? describeAnalyticsEvent(previous, replayMaps) : null;
+  const earlier = Math.max(0, session.events.length - 2);
+  const left = !session.online;
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b5/50">
-      <span className={`absolute inset-y-0 left-0 w-[3px] ${color.dot}`} aria-hidden="true" />
-      <div className="pl-3">
-        <div
-          className="flex items-center gap-1.5 overflow-hidden border-b border-osu-b3/20 px-2.5 py-1.5"
-          title={`visitor id: ${session.distinctId}`}
-        >
-          <VisitorChip
-            label={session.label}
-            slot={session.slot}
-            country={session.country}
-            deviceKind={session.deviceKind}
-            signedIn={session.signedIn}
-          />
-          <span className="ml-auto flex-shrink-0 font-mono text-[10px] text-osu-f1" title="time between their first and last event in range">
-            {formatAnalyticsDuration(session.durationMs)}
+    <div
+      className={`relative flex h-[66px] flex-col justify-center gap-0.5 border-b border-white/[0.07] pl-3.5 pr-3 transition-opacity duration-300 ${
+        left ? "opacity-40" : ""
+      }`}
+      title={`visitor id: ${session.distinctId}`}
+    >
+      <span className={`absolute inset-y-2 left-0 w-[3px] rounded-r ${color.dot}`} aria-hidden="true" />
+      <div className="flex items-center gap-1.5 overflow-hidden">
+        <VisitorChip
+          label={session.label}
+          slot={session.slot}
+          country={session.country}
+          deviceKind={session.deviceKind}
+          signedIn={session.signedIn}
+        />
+        <span className="ml-auto flex-shrink-0 font-mono text-[11px] text-osu-f1" title="time between their first and last event in range">
+          {left ? `left ${formatAnalyticsAgo(now - session.lastTs)} ago` : formatAnalyticsDuration(session.durationMs)}
+        </span>
+      </div>
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Icon className={`h-3 w-3 flex-shrink-0 ${style.text}`} aria-hidden="true" />
+        <span className={`flex-shrink-0 text-[11px] font-semibold ${style.text}`}>{activity.verb}</span>
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="group flex min-w-0 items-center gap-1 text-[12px] font-medium text-white hover:text-osu-pink-light"
+            title={formatAnalyticsActivityText(activity)}
+          >
+            <span className="truncate group-hover:underline">{activity.subject}</span>
+            <ArrowUpRight className="h-3 w-3 flex-shrink-0 opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100" />
+          </a>
+        ) : (
+          <span className="truncate text-[12px] font-medium text-white" title={formatAnalyticsActivityText(activity)}>
+            {activity.subject}
           </span>
-        </div>
-
-        <div className="px-2.5 py-2">
-          <div className="flex items-center gap-1.5">
-            <span className={`inline-flex h-4 w-4 items-center justify-center rounded ${style.bg}`}>
-              <Icon className={`h-2.5 w-2.5 ${style.text}`} aria-hidden="true" />
-            </span>
-            <span className={`text-[10px] font-semibold uppercase tracking-wider ${style.text}`}>{activity.verb}</span>
-            <span className="ml-auto flex-shrink-0 font-mono text-[10px] text-osu-f1">
-              {formatAnalyticsAgo(now - current.ts)}
-            </span>
-          </div>
-          {/* Two lines of room whether or not the subject needs them. */}
-          {href ? (
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              className="group mt-1 flex min-h-[33px] items-start gap-1 text-[12px] font-medium leading-snug text-white hover:text-osu-pink-light"
-              title={`open what they are looking at`}
-            >
-              <span className="line-clamp-2 group-hover:underline">{activity.subject}</span>
-              <ArrowUpRight className="mt-0.5 h-3 w-3 flex-shrink-0 opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100" />
-            </a>
-          ) : (
-            <div className="mt-1 line-clamp-2 min-h-[33px] text-[12px] font-medium leading-snug text-white">{activity.subject}</div>
-          )}
-          <div className="mt-0.5 h-[15px] truncate text-[10px] text-osu-f1">{activity.detail ?? ""}</div>
-        </div>
-
-        <div className="border-t border-osu-b3/20 px-2.5 py-1.5">
-          {Array.from({ length: TRAIL_LENGTH }).map((_, index) => {
-            const row = trail[index];
-            if (!row) {
-              return (
-                <div key={`slot-${index}`} className="flex h-[17px] items-center text-[10px] text-osu-f1/50">
-                  {index === 0 && trail.length === 0 ? "no earlier steps" : null}
-                </div>
-              );
-            }
-            const step = describeAnalyticsEvent(row, replayMaps);
-            const stepStyle = ACTIVITY_KIND_STYLES[step.kind];
-            return (
-              <div key={row.eventId ?? `${row.ts}-${index}`} className="flex h-[17px] items-center gap-1.5 text-[10px]">
-                <span className={`h-1 w-1 flex-shrink-0 rounded-full ${stepStyle.bar}`} aria-hidden="true" />
-                <span className="truncate text-osu-l2/70" title={formatAnalyticsActivityText(step)}>
-                  {step.verb} <span className="text-osu-c2">{step.subject}</span>
-                </span>
-                <span className="ml-auto flex-shrink-0 font-mono text-osu-f1/70">{formatAnalyticsAgo(now - row.ts)}</span>
-              </div>
-            );
-          })}
-          <div className="mt-0.5 flex h-[14px] items-center gap-2 text-[9px] text-osu-f1/70">
-            {hiddenSteps > 0 ? <span>+ {hiddenSteps} earlier</span> : null}
-            {session.referrer ? <span className="truncate">via {formatReferrerLabel(session.referrer)}</span> : null}
-          </div>
-        </div>
+        )}
+        <span className="ml-auto flex-shrink-0 pl-1 font-mono text-[11px] text-osu-f1">{formatAnalyticsAgo(now - current.ts)}</span>
+      </div>
+      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-osu-f1">
+        {step ? (
+          <span className="truncate" title={formatAnalyticsActivityText(step)}>
+            before: {step.verb} <span className="text-osu-c2">{step.subject}</span>
+          </span>
+        ) : (
+          <span className="truncate">first step</span>
+        )}
+        {earlier > 0 ? <span className="flex-shrink-0">+{formatNumber(earlier)}</span> : null}
+        {session.referrer ? (
+          <span className="ml-auto max-w-[40%] flex-shrink-0 truncate">via {formatReferrerLabel(session.referrer)}</span>
+        ) : null}
       </div>
     </div>
   );

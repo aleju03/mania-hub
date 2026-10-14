@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, isLocalChartId, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
@@ -7,6 +7,7 @@ import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
+import { invertManiaOsuText } from "#dan/invert-mod";
 import { MapScoresBoard, mapScoreEntryScore } from "./MapScoresBoard";
 import { ScorePlayDetailModal } from "../player/ScorePlayDetailModal";
 import { getBeatmapFile } from "../../lib/osu";
@@ -135,6 +136,8 @@ export interface MapDetailPlayContext {
   source: "top" | "tracked";
   /** Replaces the source line under the play's time, for plays from neither list. */
   sourceLabel?: string;
+  /** The app an imported play was sent through, named after the source line, and its page when it has one. */
+  sentThrough?: { name: string; to?: "/hashi" | "/news/companella" } | null;
   /** Absent for a play no skill list rated, which leaves the score without a side panel. */
   rating?: number;
   ratingExcluded?: boolean;
@@ -249,13 +252,13 @@ function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyC
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-2.5" aria-label={t`Skill breakdown`}>
           {skills.map(({ name, value }) => (
-            <div key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2" title={halvesTitle(i18n, name, keyCount, play.skillRatings)}>
+            <HoverTip key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2" tip={halvesTip(i18n, name, keyCount, play.skillRatings)}>
               <span className="text-[10px] text-osu-l2">{skillsetLabel(i18n, name, keyCount)}</span>
               <span className="h-1.5 overflow-hidden rounded-full bg-white/5">
                 <span className="block h-full rounded-full bg-osu-pink/70" style={{ width: `${value / max * 100}%` }} />
               </span>
               <span className="text-right text-[11px] font-semibold tabular-nums text-osu-l1">{value.toFixed(2)}</span>
-            </div>
+            </HoverTip>
           ))}
           {skills.length === 0 && <p className="text-[11px] text-osu-f1/70"><Trans>Skill breakdown unavailable</Trans></p>}
         </div>
@@ -331,7 +334,8 @@ function PendingMsdBlock({ label }: { label?: string }) {
 // by value, Overall stays the headline.
 const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
 
-// The standard keys are MinaCalc's; LN is Mania Tracker's independent model.
+// The standard keys are MinaCalc's; LN is Mania Tracker's independent model
+// (on Prism key counts LN is Prism's own, so it gets no separate tip).
 const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   Stream: msg`Stream`,
   Jumpstream: msg`Jumpstream`,
@@ -341,12 +345,12 @@ const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   Chordjack: msg`Chordjack`,
   Technical: msg`Technical`,
   LN: msg`LN`,
-  Speed: msg`Speed`,
 };
 
 // Prism, the 6K-8K calculator, files its skillsets in MinaCalc's slots, as
 // Etterna's seven-key handler does; these are the names they stand for.
 const PRISM_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
+  Speed: msg`Delay`,
   Jumpstream: msg`Chordstream`,
   Handstream: msg`Bracket`,
   Chordjack: msg`Jack`,
@@ -356,20 +360,85 @@ const PRISM_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
 // JackSpeed hold only the single-note halves, shown with the chord halves
 // when hovering the merged skillset.
 function msdSkillsetsFor(keyCount: number | null | undefined): string[] {
-  return usesPrism(keyCount) ? [...MSD_SKILLSETS.filter((name) => name !== "JackSpeed" && name !== "Stream"), "Speed"] : MSD_SKILLSETS;
+  return usesPrism(keyCount) ? [...MSD_SKILLSETS.filter((name) => name !== "JackSpeed" && name !== "Stream" && name !== "Stamina"), "Speed"] : MSD_SKILLSETS;
 }
 
-function halvesTitle(
+// Prism keeps PRISM_SKILLSET_FLOOR (0.6) of a chart's demand in a skillset
+// whose pattern the chart lacks, so on a one-pattern chart every other
+// skillset sits at one shared value, about half the top. Those read as data;
+// grey them. A floor exists when the lowest skillset is under 62% of the top,
+// and a skillset within 3% of that lowest value sits on it.
+function prismFlooredSkillsets(keyCount: number | null | undefined, skillsets: Array<{ name: string; value: number }>): Set<string> {
+  const floored = new Set<string>();
+  if (!usesPrism(keyCount)) return floored;
+  const rice = skillsets.filter(({ name }) => name !== "LN");
+  if (rice.length < 2) return floored;
+  const top = rice[0].value, low = rice[rice.length - 1].value;
+  if (!(low <= top * 0.62)) return floored;
+  for (const { name, value } of rice) if (value <= low * 1.03) floored.add(name);
+  return floored;
+}
+
+/** The site's hover tip, in place of the browser's title tooltip. Portaled and
+ * kept inside the viewport so the modal's scroll box cannot clip it. */
+function HoverTip({ tip, className, children }: { tip: ReactNode; className: string; children: ReactNode }) {
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [left, setLeft] = useState<number | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!anchor || !tipRef.current) return setLeft(null);
+    const width = tipRef.current.offsetWidth;
+    setLeft(Math.min(Math.max(anchor.x - width / 2, 8), window.innerWidth - width - 8));
+  }, [anchor]);
+  useEffect(() => {
+    if (!anchor) return;
+    const close = () => setAnchor(null);
+    window.addEventListener("scroll", close, true);
+    return () => window.removeEventListener("scroll", close, true);
+  }, [anchor]);
+  if (!tip) return <div className={className}>{children}</div>;
+  return (
+    <div
+      className={className}
+      onMouseEnter={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setAnchor({ x: rect.left + rect.width / 2, y: rect.top }); }}
+      onMouseLeave={() => setAnchor(null)}
+    >
+      {children}
+      {anchor && createPortal(
+        <div
+          ref={tipRef}
+          role="tooltip"
+          className="pointer-events-none fixed z-[200] max-w-72 -translate-y-full rounded-lg bg-osu-b3 px-3 py-2 text-xs leading-relaxed text-osu-l2 shadow-xl shadow-black/40"
+          style={{ left: left ?? 0, top: anchor.y - 8, visibility: left == null ? "hidden" : undefined }}
+        >
+          {tip}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+function halvesTip(
   i18n: ReturnType<typeof useLingui>["i18n"], name: string, keyCount: number | null | undefined, values: Record<string, number> | null | undefined,
-): string | undefined {
+): ReactNode {
   if (!usesPrism(keyCount) || (name !== "Chordjack" && name !== "Jumpstream")) return undefined;
   const jack = name === "Chordjack";
   const single = Number(values?.[jack ? "JackSpeed" : "Stream"] ?? 0), chord = Number(values?.[jack ? "ChordjackOnly" : "JumpstreamOnly"] ?? 0);
   if (!(single >= 1) || !(chord >= 1)) return undefined;
-  const singleText = single.toFixed(2), chordText = chord.toFixed(2);
-  return jack
-    ? i18n._(msg`Single-note jacks ${singleText}, chordjacks ${chordText}`)
-    : i18n._(msg`Single-note streams ${singleText}, chordstreams ${chordText}`);
+  const rows = jack
+    ? [[i18n._(msg`Single-note jacks`), single], [i18n._(msg`Chordjacks`), chord]] as const
+    : [[i18n._(msg`Streams`), single], [i18n._(msg`Chordstreams`), chord]] as const;
+  return (
+    <div className="grid grid-cols-[auto_auto] items-baseline gap-x-5 gap-y-1">
+      {rows.map(([label, value]) => (
+        <Fragment key={label}>
+          <span className="text-[11px] text-osu-f1">{label}</span>
+          <span className="text-right text-[13px] font-semibold tabular-nums text-osu-l1">{value.toFixed(2)}</span>
+        </Fragment>
+      ))}
+    </div>
+  );
 }
 
 function skillsetLabel(i18n: ReturnType<typeof useLingui>["i18n"], name: string, keyCount: number | null | undefined): string {
@@ -422,11 +491,12 @@ function groupDetectedSections(sections: VibroAnalysis["sections"], rate: number
 // ClustersBlock below is where charts speak their own keymode's language.
 type DanBadgeVerdict = { label: string; family: string };
 
-// isJumptrillExclusion in #dan/vibro-sections, kept here so the modal does not
+// isUnrateableExclusion in #dan/vibro-sections, kept here so the modal does not
 // pull the detector into the client bundle.
-function isJumptrillExclusion(analysis: VibroAnalysis): boolean {
+function isUnrateableExclusion(analysis: VibroAnalysis): boolean {
   const reasons = Object.keys(analysis.reasonShares ?? {});
-  return analysis.status === "excluded" && reasons.length > 0 && reasons.every((reason) => reason === "jumptrill");
+  return analysis.status === "excluded" && reasons.length > 0
+    && reasons.every((reason) => reason === "jumptrill" || reason === "stacked_heads");
 }
 
 // A rice-and-LN hybrid is one chart with two faces, so it is one badge: the
@@ -500,6 +570,7 @@ export function MsdBlock({
   secondaryDan = null,
   rateSecondaryDan = null,
   vibroAnalysis,
+  inverse = false,
 }: {
   entry: LiveMapSearchEntry;
   msdLn?: Record<string, number> | null;
@@ -517,6 +588,8 @@ export function MsdBlock({
   secondaryDan?: { label: string; family: string; rawDan: number } | null;
   rateSecondaryDan?: { label: string; family: string; rawDan: number } | null;
   vibroAnalysis?: VibroAnalysis;
+  // The play was set under Invert: the rate values are the inverted chart's.
+  inverse?: boolean;
 }) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
@@ -524,7 +597,7 @@ export function MsdBlock({
   // MSD and dan replace the 1.0x pair wholesale: a rate-adjusted MSD next to a
   // 1.0x dan badge would describe two different charts. When the rate values
   // never landed the whole block falls back to 1.0x and says so.
-  const rateAdjusted = rate !== 1 && rateMsd != null;
+  const rateAdjusted = (rate !== 1 || inverse) && rateMsd != null;
   // The LN-adjusted (tail-aware) values simply ARE the msd shown when the
   // chart has an eligible tail pass, using the release-weighting policy shared
   // with player ratings. Bulk search rows carry them, so the number shows from first
@@ -555,11 +628,14 @@ export function MsdBlock({
   // once the holds are cut off.
   const overall = msdHeadline(msd, entry.keyCount, hasLnIdentity);
   const topName = skillsets[0]?.name;
+  const floored = prismFlooredSkillsets(entry.keyCount, skillsets);
 
   const dan = noDans ? null : rateAdjusted ? rateDan : analysisDan !== undefined ? analysisDan : entry.dan ?? null;
   // "MSD" alone at 1.0x; a rate-modded play names the speed the numbers are
   // for, including when only the 1.0x pair could be shown.
-  const heading = rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
+  const heading = inverse && rateAdjusted
+    ? rate === 1 ? t`MSD with Inverse` : t`MSD at ${formatRate(rate)} with Inverse`
+    : rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
   const sectionRate = rateAdjusted ? rate : 1;
   const displaySections = groupDetectedSections(vibroAnalysis?.sections ?? [], sectionRate);
   const other = rateAdjusted ? (secondaryDan ? rateSecondaryDan : null) : secondaryDan;
@@ -572,7 +648,7 @@ export function MsdBlock({
         {(vibroAnalysis ? vibroAnalysis.status !== "clean" : entry.vibro) && (
           <span className="text-[9.5px] font-semibold text-[#ffcf70]">
             {vibroAnalysis?.status === "adjusted" ? t`localized vibro detected`
-              : (vibroAnalysis ? isJumptrillExclusion(vibroAnalysis) : entry.unrateable) ? t`unrateable chart` : t`vibro chart, estimates unreliable`}
+              : (vibroAnalysis ? isUnrateableExclusion(vibroAnalysis) : entry.unrateable) ? t`unrateable chart` : t`vibro chart, estimates unreliable`}
           </span>
         )}
       </div>
@@ -602,10 +678,10 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <div key={name} className="flex flex-col" title={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTitle(i18n, name, entry.keyCount, msd)}>
+            <HoverTip key={name} className="flex flex-col" tip={name.startsWith("LN") && !usesPrism(entry.keyCount) ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTip(i18n, name, entry.keyCount, msd)}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
-                  name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"
+                  name === topName ? "text-osu-pink-light" : value < 1 || floored.has(name) ? "text-osu-f1/45" : "text-osu-l2"
                 }`}
               >
                 {value.toFixed(2)}
@@ -613,7 +689,7 @@ export function MsdBlock({
               <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/55">
                 {skillsetLabel(i18n, name, entry.keyCount)}
               </span>
-            </div>
+            </HoverTip>
           ))}
         </div>
       </div>
@@ -833,6 +909,9 @@ export function MapDetailModal({
   // The rate the opening play was set at, and only while that play's own diff
   // is the active one: the set's other diffs were not the ones played.
   const playedRate = play && active && play.beatmapId === active.beatmapId ? (play.rateMod?.rate ?? 1) * (play.chartRate ?? 1) : 1;
+  // Invert rewrites the chart itself, so a play set under it is described by
+  // the inverted chart: its MSD, dan, stars, LN count and preview.
+  const playedInverse = !!(play && active && play.beatmapId === active.beatmapId && play.mods?.includes("IN"));
   // Without a play, the chart can be read at DT or HT: the preview plays at
   // that speed and the MSD and dan are rated there.
   const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(initialRate);
@@ -862,7 +941,7 @@ export function MapDetailModal({
   const ratePercent = Math.round(playRate * 100);
   // 1.5x is the one rate the catalog already carries (the DT sweep), and it
   // rides on the detail entry, so the common DT/NC play needs no request at all.
-  const entryDt = ratePercent === 150 && entry && active && active.beatmapId === entry.beatmapId && entry.msdDt
+  const entryDt = !playedInverse && ratePercent === 150 && entry && active && active.beatmapId === entry.beatmapId && entry.msdDt
     ? { msd: entry.msdDt, dan: entry.danDt ?? null }
     : null;
   // Every other rate (and a chart the DT sweep never reached) is computed on
@@ -872,14 +951,14 @@ export function MapDetailModal({
   // A chart the catalog never indexed has no stored analysis at any rate, so
   // it is rated from its own .osu at the rate played, 1.0x included.
   const offCatalog = status === "missing" && active != null && active.beatmapId > 0;
-  const rateKey = (playRate !== 1 || offCatalog) && active ? `${active.beatmapId}:${ratePercent}` : null;
+  const rateKey = (playRate !== 1 || offCatalog || playedInverse) && active ? `${active.beatmapId}:${ratePercent}${playedInverse ? ":IN" : ""}` : null;
   const needsRateFetch = rateKey != null && (entryDt == null || (active?.keyCount === 4 && (activeAnalysis?.lnRatio ?? 0) > 0));
   useEffect(() => {
     if (!needsRateFetch || rateKey == null) return;
     if (rateAnalysisByKey[rateKey] !== undefined) return;
-    const [beatmapId, percent] = rateKey.split(":");
+    const [beatmapId, percent, mod] = rateKey.split(":");
     let cancelled = false;
-    void fetchLiveRateChartAnalysis(Number(beatmapId), Number(percent) / 100).then((result) => {
+    void fetchLiveRateChartAnalysis(Number(beatmapId), Number(percent) / 100, mod === "IN").then((result) => {
       if (cancelled) return;
       setRateAnalysisByKey((prev) => ({ ...prev, [rateKey]: result }));
     });
@@ -896,16 +975,21 @@ export function MapDetailModal({
   // until it lands.
   const [rateStarsByKey, setRateStarsByKey] = useState<Record<string, number | null>>({});
   // A local chart's .osu is never served, so off 1.0x it has no star rating to show.
-  const starsKey = playRate !== 1 && active && active.beatmapId > 0 ? `${active.beatmapId}:${active.beatmapsetId}:${playRate}` : null;
+  // An Invert play's LN count is the inverted chart's, read off the same file.
+  const [inverseLnCountByKey, setInverseLnCountByKey] = useState<Record<string, number>>({});
+  const starsKey = (playRate !== 1 || playedInverse) && active && active.beatmapId > 0
+    ? `${active.beatmapId}:${active.beatmapsetId}:${playRate}:${playedInverse ? 1 : 0}` : null;
   const starsUnknown = local && playRate !== 1;
   useEffect(() => {
     if (starsKey == null || rateStarsByKey[starsKey] !== undefined) return;
-    const [beatmapId, beatmapsetId, rate] = starsKey.split(":").map(Number);
+    const [beatmapId, beatmapsetId, rate, inverse] = starsKey.split(":").map(Number);
     getBeatmapFile({ data: { beatmapId, beatmapsetId } })
       .then((result) => {
-        const beatmap = parseCachedManiaBeatmap(beatmapId, result.content);
+        const inverted = inverse ? invertManiaOsuText(result.content) : null;
+        const beatmap = parseCachedManiaBeatmap(beatmapId, inverted ?? result.content);
         const stars = calculateManiaStarRating(beatmap.notes, beatmap.keyCount, rate);
         setRateStarsByKey((prev) => ({ ...prev, [starsKey]: stars > 0 ? stars : null }));
+        if (inverted) setInverseLnCountByKey((prev) => ({ ...prev, [starsKey]: beatmap.notes.filter((note) => note.isHold).length }));
       })
       .catch(() => {
         setRateStarsByKey((prev) => ({ ...prev, [starsKey]: null }));
@@ -1118,7 +1202,7 @@ export function MapDetailModal({
                         <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm))} />
                         <Stat label={t`Length`} value={formatDuration(active.length)} />
                         {local ? null : <Stat label={t`Plays`} value={formatNumber(active.playCount)} />}
-                        <Stat label={t`LN notes`} value={formatNumber(active.lnCount)} />
+                        <Stat label={t`LN notes`} value={formatNumber((starsKey != null ? inverseLnCountByKey[starsKey] : undefined) ?? active.lnCount)} />
                         {active.od == null && analysisPending ? (
                           <PendingStat label={t`OD`} />
                         ) : (
@@ -1165,7 +1249,8 @@ export function MapDetailModal({
                       rateDan={rateDan}
                       secondaryDan={(offCatalog && playRate === 1 ? rateAnalysis?.secondaryDan : activeAnalysis?.secondaryDan) ?? null}
                       rateSecondaryDan={rateAnalysis?.secondaryDan ?? null}
-                      vibroAnalysis={offCatalog ? rateAnalysis?.vibroAnalysis : playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
+                      vibroAnalysis={offCatalog || (playedInverse && !ratePending) ? rateAnalysis?.vibroAnalysis : playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
+                      inverse={playedInverse}
                     />
                   </div>
                 ) : pending || (offCatalog && ratePending) ? <PendingMsdBlock /> : null}
@@ -1243,6 +1328,7 @@ export function MapDetailModal({
                     // longer known keeps the panel's default (pitch follows
                     // rate), which is what NC sounds like.
                     playbackRate={playRate}
+                    inverse={playedInverse}
                     stars={shownStars}
                     preservePitch={playRate !== playedRate ? true : playRate !== 1 && play?.rateMod ? !play.rateMod.pitched : undefined}
                     className="h-[300px] rounded-lg"

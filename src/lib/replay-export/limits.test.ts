@@ -164,10 +164,10 @@ describe("reserved packet counts", () => {
 });
 
 describe("presets", () => {
-  it("keeps 4K and over-60 FPS out of the first release", () => {
+  it("keeps 4K and over-60 FPS out of the presets", () => {
     for (const preset of Object.values(REPLAY_EXPORT_PRESETS)) {
-      expect(preset.width).toBeLessThanOrEqual(1920);
-      expect(preset.height).toBeLessThanOrEqual(1080);
+      expect(preset.width).toBeLessThanOrEqual(2560);
+      expect(preset.height).toBeLessThanOrEqual(1440);
       expect(preset.fps).toBeLessThanOrEqual(60);
     }
   });

@@ -43,12 +43,12 @@ beforeEach(() => {
   };
   play = {
     scoreId: SCORE_ID, mods: [], accuracy: 98.5, totalScore: 900000, pp: null,
-    reviewState: "clear", removed: false, rateSuspicious: true,
+    reviewState: "clear", removed: false, rateSuspicious: true, headerGapPp: null,
     chart: { title: "Test chart", artist: "Artist", version: "Hard", keyCount: 4 },
     playedAt: "2026-09-24T12:00:00Z", receivedAt: "2026-09-24T12:01:00Z",
   };
   flag = {
-    ...play, reviewState: "clear", userId: USER_ID, username: account.username,
+    ...play, reviewState: "clear", userId: USER_ID, username: account.username, playerName: account.username,
     rateCheck: { verdict: "claimed_rate_too_high", claimedRate: 1.5, measuredRate: 1, windows: 10 },
   };
   api.listCompanellaAccounts.mockImplementation(async () => ({ total: 1, entries: [{ ...account }] }));
@@ -147,6 +147,39 @@ describe("Companella admin moderation", () => {
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
   });
 
+  it("removes a flagged play from the flags list after a confirm, excluding it first", async () => {
+    let removed = false;
+    api.listRateFlags.mockImplementation(async () => (removed ? { total: 0, entries: [] } : { total: 1, entries: [{ ...flag }] }));
+    api.removeCompanellaPlay.mockImplementation(async () => { removed = true; });
+    await openPage("/admin/bridgers?tab=flags");
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect(api.removeCompanellaPlay).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
+    await screen.findByText("Nothing flagged.");
+    expect(api.setRateFlagHeld).toHaveBeenLastCalledWith({ data: { scoreId: SCORE_ID, held: true } });
+    expect(api.removeCompanellaPlay).toHaveBeenLastCalledWith({ data: { scoreId: SCORE_ID } });
+  });
+
+  it("lists name mismatches with the name the replay was played under", async () => {
+    api.listRateFlags.mockImplementation(async () => ({ total: 1, entries: [{ ...flag, playerName: "Someone Else", rateCheck: null }] }));
+    await openPage("/admin/bridgers?tab=flags&flag=name");
+    await screen.findByText("Played as Someone Else");
+    expect(api.listRateFlags).toHaveBeenLastCalledWith({ data: { filter: "name", offset: 0, limit: 50 } });
+    expect(screen.queryByText(/claims/)).toBeNull();
+    expect(screen.getByRole("button", { name: /Name mismatch/ }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("lists a player's excluded plays alone, with why each one is held", async () => {
+    account.heldPlays = 1;
+    play.reviewState = "quarantined";
+    play.headerGapPp = -1.01;
+    await openPage("/admin/bridgers?user=12345&q=%2312345");
+    await screen.findByText("Saved result 1.0 points below its key presses");
+    fireEvent.click(screen.getByRole("button", { name: /Excluded/ }));
+    await waitFor(() => expect(api.listCompanellaAccountPlays).toHaveBeenLastCalledWith({ data: { userId: USER_ID, offset: 0, limit: 20, excluded: true } }));
+    await screen.findByText("Saved result 1.0 points below its key presses");
+  });
+
   it("keeps account blocks separate from excluding existing plays", async () => {
     await openPage("/admin/bridgers?user=12345&q=%2312345");
     fireEvent.click(await screen.findByRole("button", { name: "Block Companella" }));
@@ -160,6 +193,18 @@ describe("Companella admin moderation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Unblock Companella" }));
     await screen.findByRole("button", { name: "Block Companella" });
     expect(api.setCompanellaAccountBlocked).toHaveBeenLastCalledWith({ data: { userId: USER_ID, blocked: false } });
+  });
+
+  it("filters players to Hashi and shows how many are on each filter", async () => {
+    api.listCompanellaAccounts.mockImplementation(async () => ({
+      total: 1, counts: { recent: 9, companella: 6, hashi: 4, blocked: 1 }, entries: [{ ...account }],
+    }));
+    const router = await openPage("/admin/bridgers");
+    await screen.findByRole("link", { name: "TestPlayer" });
+    expect(screen.getByRole("button", { name: /^Companella\s*6$/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Hashi\s*4$/ }));
+    await waitFor(() => expect(api.listCompanellaAccounts).toHaveBeenLastCalledWith({ data: { filter: "hashi", query: "", offset: 0, limit: 50 } }));
+    expect(router.state.location.search).toMatchObject({ filter: "hashi" });
   });
 
   it("resets pagination on search and keeps the blocked filter through a tab switch", async () => {

@@ -16,7 +16,8 @@ import {
   getDisplayedAccuracy,
   getDisplayedRank,
   getDisplayedTotalScore,
-  getModDisplayList,
+  getScoreDisplayVersion,
+  getScoreModDisplayList,
   getScoreIdentity,
   getScoreTimeMs,
   getScoreTimestamp,
@@ -32,7 +33,7 @@ import { CountryFlag } from "../components/ui/CountryFlag";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { FilterField, SegmentedControl } from "../components/ui/SegmentedControl";
-import { ModBadge } from "../components/ui/ModBadge";
+import { ScoreModBadge } from "../components/ui/ScoreModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
 import { StarRatingBadge } from "../components/ui/StarRating";
 import { SortArrow } from "../components/ui/SortArrow";
@@ -41,7 +42,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
-import { CompanellaMark } from "../components/ui/CompanellaMark";
+import { ScoreVideoMark, VideoMark } from "../components/ui/CompanellaMark";
 import { TRACKER_FEED_SCORE_LIMIT, TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import type { LeanTrackerScore, OsuCovers } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
@@ -2069,22 +2070,23 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 ) : (
                   <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
                 )}
-                <span className="text-[11px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
+                <span className="text-[11px] text-osu-f1 truncate">[{getScoreDisplayVersion(score)}]</span>
               </div>
               {keymodeLabel && (
                 <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
                   {keymodeLabel}
                 </span>
               )}
-              {score.companella && <CompanellaMark app={score.companella.app} />}
+              {score.companella ? (score.companella.video ? <VideoMark video={score.companella.video} /> : null)
+                : <ScoreVideoMark ids={[score.id, score.legacy_score_id]} />}
               <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
             </div>
           )}
           {/* Row 3 (mobile): Mods left, stats right */}
           <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
             <div className="flex items-center gap-1">
-              {getModDisplayList(score.mods).map((m) => (
-                <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+              {getScoreModDisplayList(score).map((m) => (
+                <ScoreModBadge key={m.acronym} mod={m} />
               ))}
               <DanBadge score={score} />
             </div>
@@ -2113,8 +2115,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
         {/* Desktop metadata */}
         <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
           <div className="flex items-center gap-0.5">
-            {getModDisplayList(score.mods).map((m) => (
-              <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+            {getScoreModDisplayList(score).map((m) => (
+              <ScoreModBadge key={m.acronym} mod={m} />
             ))}
           </div>
           <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(score))}</span>

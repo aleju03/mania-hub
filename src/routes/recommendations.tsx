@@ -849,7 +849,8 @@ function FarmHelperPage() {
       const bRecent = timestampMs(b.peerRecencyPlayedAt);
       // Unknown recency always sorts last, in either direction.
       if (sortMode === "recent" && (aRecent > 0) !== (bRecent > 0)) return aRecent > 0 ? -1 : 1;
-      const byGain = b.estimatedPpGain - a.estimatedPpGain;
+      // Unplayed maps under 1pp tie on gain, so the most farmed come first.
+      const byGain = gainSortValue(b) - gainSortValue(a);
       const byFit = b.peerFraction - a.peerFraction;
       const byPlayers = b.peerCount - a.peerCount;
       const byStars = b.stars - a.stars;
@@ -1273,7 +1274,10 @@ function FarmHelperPage() {
                     surface mounts (isXl gate): otherwise each row click would
                     mount two FarmersLists and fire the farmers request twice. */}
                 {railOpen && selected && visibleSnapshot ? (
-                  <aside className="hidden xl:block">
+                  /* self-stretch: the grid is items-start, and an aside only as
+                     tall as the preview leaves the sticky nothing to stick
+                     in, so a row clicked far down opened it off screen. */
+                  <aside className="hidden self-stretch xl:block">
                     <div className="sticky top-[76px]">
                       <RecPreview
                         rec={selected}
@@ -1361,7 +1365,8 @@ function SubjectBar({
       ? visibleSnapshot.recs.filter((rec) => rec.reason !== "push")
       : visibleSnapshot.recs
     : [];
-  const mapCount = boardRecs.length;
+  // Maps under 1pp are listed but stay out of the headline, as on the server.
+  const mapCount = visibleSnapshot?.view === "gain" ? boardRecs.filter((rec) => rec.estimatedPpGain >= MIN_VISIBLE_GAIN_PP).length : boardRecs.length;
   const biggest = maxGain(boardRecs);
   const skillHeadline = skillBoard?.axis ? farmSkillAxisMeta(skillBoard.axis) : null;
 
@@ -1601,7 +1606,10 @@ function BoardToolbar({
         {showReason ? (
           /* Phones give the tabs their own row: sharing one with the search and
              sort left them ~90px, so three of the five scrolled out of sight. */
-          <div className="flex w-full min-w-0 items-center gap-0.5 overflow-x-auto sm:w-auto sm:flex-1">
+          /* From sm up the tabs keep their full width and the search and sort
+             wrap under them, instead of the tabs scrolling sideways when the
+             map rail narrows the board. */
+          <div className="flex w-full min-w-0 items-center gap-0.5 overflow-x-auto sm:w-auto sm:min-w-max sm:flex-1">
             {tabs.map((tab) => (
               <button
                 key={tab.value}
@@ -1643,7 +1651,7 @@ function BoardToolbar({
             />
           </div>
         ) : null}
-        <div className="flex w-full items-center gap-2 sm:w-auto">
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           {showReason && countLabel ? (
             <span className="hidden text-[11px] tabular-nums text-osu-f1 lg:inline">{countLabel}</span>
           ) : null}
@@ -2273,7 +2281,7 @@ function RecRow({
           ) : (
             <>
               <div className="text-[16px] font-black leading-none tabular-nums text-osu-pink">
-                +{formatPp(rec.estimatedPpGain)}
+                {formatRecGain(rec.estimatedPpGain)}
               </div>
               <div className="mt-0.5 text-[9px] uppercase tracking-wide text-osu-pink/60">{gainUnit}</div>
               {/* The bar encodes the view's ranking share: popularity share in
@@ -2417,7 +2425,7 @@ function RecPreview({
                 <div>
                   <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1"><Trans>estimated gain</Trans></div>
                   <div className="mt-0.5 text-2xl font-black leading-none tabular-nums text-osu-pink">
-                    +{formatPp(rec.estimatedPpGain)}
+                    {formatRecGain(rec.estimatedPpGain)}
                     <span className="ml-1 text-[13px] font-bold text-osu-pink/70">{gainUnit}</span>
                   </div>
                 </div>
@@ -3308,6 +3316,14 @@ function farmStatusLabel(rec: LiveFarmHelperRec, i18n: I18nLike): string {
 // is about. A row they have no score on is not the same as a map they never
 // touched: peers farming a chart with HT put that row on the board even for
 // someone holding a no-mod pb on it.
+// On a keymode tab the server keeps unplayed maps below this gain on the
+// board, last.
+const MIN_VISIBLE_GAIN_PP = 1;
+
+function gainSortValue(rec: LiveFarmHelperRec): number {
+  return rec.estimatedPpGain >= MIN_VISIBLE_GAIN_PP ? rec.estimatedPpGain : 0;
+}
+
 function otherLaneBest(rec: LiveFarmHelperRec): { pp: number; label: string; speed: string } | null {
   if (rec.subjectPp != null || rec.subjectOtherLanePp == null) return null;
   const speed = rec.subjectOtherLaneSpeed ?? "normal";
@@ -3607,6 +3623,11 @@ function countReasons(recs: LiveFarmHelperRec[]): Record<ReasonFilter, number> {
     if (rec.reason !== "owned" && rec.reason !== "practice") counts[rec.reason] += 1;
   }
   return counts;
+}
+
+// A gain under 1pp rounds to "+0" or "+1", neither of which is true.
+function formatRecGain(gain: number): string {
+  return gain < MIN_VISIBLE_GAIN_PP ? "<1" : `+${formatPp(gain)}`;
 }
 
 function formatPp(value: number): string {

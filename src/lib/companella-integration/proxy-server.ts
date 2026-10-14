@@ -39,6 +39,8 @@ const JSON_BODY_BYTES = 64 * 1024;
  */
 const REPLAY_BODY_BYTES = 32 * MIB;
 const BEATMAP_BODY_BYTES = 32 * MIB;
+/** One piece of an asset sent in parts; the backend allows 16 KiB. */
+const PART_BODY_BYTES = 64 * 1024;
 
 const REQUEST_TIMEOUT_MS = 30_000;
 /** The backend answers an upload only once it has the whole file, so a slow
@@ -72,6 +74,8 @@ const ROUTE_RULES: Record<NativeRouteId, RouteRule> = {
   submissionRead: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
   submissionReplay: { maxBodyBytes: REPLAY_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: UPLOAD_TIMEOUT_MS },
   submissionBeatmap: { maxBodyBytes: BEATMAP_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: UPLOAD_TIMEOUT_MS },
+  submissionReplayPart: { maxBodyBytes: PART_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
+  submissionBeatmapPart: { maxBodyBytes: PART_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
   submissionComplete: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
   presence: { maxBodyBytes: JSON_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
   chartLeaderboard: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS, query: ["speed", "mods"] },
@@ -95,7 +99,7 @@ function resolveSubpath(route: NativeRouteId, params: Record<string, string>): s
   for (const [key, value] of Object.entries(params)) {
     // Ids reach the path, so anything outside the id alphabet is refused
     // rather than escaped.
-    if (!/^[A-Za-z0-9_-]{8,64}$/.test(value)) return null;
+    if (!(key === "offset" ? /^\d{1,9}$/ : /^[A-Za-z0-9_-]{8,64}$/).test(value)) return null;
     resolved = resolved.replace(`:${key}`, value);
   }
   return resolved.includes(":") ? null : resolved;

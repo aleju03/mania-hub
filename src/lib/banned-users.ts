@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl, type RestrictedPpPlay } from "./live-backend";
 
-/* The admin banned-users page (/admin/banned-users): every account osu! stopped
+/* The admin banned-users list (/admin/players): every account osu! stopped
    serving. Nothing reaches this list by being deleted; the backend only ever
    deactivates, and removing someone's content is the admin's call from here,
    through the ordinary wipe preview and confirmation. */

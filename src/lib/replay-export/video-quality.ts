@@ -13,11 +13,14 @@ export function av1QualityEncoderConfig(
   const pixels = width * height;
   const displayRate = pixels * fps;
   // AV1 Annex A: levels 4.x share a 2,359,296-pixel frame limit. Wider
-  // 1080p needs level 5.0, which covers our full 4096×1080@60 admission cap.
+  // 1080p and 1440p need level 5.0; ultrawide 1440p60 passes its display
+  // rate and needs 5.1, which covers our full 4096×1440@60 admission cap.
   // https://github.com/AOMediaCodec/av1-spec/blob/master/annex.a.levels.md
-  const level = pixels > 2_359_296 || displayRate > 141_557_760 || (bitrate ?? 0) > 20_000_000
-    ? "12"
-    : displayRate > 70_778_880 || (bitrate ?? 0) > 12_000_000 ? "09" : "08";
+  const level = displayRate > 267_386_880
+    ? "13"
+    : pixels > 2_359_296 || displayRate > 141_557_760 || (bitrate ?? 0) > 20_000_000
+      ? "12"
+      : displayRate > 70_778_880 || (bitrate ?? 0) > 12_000_000 ? "09" : "08";
   return {
     codec: `av01.0.${level}M.08`,
     width,

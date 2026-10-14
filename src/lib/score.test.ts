@@ -28,6 +28,13 @@ function createScore(overrides: Partial<OsuScore>): OsuScore {
 }
 
 describe("isLazerScore", () => {
+  it("takes an import's own client over its legacy total", () => {
+    // A stable entry with no score typed in carries a legacy total of 0.
+    const entry = (client: "stable" | "lazer") => createScore({ legacy_score_id: null, legacy_total_score: 0, companella: { importId: "x", replay: false, client } });
+    expect(isLazerScore(entry("stable"))).toBe(false);
+    expect(isLazerScore(entry("lazer"))).toBe(true);
+  });
+
   it("treats legacy-submitted scores as non-lazer even when type is solo_score", () => {
     expect(isLazerScore(createScore({
       legacy_score_id: 654682642,

@@ -33,6 +33,51 @@ const PAGE_SIZE = 150;
 const FRESH_MS = 4_000;
 // How long a finger has to stay on a chip before it means "hide this kind".
 const LONG_PRESS_MS = 400;
+// A tap on a phone holds the feed this long, standing in for a mouse resting on it.
+const TOUCH_HOLD_MS = 6_000;
+
+function rowKey(row: AnalyticsRecentEventRow): string {
+  return row.eventId ?? `${row.ts}-${row.distinctId}`;
+}
+
+/* True while somebody is reading the feed: a mouse is over it, it is scrolled
+   away from the top, or a finger touched it a moment ago. While it holds, new
+   events wait behind a button instead of shoving the rows being read. */
+function useReadingHold(ref: React.RefObject<HTMLElement | null>): boolean {
+  const [hovering, setHovering] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [touched, setTouched] = useState(false);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    let touchTimer: ReturnType<typeof setTimeout> | null = null;
+    const onEnter = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") setHovering(true);
+    };
+    const onLeave = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") setHovering(false);
+    };
+    const onDown = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") return;
+      setTouched(true);
+      if (touchTimer != null) clearTimeout(touchTimer);
+      touchTimer = setTimeout(() => setTouched(false), TOUCH_HOLD_MS);
+    };
+    const onScroll = () => setScrolled(element.scrollTop > 4);
+    element.addEventListener("pointerenter", onEnter);
+    element.addEventListener("pointerleave", onLeave);
+    element.addEventListener("pointerdown", onDown);
+    element.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (touchTimer != null) clearTimeout(touchTimer);
+      element.removeEventListener("pointerenter", onEnter);
+      element.removeEventListener("pointerleave", onLeave);
+      element.removeEventListener("pointerdown", onDown);
+      element.removeEventListener("scroll", onScroll);
+    };
+  }, [ref]);
+  return hovering || scrolled || touched;
+}
 
 function withToggled<T>(set: Set<T>, value: T) {
   const next = new Set(set);
@@ -56,6 +101,7 @@ export function AnalyticsStream({
   loading,
   now,
   onCountryChange,
+  className = "",
 }: {
   rows: AnalyticsRecentEventRow[];
   sessions: AnalyticsSession[];
@@ -65,6 +111,7 @@ export function AnalyticsStream({
   loading?: boolean;
   now: number;
   onCountryChange: (country: string | null) => void;
+  className?: string;
 }) {
   // Safe to read storage during init: this panel only ever mounts on the client,
   // after the first snapshot lands, so there is no server render to mismatch.
@@ -74,6 +121,8 @@ export function AnalyticsStream({
   const [kinds, setKinds] = useState<Set<AnalyticsActivityKind>>(new Set());
   const [hidden, setHidden] = useState<Set<AnalyticsActivityKind>>(new Set());
   const [limit, setLimit] = useState(PAGE_SIZE);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const holding = useReadingHold(bodyRef);
 
   const selectMode = (next: AnalyticsStreamMode) => {
     setMode(next);
@@ -119,7 +168,32 @@ export function AnalyticsStream({
   // A narrowed view starts from the top again rather than deep in a long list.
   useEffect(() => {
     setLimit(PAGE_SIZE);
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
   }, [kinds, hidden, country, mode]);
+
+  /* While the feed is held, the stream shows nothing newer than the row that
+     was on top when the hold began. */
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const topKey = filteredRows[0] ? rowKey(filteredRows[0]) : null;
+  useEffect(() => {
+    if (!holding) {
+      setAnchor(null);
+      return;
+    }
+    setAnchor((prev) => (prev && filteredRows.some((row) => rowKey(row) === prev) ? prev : topKey));
+  }, [holding, filteredRows, topKey]);
+  const anchorIndex = anchor ? filteredRows.findIndex((row) => rowKey(row) === anchor) : -1;
+  const waitingRows = anchorIndex > 0 ? anchorIndex : 0;
+  const heldRows = waitingRows > 0 ? filteredRows.slice(waitingRows) : filteredRows;
+
+  const scrollToTop = () => {
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+  };
+
+  const showLatest = () => {
+    scrollToTop();
+    setAnchor(topKey);
+  };
 
   // Picking and hiding are opposites, so a kind never sits in both sets.
   const toggleKind = (kind: AnalyticsActivityKind) => {
@@ -148,14 +222,14 @@ export function AnalyticsStream({
     : `${countText}${countryLabel} from ${formatNumber(shownSessions.length)} visitor${shownSessions.length === 1 ? "" : "s"}`;
 
   return (
-    <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30">
-      <div className="flex flex-col gap-2 border-b border-osu-b3/20 px-3 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-0">
+    <div className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b4/30 ${className}`}>
+      <div className="flex flex-shrink-0 flex-col gap-2 border-b border-white/[0.07] px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-c2">Activity</div>
-            <div className="text-[10px] text-osu-f1">{subtitle}</div>
+            <div className="truncate text-[11px] text-osu-f1">{subtitle}</div>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex flex-shrink-0 items-center gap-2">
             <div className="flex items-center rounded-md border border-osu-b3/30 bg-osu-b5/70 p-0.5">
               <ModeButton active={mode === "stream"} onClick={() => selectMode("stream")} icon={<List className="h-3 w-3" />} label="Stream" />
               <ModeButton active={mode === "sessions"} onClick={() => selectMode("sessions")} icon={<LayoutGrid className="h-3 w-3" />} label="Visitor trails" />
@@ -167,8 +241,9 @@ export function AnalyticsStream({
         <div className="flex flex-wrap items-center gap-1">
           <FilterChip state={filtered ? "idle" : "picked"} onClick={clearFilters} label="Everything" count={rows.length} />
           {ANALYTICS_ACTIVITY_KINDS.map((kind) => {
+            // Every kind keeps its chip at zero, so the row never reflows as
+            // kinds come and go.
             const count = kindCounts.get(kind) ?? 0;
-            if (count === 0) return null;
             const style = ACTIVITY_KIND_STYLES[kind];
             const Icon = style.icon;
             const state = kinds.has(kind) ? "picked" : hidden.has(kind) ? "hidden" : "idle";
@@ -187,7 +262,8 @@ export function AnalyticsStream({
         </div>
       </div>
 
-      <div className="p-2">
+      <div className="relative min-h-0 flex-1">
+        <div ref={bodyRef} className="h-full overflow-y-auto p-2 [overflow-anchor:none]">
         {loading ? (
           <div className="space-y-1">
             {Array.from({ length: 12 }).map((_, index) => (
@@ -196,7 +272,7 @@ export function AnalyticsStream({
           </div>
         ) : mode === "stream" ? (
           <StreamRows
-            rows={filteredRows}
+            rows={heldRows}
             replayMaps={replayMaps}
             slotByVisitor={slotByVisitor}
             now={now}
@@ -212,10 +288,30 @@ export function AnalyticsStream({
             limit={limit}
             onMore={() => setLimit((value) => value + PAGE_SIZE)}
             country={country}
+            holding={holding}
+            onShowLatest={scrollToTop}
           />
         )}
+        </div>
+        {mode === "stream" && !loading && waitingRows > 0 ? (
+          <NewArrivals text={`${formatNumber(waitingRows)} new event${waitingRows === 1 ? "" : "s"}`} onClick={showLatest} />
+        ) : null}
       </div>
     </div>
+  );
+}
+
+/* Floats over the top of the feed rather than taking a row of its own, so
+   appearing does not push the feed down either. */
+function NewArrivals({ text, onClick }: { text: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="absolute left-1/2 top-2 z-10 -translate-x-1/2 cursor-pointer rounded-full bg-osu-pink px-3 py-1 text-[11px] font-semibold text-white shadow-[0_4px_14px_rgba(0,0,0,0.45)] transition-[filter] duration-[120ms] hover:brightness-110"
+    >
+      {text}
+    </button>
   );
 }
 
@@ -319,7 +415,7 @@ function FilterChip({
     >
       {icon}
       <span className={state === "hidden" ? "line-through" : undefined}>{label}</span>
-      <span className={`font-mono ${state === "hidden" ? "text-osu-f1/50" : "text-osu-f1"}`}>{formatNumber(count)}</span>
+      <span className={`font-mono tabular-nums ${state === "hidden" || count === 0 ? "text-osu-f1/50" : "text-osu-f1"}`}>{formatNumber(count)}</span>
     </button>
   );
 }
@@ -366,7 +462,7 @@ function StreamRows({
   const shown = rows.slice(0, limit);
   return (
     <>
-      <div className="max-h-[560px] space-y-px overflow-y-auto pr-1">
+      <div className="space-y-px">
         {shown.map((row, index) => (
           <StreamRow
             key={row.eventId ?? `${row.ts}-${row.distinctId}-${index}`}
@@ -463,6 +559,8 @@ function SessionRows({
   limit,
   onMore,
   country,
+  holding: reading,
+  onShowLatest,
 }: {
   sessions: AnalyticsSession[];
   replayMaps: AnalyticsReplayMapIndex;
@@ -470,16 +568,17 @@ function SessionRows({
   limit: number;
   onMore: () => void;
   country: string | null;
+  holding: boolean;
+  onShowLatest: () => void;
 }) {
   // A lone visitor starts expanded (toggling still collapses it); with several
   // visitors everything starts collapsed.
   const [toggled, setToggled] = useState<Set<string>>(new Set());
-  const [hovering, setHovering] = useState(false);
   /* Trails re-sort by latest activity on every event, which carried the one
-     being read off down the list. While the pointer is on the list or a trail
-     is open, the order is held and newcomers wait behind a button. */
+     being read off down the list. While the feed is being read or a trail is
+     open, the order is held and newcomers wait behind a button. */
   const [frozen, setFrozen] = useState<string[] | null>(null);
-  const holding = hovering || toggled.size > 0;
+  const holding = reading || toggled.size > 0;
   useEffect(() => {
     if (!holding) setFrozen(null);
     else setFrozen((prev) => prev ?? sessions.map((session) => session.distinctId));
@@ -507,21 +606,15 @@ function SessionRows({
     <>
       <p className="mb-2 text-[10px] text-osu-f1">Trails group the loaded events by browser and can span several visits. Durations show the observed event span, not active time.</p>
       {arrivals > 0 ? (
-        <button
-          type="button"
-          onClick={() => setFrozen(sessions.map((session) => session.distinctId))}
-          className="mb-1 w-full cursor-pointer rounded-md bg-osu-pink/15 py-1.5 text-[11px] font-semibold text-osu-pink-light transition-colors duration-[120ms] hover:bg-osu-pink/25"
-        >
-          {formatNumber(arrivals)} new visitor{arrivals === 1 ? "" : "s"}
-        </button>
+        <NewArrivals
+          text={`${formatNumber(arrivals)} new visitor${arrivals === 1 ? "" : "s"}`}
+          onClick={() => {
+            onShowLatest();
+            setFrozen(sessions.map((session) => session.distinctId));
+          }}
+        />
       ) : null}
-      <div
-        className="max-h-[560px] space-y-1 overflow-y-auto pr-1"
-        onPointerEnter={(event) => {
-          if (event.pointerType === "mouse") setHovering(true);
-        }}
-        onPointerLeave={() => setHovering(false)}
-      >
+      <div className="space-y-1">
         {shown.map((session) => {
           const open = toggled.has(session.distinctId) !== defaultOpen;
           const color = visitorColor(session.slot);

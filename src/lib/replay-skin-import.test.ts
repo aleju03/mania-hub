@@ -213,6 +213,22 @@ describe("importReplaySkinFromOsk keymode synthesis", () => {
     expect(result.settings.keymodeProfiles["4"].assets.columns[0].tap?.path).toBe("mania/custom1.png");
   });
 
+  it("resolves references from skin.ini's folder when the archive wraps the skin in one", async () => {
+    const zip = new JSZip();
+    const root = "-    # Wrapped Skin/";
+    zip.file(`${root}Skin.ini`, ["[General]", "Name: Wrapped", "[Mania]", "Keys: 4", "NoteImage0: 4K/1", "KeyImage0: 4K/key"].join("\n"));
+    const bytes = Uint8Array.from(atob(PNG_BASE64), (char) => char.charCodeAt(0));
+    for (const path of ["4K/1.png", "4K/key.png"]) zip.file(`${root}${path}`, bytes);
+    const file = new File([await zip.generateAsync({ type: "arraybuffer" })], "wrapped.osk");
+    const archive = await openOskArchive(await file.arrayBuffer());
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4, archive });
+
+    const column = result.settings.keymodeProfiles["4"].assets.columns[0];
+    expect(column.tap?.path).toBe(`${root}4K/1.png`);
+    expect(column.receptor?.path).toBe(`${root}4K/key.png`);
+    expect(await loadOskImageAssetByPath(archive, `${root}4K/1.png`)).toBeDefined();
+  });
+
   it("synthesizes undeclared keymodes from stable's default filenames", async () => {
     const file = await buildOsk(
       ["[General]", "Name: FourOnly", "[Mania]", "Keys: 4", "NoteImage0: mania/custom1"].join("\n"),

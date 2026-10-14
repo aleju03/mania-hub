@@ -30,8 +30,8 @@ export interface LivePlayerSkillPlay {
   /** The play's own SSR vector at its accuracy and rate, not base chart MSD. */
   skillRatings?: Record<string, number>;
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
-  /** Turned away because the chart plays as a jumptrill the rating cannot
-   *  follow; shown as unrateable, not vibro. */
+  /** Turned away because the rating cannot follow the chart (a jumptrill, or
+   *  objects stacked on one column); shown as unrateable, not vibro. */
   unrateable?: true;
   beatmapId: number;
   beatmapsetId: number | null;
@@ -193,6 +193,8 @@ export interface LivePlayerDanCourseEvidence extends LivePlayerDanCourseClear {
   soloScoreId: number | null;
   legacyScoreId: number | null;
   mods: string[];
+  /** The rate mod's speed when it is a lazer custom one (DT at 1.1x). */
+  modRate?: number;
   statistics: OsuScoreStatistics | null;
   maxCombo: number | null;
   totalScore: number | null;
@@ -202,6 +204,8 @@ export interface LivePlayerDanCourseEvidence extends LivePlayerDanCourseClear {
   /** Lazer submissions and stable ones live in different score id spaces, so
    *  this decides which osu! score URL resolves. */
   isLazer: boolean | null;
+  /** A run sent through an app or entered by an admin: the card opens it as that import. */
+  companella?: { importId: string; replay: boolean; app?: string; video?: string };
 }
 
 /** A play on this keymode the rating has not reached yet, with why it waits:
@@ -371,7 +375,7 @@ export interface LiveMapScoreEntry {
   hasReplay: boolean;
   playedAt: string | null;
   /** Set on a play sent through an app (Companella, Hashi) instead of osu!; scoreId is then the feed's negative id. */
-  companella?: { importId: string; replay: boolean; app?: string };
+  companella?: { importId: string; replay: boolean; app?: string; video?: string };
 }
 
 export interface LiveMapScoresSnapshot {
@@ -628,8 +632,26 @@ export interface LivePlayerActivityMap {
   accuracy: number | null;
   pp: number | null;
   rank: string | null;
+  /** The mods of the day's best play on the map, as osu! sends them. */
+  mods?: OsuMod[];
   keyCount: number | null;
   skills: LivePlayerActivitySkillVector | null;
+  /** What the day's best play's details card reads; absent where no play was kept. */
+  play?: LivePlayerActivityMapPlay | null;
+}
+
+export interface LivePlayerActivityMapPlay {
+  soloScoreId: number | null;
+  /** Set when the play also has a legacy id, which makes it a stable score. */
+  legacyScoreId: number | null;
+  isLazer: boolean | null;
+  hasReplay: boolean | null;
+  maxCombo: number | null;
+  totalScore: number | null;
+  statistics: OsuScoreStatistics | null;
+  playedAt: string | null;
+  /** Set when the best play came through an app. */
+  companella?: OsuScore["companella"];
 }
 
 export interface LivePlayerActivityTimelineSegment {
@@ -1135,6 +1157,71 @@ export const fetchLiveBackendHonoraryPulls = createServerFn({ method: "GET" })
       throw new Error(message);
     }
     return { ...body, cards: Array.isArray(body.cards) ? body.cards : [] };
+  });
+
+export interface LiveBackendOsuDirectBudget {
+  family: 4 | 6;
+  ip: string | null;
+  hourly: { limit: number; used: number; remaining: number } | null;
+  daily: { limitBytes: number; usedBytes: number; remainingBytes: number; resetAt: number | null } | null;
+  error: string | null;
+}
+
+export interface LiveBackendMirrorHealth {
+  source: string;
+  served1h: number;
+  failed1h: number;
+  served24h: number;
+  failed24h: number;
+  cooldowns: Array<{ role: string; untilMs: number; reason: string | null }>;
+  lastFailure: { atMs: number; role: string; detail: string | null } | null;
+}
+
+export interface LiveBackendMapDownloads {
+  generatedAt: number;
+  osuDirect: { checkedAt: number; defaultFamily: 4 | 6 | null; budgets: LiveBackendOsuDirectBudget[] };
+  mirrors: LiveBackendMirrorHealth[];
+  songFailures: {
+    last1h: number;
+    last24h: number;
+    recent: Array<{ atMs: number; beatmapsetId: string | null; detail: string | null }>;
+  };
+  osuFileLane: { usedLastMinute: number; targetPerMinute: number; hardPerMinute: number; calls24h: number; failed24h: number };
+}
+
+// The admin "Map downloads" card: osu.direct's per-IP budget, mirror health,
+// songs no mirror served and the .osu download lane. Admin-gated; the token is
+// injected server-side, mirroring fetchLiveBackendHonoraryPulls. Returns null
+// when the backend predates the endpoint.
+export const fetchLiveBackendMapDownloads = createServerFn({ method: "GET" })
+  .handler(async (): Promise<LiveBackendMapDownloads | null> => {
+    await requireAdminAccess("Server map downloads");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${base}/api/admin/map-downloads`, { headers, signal: controller.signal });
+    } catch (err) {
+      if (isAbortError(err)) throw new Error("Map downloads timed out.");
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (response.status === 404) return null;
+    const body = await response.json() as LiveBackendMapDownloads & { error?: unknown };
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Server ${response.status} for /api/admin/map-downloads`;
+      throw new Error(message);
+    }
+    return body;
   });
 
 export type LiveBackendTableCell = string | number | boolean | null;
@@ -1844,6 +1931,11 @@ export async function fetchCompanellaPresenceDirect(): Promise<CompanellaPresenc
   }
 }
 
+/* Proof videos an admin attached to official plays; each lists both of the play's ids when known. */
+export async function fetchScoreVideosDirect(): Promise<Array<{ ids: number[]; url: string }>> {
+  return (await fetchLiveJson<{ videos: Array<{ ids: number[]; url: string }> }>("/api/score-videos")).videos;
+}
+
 /* A restricted player's Companella imports, the one public Companella read.
    Null when there is nothing to show: an active account, Companella switched
    off, or no imports. */
@@ -1873,6 +1965,17 @@ export interface RestrictedPpPlay {
   creator: string | null;
   keyCount: number | null;
   bpm?: number | null;
+  /** The official map's own figures at 1.0x. Absent on a backend older than the field. */
+  map?: {
+    stars: number;
+    od: number;
+    hp: number;
+    totalLength: number;
+    hitLength: number;
+    circles: number;
+    sliders: number;
+    maxCombo: number | null;
+  } | null;
   mods: string[];
   rate: number;
   starRating: number;
@@ -1905,6 +2008,8 @@ export interface RestrictedPpPlayer {
   playTime?: number;
   rankedScore: number;
   gradeCounts: { ss: number; ssh: number; s: number; sh: number; a: number };
+  /** The 4K and 7K totals, as osu!'s variants. Absent on a backend older than the field. */
+  variants?: { variant: "4k" | "7k"; pp: number }[];
   /** Best play per beatmap, best first, at most 200. */
   best: RestrictedPpPlay[];
 }
@@ -1920,6 +2025,9 @@ export interface RestrictedPpRankingEntry {
   play_count: number;
   ranked_score: number;
   grade_counts: { ss: number; ssh: number; s: number; sh: number; a: number };
+  /** The 4K and 7K totals, as osu!'s variants. Absent on a backend older than the fields. */
+  pp_4k?: number | null;
+  pp_7k?: number | null;
 }
 
 /** Null when the account is not one osu! turned away, or has nothing priced. */
@@ -1949,6 +2057,21 @@ export function restrictedPpReplayUrl(scoreId: string): string | null {
   const base = getLiveBackendUrl();
   if (!base || !/^[A-Za-z0-9_-]{8,64}$/.test(scoreId)) return null;
   return `${base}/api/integrations/companella/public/replays/${scoreId}`;
+}
+
+/**
+ * A listed import with a public replay, as a feed row: who played it and on
+ * what. Reads the server-side backend URL during SSR, so the replay page's
+ * head and OG card can use it too.
+ */
+export async function fetchPublicCompanellaImport(importId: string): Promise<LeanTrackerScore | null> {
+  const base = typeof window === "undefined" ? getServerLiveBackendUrl() ?? getLiveBackendUrl() : getLiveBackendUrl();
+  if (!base || !/^[A-Za-z0-9_-]{8,64}$/.test(importId)) return null;
+  const response = await fetch(`${base}/api/integrations/companella/public/imports/${importId}`, { credentials: "omit" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new LiveBackendRequestError(response.status, retryAfterMs(response));
+  const payload = (await response.json()) as { import?: LeanTrackerScore };
+  return payload.import ?? null;
 }
 
 export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<LivePlayerAboutPayload>> {
@@ -3032,7 +3155,7 @@ export interface LiveMapSearchEntry {
   // Vibro-like chart per the classifier; informational while browsing.
   // Player eligibility never hides its ordinary estimate from search.
   vibro?: boolean;
-  // Excluded by the jumptrill rule alone: shown as unrateable, not vibro.
+  // Excluded by the unrateable rules alone: shown as unrateable, not vibro.
   unrateable?: boolean;
   // Search results are one entry per beatmapset: the top-level fields describe
   // the representative diff and `diffs` lists every filter-matching diff of the
@@ -3074,6 +3197,9 @@ export interface LiveMapSearchParams {
   lenMax: number | null;
   danMin: number | null;
   danMax: number | null;
+  // Step on each dan bound, -2..2 for "--" through "++"; null is the whole dan.
+  danMinStep?: number | null;
+  danMaxStep?: number | null;
   // Hold share of the chart's objects, in percent.
   lnMin: number | null;
   lnMax: number | null;
@@ -3145,6 +3271,8 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.lenMax != null) query.set("lenMax", String(params.lenMax));
   if (params.danMin != null) query.set("danMin", String(params.danMin));
   if (params.danMax != null) query.set("danMax", String(params.danMax));
+  if (params.danMin != null && params.danMinStep != null) query.set("danMinStep", String(params.danMinStep));
+  if (params.danMax != null && params.danMaxStep != null) query.set("danMaxStep", String(params.danMaxStep));
   if (params.lnMin != null) query.set("lnMin", String(params.lnMin));
   if (params.lnMax != null) query.set("lnMax", String(params.lnMax));
   if (params.country) query.set("country", params.country);
@@ -3343,10 +3471,11 @@ export interface LiveRateChartAnalysis {
 }
 
 /** Null covers an unreachable backend and a rate the backend refuses alike. */
-export async function fetchLiveRateChartAnalysis(beatmapId: number, rate: number): Promise<LiveRateChartAnalysis | null> {
+/** `inverse`: the chart as the Invert mod rewrites it, for a play set under it. */
+export async function fetchLiveRateChartAnalysis(beatmapId: number, rate: number, inverse = false): Promise<LiveRateChartAnalysis | null> {
   try {
     return await fetchLiveJson<LiveRateChartAnalysis>(
-      `/api/chart-analysis/rate?beatmapId=${Math.floor(beatmapId)}&rate=${rate.toFixed(2)}`,
+      `/api/chart-analysis/rate?beatmapId=${Math.floor(beatmapId)}&rate=${rate.toFixed(2)}${inverse ? "&mod=IN" : ""}`,
     );
   } catch {
     return null;
@@ -3475,15 +3604,13 @@ export async function fetchGoatPollBoard(limit?: number): Promise<GoatPollBoardP
   }
 }
 
-/* The support popup's monthly goal bar. `month` is the month being filled,
-   which is a later one once the current month is covered; `coveredThrough` is
-   the last covered month, null while the current one is still short. The same
-   shape arrives on the `donation_goal` SSE event whenever a payment lands. */
+/* The support popup's monthly goal bar: what came in during the current
+   month, past the goal when it was overfunded. The same shape arrives on the
+   `donation_goal` SSE event whenever a payment lands. */
 export interface LiveDonationGoal {
   month: string;
   goalUsdCents: number;
   raisedUsdCents: number;
-  coveredThrough: string | null;
 }
 
 export async function fetchDonationGoal(): Promise<LiveDonationGoal | null> {

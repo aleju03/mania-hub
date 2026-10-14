@@ -607,7 +607,17 @@ function KofiSupportButton() {
           >
             <div className="flex items-center justify-between gap-3 border-b border-osu-b3/50 px-4 py-3">
               <div className="text-left text-[11px] text-osu-f1">
-                {i._(msg`If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going.`)} <Heart className="inline h-3 w-3 align-[-1px] text-osu-pink" aria-hidden="true" />
+                {i._(msg`If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going.`)} <Heart className="inline h-3 w-3 align-[-1px] text-osu-pink" aria-hidden="true" />{" "}
+                <a
+                  href={KOFI_PAGE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => track("support_profile_open")}
+                  className="inline-flex items-center gap-0.5 font-semibold text-osu-pink-light hover:underline"
+                >
+                  {i._(msg`Ko-fi page`)}
+                  <ExternalLink className="h-2.5 w-2.5" aria-hidden="true" />
+                </a>
               </div>
               <button
                 type="button"

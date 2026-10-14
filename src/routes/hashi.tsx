@@ -1,24 +1,28 @@
 import { useEffect, useState } from "react";
-import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 
 import { getI18n } from "../lib/i18n";
 import { track } from "../lib/analytics";
-import { canUseAdminFeatures } from "../lib/auth-shared";
 import { pageSeo } from "../lib/seo";
 import { PageHeader } from "../components/layout/PageHeader";
+import { ImageLightbox } from "../components/ui/ImageLightbox";
 import { KNOWN_APPS } from "../lib/companella-integration/shared";
 import { MANIA_BRIDGE_SOURCE_URL, MANIA_BRIDGE_VERSION, type ManiaBridgeDownloads } from "../lib/mania-bridge";
 import { fetchManiaBridgeDownloads } from "../lib/mania-bridge-server";
 
 /*
- * /hashi: Hashi's download page, and where the app's Download button opens. Admin preview until the
- * release, like the Integrations group in Settings.
+ * /hashi: Hashi's download page, and where the app's Download button opens.
  */
 
+type BridgeTab = "about" | "screenshots";
+
 export const Route = createFileRoute("/hashi")({
-  beforeLoad: ({ context }) => { if (!canUseAdminFeatures(context.auth)) throw notFound(); },
+  validateSearch: (search: Record<string, unknown>): { tab?: BridgeTab } => ({
+    tab: search.tab === "screenshots" ? "screenshots" : undefined,
+  }),
   loader: async () => {
     try {
       return await fetchManiaBridgeDownloads();
@@ -30,7 +34,7 @@ export const Route = createFileRoute("/hashi")({
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: "Hashi",
-      description: i18n._(msg`Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings.`),
+      description: i18n._(msg`Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing.`),
       path: "/hashi",
       origin: match.context.origin,
       imageTitle: "Hashi",
@@ -141,12 +145,76 @@ function Downloads({ downloads }: { downloads: ManiaBridgeDownloads | null }) {
   );
 }
 
+/** The app and what it shows on the site, so nobody installs it blind. Wide ones are site captures. */
+const SCREENSHOTS: { src: string; width: number; height: number; alt: MessageDescriptor; wide?: boolean }[] = [
+  { src: "/images/hashi/screenshot-1-main.webp", width: 960, height: 1280, alt: msg`Hashi's main window with the last plays it sent` },
+  { src: "/images/hashi/screenshot-4-leaderboard.webp", width: 534, height: 790, alt: msg`A map's leaderboard in Hashi` },
+  { src: "/images/hashi/screenshot-2-connect.webp", width: 960, height: 1280, alt: msg`Hashi before connecting to Mania Tracker` },
+  { src: "/images/hashi/screenshot-3-settings.webp", width: 960, height: 1280, alt: msg`Hashi's settings` },
+  { src: "/images/hashi/profile-live.webp", width: 2540, height: 600, alt: msg`A profile showing the map its player is playing`, wide: true },
+  { src: "/images/hashi/rankings-live.webp", width: 2330, height: 590, alt: msg`The rankings showing a player who is playing`, wide: true },
+];
+
+function Screenshots() {
+  const { i18n } = useLingui();
+  const [open, setOpen] = useState<number | null>(null);
+  const urls = SCREENSHOTS.map((shot) => shot.src);
+  return (
+    <div className="mx-auto max-w-4xl px-4">
+      <div className="mt-8 grid grid-cols-2 items-start gap-3 border-t border-white/[0.07] pt-8 sm:grid-cols-4">
+        {SCREENSHOTS.map((shot, index) => (
+          <button
+            key={shot.src}
+            type="button"
+            onClick={() => setOpen(index)}
+            className={`cursor-zoom-in overflow-hidden rounded-lg bg-osu-b4 transition hover:brightness-110 ${shot.wide ? "col-span-2 sm:col-span-4" : ""}`}
+          >
+            <img src={shot.src} alt={i18n._(shot.alt)} width={shot.width} height={shot.height} loading="lazy" className="block h-auto w-full" />
+          </button>
+        ))}
+      </div>
+      {open != null ? <ImageLightbox urls={urls} index={open} onIndex={setOpen} onClose={() => setOpen(null)} /> : null}
+    </div>
+  );
+}
+
+/** Short looping clips of the app at work. Their captions are part of the video. */
+const CLIPS: { src: string; poster: string; label: MessageDescriptor }[] = [
+  { src: "/videos/hashi/hashi-mods.mp4", poster: "/images/hashi/video-mods-poster.webp", label: msg`Hashi showing a map's leaderboard for Double Time` },
+  { src: "/videos/hashi/hashi-graveyard.mp4", poster: "/images/hashi/video-graveyard-poster.webp", label: msg`Hashi showing a leaderboard for a graveyard map` },
+];
+
+function Clips() {
+  const { i18n } = useLingui();
+  return (
+    <div className="space-y-3">
+      {CLIPS.map((clip) => (
+        <video
+          key={clip.src}
+          src={clip.src}
+          poster={clip.poster}
+          width={1280}
+          height={800}
+          autoPlay
+          muted
+          loop
+          playsInline
+          aria-label={i18n._(clip.label)}
+          className="block h-auto w-full rounded-lg bg-osu-b4"
+        />
+      ))}
+    </div>
+  );
+}
+
 const LINK = "text-white underline decoration-white/30 underline-offset-2 transition-colors hover:decoration-white";
 
 function BridgePage() {
   const { t } = useLingui();
   const app = KNOWN_APPS["mania-bridge"];
   const downloads = Route.useLoaderData();
+  const tab: BridgeTab = Route.useSearch().tab ?? "about";
+  const navigate = useNavigate();
 
   return (
     <div className="flex-1">
@@ -160,13 +228,13 @@ function BridgePage() {
           </>
         )}
       />
-      <div className="min-h-[80vh] bg-osu-b5">
-        <div className="mx-auto max-w-xl px-4 pt-12 pb-12 sm:pt-16">
+      <div className="min-h-[80vh] bg-osu-b5 pb-12">
+        <div className="mx-auto max-w-xl px-4 pt-6 sm:pt-8">
           <div className="flex flex-col items-center text-center">
             <img src={app.icon} alt="" width={112} height={112} className="h-28 w-28 rounded-full" />
             <h1 className="mt-5 text-3xl font-semibold text-white">{app.name}</h1>
             <p className="mt-2 max-w-sm text-[15px] leading-relaxed text-osu-l2">
-              <Trans>Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings.</Trans>
+              <Trans>Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing.</Trans>
             </p>
 
             <Downloads downloads={downloads} />
@@ -176,60 +244,76 @@ function BridgePage() {
               <span>{t`Windows and Linux`}</span>
               <span aria-hidden className={DIVIDER} />
               <span>{t`lazer and stable`}</span>
-              <span aria-hidden className={DIVIDER} />
-              <a
-                href={MANIA_BRIDGE_SOURCE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => track("bridge_source_click")}
-                className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
-              >
-                <img src="/images/brands/github.svg" alt="" width={12} height={12} className="h-3 w-3 opacity-70" />
-                <Trans>Source code on GitHub</Trans>
-              </a>
             </div>
           </div>
 
-          <div className="mt-12 space-y-6 border-t border-white/[0.07] pt-8 text-[15px] leading-relaxed text-osu-l2">
-            <section>
-              <h2 className="text-[13px] font-semibold text-white"><Trans>What it does</Trans></h2>
-              <p className="mt-2">
-                <Trans>
-                  Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With{" "}
-                  <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings on Mania Tracker
-                  also show what you're doing in osu!.
-                </Trans>
-              </p>
-            </section>
-            <section>
-              <h2 className="text-[13px] font-semibold text-white"><Trans>What you need</Trans></h2>
-              <p className="mt-2">
-                <Trans>
-                  It reads osu! through tosu, so tosu has to be running. You can download it from{" "}
-                  <a href="https://tosu.app" target="_blank" rel="noopener noreferrer" className={LINK}>tosu.app</a>. On Linux, lazer
-                  needs tosu's Linux build.
-                </Trans>
-              </p>
-            </section>
-            <section>
-              <h2 className="text-[13px] font-semibold text-white"><Trans>On Windows</Trans></h2>
-              <p className="mt-2">
-                <Trans>
-                  The installer isn't signed, because Microsoft charges for code signing, so Windows shows a warning before it runs. Click More info, then Run anyway. The{" "}
-                  <a href={MANIA_BRIDGE_SOURCE_URL} target="_blank" rel="noopener noreferrer" className={LINK}>source code</a> is on GitHub if you want to check what it does.
-                </Trans>
-              </p>
-            </section>
-            <section>
-              <h2 className="text-[13px] font-semibold text-white"><Trans>Connecting</Trans></h2>
-              <p className="mt-2">
-                <Trans>
-                  Connect it to your account from inside the app. You can revoke the connection in <Link to="/settings" search={{ tab: "preferences" }} className={LINK}>Settings</Link>, under Preferences.
-                </Trans>
-              </p>
-            </section>
+          <div className="mt-6 flex justify-center">
+            <div className="inline-flex rounded-full bg-osu-b4 p-1">
+              {([["about", t`About`], ["screenshots", t`Screenshots`]] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => navigate({ to: "/hashi", search: id === "about" ? {} : { tab: id }, replace: true, resetScroll: false })}
+                  className={`rounded-full px-5 py-1.5 text-[13px] font-semibold transition-colors ${tab === id ? "bg-white/10 text-white" : "text-osu-f1 hover:text-white"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {tab === "screenshots" ? <Screenshots /> : (
+        <div className="mx-auto max-w-xl px-4 lg:max-w-6xl">
+          <div className="mt-8 grid gap-8 border-t border-white/[0.07] pt-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-10">
+            <div className="space-y-6 text-[15px] leading-relaxed text-osu-l2">
+              <section>
+                <h2 className="text-[13px] font-semibold text-white"><Trans>What it does</Trans></h2>
+                <p className="mt-2">
+                  <Trans>
+                    While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't
+                    keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to
+                    your profile with its replay, and the app shows its place on the map's leaderboard. With{" "}
+                    <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings also show what
+                    you're doing in osu!, like playing, picking or editing a map, or watching a replay.
+                  </Trans>
+                </p>
+                <p className="mt-3">
+                  <Trans>It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows.</Trans>
+                </p>
+              </section>
+              <section>
+                <h2 className="text-[13px] font-semibold text-white"><Trans>What you need</Trans></h2>
+                <p className="mt-2">
+                  <Trans>
+                    It reads osu! through tosu, so tosu has to be running. You can download it from{" "}
+                    <a href="https://tosu.app" target="_blank" rel="noopener noreferrer" className={LINK}>tosu.app</a>. On Linux, lazer
+                    needs tosu's Linux build.
+                  </Trans>
+                </p>
+              </section>
+              <section>
+                <h2 className="text-[13px] font-semibold text-white"><Trans>On Windows</Trans></h2>
+                <p className="mt-2">
+                  <Trans>
+                    The installer isn't signed, because Microsoft charges for code signing, so Windows shows a warning before it runs. Click More info, then Run anyway. The{" "}
+                    <a href={MANIA_BRIDGE_SOURCE_URL} target="_blank" rel="noopener noreferrer" onClick={() => track("bridge_source_click")} className={LINK}>source code</a> is on GitHub if you want to check what it does.
+                  </Trans>
+                </p>
+              </section>
+              <section>
+                <h2 className="text-[13px] font-semibold text-white"><Trans>Connecting</Trans></h2>
+                <p className="mt-2">
+                  <Trans>
+                    Connect it to your account from inside the app. You can revoke the connection in <Link to="/settings" search={{ tab: "preferences" }} className={LINK}>Settings</Link>, under Preferences.
+                  </Trans>
+                </p>
+              </section>
+            </div>
+            <Clips />
+          </div>
+        </div>
+        )}
       </div>
     </div>
   );

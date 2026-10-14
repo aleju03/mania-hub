@@ -54,6 +54,8 @@ export interface ModDisplay {
   acronym: string;
   /** Custom speed_change when the player picked a non-default rate (lazer only). */
   rate?: number;
+  /** The official difficulty a rate-edited import's rate is measured against. */
+  basedOn?: string;
 }
 
 export function getBeatmapKeyCount(beatmap: Pick<OsuBeatmap, "cs"> | null | undefined): number | null {
@@ -197,6 +199,34 @@ export function getModDisplayList(mods: OsuMod[] | undefined, excludeCl = true):
   return out;
 }
 
+/** The mods a score row shows. An import of a rate-edited copy of an official
+ *  chart shows the rate it amounts to on that chart, on its speed mod or on one
+ *  added for it, as the skill plays list does, with the difficulty that rate is
+ *  measured against. Display only: the replay still plays the file at the rate
+ *  it was played. */
+export function getScoreModDisplayList(score: Pick<ScoreLike, "mods" | "companella">): ModDisplay[] {
+  const mods = getModDisplayList(score.mods);
+  const reference = score.companella?.reference;
+  const fileRate = reference?.rate;
+  if (!fileRate || Math.abs(fileRate - 1) < 0.005) return mods;
+  const speed = mods.findIndex((m) => MOD_RATE_DEFAULTS[m.acronym] !== undefined);
+  const played = speed >= 0 ? mods[speed].rate ?? MOD_RATE_DEFAULTS[mods[speed].acronym] : 1;
+  const rate = Math.round(played * fileRate * 100) / 100;
+  const rest = mods.filter((_, index) => index !== speed);
+  if (Math.abs(rate - 1) < 0.005) return rest;
+  const acronym = speed >= 0 && (rate > 1) === (MOD_RATE_DEFAULTS[mods[speed].acronym] > 1) ? mods[speed].acronym : rate > 1 ? "DT" : "HT";
+  return [...rest, { acronym, rate, ...(reference?.version ? { basedOn: reference.version } : {}) }];
+}
+
+/** The difficulty name a score row shows. An import of a rate-edited copy
+ *  names the official difficulty its rate badge is measured against, so the
+ *  copy's own name ("1.4x") does not read as stacked on that rate. */
+export function getScoreDisplayVersion(score: Pick<ScoreLike, "beatmap" | "companella">): string | undefined {
+  const reference = score.companella?.reference;
+  if (reference?.version && reference.rate && Math.abs(reference.rate - 1) >= 0.005) return reference.version;
+  return score.beatmap?.version;
+}
+
 export type ScoreSpeedBucket = "ht" | "normal" | "dt";
 
 /** Bucket a mania score by its effective speed mod. In osu!, HT/DC, NM, and
@@ -249,6 +279,8 @@ export function getDisplayedTotalScore(score: ScoreLike): number | null {
 }
 
 function isLegacySubmittedScore(score: ScoreLike): boolean {
+  const client = (score as { companella?: { client?: string } }).companella?.client;
+  if (client) return client === "stable";
   if (score.type != null && score.type !== "solo_score") {
     return true;
   }

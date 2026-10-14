@@ -113,14 +113,16 @@ export function ModBadge({ mod, size = 1, rate, color, detail, plain = false }: 
     // extender width = 2.2em, margin-left = -0.5em, padding-left = 0.5em, font-size = 0.5em
     // where 1em = height. Darker tail color = color-mix(in srgb, black, bg 26.3%)
     // which matches osu-framework's .Darken(2.8f).
-    const extenderWidth = Math.round(height * 2.2);
-    const overlap = Math.round(height * 0.5);
+    // Unrounded: a rounded overlap at a fractional size slid the darker tail
+    // over the pill's corner, and the pill is stacked above it besides.
+    const extenderWidth = height * 2.2;
+    const overlap = height * 0.5;
     // The tail is sized for a five-character rate; longer settings shrink to fit.
     const fontSize = Math.round(height * 0.5 * Math.min(1, 5 / tailText.length));
     const darkerBg = `color-mix(in srgb, black, ${bg} 26.3%)`;
     return (
       <span className="inline-flex items-center flex-shrink-0 align-middle" title={title}>
-        {iconPill}
+        <span className="relative z-[1] inline-flex">{iconPill}</span>
         <span
           className="inline-flex items-center justify-center"
           style={{

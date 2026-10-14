@@ -22,9 +22,8 @@ import { danBareLabel, danScaleContextFor, danTierName, danTierSuffix, getDanTie
 import { DanStepRail } from "./DanStepRail";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
-import { ModBadge } from "../ui/ModBadge";
 import { MapDetailModal } from "../maps/MapDetailModal";
-import { rateModFor, stubEntry } from "./SkillPlaysModal";
+import { PlayModBadges, rateModFor, stubEntry } from "./SkillPlaysModal";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
 
@@ -860,7 +859,6 @@ function PendingRow({
   const { t } = useLingui();
   const locale = useLocale();
   const play = entry.play;
-  const rateMod = rateModFor(play.rate, play.rateMod);
   const played = play.playedAt ? formatTimeAgo(play.playedAt, locale) : null;
   const reason = entry.reason === "revision"
     ? t`chart changed on osu!, waiting for a fresh check`
@@ -886,7 +884,7 @@ function PendingRow({
             reason column, so the reason takes a second line under the chart. */}
         <span className="block truncate text-[10px] text-osu-f1 sm:hidden">{reason}</span>
       </span>
-      {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.75} /> : null}
+      <span className="flex shrink-0 items-center"><PlayModBadges play={play} size={0.75} /></span>
       <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-osu-l2">
         {play.accuracy != null ? formatAccuracy(play.accuracy) : ""}
       </span>
@@ -971,7 +969,6 @@ function ClearRow({
   const { t } = useLingui();
   const locale = useLocale();
   const play = clear.play;
-  const rateMod = rateModFor(play.rate, play.rateMod);
   // One line per clear, deliberately unlike the top-plays rows this modal used
   // to borrow: a breakdown row is read as a column of dan credits, so artist,
   // cover art and the played-at line move into the tooltip and only the three
@@ -1008,7 +1005,7 @@ function ClearRow({
         {play.title}
         <span className="ml-1.5 text-[10px] font-normal text-osu-f1">[{play.version}]</span>
       </span>
-      {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.75} /> : null}
+      <span className="flex shrink-0 items-center"><PlayModBadges play={play} size={0.75} /></span>
       <span
         className="w-12 shrink-0 text-right text-[11px] tabular-nums text-osu-l2"
         title={t`Accuracy this clear was judged on, in the ladder's own scoring`}

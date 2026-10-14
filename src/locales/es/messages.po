@@ -131,10 +131,20 @@ msgstr "{0, plural, one {# chart} other {# charts}}"
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, one {# coleccionista} other {# coleccionistas}}"
 
+#. placeholder {0}: installations.length
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "{0, plural, one {# computer} other {# computers}}"
+#~ msgstr "{0, plural, one {# computadora} other {# computadoras}}"
+
 #. placeholder {0}: connected.length
 #: src/components/settings/CompanellaGroup.tsx
 msgid "{0, plural, one {# connected} other {# connected}}"
 msgstr "{0, plural, one {# conectado} other {# conectados}}"
+
+#. placeholder {0}: installations.length
+#: src/components/settings/CompanellaGroup.tsx
+msgid "{0, plural, one {# connection} other {# connections}}"
+msgstr "{0, plural, one {# conexión} other {# conexiones}}"
 
 #. placeholder {0}: profileInsights.keyPpConverts
 #: src/routes/player/$username.tsx
@@ -293,8 +303,6 @@ msgid "{0, plural, one {map} other {maps}}"
 msgstr "{0, plural, one {mapa} other {mapas}}"
 
 #. placeholder {0}: entry.count
-#. placeholder {0}: map.plays
-#: src/components/player/ActivityPanel.tsx
 #: src/components/player/InsightModals.tsx
 msgid "{0, plural, one {play} other {plays}}"
 msgstr "{0, plural, one {play} other {plays}}"
@@ -560,12 +568,10 @@ msgstr "{0} maniacard"
 
 #. placeholder {0}: maps.length
 #: src/components/player/ActivityPanel.tsx
-msgid "{0} map"
-msgstr "{0} mapa"
+#~ msgid "{0} map"
+#~ msgstr "{0} mapa"
 
 #. placeholder {0}: formatNumber(currentTotal)
-#. placeholder {0}: maps.length
-#: src/components/player/ActivityPanel.tsx
 #: src/routes/maps.tsx
 msgid "{0} maps"
 msgstr "{0} mapas"
@@ -719,7 +725,6 @@ msgstr "{0} personas tienen tu carta"
 msgid "{0} person to pull this card"
 msgstr "{0} persona en sacar esta carta"
 
-#. placeholder {0}: formatNumber(entry.playCount)
 #. placeholder {0}: formatNumber(segment.playCount)
 #: src/components/player/ActivityPanel.tsx
 msgid "{0} play"
@@ -1678,6 +1683,11 @@ msgstr "{rangeStart}–{pageEnd} de {totalText} cartas"
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "{rangeStart}–{pageEnd} de {totalText} jugadores"
 
+#. placeholder {0}: mod.basedOn
+#: src/components/ui/ScoreModBadge.tsx
+msgid "{rate} of {0}"
+msgstr "{rate} de {0}"
+
 #: src/components/team/TeamProfilePage.tsx
 msgid "{rated, plural, one {# member} other {# members}}"
 msgstr "{rated, plural, one {# miembro} other {# miembros}}"
@@ -2526,6 +2536,10 @@ msgstr "Una maniacard sacada de un pack booster. Abre tus propios packs y arma u
 msgid "a map"
 msgstr "un mapa"
 
+#: src/routes/hashi.tsx
+msgid "A map's leaderboard in Hashi"
+msgstr "La tabla de un mapa en Hashi"
+
 #: src/components/layout/StaleBuildNotice.tsx
 msgid "A new update just came in. Refresh to load it."
 msgstr "Acaba de llegar una nueva actualización. Recarga para cargarla."
@@ -2593,6 +2607,10 @@ msgstr "Una imagen pegada ya no está disponible. Pégala de nuevo antes de copi
 #: src/routes/dan-estimates.tsx
 msgid "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
 msgstr "Una play por debajo del OD mínimo de su escala no da nada: 5.5 en charts regulares, 7 en 4K LN y 5 en 7K LN. <0/> nunca cuenta."
+
+#: src/routes/hashi.tsx
+msgid "A profile showing the map its player is playing"
+msgstr "Un perfil mostrando el mapa que su jugador está jugando"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A quick reminder of what a dan is"
@@ -2662,6 +2680,7 @@ msgstr "A-Z"
 
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/team/TeamProfilePage.tsx
+#: src/routes/hashi.tsx
 #: src/routes/player/$username.tsx
 msgid "About"
 msgstr "Acerca de"
@@ -4439,10 +4458,18 @@ msgid "Chordjack"
 msgstr "Chordjack"
 
 #: src/components/maps/MapDetailModal.tsx
+msgid "Chordjacks"
+msgstr "Chordjacks"
+
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
 msgstr "Chordstream"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Chordstreams"
+msgstr "Chordstreams"
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -4955,6 +4982,11 @@ msgstr "comparado con {range} pp"
 #~ msgid "Completion"
 #~ msgstr ""
 
+#. placeholder {0}: index + 1
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "Computer {0}"
+#~ msgstr "Computadora {0}"
+
 #: src/routes/companella_.authorize.tsx
 #: src/routes/hashi_.authorize.tsx
 msgid "Connect an app"
@@ -5009,6 +5041,11 @@ msgstr "Conectar"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connection"
 msgstr ""
+
+#. placeholder {0}: index + 1
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Connection {0}"
+msgstr "Conexión {0}"
 
 #: src/routes/tracker.tsx
 msgid "Connection lost; reconnecting."
@@ -5634,8 +5671,12 @@ msgid "Courses"
 msgstr "Dans"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "Covered through {covered}"
-msgstr "Cubierto hasta {covered}"
+msgid "Covered"
+msgstr "Cubierto"
+
+#: src/components/layout/SupportGoalBar.tsx
+#~ msgid "Covered through {covered}"
+#~ msgstr "Cubierto hasta {covered}"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none for now."
@@ -5987,6 +6028,7 @@ msgstr "predeterminado"
 msgid "Default volume"
 msgstr "Volumen predeterminado"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Delay"
@@ -6257,6 +6299,7 @@ msgstr "suficiente"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/settings/CompanellaGroup.tsx
 msgid "Done"
 msgstr "Listo"
 
@@ -7868,6 +7911,10 @@ msgstr "Dañino, ofensivo o una estafa"
 msgid "Has its own backdrop"
 msgstr "Tiene su propio fondo"
 
+#: src/routes/hashi.tsx
+msgid "Hashi before connecting to Mania Tracker"
+msgstr "Hashi antes de conectarse a Mania Tracker"
+
 #: src/routes/bridge.tsx
 #~ msgid "Hashi reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
 #~ msgstr "Hashi lee osu! a través de tosu, así que tosu tiene que estar abierto. En Linux, lazer necesita la versión de tosu para Linux."
@@ -7881,8 +7928,8 @@ msgstr "Tiene su propio fondo"
 #~ msgstr "Hashi envía a tu cuenta cada play de mania que terminas en lazer u osu!stable, con su replay, aunque estés restringido en Bancho, juegues offline o en un servidor privado. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
 
 #: src/routes/hashi.tsx
-msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
-msgstr "Hashi envía a tu cuenta cada play de mania que terminas en lazer u osu!stable, con su replay, aunque estés restringido en Bancho, juegues offline o en un servidor privado. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp en Mania Tracker también muestran lo que estás haciendo en osu!."
+#~ msgid "Hashi sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings on Mania Tracker also show what you're doing in osu!."
+#~ msgstr "Hashi envía a tu cuenta cada play de mania que terminas en lazer u osu!stable, con su replay, aunque estés restringido en Bancho, juegues offline o en un servidor privado. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp en Mania Tracker también muestran lo que estás haciendo en osu!."
 
 #: src/routes/bridge.tsx
 #~ msgid "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
@@ -7891,6 +7938,22 @@ msgstr "Hashi envía a tu cuenta cada play de mania que terminas en lazer u osu!
 #: src/routes/bridge.tsx
 #~ msgid "Hashi sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
 #~ msgstr "Hashi envía a tu cuenta cada play de mania que terminas en osu!stable o lazer, con su replay. Con Share what I'm playing activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
+
+#: src/routes/hashi.tsx
+msgid "Hashi showing a leaderboard for a graveyard map"
+msgstr ""
+
+#: src/routes/hashi.tsx
+msgid "Hashi showing a map's leaderboard for Double Time"
+msgstr ""
+
+#: src/routes/hashi.tsx
+msgid "Hashi's main window with the last plays it sent"
+msgstr "La ventana principal de Hashi con las últimas jugadas que envió"
+
+#: src/routes/hashi.tsx
+msgid "Hashi's settings"
+msgstr "Los ajustes de Hashi"
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -8703,6 +8766,10 @@ msgstr "Puede que lo hayan retirado, o que todavía esté esperando aprobación.
 msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 msgstr "Lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
 
+#: src/routes/hashi.tsx
+msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
+msgstr "Se queda en la bandeja del sistema y casi no usa CPU, con unos 3 MB de memoria en Windows."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
 #~ msgstr "Antes era el 4º mejor pase entre todos tus skills a la vez, y en la práctica eso era simplemente aquello en lo que te especializas. Medido sobre las 12,974 estimaciones de 4K regular, el número viejo quedaba una mediana de 0.14 niveles por encima del skill más fuerte del jugador, y el 84% de los jugadores estaba a menos de medio nivel del suyo. Medía tu mejor patrón y a eso le decía tu dan. Un dan de verdad no funciona así: te hace pasar una mezcla de una sentada. Promediar hace esa misma pregunta."
@@ -8964,6 +9031,10 @@ msgstr "Modo"
 msgid "Keys pressed per second."
 msgstr "Teclas presionadas por segundo."
 
+#: src/routes/__root.tsx
+msgid "Ko-fi page"
+msgstr "página de Ko-fi"
+
 #: src/components/communities/field-options.tsx
 msgid "Korean"
 msgstr "Coreano"
@@ -9064,7 +9135,7 @@ msgstr "vista por última vez"
 #~ msgid "Last seen"
 #~ msgstr ""
 
-#. placeholder {0}: formatTimeAgo(installation.lastSeenAt, locale)
+#. placeholder {0}: formatTimeAgo(lastSeen, locale)
 #: src/components/settings/CompanellaGroup.tsx
 msgid "last seen {0}"
 msgstr "vista por última vez {0}"
@@ -9564,8 +9635,8 @@ msgid "Loaded the built-in skin"
 msgstr "Se cargó la skin integrada"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "loading"
-msgstr "cargando"
+#~ msgid "loading"
+#~ msgstr "cargando"
 
 #. placeholder {0}: skin.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -9914,6 +9985,10 @@ msgstr "Verificando que el replay esté disponible."
 #: src/components/communities/field-options.tsx
 msgid "Malay"
 msgstr "Malayo"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Manage"
+msgstr "Administrar"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "manager"
@@ -10344,8 +10419,8 @@ msgstr "Falta en tu colección."
 #~ msgstr "Score faltante"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "mixed keys"
-msgstr "teclas mixtas"
+#~ msgid "mixed keys"
+#~ msgstr "teclas mixtas"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Mod filter"
@@ -10559,6 +10634,11 @@ msgstr "MSD y dan en plays recientes"
 msgid "MSD at {0}"
 msgstr "MSD a {0}"
 
+#. placeholder {0}: formatRate(rate)
+#: src/components/maps/MapDetailModal.tsx
+msgid "MSD at {0} with Inverse"
+msgstr "MSD a {0} con Inverse"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "MSD on recent plays"
 msgstr "MSD en plays recientes"
@@ -10570,6 +10650,10 @@ msgstr "Jugadas de MSD"
 #: src/components/maps/MapDetailModal.tsx
 msgid "MSD skill rating"
 msgstr "Valoración de habilidad MSD"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "MSD with Inverse"
+msgstr "MSD con Inverse"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
@@ -15062,6 +15146,7 @@ msgstr "capturas"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/hashi.tsx
 msgid "Screenshots"
 msgstr "Capturas"
 
@@ -15415,8 +15500,8 @@ msgid "Sending…"
 msgstr "Enviando…"
 
 #: src/routes/hashi.tsx
-msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
-msgstr "Envía tus plays de osu!mania de lazer u osu!stable a Mania Tracker y muestra en tu perfil y en los rankings lo que estás jugando."
+#~ msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
+#~ msgstr "Envía tus plays de osu!mania de lazer u osu!stable a Mania Tracker y muestra en tu perfil y en los rankings lo que estás jugando."
 
 #: src/routes/bridge.tsx
 #~ msgid "Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile."
@@ -15471,8 +15556,8 @@ msgstr "Los servidores no están disponibles por ahora"
 
 #. placeholder {0}: sessionIndex + 1
 #: src/components/player/ActivityPanel.tsx
-msgid "Session {0}"
-msgstr "Sesión {0}"
+#~ msgid "Session {0}"
+#~ msgstr "Sesión {0}"
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Session shape"
@@ -15913,6 +15998,10 @@ msgstr "Muestra"
 msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "Muestra un punto en el enlace de novedades cuando hay algo nuevo"
 
+#: src/routes/hashi.tsx
+msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
+msgstr "Muestra leaderboards con los mods que tienes puestos y manda tus plays de mania a tu perfil, donde también puede mostrar lo que estás jugando."
+
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
 #~ msgstr "Muestra el MSD LN de 4K, el eje LN y el dan LN de 4K en Skills"
@@ -16089,16 +16178,24 @@ msgid "Single focus"
 msgstr "Meta única"
 
 #: src/components/maps/MapDetailModal.tsx
+msgid "Single-note jacks"
+msgstr "Jacks de una nota"
+
+#: src/components/maps/MapDetailModal.tsx
 #~ msgid "Single-note jacks {singleText}, chord jacks {chordText}"
 #~ msgstr "Jacks de una nota {singleText}, jacks en acordes {chordText}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Single-note jacks {singleText}, chordjacks {chordText}"
-msgstr "Jacks de una nota {singleText}, chordjacks {chordText}"
+#~ msgid "Single-note jacks {singleText}, chordjacks {chordText}"
+#~ msgstr "Jacks de una nota {singleText}, chordjacks {chordText}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Single-note streams {singleText}, chordstreams {chordText}"
-msgstr "Streams de una nota {singleText}, chordstreams {chordText}"
+#~ msgid "Single-note streams"
+#~ msgstr "Streams de una nota"
+
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Single-note streams {singleText}, chordstreams {chordText}"
+#~ msgstr "Streams de una nota {singleText}, chordstreams {chordText}"
 
 #: src/routes/skins.tsx
 msgid "size"
@@ -16492,8 +16589,8 @@ msgstr "Ordenando del rating de estrellas más bajo al más alto - clic izquierd
 #~ msgstr "Código fuente"
 
 #: src/routes/hashi.tsx
-msgid "Source code on GitHub"
-msgstr "Código fuente en GitHub"
+#~ msgid "Source code on GitHub"
+#~ msgstr "Código fuente en GitHub"
 
 #: src/components/communities/field-options.tsx
 msgid "Spam or advertising"
@@ -16515,7 +16612,6 @@ msgstr "Espectando a {player}"
 msgid "Spectators"
 msgstr "Espectadores"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Speed"
 msgstr "Speed"
@@ -16860,6 +16956,10 @@ msgstr "Stream"
 #: src/components/maps/PatternRadar.tsx
 msgid "STREAM"
 msgstr "STREAM"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Streams"
+msgstr "Streams"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Streams broken up by two-note jumps."
@@ -18140,6 +18240,10 @@ msgstr "No se pudo consultar la clasificación."
 #~ msgid "The rankings lookup is taking a moment"
 #~ msgstr "La consulta de la clasificación está tardando un poco"
 
+#: src/routes/hashi.tsx
+msgid "The rankings showing a player who is playing"
+msgstr "Los rankings mostrando a un jugador que está jugando"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "The rating may be waiting for a fresh chart-analysis pass."
 msgstr "Puede que la calificación espere un nuevo pase de análisis del mapa."
@@ -19313,8 +19417,8 @@ msgid "Unable to load settings."
 msgstr "No se pudieron cargar los ajustes."
 
 #: src/components/player/ActivityPanel.tsx
-msgid "Unanalyzed"
-msgstr "Sin analizar"
+#~ msgid "Unanalyzed"
+#~ msgstr "Sin analizar"
 
 #: src/routes/recommendations.tsx
 msgid "unavailable"
@@ -19734,6 +19838,11 @@ msgstr "Clear verificado"
 msgid "Vertical"
 msgstr "Vertical"
 
+#. placeholder {0}: play.sentThrough.name
+#: src/components/maps/PlayResults.tsx
+msgid "via {0}"
+msgstr "con {0}"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "vibro"
 msgstr "vibro"
@@ -19895,6 +20004,7 @@ msgstr "Ver perfil de osu!"
 msgid "View osu! team"
 msgstr "Ver equipo de osu!"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -20090,6 +20200,12 @@ msgstr "Ver comparativa"
 msgid "Watch two runs of the same map at once"
 msgstr "Mira dos runs del mismo mapa a la vez"
 
+#: src/components/player/ScorePlayDetailModal.tsx
+#: src/components/player/ScoreRows.tsx
+#: src/components/ui/CompanellaMark.tsx
+msgid "Watch video"
+msgstr "Ver video"
+
 #. placeholder {0}: record.skin.name
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Watch with {name}'s own skin ({0})"
@@ -20249,6 +20365,10 @@ msgstr "Qué plays se miran"
 #: src/components/me/MyDataPanel.tsx
 msgid "while tracked"
 msgstr "mientras estuviste en el tracker"
+
+#: src/routes/hashi.tsx
+msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
+msgstr "Mientras eliges una canción, Hashi muestra la leaderboard del mapa con los mods que tienes puestos, incluidas las que osu! no guarda, como DT o HT a cualquier rate, Invert o No Release. Cada mapa de mania que terminas en osu!stable o lazer va a tu perfil con su replay, y la app muestra en qué puesto quedó en la leaderboard del mapa. Con <0>{shareSetting}</0> activado, tu perfil y el ranking de pp también muestran lo que estás haciendo en osu!, como jugar, elegir o editar un mapa, o ver una replay."
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/communities/CommunityEditModal.tsx

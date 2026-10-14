@@ -3,9 +3,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 
-/* /admin/supporters, backed by backend features/supporters.ts: every donation
-   with who gave and how it was linked to an osu! account, the supporter list,
-   and the owner's link, unlink, grant and Ko-fi CSV import actions. */
+/* /admin/players?tab=supporters, backed by backend features/supporters.ts:
+   every donation with who gave and how it was linked to an osu! account, the
+   supporter list, and the owner's link, unlink, grant and Ko-fi CSV import
+   actions. */
 
 export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "manual" | "unlinked";
 

@@ -43,7 +43,7 @@ export const MSD_SKILLSET_META: SkillAxisMeta[] = [
 ];
 
 // Prism's own skillset, with no MinaCalc slot.
-const PRISM_SPEED_META: SkillAxisMeta = { key: "Speed", label: "Speed", labelMsg: msg`Speed`, color: "#5fb8c9" };
+const PRISM_SPEED_META: SkillAxisMeta = { key: "Speed", label: "Delay", labelMsg: msg`Delay`, color: "#5fb8c9" };
 
 // Prism, the 6K-8K calculator, files its skillsets in MinaCalc's slots, as
 // Etterna's seven-key handler does; these are the names they stand for.
@@ -55,11 +55,11 @@ const PRISM_SKILLSET_NAMES: Record<string, Pick<SkillAxisMeta, "label" | "labelM
 
 /** The skillset axes as a keymode names them. Prism's Chordstream and Jack
  *  take their single-note pattern in; the Stream and JackSpeed halves are
- *  not axes. */
+ *  not axes, and Stamina is no Prism skillset. */
 export function msdSkillsetMeta(keyCount: number | null | undefined): SkillAxisMeta[] {
   if (!usesPrism(keyCount)) return MSD_SKILLSET_META;
   return [
-    ...MSD_SKILLSET_META.filter((meta) => meta.key !== "JackSpeed" && meta.key !== "Stream").map((meta) => ({ ...meta, ...PRISM_SKILLSET_NAMES[meta.key] })),
+    ...MSD_SKILLSET_META.filter((meta) => meta.key !== "JackSpeed" && meta.key !== "Stream" && meta.key !== "Stamina").map((meta) => ({ ...meta, ...PRISM_SKILLSET_NAMES[meta.key] })),
     PRISM_SPEED_META,
   ];
 }

@@ -72,7 +72,8 @@ export function isCompanellaOsuTwin(imported: TwinScore, official: TwinScore): b
   const beatmapId = imported.beatmap?.id ?? 0;
   if (beatmapId <= 0 || (official.beatmap?.id ?? official.beatmap_id) !== beatmapId) return false;
   if ((official.user_id ?? official.user?.id) !== (imported.user_id ?? imported.user?.id)) return false;
-  const total = imported.legacy_total_score ?? imported.total_score ?? imported.score;
+  // A lazer import carries a legacy total of 0, so the first positive total is its own.
+  const total = [imported.legacy_total_score, imported.total_score, imported.score].find((value) => value != null && value > 0);
   if (!total) return false;
   const officialTotals = [official.legacy_total_score, official.classic_total_score, official.total_score, official.score];
   if (!officialTotals.includes(total)) return false;

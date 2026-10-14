@@ -36,6 +36,7 @@ import { AnalyticsStream } from "./AnalyticsStream";
 import { AnalyticsErrorBanner, AnalyticsInfoBanner, useTickingNow } from "./shared";
 
 const ANALYTICS_VIEW_STORAGE_KEY = "mh_monitor_view";
+const ANALYTICS_COUNTRY_STORAGE_KEY = "mh_monitor_country";
 type AnalyticsView = "live" | "insights" | "lookup";
 const ANALYTICS_VIEWS: readonly AnalyticsView[] = ["live", "insights", "lookup"];
 
@@ -63,13 +64,24 @@ export function AnalyticsMonitorPanel() {
   const recentCountryRef = useRef(recentCountry);
   recentCountryRef.current = recentCountry;
   const now = useTickingNow(1_000);
+  // One numbering for the panel's lifetime, so V-numbers and colours stick.
+  const visitorSlotsRef = useRef(new Map<string, number>());
 
   const setRange = useCallback((next: AnalyticsRange) => {
     const normalized = clampAnalyticsRangeHours(next);
     setRangeState(normalized);
-    setRecentCountry(null);
     try {
       window.localStorage.setItem(ANALYTICS_RANGE_STORAGE_KEY, String(normalized));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const selectRecentCountry = useCallback((next: string | null) => {
+    setRecentCountry(next);
+    try {
+      if (next) window.localStorage.setItem(ANALYTICS_COUNTRY_STORAGE_KEY, next);
+      else window.localStorage.removeItem(ANALYTICS_COUNTRY_STORAGE_KEY);
     } catch {
       // ignore
     }
@@ -137,6 +149,8 @@ export function AnalyticsMonitorPanel() {
       if (storedRange) setRangeState(storedRange);
       const storedView = window.localStorage.getItem(ANALYTICS_VIEW_STORAGE_KEY);
       if (ANALYTICS_VIEWS.includes(storedView as AnalyticsView)) setView(storedView as AnalyticsView);
+      const storedCountry = window.localStorage.getItem(ANALYTICS_COUNTRY_STORAGE_KEY)?.trim().toUpperCase();
+      if (storedCountry && /^[A-Z]{2}$/.test(storedCountry)) setRecentCountry(storedCountry);
     } catch {
       // ignore
     }
@@ -251,16 +265,20 @@ export function AnalyticsMonitorPanel() {
   const currentData = data && dataRange === range ? data : null;
   const isRecentCountryPending = Boolean(currentData && dataRecentCountry !== recentCountry);
   const statusData = currentData ?? data;
-  const statusText = statusData?.fetchedAt
-    ? statusData.cacheState === "warming"
-      ? "warming..."
-      : refreshing
-        ? "refreshing..."
+  // One fixed-width slot that changes words, never size; the refresh button's
+  // spinner says a refresh is in flight.
+  const statusText = error && statusData
+    ? "load failed"
+    : statusData?.fetchedAt
+      ? statusData.cacheState === "warming"
+        ? "warming..."
         : `updated ${formatTimeAgo(new Date(statusData.fetchedAt).toISOString())}`
-    : null;
-  const statusColorClass = statusData?.cacheState === "warming" || refreshing
-    ? "text-osu-pink-light"
-    : "text-osu-f1";
+      : "";
+  const statusColorClass = error && statusData
+    ? "text-osu-red-light"
+    : statusData?.cacheState === "warming"
+      ? "text-osu-pink-light"
+      : "text-osu-f1";
 
   const recentEvents = currentData?.recentEvents;
   const replayMaps = useMemo(() => buildAnalyticsReplayMapIndex(recentEvents ?? []), [recentEvents]);
@@ -268,7 +286,7 @@ export function AnalyticsMonitorPanel() {
   // rebuild the whole list; only the online flag depends on `now` at all.
   const sessionClock = Math.floor(now / 15_000);
   const sessions = useMemo(
-    () => buildAnalyticsSessions(recentEvents ?? [], sessionClock * 15_000),
+    () => buildAnalyticsSessions(recentEvents ?? [], sessionClock * 15_000, visitorSlotsRef.current),
     [recentEvents, sessionClock],
   );
   const onlineCountries = useMemo(() => {
@@ -318,13 +336,16 @@ export function AnalyticsMonitorPanel() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {liveFeedConnected ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-osu-green" title="Streaming events from the in-house analytics store">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-osu-green" />
-              live
-            </span>
-          ) : null}
-          {statusText ? <span className={`text-[11px] ${statusColorClass}`}>{statusText}</span> : null}
+          <span
+            className={`inline-flex items-center gap-1.5 text-[11px] ${liveFeedConnected ? "text-osu-green" : "text-osu-f1/60"}`}
+            title={liveFeedConnected ? "Streaming events from the in-house analytics store" : "Live stream not connected"}
+          >
+            <span className={`h-2 w-2 rounded-full ${liveFeedConnected ? "animate-pulse bg-osu-green" : "bg-osu-b2"}`} />
+            live
+          </span>
+          <span className={`w-[118px] truncate text-right text-[11px] tabular-nums ${statusColorClass}`} title={error ?? undefined}>
+            {statusText}
+          </span>
           <button
             type="button"
             onClick={() => void load(range, recentCountry, false)}
@@ -349,8 +370,10 @@ export function AnalyticsMonitorPanel() {
       </div>
 
       <AnalyticsRangeSelector range={range} onChange={setRange} />
-      {error ? <AnalyticsErrorBanner message={error} /> : null}
-      {currentData?.cacheState === "warming" ? (
+      {/* Once there is something on screen a failed poll only shows in the
+          status slot: a banner that comes and goes shoves the whole view. */}
+      {error && !statusData ? <AnalyticsErrorBanner message={error} /> : null}
+      {view !== "live" && currentData?.cacheState === "warming" ? (
         <AnalyticsInfoBanner message="The analytics store is still preparing this range; the view will fill in automatically." />
       ) : null}
 
@@ -362,9 +385,12 @@ export function AnalyticsMonitorPanel() {
         <>
           <AnalyticsPulse data={currentData} range={range} onlineCountries={onlineCountries} />
           {view === "live" ? (
-            <>
-              <AnalyticsLiveBoard sessions={sessions} replayMaps={replayMaps} now={now} />
+            /* Both panels are a fixed height and scroll inside themselves, so
+               visitors arriving and events streaming in never move the page. */
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+              <AnalyticsLiveBoard sessions={sessions} replayMaps={replayMaps} now={now} className="h-[380px] lg:h-[680px]" />
               <AnalyticsStream
+                className="h-[640px] lg:h-[680px]"
                 rows={currentData.recentEvents}
                 sessions={sessions}
                 replayMaps={replayMaps}
@@ -372,9 +398,9 @@ export function AnalyticsMonitorPanel() {
                 country={recentCountry}
                 loading={isRecentCountryPending}
                 now={now}
-                onCountryChange={setRecentCountry}
+                onCountryChange={selectRecentCountry}
               />
-            </>
+            </div>
           ) : (
             <AnalyticsInsights data={currentData} range={range} />
           )}

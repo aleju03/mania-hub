@@ -80,10 +80,10 @@ it.each([
     ...ANONYMOUS_AUTH_STATE, canUseDevFeatures: true,
     viewer: { id: 2, username: "Developer", avatarUrl: "", countryCode: "CR" },
   }],
-] as const)("shows Companella but not Hashi when %s", async (_label, auth) => {
+] as const)("shows both integrations when %s", async (_label, auth) => {
   await openPage("/settings?tab=preferences", auth);
   await screen.findByText("Companella");
-  expect(screen.queryByText("Hashi")).toBeNull();
-  fireEvent.click(screen.getByRole("link", { name: "About" }));
+  expect(screen.getByText("Hashi")).toBeTruthy();
+  fireEvent.click(screen.getAllByRole("link", { name: "About" })[1]);
   await screen.findByRole("heading", { name: "You can now submit plays through Companella" });
 });

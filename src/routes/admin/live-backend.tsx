@@ -31,6 +31,7 @@ import {
 import { COUNTRY_OPTIONS, getCountryName } from "../../lib/country";
 import { CountryFlag } from "../../components/ui/CountryFlag";
 import { SectionCard } from "../../components/admin/SectionCard";
+import { MapDownloadsCard } from "../../components/admin/map-downloads/MapDownloadsCard";
 import { AnalyticsMonitorPanel } from "../../components/admin/analytics/AnalyticsMonitorPanel";
 import { SweepsMonitorPanel, SweepsSummary } from "../../components/admin/sweeps/SweepsMonitorPanel";
 import { VpsMonitorPanel } from "../../components/admin/vps/VpsMonitorPanel";
@@ -768,6 +769,10 @@ function LiveBackendPage() {
 
           <Section title="osu! API pressure" subtitle="Who and what is burning rate-limit budget, in plain terms">
             <RateBreakdownCard status={status} />
+          </Section>
+
+          <Section title="Map downloads" subtitle="Mirror budgets and health behind songs, hitsounds and chart files">
+            <MapDownloadsCard />
           </Section>
 
           <Section title="Users" subtitle="Two controls: a reversible soft-deactivate/reactivate (untracks the player and marks them inactive, deletes nothing), and an irreversible wipe that also deletes their board/score projections, profile page and activity.">

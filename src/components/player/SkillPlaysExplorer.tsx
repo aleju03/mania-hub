@@ -490,7 +490,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   // narrowing controls folded behind one button.
   const toolbar = (
     <div className="relative flex flex-wrap items-center gap-x-3 gap-y-2">
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
         {onViewChange && views && views.length > 1 ? (
           <Segmented
             ariaLabel={t`Plays list`}

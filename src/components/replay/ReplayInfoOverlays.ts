@@ -2,6 +2,7 @@
 // user panel for stable and lazer plays alike. Retained Pixi objects like the
 // lazer leaderboard.
 import { Container, FillGradient, Graphics, Sprite, Text, Texture } from "pixi.js";
+import { setTextResolution } from "./pixi-text-resolution";
 import {
   formatReplayInfoLength,
   formatReplayMapDan,
@@ -411,6 +412,9 @@ class LazerPlayerCard implements InfoCard<ReplayPlayerInfo> {
 
 // --- the pair ------------------------------------------------------------------------
 
+/** `textResolution` is the renderer resolution times `scale`, so scaled text stays sharp. */
+type OverlayFrame = { x: number; y: number; scale: number; textResolution?: number };
+
 export class ReplayInfoOverlays {
   private map: LazerMapCard | null = null;
   private player: LazerPlayerCard | null = null;
@@ -449,19 +453,20 @@ export class ReplayInfoOverlays {
   }
 
   /** Draws into `parent`, the overlay's own stage layer. */
-  drawMap(input: ReplayMapCardInput, frame: { x: number; y: number; scale: number }, parent: Container) {
+  drawMap(input: ReplayMapCardInput, frame: OverlayFrame, parent: Container) {
     this.place(this.mapCard(), input, frame, parent);
   }
 
-  drawPlayer(player: ReplayPlayerInfo, frame: { x: number; y: number; scale: number }, parent: Container) {
+  drawPlayer(player: ReplayPlayerInfo, frame: OverlayFrame, parent: Container) {
     this.place(this.playerCard(), player, frame, parent);
   }
 
-  private place<T>(card: InfoCard<T>, data: T, frame: { x: number; y: number; scale: number }, parent: Container) {
+  private place<T>(card: InfoCard<T>, data: T, frame: OverlayFrame, parent: Container) {
     if (card.container.parent !== parent) parent.addChild(card.container);
     card.update(data);
     card.container.position.set(frame.x, frame.y);
     card.container.scale.set(frame.scale);
+    setTextResolution(card.container, frame.textResolution);
     card.container.visible = true;
   }
 

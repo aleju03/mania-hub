@@ -5378,7 +5378,7 @@ export class ManiaReplayRenderer {
     const scale = this.getOverlayScale(layout, "mapInfo");
     const size = overlays.measureMap(input);
     const frame = this.getOverlayFrame(layout, "mapInfo", size.width * scale, size.height * scale);
-    if (frame) overlays.drawMap(input, { x: frame.x, y: frame.y, scale }, this.getOverlayLayer("mapInfo").root);
+    if (frame) overlays.drawMap(input, { x: frame.x, y: frame.y, scale, textResolution: this.dpr * scale }, this.getOverlayLayer("mapInfo").root);
   }
 
   private renderPlayerInfoOverlay(layout: Layout) {
@@ -5390,7 +5390,7 @@ export class ManiaReplayRenderer {
     const scale = this.getOverlayScale(layout, "playerInfo");
     const size = overlays.measurePlayer(player);
     const frame = this.getOverlayFrame(layout, "playerInfo", size.width * scale, size.height * scale);
-    if (frame) overlays.drawPlayer(player, { x: frame.x, y: frame.y, scale }, this.getOverlayLayer("playerInfo").root);
+    if (frame) overlays.drawPlayer(player, { x: frame.x, y: frame.y, scale, textResolution: this.dpr * scale }, this.getOverlayLayer("playerInfo").root);
   }
 
   // Live, this reserves the frame the element over the canvas draws into,
@@ -6732,7 +6732,7 @@ export class ManiaReplayRenderer {
       combo: this.maxComboSoFar,
       accuracy: this.getAccuracy() / 100,
       avatarUrl: this.leaderboardOptions.playerAvatarUrl,
-    }, this.leaderboardOptions, { ...frame, scale }, this.lazerLeaderboardFrameTime ?? performance.now(), this.suppressOvertakeFlash, this.isLazerLeaderboardExpanded());
+    }, this.leaderboardOptions, { ...frame, scale, textResolution: this.dpr * scale }, this.lazerLeaderboardFrameTime ?? performance.now(), this.suppressOvertakeFlash, this.isLazerLeaderboardExpanded());
     this.overlayHitboxes.push({ id: "leaderboard", ...frame, width: this.lazerLeaderboard.width * scale });
     this.suppressOvertakeFlash = false;
   }

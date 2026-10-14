@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildTrackedPlayScore, getTrackedPlayRank } from "./tracked-play-score";
+import { buildActivityMapScore, buildCourseClearScore, buildTrackedPlayScore, getTrackedPlayRank } from "./tracked-play-score";
+import type { LivePlayerDanCourseEvidence } from "./live-backend";
 import { getManiaJudgementCounts, getScoreUrl, isLazerScore } from "./score";
-import type { LiveKeymodePpPlay } from "./live-backend";
+import type { LiveKeymodePpPlay, LivePlayerActivityMap } from "./live-backend";
 
 const viewer = { id: 7, username: "Tester", avatar_url: "https://a/7.png", country_code: "CR" };
 
@@ -117,5 +118,59 @@ describe("buildTrackedPlayScore", () => {
 
     expect(score.id).toBe(7_245_658_770);
     expect(getScoreUrl(score)).toBe("https://osu.ppy.sh/scores/7245658770");
+  });
+});
+
+describe("buildCourseClearScore", () => {
+  it("puts a lazer custom speed back on the rate mod so the badge shows it", () => {
+    const course = {
+      beatmapId: 2_332_320, beatmapsetId: 1, courseName: "4K LN Dan 15th - Yume", title: "t", artist: "a", version: "v",
+      level: "15", rawDan: 15, label: "15", accuracy: 0.9714, currency: "v2", bar: 0.97, displayedAccuracy: 0.9714,
+      beatmapStatus: "graveyard", scoreId: 1, soloScoreId: 1, legacyScoreId: null, mods: ["DT"], modRate: 1.1,
+      statistics: null, maxCombo: null, totalScore: null, rank: "S", playedAt: null, hasReplay: false, isLazer: true,
+    } as unknown as LivePlayerDanCourseEvidence;
+    expect(buildCourseClearScore(course, 4, viewer).mods).toEqual([{ acronym: "DT", settings: { speed_change: 1.1 } }]);
+    expect(buildCourseClearScore({ ...course, modRate: undefined }, 4, viewer).mods).toEqual([{ acronym: "DT" }]);
+  });
+});
+
+describe("buildActivityMapScore", () => {
+  const map: LivePlayerActivityMap = {
+    key: "2026-09-13:42",
+    beatmapId: 42,
+    beatmapsetId: 9,
+    title: "Song",
+    artist: "Artist",
+    version: "[7K] Hard",
+    coverUrl: null,
+    plays: 3,
+    accuracy: 0.9612,
+    pp: null,
+    rank: "S",
+    mods: [{ acronym: "DT", settings: { speed_change: 1.2 } }],
+    keyCount: 7,
+    skills: null,
+    play: {
+      soloScoreId: 900,
+      legacyScoreId: null,
+      isLazer: true,
+      hasReplay: true,
+      maxCombo: 1200,
+      totalScore: 912_345,
+      statistics: { great: 1000, miss: 3 },
+      playedAt: "2026-09-13T03:00:00.000Z",
+    },
+  };
+
+  it("opens the day's best play with its custom rate and no pp on an unranked map", () => {
+    const score = buildActivityMapScore(map, viewer)!;
+    expect(score.id).toBe(900);
+    expect(score.mods).toEqual([{ acronym: "DT", settings: { speed_change: 1.2 } }]);
+    expect(score.pp).toBeNull();
+    expect(score.has_replay).toBe(true);
+  });
+
+  it("has nothing to open when the day kept no play", () => {
+    expect(buildActivityMapScore({ ...map, play: null }, viewer)).toBeNull();
   });
 });

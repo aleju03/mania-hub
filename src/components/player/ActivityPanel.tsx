@@ -18,6 +18,7 @@ import {
   type LiveTeamActivityDayDetail,
   type LiveTeamActivitySnapshot,
   type LiveTeamMember,
+  type LivePlayerActivityMapPlay,
   type LivePlayerActivityPatterns,
   type LivePlayerActivityPrimarySkill,
   type LivePlayerActivitySnapshot,
@@ -38,7 +39,11 @@ import { showTrackingStartedToast } from "../me/TrackingToasts";
 import { OsuLogo } from "../ui/OsuLogo";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { UsernameText } from "../ui/UsernameText";
-import type { OsuUser } from "../../lib/types";
+import type { OsuMod, OsuScore, OsuUser } from "../../lib/types";
+import { buildActivityMapScore, type TrackedPlayViewer } from "../../lib/tracked-play-score";
+import { ScorePlayDetailModal } from "./ScorePlayDetailModal";
+import { getModDisplayList } from "../../lib/score";
+import { ModBadge } from "../ui/ModBadge";
 
 type ActivityDay = {
   date: string;
@@ -64,8 +69,10 @@ type ActivityPlayedMap = {
   accuracy: number | null;
   pp: number | null;
   rank: string | null;
+  mods?: OsuMod[];
   keyCount: number | null;
   skills: LivePlayerActivitySkillVector | null;
+  play?: LivePlayerActivityMapPlay | null;
 };
 
 type ActivitySkillReadout = LivePlayerActivitySkillReadout;
@@ -103,6 +110,7 @@ export function PlayerActivityPanel({ user }: { user: OsuUser }) {
   // detail-fetch effects below never race it against real backend data.
   const [devDay, setDevDay] = useState<ActivityDay | null>(null);
   const [selectedDayDetail, setSelectedDayDetail] = useState<ActivityDay | null>(null);
+  const [openedScore, setOpenedScore] = useState<OsuScore | null>(null);
   const [dayDetailLoading, setDayDetailLoading] = useState(false);
   const [dayDetailError, setDayDetailError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<LivePlayerActivitySnapshot | null>(null);
@@ -251,61 +259,45 @@ export function PlayerActivityPanel({ user }: { user: OsuUser }) {
             transition={{ duration: 0.14 }}
           >
             <motion.div
-              className="flex max-h-[calc(100dvh-1rem)] w-full max-w-[34rem] flex-col overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b4 p-4 shadow-[0_18px_70px_rgba(0,0,0,0.55)] sm:max-h-[calc(100vh-2rem)] sm:max-w-xl sm:p-5"
+              className="relative flex max-h-[calc(100dvh-1rem)] w-full max-w-[64rem] flex-col overflow-y-auto rounded-xl border border-osu-b3/25 bg-osu-b4 shadow-[0_18px_70px_rgba(0,0,0,0.55)] md:grid md:h-[min(44rem,calc(100vh-2rem))] md:grid-cols-[20rem_minmax(0,1fr)] md:overflow-hidden"
               onClick={(event) => event.stopPropagation()}
               initial={{ opacity: 0, y: 10, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.97 }}
               transition={{ duration: 0.16 }}
             >
-              <div className="flex shrink-0 items-start justify-between gap-4">
-                <div>
-                  <div className="text-[9px] font-black uppercase tracking-wide text-osu-pink-light sm:text-[10px]">{t`Activity day`}</div>
-                  <h3 className="mt-1 text-xl font-black text-white sm:text-2xl">{formatFullActivityDate(modalDay.date)}</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeDayModal}
-                  aria-label={t`Close activity details`}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 hover:bg-osu-b3/50 hover:text-white"
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M1 1l12 12M13 1L1 13" />
-                  </svg>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={closeDayModal}
+                aria-label={t`Close activity details`}
+                className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 hover:bg-osu-b3/50 hover:text-white"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M1 1l12 12M13 1L1 13" />
+                </svg>
+              </button>
 
-              <div className="min-h-0 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
-                <div className={`mt-4 grid gap-2 sm:mt-5 ${modalPlayedLabel ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+              <div className="p-5 md:overflow-y-auto md:[scrollbar-gutter:stable]">
+                <h3 className="pr-10 text-2xl font-black leading-tight text-white">{formatActivityDayHeading(modalDay.date)}</h3>
+                <div className="text-sm font-semibold text-osu-f1">{formatActivityDayYear(modalDay.date)}</div>
+
+                <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3">
                   <ActivityDetailMetric label={t`Plays`} value={formatNumber(modalDay.scoreCount)} />
                   <ActivityDetailMetric label={t`Sessions`} value={formatNumber(modalDay.sessionCount)} />
                   {modalPlayedLabel ? <ActivityDetailMetric label={t`Time played`} value={modalPlayedLabel} /> : null}
-                  <ActivityDetailMetric label={t`Maps`} value={formatNumber(modalDay.mapCount)} />
                 </div>
 
                 <ActivitySessionFlow day={modalDay} timezone={activity.timezone} />
 
-                <ActivityDayMaps
-                  key={modalDay.date}
-                  maps={modalDay.maps}
-                  mapCount={modalDay.mapCount}
-                  loading={dayDetailLoading}
-                  error={dayDetailError}
-                />
-
-                <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">{t`Pattern mix`}</div>
-                    <div className="text-[10px] text-osu-f1 sm:text-[11px]">{t`avg intensity, 0-100`}</div>
-                  </div>
+                <div className="mt-5 border-t border-white/[0.07] pt-4">
+                  <div className="text-[11px] font-bold uppercase text-osu-f1">{t`Pattern mix`}</div>
                   {modalDay.skills && modalDay.skills.analyzedPlays > 0 ? (
                     <ActivityPatternMix key={modalDay.date} skills={modalDay.skills} />
                   ) : dayDetailLoading ? (
-                    <div className="mt-3 space-y-2">
-                      <Skeleton className="h-3 rounded-full" />
-                      <Skeleton className="h-3 rounded-full" />
-                      <Skeleton className="h-3 rounded-full" />
-                      <Skeleton className="h-3 rounded-full" />
+                    <div className="mt-3 space-y-3">
+                      <Skeleton className="h-2 rounded-full" />
+                      <Skeleton className="h-2 rounded-full" />
+                      <Skeleton className="h-2 rounded-full" />
                     </div>
                   ) : (
                     <div className="mt-3 text-[11px] text-osu-f1">
@@ -314,12 +306,33 @@ export function PlayerActivityPanel({ user }: { user: OsuUser }) {
                   )}
                 </div>
               </div>
+
+              <div className="flex min-h-0 flex-col border-t border-white/[0.07] md:border-l md:border-t-0">
+                <ActivityDayMaps
+                  key={modalDay.date}
+                  maps={modalDay.maps}
+                  mapCount={modalDay.mapCount}
+                  loading={dayDetailLoading}
+                  error={dayDetailError}
+                  preview={ACTIVITY_DAY_MAPS_SHEET_PREVIEW}
+                  sheet
+                  onOpenMap={(map) => setOpenedScore(buildActivityMapScore(map, activityViewer(user)))}
+                />
+              </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {openedScore && (
+        <ScorePlayDetailModal score={openedScore} username={user.username} onClose={() => setOpenedScore(null)} />
+      )}
     </>
   );
+}
+
+function activityViewer(user: Pick<OsuUser, "id" | "username" | "avatar_url" | "country_code">): TrackedPlayViewer {
+  return { id: user.id, username: user.username, avatar_url: user.avatar_url, country_code: user.country_code };
 }
 
 /* A team's calendar: every tracked member's plays on one heatmap, each day in
@@ -544,6 +557,7 @@ function TeamActivityDayMember({ member, userId, scoreCount, day, loading }: {
   loading: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [openedScore, setOpenedScore] = useState<OsuScore | null>(null);
   const username = member?.username ?? String(userId);
   return (
     <div>
@@ -570,9 +584,13 @@ function TeamActivityDayMember({ member, userId, scoreCount, day, loading }: {
             mapCount={day?.mapCount ?? 0}
             loading={loading && !day}
             error={null}
+            onOpenMap={member ? (map) => setOpenedScore(buildActivityMapScore(map, activityViewer(member))) : undefined}
           />
         </div>
       ) : null}
+      {openedScore && (
+        <ScorePlayDetailModal score={openedScore} username={username} onClose={() => setOpenedScore(null)} />
+      )}
     </div>
   );
 }
@@ -778,9 +796,9 @@ function ActivityYearView({
 
 function ActivityDetailMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-osu-b3/20 bg-osu-b5/45 px-3 py-2">
-      <div className="text-[10px] font-bold uppercase text-osu-f1">{label}</div>
-      <div className="mt-1 text-lg font-black text-white sm:text-xl">{value}</div>
+    <div>
+      <div className="text-2xl font-black leading-none tabular-nums text-white">{value}</div>
+      <div className="mt-1 text-[11px] font-semibold text-osu-f1">{label}</div>
     </div>
   );
 }
@@ -812,7 +830,7 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
                 onClick={() => setSelectedKeyModeIndex(index)}
                 className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-colors ${selected
                     ? "bg-osu-pink text-white"
-                    : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
+                    : "bg-osu-b5/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
                   }`}
               >
                 {formatActivityKeyCount(keyMode.keyCount) ?? t`Other`}
@@ -829,13 +847,10 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
           {entries.map(({ key, label, value }) => (
             <div key={key}>
               <div className="mb-1 flex items-baseline justify-between gap-3">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-osu-l2">
-                  <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: getActivitySkillColor(key) }} />
-                  {label}
-                </span>
-                <span className="text-xs font-black text-white">{value}</span>
+                <span className="text-xs font-semibold text-osu-l2">{label}</span>
+                <span className="text-xs font-black tabular-nums text-white">{value}</span>
               </div>
-              <div className="h-2 rounded-full bg-osu-b3/35">
+              <div className="h-1.5 rounded-full bg-osu-b5/60">
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${value}%`, backgroundColor: getActivitySkillColor(key) }}
@@ -848,7 +863,7 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
         <div className="text-[11px] text-osu-f1">{t`No pattern signal for this keymode yet.`}</div>
       )}
       {activeKeyMode.analyzedPlays < activeKeyMode.totalPlays && (
-        <div className="mt-2 text-[10px] text-osu-f1">
+        <div className="mt-2.5 text-[11px] text-osu-f1">
           <Trans>{formatNumber(activeKeyMode.analyzedPlays)} of {formatNumber(activeKeyMode.totalPlays)} plays analyzed</Trans>
         </div>
       )}
@@ -860,42 +875,45 @@ function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: st
   const { t, i18n } = useLingui();
   if (day.timeline.length === 0) return null;
   const sessions = groupActivityTimelineBySession(day.timeline).map(mergeActivitySessionSegments);
-  const flowLabel = formatActivityKeyFlow(day.timeline, t`mixed keys`);
   const timezoneHint = getActivityTimezoneHint(timezone, day.timeline[0]?.startAt);
   const multiKeymode = new Set(day.timeline.map((segment) => segment.keyCount ?? 0)).size > 1;
   return (
-    <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">
-          {t`Sessions`}
-          {timezoneHint ? <span className="ml-1.5 font-semibold normal-case text-osu-f1/70">{timezoneHint}</span> : null}
-        </div>
-        <div className="text-[10px] font-semibold text-osu-l2 sm:text-[11px]">{flowLabel}</div>
+    <div className="mt-5 border-t border-white/[0.07] pt-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[11px] font-bold uppercase text-osu-f1">{t`Sessions`}</div>
+        {timezoneHint ? <div className="text-[11px] text-osu-f1">{timezoneHint}</div> : null}
       </div>
       <ActivityDayClock sessions={sessions} timezone={timezone} dayKey={day.date} />
-      <div className="mt-4 space-y-3.5">
-        {sessions.map((session, sessionIndex) => {
+      <div className="mt-4 space-y-3">
+        {sessions.map((session) => {
           const sessionPlays = session.reduce((sum, segment) => sum + segment.playCount, 0);
           const first = session[0];
           const last = session[session.length - 1];
           const startDateLabel = formatActivitySessionDate(first.startAt, day.date, timezone);
           const elapsed = Date.parse(last.endAt) - Date.parse(first.startAt);
           const durationLabel = formatActivityDuration(Number.isFinite(elapsed) ? elapsed : 0);
-          const breakdown = aggregateActivitySessionBreakdown(session);
+          const skillsLabel = aggregateActivitySessionBreakdown(session)
+            .filter((entry) => entry.skill !== "unknown")
+            .slice(0, 3)
+            .map((entry) => {
+              const keyLabel = multiKeymode ? formatActivityKeyCount(entry.keyCount) : null;
+              const label = getActivitySkillLabel(entry.skill, entry.keyCount, i18n);
+              return keyLabel ? `${label} ${keyLabel}` : label;
+            })
+            .join(", ");
           return (
             <div key={first.key}>
-              <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                <span className="text-[11px] font-semibold text-osu-l2">
-                  {sessions.length > 1 ? <span className="text-osu-f1"><Trans>Session {sessionIndex + 1}</Trans> · </span> : null}
-                  {startDateLabel ? `${startDateLabel} · ` : null}
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs font-semibold tabular-nums text-osu-l2">
+                  {startDateLabel ? `${startDateLabel}, ` : null}
                   {formatActivityTime(first.startAt, timezone)} - {formatActivityTime(last.endAt, timezone)}
-                  {durationLabel ? <span className="font-normal text-osu-f1"> · {durationLabel}</span> : null}
+                  {durationLabel ? <span className="ml-1.5 font-normal text-osu-f1">{durationLabel}</span> : null}
                 </span>
-                <span className="text-[10px] text-osu-f1">
+                <span className="shrink-0 text-[11px] text-osu-f1">
                   <Plural value={sessionPlays} one={`${formatNumber(sessionPlays)} play`} other={`${formatNumber(sessionPlays)} plays`} />
                 </span>
               </div>
-              <div className="flex h-2.5 overflow-hidden rounded-full bg-osu-b4/70">
+              <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-osu-b5/60">
                 {session.map((segment) => (
                   <div
                     key={segment.key}
@@ -909,30 +927,7 @@ function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: st
                   />
                 ))}
               </div>
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {breakdown.map((entry) => {
-                  const known = entry.skill !== "unknown";
-                  const label = known ? getActivitySkillLabel(entry.skill, entry.keyCount, i18n) : t`Unanalyzed`;
-                  const keyLabel = multiKeymode ? formatActivityKeyCount(entry.keyCount) : null;
-                  return (
-                    <span
-                      key={`${entry.skill}:${entry.keyCount ?? "x"}`}
-                      title={entry.playCount === 1 ? t`${formatNumber(entry.playCount)} play` : t`${formatNumber(entry.playCount)} plays`}
-                      className="flex items-center gap-1 rounded bg-osu-b4/60 px-1.5 py-1 text-[10px] leading-none"
-                    >
-                      <span
-                        className="h-1.5 w-1.5 shrink-0 rounded-[2px]"
-                        style={{ backgroundColor: getActivitySkillColor(entry.skill) }}
-                      />
-                      <span className={`font-semibold ${known ? "text-osu-l2" : "text-osu-f1"}`}>
-                        {label}
-                        {keyLabel ? ` ${keyLabel}` : null}
-                      </span>
-                      {entry.playCount > 1 ? <span className="text-osu-f1">×{formatNumber(entry.playCount)}</span> : null}
-                    </span>
-                  );
-                })}
-              </div>
+              {skillsLabel ? <div className="mt-1 truncate text-[11px] text-osu-f1">{skillsLabel}</div> : null}
             </div>
           );
         })}
@@ -983,7 +978,7 @@ function ActivityDayClock({ sessions, timezone, dayKey }: {
   if (blocks.length === 0) return null;
   return (
     <div className="mt-3">
-      <div className="relative h-2 rounded-full bg-osu-b4/70">
+      <div className="relative h-2.5 rounded-full bg-osu-b5/60">
         {[25, 50, 75].map((percent) => (
           <span key={percent} className="absolute inset-y-0 w-px bg-osu-b3/40" style={{ left: `${percent}%` }} />
         ))}
@@ -996,7 +991,7 @@ function ActivityDayClock({ sessions, timezone, dayKey }: {
           />
         ))}
       </div>
-      <div className="mt-1 flex justify-between text-[9px] leading-none text-osu-f1">
+      <div className="mt-1.5 flex justify-between text-[11px] leading-none text-osu-f1">
         <span>{t`12 AM`}</span>
         <span>{t`6 AM`}</span>
         <span>{t`12 PM`}</span>
@@ -1010,106 +1005,133 @@ function ActivityDayClock({ sessions, timezone, dayKey }: {
 // Below this the list renders in full; above it the tail collapses behind an
 // inline "show more" so the modal has a single scrollbar instead of a nested one.
 const ACTIVITY_DAY_MAPS_PREVIEW = 6;
+// The player day modal's maps column scrolls on its own, so it shows more.
+const ACTIVITY_DAY_MAPS_SHEET_PREVIEW = 30;
 
-function ActivityDayMaps({ maps, mapCount, loading, error }: {
+function ActivityDayMaps({ maps, mapCount, loading, error, preview = ACTIVITY_DAY_MAPS_PREVIEW, sheet = false, onOpenMap }: {
   maps: ActivityPlayedMap[];
   mapCount: number;
   loading: boolean;
   error: string | null;
+  preview?: number;
+  /* The right-hand column of the player day modal rather than a team member's list. */
+  sheet?: boolean;
+  /* Opens the day's best play on a map; a map with no kept play links to osu! instead. */
+  onOpenMap?: (map: ActivityPlayedMap) => void;
 }) {
   const { t } = useLingui();
   const [expanded, setExpanded] = useState(false);
-  const visibleMaps = expanded ? maps : maps.slice(0, ACTIVITY_DAY_MAPS_PREVIEW);
+  const visibleMaps = expanded ? maps : maps.slice(0, preview);
   const hiddenCount = maps.length - visibleMaps.length;
+  const countLabel = loading && maps.length === 0
+    ? null
+    : mapCount > maps.length
+      ? t`${maps.length} of ${mapCount}`
+      : formatNumber(maps.length);
+  const toggleClass = "mt-1 w-full rounded-lg px-3 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-white/[0.04] hover:text-osu-l2";
   return (
-    <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">{t`Maps played`}</div>
-        <div className="text-[10px] text-osu-f1 sm:text-[11px]">
-          {loading
-            ? t`loading`
-            : mapCount > maps.length
-              ? t`${maps.length} of ${mapCount}`
-              : maps.length === 1
-                ? t`${maps.length} map`
-                : t`${maps.length} maps`}
-        </div>
+    <div className={sheet ? "flex min-h-0 flex-1 flex-col" : "mt-1 mb-2"}>
+      <div className={`flex items-baseline gap-2 ${sheet ? "px-5 pb-2 pt-5" : "px-2 pb-1 pt-1"}`}>
+        <div className="text-[11px] font-bold uppercase text-osu-f1">{t`Maps played`}</div>
+        {countLabel ? <div className="text-[11px] tabular-nums text-osu-f1">{countLabel}</div> : null}
       </div>
-      <div className="mt-2 space-y-1.5 sm:mt-3 sm:space-y-2">
+      <div className={sheet ? "min-h-0 flex-1 px-3 pb-3 md:overflow-y-auto md:[scrollbar-gutter:stable]" : ""}>
         {loading && maps.length === 0 ? (
-          <>
-            <Skeleton className="h-16 rounded-md" />
-            <Skeleton className="h-16 rounded-md" />
-            <Skeleton className="h-16 rounded-md" />
-          </>
+          <div className="space-y-2 px-2 pt-1">
+            <Skeleton className="h-12 rounded-lg" />
+            <Skeleton className="h-12 rounded-lg" />
+            <Skeleton className="h-12 rounded-lg" />
+          </div>
         ) : (
           visibleMaps.map((map) => (
-            <ActivityMapRow key={map.key} map={map} />
+            <ActivityMapRow key={map.key} map={map} onOpen={onOpenMap && map.play ? () => onOpenMap(map) : undefined} />
           ))
         )}
-        {error ? (
-          <div className="rounded-md bg-osu-b4/70 px-3 py-2 text-[11px] text-osu-f1">
-            {error}
-          </div>
+        {error ? <div className="px-2 py-2 text-[11px] text-osu-f1">{error}</div> : null}
+        {hiddenCount > 0 ? (
+          <button type="button" onClick={() => setExpanded(true)} className={toggleClass}>
+            <Plural value={hiddenCount} one="Show # more map" other="Show # more maps" />
+          </button>
+        ) : expanded ? (
+          <button type="button" onClick={() => setExpanded(false)} className={toggleClass}>
+            {t`Show fewer`}
+          </button>
         ) : null}
       </div>
-      {hiddenCount > 0 ? (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="mt-2 w-full rounded-md bg-osu-b4/60 px-3 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l2"
-        >
-          <Plural value={hiddenCount} one="Show # more map" other="Show # more maps" />
-        </button>
-      ) : expanded ? (
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          className="mt-2 w-full rounded-md bg-osu-b4/60 px-3 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l2"
-        >
-          {t`Show fewer`}
-        </button>
-      ) : null}
     </div>
   );
 }
 
-function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
+const ACTIVITY_FALLBACK_COVER_URL = "/images/headers/generic.jpg";
+
+/* The set's cover, then the background pulled from the map itself, then the
+   generic header tinted per map, so a set osu! keeps no cover for still has art. */
+function ActivityMapCover({ map }: { map: ActivityPlayedMap }) {
+  const sources = [
+    map.coverUrl,
+    map.beatmapsetId ? `/api/background?beatmapsetId=${map.beatmapsetId}` : null,
+  ].filter((url, index, all): url is string => url != null && all.indexOf(url) === index);
+  const [failedCount, setFailedCount] = useState(0);
+  const className = "h-9 w-11 rounded-md object-cover sm:h-10 sm:w-14";
+  const source = sources[failedCount];
+  if (source) {
+    return <img key={source} src={source} alt="" className={className} loading="lazy" onError={() => setFailedCount((count) => count + 1)} />;
+  }
+  let hash = 0;
+  const key = `${map.artist}\u0000${map.title}\u0000${map.version}`;
+  for (let index = 0; index < key.length; index += 1) hash = (hash * 31 + key.charCodeAt(index)) | 0;
+  const seed = Math.abs(hash);
   return (
-    <a
-      href={`https://osu.ppy.sh/beatmaps/${map.beatmapId}`}
-      target="_blank"
-      rel="noreferrer"
-      className="grid grid-cols-[42px_minmax(0,1fr)_2.25rem] items-center gap-2 rounded-md bg-osu-b4/70 px-2 py-1.5 transition-colors hover:bg-osu-b3/45 sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3 sm:rounded-lg sm:p-2"
-    >
-      {map.coverUrl ? (
-        <img
-          src={map.coverUrl}
-          alt=""
-          className="h-8 w-[42px] rounded object-cover sm:h-9 sm:w-12"
-          loading="lazy"
-        />
-      ) : (
-        <div className="flex h-8 w-[42px] items-center justify-center rounded bg-osu-b3/60 text-xs font-black text-osu-l2 sm:h-9 sm:w-12">
-          {map.title.slice(0, 1).toUpperCase()}
-        </div>
-      )}
+    <img
+      src={ACTIVITY_FALLBACK_COVER_URL}
+      alt=""
+      className={className}
+      style={{ filter: `hue-rotate(${seed % 360}deg)`, objectPosition: `${Math.floor(seed / 360) % 101}% 50%` }}
+      loading="lazy"
+    />
+  );
+}
+
+function ActivityMapRow({ map, onOpen }: { map: ActivityPlayedMap; onOpen?: () => void }) {
+  const modDisplays = getModDisplayList(map.mods);
+  const mods = modDisplays.length > 0 ? (
+    <span className="flex items-center gap-0.5">
+      {modDisplays.map((mod) => <ModBadge key={mod.acronym} mod={mod.acronym} rate={mod.rate} size={0.8} />)}
+    </span>
+  ) : null;
+  const rowClass = "grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[0.04] sm:grid-cols-[56px_minmax(0,1fr)_auto]";
+  const content = (
+    <>
+      <ActivityMapCover map={map} />
       <div className="min-w-0">
-        <div className="truncate text-[13px] font-bold text-white sm:text-sm">{map.title}</div>
-        <div className="truncate text-[10px] text-osu-f1 sm:text-[11px]">
-          {map.artist} [{map.version}]
+        <div className="truncate text-sm font-bold text-white">{map.title}</div>
+        <div className="truncate text-[11px] text-osu-f1">
+          {map.artist} <span className="text-osu-l2">[{map.version}]</span>
         </div>
-        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-osu-f1">
-          {map.keyCount ? <span>{map.keyCount}K</span> : null}
-          {map.accuracy != null ? <span>{formatAccuracy(map.accuracy)}</span> : null}
-          {map.pp != null ? <span>{formatPP(map.pp)}</span> : null}
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-osu-f1">
+          {map.keyCount ? <span className="font-semibold text-osu-l2">{map.keyCount}K</span> : null}
+          {mods ? <span className="sm:hidden">{mods}</span> : null}
+          <ActivityMapPatternTag skills={map.skills} keyCount={map.keyCount} />
         </div>
-        <ActivityMapPatternTag skills={map.skills} keyCount={map.keyCount} />
       </div>
-      <div className="text-right">
-        <div className="text-[13px] font-black text-osu-l2 sm:text-sm">{formatNumber(map.plays)}</div>
-        <div className="text-[10px] text-osu-f1"><Plural value={map.plays} one="play" other="plays" /></div>
+      <div className="flex items-center gap-3">
+        {mods ? <span className="hidden sm:flex">{mods}</span> : null}
+        <div className="min-w-[3.5rem] text-right">
+          {map.pp != null ? <div className="text-sm font-bold tabular-nums text-osu-pink-light">{formatPP(map.pp)}</div> : null}
+          {map.accuracy != null ? <div className="text-[11px] tabular-nums text-osu-f1">{formatAccuracy(map.accuracy)}</div> : null}
+        </div>
+        <div className={`w-8 text-right text-sm font-bold tabular-nums ${map.plays > 1 ? "text-osu-l2" : "text-osu-f1/60"}`}>
+          ×{formatNumber(map.plays)}
+        </div>
       </div>
+    </>
+  );
+  if (onOpen) {
+    return <button type="button" onClick={onOpen} className={`${rowClass} cursor-pointer`}>{content}</button>;
+  }
+  return (
+    <a href={`https://osu.ppy.sh/beatmaps/${map.beatmapId}`} target="_blank" rel="noreferrer" className={rowClass}>
+      {content}
     </a>
   );
 }
@@ -1123,21 +1145,19 @@ function ActivityMapPatternTag({ skills, keyCount }: { skills: LivePlayerActivit
   if (primary === "unknown") return null;
   const entries = getActivityPatternEntries(skills.patterns, keyCount, i18n);
   const secondary = entries.filter(({ key }) => key !== primary).slice(0, 2);
-  const tooltip = entries.slice(0, 5).map(({ label, value }) => `${label} ${value}`).join(" · ");
+  const tooltip = entries.slice(0, 5).map(({ label, value }) => `${label} ${value}`).join(", ");
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1.5" title={tooltip}>
+    <span className="flex min-w-0 items-center gap-1.5" title={tooltip}>
       <span
-        className="rounded px-1.5 py-0.5 text-[9px] font-black leading-none text-white"
+        className="rounded px-1.5 py-0.5 text-[11px] font-bold leading-none text-white"
         style={{ backgroundColor: primary === "mixed" ? "rgba(255,255,255,0.14)" : getActivitySkillColor(primary) }}
       >
         {getActivitySkillLabel(primary, keyCount, i18n)}
       </span>
       {secondary.length > 0 ? (
-        <span className="text-[9px] leading-none text-osu-f1">
-          + {secondary.map(({ label }) => label).join(", ")}
-        </span>
+        <span className="truncate">+ {secondary.map(({ label }) => label).join(", ")}</span>
       ) : null}
-    </div>
+    </span>
   );
 }
 
@@ -1401,14 +1421,6 @@ function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill, keyCount: 
   return getActivityPatternMeta(skill, keyCount, i18n).label;
 }
 
-function formatActivityKeyFlow(segments: ActivityTimelineSegment[], mixedLabel: string): string {
-  const labels = [...new Set(segments
-    .map((segment) => formatActivityKeyCount(segment.keyCount))
-    .filter((label): label is string => label != null))];
-  if (labels.length === 0) return mixedLabel;
-  return labels.join(" / ");
-}
-
 // Adjacent same-keymode same-skill segments read as one block; merging them
 // frees enough width for the survivors' labels.
 function mergeActivitySessionSegments(session: ActivityTimelineSegment[]): ActivityTimelineSegment[] {
@@ -1536,12 +1548,12 @@ function createDevActivityDay(timezone: string): ActivityDay {
     .reduce((sum, segment) => sum + segment.playCount, 0);
   const maps = [
     createDevActivityMap(1, "Quantum Surgery", "Camellia", "[4K] Lasersweep", 4, 6, 0.9641, 412, "chordjack"),
-    createDevActivityMap(2, "Snow Crystals", "yuki.", "[4K] Hyper", 4, 5, 0.9893, 121, "stream"),
+    { ...createDevActivityMap(2, "Snow Crystals", "yuki.", "[4K] Hyper", 4, 5, 0.9893, 121, "stream"), mods: [{ acronym: "DT" }] },
     createDevActivityMap(3, "Lights of Muse", "xi", "[7K] LN Master", 7, 4, 0.9712, 287, "ln"),
     createDevActivityMap(4, "Backbeat Maniac", "Eternal", "[4K] SHD", 4, 4, 0.9534, 198, "stamina"),
     createDevActivityMap(5, "Brain Power", "NOMA", "[4K] Another", 4, 3, 0.9477, 233, "mixed"),
     createDevActivityMap(6, "Future Dominators", "technoplanet", "[7K] 4 Dimensions", 7, 3, 0.9588, 305, "handstream"),
-    createDevActivityMap(7, "Grand Thaw", "Aoi", "[7K] Release", 7, 3, 0.9821, 176, "lnRelease"),
+    { ...createDevActivityMap(7, "Grand Thaw", "Aoi", "[7K] Release", 7, 3, 0.9821, 176, "lnRelease"), mods: [{ acronym: "HT", settings: { speed_change: 0.85 } }] },
     createDevActivityMap(8, "Pure Ruby", "DJ Sharpnel", "[4K] Lunatic", 4, 2, 0.9312, 264, "jack"),
     createDevActivityMap(9, "Cicadidae", "t+pazolite", "[4K] Extra", 4, 2, 0.9665, 209, "tech"),
     createDevActivityMap(10, "Unknown Signal", "Various Artists", "[4K] ???", 4, 1, 0.9402, 88, null),
@@ -1713,6 +1725,18 @@ function formatFullActivityDate(date: string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatActivityDayHeading(date: string): string {
+  return formatDateTime(parseLocalDateKey(date), "en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatActivityDayYear(date: string): string {
+  return date.slice(0, 4);
 }
 
 function formatShortActivityDate(date: string): string {

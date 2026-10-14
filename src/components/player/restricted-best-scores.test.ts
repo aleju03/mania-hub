@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RestrictedPpPlay } from "../../lib/live-backend";
+import { computeManiaSkills } from "../../lib/maniacard";
 import { calculateUserProfileInsights } from "../../lib/profile-insights";
 import { companellaReplayImportId } from "../../lib/companella-scores";
 import { getBeatmapUrl, getScoreDisplayValues, getScoreIdentity, getScoreUrl, scoreHasReplay } from "../../lib/score";
@@ -43,6 +44,16 @@ describe("buildRestrictedBestList", () => {
     expect(display.accuracy).toBeCloseTo(0.9966666666666667, 10);
     expect(display.rank).toBe("S");
     expect(display.totalScore).toBe(987_654);
+  });
+
+  it("carries the map's own figures, which the profile card needs", () => {
+    const map = { stars: 4.5, od: 8, hp: 7.5, totalLength: 150, hitLength: 140, circles: 1_000, sliders: 200, maxCombo: 1_400 };
+    expect(computeManiaSkills(buildRestrictedBestList([play({ bpm: 180 })], owner))).toBeNull();
+    const [score] = buildRestrictedBestList([play({ bpm: 180, mods: ["DT"], rate: 1.5, starRating: 6.1, map })], owner);
+    expect(score.beatmap).toMatchObject({
+      difficulty_rating: 4.5, accuracy: 8, drain: 7.5, total_length: 150, count_circles: 1_000, count_sliders: 200, max_combo: 1_400,
+    });
+    expect(computeManiaSkills([score])).not.toBeNull();
   });
 
   it("keeps the weight osu! gives each place in the list", () => {

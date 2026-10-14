@@ -1,6 +1,7 @@
 // Layout and transitions ported from ppy/osu ebaf7e9910ef3755308dec2c7950d916aabc545b.
 // Copyright (c) ppy Pty Ltd. MIT licence: /licenses/osu-lazer-leaderboard.txt.
 import { Container, FillGradient, Graphics, Matrix, Sprite, Text, Texture } from "pixi.js";
+import { setTextResolution } from "./pixi-text-resolution";
 import { buildLazerLeaderboardRows, formatLazerLeaderboardAccuracy, LAZER_LEADERBOARD as STYLE, lazerOutElastic, lazerOutQuint } from "../../lib/replay-leaderboard";
 import type { LazerLeaderboardRow, ReplayLeaderboardEntry, ReplayLeaderboardOptions } from "../../lib/replay-leaderboard";
 
@@ -114,7 +115,7 @@ export class LazerReplayLeaderboard {
 
   update(
     entries: readonly ReplayLeaderboardEntry[], player: ReplayLeaderboardEntry, options: ReplayLeaderboardOptions,
-    frame: { x: number; y: number; scale: number }, now: number, reset: boolean, expanded = true,
+    frame: { x: number; y: number; scale: number; textResolution?: number }, now: number, reset: boolean, expanded = true,
   ) {
     this.setVisibility(true, now);
     const fresh = reset || !this.initialized || now < this.previousTime;
@@ -177,6 +178,7 @@ export class LazerReplayLeaderboard {
 
     this.container.position.set(frame.x, frame.y);
     this.container.scale.set(frame.scale);
+    setTextResolution(this.container, frame.textResolution);
     this.container.alpha = this.visibilityAlpha(now);
     this.container.visible = this.container.alpha > 0;
     for (const row of this.rows) {

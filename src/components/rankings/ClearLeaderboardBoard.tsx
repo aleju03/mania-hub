@@ -159,7 +159,11 @@ export function ClearLeaderboardBoard({
               {mods.length > 0 && (
                 <>
                   <span aria-hidden="true" className="h-3 w-px flex-shrink-0 bg-osu-b3/60" />
-                  <span className="flex-shrink-0 font-semibold text-osu-l1">{mods.join("")}</span>
+                  <span className="flex-shrink-0 font-semibold text-osu-l1">
+                    {mods.join("")}
+                    {/* A lazer custom speed: plain DT reads as 1.5x. Same format as the mod badges. */}
+                    {entry.modRate != null && mods.some((mod) => mod === "DT" || mod === "NC") ? ` ${entry.modRate.toFixed(2)}×` : null}
+                  </span>
                 </>
               )}
               {clearedOn && (

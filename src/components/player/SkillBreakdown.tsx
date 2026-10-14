@@ -215,11 +215,17 @@ function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: bool
         : i18n._(msg`rated from ${plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded`),
   ];
   const version = mode.minaCalc;
-  if (version && withVersion) parts.push(version.startsWith("prism") ? "Prism" : i18n._(msg`MinaCalc ${version}`));
+  if (version && withVersion) parts.push(version.startsWith("prism") ? prismLabel(version) : i18n._(msg`MinaCalc ${version}`));
   const pending = skills.pendingPlays;
   if (pending > 0) parts.push(i18n._(msg`${pending} still analyzing`));
   if (skills.baseline) parts.push(i18n._(msg`percentiles are among tracked players`));
   return parts.join(" · ");
+}
+
+// "prism-v23" reads as Prism 0.23, in the style of MinaCalc's 0.75.
+function prismLabel(version: string): string {
+  const calc = /^prism-v(\d+)$/.exec(version)?.[1];
+  return calc ? `Prism 0.${calc}` : "Prism";
 }
 
 // Past this many jobs ahead, the queue line stops printing the number.
@@ -575,7 +581,7 @@ export function SkillModePanel({
             <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>{mode.keyCount}K skill rating</Trans></span>
             {version?.startsWith("prism") ? (
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">Prism</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">{prismLabel(version)}</span>
             ) : version ? (
               <span className="cursor-help text-[11px] font-semibold uppercase tracking-wide text-osu-f1" title={t`MinaCalc is Etterna's difficulty calculator`}>
                 {i18n._(msg`MinaCalc ${version}`)}
