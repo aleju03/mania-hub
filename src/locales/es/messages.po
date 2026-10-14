@@ -8981,6 +8981,10 @@ msgstr "Modo"
 msgid "Keys pressed per second."
 msgstr "Teclas presionadas por segundo."
 
+#: src/routes/__root.tsx
+msgid "Ko-fi page"
+msgstr "página de Ko-fi"
+
 #: src/components/communities/field-options.tsx
 msgid "Korean"
 msgstr "Coreano"

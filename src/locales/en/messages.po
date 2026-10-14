@@ -9020,6 +9020,10 @@ msgstr "Keys"
 msgid "Keys pressed per second."
 msgstr "Keys pressed per second."
 
+#: src/routes/__root.tsx
+msgid "Ko-fi page"
+msgstr "Ko-fi page"
+
 #: src/components/communities/field-options.tsx
 msgid "Korean"
 msgstr "Korean"

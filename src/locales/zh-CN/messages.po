@@ -8990,6 +8990,10 @@ msgstr "键数"
 msgid "Keys pressed per second."
 msgstr "每秒按键次数。"
 
+#: src/routes/__root.tsx
+msgid "Ko-fi page"
+msgstr "Ko-fi 主页"
+
 #: src/components/communities/field-options.tsx
 msgid "Korean"
 msgstr "韩语"
