@@ -1269,8 +1269,8 @@ html[data-custom-cursor="true"] * {
   font-family: "Name Press Start 2P", var(--font-sans, sans-serif);
   font-weight: 400;
   font-style: normal;
-  font-size-adjust: 0.42;
-  letter-spacing: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: -0.06em;
   /* room for tall swashes and descenders (Script's j), cancelled by the
      margin so the layout does not move */
   padding-block: 0.32em;

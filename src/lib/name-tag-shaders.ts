@@ -362,6 +362,8 @@ function drawNameMask(span: HTMLElement, scale: number): { url: string; aspect: 
   const fontAt = (px: number) => `${style.fontStyle} ${style.fontWeight} ${px}px ${style.fontFamily}`;
   let fontPx = parseFloat(style.fontSize);
   ctx.font = fontAt(fontPx);
+  // a font's own letter spacing (Arcade is tightened), where canvas supports it
+  if ("letterSpacing" in ctx && style.letterSpacing !== "normal") ctx.letterSpacing = style.letterSpacing;
   // Canvas text ignores font-size-adjust (name fonts use it), so size the
   // mask from the width the page actually lays the name out at.
   const textNode = [...span.childNodes].find((node) => node.nodeType === Node.TEXT_NODE);
