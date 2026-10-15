@@ -1,5 +1,6 @@
 import type { CardMotif } from "#/lib/card-motif";
 import type { SupporterLook } from "#/lib/supporter-card-looks";
+import type { SupporterFoilId } from "#/lib/supporter-foils";
 import type { ManiaCardTier, ManiaCardTierStyle, ManiaSkills, NextManiaCardTier } from "#/lib/maniacard";
 import type { OsuScore, OsuUser } from "#/lib/types";
 
@@ -21,6 +22,8 @@ export interface ManiaCardPanelProps {
       a look object previews it, null previews the plain card. Undefined
       (the default) fetches the player's own. */
   supporterLookOverride?: SupporterLook | null;
+  /** False leaves out the rating and next-tier progress beside the card. */
+  showTierProgress?: boolean;
 }
 
 export interface ManiaCardTeamInput {
@@ -72,10 +75,10 @@ export interface ManiaCardReadyData {
      triangle flecks, or the cosmic tiers' starfield - with one image. Only a
      holding granted from /admin/collections has one. */
   motif: CardMotif | null;
-  /* The player is an active supporter: every surface draws the holographic
-     foil over the card. Independent of motif, which may be the holding's own
-     art or the supporter's chosen one. */
-  supporterFoil?: boolean;
+  /* The player is an active supporter: the foil they picked plays over the
+     card (flat surfaces bake the holo still for every foil). Independent of
+     motif, which may be the holding's own art or the supporter's chosen one. */
+  supporterFoil?: SupporterFoilId;
   /* Set on a team card, which draws the banner face instead of the player's. */
   team?: ManiaCardTeamFace | null;
 }

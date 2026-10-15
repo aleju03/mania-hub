@@ -148,7 +148,7 @@ export function buildManiaCardRenderDataFromSkills({
     glowColor: parseCssRgba(tierStyle.glowColor),
     badgeGradientStops: parseGradientStops(tierStyle.badgeGradient),
     motif: look.motif,
-    ...(look.foil ? { supporterFoil: true } : {}),
+    ...(look.foil ? { supporterFoil: look.foil } : {}),
     team: team ? { tag: team.tag, coverUrl: team.coverUrl } : null,
   };
 }
@@ -174,7 +174,7 @@ export function getManiaCardRenderDataSignature(data: ManiaCardRenderData): stri
     signatureColor(data.glowColor),
     data.badgeGradientStops.map((stop) => `${stop.color}:${signatureNumber(stop.offset)}`).join(","),
     cardMotifSignature(data.motif),
-    data.supporterFoil ? "foil" : "",
+    data.supporterFoil ? `foil:${data.supporterFoil}` : "",
     data.team ? `team:${data.team.tag}:${data.team.coverUrl ?? ""}` : "",
   ].join("|");
 }

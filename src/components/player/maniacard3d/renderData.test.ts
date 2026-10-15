@@ -222,17 +222,17 @@ describe("supporter look", () => {
     sampleSize: 40,
   } as const;
 
-  test("floats the supporter's motif, paints their palette and draws the foil", () => {
+  test("floats the supporter's motif and draws their foil in the tier's colours", () => {
     const data = buildManiaCardRenderDataFromSkills({
       user,
       skills,
       tierOverride: "common",
-      supporterLook: { motif: "hearts", palette: "gold" },
+      supporterLook: { motif: "hearts", foil: "caustics" },
     });
-    expect(data.supporterFoil).toBe(true);
+    expect(data.supporterFoil).toBe("caustics");
     expect(data.motif?.url).toBe("https://mania-tracker.com/images/supporter-motifs/hearts.svg");
-    expect(data.motif?.palette).toBe("gold");
-    // The palette repaints the card but the rarity keeps its name.
+    // A foil is light only: the card keeps its tier's colours.
+    expect(data.motif?.palette).toBeUndefined();
     expect(data.tierStyle.label).toBe("Common");
   });
 
@@ -243,10 +243,10 @@ describe("supporter look", () => {
       skills,
       tierOverride: "rare",
       motifOverride: granted,
-      supporterLook: { motif: "hearts", palette: "ember" },
+      supporterLook: { motif: "hearts", foil: "glitter" },
     });
     expect(data.motif).toEqual(granted);
-    expect(data.supporterFoil).toBe(true);
+    expect(data.supporterFoil).toBe("glitter");
   });
 
   test("leaves ordinary and team cards alone", () => {
@@ -258,7 +258,7 @@ describe("supporter look", () => {
       skills,
       tierOverride: "rare",
       team: { flagUrl: null, coverUrl: null, tag: "TM" },
-      supporterLook: { motif: "stars", palette: null },
+      supporterLook: { motif: "stars", foil: "holo" },
     });
     expect(team.supporterFoil).toBeUndefined();
     expect(team.motif).toBeNull();
@@ -268,9 +268,10 @@ describe("supporter look", () => {
     const base = { user, skills, tierOverride: "rare" as const };
     const signatures = new Set([
       getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills(base)),
-      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "stars", palette: null } })),
-      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "notes", palette: null } })),
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "stars", foil: "holo" } })),
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "notes", foil: "holo" } })),
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "notes", foil: "aurora" } })),
     ]);
-    expect(signatures.size).toBe(3);
+    expect(signatures.size).toBe(4);
   });
 });

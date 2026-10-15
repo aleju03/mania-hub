@@ -52,18 +52,18 @@ it.each(["write_pressure", "rate_limited"] as const)("preserves a signed-in %s r
 it("carries a supporter's look onto the dealt card and parses it", () => {
   const { draw } = mapServerPackDraw({
     players: [
-      { userId: 11, username: "a", supporterLook: { motif: "petals", palette: "aurora" } },
+      { userId: 11, username: "a", supporterLook: { motif: "petals", foil: "aurora" } },
       { userId: 12, username: "b" },
-      { userId: 13, username: "c", supporterLook: { motif: "unknown" as "stars", palette: null } },
+      { userId: 13, username: "c", supporterLook: { motif: "unknown" as "stars", foil: "holo" } },
     ],
     cards: [],
     poolTotal: 0,
     wallet: null,
   });
   expect(draw.players.map((player) => player.supporterLook ?? null)).toEqual([
-    { motif: "petals", palette: "aurora" },
+    { motif: "petals", foil: "aurora" },
     null,
-    { motif: "stars", palette: null },
+    { motif: "stars", foil: "holo" },
   ]);
 });
 

@@ -25,6 +25,7 @@ import {
 } from "./interactions";
 import { clamp, resolveQualityProfile, type QualityProfile } from "./layout";
 import type { ManiaCardReadyData } from "./types";
+import { supporterFoilIndex, type SupporterFoilId } from "#/lib/supporter-foils";
 import { CARD_WORLD_HEIGHT } from "./cardGeometry";
 
 // The canvas extends past the host on every side by this factor so the card can
@@ -125,6 +126,9 @@ export class ManiaCardRenderer {
   private manualRotation: Rotation2D = { x: 0, y: 0 };
   private orientationRotation: Rotation2D = { x: 0, y: 0 };
   private overlay: Mesh | null = null;
+  // The supporter foil the overlay draws: set by setData, or alone by
+  // setSupporterFoil, which needs no new textures.
+  private supporterFoil: SupporterFoilId | null = null;
   private restBeta: number | null = null;
   private orientationAttached = false;
   private orientationPermissionRequested = false;
@@ -182,6 +186,7 @@ export class ManiaCardRenderer {
 
   async setData(data: ManiaCardReadyData) {
     const requestId = ++this.dataRequestId;
+    this.supporterFoil = data.supporterFoil ?? null;
     this.readyEmitted = false;
     this.readyTextureRequestId = 0;
     let textures: CardTextureSet;
@@ -223,9 +228,27 @@ export class ManiaCardRenderer {
       createOverlayMaterial(data, textures.layout, this.quality.shaderQuality, textures.motif),
     );
     this.overlay.position.z = OVERLAY_Z_OFFSET;
+    // A setSupporterFoil that came in while the textures were painting wins.
+    this.applySupporterFoil();
 
     this.group.add(body, front, back, this.overlay);
     this.start();
+  }
+
+  /* Swaps the supporter foil on the card already drawn: two uniforms, where
+     setData would repaint every texture. */
+  setSupporterFoil(foil: SupporterFoilId | null) {
+    this.supporterFoil = foil;
+    this.applySupporterFoil();
+    this.start();
+  }
+
+  private applySupporterFoil() {
+    const material = this.overlay?.material;
+    if (!material || !("uniforms" in material)) return;
+    const uniforms = material.uniforms as Record<string, { value: number }>;
+    uniforms.uSupporter.value = this.supporterFoil ? 1 : 0;
+    uniforms.uFoilStyle.value = this.supporterFoil ? supporterFoilIndex(this.supporterFoil) : 0;
   }
 
   // Replaces the card-back art with an external canvas. The pack reveal uses

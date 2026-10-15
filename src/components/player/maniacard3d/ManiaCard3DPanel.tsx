@@ -142,6 +142,7 @@ export function ManiaCard3DPanel({
   tierOverride,
   team,
   supporterLookOverride,
+  showTierProgress = true,
 }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
@@ -161,6 +162,13 @@ export function ManiaCard3DPanel({
     [precomputedSkills, scores, team, tierOverride, user, supporterLook],
   );
   const dataSignature = useMemo(() => getManiaCardRenderDataSignature(data), [data]);
+  /* The same without the supporter foil: two cards that differ only there
+     share every texture, so the renderer swaps the foil in place. */
+  const textureSignature = useMemo(
+    () => (data.status === "ready" ? getManiaCardRenderDataSignature({ ...data, supporterFoil: undefined }) : dataSignature),
+    [data, dataSignature],
+  );
+  const rendererTextureSignatureRef = useRef<string | null>(null);
   const rendererReady = readySignature === dataSignature;
 
   useEffect(() => {
@@ -196,6 +204,7 @@ export function ManiaCard3DPanel({
       renderer?.dispose();
       if (rendererRef.current === renderer) rendererRef.current = null;
       rendererSignatureRef.current = null;
+      rendererTextureSignatureRef.current = null;
       pendingSignatureRef.current = null;
     };
 
@@ -215,6 +224,7 @@ export function ManiaCard3DPanel({
 
         pendingSignatureRef.current = scheduledSignature;
         rendererSignatureRef.current = scheduledSignature;
+        rendererTextureSignatureRef.current = getManiaCardRenderDataSignature({ ...scheduledData, supporterFoil: undefined });
         renderer = new ManiaCardRenderer({
           host,
           data: scheduledData,
@@ -266,12 +276,23 @@ export function ManiaCard3DPanel({
     const renderer = rendererRef.current;
     if (!renderer || rendererSignatureRef.current === dataSignature) return;
 
+    if (rendererTextureSignatureRef.current === textureSignature) {
+      // Only the foil changed. A card mid-repaint stays not-ready until its
+      // own onReady, which then reports this signature.
+      rendererSignatureRef.current = dataSignature;
+      pendingSignatureRef.current = dataSignature;
+      renderer.setSupporterFoil(data.status === "ready" ? data.supporterFoil ?? null : null);
+      setReadySignature((ready) => (ready === null ? null : dataSignature));
+      return;
+    }
+
     setRenderError(null);
     setReadySignature(null);
     pendingSignatureRef.current = dataSignature;
     rendererSignatureRef.current = dataSignature;
+    rendererTextureSignatureRef.current = textureSignature;
     void renderer.setData(data);
-  }, [data, dataSignature, loading]);
+  }, [data, dataSignature, textureSignature, loading]);
 
   if (loading) return <ManiaCard3DLoading />;
 
@@ -301,7 +322,7 @@ export function ManiaCard3DPanel({
             aria-hidden="true"
           />
         )}
-        {rendererReady && (
+        {rendererReady && showTierProgress && (
           <TierProgress
             nextTier={data.nextTier}
             cardRating={data.skills.cardPower}

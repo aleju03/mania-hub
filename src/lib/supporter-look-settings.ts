@@ -5,6 +5,7 @@ import { getServerLiveBackendUrl } from "./live-backend";
 import { isSupporterAvatarFrame, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
 import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
 import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
+import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 
 // Server functions behind the /supporter page: the viewer's supporter status
@@ -26,9 +27,12 @@ export interface SupporterLookState {
   /** How their name is drawn on their profile, null for plain. */
   nameStyle: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
+  /** The theme their whole profile wears, null for the site's own colours. */
+  profileTheme: SupporterProfileThemeId | null;
+  profileThemeOptions: ProfileThemeOptions;
 }
 
-const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null };
+const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {} };
 
 async function requireViewer(): Promise<{ userId: number; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
@@ -40,7 +44,7 @@ async function requireViewer(): Promise<{ userId: number; base: string } | null>
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
@@ -51,6 +55,8 @@ function readState(body: unknown): SupporterLookState {
     frame: isSupporterAvatarFrame(raw.frame) ? raw.frame : null,
     nameStyle: isSupporterNameStyle(raw.nameStyle) ? raw.nameStyle : null,
     nameFont: isSupporterNameFont(raw.nameFont) ? raw.nameFont : null,
+    profileTheme: isSupporterProfileTheme(raw.profileTheme) ? raw.profileTheme : null,
+    profileThemeOptions: parseProfileThemeOptions(raw.profileThemeOptions),
   };
 }
 
@@ -139,6 +145,26 @@ export const saveSupporterNameFontSetting = createServerFn({ method: "POST" })
       method: "POST",
       headers: bridgeAuthHeaders(true),
       body: JSON.stringify({ userId: viewer.userId, nameFont: data.nameFont }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return readState(body);
+  });
+
+export const saveSupporterProfileThemeSetting = createServerFn({ method: "POST" })
+  .validator((data: { profileTheme?: unknown; profileThemeOptions?: unknown }) => {
+    const profileTheme = data?.profileTheme ?? null;
+    if (profileTheme !== null && !isSupporterProfileTheme(profileTheme)) throw new Error("Pick a profile theme.");
+    return { profileTheme, profileThemeOptions: parseProfileThemeOptions(data?.profileThemeOptions) };
+  })
+  .handler(async ({ data }): Promise<SupporterLookState> => {
+    const viewer = await requireViewer();
+    if (!viewer) return SIGNED_OUT;
+    const response = await fetch(`${viewer.base}/api/supporters/self/profile-theme`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, profileTheme: data.profileTheme, profileThemeOptions: data.profileThemeOptions }),
     });
     const body = await response.json().catch(() => null) as { error?: unknown } | null;
     if (response.status === 403) throw new Error("Your supporter time has run out.");

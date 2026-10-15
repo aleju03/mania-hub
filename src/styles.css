@@ -1070,6 +1070,17 @@ html[data-custom-cursor="true"] * {
   animation-play-state: paused;
 }
 
+/* The /supporter name style drawer: a tile holds still until it is pointed at
+   or picked, since a grid of animated, drop-shadowed names repaints every frame. */
+.name-tag-grid .name-tag,
+.name-tag-grid .name-tag::after {
+  animation-play-state: paused;
+}
+.name-tag-grid button:is(:hover, :focus-visible, [aria-pressed="true"]) .name-tag,
+.name-tag-grid button:is(:hover, :focus-visible, [aria-pressed="true"]) .name-tag::after {
+  animation-play-state: running;
+}
+
 /* Ethereal Dream, as CSS for small names and until the shader draws:
    periwinkle letters with warm light drifting through them. */
 .name-tag--ethereal {
@@ -1265,6 +1276,119 @@ html[data-custom-cursor="true"] * {
   src: url("/fonts/name/playfair.woff2") format("woff2");
 }
 
+@font-face {
+  font-family: "Name Silkscreen";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/silkscreen.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Audiowide";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/audiowide.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Russo One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/russo.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Black Ops One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/blackops.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Bangers";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/bangers.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Luckiest Guy";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/luckiest.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Creepster";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/creepster.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Lobster";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/lobster.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Rock Salt";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/rocksalt.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name UnifrakturMaguntia";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/unifraktur.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Abril Fatface";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/abril.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Major Mono Display";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/majormono.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Michroma";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/michroma.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Rubik Glitch";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/rubikglitch.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Shrikhand";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/shrikhand.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Zen Dots";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/zendots.woff2") format("woff2");
+}
+
 .name-font--pixel {
   font-family: "Name Press Start 2P", var(--font-sans, sans-serif);
   font-weight: 400;
@@ -1398,6 +1522,182 @@ html[data-custom-cursor="true"] * {
   margin-block: -0.5em;
 }
 
+.name-font--silkscreen {
+  font-family: "Name Silkscreen", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--audiowide {
+  font-family: "Name Audiowide", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--russo {
+  font-family: "Name Russo One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--blackops {
+  font-family: "Name Black Ops One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--bangers {
+  font-family: "Name Bangers", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: none;
+  letter-spacing: 0.02em;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--luckiest {
+  font-family: "Name Luckiest Guy", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: none;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--creepster {
+  font-family: "Name Creepster", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.6;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--lobster {
+  font-family: "Name Lobster", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--rocksalt {
+  font-family: "Name Rock Salt", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.58;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--unifraktur {
+  font-family: "Name UnifrakturMaguntia", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.57;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--abril {
+  font-family: "Name Abril Fatface", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--majormono {
+  font-family: "Name Major Mono Display", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.56;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--michroma {
+  font-family: "Name Michroma", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.46;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--rubikglitch {
+  font-family: "Name Rubik Glitch", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--shrikhand {
+  font-family: "Name Shrikhand", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--zendots {
+  font-family: "Name Zen Dots", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.46;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
 @media (prefers-reduced-motion: reduce) {
   .name-tag,
   .name-tag::after {

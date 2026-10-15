@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
 import { isSupporterAvatarFrame, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
 import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
+import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import type { VibroAnalysis } from "#dan/vibro-sections";
@@ -4497,7 +4498,7 @@ export async function fetchLivePackSharedCard(
   return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${encodeURIComponent(cardKey)}${query}`);
 }
 
-/* A player's supporter card look, avatar frame and name style, for the
+/* A player's supporter card look, avatar frame, name style and profile theme, for the
    profile card and hero (collection payloads carry the look inline). Null when they are not an
    active supporter, and on any failure: an ordinary card and a bare avatar are
    the safe fallback. Cached in memory per user id for a few minutes, so moving
@@ -4508,8 +4509,10 @@ export interface SupporterProfileLook {
   frame: SupporterAvatarFrameId | null;
   nameStyle: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
+  profileTheme: SupporterProfileThemeId | null;
+  profileThemeOptions: ProfileThemeOptions;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {} };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4534,13 +4537,15 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
   if (cached) return cached.value;
   const entry: SupporterLookCacheEntry = { at: Date.now(), value: Promise.resolve(NO_SUPPORTER_LOOK) };
   const reload = supporterLooksToReload.delete(id);
-  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
+  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
     .then((body) => {
       const value = {
         look: parseSupporterLook(body?.look ?? null),
         frame: isSupporterAvatarFrame(body?.frame) ? body.frame : null,
         nameStyle: isSupporterNameStyle(body?.nameStyle) ? body.nameStyle : null,
         nameFont: isSupporterNameFont(body?.nameFont) ? body.nameFont : null,
+        profileTheme: isSupporterProfileTheme(body?.profileTheme) ? body.profileTheme : null,
+        profileThemeOptions: parseProfileThemeOptions(body?.profileThemeOptions),
       };
       entry.settled = value;
       return value;
@@ -4582,6 +4587,14 @@ export function peekLiveSupporterNameStyle(userId: number): SupporterNameStyleId
 
 export function peekLiveSupporterNameFont(userId: number): SupporterNameFontId | null | undefined {
   return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.nameFont;
+}
+
+export function peekLiveSupporterProfileTheme(userId: number): SupporterProfileThemeId | null | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.profileTheme;
+}
+
+export function peekLiveSupporterProfileThemeOptions(userId: number): ProfileThemeOptions | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.profileThemeOptions;
 }
 
 /* Every active supporter's name tag style and name font, for names in lists. One

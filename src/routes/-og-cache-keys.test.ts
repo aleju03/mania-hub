@@ -70,10 +70,10 @@ describe("pull OG cache key", () => {
   it("leaves ordinary cards on the keys already in R2 and moves a supporter's with their look", () => {
     expect(pulledCardLookKeySegment({ card: {} })).toBe("");
     expect(pulledCardLookKeySegment({ card: { supporterLook: null } })).toBe("");
-    const stars = pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", palette: null } } });
-    const gold = pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", palette: "gold" } } });
-    expect(stars).toBe(":sl-stars--");
-    expect(gold).toBe(":sl-stars-gold");
-    expect(pulledCardLookKeySegment({ team: {}, card: { supporterLook: { motif: "stars", palette: null } } })).toBe("");
+    const stars = pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", foil: "holo" } } });
+    const ice = pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", foil: "cracked-ice" } } });
+    expect(stars).toBe(":sl-stars-holo");
+    expect(ice).toBe(":sl-stars-cracked-ice");
+    expect(pulledCardLookKeySegment({ team: {}, card: { supporterLook: { motif: "stars", foil: "holo" } } })).toBe("");
   });
 });

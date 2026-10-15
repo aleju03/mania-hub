@@ -23,6 +23,8 @@ import {
   peekLiveSupporterFrame,
   peekLiveSupporterNameFont,
   peekLiveSupporterNameStyle,
+  peekLiveSupporterProfileTheme,
+  peekLiveSupporterProfileThemeOptions,
   type LivePlayerSkills,
   type LiveKeymodePpPlay,
   type LivePlayerKeymodePpTail,
@@ -72,6 +74,10 @@ import { framedAvatarStyle, type SupporterAvatarFrameId } from "../../lib/suppor
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "../../components/supporter/SupporterNameStyle";
+import { ProfileThemeBackdrop } from "../../components/supporter/ProfileThemeBackdrop";
+import { useHighwayNotes } from "../../components/supporter/use-highway-notes";
+import { useHighwayChart } from "../../components/supporter/use-highway-chart";
+import { PROFILE_THEME_LOOKS, profileThemeStyle, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
 import { buildRestrictedBestList, profileRailTotals } from "../../components/player/restricted-best-scores";
 import { companellaImportsToScores, dropCompanellaOsuTwins } from "../../lib/companella-scores";
 import type { OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
@@ -145,6 +151,11 @@ import { rememberTeamName } from "../../lib/analytics-teams";
 // actually opens it; the about tab itself stays light.
 const BBCodeEditorLazy = lazy(() => import("../../components/player/bbcode/BBCodeEditor"));
 const GUEST_AVATAR_URL = "https://osu.ppy.sh/images/layout/avatar-guest@2x.png";
+/* The empty space left of the hero's 1200px column (its 16px padding, plus
+   half of whatever the window has beyond 1200px, less room for a scrollbar):
+   a frame's art may spread into it, so a wide frame moves the avatar only on
+   a window too narrow to hold it. */
+const HERO_LEFT_GUTTER = "max(16px, calc((100vw - 1200px) / 2 + 8px))";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
@@ -1097,14 +1108,16 @@ export function PlayerProfilePage({
   });
   const restrictedPpPending = !!user?.account_status && restrictedPp?.userId !== user.id;
   const restrictedStanding = user?.account_status && restrictedPp?.userId === user.id ? restrictedPp.standing : null;
-  /* A supporter's avatar frame, name style and name font (picked on /supporter). Only an
-     answer about this user counts. */
+  /* A supporter's avatar frame, name style, name font and profile theme (picked on
+     /supporter). Only an answer about this user counts. */
   const profileUserId = user?.id ?? 0;
   const [supporterFrame, setSupporterFrame] = useState<{
     userId: number;
     frame: SupporterAvatarFrameId | null;
     nameStyle: SupporterNameStyleId | null;
     nameFont: SupporterNameFontId | null;
+    profileTheme: SupporterProfileThemeId | null;
+    profileThemeOptions: ProfileThemeOptions;
   } | null>(null);
   useEffect(() => {
     if (!profileUserId) return;
@@ -1116,10 +1129,12 @@ export function PlayerProfilePage({
         frame: known,
         nameStyle: peekLiveSupporterNameStyle(profileUserId) ?? null,
         nameFont: peekLiveSupporterNameFont(profileUserId) ?? null,
+        profileTheme: peekLiveSupporterProfileTheme(profileUserId) ?? null,
+        profileThemeOptions: peekLiveSupporterProfileThemeOptions(profileUserId) ?? {},
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions });
     });
     return () => {
       alive = false;
@@ -1128,6 +1143,7 @@ export function PlayerProfilePage({
   const heroFrame = supporterFrame?.userId === profileUserId ? supporterFrame.frame : null;
   const heroNameStyle = supporterFrame?.userId === profileUserId ? supporterFrame.nameStyle : null;
   const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
+  const profileTheme = supporterFrame?.userId === profileUserId ? supporterFrame.profileTheme : null;
   const restrictedBest = useMemo(
     () => restrictedStanding
       ? buildRestrictedBestList(restrictedStanding.best, {
@@ -1158,6 +1174,12 @@ export function PlayerProfilePage({
     [restrictedBest],
   );
   const profileInsights = restrictedInsights ?? storedProfileInsights;
+  /* The Note highway plays the owner's replay skin notes in their main keymode. */
+  const mainKeys = profileInsights?.keySplit.reduce<{ keyCount: number; count: number } | null>((top, entry) => (!top || entry.count > top.count ? entry : top), null)?.keyCount ?? null;
+  const highwayNotes = useHighwayNotes(profileUserId, mainKeys, profileTheme === "highway" || profileTheme === "judgements");
+  // and, when they switched it on, their best play's chart in that keymode
+  const highwayCharts = profileTheme === "highway" && supporterFrame?.userId === profileUserId && !!supporterFrame.profileThemeOptions.charts;
+  const highwayChart = useHighwayChart(profileUserId, best, highwayNotes?.lanes ?? mainKeys ?? 4, highwayCharts);
   /* Recent follows Best there: the stored osu! plays stay hidden and only the
      account's Companella imports show, in the same list as anyone's. */
   const shownRecent = useMemo(
@@ -2112,8 +2134,20 @@ export function PlayerProfilePage({
   const joinedValue = !profileStatsProjectedOnly && hasValidDate(user.join_date) ? formatDate(user.join_date) : null;
   const playstyleValue = user.playstyle?.length ? user.playstyle.join(", ") : null;
 
+  /* A supporter's profile theme: the page takes its colours, and its bands
+     turn see-through over the theme's backdrop, which stays pinned behind
+     them as the page scrolls (clipped to the profile, so not under the
+     footer). Nothing here makes a stacking context, so the modals still sit
+     over the nav: the backdrop comes first and the bands after it are
+     positioned, which is enough to paint them over it. */
+  const band = profileTheme ? "relative bg-osu-b5/[0.78]" : "bg-osu-b5";
   return (
-    <div className="flex-1">
+    <div className={profileTheme ? "relative flex-1 overflow-clip" : "flex-1"} style={profileThemeStyle(profileTheme, highwayNotes)}>
+      {profileTheme && (
+        <div aria-hidden className="pointer-events-none sticky top-0 h-0">
+          <ProfileThemeBackdrop theme={profileTheme} notes={highwayNotes} chart={highwayChart} scroll className="absolute inset-x-0 top-0 h-screen" />
+        </div>
+      )}
       {/* Avatar modal */}
       <AnimatePresence>
         {avatarOpen && (
@@ -2331,17 +2365,21 @@ export function PlayerProfilePage({
 
       {/* Hero: cover art, identity, and the headline ranks share one band, with
           the 90-day rank trend drawn edge to edge underneath them. */}
-      <header className="relative isolate overflow-hidden bg-osu-b4">
+      {/* Under a theme the hero is see-through, so it does not isolate: the
+          cover blends into the backdrop behind it as a soft grey texture. */}
+      <header className={`relative overflow-hidden ${profileTheme ? "" : "isolate bg-osu-b4"}`}>
         {coverImage && (
           <img
             src={coverImage}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
-            style={{ filter: "brightness(0.34) saturate(1.15)" }}
+            style={profileTheme
+              ? { filter: "grayscale(1) contrast(1.15)", opacity: PROFILE_THEME_LOOKS[profileTheme].cover, mixBlendMode: "soft-light" }
+              : { filter: "brightness(0.34) saturate(1.15)" }}
           />
         )}
-        <div className="absolute inset-0 bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.25),rgba(0,0,0,0.82))]" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-osu-b5" />
+        <div className={`absolute inset-0 ${profileTheme ? "bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.05),rgba(0,0,0,0.5))]" : "bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.25),rgba(0,0,0,0.82))]"}`} />
+        <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent ${profileTheme ? "to-osu-b5/[0.78]" : "to-osu-b5"}`} />
         <RankTrendline history={rankHistoryPoints} />
 
         <div className="relative mx-auto max-w-[1200px] px-4 pt-8 pb-7 sm:px-5 sm:pt-12 sm:pb-9">
@@ -2350,7 +2388,7 @@ export function PlayerProfilePage({
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:gap-x-5">
             <div
               className="relative flex-shrink-0 [--hero-avatar:84px] sm:[--hero-avatar:124px]"
-              style={heroFrame ? frameOverhangMargins(heroFrame, "var(--hero-avatar)", "28px") : undefined}
+              style={heroFrame ? frameOverhangMargins(heroFrame, "var(--hero-avatar)", "28px", HERO_LEFT_GUTTER) : undefined}
             >
               <button
                 type="button"
@@ -2483,7 +2521,7 @@ export function PlayerProfilePage({
       </header>
 
       {/* Stats */}
-      <div className="bg-osu-b5">
+      <div className={band}>
         <div className={`max-w-[1200px] mx-auto px-4 sm:px-5 ${hasTabControls ? "pb-4" : ""}`}>
           {/* Play totals and the grade tally share one flat rail: no boxes, just
               the numbers with a hairline under them. */}
@@ -2761,7 +2799,7 @@ export function PlayerProfilePage({
       </div>
 
       {/* Tab body: About card or scores list */}
-      <div className="bg-osu-b5 border-t border-osu-b3/20">
+      <div className={`${band} border-t border-osu-b3/20`}>
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-1.5">
           {tab === "recent" && <SharedRecentPlay userId={user.id} username={user.username} />}
           <AnimatePresence mode="wait" initial={false}>

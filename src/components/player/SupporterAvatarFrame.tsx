@@ -7,7 +7,8 @@ import { supporterFrameGeometry, supporterFrameSrc, type SupporterAvatarFrameId 
    (frameOverhangMargins reserves the room). It loops as a transparent WebM
    where the browser can show VP9 alpha, and stays the still PNG on Safari and
    every iOS browser (WebKit drops the alpha), under reduced motion, and during
-   SSR. */
+   SSR. `still` holds it on the PNG anyway (a picker sweeping through frames
+   would otherwise start a video decode per frame). */
 
 function canPlayAlphaVideo(): boolean {
   const ua = navigator.userAgent;
@@ -17,7 +18,7 @@ function canPlayAlphaVideo(): boolean {
   return document.createElement("video").canPlayType('video/webm; codecs="vp9"') !== "";
 }
 
-export function SupporterAvatarFrame({ frame }: { frame: SupporterAvatarFrameId }) {
+export function SupporterAvatarFrame({ frame, still: holdStill = false }: { frame: SupporterAvatarFrameId; still?: boolean }) {
   const [animate, setAnimate] = useState(false);
   useEffect(() => setAnimate(canPlayAlphaVideo()), []);
 
@@ -31,7 +32,7 @@ export function SupporterAvatarFrame({ frame }: { frame: SupporterAvatarFrameId 
   const className = "pointer-events-none absolute max-w-none select-none";
   const still = supporterFrameSrc(frame, "still");
 
-  return animate ? (
+  return animate && !holdStill ? (
     <video
       key={frame}
       src={supporterFrameSrc(frame, "video")}
@@ -52,12 +53,14 @@ export function SupporterAvatarFrame({ frame }: { frame: SupporterAvatarFrameId 
 
 /* Margins that make room for a frame's overhang around an avatar `size` wide
    (any CSS length). `allowance` is how much of the overhang above and below
-   the surrounding padding can already absorb. */
-export function frameOverhangMargins(frame: SupporterAvatarFrameId, size: string, allowance = "0px"): CSSProperties {
+   the surrounding padding can already absorb, `leftAllowance` how much on the
+   left (empty page gutter the art may spread into, so the avatar does not
+   move for it). */
+export function frameOverhangMargins(frame: SupporterAvatarFrameId, size: string, allowance = "0px", leftAllowance = "0px"): CSSProperties {
   const [left, top, right, bottom] = supporterFrameGeometry(frame).overhang;
   const vertical = (share: number) => `max(0px, calc(${size} * ${share} - ${allowance}))`;
   return {
-    marginLeft: `calc(${size} * ${left})`,
+    marginLeft: `max(0px, calc(${size} * ${left} - ${leftAllowance}))`,
     marginRight: `calc(${size} * ${right})`,
     marginTop: vertical(top),
     marginBottom: vertical(bottom),

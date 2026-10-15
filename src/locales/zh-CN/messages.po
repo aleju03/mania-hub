@@ -563,6 +563,11 @@ msgstr "{0} 归你所有"
 msgid "{0} loaded"
 msgstr "已加载 {0}"
 
+#. placeholder {0}: locks.size
+#: src/routes/supporter.tsx
+msgid "{0} locked"
+msgstr ""
+
 #. placeholder {0}: activeData.user.username
 #. placeholder {0}: card.player.user.username
 #. placeholder {0}: card.username
@@ -2404,7 +2409,7 @@ msgstr "7K LN"
 msgid "7K LN stays within one level of your General dan, because few hard Tech, Inverse and Release charts exist. Those three still show their own numbers."
 msgstr "7K LN 的段位与你的综合段位相差不超过一级，因为高难度的技、反键和放手谱面很少。这三项仍然显示各自的数值。"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "7K orbit"
 msgstr ""
 
@@ -3040,7 +3045,7 @@ msgstr "管理员：用假抽卡刷满侧栏以预览动画"
 msgid "Advanced"
 msgstr "高级"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Aero window"
 msgstr ""
 
@@ -3291,7 +3296,7 @@ msgstr "还有 {0} 位"
 msgid "and {0} more below these"
 msgstr "此外还有 {0} 次排在这些之后"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Angel wings"
 msgstr ""
 
@@ -3549,12 +3554,17 @@ msgstr "音频链接 (mp3)"
 msgid "Audio wave"
 msgstr "音频波形"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Audiowide"
+msgstr ""
+
 #: src/routes/terms.tsx
 msgid "August 23, 2026"
 msgstr "2026年8月23日"
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/lib/supporter-foils.ts
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Aurora"
 msgstr "极光"
 
@@ -3591,7 +3601,7 @@ msgstr "自动追踪从 2026 年 6 月 9 日开始。更早的成绩只要还在
 #~ msgid "Automatic tracking only began on June 9, 2026. Older scores are included when they are still in your osu! top plays, and any missing passed mania score with an osu! score link can be added from your profile's Skills tab."
 #~ msgstr "自动追踪直到 2026 年 6 月 9 日才开始。更早的成绩如果仍在你的 osu! 最佳成绩中就会被计入；任何缺失且有 osu! 成绩链接的 mania 通过成绩，都可以在个人主页的“技能”标签页中添加。"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Autumn maple"
 msgstr ""
 
@@ -3599,7 +3609,7 @@ msgstr ""
 msgid "avatar"
 msgstr "头像"
 
-#: src/routes/supporter.tsx
+#: src/components/supporter/loadout.ts
 msgid "Avatar frame"
 msgstr ""
 
@@ -3962,9 +3972,21 @@ msgstr "涨幅最大优先"
 #~ msgid "Binders are kept with your account, so sign in to make one."
 #~ msgstr "卡夹保存在你的账号里，登录后即可创建。"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Bitmap"
+msgstr ""
+
+#: src/lib/supporter-profile-themes.ts
+msgid "Black hole"
+msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Black playfield"
 msgstr "纯黑游玩区域"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Blackletter"
+msgstr ""
 
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
@@ -3992,6 +4014,7 @@ msgid "Board spot <0>#{0}</0>"
 msgstr "榜单位置 <0>#{0}</0>"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/loadout.ts
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "加粗"
@@ -4008,7 +4031,7 @@ msgstr "这里不计入游玩次数带来的奖励 pp，所以数值会比 osu! 
 msgid "boosts"
 msgstr "加成"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Boot box"
 msgstr ""
 
@@ -4061,7 +4084,7 @@ msgstr "亮度"
 msgid "Bring to front"
 msgstr "置于顶层"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Bronze laurel"
 msgstr ""
 
@@ -4206,7 +4229,6 @@ msgstr "画布不可用。"
 #~ msgstr "已封顶"
 
 #: src/lib/signature-shared.ts
-#: src/routes/supporter.tsx
 msgid "Card"
 msgstr "卡片"
 
@@ -4214,15 +4236,27 @@ msgstr "卡片"
 msgid "Card albums"
 msgstr "卡册"
 
+#: src/components/supporter/loadout.ts
+msgid "Card art"
+msgstr ""
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "Card collection"
 msgstr "卡片收藏册"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Card colours"
+#~ msgstr ""
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "card cover"
 msgstr "卡片封面"
+
+#: src/components/supporter/loadout.ts
+msgid "Card foil"
+msgstr ""
 
 #: src/lib/signature-shared.ts
 msgid "Card front"
@@ -4273,14 +4307,19 @@ msgstr "你持有两张或以上的卡片。"
 msgid "Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
 msgstr "你持有的、已经抽不到的玩家卡片：他们在每个已追踪国家/地区都掉出了前 100 名，也没有主动加入。如果他们回来，就会重新进入卡池和完成度统计。"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/lib/supporter-name-fonts.ts
+msgid "Cartoon"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
 msgid "Cat parade"
 msgstr ""
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Cats"
 msgstr ""
 
+#: src/lib/supporter-foils.ts
 #: src/lib/supporter-name-styles.ts
 msgid "Caustics"
 msgstr ""
@@ -4568,6 +4607,7 @@ msgstr "圆形"
 msgid "CJ"
 msgstr "CJ"
 
+#: src/components/supporter/loadout.ts
 #: src/lib/replay-overlays.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Classic"
@@ -4578,7 +4618,7 @@ msgstr "经典"
 #~ msgid "Classic"
 #~ msgstr "经典"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Classic window"
 msgstr ""
 
@@ -4606,6 +4646,7 @@ msgstr "通过"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
+#: src/routes/supporter.tsx
 msgid "Clear all"
 msgstr "清除全部"
 
@@ -4871,6 +4912,10 @@ msgstr "不开放"
 msgid "Code block"
 msgstr "代码块"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Code rain"
+msgstr ""
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Collapse"
 msgstr "收起"
@@ -4992,6 +5037,10 @@ msgstr "连击数字体"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "ComboPosition"
 msgstr "ComboPosition"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Comic"
+msgstr ""
 
 #: src/components/communities/TagInput.tsx
 msgid "Comma after each one. Up to {COMMUNITY_MAX_TAGS}, and they become filters people browse by, so use words someone would actually search for."
@@ -5411,7 +5460,6 @@ msgstr "无法撤销这些连接。"
 #~ msgid "Could not revoke the installations."
 #~ msgstr ""
 
-#: src/components/supporter/SupporterLookPicker.tsx
 #: src/routes/supporter.tsx
 msgid "Could not save that."
 msgstr "无法保存。"
@@ -5444,7 +5492,7 @@ msgstr ""
 msgid "Could not submit that. Try again."
 msgstr "提交失败，请再试一次。"
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/routes/supporter.tsx
 msgid "Could not upload that image."
 msgstr "无法上传这张图片。"
 
@@ -5784,6 +5832,10 @@ msgstr "已覆盖"
 #~ msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, general, tech, inverse and release on 7K LN, and all-round, technical, walls and speed on 4K LN. 6K has none for now."
 #~ msgstr "覆盖范围：4K 常规的叠、技、速度和耐力，7K 常规的叠、技、速度和切，7K LN 的综合、技、反键和放手，以及 4K LN 的全能、技、条墙和速度。6K 目前没有。"
 
+#: src/lib/supporter-foils.ts
+msgid "Cracked ice"
+msgstr ""
+
 #. placeholder {0}: names[finish]
 #. placeholder {1}: status?.cost ?? 20
 #: src/components/packs/ForgePanel.tsx
@@ -5855,7 +5907,7 @@ msgstr "克罗地亚语"
 msgid "crop {0}×{1}"
 msgstr "裁剪 {0}×{1}"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "CRT monitor"
 msgstr ""
 
@@ -6055,7 +6107,7 @@ msgstr "段位评定"
 msgid "Dan skill"
 msgstr "段位技能"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Dan skip"
 msgstr ""
 
@@ -6067,7 +6119,7 @@ msgstr "危险操作"
 msgid "Danish"
 msgstr "丹麦语"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Dans"
 msgstr ""
 
@@ -6125,11 +6177,15 @@ msgstr "正在解码皮肤图片，{0}%"
 msgid "Decrease"
 msgstr "减少"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Deep sea"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "default"
 msgstr "默认"
 
-#: src/components/supporter/SupporterNameStylePicker.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Default"
 msgstr ""
 
@@ -6207,7 +6263,7 @@ msgstr "已删除 {0}"
 msgid "Deleting"
 msgstr "删除中"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Delta crest"
 msgstr ""
 
@@ -6243,7 +6299,7 @@ msgstr "检测到的片段"
 msgid "dev preview"
 msgstr "开发预览"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "DFJK"
 msgstr ""
 
@@ -6428,6 +6484,10 @@ msgstr "完成"
 #: src/routes/recommendations.tsx
 msgid "done with it"
 msgstr "刷够了"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Dots"
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "Doubles the columns into two stages."
@@ -6783,8 +6843,7 @@ msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到<0>
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page."
 msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到你的 osu! 页面的 me! 编辑器中。"
 
-#: src/components/supporter/SupporterFramePicker.tsx
-#: src/components/supporter/SupporterNameStylePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Effects"
 msgstr ""
 
@@ -6796,7 +6855,6 @@ msgstr "正在重启或维护中。请稍后再试。"
 msgid "Elite"
 msgstr "精英"
 
-#: src/components/supporter/SupporterLookPicker.tsx
 #: src/lib/supporter-name-styles.ts
 msgid "Ember"
 msgstr "余烬"
@@ -6838,7 +6896,7 @@ msgstr "每位玩家等概率"
 msgid "error"
 msgstr "错误"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Error cascade"
 msgstr ""
 
@@ -7085,6 +7143,10 @@ msgstr "导出的视频无法使用此链接，因为其网站阻止了访问。
 #~ msgid "Exposed Releases"
 #~ msgstr "独立松键"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Extended"
+msgstr ""
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "External application"
 msgstr "外部应用"
@@ -7129,7 +7191,7 @@ msgstr "上传的回放加载失败"
 msgid "Failed to start the replay renderers."
 msgstr "回放渲染器启动失败。"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Fairy lights"
 msgstr ""
 
@@ -7190,6 +7252,10 @@ msgstr "在各键之间快速流动的单点串。"
 msgid "Fastest"
 msgstr "最快"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Fatface"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Favourited by"
 msgstr "收藏的玩家"
@@ -7231,11 +7297,11 @@ msgstr "在 {mapSlot} 上 FC（<0/>）"
 msgid "FC chokes only (1 miss)"
 msgstr "仅 FC 断连（1 miss）"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Feather wings"
 msgstr ""
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Feathers"
 msgstr "羽毛"
 
@@ -7625,7 +7691,7 @@ msgstr "翻转"
 msgid "Follow SV changes"
 msgstr "跟随 SV 变化"
 
-#: src/components/supporter/SupporterNameStylePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Font"
 msgstr ""
 
@@ -7738,6 +7804,7 @@ msgid "Fronts the browse card"
 msgstr "作为浏览卡片的封面"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Frost"
 msgstr ""
 
@@ -7780,8 +7847,16 @@ msgstr "满宽"
 msgid "Fullscreen"
 msgstr "全屏"
 
+#: src/components/supporter/loadout.ts
+msgid "Fun"
+msgstr ""
+
 #: src/lib/supporter-name-styles.ts
 msgid "Galaxy"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Game and tech"
 msgstr ""
 
 #: src/lib/skill-axes.ts
@@ -7870,6 +7945,14 @@ msgstr "给卡组起个名字。"
 msgid "Glitch"
 msgstr ""
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Glitched"
+msgstr ""
+
+#: src/lib/supporter-foils.ts
+msgid "Glitter"
+msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/maps.tsx
 msgid "global"
@@ -7913,7 +7996,7 @@ msgstr "全球追踪器已就绪"
 msgid "Glow"
 msgstr "光晕"
 
-#: src/components/supporter/SupporterNameStylePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Glow and retro"
 msgstr ""
 
@@ -7987,14 +8070,17 @@ msgid "Goes by the country on someone's osu! account, and anyone already in can 
 msgstr "以对方 osu! 账号上的国家/地区为准，已经加入的人仍然可以分享邀请链接。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
-#: src/components/supporter/SupporterLookPicker.tsx
 #: src/lib/signature-style.ts
 #: src/lib/supporter-name-styles.ts
 msgid "Gold"
 msgstr "金色"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Gold wings"
+msgstr ""
+
+#: src/lib/supporter-profile-themes.ts
+msgid "Golden hour"
 msgstr ""
 
 #: src/components/packs/GiftInbox.tsx
@@ -8016,7 +8102,7 @@ msgstr "渐变"
 msgid "Gradient text"
 msgstr "渐变文字"
 
-#: src/components/supporter/SupporterNameStylePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Gradients"
 msgstr ""
 
@@ -8052,12 +8138,20 @@ msgstr "绿色"
 msgid "Grid"
 msgstr "网格"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Groovy"
+msgstr ""
+
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
 msgstr "随机猜一个"
 
-#: src/components/supporter/SupporterFramePicker.tsx
-msgid "Halloween"
+#: src/components/supporter/loadout.ts
+#~ msgid "Halloween"
+#~ msgstr ""
+
+#: src/lib/supporter-profile-themes.ts
+msgid "Hanabi"
 msgstr ""
 
 #: src/lib/pattern-labels.ts
@@ -8071,6 +8165,10 @@ msgstr "三押叠"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Handstream"
 msgstr "三押切"
+
+#: src/components/supporter/loadout.ts
+msgid "Handwritten"
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "hard"
@@ -8157,12 +8255,16 @@ msgstr "标题"
 msgid "Health bar"
 msgstr "血条"
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Hearts"
 msgstr "爱心"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Heatmap"
+msgstr ""
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Heavy"
 msgstr ""
 
 #: src/components/communities/field-options.tsx
@@ -8181,7 +8283,7 @@ msgstr "导出图片的高度，单位像素"
 #~ msgid "Held-chord Coordination"
 #~ msgstr "多键长按协调"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Hex HUD"
 msgstr ""
 
@@ -8461,6 +8563,10 @@ msgstr "在 <1>{1}</1> 张可收集卡牌中持有 <0>{0}</0> 张，占 <2>{pool
 msgid "Holo"
 msgstr ""
 
+#: src/lib/supporter-foils.ts
+msgid "Holo lattice"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "home"
 msgstr "首页"
@@ -8472,6 +8578,10 @@ msgstr "荣誉名单"
 #: src/lib/replay-overlays.ts
 msgid "Horizontal"
 msgstr "横向"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Horror"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "How a chart's skill is picked"
@@ -8830,6 +8940,10 @@ msgstr "靛蓝"
 msgid "Indonesian"
 msgstr "印尼语"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Inferno"
+msgstr ""
+
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
 #~ msgstr "计入同谱面重复成绩的权重衰减及窗口上限后，在本次平均中的权重；段位折算值不变"
@@ -8850,7 +8964,7 @@ msgstr "游戏内排行榜，实时显示名次变化。按 Tab 开关。"
 msgid "Ink marble"
 msgstr ""
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Ink plum"
 msgstr ""
 
@@ -9078,6 +9192,10 @@ msgstr "已判定"
 msgid "Judged at OD {0}, the original map's, instead of this file's OD {1}."
 msgstr ""
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Judgement rain"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Judgement set"
 msgstr "判定图组"
@@ -9088,7 +9206,7 @@ msgstr "判定图大小"
 
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 #: src/lib/replay-overlays.ts
 msgid "Judgements"
 msgstr "判定"
@@ -9131,11 +9249,12 @@ msgstr "2026年6月16日"
 msgid "just now"
 msgstr "刚刚"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Kappa signal"
 msgstr ""
 
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/supporter.tsx
 msgid "Keep"
 msgstr "保留"
 
@@ -9244,6 +9363,10 @@ msgstr "每秒按键次数。"
 #: src/routes/__root.tsx
 msgid "Ko-fi page"
 msgstr "Ko-fi 主页"
+
+#: src/lib/supporter-profile-themes.ts
+msgid "Koi pond"
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Korean"
@@ -9392,7 +9515,7 @@ msgstr "拉脱维亚语"
 msgid "Lava lamp"
 msgstr ""
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Layers"
 msgstr ""
 
@@ -9545,7 +9668,7 @@ msgstr "浅色"
 msgid "Light"
 msgstr "灯光"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Light wings"
 msgstr ""
 
@@ -9729,7 +9852,7 @@ msgstr "长条头颜色"
 msgid "LN Head color"
 msgstr "长条头颜色"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "LN hold"
 msgstr ""
 
@@ -9877,7 +10000,7 @@ msgstr "正在加载 {countryName} 狙击…"
 msgid "Loading audio preview…"
 msgstr "正在加载试听音频…"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Loading bar"
 msgstr ""
 
@@ -10021,6 +10144,10 @@ msgstr "加载中..."
 msgid "Loading…"
 msgstr "加载中…"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Lobster"
+msgstr ""
+
 #: src/components/replay/ReplayCustomMediaControls.tsx
 msgid "Local file"
 msgstr "本地文件"
@@ -10028,6 +10155,10 @@ msgstr "本地文件"
 #: src/components/maps/MapDetailModal.tsx
 msgid "localized vibro detected"
 msgstr "检测到局部 Vibro"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Lock for rolls"
+msgstr ""
 
 #: src/routes/communities.tsx
 msgid "Log in to post"
@@ -10209,7 +10340,7 @@ msgstr "设为 {OSU_PROFILE_COLUMN_WIDTH}px 宽，正好是 osu! 个人资料栏
 msgid "Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one."
 msgstr "尽量用永久邀请：临时邀请一到期，你的服务器就会被隐藏，直到你贴上新的链接。"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Makiba"
 msgstr ""
 
@@ -10492,7 +10623,7 @@ msgstr "正在与回放的校验值比对。"
 msgid "Matching the replay to its beatmap."
 msgstr "正在为回放匹配对应谱面。"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Matrix rain"
 msgstr ""
 
@@ -10976,9 +11107,13 @@ msgstr "第 {0} 张截图的名称"
 msgid "Name preset"
 msgstr "为预设命名"
 
-#: src/routes/supporter.tsx
-msgid "Name tag"
+#: src/components/supporter/loadout.ts
+msgid "Name style"
 msgstr ""
+
+#: src/routes/supporter.tsx
+#~ msgid "Name tag"
+#~ msgstr ""
 
 #. placeholder {0}: trimmed.slice(0, 80)
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10997,6 +11132,10 @@ msgstr "差一点通过"
 msgid "nearby players outscore you"
 msgstr "附近玩家的分数比你高"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Nebula"
+msgstr ""
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "needs {quorum}"
 msgstr "需要 {quorum} 次"
@@ -11009,7 +11148,7 @@ msgstr "需要一个指向其 osu! 主页的 web.archive.org 链接。"
 msgid "Neon"
 msgstr ""
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Neon ears"
 msgstr ""
 
@@ -11350,7 +11489,7 @@ msgstr "没有符合筛选条件的收藏。试着放宽一些。"
 #~ msgid "No folders yet. Make one to group your cards however you like, then show it on your shelf if you want."
 #~ msgstr "还没有文件夹。建一个来随意归类你的卡片，想展示的话还能放到展示柜上。"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "No frame"
 msgstr ""
 
@@ -11869,6 +12008,10 @@ msgstr "还没有人持有专属卡。"
 msgid "Nobody we track has a scored run on this map. Search a player, or paste a score link."
 msgstr "我们追踪的玩家里没有人在这张谱面上有成绩。搜索一位玩家，或粘贴成绩链接。"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Noir"
+msgstr ""
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Nominate"
 msgstr "提名"
@@ -12073,10 +12216,15 @@ msgstr "音符颜色"
 msgid "Note height"
 msgstr "音符高度"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Note highway"
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 msgid "note on this"
 msgstr "关于这个的说明"
 
+#: src/lib/supporter-foils.ts
 #: src/lib/supporter-name-styles.ts
 msgid "Note rain"
 msgstr ""
@@ -12093,7 +12241,7 @@ msgstr "音符"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/loadout.ts
 #: src/routes/skins_.$id.tsx
 msgid "Notes"
 msgstr "音符"
@@ -12306,7 +12454,7 @@ msgstr "旧"
 msgid "old pb"
 msgstr "旧 PB"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Old photo"
 msgstr ""
 
@@ -12800,7 +12948,7 @@ msgstr "osu! 成绩链接"
 msgid "osu! team"
 msgstr "osu! 战队"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "osu!mania"
 msgstr ""
 
@@ -13208,7 +13356,7 @@ msgstr "表现分排名"
 msgid "Persian"
 msgstr "波斯语"
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Petals"
 msgstr "花瓣"
 
@@ -13285,7 +13433,7 @@ msgstr "粉"
 msgid "Pink"
 msgstr "粉色"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Pink wings"
 msgstr ""
 
@@ -13297,11 +13445,11 @@ msgstr "已置顶"
 msgid "Pixel"
 msgstr ""
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Pixel hearts"
 msgstr ""
 
-#: src/components/supporter/SupporterNameStylePicker.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Plain"
 msgstr ""
 
@@ -13344,6 +13492,10 @@ msgstr "从 {0} 开始播放"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
 msgstr "游玩习惯与打法分析：活跃天数、游玩场次和技能构成。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Play my top plays"
+msgstr ""
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Play preview"
@@ -13607,6 +13759,10 @@ msgstr "热门程度"
 msgid "Portuguese"
 msgstr "葡萄牙语"
 
+#: src/routes/supporter.tsx
+msgid "possible looks"
+msgstr ""
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Post a Discord server"
 msgstr "发布 Discord 服务器"
@@ -13832,9 +13988,9 @@ msgstr "上一段试听"
 msgid "Previously"
 msgstr "此前"
 
-#: src/components/supporter/SupporterLookPicker.tsx
-msgid "Prismatic"
-msgstr "棱彩"
+#: src/components/supporter/loadout.ts
+#~ msgid "Prismatic"
+#~ msgstr "棱彩"
 
 #: src/routes/__root.tsx
 msgid "privacy"
@@ -13891,6 +14047,10 @@ msgstr "主页链接"
 #: src/lib/signature-shared.ts
 msgid "Profile stats"
 msgstr "个人资料数据"
+
+#: src/components/supporter/loadout.ts
+msgid "Profile theme"
+msgstr ""
 
 #: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
@@ -14017,7 +14177,7 @@ msgstr "雷达图"
 msgid "Radar and axes"
 msgstr "雷达图与坐标轴"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Rain cloud"
 msgstr ""
 
@@ -15049,7 +15209,7 @@ msgstr "继续这张谱面"
 msgid "Retention And Controls"
 msgstr "数据保留与控制"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Retro"
 msgstr ""
@@ -15178,6 +15338,10 @@ msgstr "圆环"
 #~ msgid "Road to {target} packs"
 #~ msgstr "冲向 {target} 个卡包"
 
+#: src/routes/supporter.tsx
+msgid "Roll"
+msgstr ""
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
 msgstr "随机抽一张被收藏的谱面，卡池与「谱面」的随机标签页相同。可按键数、状态、谱型或星级区间筛选，也可以再抽一次。"
@@ -15185,6 +15349,10 @@ msgstr "随机抽一张被收藏的谱面，卡池与「谱面」的随机标签
 #: src/components/discord/CommandShowcase.tsx
 msgid "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another."
 msgstr "随机抽一张热门刷分谱面。默认使用全球刷分榜，可按键数、状态、星级区间或最低 pp 筛选。也可以再抽一次。"
+
+#: src/routes/supporter.tsx
+msgid "Roll again"
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Romanian"
@@ -15234,7 +15402,8 @@ msgstr "在运营 osu!mania 服务器？发布它，通过审核后就会显示�
 msgid "Russian"
 msgstr "俄语"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Sakura"
 msgstr ""
 
@@ -15395,6 +15564,10 @@ msgstr "缩放图片以适应"
 msgid "Scales the skin's hitburst art."
 msgstr "缩放皮肤的打击特效图。"
 
+#: src/lib/supporter-foils.ts
+msgid "Scanline"
+msgstr ""
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Scopes"
 msgstr ""
@@ -15463,7 +15636,11 @@ msgstr "ScoreV2 准确率（97%）"
 msgid "ScoreV2 accuracy"
 msgstr "ScoreV2 准确率"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/lib/supporter-name-fonts.ts
+msgid "Scrawl"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
 msgid "Screensaver"
 msgstr ""
 
@@ -15697,7 +15874,7 @@ msgstr "搜索..."
 msgid "searching"
 msgstr "搜索中"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Seasons and nature"
 msgstr ""
 
@@ -16546,13 +16723,17 @@ msgstr "单点叠"
 #~ msgid "Single-note streams {singleText}, chordstreams {chordText}"
 #~ msgstr "单点切 {singleText}，大切 {chordText}"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Site colours"
+msgstr ""
+
 #: src/routes/skins.tsx
 msgid "size"
 msgstr "大小"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Size"
 msgstr "大小"
 
@@ -16724,7 +16905,7 @@ msgstr "皮肤"
 msgid "Skins are unavailable right now"
 msgstr "皮肤列表暂时不可用"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Skip"
 msgstr ""
 
@@ -16820,7 +17001,7 @@ msgstr "{name} 未开启狙击追踪"
 #~ msgid "Snipes don't apply to Global"
 #~ msgstr "狙击不适用于全球视图"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Soft wings"
 msgstr ""
 
@@ -17111,7 +17292,7 @@ msgstr "星级"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/loadout.ts
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -17177,12 +17358,16 @@ msgstr "数据与最佳成绩"
 msgid "Status"
 msgstr "状态"
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Stellium"
 msgstr "Stellium"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Stellium charm"
+msgstr ""
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Stencil"
 msgstr ""
 
 #: src/routes/dan-estimates.tsx
@@ -17292,7 +17477,7 @@ msgstr ""
 #~ msgid "Stored, but not rated:"
 #~ msgstr ""
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Storm"
 msgstr ""
 
@@ -17338,7 +17523,7 @@ msgstr "被双押打断的切换。"
 msgid "Streams thickened with three-note hand chords."
 msgstr "加入三押的切换。"
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Strength"
 msgstr "强度"
 
@@ -17402,6 +17587,10 @@ msgstr "子区域"
 #: src/components/player/ActivityPanel.tsx
 msgid "Sun"
 msgstr "日"
+
+#: src/lib/supporter-foils.ts
+msgid "Sunburst"
+msgstr ""
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Sundays"
@@ -17487,7 +17676,7 @@ msgstr "把任意元素替换成 {0} 里的其他图片，或在预览里点击�
 msgid "Swedish"
 msgstr "瑞典语"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Swept wings"
 msgstr ""
 
@@ -17508,6 +17697,10 @@ msgstr "已同步到你的 osu! 账号。"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Syncing to your osu! account..."
 msgstr "正在同步到你的 osu! 账号…"
+
+#: src/lib/supporter-profile-themes.ts
+msgid "Synthwave"
+msgstr ""
 
 #: src/routes/communities.tsx
 msgid "tags"
@@ -17659,13 +17852,13 @@ msgstr "用 <0>/link</0> 告诉机器人你是谁，只需一次。之后 <1>/re
 msgid "Temporarily offline"
 msgstr "暂时离线"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 #: src/lib/supporter-name-styles.ts
 msgid "Terminal"
 msgstr ""
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Terminal window"
 msgstr ""
 
@@ -17783,7 +17976,7 @@ msgstr "这个文件不是支持的图片格式。"
 msgid "That gift is no longer there."
 msgstr "这份礼物已经不在了。"
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/routes/supporter.tsx
 msgid "That image is over 5 MB."
 msgstr "图片超过 5 MB。"
 
@@ -18479,6 +18672,10 @@ msgstr "第一个上传的皮肤会出现在这里。"
 #~ msgid "The forge is not available right now."
 #~ msgstr "熔铸暂时不可用。"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "The highway streams a section of your best play in your main keymode, instead of random notes."
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
 msgstr "图片已上传，但浏览器拦截了剪贴板。请再点一次复制 BBCode。"
@@ -18983,6 +19180,10 @@ msgstr "他们已经是 GOAT 了。"
 msgid "They're removed from your tracked plays, recent plays and activity on this site."
 msgstr "它们会从本站你的追踪成绩、最近成绩和活动中移除。"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Thin mono"
+msgstr ""
+
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Third pull"
 msgstr "第三个抽到"
@@ -19372,11 +19573,15 @@ msgstr "这些图片已无法查看。"
 msgid "Thu"
 msgstr "四"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Thunderstorm"
+msgstr ""
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Thursdays"
 msgstr "周四"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Tier"
 msgstr ""
 
@@ -19384,9 +19589,9 @@ msgstr ""
 msgid "Tier changed to {tierLabel}"
 msgstr "等级变更为 {tierLabel}"
 
-#: src/components/supporter/SupporterLookPicker.tsx
-msgid "Tier colours"
-msgstr "等级配色"
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Tier colours"
+#~ msgstr "等级配色"
 
 #: src/lib/replay-overlays.ts
 msgid "Time left"
@@ -19857,6 +20062,7 @@ msgid "Underline"
 msgstr "下划线"
 
 #: src/components/me/GoalToasts.tsx
+#: src/routes/supporter.tsx
 msgid "Undo"
 msgstr "撤销"
 
@@ -19919,6 +20125,10 @@ msgstr "未知谱面"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Unknown player"
 msgstr "未知玩家"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Unlock for rolls"
+msgstr ""
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
@@ -20079,11 +20289,11 @@ msgid "Upload a skin and it lands here."
 msgstr "上传一个皮肤，它就会出现在这里。"
 
 #: src/components/skins/SkinUploadModal.tsx
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Upload another"
 msgstr "再上传一个"
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Upload image"
 msgstr "上传图片"
 
@@ -20243,6 +20453,10 @@ msgstr "用户名"
 #: src/routes/recommendations.tsx
 msgid "username..."
 msgstr "用户名…"
+
+#: src/lib/supporter-profile-themes.ts
+msgid "Vaporwave"
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Verified"
@@ -20847,11 +21061,11 @@ msgstr "狂野"
 msgid "Windows and Linux"
 msgstr "Windows 和 Linux"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Wings"
 msgstr ""
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Winter pine"
 msgstr ""
 
@@ -20876,7 +21090,7 @@ msgstr "愿望单"
 msgid "Wishlist is full (5)"
 msgstr "愿望单已满（5）"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "Wisteria"
 msgstr ""
 
@@ -20953,7 +21167,7 @@ msgstr "写入视频文件失败。"
 msgid "wrong"
 msgstr "答错"
 
-#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/loadout.ts
 msgid "XP window"
 msgstr ""
 
@@ -21270,7 +21484,7 @@ msgstr "你的最佳成绩"
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
 
-#: src/routes/supporter.tsx
+#: src/components/supporter/LoadoutStage.tsx
 msgid "Your card is not ready yet."
 msgstr ""
 
@@ -21353,7 +21567,7 @@ msgstr "你的动态渲染图已被关闭。"
 #~ msgid "Your first forge"
 #~ msgstr "你的第一次锻造"
 
-#: src/components/supporter/SupporterLookPicker.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Your image"
 msgstr "你的图片"
 
@@ -21536,6 +21750,10 @@ msgstr "你的上传"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your username and avatar"
 msgstr "你的用户名和头像"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Your whole profile takes on the theme: its colours, and a living backdrop behind the page."
+msgstr ""
 
 #: src/components/packs/WishlistLine.tsx
 msgid "Your wishlist"

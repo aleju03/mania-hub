@@ -15,6 +15,7 @@ import { cardOverlayFragmentShader, cardOverlayVertexShader } from "./cardShader
 import { getCosmicTierPalette, type PreparedCardMotif } from "./cardTexture";
 import type { FaceLayout, Rect } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
+import { supporterFoilIndex } from "#/lib/supporter-foils";
 
 /* A face rect in the shader's UV space, whose y runs up from the bottom. */
 function textureRectUv(rect: Rect): Vector4 {
@@ -82,6 +83,8 @@ export function createOverlayMaterial(
       uFoil: { value: data.tier === "common" ? 0 : 1 },
       // A supporter's card foils on every tier, common included.
       uSupporter: { value: data.supporterFoil ? 1 : 0 },
+      uTierLayer: { value: 1 },
+      uFoilStyle: { value: data.supporterFoil ? supporterFoilIndex(data.supporterFoil) : 0 },
       // Cosmic tiers trade the triangle sparkle for a drifting starfield.
       uStarfield: { value: cosmic ? 1 : 0 },
       uLight: { value: new Vector2(0.5, 0.38) },

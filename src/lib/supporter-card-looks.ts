@@ -1,4 +1,5 @@
-import { CARD_MOTIF_PALETTES, type CardMotif, type CardMotifPalette } from "./card-motif";
+import type { CardMotif } from "./card-motif";
+import { DEFAULT_SUPPORTER_FOIL, isSupporterFoil, type SupporterFoilId } from "./supporter-foils";
 import {
   DEFAULT_SUPPORTER_MOTIF,
   SUPPORTER_MOTIF_IDS,
@@ -10,8 +11,9 @@ import {
 
    The backend attaches `supporterLook` to a card payload only while the
    player's supporter status is live, so its presence is the whole signal: a
-   card that has one draws the holographic foil, floats the supporter's chosen
-   motif and, when they picked one, paints in that palette. Unlike a holding's
+   card that has one draws the supporter's chosen foil and floats their chosen
+   motif, in the tier's own colours (a foil is light only, so rarity still
+   reads at a glance). Unlike a holding's
    own motif (a grant, the milestone card, a legacy finish), the look belongs
    to the player, so it reaches every collector's copy at once.
 
@@ -20,14 +22,14 @@ import {
 
 export { SUPPORTER_MOTIF_IDS, DEFAULT_SUPPORTER_MOTIF, type SupporterMotifId } from "./supporter-motif-art";
 
-export const SUPPORTER_PALETTES = CARD_MOTIF_PALETTES;
-export type SupporterPalette = CardMotifPalette;
+export { SUPPORTER_FOILS, DEFAULT_SUPPORTER_FOIL, type SupporterFoilId } from "./supporter-foils";
 
 export interface SupporterLook {
   /** A preset sprite, or "custom" for the supporter's own image. */
   motif: SupporterMotifId | "custom";
   /** Null keeps the tier's own colours. */
-  palette: SupporterPalette | null;
+  /** The light over the card; never its colours. */
+  foil: SupporterFoilId;
   /** Only on "custom": the converted upload, and how large and strong it floats. */
   url?: string;
   scale?: number;
@@ -78,14 +80,10 @@ function isSupporterMotifId(value: unknown): value is SupporterMotifId {
   return typeof value === "string" && (SUPPORTER_MOTIF_IDS as readonly string[]).includes(value);
 }
 
-function isSupporterPalette(value: unknown): value is SupporterPalette {
-  return typeof value === "string" && (SUPPORTER_PALETTES as readonly string[]).includes(value);
-}
-
 /* A look from an API payload, a stored row or a form. Null when there is none.
 
    An object is a supporter even if its fields are off: an unknown motif falls
-   back to the default and an unknown palette to the tier's own colours, so a
+   back to the default and so does an unknown foil, so a
    backend that grows a new motif before this build knows it still shows the
    card as a supporter's rather than as an ordinary one. */
 export function parseSupporterLook(value: unknown): SupporterLook | null {
@@ -100,11 +98,11 @@ export function parseSupporterLook(value: unknown): SupporterLook | null {
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
-  const palette = isSupporterPalette(raw.palette) ? raw.palette : null;
+  const foil = isSupporterFoil(raw.foil) ? raw.foil : DEFAULT_SUPPORTER_FOIL;
   if (raw.motif === "custom" && isCustomMotifUrl(raw.url)) {
     return {
       motif: "custom",
-      palette,
+      foil,
       url: raw.url,
       scale: clampTo(raw.scale, CUSTOM_MOTIF_SCALE_RANGE, 1),
       opacity: clampTo(raw.opacity, CUSTOM_MOTIF_OPACITY_RANGE, 0.85),
@@ -112,7 +110,7 @@ export function parseSupporterLook(value: unknown): SupporterLook | null {
   }
   return {
     motif: isSupporterMotifId(raw.motif) ? raw.motif : DEFAULT_SUPPORTER_MOTIF,
-    palette,
+    foil,
   };
 }
 
@@ -125,7 +123,6 @@ export function supporterLookMotif(look: SupporterLook | null | undefined): Card
       url: parsed.url,
       scale: parsed.scale ?? 1,
       opacity: parsed.opacity ?? 0.85,
-      ...(parsed.palette ? { palette: parsed.palette } : {}),
     };
   }
   const definition = MOTIFS_BY_ID.get(parsed.motif as SupporterMotifId) ?? MOTIFS_BY_ID.get(DEFAULT_SUPPORTER_MOTIF)!;
@@ -133,7 +130,6 @@ export function supporterLookMotif(look: SupporterLook | null | undefined): Card
     url: supporterMotifUrl(definition.id),
     scale: definition.scale,
     opacity: definition.opacity,
-    ...(parsed.palette ? { palette: parsed.palette } : {}),
   };
 }
 
@@ -148,18 +144,18 @@ export function supporterLookSignature(look: SupporterLook | null | undefined): 
   const motif = parsed.motif === "custom" && parsed.url
     ? `custom.${parsed.url.slice(parsed.url.lastIndexOf("/") + 1, -5).slice(0, 16)}.${parsed.scale}.${parsed.opacity}`
     : parsed.motif;
-  return `${motif}:${parsed.palette ?? "-"}`;
+  return `${motif}:${parsed.foil}`;
 }
 
 export interface EffectiveCardLook {
-  /** What the card floats and which palette it paints in. */
+  /** What the card floats, and for a granted motif the palette it paints in. */
   motif: CardMotif | null;
-  /** Whether the holographic supporter foil is drawn. */
-  foil: boolean;
+  /** The supporter foil drawn over the card, null for none. */
+  foil: SupporterFoilId | null;
 }
 
 /* Precedence, in one place: the holding's own motif wins whole (its palette
-   included), else the supporter's motif and palette; the foil follows the look
+   included), else the supporter's motif; the foil follows the look
    alone, so a supporter's granted copy keeps its art and still shines. */
 export function effectiveCardLook(
   ownMotif: CardMotif | null | undefined,
@@ -168,6 +164,6 @@ export function effectiveCardLook(
   const look = parseSupporterLook(supporterLook);
   return {
     motif: ownMotif ?? supporterLookMotif(look),
-    foil: look !== null,
+    foil: look?.foil ?? null,
   };
 }

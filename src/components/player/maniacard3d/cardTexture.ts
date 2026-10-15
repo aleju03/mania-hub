@@ -143,7 +143,7 @@ export async function createCardTextures(
     return front.measureText(text).width;
   };
   const layout = buildFaceLayout(data, measure);
-  const bakeFoil = data.supporterFoil === true && options.shaderFoil !== true;
+  const bakeFoil = data.supporterFoil !== undefined && options.shaderFoil !== true;
   const [avatar, laurel, motif, teamCover, foil] = await Promise.all([
     data.avatarUrl ? loadImage(data.avatarUrl).catch(() => loadImage(data.avatarUrl)).catch(() => null) : Promise.resolve(null),
     loadImage("/images/maniacard/laurel-wreath.svg").catch(() => null),
