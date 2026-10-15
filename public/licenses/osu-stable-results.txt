@@ -1,0 +1,12 @@
+osu!stable ranking screen default art in public/images/stable-results/
+(ranking-*, score-*, mania-hit*, pause-replay)
+Source: https://github.com/ppy/osu-resources/tree/a3423ae5fa76223b648db1df31875a952b588d69/osu.Game.Resources/Skins/Legacy
+Unmodified.
+
+Default mod icons in public/images/stable-results/mods/ (selection-mod-*)
+Source: https://github.com/ppy/osu-wiki/tree/57293eaab3fb0597bc6aad29f28499af00e6f91c/wiki/Skinning/Interface/img
+Unmodified.
+
+Copyright (c) ppy Pty Ltd <contact@ppy.sh>.
+Licensed under Creative Commons Attribution-NonCommercial 4.0 International
+(CC BY-NC 4.0): https://creativecommons.org/licenses/by-nc/4.0/

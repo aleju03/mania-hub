@@ -11,7 +11,7 @@ import { searchPlayers } from "../lib/player-search";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { loadReplayRenderer, preloadReplayRenderer } from "../lib/replay-renderer-loader";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getModDisplayList, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getModDisplayList, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring, beatmapStatusAwardsPp } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -159,6 +159,8 @@ import {
 import { loadReplayStoryboard, type LoadedReplayStoryboard } from "../lib/replay-storyboard";
 import {
   appliedCommunityReplaySkinKey,
+  fetchOwnerReplaySkinArchive,
+  fetchSkinArchive,
   fetchUserReplaySkin,
   loadAppliedReplaySkinSettings,
   loadOwnerReplaySkinCached,
@@ -187,6 +189,9 @@ import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlaySettings } f
 import type { BeatmapScoreLookupStatus, LeanTrackerScore, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
+import { LazerResultsScreen, lazerManiaRank, normalizeLazerRank, preloadLazerResultsSounds, type LazerResultsScore } from "../components/replay/LazerResultsScreen";
+import { STABLE_RESULTS_CONTENT_DELAY_MS, StableResultsScreen, preloadStableResultsArt, stableManiaAccuracy, stableManiaGrade, stableModElements, type StableResultsScore } from "../components/replay/StableResultsScreen";
+import type { OskRankingArt } from "../lib/replay-skin-import";
 import { importReplayOgImagePath, pageSeo, replayOgImagePath, uploadedReplayOgImagePath } from "../lib/seo";
 import { withSearchParams } from "../lib/country-search";
 
@@ -246,6 +251,50 @@ const REPLAY_LANDING_OG_TITLE = "osu!mania replay watcher";
 const REPLAY_LANDING_SEO_DESCRIPTION =
   msg`Watch osu!mania replays in your browser.`;
 const REPLAY_END_AUDIO_FADE_MS = 1500;
+// Player.RESULTS_DISPLAY_DELAY (1000 ms) less the miss-window tail the
+// renderer already runs past the last judgement.
+const LAZER_RESULTS_DISPLAY_DELAY_MS = 700;
+// Stable leaves gameplay this long (real time) after the chart's last note
+// ends, measured off an in-game replay; its outro (StableResultsScreen) then
+// holds the background before the ranking.
+const STABLE_OUTRO_AFTER_LAST_NOTE_MS = 330;
+
+function lazerResultsFromApiScore(score: OsuScore, position: number): LazerResultsScore {
+  const stats = score.statistics ?? {};
+  const statistics = {
+    perfect: stats.perfect ?? stats.count_geki ?? 0,
+    great: stats.great ?? stats.count_300 ?? 0,
+    good: stats.good ?? stats.count_katu ?? 0,
+    ok: stats.ok ?? stats.count_100 ?? 0,
+    meh: stats.meh ?? stats.count_50 ?? 0,
+    miss: stats.miss ?? stats.count_miss ?? 0,
+  };
+  const judged = statistics.perfect + statistics.great + statistics.good + statistics.ok + statistics.meh + statistics.miss;
+  const rank = normalizeLazerRank(score.passed === false ? "F" : score.rank);
+  return {
+    key: `score:${score.id}`,
+    totalScore: score.total_score ?? score.score ?? 0,
+    accuracy: score.accuracy,
+    rank,
+    maxCombo: score.max_combo,
+    maxAchievableCombo: judged > 0 ? judged : null,
+    pp: score.pp,
+    ppDimmed: !beatmapStatusAwardsPp(score.beatmap?.status) || rank === "F",
+    statistics,
+    mods: getModDisplayList(score.mods),
+    playedAt: score.ended_at ?? score.created_at ?? null,
+    user: { name: score.user?.username ?? "", avatarUrl: avatarImageSrc(score.user?.avatar_url, score.user?.id), coverUrl: apiUserCoverUrl(score.user) },
+    position,
+    rate: getScoreRate(score.mods),
+    hasReplay: scoreHasReplay(score),
+  };
+}
+
+/** The osu! API's beatmap and score endpoints embed the player's cover. */
+function apiUserCoverUrl(user: OsuScore["user"] | undefined): string | undefined {
+  const cover = (user as { cover?: { url?: string | null; custom_url?: string | null } } | undefined)?.cover;
+  return cover?.custom_url ?? cover?.url ?? undefined;
+}
 const REPLAY_COVER_FALLBACK_DELAY_MS = 200;
 const REPLAY_AUDIO_RECOVERY_DELAY_MS = 1500;
 // Longest the stage waits for the player's skin before painting with the
@@ -2360,6 +2409,8 @@ function ReplayViewer({
   const volumeRef = useRef(volume);
   const replayEndAudioFadeActiveRef = useRef(false);
   const replayEndAudioFadeFrameRef = useRef<number | null>(null);
+  // Both clients keep the song playing into their results screen.
+  const holdMusicForResultsRef = useRef<() => boolean>(() => false);
   const isCanvasFullscreen = isNativeFullscreen || isPseudoFullscreen;
   const replayExportJob = useReplayExportJob();
   const replayExportBusy = replayExportJob !== null
@@ -2383,6 +2434,14 @@ function ReplayViewer({
     const audio = audioRef.current;
     if (!audio || !audioEnabled || audio.ended) return false;
     if (replayEndAudioFadeActiveRef.current) return true;
+    if (holdMusicForResultsRef.current()) {
+      // Marked as a fade so the paused-playback sync leaves it running; the
+      // audio's own end, a seek or the results' back button settles it.
+      replayEndAudioFadeActiveRef.current = true;
+      shouldResumeAudioRef.current = false;
+      if (audio.paused && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) audio.play().catch(() => {});
+      return true;
+    }
 
     const startVolume = audio.volume;
     replayEndAudioFadeActiveRef.current = true;
@@ -4350,6 +4409,253 @@ function ReplayViewer({
     }
   }, [audioEnabled, audioPreservesPitch, effectiveRate, volume, cancelReplayEndAudioFade]);
 
+  // Lazer's results screen. Once a lazer-judged play runs to its end on its
+  // own, Player waits RESULTS_DISPLAY_DELAY (less the tail the renderer
+  // already played past the last note) and pushes the results; a fail never
+  // gets one.
+  const [lazerResults, setLazerResults] = useState<LazerResultsScore | null>(null);
+  const [lazerResultsLeaderboard, setLazerResultsLeaderboard] = useState<OsuScore[] | null>(null);
+  const lazerResultsTimerRef = useRef<number | null>(null);
+  const lazerResultsWasPlayingRef = useRef(false);
+  useEffect(() => {
+    holdMusicForResultsRef.current = () => rendererRef.current?.getFailTime?.() == null;
+  }, []);
+  const buildLazerResultsScore = useCallback((): LazerResultsScore | null => {
+    const live = rendererRef.current?.getLiveStats?.();
+    const official = scoreInfo != null && judgeAsLazer === sourceIsLazer;
+    if (!official && !live) return null;
+    const expected = official ? getScoreExpectedCounts(scoreInfo, replay) : null;
+    const counts = live?.counts ?? [];
+    const statistics = expected
+      ? { perfect: expected.countGeki, great: expected.count300, good: expected.countKatu, ok: expected.count100, meh: expected.count50, miss: expected.countMiss }
+      : { perfect: counts[1] ?? 0, great: counts[2] ?? 0, good: counts[3] ?? 0, ok: counts[4] ?? 0, meh: counts[5] ?? 0, miss: counts[6] ?? 0 };
+    const accuracy = official ? scoreInfo.accuracy : (live?.accuracy ?? 0) / 100;
+    const silver = rendererMods.some((mod) => ["HD", "FL", "FI"].includes(mod.acronym?.toUpperCase()));
+    const rank = official
+      ? normalizeLazerRank(scoreInfo.passed === false ? "F" : scoreInfo.rank)
+      : lazerManiaRank(accuracy, statistics, silver);
+    const judged = statistics.perfect + statistics.great + statistics.good + statistics.ok + statistics.meh + statistics.miss;
+    const player = replayInfo.player;
+    return {
+      key: scoreInfo?.id != null ? `score:${scoreInfo.id}` : "replay",
+      totalScore: Math.round((official ? scoreInfo.total_score : null) ?? live?.score ?? 0),
+      accuracy,
+      rank,
+      maxCombo: official ? scoreInfo.max_combo : live?.maxCombo ?? 0,
+      maxAchievableCombo: judged > 0 ? judged : null,
+      pp: (official ? scoreInfo.pp : null) ?? live?.pp ?? null,
+      ppDimmed: (scoreInfo != null && !beatmapStatusAwardsPp(scoreInfo.beatmap?.status)) || rank === "F",
+      statistics,
+      mods: getModDisplayList(rendererMods, !sourceIsLazer),
+      playedAt: scoreInfo?.ended_at ?? scoreInfo?.created_at ?? null,
+      user: {
+        name: player?.name ?? leaderboardPlayerName,
+        avatarUrl: player?.avatarUrl,
+        coverUrl: player?.coverUrl ?? apiUserCoverUrl(scoreInfo?.user),
+      },
+      hitEvents: rendererRef.current?.getHitEvents?.() ?? null,
+      rate: modRate,
+      maxPp: live?.maxPp ?? null,
+      hasReplay: true,
+    };
+  }, [scoreInfo, judgeAsLazer, sourceIsLazer, replay, rendererMods, replayInfo.player, leaderboardPlayerName, modRate]);
+
+  // Stable's ranking screen, for a stable-judged play. A play set on stable
+  // and judged as stable reads the .osr's own header (or the score's
+  // statistics); a what-if judge reads the renderer's run.
+  const [stableResults, setStableResults] = useState<{ score: StableResultsScore; art: OskRankingArt | null } | null>(null);
+  const stableResultsTokenRef = useRef(0);
+  const buildStableResultsScore = useCallback((): StableResultsScore | null => {
+    const r = rendererRef.current;
+    const live = r?.getLiveStats?.();
+    const official = !judgeAsLazer && !sourceIsLazer;
+    if (!official && !live) return null;
+    const expected = official ? getScoreExpectedCounts(scoreInfo, replay) : null;
+    const liveCounts = live?.counts ?? [];
+    const counts = expected
+      ? { geki: expected.countGeki, c300: expected.count300, katu: expected.countKatu, c100: expected.count100, c50: expected.count50, miss: expected.countMiss }
+      : { geki: liveCounts[1] ?? 0, c300: liveCounts[2] ?? 0, katu: liveCounts[3] ?? 0, c100: liveCounts[4] ?? 0, c50: liveCounts[5] ?? 0, miss: liveCounts[6] ?? 0 };
+    const accuracy = stableManiaAccuracy(counts);
+    const acronyms = rendererMods.map((mod) => mod.acronym?.toUpperCase() ?? "").filter(Boolean);
+    const silver = acronyms.some((acronym) => acronym === "HD" || acronym === "FL" || acronym === "FI");
+    const header = replay.header;
+    return {
+      totalScore: official
+        ? (header.totalScore || scoreInfo?.legacy_total_score || scoreInfo?.score || 0)
+        : Math.round(live?.score ?? 0),
+      counts,
+      maxCombo: official ? (header.maxCombo || scoreInfo?.max_combo || 0) : live?.maxCombo ?? 0,
+      accuracy,
+      grade: stableManiaGrade(accuracy, silver),
+      perfect: official ? (header.isPerfect || scoreInfo?.legacy_perfect === true) : counts.miss === 0,
+      mods: acronyms,
+      playerName: replayInfo.player?.name ?? leaderboardPlayerName,
+      playedAt: scoreInfo?.ended_at ?? scoreInfo?.created_at ?? null,
+      lifeBar: r?.getLifeBarFrames?.() ?? replay.lifeBarFrames,
+      hitOffsets: (r?.getHitEvents?.() ?? []).map((event) => event.offsetMs),
+    };
+  }, [scoreInfo, judgeAsLazer, sourceIsLazer, replay, rendererMods, replayInfo.player, leaderboardPlayerName]);
+  // The ranking art of whichever skin the stage wears: the player's own skin
+  // while applied, the viewer's community skin otherwise. A skin kept only as
+  // local settings has no archive to read, so it gets the default screen.
+  const stableArtRef = useRef<{ key: string; promise: Promise<OskRankingArt | null> } | null>(null);
+  const loadStableRankingArt = useCallback((): Promise<OskRankingArt | null> => {
+    const modElements = stableModElements(rendererMods.map((mod) => mod.acronym ?? ""));
+    let key: string;
+    let getArchive: () => ReturnType<typeof fetchSkinArchive>;
+    if (ownerSkinApplied && ownerSkin) {
+      const record = ownerSkin.record;
+      key = `owner:${record.skin.id}:${record.updatedAt}:${record.bundleVersion ?? ""}`;
+      getArchive = () => fetchOwnerReplaySkinArchive(record);
+    } else {
+      const applied = readAppliedCommunityReplaySkin();
+      if (!applied) return Promise.resolve(null);
+      key = `applied:${appliedCommunityReplaySkinKey(applied)}`;
+      getArchive = () => fetchSkinArchive(applied.skin);
+    }
+    key += `|${modElements.join(",")}`;
+    if (stableArtRef.current?.key === key) return stableArtRef.current.promise;
+    const promise = (async () => {
+      const archive = await getArchive();
+      if (!archive) return null;
+      const { readOskRankingArt } = await import("../lib/replay-skin-import");
+      return readOskRankingArt(archive, modElements);
+    })().catch(() => null);
+    stableArtRef.current = { key, promise };
+    void promise.then((art) => {
+      if (!art && stableArtRef.current?.promise === promise) stableArtRef.current = null;
+    });
+    return promise;
+  }, [ownerSkinApplied, ownerSkin, rendererMods]);
+
+  const clearLazerResultsTimer = useCallback(() => {
+    if (lazerResultsTimerRef.current != null) window.clearTimeout(lazerResultsTimerRef.current);
+    lazerResultsTimerRef.current = null;
+    stableResultsTokenRef.current += 1;
+  }, []);
+  const stableOutroStartedRef = useRef(false);
+  const openStableResults = useCallback(() => {
+    const score = buildStableResultsScore();
+    if (!score) return;
+    stableOutroStartedRef.current = true;
+    const token = stableResultsTokenRef.current;
+    // The outro starts at once; the skin's art has until the ranking fades
+    // in, and one still on its way after that leaves the default.
+    const openedAt = performance.now();
+    setStableResults({ score, art: null });
+    void loadStableRankingArt().then((art) => {
+      if (!art || stableResultsTokenRef.current !== token) return;
+      if (performance.now() - openedAt > STABLE_RESULTS_CONTENT_DELAY_MS - 100) return;
+      setStableResults((current) => (current?.score === score ? { score, art } : current));
+    });
+  }, [buildStableResultsScore, loadStableRankingArt]);
+  useEffect(() => {
+    const wasPlaying = lazerResultsWasPlayingRef.current;
+    lazerResultsWasPlayingRef.current = isPlaying;
+    if (isPlaying) {
+      if (judgeAsLazer) preloadLazerResultsSounds();
+      else {
+        preloadStableResultsArt();
+        void loadStableRankingArt();
+      }
+      clearLazerResultsTimer();
+      stableOutroStartedRef.current = false;
+      setLazerResults(null);
+      setStableResults(null);
+      return;
+    }
+    // Stable's outro already began off the last note; the replay running
+    // out underneath it changes nothing.
+    if (!judgeAsLazer && stableOutroStartedRef.current) return;
+    const r = rendererRef.current;
+    if (!wasPlaying || !r || r.time < r.duration - 1 || r.getFailTime?.() != null) return;
+    clearLazerResultsTimer();
+    lazerResultsTimerRef.current = window.setTimeout(() => {
+      lazerResultsTimerRef.current = null;
+      if (judgeAsLazer) setLazerResults(buildLazerResultsScore());
+      else openStableResults();
+    }, judgeAsLazer ? LAZER_RESULTS_DISPLAY_DELAY_MS : 0);
+  }, [isPlaying, judgeAsLazer, buildLazerResultsScore, openStableResults, loadStableRankingArt, clearLazerResultsTimer]);
+  // Stable leaves gameplay a fixed moment after the chart's last note, not
+  // when the replay's recording runs out (which can be seconds later), so
+  // its outro is timed off the notes while the replay is still playing.
+  useEffect(() => {
+    if (!isPlaying || judgeAsLazer) return;
+    const interval = window.setInterval(() => {
+      const r = rendererRef.current;
+      if (!r || stableOutroStartedRef.current || r.getFailTime?.() != null) return;
+      const notesEnd = r.getNotesEndTime?.();
+      if (notesEnd == null || notesEnd <= 0) return;
+      if (r.time < notesEnd + STABLE_OUTRO_AFTER_LAST_NOTE_MS * (r.getClockRate?.() ?? 1)) return;
+      window.clearInterval(interval);
+      openStableResults();
+    }, 50);
+    return () => window.clearInterval(interval);
+  }, [isPlaying, judgeAsLazer, openStableResults]);
+  useEffect(() => () => clearLazerResultsTimer(), [clearLazerResultsTimer]);
+  // A different client or replay is a different play: drop its results.
+  useEffect(() => {
+    clearLazerResultsTimer();
+    setLazerResults(null);
+    setStableResults(null);
+  }, [judgeAsLazer, replay, clearLazerResultsTimer]);
+  // The leaderboard overlay may not have fetched the map's scores; the
+  // results screen lays them out beside the play like SoloResultsScreen.
+  const lazerResultsBeatmapId = lazerResults ? scoreInfo?.beatmap?.id ?? null : null;
+  useEffect(() => {
+    if (!lazerResultsBeatmapId || leaderboardScores) return;
+    let cancelled = false;
+    getBeatmapScores({ data: { beatmapId: lazerResultsBeatmapId, page: 1 } })
+      .then((res) => {
+        if (!cancelled) setLazerResultsLeaderboard((res as { scores?: OsuScore[] } | null)?.scores ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [lazerResultsBeatmapId, leaderboardScores]);
+  const lazerResultsOthers = useMemo(() => {
+    const list = leaderboardScores ?? lazerResultsLeaderboard;
+    if (!lazerResults || !list) return [];
+    // The performance breakdown needs the SS pp, known here only for the
+    // watched play's own mod set.
+    const sameMods = (mods: { acronym: string }[]) => mods.map((mod) => mod.acronym).sort().join() === lazerResults.mods.map((mod) => mod.acronym).sort().join();
+    return list.map((score, index) => {
+      const other = lazerResultsFromApiScore(score, index + 1);
+      return sameMods(other.mods) ? { ...other, maxPp: lazerResults.maxPp } : other;
+    });
+  }, [lazerResults, leaderboardScores, lazerResultsLeaderboard]);
+  const lazerResultsMain = useMemo(() => {
+    if (!lazerResults) return null;
+    const own = lazerResultsOthers.find((other) => other.key === lazerResults.key);
+    return own ? { ...lazerResults, position: own.position } : lazerResults;
+  }, [lazerResults, lazerResultsOthers]);
+  const closeLazerResults = useCallback(() => {
+    setLazerResults(null);
+    setStableResults(null);
+    // Back on the finished replay the held song fades out as it would have.
+    const audio = audioRef.current;
+    if (audio && !audio.paused && replayEndAudioFadeActiveRef.current) {
+      cancelReplayEndAudioFade(false);
+      const hold = holdMusicForResultsRef.current;
+      holdMusicForResultsRef.current = () => false;
+      startReplayEndAudioFade();
+      holdMusicForResultsRef.current = hold;
+    }
+  }, [cancelReplayEndAudioFade, startReplayEndAudioFade]);
+  const watchReplayFromResults = useCallback(() => {
+    setLazerResults(null);
+    setStableResults(null);
+    startPlayback();
+  }, [startPlayback]);
+  const navigate = useNavigate();
+  const watchOtherScoreFromResults = useCallback((other: LazerResultsScore) => {
+    const id = Number(other.key.replace(/^score:/, ""));
+    if (!Number.isSafeInteger(id) || id <= 0) return;
+    setLazerResults(null);
+    void navigate({ to: "/replay", search: { scoreId: id } });
+  }, [navigate]);
+
   const togglePlay = () => {
     const r = rendererRef.current;
     if (!r) return;
@@ -5296,6 +5602,43 @@ function ReplayViewer({
               </div>
             </div>
           </div>
+        )}
+        {stableResults && (
+          <StableResultsScreen
+            score={stableResults.score}
+            beatmap={{
+              title: replayInfo.map?.title ?? beatmap?.title ?? "",
+              artist: replayInfo.map?.artist ?? beatmap?.artist ?? "",
+              version: replayInfo.map?.version ?? beatmap?.version ?? "",
+              creator: replayInfo.map?.creator ?? beatmap?.creator ?? "",
+            }}
+            backgroundUrl={bgSrc}
+            startBrightness={storyboardActive ? 0.5 : 1 - bgDim / 100}
+            skinArt={stableResults.art}
+            onBack={closeLazerResults}
+            onWatchReplay={watchReplayFromResults}
+          />
+        )}
+        {lazerResultsMain && (
+          <LazerResultsScreen
+            score={lazerResultsMain}
+            others={lazerResultsOthers}
+            beatmap={{
+              title: replayInfo.map?.title ?? beatmap?.title ?? "",
+              artist: replayInfo.map?.artist ?? beatmap?.artist ?? "",
+              version: replayInfo.map?.version ?? beatmap?.version ?? "",
+              creator: replayInfo.map?.creator ?? beatmap?.creator ?? "",
+              stars: replayInfo.map?.stars ?? starRating,
+              beatmapUrl: scoreInfo?.beatmap?.id ? `https://osu.ppy.sh/beatmaps/${scoreInfo.beatmap.id}` : null,
+              beatmapsetUrl: scoreInfo?.beatmapset?.id ? `https://osu.ppy.sh/beatmapsets/${scoreInfo.beatmapset.id}` : null,
+            }}
+            backgroundUrl={bgSrc}
+            startBrightness={storyboardActive ? 0.5 : 1 - bgDim / 100}
+            volume={volume}
+            onBack={closeLazerResults}
+            onWatchReplay={watchReplayFromResults}
+            onWatchScore={watchOtherScoreFromResults}
+          />
         )}
         {/* Skip-intro, centered at 70% height where lazer floats its skip
             button, driven by Space like ingame. Down in the bottom corner it

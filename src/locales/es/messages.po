@@ -603,6 +603,16 @@ msgstr "{0} meses"
 msgid "{0} most"
 msgstr "{0} con más packs abiertos"
 
+#. placeholder {0}: formatTwoDecimals(Math.abs(average))
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "{0} ms early"
+msgstr "{0} ms antes"
+
+#. placeholder {0}: formatTwoDecimals(average)
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "{0} ms late"
+msgstr "{0} ms tarde"
+
 #. placeholder {0}: formatPp(recs.length)
 #. placeholder {0}: index + 1
 #. placeholder {1}: entries.length
@@ -2733,6 +2743,7 @@ msgstr "Acc"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
@@ -2794,10 +2805,18 @@ msgstr "Acc con la que se juzgó este clear, frente a su barra de {0}"
 msgid "Accuracy this clear was judged on, in the ladder's own scoring"
 msgstr "Acc con la que se juzgó este clear, en el sistema de puntuación de la propia escalera"
 
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Accuracy:"
+msgstr "Precisión:"
+
 #. placeholder {0}: formatDate(peakRankDate)
 #: src/routes/player/$username.tsx
 msgid "achieved {0}"
 msgstr "logrado el {0}"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Achieved PP"
+msgstr "PP obtenidos"
 
 #. placeholder {0}: profileInsights.sampleSize
 #: src/components/player/InsightModals.tsx
@@ -3552,6 +3571,10 @@ msgstr "El tracking automático empezó el 9 de junio de 2026. Los scores más v
 msgid "avatar"
 msgstr "avatar"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Average Hit Error"
+msgstr "Error de golpe promedio"
+
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Average length"
 #~ msgstr "Duración media"
@@ -3595,6 +3618,11 @@ msgstr "PP promedio"
 #: src/routes/maps.tsx
 msgid "Avoid repeats"
 msgstr "Evitar repeticiones"
+
+#: src/components/replay/LazerResultsScreen.tsx
+#: src/components/replay/StableResultsScreen.tsx
+msgid "back"
+msgstr "atrás"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
@@ -3753,6 +3781,11 @@ msgstr "El audio, los fondos, los títulos, los nombres de artistas, los nombres
 #: src/routes/legal.tsx
 msgid "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. This site displays available public metadata and derived information for community reference."
 msgstr "El audio, los fondos, los títulos, los nombres de artistas, los nombres de creadores, los metadatos y demás contenido enviado por usuarios o de terceros de los mapas siguen perteneciendo a sus respectivos propietarios. Este sitio muestra los metadatos públicos disponibles e información derivada como referencia para la comunidad."
+
+#. placeholder {0}: beatmap.creator
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Beatmap by {0}"
+msgstr "Beatmap de {0}"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM and length."
@@ -6131,6 +6164,7 @@ msgid "difficulty"
 msgstr "dificultad"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/maps.tsx
 #: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
@@ -6698,6 +6732,12 @@ msgstr "Misma probabilidad por jugador"
 msgid "error"
 msgstr "error"
 
+#. placeholder {0}: hitError.early
+#. placeholder {1}: hitError.late
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Error: {0}ms - {1}ms avg"
+msgstr "Error: {0}ms - {1}ms prom."
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Estimate a chart's dan level, with its dan emblem."
 msgstr "Estima el nivel de dan de un chart, con su emblema de dan."
@@ -6933,6 +6973,10 @@ msgstr "Los videos exportados no pueden usar este enlace porque su sitio lo bloq
 #~ msgid "Exposed Releases"
 #~ msgstr "Sueltas expuestas"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Extended statistics are only available after watching a replay!"
+msgstr "¡Las estadísticas extendidas solo están disponibles después de ver un replay!"
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "External application"
 msgstr "Aplicación externa"
@@ -7033,6 +7077,10 @@ msgstr "Rápidas cadenas de notas individuales que fluyen por las teclas."
 #: src/components/player/InsightModals.tsx
 msgid "Fastest"
 msgstr "Más rápido"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Favourite on osu!"
+msgstr "Agregar a favoritos en osu!"
 
 #: src/routes/maps.tsx
 msgid "Favourited by"
@@ -10134,6 +10182,7 @@ msgstr "Forma del mapa"
 msgid "map unavailable"
 msgstr "mapa no disponible"
 
+#: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/replay.tsx
 msgid "mapped by"
 msgstr "mapeado por"
@@ -10240,6 +10289,10 @@ msgstr "MAX"
 msgid "Max combo"
 msgstr "Combo máx."
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Max Combo"
+msgstr "Combo máximo"
+
 #: src/routes/maps.tsx
 msgid "max pp"
 msgstr "pp máximo"
@@ -10259,6 +10312,10 @@ msgstr "PP máx."
 #: src/components/me/MyStatsInsights.tsx
 msgid "MAX:300 ratio"
 msgstr "Ratio MAX:300"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Maximum"
+msgstr "Máximo"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
@@ -10490,6 +10547,10 @@ msgstr "Más servidores"
 msgid "More servers from {0}"
 msgstr "Más servidores de {0}"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "More statistics available after watching a replay!"
+msgstr "¡Más estadísticas disponibles después de ver un replay!"
+
 #: src/lib/streak-game.ts
 msgid "More watched"
 msgstr "Más vistas"
@@ -10666,6 +10727,10 @@ msgstr "mis estadísticas"
 #: src/routes/my-stats.tsx
 msgid "My Stats"
 msgstr "Mis estadísticas"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "N/A"
+msgstr "N/D"
 
 #: src/routes/communities.tsx
 msgid "name"
@@ -12322,6 +12387,10 @@ msgstr "Abrir enlace"
 msgid "Open map on osu!"
 msgstr "Abrir mapa en osu!"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Open on osu!"
+msgstr "Abrir en osu!"
+
 #: src/components/layout/Nav.tsx
 msgid "open packs"
 msgstr "abrir packs"
@@ -12883,6 +12952,10 @@ msgstr "percentiles calculados entre jugadores trackeados"
 msgid "Performance"
 msgstr "Rendimiento"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Performance Breakdown"
+msgstr "Desglose de rendimiento"
+
 #: src/routes/teams.tsx
 msgid "Performance rank"
 msgstr "Rank de rendimiento"
@@ -13039,9 +13112,23 @@ msgstr "Jugado"
 msgid "Played {0} on {1}"
 msgstr "Jugó {0} en {1}"
 
+#. placeholder {0}: score.playerName
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Played by {0} on {playedOn}."
+msgstr "Jugado por {0} el {playedOn}."
+
+#. placeholder {0}: score.playerName
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Played by {0}."
+msgstr "Jugado por {0}."
+
 #: src/components/replay/CommunityReplayCard.tsx
 msgid "Played by {playerName}"
 msgstr "Jugado por {playerName}"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Played on {playedOn}"
+msgstr "Jugado el {playedOn}"
 
 #: src/components/player/ScorePlayDetailModal.tsx
 msgid "played on Lazer"
@@ -18951,6 +19038,10 @@ msgstr "Se agotó el tiempo de espera al cargar el renderizador de replays."
 msgid "Timed out starting the replay renderers."
 msgstr "Se agotó el tiempo de espera al iniciar los renderizadores de replays."
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Timing Distribution"
+msgstr "Distribución de timing"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Tiny"
 msgstr "Diminuto"
@@ -19534,6 +19625,15 @@ msgstr "ilegible"
 #: src/lib/replay-overlays.ts
 msgid "Unstable rate"
 msgstr "Unstable rate"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Unstable Rate"
+msgstr "Unstable Rate"
+
+#. placeholder {0}: hitError.unstableRate
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Unstable Rate: {0}"
+msgstr "Unstable Rate: {0}"
 
 #: src/routes/teams.tsx
 #~ msgid "Until someone opens a team's page, its pp only counts tracked members."
@@ -20125,6 +20225,8 @@ msgstr "Mira replays de osu!mania en tu navegador."
 
 #: src/components/player/ScorePlayDetailModal.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/replay/LazerResultsScreen.tsx
+#: src/components/replay/StableResultsScreen.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
