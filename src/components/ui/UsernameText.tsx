@@ -18,11 +18,14 @@ import { useAppStore } from "../../store";
 export function UsernameText({
   username,
   avatarUrl,
+  userId: userIdProp,
   accent: accentProp,
   className,
 }: {
   username: string;
   avatarUrl?: string;
+  /** The player's osu! id, for name tags where there is no avatar URL to read it from. */
+  userId?: number | string | null;
   /** Accent carried inline by the caller's data; skips the store and the backend lookup. */
   accent?: string | null;
   className?: string;
@@ -43,7 +46,7 @@ export function UsernameText({
     if (!accent && avatarUrl) requestAvatarAccent(avatarUrl);
   }, [accent, avatarUrl]);
 
-  const userId = avatarUrlUserId(avatarUrl);
+  const userId = Number(userIdProp) > 0 ? Number(userIdProp) : avatarUrlUserId(avatarUrl);
   const nameStyle = useSyncExternalStore(
     subscribeSupporterNameStyles,
     () => (hydrated && userId ? getSupporterNameStyle(userId) : null),

@@ -28,6 +28,7 @@ import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
 import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, pingSkinView, readSkinsBrowseEntry, skinDownloadUrl, skinNoteShapeLabel, skinOskFileUrl, skinScreenshotLabel, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 import { useScrollRestoreRef } from "../lib/use-scroll-restore";
+import { UsernameText } from "../components/ui/UsernameText";
 
 export const Route = createFileRoute("/skins_/$id")({
   loader: async ({ params }) => {
@@ -397,7 +398,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                         className="inline-flex items-center gap-1.5 font-semibold text-osu-l2 transition-colors hover:text-white"
                       >
                         <Avatar userId={skin.ownerUserId} size={16} shape="circle" />
-                        {skin.ownerUsername}
+                        <UsernameText username={skin.ownerUsername} userId={skin.ownerUserId} />
                       </Link>
                       {/* Reads as the browse card does: time in the catalog,
                           not time since the upload. The exact upload date is a

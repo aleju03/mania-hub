@@ -39,6 +39,7 @@ import { MarkFilters } from "./collections/MarkFilters";
 import { teamImageProxyUrl } from "#/lib/team-image";
 import { useAuth } from "#/lib/auth-context";
 import { rememberTeamName } from "../../lib/analytics-teams";
+import { UsernameText } from "../ui/UsernameText";
 
 export type { CardMint };
 
@@ -1935,7 +1936,7 @@ export function CollectionPanel({
               ) : (
                 <img src={honoraryAvatarUrl(menu.card.userId) ?? menu.card.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" draggable={false} />
               )}
-              <span className="truncate text-[12px] font-bold text-white">{menu.card.username}</span>
+              <UsernameText username={menu.card.username} userId={menu.card.userId} className="truncate text-[12px] font-bold text-white" />
             </div>
             <div className="mx-2 my-1 h-px bg-osu-b3/40" />
             {menu.card.team ? (

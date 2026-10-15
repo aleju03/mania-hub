@@ -2143,7 +2143,7 @@ export function PlayerProfilePage({
               transition={{ duration: 0.15, delay: 0.05 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <span className="text-white font-bold text-lg">{user.username}</span>
+              <UsernameText username={user.username} userId={user.id} className="text-white font-bold text-lg" />
               <a
                 href={`https://osu.ppy.sh/users/${user.id}/mania`}
                 target="_blank"

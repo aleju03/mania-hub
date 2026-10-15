@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 import { avatarImageSrc } from "./Avatar";
 import { CountryFlag } from "./CountryFlag";
+import { UsernameText } from "./UsernameText";
 
 interface SearchResult {
   id: number;
@@ -172,7 +173,7 @@ export function SearchInput({
                     className={`w-7 h-7 rounded-full ${disabled ? "grayscale" : ""}`}
                     loading="lazy"
                   />
-                  <span className="text-sm font-medium text-white">{u.username}</span>
+                  <UsernameText username={u.username} userId={u.id} className="text-sm font-medium text-white" />
                   {disabled && disabledNote ? (
                     <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.1em] text-osu-f1">
                       {disabledNote}

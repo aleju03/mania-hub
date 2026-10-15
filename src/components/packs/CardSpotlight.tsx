@@ -18,6 +18,7 @@ import { collectedCardRenderData } from "./cardThumbnailCache";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { rememberTeamName } from "../../lib/analytics-teams";
 import { effectiveCardLook } from "../../lib/supporter-card-looks";
+import { UsernameText } from "../ui/UsernameText";
 
 export interface CardSpotlightTarget {
   card: CollectedCard;
@@ -352,7 +353,7 @@ export function CardSpotlight({
             <div className="flex flex-col items-center gap-1.5 text-center">
               <div className="flex items-center gap-2">
                 {!card.team && <CountryFlag code={card.countryCode} size="sm" />}
-                <span className="text-[15px] font-bold text-white">{card.username}</span>
+                <UsernameText username={card.username} userId={card.userId} className="text-[15px] font-bold text-white" />
                 {tierLabel && tier && (
                   <span
                     className="rounded-full border px-2 py-px text-[10px] font-bold uppercase tracking-wide"
@@ -431,7 +432,7 @@ export function CardSpotlight({
                           preload="intent"
                           className="font-semibold text-white transition-colors hover:text-osu-pink-light"
                         >
-                          {showcasedBy.username}
+                          <UsernameText username={showcasedBy.username} userId={showcasedBy.userId} />
                         </Link>
                       ) : null;
                       const dateText = gotAt > 0 ? formatDate(new Date(gotAt).toISOString(), viewerTimeZone, locale) : null;
@@ -444,7 +445,7 @@ export function CardSpotlight({
                             preload="intent"
                             className="font-semibold text-white transition-colors hover:text-osu-pink-light"
                           >
-                            {giftedBy.username}
+                            <UsernameText username={giftedBy.username} userId={giftedBy.userId} />
                           </Link>
                         );
                         if (nameLink) {

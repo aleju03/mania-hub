@@ -9,6 +9,7 @@ import { COMMUNITY_INTERNATIONAL, type CommunitySummary } from "../../lib/commun
 import { useAccessScopeSummary } from "./AccessScopePicker";
 import { useCommunityLanguageLabel } from "./field-options";
 import { CommunityStatusNote } from "./CommunityStatusNote";
+import { UsernameText } from "../ui/UsernameText";
 
 /* One Discord server on the directory. The banner and icon are Discord's own,
    either hotlinked from their CDN or, for a listing this viewer cannot join,
@@ -182,7 +183,7 @@ export function CommunityCard({
           <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-osu-f1/70">
             <Trans>posted by</Trans>
             <Avatar userId={community.ownerUserId} size={16} />
-            <span className="min-w-0 truncate font-semibold text-osu-l2">{community.ownerUsername}</span>
+            <UsernameText username={community.ownerUsername} userId={community.ownerUserId} className="min-w-0 truncate font-semibold text-osu-l2" />
           </span>
         </div>
       </div>

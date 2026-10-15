@@ -32,6 +32,7 @@ import { MilestoneBurst, MILESTONE_CEREMONY_MS, MILESTONE_IMPACT_S } from "./Mil
 import { GoatBurst } from "./GoatBurst";
 import { SlicedFace } from "./SlicedFace";
 import { TierBurst } from "./TierBurst";
+import { UsernameText } from "../ui/UsernameText";
 
 export interface PackCardState {
   player: PackPlayer;
@@ -1651,7 +1652,7 @@ export function RevealStage({
                     className="h-7 w-7 rounded-full object-cover"
                     draggable={false}
                   />
-                  <span className="text-lg font-bold text-white">{current.player.user.username}</span>
+                  <UsernameText username={current.player.user.username} userId={current.player.user.id} className="text-lg font-bold text-white" />
                   <CountryFlag code={current.player.user.country_code} size="sm" decorative />
                 </Link>
               )}

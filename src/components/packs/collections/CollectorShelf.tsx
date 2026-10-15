@@ -39,6 +39,7 @@ import {
 } from "./chrome";
 import { useDebounced } from "./useDebounced";
 import { ShowcaseCards } from "./ShowcaseCards";
+import { UsernameText } from "../../ui/UsernameText";
 
 /* Somebody else's collection. Read-only by construction: the same tiles the
    owner sees, with none of the actions, since nothing here is yours to recycle
@@ -174,10 +175,10 @@ function CollectorHeader({ profile }: { profile: LivePackCollectorProfile }) {
                 preload="intent"
                 className="truncate text-xl font-black text-white transition-colors hover:text-osu-pink-light"
               >
-                {collector.username}
+                <UsernameText username={collector.username} userId={collector.userId} />
               </Link>
             ) : (
-              <span className="truncate text-xl font-black text-white">{collector.username}</span>
+              <UsernameText username={collector.username} userId={collector.userId} className="truncate text-xl font-black text-white" />
             )}
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1">
@@ -315,7 +316,7 @@ function CardGrid({
               />
               <CardMarks card={card} collectorUserId={collectorUserId} />
             </div>
-            <div className="mt-1 truncate text-center text-[11px] text-osu-f1">{card.username}</div>
+            <div className="mt-1 truncate text-center text-[11px] text-osu-f1"><UsernameText username={card.username} userId={card.userId} /></div>
           </button>
         );
       })}

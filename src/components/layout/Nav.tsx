@@ -27,6 +27,7 @@ import { useDynamicFavicon } from "../../lib/favicon";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
 import { useLocale } from "../../lib/locale-context";
+import { UsernameText } from "../ui/UsernameText";
 
 // Leaf destinations. Kept `as const` (not typed) so each `to` stays a literal
 // route path; TanStack Router's Link types reject a widened `string`.
@@ -904,7 +905,7 @@ export function Nav() {
                       <div className="px-3 py-2 border-b border-osu-b3/30">
                         <div className="text-[10px] font-medium text-osu-l3 leading-tight"><Trans>Signed in as</Trans></div>
                         <div className="flex items-center gap-1.5">
-                          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white">{auth.viewer.username}</span>
+                          <UsernameText username={auth.viewer.username} userId={auth.viewer.id} className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white" />
                           {viewerCountryTracked && viewerCountryCode ? (
                             <button
                               type="button"
@@ -1194,7 +1195,7 @@ export function Nav() {
                           ) : null}
                         </span>
                         <span className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold">
-                          {auth.viewer.username}
+                          <UsernameText username={auth.viewer.username} userId={auth.viewer.id} />
                         </span>
                         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${mobileAccountOpen ? "rotate-180" : ""}`} strokeWidth={2.2} />
                       </button>

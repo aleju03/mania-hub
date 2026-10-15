@@ -21,6 +21,7 @@ import {
   userCollectionKeyLabel,
   type UserMapCollectionDetail as CollectionDetail,
 } from "../../lib/user-map-collections";
+import { UsernameText } from "../ui/UsernameText";
 
 /* One posted collection on its own page (/collections/<slug>). Loaded on the
    server so the link a player shares carries a real title, blurb and card
@@ -169,7 +170,7 @@ export function UserCollectionDetailView({ collection }: { collection: Collectio
                   className="h-4 w-4 rounded-full object-cover"
                   loading="lazy"
                 />
-                <span className="font-semibold text-osu-l2">{detail.owner.username}</span>
+                <UsernameText username={detail.owner.username} userId={detail.owner.userId} className="font-semibold text-osu-l2" />
               </Link>
               <span>
                 · {formatNumber(detail.memberCount)} <Plural value={detail.memberCount} one="map" other="maps" />

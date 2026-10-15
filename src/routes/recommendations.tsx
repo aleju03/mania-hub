@@ -2966,7 +2966,7 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
                   className="group inline-flex items-center gap-2.5 rounded-xl border border-osu-b3/30 bg-osu-b4 py-1.5 pl-2 pr-3 text-lg font-bold text-osu-c1 transition-colors duration-150 hover:border-osu-pink/60 hover:bg-osu-b3"
                 >
                   <Avatar url={viewer.avatarUrl} userId={viewer.id} size={30} />
-                  <span className="max-w-44 truncate">{viewer.username}</span>
+                  <UsernameText username={viewer.username} userId={viewer.id} className="max-w-44 truncate" />
                   {viewer.countryCode ? <CountryFlag code={viewer.countryCode} size="sm" decorative /> : null}
                   <ArrowRight className="h-4 w-4 shrink-0 text-osu-pink transition-transform group-hover:translate-x-0.5" />
                 </button>
@@ -3018,7 +3018,7 @@ function PlayerPicker({ viewer, onPick, keyMode, view }: {
                     className="flex items-center gap-2 py-1.5 pr-1"
                   >
                     <Avatar url={player.avatarUrl} userId={player.userId} size={24} />
-                    <span className="max-w-[120px] truncate text-[13px] font-medium text-osu-c1">{player.username}</span>
+                    <UsernameText username={player.username} userId={player.userId} className="max-w-[120px] truncate text-[13px] font-medium text-osu-c1" />
                   </button>
                   <button
                     type="button"
@@ -3447,7 +3447,7 @@ function LoadingState({ subject, view }: { subject?: KnownSubject | null; view: 
             )}
             <div className="min-w-0 flex-1 space-y-2">
               {subject ? (
-                <div className="truncate text-base font-bold leading-none text-osu-c1">{subject.username}</div>
+                <div className="truncate text-base font-bold leading-none text-osu-c1"><UsernameText username={subject.username} userId={subject.userId} /></div>
               ) : (
                 <Skeleton className="h-4 w-40 max-w-full" />
               )}

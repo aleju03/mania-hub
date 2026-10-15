@@ -355,7 +355,7 @@ export function ScoreRow({
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
         <span className="block truncate text-[11px] text-osu-f1">
-          {player ? <><span className="font-semibold text-osu-l2">{player.username}</span> &middot;{" "}</> : null}
+          {player ? <><UsernameText username={player.username} avatarUrl={player.avatar_url} className="font-semibold text-osu-l2" /> &middot;{" "}</> : null}
           {score.beatmapset?.artist} &middot;{" "}
           {/* Fresh scores are minutes old, so this half drifts between SSR and
               hydration; the artist name stays hydration-checked. */}

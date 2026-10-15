@@ -30,6 +30,7 @@ import { avatarImageSrc } from "#/components/ui/Avatar";
 import { CountryFlag } from "#/components/ui/CountryFlag";
 import { SearchInput } from "#/components/ui/SearchInput";
 import { GoatPollVotersModal } from "./GoatPollVoters";
+import { UsernameText } from "../ui/UsernameText";
 
 /* The temporary community vote for the next GOAT card: a timed window where
    players put names up and vote them up or down.
@@ -253,7 +254,7 @@ function NomineeRow({
      nesting one inside the other is invalid and would swallow the link's click. */
   const nameLine = (
     <>
-      <span className="truncate text-[11px] font-semibold text-osu-c1/85">{nominee.username}</span>
+      <UsernameText username={nominee.username} userId={nominee.id} className="truncate text-[11px] font-semibold text-osu-c1/85" />
       {nominee.countryCode && <CountryFlag code={nominee.countryCode} size="xs" />}
     </>
   );

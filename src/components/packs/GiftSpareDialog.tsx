@@ -7,6 +7,7 @@ import { PackDialog } from "./PackDialog";
 import { CollectionCardTile } from "./CardTile";
 import { useCardThumbnails } from "./useCardThumbnails";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "./cardThumbnailCache";
+import { UsernameText } from "../ui/UsernameText";
 
 export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard; onClose: () => void; onSent: () => void }) {
   const { t } = useLingui();
@@ -63,7 +64,7 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
         <CollectionCardTile card={card} thumbnail={getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card))} canBackfill={false} onApplyMint={() => false} onThumbnailError={thumbnails.onThumbnailError} showCopies={false} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold text-white">{card.username}</p>
+        <p className="text-[13px] font-semibold text-white"><UsernameText username={card.username} userId={card.userId} /></p>
         <p className="mt-1 text-[12px] text-osu-f1">{remaining > 0 ? t`One copy for a friend. You keep ${remaining}.` : t`Your only copy. It leaves your collection when they accept.`}</p>
         {sent ? <div role="status" className="mt-4">
           <p className="flex items-center gap-2 text-[13px] text-white"><Check className="shrink-0 text-emerald-300" size={16} />{t`Sent to ${recipient?.username ?? ""}.`}</p>
@@ -73,7 +74,7 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
         </div> : <>
           {recipient ? <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg bg-white/5 p-2">
             <img src={recipient.avatarUrl} alt="" width={28} height={28} className="h-7 w-7 rounded-full" />
-            <span className="min-w-0 flex-1 truncate text-[12px] text-white">{recipient.username}</span>
+            <UsernameText username={recipient.username} userId={recipient.userId} className="min-w-0 flex-1 truncate text-[12px] text-white" />
             {!attempted && <button type="button" onClick={() => setRecipient(null)} className="text-[11px] text-osu-f1 hover:text-white">{t`Change`}</button>}
           </div> : <>
             <label className="relative mt-4 block">
@@ -85,7 +86,7 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
               : searchFailed ? <p className="mt-3 text-[11px] text-rose-300">{t`Could not search collectors. Try again.`} <button type="button" onClick={() => setSearchAttempt((value) => value + 1)} className="underline">{t`Try again`}</button></p>
               : query.trim().length >= 2 && recipients.length === 0 ? <p className="mt-3 text-[11px] text-osu-f1">{t`No collector found. They need to open a pack first.`}</p> : null}
             <div className="mt-2 max-h-48 overflow-y-auto">{recipients.map((person) => <button key={person.userId} type="button" onClick={() => { setRecipient(person); setError(null); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[12px] text-osu-l2 hover:bg-white/5 hover:text-white">
-              <img src={person.avatarUrl} alt="" width={24} height={24} className="h-6 w-6 rounded-full" /><span className="truncate">{person.username}</span>
+              <img src={person.avatarUrl} alt="" width={24} height={24} className="h-6 w-6 rounded-full" /><UsernameText username={person.username} userId={person.userId} className="truncate" />
             </button>)}</div>
           </>}
           <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={2} maxLength={GIFT_MESSAGE_MAX_CHARS}

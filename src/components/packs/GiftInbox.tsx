@@ -8,6 +8,7 @@ import { PackDialog } from "./PackDialog";
 import { CollectionCardTile } from "./CardTile";
 import { useCardThumbnails } from "./useCardThumbnails";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "./cardThumbnailCache";
+import { UsernameText } from "../ui/UsernameText";
 
 export function GiftInbox({ onReceived }: { onReceived: () => void }) {
   const { t } = useLingui();
@@ -160,10 +161,10 @@ function GiftReceipt({ gift, onThumbnailError, onRespond, answering, disabled }:
           <p className="text-[11px] text-osu-f1">{t`A gift from`}</p>
           <div className="mt-1.5 flex items-center gap-2">
             <img src={gift.sender.avatarUrl} alt="" width={24} height={24} className="h-6 w-6 shrink-0 rounded-full ring-1 ring-white/10" />
-            <span className="break-words text-[12px] font-semibold leading-snug text-white [overflow-wrap:anywhere]">{gift.sender.username}</span>
+            <UsernameText username={gift.sender.username} avatarUrl={gift.sender.avatarUrl} className="break-words text-[12px] font-semibold leading-snug text-white [overflow-wrap:anywhere]" />
           </div>
           {card ? <>
-            <p className="mt-4 break-words text-[17px] font-bold leading-tight text-white [overflow-wrap:anywhere]">{card.username}</p>
+            <p className="mt-4 break-words text-[17px] font-bold leading-tight text-white [overflow-wrap:anywhere]"><UsernameText username={card.username} userId={card.userId} /></p>
             <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-osu-f1">{card.customLabel ?? tier?.label}</p>
             {gift.status === "pending"
               ? card.copies > 0 && <p className="mt-4 text-[11px] leading-relaxed text-osu-f1">{t`You already have ${card.copies}.`}</p>

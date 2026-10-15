@@ -8,6 +8,7 @@ import { avatarImageSrc } from "#/components/ui/Avatar";
 import { CountryFlag } from "#/components/ui/CountryFlag";
 import type { PackWishlist } from "#/lib/pack-wishlist";
 import { PackDialog } from "./PackDialog";
+import { UsernameText } from "../ui/UsernameText";
 
 /** The toolbar shows only the count; names and odds belong inside the manager. */
 export function WishlistLine({ wishlist, onRemove }: { wishlist: PackWishlist; onRemove: (userId: number) => void }) {
@@ -50,7 +51,7 @@ export function WishlistLine({ wishlist, onRemove }: { wishlist: PackWishlist; o
             translate="no"
             className="min-w-0 flex-1 truncate text-[12px] font-semibold text-osu-c1/85 transition-colors hover:text-osu-pink"
           >
-            {player.username}
+            <UsernameText username={player.username} userId={player.userId} />
           </Link>
           {player.countryCode && <CountryFlag code={player.countryCode} size="xs" />}
           {player.globalRank != null && (

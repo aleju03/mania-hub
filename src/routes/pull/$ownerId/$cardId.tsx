@@ -25,6 +25,7 @@ import { getI18n } from "../../../lib/i18n";
 import { PACK_TYPE_NAME_LABELS, PACK_TYPES, type PackTypeId } from "../../../lib/packs";
 import { pageSeo, pullOgImagePath } from "../../../lib/seo";
 import { effectiveCardLook } from "../../../lib/supporter-card-looks";
+import { UsernameText } from "../../../components/ui/UsernameText";
 
 export const Route = createFileRoute("/pull/$ownerId/$cardId")({
   validateSearch: (search: Record<string, unknown>): { pull?: number } => {
@@ -329,7 +330,7 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           ) : (
             <CountryFlag code={shared.card.countryCode} size="sm" />
           )}
-          <span className="text-[16px] font-bold text-white">{shared.card.username}</span>
+          <UsernameText username={shared.card.username} userId={shared.card.userId} className="text-[16px] font-bold text-white" />
           <span
             className="rounded-full border px-2 py-px text-[10px] font-bold uppercase tracking-wide"
             style={{
@@ -382,7 +383,7 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
               params={{ username: shared.owner.username }}
               className="font-bold text-white transition-colors hover:text-osu-pink-light"
             >
-              {shared.owner.username}
+              <UsernameText username={shared.owner.username} userId={shared.owner.userId} />
             </Link>
           )}
           {displayedPullAt > 0 && (

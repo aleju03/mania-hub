@@ -22,6 +22,7 @@ import { playRecycleClink } from "./packSfx";
 import type { FlightRect, RevealedCard } from "./RevealStage";
 import { SlicedFace } from "./SlicedFace";
 import { rememberTeamName } from "../../lib/analytics-teams";
+import { UsernameText } from "../ui/UsernameText";
 
 interface PackSummaryProps {
   cards: RevealedCard[];
@@ -711,7 +712,7 @@ export function PackSummary({
                         }`}
                         style={turnDelayStyle}
                       >
-                        <span className="text-[12px] font-semibold text-white">{card.player.user.username}</span>
+                        <UsernameText username={card.player.user.username} userId={card.player.user.id} className="text-[12px] font-semibold text-white" />
                       </div>
                     );
                     return damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face;
@@ -770,7 +771,7 @@ export function PackSummary({
                     aria-label={t`Open ${card.player.user.username}'s profile`}
                   >
                     <CountryFlag code={card.player.user.country_code} size="xs" decorative />
-                    <span className="truncate text-[13px] font-bold text-white">{card.player.user.username}</span>
+                    <UsernameText username={card.player.user.username} userId={card.player.user.id} className="truncate text-[13px] font-bold text-white" />
                   </Link>
                 )}
                 <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px]">
@@ -934,7 +935,7 @@ export function PackSummary({
             >
               <div className="flex items-center gap-2 px-3 py-1.5">
                 <CountryFlag code={card.player.user.country_code} size="xs" decorative />
-                <span className="truncate text-[12px] font-bold text-white">{card.player.user.username}</span>
+                <UsernameText username={card.player.user.username} userId={card.player.user.id} className="truncate text-[12px] font-bold text-white" />
               </div>
               <div className="mx-2 my-1 h-px bg-osu-b3/40" />
               {card.player.team ? (

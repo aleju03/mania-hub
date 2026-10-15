@@ -68,6 +68,7 @@ import {
   type AlbumSection,
 } from "./albumModel";
 import { FlipBook, type FlipBookApi } from "./FlipBook";
+import { UsernameText } from "../../ui/UsernameText";
 
 const PAGE_WIDTH = 380;
 const PAGE_HEIGHT = 560;
@@ -790,7 +791,7 @@ function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onCl
         </div>
         <div className="px-4 pb-4 pt-8">
           <div className="flex items-center gap-2">
-            <span className="truncate text-[15px] font-bold text-white">{entry.user.username}</span>
+            <UsernameText username={entry.user.username} userId={entry.user.id} className="truncate text-[15px] font-bold text-white" />
             <CountryFlag code={entry.user.country_code} size="sm" decorative />
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1 tabular-nums">
@@ -963,7 +964,7 @@ const AlbumSlot = memo(function AlbumSlot({
           draggable={false}
         />
         <span className="mt-1.5 w-full truncate text-center text-[9px] font-semibold text-white">
-          {entry.user.username}
+          <UsernameText username={entry.user.username} userId={entry.user.id} />
         </span>
       </button>
     );
@@ -986,7 +987,7 @@ const AlbumSlot = memo(function AlbumSlot({
         draggable={false}
       />
       <span className="mt-1.5 w-full truncate text-center text-[9px] text-osu-f1/80">
-        {entry.user.username}
+        <UsernameText username={entry.user.username} userId={entry.user.id} />
       </span>
     </button>
   );

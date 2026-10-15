@@ -21,6 +21,7 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { useAuth } from "#/lib/auth-context";
 import { canUseAdminFeatures } from "#/lib/auth-shared";
 import { CardCollectorsButton } from "./CardCollectors";
+import { UsernameText } from "../ui/UsernameText";
 
 /* People spam-open packs all day, so the feed is an ambient live ticker at
    the page's edge, not a section of the page: every pull that lands while you
@@ -624,7 +625,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                         )}
                         <span className="flex min-w-0 flex-col">
                           <span className="flex items-center gap-1 leading-tight">
-                            <span className="truncate text-[11px] font-semibold text-white/90">{pull.cardUsername}</span>
+                            <UsernameText username={pull.cardUsername} userId={pull.cardUserId} className="truncate text-[11px] font-semibold text-white/90" />
                             {pull.isFirstGlobal && (
                               <span title={t`First time anyone pulled this card`} className="flex shrink-0">
                                 <Sparkles className="h-2.5 w-2.5 text-osu-pink" aria-label={t`first time anyone pulled this card`} />

@@ -14,6 +14,7 @@ import {
   type LiveBackendHonoraryCardPulls,
   type LiveBackendHonoraryPulls,
 } from "../../lib/live-backend";
+import { UsernameText } from "../ui/UsernameText";
 
 /* Admin-only readout of how the honorary roster has actually landed. It sits on
    the packs page rather than the backend admin page because it is about the
@@ -202,7 +203,7 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
                           translate="no"
                           className="min-w-0 flex-1 truncate text-[13px] font-bold text-white underline-offset-2 hover:underline"
                         >
-                          {collector.username}
+                          <UsernameText username={collector.username} userId={collector.userId} />
                         </Link>
                         {collector.copies > collector.cards ? (
                           <span className="flex-shrink-0 text-[11px] text-osu-f1">
@@ -353,7 +354,7 @@ function GoatHolderRow({
                 translate="no"
                 className="min-w-0 flex-1 truncate text-osu-l2/80 underline-offset-2 transition-colors hover:text-white hover:underline"
               >
-                {owner.username}
+                <UsernameText username={owner.username} userId={owner.userId} />
                 {owner.copies > 1 ? ` x${owner.copies}` : ""}
               </Link>
               <span className="flex-shrink-0 text-[11px] text-osu-f1">{timeAgo(owner.firstPulledAt, locale)}</span>

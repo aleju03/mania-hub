@@ -13,6 +13,7 @@ import {
 } from "#/lib/live-backend";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { BoardSkeleton, Section, SectionHeading } from "./chrome";
+import { UsernameText } from "../../ui/UsernameText";
 
 /* The record boards. Every collector row is a link into their shelf, which is
    the whole point of the page: a board is a list of people to go and look at,
@@ -62,7 +63,7 @@ function CollectorRow({
       {collector.countryCode ? (
         <CountryFlag code={collector.countryCode} size="xs" decorative className="shrink-0" />
       ) : null}
-      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-osu-l2">{collector.username}</span>
+      <UsernameText username={collector.username} userId={collector.userId} className="min-w-0 flex-1 truncate text-[13px] font-medium text-osu-l2" />
       {note ? <span className="shrink-0 text-[11px] text-osu-f1">{note}</span> : null}
       <span translate="no" className="shrink-0 text-[15px] font-bold text-white tabular-nums">
         {value}
@@ -92,7 +93,7 @@ function CardRow({ card, index, value, note }: { card: LivePackCommunityCard; in
         draggable={false}
       />
       {card.countryCode ? <CountryFlag code={card.countryCode} size="xs" decorative className="shrink-0" /> : null}
-      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-osu-l2">{card.username}</span>
+      <UsernameText username={card.username} userId={card.userId} className="min-w-0 flex-1 truncate text-[13px] font-medium text-osu-l2" />
       {note ? <span className="shrink-0 text-[11px] text-osu-f1">{note}</span> : null}
       <span translate="no" className="shrink-0 text-[15px] font-bold text-white tabular-nums">
         {value}

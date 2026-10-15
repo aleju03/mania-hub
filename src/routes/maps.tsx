@@ -122,6 +122,7 @@ import type { RandomDrawEvent } from "../lib/maps-random-draw-state";
 import { useWindowActive } from "../lib/window-activity";
 import { useBodyScrollLock } from "../lib/use-body-scroll-lock";
 import { parseMsdRanges, serializeMsdRanges } from "../lib/map-search-msd";
+import { UsernameText } from "../components/ui/UsernameText";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -2101,7 +2102,7 @@ function MapsPage() {
                           <Trans>random pick from</Trans>
                         </div>
                         <div className="text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors truncate">
-                          {randomPick.player.username}
+                          <UsernameText username={randomPick.player.username} userId={randomPick.player.id} />
                         </div>
                         <div className="text-[10px] text-osu-f1">
                           <Trans>{randomPick.player.favouriteCount} favourites</Trans>
@@ -2919,7 +2920,7 @@ function PlayerRow({
       <Avatar url={player.avatarUrl} size={26} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-[12px] text-osu-l2 transition-colors group-hover:text-white">{player.username}</span>
+          <UsernameText username={player.username} userId={player.id} className="truncate text-[12px] text-osu-l2 transition-colors group-hover:text-white" />
           {sublabel ? (
             <span className="shrink-0 text-[10px] text-osu-f1/75">{sublabel}</span>
           ) : null}
