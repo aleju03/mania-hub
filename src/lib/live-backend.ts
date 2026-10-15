@@ -1,6 +1,9 @@
 import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
+import { isSupporterAvatarFrame, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
+import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
+import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
@@ -4494,54 +4497,174 @@ export async function fetchLivePackSharedCard(
   return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${encodeURIComponent(cardKey)}${query}`);
 }
 
-/* A player's supporter card look, for the profile card (collection payloads
-   carry it inline). Null when they are not an active supporter, and on any
-   failure: an ordinary card is the safe fallback. Cached in memory per user id
-   for a few minutes, so moving between profile tabs does not refetch it. */
+/* A player's supporter card look, avatar frame and name style, for the
+   profile card and hero (collection payloads carry the look inline). Null when they are not an
+   active supporter, and on any failure: an ordinary card and a bare avatar are
+   the safe fallback. Cached in memory per user id for a few minutes, so moving
+   between profile tabs does not refetch it. */
 const SUPPORTER_LOOK_TTL_MS = 5 * 60_000;
+export interface SupporterProfileLook {
+  look: SupporterLook | null;
+  frame: SupporterAvatarFrameId | null;
+  nameStyle: SupporterNameStyleId | null;
+  nameFont: SupporterNameFontId | null;
+}
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null };
 interface SupporterLookCacheEntry {
   at: number;
-  look: Promise<SupporterLook | null>;
-  /* Set once the request settles, for peekLiveSupporterLook. */
-  settled?: { value: SupporterLook | null };
+  value: Promise<SupporterProfileLook>;
+  /* Set once the request settles, for the peek helpers. */
+  settled?: SupporterProfileLook;
 }
 const supporterLookCache = new Map<number, SupporterLookCacheEntry>();
+/* Players whose look was just saved here: their next read skips the browser's
+   HTTP cache too (the public read is cacheable for 30s), or a profile opened
+   right after a save would show the old look. */
+const supporterLooksToReload = new Set<number>();
 
 function freshSupporterLookEntry(userId: number): SupporterLookCacheEntry | undefined {
   const cached = supporterLookCache.get(userId);
   return cached && Date.now() - cached.at < SUPPORTER_LOOK_TTL_MS ? cached : undefined;
 }
 
-export function fetchLiveSupporterLook(userId: number): Promise<SupporterLook | null> {
+export function fetchLiveSupporterProfileLook(userId: number): Promise<SupporterProfileLook> {
   const id = Math.floor(Number(userId) || 0);
-  if (id <= 0 || !getLiveBackendUrl()) return Promise.resolve(null);
+  if (id <= 0 || !getLiveBackendUrl()) return Promise.resolve(NO_SUPPORTER_LOOK);
   const cached = freshSupporterLookEntry(id);
-  if (cached) return cached.look;
-  const entry: SupporterLookCacheEntry = { at: Date.now(), look: Promise.resolve(null) };
-  entry.look = fetchLiveJson<{ look?: unknown }>(`/api/supporters/look/${id}`)
+  if (cached) return cached.value;
+  const entry: SupporterLookCacheEntry = { at: Date.now(), value: Promise.resolve(NO_SUPPORTER_LOOK) };
+  const reload = supporterLooksToReload.delete(id);
+  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
     .then((body) => {
-      const value = parseSupporterLook(body?.look ?? null);
-      entry.settled = { value };
+      const value = {
+        look: parseSupporterLook(body?.look ?? null),
+        frame: isSupporterAvatarFrame(body?.frame) ? body.frame : null,
+        nameStyle: isSupporterNameStyle(body?.nameStyle) ? body.nameStyle : null,
+        nameFont: isSupporterNameFont(body?.nameFont) ? body.nameFont : null,
+      };
+      entry.settled = value;
       return value;
     })
     .catch(() => {
       if (supporterLookCache.get(id) === entry) supporterLookCache.delete(id);
-      return null;
+      return NO_SUPPORTER_LOOK;
     });
   supporterLookCache.set(id, entry);
-  return entry.look;
+  return entry.value;
+}
+
+export function fetchLiveSupporterLook(userId: number): Promise<SupporterLook | null> {
+  return fetchLiveSupporterProfileLook(userId).then((value) => value.look);
 }
 
 /* Drops the cached look, for the settings page after a save, so the next
    profile card fetches the new one rather than waiting out the TTL. */
 export function forgetLiveSupporterLook(userId: number): void {
-  supporterLookCache.delete(Math.floor(Number(userId) || 0));
+  const id = Math.floor(Number(userId) || 0);
+  supporterLookCache.delete(id);
+  supporterLooksToReload.add(id);
 }
 
-/* The look already fetched for this player, without a request, so a card
-   that remounts does not flash plain first. Undefined when not known yet. */
+/* The look, frame or name style already fetched for this player, without a
+   request, so a card, avatar or name that remounts does not flash plain first.
+   Undefined when not known yet. */
 export function peekLiveSupporterLook(userId: number): SupporterLook | null | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.value;
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.look;
+}
+
+export function peekLiveSupporterFrame(userId: number): SupporterAvatarFrameId | null | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.frame;
+}
+
+export function peekLiveSupporterNameStyle(userId: number): SupporterNameStyleId | null | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.nameStyle;
+}
+
+export function peekLiveSupporterNameFont(userId: number): SupporterNameFontId | null | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.nameFont;
+}
+
+/* Every active supporter's name tag style and name font, for names in lists. One
+   small map shared by every UsernameText, fetched at most once a minute;
+   names subscribe and restyle when it lands. */
+const NAME_STYLE_MAP_TTL_MS = 60_000;
+let nameStyleMap: {
+  at: number;
+  styles: Map<number, SupporterNameStyleId>;
+  fonts: Map<number, SupporterNameFontId>;
+  frames: Map<number, SupporterAvatarFrameId>;
+} | null = null;
+let nameStyleMapInflight = false;
+// set after a local save, so the next fetch skips the HTTP cache (max-age 60)
+let nameStyleMapReload = false;
+const nameStyleListeners = new Set<() => void>();
+
+export function subscribeSupporterNameStyles(listener: () => void): () => void {
+  nameStyleListeners.add(listener);
+  return () => nameStyleListeners.delete(listener);
+}
+
+export function getSupporterNameStyle(userId: number): SupporterNameStyleId | null {
+  return nameStyleMap?.styles.get(userId) ?? null;
+}
+
+export function getSupporterNameFont(userId: number): SupporterNameFontId | null {
+  return nameStyleMap?.fonts.get(userId) ?? null;
+}
+
+/* The avatar frame lists draw around this player's avatar (the same map). */
+export function getSupporterListFrame(userId: number): SupporterAvatarFrameId | null {
+  return nameStyleMap?.frames.get(userId) ?? null;
+}
+
+export function ensureSupporterNameStyles(): void {
+  if (nameStyleMapInflight || !getLiveBackendUrl()) return;
+  if (nameStyleMap && Date.now() - nameStyleMap.at < NAME_STYLE_MAP_TTL_MS) return;
+  nameStyleMapInflight = true;
+  const reload = nameStyleMapReload;
+  nameStyleMapReload = false;
+  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown> }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
+    .then((body) => {
+      const styles = new Map<number, SupporterNameStyleId>();
+      for (const [id, style] of Object.entries(body?.styles ?? {})) if (isSupporterNameStyle(style)) styles.set(Number(id), style);
+      const fonts = new Map<number, SupporterNameFontId>();
+      for (const [id, font] of Object.entries(body?.fonts ?? {})) if (isSupporterNameFont(font)) fonts.set(Number(id), font);
+      const frames = new Map<number, SupporterAvatarFrameId>();
+      for (const [id, frame] of Object.entries(body?.frames ?? {})) if (isSupporterAvatarFrame(frame)) frames.set(Number(id), frame);
+      nameStyleMap = { at: Date.now(), styles, fonts, frames };
+      for (const listener of nameStyleListeners) listener();
+    })
+    .catch(() => {})
+    .finally(() => {
+      nameStyleMapInflight = false;
+    });
+}
+
+/* After the supporter page saves a frame, so the viewer's framed avatar in
+   lists updates without waiting for the next fetch. */
+export function setSupporterFrameLocally(userId: number, frame: SupporterAvatarFrameId | null): void {
+  const frames = new Map(nameStyleMap?.frames ?? []);
+  if (frame) frames.set(userId, frame);
+  else frames.delete(userId);
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames };
+  nameStyleMapReload = true;
+  for (const listener of nameStyleListeners) listener();
+}
+
+/* After the supporter page saves a style, so the viewer's own name updates
+   everywhere without waiting for the next fetch. */
+export function setSupporterNameStyleLocally(userId: number, style: SupporterNameStyleId | null, font?: SupporterNameFontId | null): void {
+  const styles = new Map(nameStyleMap?.styles ?? []);
+  if (style) styles.set(userId, style);
+  else styles.delete(userId);
+  const fonts = new Map(nameStyleMap?.fonts ?? []);
+  if (font !== undefined) {
+    if (font) fonts.set(userId, font);
+    else fonts.delete(userId);
+  }
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles, fonts, frames: nameStyleMap?.frames ?? new Map() };
+  nameStyleMapReload = true;
+  for (const listener of nameStyleListeners) listener();
 }
 
 /* The public pull feed: notable-only by default (high mints and first-ever

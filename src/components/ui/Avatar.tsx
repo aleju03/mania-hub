@@ -1,5 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useLingui } from "@lingui/react/macro";
+
+import { ensureSupporterNameStyles, getSupporterListFrame, subscribeSupporterNameStyles } from "../../lib/live-backend";
+import { framedAvatarStyle, supporterFrameGeometry, supporterFrameSrc } from "../../lib/supporter-avatar-frames";
+import { useHydrated } from "../../lib/use-hydrated";
 
 type ParsedAvatarUrl = {
   userId: number;
@@ -18,6 +22,11 @@ function parseAvatarUrl(url: string | undefined): ParsedAvatarUrl | null {
   } catch {
     return null;
   }
+}
+
+/* The osu! user id in an a.ppy.sh avatar URL, or null. */
+export function avatarUrlUserId(url: string | undefined): number | null {
+  return parseAvatarUrl(url)?.userId ?? null;
 }
 
 // Default goes direct to a.ppy.sh so rankings/feeds don't burst N same-origin
@@ -48,21 +57,40 @@ export function avatarImageSrc(
   return url;
 }
 
+/* How far a list avatar's frame may reach past its slot, in slot widths: the
+   whole frame is shrunk to fit, so wide wings make a smaller avatar rather
+   than spilling over the row's rank and name. */
+const LIST_FRAME_REACH = { x: 1.6, y: 1.35 };
+
 export function Avatar({
   url,
   userId,
   size = 40,
   shape = "circle",
   online = false,
+  framed = false,
 }: {
   url?: string;
   userId?: number | string | null;
   size?: number;
   shape?: "circle" | "square";
   online?: boolean;
+  /** Draw the player's supporter frame (still) around the avatar, as lists do. */
+  framed?: boolean;
 }) {
   const { t } = useLingui();
   const [imageFailed, setImageFailed] = useState(false);
+  const hydrated = useHydrated();
+  const frameUserId = framed ? (Number(userId) > 0 ? Number(userId) : parseAvatarUrl(url)?.userId ?? null) : null;
+  // after hydration only, like styled names, so server and client markup agree
+  const frame = useSyncExternalStore(
+    subscribeSupporterNameStyles,
+    () => (hydrated && frameUserId ? getSupporterListFrame(frameUserId) : null),
+    () => null,
+  );
+  useEffect(() => {
+    if (frameUserId) ensureSupporterNameStyles();
+  }, [frameUserId]);
   const shapeClass = shape === "square" ? "rounded-none" : "rounded-full";
   const onlineClass = online
     ? "ring-2 ring-osu-green-light shadow-[0_0_8px_rgba(179,217,68,0.45)]"
@@ -72,6 +100,38 @@ export function Avatar({
   useEffect(() => {
     setImageFailed(false);
   }, [url, userId]);
+
+  if (frame && imageUrl && !imageFailed) {
+    const [left, top, right, bottom] = supporterFrameGeometry(frame).overhang;
+    const fit = Math.min(1, LIST_FRAME_REACH.x / (1 + left + right), LIST_FRAME_REACH.y / (1 + top + bottom));
+    const inner = size * fit;
+    // centre the framed whole on the slot, so the row's layout never moves
+    const x = (size - inner * (1 + left + right)) / 2 + inner * left;
+    const y = (size - inner * (1 + top + bottom)) / 2 + inner * top;
+    const [bx, by, bw, bh] = supporterFrameGeometry(frame).box;
+    return (
+      <span className="relative block flex-shrink-0" style={{ width: size, height: size }}>
+        <span className="absolute" style={{ left: x, top: y, width: inner, height: inner }}>
+          <img
+            src={imageUrl}
+            alt={t`avatar`}
+            className="h-full w-full object-cover"
+            style={framedAvatarStyle(frame)}
+            loading="lazy"
+            onError={() => setImageFailed(true)}
+          />
+          <img
+            src={supporterFrameSrc(frame, "still")}
+            alt=""
+            aria-hidden
+            loading="lazy"
+            className="pointer-events-none absolute max-w-none"
+            style={{ left: `${bx * 100}%`, top: `${by * 100}%`, width: `${bw * 100}%`, height: `${bh * 100}%` }}
+          />
+        </span>
+      </span>
+    );
+  }
 
   if (imageUrl && !imageFailed) {
     return (

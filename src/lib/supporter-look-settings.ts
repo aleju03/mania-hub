@@ -2,6 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 
 import { bridgeAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
+import { isSupporterAvatarFrame, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
+import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
+import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 
 // Server functions behind the /supporter page: the viewer's supporter status
@@ -18,9 +21,14 @@ export interface SupporterLookState {
   look: SupporterLook | null;
   /** The last uploaded image, kept while a preset is picked so it can be picked again. */
   custom: { url: string; scale: number; opacity: number } | null;
+  /** The frame around their avatar on their profile, null for none. */
+  frame: SupporterAvatarFrameId | null;
+  /** How their name is drawn on their profile, null for plain. */
+  nameStyle: SupporterNameStyleId | null;
+  nameFont: SupporterNameFontId | null;
 }
 
-const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, look: null, custom: null };
+const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null };
 
 async function requireViewer(): Promise<{ userId: number; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
@@ -32,7 +40,7 @@ async function requireViewer(): Promise<{ userId: number; base: string } | null>
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; look?: unknown; custom?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
@@ -40,6 +48,9 @@ function readState(body: unknown): SupporterLookState {
     expiresAt: typeof raw.expiresAt === "number" && Number.isFinite(raw.expiresAt) ? raw.expiresAt : null,
     look: parseSupporterLook(raw.look),
     custom: custom?.motif === "custom" && custom.url ? { url: custom.url, scale: custom.scale ?? 1, opacity: custom.opacity ?? 0.85 } : null,
+    frame: isSupporterAvatarFrame(raw.frame) ? raw.frame : null,
+    nameStyle: isSupporterNameStyle(raw.nameStyle) ? raw.nameStyle : null,
+    nameFont: isSupporterNameFont(raw.nameFont) ? raw.nameFont : null,
   };
 }
 
@@ -68,6 +79,66 @@ export const saveSupporterLookSetting = createServerFn({ method: "POST" })
       method: "POST",
       headers: bridgeAuthHeaders(true),
       body: JSON.stringify({ userId: viewer.userId, ...data }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return readState(body);
+  });
+
+export const saveSupporterFrameSetting = createServerFn({ method: "POST" })
+  .validator((data: { frame?: unknown }) => {
+    const frame = data?.frame ?? null;
+    if (frame !== null && !isSupporterAvatarFrame(frame)) throw new Error("Pick a frame.");
+    return { frame };
+  })
+  .handler(async ({ data }): Promise<SupporterLookState> => {
+    const viewer = await requireViewer();
+    if (!viewer) return SIGNED_OUT;
+    const response = await fetch(`${viewer.base}/api/supporters/self/frame`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, frame: data.frame }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return readState(body);
+  });
+
+export const saveSupporterNameStyleSetting = createServerFn({ method: "POST" })
+  .validator((data: { nameStyle?: unknown }) => {
+    const nameStyle = data?.nameStyle ?? null;
+    if (nameStyle !== null && !isSupporterNameStyle(nameStyle)) throw new Error("Pick a name style.");
+    return { nameStyle };
+  })
+  .handler(async ({ data }): Promise<SupporterLookState> => {
+    const viewer = await requireViewer();
+    if (!viewer) return SIGNED_OUT;
+    const response = await fetch(`${viewer.base}/api/supporters/self/name-style`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, nameStyle: data.nameStyle }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return readState(body);
+  });
+
+export const saveSupporterNameFontSetting = createServerFn({ method: "POST" })
+  .validator((data: { nameFont?: unknown }) => {
+    const nameFont = data?.nameFont ?? null;
+    if (nameFont !== null && !isSupporterNameFont(nameFont)) throw new Error("Pick a name font.");
+    return { nameFont };
+  })
+  .handler(async ({ data }): Promise<SupporterLookState> => {
+    const viewer = await requireViewer();
+    if (!viewer) return SIGNED_OUT;
+    const response = await fetch(`${viewer.base}/api/supporters/self/name-font`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, nameFont: data.nameFont }),
     });
     const body = await response.json().catch(() => null) as { error?: unknown } | null;
     if (response.status === 403) throw new Error("Your supporter time has run out.");

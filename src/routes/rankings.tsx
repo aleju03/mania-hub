@@ -835,7 +835,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                           #{originalRank}
                           <PpRankNote rank={ppRank} />
                         </span>
-                        <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} />
+                        <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} framed />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 min-w-0">
                             <UsernameText
@@ -926,7 +926,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                             params={{ username: entry.user.username }}
                             className="flex items-center gap-3 min-w-0"
                           >
-                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
+                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} framed />
                             <UsernameText
                               username={entry.user.username}
                               avatarUrl={entry.user.avatar_url}
@@ -1152,7 +1152,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-osu-f1 w-8">#{originalRank}</span>
-                      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} online={entry.user.is_online} />
+                      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} online={entry.user.is_online} framed />
                       <div className="flex-1 min-w-0">
                         <UsernameText
                           username={entry.user.username}
@@ -1258,7 +1258,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                             onClick={() => seedRowShell(entry, originalRank)}
                             className="flex items-center gap-3 min-w-0"
                           >
-                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} online={entry.user.is_online} />
+                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} online={entry.user.is_online} framed />
                             <UsernameText
                               username={entry.user.username}
                               avatarUrl={entry.user.avatar_url}

@@ -14,12 +14,13 @@ import {
   type SupporterPalette,
 } from "../../lib/supporter-card-looks";
 import { SUPPORTER_MOTIF_SVGS } from "../../lib/supporter-motif-art";
-import { fetchSupporterLookState, saveSupporterLookSetting, type SupporterLookState } from "../../lib/supporter-look-settings";
+import { saveSupporterLookSetting, type SupporterLookState } from "../../lib/supporter-look-settings";
 
-/* Under the viewer's own card on their profile: the motif and colours every
-   copy of their card wears while they are a supporter. A preset or their own
-   uploaded image; picking previews it on the card above at once and saves it.
-   Nothing shows for anyone who is not a supporter right now. */
+/* The card section of /supporter: the motif and colours every copy of the
+   viewer's card wears while they are a supporter. A preset or their own
+   uploaded image; picking previews it on the card beside it at once and saves
+   it. Someone who is not a supporter right now can try the presets on, with
+   nothing saved and no upload. */
 
 const MOTIF_LABELS: Record<SupporterMotifId, MessageDescriptor> = {
   stars: msg`Stars`,
@@ -54,49 +55,39 @@ function motifSrc(id: SupporterMotifId): string {
 const chip = (active: boolean) =>
   `flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors disabled:cursor-default ${active ? "bg-osu-b3 text-white ring-1 ring-osu-pink" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3"}`;
 
-export function SupporterLookPicker({ userId, onPreview }: {
+const TRY_ON_LOOK: SupporterLook = { motif: "stars", palette: null };
+
+export function SupporterLookPicker({ userId, state, onSaved, onPreview }: {
   userId: number;
-  /** The look the card above should draw; undefined hands it back to the saved one. */
+  state: SupporterLookState;
+  onSaved: (state: SupporterLookState) => void;
+  /** The look the card beside it should draw; undefined hands it back to the saved one. */
   onPreview: (look: SupporterLook | undefined) => void;
 }) {
   const { t, i18n } = useLingui();
-  const [state, setState] = useState<SupporterLookState | null>(null);
-  const [look, setLook] = useState<SupporterLook | null>(null);
+  const [look, setLook] = useState<SupporterLook>(() => state.look ?? TRY_ON_LOOK);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savedLook = useRef<SupporterLook | null>(null);
+  const savedLook = useRef<SupporterLook | null>(state.look);
 
-  useEffect(() => {
-    let alive = true;
-    fetchSupporterLookState()
-      .then((next) => {
-        if (!alive) return;
-        setState(next);
-        setLook(next.look);
-        savedLook.current = next.look;
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      onPreview(undefined);
-    };
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!state?.supporter || !look) return null;
+  useEffect(() => () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    onPreview(undefined);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async (next: SupporterLook) => {
+    if (!state.supporter) return;
     setError(null);
     setBusy(true);
     try {
       const saved = await saveSupporterLookSetting({ data: next });
-      setState(saved);
+      onSaved(saved);
       savedLook.current = saved.look;
       forgetLiveSupporterLook(userId);
     } catch (cause) {
-      setLook(savedLook.current);
+      setLook(savedLook.current ?? TRY_ON_LOOK);
       onPreview(savedLook.current ?? undefined);
       setError(cause instanceof Error ? cause.message : t`Could not save that.`);
     } finally {
@@ -140,15 +131,10 @@ export function SupporterLookPicker({ userId, onPreview }: {
     }
   };
 
-  const until = state.expiresAt ? new Date(state.expiresAt).toLocaleDateString(i18n.locale, { month: "short", day: "numeric", year: "numeric" }) : null;
   const customUrl = look.motif === "custom" ? look.url : state.custom?.url;
 
   return (
-    <div className="mx-auto mt-5 max-w-[560px] border-t border-white/[0.07] pt-4">
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <span className="text-[13px] font-semibold text-osu-c2">{t`Card look`}</span>
-        {until && <span className="text-[11px] text-osu-f1">{t`Supporter until ${until}`}</span>}
-      </div>
+    <div>
       <div className="flex flex-wrap gap-2">
         {SUPPORTER_MOTIFS.map((motif) => {
           const active = look.motif === motif.id;
@@ -178,9 +164,11 @@ export function SupporterLookPicker({ userId, onPreview }: {
             {t`Your image`}
           </button>
         )}
-        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className={chip(false)}>
-          {customUrl ? t`Upload another` : t`Upload image`}
-        </button>
+        {state.supporter && (
+          <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className={chip(false)}>
+            {customUrl ? t`Upload another` : t`Upload image`}
+          </button>
+        )}
         <input
           ref={fileRef}
           type="file"

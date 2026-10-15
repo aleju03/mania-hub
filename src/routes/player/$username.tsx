@@ -17,8 +17,12 @@ import {
   fetchLivePlayerProfileSnapshotDirect,
   fetchLivePlayerRecentScoresDirect,
   fetchLivePlayerSkillsDirect,
+  fetchLiveSupporterProfileLook,
   fetchRestrictedPpPlayerDirect,
   isLiveBackendConfigured,
+  peekLiveSupporterFrame,
+  peekLiveSupporterNameFont,
+  peekLiveSupporterNameStyle,
   type LivePlayerSkills,
   type LiveKeymodePpPlay,
   type LivePlayerKeymodePpTail,
@@ -63,8 +67,11 @@ import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import { SkillsUntrackedNotice } from "../../components/player/SkillsUntrackedNotice";
-import { SupporterLookPicker } from "../../components/player/SupporterLookPicker";
-import type { SupporterLook } from "../../lib/supporter-card-looks";
+import { frameOverhangMargins, SupporterAvatarFrame } from "../../components/player/SupporterAvatarFrame";
+import { framedAvatarStyle, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
+import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
+import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { SupporterStyledName } from "../../components/supporter/SupporterNameStyle";
 import { buildRestrictedBestList, profileRailTotals } from "../../components/player/restricted-best-scores";
 import { companellaImportsToScores, dropCompanellaOsuTwins } from "../../lib/companella-scores";
 import type { OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
@@ -981,8 +988,6 @@ export function PlayerProfilePage({
   const navigate = useNavigate();
   const hasHydrated = useHasHydrated();
   const cardTierPreview = useCardTierPreview();
-  // The look the card tab previews while its owner picks one; undefined draws the saved look.
-  const [supporterLookPreview, setSupporterLookPreview] = useState<SupporterLook | undefined>(undefined);
   const loaderSnapshot = loaderData?.cachedSnapshot ?? null;
   const loaderBestScores = useMemo(
     () => loaderSnapshot ? dedupeScores(loaderSnapshot.bestScores) : [],
@@ -1092,6 +1097,37 @@ export function PlayerProfilePage({
   });
   const restrictedPpPending = !!user?.account_status && restrictedPp?.userId !== user.id;
   const restrictedStanding = user?.account_status && restrictedPp?.userId === user.id ? restrictedPp.standing : null;
+  /* A supporter's avatar frame, name style and name font (picked on /supporter). Only an
+     answer about this user counts. */
+  const profileUserId = user?.id ?? 0;
+  const [supporterFrame, setSupporterFrame] = useState<{
+    userId: number;
+    frame: SupporterAvatarFrameId | null;
+    nameStyle: SupporterNameStyleId | null;
+    nameFont: SupporterNameFontId | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!profileUserId) return;
+    let alive = true;
+    const known = peekLiveSupporterFrame(profileUserId);
+    if (known !== undefined) {
+      setSupporterFrame({
+        userId: profileUserId,
+        frame: known,
+        nameStyle: peekLiveSupporterNameStyle(profileUserId) ?? null,
+        nameFont: peekLiveSupporterNameFont(profileUserId) ?? null,
+      });
+    }
+    void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [profileUserId]);
+  const heroFrame = supporterFrame?.userId === profileUserId ? supporterFrame.frame : null;
+  const heroNameStyle = supporterFrame?.userId === profileUserId ? supporterFrame.nameStyle : null;
+  const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
   const restrictedBest = useMemo(
     () => restrictedStanding
       ? buildRestrictedBestList(restrictedStanding.best, {
@@ -2309,26 +2345,40 @@ export function PlayerProfilePage({
         <RankTrendline history={rankHistoryPoints} />
 
         <div className="relative mx-auto max-w-[1200px] px-4 pt-8 pb-7 sm:px-5 sm:pt-12 sm:pb-9">
-          <div className="flex items-center gap-4 sm:gap-5">
-            <button
-              type="button"
-              onClick={() => setAvatarOpen(true)}
-              className="h-[84px] w-[84px] flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.45)] ring-2 ring-white/15 transition duration-150 hover:ring-osu-pink/70 sm:h-[124px] sm:w-[124px]"
+          {/* The name drops under the avatar when a wide frame leaves it less
+              than its basis, instead of truncating to a few letters. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:gap-x-5">
+            <div
+              className="relative flex-shrink-0 [--hero-avatar:84px] sm:[--hero-avatar:124px]"
+              style={heroFrame ? frameOverhangMargins(heroFrame, "var(--hero-avatar)", "28px") : undefined}
             >
-              <img
-                src={avatarSrc}
-                alt={`${user.username}'s avatar`}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-            </button>
-            <div className="min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => setAvatarOpen(true)}
+                className="block h-[84px] w-[84px] cursor-pointer overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.45)] ring-2 ring-white/15 transition duration-150 hover:ring-osu-pink/70 sm:h-[124px] sm:w-[124px]"
+                style={framedAvatarStyle(heroFrame)}
+              >
+                <img
+                  src={avatarSrc}
+                  alt={`${user.username}'s avatar`}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </button>
+              {heroFrame && <SupporterAvatarFrame frame={heroFrame} />}
+            </div>
+            <div className="min-w-0 flex-1 basis-[11rem]">
               <h1 className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
                 {/* `truncate` clips at the padding box, and with leading-none the
                     box is tighter than the ink: a capital J overhangs it on the
                     left and below. The padding/-margin pair buys room on every
                     side without moving anything. */}
-                <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                {/* A supporter's name style replaces the accent colour. */}
+                {heroNameStyle || heroNameFont ? (
+                  <SupporterStyledName live nameStyle={heroNameStyle} nameFont={heroNameFont} name={user.display_name ?? user.username} className="min-w-0 truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                ) : (
+                  <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                )}
                 {showProfileCountryFlag ? (
                   <Link
                     to="/"
@@ -2782,11 +2832,7 @@ export function PlayerProfilePage({
                   loading={restrictedPpPending || (!restrictedBest && !bestWindowLoaded)}
                   isOwnProfile={!!auth.viewer && !!user && auth.viewer.id === user.id}
                   tierOverride={cardTierPreview}
-                  supporterLookOverride={supporterLookPreview}
                 />
-                {!!auth.viewer && !!user && auth.viewer.id === user.id && (
-                  <SupporterLookPicker userId={user.id} onPreview={setSupporterLookPreview} />
-                )}
               </motion.div>
             ) : tab === "activity" ? (
               <motion.div

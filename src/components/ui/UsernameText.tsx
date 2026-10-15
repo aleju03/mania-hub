@@ -1,6 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { getAvatarAccentStoreKey } from "../../lib/avatar-accent";
 import { requestAvatarAccent } from "../../lib/avatar-accent-harvest";
+import { ensureSupporterNameStyles, getSupporterNameFont, getSupporterNameStyle, subscribeSupporterNameStyles } from "../../lib/live-backend";
+import { SupporterStyledName } from "../supporter/SupporterNameStyle";
+import { avatarUrlUserId } from "./Avatar";
 import { useHydrated } from "../../lib/use-hydrated";
 import { useAppStore } from "../../store";
 
@@ -9,6 +12,9 @@ import { useAppStore } from "../../store";
 // normally a pure store read. Names from osu!-API-sourced data (home top players, /rankings) have
 // no payload to ride, so a miss registers the URL for a batched backend lookup; until it answers,
 // the name renders in the surrounding text color.
+// An active supporter's name wears their name tag style and name font instead, looked up by the user id in the
+// avatar URL from one shared map (ensureSupporterNameStyles); it joins after hydration like the
+// store accent, so server and client markup agree.
 export function UsernameText({
   username,
   avatarUrl,
@@ -36,6 +42,23 @@ export function UsernameText({
   useEffect(() => {
     if (!accent && avatarUrl) requestAvatarAccent(avatarUrl);
   }, [accent, avatarUrl]);
+
+  const userId = avatarUrlUserId(avatarUrl);
+  const nameStyle = useSyncExternalStore(
+    subscribeSupporterNameStyles,
+    () => (hydrated && userId ? getSupporterNameStyle(userId) : null),
+    () => null,
+  );
+  const nameFont = useSyncExternalStore(
+    subscribeSupporterNameStyles,
+    () => (hydrated && userId ? getSupporterNameFont(userId) : null),
+    () => null,
+  );
+  useEffect(() => {
+    if (userId) ensureSupporterNameStyles();
+  }, [userId]);
+
+  if (nameStyle || nameFont) return <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} name={username} className={className} />;
 
   return (
     <span

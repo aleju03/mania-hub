@@ -90,7 +90,7 @@ export function LeaderboardTable({
           rows.map((row) => {
             const identity = (
               <>
-                <Avatar url={row.user.avatar_url} userId={row.user.id} size={36} />
+                <Avatar url={row.user.avatar_url} userId={row.user.id} size={36} framed />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <CountryFlag code={row.user.country_code} size="sm" className="flex-shrink-0" />

@@ -2189,6 +2189,10 @@ msgstr "1× = velocidad original"
 msgid "100"
 msgstr "100"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+#~ msgid "10th to Alpha"
+#~ msgstr ""
+
 #: src/components/player/ActivityPanel.tsx
 msgid "12 AM"
 msgstr "12 a. m."
@@ -2200,6 +2204,10 @@ msgstr "12 p. m."
 #: src/components/replay/ReplayControls.tsx
 msgid "16:9 video"
 msgstr "Video 16:9"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+#~ msgid "1st to Eta"
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "2. Your passes earn credit by accuracy"
@@ -2237,6 +2245,7 @@ msgid "300"
 msgstr "300"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/lib/supporter-name-styles.ts
 msgid "300g"
 msgstr "300g"
 
@@ -2280,6 +2289,10 @@ msgstr "5. Cursos de dan y charts de práctica"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "50"
 msgstr "50"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+#~ msgid "5th to Gamma"
+#~ msgstr ""
 
 #: src/components/player/ActivityPanel.tsx
 msgid "6 AM"
@@ -2381,6 +2394,10 @@ msgstr "7K LN"
 #: src/routes/dan-estimates.tsx
 msgid "7K LN stays within one level of your General dan, because few hard Tech, Inverse and Release charts exist. Those three still show their own numbers."
 msgstr "7K LN se queda a un nivel como máximo de tu dan de General, porque hay pocos charts difíciles de Tech, Inverse y Release. Esos tres siguen mostrando su propio número."
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "7K orbit"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
@@ -3014,6 +3031,10 @@ msgstr "Admin: llenar la fila con tiradas falsas para previsualizar la animació
 msgid "Advanced"
 msgstr "Avanzado"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Aero window"
+msgstr ""
+
 #: src/components/player/BestScoresControls.tsx
 msgid "Age"
 msgstr "Edad"
@@ -3143,6 +3164,10 @@ msgstr "Casi listo..."
 msgid "Almost there{elapsedLabel}"
 msgstr "Casi listo{elapsedLabel}"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+#~ msgid "Alpha to Kappa"
+#~ msgstr ""
+
 #: src/components/packs/GoatPoll.tsx
 msgid "already a GOAT"
 msgstr "ya es un GOAT"
@@ -3256,6 +3281,10 @@ msgstr "y {0} más"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "and {0} more below these"
 msgstr "y {0} más por debajo de estos"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Angel wings"
+msgstr ""
 
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Another player already goes by that name."
@@ -3411,6 +3440,10 @@ msgstr "aprobada"
 msgid "Arabic"
 msgstr "Árabe"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Arcade"
+msgstr ""
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Archive filter"
 msgstr "Filtro de archivados"
@@ -3511,7 +3544,8 @@ msgstr "Onda de audio"
 msgid "August 23, 2026"
 msgstr "23 de agosto de 2026"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
+#: src/lib/supporter-name-styles.ts
 msgid "Aurora"
 msgstr "Aurora"
 
@@ -3548,9 +3582,17 @@ msgstr "El tracking automático empezó el 9 de junio de 2026. Los scores más v
 #~ msgid "Automatic tracking only began on June 9, 2026. Older scores are included when they are still in your osu! top plays, and any missing passed mania score with an osu! score link can be added from your profile's Skills tab."
 #~ msgstr "El tracking automático no comenzó hasta el 9 de junio de 2026. Los scores anteriores se incluyen si todavía están entre tus top plays de osu!, y cualquier score aprobado de mania que falte y tenga un enlace de score de osu! se puede agregar desde la pestaña Skills de tu perfil."
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Autumn maple"
+msgstr ""
+
 #: src/components/ui/Avatar.tsx
 msgid "avatar"
 msgstr "avatar"
+
+#: src/routes/supporter.tsx
+msgid "Avatar frame"
+msgstr ""
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Average length"
@@ -3919,6 +3961,10 @@ msgstr "Playfield negro"
 msgid "Blitz"
 msgstr "Blitz"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Block"
+msgstr ""
+
 #: src/components/layout/ThemePicker.tsx
 msgid "blue"
 msgstr "azul"
@@ -3952,6 +3998,10 @@ msgstr "Aquí no se cuentan los pp de bonificación por número de jugadas, así
 #: src/routes/communities_.$id.tsx
 msgid "boosts"
 msgstr "impulsos"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Boot box"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bottom"
@@ -4001,6 +4051,10 @@ msgstr "Brillo"
 #: src/routes/replay.tsx
 msgid "Bring to front"
 msgstr "Traer al frente"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Bronze laurel"
+msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Browse"
@@ -4143,6 +4197,7 @@ msgstr "Canvas no disponible."
 #~ msgstr "limitada"
 
 #: src/lib/signature-shared.ts
+#: src/routes/supporter.tsx
 msgid "Card"
 msgstr "Carta"
 
@@ -4165,8 +4220,8 @@ msgid "Card front"
 msgstr "Frente de la carta"
 
 #: src/components/player/SupporterLookPicker.tsx
-msgid "Card look"
-msgstr "Aspecto de la carta"
+#~ msgid "Card look"
+#~ msgstr "Aspecto de la carta"
 
 #: src/routes/packs.tsx
 msgid "Card Packs"
@@ -4209,6 +4264,18 @@ msgstr "Cartas de las que tienes más de una copia."
 msgid "Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
 msgstr "Cartas tuyas de jugadores que ya no se pueden sacar: salieron del top 100 de todos los países trackeados y no se han inscrito. Si regresan, vuelven al grupo y vuelven a contar para completar el álbum."
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Cat parade"
+msgstr ""
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Cats"
+msgstr ""
+
+#: src/lib/supporter-name-styles.ts
+msgid "Caustics"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Center"
@@ -4237,6 +4304,10 @@ msgstr "Cambio"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Change {0}"
 msgstr "Cambiar {0}"
+
+#: src/components/player/SupporterFrameEditor.tsx
+#~ msgid "Change avatar frame"
+#~ msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
@@ -4471,6 +4542,10 @@ msgstr "Chordstream"
 msgid "Chordstreams"
 msgstr "Chordstreams"
 
+#: src/lib/supporter-name-styles.ts
+msgid "Chrome"
+msgstr ""
+
 #: src/routes/skins.tsx
 msgid "circles"
 msgstr "círculos"
@@ -4485,6 +4560,7 @@ msgid "CJ"
 msgstr "CJ"
 
 #: src/lib/replay-overlays.ts
+#: src/lib/supporter-name-fonts.ts
 msgid "Classic"
 msgstr "Clásico"
 
@@ -4492,6 +4568,10 @@ msgstr "Clásico"
 #~ msgctxt "overall rating method"
 #~ msgid "Classic"
 #~ msgstr "Clásico"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Classic window"
+msgstr ""
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
@@ -4987,6 +5067,10 @@ msgstr "comparado con {range} pp"
 #~ msgid "Computer {0}"
 #~ msgstr "Computadora {0}"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Condensed"
+msgstr ""
+
 #: src/routes/companella_.authorize.tsx
 #: src/routes/hashi_.authorize.tsx
 msgid "Connect an app"
@@ -5318,7 +5402,8 @@ msgstr "No se pudieron revocar las conexiones."
 #~ msgid "Could not revoke the installations."
 #~ msgstr ""
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
+#: src/routes/supporter.tsx
 msgid "Could not save that."
 msgstr "No se pudo guardar."
 
@@ -5350,7 +5435,7 @@ msgstr ""
 msgid "Could not submit that. Try again."
 msgstr "No se pudo enviar. Inténtalo de nuevo."
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Could not upload that image."
 msgstr "No se pudo subir esa imagen."
 
@@ -5761,6 +5846,10 @@ msgstr "Croata"
 msgid "crop {0}×{1}"
 msgstr "recortar {0}×{1}"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "CRT monitor"
+msgstr ""
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Crystal facets and a rainbow foil rim."
 #~ msgstr "Facetas de cristal y un borde holográfico arcoíris."
@@ -5957,6 +6046,10 @@ msgstr "Nivel de dan"
 msgid "Dan skill"
 msgstr "Habilidad de dan"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Dan skip"
+msgstr ""
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Danger"
 msgstr "Peligro"
@@ -5964,6 +6057,10 @@ msgstr "Peligro"
 #: src/components/communities/field-options.tsx
 msgid "Danish"
 msgstr "Danés"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Dans"
+msgstr ""
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "dark"
@@ -6022,6 +6119,10 @@ msgstr "Reducir"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "default"
 msgstr "predeterminado"
+
+#: src/components/supporter/SupporterNameStylePicker.tsx
+msgid "Default"
+msgstr ""
 
 #: src/components/maps/MapPreviewAudio.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -6097,6 +6198,10 @@ msgstr "Eliminado {0}"
 msgid "Deleting"
 msgstr "Eliminando"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Delta crest"
+msgstr ""
+
 #: src/routes/skins.tsx
 msgid "descending"
 msgstr "descendente"
@@ -6128,6 +6233,10 @@ msgstr "Secciones detectadas"
 #: src/routes/discord.tsx
 msgid "dev preview"
 msgstr "vista previa de desarrollo"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "DFJK"
+msgstr ""
 
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
@@ -6212,6 +6321,10 @@ msgstr "Descartar"
 #: src/routes/skins.tsx
 msgid "display"
 msgstr "pantalla"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Dither"
+msgstr ""
 
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
@@ -6661,6 +6774,11 @@ msgstr "Los cambios quedan en este navegador. Copia el resultado y pégalo en el
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page."
 msgstr "Los cambios quedan en este navegador. Copia el resultado y pégalo en el editor me! de tu página de osu!."
 
+#: src/components/supporter/SupporterFramePicker.tsx
+#: src/components/supporter/SupporterNameStylePicker.tsx
+msgid "Effects"
+msgstr ""
+
 #: src/components/BackendOfflineScreen.tsx
 msgid "Either restarting or under maintenance. Try again later."
 msgstr "Se está reiniciando o está en mantenimiento. Inténtalo de nuevo más tarde."
@@ -6669,7 +6787,8 @@ msgstr "Se está reiniciando o está en mantenimiento. Inténtalo de nuevo más 
 msgid "Elite"
 msgstr "Élite"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
+#: src/lib/supporter-name-styles.ts
 msgid "Ember"
 msgstr "Brasa"
 
@@ -6709,6 +6828,10 @@ msgstr "Misma probabilidad por jugador"
 #: src/routes/recommendations.tsx
 msgid "error"
 msgstr "error"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Error cascade"
+msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Estimate a chart's dan level, with its dan emblem."
@@ -6754,6 +6877,10 @@ msgstr "Estonio"
 #: src/components/packs/collections/CollectorDirectory.tsx
 #~ msgid "Eternals"
 #~ msgstr "Eternal"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Ethereal"
+msgstr ""
 
 #: src/components/player/OverallMethodToggle.tsx
 msgid "Etterna"
@@ -6868,6 +6995,10 @@ msgstr "todo"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "todo lo demás que trae el archivo"
+
+#: src/routes/supporter.tsx
+msgid "Everything here is a preview until you support. Use your osu! username as your Ko-fi name so it counts for you."
+msgstr ""
 
 #. placeholder {0}: dan.rawDan.toFixed(2)
 #: src/components/player/DanEvidenceModal.tsx
@@ -6989,6 +7120,10 @@ msgstr "No se pudo cargar el replay subido"
 msgid "Failed to start the replay renderers."
 msgstr "No se pudieron iniciar los renderizadores de replay."
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Fairy lights"
+msgstr ""
+
 #: src/lib/signature-style.ts
 msgid "Falling notes"
 msgstr "Notas que caen"
@@ -7087,7 +7222,11 @@ msgstr "FC <0/> en {mapSlot}"
 msgid "FC chokes only (1 miss)"
 msgstr "Solo chokes de FC (1 miss)"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Feather wings"
+msgstr ""
+
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Feathers"
 msgstr "Plumas"
 
@@ -7477,6 +7616,10 @@ msgstr "Invertido"
 msgid "Follow SV changes"
 msgstr "Seguir cambios de SV"
 
+#: src/components/supporter/SupporterNameStylePicker.tsx
+msgid "Font"
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "for"
 msgstr "para"
@@ -7585,6 +7728,10 @@ msgstr "De la play real (no simulada)"
 msgid "Fronts the browse card"
 msgstr "Es la portada de la tarjeta del listado"
 
+#: src/lib/supporter-name-styles.ts
+msgid "Frost"
+msgstr ""
+
 #: src/components/packs/SetsView.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Full"
@@ -7623,6 +7770,10 @@ msgstr "Ancho completo"
 #: src/routes/replay.tsx
 msgid "Fullscreen"
 msgstr "Pantalla completa"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Galaxy"
+msgstr ""
 
 #: src/lib/skill-axes.ts
 msgid "General"
@@ -7706,6 +7857,10 @@ msgstr "Ponle un título a la colección."
 msgid "Give the set a name."
 msgstr "Dale un nombre al set."
 
+#: src/lib/supporter-name-styles.ts
+msgid "Glitch"
+msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/maps.tsx
 msgid "global"
@@ -7748,6 +7903,10 @@ msgstr "El tracker global está listo"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Glow"
 msgstr "Brillo"
+
+#: src/components/supporter/SupporterNameStylePicker.tsx
+msgid "Glow and retro"
+msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
 msgid "go again"
@@ -7819,10 +7978,15 @@ msgid "Goes by the country on someone's osu! account, and anyone already in can 
 msgstr "Se basa en el país de la cuenta de osu! de cada quien, y cualquiera que ya esté dentro puede seguir compartiendo la invitación."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 #: src/lib/signature-style.ts
+#: src/lib/supporter-name-styles.ts
 msgid "Gold"
 msgstr "Dorado"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Gold wings"
+msgstr ""
 
 #: src/components/packs/GiftInbox.tsx
 #~ msgid "Got it"
@@ -7842,6 +8006,10 @@ msgstr "Degradado"
 #: src/routes/bbcode.tsx
 msgid "Gradient text"
 msgstr "Texto con degradado"
+
+#: src/components/supporter/SupporterNameStylePicker.tsx
+msgid "Gradients"
+msgstr ""
 
 #: src/components/player/SkillHistoryModal.tsx
 msgctxt "skill history view"
@@ -7878,6 +8046,10 @@ msgstr "Cuadrícula"
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
 msgstr "Adivinar al azar"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Halloween"
+msgstr ""
 
 #: src/lib/pattern-labels.ts
 msgid "Handjack"
@@ -7976,9 +8148,13 @@ msgstr "Encabezado"
 msgid "Health bar"
 msgstr "Barra de HP"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Hearts"
 msgstr "Corazones"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Heatmap"
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
@@ -7995,6 +8171,10 @@ msgstr "Alto de la imagen exportada, en píxeles"
 #: src/lib/pattern-labels.ts
 #~ msgid "Held-chord Coordination"
 #~ msgstr "Coordinación de acordes mantenidos"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Hex HUD"
+msgstr ""
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -8171,6 +8351,10 @@ msgstr "Conteos de hits y unstable rate."
 msgid "Hit error bar"
 msgstr "Hit error bar"
 
+#: src/lib/supporter-name-styles.ts
+msgid "Hit light"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit position"
 msgstr "Posición de hits"
@@ -8263,6 +8447,10 @@ msgstr "Tiene <0>{0}</0> de las <1>{1}</1> cartas coleccionables, <2>{poolPercen
 #: src/components/packs/collections/CollectorShelf.tsx
 #~ msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
 #~ msgstr "Tiene <0>{0}</0> de los <1>{1}</1> jugadores que puedes sacar, <2>{poolPercent}%</2>"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Holo"
+msgstr ""
 
 #: src/components/layout/Nav.tsx
 msgid "home"
@@ -8649,6 +8837,14 @@ msgstr ""
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
 msgstr "Scoreboard del juego con subida de rank en vivo. Se activa con la tecla Tab."
 
+#: src/lib/supporter-name-styles.ts
+msgid "Ink marble"
+msgstr ""
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Ink plum"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Inline code"
@@ -8883,6 +9079,7 @@ msgstr "Tamaño de los juicios"
 
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/SupporterFramePicker.tsx
 #: src/lib/replay-overlays.ts
 msgid "Judgements"
 msgstr "Juicios"
@@ -8924,6 +9121,10 @@ msgstr "16 de junio de 2026"
 #: src/lib/format.ts
 msgid "just now"
 msgstr "justo ahora"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Kappa signal"
+msgstr ""
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Keep"
@@ -9178,6 +9379,14 @@ msgstr "El play más reciente completo (rank, mods, judgements, pp), con los ant
 msgid "Latvian"
 msgstr "Letón"
 
+#: src/lib/supporter-name-styles.ts
+msgid "Lava lamp"
+msgstr ""
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Layers"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
 msgid "Layout"
@@ -9326,6 +9535,10 @@ msgstr "claro"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Light"
 msgstr "Luz"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Light wings"
+msgstr ""
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
@@ -9507,6 +9720,10 @@ msgstr "Color de la cabeza del LN"
 msgid "LN Head color"
 msgstr "Color de la cabeza del LN"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "LN hold"
+msgstr ""
+
 #: src/lib/pattern-labels.ts
 #~ msgid "LN Hybrid"
 #~ msgstr "LN híbrido"
@@ -9650,6 +9867,10 @@ msgstr "Cargando snipes de {countryName}…"
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Loading audio preview…"
 msgstr "Cargando preview de audio…"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Loading bar"
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "Loading board…"
@@ -9820,6 +10041,7 @@ msgstr "Inicia sesión para subir"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/routes/supporter.tsx
 msgid "Log in with osu!"
 msgstr "Inicia sesión con osu!"
 
@@ -9977,6 +10199,10 @@ msgstr "Hazlo de {OSU_PROFILE_COLUMN_WIDTH}px de ancho: todo el ancho de la colu
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one."
 msgstr "Hazlo permanente si puedes: una invitación temporal oculta tu servidor el día que expira, hasta que pegues una nueva."
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Makiba"
+msgstr ""
 
 #: src/routes/replay.tsx
 msgid "Making sure a replay is available."
@@ -10241,6 +10467,10 @@ msgstr "marcado fácil"
 msgid "marked hard"
 msgstr "marcado difícil"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Marker"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
 msgstr "Igualar tamaños a la primera imagen seleccionada"
@@ -10252,6 +10482,10 @@ msgstr "Comparando el checksum del replay."
 #: src/routes/replay.tsx
 msgid "Matching the replay to its beatmap."
 msgstr "Asociando el replay a su beatmap."
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Matrix rain"
+msgstr ""
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "MAX"
@@ -10323,6 +10557,10 @@ msgstr "miembros"
 #: src/routes/teams.tsx
 msgid "Members"
 msgstr "Miembros"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Mesh gradient"
+msgstr ""
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Message"
@@ -10457,6 +10695,10 @@ msgstr "mods"
 #: src/routes/recommendations.tsx
 msgid "Mods"
 msgstr "Mods"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Molten gold"
+msgstr ""
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Mon"
@@ -10725,10 +10967,18 @@ msgstr "Nombre para la captura {0}"
 msgid "Name preset"
 msgstr "Nombrar preset"
 
+#: src/routes/supporter.tsx
+msgid "Name tag"
+msgstr ""
+
 #. placeholder {0}: trimmed.slice(0, 80)
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Named {0}"
 msgstr "Guardado como {0}"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Nameplate"
+msgstr ""
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Near clear"
@@ -10745,6 +10995,18 @@ msgstr "faltan {quorum}"
 #: src/components/packs/GoatPoll.tsx
 msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "Necesita un enlace de web.archive.org a su perfil de osu!."
+
+#: src/lib/supporter-name-styles.ts
+msgid "Neon"
+msgstr ""
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Neon ears"
+msgstr ""
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Neon lines"
+msgstr ""
 
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Never"
@@ -11078,6 +11340,10 @@ msgstr "Ningún favorito coincide con tus filtros. Intenta relajarlos."
 #: src/components/packs/BindersView.tsx
 #~ msgid "No folders yet. Make one to group your cards however you like, then show it on your shelf if you want."
 #~ msgstr "Aún no hay carpetas. Crea una para agrupar tus cartas como quieras y, si quieres, muéstrala en tu vitrina."
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "No frame"
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "no gains here"
@@ -11802,6 +12068,10 @@ msgstr "Altura de las notas"
 msgid "note on this"
 msgstr "nota sobre esto"
 
+#: src/lib/supporter-name-styles.ts
+msgid "Note rain"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Note shape"
@@ -11811,10 +12081,10 @@ msgstr "Forma de las notas"
 msgid "notes"
 msgstr "notas"
 
-#: src/components/player/SupporterLookPicker.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Notes"
 msgstr "Notas"
@@ -12026,6 +12296,10 @@ msgstr "antiguo"
 #: src/routes/recommendations.tsx
 msgid "old pb"
 msgstr "pb viejo"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Old photo"
+msgstr ""
 
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
@@ -12454,6 +12728,10 @@ msgstr "o alguien más"
 msgid "orange"
 msgstr "naranja"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Orbitron"
+msgstr ""
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Order"
 msgstr "Orden"
@@ -12512,6 +12790,10 @@ msgstr "Enlace de score de osu!"
 #: src/components/team/TeamProfilePage.tsx
 msgid "osu! team"
 msgstr "Equipo de osu!"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "osu!mania"
+msgstr ""
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -12855,6 +13137,10 @@ msgstr "Pausar preview"
 msgid "Peak"
 msgstr "Peak"
 
+#: src/lib/supporter-name-styles.ts
+msgid "Pearl"
+msgstr ""
+
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "peers farming"
 msgstr "jugadores cercanos farmeando"
@@ -12913,7 +13199,7 @@ msgstr "Rank de rendimiento"
 msgid "Persian"
 msgstr "Persa"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Petals"
 msgstr "Pétalos"
 
@@ -12990,9 +13276,29 @@ msgstr "rosa"
 msgid "Pink"
 msgstr "Rosa"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Pink wings"
+msgstr ""
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Pinned"
 msgstr "Fijados"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Pixel"
+msgstr ""
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Pixel hearts"
+msgstr ""
+
+#: src/components/supporter/SupporterNameStylePicker.tsx
+msgid "Plain"
+msgstr ""
+
+#: src/lib/supporter-name-styles.ts
+msgid "Plasma"
+msgstr ""
 
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Platform"
@@ -13517,7 +13823,7 @@ msgstr "Vista previa anterior"
 msgid "Previously"
 msgstr "Antes"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Prismatic"
 msgstr "Prismática"
 
@@ -13702,9 +14008,18 @@ msgstr "Radar"
 msgid "Radar and axes"
 msgstr "Radar y ejes"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Rain cloud"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/lib/supporter-name-styles.ts
 msgid "Rainbow"
 msgstr "Arcoíris"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+#~ msgid "Raised wings"
+#~ msgstr ""
 
 #: src/components/packs/StreakGame.tsx
 msgid "Ran out of players to draw."
@@ -14725,6 +15040,11 @@ msgstr "Reanudar este mapa"
 msgid "Retention And Controls"
 msgstr "Retención y controles"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+#: src/lib/supporter-name-fonts.ts
+msgid "Retro"
+msgstr ""
+
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/AddScoreModal.tsx
@@ -14904,6 +15224,10 @@ msgstr "¿Tienes un servidor de osu!mania? Publícalo y aparecerá aquí cuando 
 #: src/components/communities/field-options.tsx
 msgid "Russian"
 msgstr "Ruso"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Sakura"
+msgstr ""
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
@@ -15130,6 +15454,10 @@ msgstr "Acc de ScoreV2 (97%)"
 msgid "ScoreV2 accuracy"
 msgstr "Precisión ScoreV2"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Screensaver"
+msgstr ""
+
 #: src/components/ui/ImageLightbox.tsx
 msgid "Screenshot"
 msgstr "Captura"
@@ -15149,6 +15477,10 @@ msgstr "capturas"
 #: src/routes/hashi.tsx
 msgid "Screenshots"
 msgstr "Capturas"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Script"
+msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll"
@@ -15356,6 +15688,10 @@ msgstr "Buscar..."
 msgid "searching"
 msgstr "buscando"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Seasons and nature"
+msgstr ""
+
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Second pull"
 msgstr "Segunda en sacarse"
@@ -15545,6 +15881,10 @@ msgstr "Enviado, gracias."
 #: src/components/communities/field-options.tsx
 msgid "Serbian"
 msgstr "Serbio"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Serif"
+msgstr ""
 
 #: src/routes/communities_.$id.tsx
 msgid "server made"
@@ -16201,9 +16541,9 @@ msgstr "Jacks de una nota"
 msgid "size"
 msgstr "tamaño"
 
-#: src/components/player/SupporterLookPicker.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Size"
 msgstr "Tamaño"
 
@@ -16375,6 +16715,10 @@ msgstr "Skins"
 msgid "Skins are unavailable right now"
 msgstr "Las skins no están disponibles por ahora"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Skip"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Skip animations"
 msgstr "Omitir animaciones"
@@ -16466,6 +16810,10 @@ msgstr "No se registran snipes para {name}"
 #: src/routes/snipes.tsx
 #~ msgid "Snipes don't apply to Global"
 #~ msgstr "Los snipes no aplican a Global"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Soft wings"
+msgstr ""
 
 #: src/lib/signature-style.ts
 msgid "Solid"
@@ -16754,7 +17102,7 @@ msgstr "estrellas"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -16820,9 +17168,13 @@ msgstr "Estadísticas y top play"
 msgid "Status"
 msgstr "Estado"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Stellium"
 msgstr "Stellium"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Stellium charm"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 1: every chart gets its own dan level"
@@ -16871,6 +17223,10 @@ msgstr "Stellium"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 7: clearing a real course overrides all of it"
 #~ msgstr "Paso 7: superar un curso real manda sobre todo esto"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Sticker"
+msgstr ""
 
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
@@ -16927,6 +17283,10 @@ msgstr ""
 #~ msgid "Stored, but not rated:"
 #~ msgstr ""
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Storm"
+msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Storyboard"
@@ -16969,7 +17329,7 @@ msgstr "Streams interrumpidos por saltos de dos notas."
 msgid "Streams thickened with three-note hand chords."
 msgstr "Streams engrosados con acordes de tres notas."
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Strength"
 msgstr "Intensidad"
 
@@ -17038,6 +17398,10 @@ msgstr "dom"
 msgid "Sundays"
 msgstr "domingos"
 
+#: src/lib/supporter-name-styles.ts
+msgid "Sunset"
+msgstr ""
+
 #: src/routes/__root.tsx
 msgid "support"
 msgstr "apoyar"
@@ -17050,11 +17414,20 @@ msgstr "Apoya a Mania Tracker en Ko-fi"
 msgid "Support mania-tracker"
 msgstr "Apoya a mania-tracker"
 
-#: src/routes/player/$username.tsx
-#~ msgid "Supporter"
-#~ msgstr "Supporter"
+#: src/routes/supporter.tsx
+msgid "Support on Ko-fi"
+msgstr ""
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/routes/supporter.tsx
+msgid "supporter"
+msgstr ""
+
+#: src/components/layout/Nav.tsx
+#: src/routes/supporter.tsx
+msgid "Supporter"
+msgstr "Supporter"
+
+#: src/routes/supporter.tsx
 msgid "Supporter until {until}"
 msgstr "Supporter hasta el {until}"
 
@@ -17104,6 +17477,10 @@ msgstr "Cambia cualquier elemento por otra imagen de {0}, o haz clic en él en l
 #: src/components/communities/field-options.tsx
 msgid "Swedish"
 msgstr "Sueco"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Swept wings"
+msgstr ""
 
 #. placeholder {0}: displayCountryName(viewerCountryCode, locale)
 #: src/components/layout/Nav.tsx
@@ -17273,6 +17650,16 @@ msgstr "Dile al bot quién eres una sola vez con <0>/link</0>. Después, consult
 msgid "Temporarily offline"
 msgstr "Temporalmente fuera de línea"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+#: src/lib/supporter-name-fonts.ts
+#: src/lib/supporter-name-styles.ts
+msgid "Terminal"
+msgstr ""
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Terminal window"
+msgstr ""
+
 #: src/routes/__root.tsx
 msgid "terms"
 msgstr "términos"
@@ -17331,6 +17718,16 @@ msgstr "Texto que se lee mal"
 msgid "Thai"
 msgstr "Tailandés"
 
+#. placeholder {0}: viewer.username
+#: src/routes/supporter.tsx
+msgid "Thank you for supporting before, {0}."
+msgstr ""
+
+#. placeholder {0}: viewer.username
+#: src/routes/supporter.tsx
+msgid "Thank you for supporting, {0}."
+msgstr ""
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
 msgstr "No se puede cargar esa dirección."
@@ -17377,7 +17774,7 @@ msgstr "Ese archivo no es una imagen compatible."
 msgid "That gift is no longer there."
 msgstr "Ese regalo ya no está."
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "That image is over 5 MB."
 msgstr "Esa imagen pesa más de 5 MB."
 
@@ -18970,11 +19367,15 @@ msgstr "jue"
 msgid "Thursdays"
 msgstr "Jueves"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Tier"
+msgstr ""
+
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Tier changed to {tierLabel}"
 msgstr "Nuevo nivel: {tierLabel}"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Tier colours"
 msgstr "Colores del tier"
 
@@ -19039,6 +19440,14 @@ msgstr "Para prevenir el abuso, el servidor cuenta las peticiones por dirección
 #: src/routes/privacy.tsx
 msgid "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
 msgstr "Para informar de un error, usa el formulario <0>Reportar un error</0> del sitio. Para asuntos de privacidad, eliminación, atribución, retirada de contenido o cualquier otra cuestión, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
+
+#: src/routes/supporter.tsx
+#~ msgid "to set up your avatar frame and card look."
+#~ msgstr ""
+
+#: src/routes/supporter.tsx
+msgid "to set up your avatar frame, name tag and card look."
+msgstr ""
 
 #: src/lib/changelog.ts
 msgid "today"
@@ -19660,12 +20069,12 @@ msgstr "Subir una skin"
 msgid "Upload a skin and it lands here."
 msgstr "Sube una skin y aparecerá aquí."
 
-#: src/components/player/SupporterLookPicker.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Upload another"
 msgstr "Subir otra"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Upload image"
 msgstr "Subir imagen"
 
@@ -20404,6 +20813,10 @@ msgstr "Todo el pool, cartas nuevas primero"
 msgid "why a map shows up"
 msgstr "por qué aparece un mapa"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Wide"
+msgstr ""
+
 #: src/components/replay/ReplayCustomMediaControls.tsx
 #~ msgid "Width"
 #~ msgstr "Ancho"
@@ -20425,6 +20838,14 @@ msgstr "Wild"
 msgid "Windows and Linux"
 msgstr "Windows y Linux"
 
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Wings"
+msgstr ""
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Winter pine"
+msgstr ""
+
 #: src/components/packs/MissingPlayerTile.tsx
 msgid "Wish"
 msgstr "Desear"
@@ -20445,6 +20866,10 @@ msgstr "Lista de deseos"
 #: src/components/packs/MissingPlayerTile.tsx
 msgid "Wishlist is full (5)"
 msgstr "La lista de deseos está llena (5)"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "Wisteria"
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "with {mods}"
@@ -20518,6 +20943,10 @@ msgstr "Falló la escritura del archivo de video."
 #: src/components/packs/StreakGame.tsx
 msgid "wrong"
 msgstr "mal"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+msgid "XP window"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Yes, this is saragi"
@@ -20832,6 +21261,10 @@ msgstr "tus mejores plays"
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "Tu mejor score en el último mapa que alguien mostró en el canal (de /recent, /map, ...). También /c y /compare. Pasa un nombre para buscar a otra persona."
 
+#: src/routes/supporter.tsx
+msgid "Your card is not ready yet."
+msgstr ""
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your collection changed. Nothing was sent. Refresh and try again."
 msgstr "Tu colección cambió. No se envió nada. Actualiza e inténtalo de nuevo."
@@ -20911,7 +21344,7 @@ msgstr "Se desactivaron tus renders dinámicos."
 #~ msgid "Your first forge"
 #~ msgstr "Tu primera forja"
 
-#: src/components/player/SupporterLookPicker.tsx
+#: src/components/supporter/SupporterLookPicker.tsx
 msgid "Your image"
 msgstr "Tu imagen"
 
@@ -21058,6 +21491,18 @@ msgstr "tus destacados"
 msgid "Your skin"
 msgstr "Tu skin"
 
+#: src/routes/supporter.tsx
+msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks."
+msgstr ""
+
+#: src/routes/supporter.tsx
+#~ msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, so take these extra features as a gift."
+#~ msgstr ""
+
+#: src/routes/supporter.tsx
+#~ msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot."
+#~ msgstr ""
+
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "Your teams could not be loaded just now. Try again in a moment."
 #~ msgstr "No se pudieron cargar tus equipos. Inténtalo de nuevo en un momento."
@@ -21091,3 +21536,7 @@ msgstr "Tu lista de deseos"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "Video de YouTube"
+
+#: src/components/supporter/SupporterFramePicker.tsx
+#~ msgid "Zenith orbit"
+#~ msgstr ""
