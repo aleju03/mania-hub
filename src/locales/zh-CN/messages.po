@@ -16221,8 +16221,8 @@ msgstr "技能谱面需要 4K 或 7K 的已评分成绩。"
 #~ msgstr "4K 以外的技能识别调校较少。"
 
 #: src/components/maps/MapSearchSection.tsx
-msgid "Skill detection outside 4K is not fully tuned yet."
-msgstr "4K 以外的技能识别尚未完全调校。"
+#~ msgid "Skill detection outside 4K is not fully tuned yet."
+#~ msgstr "4K 以外的技能识别尚未完全调校。"
 
 #: src/lib/signature-shared.ts
 msgid "Skill radar"

@@ -1742,11 +1742,6 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           <div className="flex flex-col gap-2">
             <div className="flex items-baseline gap-2">
               <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Skill</Trans></span>
-              {/* With no keymode picked, a skill pick also reaches 7K charts.
-                  Beside the heading so toggling it never moves the page. */}
-              {(ui.keys.some((key) => key !== "4k") || (ui.keys.length === 0 && ui.skills.length + ui.skillsExclude.length > 0)) && (
-                <span className="text-[11px] leading-none text-osu-f1"><Trans>Skill detection outside 4K is not fully tuned yet.</Trans></span>
-              )}
             </div>
             <SkillPicker
               skills={ui.skills}

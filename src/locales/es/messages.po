@@ -16212,8 +16212,8 @@ msgstr "Los charts por skillset necesitan plays con rating en 4K o 7K."
 #~ msgstr "La detección de habilidades está menos ajustada fuera de 4K."
 
 #: src/components/maps/MapSearchSection.tsx
-msgid "Skill detection outside 4K is not fully tuned yet."
-msgstr "La detección de skillsets fuera de 4K todavía no está del todo ajustada."
+#~ msgid "Skill detection outside 4K is not fully tuned yet."
+#~ msgstr "La detección de skillsets fuera de 4K todavía no está del todo ajustada."
 
 #: src/lib/signature-shared.ts
 msgid "Skill radar"
