@@ -5933,6 +5933,10 @@ msgstr "CRT monitor"
 #~ msgid "Crystal facets and a rainbow foil rim."
 #~ msgstr "Crystal facets and a rainbow foil rim."
 
+#: src/components/supporter/loadout.ts
+msgid "Crystal wings"
+msgstr "Crystal wings"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
 msgstr "Ctrl/Cmd-click images to add or remove them."
@@ -8724,6 +8728,10 @@ msgstr "Hybrid"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Hybrid chart: {0}, {1}"
 msgstr "Hybrid chart: {0}, {1}"
+
+#: src/components/supporter/loadout.ts
+msgid "Ice fairy"
+msgstr "Ice fairy"
 
 #: src/routes/news_.companella.tsx
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
@@ -15598,6 +15606,10 @@ msgstr "Scales the skin's hitburst art."
 msgid "Scanline"
 msgstr "Scanline"
 
+#: src/components/supporter/loadout.ts
+msgid "Scarlet moon"
+msgstr "Scarlet moon"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Scopes"
 msgstr "Scopes"
@@ -16582,6 +16594,18 @@ msgstr "Shows the MSD of each play in Recent Plays"
 msgid "Shows your cards with a quick fade instead of the full reveal"
 msgstr "Shows your cards with a quick fade instead of the full reveal"
 
+#: src/components/supporter/loadout.ts
+msgid "Shrine and magic"
+msgstr "Shrine and magic"
+
+#: src/components/supporter/loadout.ts
+msgid "Shrine gate"
+msgstr "Shrine gate"
+
+#: src/components/supporter/loadout.ts
+msgid "Shrine ribbon"
+msgstr "Shrine ribbon"
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
 msgstr "shuffle"
@@ -17238,6 +17262,10 @@ msgstr "Speeds the song up to 1.5x and raises the pitch."
 msgid "Speeds the song up to 1.5x."
 msgstr "Speeds the song up to 1.5x."
 
+#: src/components/supporter/loadout.ts
+msgid "Spell card"
+msgstr "Spell card"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -17323,6 +17351,10 @@ msgstr "Star rating"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "star rating shown for 1.0x"
 msgstr "star rating shown for 1.0x"
+
+#: src/components/supporter/loadout.ts
+msgid "Stardust"
+msgstr "Stardust"
 
 #: src/routes/recommendations.tsx
 msgid "stars"
@@ -19647,6 +19679,10 @@ msgstr "Time left"
 msgid "Time played"
 msgstr "Time played"
 
+#: src/components/supporter/loadout.ts
+msgid "Time-stop knives"
+msgstr "Time-stop knives"
+
 #. placeholder {0}: Math.round(active.bpm)
 #: src/components/maps/MapDetailModal.tsx
 msgid "timed at {0}"
@@ -21140,6 +21176,10 @@ msgstr "Wishlist is full (5)"
 msgid "Wisteria"
 msgstr "Wisteria"
 
+#: src/components/supporter/loadout.ts
+msgid "Witch hat"
+msgstr "Witch hat"
+
 #: src/routes/recommendations.tsx
 msgid "with {mods}"
 msgstr "with {mods}"
@@ -21224,6 +21264,10 @@ msgstr "Yes, this is saragi"
 #: src/lib/changelog.ts
 msgid "yesterday"
 msgstr "yesterday"
+
+#: src/components/supporter/loadout.ts
+msgid "Yin-yang orbs"
+msgstr "Yin-yang orbs"
 
 #: src/components/farm-helper/NeighborhoodGraph.tsx
 #: src/components/packs/CardCollectors.tsx

@@ -5906,6 +5906,10 @@ msgstr ""
 #~ msgid "Crystal facets and a rainbow foil rim."
 #~ msgstr "Facetas de cristal y un borde holográfico arcoíris."
 
+#: src/components/supporter/loadout.ts
+msgid "Crystal wings"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
 msgstr "Ctrl/Cmd + clic en las imágenes para añadirlas o quitarlas."
@@ -8689,6 +8693,10 @@ msgstr "Híbrido"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Hybrid chart: {0}, {1}"
 msgstr "Mapa híbrido: {0}, {1}"
+
+#: src/components/supporter/loadout.ts
+msgid "Ice fairy"
+msgstr ""
 
 #: src/routes/news_.companella.tsx
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
@@ -15559,6 +15567,10 @@ msgstr "Escala el arte de hitbursts de la skin."
 msgid "Scanline"
 msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Scarlet moon"
+msgstr ""
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Scopes"
 msgstr ""
@@ -16535,6 +16547,18 @@ msgstr "Muestra el MSD de cada play en Plays recientes"
 msgid "Shows your cards with a quick fade instead of the full reveal"
 msgstr "Las cartas aparecen de una vez, sin la animación completa al abrir el sobre"
 
+#: src/components/supporter/loadout.ts
+msgid "Shrine and magic"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Shrine gate"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Shrine ribbon"
+msgstr ""
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
 msgstr "aleatorio"
@@ -17191,6 +17215,10 @@ msgstr "Sube la velocidad de la canción a 1.5x y sube el tono."
 msgid "Speeds the song up to 1.5x."
 msgstr "Sube la velocidad de la canción a 1.5x."
 
+#: src/components/supporter/loadout.ts
+msgid "Spell card"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -17276,6 +17304,10 @@ msgstr "Rating de estrellas"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "star rating shown for 1.0x"
 msgstr "rating de estrellas mostrado a 1.0x"
+
+#: src/components/supporter/loadout.ts
+msgid "Stardust"
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "stars"
@@ -19592,6 +19624,10 @@ msgstr "Tiempo restante"
 msgid "Time played"
 msgstr "Tiempo jugado"
 
+#: src/components/supporter/loadout.ts
+msgid "Time-stop knives"
+msgstr ""
+
 #. placeholder {0}: Math.round(active.bpm)
 #: src/components/maps/MapDetailModal.tsx
 msgid "timed at {0}"
@@ -21085,6 +21121,10 @@ msgstr "La lista de deseos está llena (5)"
 msgid "Wisteria"
 msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Witch hat"
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "with {mods}"
 msgstr "con {mods}"
@@ -21169,6 +21209,10 @@ msgstr "Sí, es saragi"
 #: src/lib/changelog.ts
 msgid "yesterday"
 msgstr "ayer"
+
+#: src/components/supporter/loadout.ts
+msgid "Yin-yang orbs"
+msgstr ""
 
 #: src/components/farm-helper/NeighborhoodGraph.tsx
 #: src/components/packs/CardCollectors.tsx

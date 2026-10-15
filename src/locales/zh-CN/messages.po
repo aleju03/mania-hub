@@ -5915,6 +5915,10 @@ msgstr ""
 #~ msgid "Crystal facets and a rainbow foil rim."
 #~ msgstr "水晶切面与彩虹镭射边框。"
 
+#: src/components/supporter/loadout.ts
+msgid "Crystal wings"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
 msgstr "按住 Ctrl/Cmd 点击图片以添加或移除。"
@@ -8698,6 +8702,10 @@ msgstr "混合"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Hybrid chart: {0}, {1}"
 msgstr "混合谱面：{0}，{1}"
+
+#: src/components/supporter/loadout.ts
+msgid "Ice fairy"
+msgstr ""
 
 #: src/routes/news_.companella.tsx
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
@@ -15568,6 +15576,10 @@ msgstr "缩放皮肤的打击特效图。"
 msgid "Scanline"
 msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Scarlet moon"
+msgstr ""
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Scopes"
 msgstr ""
@@ -16544,6 +16556,18 @@ msgstr "在最近成绩中显示每个成绩的 MSD"
 msgid "Shows your cards with a quick fade instead of the full reveal"
 msgstr "开包时卡片直接淡入，不播放完整的揭晓动画"
 
+#: src/components/supporter/loadout.ts
+msgid "Shrine and magic"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Shrine gate"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Shrine ribbon"
+msgstr ""
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
 msgstr "换一批"
@@ -17200,6 +17224,10 @@ msgstr "把歌曲加快到 1.5 倍并提高音调。"
 msgid "Speeds the song up to 1.5x."
 msgstr "把歌曲加快到 1.5 倍。"
 
+#: src/components/supporter/loadout.ts
+msgid "Spell card"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -17285,6 +17313,10 @@ msgstr "星级"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "star rating shown for 1.0x"
 msgstr "星级按 1.0x 显示"
+
+#: src/components/supporter/loadout.ts
+msgid "Stardust"
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "stars"
@@ -19601,6 +19633,10 @@ msgstr "剩余时间"
 msgid "Time played"
 msgstr "游玩时长"
 
+#: src/components/supporter/loadout.ts
+msgid "Time-stop knives"
+msgstr ""
+
 #. placeholder {0}: Math.round(active.bpm)
 #: src/components/maps/MapDetailModal.tsx
 msgid "timed at {0}"
@@ -21094,6 +21130,10 @@ msgstr "愿望单已满（5）"
 msgid "Wisteria"
 msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Witch hat"
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "with {mods}"
 msgstr "使用 {mods}"
@@ -21178,6 +21218,10 @@ msgstr "对，就是 saragi"
 #: src/lib/changelog.ts
 msgid "yesterday"
 msgstr "昨天"
+
+#: src/components/supporter/loadout.ts
+msgid "Yin-yang orbs"
+msgstr ""
 
 #: src/components/farm-helper/NeighborhoodGraph.tsx
 #: src/components/packs/CardCollectors.tsx

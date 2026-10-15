@@ -205,6 +205,22 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
     entries: [{ id: "storm", label: msg`Storm` }],
   },
   {
+    key: "shrine",
+    title: msg`Shrine and magic`,
+    entries: [
+      { id: "yinyang-orbs", label: msg`Yin-yang orbs` },
+      { id: "reimu-ribbon", label: msg`Shrine ribbon` },
+      { id: "hakurei-torii", label: msg`Shrine gate` },
+      { id: "spell-card", label: msg`Spell card` },
+      { id: "witch-hat", label: msg`Witch hat` },
+      { id: "stardust", label: msg`Stardust` },
+      { id: "ice-fairy", label: msg`Ice fairy` },
+      { id: "scarlet-moon", label: msg`Scarlet moon` },
+      { id: "rainbow-crystal-wings", label: msg`Crystal wings` },
+      { id: "time-stop-knives", label: msg`Time-stop knives` },
+    ],
+  },
+  {
     key: "wings",
     title: msg`Wings`,
     entries: [

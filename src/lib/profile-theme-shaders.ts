@@ -758,68 +758,88 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Koi pond: koi gliding beneath dappled light, lily pads drifting on top,
-  // and rings spreading from the pointer.
+  // Koi pond: koi gliding beneath dappled light, bending through their
+  // turns, lily pads drifting on top; the koi come toward the pointer.
   koi: shader(`
-vec2 koiPath(float i, float tau, float aspect) {
+uniform sampler2D u_sprite;
+
+/* Where koi i is at path time tau: a loop round the pond, pulled toward
+   wherever the pointer rests, as if coming to be fed. */
+vec2 koiPath(float i, float tau, float aspect, vec2 lure) {
   float a = .7 + .25 * i, b = .9 + .17 * i, phase = i * 2.1;
-  return vec2(cos(tau * a + phase) * aspect * .4, sin(tau * b + phase * 1.3) * .36);
+  vec2 roam = vec2(cos(tau * a + phase) * aspect * .4, sin(tau * b + phase * 1.3) * .36);
+  return mix(roam, lure + (roam - lure) * .35, .45);
 }
 
 vec3 theme(vec2 uv, vec2 p, float t) {
   float aspect = u_res.x / u_res.y;
   vec2 w = p + vec2(0., u_scroll * .35);
   vec3 col = mix(vec3(.01, .05, .06), vec3(.03, .11, .12), fbm(w * 1.5 + t * .02));
-  // the pointer's rings bend the light
-  vec2 ptr = pointerP() + vec2(0., u_scroll * .35);
-  float pd = length(w - ptr);
-  float rings = sin(pd * 70. - t * 5.) * exp(-pd * 7.);
-  vec2 bent = w + normalize(w - ptr + 1e-4) * rings * .004;
+  vec2 lure = pointerP() + vec2(0., u_scroll * .35);
+  vec2 bent = w;
   float caustic = 1. - smoothstep(0., .03, voronoiEdge(bent * 4.5 + vec2(t * .12, t * .08) + fbm(bent * 1.6 + t * .1) * 1.4));
-  col += vec3(.25, .5, .45) * caustic * .09 * (.5 + fbm(bent * 3. - t * .05));
-  // koi, under the surface
+  col += vec3(.25, .5, .45) * caustic * .045 * (.4 + fbm(bent * 3. - t * .05));
+  // koi, under the surface: the sprite (head to the left, drawn straight)
+  // laid along the curve each fish has just swum, so its body bends through
+  // turns, with a tail beat that grows toward the tail
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
     float tau = t * (.09 + .02 * fi);
-    float size = .028 + .008 * hash(vec2(fi, 3.));
-    // the body: a chain of tapering capsules along the path it just swam,
-    // a wave running down it toward the tail
-    vec2 pts[9];
-    for (int j = 0; j < 9; j++) {
+    float len = .26 + .07 * hash(vec2(fi, 3.));
+    float thick = len * 150. / 424.;
+    // path time per body length, from how fast the head is moving
+    float speed = length(koiPath(fi, tau + .01, aspect, lure) - koiPath(fi, tau, aspect, lure)) / .01;
+    float step_ = len / 6. / max(speed, .05);
+    float beat = t * (4.5 + hash(vec2(fi, 4.))) + fi * 2.;
+    vec2 spine[7];
+    for (int j = 0; j < 7; j++) {
       float fj = float(j);
-      vec2 c = koiPath(fi, tau - fj * .03, aspect);
-      vec2 ahead = koiPath(fi, tau - fj * .03 + .01, aspect) - c;
-      vec2 side = normalize(vec2(-ahead.y, ahead.x) + 1e-5);
-      pts[j] = c + side * sin(t * 5. - fj * .8) * .0035 * fj;
+      vec2 c = koiPath(fi, tau - fj * step_, aspect, lure);
+      vec2 ahead = normalize(koiPath(fi, tau - fj * step_ + .002, aspect, lure) - c + 1e-6);
+      float u = fj / 6.;
+      // the beat: little at the head, a free swing at the tail
+      spine[j] = c + vec2(-ahead.y, ahead.x) * sin(beat - u * 3.2) * len * (.015 + .11 * u * u);
     }
-    float best = 9., along = 0.;
-    for (int j = 0; j < 8; j++) {
-      float fj = float(j);
-      vec2 a = pts[j], b = pts[j + 1];
+    float best = 1e9, u = 0., side = 0.;
+    for (int j = 0; j < 6; j++) {
+      vec2 a = spine[j], b = spine[j + 1];
       vec2 pa = w - a, ba = b - a;
       float hseg = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-8), 0., 1.);
-      float u = (fj + hseg) / 8.;
-      float r = size * (u < .15 ? mix(.75, 1., u / .15) : mix(1., .22, (u - .15) / .85));
-      float d = length(pa - ba * hseg) - r;
-      if (d < best) { best = d; along = u; }
+      vec2 off = pa - ba * hseg;
+      float d = dot(off, off);
+      if (d < best) {
+        best = d;
+        // past the tail the projection runs on, so nothing beyond it maps onto the sprite
+        float along = j == 5 ? dot(pa, ba) / max(dot(ba, ba), 1e-8) : hseg;
+        u = (float(j) + along) / 6.;
+        side = (ba.x * pa.y - ba.y * pa.x) / max(length(ba), 1e-6);
+      }
     }
-    // the tail fin, a fan behind the last segment
-    vec2 tailDir = normalize(pts[8] - pts[7] + 1e-5);
-    vec2 tl = w - pts[8];
-    vec2 tailLocal = vec2(dot(tl, tailDir), dot(tl, vec2(-tailDir.y, tailDir.x)));
-    float tail = max(length(tailLocal) - size * .9, abs(tailLocal.y) - tailLocal.x * .9);
-    best = min(best, max(tail, -tailLocal.x));
-    float shadow = smoothstep(.02, -.01, best - .01);
-    col *= 1. - shadow * .25;
-    float body = smoothstep(PX * 2., -PX * 2., best);
-    float spots = noise(vec2(along * 5. + fi * 13., fi));
-    vec3 koiCol = hash(vec2(fi, 9.)) > .5
-      ? mix(vec3(.95, .92, .86), vec3(1., .38, .1), step(.5, spots))
-      : mix(vec3(1., .45, .1), vec3(1., .6, .2), spots);
-    koiCol = mix(koiCol, col, .25);
-    col = mix(col, koiCol, body * .9);
+    // the head reaches a little past the front of the spine
+    vec2 front = w - spine[0];
+    vec2 headDir = normalize(spine[0] - spine[1] + 1e-6);
+    float lead = dot(front, headDir);
+    if (lead > 0.) {
+      u = -lead / len;
+      side = headDir.x * front.y - headDir.y * front.x;
+    }
+    // only near the body: further out, the nearest segment says nothing useful
+    if (sqrt(best) > thick * .9 && lead <= 0.) continue;
+    vec2 cell = vec2(u * .92 + .06, .5 + side / thick);
+    vec2 shade = cell + vec2(-.03, -.12);
+    float shadow = 0.;
+    if (shade.x > 0. && shade.x < 1. && shade.y > 0. && shade.y < 1.) shadow = textureLod(u_sprite, shade, 2.).a;
+    col *= 1. - shadow * .35;
+    if (cell.x > 0. && cell.x < 1. && cell.y > 0. && cell.y < 1.) {
+      vec4 koi = texture(u_sprite, cell);
+      vec3 fish = koi.rgb / max(koi.a, 1e-3);
+      // some are gold rather than red
+      float redness = clamp((fish.r - fish.g) * 1.5, 0., 1.);
+      if (hash(vec2(fi, 9.)) > .55) fish = mix(fish, vec3(1., .55, .12), redness);
+      fish = mix(fish, col, .18);
+      col = mix(col, fish, koi.a * .95);
+    }
   }
-  col += vec3(.5, .8, .75) * max(rings, 0.) * .12;
   // lily pads on the surface
   vec2 lq = w * 3. + vec2(t * .015, 0.);
   vec2 lid = floor(lq);
@@ -829,9 +849,9 @@ vec3 theme(vec2 uv, vec2 p, float t) {
     float pad = length(ld) - .22;
     float notch = step(abs(atan(ld.x, ld.y)), .25);
     float cover = smoothstep(PX * 6., -PX * 6., pad) * (1. - notch);
-    float vein = smoothstep(.04, 0., abs(sin(atan(ld.y, ld.x) * 5.)) * length(ld)) * .35;
-    vec3 green = mix(vec3(.06, .22, .09), vec3(.13, .34, .13), smoothstep(.22, 0., length(ld))) * (1. - vein);
-    col = mix(col, green, cover * .92);
+    vec3 green = mix(vec3(.05, .16, .07), vec3(.11, .27, .11), smoothstep(.22, .02, length(ld) + .05 * noise(ld * 20.)));
+    green *= .85 + .15 * smoothstep(-.1, .2, ld.x - ld.y);
+    col = mix(col, green, cover * .8);
     if (hash(lid + 5.) > .6) {
       float bloom = smoothstep(.07, .03, length(ld - vec2(.06, -.04)));
       col = mix(col, vec3(1., .72, .82), bloom * .9);
@@ -910,27 +930,18 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   // shimmering on the water, palms framing the hero; it all scrolls away
   // with the hero.
   vaporwave: shader(`
-float frond(vec2 q, vec2 crown, float angle, float len) {
-  vec2 l = rot(angle) * (q - crown);
-  float x = l.x;
-  float droop = l.y + .9 * x * x / len;
-  float width = .024 * sin(3.1416 * clamp(x / len, 0., 1.)) + .003;
-  return step(0., x) * step(x, len) * smoothstep(width, width * .4, abs(droop));
-}
+uniform sampler2D u_sprite;
 
-float palm(vec2 q, vec2 base, float lean) {
-  // trunk: a gentle curve
-  float hgt = .32;
-  float y = clamp((q.y - base.y) / hgt, 0., 1.);
-  float trunkX = base.x + lean * y * y * hgt;
-  float trunk = step(base.y, q.y) * step(q.y, base.y + hgt) * smoothstep(.009, .004, abs(q.x - trunkX));
-  vec2 crown = vec2(base.x + lean * hgt, base.y + hgt);
-  float leaves = 0.;
-  for (int i = 0; i < 9; i++) {
-    float fi = float(i);
-    leaves = max(leaves, frond(q, crown, -2.9 + fi * .72 + sin(fi * 2.3) * .15, .15 + .035 * sin(fi * 1.7)));
-  }
-  return max(trunk, leaves);
+/* A palm silhouette (the sprite, 519x880, trunk foot at the bottom middle)
+   standing at base, height tall, mirrored when flip is -1, its crown
+   swaying a little more than its trunk. */
+float palm(vec2 q, vec2 base, float height, float flip, float sway) {
+  vec2 l = (q - base) / height;
+  float v = l.y;
+  l.x -= sway * v * v;
+  vec2 cell = vec2(.5 + flip * l.x / (519. / 880.), 1. - v);
+  if (cell.x < 0. || cell.x > 1. || cell.y < 0. || cell.y > 1.) return 0.;
+  return texture(u_sprite, cell).a;
 }
 
 vec3 theme(vec2 uv, vec2 p, float t) {
@@ -945,26 +956,35 @@ vec3 theme(vec2 uv, vec2 p, float t) {
     col = mix(col, vec3(.42, .22, .55), smoothstep(.12, .32, y));
     col = mix(col, vec3(.12, .07, .22), smoothstep(.3, .55, y));
     float d = length(q - sp);
-    float cut = (q.y < sp.y - .02 && fract((sp.y - q.y) * 32.) < .3) ? 0. : 1.;
+    // the stripes slide down through the sun's lower half
+    float cut = (q.y < sp.y - .02 && fract((sp.y - q.y) * 32. - t * .4) < .3 * smoothstep(sp.y, sp.y - .13, q.y) + .05) ? 0. : 1.;
     vec3 sunCol = mix(vec3(1., .5, .7), vec3(1., .9, .55), smoothstep(-.13, .13, q.y - sp.y));
     col = mix(col, sunCol, smoothstep(.13 + PX * 2., .13 - PX * 2., d) * cut);
     col += vec3(1., .6, .75) * exp(-max(d - .13, 0.) * 8.) * .25;
-    // soft pastel clouds
-    float cl = fbm(vec2(q.x * 1.5 + t * .01, y * 6.));
+    // stars coming out high up
+    col += vec3(1., .9, 1.) * stars(q, 40., .12, t) * smoothstep(.2, .45, y) * .8;
+    // soft pastel clouds drifting by
+    float cl = fbm(vec2(q.x * 1.5 + t * .04, y * 6. + sin(t * .1) * .2));
     col = mix(col, vec3(1., .8, .9), smoothstep(.55, .8, cl) * smoothstep(.04, .12, y) * .35);
   } else {
     // the sea, with the sun's broken reflection
     col = mix(vec3(.26, .14, .36), vec3(.07, .04, .12), smoothstep(0., -.35, y));
-    float streak = .5 + .5 * sin(q.y * 260. + noise(vec2(q.x * 30., q.y * 80. + t)) * 6.);
+    // waves roll in toward the viewer: closer rows are wider apart and move faster
+    float depth = .02 / max(-y, .002);
+    float wave = sin(depth * 40. + t * 1.6 + noise(vec2(q.x * 6. * depth, depth * 3. + t * .3)) * 4.);
+    float streak = .5 + .5 * wave;
+    // the sun's reflection breaks into glints that flicker as the waves pass
+    float glint = smoothstep(.75, 1., streak) * step(.4, noise(vec2(q.x * 60., depth * 8. - t * 2.)));
     float column = exp(-abs(q.x - sp.x) / (.06 + -y * .3)) * exp(y * 3.);
-    col += vec3(1., .7, .75) * column * smoothstep(.55, 1., streak) * .7;
-    col += vec3(.6, .5, .9) * smoothstep(.85, 1., streak) * exp(y * 6.) * .15;
+    col += vec3(1., .7, .75) * column * (smoothstep(.5, 1., streak) * .45 + glint * .8);
+    col += vec3(.6, .5, .9) * smoothstep(.85, 1., streak) * exp(y * 5.) * .18;
   }
   col += vec3(1., .75, .85) * exp(-abs(y) * 60.) * .4;
   // palms framing the hero, swaying a little
-  float sway = sin(t * .7) * .02;
-  float trees = max(palm(q, vec2(-aspect * .5 + .06, H - .02), .25 + sway), palm(q, vec2(aspect * .5 - .08, H - .02), -.3 + sway));
-  trees = max(trees, palm(q, vec2(aspect * .5 - .2, H - .02), -.12 + sway));
+  float sway = sin(t * .9) * .03 + sin(t * 2.3) * .008;
+  float trees = palm(q, vec2(-aspect * .5 + .1, H - .03), .58, 1., sway + .02);
+  trees = max(trees, palm(q, vec2(aspect * .5 - .12, H - .03), .62, -1., sway - .02));
+  trees = max(trees, palm(q, vec2(aspect * .5 - .32, H - .03), .4, 1., sway * 1.4));
   col = mix(col, vec3(.08, .03, .12), trees);
   // a VHS line rolling down
   col += vec3(.6, .5, .8) * exp(-abs(fract(uv.y + t * .05) - .5) * 80.) * .04;

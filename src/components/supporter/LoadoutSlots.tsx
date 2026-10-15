@@ -58,9 +58,12 @@ function motifSrc(id: SupporterMotifId): string {
 /* A frame's still around the viewer's avatar, fitted into a square. */
 export function FrameThumb({ frame, avatar, size }: { frame: SupporterAvatarFrameId | null; avatar: string | undefined; size: number }) {
   const [left, top, width, height] = frame ? supporterFrameGeometry(frame).box : [0, 0, 1, 1];
-  const scale = size / Math.max(width, height, 1.6);
-  const avatarLeft = (size - width * scale) / 2 - left * scale;
-  const avatarTop = (size - height * scale) / 2 - top * scale;
+  // fit the art and the avatar together: a frame's canvas need not contain the avatar (a hat sits above it)
+  const minX = Math.min(left, 0), minY = Math.min(top, 0);
+  const spanX = Math.max(left + width, 1) - minX, spanY = Math.max(top + height, 1) - minY;
+  const scale = size / Math.max(spanX, spanY, 1.6);
+  const avatarLeft = (size - spanX * scale) / 2 - minX * scale;
+  const avatarTop = (size - spanY * scale) / 2 - minY * scale;
   return (
     <span className="relative block" style={{ width: size, height: size }}>
       <span className="absolute" style={{ left: avatarLeft, top: avatarTop, width: scale, height: scale }}>

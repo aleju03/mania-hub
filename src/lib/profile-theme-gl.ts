@@ -35,7 +35,14 @@ interface Compiled {
   chartBucket: WebGLUniformLocation | null;
   chartLaneEnd: WebGLUniformLocation | null;
   judgements: WebGLUniformLocation | null;
+  sprite: WebGLUniformLocation | null;
 }
+
+/* Licensed art a theme's shader draws (sources in public/images/profile-themes/SOURCES.md). */
+const THEME_SPRITES: Partial<Record<SupporterProfileThemeId, string>> = {
+  koi: "/images/profile-themes/koi.png",
+  vaporwave: "/images/profile-themes/palm.png",
+};
 
 const STILL_TIME = 6.5;
 
@@ -53,6 +60,9 @@ class ThemeContext {
   private chartKey: string | null = null;
   private judgementTexture: WebGLTexture | null;
   private judgementSource: HTMLCanvasElement | null = null;
+  /* Each theme's sprite once it has loaded (unit 4), and a blank until then. */
+  private sprites = new Map<SupporterProfileThemeId, WebGLTexture | null>();
+  private blank: WebGLTexture | null = null;
   /* The site's default judgements, built once the first time a shader asks. */
   private defaultJudgements: HTMLCanvasElement | null | undefined;
 
@@ -78,6 +88,41 @@ class ThemeContext {
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, this.judgementTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
+  /* Binds the theme's sprite on unit 4, loading it the first time. */
+  private bindSprite(theme: SupporterProfileThemeId) {
+    const { gl } = this;
+    if (!this.blank) {
+      this.blank = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, this.blank);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+    }
+    const url = THEME_SPRITES[theme];
+    if (url && !this.sprites.has(theme)) {
+      this.sprites.set(theme, null);
+      const image = new Image();
+      image.decoding = "async";
+      image.onload = () => {
+        const texture = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE4);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.activeTexture(gl.TEXTURE0);
+        this.sprites.set(theme, texture);
+      };
+      image.src = url;
+    }
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, this.sprites.get(theme) ?? this.blank);
     gl.activeTexture(gl.TEXTURE0);
   }
 
@@ -196,6 +241,7 @@ class ThemeContext {
           chartBucket: gl.getUniformLocation(program, "u_chartBucket"),
           chartLaneEnd: gl.getUniformLocation(program, "u_chartLaneEnd"),
           judgements: gl.getUniformLocation(program, "u_judgements"),
+          sprite: gl.getUniformLocation(program, "u_sprite"),
         };
       }
     }
@@ -240,6 +286,10 @@ class ThemeContext {
       gl.uniform1i(compiled.notes, 0);
       const accent = notes?.accent ?? [0.3, 0.5, 1];
       gl.uniform3f(compiled.accent, accent[0], accent[1], accent[2]);
+    }
+    if (compiled.sprite) {
+      this.bindSprite(theme);
+      gl.uniform1i(compiled.sprite, 4);
     }
     if (compiled.judgements) {
       this.uploadJudgements(notes?.judgements ?? null);
