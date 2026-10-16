@@ -268,7 +268,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     expect(popup.queryByText("does not count")).toBeNull();
   });
 
-  it("explains a rate play outside the chart's best two without labelling it vibro", async () => {
+  it("explains a rate play that is not the chart's best without labelling it vibro", async () => {
     fetchDanEvidence.mockResolvedValue({
       clears: [],
       rejected: [{
@@ -283,7 +283,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recent" }));
     fireEvent.click(await screen.findByText("Recent 103"));
     expect(within(screen.getByTestId("map-rating-state")).getByText(
-      "Only your two best rate plays on the same chart count toward Dan. This play is outside those two.",
+      "Only your best rate play on the same chart counts toward Dan. This play is not it.",
     )).toBeTruthy();
     expect(screen.queryByText(/Vibro detected/)).toBeNull();
   });

@@ -2052,6 +2052,10 @@ msgstr "<0>{username} no está trackeado</0>, así que aquí solo se califican s
 msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
 msgstr "<0>/subscribe feed:Top plays country:{country}</0> publica cada nuevo top play de {country} en el canal donde se use. Los demás feeds son snipes y nuevos mapas de farm, y <1>min_pp</1> omite los scores por debajo de un umbral. <2>/subscriptions</2> lista los feeds activos de un servidor y <3>/unsubscribe</3> detiene uno. Para suscribirte se necesita el permiso Administrar servidor."
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "<0>#{global}</0> global"
+msgstr "<0>#{global}</0> global"
+
 #: src/routes/recommendations.tsx
 msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
 msgstr "<0>+pp</0> es la ganancia estimada si logras el puntaje objetivo, ponderada contra tus top plays actuales."
@@ -2124,9 +2128,8 @@ msgstr "<0>osu!stable</0> guarda cada mapa como archivos sueltos: abre osu!/Song
 msgid "<0>Page</0><1/><2>of {totalPages}</2>"
 msgstr "<0>Página</0><1/><2>de {totalPages}</2>"
 
-#. placeholder {0}: topSharePercent(overallPercentile)
-#. placeholder {1}: overallPercentile.population.toLocaleString("en-US")
-#. placeholder {2}: mode!.keyCount
+#. placeholder {0}: topSharePercent(percentile)
+#. placeholder {1}: percentile.population.toLocaleString("en-US")
 #. placeholder {2}: mode.keyCount
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
@@ -6556,8 +6559,12 @@ msgid "Each skill's dan is the average of your best 20 passes in it, by the leve
 msgstr "El dan de cada skill es el promedio de tus 20 mejores pases en él, según el nivel que acreditó cada uno. Un skill necesita al menos cuatro pases. Tu dan es el promedio de los dan de tus skills, así que skills en 10, 9, 7 y 6 dan 8."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
-msgstr "Cada skillset promedia hasta {averageWindow} clears. Solo cuentan tus dos mejores plays de rate por chart. Con menos evidencia, promedia lo que tengas y la estimación todavía se está completando."
+msgid "Each skillset averages up to {averageWindow} clears. Only your best rate play per chart counts. With less evidence, it averages what you have and the estimate is still filling in."
+msgstr "Cada skillset promedia hasta {averageWindow} clears. Solo cuenta tu mejor play de rate por chart. Con menos evidencia, promedia lo que tengas y la estimación todavía se está completando."
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
+#~ msgstr "Cada skillset promedia hasta {averageWindow} clears. Solo cuentan tus dos mejores plays de rate por chart. Con menos evidencia, promedia lo que tengas y la estimación todavía se está completando."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
@@ -12268,12 +12275,20 @@ msgstr "solo tú puedes abrirlas"
 #~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
-msgid "Only your two best rate plays on the same chart count per ladder, rate reuploads included."
-msgstr "Por escala solo cuentan tus dos mejores plays con rate en el mismo chart, contando los reuploads con rate."
+msgid "Only your best rate play on the same chart counts per ladder, rate reuploads included."
+msgstr "Por escala solo cuenta tu mejor play con rate en el mismo chart, contando los reuploads con rate."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Only your two best rate plays on the same chart count toward Dan. This play is outside those two."
-msgstr "Solo tus dos mejores plays de rate en el mismo chart cuentan para el dan. Este play queda fuera de esos dos."
+msgid "Only your best rate play on the same chart counts toward Dan. This play is not it."
+msgstr "Solo tu mejor play de rate en el mismo chart cuenta para el dan. Este play no es ese."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Only your two best rate plays on the same chart count per ladder, rate reuploads included."
+#~ msgstr "Por escala solo cuentan tus dos mejores plays con rate en el mismo chart, contando los reuploads con rate."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Only your two best rate plays on the same chart count toward Dan. This play is outside those two."
+#~ msgstr "Solo tus dos mejores plays de rate en el mismo chart cuentan para el dan. Este play queda fuera de esos dos."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
@@ -17931,6 +17946,10 @@ msgid "the chart's level +0.35"
 msgstr "el nivel del chart +0.35"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.37"
+msgstr "el nivel del chart +0.37"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.38"
 #~ msgstr "el nivel del chart +0.38"
 
@@ -17967,12 +17986,20 @@ msgid "the chart's level +0.86"
 msgstr "el nivel del chart +0.86"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.95"
+msgstr "el nivel del chart +0.95"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.1"
 msgstr "el nivel del chart +1.1"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.18"
 msgstr "el nivel del chart +1.18"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +1.37"
+msgstr "el nivel del chart +1.37"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.5"
@@ -19651,6 +19678,10 @@ msgstr "Hasta {BUG_REPORT_MAX_SCREENSHOTS} imágenes."
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
 msgstr "Hasta 50 MB."
+
+#: src/routes/dan-estimates.tsx
+msgid "up to the chart's level +0.1"
+msgstr "hasta el nivel del chart +0.1"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Up to three passes in a skill are left out of its average when they credit more than five levels below the average of your best five in it. They still show in the dan window, marked <0>not counted</0>."

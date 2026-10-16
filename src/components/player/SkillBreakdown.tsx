@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { Link } from "@tanstack/react-router";
 import type { I18n, MessageDescriptor } from "@lingui/core";
 import { msg, plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -10,7 +11,10 @@ import { useNoDans } from "../../store";
 import { DanLevelBadge } from "./DanLevelBadge";
 import { SkillHistoryButton } from "./SkillHistoryButton";
 import { OverallMethodToggle, RollingOverall } from "./OverallMethodToggle";
-import { hasEtternaOverall, modeOverall, useOverallMethod } from "../../lib/overall-method";
+import { hasEtternaOverall, modeOverall, overallAxisFor, useOverallMethod, type OverallMethod } from "../../lib/overall-method";
+import { LEADERBOARD_KEY_COUNTS, LEADERBOARD_PAGE_SIZE, type LeaderboardKeyCount } from "../../lib/skill-leaderboards";
+import { isSupportedCountryScope } from "../../lib/country";
+import { CountryFlag } from "../ui/CountryFlag";
 import {
   lnPlayShare,
   radarAnchor,
@@ -228,6 +232,53 @@ function prismLabel(version: string): string {
   return calc ? `Prism 0.${calc}` : "Prism";
 }
 
+// The line under the Overall: its leaderboard ranks, worldwide and in the
+// player's country, each linking to its page of the board. Before the backend
+// has a board to rank against, the population percentile stands in.
+function OverallStanding({ mode, method, className }: { mode: MyDataSkillMode; method: OverallMethod; className: string }) {
+  const locale = useLocale();
+  const rank = mode.ranks?.[overallAxisFor(method, hasEtternaOverall(mode))];
+  const { percentile } = modeOverall(mode, method);
+  if (!rank) {
+    return (
+      <div className={`text-[11px] text-osu-l2 ${className}`}>
+        {percentile ? (
+          <Trans>
+            <span className="font-semibold text-osu-pink-light">top {topSharePercent(percentile)}%</span>
+            {" "}of {percentile.population.toLocaleString("en-US")} tracked {mode.keyCount}K mains
+          </Trans>
+        ) : null}
+      </div>
+    );
+  }
+  const keys = (LEADERBOARD_KEY_COUNTS as readonly number[]).includes(mode.keyCount) ? mode.keyCount as LeaderboardKeyCount : null;
+  const boardLink = (country: string, position: number, children: ReactElement) => keys && isSupportedCountryScope(country) ? (
+    <Link
+      to="/rankings"
+      search={{ tab: "skills", keys, country, page: Math.ceil(position / LEADERBOARD_PAGE_SIZE) }}
+      className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
+    >
+      {children}
+    </Link>
+  ) : <span className="inline-flex items-center gap-1.5">{children}</span>;
+  const global = formatNumber(rank.global, locale);
+  const countryRank = formatNumber(rank.countryRank, locale);
+  return (
+    <div className={`flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-osu-l2 ${className}`}>
+      {boardLink("GLOBAL", rank.global, (
+        <span><Trans><span className="font-semibold text-osu-pink-light">#{global}</span> global</Trans></span>
+      ))}
+      <span className="h-3 w-px shrink-0 bg-white/15" aria-hidden="true" />
+      {boardLink(rank.country, rank.countryRank, (
+        <>
+          <CountryFlag code={rank.country} />
+          <span className="font-semibold text-white tabular-nums">#{countryRank}</span>
+        </>
+      ))}
+    </div>
+  );
+}
+
 // Past this many jobs ahead, the queue line stops printing the number.
 const QUEUE_AHEAD_SHOWN_MAX = 100;
 
@@ -239,7 +290,7 @@ export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, use
   const empty = skillEmptyState(skills, mode, own);
   if (empty) return mode?.dan ? <div className="space-y-3">{empty}<DanChips mode={mode} onSelect={onSelectDan} /></div> : empty;
   const entries = skillModeEntries(mode!);
-  const { value: overall, percentile: overallPercentile } = modeOverall(mode!, overallMethod);
+  const { value: overall } = modeOverall(mode!, overallMethod);
   const max = entries[0]?.value ?? 1;
   return (
     <div>
@@ -260,16 +311,7 @@ export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, use
         <RefreshingChip skills={skills!} />
         {userId ? <span className="ml-auto self-center"><SkillHistoryButton userId={userId} keyCount={mode!.keyCount} /></span> : null}
       </div>
-      {overallPercentile ? (
-        <div className="mb-2.5 text-[11px] text-osu-l2">
-          <Trans>
-            <span className="font-semibold text-osu-pink-light">top {topSharePercent(overallPercentile)}%</span>
-            {" "}of {overallPercentile.population.toLocaleString("en-US")} tracked {mode!.keyCount}K mains
-          </Trans>
-        </div>
-      ) : (
-        <div className="mb-2.5" />
-      )}
+      <OverallStanding mode={mode!} method={overallMethod} className="mb-2.5" />
       <div className="mb-3">
         <DanChips mode={mode!} onSelect={onSelectDan} />
       </div>
@@ -570,7 +612,7 @@ export function SkillModePanel({
   const overallMethod = useOverallMethod(mode.keyCount);
   const entries = skillModeEntries(mode);
   const accent = entries[0]?.color ?? "#8f6bd8";
-  const { value: overall, percentile: overallPercentile } = modeOverall(mode, overallMethod);
+  const { value: overall } = modeOverall(mode, overallMethod);
   const max = entries[0]?.value ?? 1;
   const version = mode.minaCalc;
   return (
@@ -595,14 +637,7 @@ export function SkillModePanel({
             <ProvisionalChip mode={mode} />
             <RefreshingChip skills={skills} />
           </div>
-          {overallPercentile ? (
-            <div className="mt-1 text-[11px] text-osu-l2">
-              <Trans>
-                <span className="font-semibold text-osu-pink-light">top {topSharePercent(overallPercentile)}%</span>
-                {" "}of {overallPercentile.population.toLocaleString("en-US")} tracked {mode.keyCount}K mains
-              </Trans>
-            </div>
-          ) : null}
+          <OverallStanding mode={mode} method={overallMethod} className="mt-1" />
         </div>
         <div className="ml-auto flex items-center gap-3">
           <DanChips mode={mode} onSelect={onSelectDan ? (side) => onSelectDan(side, mode) : undefined} />

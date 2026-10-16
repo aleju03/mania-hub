@@ -37,6 +37,11 @@ export interface SkillHistoryNote {
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
+    date: "2026-10-16",
+    text: "Only your best rate play on the same chart now counts toward Dan, instead of your best two. MSD still counts two.",
+    keyCounts: [4, 6, 7],
+  },
+  {
     date: "2026-10-07",
     text: "4K Invert plays now count toward MSD and LN dan.",
     keyCounts: [4],

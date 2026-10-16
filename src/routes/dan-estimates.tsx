@@ -142,7 +142,7 @@ const RICE_4K_POPULATION: Array<{ level: string; players: number }> = [
 
 // Set by hand whenever this page's own text changes: the deploy checkout is
 // shallow, so git cannot supply the date at build time.
-const LAST_EDITED = "2026-10-09";
+const LAST_EDITED = "2026-10-16";
 
 function DanEstimatesPage() {
   const { t } = useLingui();
@@ -431,7 +431,7 @@ function DanEstimatesPage() {
             <ul className="space-y-2 pl-5">
               <Li>
                 <Trans>
-                  Only your two best rate plays on the same chart count per ladder, rate reuploads
+                  Only your best rate play on the same chart counts per ladder, rate reuploads
                   included.
                 </Trans>
               </Li>
@@ -1250,31 +1250,32 @@ function CreditCurveTabs() {
   const stableFormulaNote = t`Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear. On charts with a lot of long notes the recalculation is only close to what stable would show, because the two clients judge holds differently. The Classic mod makes no difference.`;
   const tabs: Array<{
     label: string;
-    ladder: { key: string; bar: number; side: "rc" | "ln"; keyCount: number; example: number; jackCurve?: boolean };
+    ladder: { key: string; bar: number; side: "rc" | "ln"; keyCount: number; example: number; jackCurve?: boolean; sevenKCurve?: boolean };
     head: string[];
     note: string;
     rows: string[][];
   }> = [
     {
       label: t`Regular 4K/6K/7K`,
-      ladder: { key: "4k-regular", bar: 0.96, side: "rc" as const, keyCount: 4, example: 3729620, jackCurve: true },
+      ladder: { key: "4k-regular", bar: 0.96, side: "rc" as const, keyCount: 4, example: 3729620, jackCurve: true, sevenKCurve: true },
       /* The third column is the 4K jack tile's bonus (DAN_CREDIT_JACK_BONUS_SCALE):
-         half of the shared one above the bar, the same below it. */
-      head: [t`Stable-formula acc (96%)`, t`Credit`, t`4K jack`],
+         half of the shared one above the bar, the same below it. The fourth is
+         7K's, read through DAN_CREDIT_7K_ACCURACY_MAP above the bar. */
+      head: [t`Stable-formula acc (96%)`, t`Credit`, t`4K jack`, "7K"],
       rows: [
-        ["100%", t`the chart's level +1.5`, t`the chart's level +0.75`],
-        ["99.5%", t`the chart's level +1.1`, t`the chart's level +0.55`],
-        ["99%", t`the chart's level +0.7`, t`the chart's level +0.35`],
-        ["98.7%", t`the chart's level +0.2`, t`the chart's level +0.1`],
-        ["98%", t`the chart's level +0.12`, t`the chart's level +0.06`],
-        ["97.5%", t`the chart's level +0.06`, t`the chart's level +0.03`],
-        ["96-97%", t`the chart's full level`, t`the chart's full level`],
-        ["95.5%", t`the chart's level -0.25`, t`the chart's level -0.25`],
-        ["95%", t`the chart's level -0.51`, t`the chart's level -0.51`],
-        ["94%", t`the chart's level -0.76`, t`the chart's level -0.76`],
-        ["92%", t`the chart's level -1.25`, t`the chart's level -1.25`],
-        ["91%", t`the chart's level -1.5`, t`the chart's level -1.5`],
-        [t`below 91%`, t`nothing`, t`nothing`],
+        ["100%", t`the chart's level +1.5`, t`the chart's level +0.75`, t`the chart's level +1.5`],
+        ["99.5%", t`the chart's level +1.1`, t`the chart's level +0.55`, t`the chart's level +1.37`],
+        ["99%", t`the chart's level +0.7`, t`the chart's level +0.35`, t`the chart's level +1.1`],
+        ["98.7%", t`the chart's level +0.2`, t`the chart's level +0.1`, t`the chart's level +0.95`],
+        ["98%", t`the chart's level +0.12`, t`the chart's level +0.06`, t`the chart's level +0.37`],
+        ["97.5%", t`the chart's level +0.06`, t`the chart's level +0.03`, t`the chart's level +0.15`],
+        ["96-97%", t`the chart's full level`, t`the chart's full level`, t`up to the chart's level +0.1`],
+        ["95.5%", t`the chart's level -0.25`, t`the chart's level -0.25`, t`the chart's level -0.25`],
+        ["95%", t`the chart's level -0.51`, t`the chart's level -0.51`, t`the chart's level -0.51`],
+        ["94%", t`the chart's level -0.76`, t`the chart's level -0.76`, t`the chart's level -0.76`],
+        ["92%", t`the chart's level -1.25`, t`the chart's level -1.25`, t`the chart's level -1.25`],
+        ["91%", t`the chart's level -1.5`, t`the chart's level -1.5`, t`the chart's level -1.5`],
+        [t`below 91%`, t`nothing`, t`nothing`, t`nothing`],
       ],
       note: stableFormulaNote,
     },
@@ -1346,6 +1347,7 @@ function CreditCurveTabs() {
         side={active.ladder.side}
         keyCount={active.ladder.keyCount}
         jackCurve={active.ladder.jackCurve}
+        sevenKCurve={active.ladder.sevenKCurve}
         example={CHART_EXAMPLES.find((chart) => chart.id === active.ladder.example)}
       />
       <Details summary={t`The credit as a table`}>
@@ -1386,13 +1388,15 @@ function formatCreditOffset(offset: number): string {
   return `${offset < 0 ? "-" : "+"}${body}`;
 }
 
-function CreditCurvePlot({ ladder, bar, side, keyCount, jackCurve, example }: {
+function CreditCurvePlot({ ladder, bar, side, keyCount, jackCurve, sevenKCurve, example }: {
   ladder: string;
   bar: number;
   side: "rc" | "ln";
   keyCount: number;
   /** Also draw the 4K jack tile's damped bonus above the bar, dashed. */
   jackCurve?: boolean;
+  /** Also draw 7K rice's bonus above the bar (DAN_CREDIT_7K_ACCURACY_MAP). */
+  sevenKCurve?: boolean;
   example?: (typeof CHART_EXAMPLES)[number];
 }) {
   const { t } = useLingui();
@@ -1458,6 +1462,12 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, jackCurve, example }: {
   const jackOffsetAt = (value: number) => danCreditOffset(value, bar, danCreditOptionsFor(side, keyCount, jackOptions));
   const jackAboveBarPoints = jackCurve ? sample(bar, 1, jackOffsetAt) : null;
   const jackTop = jackCurve ? jackOffsetAt(1) : null;
+  // 7K reads its accuracy higher above the bar, so its line leaves the shared
+  // one early and meets it again at 100%; labelled where the two are furthest apart.
+  const sevenKOffsetAt = (value: number) => danCreditOffset(value, bar, danCreditOptionsFor(side, 7));
+  const sevenKAboveBarPoints = sevenKCurve ? sample(bar, 1, sevenKOffsetAt) : null;
+  const sevenKLabelAt = 0.9875;
+  const sevenKLabelOffset = sevenKCurve ? sevenKOffsetAt(sevenKLabelAt) : null;
   const hasBarCliff = (options.nearBarCap ?? 0) > 0;
   const belowBarPoints = sample(lo, hasBarCliff ? bar - 1e-6 : bar);
   const aboveBarPoints = sample(bar, 1);
@@ -1564,6 +1574,12 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, jackCurve, example }: {
           <>
             <polyline points={jackAboveBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" strokeDasharray="4 4" className="stroke-osu-blue/50" />
             <text x={x(1)} y={y(jackTop) + 24} textAnchor="end" className="fill-osu-f2 text-[11px]">{t`4K jack`}</text>
+          </>
+        )}
+        {sevenKAboveBarPoints && sevenKLabelOffset != null && (
+          <>
+            <polyline points={sevenKAboveBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-osu-pink" />
+            <text x={x(sevenKLabelAt) - 6} y={y(sevenKLabelOffset) - 2} textAnchor="end" className="fill-osu-pink text-[11px]">7K</text>
           </>
         )}
         {hasBarCliff && barEdgeOffset != null && (
