@@ -12,6 +12,7 @@ import { SettingsDrawer } from "./SettingsDrawer";
 import { preloadSettingsPanel } from "../settings/LazySettingsPanel";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
+import { isPrismViewOn, setPrismView } from "../../lib/prism-view";
 import { useBannedUsersAlert } from "../../lib/banned-users-alert";
 import { useBugReportAlert } from "../../lib/bug-report-alert";
 import { useReplyAlert } from "../../lib/reply-alert";
@@ -189,6 +190,31 @@ function UnreadBadge({ count, className = "" }: { count: number; className?: str
     >
       {count > 99 ? "99+" : count}
     </span>
+  );
+}
+
+/* The admin Prism view (lib/prism-view.ts): 6K-8K from the Prism sidecar's
+   numbers, for this browser only. Admin chrome, so no Lingui. */
+function PrismViewToggle() {
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setOn(isPrismViewOn()), []);
+  return (
+    <div className="min-w-[132px] border-l border-white/[0.07] py-2">
+      <div className="px-3 pb-1 text-[11px] text-osu-f1">Prism</div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setPrismView(!on).catch(() => setBusy(false));
+        }}
+        className="block w-full whitespace-nowrap px-3 py-1.5 text-left text-[12px] font-semibold text-osu-f1 transition-colors hover:text-white disabled:opacity-50 cursor-pointer"
+        role="menuitem"
+      >
+        {on ? "Prism view on" : "Prism view off"}
+      </button>
+    </div>
   );
 }
 
@@ -866,6 +892,7 @@ export function Nav() {
                         ))}
                       </div>
                     ))}
+                    {adminMode ? <PrismViewToggle /> : null}
                   </div>
                 )}
               </div>
