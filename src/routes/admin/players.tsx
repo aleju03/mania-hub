@@ -7,6 +7,7 @@ import { AddVideoPanel } from "../../components/admin/players/AddVideoPanel";
 import { BannedUsersPanel } from "../../components/admin/players/BannedUsersPanel";
 import { RemovePlaysPanel } from "../../components/admin/players/RemovePlaysPanel";
 import { SupportersPanel } from "../../components/admin/players/SupportersPanel";
+import { TakedownsPanel } from "../../components/admin/players/TakedownsPanel";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { PageTabs } from "../../components/layout/PageTabs";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
@@ -14,12 +15,13 @@ import type { BannedUsersFilter } from "../../lib/banned-users";
 import { useBannedUsersAlert } from "../../lib/banned-users-alert";
 
 /* One admin page for the per-player tools: banned accounts, removing and
- * adding plays, proof videos on plays, restricted players' About pages, and supporters. Each tab is
+ * adding plays, proof videos on plays, restricted players' About pages, supporters, and
+ * takedowns players asked for. Each tab is
  * its own panel under components/admin/players/; the old one-tool URLs
  * (/admin/banned-users, /admin/scores, /admin/about-pages, /admin/supporters)
  * redirect here. */
 
-type PlayersTab = "banned" | "remove" | "add" | "video" | "about" | "supporters";
+type PlayersTab = "banned" | "remove" | "add" | "video" | "about" | "supporters" | "takedowns";
 
 interface PlayersSearch {
   tab?: Exclude<PlayersTab, "banned">;
@@ -27,7 +29,7 @@ interface PlayersSearch {
   page?: number;
 }
 
-const TAB_IDS: PlayersTab[] = ["banned", "remove", "add", "video", "about", "supporters"];
+const TAB_IDS: PlayersTab[] = ["banned", "remove", "add", "video", "about", "supporters", "takedowns"];
 
 export const Route = createFileRoute("/admin/players")({
   validateSearch: (search: Record<string, unknown>): PlayersSearch => {
@@ -64,6 +66,7 @@ function PlayersAdminPage() {
     { id: "video", label: "Add video" },
     { id: "about", label: "About pages" },
     { id: "supporters", label: "Supporters" },
+    { id: "takedowns", label: "Takedowns" },
   ];
 
   return (
@@ -89,6 +92,8 @@ function PlayersAdminPage() {
           <AddVideoPanel />
         ) : tab === "about" ? (
           <AboutPagesPanel />
+        ) : tab === "takedowns" ? (
+          <TakedownsPanel />
         ) : (
           <SupportersPanel />
         )}

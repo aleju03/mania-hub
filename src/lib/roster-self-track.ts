@@ -15,6 +15,7 @@ export type RosterSelfTrackStatus =
   | "not_member"
   | "country_not_tracked"
   | "country_full"
+  | "account_unavailable"
   | "unavailable";
 
 export interface RosterSelfTrackResult {

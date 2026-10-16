@@ -7,7 +7,7 @@ afterEach(() => {
 });
 
 describe("extractBeatmapArchiveFile", () => {
-  it("hits osu.direct's /api/d/ once and reads every range from the presigned redirect target", async () => {
+  it("asks osu.direct last, once, and reads every range from the presigned redirect target", async () => {
     const zip = new JSZip();
     zip.file("bg.jpg", "background bytes");
     const archive = await zip.generateAsync({ type: "nodebuffer" });
@@ -41,5 +41,28 @@ describe("extractBeatmapArchiveFile", () => {
     expect(file.toString()).toBe("background bytes");
     expect(apiCalls).toHaveLength(1);
     expect(storageRanges.length).toBeGreaterThan(1);
+  });
+
+  it("leaves osu.direct alone while a free mirror has the set", async () => {
+    const zip = new JSZip();
+    zip.file("bg.jpg", "background bytes");
+    const archive = await zip.generateAsync({ type: "nodebuffer" });
+    const osuDirectCalls: string[] = [];
+
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://osu.direct/")) {
+        osuDirectCalls.push(url);
+        throw new Error("osu.direct must not be asked");
+      }
+      if (url.startsWith("https://mirror.lisek.cc/")) {
+        return new Response(new Uint8Array(archive), { headers: { "content-length": String(archive.length) } });
+      }
+      return new Response("missing", { status: 404 });
+    }));
+
+    const file = await extractBeatmapArchiveFile("2", "bg.jpg");
+    expect(file.toString()).toBe("background bytes");
+    expect(osuDirectCalls).toEqual([]);
   });
 });

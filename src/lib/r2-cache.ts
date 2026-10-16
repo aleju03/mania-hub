@@ -1556,6 +1556,50 @@ export async function deleteUploadedReplayObjects(id: string): Promise<void> {
   }
 }
 
+export interface ScoreReplayPurgeResult {
+  deleted: number;
+  failed: number;
+}
+
+// An owner takedown's replay half: the cached .osr of each osu! score and
+// every parsed artifact of it, across parsed versions 1..`parsedVersion` and
+// every mode/key-count variant (one LIST per version, which a few hundred
+// scores keep cheap). `deleted` counts delete requests, a never-cached .osr
+// included, since R2 answers a missing key the same; `failed` counts scores.
+export async function deleteCachedScoreReplays(scoreIds: readonly number[], parsedVersion: number): Promise<ScoreReplayPurgeResult> {
+  const r2 = getClient();
+  if (!r2) return { deleted: 0, failed: 0 };
+  let deleted = 0;
+  let failed = 0;
+  const purgeOne = async (scoreId: number) => {
+    const keys = [getReplayStorageKey(scoreId)];
+    for (let version = 1; version <= parsedVersion; version++) {
+      const listed = await r2.send(new ListObjectsV2Command({
+        Bucket: REPLAY_CACHE_BUCKET,
+        Prefix: `${PARSED_REPLAY_PREFIX}v${version}/${scoreId}-`,
+      }));
+      for (const entry of listed.Contents ?? []) if (entry.Key) keys.push(entry.Key);
+    }
+    for (const key of keys) {
+      assertReplayCacheKey(key);
+      await r2.send(new DeleteObjectCommand({ Bucket: REPLAY_CACHE_BUCKET, Key: key }));
+      deleted += 1;
+    }
+  };
+  const queue = scoreIds.filter((id) => Number.isSafeInteger(id) && id > 0);
+  const workers = Array.from({ length: Math.min(6, queue.length) }, async () => {
+    for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+      try {
+        await purgeOne(next);
+      } catch {
+        failed += 1;
+      }
+    }
+  });
+  await Promise.all(workers);
+  return { deleted, failed };
+}
+
 // Every packed-artifact version a delete has to sweep; add to it when
 // UPLOADED_REPLAY_PACKED_VERSION in uploaded-replay-payload.ts bumps.
 const UPLOADED_REPLAY_PACKED_VERSIONS = [1];
