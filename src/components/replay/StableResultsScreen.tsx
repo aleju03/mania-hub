@@ -47,6 +47,7 @@ const OUTRO_HOLD_MS = 1800;
 const FADE_TO_BLACK_MS = 130;
 const BLACK_HOLD_MS = 200;
 const FADE_IN_MS = 430;
+const RANKING_BACKGROUND_BRIGHTNESS = 0.6;
 /** When the ranking itself starts fading in; skin art arriving later waits for the next showing. */
 export const STABLE_RESULTS_CONTENT_DELAY_MS = OUTRO_HOLD_MS + FADE_TO_BLACK_MS + BLACK_HOLD_MS;
 // Narrower than 4:3 the grade would land on the panel; stable never runs
@@ -484,7 +485,9 @@ export function StableResultsScreen({
       <div className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: phase === "black" || phase === "shown" ? 1 : 0, transition: `opacity ${FADE_TO_BLACK_MS}ms linear` }} />
       <div className="absolute inset-0" style={{ opacity: phase === "shown" ? 1 : 0, transition: `opacity ${FADE_IN_MS}ms linear`, pointerEvents: phase === "shown" ? undefined : "none" }}>
       {backgroundUrl && (
-        <img src={backgroundUrl} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+        // Over the black layer, so the opacity dims it: full strength read too
+        // bright behind the panel.
+        <img src={backgroundUrl} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={{ opacity: RANKING_BACKGROUND_BRIGHTNESS }} />
       )}
       {s > 0 && (
         <div className="absolute left-0 top-0 origin-top-left" style={{ width: VW, height: VH, transform: `scale(${s})` }}>
