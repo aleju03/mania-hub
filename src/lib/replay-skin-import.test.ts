@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 
-import { applyTextureCap, decodeUncompressedTiff, importReplaySkinFromOsk, loadOskImageAssetByPath, openOskArchive, planTextureCap } from "./replay-skin-import";
+import { applyTextureCap, decodeUncompressedTiff, importReplaySkinFromOsk, loadOskImageAssetByPath, openOskArchive, planTextureCap, readOskRankingArt } from "./replay-skin-import";
 
 // Builds a minimal little-endian uncompressed TIFF the way Photoshop lays it
 // out: header, pixel strip, then one IFD. Enough to cover the renamed-TIFF
@@ -524,5 +524,57 @@ describe("importReplaySkinFromOsk NoteBodyStyle", () => {
     const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
 
     expect(result.settings.keymodeProfiles["4"].noteBodyStyles).toEqual([]);
+  });
+});
+
+describe("readOskRankingArt", () => {
+  it("reads the ranking screen by stable's filenames and lookup order", async () => {
+    const file = await buildOsk(
+      ["[General]", "Name: Ranked", "Version: 2.5", "[Fonts]", "ScorePrefix: fonts/score", "ScoreOverlap: 310"].join("\n"),
+      [
+        "ranking-panel@2x.png",
+        "ranking-A.png",
+        "ranking-A-0.png",
+        "mania-hit300.png",
+        "mania-hit300-0.png",
+        "fonts/score-0.png",
+        "score-1.png",
+        "pause-replay.png",
+        "ranking-replay.png",
+        "selection-mod-hidden.png",
+        "menu-back-0.png",
+        "menu-back-1.png",
+        "menu-back-2.png",
+        "menu-back-3.png",
+        "menu-back-4.png",
+      ],
+    );
+    const art = await readOskRankingArt(await openOskArchive(await file.arrayBuffer()), ["selection-mod-hidden"]);
+
+    expect(art.version).toBe(2.5);
+    expect(art.scoreOverlap).toBe(310);
+    expect(art.images["ranking-panel"]?.path).toBe("ranking-panel@2x.png");
+    expect(art.images["ranking-panel"]?.scale).toBe(2);
+    // The ranking screen takes a static image over an animation's first
+    // frame, judgements included.
+    expect(art.images["ranking-A"]?.path).toBe("ranking-A.png");
+    expect(art.images["mania-hit300"]?.path).toBe("mania-hit300.png");
+    // Digits come from ScorePrefix only: a stray default-named digit is not
+    // the skin's score font.
+    expect(art.images["score-0"]?.path).toBe("fonts/score-0.png");
+    expect(art.images["score-1"]).toBeUndefined();
+    expect(art.images["pause-replay"]?.path).toBe("pause-replay.png");
+    expect(art.images["ranking-replay"]?.path).toBe("ranking-replay.png");
+    expect(art.images["selection-mod-hidden"]?.path).toBe("selection-mod-hidden.png");
+    expect(art.images["ranking-title"]).toBeUndefined();
+    // An animated back button shows the middle of its loop, not a blank start.
+    expect(art.images["menu-back"]?.path).toBe("menu-back-2.png");
+  });
+
+  it("reads a skin without a Version as 1.0 and \"latest\" as the newest layout", async () => {
+    const old = await buildOsk(["[General]", "Name: Old"].join("\n"), []);
+    const latest = await buildOsk(["[General]", "Name: New", "Version: latest"].join("\n"), []);
+    expect((await readOskRankingArt(await openOskArchive(await old.arrayBuffer()))).version).toBe(1);
+    expect((await readOskRankingArt(await openOskArchive(await latest.arrayBuffer()))).version).toBeGreaterThanOrEqual(2);
   });
 });

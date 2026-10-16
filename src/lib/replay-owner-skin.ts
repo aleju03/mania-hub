@@ -594,6 +594,13 @@ async function fetchRecordArchive(
   return owned ? fetchSkinArchive(owned, init) : null;
 }
 
+// The archive behind a player's skin as a viewer may see it: the whole .osk
+// for a public skin, the filtered bundle for a private one. The replay's
+// results screen reads its ranking art from here.
+export function fetchOwnerReplaySkinArchive(record: OwnerReplaySkinRecord): Promise<OskArchive | null> {
+  return fetchRecordArchive(record, "viewer");
+}
+
 // Rebuilds the full settings + gameplay sounds for a player's replay skin.
 export async function loadOwnerReplaySkin(
   record: OwnerReplaySkinRecord,

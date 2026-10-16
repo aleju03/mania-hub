@@ -21,7 +21,7 @@ import type { ReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
 import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, listSkinAssetFrames, normalizeReplaySkinSettings, pickSkinAnimationFrame } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStagePositionKey } from "../../lib/replay-skin";
-import type { ReplayLiveStats, ReplayViewportSnapshot } from "../../lib/replay-types";
+import type { ReplayHitEvent, ReplayLiveStats, ReplayViewportSnapshot } from "../../lib/replay-types";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
 import type { HitsoundAnchor, ReplayHitsoundTrigger } from "../../lib/replay-hitsounds";
@@ -990,6 +990,14 @@ export class ManiaReplayRenderer {
   private bpmTimingPoints: ManiaTimingPoint[] = [];
   private audioWaveLevels = new Float32Array(0);
   private lazerLeaderboardFadeRaf: number | null = null;
+  // Stable's board eases its rows on wall time, frame by frame; once
+  // playback stops nothing draws frames, so a slide in flight (an overtake
+  // on the last notes) is carried to rest by this loop instead of freezing.
+  private stableLeaderboardSettleRaf: number | null = null;
+  // Video export draws frames itself, one per encoded frame.
+  private frameDriven = false;
+  // Map time the last note (or hold) ends; the replay itself usually runs on.
+  private notesEndTime = 0;
   private leaderboardSlotYs = new Map<string, number>();
   private leaderboardSlotGradients = new Map<string, FillGradient>();
   private leaderboardPrevRank: number | null = null;
@@ -1195,6 +1203,7 @@ export class ManiaReplayRenderer {
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
     const noteDuration = maxNoteEndTime(this.notes);
+    this.notesEndTime = noteDuration;
     const replayTailGrace = this.hitWindows.miss * 1.5;
     this.totalDuration = Math.max(frameDuration, noteDuration + replayTailGrace);
 
@@ -2348,6 +2357,7 @@ export class ManiaReplayRenderer {
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
     const noteDuration = maxNoteEndTime(this.notes);
+    this.notesEndTime = noteDuration;
     const replayTailGrace = this.hitWindows.miss * 1.5;
     this.totalDuration = Math.max(frameDuration, noteDuration + replayTailGrace);
     this.maxHoldDuration = 0;
@@ -2428,6 +2438,7 @@ export class ManiaReplayRenderer {
       await this.customMediaExport.seek((timeMs - this.customMediaClockStart) / (this.modRate * this.playbackSpeed));
       if (this.destroyed) return;
     }
+    this.frameDriven = true;
     const previousTime = this.currentTime;
     const wasSuppressed = this.suppressOvertakeFlash;
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
@@ -6665,6 +6676,7 @@ export class ManiaReplayRenderer {
     // it; the pin and then the player draw last to stay on top of sliders.
     let pinnedDraw: { row: Row; y: number } | null = null;
     let playerDraw: { row: Row; y: number } | null = null;
+    let moving = false;
     merged.forEach((row, index) => {
       const slot = slotFor(index);
       if (slot == null) return;
@@ -6674,6 +6686,7 @@ export class ManiaReplayRenderer {
         ? (freshMount || slot === 0 || slot >= maxRows ? targetY : targetY - advance)
         : currentY + (targetY - currentY) * ease;
       this.leaderboardSlotYs.set(row.key, y);
+      if (Math.abs(targetY - y) > 0.25) moving = true;
       seen.add(row.key);
       const overshoot = Math.max(frame.y - y, y + slotHeight - (frame.y + totalHeight));
       const slideAlpha = overshoot > 0 ? Math.max(0, 1 - overshoot / slotHeight) : 1;
@@ -6699,6 +6712,16 @@ export class ManiaReplayRenderer {
     for (const key of [...this.leaderboardSlotYs.keys()]) {
       if (!seen.has(key)) this.leaderboardSlotYs.delete(key);
     }
+    if ((moving || this.leaderboardExplosionTimes.length > 0) && !this._isPlaying) this.settleStableLeaderboard();
+  }
+
+  private settleStableLeaderboard() {
+    if (this.frameDriven || this.destroyed || this.stableLeaderboardSettleRaf != null) return;
+    this.stableLeaderboardSettleRaf = requestAnimationFrame(() => {
+      this.stableLeaderboardSettleRaf = null;
+      if (this.destroyed || this._isPlaying) return;
+      this.render();
+    });
   }
 
   private getLazerLeaderboardLayoutWidth(): number {
@@ -8921,6 +8944,35 @@ export class ManiaReplayRenderer {
     };
   }
 
+  // Every judged hit up to the playback clock, for the results screen's
+  // timing distribution: map-time offset (negative is early) and judgement.
+  getHitEvents(): ReplayHitEvent[] {
+    const out: ReplayHitEvent[] = [];
+    for (const event of this.judgmentEvents) {
+      if (event.time > this.currentTime) break;
+      if (event.judgment == null || event.judgment < 1 || event.judgment > 5) continue;
+      out.push({ offsetMs: event.offsetMs, judgment: event.judgment });
+    }
+    return out;
+  }
+
+  // When the chart's last note ends, in map time, and how fast map time runs
+  // against the wall clock: stable leaves gameplay a fixed real time after
+  // that note, whatever the replay records afterwards.
+  getNotesEndTime(): number {
+    return this.notesEndTime;
+  }
+
+  getClockRate(): number {
+    return this.playbackSpeed * this.modRate;
+  }
+
+  // The HP over the play (the .osr's own, or the simulated fallback), for
+  // stable's ranking graph.
+  getLifeBarFrames(): ReplayLifeBarFrame[] {
+    return this.lifeBarFrames;
+  }
+
   getDiagnostics(): { rendererBackend: string; judgementBuildMs: number | null } {
     return {
       rendererBackend: this.app ? formatPixiRendererType(this.app.renderer.type, this.app.renderer.name) : "uninitialized",
@@ -8968,6 +9020,8 @@ export class ManiaReplayRenderer {
     this.replayInfoImageLoads.clear();
     if (this.lazerLeaderboardFadeRaf != null) cancelAnimationFrame(this.lazerLeaderboardFadeRaf);
     this.lazerLeaderboardFadeRaf = null;
+    if (this.stableLeaderboardSettleRaf != null) cancelAnimationFrame(this.stableLeaderboardSettleRaf);
+    this.stableLeaderboardSettleRaf = null;
     this.storyboardActiveSet = null;
     // Pooled storyboard sprites are detached from the stage, so the app
     // destroy below cannot reach them.

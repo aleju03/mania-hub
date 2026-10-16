@@ -603,6 +603,16 @@ msgstr "{0} months"
 msgid "{0} most"
 msgstr "{0} most"
 
+#. placeholder {0}: formatTwoDecimals(Math.abs(average))
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "{0} ms early"
+msgstr "{0} ms early"
+
+#. placeholder {0}: formatTwoDecimals(average)
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "{0} ms late"
+msgstr "{0} ms late"
+
 #. placeholder {0}: formatPp(recs.length)
 #. placeholder {0}: index + 1
 #. placeholder {1}: entries.length
@@ -2756,6 +2766,7 @@ msgstr "accuracy"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
@@ -2821,10 +2832,18 @@ msgstr "Accuracy this clear was judged on, against its {0} bar"
 msgid "Accuracy this clear was judged on, in the ladder's own scoring"
 msgstr "Accuracy this clear was judged on, in the ladder's own scoring"
 
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Accuracy:"
+msgstr "Accuracy:"
+
 #. placeholder {0}: formatDate(peakRankDate)
 #: src/routes/player/$username.tsx
 msgid "achieved {0}"
 msgstr "achieved {0}"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Achieved PP"
+msgstr "Achieved PP"
 
 #. placeholder {0}: profileInsights.sampleSize
 #: src/components/player/InsightModals.tsx
@@ -3579,6 +3598,10 @@ msgstr "Automatic tracking began on June 9, 2026. Older scores count if they are
 msgid "avatar"
 msgstr "avatar"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Average Hit Error"
+msgstr "Average Hit Error"
+
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Average length"
 #~ msgstr "Average length"
@@ -3622,6 +3645,11 @@ msgstr "Avg PP"
 #: src/routes/maps.tsx
 msgid "Avoid repeats"
 msgstr "Avoid repeats"
+
+#: src/components/replay/LazerResultsScreen.tsx
+#: src/components/replay/StableResultsScreen.tsx
+msgid "back"
+msgstr "back"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
@@ -3780,6 +3808,11 @@ msgstr "Beatmap audio, backgrounds, titles, artist names, creator names, metadat
 #: src/routes/legal.tsx
 msgid "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. This site displays available public metadata and derived information for community reference."
 msgstr "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. This site displays available public metadata and derived information for community reference."
+
+#. placeholder {0}: beatmap.creator
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Beatmap by {0}"
+msgstr "Beatmap by {0}"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM and length."
@@ -6158,6 +6191,7 @@ msgid "difficulty"
 msgstr "difficulty"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/maps.tsx
 #: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
@@ -6725,6 +6759,12 @@ msgstr "Equal chance per player"
 msgid "error"
 msgstr "error"
 
+#. placeholder {0}: hitError.early
+#. placeholder {1}: hitError.late
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Error: {0}ms - {1}ms avg"
+msgstr "Error: {0}ms - {1}ms avg"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Estimate a chart's dan level, with its dan emblem."
 msgstr "Estimate a chart's dan level, with its dan emblem."
@@ -6964,6 +7004,10 @@ msgstr "Exported videos can't use this link because its site blocks it. Save the
 #~ msgid "Exposed Releases"
 #~ msgstr "Exposed Releases"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Extended statistics are only available after watching a replay!"
+msgstr "Extended statistics are only available after watching a replay!"
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "External application"
 msgstr "External application"
@@ -7064,6 +7108,10 @@ msgstr "Fast single-note runs flowing across the keys."
 #: src/components/player/InsightModals.tsx
 msgid "Fastest"
 msgstr "Fastest"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Favourite on osu!"
+msgstr "Favourite on osu!"
 
 #: src/routes/maps.tsx
 msgid "Favourited by"
@@ -10173,6 +10221,7 @@ msgstr "Map shape"
 msgid "map unavailable"
 msgstr "map unavailable"
 
+#: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/replay.tsx
 msgid "mapped by"
 msgstr "mapped by"
@@ -10279,6 +10328,10 @@ msgstr "MAX"
 msgid "Max combo"
 msgstr "Max combo"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Max Combo"
+msgstr "Max Combo"
+
 #: src/routes/maps.tsx
 msgid "max pp"
 msgstr "max pp"
@@ -10298,6 +10351,10 @@ msgstr "Max PP"
 #: src/components/me/MyStatsInsights.tsx
 msgid "MAX:300 ratio"
 msgstr "MAX:300 ratio"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Maximum"
+msgstr "Maximum"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
@@ -10529,6 +10586,10 @@ msgstr "More servers"
 msgid "More servers from {0}"
 msgstr "More servers from {0}"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "More statistics available after watching a replay!"
+msgstr "More statistics available after watching a replay!"
+
 #: src/lib/streak-game.ts
 msgid "More watched"
 msgstr "More watched"
@@ -10705,6 +10766,10 @@ msgstr "my stats"
 #: src/routes/my-stats.tsx
 msgid "My Stats"
 msgstr "My Stats"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "N/A"
+msgstr "N/A"
 
 #: src/routes/communities.tsx
 msgid "name"
@@ -12361,6 +12426,10 @@ msgstr "Open link"
 msgid "Open map on osu!"
 msgstr "Open map on osu!"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Open on osu!"
+msgstr "Open on osu!"
+
 #: src/components/layout/Nav.tsx
 msgid "open packs"
 msgstr "open packs"
@@ -12922,6 +12991,10 @@ msgstr "percentiles are among tracked players"
 msgid "Performance"
 msgstr "Performance"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Performance Breakdown"
+msgstr "Performance Breakdown"
+
 #: src/routes/teams.tsx
 msgid "Performance rank"
 msgstr "Performance rank"
@@ -13078,9 +13151,23 @@ msgstr "Played"
 msgid "Played {0} on {1}"
 msgstr "Played {0} on {1}"
 
+#. placeholder {0}: score.playerName
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Played by {0} on {playedOn}."
+msgstr "Played by {0} on {playedOn}."
+
+#. placeholder {0}: score.playerName
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Played by {0}."
+msgstr "Played by {0}."
+
 #: src/components/replay/CommunityReplayCard.tsx
 msgid "Played by {playerName}"
 msgstr "Played by {playerName}"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Played on {playedOn}"
+msgstr "Played on {playedOn}"
 
 #: src/components/player/ScorePlayDetailModal.tsx
 msgid "played on Lazer"
@@ -19006,6 +19093,10 @@ msgstr "Timed out loading the replay renderer."
 msgid "Timed out starting the replay renderers."
 msgstr "Timed out starting the replay renderers."
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Timing Distribution"
+msgstr "Timing Distribution"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Tiny"
 msgstr "Tiny"
@@ -19589,6 +19680,15 @@ msgstr "unreadable"
 #: src/lib/replay-overlays.ts
 msgid "Unstable rate"
 msgstr "Unstable rate"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Unstable Rate"
+msgstr "Unstable Rate"
+
+#. placeholder {0}: hitError.unstableRate
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Unstable Rate: {0}"
+msgstr "Unstable Rate: {0}"
 
 #: src/routes/teams.tsx
 #~ msgid "Until someone opens a team's page, its pp only counts tracked members."
@@ -20180,6 +20280,8 @@ msgstr "Watch osu!mania replays in your browser."
 
 #: src/components/player/ScorePlayDetailModal.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/replay/LazerResultsScreen.tsx
+#: src/components/replay/StableResultsScreen.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx

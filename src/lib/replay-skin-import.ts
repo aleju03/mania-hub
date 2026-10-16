@@ -346,6 +346,97 @@ export async function resolveOskAssetByName(
     ?? (await resolveAssetReference(archive.zip, archive.lookup, archive.assetCache, `${name}-0`));
 }
 
+// osu!stable's ranking screen as a skin dresses it: every element the skin
+// ships, by stable filename, for the results screen to lay over the default
+// art one element at a time like the game does. Read lazily when a replay
+// ends rather than at import, because none of it is drawn during play.
+export interface OskRankingArt {
+  // skin.ini [General] Version: below 2 the panel, labels, graph and grade sit
+  // on the 1.0 layout. Absent means 1.0, as in stable; "latest" reads as 2.7.
+  version: number;
+  // [Fonts] ScoreOverlap, in SD pixels. Not clamped: skins pad each digit
+  // into a wide canvas and overlap by most of it (the Teto edits ship 325px
+  // digits with an overlap of 310).
+  scoreOverlap: number;
+  // Keyed by the default element name (score digits under "score-N" whatever
+  // the skin's ScorePrefix).
+  images: Record<string, ReplaySkinImageAsset>;
+}
+
+const RANKING_STATIC_ELEMENTS = [
+  "ranking-panel",
+  "ranking-title",
+  "ranking-graph",
+  "ranking-accuracy",
+  "ranking-maxcombo",
+  "ranking-perfect",
+  "ranking-XH",
+  "ranking-X",
+  "ranking-SH",
+  "ranking-S",
+  "ranking-A",
+  "ranking-B",
+  "ranking-C",
+  "ranking-D",
+];
+const RANKING_SCORE_GLYPHS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "comma", "dot", "percent", "x"];
+const RANKING_MANIA_HITS = ["mania-hit300g", "mania-hit300", "mania-hit200", "mania-hit100", "mania-hit50", "mania-hit0"];
+
+export async function readOskRankingArt(archive: OskArchive, modElements: string[] = []): Promise<OskRankingArt> {
+  const { zip, lookup, assetCache } = archive;
+  const resolve = (name: string) => resolveAssetReference(zip, lookup, assetCache, name);
+  const ini = await readSkinIni(zip).catch(() => null);
+  const parsed = ini ? parseSkinIni(ini) : null;
+  const versionText = ini ? /^\s*Version\s*:\s*([^\r\n/]+)/im.exec(ini)?.[1]?.trim() : undefined;
+  const version = versionText?.toLowerCase() === "latest" ? 2.7 : parseNumber(versionText) ?? 1;
+  const scorePrefix = cleanReference(parsed?.fonts.ScorePrefix) ?? "score";
+  const images: Record<string, ReplaySkinImageAsset> = {};
+  const put = (key: string, asset: ReplaySkinImageAsset | undefined) => {
+    if (asset) images[key] = asset;
+  };
+
+  await Promise.all([
+    // The ranking screen takes the static image over an animation's first
+    // frame (Skinning/FAQ, ranking screen hierarchy).
+    ...[...RANKING_STATIC_ELEMENTS, ...modElements].map(async (name) => {
+      put(name, (await resolve(name)) ?? (await resolve(`${name}-0`)));
+    }),
+    // menu-back is usually a looping animation that builds the button from
+    // nothing, so its first frame is often blank; the middle of the loop is
+    // the button as it sits on screen.
+    (async () => {
+      let last = -1;
+      for (const key of lookup.keys()) {
+        const frame = /^menu-back-(\d+)(?:@2x)?\.(?:png|jpe?g)$/.exec(key);
+        if (frame) last = Math.max(last, Number(frame[1]));
+      }
+      put("menu-back", (await resolve("menu-back")) ?? (last >= 0 ? await resolve(`menu-back-${Math.floor(last / 2)}`) : undefined));
+    })(),
+    // ranking-replay is the 1.0 name; from 2.0 on the button is the pause
+    // screen's art, and a leftover ranking-replay is ignored (skins ship it
+    // as a 1px blank).
+    (async () => {
+      put("ranking-replay", await resolve("ranking-replay"));
+      put("pause-replay", await resolve("pause-replay"));
+    })(),
+    // Only from the skin's root, whatever its [Mania] paths say, and the
+    // static image first: skins blank the ranking screen's judgements with a
+    // 1px static beside the animated gameplay frames, and stable shows none.
+    ...RANKING_MANIA_HITS.map(async (name) => {
+      put(name, (await resolve(name)) ?? (await resolve(`${name}-0`)));
+    }),
+    ...RANKING_SCORE_GLYPHS.map(async (glyph) => {
+      put(`score-${glyph}`, await resolve(`${scorePrefix}-${glyph}`));
+    }),
+  ]);
+
+  return {
+    version,
+    scoreOverlap: clampInteger(parseNumber(parsed?.fonts.ScoreOverlap) ?? 0, -4096, 4096),
+    images,
+  };
+}
+
 export async function extractSkinSoundsFromArchive(archive: OskArchive): Promise<Record<string, ArrayBuffer>> {
   return extractSkinSounds(archive.lookup);
 }

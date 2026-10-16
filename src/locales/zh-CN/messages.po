@@ -615,6 +615,16 @@ msgstr "{0} 个月"
 msgid "{0} most"
 msgstr "{0} 多"
 
+#. placeholder {0}: formatTwoDecimals(Math.abs(average))
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "{0} ms early"
+msgstr "早 {0} ms"
+
+#. placeholder {0}: formatTwoDecimals(average)
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "{0} ms late"
+msgstr "晚 {0} ms"
+
 #. placeholder {0}: formatPp(recs.length)
 #. placeholder {0}: index + 1
 #. placeholder {1}: entries.length
@@ -2745,6 +2755,7 @@ msgstr "准确率"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
@@ -2806,10 +2817,18 @@ msgstr "这次通过所依据的准确率，对照它 {0} 的门槛"
 msgid "Accuracy this clear was judged on, in the ladder's own scoring"
 msgstr "这次通过所依据的准确率，按该段位表自己的计分方式计算"
 
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Accuracy:"
+msgstr "准确率："
+
 #. placeholder {0}: formatDate(peakRankDate)
 #: src/routes/player/$username.tsx
 msgid "achieved {0}"
 msgstr "达成于 {0}"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Achieved PP"
+msgstr "获得 PP"
 
 #. placeholder {0}: profileInsights.sampleSize
 #: src/components/player/InsightModals.tsx
@@ -3564,6 +3583,10 @@ msgstr "自动追踪从 2026 年 6 月 9 日开始。更早的成绩只要还在
 msgid "avatar"
 msgstr "头像"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Average Hit Error"
+msgstr "平均击打误差"
+
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Average length"
 #~ msgstr "平均时长"
@@ -3607,6 +3630,11 @@ msgstr "平均 PP"
 #: src/routes/maps.tsx
 msgid "Avoid repeats"
 msgstr "避免重复"
+
+#: src/components/replay/LazerResultsScreen.tsx
+#: src/components/replay/StableResultsScreen.tsx
+msgid "back"
+msgstr "返回"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
@@ -3765,6 +3793,11 @@ msgstr "谱面的音频、背景、标题、艺术家名、作者名、元数据
 #: src/routes/legal.tsx
 msgid "Beatmap audio, backgrounds, titles, artist names, creator names, metadata, and other user-submitted or third-party content remain with their respective owners. This site displays available public metadata and derived information for community reference."
 msgstr "谱面的音频、背景、标题、艺术家名、作者名、元数据，以及其它由用户提交或第三方提供的内容，权利仍归各自的所有者。本站展示可获取的公开元数据和衍生信息，供社区参考。"
+
+#. placeholder {0}: beatmap.creator
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Beatmap by {0}"
+msgstr "谱师：{0}"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM and length."
@@ -6143,6 +6176,7 @@ msgid "difficulty"
 msgstr "难度"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/maps.tsx
 #: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
@@ -6710,6 +6744,12 @@ msgstr "每位玩家等概率"
 msgid "error"
 msgstr "错误"
 
+#. placeholder {0}: hitError.early
+#. placeholder {1}: hitError.late
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Error: {0}ms - {1}ms avg"
+msgstr "误差：{0}ms - {1}ms 平均"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Estimate a chart's dan level, with its dan emblem."
 msgstr "估算谱面的段位等级，并附上段位徽章。"
@@ -6945,6 +6985,10 @@ msgstr "导出的视频无法使用此链接，因为其网站阻止了访问。
 #~ msgid "Exposed Releases"
 #~ msgstr "独立松键"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Extended statistics are only available after watching a replay!"
+msgstr "观看回放后才能查看扩展统计！"
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "External application"
 msgstr "外部应用"
@@ -7045,6 +7089,10 @@ msgstr "在各键之间快速流动的单点串。"
 #: src/components/player/InsightModals.tsx
 msgid "Fastest"
 msgstr "最快"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Favourite on osu!"
+msgstr "在 osu! 上收藏"
 
 #: src/routes/maps.tsx
 msgid "Favourited by"
@@ -10146,6 +10194,7 @@ msgstr "谱面构成"
 msgid "map unavailable"
 msgstr "谱面不可用"
 
+#: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/replay.tsx
 msgid "mapped by"
 msgstr "谱师"
@@ -10252,6 +10301,10 @@ msgstr "MAX"
 msgid "Max combo"
 msgstr "最大连击"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Max Combo"
+msgstr "最大连击"
+
 #: src/routes/maps.tsx
 msgid "max pp"
 msgstr "最高 pp"
@@ -10271,6 +10324,10 @@ msgstr "最高 PP"
 #: src/components/me/MyStatsInsights.tsx
 msgid "MAX:300 ratio"
 msgstr "MAX:300 之比"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Maximum"
+msgstr "最大值"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
@@ -10502,6 +10559,10 @@ msgstr "更多服务器"
 msgid "More servers from {0}"
 msgstr "更多来自{0}的服务器"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "More statistics available after watching a replay!"
+msgstr "观看回放后可查看更多统计！"
+
 #: src/lib/streak-game.ts
 msgid "More watched"
 msgstr "更多观看"
@@ -10678,6 +10739,10 @@ msgstr "我的数据"
 #: src/routes/my-stats.tsx
 msgid "My Stats"
 msgstr "我的数据"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "N/A"
+msgstr "无"
 
 #: src/routes/communities.tsx
 msgid "name"
@@ -12334,6 +12399,10 @@ msgstr "打开链接"
 msgid "Open map on osu!"
 msgstr "在 osu! 上打开谱面"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Open on osu!"
+msgstr "在 osu! 上打开"
+
 #: src/components/layout/Nav.tsx
 msgid "open packs"
 msgstr "开卡包"
@@ -12895,6 +12964,10 @@ msgstr "百分位是在已追踪玩家中的排名"
 msgid "Performance"
 msgstr "表现分"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Performance Breakdown"
+msgstr "表现分析"
+
 #: src/routes/teams.tsx
 msgid "Performance rank"
 msgstr "表现分排名"
@@ -13051,9 +13124,23 @@ msgstr "游玩于"
 msgid "Played {0} on {1}"
 msgstr "{0}在 {1} 上游玩"
 
+#. placeholder {0}: score.playerName
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Played by {0} on {playedOn}."
+msgstr "由 {0} 于 {playedOn} 游玩。"
+
+#. placeholder {0}: score.playerName
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Played by {0}."
+msgstr "由 {0} 游玩。"
+
 #: src/components/replay/CommunityReplayCard.tsx
 msgid "Played by {playerName}"
 msgstr "由 {playerName} 游玩"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Played on {playedOn}"
+msgstr "游玩于 {playedOn}"
 
 #: src/components/player/ScorePlayDetailModal.tsx
 msgid "played on Lazer"
@@ -18963,6 +19050,10 @@ msgstr "加载回放渲染器超时。"
 msgid "Timed out starting the replay renderers."
 msgstr "启动回放渲染器超时。"
 
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Timing Distribution"
+msgstr "时间分布"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Tiny"
 msgstr "极小"
@@ -19546,6 +19637,15 @@ msgstr "无法读取"
 #: src/lib/replay-overlays.ts
 msgid "Unstable rate"
 msgstr "UR"
+
+#: src/components/replay/LazerResultsScreen.tsx
+msgid "Unstable Rate"
+msgstr "不稳定率"
+
+#. placeholder {0}: hitError.unstableRate
+#: src/components/replay/StableResultsScreen.tsx
+msgid "Unstable Rate: {0}"
+msgstr "UR：{0}"
 
 #: src/routes/teams.tsx
 #~ msgid "Until someone opens a team's page, its pp only counts tracked members."
@@ -20137,6 +20237,8 @@ msgstr "在浏览器中观看 osu!mania 回放。"
 
 #: src/components/player/ScorePlayDetailModal.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/replay/LazerResultsScreen.tsx
+#: src/components/replay/StableResultsScreen.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
