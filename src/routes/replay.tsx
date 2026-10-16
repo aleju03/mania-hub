@@ -5171,7 +5171,10 @@ function ReplayViewer({
         onPointerMove={handleReplayCanvasPointerMove}
         onPointerUp={handleReplayCanvasPointerUp}
         onPointerLeave={handleReplayCanvasPointerLeave}
-        className={`group/replay-canvas relative overflow-hidden bg-[#0a0a18] ${
+        // isolate: the stage's own layers (the z-60 results screens among them)
+        // stack inside it, so the navbar's dropdowns and their dim (z-40/50)
+        // open over the stage instead of under it.
+        className={`group/replay-canvas relative isolate overflow-hidden bg-[#0a0a18] ${
           isCanvasFullscreen
             ? `${isPseudoFullscreen ? "fixed inset-0 z-[100]" : ""} h-[100dvh] w-screen max-w-none rounded-none border-0`
             : "border-y border-osu-b3/20 sm:border-0"
