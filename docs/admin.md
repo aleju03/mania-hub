@@ -16,9 +16,17 @@ What it does delete is every tracking-derived row and public appearance: raw `sc
 
 Left alone deliberately: GOAT poll nominations, since that board is meant to hold banned and deleted players, and another account's Discord tracker row pointed at them, which can never fire again once ingest drops their scores.
 
+## Owner takedowns
+
+When a player asks for their data to be taken down, the Takedowns tab of `/admin/players` runs the same purge in a second mode (`backend/src/features/owner-takedown.ts`, frontend `src/lib/owner-takedown.ts`). Confirm the request came from the account's owner first. The account keeps working: it signs in as before and keeps its wallet, the cards it owns, binders, wishlist, gifts, goals, skins and Farm Helper marks. Features built on its tracked plays (My Data, Farm Helper, goal progress) have nothing left to read.
+
+The purge removes every tracking-derived row the banned-account wipe removes, and every card of the player wherever it is held. On top of that the takedown deletes the player's Companella imports (owner deletes) and blocks the account from sending more, and the frontend action deletes their uploaded replays and our R2 copies (cached `.osr` and parsed artifacts) of their osu! replays. `users.profile_json.reason` is set to the takedown marker, which `getUserAccountStatus` reads as `wiped`, so every surface that hides a purged account hides this one: the profile is a 404, search, rankings, boards and feeds drop it, a sign-in does not reactivate it and the "track me" opt-in refuses it. The account is still live on osu!, so the backend's osu! proxy also refuses it: profile and score lookups for it answer 404, and it is taken out of map leaderboards, rankings and bulk user lookups. The score ids the purge found are kept in `user_takedown_scores`, so the proxy keeps refusing those scores and their replay downloads after the rows that named them are gone. A play the player makes after the takedown is never tracked, though a direct link to it still opens.
+
+Preview (`POST /api/admin/takedown-preview`) uses the wipe preview's lookup rules; `POST /api/admin/takedown` takes the previewed id, username and a `TAKEDOWN <id>` confirmation. Every step can be run again, and a rerun is how a partial failure (an upload or replay copy that failed to delete) is finished. Restore (`POST /api/admin/takedown-restore`, `RESTORE <id>`) reactivates the account, tracks it again, lifts the Companella block only if the takedown placed it, and queues an enrich, so the profile rebuilds from what osu! still serves. Nothing the takedown deleted comes back. An account the banned-account wipe already purged cannot be taken down or restored.
+
 ## Players page
 
-`/admin/players` holds the per-player tools as tabs: Banned users (the default, carrying the unseen count), Remove plays, Add plays, About pages and Supporters, each a panel in `src/components/admin/players/`. The old `/admin/banned-users`, `/admin/scores`, `/admin/about-pages` and `/admin/supporters` links redirect to their tab.
+`/admin/players` holds the per-player tools as tabs: Banned users (the default, carrying the unseen count), Remove plays, Add plays, About pages, Supporters and Takedowns, each a panel in `src/components/admin/players/`. The old `/admin/banned-users`, `/admin/scores`, `/admin/about-pages` and `/admin/supporters` links redirect to their tab.
 
 ## Adding plays by hand
 
