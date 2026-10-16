@@ -250,10 +250,33 @@ function ScoreText({ text, x, y, scale, skin, overlap, centred = false }: {
   return <>{glyphs}</>;
 }
 
-// The ranking-graph box's HP line: green while above half, red below.
-function LifeGraph({ frames, x, y }: { frames: StableResultsScore["lifeBar"]; x: number; y: number }) {
+// Stable records the HP into the replay every couple of seconds and draws
+// the graph through those samples, so dips read as soft Vs rather than one
+// spike per miss. Frames denser than that (the per-judgement HP this viewer
+// simulates when the .osr carries no graph, which downloaded replays never
+// do) are sampled down to that cadence, reading the HP at each sample time.
+const LIFE_SAMPLE_INTERVAL_MS = 2500;
+
+function sampleLifeFrames(frames: StableResultsScore["lifeBar"]): StableResultsScore["lifeBar"] {
+  if (frames.length < 3) return frames;
+  const span = frames[frames.length - 1].time - frames[0].time;
+  if (span / (frames.length - 1) >= LIFE_SAMPLE_INTERVAL_MS / 2) return frames;
+  const out: StableResultsScore["lifeBar"] = [];
+  let index = 0;
+  for (let time = frames[0].time; ; time += LIFE_SAMPLE_INTERVAL_MS) {
+    const at = Math.min(time, frames[frames.length - 1].time);
+    while (index + 1 < frames.length && frames[index + 1].time <= at) index += 1;
+    out.push({ time: at, health: frames[index].health });
+    if (at >= frames[frames.length - 1].time) break;
+  }
+  return out;
+}
+
+// The ranking-graph box's HP line: lime while above half, red below.
+function LifeGraph({ frames: rawFrames, x, y }: { frames: StableResultsScore["lifeBar"]; x: number; y: number }) {
   const W = 301;
   const H = 141;
+  const frames = sampleLifeFrames(rawFrames);
   if (frames.length < 2) return null;
   const t0 = frames[0].time;
   const t1 = frames[frames.length - 1].time;
@@ -264,7 +287,7 @@ function LifeGraph({ frames, x, y }: { frames: StableResultsScore["lifeBar"]; x:
   for (let index = 1; index < frames.length; index += 1) {
     const a = frames[index - 1];
     const b = frames[index];
-    const color = (a.health + b.health) / 2 >= 0.5 ? "#00e100" : "#ff1a1a";
+    const color = (a.health + b.health) / 2 >= 0.5 ? "#a0d440" : "#e83c3c";
     const [ax, ay] = point(a);
     const [bx, by] = point(b);
     const last = segments[segments.length - 1];
@@ -274,7 +297,7 @@ function LifeGraph({ frames, x, y }: { frames: StableResultsScore["lifeBar"]; x:
   return (
     <svg className="pointer-events-none absolute overflow-visible" style={{ left: x, top: y, width: W, height: H }} viewBox={`0 0 ${W} ${H}`}>
       {segments.map((segment, index) => (
-        <polyline key={index} points={segment.points} fill="none" stroke={segment.color} strokeWidth={1.5} strokeLinejoin="round" />
+        <polyline key={index} points={segment.points} fill="none" stroke={segment.color} strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
       ))}
     </svg>
   );
