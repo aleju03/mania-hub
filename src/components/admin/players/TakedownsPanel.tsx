@@ -1,9 +1,11 @@
 import { RefreshCw, X } from "lucide-react";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ConfirmModal } from "../../ui/ConfirmModal";
 import { Skeleton } from "../../ui/LoadingSkeleton";
+import { SearchInput } from "../../ui/SearchInput";
 import { formatNumber, formatTimeAgo } from "../../../lib/format";
+import { searchPlayers, searchPlayersOnOsu } from "../../../lib/player-search";
 import {
   listOwnerTakedowns,
   previewOwnerTakedown,
@@ -37,7 +39,6 @@ function plural(count: number, noun: string): string {
 
 export function TakedownsPanel() {
   const [users, setUsers] = useState<TakenDownUser[] | null>(null);
-  const [query, setQuery] = useState("");
   const [preview, setPreview] = useState<OwnerTakedownPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -71,9 +72,9 @@ export function TakedownsPanel() {
     }
   };
 
-  const lookUp = (event: FormEvent) => {
-    event.preventDefault();
-    if (!query.trim()) return;
+  const lookUp = (rawQuery: string) => {
+    const query = rawQuery.trim();
+    if (!query) return;
     void run(async () => {
       setPreview(null);
       setPreview(await previewOwnerTakedown({ data: { query } }));
@@ -83,15 +84,14 @@ export function TakedownsPanel() {
 
   return (
     <div className="space-y-5">
-      <form onSubmit={lookUp} className="flex flex-wrap items-center gap-2">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="username, #user-id or id:user-id"
-          className="min-w-[220px] flex-1 rounded-md border border-osu-b3/30 bg-osu-b4/60 px-3 py-1.5 text-[13px] text-white outline-none placeholder:text-osu-f1 focus:border-osu-b3"
-        />
-        <button type="submit" disabled={busy || !query.trim()} className={ACTION_CLASS}>Look up</button>
-      </form>
+      <SearchInput
+        className="w-full"
+        placeholder="find player..."
+        onSearch={(q) => searchPlayers(q)}
+        onSearchOsu={searchPlayersOnOsu}
+        onSelect={(user) => lookUp(`#${user.id}`)}
+        onSubmit={lookUp}
+      />
 
       {error ? <Notice text={error} tone="error" onDismiss={() => setError(null)} /> : null}
       {message ? <Notice text={message} onDismiss={() => setMessage(null)} /> : null}
