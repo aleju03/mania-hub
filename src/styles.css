@@ -830,6 +830,18 @@ html[data-custom-cursor="true"] * {
   background-repeat: repeat;
 }
 
+/* A text-clipped fill only paints inside the box, and tight line heights
+   leave descenders (j, g, y) hanging below it, so they came out cut off. Pad
+   the box past them and take the room back so layout doesn't move. In the
+   components layer so a caller's own padding utilities (the hero's p-2 -m-2)
+   still win. */
+@layer components {
+  .name-tag {
+    padding-block: 0.25em;
+    margin-block: -0.25em;
+  }
+}
+
 /* One full background width per loop, so a gradient whose ends match wraps
    without a seam (a 200%-wide image moves by its own width from 0% to 200%). */
 @keyframes name-tag-slide {
@@ -1166,6 +1178,16 @@ html[data-custom-cursor="true"] * {
   background-size: 200% 100%;
   filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.55));
   animation: name-tag-slide 16s linear infinite;
+}
+
+/* A big name waiting for its liquid-metal shader: plain metal without the CSS
+   look's hard reflection band, so the real shader takes over without a flash. */
+.name-tag--chrome.name-tag--pending {
+  background-image: linear-gradient(180deg, #ffffff 15%, #d4d7e0 55%, #9a9fad 100%);
+  animation: none;
+}
+.name-tag--molten-gold.name-tag--pending {
+  background-image: linear-gradient(180deg, #fff3c4 15%, #f2c35e 55%, #b47a1e 100%);
 }
 
 /* A live shader over the name: the canvas fills the padding box and the text

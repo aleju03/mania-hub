@@ -33,7 +33,7 @@ const ROOM = SUPPORTER_AVATAR_FRAMES.reduce(
 );
 const ROOM_PADDING = `calc(var(--stage-avatar) * ${ROOM[0]}) calc(var(--stage-avatar) * ${ROOM[1]}) calc(var(--stage-avatar) * ${ROOM[2]})`;
 
-const NAME_CLASS = "min-w-0 max-w-full truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]";
+const NAME_CLASS = "min-w-0 max-w-full truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]";
 
 export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, card, focus, pop, spinning, footer }: {
   shown: Loadout;

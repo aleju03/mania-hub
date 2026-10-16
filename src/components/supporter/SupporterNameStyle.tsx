@@ -11,8 +11,10 @@ import { isShaderNameStyle, type SupporterNameStyleId } from "../../lib/supporte
 
    `live` (big names only: the profile hero, the /supporter preview) also runs
    the shader styles (SHADER_NAME_STYLES) as WebGL over the name
-   (name-tag-shaders.ts, loaded on demand). The CSS look shows until the shader draws; then the text
-   turns transparent but stays for layout, selection and truncation. */
+   (name-tag-shaders.ts, loaded on demand). The CSS look shows until the shader draws (a softer
+   one for the liquid metals, `name-tag--pending`, so their hard reflection band doesn't flash
+   before the real metal); then the text turns transparent but stays for layout, selection and
+   truncation. */
 
 export function SupporterStyledName({ nameStyle, nameFont = null, name, className, live = false }: {
   nameStyle: SupporterNameStyleId | null;
@@ -43,7 +45,7 @@ export function SupporterStyledName({ nameStyle, nameFont = null, name, classNam
   }, [shaded, nameStyle, nameFont, name]);
 
   return (
-    <span ref={spanRef} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${shaded ? " relative" : ""}${ready ? " name-tag--live" : ""}`}>
+    <span ref={spanRef} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${shaded ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : ""}`}>
       {name}
       {shaded && <span ref={hostRef} aria-hidden className="name-tag-shader" />}
     </span>

@@ -371,7 +371,7 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
   );
 }
 
-const NAME_CLASS = "min-w-0 truncate p-2 -m-2 text-[18px] font-black leading-none text-white";
+const NAME_CLASS = "min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[18px] font-black leading-none text-white";
 
 function NameStyleDrawer({ current, disabled, username, onTry, onPick }: DrawerProps) {
   const { t, i18n } = useLingui();

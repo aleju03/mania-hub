@@ -3445,6 +3445,7 @@ msgstr "aprobada"
 msgid "Arabic"
 msgstr "Árabe"
 
+#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Arcade"
 msgstr ""
@@ -3782,6 +3783,10 @@ msgstr "Color base de tap, usado en cualquier columna sin color propio."
 #: src/routes/recommendations.tsx
 msgid "based on what players near the same pp are farming:"
 msgstr "basado en lo que farmean jugadores con pp similar:"
+
+#: src/components/supporter/loadout.ts
+msgid "Battle menu"
+msgstr ""
 
 #: src/routes/bbcode.tsx
 msgid "BBCode"
@@ -4143,6 +4148,10 @@ msgstr "Diseño integrado"
 #: src/components/communities/field-options.tsx
 msgid "Bulgarian"
 msgstr "Búlgaro"
+
+#: src/components/supporter/loadout.ts
+msgid "Bullet board"
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -5846,6 +5855,10 @@ msgstr ""
 #~ msgid "Crafting your edition…"
 #~ msgstr "Creando tu edición…"
 
+#: src/components/supporter/loadout.ts
+msgid "Crayon"
+msgstr ""
+
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
@@ -6106,6 +6119,10 @@ msgstr "Habilidad de dan"
 msgid "Dan skip"
 msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Dance pad"
+msgstr ""
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Danger"
 msgstr "Peligro"
@@ -6296,6 +6313,10 @@ msgstr "vista previa de desarrollo"
 
 #: src/components/supporter/loadout.ts
 msgid "DFJK"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Dialogue box"
 msgstr ""
 
 #: src/lib/streak-game.ts
@@ -7633,6 +7654,10 @@ msgstr "Ajusta los overlays a un formato 16:9."
 #~ msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 #~ msgstr "El cinco corresponde más o menos a la duración de un dan de verdad. Con exactamente cuatro pases válidos se promedian esos cuatro; un skill en el que tengas menos de cuatro no recibe dan propio, y un lado en el que tengas menos de cuatro se queda sin estimación, en vez de darte una que no se sostiene."
 
+#: src/components/supporter/loadout.ts
+msgid "Five-star pull"
+msgstr ""
+
 #: src/routes/report.tsx
 msgid "fixed"
 msgstr "arreglado"
@@ -7844,6 +7869,10 @@ msgstr "Pantalla completa"
 
 #: src/components/supporter/loadout.ts
 msgid "Fun"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Gacha"
 msgstr ""
 
 #: src/lib/supporter-name-styles.ts
@@ -8145,6 +8174,10 @@ msgstr "Adivinar al azar"
 #~ msgid "Halloween"
 #~ msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Halo"
+msgstr ""
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Hanabi"
 msgstr ""
@@ -8412,6 +8445,10 @@ msgstr "PP más alto primero"
 msgid "Highest tier first, then pp"
 msgstr "Primero el tier más alto, luego pp"
 
+#: src/components/supporter/loadout.ts
+msgid "Highlighter"
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Hindi"
 msgstr "Hindi"
@@ -8647,6 +8684,10 @@ msgstr "Cómo elegir"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "HP"
 msgstr "HP"
+
+#: src/components/supporter/loadout.ts
+msgid "HP bar"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "HP bar bg"
@@ -9191,6 +9232,10 @@ msgstr "Juzgadas"
 msgid "Judged at OD {0}, the original map's, instead of this file's OD {1}."
 msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Judgement line"
+msgstr ""
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Judgement rain"
 msgstr ""
@@ -9358,6 +9403,10 @@ msgstr "Modo"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Keys pressed per second."
 msgstr "Teclas presionadas por segundo."
+
+#: src/components/supporter/loadout.ts
+msgid "Knob lasers"
+msgstr ""
 
 #: src/routes/__root.tsx
 msgid "Ko-fi page"
@@ -10589,6 +10638,10 @@ msgstr "Mapas listos."
 #: src/routes/snipes.tsx
 msgid "Margin <0>+{0}</0>"
 msgstr "Margen <0>+{0}</0>"
+
+#: src/components/supporter/loadout.ts
+msgid "Margin doodles"
+msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Mark the export range"
@@ -13305,6 +13358,10 @@ msgstr "jugadores cercanos farmeando"
 msgid "peers hold"
 msgstr "ellos tienen"
 
+#: src/components/supporter/loadout.ts
+msgid "Pencil test"
+msgstr ""
+
 #: src/lib/beatmap-status.ts
 msgid "pending"
 msgstr "pendiente"
@@ -13433,12 +13490,20 @@ msgid "Pink"
 msgstr "Rosa"
 
 #: src/components/supporter/loadout.ts
+msgid "Pink halo"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
 msgid "Pink wings"
 msgstr ""
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Pinned"
 msgstr "Fijados"
+
+#: src/components/supporter/loadout.ts
+msgid "Pity counter"
+msgstr ""
 
 #: src/lib/supporter-name-styles.ts
 msgid "Pixel"
@@ -14175,6 +14240,10 @@ msgstr "Radar"
 #: src/lib/signature-shared.ts
 msgid "Radar and axes"
 msgstr "Radar y ejes"
+
+#: src/components/supporter/loadout.ts
+msgid "Rail pass"
+msgstr ""
 
 #: src/components/supporter/loadout.ts
 msgid "Rain cloud"
@@ -15443,6 +15512,10 @@ msgstr "Guardar cambios para todos"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save for everyone"
 msgstr "Guardar para todos"
+
+#: src/components/supporter/loadout.ts
+msgid "Save point"
+msgstr ""
 
 #: src/components/packs/SetsView.tsx
 msgid "Save set"
@@ -16752,6 +16825,10 @@ msgstr "tamaño"
 msgid "Size"
 msgstr "Tamaño"
 
+#: src/components/supporter/loadout.ts
+msgid "Sketchbook"
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "skill"
 msgstr "skillset"
@@ -17137,6 +17214,14 @@ msgstr "Ordenando del rating de estrellas más alto al más bajo - clic izquierd
 msgid "Sorting lowest star rating first - left click to clear, right click for descending"
 msgstr "Ordenando del rating de estrellas más bajo al más alto - clic izquierdo para quitar, clic derecho para descendente"
 
+#: src/components/supporter/loadout.ts
+msgid "Soul"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Soul shatter"
+msgstr ""
+
 #: src/routes/bridge.tsx
 #~ msgid "Source code"
 #~ msgstr "Código fuente"
@@ -17223,6 +17308,10 @@ msgstr ""
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
 msgstr "Texto spoiler"
+
+#: src/components/supporter/loadout.ts
+msgid "SSR card"
+msgstr ""
 
 #: src/routes/skins.tsx
 msgid "stable"
@@ -17785,6 +17874,10 @@ msgstr "toca uno para previsualizar su respuesta"
 #: src/components/packs/RevealStage.tsx
 msgid "Tap the stack or drag the top card to draw"
 msgstr "Toca las cartas o arrastra la de arriba para sacar una"
+
+#: src/components/supporter/loadout.ts
+msgid "Taped page"
+msgstr ""
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "target"
@@ -19852,6 +19945,10 @@ msgstr "plays totales"
 msgid "total pp"
 msgstr "pp totales"
 
+#: src/components/supporter/loadout.ts
+msgid "Touch ring"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Tournament"
 msgstr "Torneo"
@@ -20012,6 +20109,10 @@ msgstr "Convierte todas las hold notes en notas normales."
 #: src/routes/snipes.tsx
 msgid "Turns the notes into hold notes that fill the gaps between them."
 msgstr "Convierte las notas en hold notes que llenan los espacios entre ellas."
+
+#: src/components/supporter/loadout.ts
+msgid "Turntable"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Twenty is enough that a few lucky passes cannot carry it. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
@@ -21123,6 +21224,10 @@ msgstr ""
 
 #: src/components/supporter/loadout.ts
 msgid "Witch hat"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Witch hat and broom"
 msgstr ""
 
 #: src/routes/recommendations.tsx

@@ -2413,9 +2413,9 @@ export function PlayerProfilePage({
                     side without moving anything. */}
                 {/* A supporter's name style replaces the accent colour. */}
                 {heroNameStyle || heroNameFont ? (
-                  <SupporterStyledName live nameStyle={heroNameStyle} nameFont={heroNameFont} name={user.display_name ?? user.username} className="min-w-0 truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                  <SupporterStyledName live nameStyle={heroNameStyle} nameFont={heroNameFont} name={user.display_name ?? user.username} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
                 ) : (
-                  <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                  <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
                 )}
                 {showProfileCountryFlag ? (
                   <Link

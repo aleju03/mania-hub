@@ -3454,6 +3454,7 @@ msgstr "批准于"
 msgid "Arabic"
 msgstr "阿拉伯语"
 
+#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Arcade"
 msgstr ""
@@ -3791,6 +3792,10 @@ msgstr "没有单独设置的列所使用的单点基础颜色。"
 #: src/routes/recommendations.tsx
 msgid "based on what players near the same pp are farming:"
 msgstr "基于相近 pp 的玩家都在刷什么："
+
+#: src/components/supporter/loadout.ts
+msgid "Battle menu"
+msgstr ""
 
 #: src/routes/bbcode.tsx
 msgid "BBCode"
@@ -4152,6 +4157,10 @@ msgstr "内置布局"
 #: src/components/communities/field-options.tsx
 msgid "Bulgarian"
 msgstr "保加利亚语"
+
+#: src/components/supporter/loadout.ts
+msgid "Bullet board"
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -5855,6 +5864,10 @@ msgstr ""
 #~ msgid "Crafting your edition…"
 #~ msgstr "正在制作你的特别版…"
 
+#: src/components/supporter/loadout.ts
+msgid "Crayon"
+msgstr ""
+
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
@@ -6115,6 +6128,10 @@ msgstr "段位技能"
 msgid "Dan skip"
 msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Dance pad"
+msgstr ""
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Danger"
 msgstr "危险操作"
@@ -6305,6 +6322,10 @@ msgstr "开发预览"
 
 #: src/components/supporter/loadout.ts
 msgid "DFJK"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Dialogue box"
 msgstr ""
 
 #: src/lib/streak-game.ts
@@ -7642,6 +7663,10 @@ msgstr "将叠加组件调整到 16:9 画面中。"
 #~ msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 #~ msgstr "五大致对应一个真实课题的长度。达标通过正好四次时，就取那四次的平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
 
+#: src/components/supporter/loadout.ts
+msgid "Five-star pull"
+msgstr ""
+
 #: src/routes/report.tsx
 msgid "fixed"
 msgstr "已修复"
@@ -7853,6 +7878,10 @@ msgstr "全屏"
 
 #: src/components/supporter/loadout.ts
 msgid "Fun"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Gacha"
 msgstr ""
 
 #: src/lib/supporter-name-styles.ts
@@ -8154,6 +8183,10 @@ msgstr "随机猜一个"
 #~ msgid "Halloween"
 #~ msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Halo"
+msgstr ""
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Hanabi"
 msgstr ""
@@ -8421,6 +8454,10 @@ msgstr "pp 从高到低"
 msgid "Highest tier first, then pp"
 msgstr "先按等级从高到低，再按 pp"
 
+#: src/components/supporter/loadout.ts
+msgid "Highlighter"
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Hindi"
 msgstr "印地语"
@@ -8656,6 +8693,10 @@ msgstr "抽取方式"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "HP"
 msgstr "HP"
+
+#: src/components/supporter/loadout.ts
+msgid "HP bar"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "HP bar bg"
@@ -9200,6 +9241,10 @@ msgstr "已判定"
 msgid "Judged at OD {0}, the original map's, instead of this file's OD {1}."
 msgstr ""
 
+#: src/components/supporter/loadout.ts
+msgid "Judgement line"
+msgstr ""
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Judgement rain"
 msgstr ""
@@ -9367,6 +9412,10 @@ msgstr "键数"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Keys pressed per second."
 msgstr "每秒按键次数。"
+
+#: src/components/supporter/loadout.ts
+msgid "Knob lasers"
+msgstr ""
 
 #: src/routes/__root.tsx
 msgid "Ko-fi page"
@@ -10598,6 +10647,10 @@ msgstr "谱面数据已就绪。"
 #: src/routes/snipes.tsx
 msgid "Margin <0>+{0}</0>"
 msgstr "领先 <0>+{0}</0>"
+
+#: src/components/supporter/loadout.ts
+msgid "Margin doodles"
+msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Mark the export range"
@@ -13314,6 +13367,10 @@ msgstr "同水平在刷"
 msgid "peers hold"
 msgstr "玩家平均"
 
+#: src/components/supporter/loadout.ts
+msgid "Pencil test"
+msgstr ""
+
 #: src/lib/beatmap-status.ts
 msgid "pending"
 msgstr "待定"
@@ -13442,12 +13499,20 @@ msgid "Pink"
 msgstr "粉色"
 
 #: src/components/supporter/loadout.ts
+msgid "Pink halo"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
 msgid "Pink wings"
 msgstr ""
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Pinned"
 msgstr "已置顶"
+
+#: src/components/supporter/loadout.ts
+msgid "Pity counter"
+msgstr ""
 
 #: src/lib/supporter-name-styles.ts
 msgid "Pixel"
@@ -14184,6 +14249,10 @@ msgstr "雷达图"
 #: src/lib/signature-shared.ts
 msgid "Radar and axes"
 msgstr "雷达图与坐标轴"
+
+#: src/components/supporter/loadout.ts
+msgid "Rail pass"
+msgstr ""
 
 #: src/components/supporter/loadout.ts
 msgid "Rain cloud"
@@ -15452,6 +15521,10 @@ msgstr "保存改动，对所有人生效"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save for everyone"
 msgstr "对所有人保存"
+
+#: src/components/supporter/loadout.ts
+msgid "Save point"
+msgstr ""
 
 #: src/components/packs/SetsView.tsx
 msgid "Save set"
@@ -16761,6 +16834,10 @@ msgstr "大小"
 msgid "Size"
 msgstr "大小"
 
+#: src/components/supporter/loadout.ts
+msgid "Sketchbook"
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "skill"
 msgstr "技能"
@@ -17146,6 +17223,14 @@ msgstr "按星级从高到低排序 - 左键切换升序，右键清除"
 msgid "Sorting lowest star rating first - left click to clear, right click for descending"
 msgstr "按星级从低到高排序 - 左键清除，右键切换降序"
 
+#: src/components/supporter/loadout.ts
+msgid "Soul"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Soul shatter"
+msgstr ""
+
 #: src/routes/bridge.tsx
 #~ msgid "Source code"
 #~ msgstr "源代码"
@@ -17232,6 +17317,10 @@ msgstr ""
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
 msgstr "剧透文字"
+
+#: src/components/supporter/loadout.ts
+msgid "SSR card"
+msgstr ""
 
 #: src/routes/skins.tsx
 msgid "stable"
@@ -17794,6 +17883,10 @@ msgstr "点击任意一个即可预览它的回复"
 #: src/components/packs/RevealStage.tsx
 msgid "Tap the stack or drag the top card to draw"
 msgstr "点击卡堆，或拖走最上面的卡片来抽卡"
+
+#: src/components/supporter/loadout.ts
+msgid "Taped page"
+msgstr ""
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "target"
@@ -19861,6 +19954,10 @@ msgstr "总游玩次数"
 msgid "total pp"
 msgstr "总 pp"
 
+#: src/components/supporter/loadout.ts
+msgid "Touch ring"
+msgstr ""
+
 #: src/routes/maps.tsx
 msgid "Tournament"
 msgstr "比赛"
@@ -20021,6 +20118,10 @@ msgstr "把所有长条变成普通音符。"
 #: src/routes/snipes.tsx
 msgid "Turns the notes into hold notes that fill the gaps between them."
 msgstr "把音符变成填满其间空隙的长条。"
+
+#: src/components/supporter/loadout.ts
+msgid "Turntable"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Twenty is enough that a few lucky passes cannot carry it. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
@@ -21132,6 +21233,10 @@ msgstr ""
 
 #: src/components/supporter/loadout.ts
 msgid "Witch hat"
+msgstr ""
+
+#: src/components/supporter/loadout.ts
+msgid "Witch hat and broom"
 msgstr ""
 
 #: src/routes/recommendations.tsx

@@ -418,39 +418,58 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Inferno: heat welling up from below, smoke rolling, embers rising and
-  // flickering out as they climb.
+  // Inferno: drawn fire, not a glow. Flame tongues lick up from the bottom of
+  // the view in four hard colour bands (cel-shaded, like 2D game fire), their
+  // tips tearing off as loose licks; a few sharp sparks streak up through the
+  // smoke above. No soft glow bands or round bokeh embers.
   inferno: shader(`
+float flameField(vec2 p, float t) {
+  float y = p.y + .5;
+  // how far up the fire reaches here: a few wandering crests along the bottom
+  float crest = .75 + .35 * sin(p.x * 4.5 + noise(vec2(p.x * 1.5, t * .4)) * 4. + t * .3);
+  float grad = 1. - y / (.42 * crest);
+  // tall noise rising fast; near the base it barely matters, near the top only
+  // its low spots stay lit, which tears the fire into separate pointed licks
+  vec2 q = vec2(p.x * 6.5, y * 3.2 - t * 2.6);
+  q.x += (noise(vec2(y * 4. - t * 1.5, p.x * 2.)) - .5) * 1.2;
+  float n = smoothstep(.22, .78, fbm(q + (vec2(fbm(q * .7 + t * .2), 0.) - .5) * 1.2));
+  return grad * 1.3 - n * 1.5 + .45;
+}
 vec3 theme(vec2 uv, vec2 p, float t) {
   float sc = u_scroll;
-  vec3 col = vec3(.03, .008, .004);
-  vec2 hp = p;
-  hp.x += (noise(vec2(p.y * 6. - t * 2., t * .5)) - .5) * .05;
-  float heat = fbm(vec2(hp.x * 2.2, hp.y * 1.5 - t * .45));
-  // heat wells up along the foot of the hero (riding with the page) and the bottom of the view
-  float foot = .1 + sc;
-  float glow = (exp(-(p.y + .5) * 2.4) + exp(-abs(p.y - foot) * 5.5) * .8) * (.5 + .75 * heat);
-  col += vec3(1., .3, .06) * glow * .5;
-  col += vec3(1., .62, .2) * pow(glow, 3.) * .3;
-  float smoke = fbm(vec2(p.x * 1.8 + t * .03, p.y * 1.2 - t * .12 - sc * .4));
-  col = mix(col, vec3(.07, .03, .022), smoothstep(.45, .85, smoke) * .45);
-  for (int l = 0; l < 3; l++) {
+  vec3 col = mix(vec3(.05, .016, .01), vec3(.018, .008, .007), smoothstep(-.5, .45, p.y));
+  // heavy smoke rolling up, darker than the sky behind it
+  float smoke = fbm(vec2(p.x * 1.6 + t * .025, p.y * 1.1 - t * .1 - sc * .4));
+  col = mix(col, vec3(.012, .006, .006), smoothstep(.5, .8, smoke) * .6);
+  float f = flameField(p, t);
+  float aa = PX * 6.;
+  // hard bands: ember red at the rim, orange, then a yellow core
+  col = mix(col, vec3(.42, .06, .03), smoothstep(0., aa, f));
+  col = mix(col, vec3(.86, .2, .05), smoothstep(.2, .2 + aa, f));
+  col = mix(col, vec3(1., .52, .1), smoothstep(.48, .48 + aa, f));
+  col = mix(col, vec3(1., .86, .42), smoothstep(.9, .9 + aa, f));
+  // a thin dark outline where the fire meets the dark, like an inked edge
+  col *= 1. - .55 * smoothstep(aa * 2., 0., abs(f + .03)) * step(f, .1);
+  // sparks: short sharp streaks along their climb, a few at a time
+  for (int l = 0; l < 2; l++) {
     float fl = float(l);
-    float s = 5. + fl * 4.;
+    float s = 6. + fl * 5.;
     vec2 q = p * s;
-    q.y -= t * (1.1 + fl * .5) + sc * s * .35;
-    q.x += sin(q.y * .8 + t * 1.5 + fl * 2.) * .25;
+    q.y -= t * (1.6 + fl * .6) + sc * s * .35;
+    float sway = sin(q.y * .9 + t * 2. + fl * 3.) * .2;
+    q.x += sway;
     vec2 id = floor(q);
-    vec2 f = fract(q) - .5;
-    float h = hash(id + fl * 13.);
-    if (h < .7) continue;
-    float d = length(f - (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .6);
-    float core = smoothstep(max(.045, PX * s * 1.5), 0., d);
-    float halo = exp(-d * 14.) * .3;
-    float flick = .55 + .45 * sin(t * (6. + 8. * hash(id + 3.)) + h * 20.);
-    float life = smoothstep(.6, -.35, p.y) + exp(-abs(p.y - foot) * 4.);
-    vec3 ec = mix(vec3(1., .35, .05), vec3(1., .8, .35), hash(id + 5.));
-    col += ec * (core + halo) * flick * (.35 + fl * .25) * (.2 + .8 * life);
+    vec2 c = fract(q) - .5;
+    float h = hash(id + fl * 17.);
+    if (h < .86) continue;
+    vec2 o = c - (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .5;
+    // a streak leaning with the sway, longer than it is wide
+    o.x -= o.y * cos(q.y * .9 + t * 2. + fl * 3.) * .2;
+    float d = length(o * vec2(1., .22));
+    float spark = smoothstep(max(.035, PX * s * 1.5), 0., d);
+    float life = smoothstep(.55, -.3, p.y);
+    float blink = step(.25, fract(t * (1.5 + hash(id + 3.) * 2.) + h * 7.));
+    col = mix(col, vec3(1., .78, .35), spark * life * blink * (.7 + fl * .3));
   }
   return col;
 }`),

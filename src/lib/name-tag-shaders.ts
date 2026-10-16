@@ -402,9 +402,23 @@ function drawNameMask(span: HTMLElement, scale: number): { url: string; aspect: 
 
 type Built = { shader: string; uniforms: Record<string, unknown>; mipmaps?: string[] };
 
+/* Liquid Metal's preprocessing of a name's mask takes a noticeable moment;
+   keep the last few so hovering back over chrome or molten gold is instant. */
+const liquidMetalImages = new Map<string, Promise<HTMLImageElement>>();
+function processedLiquidMetal(maskUrl: string): Promise<HTMLImageElement> {
+  let image = liquidMetalImages.get(maskUrl);
+  if (!image) {
+    image = toProcessedLiquidMetal(maskUrl).then((processed) => blobImage(processed.pngBlob));
+    image.catch(() => liquidMetalImages.delete(maskUrl));
+    liquidMetalImages.set(maskUrl, image);
+    if (liquidMetalImages.size > 8) liquidMetalImages.delete(liquidMetalImages.keys().next().value!);
+  }
+  return image;
+}
+
 async function buildStyle(style: ShaderNameStyle, mask: { url: string; aspect: number }): Promise<Built> {
   if (style === "chrome" || style === "molten-gold") {
-    const image = await blobImage((await toProcessedLiquidMetal(mask.url)).pngBlob);
+    const image = await processedLiquidMetal(mask.url);
     const gold = style === "molten-gold";
     return {
       shader: nameLiquidMetalShader,
