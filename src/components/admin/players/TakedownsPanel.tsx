@@ -16,9 +16,9 @@ import {
 } from "../../../lib/owner-takedown";
 
 /* The Takedowns tab of /admin/players: a player asked for their data to come
- * down (lib/owner-takedown.ts). Their tracked history, every card of them,
- * their Companella imports, uploaded replays and our copies of their osu!
- * replays are deleted, their profile is a 404 everywhere, and nothing tracks
+ * down (lib/owner-takedown.ts). Their tracked history, their Companella
+ * imports, uploaded replays and our copies of their osu! replays are deleted
+ * (cards of them other players pulled stay), their profile is a 404 everywhere, and nothing tracks
  * them again. Their account keeps working: sign-in, the packs they own, goals,
  * skins. Unlike the banned-account wipe it can be undone: Restore turns
  * tracking back on and the profile rebuilds from what osu! still serves.
@@ -126,8 +126,6 @@ export function TakedownsPanel() {
             <Stat label="tracker scores" value={preview.impact.trackerScores} />
             <Stat label="activity plays" value={preview.impact.activityPlays} />
             <Stat label="top plays" value={preview.impact.topScores} />
-            <Stat label="card holdings" value={preview.impact.packHoldings} />
-            <Stat label="card owners" value={preview.impact.packOwners} />
             <Stat label="Companella imports" value={preview.impact.companellaImports} />
             <Stat label="uploaded replays" value={preview.impact.uploadedReplays} />
           </dl>
@@ -169,7 +167,7 @@ export function TakedownsPanel() {
       {ask?.kind === "takedown" ? (
         <ConfirmModal
           title={`Take down ${ask.preview.username}?`}
-          body={`Deletes their tracked scores, activity, skills, every card of them (${plural(ask.preview.impact.packOwners, "collector")}), ${plural(ask.preview.impact.companellaImports, "Companella import")}, ${plural(ask.preview.impact.uploadedReplays, "uploaded replay")} and our copies of their osu! replays (#${ask.preview.userId}). Their profile becomes a 404 and nothing tracks them again. Their account keeps working. Restore turns tracking back on, but what is deleted stays deleted.`}
+          body={`Deletes their tracked scores, activity, skills, ${plural(ask.preview.impact.companellaImports, "Companella import")}, ${plural(ask.preview.impact.uploadedReplays, "uploaded replay")} and our copies of their osu! replays (#${ask.preview.userId}). Their profile becomes a 404 and nothing tracks them again. Their account keeps working, and cards of them other players pulled stay. Restore turns tracking back on, but what is deleted stays deleted.`}
           confirmLabel="Take down"
           danger
           onConfirm={() => {
