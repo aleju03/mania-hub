@@ -329,7 +329,17 @@ function CardGrid({
         );
       });
   return binder
-    ? <BinderPages binder={binder} page={pageIndex} className="mt-4">{tiles}</BinderPages>
+    ? (
+      <BinderPages
+        binder={binder}
+        page={pageIndex}
+        ready={!loading}
+        settled={cards.every((card) => !card.skills || Boolean(getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card))))}
+        className="mt-4"
+      >
+        {tiles}
+      </BinderPages>
+    )
     : <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6">{tiles}</div>;
 }
 

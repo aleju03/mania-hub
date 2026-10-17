@@ -33,7 +33,7 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { CollectionCardPlaceholder, CollectionCardTile, type CardMint } from "./CardTile";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "./cardThumbnailCache";
-import { useCardThumbnails } from "./useCardThumbnails";
+import { useCardThumbnails, warmCardThumbnails } from "./useCardThumbnails";
 import { playRecycleClink } from "./packSfx";
 import { MarkFilters } from "./collections/MarkFilters";
 import { teamImageProxyUrl } from "#/lib/team-image";
@@ -1153,6 +1153,52 @@ export function CollectionPanel({
     };
   }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, duplicatesOnly, mark, teamsOnly, playersOnly, serverCacheKey, serverFilterKey, serverRefreshKey]);
 
+  /* A binder turns its page as a page, so the spreads either side are read
+     ahead, faces and all: by the time the reader turns, the next page is a
+     cache hit and the leaf lands on cards rather than on loading slots. */
+  useEffect(() => {
+    if (!binder || !useServerCollection || missingOpen || !activeServerPage) return;
+    let cancelled = false;
+    const neighbours = [collectionPage + 1, collectionPage - 1].filter((index) => index >= 0 && index < totalPages);
+    const timer = window.setTimeout(() => {
+      for (const index of neighbours) {
+        const request = { ...serverRequest, page: index };
+        const key = serverCollectionCacheKey(request);
+        const cached = serverCollectionPageCache.get(key);
+        if (cached) {
+          void warmCardThumbnails(cached.cards as CollectedCard[]);
+          continue;
+        }
+        void fetchServerPackCollectionPage({
+          data: {
+            page: index,
+            pageSize: collectionPageSize,
+            tier: tierFilter,
+            query: trimmedQuery,
+            sort: sortMode,
+            duplicatesOnly,
+            mark,
+            teams: true,
+            teamsOnly,
+            playersOnly,
+          },
+        })
+          .then((page) => {
+            if (cancelled || !page) return;
+            serverCollectionPageCache.set(key, page);
+            void warmCardThumbnails(page.cards as CollectedCard[]);
+          })
+          .catch(() => {});
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // serverCacheKey stands for the whole request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [binder, useServerCollection, missingOpen, Boolean(activeServerPage), serverCacheKey, totalPages]);
+
   /* The missing list, read only while it is on screen. Not cached across
      opens like the collection pages are: the point of the list is which
      players are still out there, and a pack pulled a minute ago has already
@@ -1634,7 +1680,13 @@ export function CollectionPanel({
             : t`No cards match the selected rarity.`}
         </div>
       ) : (
-        <BinderOrGrid binder={binder} page={currentPage} className={`mt-4 ${selecting ? "select-none" : ""}`}>
+        <BinderOrGrid
+          binder={binder}
+          page={currentPage}
+          ready={!showSkeletonGrid}
+          settled={pageCards.every((card) => !card.skills || Boolean(getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card))))}
+          className={`mt-4 ${selecting ? "select-none" : ""}`}
+        >
           {showSkeletonGrid
             ? placeholderTiers.map((tier, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} tier={tier} team={teamsOnly} />)
             : pageCards.map((card) => {
@@ -2050,7 +2102,14 @@ export function CollectionPanel({
 }
 
 /* The collection page: the usual grid, or a supporter's binder pages. */
-function BinderOrGrid({ binder, page, className, children }: { binder: SupporterBinderId | null; page: number; className: string; children: ReactNode }) {
-  if (binder) return <BinderPages binder={binder} page={page} className={className}>{children}</BinderPages>;
+function BinderOrGrid({ binder, page, ready, settled, className, children }: {
+  binder: SupporterBinderId | null;
+  page: number;
+  ready: boolean;
+  settled: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  if (binder) return <BinderPages binder={binder} page={page} ready={ready} settled={settled} className={className}>{children}</BinderPages>;
   return <div className={`grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${className}`}>{children}</div>;
 }
