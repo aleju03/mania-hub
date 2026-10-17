@@ -1,5 +1,4 @@
 import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
-import { installPrismView, prismViewHeaders } from "./prism-view";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
 import type { VibroAnalysis } from "#dan/vibro-sections";
@@ -4598,18 +4597,10 @@ export function openLiveEventSource(country: string, options?: { observe?: boole
   return liveEventSourcePool.open(`${base}/api/live?${query.toString()}`);
 }
 
-// The reads the backend answers from Prism in an admin's Prism view (backend isPrismViewPath).
-const PRISM_VIEW_PATH = /^\/api\/(chart-analysis(\/rate)?\?|profiles\/[^/]+\/(skills|skill-history|skill-plays|dan-evidence|recent-ratings)(\?|$))/;
-
 async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Server is not configured.");
-  const prism = PRISM_VIEW_PATH.test(path) ? prismViewHeaders() : null;
-  const response = await fetch(`${base}${path}`, {
-    credentials: "omit",
-    ...init,
-    ...(prism ? { cache: "no-store" as const, headers: { ...(init?.headers as Record<string, string> | undefined), ...prism } } : {}),
-  });
+  const response = await fetch(`${base}${path}`, { credentials: "omit", ...init });
   // Same "Server <status>" message as the plain Error this used to throw, but
   // carrying the status and a 429's retry-after so callers like the pack draw
   // can tell a rate-limited request from a broken backend.
@@ -4841,6 +4832,3 @@ export async function fetchDiscordShowcase(
   if (options?.fresh) query.set("fresh", "1");
   return fetchLiveJson<DiscordShowcase>(`/api/discord/showcase?${query.toString()}`);
 }
-
-// The Prism view's labels follow before the first render (lib/prism-view.ts).
-if (typeof window !== "undefined") installPrismView();

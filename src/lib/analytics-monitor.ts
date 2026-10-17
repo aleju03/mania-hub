@@ -194,6 +194,8 @@ const ANALYTICS_EVENT_LABELS: Record<string, string> = {
   dom_translate_conflict: "Page translator conflict",
   map_opened: "Map opened",
   osu_api_error: "osu! API error",
+  prism_news_read: "Prism article read to the end",
+  prism_news_view: "Prism article opened",
   pack_cut: "Pack cut open",
   pack_open: "Pack opened",
   packs_collections_card: "Card opened",

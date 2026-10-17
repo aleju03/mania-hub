@@ -2237,6 +2237,10 @@ msgstr "1 rate per chart"
 msgid "1 screenshot"
 msgstr "1 screenshot"
 
+#: src/routes/news_.prism.tsx
+msgid "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
+msgstr "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
+
 #: src/routes/dan-estimates.tsx
 msgid "1. Every chart gets a dan level"
 msgstr "1. Every chart gets a dan level"
@@ -2350,6 +2354,10 @@ msgstr "6 AM"
 msgid "6 PM"
 msgstr "6 PM"
 
+#: src/routes/news_.prism.tsx
+msgid "69% of ranked and loved 6K-8K charts moved by less than 2. You can see any chart's numbers in <0>Maps</0>."
+msgstr "69% of ranked and loved 6K-8K charts moved by less than 2. You can see any chart's numbers in <0>Maps</0>."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use pattern tags from the chart analysis instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only 7K gets a split, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume. The other LN ladders are read as one skill."
 #~ msgstr "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use pattern tags from the chart analysis instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only 7K gets a split, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume. The other LN ladders are read as one skill."
@@ -2377,6 +2385,14 @@ msgstr "6K regular"
 #: src/routes/dan-estimates.tsx
 msgid "6K regular and LN"
 msgstr "6K regular and LN"
+
+#: src/routes/news_.prism.tsx
+msgid "6K, 7K and 8K are now rated by Prism"
+msgstr "6K, 7K and 8K are now rated by Prism"
+
+#: src/routes/news_.prism.tsx
+msgid "6K, 7K and 8K charts and plays are now rated by Prism, a difficulty calculator made for those keymodes."
+msgstr "6K, 7K and 8K charts and plays are now rated by Prism, a difficulty calculator made for those keymodes."
 
 #: src/routes/dan-estimates.tsx
 msgid "6K/7K LN"
@@ -2517,6 +2533,10 @@ msgstr "A 4K chart is LN when holds make up at least 45% of its notes and those 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 #~ msgstr "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
+
+#: src/routes/news_.prism.tsx
+msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
+msgstr "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
 
 #. placeholder {0}: formatAccuracy(bar)
 #. placeholder {1}: formatAccuracy(accuracy)
@@ -2802,6 +2822,11 @@ msgstr "accuracy"
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 #: src/routes/teams.tsx
+msgid "Accuracy"
+msgstr "Accuracy"
+
+#: src/routes/news_.prism.tsx
+msgctxt "article heading"
 msgid "Accuracy"
 msgstr "Accuracy"
 
@@ -4077,6 +4102,7 @@ msgstr "BPM Breakdown"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Bracket"
 msgstr "Bracket"
 
@@ -4462,6 +4488,10 @@ msgstr "Chart preview volume"
 #~ msgid "Chart sharing is off for this installation, so plays on maps the site does not have will be skipped."
 #~ msgstr "Chart sharing is off for this installation, so plays on maps the site does not have will be skipped."
 
+#: src/routes/news_.prism.tsx
+msgid "Charts that only repeat the same full chord rate closer to a jack now."
+msgstr "Charts that only repeat the same full chord rate closer to a jack now."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "chasing your first {chaseTarget}pp play"
 msgstr "chasing your first {chaseTarget}pp play"
@@ -4539,6 +4569,7 @@ msgstr "Choose another collector for your gift."
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Chordjack"
 msgstr "Chordjack"
@@ -4550,6 +4581,7 @@ msgstr "Chordjacks"
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Chordstream"
 msgstr "Chordstream"
 
@@ -6113,6 +6145,7 @@ msgstr "Default volume"
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Delay"
 msgstr "Delay"
 
@@ -7991,6 +8024,7 @@ msgstr "Handjack"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Handstream"
 msgstr "Handstream"
@@ -8496,6 +8530,10 @@ msgstr "Hybrid"
 msgid "Hybrid chart: {0}, {1}"
 msgstr "Hybrid chart: {0}, {1}"
 
+#: src/routes/news_.prism.tsx
+msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
+msgstr "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
+
 #: src/routes/news_.companella.tsx
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
 #~ msgstr "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
@@ -8908,6 +8946,7 @@ msgstr "Italic"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jack"
 msgstr "Jack"
@@ -8918,6 +8957,7 @@ msgstr "JACK"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jackspeed"
 msgstr "Jackspeed"
@@ -8962,6 +9002,10 @@ msgstr "joined {month}"
 #: src/routes/player/$username.tsx
 msgid "Joined <0>{joinedValue}</0>"
 msgstr "Joined <0>{joinedValue}</0>"
+
+#: src/routes/news_.prism.tsx
+msgid "Joke charts"
+msgstr "Joke charts"
 
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Journal"
@@ -9013,6 +9057,7 @@ msgstr "Jump to a page"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jumpstream"
 msgstr "Jumpstream"
@@ -9540,6 +9585,7 @@ msgstr "Live updates on"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "LN"
 msgstr "LN"
@@ -9568,6 +9614,10 @@ msgstr "LN body color"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "LN Body color"
 msgstr "LN Body color"
+
+#: src/routes/news_.prism.tsx
+msgid "LN charts"
+msgstr "LN charts"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "LN Chordjacks"
@@ -10470,6 +10520,14 @@ msgstr "MinaCalc {version}"
 #: src/components/player/SkillBreakdown.tsx
 msgid "MinaCalc is Etterna's difficulty calculator"
 msgstr "MinaCalc is Etterna's difficulty calculator"
+
+#: src/routes/news_.prism.tsx
+msgid "MinaCalc rated jumptrill charts much harder than they are to play."
+msgstr "MinaCalc rated jumptrill charts much harder than they are to play."
+
+#: src/routes/news_.prism.tsx
+msgid "MinaCalc was made for 4K. On 6K to 8K it rated charts with the same skillsets it uses on 4K, without Technical, and gave no chart an LN number."
+msgstr "MinaCalc was made for 4K. On 6K to 8K it rated charts with the same skillsets it uses on 4K, without Technical, and gave no chart an LN number."
 
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Mine"
@@ -12785,6 +12843,7 @@ msgstr "overall"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Overall"
 msgstr "Overall"
 
@@ -13352,6 +13411,10 @@ msgstr "Plays / session"
 msgid "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
 msgstr "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
 
+#: src/routes/news_.prism.tsx
+msgid "Plays are rated on ScoreV2 accuracy, the accuracy osu!lazer shows, instead of Etterna's Wife3. Wife3 takes a lot for misses and broken holds, so about a quarter of 7K LN plays between 93% and 95% fell under its cutoff and didn't count. Plays above 90% count now."
+msgstr "Plays are rated on ScoreV2 accuracy, the accuracy osu!lazer shows, instead of Etterna's Wife3. Wife3 takes a lot for misses and broken holds, so about a quarter of 7K LN plays between 93% and 95% fell under its cutoff and didn't count. Plays above 90% count now."
+
 #: src/components/me/RosterOptInCard.tsx
 msgid "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
 msgstr "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
@@ -13594,6 +13657,10 @@ msgstr "Press Enter or comma to add a tag. Up to {USER_COLLECTION_MAX_TAGS} tags
 msgid "Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds."
 msgstr "Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds."
 
+#: src/routes/news_.prism.tsx
+msgid "Pressing while other fingers of the same hand are holding costs more the more fingers are held and the longer they hold, and letting go of a long hold costs too."
+msgstr "Pressing while other fingers of the same hand are holding costs more the more fingers are held and the longer they hold, and letting go of a long hold costs too."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "preview"
 msgstr "preview"
@@ -13676,6 +13743,22 @@ msgstr "Previous preview"
 #: src/routes/snipes.tsx
 msgid "Previously"
 msgstr "Previously"
+
+#: src/routes/news_.prism.tsx
+msgid "Prism"
+msgstr "Prism"
+
+#: src/routes/news_.prism.tsx
+msgid "Prism also reads the chart's OD. Wider hit windows make a chart easier to score on, so the same notes rate lower at a low OD, and more so on LN charts."
+msgstr "Prism also reads the chart's OD. Wider hit windows make a chart easier to score on, so the same notes rate lower at a low OD, and more so on LN charts."
+
+#: src/routes/news_.prism.tsx
+msgid "Prism is a difficulty calculator made for 6K, 7K and 8K. It now rates every chart and play on those keymodes instead of MinaCalc, which still rates 4K, 5K and 9K and up."
+msgstr "Prism is a difficulty calculator made for 6K, 7K and 8K. It now rates every chart and play on those keymodes instead of MinaCalc, which still rates 4K, 5K and 9K and up."
+
+#: src/routes/news_.prism.tsx
+msgid "Prism rates Chordstream, Bracket, Jack, Technical and Delay, and LN on charts with enough holds."
+msgstr "Prism rates Chordstream, Bracket, Jack, Technical and Delay, and LN on charts with enough holds."
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Prismatic"
@@ -15016,6 +15099,10 @@ msgstr "Roll a random favourited map, the same pool as the Maps random tab. Filt
 #: src/components/discord/CommandShowcase.tsx
 msgid "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another."
 msgstr "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another."
+
+#: src/routes/news_.prism.tsx
+msgid "Rolls this fast get played as chords, and Prism rates them as chords."
+msgstr "Rolls this fast get played as chords, and Prism rates them as chords."
 
 #: src/components/communities/field-options.tsx
 msgid "Romanian"
@@ -16497,6 +16584,10 @@ msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic
 #~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
 #~ msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
 
+#: src/routes/news_.prism.tsx
+msgid "Skillsets"
+msgstr "Skillsets"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Skin"
@@ -16903,6 +16994,7 @@ msgstr "STAM"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stamina"
 msgstr "Stamina"
@@ -17119,6 +17211,7 @@ msgstr "Streak"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stream"
 msgstr "Stream"
@@ -17424,6 +17517,7 @@ msgstr "TECH"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Technical"
 msgstr "Technical"
 
@@ -20987,6 +21081,10 @@ msgstr "your {yourPp}pp · {age} old"
 msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 msgstr "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 
+#: src/routes/news_.prism.tsx
+msgid "Your 6K, 7K and 8K skill ratings are being recalculated with Prism. Until a player's are, they don't show on those keymodes' leaderboards."
+msgstr "Your 6K, 7K and 8K skill ratings are being recalculated with Prism. Until a player's are, they don't show on those keymodes' leaderboards."
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "Your account is not on the list for this beta."
 msgstr "Your account is not on the list for this beta."
@@ -21179,6 +21277,10 @@ msgstr "Your private skins are on the shelf above; anything you publish lands he
 #: src/routes/recommendations.tsx
 msgid "your rating"
 msgstr "your rating"
+
+#: src/routes/news_.prism.tsx
+msgid "Your ratings"
+msgstr "Your ratings"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 #~ msgid "Your recent plays are being pulled in and will be rated here in a few minutes."

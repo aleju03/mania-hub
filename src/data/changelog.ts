@@ -43,6 +43,8 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-17", text: "Initial release of Prism, a difficulty calculator made for 6K, 7K and 8K that replaces MinaCalc on those keymodes. Your 6K, 7K and 8K ratings take a while to recalculate after the release, so they might not show up right away.", bold: "Prism", kind: "new", to: "/news/prism" },
+  { date: "2026-10-17", text: "Added sessions, maps and passes colors and a keymode filter to the activity calendar, and a setting for the count that gets the brightest color." },
   { date: "2026-10-16", text: "Added the osu!lazer and osu!stable results screens to the end of replays.", to: "/replay" },
   { date: "2026-10-16", text: "Added your global and country rank under the Overall on the Skills tab." },
   { date: "2026-10-16", text: "Only your best rate play on each chart counts toward dan now, instead of your best two.", to: "/dan-estimates" },

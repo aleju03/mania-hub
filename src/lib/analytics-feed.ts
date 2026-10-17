@@ -165,6 +165,7 @@ const SIMPLE_PAGE_LABELS: Record<string, string> = {
   "/bbcode": "the BBCode editor",
   "/discord": "the Discord page",
   "/dan-estimates": "the dan explainer",
+  "/news/prism": "the Prism article",
 };
 
 /* The country scope the visitor had selected when the event fired, as a name
@@ -557,6 +558,10 @@ function describeNamedAnalyticsEvent(
     /* The two things on the page that are hidden until someone goes looking:
        the folded ScoreV2 note, and the tooltip on the one-player top of the
        4K ladder. */
+    case "prism_news_view":
+      return { kind: "visit", verb: "opened", subject: "the Prism article", detail: null };
+    case "prism_news_read":
+      return { kind: "visit", verb: "read", subject: "the Prism article", detail: "to the end" };
     case "dan_estimates_note":
       return { kind: "visit", verb: "opened", subject: "the ScoreV2 note", detail: "on the dan explainer" };
     case "dan_estimates_saragi":

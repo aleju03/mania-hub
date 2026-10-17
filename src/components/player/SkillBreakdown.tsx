@@ -623,7 +623,7 @@ export function SkillModePanel({
             <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>{mode.keyCount}K skill rating</Trans></span>
             {version?.startsWith("prism") ? (
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">{prismLabel(version)}</span>
+              <Link to="/news/prism" className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1 transition-colors hover:text-white">{prismLabel(version)}</Link>
             ) : version ? (
               <span className="cursor-help text-[11px] font-semibold uppercase tracking-wide text-osu-f1" title={t`MinaCalc is Etterna's difficulty calculator`}>
                 {i18n._(msg`MinaCalc ${version}`)}

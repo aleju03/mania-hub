@@ -2226,6 +2226,10 @@ msgstr "每张谱面 1 个倍速"
 msgid "1 screenshot"
 msgstr "1 张截图"
 
+#: src/routes/news_.prism.tsx
+msgid "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
+msgstr "1,632 张 6K-8K 上架和社区喜爱谱面现在有了 LN 数值，评分变化最大的也正是 LN 谱面。"
+
 #: src/routes/dan-estimates.tsx
 msgid "1. Every chart gets a dan level"
 msgstr "1. 每张谱面都有一个段位"
@@ -2339,6 +2343,10 @@ msgstr "6:00"
 msgid "6 PM"
 msgstr "18:00"
 
+#: src/routes/news_.prism.tsx
+msgid "69% of ranked and loved 6K-8K charts moved by less than 2. You can see any chart's numbers in <0>Maps</0>."
+msgstr "69% 的 6K-8K 上架和社区喜爱谱面变化不到 2。任何谱面的数值都可以在<0>谱面</0>里查看。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "6K and 7K cannot use those skillsets, because that engine does not rate Technical at all and everything collapses onto Handstream. They use pattern tags from the chart analysis instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only 7K gets a split, into general, tech, inverse and release, because those are the only LN subtypes the analyzer separates in any volume. The other LN ladders are read as one skill."
 #~ msgstr "6K 和 7K 无法使用这些技能项，因为该引擎完全不评 Technical，所有结果都会归到 Handstream。它们改用谱面分析得出的谱型标签，所以同时标有大叠和技的谱面会为这两个技能都提供依据。LN 这边只有 7K 会拆分为综合、技、反键和放键，因为只有这些 LN 子类型有足够的数据让分析器将它们区分开来。其它 LN 段位表都按单一技能计算。"
@@ -2366,6 +2374,14 @@ msgstr "6K 单点"
 #: src/routes/dan-estimates.tsx
 msgid "6K regular and LN"
 msgstr "6K 单点和 LN"
+
+#: src/routes/news_.prism.tsx
+msgid "6K, 7K and 8K are now rated by Prism"
+msgstr "6K、7K 和 8K 现在由 Prism 评分"
+
+#: src/routes/news_.prism.tsx
+msgid "6K, 7K and 8K charts and plays are now rated by Prism, a difficulty calculator made for those keymodes."
+msgstr "6K、7K 和 8K 的谱面和成绩现在由 Prism 评分，这是一个专为这些键数打造的难度计算器。"
 
 #: src/routes/dan-estimates.tsx
 msgid "6K/7K LN"
@@ -2506,6 +2522,10 @@ msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速�
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 #~ msgstr "长条占到 45% 或以上的谱面算 LN 谱面，低于这个比例就算单点谱面。这和谱面页面给谱面打标签用的是同一条线，所以一张谱面不可能一边喂你的 LN 评分，一边挂着单点的标签。"
+
+#: src/routes/news_.prism.tsx
+msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
+msgstr "7K 谱面中至少 37.5% 的音符是长条（6K 和 8K 为 45%），或者有一个长条贯穿谱面大部分时间、其他手指在它下面继续按键时，谱面就会有 LN 数值。长条能直接点一下并及时放手的谱面没有 LN 数值。有 30 秒以上 LN 段落的谱面，会按这些段落评 LN。"
 
 #. placeholder {0}: formatAccuracy(bar)
 #. placeholder {1}: formatAccuracy(accuracy)
@@ -2791,6 +2811,11 @@ msgstr "准确率"
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 #: src/routes/teams.tsx
+msgid "Accuracy"
+msgstr "准确率"
+
+#: src/routes/news_.prism.tsx
+msgctxt "article heading"
 msgid "Accuracy"
 msgstr "准确率"
 
@@ -4062,6 +4087,7 @@ msgstr "BPM 分布"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Bracket"
 msgstr "衩"
 
@@ -4447,6 +4473,10 @@ msgstr "谱面预览音量"
 #~ msgid "Chart sharing is off for this installation, so plays on maps the site does not have will be skipped."
 #~ msgstr ""
 
+#: src/routes/news_.prism.tsx
+msgid "Charts that only repeat the same full chord rate closer to a jack now."
+msgstr "只重复同一个全押的谱面，现在的评分更接近叠键。"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "chasing your first {chaseTarget}pp play"
 msgstr "正在冲击你的第一个 {chaseTarget}pp 成绩"
@@ -4524,6 +4554,7 @@ msgstr "请选择另一位收藏者收礼。"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Chordjack"
 msgstr "大叠"
@@ -4535,6 +4566,7 @@ msgstr "大叠"
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Chordstream"
 msgstr "胶囊"
 
@@ -6098,6 +6130,7 @@ msgstr "默认音量"
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Delay"
 msgstr "延迟"
 
@@ -7972,6 +8005,7 @@ msgstr "三押叠"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Handstream"
 msgstr "三押切"
@@ -8473,6 +8507,10 @@ msgstr "混合"
 msgid "Hybrid chart: {0}, {1}"
 msgstr "混合谱面：{0}，{1}"
 
+#: src/routes/news_.prism.tsx
+msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
+msgstr "如果你觉得某张谱面的评分不对，可以通过<0>问题反馈</0>告诉我们。"
+
 #: src/routes/news_.companella.tsx
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
 #~ msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，其中 ranked 图的成绩会计入你在排行榜上的 pp。"
@@ -8881,6 +8919,7 @@ msgstr "斜体"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jack"
 msgstr "叠键"
@@ -8891,6 +8930,7 @@ msgstr "叠键"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jackspeed"
 msgstr "速叠"
@@ -8935,6 +8975,10 @@ msgstr "加入于 {month}"
 #: src/routes/player/$username.tsx
 msgid "Joined <0>{joinedValue}</0>"
 msgstr "注册于 <0>{joinedValue}</0>"
+
+#: src/routes/news_.prism.tsx
+msgid "Joke charts"
+msgstr "整活谱"
 
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Journal"
@@ -8986,6 +9030,7 @@ msgstr "跳转到某一页"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jumpstream"
 msgstr "双押切"
@@ -9513,6 +9558,7 @@ msgstr "实时更新已开启"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "LN"
 msgstr "LN"
@@ -9541,6 +9587,10 @@ msgstr "长条主体颜色"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "LN Body color"
 msgstr "长条主体颜色"
+
+#: src/routes/news_.prism.tsx
+msgid "LN charts"
+msgstr "LN 谱面"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "LN Chordjacks"
@@ -10443,6 +10493,14 @@ msgstr "MinaCalc {version}"
 #: src/components/player/SkillBreakdown.tsx
 msgid "MinaCalc is Etterna's difficulty calculator"
 msgstr "MinaCalc 是 Etterna 的难度计算器"
+
+#: src/routes/news_.prism.tsx
+msgid "MinaCalc rated jumptrill charts much harder than they are to play."
+msgstr "MinaCalc 把对拍谱面评得比实际打起来难得多。"
+
+#: src/routes/news_.prism.tsx
+msgid "MinaCalc was made for 4K. On 6K to 8K it rated charts with the same skillsets it uses on 4K, without Technical, and gave no chart an LN number."
+msgstr "MinaCalc 是为 4K 做的。在 6K 到 8K 上，它用和 4K 一样的技能组来评谱面，没有技巧，也不给任何谱面 LN 数值。"
 
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Mine"
@@ -12758,6 +12816,7 @@ msgstr "总体"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Overall"
 msgstr "总体"
 
@@ -13325,6 +13384,10 @@ msgstr "每场游玩次数"
 msgid "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
 msgstr "成绩只记录每个已追踪国家/地区的前 100 名玩家，这名玩家目前不在其中。"
 
+#: src/routes/news_.prism.tsx
+msgid "Plays are rated on ScoreV2 accuracy, the accuracy osu!lazer shows, instead of Etterna's Wife3. Wife3 takes a lot for misses and broken holds, so about a quarter of 7K LN plays between 93% and 95% fell under its cutoff and didn't count. Plays above 90% count now."
+msgstr "成绩按 ScoreV2 准确率评分，也就是 osu!lazer 显示的准确率，而不是 Etterna 的 Wife3。Wife3 对 miss 和断长条扣得很重，所以 93% 到 95% 之间约四分之一的 7K LN 成绩会低于它的门槛而不计入。现在 90% 以上的成绩都会计入。"
+
 #: src/components/me/RosterOptInCard.tsx
 msgid "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
 msgstr "每个国家/地区前 100 名的成绩会被自动记录。你还不在其中，但可以把自己加入追踪器。"
@@ -13567,6 +13630,10 @@ msgstr "按回车键或英文逗号添加标签，最多可添加 {USER_COLLECTI
 msgid "Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds."
 msgstr "来自皮肤或默认采样的按键反馈音。关闭后只听谱面自己的打击音。"
 
+#: src/routes/news_.prism.tsx
+msgid "Pressing while other fingers of the same hand are holding costs more the more fingers are held and the longer they hold, and letting go of a long hold costs too."
+msgstr "同一只手的其他手指按着长条时再按键，按住的手指越多、按得越久，难度越高；放开一个长条也有难度。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "preview"
 msgstr "预览"
@@ -13649,6 +13716,22 @@ msgstr "上一段试听"
 #: src/routes/snipes.tsx
 msgid "Previously"
 msgstr "此前"
+
+#: src/routes/news_.prism.tsx
+msgid "Prism"
+msgstr "Prism"
+
+#: src/routes/news_.prism.tsx
+msgid "Prism also reads the chart's OD. Wider hit windows make a chart easier to score on, so the same notes rate lower at a low OD, and more so on LN charts."
+msgstr "Prism 也会读取谱面的 OD。判定区间越宽，谱面越容易打出分数，所以同样的音符在低 OD 下评分更低，LN 谱面更明显。"
+
+#: src/routes/news_.prism.tsx
+msgid "Prism is a difficulty calculator made for 6K, 7K and 8K. It now rates every chart and play on those keymodes instead of MinaCalc, which still rates 4K, 5K and 9K and up."
+msgstr "Prism 是专为 6K、7K 和 8K 打造的难度计算器。这些键数的所有谱面和成绩现在都由它评分，不再使用 MinaCalc；MinaCalc 继续负责 4K、5K 以及 9K 及以上。"
+
+#: src/routes/news_.prism.tsx
+msgid "Prism rates Chordstream, Bracket, Jack, Technical and Delay, and LN on charts with enough holds."
+msgstr "Prism 评分的技能组有胶囊、衩、叠键、技巧和延迟，长条足够多的谱面还有 LN。"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Prismatic"
@@ -14989,6 +15072,10 @@ msgstr "随机抽一张被收藏的谱面，卡池与「谱面」的随机标签
 #: src/components/discord/CommandShowcase.tsx
 msgid "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another."
 msgstr "随机抽一张热门刷分谱面。默认使用全球刷分榜，可按键数、状态、星级区间或最低 pp 筛选。也可以再抽一次。"
+
+#: src/routes/news_.prism.tsx
+msgid "Rolls this fast get played as chords, and Prism rates them as chords."
+msgstr "这么快的楼梯实际上是当多押来打的，Prism 也按多押来评分。"
 
 #: src/components/communities/field-options.tsx
 msgid "Romanian"
@@ -16462,6 +16549,10 @@ msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Vo
 #~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
 #~ msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Volcanic ~ Delta ~</0>，就会把你的 4K 速度段位设为 <1>delta</1>，无需一个技能通常要求的四次通过。除 6K 外每个段位表都有练习谱面。"
 
+#: src/routes/news_.prism.tsx
+msgid "Skillsets"
+msgstr "技能组"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Skin"
@@ -16868,6 +16959,7 @@ msgstr "耐力"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stamina"
 msgstr "耐力"
@@ -17084,6 +17176,7 @@ msgstr "连续天数"
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
+#: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stream"
 msgstr "乱键"
@@ -17389,6 +17482,7 @@ msgstr "技"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
+#: src/routes/news_.prism.tsx
 msgid "Technical"
 msgstr "技巧"
 
@@ -20944,6 +21038,10 @@ msgstr "你的 {yourPp}pp · 已过去 {age}"
 msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 msgstr "你这个 {yourPp}pp 的成绩已经过去 {age}。水平相近的玩家中前四分之一在 {p75}pp。"
 
+#: src/routes/news_.prism.tsx
+msgid "Your 6K, 7K and 8K skill ratings are being recalculated with Prism. Until a player's are, they don't show on those keymodes' leaderboards."
+msgstr "你的 6K、7K 和 8K 技能评分正在用 Prism 重新计算。在某位玩家的评分算完之前，该玩家不会出现在这些键数的排行榜上。"
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "Your account is not on the list for this beta."
 msgstr "你的账号不在这次测试的名单中。"
@@ -21135,6 +21233,10 @@ msgstr "你的私有皮肤在上方的架子上，你发布的皮肤会出现在
 
 #: src/routes/recommendations.tsx
 msgid "your rating"
+msgstr "你的评分"
+
+#: src/routes/news_.prism.tsx
+msgid "Your ratings"
 msgstr "你的评分"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
