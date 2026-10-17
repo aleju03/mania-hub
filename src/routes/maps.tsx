@@ -121,7 +121,7 @@ import { MapsRandomDrawController } from "../lib/maps-random-draw-state";
 import type { RandomDrawEvent } from "../lib/maps-random-draw-state";
 import { useWindowActive } from "../lib/window-activity";
 import { useBodyScrollLock } from "../lib/use-body-scroll-lock";
-import { parseMsdRanges, serializeMsdRanges } from "../lib/map-search-msd";
+import { msdRangesForFacet, parseMsdRanges, serializeMsdRanges } from "../lib/map-search-msd";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1137,7 +1137,7 @@ function MapsPage() {
       skills: [...skills.includes],
       skillsExclude: [...skills.excludes],
       vibro: mapsSearch.sVibro,
-      msd: parseMsdRanges(mapsSearch.sMsd),
+      msd: msdRangesForFacet(parseMsdRanges(mapsSearch.sMsd), [...keys.includes]),
       starMin: mapsSearch.sStarMin,
       starMax: mapsSearch.sStarMax,
       bpmMin: mapsSearch.sBpmMin,

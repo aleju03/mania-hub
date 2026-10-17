@@ -34,8 +34,8 @@ import {
 import type { TriStateMode } from "../../lib/maps-random-filter";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useNoDans } from "../../store";
-import { activeMsdKeys, MSD_FILTER_MAX, MSD_FILTER_SKILLSET, msdFilterKeysFor, serializeMsdRanges, type MsdRanges } from "../../lib/map-search-msd";
-import { MSD_SKILLSET_META, msdSkillsetMeta, OVERALL_AXIS_META, PATTERN_RATING_META } from "../../lib/skill-axes";
+import { activeMsdKeys, isPrismKeyFacet, isPrismOnlyMsdKey, MSD_FILTER_MAX, MSD_FILTER_SKILLSET, msdRangesForFacet, serializeMsdRanges, type MsdRanges, msdFilterKeysFor } from "../../lib/map-search-msd";
+import { MSD_SKILLSET_META, msdSkillsetMeta, OVERALL_AXIS_META, PATTERN_RATING_META, type SkillAxisMeta } from "../../lib/skill-axes";
 
 const SEARCH_PAGE_SIZE = 24;
 const SEARCH_INITIAL_SKELETON_COUNT = 12;
@@ -165,7 +165,7 @@ function pruneForKeys(ui: MapSearchUiState, keys: string[]): Partial<MapSearchUi
     patternsExclude: ui.patternsExclude.filter((pattern) => patterns.has(pattern)),
     skills: ui.skills.filter((skill) => skills.has(skill)),
     skillsExclude: ui.skillsExclude.filter((skill) => skills.has(skill)),
-    msd: Object.fromEntries(Object.entries(ui.msd).filter(([key]) => msdFilterKeysFor(keys).includes(key))),
+    msd: msdRangesForFacet(ui.msd, keys),
   };
 }
 
@@ -946,7 +946,15 @@ function FilterPopover({ active, trigger, children }: { active: boolean; trigger
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    // Picking a value inside widens the trigger ("Any" -> "Overall 26.5+"),
+    // which can wrap the row and move the trigger without any window resize;
+    // a shift kept from before pushed the panel off the left edge.
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    for (const element of [rootRef.current, popRef.current, document.body]) if (element) observer?.observe(element);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -1051,7 +1059,10 @@ function msdFilterMeta(skillsets: typeof MSD_SKILLSET_META) {
 const MSD_FILTER_META = msdFilterMeta(MSD_SKILLSET_META);
 // Prism's names (Chordstream, Bracket, Jack, Delay) for a 7K-only key facet.
 const PRISM_MSD_FILTER_META = msdFilterMeta(msdSkillsetMeta(7));
-const msdFilterMetaFor = (keys: readonly string[]) => (msdFilterKeysFor(keys).includes("speed") ? PRISM_MSD_FILTER_META : MSD_FILTER_META);
+// A key's chip: Prism's name and colour for the Prism keys and on a 7K-only
+// facet, MinaCalc's otherwise.
+const msdFilterMetaFor = (keys: readonly string[]) => (key: string): SkillAxisMeta | undefined =>
+  (isPrismKeyFacet(keys) || isPrismOnlyMsdKey(key) ? PRISM_MSD_FILTER_META : MSD_FILTER_META)[MSD_FILTER_SKILLSET[key]];
 
 function formatMsd(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -1071,8 +1082,8 @@ const SKILL_MSD_FOCUS: Record<string, string> = {
 const PRISM_SKILL_MSD_FOCUS: Record<string, string> = {
   speed: "speed",
   tech: "technical",
-  jack: "chordjack",
-  stream: "jumpstream",
+  jack: "jack",
+  stream: "chordstream",
 };
 
 function msdRangeText(range: { min: number; max: number }): string {
@@ -1104,15 +1115,14 @@ function MsdPanel({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   const { t, i18n } = useLingui();
   const active = activeMsdKeys(ui.msd);
   const keys = msdFilterKeysFor(ui.keys);
-  const filterMeta = msdFilterMetaFor(ui.keys);
+  const metaFor = msdFilterMetaFor(ui.keys);
   const [focus, setFocus] = useState<string>(() => {
     if (active.length > 0) return active[0];
-    const focusMap = keys.includes("speed") ? PRISM_SKILL_MSD_FOCUS : SKILL_MSD_FOCUS;
+    const focusMap = isPrismKeyFacet(ui.keys) ? PRISM_SKILL_MSD_FOCUS : SKILL_MSD_FOCUS;
     const skill = ui.skills.find((id) => focusMap[id]);
     if (skill) return focusMap[skill];
     return ui.patterns.includes("ln") ? "ln" : "overall";
   });
-  const metaFor = (key: string) => filterMeta[MSD_FILTER_SKILLSET[key]];
   const labelFor = (key: string) => {
     const meta = metaFor(key);
     return meta ? i18n._(meta.labelMsg) : key;
@@ -1179,7 +1189,7 @@ function MsdPicker({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   let summary: ReactNode = <Trans>Any</Trans>;
   if (active.length === 1) {
     const key = active[0];
-    const meta = msdFilterMetaFor(ui.keys)[MSD_FILTER_SKILLSET[key]];
+    const meta = msdFilterMetaFor(ui.keys)(key);
     summary = `${meta ? i18n._(meta.labelMsg) : key} ${msdRangeText(ui.msd[key])}`;
   } else if (active.length > 1) {
     const count = active.length;
