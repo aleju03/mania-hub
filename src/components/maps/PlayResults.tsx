@@ -58,8 +58,13 @@ export function PlayResults({ play }: { play: MapDetailPlayContext }) {
   const countMax = judgements[0]?.value ?? 0;
   const count300 = judgements[1]?.value ?? 0;
   // MAX:300, the ratio mania players compare plays by. A play with no 300s has
-  // no ratio to show.
-  const ratio = count300 > 0 ? `${(countMax / count300).toFixed(2)} : 1` : null;
+  // no ratio to show. Below 1 it flips to 1 : N, so 6 MAX to 3,229 300s reads
+  // 1 : 538.17 instead of rounding to 0.00 : 1.
+  const ratio = count300 <= 0
+    ? null
+    : countMax >= count300 || countMax <= 0
+      ? `${(countMax / count300).toFixed(2)} : 1`
+      : `1 : ${(count300 / countMax).toFixed(2)}`;
 
   return (
     <div className="min-w-0">
