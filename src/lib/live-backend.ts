@@ -2512,13 +2512,11 @@ export interface LiveTeamSkills {
   members: LiveTeamSkillMember[];
 }
 
+/* Counts only: maps, passes and the pattern mix come with the day's detail. */
 export interface LiveTeamActivityDay {
   date: string;
   scoreCount: number;
-  passedCount: number;
   sessionCount: number;
-  mapCount: number;
-  skills: LivePlayerActivitySkillReadout | null;
   members: Array<{ userId: number; scoreCount: number }>;
 }
 
@@ -2540,6 +2538,8 @@ export interface LiveTeamActivitySnapshot {
 export interface LiveTeamActivityDayDetail {
   teamId: number;
   date: string;
+  /* The day summed over members; mapCount counts each member's maps. */
+  summary: { scoreCount: number; passedCount: number; sessionCount: number; mapCount: number; skills: LivePlayerActivitySkillReadout | null };
   members: Array<{ userId: number; day: LivePlayerActivityDay }>;
 }
 

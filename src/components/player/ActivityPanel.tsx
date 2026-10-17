@@ -443,7 +443,9 @@ export function TeamActivityPanel({ teamId, members, onReady }: {
     );
   }
 
-  const detailMembers = dayDetail?.date === selectedDate ? dayDetail.members : null;
+  const detail = dayDetail?.date === selectedDate ? dayDetail : null;
+  const detailMembers = detail?.members ?? null;
+  const daySkills = detail?.summary.skills ?? null;
   const dayMembers = detailMembers
     ? detailMembers.map((entry) => ({ userId: entry.userId, scoreCount: entry.day.scoreCount, day: entry.day }))
     : (selectedTeamDay?.members ?? []).map((entry) => ({ ...entry, day: null }));
@@ -510,7 +512,7 @@ export function TeamActivityPanel({ teamId, members, onReady }: {
                   <ActivityDetailMetric label={t`Plays`} value={formatNumber(selectedDay.scoreCount)} />
                   <ActivityDetailMetric label={t`Players`} value={formatNumber(selectedTeamDay?.members.length ?? dayMembers.length)} />
                   <ActivityDetailMetric label={t`Sessions`} value={formatNumber(selectedDay.sessionCount)} />
-                  <ActivityDetailMetric label={t`Maps`} value={formatNumber(selectedDay.mapCount)} />
+                  <ActivityDetailMetric label={t`Maps`} value={detail ? formatNumber(detail.summary.mapCount) : "—"} />
                 </div>
 
                 <div className="mt-4 space-y-1.5 sm:mt-5">
@@ -532,13 +534,19 @@ export function TeamActivityPanel({ teamId, members, onReady }: {
                     <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">{t`Pattern mix`}</div>
                     <div className="text-[10px] text-osu-f1 sm:text-[11px]">{t`avg intensity, 0-100`}</div>
                   </div>
-                  {selectedDay.skills && selectedDay.skills.analyzedPlays > 0 ? (
-                    <ActivityPatternMix key={selectedDay.date} skills={selectedDay.skills} />
-                  ) : (
+                  {daySkills && daySkills.analyzedPlays > 0 ? (
+                    <ActivityPatternMix key={selectedDay.date} skills={daySkills} />
+                  ) : dayLoading ? (
+                    <div className="mt-3 space-y-3">
+                      <Skeleton className="h-2 rounded-full" />
+                      <Skeleton className="h-2 rounded-full" />
+                      <Skeleton className="h-2 rounded-full" />
+                    </div>
+                  ) : detail ? (
                     <div className="mt-3 text-[11px] text-osu-f1">
                       {t`Skill analysis is queued for the maps played on this day.`}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </motion.div>
@@ -596,7 +604,7 @@ function TeamActivityDayMember({ member, userId, scoreCount, day, loading }: {
 }
 
 /* The team payload in the player snapshot's shape, so the same grid builder
-   and cell colours apply. Maps and timelines only exist on a day's detail. */
+   and cell colours apply. Maps, passes and skills only exist on a day's detail. */
 function teamToActivitySnapshot(snapshot: LiveTeamActivitySnapshot): LivePlayerActivitySnapshot {
   return {
     available: true,
@@ -615,11 +623,11 @@ function teamToActivitySnapshot(snapshot: LiveTeamActivitySnapshot): LivePlayerA
     days: snapshot.days.map((day) => ({
       date: day.date,
       scoreCount: day.scoreCount,
-      passedCount: day.passedCount,
+      passedCount: 0,
       sessionCount: day.sessionCount,
-      mapCount: day.mapCount,
+      mapCount: 0,
       maps: [],
-      skills: day.skills,
+      skills: null,
       timeline: [],
     })),
   };
