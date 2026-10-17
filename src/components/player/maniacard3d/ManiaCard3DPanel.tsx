@@ -143,6 +143,7 @@ export function ManiaCard3DPanel({
   team,
   supporterLookOverride,
   showTierProgress = true,
+  sleeve = null,
 }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
@@ -241,6 +242,7 @@ export function ManiaCard3DPanel({
           },
         });
         rendererRef.current = renderer;
+        renderer.setSleeve(sleeveRef.current);
         renderer.setWindowActive(isWindowActive());
 
         const resize = () => renderer?.resize();
@@ -260,6 +262,13 @@ export function ManiaCard3DPanel({
 
     return cleanup;
   }, [data.status, loading, reducedMotion]);
+
+  // The case goes on and off without repainting the card.
+  const sleeveRef = useRef(sleeve);
+  sleeveRef.current = sleeve;
+  useEffect(() => {
+    rendererRef.current?.setSleeve(sleeve);
+  }, [sleeve]);
 
   useEffect(() => {
     const apply = () => rendererRef.current?.setWindowActive(isWindowActive());

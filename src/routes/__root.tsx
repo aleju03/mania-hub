@@ -1,7 +1,6 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { Coffee, ExternalLink, Heart, X } from "lucide-react";
+import { Coffee } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { ChangelogModal } from "../components/layout/ChangelogModal";
@@ -16,8 +15,7 @@ import { GoalToasts } from "../components/me/GoalToasts";
 import { SupporterWelcome } from "../components/supporter/SupporterWelcome";
 import { TrackingToasts } from "../components/me/TrackingToasts";
 import { ReplayExportPanel } from "../components/replay/ReplayExportPanel";
-import { SupportGoalBar } from "../components/layout/SupportGoalBar";
-import { AuthContext, useAuth } from "../lib/auth-context";
+import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
 import { InitialCountryContext } from "../lib/country-context";
 import { ANONYMOUS_AUTH_STATE } from "../lib/auth-shared";
@@ -48,7 +46,7 @@ import { getI18n } from "../lib/i18n";
 import { CHANGELOG_SEEN_KEY, hasUnseenChangelog, markChangelogSeen, readChangelogSeen } from "../lib/changelog";
 import { UPDATES } from "../data/changelog";
 import { I18nProvider } from "@lingui/react";
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Trans } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { AnalyticsProvider } from "../lib/analytics-provider";
 import { track } from "../lib/analytics";
@@ -525,164 +523,18 @@ function NotFoundPage() {
   );
 }
 
-const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
-const LAVA_TIP_URL = "https://app.lava.top/mania-tracker?tabId=donate";
-
-// A signed-in visitor's tip link carries their osu! id, which lava.top hands
-// back on the webhook so the tip counts toward their supporter time (backend
-// features/supporters.ts, LAVA_UTM_PREFIX).
-function lavaTipUrl(viewerId: number | null | undefined): string {
-  if (!viewerId) return LAVA_TIP_URL;
-  return `${LAVA_TIP_URL}&utm_source=mania-tracker&utm_content=osu-${viewerId}`;
-}
-// Countries where Ko-fi cannot take a payment (no PayPal, and local cards do
-// not work abroad), so the popup offers lava.top, which takes ruble cards.
-const LAVA_SUPPORT_COUNTRIES = new Set(["RU", "BY", "IR", "CU", "SY", "KP"]);
-
-// Asked when the popup opens rather than rendered into the page, so the
-// visitor's country never ends up in HTML a CDN could cache for someone else.
-const getSupportUsesLava = createServerFn({ method: "GET" }).handler(() => {
-  const country = readEdgeCountry(getRequest().headers);
-  return country != null && LAVA_SUPPORT_COUNTRIES.has(country);
-});
-
-function KofiSupportButton() {
-  const { t } = useLingui();
+function SupportFooterLink() {
   // getI18n rather than useLingui for the same reason as RootErrorComponent.
   const i = getI18n(useLocale());
-  const viewerId = useAuth().viewer?.id;
-  const [open, setOpen] = useState(false);
-  // null until the server answers; Ko-fi shows meanwhile only if it says no.
-  const [useLava, setUseLava] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!open || useLava != null) return;
-    let cancelled = false;
-    getSupportUsesLava()
-      .then((value) => {
-        if (!cancelled) setUseLava(value);
-      })
-      .catch(() => {
-        if (!cancelled) setUseLava(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, useLava]);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overscrollBehavior = "none";
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
-    };
-  }, [open]);
-  const modal = open && typeof document !== "undefined"
-    ? createPortal(
-        <div
-          className="fixed inset-0 z-[140] flex items-center justify-center p-4 pointer-events-none"
-          onTouchMoveCapture={(event) => {
-            if (event.target instanceof HTMLIFrameElement) return;
-            event.preventDefault();
-          }}
-        >
-          <div
-            className="absolute inset-0 bg-black/65 pointer-events-auto touch-none"
-            onClick={() => setOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={i._(msg`Support mania-tracker`)}
-            className="relative z-10 w-[min(400px,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl pointer-events-auto"
-          >
-            <div className="flex items-center justify-between gap-3 border-b border-osu-b3/50 px-4 py-3">
-              <div className="text-left text-[11px] text-osu-f1">
-                {i._(msg`If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going.`)} <Heart className="inline h-3 w-3 align-[-1px] text-osu-pink" aria-hidden="true" />{" "}
-                <a
-                  href={KOFI_PAGE_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => track("support_profile_open")}
-                  className="inline-flex items-center gap-0.5 font-semibold text-osu-pink-light hover:underline"
-                >
-                  {i._(msg`Ko-fi page`)}
-                  <ExternalLink className="h-2.5 w-2.5" aria-hidden="true" />
-                </a>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label={i._(msg`Close`)}
-                className="cursor-pointer rounded-md p-1 text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <SupportGoalBar />
-            {useLava === true ? (
-              <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3">
-                <p className="text-[12px] text-osu-f1">
-                  {i._(msg`Can't pay with Ko-fi? You can tip through lava.top.`)}
-                </p>
-                <a
-                  href={lavaTipUrl(viewerId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => track("support_lava_open")}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-osu-pink px-4 py-2 text-[12px] font-semibold text-white transition hover:brightness-110"
-                >
-                  {i._(msg`Send a tip`)}
-                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                </a>
-              </div>
-            ) : null}
-            {useLava != null ? (
-              <iframe
-                src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true`}
-                title={t`Support Mania Tracker on Ko-fi`}
-                loading="eager"
-                scrolling="yes"
-                allow="payment *"
-                className={`block ${useLava ? "h-[480px]" : "h-[540px]"} max-h-[calc(100vh-14rem)] w-full overscroll-contain border-0 bg-[#f9f9f9] [touch-action:auto]`}
-              />
-            ) : (
-              <div className="h-[540px] max-h-[calc(100vh-12rem)]" />
-            )}
-          </div>
-        </div>,
-        document.body,
-      )
-    : null;
   return (
-    <>
-      <a
-        href={KOFI_PAGE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(event) => {
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-          event.preventDefault();
-          setOpen(true);
-          track("support_open");
-        }}
-        className="inline-flex items-center gap-1 rounded-full border border-osu-pink/25 bg-osu-pink/10 px-2 py-0.5 text-[10px] font-semibold text-osu-pink-light/80 hover:bg-osu-pink/20 hover:text-osu-pink-light transition-colors"
-      >
-        <Coffee className="h-3 w-3" />
-        {i._(msg`support`)}
-      </a>
-      {modal}
-    </>
+    <Link
+      to="/support"
+      onClick={() => track("support_page_open")}
+      className="inline-flex items-center gap-1 rounded-full border border-osu-pink/25 bg-osu-pink/10 px-2 py-0.5 text-[10px] font-semibold text-osu-pink-light/80 hover:bg-osu-pink/20 hover:text-osu-pink-light transition-colors"
+    >
+      <Coffee className="h-3 w-3" />
+      {i._(msg`support`)}
+    </Link>
   );
 }
 
@@ -768,7 +620,7 @@ function RootLayout() {
           <ReplayExportPanel />
           <footer className="relative px-16 py-2 text-center text-[10px] text-osu-pink-light/30">
             <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
-              <KofiSupportButton />
+              <SupportFooterLink />
               <span aria-hidden="true" className="h-2.5 w-px bg-current opacity-60" />
               <Link to="/privacy" className="hover:text-osu-pink-light/60 transition-colors">
                 <Trans>privacy</Trans>

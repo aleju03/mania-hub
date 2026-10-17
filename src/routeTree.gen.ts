@@ -36,6 +36,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkinsRouteImport } from './routes/skins'
 import { Route as SnipesRouteImport } from './routes/snipes'
 import { Route as StreakRouteImport } from './routes/streak'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as SupporterRouteImport } from './routes/supporter'
 import { Route as TeamsRouteImport } from './routes/teams'
 import { Route as TermsRouteImport } from './routes/terms'
@@ -269,6 +270,11 @@ const SnipesRoute = SnipesRouteImport.update({
 const StreakRoute = StreakRouteImport.update({
   id: '/streak',
   path: '/streak',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SupporterRoute = SupporterRouteImport.update({
@@ -813,6 +819,7 @@ export interface FileRoutesByFullPath {
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/streak': typeof StreakRoute
+  '/support': typeof SupportRoute
   '/supporter': typeof SupporterRoute
   '/teams': typeof TeamsRoute
   '/terms': typeof TermsRoute
@@ -941,6 +948,7 @@ export interface FileRoutesByTo {
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/streak': typeof StreakRoute
+  '/support': typeof SupportRoute
   '/supporter': typeof SupporterRoute
   '/teams': typeof TeamsRoute
   '/terms': typeof TermsRoute
@@ -1070,6 +1078,7 @@ export interface FileRoutesById {
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/streak': typeof StreakRoute
+  '/support': typeof SupportRoute
   '/supporter': typeof SupporterRoute
   '/teams': typeof TeamsRoute
   '/terms': typeof TermsRoute
@@ -1200,6 +1209,7 @@ export interface FileRouteTypes {
     | '/skins'
     | '/snipes'
     | '/streak'
+    | '/support'
     | '/supporter'
     | '/teams'
     | '/terms'
@@ -1328,6 +1338,7 @@ export interface FileRouteTypes {
     | '/skins'
     | '/snipes'
     | '/streak'
+    | '/support'
     | '/supporter'
     | '/teams'
     | '/terms'
@@ -1456,6 +1467,7 @@ export interface FileRouteTypes {
     | '/skins'
     | '/snipes'
     | '/streak'
+    | '/support'
     | '/supporter'
     | '/teams'
     | '/terms'
@@ -1585,6 +1597,7 @@ export interface RootRouteChildren {
   SkinsRoute: typeof SkinsRoute
   SnipesRoute: typeof SnipesRoute
   StreakRoute: typeof StreakRoute
+  SupportRoute: typeof SupportRoute
   SupporterRoute: typeof SupporterRoute
   TeamsRoute: typeof TeamsRoute
   TermsRoute: typeof TermsRoute
@@ -1860,6 +1873,13 @@ declare module '@tanstack/react-router' {
       path: '/streak'
       fullPath: '/streak'
       preLoaderRoute: typeof StreakRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/supporter': {
@@ -2720,6 +2740,7 @@ const rootRouteChildren: RootRouteChildren = {
   SkinsRoute: SkinsRoute,
   SnipesRoute: SnipesRoute,
   StreakRoute: StreakRoute,
+  SupportRoute: SupportRoute,
   SupporterRoute: SupporterRoute,
   TeamsRoute: TeamsRoute,
   TermsRoute: TermsRoute,

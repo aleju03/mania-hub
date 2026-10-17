@@ -1,3 +1,5 @@
+import { isSupporterCardSleeve, NO_PACK_STYLE, parsePackStyle, type SupporterCardSleeveId, type SupporterPackStyle } from "./supporter-pack-style";
+import { parseProfileStats, parseProfileStatsData, type ProfileStatId, type ProfileStatsData } from "./profile-stats";
 import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
@@ -4511,8 +4513,13 @@ export interface SupporterProfileLook {
   nameFont: SupporterNameFontId | null;
   profileTheme: SupporterProfileThemeId | null;
   profileThemeOptions: ProfileThemeOptions;
+  /* The supporter's four insight cards, null for the usual four. */
+  profileStats: ProfileStatId[] | null;
+  profileStatsData: ProfileStatsData;
+  /* Their sleeve, binder and reveal confetti in packs. */
+  packStyle: SupporterPackStyle;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {} };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, packStyle: NO_PACK_STYLE };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4537,7 +4544,7 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
   if (cached) return cached.value;
   const entry: SupporterLookCacheEntry = { at: Date.now(), value: Promise.resolve(NO_SUPPORTER_LOOK) };
   const reload = supporterLooksToReload.delete(id);
-  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
+  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; profileStats?: unknown; profileStatsData?: unknown; packStyle?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
     .then((body) => {
       const value = {
         look: parseSupporterLook(body?.look ?? null),
@@ -4546,6 +4553,9 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
         nameFont: isSupporterNameFont(body?.nameFont) ? body.nameFont : null,
         profileTheme: isSupporterProfileTheme(body?.profileTheme) ? body.profileTheme : null,
         profileThemeOptions: parseProfileThemeOptions(body?.profileThemeOptions),
+        profileStats: parseProfileStats(body?.profileStats),
+        profileStatsData: parseProfileStatsData(body?.profileStatsData),
+        packStyle: parsePackStyle(body?.packStyle),
       };
       entry.settled = value;
       return value;
@@ -4597,6 +4607,15 @@ export function peekLiveSupporterProfileThemeOptions(userId: number): ProfileThe
   return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.profileThemeOptions;
 }
 
+export function peekLiveSupporterPackStyle(userId: number): SupporterPackStyle | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.packStyle;
+}
+
+export function peekLiveSupporterProfileStats(userId: number): { stats: ProfileStatId[] | null; data: ProfileStatsData } | undefined {
+  const settled = freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled;
+  return settled ? { stats: settled.profileStats, data: settled.profileStatsData } : undefined;
+}
+
 /* Every active supporter's name tag style and name font, for names in lists. One
    small map shared by every UsernameText, fetched at most once a minute;
    names subscribe and restyle when it lands. */
@@ -4606,6 +4625,7 @@ let nameStyleMap: {
   styles: Map<number, SupporterNameStyleId>;
   fonts: Map<number, SupporterNameFontId>;
   frames: Map<number, SupporterAvatarFrameId>;
+  sleeves: Map<number, SupporterCardSleeveId>;
 } | null = null;
 let nameStyleMapInflight = false;
 // set after a local save, so the next fetch skips the HTTP cache (max-age 60)
@@ -4630,13 +4650,28 @@ export function getSupporterListFrame(userId: number): SupporterAvatarFrameId | 
   return nameStyleMap?.frames.get(userId) ?? null;
 }
 
+/* The card sleeve a supporter's collection tiles wear (the same map). */
+export function getSupporterSleeve(userId: number): SupporterCardSleeveId | null {
+  return nameStyleMap?.sleeves.get(userId) ?? null;
+}
+
+/* After the supporter page saves a sleeve, so the viewer's own tiles update at once. */
+export function setSupporterSleeveLocally(userId: number, sleeve: SupporterCardSleeveId | null): void {
+  const sleeves = new Map(nameStyleMap?.sleeves ?? []);
+  if (sleeve) sleeves.set(userId, sleeve);
+  else sleeves.delete(userId);
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames: nameStyleMap?.frames ?? new Map(), sleeves };
+  nameStyleMapReload = true;
+  for (const listener of nameStyleListeners) listener();
+}
+
 export function ensureSupporterNameStyles(): void {
   if (nameStyleMapInflight || !getLiveBackendUrl()) return;
   if (nameStyleMap && Date.now() - nameStyleMap.at < NAME_STYLE_MAP_TTL_MS) return;
   nameStyleMapInflight = true;
   const reload = nameStyleMapReload;
   nameStyleMapReload = false;
-  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown> }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
+  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown> }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
     .then((body) => {
       const styles = new Map<number, SupporterNameStyleId>();
       for (const [id, style] of Object.entries(body?.styles ?? {})) if (isSupporterNameStyle(style)) styles.set(Number(id), style);
@@ -4644,7 +4679,9 @@ export function ensureSupporterNameStyles(): void {
       for (const [id, font] of Object.entries(body?.fonts ?? {})) if (isSupporterNameFont(font)) fonts.set(Number(id), font);
       const frames = new Map<number, SupporterAvatarFrameId>();
       for (const [id, frame] of Object.entries(body?.frames ?? {})) if (isSupporterAvatarFrame(frame)) frames.set(Number(id), frame);
-      nameStyleMap = { at: Date.now(), styles, fonts, frames };
+      const sleeves = new Map<number, SupporterCardSleeveId>();
+      for (const [id, sleeve] of Object.entries(body?.sleeves ?? {})) if (isSupporterCardSleeve(sleeve)) sleeves.set(Number(id), sleeve);
+      nameStyleMap = { at: Date.now(), styles, fonts, frames, sleeves };
       for (const listener of nameStyleListeners) listener();
     })
     .catch(() => {})
@@ -4659,7 +4696,7 @@ export function setSupporterFrameLocally(userId: number, frame: SupporterAvatarF
   const frames = new Map(nameStyleMap?.frames ?? []);
   if (frame) frames.set(userId, frame);
   else frames.delete(userId);
-  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames };
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames, sleeves: nameStyleMap?.sleeves ?? new Map() };
   nameStyleMapReload = true;
   for (const listener of nameStyleListeners) listener();
 }
@@ -4675,7 +4712,7 @@ export function setSupporterNameStyleLocally(userId: number, style: SupporterNam
     if (font) fonts.set(userId, font);
     else fonts.delete(userId);
   }
-  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles, fonts, frames: nameStyleMap?.frames ?? new Map() };
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles, fonts, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map() };
   nameStyleMapReload = true;
   for (const listener of nameStyleListeners) listener();
 }

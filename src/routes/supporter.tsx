@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import { motion, useReducedMotion } from "framer-motion";
-import { ExternalLink } from "lucide-react";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { LoadoutStage } from "../components/supporter/LoadoutStage";
@@ -34,17 +33,21 @@ import {
   forgetLiveSupporterLook,
   setSupporterFrameLocally,
   setSupporterNameStyleLocally,
+  setSupporterSleeveLocally,
   type LivePackCardSnapshot,
 } from "../lib/live-backend";
 import type { SupporterLook } from "../lib/supporter-card-looks";
 import { profileThemeStyle } from "../lib/supporter-profile-themes";
 import { rememberViewerSupporter } from "../lib/viewer-supporter";
+import { ProfileStatsSection, SupporterPerks } from "../components/supporter/SupporterExtras";
+import { NO_PACK_STYLE } from "../lib/supporter-pack-style";
 import {
   fetchSupporterLookState,
   saveSupporterFrameSetting,
   saveSupporterLookSetting,
   saveSupporterNameFontSetting,
   saveSupporterNameStyleSetting,
+  saveSupporterPackStyleSetting,
   saveSupporterProfileThemeSetting,
   type SupporterLookState,
 } from "../lib/supporter-look-settings";
@@ -58,7 +61,6 @@ import {
    A supporter's loadout saves as it changes; anyone else can try everything
    on, with nothing saved. The profile itself only draws what was saved. */
 
-const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 const NO_SCORES: [] = [];
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const SLIDER_SAVE_DELAY_MS = 450;
@@ -82,7 +84,7 @@ export const Route = createFileRoute("/supporter")({
 });
 
 function loadoutOf(state: SupporterLookState): Loadout {
-  return { theme: state.profileTheme, themeOptions: state.profileThemeOptions, frame: state.frame, nameStyle: state.nameStyle, nameFont: state.nameFont, look: state.look ?? DEFAULT_LOOK };
+  return { theme: state.profileTheme, themeOptions: state.profileThemeOptions, frame: state.frame, nameStyle: state.nameStyle, nameFont: state.nameFont, look: state.look ?? DEFAULT_LOOK, pack: state.packStyle };
 }
 
 function SupporterPage() {
@@ -122,7 +124,7 @@ function SupporterPage() {
         saved.current = loadoutOf(next);
         setEquipped(loadoutOf(next));
       })
-      .catch(() => alive && setEquipped({ theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, look: DEFAULT_LOOK }));
+      .catch(() => alive && setEquipped({ theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE }));
     fetchLivePackCardSnapshotDirect(String(viewer.id))
       .then((next) => alive && setCard(next))
       .catch(() => alive && setCard(null));
@@ -164,6 +166,10 @@ function SupporterPage() {
         if (next.nameStyle !== before.nameStyle) latest = await saveSupporterNameStyleSetting({ data: { nameStyle: next.nameStyle } });
         if (next.nameFont !== before.nameFont) latest = await saveSupporterNameFontSetting({ data: { nameFont: next.nameFont } });
         if (!sameLook(next.look, before.look)) latest = await saveSupporterLookSetting({ data: next.look });
+        if (next.pack.sleeve !== before.pack.sleeve || next.pack.binder !== before.pack.binder || next.pack.wrapper !== before.pack.wrapper) {
+          latest = await saveSupporterPackStyleSetting({ data: { packStyle: next.pack } });
+          setSupporterSleeveLocally(viewer.id, next.pack.sleeve);
+        }
         if (latest) {
           setState(latest);
           saved.current = loadoutOf(latest);
@@ -297,7 +303,7 @@ function SupporterPage() {
   };
 
   /* Everything back to bare, waiting like a roll, so Keep saves it and Undo takes it back. */
-  const BARE: Loadout = { theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, look: DEFAULT_LOOK };
+  const BARE: Loadout = { theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE };
   const clearAll = () => {
     if (!equipped || spinning) return;
     setHover(null);
@@ -305,7 +311,8 @@ function SupporterPage() {
     setPending(BARE);
     setPop((n) => n + 1);
   };
-  const bare = !!equipped && equipped.theme === null && equipped.frame === null && equipped.nameStyle === null && equipped.nameFont === null && sameLook(equipped.look, DEFAULT_LOOK);
+  const bare = !!equipped && equipped.theme === null && equipped.frame === null && equipped.nameStyle === null && equipped.nameFont === null && sameLook(equipped.look, DEFAULT_LOOK)
+    && !equipped.pack.sleeve && !equipped.pack.binder && !equipped.pack.wrapper;
 
   const undo = () => {
     setPending(null);
@@ -361,15 +368,13 @@ function SupporterPage() {
   const status = !viewer || !state ? null : until ? (
     <span className="text-[12px] text-osu-l2">{t`Supporter until ${until}`}</span>
   ) : (
-    <a
-      href={KOFI_PAGE_URL}
-      target="_blank"
-      rel="noopener noreferrer"
+    <Link
+      to="/support"
+      hash="checkout"
       className="inline-flex items-center gap-1.5 rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-semibold text-white transition hover:brightness-110"
     >
-      {t`Support on Ko-fi`}
-      <ExternalLink className="h-3 w-3" aria-hidden="true" />
-    </a>
+      {t`Become a supporter`}
+    </Link>
   );
 
   const avatar = viewer ? avatarImageSrc(viewer.avatarUrl, viewer.id) : undefined;
@@ -451,7 +456,7 @@ function SupporterPage() {
 
               <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
                 {/* Below lg only the avatar and name stay in view; the card is too tall to. */}
-                <div className={`z-20 lg:sticky lg:top-[76px] ${open === "motif" || open === "foil" ? "" : "max-lg:sticky max-lg:top-[60px]"}`}>
+                <div className={`z-20 lg:sticky lg:top-[76px] ${open === "motif" || open === "foil" || open === "sleeve" ? "" : "max-lg:sticky max-lg:top-[60px]"}`}>
                   {shown && held ? (
                     <LoadoutStage
                       shown={shown}
@@ -461,7 +466,7 @@ function SupporterPage() {
                       username={viewer.username}
                       avatar={avatar}
                       card={stageCard}
-                      focus={open === "motif" || open === "foil" ? "card" : "hero"}
+                      focus={open === "motif" || open === "foil" || open === "sleeve" ? "card" : "hero"}
                       pop={pop}
                       spinning={spinning}
                       footer={footer}
@@ -505,6 +510,11 @@ function SupporterPage() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className="mt-10 grid gap-8 border-t border-white/[0.07] pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <ProfileStatsSection viewerId={viewer.id} supporter={supporter} />
+                <SupporterPerks />
               </div>
             </>
           )}

@@ -1,4 +1,6 @@
 import { GiftInbox } from "../components/packs/GiftInbox";
+import { useSupporterPackStyle } from "#/lib/use-supporter-pack-style";
+import type { SupporterWrapperId } from "#/lib/supporter-pack-style";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -307,15 +309,22 @@ function getDuplicateProtectionOwned(
    and kept across route visits. Each full-size foil draw costs ~20ms, so the
    types render in separate idle tasks instead of competing with the 3D pack's
    setup or interaction frames. */
-const packThumbCache = new Map<PackTypeId, string>();
+const packThumbCache = new Map<string, string>();
+const packThumbKey = (type: PackTypeId, wrapper: SupporterWrapperId | null) => `${type}:${wrapper ?? ""}`;
 
-function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>> {
-  const [thumbs, setThumbs] = useState<Partial<Record<PackTypeId, string>>>(() =>
-    Object.fromEntries(packThumbCache),
-  );
+/* The viewer's wrapper prints on every type, so the shelf shows their packs as they will open. */
+function usePackArtThumbs(enabled: boolean, wrapper: SupporterWrapperId | null): Partial<Record<PackTypeId, string>> {
+  const cachedFor = () => Object.fromEntries(
+    PACK_TYPES.flatMap((type) => {
+      const url = packThumbCache.get(packThumbKey(type.id, wrapper));
+      return url ? [[type.id, url]] : [];
+    }),
+  ) as Partial<Record<PackTypeId, string>>;
+  const [thumbs, setThumbs] = useState<Partial<Record<PackTypeId, string>>>(cachedFor);
   useEffect(() => {
+    setThumbs(cachedFor());
     if (!enabled) return;
-    const pending = PACK_TYPES.filter((type) => !packThumbCache.has(type.id));
+    const pending = PACK_TYPES.filter((type) => !packThumbCache.has(packThumbKey(type.id, wrapper)));
     if (pending.length === 0) return;
     let cancelled = false;
     const idleWindow = window as WindowWithIdleCallback;
@@ -334,7 +343,7 @@ function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>>
       if (cancelled) return;
       const type = pending.shift();
       if (!type) return;
-      const full = getCachedPackFrontCanvas(packArtStyleFor(type));
+      const full = getCachedPackFrontCanvas({ ...packArtStyleFor(type), wrapper });
       const small = document.createElement("canvas");
       small.width = 256;
       small.height = Math.round(256 / PACK_ASPECT);
@@ -342,7 +351,7 @@ function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>>
       if (context) {
         context.drawImage(full, 0, 0, small.width, small.height);
         const url = small.toDataURL("image/png");
-        packThumbCache.set(type.id, url);
+        packThumbCache.set(packThumbKey(type.id, wrapper), url);
         setThumbs((current) => ({ ...current, [type.id]: url }));
       }
       if (pending.length > 0) {
@@ -363,7 +372,7 @@ function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>>
       if (idleHandle !== null) idleWindow.cancelIdleCallback?.(idleHandle);
       if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
     };
-  }, [enabled]);
+  }, [enabled, wrapper]); // eslint-disable-line react-hooks/exhaustive-deps
   return thumbs;
 }
 
@@ -533,6 +542,8 @@ function PacksPage() {
      it is not reduced motion, so the cards still deal and turn one after
      another, and the pack keeps the tear people came for. */
   const auth = useAuth();
+  // The viewer's own packs cosmetics: the case their cards land in and their pack wrapper.
+  const viewerPackStyle = useSupporterPackStyle(auth.viewer?.id);
   const { view, album: openAlbumCode } = Route.useSearch();
   /* Local first, URL second: mounting the game must land in the click's own
      render. Waiting for the router to rematch the whole packs route let idle
@@ -542,7 +553,7 @@ function PacksPage() {
   const { countryFeatures } = Route.useRouteContext();
   const navigate = useNavigate();
   const walletApi = usePackWallet();
-  const packThumbs = usePackArtThumbs(!streakOpen);
+  const packThumbs = usePackArtThumbs(!streakOpen, viewerPackStyle.wrapper);
   const [phase, setPhase] = useState<PackPhase>("pack");
   const [packId, setPackId] = useState(0);
   const [packTypeId, setPackTypeId] = useState<PackTypeId>("standard");
@@ -1174,6 +1185,7 @@ function PacksPage() {
                       // type switches and swaps its cached foil texture
                       // instead of remounting a fresh WebGL scene.
                       <PackStage
+                        wrapper={viewerPackStyle.wrapper}
                         reducedMotion={reducedMotion}
                         onOpened={handleOpened}
                         onCut={handleCut}
@@ -1271,6 +1283,7 @@ function PacksPage() {
                         autoRevealAll={revealAllPreferred}
                         compactReveal={skipAnimations}
                         damage={damage}
+                        sleeve={viewerPackStyle.sleeve}
                         onCardRevealed={(pull) => {
                           // In the wallet now, so no longer owed by the pending pack.
                           consumePendingPackCard(pull.userId, pull.cardKey?.startsWith("team:") ? pull.cardKey : undefined);

@@ -61,6 +61,9 @@ describe("supporterLookMotif", () => {
     expect(parseSupporterLook({ motif: "none", foil: "glitter" })).toEqual({ motif: "none", foil: "glitter" });
     expect(supporterLookMotif({ motif: "none", foil: "glitter" })).toBeNull();
     expect(effectiveCardLook(null, { motif: "none", foil: "glitter" })).toEqual({ motif: null, foil: "glitter" });
+    // No foil keeps the art and lays no light over it.
+    expect(parseSupporterLook({ motif: "stars", foil: "none" })).toEqual({ motif: "stars", foil: "none" });
+    expect(effectiveCardLook(null, { motif: "stars", foil: "none" }).foil).toBeNull();
   });
 
   it("does not resolve a lookalike URL", () => {

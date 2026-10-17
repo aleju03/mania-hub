@@ -25,6 +25,9 @@ import {
   peekLiveSupporterNameStyle,
   peekLiveSupporterProfileTheme,
   peekLiveSupporterProfileThemeOptions,
+  peekLiveSupporterProfileStats,
+  peekLiveSupporterLook,
+  forgetLiveSupporterLook,
   type LivePlayerSkills,
   type LiveKeymodePpPlay,
   type LivePlayerKeymodePpTail,
@@ -75,6 +78,10 @@ import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "../../components/supporter/SupporterNameStyle";
 import { ProfileThemeBackdrop } from "../../components/supporter/ProfileThemeBackdrop";
+import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
+import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "../../lib/profile-stats";
+import { saveSupporterProfileStatsSetting } from "../../lib/supporter-look-settings";
+import { useViewerIsSupporter } from "../../lib/viewer-supporter";
 import { useHighwayNotes } from "../../components/supporter/use-highway-notes";
 import { useHighwayChart } from "../../components/supporter/use-highway-chart";
 import { PROFILE_THEME_LOOKS, profileThemeStyle, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
@@ -1118,6 +1125,10 @@ export function PlayerProfilePage({
     nameFont: SupporterNameFontId | null;
     profileTheme: SupporterProfileThemeId | null;
     profileThemeOptions: ProfileThemeOptions;
+    profileStats: ProfileStatId[] | null;
+    profileStatsData: ProfileStatsData;
+    /* Only an active supporter has a card look. */
+    supporter: boolean;
   } | null>(null);
   useEffect(() => {
     if (!profileUserId) return;
@@ -1131,10 +1142,13 @@ export function PlayerProfilePage({
         nameFont: peekLiveSupporterNameFont(profileUserId) ?? null,
         profileTheme: peekLiveSupporterProfileTheme(profileUserId) ?? null,
         profileThemeOptions: peekLiveSupporterProfileThemeOptions(profileUserId) ?? {},
+        profileStats: peekLiveSupporterProfileStats(profileUserId)?.stats ?? null,
+        profileStatsData: peekLiveSupporterProfileStats(profileUserId)?.data ?? {},
+        supporter: peekLiveSupporterLook(profileUserId) != null,
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, supporter: value.look !== null });
     });
     return () => {
       alive = false;
@@ -1144,6 +1158,35 @@ export function PlayerProfilePage({
   const heroNameStyle = supporterFrame?.userId === profileUserId ? supporterFrame.nameStyle : null;
   const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
   const profileTheme = supporterFrame?.userId === profileUserId ? supporterFrame.profileTheme : null;
+  /* The four insight cards: a supporter's own pick, or the usual four. The
+     owner's swaps show at once and save in the background. */
+  const [statsOverride, setStatsOverride] = useState<{ userId: number; stats: ProfileStatId[] } | null>(null);
+  const profileStatSlots: readonly ProfileStatId[] = (statsOverride?.userId === profileUserId ? statsOverride.stats : null)
+    ?? (supporterFrame?.userId === profileUserId ? supporterFrame.profileStats : null)
+    ?? DEFAULT_PROFILE_STATS;
+  const profileStatsData = supporterFrame?.userId === profileUserId ? supporterFrame.profileStatsData : {};
+  const viewerIsSupporter = useViewerIsSupporter(auth.viewer?.id);
+  const extraStatPreviews = useExtraStatPreviews(profileStatsData);
+  // The owner's own look says whether they are a supporter; the stored hint
+  // only covers browsers that have been to /supporter.
+  const ownerIsSupporter = supporterFrame?.userId === profileUserId && supporterFrame.supporter;
+  const canSwapStats = !!auth.viewer && auth.viewer.id === profileUserId && (viewerIsSupporter || ownerIsSupporter);
+  const setProfileStats = (next: ProfileStatId[]) => {
+    setStatsOverride({ userId: profileUserId, stats: next });
+    const isDefault = next.every((entry, index) => entry === DEFAULT_PROFILE_STATS[index]);
+    void saveSupporterProfileStatsSetting({ data: { profileStats: isDefault ? null : next } })
+      .then(() => {
+        // The streak and player count ride the public look, so read it again.
+        forgetLiveSupporterLook(profileUserId);
+        return fetchLiveSupporterProfileLook(profileUserId);
+      })
+      .then((value) => {
+        setSupporterFrame((current) => current?.userId === profileUserId
+          ? { ...current, profileStats: value.profileStats, profileStatsData: value.profileStatsData }
+          : current);
+      })
+      .catch(() => setStatsOverride(null));
+  };
   const restrictedBest = useMemo(
     () => restrictedStanding
       ? buildRestrictedBestList(restrictedStanding.best, {
@@ -2587,94 +2630,135 @@ export function PlayerProfilePage({
               const profileInsights = displayedProfileInsights;
               const hasPpDistribution = profileInsights.ppRange != null && profileInsights.ppDistribution.length > 0;
               const hasKeyPp = profileInsights.keyPp.length > 0;
+              // What each stat would show, for the owner's picker.
+              const topKeys = [...profileInsights.keySplit].sort((a, b) => b.count - a.count)[0];
+              const statPreviews: Partial<Record<ProfileStatId, string | null>> = canSwapStats ? {
+                keySplit: topKeys ? `${Math.round((topKeys.count / profileInsights.sampleSize) * 100)}% ${topKeys.keyCount}K` : null,
+                mostUsedMod: profileInsights.mostUsedMod?.label ?? null,
+                medianBpm: profileInsights.medianBpm != null ? `${Math.round(profileInsights.medianBpm)} BPM` : null,
+                ppRange: profileInsights.ppRange ? `${Math.round(profileInsights.ppRange.top)} to ${Math.round(profileInsights.ppRange.bottom)}` : null,
+                ...extraStatPreviews,
+              } : {};
+              const renderStatCell = (stat: ProfileStatId): ReactNode => {
+                switch (stat) {
+                  case "keySplit":
+                    return (
+                      <KeySplitCard
+                        keySplit={profileInsights.keySplit}
+                        sampleSize={profileInsights.sampleSize}
+                        onOpen={hasKeyPp ? () => setKeyPpModalOpen(true) : undefined}
+                        onPrefetch={hasKeyPp ? loadKeyPpTail : undefined}
+                      />
+                    );
+                  case "mostUsedMod":
+                    return (
+                      <div
+                        className={`${INSIGHT_CELL_CLASS} group ${profileInsights.mostUsedMod ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
+                        onClick={profileInsights.mostUsedMod ? () => setModModalOpen(true) : undefined}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className={INSIGHT_LABEL_CLASS}>{t`Most Used Mod`}</div>
+                          {profileInsights.mostUsedMod && <ExpandHint />}
+                        </div>
+                        {profileInsights.mostUsedMod ? (
+                          <>
+                            <div className="mt-2 flex items-center gap-2">
+                              <ModBadge mod={profileInsights.mostUsedMod.label} />
+                              <span className="text-[26px] font-black leading-none text-white">{profileInsights.mostUsedMod.label}</span>
+                            </div>
+                            <div className="mt-auto flex items-center gap-2 pt-2.5">
+                              <div className="h-1 flex-1 overflow-hidden rounded-full bg-osu-b3/50">
+                                <div
+                                  className="h-full rounded-full bg-osu-yellow"
+                                  style={{ width: `${Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] tabular-nums text-osu-f1">
+                                {Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-2 text-sm text-osu-f1">{t`No mod preference`}</div>
+                        )}
+                      </div>
+                    );
+                  case "medianBpm":
+                    return (
+                      <div
+                        className={`${INSIGHT_CELL_CLASS} group ${profileInsights.medianBpm != null ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
+                        onClick={profileInsights.medianBpm != null ? () => setBpmModalOpen(true) : undefined}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className={INSIGHT_LABEL_CLASS}>{t`Median BPM`}</div>
+                          {profileInsights.medianBpm != null && <ExpandHint />}
+                        </div>
+                        {profileInsights.medianBpm != null ? (
+                          <>
+                            <div className="mt-2 flex items-baseline gap-1.5">
+                              <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.medianBpm)}</span>
+                              <span className="text-[11px] font-semibold text-osu-f1">{t`BPM`}</span>
+                            </div>
+                            {profileInsights.bpmRange && (
+                              <div className="mt-auto pt-2.5 text-[11px] tabular-nums text-osu-f1">
+                                <Trans>{Math.round(profileInsights.bpmRange.min)} to {Math.round(profileInsights.bpmRange.max)}</Trans>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="mt-2 text-sm text-osu-f1">-</div>
+                        )}
+                      </div>
+                    );
+                  case "ppRange":
+                    return (
+                      <button
+                        type="button"
+                        className={`${INSIGHT_CELL_CLASS} group w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-osu-pink/50 ${hasPpDistribution ? INSIGHT_CELL_INTERACTIVE_CLASS : "cursor-default"}`}
+                        onClick={hasPpDistribution ? () => setPpModalOpen(true) : undefined}
+                        disabled={!hasPpDistribution}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className={INSIGHT_LABEL_CLASS}>{t`PP Range`}</div>
+                          {hasPpDistribution && <ExpandHint />}
+                        </div>
+                        {profileInsights.ppRange ? (
+                          <>
+                            <div className="mt-2 flex items-baseline gap-1.5">
+                              <span className="text-[26px] font-black leading-none tabular-nums text-osu-pink-light">{Math.round(profileInsights.ppRange.top)}</span>
+                              <span className="text-[11px] text-osu-f1">{t`to`}</span>
+                              <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.ppRange.bottom)}</span>
+                            </div>
+                            <div className="mt-auto pt-2.5 text-[11px] text-osu-f1">{t`${Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)}pp spread`}</div>
+                          </>
+                        ) : (
+                          <div className="mt-2 text-sm text-osu-f1">-</div>
+                        )}
+                      </button>
+                    );
+                  case "ratio":
+                    return <RatioCard ratio={profileStatsData.ratio} />;
+                  case "lnSplit":
+                    return <LnSplitCard lnSplit={profileStatsData.lnSplit} />;
+                  case "streak":
+                    return <StreakCard streak={profileStatsData.streak} />;
+                  case "percentile":
+                    return <PercentileCard percentile={profileStatsData.percentile} />;
+                }
+              };
               return (
               <div className="space-y-3">
                 {/* One panel, four cells: the 1px gaps show the parent through as
                     hairlines so this reads as a single object, not four boxes. */}
                 <div className={INSIGHT_PANEL_CLASS}>
-                  <KeySplitCard
-                    keySplit={profileInsights.keySplit}
-                    sampleSize={profileInsights.sampleSize}
-                    onOpen={hasKeyPp ? () => setKeyPpModalOpen(true) : undefined}
-                    onPrefetch={hasKeyPp ? loadKeyPpTail : undefined}
-                  />
-                  <div
-                    className={`${INSIGHT_CELL_CLASS} group ${profileInsights.mostUsedMod ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
-                    onClick={profileInsights.mostUsedMod ? () => setModModalOpen(true) : undefined}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className={INSIGHT_LABEL_CLASS}>{t`Most Used Mod`}</div>
-                      {profileInsights.mostUsedMod && <ExpandHint />}
+                  {profileStatSlots.map((stat, slot) => (
+                    <div key={`${slot}:${stat}`} className="group/stat relative grid">
+                      {renderStatCell(stat)}
+                      {canSwapStats && (
+                        <ProfileStatPicker slot={slot} slots={profileStatSlots} previews={statPreviews} onChange={setProfileStats} />
+                      )}
                     </div>
-                    {profileInsights.mostUsedMod ? (
-                      <>
-                        <div className="mt-2 flex items-center gap-2">
-                          <ModBadge mod={profileInsights.mostUsedMod.label} />
-                          <span className="text-[26px] font-black leading-none text-white">{profileInsights.mostUsedMod.label}</span>
-                        </div>
-                        <div className="mt-auto flex items-center gap-2 pt-2.5">
-                          <div className="h-1 flex-1 overflow-hidden rounded-full bg-osu-b3/50">
-                            <div
-                              className="h-full rounded-full bg-osu-yellow"
-                              style={{ width: `${Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] tabular-nums text-osu-f1">
-                            {Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="mt-2 text-sm text-osu-f1">{t`No mod preference`}</div>
-                    )}
-                  </div>
-                  <div
-                    className={`${INSIGHT_CELL_CLASS} group ${profileInsights.medianBpm != null ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
-                    onClick={profileInsights.medianBpm != null ? () => setBpmModalOpen(true) : undefined}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className={INSIGHT_LABEL_CLASS}>{t`Median BPM`}</div>
-                      {profileInsights.medianBpm != null && <ExpandHint />}
-                    </div>
-                    {profileInsights.medianBpm != null ? (
-                      <>
-                        <div className="mt-2 flex items-baseline gap-1.5">
-                          <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.medianBpm)}</span>
-                          <span className="text-[11px] font-semibold text-osu-f1">{t`BPM`}</span>
-                        </div>
-                        {profileInsights.bpmRange && (
-                          <div className="mt-auto pt-2.5 text-[11px] tabular-nums text-osu-f1">
-                            <Trans>{Math.round(profileInsights.bpmRange.min)} to {Math.round(profileInsights.bpmRange.max)}</Trans>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="mt-2 text-sm text-osu-f1">-</div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    className={`${INSIGHT_CELL_CLASS} group w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-osu-pink/50 ${hasPpDistribution ? INSIGHT_CELL_INTERACTIVE_CLASS : "cursor-default"}`}
-                    onClick={hasPpDistribution ? () => setPpModalOpen(true) : undefined}
-                    disabled={!hasPpDistribution}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className={INSIGHT_LABEL_CLASS}>{t`PP Range`}</div>
-                      {hasPpDistribution && <ExpandHint />}
-                    </div>
-                    {profileInsights.ppRange ? (
-                      <>
-                        <div className="mt-2 flex items-baseline gap-1.5">
-                          <span className="text-[26px] font-black leading-none tabular-nums text-osu-pink-light">{Math.round(profileInsights.ppRange.top)}</span>
-                          <span className="text-[11px] text-osu-f1">{t`to`}</span>
-                          <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.ppRange.bottom)}</span>
-                        </div>
-                        <div className="mt-auto pt-2.5 text-[11px] text-osu-f1">{t`${Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)}pp spread`}</div>
-                      </>
-                    ) : (
-                      <div className="mt-2 text-sm text-osu-f1">-</div>
-                    )}
-                  </button>
+                  ))}
                 </div>
 
                 {/* Row 2: Newest + Oldest top play with map backgrounds */}

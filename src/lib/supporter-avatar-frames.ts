@@ -29,7 +29,7 @@ const FRAME_GEOMETRY = {
   "cat-parade": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1573, 0.1694, 0.1532, 0.1694] },
   "classic-window": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0726, 0.2056, 0.0726, 0.0847] },
   "crayon-border": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2056, 0.2016, 0.2097, 0.2056] },
-  "crt-monitor": { box: [-0.2419, -0.2419, 1.4839, 1.6452], overhang: [0.1573, 0.1371, 0.1573, 0.3508] },
+  "crt-monitor": { box: [-0.2419, -0.2419, 1.4839, 1.7419], overhang: [0.1895, 0.0968, 0.1895, 0.4556] },
   "dan-skip-1-eta": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1048, 0.129, 0.1048, 0.1653] },
   "dan-skip-10-alpha": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1573, 0.0968, 0.121, 0.129] },
   "dan-skip-5-gamma": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.129, 0.129, 0.125, 0.1895] },
@@ -82,7 +82,7 @@ const FRAME_GEOMETRY = {
   "ssr-card": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2097, 0.1694, 0.1008, 0.3185] },
   "stellium-orbit": { box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
   "step-pad": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.371, 0.371, 0.371, 0.371] },
-  "susies-idea": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.1935, 0, 0.1815, 0.2823] },
+  "susies-idea": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.1089, 0, 0.0968, 0.2298] },
   "taped-page": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2419, 0.25, 0.254, 0.3387] },
   "term-boot": { box: [-0.2419, -0.2419, 1.4839, 1.5806], overhang: [0.1169, 0.1815, 0.1169, 0.3065] },
   "term-hud": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2218, 0.1815, 0.2339, 0.1734] },
@@ -142,7 +142,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 36;
+const FRAME_ART_VERSION = 38;
 
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still"): string {
   return `/images/supporter-frames/${id}.${kind === "video" ? "webm" : "png"}?v=${FRAME_ART_VERSION}`;

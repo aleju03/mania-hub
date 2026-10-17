@@ -7,6 +7,8 @@ import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-
 import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
 import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
+import { NO_PACK_STYLE, parsePackStyle, SUPPORTER_BINDERS, SUPPORTER_CARD_SLEEVES, SUPPORTER_WRAPPERS, type SupporterPackStyle } from "./supporter-pack-style";
+import { isProfileStatId, parseProfileStats, PROFILE_STAT_SLOTS, type ProfileStatId } from "./profile-stats";
 
 // Server functions behind the /supporter page: the viewer's supporter status
 // and the look their card wears. The viewer always comes from the osu! login
@@ -30,11 +32,13 @@ export interface SupporterLookState {
   /** The theme their whole profile wears, null for the site's own colours. */
   profileTheme: SupporterProfileThemeId | null;
   profileThemeOptions: ProfileThemeOptions;
+  /** Their sleeve, binder and reveal confetti in packs. */
+  packStyle: SupporterPackStyle;
   /** Who gave them their current time, when it is a gift code's trial. */
   giftFrom?: string | null;
 }
 
-const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {} };
+const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
 
 async function requireViewer(): Promise<{ userId: number; username: string; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
@@ -46,7 +50,7 @@ async function requireViewer(): Promise<{ userId: number; username: string; base
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; giftFrom?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
@@ -59,6 +63,7 @@ function readState(body: unknown): SupporterLookState {
     nameFont: isSupporterNameFont(raw.nameFont) ? raw.nameFont : null,
     profileTheme: isSupporterProfileTheme(raw.profileTheme) ? raw.profileTheme : null,
     profileThemeOptions: parseProfileThemeOptions(raw.profileThemeOptions),
+    packStyle: parsePackStyle(raw.packStyle),
     giftFrom: typeof raw.giftFrom === "string" ? raw.giftFrom : null,
   };
 }
@@ -173,6 +178,55 @@ export const saveSupporterProfileThemeSetting = createServerFn({ method: "POST" 
     if (response.status === 403) throw new Error("Your supporter time has run out.");
     if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
     return readState(body);
+  });
+
+/* Sets the supporter's packs cosmetics, all three at once. */
+export const saveSupporterPackStyleSetting = createServerFn({ method: "POST" })
+  .validator((data: { packStyle?: unknown }) => {
+    const style = parsePackStyle(data?.packStyle);
+    const raw = (data?.packStyle ?? {}) as Record<string, unknown>;
+    const lists = { sleeve: SUPPORTER_CARD_SLEEVES, binder: SUPPORTER_BINDERS, wrapper: SUPPORTER_WRAPPERS } as const;
+    for (const key of Object.keys(lists) as (keyof typeof lists)[]) {
+      if (raw[key] != null && style[key] === null) throw new Error("Pick from the list.");
+    }
+    return { packStyle: style };
+  })
+  .handler(async ({ data }): Promise<SupporterLookState> => {
+    const viewer = await requireViewer();
+    if (!viewer) return SIGNED_OUT;
+    const response = await fetch(`${viewer.base}/api/supporters/self/pack-style`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, packStyle: data.packStyle }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return readState(body);
+  });
+
+/* Sets the supporter's four profile insight cards, or (null) puts the usual
+   four back. Answers with what was stored: null for the usual four. */
+export const saveSupporterProfileStatsSetting = createServerFn({ method: "POST" })
+  .validator((data: { profileStats?: unknown }) => {
+    const stats = data?.profileStats ?? null;
+    if (stats !== null && !(Array.isArray(stats) && stats.length === PROFILE_STAT_SLOTS && stats.every(isProfileStatId))) {
+      throw new Error("Pick four stats.");
+    }
+    return { profileStats: stats as ProfileStatId[] | null };
+  })
+  .handler(async ({ data }): Promise<{ profileStats: ProfileStatId[] | null }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/profile-stats`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, profileStats: data.profileStats }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown; profileStats?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return { profileStats: parseProfileStats(body?.profileStats) };
   });
 
 export interface SupporterWelcomeState {

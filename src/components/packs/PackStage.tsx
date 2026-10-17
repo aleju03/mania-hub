@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import type { SupporterWrapperId } from "#/lib/supporter-pack-style";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Trans } from "@lingui/react/macro";
 import { packDamageFromCut, type PackDamage } from "#/lib/pack-damage";
@@ -82,6 +83,8 @@ interface SlashSpark {
 }
 
 interface PackStageProps {
+  /* The viewer's own wrapper (a supporter's pick): the pack is printed on it. */
+  wrapper?: SupporterWrapperId | null;
   /* Damage is non-null when the blade went through the pack's middle: the
      cards inside were cut, and the page has to deal a ruined hand. */
   onOpened: (damage: PackDamage | null) => void;
@@ -110,7 +113,7 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, controls }: PackStageProps) {
+export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, controls, wrapper = null }: PackStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
   // The blade effect below subscribes once ([] deps), so it reads the latest
@@ -461,7 +464,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   }, [reducedMotion, sceneReady]);
 
   useEffect(() => {
-    const nextStyle = packType ? packArtStyleFor(packType) : DEFAULT_PACK_ART_STYLE;
+    const nextStyle = { ...(packType ? packArtStyleFor(packType) : DEFAULT_PACK_ART_STYLE), wrapper };
     const next = getCachedPackFrontCanvas(nextStyle);
     setArtReady(true);
     // A per-frame blend redraws and uploads a 600x1000 texture for the whole
@@ -473,10 +476,10 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     // place keeps the scene's existing back texture valid.
     const back = backCanvasRef.current;
     if (back) {
-      paintPackBackCanvas(back, nextStyle.accent);
+      paintPackBackCanvas(back, nextStyle.accent, wrapper);
       sceneRef.current?.markBackArtDirty();
     }
-  }, [packType, sceneReady]);
+  }, [packType, sceneReady, wrapper]);
 
   // Blade trail: while the pointer is held down anywhere on the stage, a
   // fading streak chases the cursor (on and off the pack), so the slash

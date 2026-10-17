@@ -189,3 +189,29 @@ export function FoilPreview({ foil, className, still = false }: { foil: Supporte
     />
   );
 }
+
+/* A foil drawn live into `canvas` (sized by the caller) for use as a texture
+   elsewhere, through the same shared context and 30fps loop as the swatches.
+   The caller says when it is on screen and where the light is (null: it circles). */
+export function mountFoilSource(canvas: HTMLCanvasElement, foil: SupporterFoilId): {
+  setVisible: (visible: boolean) => void;
+  setPointer: (pointer: [number, number] | null) => void;
+  dispose: () => void;
+} {
+  const swatch: Swatch = { canvas, target: null, visible: false, style: supporterFoilIndex(foil), phase: 0, pointer: null };
+  swatches.add(swatch);
+  draw(start + 4000, swatch);
+  if (!frame) frame = requestAnimationFrame(loop);
+  return {
+    setVisible: (visible) => {
+      swatch.visible = visible;
+      if (visible && !frame) frame = requestAnimationFrame(loop);
+    },
+    setPointer: (pointer) => {
+      swatch.pointer = pointer;
+    },
+    dispose: () => {
+      swatches.delete(swatch);
+    },
+  };
+}

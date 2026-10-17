@@ -1737,3 +1737,333 @@ html[data-custom-cursor="true"] * {
     animation: none !important;
   }
 }
+
+/* --- Supporter binders (components/packs/BinderPages.tsx) -----------------
+   An open binder seen from above. The cover's grain is an SVG lighting
+   filter over noise (each cover sets --grain and its colours); pages are
+   black card stock with a frosted, welded nine-pocket sheet; the glare is
+   one light across each sheet at --glare-x/--glare-y (set by the component
+   from the pointer or the scroll). */
+.bnd {
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='4' seed='4' stitchTiles='stitch'/><feDiffuseLighting lighting-color='%23ffffff' surfaceScale='2.6'><feDistantLight azimuth='235' elevation='52'/></feDiffuseLighting></filter><rect width='260' height='260' filter='url(%23f)'/></svg>");
+  --cover-a: #7a4a32;
+  --cover-b: #2b180f;
+  --stitch: rgba(236, 204, 160, 0.9);
+  --glare-x: 40%;
+  --glare-y: 45%;
+  position: relative;
+  padding: 28px;
+  border-radius: 26px;
+  background-image: var(--grain), radial-gradient(130% 110% at 22% 0%, var(--cover-a), var(--cover-b));
+  background-blend-mode: soft-light, normal;
+  box-shadow:
+    0 34px 70px -28px rgba(0, 0, 0, 0.9),
+    0 10px 20px -10px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+.bnd::before {
+  /* the padded rim */
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 20px;
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.14), inset 0 -4px 7px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.bnd::after {
+  /* stitching, with the thread's own shadow */
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: 18px;
+  border: 2px dashed var(--stitch);
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7));
+  opacity: 0.85;
+  pointer-events: none;
+}
+.bnd--denim {
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.9 0.25' numOctaves='3' seed='9' stitchTiles='stitch'/><feDiffuseLighting lighting-color='%23ffffff' surfaceScale='1.8'><feDistantLight azimuth='225' elevation='58'/></feDiffuseLighting></filter><rect width='200' height='200' filter='url(%23f)'/></svg>");
+  --cover-a: #5683bd;
+  --cover-b: #1b3459;
+  --stitch: rgba(236, 150, 60, 0.95);
+  background-image:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.07) 0 1.5px, transparent 1.5px 4px),
+    var(--grain),
+    radial-gradient(130% 110% at 22% 0%, var(--cover-a), var(--cover-b));
+  background-blend-mode: overlay, soft-light, normal;
+}
+.bnd--holo {
+  --stitch: rgba(255, 255, 255, 0.9);
+  background-image:
+    var(--grain),
+    radial-gradient(70% 60% at var(--glare-x) var(--glare-y), rgba(255, 255, 255, 0.55), transparent 70%),
+    linear-gradient(115deg, #8fe3ff 0%, #c9a9ff 16%, #ffb3dc 32%, #ffeea0 48%, #a9ffd0 64%, #8fe3ff 80%, #c9a9ff 100%);
+  background-size: auto, auto, 300% 300%;
+  background-position: 0 0, 0 0, var(--glare-x) 50%;
+  background-blend-mode: soft-light, screen, normal;
+}
+.bnd--carbon {
+  --stitch: rgba(232, 70, 78, 0.95);
+  background-color: #141518;
+  background-image:
+    var(--grain),
+    radial-gradient(90% 70% at var(--glare-x) var(--glare-y), rgba(255, 255, 255, 0.12), transparent 70%),
+    linear-gradient(27deg, #131315 5px, transparent 5px),
+    linear-gradient(207deg, #131315 5px, transparent 5px),
+    linear-gradient(27deg, #26262a 5px, transparent 5px),
+    linear-gradient(207deg, #26262a 5px, transparent 5px),
+    linear-gradient(90deg, #1b1b1e 10px, transparent 10px),
+    linear-gradient(#1e1e21 25%, #19191c 25%, #19191c 50%, transparent 50%, transparent 75%, #29292d 75%, #29292d);
+  background-size: auto, auto, 20px 20px, 20px 20px, 20px 20px, 20px 20px, 20px 20px, 20px 20px;
+  background-position: 0 0, 0 0, 0 0, 10px 0, 0 10px, 10px 10px, 0 0, 0 0;
+  background-blend-mode: soft-light, screen, normal, normal, normal, normal, normal, normal;
+}
+.bnd-spread {
+  /* the lining inside the cover */
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: radial-gradient(120% 90% at 50% 0%, #1d1a20, #0f0d11);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.7), inset 0 8px 22px rgba(0, 0, 0, 0.7);
+  perspective: 2600px;
+}
+.bnd-spine,
+.bnd-leaf {
+  display: none;
+}
+@media (min-width: 900px) {
+  .bnd-spread {
+    grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
+    gap: 0;
+  }
+  .bnd-spine {
+    position: relative;
+    display: block;
+    z-index: 4;
+  }
+  .bnd-leaf {
+    display: block;
+  }
+}
+.bnd-plate {
+  position: absolute;
+  top: 6%;
+  bottom: 6%;
+  left: 15px;
+  right: 15px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, #26272b 0%, #5d6068 22%, #c5c8cf 46%, #8a8d95 58%, #3a3b40 82%, #1f2023 100%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 6px 14px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.bnd-plate::before,
+.bnd-plate::after {
+  /* rivets */
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #9b9ea6 45%, #3c3e44 100%);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
+}
+.bnd-plate::before { top: 10px; }
+.bnd-plate::after { bottom: 10px; }
+.bnd-ring {
+  position: absolute;
+  left: 50%;
+  width: 129px;
+  height: 43px;
+  margin-left: -64.5px;
+  overflow: visible;
+  pointer-events: none;
+}
+/* Each ring's ends (x 14 and 106, y 30 of its 120x40 box) sit on the hole centres. */
+.bnd-ring:nth-of-type(1) { top: calc(18% - 32px); }
+.bnd-ring:nth-of-type(2) { top: calc(50% - 32px); }
+.bnd-ring:nth-of-type(3) { top: calc(82% - 32px); }
+.bnd-slot {
+  position: relative;
+  min-width: 0;
+}
+.bnd-page {
+  position: relative;
+  height: 100%;
+  padding: 14px 14px 14px 36px;
+  border-radius: 7px;
+  background-color: #0e0e11;
+  background-image: radial-gradient(120% 100% at 50% 0%, rgba(255, 255, 255, 0.035), transparent 60%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 8px 16px rgba(0, 0, 0, 0.55),
+    3px 3px 0 #0a0a0c,
+    6px 6px 0 #070709;
+}
+@media (min-width: 900px) {
+  .bnd-page--left {
+    padding: 14px 36px 14px 14px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 16px rgba(0, 0, 0, 0.55), -3px 3px 0 #0a0a0c, -6px 6px 0 #070709;
+  }
+}
+.bnd-holes span {
+  position: absolute;
+  left: 10px;
+  width: 15px;
+  height: 15px;
+  margin-top: -7.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, #030304 55%, #19171b 100%);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.95), 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+@media (min-width: 900px) {
+  .bnd-page--left .bnd-holes span {
+    left: auto;
+    right: 10px;
+  }
+}
+.bnd-holes span:nth-child(1) { top: 18%; }
+.bnd-holes span:nth-child(2) { top: 50%; }
+.bnd-holes span:nth-child(3) { top: 82%; }
+.bnd-sheet {
+  /* the frosted plastic: its colour shows only in the welds between pockets */
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding: 5px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(228, 234, 244, 0.16), rgba(228, 234, 244, 0.1));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.bnd-pocket {
+  position: relative;
+  padding: 5px 4px 4px;
+  border-radius: 2px;
+  background: #0b0b0e;
+}
+.bnd-pocket::before {
+  /* the pocket's opening: a faint curved lip a little way down the card */
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 11%;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 0 0 50% 50% / 0 0 5px 5px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
+  pointer-events: none;
+  z-index: 3;
+}
+.bnd-pocket::after {
+  /* the film over the card */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012) 45%, rgba(255, 255, 255, 0.035));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 0 14px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 3;
+}
+.bnd-pocket--empty .bnd-card {
+  aspect-ratio: 5 / 7;
+}
+.bnd-card {
+  position: relative;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.75));
+}
+.bnd-sheet-glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 4;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(55% 40% at calc(var(--glare-x) * 2 - var(--sheet-shift, 0%)) var(--glare-y), rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.04) 50%, transparent 72%),
+    linear-gradient(118deg, transparent 0 34%, rgba(255, 255, 255, 0.07) 44%, transparent 52%, transparent 62%, rgba(255, 255, 255, 0.04) 66%, transparent 70%);
+}
+.bnd-page--right .bnd-sheet-glare { --sheet-shift: 100%; }
+@media (max-width: 899px) {
+  .bnd-page--right .bnd-sheet-glare { --sheet-shift: 0%; }
+}
+.bnd-leaf {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  width: calc((100% - 24px - 64px) / 2);
+  transform-style: preserve-3d;
+  z-index: 6;
+  pointer-events: none;
+}
+.bnd-leaf--next {
+  left: calc(50% + 32px);
+  transform-origin: -32px 50%;
+  animation: bnd-turn-next var(--turn-ms) cubic-bezier(0.45, 0.05, 0.25, 1) both;
+}
+.bnd-leaf--prev {
+  left: 12px;
+  transform-origin: calc(100% + 32px) 50%;
+  animation: bnd-turn-prev var(--turn-ms) cubic-bezier(0.45, 0.05, 0.25, 1) both;
+}
+.bnd-leaf-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+.bnd-leaf-face--back {
+  transform: rotateY(180deg);
+}
+.bnd-leaf-face::after {
+  /* the leaf darkens as it stands up off the page */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 7px;
+  background: #000;
+  opacity: 0;
+  animation: bnd-turn-shade var(--turn-ms) ease-in-out both;
+  pointer-events: none;
+}
+@keyframes bnd-turn-next {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(-180deg); }
+}
+@keyframes bnd-turn-prev {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(180deg); }
+}
+@keyframes bnd-turn-shade {
+  0% { opacity: 0; }
+  50% { opacity: 0.45; }
+  100% { opacity: 0; }
+}
+.bnd-holes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+
+/* /support: the glint across the gift ticket, once as it lands and again on hover. */
+.gift-ticket-glint {
+  transform: skewX(-18deg) translateX(0);
+  animation: gift-glint 1.4s ease-out 0.6s 1 both;
+}
+.group:hover .gift-ticket-glint {
+  animation: gift-glint 0.9s ease-out 1 both;
+}
+@keyframes gift-glint {
+  from { transform: skewX(-18deg) translateX(0); }
+  to { transform: skewX(-18deg) translateX(520%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gift-ticket-glint { animation: none; opacity: 0; }
+}

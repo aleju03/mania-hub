@@ -28,9 +28,8 @@ export interface SupporterLook {
   /** A preset picture, "custom" for the supporter's own image, or "none" for
       the tier's own flecks with only the foil on top. */
   motif: SupporterMotifId | "custom" | "none";
-  /** Null keeps the tier's own colours. */
-  /** The light over the card; never its colours. */
-  foil: SupporterFoilId;
+  /** The light over the card, never its colours; "none" lays no foil at all. */
+  foil: SupporterFoilId | "none";
   /** Only on "custom": the converted upload, and how large and strong it floats. */
   url?: string;
   scale?: number;
@@ -99,7 +98,7 @@ export function parseSupporterLook(value: unknown): SupporterLook | null {
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
-  const foil = isSupporterFoil(raw.foil) ? raw.foil : DEFAULT_SUPPORTER_FOIL;
+  const foil = raw.foil === "none" ? "none" : isSupporterFoil(raw.foil) ? raw.foil : DEFAULT_SUPPORTER_FOIL;
   if (raw.motif === "custom" && isCustomMotifUrl(raw.url)) {
     return {
       motif: "custom",
@@ -166,6 +165,6 @@ export function effectiveCardLook(
   const look = parseSupporterLook(supporterLook);
   return {
     motif: ownMotif ?? supporterLookMotif(look),
-    foil: look?.foil ?? null,
+    foil: look && look.foil !== "none" ? look.foil : null,
   };
 }

@@ -418,60 +418,62 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Inferno: drawn fire, not a glow. Flame tongues lick up from the bottom of
-  // the view in four hard colour bands (cel-shaded, like 2D game fire), their
-  // tips tearing off as loose licks; a few sharp sparks streak up through the
-  // smoke above. No soft glow bands or round bokeh embers.
+  // Inferno: a field of cooled black lava running to the horizon, its cracks
+  // glowing orange and breathing hotter and cooler, the far ground lost in a
+  // red haze under a smoky sky; embers drift up out of it at three depths. The
+  // cracks run hotter under the pointer, and the field slides toward the view
+  // as the page scrolls.
   inferno: shader(`
-float flameField(vec2 p, float t) {
-  float y = p.y + .5;
-  // how far up the fire reaches here: a few wandering crests along the bottom
-  float crest = .75 + .35 * sin(p.x * 4.5 + noise(vec2(p.x * 1.5, t * .4)) * 4. + t * .3);
-  float grad = 1. - y / (.42 * crest);
-  // tall noise rising fast; near the base it barely matters, near the top only
-  // its low spots stay lit, which tears the fire into separate pointed licks
-  vec2 q = vec2(p.x * 6.5, y * 3.2 - t * 2.6);
-  q.x += (noise(vec2(y * 4. - t * 1.5, p.x * 2.)) - .5) * 1.2;
-  float n = smoothstep(.22, .78, fbm(q + (vec2(fbm(q * .7 + t * .2), 0.) - .5) * 1.2));
-  return grad * 1.3 - n * 1.5 + .45;
+/* Embers at three depths drifting up and swaying, each a hot point with a soft halo, dying as they climb. */
+vec3 embers(vec2 uv, vec2 p, float t, float sc) {
+  vec3 acc = vec3(0.);
+  for (int l = 0; l < 3; l++) {
+    float fl = float(l);
+    float s = 5. + fl * 6.;
+    vec2 e = p * s;
+    e.y -= t * (.35 + fl * .25) + sc * s * .3;
+    e.x += sin(e.y * .6 + t * .8 + fl * 2.) * .35 + (noise(vec2(e.y * .3, fl * 3.)) - .5) * .8;
+    vec2 id = floor(e);
+    vec2 c = fract(e) - .5;
+    float hh = hash(id + fl * 13.);
+    if (hh < .8) continue;
+    vec2 o = c - (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .6;
+    float d = length(o);
+    float r = max(.03, PX * s * 1.6);
+    float core = smoothstep(r, 0., d);
+    float halo = exp(-d * d / (r * r * 14.)) * .35;
+    float flick = .6 + .4 * sin(t * (3. + hash(id + 4.) * 4.) + hh * 30.);
+    float fade = smoothstep(1., .05, uv.y);
+    vec3 ec = mix(vec3(1., .42, .08), vec3(1., .82, .45), hash(id + 6.));
+    acc += ec * (core + halo) * flick * fade * (.45 + fl * .25);
+  }
+  return acc;
 }
 vec3 theme(vec2 uv, vec2 p, float t) {
   float sc = u_scroll;
-  vec3 col = mix(vec3(.05, .016, .01), vec3(.018, .008, .007), smoothstep(-.5, .45, p.y));
-  // heavy smoke rolling up, darker than the sky behind it
-  float smoke = fbm(vec2(p.x * 1.6 + t * .025, p.y * 1.1 - t * .1 - sc * .4));
-  col = mix(col, vec3(.012, .006, .006), smoothstep(.5, .8, smoke) * .6);
-  float f = flameField(p, t);
-  float aa = PX * 6.;
-  // hard bands: ember red at the rim, orange, then a yellow core
-  col = mix(col, vec3(.42, .06, .03), smoothstep(0., aa, f));
-  col = mix(col, vec3(.86, .2, .05), smoothstep(.2, .2 + aa, f));
-  col = mix(col, vec3(1., .52, .1), smoothstep(.48, .48 + aa, f));
-  col = mix(col, vec3(1., .86, .42), smoothstep(.9, .9 + aa, f));
-  // a thin dark outline where the fire meets the dark, like an inked edge
-  col *= 1. - .55 * smoothstep(aa * 2., 0., abs(f + .03)) * step(f, .1);
-  // sparks: short sharp streaks along their climb, a few at a time
-  for (int l = 0; l < 2; l++) {
-    float fl = float(l);
-    float s = 6. + fl * 5.;
-    vec2 q = p * s;
-    q.y -= t * (1.6 + fl * .6) + sc * s * .35;
-    float sway = sin(q.y * .9 + t * 2. + fl * 3.) * .2;
-    q.x += sway;
-    vec2 id = floor(q);
-    vec2 c = fract(q) - .5;
-    float h = hash(id + fl * 17.);
-    if (h < .86) continue;
-    vec2 o = c - (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .5;
-    // a streak leaning with the sway, longer than it is wide
-    o.x -= o.y * cos(q.y * .9 + t * 2. + fl * 3.) * .2;
-    float d = length(o * vec2(1., .22));
-    float spark = smoothstep(max(.035, PX * s * 1.5), 0., d);
-    float life = smoothstep(.55, -.3, p.y);
-    float blink = step(.25, fract(t * (1.5 + hash(id + 3.) * 2.) + h * 7.));
-    col = mix(col, vec3(1., .78, .35), spark * life * blink * (.7 + fl * .3));
+  vec3 col = mix(vec3(.14, .03, .015), vec3(.015, .006, .008), smoothstep(-.25, .5, p.y));
+  float horizon = -.16;
+  vec2 q = vec2(p.x * 1.3, p.y * 1.4 - t * .05 - sc * .3);
+  float smoke = fbm(q * 1.4 + vec2(fbm(q + t * .03), fbm(q + 3.1)) * 1.4);
+  col = mix(col, vec3(.01, .004, .005), smoothstep(.5, .85, smoke) * .5);
+  if (p.y < horizon) {
+    float d = horizon - p.y;
+    // the ground plane: x spreads and depth shrinks toward the horizon
+    vec2 g = vec2(p.x / d, 1. / d) * .3;
+    g.y += t * .04 + sc * .5;
+    float e = voronoiEdge(g * 1.1);
+    float e2 = voronoiEdge(g * 2.9 + 4.);
+    float heat = .55 + .45 * sin(t * .8 + fbm(g * .7) * 6.);
+    heat += .6 * exp(-length(p - pointerP()) * 5.);
+    float seam = smoothstep(.08, 0., e) * heat + smoothstep(.04, 0., e2) * .3 * heat;
+    vec3 rock = vec3(.035, .018, .016) * (.5 + fbm(g * 4.) * .9);
+    vec3 lava = mix(vec3(.85, .16, .03), vec3(1., .72, .28), clamp(seam * seam, 0., 1.));
+    vec3 ground = rock + lava * seam * 1.3;
+    float fog = exp(-d * 5.);
+    col = mix(ground, col + vec3(.45, .1, .02) * .5, fog * .9);
   }
-  return col;
+  col += vec3(.85, .24, .04) * exp(-abs(p.y - horizon) * 10.) * .35;
+  return col + embers(uv, p, t, sc) * .8;
 }`),
 
   // Frost: snow falling in three layers, ice crystals growing in from the
@@ -751,22 +753,70 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Noir: light through venetian blinds, dust turning in it, smoke drifting,
-  // film grain; the light leans after the pointer.
+  // Noir: rain on a window at night. Drops slide down the glass in fits and
+  // starts, wiping clear trails through the fogged pane and showing the street
+  // sharp through themselves; behind it the city's lights blur at three depths.
+  // The glass leans a little after the pointer, and the street sinks as the
+  // page scrolls. Black and white, with film grain.
   noir: shader(`
+vec4 rainLayer(vec2 UV, float t) {
+  vec2 aspect = vec2(2., 1.);
+  vec2 uv = UV * aspect;
+  uv.y += t * .75;
+  vec2 gv = fract(uv) - .5;
+  vec2 id = floor(uv);
+  float n = hash(id);
+  t += n * 6.2831;
+  float w = UV.y * 10.;
+  float x = (n - .5) * .8;
+  x += (.4 - abs(x)) * sin(3. * w) * pow(sin(w), 6.) * .45;
+  float y = -sin(t + sin(t + sin(t) * .5)) * .45;
+  y -= (gv.x - x) * (gv.x - x);
+  vec2 dropPos = (gv - vec2(x, y)) / aspect;
+  float drop = smoothstep(.05, .03, length(dropPos));
+  vec2 trailPos = (gv - vec2(x, t * .25)) / aspect;
+  trailPos.y = (fract(trailPos.y * 8.) - .5) / 8.;
+  float trail = smoothstep(.03, .01, length(trailPos));
+  float fogTrail = smoothstep(-.05, .05, dropPos.y);
+  fogTrail *= smoothstep(.5, y, gv.y);
+  trail *= fogTrail;
+  fogTrail *= smoothstep(.05, .04, abs(dropPos.x));
+  return vec4(drop * dropPos + trail * trailPos, fogTrail, max(drop, trail * .6));
+}
+float city(vec2 p, float t, float sharp) {
+  // the street below: a glow rising from the bottom, and lights at three depths
+  float v = .07 * smoothstep(.45, -.55, p.y);
+  for (int l = 0; l < 3; l++) {
+    float fl = float(l);
+    float s = 4. + fl * 4.;
+    vec2 q = p * s + vec2(t * .012 * (fl + 1.), fl * 3.1);
+    vec2 id = floor(q);
+    vec2 c = fract(q) - .5;
+    float h = hash(id + fl * 9.);
+    if (h < .35) continue;
+    vec2 o = c - (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .55;
+    float r = .1 + .16 * hash(id + 3.);
+    float edge = mix(.25, .85, sharp);
+    v += smoothstep(r, r * edge, length(o)) * (.1 + .35 * hash(id + 4.)) * (.85 + .15 * sin(t * .6 + h * 20.)) * smoothstep(.65, -.4, p.y + fl * .08);
+  }
+  return v;
+}
 vec3 theme(vec2 uv, vec2 p, float t) {
-  vec2 ptr = pointerP();
-  vec2 r = rot(.38) * (p - ptr * .06);
-  float bars = smoothstep(.25, .6, abs(fract(r.y * 12. + .25) - .5) * 2.);
-  float pool = smoothstep(.75, .05, length((r - vec2(.42, .12)) * vec2(.7, 1.3)));
-  float light = bars * pool;
-  float v = .02 + light * .15 + pool * .025;
-  v += stars(p - vec2(t * .008, t * .006 - u_scroll * .2), 38., .12, t * .5) * pool * .9;
-  float sm = fbm(vec2(p.x * 2. - t * .05, p.y * 2.5 - t * .07) + fbm(p * 3. + t * .03));
-  v += smoothstep(.55, .9, sm) * .05 * (.4 + pool);
-  v *= 1. - .55 * dot(p * vec2(.8, 1.), p * vec2(.8, 1.));
-  v += (hash(gl_FragCoord.xy + floor(t * 24.) * .731) - .5) * .03;
-  v *= .97 + .03 * sin(t * 17.) * sin(t * 7.3);
+  vec2 UV = p * 1.4 - pointerP() * .03 + vec2(0., u_scroll * .15);
+  float tt = t * .5;
+  vec4 a = rainLayer(UV, tt);
+  vec4 b = rainLayer(UV * 1.35 + 7.54, tt);
+  vec2 offs = a.xy + b.xy;
+  float clear = clamp(a.z + b.z, 0., 1.);
+  float drops = clamp(a.w + b.w, 0., 1.);
+  // through a drop the street shows sharp and upside down-ish (the offset), and a bit brighter
+  float v = .014 + city(p + offs * 3. + vec2(0., u_scroll * .25), t, max(clear, drops)) * (.6 + .4 * clear + .35 * drops);
+  // fogged glass: a pale haze except where the drops wiped it
+  v = mix(v, v * .75 + .022, (1. - max(clear, drops)) * .55);
+  // a thin bright rim on each drop, where it catches the light
+  v += drops * (1. - drops) * .12;
+  v *= 1. - .5 * dot(p * vec2(.75, 1.), p * vec2(.75, 1.));
+  v += (hash(gl_FragCoord.xy + floor(t * 24.) * .731) - .5) * .028;
   return vec3(v);
 }`),
 
@@ -1152,7 +1202,7 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col * .72;
 }`),
 
-  // Roaring knight: a black void where six-pointed stars swell, flinch back,
+  // Shattered stars: a black void where six-pointed stars swell, flinch back,
   // turn red, throw out white beams and burst into shards, and red warning
   // lines (sometimes turning) snap into white slashes that crack diamonds
   // out along the cut; now and then a roar of red streaks rushes across it.
@@ -1295,7 +1345,7 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Black knife: the Knight's fight, without the Knight. A smoky glow
+  // Bullet hell: a boss fight with no boss in it. A smoky glow
   // where it would hang turns from violet to deep blue to the red of its
   // roar, light streaming out from behind it; six-pointed star bullets drift
   // past, the far ones smeared into scanlines, the near ones circling the

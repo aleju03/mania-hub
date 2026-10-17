@@ -12,7 +12,9 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { LivePackCommunityCollectionPage } from "#/lib/live-backend";
 
 const fetchLivePackCollectorCards = vi.hoisted(() => vi.fn());
-vi.mock("#/lib/live-backend", () => ({ fetchLivePackCollectorCards }));
+// Supporter cases come from the live look cache this file does not mock.
+vi.mock("#/lib/use-supporter-pack-style", () => ({ useSupporterSleeve: () => null, useSupporterPackStyle: () => ({ sleeve: null, binder: null, wrapper: null }) }));
+vi.mock("#/lib/live-backend", () => ({ ensureSupporterNameStyles: () => {}, getSupporterNameStyle: () => null, getSupporterNameFont: () => null, subscribeSupporterNameStyles: () => () => {}, fetchLivePackCollectorCards }));
 
 /* The tile draws a card onto a canvas, which jsdom has no answer for; the
    picker's own behaviour is the selection state around it. */

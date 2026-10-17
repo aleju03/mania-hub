@@ -43,11 +43,11 @@ export const PROFILE_THEME_LOOKS: Record<SupporterProfileThemeId, ProfileThemeLo
   abyss: { hue: 196, sat: 0.9, base: "#010810", swatch: "linear-gradient(180deg,#0b3a52 0%,#06202f 45%,#010810 100%)", cover: 0.25 },
   cosmos: { hue: 252, sat: 0.8, base: "#04030c", swatch: "radial-gradient(120% 90% at 30% 30%,#3b1f6e 0%,#140b33 45%,#04030c 100%)", cover: 0.25 },
   terminal: { hue: 138, sat: 0.7, base: "#010603", swatch: "linear-gradient(180deg,#02140a 0%,#010603 100%)", cover: 0.2 },
-  inferno: { hue: 16, sat: 1, base: "#0b0302", swatch: "linear-gradient(0deg,#5a1a05 0%,#260a04 40%,#0b0302 100%)", cover: 0.25 },
+  inferno: { hue: 16, sat: 1, base: "#0b0302", swatch: "linear-gradient(0deg,#1c0a07 0%,#2c0f08 26%,#a8380c 33%,#3a0c05 38%,#0b0302 100%)", cover: 0.25 },
   frost: { hue: 204, sat: 0.45, base: "#060a10", swatch: "linear-gradient(180deg,#1b2a3a 0%,#0d1520 60%,#060a10 100%)", cover: 0.3 },
   highway: { hue: 222, sat: 0.75, base: "#03040b", swatch: "linear-gradient(180deg,#03040b 0%,#0d1440 70%,#2a3c9a 100%)", cover: 0.2 },
   storm: { hue: 214, sat: 0.32, base: "#05070a", swatch: "linear-gradient(180deg,#1a2028 0%,#0b0e13 60%,#05070a 100%)", cover: 0.3 },
-  noir: { hue: 0, sat: 0, base: "#050505", swatch: "linear-gradient(135deg,#2a2a2a 0%,#0c0c0c 55%,#050505 100%)", cover: 0.35 },
+  noir: { hue: 0, sat: 0, base: "#050505", swatch: "radial-gradient(circle at 30% 70%,#3a3a3a 0 3%,transparent 4%),radial-gradient(circle at 70% 60%,#2e2e2e 0 4%,transparent 5%),linear-gradient(0deg,#1c1c1c 0%,#0c0c0c 50%,#050505 100%)", cover: 0.35 },
   judgements: { hue: 44, sat: 0.7, base: "#0a0806", swatch: "radial-gradient(90% 80% at 60% 40%,#3a2a10 0%,#140d06 55%,#0a0806 100%)", cover: 0.22 },
   koi: { hue: 178, sat: 0.55, base: "#021012", swatch: "radial-gradient(100% 90% at 40% 40%,#0d3b3a 0%,#06201f 55%,#021012 100%)", cover: 0.2 },
   hanabi: { hue: 255, sat: 0.55, base: "#03030c", swatch: "radial-gradient(70% 60% at 60% 35%,#5a2a5a 0%,#151230 45%,#03030c 100%)", cover: 0.2 },
@@ -76,8 +76,8 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
   hanabi: msg`Hanabi`,
   vaporwave: msg`Vaporwave`,
   blackhole: msg`Black hole`,
-  knight: msg`Roaring knight`,
-  knightfight: msg`Black knife`,
+  knight: msg`Shattered stars`,
+  knightfight: msg`Bullet hell`,
 };
 
 /* A theme's own switches, saved with the pick (the backend keeps the same

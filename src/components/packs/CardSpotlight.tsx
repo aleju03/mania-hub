@@ -1,4 +1,5 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { useSupporterSleeve } from "#/lib/use-supporter-pack-style";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Share2 } from "lucide-react";
@@ -96,6 +97,13 @@ export function CardSpotlight({
      so a collector who holds a player's ordinary card and a granted one is
      told about the card in front of them rather than about the player. */
   const cardOwnerId = target?.ownerUserId ?? viewerId;
+  // The holder's case, around the live card.
+  const ownerSleeve = useSupporterSleeve(cardOwnerId);
+  const ownerSleeveRef = useRef(ownerSleeve);
+  ownerSleeveRef.current = ownerSleeve;
+  useEffect(() => {
+    rendererRef.current?.setSleeve(ownerSleeve);
+  }, [ownerSleeve]);
   const showcasedBy = target?.showcasedBy ?? null;
   /* The day the holder got it, however they got it. Shown on every card: a
      pull with no date said only how it ranked, which is the less interesting
@@ -238,6 +246,7 @@ export function CardSpotlight({
             if (!cancelled) fallbackTo2d();
           },
         });
+        rendererRef.current.setSleeve(ownerSleeveRef.current);
         rendererRef.current.resize();
       } catch {
         if (!cancelled) fallbackTo2d();

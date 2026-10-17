@@ -3,7 +3,7 @@ declare module "three" {
 
   export class Object3D {
     children: Object3D[];
-    position: { x: number; y: number; z: number; set: (...args: any[]) => void };
+    position: { x: number; y: number; z: number; set: (...args: any[]) => void; copy: (other: { x: number; y: number; z: number }) => void };
     rotation: { x: number; y: number; z: number; set: (...args: any[]) => void };
     scale: { x: number; y: number; z: number; setScalar: (value: number) => void };
     quaternion: Quaternion;
@@ -29,6 +29,17 @@ declare module "three" {
     dispose(): void;
   }
 
+  export class CircleGeometry {
+    constructor(...args: any[]);
+    dispose(): void;
+  }
+
+  export class CylinderGeometry {
+    constructor(...args: any[]);
+    rotateX(angle: number): this;
+    dispose(): void;
+  }
+
   export class PlaneGeometry {
     boundingBox: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | null;
     attributes: {
@@ -45,11 +56,17 @@ declare module "three" {
     dispose(): void;
   }
 
-  export class Shape {
+  export class Path {
     constructor(...args: any[]);
     moveTo(...args: any[]): void;
     lineTo(...args: any[]): void;
     quadraticCurveTo(...args: any[]): void;
+    absarc(...args: any[]): void;
+    absellipse(...args: any[]): void;
+  }
+
+  export class Shape extends Path {
+    holes: Path[];
   }
 
   export class Color {
@@ -180,6 +197,8 @@ declare module "three" {
   export const ClampToEdgeWrapping: unknown;
   export const RGBAFormat: unknown;
   export const DoubleSide: unknown;
+  export const FrontSide: unknown;
+  export const NormalBlending: unknown;
 }
 
 declare module "three/*";

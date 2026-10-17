@@ -32,6 +32,7 @@ import { MilestoneBurst, MILESTONE_CEREMONY_MS, MILESTONE_IMPACT_S } from "./Mil
 import { GoatBurst } from "./GoatBurst";
 import { SlicedFace } from "./SlicedFace";
 import { TierBurst } from "./TierBurst";
+import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
 import { UsernameText } from "../ui/UsernameText";
 
 export interface PackCardState {
@@ -75,6 +76,8 @@ interface RevealStageProps {
      summary should skip its enter ceremony and fly each card from its
      handed-off rect into the grid. */
   onComplete: (revealed: RevealedCard[], handoff?: RevealHandoff) => void;
+  /* The viewer's card case, put on each card once it lands face up. */
+  sleeve?: SupporterCardSleeveId | null;
 }
 
 type RevealPhase = "stack" | "preparing" | "flipping" | "shown";
@@ -614,7 +617,10 @@ export function RevealStage({
   compactReveal = false,
   onCardRevealed,
   onComplete,
+  sleeve = null,
 }: RevealStageProps) {
+  const sleeveRef = useRef(sleeve);
+  sleeveRef.current = sleeve;
   const { t } = useLingui();
   const windowActive = useWindowActive();
   const mobileViewport = isMobileViewport();
@@ -780,6 +786,7 @@ export function RevealStage({
         rendererRef.current.resize();
       } else {
         rendererRef.current.setFaceDown();
+        rendererRef.current.setSleeve(null);
         void rendererRef.current.setData(data);
       }
     });
@@ -878,6 +885,8 @@ export function RevealStage({
       const flipMs = reducedMotion ? 240 : compactReveal ? 420 : 980;
       playFlipWhoosh(flipMs);
       await rendererRef.current?.playRevealFlip(flipMs);
+      // The card goes into the viewer's case once it is face up.
+      if (sleeveRef.current) rendererRef.current?.setSleeve(sleeveRef.current);
       if (cancelledRef.current) return;
       // Tray thumbnail comes from the front texture the renderer already
       // drew; rebuilding it through the full texture pipeline used to run

@@ -8,7 +8,7 @@ import { getServerLiveBackendUrl } from "./live-backend";
    supporter list, and the owner's link, unlink, grant and Ko-fi CSV import
    actions. */
 
-export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "manual" | "unlinked";
+export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked";
 
 export interface AdminDonationRow {
   provider: string;

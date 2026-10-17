@@ -1,6 +1,7 @@
 import type { PackTypeDef, PackTypeId } from "#/lib/packs";
 import { pathRoundRect } from "#/lib/canvas";
 import { drawManiaGlyph } from "../player/maniacard3d/cardTexture";
+import type { SupporterWrapperId } from "#/lib/supporter-pack-style";
 
 // Real booster proportions: ~72x122mm, so width/height ~0.6.
 export const PACK_ART_WIDTH = 600;
@@ -46,6 +47,10 @@ export interface PackArtStyle {
      foil's treatment gets. */
   rank: number;
   motif: PackMotif;
+  /* A supporter's own wrapper (lib/supporter-pack-style.ts), printed in
+     place of the type's foil; the type still reads from the band, the pips
+     and the terms. */
+  wrapper?: SupporterWrapperId | null;
 }
 
 const PACK_ART_RECIPES: Record<PackTypeId, { motif: PackMotif; rank: number }> = {
@@ -102,6 +107,7 @@ function packArtCacheKey(style: PackArtStyle): string {
     style.poolLabel,
     style.rank,
     style.motif,
+    style.wrapper ?? "",
   ].join(":");
 }
 
@@ -256,14 +262,18 @@ export function createPackFrontCanvas(style: PackArtStyle = DEFAULT_PACK_ART_STY
   const height = PACK_ART_HEIGHT;
   const emblemY = height * 0.4;
 
-  drawFoilBase(context, width, height, style.accent);
-  drawFoilSubstrate(context, width, height);
-  drawMotif(context, width, height, style, emblemY);
-  if (style.rank >= 3) drawPrismBand(context, width, height, style.rank);
-  drawSheen(context, width, height);
-  // The team pack's seal is a crest; every player pack keeps the coin.
-  if (style.motif === "flags") drawCrest(context, width / 2, emblemY, style.accent);
-  else drawEmblem(context, width, height, style.accent);
+  if (style.wrapper) {
+    drawWrapper(context, width, height, style, emblemY);
+  } else {
+    drawFoilBase(context, width, height, style.accent);
+    drawFoilSubstrate(context, width, height);
+    drawMotif(context, width, height, style, emblemY);
+    if (style.rank >= 3) drawPrismBand(context, width, height, style.rank);
+    drawSheen(context, width, height);
+    // The team pack's seal is a crest; every player pack keeps the coin.
+    if (style.motif === "flags") drawCrest(context, width / 2, emblemY, style.accent);
+    else drawEmblem(context, width, height, style.accent);
+  }
   drawPrint(context, width, height, style);
   drawCrimp(context, width, height, 0, style.accent);
   drawCrimp(context, width, height, height - PACK_CRIMP_FRACTION * height, style.accent);
@@ -304,7 +314,7 @@ export function createPackBackCanvas(
 /* Repaints an existing back canvas. Switching pack type has to keep the same
    canvas object: the 3D scene's back texture points at it, and swapping in a
    fresh one would mean tearing down and re-uploading the texture. */
-export function paintPackBackCanvas(canvas: HTMLCanvasElement, accent: Rgb) {
+export function paintPackBackCanvas(canvas: HTMLCanvasElement, accent: Rgb, wrapper: SupporterWrapperId | null = null) {
   const context = canvas.getContext("2d");
   if (!context) throw new Error("2D canvas is unavailable");
 
@@ -313,9 +323,13 @@ export function paintPackBackCanvas(canvas: HTMLCanvasElement, accent: Rgb) {
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.globalCompositeOperation = "source-over";
   context.clearRect(0, 0, width, height);
-  drawFoilBase(context, width, height, accent);
-  drawFoilSubstrate(context, width, height);
-  drawSheen(context, width, height);
+  if (wrapper) {
+    drawWrapperStock(context, width, height, wrapper, accent);
+  } else {
+    drawFoilBase(context, width, height, accent);
+    drawFoilSubstrate(context, width, height);
+    drawSheen(context, width, height);
+  }
   drawCrimp(context, width, height, 0, accent);
   drawCrimp(context, width, height, height - PACK_CRIMP_FRACTION * height, accent);
   drawSideWelds(context, width, height);
@@ -988,4 +1002,295 @@ export function getCachedCardBackDataUrl(): string {
     cachedCardBackDataUrl = getCachedCardBackCanvas().toDataURL("image/png");
   }
   return cachedCardBackDataUrl;
+}
+
+
+/* --- Supporter wrappers ------------------------------------------------------
+   A supporter's packs are printed on their own stock. Each wrapper paints the
+   stock (front and back) and its own centrepiece; the pack's print, crimps,
+   perforation and welds go on top as on every pack. */
+
+function drawWrapper(context: CanvasRenderingContext2D, width: number, height: number, style: PackArtStyle, emblemY: number) {
+  const wrapper = style.wrapper!;
+  drawWrapperStock(context, width, height, wrapper, style.accent);
+  // The playfield is the pack's picture on its own: no coin over the notes.
+  if (wrapper === "playfield") drawPlayfield(context, width, height, style.accent, emblemY);
+  else if (wrapper === "cassette") drawCassetteWindow(context, width / 2, emblemY, style.accent);
+  else if (wrapper === "envelope") drawWaxSeal(context, width / 2, emblemY, style.accent);
+  else drawEmblem(context, width, height, style.accent);
+}
+
+function drawWrapperStock(context: CanvasRenderingContext2D, width: number, height: number, wrapper: SupporterWrapperId, accent: Rgb) {
+  if (wrapper === "holo") return drawHoloStock(context, width, height);
+  if (wrapper === "playfield") return drawPlayfieldStock(context, width, height);
+  if (wrapper === "cassette") return drawCassetteStock(context, width, height, accent);
+  return drawEnvelopeStock(context, width, height);
+}
+
+/* Holographic film: rainbow bands at a slant, the fine diffraction lines that
+   split them, and pinpoint sparkles. */
+function drawHoloStock(context: CanvasRenderingContext2D, width: number, height: number) {
+  context.fillStyle = "#120f1c";
+  context.fillRect(0, 0, width, height);
+  const hues = [190, 270, 320, 45, 150, 200, 280];
+  context.save();
+  context.globalCompositeOperation = "lighter";
+  for (let band = 0; band < 3; band += 1) {
+    const gradient = context.createLinearGradient(-width * 0.2 + band * 140, 0, width * 1.1 + band * 140, height);
+    hues.forEach((hue, index) => {
+      gradient.addColorStop(index / (hues.length - 1), `hsla(${(hue + band * 40) % 360}, 90%, 62%, ${0.16 - band * 0.04})`);
+    });
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, width, height);
+  }
+  context.restore();
+  context.save();
+  context.globalAlpha = 0.18;
+  context.strokeStyle = "#ffffff";
+  context.lineWidth = 1;
+  for (let x = -height; x < width; x += 7) {
+    context.beginPath();
+    context.moveTo(x, height);
+    context.lineTo(x + height * 0.58, 0);
+    context.stroke();
+  }
+  context.restore();
+  for (let index = 0; index < 140; index += 1) {
+    const x = random01(index * 3.1) * width;
+    const y = random01(index * 7.7 + 1) * height;
+    const size = 0.6 + random01(index * 1.9) * 2.2;
+    context.fillStyle = `hsla(${Math.round(random01(index * 5.3) * 360)}, 100%, 85%, ${0.35 + random01(index) * 0.5})`;
+    context.beginPath();
+    context.arc(x, y, size, 0, Math.PI * 2);
+    context.fill();
+  }
+  drawSheen(context, width, height);
+}
+
+/* A mania stage: lanes, a hit line near the bottom of the window, and notes
+   coming down at it, drawn behind the coin. */
+function drawPlayfieldStock(context: CanvasRenderingContext2D, width: number, height: number) {
+  const base = context.createLinearGradient(0, 0, 0, height);
+  base.addColorStop(0, "#07070d");
+  base.addColorStop(1, "#0d0b18");
+  context.fillStyle = base;
+  context.fillRect(0, 0, width, height);
+  drawFoilSubstrate(context, width, height);
+}
+
+function drawPlayfield(context: CanvasRenderingContext2D, width: number, height: number, accent: Rgb, emblemY: number) {
+  const lanes = 7;
+  const stageWidth = width * 0.78;
+  const left = (width - stageWidth) / 2;
+  const top = height * 0.1;
+  const bottom = height * 0.58;
+  const lane = stageWidth / lanes;
+  const colors = ["#e9e9ef", "#ff7ab2", "#e9e9ef", "#ffd25e", "#e9e9ef", "#ff7ab2", "#e9e9ef"];
+  context.save();
+  context.fillStyle = "rgba(255,255,255,0.03)";
+  context.fillRect(left, top, stageWidth, bottom - top);
+  context.strokeStyle = "rgba(255,255,255,0.08)";
+  context.lineWidth = 1.5;
+  for (let index = 0; index <= lanes; index += 1) {
+    context.beginPath();
+    context.moveTo(left + index * lane, top);
+    context.lineTo(left + index * lane, bottom);
+    context.stroke();
+  }
+  // Notes, a fixed little pattern: a stream into a jump into a hold.
+  const notes: [number, number, number][] = [
+    [0, 0.06, 0], [2, 0.14, 0], [4, 0.2, 0], [6, 0.26, 0], [1, 0.33, 0], [5, 0.33, 0],
+    [3, 0.42, 0.16], [0, 0.52, 0], [6, 0.58, 0], [2, 0.66, 0], [4, 0.72, 0], [1, 0.8, 0], [5, 0.86, 0],
+  ];
+  const fade = (y: number) => Math.min(1, Math.max(0, (y - top) / ((bottom - top) * 0.35)));
+  for (const [column, at, hold] of notes) {
+    const y = top + (bottom - top) * at;
+    const x = left + column * lane + lane * 0.1;
+    const noteWidth = lane * 0.8;
+    const noteHeight = 16;
+    context.globalAlpha = 0.25 + fade(y) * 0.75;
+    if (hold > 0) {
+      context.fillStyle = "rgba(255,210,94,0.35)";
+      context.fillRect(x + noteWidth * 0.2, y - (bottom - top) * hold, noteWidth * 0.6, (bottom - top) * hold);
+    }
+    context.fillStyle = colors[column]!;
+    context.beginPath();
+    pathRoundRect(context, x, y, noteWidth, noteHeight, 4);
+    context.fill();
+  }
+  context.globalAlpha = 1;
+  // The judgement line and its glow.
+  const hitY = bottom - 8;
+  const glow = context.createLinearGradient(0, hitY - 40, 0, hitY + 6);
+  glow.addColorStop(0, rgba(accent, 0));
+  glow.addColorStop(1, rgba(accent, 0.55));
+  context.fillStyle = glow;
+  context.fillRect(left, hitY - 40, stageWidth, 46);
+  context.fillStyle = "rgba(255,255,255,0.85)";
+  context.fillRect(left, hitY, stageWidth, 3);
+  // A MAX judgement, as it would flash above the line.
+  context.font = `italic 900 30px ${FONT}`;
+  context.textAlign = "center";
+  context.fillStyle = "rgba(255,255,255,0.92)";
+  context.shadowColor = "rgba(120,220,255,0.9)";
+  context.shadowBlur = 16;
+  context.fillText("MAX", width / 2, emblemY + 175);
+  context.restore();
+}
+
+/* A cassette shell: dark plastic with retro stripes running across it. */
+function drawCassetteStock(context: CanvasRenderingContext2D, width: number, height: number, accent: Rgb) {
+  context.fillStyle = "#1b1a1f";
+  context.fillRect(0, 0, width, height);
+  drawFoilSubstrate(context, width, height);
+  const stripes = ["#ff8a3d", "#ff5f6d", "#ffd25e", rgbString(mixRgb(accent, WHITE, 0.2))];
+  context.save();
+  context.translate(width / 2, height * 0.52);
+  context.rotate(-0.16);
+  stripes.forEach((color, index) => {
+    context.fillStyle = color;
+    context.globalAlpha = 0.85;
+    context.fillRect(-width, -height * 0.31 + index * 22, width * 2, 14);
+  });
+  context.restore();
+  // Screws in the corners of the shell.
+  for (const [x, y] of [[0.12, 0.12], [0.88, 0.12], [0.12, 0.9], [0.88, 0.9]] as const) {
+    context.fillStyle = "#3a3840";
+    context.beginPath();
+    context.arc(width * x, height * y, 9, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = "#141318";
+    context.lineWidth = 2.5;
+    context.beginPath();
+    context.moveTo(width * x - 5, height * y);
+    context.lineTo(width * x + 5, height * y);
+    context.stroke();
+  }
+  drawSheen(context, width, height);
+}
+
+/* The cassette's window: the tape, and the two reels turning on it. */
+function drawCassetteWindow(context: CanvasRenderingContext2D, cx: number, cy: number, accent: Rgb) {
+  const w = 380;
+  const h = 170;
+  context.save();
+  context.fillStyle = "#f4ede0";
+  context.beginPath();
+  pathRoundRect(context, cx - w / 2 - 22, cy - h / 2 - 46, w + 44, h + 92, 16);
+  context.fill();
+  context.fillStyle = "#121116";
+  context.beginPath();
+  pathRoundRect(context, cx - w / 2, cy - h / 2, w, h, 60);
+  context.fill();
+  for (const dx of [-100, 100]) {
+    const tape = context.createRadialGradient(cx + dx, cy, 20, cx + dx, cy, dx < 0 ? 66 : 50);
+    tape.addColorStop(0, "#3b2a22");
+    tape.addColorStop(1, "#1c1410");
+    context.fillStyle = tape;
+    context.beginPath();
+    context.arc(cx + dx, cy, dx < 0 ? 66 : 50, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#f4ede0";
+    context.beginPath();
+    context.arc(cx + dx, cy, 24, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#121116";
+    for (let tooth = 0; tooth < 6; tooth += 1) {
+      const angle = (tooth * Math.PI) / 3;
+      context.beginPath();
+      context.arc(cx + dx + Math.cos(angle) * 15, cy + Math.sin(angle) * 15, 4, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+  context.fillStyle = rgbString(mixRgb(accent, BLACK, 0.2));
+  context.font = `900 22px ${FONT}`;
+  context.textAlign = "left";
+  context.fillText("A", cx - w / 2 - 8, cy - h / 2 - 16);
+  context.fillStyle = "rgba(20,18,24,0.55)";
+  context.fillRect(cx - w / 2 + 30, cy - h / 2 - 24, w - 60, 2);
+  context.fillRect(cx - w / 2 + 30, cy + h / 2 + 22, w - 60, 2);
+  context.restore();
+}
+
+/* A sealed envelope in black paper: the flap's fold lines pressed into it. */
+function drawEnvelopeStock(context: CanvasRenderingContext2D, width: number, height: number) {
+  const base = context.createLinearGradient(0, 0, width, height);
+  base.addColorStop(0, "#1c1a22");
+  base.addColorStop(1, "#0f0e13");
+  context.fillStyle = base;
+  context.fillRect(0, 0, width, height);
+  // Paper fibres.
+  context.save();
+  context.globalAlpha = 0.06;
+  context.strokeStyle = "#ffffff";
+  for (let index = 0; index < 260; index += 1) {
+    const x = random01(index * 2.3) * width;
+    const y = random01(index * 4.1 + 2) * height;
+    const angle = random01(index * 9.7) * Math.PI;
+    context.lineWidth = 0.6;
+    context.beginPath();
+    context.moveTo(x, y);
+    context.lineTo(x + Math.cos(angle) * 14, y + Math.sin(angle) * 14);
+    context.stroke();
+  }
+  context.restore();
+  // The flap, pressed in: a light edge over a dark one.
+  const tip = height * 0.44;
+  for (const [offset, color] of [[2, "rgba(0,0,0,0.55)"], [0, "rgba(255,255,255,0.12)"]] as const) {
+    context.strokeStyle = color;
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(0, height * 0.1 + offset);
+    context.lineTo(width / 2, tip + offset);
+    context.lineTo(width, height * 0.1 + offset);
+    context.stroke();
+  }
+  context.strokeStyle = "rgba(255,255,255,0.07)";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(0, height * 0.95);
+  context.lineTo(width * 0.42, height * 0.6);
+  context.moveTo(width, height * 0.95);
+  context.lineTo(width * 0.58, height * 0.6);
+  context.stroke();
+}
+
+/* The wax seal where the flap meets: a lumpy disc with the glyph pressed in. */
+function drawWaxSeal(context: CanvasRenderingContext2D, cx: number, cy: number, accent: Rgb) {
+  const wax = mixRgb(accent, { r: 170, g: 24, b: 42 }, 0.65);
+  context.save();
+  context.beginPath();
+  for (let index = 0; index <= 48; index += 1) {
+    const angle = (index / 48) * Math.PI * 2;
+    const radius = 104 + Math.sin(angle * 7) * 5 + Math.sin(angle * 3 + 1) * 4;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    if (index === 0) context.moveTo(x, y);
+    else context.lineTo(x, y);
+  }
+  context.closePath();
+  const fill = context.createRadialGradient(cx - 30, cy - 34, 10, cx, cy, 110);
+  fill.addColorStop(0, rgbString(mixRgb(wax, WHITE, 0.25)));
+  fill.addColorStop(0.6, rgbString(wax));
+  fill.addColorStop(1, rgbString(mixRgb(wax, BLACK, 0.45)));
+  context.fillStyle = fill;
+  context.shadowColor = "rgba(0,0,0,0.6)";
+  context.shadowBlur = 18;
+  context.shadowOffsetY = 6;
+  context.fill();
+  context.shadowColor = "transparent";
+  context.beginPath();
+  context.arc(cx, cy, 72, 0, Math.PI * 2);
+  context.strokeStyle = rgba(mixRgb(wax, BLACK, 0.5), 0.9);
+  context.lineWidth = 6;
+  context.stroke();
+  context.strokeStyle = rgba(mixRgb(wax, WHITE, 0.35), 0.5);
+  context.lineWidth = 2;
+  context.beginPath();
+  context.arc(cx, cy, 76, Math.PI * 1.1, Math.PI * 1.7);
+  context.stroke();
+  // The glyph, pressed: dark, with a light lip below it.
+  drawManiaGlyph(context, cx - 48, cy - 46, 96, rgba(mixRgb(wax, WHITE, 0.3), 0.55));
+  drawManiaGlyph(context, cx - 48, cy - 48, 96, rgba(mixRgb(wax, BLACK, 0.55), 0.9));
+  context.restore();
 }

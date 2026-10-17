@@ -4,7 +4,7 @@ import { MissingPlayerTile } from "./MissingPlayerTile";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Gift, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
@@ -38,6 +38,9 @@ import { playRecycleClink } from "./packSfx";
 import { MarkFilters } from "./collections/MarkFilters";
 import { teamImageProxyUrl } from "#/lib/team-image";
 import { useAuth } from "#/lib/auth-context";
+import { useSupporterPackStyle } from "#/lib/use-supporter-pack-style";
+import type { SupporterBinderId } from "#/lib/supporter-pack-style";
+import { BINDER_PAGE_SIZE, BinderPages } from "./BinderPages";
 import { rememberTeamName } from "../../lib/analytics-teams";
 import { UsernameText } from "../ui/UsernameText";
 
@@ -477,6 +480,9 @@ export function CollectionPanel({
   const { t, i18n } = useLingui();
   // Only for the self chip's badge, which wears the collector's own face.
   const viewer = useAuth().viewer;
+  // A supporter's own collection reads as their binder: two 3x3 pages a spread.
+  const binder = useSupporterPackStyle(viewer?.id).binder;
+  const collectionPageSize = binder ? BINDER_PAGE_SIZE : COLLECTION_PAGE_SIZE;
   const [query, setQuery] = useState("");
   // Searching a synced collection is a server round trip per distinct query, so
   // it waits for a pause in typing instead of firing a request per keystroke.
@@ -828,7 +834,7 @@ export function CollectionPanel({
   const activeQuery = useServerCollection ? debouncedQuery : query;
   const serverRequest = {
     page: collectionPage,
-    pageSize: COLLECTION_PAGE_SIZE,
+    pageSize: collectionPageSize,
     tier: tierFilter,
     query: activeQuery.trim().toLowerCase(),
     sort: sortMode,
@@ -963,10 +969,10 @@ export function CollectionPanel({
           ? serverPoolProgress?.retiredOwnedCount ?? 0
           : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
   const filteredTotal = useServerCollection ? serverMetaPage?.total ?? estimatedFilteredTotal : visibleCards.length;
-  const totalPages = Math.max(1, Math.ceil(filteredTotal / COLLECTION_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / collectionPageSize));
   const currentPage = Math.min(collectionPage, totalPages - 1);
-  const pageStart = currentPage * COLLECTION_PAGE_SIZE;
-  const pageEnd = Math.min(filteredTotal, pageStart + COLLECTION_PAGE_SIZE);
+  const pageStart = currentPage * collectionPageSize;
+  const pageEnd = Math.min(filteredTotal, pageStart + collectionPageSize);
   const pageCards = useServerCollection ? cards : visibleCards.slice(pageStart, pageEnd);
   // Faces for the page, filled in cheapest-source-first.
   const { onThumbnailError: handleThumbnailError } = useCardThumbnails(pageCards);
@@ -1034,7 +1040,7 @@ export function CollectionPanel({
   // Skeletons mirror what the current filter will return: a rarity filter
   // (without a search) resolves to exactly that rarity's count rather than a
   // full page of placeholders.
-  const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, filteredTotal - pageStart));
+  const placeholderCount = Math.max(1, Math.min(collectionPageSize, filteredTotal - pageStart));
   const placeholderTiers: Array<ManiaCardTier | null> = showSkeletonGrid
     ? (sortMode !== "rarity" || duplicatesOnly || mark !== null || cardKind !== null) && tierFilter === "all"
       // Sorted by pull date the page mixes rarities unpredictably, so the
@@ -1115,7 +1121,7 @@ export function CollectionPanel({
     void fetchServerPackCollectionPage({
       data: {
         page: collectionPage,
-        pageSize: COLLECTION_PAGE_SIZE,
+        pageSize: collectionPageSize,
         tier: tierFilter,
         query: trimmedQuery,
         sort: sortMode,
@@ -1628,7 +1634,7 @@ export function CollectionPanel({
             : t`No cards match the selected rarity.`}
         </div>
       ) : (
-        <div className={`mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${selecting ? "select-none" : ""}`}>
+        <BinderOrGrid binder={binder} page={currentPage} className={`mt-4 ${selecting ? "select-none" : ""}`}>
           {showSkeletonGrid
             ? placeholderTiers.map((tier, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} tier={tier} team={teamsOnly} />)
             : pageCards.map((card) => {
@@ -1715,7 +1721,8 @@ export function CollectionPanel({
                     <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
                   </button>
                 )}
-                {selecting || card.recyclable === false ? null : card.copies > 1 ? (
+                {/* A binder pocket holds the card alone; recycling goes through Select there. */}
+                {selecting || binder || card.recyclable === false ? null : card.copies > 1 ? (
                   <button
                     type="button"
                     onClick={(event) => runRecycle(() => onRecycleCard(cardKey), event.currentTarget)}
@@ -1751,7 +1758,7 @@ export function CollectionPanel({
               </div>
             );
           })}
-        </div>
+        </BinderOrGrid>
       )}
 
       {missingOpen
@@ -2040,4 +2047,10 @@ export function CollectionPanel({
       />
     </section>
   );
+}
+
+/* The collection page: the usual grid, or a supporter's binder pages. */
+function BinderOrGrid({ binder, page, className, children }: { binder: SupporterBinderId | null; page: number; className: string; children: ReactNode }) {
+  if (binder) return <BinderPages binder={binder} page={page} className={className}>{children}</BinderPages>;
+  return <div className={`grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${className}`}>{children}</div>;
 }

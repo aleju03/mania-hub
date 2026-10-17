@@ -466,8 +466,10 @@ msgstr "{0} 无法下载，只应用了配色"
 msgid "{0} day"
 msgstr "{0} 天"
 
+#. placeholder {0}: streak.longest
 #. placeholder {0}: summary.highlights.longestStreak
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/ProfileStatCards.tsx
 msgid "{0} days"
 msgstr "{0} 天"
 
@@ -503,6 +505,11 @@ msgstr "{0} 个收藏"
 msgid "{0} favs"
 msgstr "{0} 收藏"
 
+#. placeholder {0}: SUPPORTER_FOILS.length
+#: src/routes/support.tsx
+#~ msgid "{0} foils"
+#~ msgstr "{0} 种闪膜"
+
 #. placeholder {0}: nominee.up
 #: src/components/packs/GoatPoll.tsx
 msgid "{0} for"
@@ -527,6 +534,11 @@ msgstr "{0} 张 GOAT"
 #: src/components/packs/album/AlbumView.tsx
 msgid "{0} goats"
 msgstr "{0} 张 GOAT"
+
+#. placeholder {0}: formatNumber(streak.current)
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0} going now"
+msgstr "当前连续 {0}"
 
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
@@ -867,11 +879,22 @@ msgstr "{0} 星"
 #~ msgid "{0} still held"
 #~ msgstr "仍持有 {0}"
 
+#. placeholder {0}: SUPPORTER_NAME_STYLES.length
+#. placeholder {1}: SUPPORTER_NAME_FONTS.length
+#: src/routes/support.tsx
+#~ msgid "{0} styles, {1} fonts"
+#~ msgstr "{0} 种样式，{1} 种字体"
+
 #. placeholder {0}: patternName("ln")
 #. placeholder {0}: patternName(pattern)
 #: src/components/maps/PatternPicker.tsx
 msgid "{0} subfamilies"
 msgstr "{0} 个子类型"
+
+#. placeholder {0}: SUPPORTER_PROFILE_THEMES.length
+#: src/routes/support.tsx
+#~ msgid "{0} themes"
+#~ msgstr "{0} 个主题"
 
 #. placeholder {0}: Math.round(insights.bpmRange.min)
 #. placeholder {0}: Math.round(profileInsights.bpmRange.min)
@@ -999,6 +1022,11 @@ msgstr "{0} 的 me! 页面是空的。"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "{0}% GOAT slot, then 1 of {1} on the roster"
 msgstr "{0}% 的 GOAT 位，再从 {1} 人名单中抽 1 位"
+
+#. placeholder {0}: Math.round((lnSplit.ln / lnTotal) * 100)
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0}% LN"
+msgstr "{0}% LN"
 
 #. placeholder {0}: (judgement.maxShare * 100).toFixed(0)
 #: src/components/me/MyStatsInsights.tsx
@@ -1957,6 +1985,12 @@ msgstr "全球第 {0} 名"
 #~ msgid "#{0} of {1}"
 #~ msgstr ""
 
+#. placeholder {0}: formatNumber(percentile.rank)
+#. placeholder {1}: formatNumber(percentile.players)
+#: src/components/player/ProfileStatCards.tsx
+msgid "#{0} of {1} tracked players"
+msgstr "已追踪的 {1} 名玩家中第 #{0}"
+
 #: src/lib/format.ts
 msgid "#{grouped}"
 msgstr "第 {grouped}"
@@ -2001,6 +2035,22 @@ msgstr "{0} 秒后 +1"
 #: src/routes/index.tsx
 msgid "<0/> <1>on</1> {0}"
 msgstr "<0/><1>游玩了</1>{0}"
+
+#: src/routes/support.tsx
+msgid "<0/> foils"
+msgstr "<0/> 种闪膜"
+
+#: src/routes/support.tsx
+msgid "<0/> frames"
+msgstr "<0/> 个头像框"
+
+#: src/routes/support.tsx
+msgid "<0/> styles, <1/> fonts"
+msgstr "<0/> 种样式，<1/> 种字体"
+
+#: src/routes/support.tsx
+msgid "<0/> themes"
+msgstr "<0/> 个主题"
 
 #. placeholder {0}: formatNumber(totals.cardsRecycled)
 #: src/components/packs/collections/CommunityStatsHeader.tsx
@@ -2175,6 +2225,14 @@ msgstr "<1% 权重"
 msgid "▶ Watch"
 msgstr "▶ 观看"
 
+#: src/routes/support.tsx
+msgid "$3 buys a month of supporter, and every tip adds more time."
+msgstr "$3 可购买一个月的支持者时长，每次打赏都会累加时间。"
+
+#: src/routes/support.tsx
+msgid "$3 is a month"
+msgstr "$3 即一个月"
+
 #: src/lib/format.ts
 msgid "0h"
 msgstr "0 小时"
@@ -2279,6 +2337,10 @@ msgstr "300g"
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "3D card preview is unavailable on this device."
 msgstr "此设备无法显示 3D 卡片预览。"
+
+#: src/routes/support.tsx
+msgid "4 more stats"
+msgstr "多 4 项数据"
 
 #: src/routes/dan-estimates.tsx
 msgid "4. Your dan is the average of your skills"
@@ -2546,6 +2608,11 @@ msgstr "一张可以自定义的图片，放在你的 osu! 个人资料里，还
 #~ msgid "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
 #~ msgstr "有少数通过不计入平均：一项技能中最多三个，且比你在该技能最好的五个通过的平均低五个以上段位。这通常是你为了精度去打的简单图，而不是能衡量你水平的成绩。它们仍会出现在段位窗口中，标记为<0>不计入</0>。最多三个，并且绝不会让一项技能少于所需的四个通过，所以真正跨度很大的成绩仍会完整计入平均。"
 
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+msgid "A frame around your avatar on your profile."
+msgstr "个人资料页头像周围的边框。"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
 msgstr "正在根据最新成绩重新计算评分，这些数字稍后可能会变动"
@@ -2603,6 +2670,10 @@ msgstr "刚刚有新更新。正在刷新..."
 #: src/components/packs/collections/CardMarks.tsx
 #~ msgid "A one-off card made for its holder"
 #~ msgstr "为持有者特制的独一无二的卡片"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A one-time code that gives someone else a week of supporter."
+msgstr "一次性兑换码，送给别人一周支持者身份。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass at the bar credits the chart's full level, the same as passing the course, and so does the first point above it: a 96.9% on a 96% ladder is a normal clear, not a bonus. Above that the bonus stays small until 99%, then it climbs. Under the bar a pass still counts, as a clear of a lower level, down to a level and a quarter less at the cutoff. Regular ladders credit to 4 points under the bar and 6K/7K LN to 1. 4K LN uses its own numbers: it credits down to 94.5%, a level and a half less there, and its bonus tops out at 99.7%:"
@@ -2697,6 +2768,7 @@ msgstr "一个卡组只能放玩家或只能放战队。"
 msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
 msgstr "一张可分享的技能等级卡：等级徽章下方是控制、速度和精准，并附带星级。"
 
+#: src/components/supporter/SupporterExtras.tsx
 #: src/routes/snipes.tsx
 #~ msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 #~ msgstr "狙击是指同一国家/地区的玩家在某个排行榜上反超另一名玩家，所以它只在单个国家/地区内才有意义。选择一个国家/地区查看其狙击记录，或浏览合并的谱面视图。"
@@ -2712,6 +2784,11 @@ msgstr "狙击是指你在某张图上的新最佳成绩超过了原本排在你
 #: src/routes/dan-estimates.tsx
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
+
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+msgid "A week for a friend"
+msgstr "送朋友一周"
 
 #: src/routes/gift.$code.tsx
 msgid "A week of supporter"
@@ -3066,6 +3143,11 @@ msgstr "高级"
 msgid "Aero window"
 msgstr ""
 
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+msgid "After exporting a replay video, get a link that plays it right in Discord chat. Links last 24 hours."
+msgstr "导出回放视频后，获取可在 Discord 聊天中直接播放的链接。链接有效期 24 小时。"
+
 #: src/components/player/BestScoresControls.tsx
 msgid "Age"
 msgstr "时间"
@@ -3144,6 +3226,10 @@ msgstr "全部键数"
 #: src/components/me/dynamic-renders/GalleryView.tsx
 msgid "All layouts"
 msgstr "全部布局"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "All MAX"
+msgstr "全 MAX"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "All mods"
@@ -3346,6 +3432,10 @@ msgstr "不限"
 #: src/routes/tracker.tsx
 msgid "Any"
 msgstr "不限"
+
+#: src/routes/support.tsx
+msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
+msgstr "任何金额都可以，按天折算。每次打赏都会加到你剩余的时长上。"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -3628,8 +3718,13 @@ msgid "avatar"
 msgstr "头像"
 
 #: src/components/supporter/loadout.ts
+#: src/components/supporter/SupporterExtras.tsx
 msgid "Avatar frame"
-msgstr ""
+msgstr "头像框"
+
+#: src/routes/support.tsx
+msgid "Avatar frames"
+msgstr "头像框"
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Average length"
@@ -3730,6 +3825,10 @@ msgstr "返回皮肤"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back to the picker"
 msgstr "返回选择界面"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Back to the usual four"
+msgstr "恢复默认四项"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "backdrop"
@@ -3887,6 +3986,11 @@ msgstr "你的国家/地区玩过的谱面"
 msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
 
+#: src/routes/support.tsx
+#: src/routes/supporter.tsx
+msgid "Become a supporter"
+msgstr "成为支持者"
+
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Beginning of recorded history"
 msgstr "历史记录起点"
@@ -3982,13 +4086,17 @@ msgstr "最多的一天"
 msgid "biggest jump first"
 msgstr "涨幅最大优先"
 
+#: src/components/supporter/loadout.ts
+msgid "Binder"
+msgstr "卡册"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "Binder name"
 #~ msgstr "卡夹名称"
 
-#: src/routes/packs.tsx
-#~ msgid "Binders"
-#~ msgstr "卡夹"
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Binders"
+msgstr "卡夹"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "Binders are kept with your account, so sign in to make one."
@@ -4003,8 +4111,8 @@ msgid "Black hole"
 msgstr ""
 
 #: src/lib/supporter-profile-themes.ts
-msgid "Black knife"
-msgstr ""
+#~ msgid "Black knife"
+#~ msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Black playfield"
@@ -4102,6 +4210,10 @@ msgstr "衩"
 msgid "Bright"
 msgstr "明亮"
 
+#: src/components/supporter/loadout.ts
+msgid "Bright idea"
+msgstr "好主意"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Brightness"
 msgstr "亮度"
@@ -4183,6 +4295,10 @@ msgstr "保加利亚语"
 msgid "Bullet board"
 msgstr ""
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Bullet hell"
+msgstr "弹幕地狱"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Bullet list"
@@ -4212,7 +4328,7 @@ msgstr "按玩家"
 msgid "Calculating skills..."
 msgstr "正在计算技能…"
 
-#: src/routes/__root.tsx
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Can't pay with Ko-fi? You can tip through lava.top."
 msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
 
@@ -4258,6 +4374,10 @@ msgstr "画布不可用。"
 #~ msgid "capped"
 #~ msgstr "已封顶"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Carbon fiber"
+msgstr "碳纤维"
+
 #: src/lib/signature-shared.ts
 msgid "Card"
 msgstr "卡片"
@@ -4288,6 +4408,10 @@ msgstr "卡片封面"
 msgid "Card foil"
 msgstr ""
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Card foil and art"
+msgstr "卡牌闪膜与图案"
+
 #: src/lib/signature-shared.ts
 msgid "Card front"
 msgstr "卡片正面"
@@ -4303,6 +4427,10 @@ msgstr "卡包"
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Card rank"
 msgstr "卡片等级"
+
+#: src/components/supporter/loadout.ts
+msgid "Card sleeve"
+msgstr "卡套"
 
 #: src/lib/signature-style.ts
 msgid "Card tier"
@@ -4340,6 +4468,18 @@ msgstr "你持有的、已经抽不到的玩家卡片：他们在每个已追踪
 #: src/lib/supporter-name-fonts.ts
 msgid "Cartoon"
 msgstr ""
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Cases"
+msgstr "卡套"
+
+#: src/routes/support.tsx
+msgid "Cases, binders and wrappers"
+msgstr "卡套、卡册和卡包包装"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Cassette"
+msgstr "磁带"
 
 #: src/components/supporter/loadout.ts
 msgid "Cat parade"
@@ -4403,6 +4543,10 @@ msgstr "{0} 可更改名字"
 #: src/routes/recommendations.tsx
 msgid "change player"
 msgstr "更换玩家"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Change this stat"
+msgstr "更换此项数据"
 
 #: src/components/layout/ChangelogModal.tsx
 msgid "Changed"
@@ -4893,7 +5037,6 @@ msgstr "找不到片段"
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/ui/ImageLightbox.tsx
-#: src/routes/__root.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/skins.tsx
 msgid "Close"
@@ -6204,6 +6347,16 @@ msgstr "本站使用的数据"
 msgid "Date"
 msgstr "日期"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "day"
+msgstr "天"
+
+#: src/components/player/ProfileStatCards.tsx
+#: src/components/supporter/GiftTicket3D.tsx
+#: src/components/supporter/SupportShowcase.tsx
+msgid "days"
+msgstr "天"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "DDMythical's Reform dan courses, stable accuracy"
 #~ msgstr "DDMythical 的 Reform 段位课题，stable 准确率"
@@ -6327,6 +6480,10 @@ msgstr "删除中"
 #: src/components/supporter/loadout.ts
 msgid "Delta crest"
 msgstr ""
+
+#: src/lib/supporter-pack-style.ts
+msgid "Denim"
+msgstr "牛仔布"
 
 #: src/routes/skins.tsx
 msgid "descending"
@@ -6534,6 +6691,10 @@ msgstr "不计入"
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Does not count for dan."
 #~ msgstr "不计入段位。"
+
+#: src/routes/support.tsx
+#~ msgid "Does supporting give any advantage?"
+#~ msgstr "成为支持者有任何优势吗？"
 
 #: src/routes/recommendations.tsx
 msgid "done"
@@ -6771,6 +6932,10 @@ msgstr "每一级分成五档，所以一张谱面可以是 7--、7-、7、7+ �
 #: src/routes/dan-estimates.tsx
 msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long tech chart, counts in both."
 msgstr "每次通过都会归到谱面最主要考验的技能。明显同时属于两类的谱面，比如很长的技术谱，会同时计入两边。"
+
+#: src/routes/support.tsx
+msgid "Each payment gives you a one-time code that gives someone else a week of supporter."
+msgstr "每次付款都会给你一个一次性兑换码，可以送给别人一周的支持者。"
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
@@ -7141,6 +7306,10 @@ msgstr ""
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Exact estimate: {0}"
 msgstr "精确估计：{0}"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Example numbers."
+msgstr "示例数据。"
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Excluded sections"
@@ -7801,6 +7970,7 @@ msgstr "为你推荐"
 msgid "Force a fresh collection rotation now (admin only)"
 msgstr "立即强制轮换收藏册（仅管理员）"
 
+#: src/lib/supporter-pack-style.ts
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Forge"
 #~ msgstr "熔铸"
@@ -7868,6 +8038,10 @@ msgstr "周五"
 #: src/components/me/GoalsPanel.tsx
 msgid "from {0} now, that's +{1} to climb"
 msgstr "当前 {0}，还差 {1}"
+
+#: src/routes/support.tsx
+#~ msgid "From Russia, Belarus and a few other countries this page shows a lava.top button instead, which takes local cards."
+#~ msgstr "在俄罗斯、白俄罗斯等少数国家，此页面会改为显示 lava.top 按钮，可使用当地银行卡。"
 
 #: src/components/replay/ReplayInfo.tsx
 msgid "From the real play (not simulated)"
@@ -7972,6 +8146,11 @@ msgstr "从 osu! 里把谱面导出"
 #: src/routes/gift.$code.tsx
 msgid "gift"
 msgstr "赠送"
+
+#: src/components/supporter/GiftTicket3D.tsx
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Gift"
+msgstr "礼物"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Gift a card"
@@ -8186,6 +8365,10 @@ msgstr "{hoursLeft} 小时后删除"
 #: src/routes/tracker.tsx
 msgid "Grade"
 msgstr "评级"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Graded slab"
+msgstr "评级盒"
 
 #: src/lib/signature-style.ts
 msgid "Gradient"
@@ -8670,8 +8853,13 @@ msgstr "在 <1>{1}</1> 张可收集卡牌中持有 <0>{0}</0> 张，占 <2>{pool
 #~ msgstr "在 <1>{1}</1> 名可抽取玩家中持有 <0>{0}</0> 名，占 <2>{poolPercent}%</2>"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 msgid "Holo"
-msgstr ""
+msgstr "镭射"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Holo foil"
+msgstr "镭射箔"
 
 #: src/lib/supporter-foils.ts
 msgid "Holo lattice"
@@ -8726,6 +8914,10 @@ msgstr "建议的译法"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "How it will look"
 msgstr "实际效果"
+
+#: src/routes/support.tsx
+msgid "How it works"
+msgstr "运作方式"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."
@@ -8813,6 +9005,10 @@ msgstr "混合"
 msgid "Hybrid chart: {0}, {1}"
 msgstr "混合谱面：{0}，{1}"
 
+#: src/routes/support.tsx
+#~ msgid "I can't pay with Ko-fi."
+#~ msgstr "我无法用 Ko-fi 付款。"
+
 #: src/components/supporter/loadout.ts
 msgid "Ice fairy"
 msgstr ""
@@ -8830,8 +9026,8 @@ msgstr ""
 #~ msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，并用与 osu! 相同的算法根据其中 ranked 图的成绩计算你的 pp，所以你仍会出现在排行榜上。作弊仍会让你被 Mania Tracker 封禁。"
 
 #: src/routes/__root.tsx
-msgid "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
-msgstr "如果这个网站对你有帮助，欢迎支持一下。捐赠用于支付服务器费用，并让开发得以继续。"
+#~ msgid "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
+#~ msgstr "如果这个网站对你有帮助，欢迎支持一下。捐赠用于支付服务器费用，并让开发得以继续。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "If the site sees you pass a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
@@ -8997,6 +9193,10 @@ msgstr "{minutes} 分钟后"
 msgid "in 90d"
 msgstr "90 天内"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "In a row, with a play each day"
+msgstr "连续每天都有游玩"
+
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "in flight"
 #~ msgstr "进行中"
@@ -9139,6 +9339,10 @@ msgstr "国际"
 msgid "international servers"
 msgstr "国际服务器"
 
+#: src/routes/support.tsx
+msgid "Introduction"
+msgstr "介绍"
+
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Invalid beatmap id."
 msgstr "谱面 ID 无效。"
@@ -9158,6 +9362,10 @@ msgstr "邀请链接"
 #: src/lib/streak-game.ts
 msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 msgstr "{hidden} 最早的最佳成绩比 {shown} 更早还是更晚？"
+
+#: src/routes/support.tsx
+#~ msgid "Is it a subscription?"
+#~ msgstr "这是订阅吗？"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
@@ -9392,9 +9600,17 @@ msgstr "保留"
 msgid "Keep my plays"
 msgstr "保留我的成绩"
 
+#: src/routes/support.tsx
+msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper."
+msgstr "把你拥有的卡片放进 3D 卡套，用卡册页面展示你的收藏，开启印着你专属包装的卡包。"
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
 #~ msgstr "保留"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper."
+msgstr "把卡牌放进 3D 卡壳（硬卡套、磁吸卡砖或评级盒），把收藏展示成卡册内页，并用你自己的包装印制卡包。"
 
 #: src/lib/replay-export/errors.ts
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
@@ -9439,7 +9655,12 @@ msgstr "按下的按键"
 msgid "Key presses play the note's hitsound, like in game. Misses trigger the combo break sound."
 msgstr "按键会播放音符的打击音，和游戏里一样。Miss 会触发断连音效。"
 
+#: src/lib/profile-stats.ts
+#~ msgid "Key split"
+#~ msgstr ""
+
 #: src/components/player/ProfileParts.tsx
+#: src/lib/profile-stats.ts
 msgid "Key Split"
 msgstr "键数分布"
 
@@ -9491,8 +9712,8 @@ msgid "Knob lasers"
 msgstr ""
 
 #: src/routes/__root.tsx
-msgid "Ko-fi page"
-msgstr "Ko-fi 主页"
+#~ msgid "Ko-fi page"
+#~ msgstr "Ko-fi 主页"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
@@ -9711,6 +9932,10 @@ msgstr "队长"
 msgid "Leaderboard"
 msgstr "排行榜"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Leather"
+msgstr "皮革"
+
 #: src/components/communities/CommunityEditModal.tsx
 msgid "leave empty to keep the current one"
 msgstr "留空则保留当前链接"
@@ -9899,6 +10124,7 @@ msgstr "实时更新已开启"
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
@@ -10385,6 +10611,8 @@ msgid "Longest blitz streaks"
 msgstr "闪电战最长连胜"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
 msgid "Longest streak"
 msgstr "最长连续天数"
 
@@ -10454,6 +10682,10 @@ msgstr "适配分辨率"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Made for, e.g. 1920x1080"
 msgstr "适配分辨率，例如 1920x1080"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Magnetic case"
+msgstr "磁吸卡砖"
 
 #: src/lib/packs.ts
 msgid "Main 4K players only"
@@ -10794,6 +11026,10 @@ msgstr "最高 PP"
 #~ msgid "MAX share"
 #~ msgstr "MAX 占比"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "MAX to 300 over every tracked play"
+msgstr "所有已记录游玩的 MAX 与 300 之比"
+
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "MAX to 300 ratio"
 #~ msgstr "MAX 与 300 之比"
@@ -10823,6 +11059,7 @@ msgid "median BPM"
 msgstr "BPM 中位数"
 
 #: src/components/team/TeamProfilePage.tsx
+#: src/lib/profile-stats.ts
 #: src/routes/player/$username.tsx
 msgid "Median BPM"
 msgstr "BPM 中位数"
@@ -11118,7 +11355,12 @@ msgstr "{countryName} 游玩最多"
 msgid "most unique cards"
 msgstr "最多不重复卡牌"
 
+#: src/lib/profile-stats.ts
+#~ msgid "Most used mod"
+#~ msgstr ""
+
 #: src/components/team/TeamProfilePage.tsx
+#: src/lib/profile-stats.ts
 #: src/routes/player/$username.tsx
 msgid "Most Used Mod"
 msgstr "最常用 Mod"
@@ -11196,6 +11438,10 @@ msgstr "静音谱面预览"
 msgid "muted"
 msgstr "静音"
 
+#: src/routes/support.tsx
+#~ msgid "My Ko-fi name isn't my osu! username."
+#~ msgstr "我的 Ko-fi 名字不是我的 osu! 用户名。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "My mania skin"
 msgstr "我的 mania 皮肤"
@@ -11257,6 +11503,18 @@ msgstr "为预设命名"
 #: src/components/supporter/loadout.ts
 msgid "Name style"
 msgstr ""
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Name style and font"
+msgstr "名字样式与字体"
+
+#: src/routes/support.tsx
+msgid "Name styles"
+msgstr "名字样式"
+
+#: src/routes/support.tsx
+msgid "Name styles and fonts"
+msgstr "名字样式和字体"
 
 #: src/routes/supporter.tsx
 #~ msgid "Name tag"
@@ -11367,6 +11625,14 @@ msgstr "新的邀请链接"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "New link"
 msgstr "新链接"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "new pb"
+msgstr "新 pb"
+
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "new pb on the 7th dan stamina map"
+#~ msgstr "7th dan 耐力图新 pb"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "New plays stop being recorded."
@@ -11550,6 +11816,10 @@ msgstr "没有找到匹配「{query}」的谱面"
 msgid "no bg"
 msgstr "无背景"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "No binder"
+msgstr "无卡册"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "No binders yet. Name one above, then add cards to it."
 #~ msgstr "还没有卡夹。在上方起个名字，然后往里加卡片。"
@@ -11635,6 +11905,10 @@ msgstr "前 50 名玩家中没有找到任何收藏。"
 #: src/routes/maps.tsx
 msgid "No favourites match your filters. Try loosening them."
 msgstr "没有符合筛选条件的收藏。试着放宽一些。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "No foil"
+msgstr "无闪膜"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "No folders yet. Make one to group your cards however you like, then show it on your shelf if you want."
@@ -11999,6 +12273,10 @@ msgstr "没有符合搜索的皮肤。"
 msgid "No skins yet"
 msgstr "还没有皮肤"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "No sleeve"
+msgstr "无卡套"
+
 #: src/routes/snipes.tsx
 msgid "No snipes match the current filters."
 msgstr "没有符合当前筛选的狙击。"
@@ -12082,6 +12360,14 @@ msgstr "没有匹配的更新。"
 #: src/components/packs/WishlistLine.tsx
 msgid "No wishes yet. Choose a missing player to get started."
 msgstr "还没有心愿。选择一位尚未拥有的玩家开始吧。"
+
+#: src/routes/support.tsx
+#~ msgid "No. Each tip buys time, and supporter ends when it runs out. A monthly tip on Ko-fi adds a month each time it goes through."
+#~ msgstr "不是。每次打赏购买时长，时长用完支持者身份就结束。Ko-fi 上的月度打赏每扣款一次就加一个月。"
+
+#: src/routes/support.tsx
+#~ msgid "No. Rankings, dans, pack odds and card values are the same for everyone."
+#~ msgstr "没有。排名、段位、卡包概率和卡片价值对所有人都一样。"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Nobody above you on the roster."
@@ -12700,6 +12986,10 @@ msgstr "查看结算中"
 msgid "on the to-do list"
 msgstr "已列入待办"
 
+#: src/routes/support.tsx
+msgid "On this page"
+msgstr "本页内容"
+
 #: src/routes/hashi.tsx
 msgid "On Windows"
 msgstr "在 Windows 上"
@@ -12707,6 +12997,10 @@ msgstr "在 Windows 上"
 #: src/routes/news_.companella.tsx
 msgid "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
 msgstr "把 Companella 连接到你的账号后，它会上传你完成的每一局 mania 成绩，并附带回放。这些成绩会带着 Companella 图标显示在你个人资料的最近标签页和追踪器中。osu! 也收录的成绩只显示一次。"
+
+#: src/routes/support.tsx
+msgid "One code per payment"
+msgstr "每次付款一个兑换码"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -12735,6 +13029,11 @@ msgstr "其中一张图片因来源限制无法录入视频。"
 #: src/routes/dan-estimates.tsx
 msgid "one skill, no split"
 msgstr "单一技能，不细分"
+
+#: src/components/supporter/GiftTicket3D.tsx
+#: src/components/supporter/SupportShowcase.tsx
+msgid "One week of supporter"
+msgstr "一周支持者"
 
 #: src/routes/communities_.$id.tsx
 msgid "online"
@@ -12956,6 +13255,10 @@ msgstr "用模拟的高强度数据打开当天弹窗"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Open the in-browser replay viewer for a score."
 msgstr "在浏览器里打开某个成绩的回放播放器。"
+
+#: src/routes/support.tsx
+msgid "Open the supporter page"
+msgstr "打开支持者页面"
 
 #: src/routes/recommendations.tsx
 msgid "open their profile"
@@ -13278,6 +13581,10 @@ msgstr "所有者"
 msgid "Pack opening is paused on this account until {0}."
 msgstr "此账号的开包已暂停，直到 {0}。"
 
+#: src/components/supporter/loadout.ts
+msgid "Pack wrapper"
+msgstr "卡包包装"
+
 #: src/components/layout/Nav.tsx
 #: src/routes/packs.tsx
 msgid "packs"
@@ -13285,8 +13592,14 @@ msgstr "卡包"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/LoadoutSlots.tsx
+#: src/routes/support.tsx
 msgid "Packs"
 msgstr "卡包"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Packs cosmetics"
+msgstr "卡包装饰"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx
@@ -13476,6 +13789,10 @@ msgstr "待定"
 msgid "Pending"
 msgstr "待定"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Penny sleeve"
+msgstr "软卡套"
+
 #: src/components/me/MyStatsInsights.tsx
 msgid "per 1k notes"
 msgstr "每千物件"
@@ -13495,6 +13812,11 @@ msgstr "每指数据"
 #: src/lib/replay-overlays.ts
 msgid "Per-hand accuracy"
 msgstr "左右手准确率"
+
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Percentile"
+msgstr "百分位"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "percentiles are among tracked players"
@@ -13535,6 +13857,14 @@ msgstr "在下方选择难度"
 msgid "Pick a target above. Progress updates as your mania plays land."
 msgstr "在上面选一个目标，你的 mania 成绩一落地进度就会更新。"
 
+#: src/routes/support.tsx
+#~ msgid "Pick an amount on Ko-fi. Use your osu! username as your name there so the time counts for you."
+#~ msgstr "在 Ko-fi 上选择金额。请用你的 osu! 用户名作为名字，这样时长才会算在你身上。"
+
+#: src/routes/support.tsx
+msgid "Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you."
+msgstr "在 Ko-fi 上选择金额。请用你的 osu! 用户名作为名字，或在留言中写 osu: 加上你的用户名，这样时长才会算在你身上。"
+
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Pick another file"
 msgstr "换一个文件"
@@ -13570,6 +13900,10 @@ msgstr "选择你要发布的服务器。"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Pick two scores"
 msgstr "选择两份成绩"
+
+#: src/routes/support.tsx
+msgid "Pick your look on the supporter page. It saves as you go."
+msgstr "在支持者页面挑选外观，选择时自动保存。"
 
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Pick your showcase"
@@ -13786,6 +14120,10 @@ msgstr "与你 pp 相近的玩家在刷谱面，但现在每一张对你来说�
 #: src/components/settings/SettingsPanel.tsx
 msgid "Players you hide are filtered out of rankings and feeds across the site. This list is stored on this browser only."
 msgstr "被你隐藏的玩家会从全站的排行榜和信息流中过滤掉。此列表仅保存在当前浏览器中。"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Playfield"
+msgstr "游玩区"
 
 #: src/components/player/LivePresence.tsx
 #: src/routes/tracker.tsx
@@ -14008,7 +14346,12 @@ msgstr "获得的 pp"
 msgid "PP Gained"
 msgstr "获得 PP"
 
+#: src/lib/profile-stats.ts
+#~ msgid "PP range"
+#~ msgstr ""
+
 #: src/components/team/TeamProfilePage.tsx
+#: src/lib/profile-stats.ts
 #: src/routes/player/$username.tsx
 msgid "PP Range"
 msgstr "pp 区间"
@@ -14211,13 +14554,20 @@ msgstr "个人资料横幅"
 msgid "Profile link"
 msgstr "主页链接"
 
+#: src/components/supporter/SupporterExtras.tsx
 #: src/lib/signature-shared.ts
+#: src/routes/support.tsx
 msgid "Profile stats"
 msgstr "个人资料数据"
 
 #: src/components/supporter/loadout.ts
+#: src/components/supporter/SupporterExtras.tsx
 msgid "Profile theme"
-msgstr ""
+msgstr "个人资料主题"
+
+#: src/routes/support.tsx
+msgid "Profile themes"
+msgstr "个人资料主题"
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Profile themes, avatar frames, name styles and card foils are all yours now."
@@ -14336,6 +14686,10 @@ msgstr "过审"
 #: src/routes/maps.tsx
 msgid "Qualified"
 msgstr "过审"
+
+#: src/routes/support.tsx
+#~ msgid "Questions"
+#~ msgstr "常见问题"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "queued"
@@ -14608,7 +14962,9 @@ msgstr "评分"
 msgid "Ratings could not be loaded. Tap Retry to try again."
 msgstr "无法加载评级。点击“重试”以重新加载。"
 
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/lib/profile-stats.ts
 msgid "Ratio"
 msgstr "比值"
 
@@ -15489,9 +15845,18 @@ msgstr ""
 #~ msgid "Revoking stops an installation from submitting straight away. Scores it already imported stay in your history until you delete them."
 #~ msgstr ""
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "rice"
+msgstr "rice"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Rice"
 #~ msgstr "单点"
+
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Rice / LN"
+msgstr "Rice / LN"
 
 #: src/components/packs/StreakGame.tsx
 msgid "right"
@@ -15528,8 +15893,8 @@ msgstr "圆环"
 #~ msgstr "冲向 {target} 个卡包"
 
 #: src/lib/supporter-profile-themes.ts
-msgid "Roaring knight"
-msgstr ""
+#~ msgid "Roaring knight"
+#~ msgstr ""
 
 #: src/routes/supporter.tsx
 msgid "Roll"
@@ -15891,6 +16256,10 @@ msgstr "流速："
 msgid "Scrolling judgement-colored notes with actual hit offsets and long-note releases."
 msgstr "按判定着色的滚动音符，显示实际击打偏差及长按松键时机。"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Sealed envelope"
+msgstr "密封信封"
+
 #: src/routes/maps.tsx
 msgid "search"
 msgstr "搜索"
@@ -16186,7 +16555,7 @@ msgstr "选中文字，或直接在这里输入"
 msgid "Send"
 msgstr "发送"
 
-#: src/routes/__root.tsx
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Send a tip"
 msgstr "打赏"
 
@@ -16281,6 +16650,10 @@ msgstr "服务器创建于"
 msgid "Servers are unavailable right now"
 msgstr "服务器列表暂时不可用"
 
+#: src/routes/support.tsx
+#~ msgid "Servers first. The bar above the Ko-fi panel shows how much of this month's hosting is covered."
+#~ msgstr "首先用于服务器。Ko-fi 面板上方的进度条显示本月服务器费用已覆盖多少。"
+
 #. placeholder {0}: sessionIndex + 1
 #: src/components/player/ActivityPanel.tsx
 #~ msgid "Session {0}"
@@ -16346,6 +16719,10 @@ msgstr "设为我的回放皮肤"
 #: src/components/me/GoalsPanel.tsx
 msgid "Set goal"
 msgstr "设定目标"
+
+#: src/routes/support.tsx
+msgid "Set it up"
+msgstr "设置外观"
 
 #: src/lib/goal-format.ts
 msgid "set just now"
@@ -16499,6 +16876,10 @@ msgstr "分享的回放"
 #: src/routes/privacy.tsx
 msgid "Sharing"
 msgstr "数据共享"
+
+#: src/lib/supporter-profile-themes.ts
+msgid "Shattered stars"
+msgstr "碎星"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "Shield Streams"
@@ -17535,6 +17916,10 @@ msgstr "耐力"
 msgid "Standard"
 msgstr "标准"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Standard foil"
+msgstr "标准箔"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/maps.tsx
@@ -17863,23 +18248,29 @@ msgstr "周日"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Sunset"
-msgstr ""
+msgstr "日落橙"
 
 #: src/routes/__root.tsx
+#: src/routes/support.tsx
 msgid "support"
 msgstr "支持"
 
-#: src/routes/__root.tsx
-msgid "Support Mania Tracker on Ko-fi"
-msgstr "在 Ko-fi 上支持 Mania Tracker"
+#: src/routes/support.tsx
+msgid "Support"
+msgstr "支持"
 
 #: src/routes/__root.tsx
-msgid "Support mania-tracker"
-msgstr "支持 mania-tracker"
+#~ msgid "Support Mania Tracker on Ko-fi"
+#~ msgstr "在 Ko-fi 上支持 Mania Tracker"
 
-#: src/routes/supporter.tsx
+#: src/routes/__root.tsx
+#~ msgid "Support mania-tracker"
+#~ msgstr "支持 mania-tracker"
+
+#: src/components/supporter/SupportCheckout.tsx
+#: src/routes/support.tsx
 msgid "Support on Ko-fi"
-msgstr ""
+msgstr "在 Ko-fi 上支持"
 
 #: src/routes/supporter.tsx
 msgid "supporter"
@@ -17898,6 +18289,10 @@ msgstr "支持者福利"
 #: src/routes/supporter.tsx
 msgid "Supporter until {until}"
 msgstr "支持者到期：{until}"
+
+#: src/routes/support.tsx
+msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, card foils, packs cosmetics, extra profile stats and video share links."
+msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、卡片闪膜、卡包外观、额外的个人资料数据和视频分享链接。"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
@@ -17926,8 +18321,8 @@ msgstr "确定？这张卡片将离开收藏册"
 #~ msgstr "确定？这五张卡会被用掉"
 
 #: src/components/supporter/loadout.ts
-msgid "Susie's idea"
-msgstr ""
+#~ msgid "Susie's idea"
+#~ msgstr ""
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
@@ -17941,10 +18336,22 @@ msgstr ""
 msgid "SV"
 msgstr "SV"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "swap"
+msgstr "互换"
+
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Swap any element for another image from {0}, or click it in the preview to find its row. Note and key art draws under the Bars style; cleared elements fall back to flat shapes."
 msgstr "把任意元素替换成 {0} 里的其他图片，或在预览里点击它来定位对应的行。音符和按键图片会以长条样式绘制；清空的元素会退回纯色形状。"
+
+#: src/routes/support.tsx
+msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak or percentile among tracked players."
+msgstr "可将个人资料下方的四张数据卡换成你的 ratio、rice / LN 占比、最长连续天数或在已追踪玩家中的百分位。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak or percentile."
+msgstr "把个人资料下方的四项数据换成你的 ratio、rice / LN 比例、最长连续天数或百分位。"
 
 #: src/components/communities/field-options.tsx
 msgid "Swedish"
@@ -18231,6 +18638,10 @@ msgstr "操作没有成功。请重试。"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/SetsView.tsx
 msgid "That did not save. Try again."
+msgstr "保存失败，请重试。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "That didn't save. Try again."
 msgstr "保存失败，请重试。"
 
 #: src/components/communities/field-options.tsx
@@ -18534,6 +18945,10 @@ msgstr "在对方接受之前，这张卡片仍然属于你。"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "The card was recycled, never synced, or the link is wrong."
 msgstr "这张卡片已被回收、从未同步，或者链接有误。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "The case your cards sit in whenever you lift one out of your collection or turn one over in a pack. Anyone opening a card from your shelf sees it too."
+msgstr "你从收藏中取出卡牌或在卡包中翻开卡牌时，卡牌所在的卡壳。别人打开你展示架上的卡牌时也能看到。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The chart analyzer is rating the top plays right now."
@@ -18942,6 +19357,10 @@ msgstr "导出在完成前被中断。"
 msgid "The first uploaded skin lands here."
 msgstr "第一个上传的皮肤会出现在这里。"
 
+#: src/routes/support.tsx
+msgid "The foil and the art on every copy of your card, including the ones other players pull from packs. You can also put your own image on it."
+msgstr "你的每一张卡片都带有闪膜和插画，包括其他玩家从卡包中抽到的。你也可以放上自己的图片。"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "The forge could not finish. Refresh the ingredients before trying again."
 #~ msgstr "锻造未能完成。请刷新材料后重试。"
@@ -18957,6 +19376,10 @@ msgstr "第一个上传的皮肤会出现在这里。"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "The forge is not available right now."
 #~ msgstr "熔铸暂时不可用。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "The four cards under your profile's numbers. Swap any of them, here or from the card itself on your profile."
+msgstr "个人资料数字下方的四项数据。可以在这里更换，也可以直接在个人资料的卡片上更换。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway streams a section of your best play in your main keymode, instead of random notes."
@@ -18981,6 +19404,10 @@ msgstr "该成绩的判定数据已丢失，无法据此核对准确率。"
 #: src/components/companella/SubmissionDetail.tsx
 msgid "The judgements saved in this replay don't match its key presses, so it's held for review."
 msgstr ""
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "The light and the art on every copy of your card in packs, or an image of your own."
+msgstr "卡包中你每张卡牌上的光效和图案，也可以用自己的图片。"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The link and the .osk filename stay as published."
@@ -19054,6 +19481,10 @@ msgstr "页面遇到意外错误，未能完成渲染。重新加载通常可以
 #: src/routes/player/$username.tsx
 msgid "The page is over osu!'s 60,000 character limit."
 msgstr "页面超过了 osu! 的 60,000 字符上限。"
+
+#: src/routes/support.tsx
+#~ msgid "The perks switch off. Your picks stay saved and come back if you support again."
+#~ msgstr "福利会关闭。你的选择会保留，再次支持时恢复。"
 
 #: src/routes/recommendations.tsx
 msgid "The player panel can stay here, but this view did not return fresh map data."
@@ -19246,6 +19677,10 @@ msgstr "本站会缓存、排队并复用数据，以避免反复向 osu! 请求
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "The site has no matching chart indexed. That does not mean this chart is new, only that nothing here matched it."
 #~ msgstr ""
+
+#: src/routes/support.tsx
+msgid "The site is made and paid for by one person. Supporting covers the servers and gives me time to keep building it. As thanks, supporters get everything on this page."
+msgstr "这个网站由一个人制作并承担费用。你的支持用于支付服务器，也让我有时间继续开发。作为感谢，支持者可获得本页上的所有内容。"
 
 #: src/routes/dan-estimates.tsx
 msgid "The site notices you are playing from osu!'s feed of new scores, which only lists charts with a leaderboard. Once it sees one, it checks your recent plays every few minutes, unranked charts included, until 30 minutes pass without a new play. <0>If you only play unranked charts, nothing is recorded automatically.</0>"
@@ -19936,6 +20371,10 @@ msgstr "启动回放渲染器超时。"
 msgid "Tiny"
 msgstr "极小"
 
+#: src/routes/support.tsx
+msgid "Tip on Ko-fi"
+msgstr "在 Ko-fi 上打赏"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "title"
 msgstr "标题"
@@ -19984,6 +20423,10 @@ msgstr ""
 #: src/lib/changelog.ts
 msgid "today"
 msgstr "今天"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Today at 21:14"
+msgstr "今天 21:14"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Toggle field input overlay"
@@ -20045,6 +20488,10 @@ msgstr "占据了榜单第 {0} 名"
 #~ msgid "Took the country board's #{0} spot"
 #~ msgstr "占据了国家/地区榜第 {0} 名"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "top"
+msgstr "前"
+
 #. placeholder {0}: board.entries.length
 #. placeholder {1}: formatNumber(board.total)
 #: src/routes/snipes.tsx
@@ -20067,6 +20514,10 @@ msgstr "前 {GLOBAL_ALBUM_CAP} 名"
 #: src/components/packs/album/AlbumView.tsx
 msgid "Top {GLOBAL_ALBUM_CAP} players"
 msgstr "前 {GLOBAL_ALBUM_CAP} 名玩家"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "top {top}%"
+msgstr "前 {top}%"
 
 #: src/lib/packs.ts
 msgid "Top 10%, new cards first"
@@ -20134,6 +20585,10 @@ msgstr "最高 pp"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Top-play feed"
 msgstr "最佳成绩 feed"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Toploader"
+msgstr "硬卡套"
 
 #: src/routes/maps.tsx
 msgid "total plays"
@@ -20255,6 +20710,10 @@ msgstr "重试"
 #: src/components/LiveDataEmptyState.tsx
 msgid "Try again in a bit."
 msgstr "请稍后再试。"
+
+#: src/routes/support.tsx
+msgid "Try it all on"
+msgstr "全部试用"
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "Try the share link again"
@@ -20553,6 +21012,10 @@ msgstr "UR"
 msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
 
+#: src/routes/support.tsx
+msgid "Up to 200 MB"
+msgstr "最大 200 MB"
+
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
@@ -20762,6 +21225,10 @@ msgstr "把第 {0} 张截图设为卡片封面"
 msgid "Use this screenshot as the card cover"
 msgstr "把这张截图设为卡片封面"
 
+#: src/routes/support.tsx
+msgid "Use your osu! username as your name there, so the time lands on your account."
+msgstr "请用你的 osu! 用户名作为名字，这样时长会加到你的账号上。"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Used when a replay or map preview opens."
 msgstr "打开回放或谱面预览时使用。"
@@ -20874,6 +21341,11 @@ msgstr "视频码率（Mbps）"
 #: src/components/replay/ReplayControls.tsx
 msgid "Video layout"
 msgstr "视频布局"
+
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+msgid "Video share links"
+msgstr "视频分享链接"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"
@@ -21243,6 +21715,10 @@ msgstr "欢迎成为支持者，{username}"
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或推荐游玩顺序。"
 
+#: src/routes/support.tsx
+#~ msgid "What happens when my time runs out?"
+#~ msgstr "时长用完后会怎样？"
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "What is it for"
@@ -21272,6 +21748,10 @@ msgstr "与你水平相近的玩家最近在打什么"
 msgid "What seems wrong?"
 msgstr "哪里看起来不对？"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "What supporting gets you"
+msgstr "支持可获得的福利"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
 #~ msgstr "这个数字不是什么"
@@ -21287,6 +21767,10 @@ msgstr "你在玩什么"
 #: src/routes/recommendations.tsx
 msgid "what you're browsing"
 msgstr "你在浏览的内容"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "What your packs are printed on, every pack type alike. The pack's name and terms stay on it."
+msgstr "你的卡包印在什么上面，所有卡包类型都一样。卡包名称和说明依然保留。"
 
 #: src/components/layout/ChangelogModal.tsx
 msgid "What's new"
@@ -21319,6 +21803,10 @@ msgstr "你什么时候打图"
 #: src/routes/communities.tsx
 msgid "where"
 msgstr "地区"
+
+#: src/routes/support.tsx
+#~ msgid "Where does the money go?"
+#~ msgstr "钱用在哪里？"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Where it comes from"
@@ -21484,6 +21972,10 @@ msgstr "接下来在做的"
 msgid "Works once, for an account that isn't a supporter and hasn't had a trial."
 msgstr "仅限使用一次，适用于不是支持者且没有试用过的账号。"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Wrappers"
+msgstr "包装"
+
 #: src/routes/report.tsx
 msgid "Write a reply"
 msgstr "写回复"
@@ -21508,6 +22000,10 @@ msgstr "在 BBCode 编辑器里写一段"
 #: src/routes/report.tsx
 msgid "Write something first."
 msgstr "请先填写内容。"
+
+#: src/routes/support.tsx
+#~ msgid "Write your osu! username in the Ko-fi message and I'll link it by hand."
+#~ msgstr "在 Ko-fi 留言里写上你的 osu! 用户名，我会手动关联。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
@@ -21547,6 +22043,7 @@ msgstr "你"
 #: src/components/discord/CommandShowcase.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
+#: src/components/supporter/SupportShowcase.tsx
 msgid "You"
 msgstr "你"
 
@@ -21854,9 +22351,17 @@ msgstr "你的最佳成绩"
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
 
+#: src/routes/support.tsx
+msgid "Your card"
+msgstr "你的卡片"
+
 #: src/components/supporter/LoadoutStage.tsx
 msgid "Your card is not ready yet."
 msgstr ""
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Your collection as binder pages, three by three in plastic pockets, for you and anyone visiting your shelf."
+msgstr "你的收藏变成卡册内页，每页三乘三的塑料卡袋，你和访问你展示架的人都能看到。"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your collection changed. Nothing was sent. Refresh and try again."
@@ -21969,6 +22474,15 @@ msgstr "你最低的评分是 {0}。"
 #: src/routes/recommendations.tsx
 msgid "your marks"
 msgstr "你的标记"
+
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+msgid "Your name in its own style and font, on your profile and in every list it shows up in."
+msgstr "你的名字拥有专属样式和字体，显示在个人资料和所有列表中。"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Your numbers."
+msgstr "你的数据。"
 
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Your official rating has not been computed yet, so the comparison below is incomplete."
@@ -22128,6 +22642,14 @@ msgstr "你的上传"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your username and avatar"
 msgstr "你的用户名和头像"
+
+#: src/routes/support.tsx
+msgid "Your whole profile takes on a theme, with a living backdrop behind it and the site's colours shifted to match."
+msgstr "你的整个个人资料会套用一个主题，背后有动态背景，网站配色也随之改变。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Your whole profile takes on a theme, with a living backdrop behind it."
+msgstr "整个个人资料换上主题，并带有动态背景。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your whole profile takes on the theme: its colours, and a living backdrop behind the page."

@@ -1,3 +1,4 @@
+import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
 import type { CardMotif } from "#/lib/card-motif";
 import type { SupporterLook } from "#/lib/supporter-card-looks";
 import type { SupporterFoilId } from "#/lib/supporter-foils";
@@ -24,6 +25,8 @@ export interface ManiaCardPanelProps {
   supporterLookOverride?: SupporterLook | null;
   /** False leaves out the rating and next-tier progress beside the card. */
   showTierProgress?: boolean;
+  /** The case the card is kept in (a supporter's sleeve), drawn around it in 3D. */
+  sleeve?: SupporterCardSleeveId | null;
 }
 
 export interface ManiaCardTeamInput {

@@ -85,7 +85,7 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
         <div className={`${focus === "hero" ? "max-lg:hidden" : ""} border-white/[0.07] px-4 max-lg:border-t lg:w-[300px] lg:shrink-0 lg:border-l lg:px-3 ${theme ? "bg-black/25" : ""}`}>
           <div className="mx-auto w-full max-w-[270px]">
             {card ? (
-              <ManiaCardPanel user={card.user} scores={card.scores} loading={card.loading} isOwnProfile supporterLookOverride={cardLook} showTierProgress={false} />
+              <ManiaCardPanel user={card.user} scores={card.scores} loading={card.loading} isOwnProfile supporterLookOverride={cardLook} showTierProgress={false} sleeve={shown.pack.sleeve} />
             ) : (
               <p className="py-16 text-center text-[13px] text-osu-f1">{t`Your card is not ready yet.`}</p>
             )}

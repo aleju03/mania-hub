@@ -37,6 +37,8 @@ export const SALVAGEABLE_ROUTES = [
   "skins",
   "snipes",
   "streak",
+  "support",
+  "supporter",
   "teams",
   "terms",
   "top-plays",

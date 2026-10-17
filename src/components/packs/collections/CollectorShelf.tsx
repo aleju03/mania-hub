@@ -1,4 +1,7 @@
 import { packCompletionCounts } from "#/lib/pack-completion";
+import { useSupporterPackStyle } from "#/lib/use-supporter-pack-style";
+import type { SupporterBinderId } from "#/lib/supporter-pack-style";
+import { BinderPages } from "../BinderPages";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useLocale } from "#/lib/locale-context";
 import { Link } from "@tanstack/react-router";
@@ -49,7 +52,8 @@ import { UsernameText } from "../../ui/UsernameText";
    Their cards are a public read, cached on the backend, so this page never
    goes near the owner-scoped collection routes. */
 
-const PAGE_SIZE = 24;
+/* Three rows of six, or one binder spread of two 3x3 pages. */
+const PAGE_SIZE = 18;
 type CardPool = "all" | "players" | "teams";
 
 /* Pages of somebody else's shelf, held for as long as the tab is open and
@@ -253,7 +257,13 @@ function CardGrid({
   liftedCardKey,
   collectorUserId,
   onSpotlight,
+  binder = null,
+  pageIndex = 0,
 }: {
+  /* Which page of the shelf this is, so the binder turns a page between them. */
+  pageIndex?: number;
+  /* The collector's binder cover, when they are a supporter who picked one. */
+  binder?: SupporterBinderId | null;
   page: LivePackCommunityCollectionPage | null;
   loading: boolean;
   /* Whose shelf this is, for the mark on a card of the collector themselves. */
@@ -281,9 +291,7 @@ function CardGrid({
     return <div className="py-12 text-center text-[12px] text-osu-f1">{t`No cards match that.`}</div>;
   }
 
-  return (
-    <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6">
-      {cards.map((card) => {
+  const tiles = cards.map((card) => {
         const cardKey = packCardKeyOf(card);
         const thumbnail = getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card));
         return (
@@ -319,9 +327,10 @@ function CardGrid({
             <div className="mt-1 truncate text-center text-[11px] text-osu-f1"><UsernameText username={card.username} userId={card.userId} /></div>
           </button>
         );
-      })}
-    </div>
-  );
+      });
+  return binder
+    ? <BinderPages binder={binder} page={pageIndex} className="mt-4">{tiles}</BinderPages>
+    : <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6">{tiles}</div>;
 }
 
 export function CollectorShelf({ collector, tab }: {
@@ -405,6 +414,8 @@ export function CollectorShelf({ collector, tab }: {
   }
 
   const ownerUserId = profile?.collector.userId ?? null;
+  // A supporter's shelf is their binder.
+  const binder = useSupporterPackStyle(ownerUserId).binder;
   const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, mark, debounced, pool) : null;
   /* Read during the render that the click causes, so a page already in hand
      paints in the same commit instead of a frame later. */
@@ -673,6 +684,8 @@ export function CollectorShelf({ collector, tab }: {
         </div>
 
         <CardGrid
+          binder={binder}
+          pageIndex={page}
           page={shownPage}
           loading={cachedPage ? false : cardsLoading}
           liftedCardKey={liftedCardKey}

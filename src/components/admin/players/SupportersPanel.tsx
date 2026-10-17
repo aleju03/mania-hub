@@ -34,6 +34,7 @@ const METHOD_LABEL: Record<DonationLinkMethod, string> = {
   lava_link: "lava.top link",
   email_match: "same email",
   name_match: "name match",
+  message_match: "message match",
   manual: "linked by hand",
   unlinked: "unlinked by hand",
 };

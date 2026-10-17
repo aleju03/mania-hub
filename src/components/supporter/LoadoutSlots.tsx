@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type ReactNode } from "react";
+import { Fragment, memo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 
@@ -21,8 +21,21 @@ import { supporterMotifPath } from "../../lib/supporter-motif-art";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { SUPPORTER_NAME_STYLE_LABELS, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "./SupporterNameStyle";
+import { SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { CheckBadge, LockIcon, UploadIcon } from "./LoadoutIcons";
 import { FoilPreview } from "./FoilPreview";
+import { DEFAULT_PACK_ART_STYLE, getCachedPackFrontCanvas } from "../packs/packArt";
+import {
+  SUPPORTER_BINDER_LABELS,
+  SUPPORTER_BINDERS,
+  SUPPORTER_CARD_SLEEVE_LABELS,
+  SUPPORTER_CARD_SLEEVES,
+  SUPPORTER_WRAPPER_LABELS,
+  SUPPORTER_WRAPPERS,
+  type SupporterBinderId,
+  type SupporterCardSleeveId,
+  type SupporterWrapperId,
+} from "../../lib/supporter-pack-style";
 import { ProfileThemeSwatch } from "./ProfileThemeBackdrop";
 import { SUPPORTER_PROFILE_THEME_LABELS, SUPPORTER_PROFILE_THEMES, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
 import {
@@ -32,6 +45,7 @@ import {
   NAME_FONT_GROUPS,
   NAME_STYLE_GROUPS,
   SLOT_IDS,
+  PACK_SLOT_IDS,
   SLOT_LABELS,
   slotValue,
   type FrameEntry,
@@ -52,7 +66,7 @@ export interface CustomMotif {
 }
 
 /* A frame's still around the viewer's avatar, fitted into a square. */
-export function FrameThumb({ frame, avatar, size }: { frame: SupporterAvatarFrameId | null; avatar: string | undefined; size: number }) {
+export function FrameThumb({ frame, avatar, size, live = false }: { frame: SupporterAvatarFrameId | null; avatar: string | undefined; size: number; live?: boolean }) {
   const [left, top, width, height] = frame ? supporterFrameGeometry(frame).box : [0, 0, 1, 1];
   // fit the art and the avatar together: a frame's canvas need not contain the avatar (a hat sits above it)
   const minX = Math.min(left, 0), minY = Math.min(top, 0);
@@ -64,7 +78,8 @@ export function FrameThumb({ frame, avatar, size }: { frame: SupporterAvatarFram
     <span className="relative block" style={{ width: size, height: size }}>
       <span className="absolute" style={{ left: avatarLeft, top: avatarTop, width: scale, height: scale }}>
         <img src={avatar} alt="" className="h-full w-full bg-osu-b3 object-cover" style={framedAvatarStyle(frame) ?? { borderRadius: FRAMED_AVATAR_RADIUS }} />
-        {frame && (
+        {frame && live && <SupporterAvatarFrame frame={frame} />}
+        {frame && !live && (
           <img
             src={supporterFrameSrc(frame, "still")}
             alt=""
@@ -79,7 +94,7 @@ export function FrameThumb({ frame, avatar, size }: { frame: SupporterAvatarFram
 }
 
 /* A foil over a blank card, as the drawer and the slot show it. */
-function FoilCard({ foil, className, still }: { foil: SupporterFoilId; className: string; still?: boolean }) {
+export function FoilCard({ foil, className, still }: { foil: SupporterFoilId; className: string; still?: boolean }) {
   return (
     <span className={`relative block overflow-hidden rounded-[6px] bg-gradient-to-b from-[#3a3d4a] to-[#24262f] ${className}`}>
       <FoilPreview foil={foil} still={still} className="absolute inset-0 h-full w-full" />
@@ -101,11 +116,14 @@ function useSlotName() {
     if (slot === "nameStyle") return value ? i18n._(SUPPORTER_NAME_STYLE_LABELS[value as SupporterNameStyleId]) : t`Plain`;
     if (slot === "nameFont") return value ? i18n._(SUPPORTER_NAME_FONT_LABELS[value as SupporterNameFontId]) : t`Default`;
     if (slot === "motif") return value === null ? t`No art` : value === "custom" ? t`Your image` : i18n._(MOTIF_LABELS[value as SupporterMotifId]);
-    return i18n._(SUPPORTER_FOIL_LABELS[value as SupporterFoilId]);
+    if (slot === "sleeve") return value ? i18n._(SUPPORTER_CARD_SLEEVE_LABELS[value as SupporterCardSleeveId]) : t`No sleeve`;
+    if (slot === "binder") return value ? i18n._(SUPPORTER_BINDER_LABELS[value as SupporterBinderId]) : t`No binder`;
+    if (slot === "wrapper") return value ? i18n._(SUPPORTER_WRAPPER_LABELS[value as SupporterWrapperId]) : t`Standard foil`;
+    return value === null ? t`No foil` : i18n._(SUPPORTER_FOIL_LABELS[value as SupporterFoilId]);
   };
 }
 
-/* An empty art slot: a struck-through circle, drawn rather than an icon font. */
+/* An empty art or foil slot: a struck-through circle, drawn rather than an icon font. */
 function NoArt({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
@@ -133,7 +151,108 @@ function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; 
     const src = loadout.look.motif === "custom" ? loadout.look.url : supporterMotifPath(loadout.look.motif);
     return <img src={src} alt="" className="h-8 w-8 rounded-sm object-contain" />;
   }
+  if (slot === "sleeve") {
+    return loadout.pack.sleeve ? <SleeveCard sleeve={loadout.pack.sleeve} className="h-[38px] w-[27px]" /> : <NoArt className="h-5 w-5" />;
+  }
+  if (slot === "binder") return loadout.pack.binder ? <BinderBook binder={loadout.pack.binder} className="h-[36px] w-[28px]" /> : <NoArt className="h-5 w-5" />;
+  if (slot === "wrapper") {
+    return loadout.pack.wrapper
+      ? <img src={wrapperThumb(loadout.pack.wrapper)} alt="" className="h-[40px] w-[24px] rounded-[3px] object-cover" />
+      : <img src={wrapperThumb(null)} alt="" className="h-[40px] w-[24px] rounded-[3px] object-cover" />;
+  }
+  if (loadout.look.foil === "none") return <NoArt className="h-5 w-5" />;
   return <FoilCard foil={loadout.look.foil} still className="h-[40px] w-[29px]" />;
+}
+
+/* A drawing of each case for the slot and drawer; the stage shows the real
+   one, in 3D, around the viewer's card. */
+export function SleeveCard({ sleeve, className }: { sleeve: SupporterCardSleeveId; className: string }) {
+  const card = "url(#sleeve-card)";
+  return (
+    <svg viewBox="0 0 60 84" aria-hidden className={className}>
+      <defs>
+        <linearGradient id="sleeve-card" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#4a4e5e" />
+          <stop offset="1" stopColor="#262833" />
+        </linearGradient>
+        <linearGradient id="sleeve-glint" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0.35" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.5" stopColor="#fff" stopOpacity="0.35" />
+          <stop offset="0.62" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {sleeve === "penny" && (
+        <>
+          <rect x="11" y="14" width="38" height="56" rx="3" fill={card} />
+          <path d="M9 10 V70 Q9 72 11 72 H49 Q51 72 51 70 V10" fill="#fff" fillOpacity="0.06" stroke="#fff" strokeOpacity="0.55" strokeWidth="0.8" />
+          <rect x="9" y="10" width="42" height="62" fill="url(#sleeve-glint)" />
+        </>
+      )}
+      {sleeve === "toploader" && (
+        <>
+          <rect x="11" y="14" width="38" height="56" rx="3" fill={card} />
+          <rect x="7" y="8" width="46" height="66" rx="3.5" fill="#fff" fillOpacity="0.07" stroke="#fff" strokeOpacity="0.75" strokeWidth="1.4" />
+          <rect x="7" y="8" width="46" height="4" rx="2" fill="#fff" fillOpacity="0.28" />
+          <rect x="7" y="8" width="46" height="66" rx="3.5" fill="url(#sleeve-glint)" />
+        </>
+      )}
+      {sleeve === "onetouch" && (
+        <>
+          <rect x="5" y="1.5" width="50" height="81" rx="1.5" fill="#fff" fillOpacity="0.06" stroke="#b9c3ff" strokeOpacity="0.9" strokeWidth="1" />
+          <path fillRule="evenodd" d="M6.5 3h47v78h-47zM9 16h3v-3h36v3h3v3.5h-3v49h3v3.5h-3v3H12v-3H9v-3.5h3v-49H9zM26 5.5h8a2.8 2.8 0 0 1 0 5.6h-8a2.8 2.8 0 0 1 0-5.6z" fill="#eef1f8" fillOpacity="0.82" />
+          <rect x="12" y="13" width="36" height="62" rx="1.5" fill={card} />
+          <circle cx="30" cy="8.3" r="2.2" fill="#e8b64a" stroke="#7a5512" strokeWidth="0.5" />
+          <rect x="5" y="1.5" width="50" height="81" rx="1.5" fill="url(#sleeve-glint)" />
+        </>
+      )}
+      {sleeve === "slab" && (
+        <>
+          <rect x="2" y="1" width="56" height="82" rx="4" fill="#fff" fillOpacity="0.05" stroke="#fff" strokeOpacity="0.55" strokeWidth="1.2" />
+          <rect x="8" y="5" width="44" height="74" rx="2.5" fill="#fff" fillOpacity="0.06" stroke="#fff" strokeOpacity="0.8" strokeWidth="1.2" />
+          <rect x="11" y="8" width="38" height="12" fill="#ff6aa8" />
+          <rect x="12.2" y="9.2" width="35.6" height="9.6" fill="#f6f3ee" />
+          <rect x="14" y="11" width="16" height="1.6" rx="0.8" fill="#16141a" opacity="0.75" />
+          <rect x="14" y="14" width="11" height="1.4" rx="0.7" fill="#16141a" opacity="0.5" />
+          <text x="46.5" y="17.2" textAnchor="end" fontSize="6" fontWeight="700" fill="#16141a" fontFamily="Arial, sans-serif">10</text>
+          <rect x="12" y="24" width="36" height="51" rx="1.5" fill="#dfe6ee" fillOpacity="0.25" />
+          <rect x="14" y="26" width="32" height="47" rx="2" fill={card} />
+          {[[5.5, 4.5], [54.5, 4.5], [5.5, 79.5], [54.5, 79.5]].map(([cx, cy]) => (
+            <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2" fill="#c9ccd2" stroke="#6d7077" strokeWidth="0.6" />
+          ))}
+          <rect x="2" y="1" width="56" height="82" rx="4" fill="url(#sleeve-glint)" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/* A closed binder in its cover (the .binder-cover-* rules in styles.css),
+   with a spine and a label. */
+export function BinderBook({ binder, className }: { binder: SupporterBinderId; className: string }) {
+  return (
+    <span className={`relative block overflow-hidden rounded-[4px] binder-cover--${binder} ${className}`}>
+      <span className="absolute inset-y-0 left-0 w-[18%] bg-black/30" />
+      <span className="absolute left-[34%] right-[14%] top-[22%] h-[16%] rounded-[2px] bg-white/30" />
+      <span className="absolute inset-[3px] left-[22%] rounded-[2px] border border-dashed border-white/30" />
+    </span>
+  );
+}
+
+/* A small print of a pack in a wrapper (null: the standard foil), drawn once. */
+const wrapperThumbs = new Map<string, string>();
+export function wrapperThumb(wrapper: SupporterWrapperId | null): string {
+  const key = wrapper ?? "standard";
+  const cached = wrapperThumbs.get(key);
+  if (cached) return cached;
+  if (typeof document === "undefined") return "";
+  const art = getCachedPackFrontCanvas({ ...DEFAULT_PACK_ART_STYLE, wrapper });
+  const canvas = document.createElement("canvas");
+  canvas.width = 180;
+  canvas.height = 300;
+  canvas.getContext("2d")?.drawImage(art, 0, 0, canvas.width, canvas.height);
+  const url = canvas.toDataURL("image/jpeg", 0.86);
+  wrapperThumbs.set(key, url);
+  return url;
 }
 
 export function LoadoutSlots({ shown, open, onOpen, locks, onToggleLock, spinning, trying, avatar }: {
@@ -159,7 +278,11 @@ export function LoadoutSlots({ shown, open, onOpen, locks, onToggleLock, spinnin
         const locked = locks.has(slot);
         const active = open === slot;
         return (
-          <div key={slot} className={`flex items-stretch rounded-xl transition-colors ${active ? "bg-osu-b4" : "hover:bg-osu-b4/60"}`}>
+          <Fragment key={slot}>
+          {slot === PACK_SLOT_IDS[0] && (
+            <div className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">{t`Packs`}</div>
+          )}
+          <div className={`flex items-stretch rounded-xl transition-colors ${active ? "bg-osu-b4" : "hover:bg-osu-b4/60"}`}>
             <button
               type="button"
               onClick={() => onOpen(slot)}
@@ -201,6 +324,7 @@ export function LoadoutSlots({ shown, open, onOpen, locks, onToggleLock, spinnin
               <LockIcon locked={locked} className="h-[18px] w-[18px]" />
             </button>
           </div>
+          </Fragment>
         );
       })}
     </div>
@@ -314,6 +438,9 @@ export const LoadoutDrawer = memo(function LoadoutDrawer(props: DrawerProps) {
           : props.slot === "nameStyle" ? <NameStyleDrawer {...props} />
           : props.slot === "nameFont" ? <FontDrawer {...props} />
           : props.slot === "motif" ? <MotifDrawer {...props} />
+          : props.slot === "sleeve" ? <SleeveDrawer {...props} />
+          : props.slot === "binder" ? <BinderDrawer {...props} />
+          : props.slot === "wrapper" ? <WrapperDrawer {...props} />
           : <FoilDrawer {...props} />}
       </motion.div>
     </AnimatePresence>
@@ -511,16 +638,92 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
 }
 
 function FoilDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
-  const { i18n } = useLingui();
-  const tryOn = (value: SupporterFoilId) => (on: boolean) => onTry("foil", on ? value : undefined);
+  const { t, i18n } = useLingui();
+  const tryOn = (value: SupporterFoilId | null) => (on: boolean) => onTry("foil", on ? value : undefined);
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
+      <Item active={current.look.foil === "none"} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("foil", null)}>
+        <span className="grid aspect-[5/7] w-full place-items-center rounded-[6px] bg-osu-b6 text-osu-f1">
+          <NoArt className="h-6 w-6" />
+        </span>
+        <span className="w-full truncate text-center">{t`No foil`}</span>
+      </Item>
       {SUPPORTER_FOILS.map((id) => (
         <Item key={id} active={current.look.foil === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("foil", id)}>
           <FoilCard foil={id} className="aspect-[5/7] w-full" />
           <span className="w-full truncate text-center">{i18n._(SUPPORTER_FOIL_LABELS[id])}</span>
         </Item>
       ))}
+    </div>
+  );
+}
+
+function SleeveDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
+  const { t, i18n } = useLingui();
+  const tryOn = (value: SupporterCardSleeveId | null) => (on: boolean) => onTry("sleeve", on ? value : undefined);
+  return (
+    <div>
+      <p className="mb-3 text-[12px] text-osu-f1">{t`The case your cards sit in whenever you lift one out of your collection or turn one over in a pack. Anyone opening a card from your shelf sees it too.`}</p>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
+        <Item active={current.pack.sleeve === null} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("sleeve", null)}>
+          <span className="grid aspect-[5/7] w-full place-items-center rounded-[6px] bg-osu-b6 text-osu-f1">
+            <NoArt className="h-6 w-6" />
+          </span>
+          <span className="w-full truncate text-center">{t`No sleeve`}</span>
+        </Item>
+        {SUPPORTER_CARD_SLEEVES.map((id) => (
+          <Item key={id} active={current.pack.sleeve === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("sleeve", id)}>
+            <span className="block w-full px-1.5 pt-1.5"><SleeveCard sleeve={id} className="aspect-[5/7] w-full" /></span>
+            <span className="w-full truncate text-center">{i18n._(SUPPORTER_CARD_SLEEVE_LABELS[id])}</span>
+          </Item>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BinderDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
+  const { t, i18n } = useLingui();
+  const tryOn = (value: SupporterBinderId | null) => (on: boolean) => onTry("binder", on ? value : undefined);
+  return (
+    <div>
+      <p className="mb-3 text-[12px] text-osu-f1">{t`Your collection as binder pages, three by three in plastic pockets, for you and anyone visiting your shelf.`}</p>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2">
+        <Item active={current.pack.binder === null} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("binder", null)}>
+          <span className="grid h-[76px] w-full place-items-center rounded-md bg-osu-b6 text-osu-f1">
+            <NoArt className="h-6 w-6" />
+          </span>
+          {t`No binder`}
+        </Item>
+        {SUPPORTER_BINDERS.map((id) => (
+          <Item key={id} active={current.pack.binder === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("binder", id)}>
+            <span className="grid h-[76px] w-full place-items-center"><BinderBook binder={id} className="h-[70px] w-[54px]" /></span>
+            {i18n._(SUPPORTER_BINDER_LABELS[id])}
+          </Item>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WrapperDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
+  const { t, i18n } = useLingui();
+  const tryOn = (value: SupporterWrapperId | null) => (on: boolean) => onTry("wrapper", on ? value : undefined);
+  return (
+    <div>
+      <p className="mb-3 text-[12px] text-osu-f1">{t`What your packs are printed on, every pack type alike. The pack's name and terms stay on it.`}</p>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
+        <Item active={current.pack.wrapper === null} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("wrapper", null)}>
+          <img src={wrapperThumb(null)} alt="" className="aspect-[3/5] w-full rounded-[5px] object-cover" />
+          <span className="w-full truncate text-center">{t`Standard foil`}</span>
+        </Item>
+        {SUPPORTER_WRAPPERS.map((id) => (
+          <Item key={id} active={current.pack.wrapper === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("wrapper", id)}>
+            <img src={wrapperThumb(id)} alt="" className="aspect-[3/5] w-full rounded-[5px] object-cover" />
+            <span className="w-full truncate text-center">{i18n._(SUPPORTER_WRAPPER_LABELS[id])}</span>
+          </Item>
+        ))}
+      </div>
     </div>
   );
 }

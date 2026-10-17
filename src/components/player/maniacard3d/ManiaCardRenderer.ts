@@ -26,6 +26,8 @@ import {
 import { clamp, resolveQualityProfile, type QualityProfile } from "./layout";
 import type { ManiaCardReadyData } from "./types";
 import { supporterFoilIndex, type SupporterFoilId } from "#/lib/supporter-foils";
+import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
+import { buildCardSleeve, sleeveFit, type CardSleeveMeshes } from "./cardSleeve";
 import { CARD_WORLD_HEIGHT } from "./cardGeometry";
 
 // The canvas extends past the host on every side by this factor so the card can
@@ -140,6 +142,16 @@ export class ManiaCardRenderer {
   private backMesh: Mesh | null = null;
   private backOverrideCanvas: HTMLCanvasElement | null = null;
   private backOverrideTexture: CanvasTexture | null = null;
+  /* The case the card's holder keeps it in (cardSleeve.ts), outside the card
+     group so a new card does not rebuild it, turned with it every frame. */
+  private sleeve: SupporterCardSleeveId | null = null;
+  private sleeveMeshes: CardSleeveMeshes | null = null;
+  private readonly sleeveGroup = new Group();
+  private lastData: ManiaCardReadyData | null = null;
+  /* Card and case ease to their fit instead of jumping when a case goes on or off. */
+  private fit = { scale: 1, offsetY: 0 };
+  private fitTarget = { scale: 1, offsetY: 0 };
+  private sleeveIn = 1;
 
   constructor(options: ManiaCardRendererOptions) {
     if (options.startFaceDown) this.introRotationDeg = 180;
@@ -181,6 +193,7 @@ export class ManiaCardRenderer {
     this.camera.position.set(0, 0, cameraDistance);
     this.scene.add(new AmbientLight(0xffffff, 1.4));
     this.scene.add(this.group);
+    this.scene.add(this.sleeveGroup);
     this.attachPointerEvents();
     if (this.gyroEnabled && !this.getOrientationPermissionRequester()) this.attachOrientationListener();
     void this.setData(options.data);
@@ -234,6 +247,9 @@ export class ManiaCardRenderer {
     this.applySupporterFoil();
 
     this.group.add(body, front, back, this.overlay);
+    this.lastData = data;
+    // The slab's label names the card, so a new card reprints it.
+    if (this.sleeve) this.buildSleeve();
     this.motifLayer = null;
     if (textures.contentTexture && textures.motif) {
       // background, then the paint drifting over it, then everything printed
@@ -265,6 +281,44 @@ export class ManiaCardRenderer {
     const uniforms = material.uniforms as Record<string, { value: number }>;
     uniforms.uSupporter.value = this.supporterFoil ? 1 : 0;
     uniforms.uFoilStyle.value = this.supporterFoil ? supporterFoilIndex(this.supporterFoil) : 0;
+  }
+
+  /* Puts the card in its holder's case, or (null) takes it out. */
+  setSleeve(sleeve: SupporterCardSleeveId | null) {
+    if (this.sleeve === sleeve) return;
+    this.sleeve = sleeve;
+    this.buildSleeve();
+    this.start();
+  }
+
+  private buildSleeve() {
+    this.sleeveMeshes?.dispose();
+    this.sleeveMeshes = null;
+    while (this.sleeveGroup.children.length > 0) this.sleeveGroup.remove(this.sleeveGroup.children[0]!);
+    if (!this.sleeve || !this.lastData) {
+      this.fitTarget = { scale: 1, offsetY: 0 };
+      return;
+    }
+    this.sleeveMeshes = buildCardSleeve(this.sleeve, this.lastData);
+    this.sleeveGroup.add(this.sleeveMeshes.group);
+    // Card and case shrink together so the case fills the frame the card did,
+    // and both shift so the case, not the card, sits in the middle. The case
+    // drops on from a little larger.
+    const fit = sleeveFit(this.sleeve);
+    this.fitTarget = { scale: fit.scale, offsetY: fit.cardOffsetY * fit.scale };
+    this.sleeveIn = 0;
+  }
+
+  private applyFit(): boolean {
+    const ease = (from: number, to: number) => (Math.abs(to - from) < 0.0005 ? to : from + (to - from) * 0.16);
+    this.fit = { scale: ease(this.fit.scale, this.fitTarget.scale), offsetY: ease(this.fit.offsetY, this.fitTarget.offsetY) };
+    this.sleeveIn = this.sleeveIn >= 0.999 ? 1 : this.sleeveIn + (1 - this.sleeveIn) * 0.14;
+    this.group.scale.setScalar(this.fit.scale);
+    this.group.position.set(0, this.fit.offsetY, 0);
+    const drop = 1 + (1 - this.sleeveIn) * 0.12;
+    this.sleeveGroup.scale.setScalar(this.fit.scale * drop);
+    this.sleeveGroup.position.set(0, this.fit.offsetY, (1 - this.sleeveIn) * 0.8);
+    return this.fit.scale !== this.fitTarget.scale || this.fit.offsetY !== this.fitTarget.offsetY || this.sleeveIn < 1;
   }
 
   // Replaces the card-back art with an external canvas. The pack reveal uses
@@ -400,6 +454,8 @@ export class ManiaCardRenderer {
     const textures = this.textures;
     const backOverrideTexture = this.backOverrideTexture;
     const group = this.group;
+    const sleeveMeshes = this.sleeveMeshes;
+    this.sleeveMeshes = null;
     const renderer = this.renderer;
     const canvas = this.renderer.domElement;
     this.textures = null;
@@ -409,6 +465,7 @@ export class ManiaCardRenderer {
     releaseRendererResources(() => {
       textures?.dispose();
       backOverrideTexture?.dispose();
+      sleeveMeshes?.dispose();
       group.traverse((object: Object3D) => {
         const mesh = object as Mesh;
         if (mesh.geometry) mesh.geometry.dispose();
@@ -489,13 +546,19 @@ export class ManiaCardRenderer {
     if (this.motifLayer?.material && "uniforms" in this.motifLayer.material) {
       (this.motifLayer.material.uniforms as any).uTime.value = time;
     }
+    const fitting = this.applyFit();
+    if (this.sleeveMeshes) {
+      this.sleeveGroup.rotation.x = this.group.rotation.x;
+      this.sleeveGroup.rotation.y = this.group.rotation.y;
+      this.sleeveMeshes.update(time, this.interaction.light);
+    }
 
     this.renderer.render(this.scene, this.camera);
     if (this.textures && !this.readyEmitted && this.readyTextureRequestId === this.dataRequestId) {
       this.readyEmitted = true;
       this.onReady?.();
     }
-    return this.shouldKeepAnimating();
+    return fitting || this.shouldKeepAnimating();
   }
 
   private setRotation(rotation: Rotation2D) {
