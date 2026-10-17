@@ -2,7 +2,7 @@ import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 
 import { SUPPORTER_AVATAR_FRAMES, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
-import { SUPPORTER_MOTIFS, type SupporterLook, type SupporterMotifId } from "../../lib/supporter-card-looks";
+import { DEFAULT_SUPPORTER_MOTIF, SUPPORTER_MOTIFS, type SupporterLook, type SupporterMotifId } from "../../lib/supporter-card-looks";
 import { DEFAULT_SUPPORTER_FOIL, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
 import { SUPPORTER_NAME_FONTS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { SUPPORTER_NAME_STYLES, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
@@ -37,10 +37,10 @@ export const SLOT_LABELS: Record<SlotId, MessageDescriptor> = {
 
 export type SlotValue = string | null;
 
-export const DEFAULT_LOOK: SupporterLook = { motif: "stars", foil: DEFAULT_SUPPORTER_FOIL };
+export const DEFAULT_LOOK: SupporterLook = { motif: DEFAULT_SUPPORTER_MOTIF, foil: DEFAULT_SUPPORTER_FOIL };
 
 export function slotValue(loadout: Loadout, slot: SlotId): SlotValue {
-  if (slot === "motif") return loadout.look.motif;
+  if (slot === "motif") return loadout.look.motif === "none" ? null : loadout.look.motif;
   if (slot === "foil") return loadout.look.foil;
   return loadout[slot];
 }
@@ -49,6 +49,7 @@ export function slotValue(loadout: Loadout, slot: SlotId): SlotValue {
 export function withSlot(loadout: Loadout, slot: SlotId, value: SlotValue, custom?: { url: string; scale: number; opacity: number } | null): Loadout {
   if (slot === "motif") {
     if (value === "custom") return custom ? { ...loadout, look: { motif: "custom", foil: loadout.look.foil, ...custom } } : loadout;
+    if (value === null) return { ...loadout, look: { motif: "none", foil: loadout.look.foil } };
     return { ...loadout, look: { motif: value as SupporterMotifId, foil: loadout.look.foil } };
   }
   if (slot === "foil") return { ...loadout, look: { ...loadout.look, foil: value as SupporterFoilId } };
@@ -81,7 +82,7 @@ export const LOADOUT_COMBINATIONS =
   * (SUPPORTER_NAME_STYLES.length + 1)
   * (SUPPORTER_NAME_FONTS.length + 1)
   * SUPPORTER_FOILS.length
-  * SUPPORTER_MOTIFS.length;
+  * (SUPPORTER_MOTIFS.length + 1);
 
 export function sameLook(a: SupporterLook, b: SupporterLook): boolean {
   return a.motif === b.motif && a.foil === b.foil && a.url === b.url && a.scale === b.scale && a.opacity === b.opacity;
@@ -314,9 +315,10 @@ export const NAME_FONT_GROUPS: { key: string; title: MessageDescriptor; fonts: S
 
 export const MOTIF_LABELS: Record<SupporterMotifId, MessageDescriptor> = {
   stars: msg`Stars`,
-  notes: msg`Notes`,
-  stellium: msg`Stellium`,
-  petals: msg`Petals`,
-  feathers: msg`Feathers`,
   hearts: msg`Hearts`,
+  notes: msg`Notes`,
+  petals: msg`Sakura`,
+  headphones: msg`Headphones`,
+  keys: msg`Keycaps`,
+  stellium: msg`Stellium`,
 };

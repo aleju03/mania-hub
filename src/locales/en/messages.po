@@ -4032,6 +4032,7 @@ msgstr "Black playfield"
 msgid "Blackletter"
 msgstr "Blackletter"
 
+
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
 msgstr "Blitz"
@@ -4211,6 +4212,7 @@ msgstr "Bullet list"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Burn 5 duplicate {0} copies for one {1} card"
 #~ msgstr "Burn 5 duplicate {0} copies for one {1} card"
+
 
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
@@ -7384,8 +7386,8 @@ msgid "Feather wings"
 msgstr "Feather wings"
 
 #: src/components/supporter/loadout.ts
-msgid "Feathers"
-msgstr "Feathers"
+#~ msgid "Feathers"
+#~ msgstr "Feathers"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Feeds"
@@ -8181,6 +8183,7 @@ msgstr "Gold wings"
 msgid "Golden hour"
 msgstr "Golden hour"
 
+
 #: src/components/packs/GiftInbox.tsx
 #~ msgid "Got it"
 #~ msgstr "Got it"
@@ -8356,6 +8359,10 @@ msgstr "Have a gift code?"
 #: src/routes/bbcode.tsx
 msgid "Heading"
 msgstr "Heading"
+
+#: src/components/supporter/loadout.ts
+msgid "Headphones"
+msgstr "Headphones"
 
 #: src/lib/replay-overlays.ts
 msgid "Health bar"
@@ -9263,6 +9270,7 @@ msgstr "Jackspeed"
 msgid "Japanese"
 msgstr "Japanese"
 
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "JinJin dan courses"
 #~ msgstr "JinJin dan courses"
@@ -9450,6 +9458,10 @@ msgstr "Key presses play the note's hitsound, like in game. Misses trigger the c
 #: src/components/player/ProfileParts.tsx
 msgid "Key Split"
 msgstr "Key Split"
+
+#: src/components/supporter/loadout.ts
+msgid "Keycaps"
+msgstr "Keycaps"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10431,6 +10443,7 @@ msgstr "Lowest PP first"
 #~ msgid "Lowest rarities first. You keep at least one of every card."
 #~ msgstr "Lowest rarities first. You keep at least one of every card."
 
+
 #: src/routes/__root.tsx
 msgid "made by"
 msgstr "made by"
@@ -10663,6 +10676,7 @@ msgstr "Map shape"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "map unavailable"
+
 
 #: src/routes/replay.tsx
 msgid "mapped by"
@@ -11537,6 +11551,10 @@ msgstr "No activity data for this player"
 #: src/components/packs/album/AlbumView.tsx
 msgid "No album matches \"{0}\"."
 msgstr "No album matches \"{0}\"."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "No art"
+msgstr "No art"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No beatmaps found for \"{query}\""
@@ -13508,8 +13526,8 @@ msgid "Persian"
 msgstr "Persian"
 
 #: src/components/supporter/loadout.ts
-msgid "Petals"
-msgstr "Petals"
+#~ msgid "Petals"
+#~ msgstr "Petals"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Pick a colour"
@@ -13885,6 +13903,7 @@ msgstr "Please do not abuse the site, overload public endpoints, attempt to bypa
 #: src/routes/packs.tsx
 msgid "Please wait a minute before opening another pack. This pack wasn't charged."
 msgstr "Please wait a minute before opening another pack. This pack wasn't charged."
+
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "points"

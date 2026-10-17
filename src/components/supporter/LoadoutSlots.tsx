@@ -17,7 +17,7 @@ import {
   supporterFrameSrc,
   type SupporterAvatarFrameId,
 } from "../../lib/supporter-avatar-frames";
-import { SUPPORTER_MOTIF_SVGS } from "../../lib/supporter-motif-art";
+import { supporterMotifPath } from "../../lib/supporter-motif-art";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { SUPPORTER_NAME_STYLE_LABELS, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "./SupporterNameStyle";
@@ -49,10 +49,6 @@ export interface CustomMotif {
   url: string;
   scale: number;
   opacity: number;
-}
-
-function motifSrc(id: SupporterMotifId): string {
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(SUPPORTER_MOTIF_SVGS[id])}`;
 }
 
 /* A frame's still around the viewer's avatar, fitted into a square. */
@@ -104,9 +100,19 @@ function useSlotName() {
     }
     if (slot === "nameStyle") return value ? i18n._(SUPPORTER_NAME_STYLE_LABELS[value as SupporterNameStyleId]) : t`Plain`;
     if (slot === "nameFont") return value ? i18n._(SUPPORTER_NAME_FONT_LABELS[value as SupporterNameFontId]) : t`Default`;
-    if (slot === "motif") return value === "custom" ? t`Your image` : i18n._(MOTIF_LABELS[value as SupporterMotifId]);
+    if (slot === "motif") return value === null ? t`No art` : value === "custom" ? t`Your image` : i18n._(MOTIF_LABELS[value as SupporterMotifId]);
     return i18n._(SUPPORTER_FOIL_LABELS[value as SupporterFoilId]);
   };
+}
+
+/* An empty art slot: a struck-through circle, drawn rather than an icon font. */
+function NoArt({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M6.2 17.8 17.8 6.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; avatar: string | undefined }) {
@@ -123,8 +129,9 @@ function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; 
     return <span className={`text-[19px] font-bold leading-none text-white ${loadout.nameFont ? `name-font--${loadout.nameFont}` : ""}`}>Aa</span>;
   }
   if (slot === "motif") {
-    const src = loadout.look.motif === "custom" ? loadout.look.url : motifSrc(loadout.look.motif);
-    return <img src={src} alt="" className="h-7 w-7 rounded-sm object-contain" />;
+    if (loadout.look.motif === "none") return <NoArt className="h-5 w-5" />;
+    const src = loadout.look.motif === "custom" ? loadout.look.url : supporterMotifPath(loadout.look.motif);
+    return <img src={src} alt="" className="h-8 w-8 rounded-sm object-contain" />;
   }
   return <FoilCard foil={loadout.look.foil} still className="h-[40px] w-[29px]" />;
 }
@@ -429,10 +436,16 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
   return (
     <div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2">
+        <Item active={look.motif === "none"} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("motif", null)}>
+          <span className="grid h-[68px] w-full place-items-center rounded-md bg-osu-b6 text-osu-f1">
+            <NoArt className="h-6 w-6" />
+          </span>
+          {t`No art`}
+        </Item>
         {SUPPORTER_MOTIFS.map((motif) => (
           <Item key={motif.id} active={look.motif === motif.id} disabled={disabled} onTry={tryOn(motif.id)} onPick={() => onPick("motif", motif.id)}>
             <span className="grid h-[68px] w-full place-items-center rounded-md bg-osu-b6">
-              <img src={motifSrc(motif.id)} alt="" className="h-11 w-11" />
+              <img src={supporterMotifPath(motif.id)} alt="" className="h-14 w-14 object-contain" />
             </span>
             {i18n._(MOTIF_LABELS[motif.id])}
           </Item>

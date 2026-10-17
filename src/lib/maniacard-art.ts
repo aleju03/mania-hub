@@ -21,7 +21,7 @@ import { getAssetOrigin } from "./origin";
 import { MANIA_TIER_STYLES, resolveManiaTierStyle } from "./maniacard";
 import type { ManiaCardTier } from "./maniacard";
 import { packFinishSvg } from "./card-finish-art";
-import { siteAssetMotifPath, type CardMotif } from "./card-motif";
+import { motifCopyOpacity, siteAssetMotifPath, type CardMotif } from "./card-motif";
 import { readImageSize, sniffImageMime } from "./image-sniff";
 import { getCosmicTierPalette } from "./maniacard-cosmic";
 import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilSvg } from "./supporter-foil-art";
@@ -181,7 +181,7 @@ function motifSpriteElements(motif: CardMotif, dataUrl: string, aspect: number, 
             top: `${(cy - spriteH / 2).toFixed(1)}px`,
             width: `${spriteW.toFixed(1)}px`,
             height: `${spriteH.toFixed(1)}px`,
-            opacity: motif.opacity * (0.46 + rand(index * 5.21 + 1.3) * 0.32),
+            opacity: motifCopyOpacity(motif, rand(index * 5.21 + 1.3)),
             transform: `rotate(${((rotation * 180) / Math.PI).toFixed(2)}deg)`,
           },
         }),

@@ -4014,6 +4014,7 @@ msgstr "纯黑游玩区域"
 msgid "Blackletter"
 msgstr ""
 
+
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
 msgstr "闪电战"
@@ -4193,6 +4194,7 @@ msgstr "无序列表"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Burn 5 duplicate {0} copies for one {1} card"
 #~ msgstr "熔掉 5 张重复的{0}卡，换 1 张{1}卡"
+
 
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
@@ -7362,8 +7364,8 @@ msgid "Feather wings"
 msgstr ""
 
 #: src/components/supporter/loadout.ts
-msgid "Feathers"
-msgstr "羽毛"
+#~ msgid "Feathers"
+#~ msgstr "羽毛"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Feeds"
@@ -8159,6 +8161,7 @@ msgstr ""
 msgid "Golden hour"
 msgstr ""
 
+
 #: src/components/packs/GiftInbox.tsx
 #~ msgid "Got it"
 #~ msgstr "知道了"
@@ -8334,6 +8337,10 @@ msgstr "有兑换码？"
 #: src/routes/bbcode.tsx
 msgid "Heading"
 msgstr "标题"
+
+#: src/components/supporter/loadout.ts
+msgid "Headphones"
+msgstr "耳机"
 
 #: src/lib/replay-overlays.ts
 msgid "Health bar"
@@ -9233,6 +9240,7 @@ msgstr "速叠"
 msgid "Japanese"
 msgstr "日语"
 
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "JinJin dan courses"
 #~ msgstr "JinJin 的段位课题"
@@ -9420,6 +9428,10 @@ msgstr "按键会播放音符的打击音，和游戏里一样。Miss 会触发�
 #: src/components/player/ProfileParts.tsx
 msgid "Key Split"
 msgstr "键数分布"
+
+#: src/components/supporter/loadout.ts
+msgid "Keycaps"
+msgstr "键帽"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10401,6 +10413,7 @@ msgstr "pp 从低到高"
 #~ msgid "Lowest rarities first. You keep at least one of every card."
 #~ msgstr "优先使用低稀有度卡片。每张卡片至少保留一份。"
 
+
 #: src/routes/__root.tsx
 msgid "made by"
 msgstr "作者"
@@ -10633,6 +10646,7 @@ msgstr "谱面构成"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "谱面不可用"
+
 
 #: src/routes/replay.tsx
 msgid "mapped by"
@@ -11507,6 +11521,10 @@ msgstr "这名玩家没有活跃度数据"
 #: src/components/packs/album/AlbumView.tsx
 msgid "No album matches \"{0}\"."
 msgstr "没有匹配「{0}」的卡册。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "No art"
+msgstr "无图案"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No beatmaps found for \"{query}\""
@@ -13478,8 +13496,8 @@ msgid "Persian"
 msgstr "波斯语"
 
 #: src/components/supporter/loadout.ts
-msgid "Petals"
-msgstr "花瓣"
+#~ msgid "Petals"
+#~ msgstr "花瓣"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Pick a colour"
@@ -13855,6 +13873,7 @@ msgstr "请不要滥用本站、使公开接口过载、试图绕过访问控制
 #: src/routes/packs.tsx
 msgid "Please wait a minute before opening another pack. This pack wasn't charged."
 msgstr "请稍等一分钟再开下一个卡包。本次开包未扣费。"
+
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "points"
@@ -15555,7 +15574,7 @@ msgstr "俄语"
 #: src/components/supporter/loadout.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Sakura"
-msgstr ""
+msgstr "樱花"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"

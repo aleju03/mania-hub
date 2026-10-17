@@ -25,8 +25,9 @@ export { SUPPORTER_MOTIF_IDS, DEFAULT_SUPPORTER_MOTIF, type SupporterMotifId } f
 export { SUPPORTER_FOILS, DEFAULT_SUPPORTER_FOIL, type SupporterFoilId } from "./supporter-foils";
 
 export interface SupporterLook {
-  /** A preset sprite, or "custom" for the supporter's own image. */
-  motif: SupporterMotifId | "custom";
+  /** A preset picture, "custom" for the supporter's own image, or "none" for
+      the tier's own flecks with only the foil on top. */
+  motif: SupporterMotifId | "custom" | "none";
   /** Null keeps the tier's own colours. */
   /** The light over the card; never its colours. */
   foil: SupporterFoilId;
@@ -62,16 +63,16 @@ interface SupporterMotifDefinition {
   opacity: number;
 }
 
-/* Scale and opacity per shape: the busy sprites (notes, stellium) sit a little
-   larger so their detail survives a thumbnail, the solid ones a little fainter
-   so they stay behind the card's text. */
+/* Scale per doodle: the busy ones (notes, keys) a little larger so their
+   detail survives a thumbnail. */
 export const SUPPORTER_MOTIFS: readonly SupporterMotifDefinition[] = [
-  { id: "stars", label: "Stars", scale: 0.9, opacity: 0.85 },
-  { id: "notes", label: "Notes", scale: 1.0, opacity: 0.85 },
-  { id: "stellium", label: "Stellium", scale: 0.95, opacity: 0.8 },
-  { id: "petals", label: "Petals", scale: 0.9, opacity: 0.85 },
-  { id: "feathers", label: "Feathers", scale: 1.0, opacity: 0.8 },
-  { id: "hearts", label: "Hearts", scale: 0.85, opacity: 0.8 },
+  { id: "stars", label: "Stars", scale: 1.3, opacity: 1 },
+  { id: "hearts", label: "Hearts", scale: 1.3, opacity: 1 },
+  { id: "notes", label: "Notes", scale: 1.4, opacity: 1 },
+  { id: "petals", label: "Sakura", scale: 1.3, opacity: 1 },
+  { id: "headphones", label: "Headphones", scale: 1.35, opacity: 1 },
+  { id: "keys", label: "Keycaps", scale: 1.4, opacity: 1 },
+  { id: "stellium", label: "Stellium", scale: 1.3, opacity: 1 },
 ];
 
 const MOTIFS_BY_ID = new Map(SUPPORTER_MOTIFS.map((motif) => [motif.id, motif]));
@@ -108,6 +109,7 @@ export function parseSupporterLook(value: unknown): SupporterLook | null {
       opacity: clampTo(raw.opacity, CUSTOM_MOTIF_OPACITY_RANGE, 0.85),
     };
   }
+  if (raw.motif === "none") return { motif: "none", foil };
   return {
     motif: isSupporterMotifId(raw.motif) ? raw.motif : DEFAULT_SUPPORTER_MOTIF,
     foil,
@@ -117,7 +119,7 @@ export function parseSupporterLook(value: unknown): SupporterLook | null {
 /* The motif a look floats, in the shape every card surface already draws. */
 export function supporterLookMotif(look: SupporterLook | null | undefined): CardMotif | null {
   const parsed = parseSupporterLook(look);
-  if (!parsed) return null;
+  if (!parsed || parsed.motif === "none") return null;
   if (parsed.motif === "custom" && parsed.url) {
     return {
       url: parsed.url,

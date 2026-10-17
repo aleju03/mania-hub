@@ -230,7 +230,7 @@ describe("supporter look", () => {
       supporterLook: { motif: "hearts", foil: "caustics" },
     });
     expect(data.supporterFoil).toBe("caustics");
-    expect(data.motif?.url).toBe("https://mania-tracker.com/images/supporter-motifs/hearts.svg");
+    expect(data.motif?.url).toBe("https://mania-tracker.com/images/supporter-motifs/hearts-2.png");
     // A foil is light only: the card keeps its tier's colours.
     expect(data.motif?.palette).toBeUndefined();
     expect(data.tierStyle.label).toBe("Common");

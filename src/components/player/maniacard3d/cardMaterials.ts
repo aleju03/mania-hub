@@ -11,7 +11,7 @@ import {
 } from "three";
 import type { Texture } from "three";
 import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH, type ShaderQuality } from "./layout";
-import { cardOverlayFragmentShader, cardOverlayVertexShader } from "./cardShaders";
+import { cardMotifPaintFragmentShader, cardOverlayFragmentShader, cardOverlayVertexShader } from "./cardShaders";
 import { getCosmicTierPalette, type PreparedCardMotif } from "./cardTexture";
 import type { FaceLayout, Rect } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
@@ -56,6 +56,23 @@ export function createFaceMaterial(texture: Texture) {
   });
 }
 
+/* The painted motif's own layer, between the front's background and its
+   printed content. Normal alpha blending: it is paint, not light. */
+export function createMotifPaintMaterial(motif: PreparedCardMotif) {
+  return new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    vertexShader: cardOverlayVertexShader,
+    fragmentShader: cardMotifPaintFragmentShader,
+    uniforms: {
+      uTime: { value: 0 },
+      uMotif: { value: motif.texture },
+      uMotifSize: { value: new Vector2(motif.cellWidth, motif.cellHeight) },
+      uMotifOpacity: { value: motif.opacity },
+    },
+  });
+}
+
 export function createOverlayMaterial(
   data: ManiaCardReadyData,
   layout: FaceLayout,
@@ -93,7 +110,9 @@ export function createOverlayMaterial(
       uMotif: { value: motif?.texture ?? getEmptyMotifTexture() },
       uMotifOn: { value: motif ? 1 : 0 },
       uMotifSize: { value: new Vector2(motif?.cellWidth ?? 0.34, motif?.cellHeight ?? 0.34) },
-      uMotifOpacity: { value: motif?.opacity ?? 1 },
+      // A printed motif is already on the front: the overlay only needs to know
+      // one is there, so it neither drifts a second copy nor brings the flecks back.
+      uMotifOpacity: { value: motif?.painted ? 0 : (motif?.opacity ?? 1) },
       uRainbow: { value: cosmic?.rainbow ?? 1 },
       uAvatarMask: { value: textureRectUv(avatar) },
       uTextureSize: { value: new Vector2(CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT) },

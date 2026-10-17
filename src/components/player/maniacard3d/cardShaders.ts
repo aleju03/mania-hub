@@ -172,7 +172,8 @@ vec4 motifCell(vec2 p, vec2 id) {
    a neighbour's shape. */
 vec4 motifWave(vec2 uv, vec2 grid, float offset) {
   vec2 p = uv * grid;
-  p.y -= offset;
+  // up and to the right, the way the painted layer drifts
+  p -= vec2(offset * 0.55, offset);
   vec2 id = floor(p);
   vec4 best = vec4(0.0);
   for (int dy = -1; dy <= 1; dy += 1) {
@@ -525,5 +526,57 @@ void main() {
     0.55 + uSupporter * 0.05
   ) * mask;
   gl_FragColor = vec4(color, alpha);
+}
+`;
+
+/* A supporter's painted doodles, drifting between the card's background and
+   everything printed on it (ManiaCardRenderer stacks the meshes). The same
+   jittered grid and drift as the overlay's motifWave, but drawn as paint: the
+   sprite's own colour at its own alpha, not light. */
+export const cardMotifPaintFragmentShader = `
+precision highp float;
+
+uniform float uTime;
+uniform sampler2D uMotif;
+uniform vec2 uMotifSize;
+uniform float uMotifOpacity;
+varying vec2 vUv;
+
+float random(vec2 value) {
+  return fract(sin(dot(value, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+vec4 paintCell(vec2 p, vec2 id) {
+  float variant = random(id);
+  vec2 center = id + 0.5 + (vec2(random(id + vec2(7.1, 2.9)), random(id + vec2(3.7, 9.4))) - 0.5) * 0.78;
+  vec2 halfSize = uMotifSize * (0.76 + random(id + vec2(11.2, 5.8)) * 0.48) * 0.5;
+  // a slow sway on top of each copy's own tilt, so the drift is not rigid
+  float angle = (random(id + vec2(4.3, 8.9)) - 0.5) * 0.62 + sin(uTime * 0.6 + variant * 6.28) * 0.08;
+  vec2 rel = p - center;
+  vec2 turned = vec2(rel.x * cos(angle) + rel.y * sin(angle), rel.y * cos(angle) - rel.x * sin(angle));
+  vec2 local = turned / max(halfSize, vec2(0.0001));
+  if (abs(local.x) > 1.0 || abs(local.y) > 1.0) return vec4(0.0);
+  vec4 texel = texture2D(uMotif, local * 0.5 + 0.5);
+  return vec4(texel.rgb, texel.a * mix(0.85, 1.0, variant));
+}
+
+float roundedCardMask(vec2 uv) {
+  vec2 p = abs(uv - 0.5) - vec2(0.5) + vec2(0.055);
+  float d = length(max(p, 0.0)) + min(max(p.x, p.y), 0.0) - 0.055;
+  return 1.0 - smoothstep(0.0, 0.006, d);
+}
+
+void main() {
+  float offset = uTime * 0.05;
+  vec2 p = vUv * vec2(3.0, 4.2) - vec2(offset * 0.55, offset);
+  vec2 id = floor(p);
+  vec4 best = vec4(0.0);
+  for (int dy = -1; dy <= 1; dy += 1) {
+    for (int dx = -1; dx <= 1; dx += 1) {
+      vec4 sampled = paintCell(p, id + vec2(float(dx), float(dy)));
+      if (sampled.a > best.a) best = sampled;
+    }
+  }
+  gl_FragColor = vec4(best.rgb, best.a * uMotifOpacity * roundedCardMask(vUv));
 }
 `;

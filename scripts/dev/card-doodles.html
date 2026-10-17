@@ -1,0 +1,202 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>card doodles</title>
+<!-- Draws the supporter card-art doodles (public/images/supporter-motifs/). Open in a browser, then save each canvas in window.SPRITES as <id>-<version>.png. -->
+<style>
+  body { margin: 0; background: #2a2730; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; font: 12px sans-serif; color: #ccc; }
+  figure { margin: 0; text-align: center; }
+  canvas { width: 220px; height: 220px; display: block; border-radius: 6px; }
+  .gold canvas { background: #e7b54a; }
+  .dark canvas { background: #1c1b22; }
+  .blue canvas { background: #3aa0e8; }
+</style>
+<div id="rows"></div>
+<script>
+/* Card art doodles, drawn the way the supporter welcome heart is: every line
+   a filled ribbon whose width and path drift with noise, colour laid first as
+   a loose marker scribble, off register, then the ink on top. Units: the
+   doodle spans about -1..1. */
+const INK = "#fbeef2";
+const SHADOW = "rgba(28,14,34,0.5)";
+const C = { pink: "#ff7ab2", petal: "#ffb0cd", yellow: "#ffd25e", sky: "#7cc8ff", lav: "#b49bff", mint: "#7fe0b8" };
+const SIZE = 960; // drawn at 3x, saved at 320
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const hash = (n) => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); };
+const noise = (x, seed) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return lerp(hash(i + seed * 57.3), hash(i + 1 + seed * 57.3), u); };
+
+function sample(d, step) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.style.cssText = "position:absolute;width:0;height:0";
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p.setAttribute("d", d); svg.appendChild(p); document.body.appendChild(svg);
+  const total = p.getTotalLength(), out = [];
+  for (let l = 0; l <= total; l += step) { const q = p.getPointAtLength(l); out.push([q.x, q.y, l]); }
+  const q = p.getPointAtLength(total); out.push([q.x, q.y, total]);
+  svg.remove();
+  return out;
+}
+
+function ribbon(g, pts, { width, wob, taper = 0.1, salt = 0, color }) {
+  const l0 = pts[0][2], l1 = pts[pts.length - 1][2];
+  const left = [], right = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    let nx = -(b[1] - a[1]), ny = b[0] - a[0]; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+    const l = pts[i][2];
+    const off = (noise(l / 0.32, salt + 3) - 0.5) * 2 * wob;
+    const t = Math.sqrt(clamp((l - l0) / taper)) * Math.sqrt(clamp((l1 - l) / taper));
+    const half = (width * (0.7 + 0.6 * noise(l / 0.22, salt)) * Math.max(0.15, t)) / 2;
+    const x = pts[i][0] + nx * off, y = pts[i][1] + ny * off;
+    left.push([x + nx * half, y + ny * half]); right.push([x - nx * half, y - ny * half]);
+  }
+  g.fillStyle = color; g.beginPath(); g.moveTo(...left[0]);
+  for (const p of left) g.lineTo(...p);
+  for (let i = right.length - 1; i >= 0; i--) g.lineTo(...right[i]);
+  g.closePath(); g.fill();
+}
+
+/* Marker colour: back-and-forth strokes across the shape's box, clipped to
+   the shape nudged off register. */
+function scribble(g, d, color, { angle = -0.6, gap = 0.16, width = 0.16, dx = 0.05, dy = 0.045, salt = 0 } = {}) {
+  const pts = sample(d, 0.02);
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const r = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) * 0.75 + 0.1;
+  g.save();
+  g.beginPath();
+  pts.forEach(([x, y, l], i) => { const w = (noise(l * 3, salt + 7) - 0.5) * 0.04; const px = x + dx + (x - cx) * w, py = y + dy + (y - cy) * w; i ? g.lineTo(px, py) : g.moveTo(px, py); });
+  g.closePath(); g.clip();
+  g.strokeStyle = color; g.lineWidth = width; g.lineCap = "round"; g.lineJoin = "round";
+  g.beginPath();
+  const ca = Math.cos(angle), sa = Math.sin(angle);
+  let k = 0;
+  for (let y = -r; y <= r; y += gap, k++) {
+    for (const x of k % 2 ? [r, -r] : [-r, r]) {
+      const jx = x + (hash(k * 3.1 + salt) - 0.5) * 0.2, jy = y + (hash(k * 5.7 + salt) - 0.5) * 0.06;
+      const px = cx + jx * ca - jy * sa, py = cy + jx * sa + jy * ca;
+      k === 0 && x === -r ? g.moveTo(px, py) : g.lineTo(px, py);
+    }
+  }
+  g.stroke();
+  g.restore();
+}
+
+/* One ink line: a dark pass a hair down-right (so it reads on pale cards),
+   then the cream ink. */
+function ink(g, d, { width = 0.075, wob = 0.018, salt = 1, taper = 0.12 } = {}) {
+  const pts = sample(d, 0.012);
+  g.save(); g.translate(0.022, 0.03);
+  ribbon(g, pts, { width: width * 1.25, wob, taper, salt, color: SHADOW });
+  g.restore();
+  ribbon(g, pts, { width, wob, taper, salt, color: INK });
+}
+function dot(g, x, y, r) {
+  g.fillStyle = SHADOW; g.beginPath(); g.ellipse(x + 0.02, y + 0.025, r * 1.1, r * 0.95, 0.3, 0, 7); g.fill();
+  g.fillStyle = INK; g.beginPath(); g.ellipse(x, y, r, r * 0.88, 0.3, 0, 7); g.fill();
+}
+
+const HEART = "M0 0.86 C0.36 0.6 0.95 0.24 0.93 -0.25 C0.91 -0.64 0.6 -0.86 0.34 -0.82 C0.16 -0.79 0.06 -0.66 0.03 -0.5 C-0.04 -0.64 -0.17 -0.75 -0.36 -0.73 C-0.63 -0.71 -0.88 -0.5 -0.86 -0.16 C-0.84 0.27 -0.34 0.6 0.02 0.88 L0.11 0.96";
+
+function starPath(cx, cy, R, r, rot, jit) {
+  let d = "";
+  for (let i = 0; i < 10; i++) {
+    const a = rot + (i * Math.PI) / 5, rr = (i % 2 ? r : R) * (1 + (hash(i * 9.1 + jit) - 0.5) * 0.14);
+    const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+    d += (i ? " L" : "M") + x.toFixed(3) + " " + y.toFixed(3);
+  }
+  return d + " Z";
+}
+
+const DOODLES = {
+  hearts(g) {
+    scribble(g, HEART, C.pink, { angle: -0.62, gap: 0.15, width: 0.165 });
+    ink(g, HEART, { width: 0.085, salt: 2 });
+    // a little shine, the way a marker leaves paper showing
+    ink(g, "M-0.6 -0.3 C-0.58 -0.42 -0.5 -0.5 -0.4 -0.52", { width: 0.055, salt: 5, taper: 0.06 });
+  },
+  notes(g) {
+    const head = (x, y) => `M${x - 0.2} ${y} C${x - 0.21} ${y - 0.13} ${x + 0.05} ${y - 0.2} ${x + 0.18} ${y - 0.12} C${x + 0.27} ${y - 0.05} ${x + 0.2} ${y + 0.11} ${x + 0.02} ${y + 0.14} C${x - 0.12} ${y + 0.16} ${x - 0.2} ${y + 0.09} ${x - 0.2} ${y} Z`;
+    const h1 = head(-0.48, 0.6), h2 = head(0.42, 0.42);
+    scribble(g, h1, C.sky, { gap: 0.09, width: 0.13, angle: 0.4 });
+    scribble(g, h2, C.sky, { gap: 0.09, width: 0.13, angle: 0.4, salt: 3 });
+    const beam = "M-0.3 -0.6 L0.6 -0.8 L0.61 -0.6 L-0.29 -0.42 Z";
+    scribble(g, beam, C.lav, { gap: 0.08, width: 0.12, angle: -0.2, salt: 5 });
+    ink(g, h1, { salt: 1 }); ink(g, h2, { salt: 2 });
+    ink(g, "M-0.3 0.58 C-0.3 0.1 -0.31 -0.2 -0.3 -0.62", { salt: 3 });
+    ink(g, "M0.6 0.4 C0.6 -0.05 0.61 -0.4 0.6 -0.82", { salt: 4 });
+    ink(g, beam, { salt: 6, width: 0.07 });
+  },
+  stars(g) {
+    const s = starPath(0, 0.04, 0.95, 0.42, -Math.PI / 2 + 0.08, 2);
+    scribble(g, s, C.yellow, { angle: -0.7, gap: 0.15, width: 0.165 });
+    ink(g, s, { width: 0.08, salt: 3 });
+  },
+  petals(g) {
+    // five notched petals, each a little different
+    const PETAL = [[0, -0.1], [-0.3, -0.3, -0.44, -0.64, -0.3, -0.88], [-0.22, -1.0, -0.09, -0.99, -0.04, -0.9], [0.0, -0.8], [0.05, -0.91], [0.12, -0.99, 0.26, -0.98, 0.32, -0.86], [0.44, -0.62, 0.29, -0.3, 0, -0.1]];
+    const petals = [];
+    for (let i = 0; i < 5; i++) {
+      const a = (i * 2 * Math.PI) / 5 + 0.2 + (hash(i * 2.3) - 0.5) * 0.16, sc = 0.92 + hash(i * 4.1) * 0.12;
+      const t = (x, y) => [(x * Math.cos(a) - y * Math.sin(a)) * sc, (x * Math.sin(a) + y * Math.cos(a)) * sc + 0.03].map((v) => v.toFixed(3)).join(" ");
+      const [m, c1, c2, l1, l2, c3, c4] = PETAL;
+      petals.push(`M${t(...m)} C${t(c1[0], c1[1])} ${t(c1[2], c1[3])} ${t(c1[4], c1[5])} C${t(c2[0], c2[1])} ${t(c2[2], c2[3])} ${t(c2[4], c2[5])} L${t(...l1)} L${t(...l2)} C${t(c3[0], c3[1])} ${t(c3[2], c3[3])} ${t(c3[4], c3[5])} C${t(c4[0], c4[1])} ${t(c4[2], c4[3])} ${t(c4[4], c4[5])} Z`);
+    }
+    petals.forEach((d, i) => scribble(g, d, C.petal, { gap: 0.13, width: 0.145, angle: i * 1.26 + 0.4, salt: i }));
+    petals.forEach((d, i) => ink(g, d, { width: 0.06, salt: 10 + i }));
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + i * 1.2566 + 0.6;
+      ink(g, `M${(Math.cos(a) * 0.05).toFixed(3)} ${(Math.sin(a) * 0.05 + 0.03).toFixed(3)} L${(Math.cos(a) * 0.22).toFixed(3)} ${(Math.sin(a) * 0.22 + 0.03).toFixed(3)}`, { width: 0.035, salt: 20 + i, taper: 0.03 });
+      dot(g, Math.cos(a) * 0.25, Math.sin(a) * 0.25 + 0.03, 0.04);
+    }
+  },
+  headphones(g) {
+    const cupL = "M-0.92 0.02 C-0.94 -0.08 -0.82 -0.14 -0.7 -0.12 L-0.55 -0.1 C-0.47 -0.09 -0.44 -0.02 -0.45 0.08 L-0.47 0.55 C-0.48 0.65 -0.55 0.7 -0.64 0.69 L-0.78 0.67 C-0.88 0.66 -0.92 0.6 -0.92 0.5 Z";
+    const cupR = "M0.9 0.04 C0.92 -0.06 0.82 -0.12 0.7 -0.11 L0.54 -0.09 C0.46 -0.08 0.43 -0.01 0.44 0.09 L0.46 0.56 C0.47 0.66 0.54 0.71 0.63 0.7 L0.77 0.68 C0.87 0.67 0.91 0.61 0.91 0.51 Z";
+    scribble(g, cupL, C.lav, { gap: 0.11, width: 0.135, angle: 1.1 });
+    scribble(g, cupR, C.lav, { gap: 0.11, width: 0.135, angle: 1.1, salt: 4 });
+    ink(g, "M-0.74 -0.1 C-0.86 -0.95 0.82 -1.02 0.72 -0.08", { width: 0.09, salt: 2 });
+    ink(g, "M-0.6 -0.12 C-0.66 -0.78 0.64 -0.84 0.58 -0.1", { width: 0.05, salt: 3 });
+    ink(g, cupL, { salt: 4 }); ink(g, cupR, { salt: 5 });
+  },
+  keys(g) {
+    const cap = (x, y, s) => `M${x - s} ${y - s + 0.06} C${x - s} ${y - s - 0.02} ${x - s + 0.05} ${y - s - 0.05} ${x - s + 0.12} ${y - s - 0.05} L${x + s - 0.1} ${y - s - 0.03} C${x + s - 0.02} ${y - s - 0.03} ${x + s + 0.01} ${y - s + 0.02} ${x + s + 0.01} ${y - s + 0.1} L${x + s} ${y + s - 0.08} C${x + s} ${y + s} ${x + s - 0.05} ${y + s + 0.03} ${x + s - 0.12} ${y + s + 0.03} L${x - s + 0.1} ${y + s + 0.02} C${x - s + 0.02} ${y + s + 0.02} ${x - s - 0.01} ${y + s - 0.03} ${x - s - 0.01} ${y + s - 0.1} Z`;
+    const a = cap(-0.45, -0.12, 0.38), b = cap(0.45, 0.12, 0.38);
+    scribble(g, b, C.mint, { gap: 0.11, width: 0.135, angle: -0.5 });
+    ink(g, a, { salt: 1 }); ink(g, b, { salt: 2 });
+    ink(g, "M-0.7 0.26 L-0.78 0.48 M-0.2 0.26 L-0.12 0.48 M-0.78 0.48 C-0.5 0.5 -0.4 0.49 -0.12 0.48", { width: 0.05, salt: 3, taper: 0.05 });
+    ink(g, "M-0.52 -0.2 L-0.52 -0.02 M-0.52 -0.2 C-0.36 -0.2 -0.36 -0.02 -0.52 -0.02", { width: 0.06, salt: 4, taper: 0.04 }); // D
+    ink(g, "M0.48 0.03 L0.48 0.18 C0.48 0.27 0.36 0.27 0.35 0.2", { width: 0.06, salt: 5, taper: 0.04 }); // J
+    // the pressed one's hit lines
+    ink(g, "M0.45 -0.42 L0.45 -0.62 M0.15 -0.38 L0.02 -0.54 M0.75 -0.38 L0.88 -0.54", { width: 0.05, salt: 6, taper: 0.05 });
+  },
+  stellium(g) {
+    const s = starPath(0, 0.02, 0.48, 0.21, -Math.PI / 2, 5);
+    scribble(g, s, C.yellow, { gap: 0.1, width: 0.14, angle: -0.6 });
+    ink(g, "M-0.42 -0.72 C-0.9 -0.48 -1.0 0.2 -0.66 0.62 C-0.36 0.98 0.3 1.0 0.66 0.64", { width: 0.08, salt: 1 });
+    ink(g, "M0.86 0.32 C0.98 -0.08 0.92 -0.46 0.62 -0.74 C0.42 -0.9 0.14 -0.96 -0.12 -0.92", { width: 0.08, salt: 2 });
+    ink(g, s, { width: 0.07, salt: 3 });
+  },
+};
+
+function render(name) {
+  const c = document.createElement("canvas"); c.width = c.height = SIZE;
+  const g = c.getContext("2d");
+  g.setTransform(SIZE * 0.4, 0, 0, SIZE * 0.4, SIZE / 2, SIZE / 2);
+  DOODLES[name](g);
+  const out = document.createElement("canvas"); out.width = out.height = 320;
+  const o = out.getContext("2d"); o.imageSmoothingQuality = "high"; o.drawImage(c, 0, 0, 320, 320);
+  return out;
+}
+
+const rows = document.getElementById("rows");
+window.SPRITES = {};
+for (const bg of ["dark", "gold", "blue"]) {
+  const row = document.createElement("div"); row.className = bg; row.style.cssText = "display:flex;gap:12px;width:100%";
+  for (const name of Object.keys(DOODLES)) {
+    const c = render(name); window.SPRITES[name] = c;
+    const f = document.createElement("figure"); f.append(c, name); row.append(f);
+  }
+  rows.append(row);
+}
+</script>

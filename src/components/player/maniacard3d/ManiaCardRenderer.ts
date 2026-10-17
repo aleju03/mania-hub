@@ -10,8 +10,8 @@ import {
   WebGLRenderer,
 } from "three";
 import type { Object3D } from "three";
-import { createCardBodyGeometry, createCardFaceGeometry, FACE_Z_OFFSET, OVERLAY_Z_OFFSET } from "./cardGeometry";
-import { createEdgeMaterial, createFaceMaterial, createOverlayMaterial } from "./cardMaterials";
+import { CONTENT_Z_OFFSET, createCardBodyGeometry, createCardFaceGeometry, FACE_Z_OFFSET, MOTIF_Z_OFFSET, OVERLAY_Z_OFFSET } from "./cardGeometry";
+import { createEdgeMaterial, createFaceMaterial, createMotifPaintMaterial, createOverlayMaterial } from "./cardMaterials";
 import { createCardTextures, type CardTextureSet } from "./cardTexture";
 import {
   addRotation,
@@ -126,6 +126,8 @@ export class ManiaCardRenderer {
   private manualRotation: Rotation2D = { x: 0, y: 0 };
   private orientationRotation: Rotation2D = { x: 0, y: 0 };
   private overlay: Mesh | null = null;
+  /* The drifting painted motif, on a card that has one (see createCardTextures). */
+  private motifLayer: Mesh | null = null;
   // The supporter foil the overlay draws: set by setData, or alone by
   // setSupporterFoil, which needs no new textures.
   private supporterFoil: SupporterFoilId | null = null;
@@ -232,6 +234,20 @@ export class ManiaCardRenderer {
     this.applySupporterFoil();
 
     this.group.add(body, front, back, this.overlay);
+    this.motifLayer = null;
+    if (textures.contentTexture && textures.motif) {
+      // background, then the paint drifting over it, then everything printed
+      // on the card, then the overlay's light; drawn in that order
+      this.motifLayer = new Mesh(createCardFaceGeometry(), createMotifPaintMaterial(textures.motif));
+      this.motifLayer.position.z = MOTIF_Z_OFFSET;
+      const content = new Mesh(createCardFaceGeometry(), createFaceMaterial(textures.contentTexture));
+      content.position.z = CONTENT_Z_OFFSET;
+      front.renderOrder = 1;
+      this.motifLayer.renderOrder = 2;
+      content.renderOrder = 3;
+      this.overlay.renderOrder = 4;
+      this.group.add(this.motifLayer, content);
+    }
     this.start();
   }
 
@@ -314,7 +330,7 @@ export class ManiaCardRenderer {
      uses it for tray thumbnails after the flip lands. */
   snapshotFrontCanvas(width = 280): string | null {
     if (!this.textures?.avatarLoaded) return null;
-    const image = this.textures?.frontTexture.image;
+    const image = this.textures?.composeFront();
     if (!(image instanceof HTMLCanvasElement)) return null;
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -410,6 +426,7 @@ export class ManiaCardRenderer {
 
   private clearGroup() {
     this.backMesh = null;
+    this.motifLayer = null;
     while (this.group.children.length > 0) {
       const child = this.group.children[0];
       if (!child) continue;
@@ -468,6 +485,9 @@ export class ManiaCardRenderer {
       const uniforms = this.overlay.material.uniforms as any;
       uniforms.uTime.value = time;
       uniforms.uLight.value.set(this.interaction.light.x, this.interaction.light.y);
+    }
+    if (this.motifLayer?.material && "uniforms" in this.motifLayer.material) {
+      (this.motifLayer.material.uniforms as any).uTime.value = time;
     }
 
     this.renderer.render(this.scene, this.camera);

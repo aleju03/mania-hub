@@ -1,4 +1,5 @@
 import { packFinishSvg } from "./card-finish-art";
+import { supporterMotifPathForUrl } from "./supporter-motif-art";
 
 /* The floating shape a maniacard's background drifts with.
 
@@ -125,7 +126,21 @@ export function siteAssetMotifPath(url: string): string | null {
    bytes a card can pull in. */
 export function cardMotifImageSrc(motif: CardMotif): string {
   const svg = packFinishSvg(motif.url);
-  return svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : `/api/card-motif?src=${encodeURIComponent(motif.url)}`;
+  if (svg) return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  /* A supporter's preset picture is our own file on our own origin, so it
+     needs no proxy; its versioned name keeps the service worker honest. */
+  return supporterMotifPathForUrl(motif.url) ?? `/api/card-motif?src=${encodeURIComponent(motif.url)}`;
+}
+
+/* How strongly one still copy of a motif is painted, from a 0..1 draw.
+   Shared by the card canvas and the share image so both print alike.
+   Granted images and legacy finishes float faint, behind the card; a
+   supporter's painted picture prints near full strength, since a faded
+   painting reads as a stain rather than as art. */
+export function motifCopyOpacity(motif: CardMotif, random: number): number {
+  return supporterMotifPathForUrl(motif.url)
+    ? motif.opacity * (0.84 + random * 0.16)
+    : motif.opacity * (0.46 + random * 0.32);
 }
 
 /* Identity of a motif for cache keys and render signatures. A card whose motif

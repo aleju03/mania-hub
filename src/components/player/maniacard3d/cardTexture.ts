@@ -3,8 +3,9 @@ import { CARD_CORNER_RADIUS, CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "./l
 import { buildFaceLayout, TEAM_FLAG_RADIUS, type Rect } from "./textureLayout";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
-import { cardMotifImageSrc, type CardMotif } from "#/lib/card-motif";
+import { cardMotifImageSrc, motifCopyOpacity, type CardMotif } from "#/lib/card-motif";
 import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilDataUrl } from "#/lib/supporter-foil-art";
+import { supporterMotifPathForUrl } from "#/lib/supporter-motif-art";
 import { getCosmicTierPalette as cosmicPaletteFor, motifKeepsStarfield } from "#/lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
@@ -40,11 +41,21 @@ export interface PreparedCardMotif {
   cellWidth: number;
   cellHeight: number;
   opacity: number;
+  /** A painted picture: it drifts in a layer of its own between the card's
+      background and its text (see createCardTextures), so the overlay's
+      light layer only needs to know one is there and keeps the flecks off. */
+  painted: boolean;
 }
 
 export interface CardTextureSet {
+  /** The whole front, or, when contentTexture is set, only its background. */
   frontTexture: CanvasTexture;
+  /** Everything printed on the front (name, avatar, numbers, stars) on a
+      clear canvas, for a card whose painted motif drifts between the two. */
+  contentTexture: CanvasTexture | null;
   backTexture: CanvasTexture;
+  /** The front as one still picture, for thumbnails taken off a live card. */
+  composeFront: () => HTMLCanvasElement;
   /** A missing portrait may be displayed temporarily, but must never be cached. */
   avatarLoaded: boolean;
   /** Set only when this card floats a motif and its image actually loaded. */
@@ -76,7 +87,7 @@ function createMotifTexture(image: HTMLImageElement): Texture {
    granted scale and the shorter one is divided down by the aspect. At 0.34 of
    a cell a copy is about 113px on the 1000x1400 face, which leaves a clear
    third of a cell between neighbours however they jitter. */
-function prepareCardMotif(motif: CardMotif, image: HTMLImageElement): PreparedCardMotif {
+function prepareCardMotif(motif: CardMotif, image: HTMLImageElement, painted: boolean): PreparedCardMotif {
   const width = image.naturalWidth || image.width || 1;
   const height = image.naturalHeight || image.height || 1;
   const aspect = width / height;
@@ -86,6 +97,7 @@ function prepareCardMotif(motif: CardMotif, image: HTMLImageElement): PreparedCa
     cellWidth: aspect >= 1 ? base : base * aspect,
     cellHeight: aspect >= 1 ? base / aspect : base,
     opacity: motif.opacity,
+    painted,
   };
 }
 
@@ -156,7 +168,23 @@ export async function createCardTextures(
     bakeFoil ? loadImage(supporterFoilDataUrl()).catch(() => null) : Promise.resolve(null),
   ]);
 
-  drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true, teamCover, foil);
+  /* A supporter's painted picture cannot drift in the overlay: that layer is
+     light laid over the whole face, text included, so a picture there could
+     only be a faint glow, and a painting drawn as a glow is a ghost of itself.
+     Under the shader it gets a layer of its own instead: the front is split
+     into its background and a clear canvas with everything printed on it, and
+     the renderer floats the picture, in its own paint, between the two. */
+  const paintedMotif = data.motif !== null && data.motif !== undefined && supporterMotifPathForUrl(data.motif.url) !== null;
+  const layered = options.driftingMotif === true && paintedMotif && motif !== null;
+  const contentCanvas = layered ? createCanvas(textureScale) : null;
+  if (contentCanvas) {
+    const content = getContext(contentCanvas);
+    if (textureScale !== 1) content.scale(textureScale, textureScale);
+    drawFront(front, data, layout, avatar, laurel, motif, true, teamCover, foil, "background");
+    drawFront(content, data, layout, avatar, laurel, motif, true, teamCover, foil, "content");
+  } else {
+    drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true, teamCover, foil);
+  }
   if (!options.frontOnly) drawBack(back, data, layout, laurel);
 
   const frontTexture = toTexture(frontCanvas);
@@ -164,16 +192,33 @@ export async function createCardTextures(
   /* The same image the front just painted, handed to the shader rather than
      loaded twice. Null whenever the front fell back to its tier's own pattern,
      which is what tells the shader to keep drifting triangles or stars. */
-  const preparedMotif = data.motif && motif ? prepareCardMotif(data.motif, motif) : null;
+  const preparedMotif = data.motif && motif ? prepareCardMotif(data.motif, motif, paintedMotif) : null;
+  const contentTexture = contentCanvas ? toTexture(contentCanvas) : null;
 
   return {
     frontTexture,
+    contentTexture,
     backTexture,
+    composeFront: () => {
+      if (!contentCanvas) return frontCanvas;
+      // The layers flattened, with the drifting picture as its still copies.
+      const flat = createCanvas(textureScale);
+      const context = getContext(flat);
+      context.drawImage(frontCanvas, 0, 0);
+      context.save();
+      if (textureScale !== 1) context.scale(textureScale, textureScale);
+      clipCard(context);
+      drawMotifPattern(context, data.motif as CardMotif, motif as HTMLImageElement);
+      context.restore();
+      context.drawImage(contentCanvas, 0, 0);
+      return flat;
+    },
     avatarLoaded: avatar !== null,
     motif: preparedMotif,
     layout,
     dispose: () => {
       frontTexture.dispose();
+      contentTexture?.dispose();
       backTexture.dispose();
       preparedMotif?.texture.dispose();
     },
@@ -226,6 +271,9 @@ function drawFront(
   teamCover: HTMLImageElement | null = null,
   /* The still supporter foil, loaded only when this front should bake it. */
   foil: HTMLImageElement | null = null,
+  /* "background" stops before anything printed on the card, "content" draws
+     only that, on a clear canvas; see createCardTextures. */
+  part: "all" | "background" | "content" = "all",
 ) {
   /* A motif takes the place of whichever background pattern this tier would
      have drawn - the triangle flecks below, or the cosmic starfield inside
@@ -235,6 +283,24 @@ function drawFront(
   const withMotif = data.motif !== null && motif !== null;
   context.save();
   clipCard(context);
+  if (part !== "content") drawFrontBackground(context, data, laurel, motif, withMotif, driftingMotif, foil);
+  if (part === "background") {
+    context.restore();
+    return;
+  }
+  drawFrontContent(context, data, layout, avatar, teamCover);
+  context.restore();
+}
+
+function drawFrontBackground(
+  context: CanvasRenderingContext2D,
+  data: ManiaCardReadyData,
+  laurel: HTMLImageElement | null,
+  motif: HTMLImageElement | null,
+  withMotif: boolean,
+  driftingMotif: boolean,
+  foil: HTMLImageElement | null,
+) {
   drawTierBackground(context, data, { starfield: !withMotif || motifKeepsStarfield(data.tier, data.motif) });
   // Cosmic tiers skip the triangle flecks entirely - their front is a clean
   // starfield (static here, drifting/twinkling in the overlay shader).
@@ -252,6 +318,15 @@ function drawFront(
   // Over the card art and under everything printed on it, so the name, the
   // avatar and the numbers stay as crisp as on any other card.
   if (foil) drawSupporterFoil(context, foil);
+}
+
+function drawFrontContent(
+  context: CanvasRenderingContext2D,
+  data: ManiaCardReadyData,
+  layout: FaceLayout,
+  avatar: HTMLImageElement | null,
+  teamCover: HTMLImageElement | null,
+) {
   if (data.team && layout.front.team) {
     dimTeamColumn(context, data, layout);
     drawTeamSpine(context, data, layout, teamCover);
@@ -261,7 +336,6 @@ function drawFront(
     drawTierLabel(context, data, layout);
     drawTeamStats(context, layout);
     drawStars(context, layout);
-    context.restore();
     return;
   }
   drawModeBadge(context, data);
@@ -270,7 +344,6 @@ function drawFront(
   drawAvatar(context, layout, avatar);
   drawStats(context, layout);
   drawStars(context, layout);
-  context.restore();
 }
 
 /* A player card hides most of its tier under the avatar and the stats box; a
@@ -1192,7 +1265,7 @@ function drawMotifPattern(context: CanvasRenderingContext2D, motif: CardMotif, i
       // canvas is pre-scaled when a thumbnail draws at a fraction of texture
       // size, and setTransform would throw that scale away mid-card.
       context.save();
-      context.globalAlpha = motif.opacity * (0.46 + random01(index * 5.21 + 1.3) * 0.32);
+      context.globalAlpha = motifCopyOpacity(motif, random01(index * 5.21 + 1.3));
       context.translate(x, y);
       context.rotate(rotation);
       context.drawImage(image, -width / 2, -height / 2, width, height);

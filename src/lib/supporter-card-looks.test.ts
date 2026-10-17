@@ -1,7 +1,8 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { packFinishSvg } from "./card-finish-art";
-import { cardMotifImageSrc, parseCardMotif } from "./card-motif";
-import { cardMotifDataUrl } from "./maniacard-art";
+import { cardMotifImageSrc, parseCardMotif, siteAssetMotifPath } from "./card-motif";
 import {
   DEFAULT_SUPPORTER_MOTIF,
   SUPPORTER_MOTIFS,
@@ -12,7 +13,7 @@ import {
   supporterLookMotif,
   supporterLookSignature,
 } from "./supporter-card-looks";
-import { SUPPORTER_MOTIF_SVGS, supporterMotifUrl } from "./supporter-motif-art";
+import { supporterMotifPath, supporterMotifPathForUrl, supporterMotifUrl } from "./supporter-motif-art";
 
 describe("parseSupporterLook", () => {
   it("reads a look from an object or its JSON", () => {
@@ -36,7 +37,7 @@ describe("parseSupporterLook", () => {
 });
 
 describe("supporterLookMotif", () => {
-  it("maps every motif to a code-native sprite every renderer can draw", async () => {
+  it("maps every motif to a picture of our own that every renderer can draw", async () => {
     expect(SUPPORTER_MOTIFS.map((motif) => motif.id)).toEqual([...SUPPORTER_MOTIF_IDS]);
     for (const id of SUPPORTER_MOTIF_IDS) {
       const motif = supporterLookMotif({ motif: id, foil: "holo" })!;
@@ -44,10 +45,11 @@ describe("supporterLookMotif", () => {
       expect(motif.palette).toBeUndefined();
       // It survives the motif parser that every stored and dealt motif goes through.
       expect(parseCardMotif(motif)).toEqual(motif);
-      expect(packFinishSvg(motif.url)).toBe(SUPPORTER_MOTIF_SVGS[id]);
-      expect(cardMotifImageSrc(motif)).toMatch(/^data:image\/svg\+xml/);
-      const inlined = await cardMotifDataUrl(motif);
-      expect(Buffer.from(inlined!.dataUrl.split(",")[1], "base64").toString()).toBe(SUPPORTER_MOTIF_SVGS[id]);
+      expect(packFinishSvg(motif.url)).toBeNull();
+      // same-origin, never through the proxy, and read off this deployment for share images
+      expect(cardMotifImageSrc(motif)).toBe(supporterMotifPath(id));
+      expect(siteAssetMotifPath(motif.url)).toBe(supporterMotifPath(id));
+      expect(existsSync(join("public", supporterMotifPath(id)))).toBe(true);
     }
   });
 
@@ -55,8 +57,14 @@ describe("supporterLookMotif", () => {
     expect(supporterLookMotif(null)).toBeNull();
   });
 
+  it("floats nothing for no art, and keeps the foil", () => {
+    expect(parseSupporterLook({ motif: "none", foil: "glitter" })).toEqual({ motif: "none", foil: "glitter" });
+    expect(supporterLookMotif({ motif: "none", foil: "glitter" })).toBeNull();
+    expect(effectiveCardLook(null, { motif: "none", foil: "glitter" })).toEqual({ motif: null, foil: "glitter" });
+  });
+
   it("does not resolve a lookalike URL", () => {
-    expect(packFinishSvg("https://example.com/images/supporter-motifs/stars.svg")).toBeNull();
+    expect(supporterMotifPathForUrl("https://example.com/images/supporter-motifs/stars-2.png")).toBeNull();
   });
 });
 
@@ -84,8 +92,8 @@ describe("effectiveCardLook", () => {
   });
 
   it("uses the supporter's motif and foil when the holding has none", () => {
-    expect(effectiveCardLook(null, { motif: "feathers", foil: "scanline" })).toEqual({
-      motif: supporterLookMotif({ motif: "feathers", foil: "scanline" }),
+    expect(effectiveCardLook(null, { motif: "keys", foil: "scanline" })).toEqual({
+      motif: supporterLookMotif({ motif: "keys", foil: "scanline" }),
       foil: "scanline",
     });
   });

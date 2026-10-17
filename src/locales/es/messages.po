@@ -4005,6 +4005,7 @@ msgstr "Playfield negro"
 msgid "Blackletter"
 msgstr ""
 
+
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
 msgstr "Blitz"
@@ -4184,6 +4185,7 @@ msgstr "Lista con viñetas"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Burn 5 duplicate {0} copies for one {1} card"
 #~ msgstr "Quema 5 copias duplicadas de {0} por una carta {1}"
+
 
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
@@ -7353,8 +7355,8 @@ msgid "Feather wings"
 msgstr ""
 
 #: src/components/supporter/loadout.ts
-msgid "Feathers"
-msgstr "Plumas"
+#~ msgid "Feathers"
+#~ msgstr "Plumas"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Feeds"
@@ -8150,6 +8152,7 @@ msgstr ""
 msgid "Golden hour"
 msgstr ""
 
+
 #: src/components/packs/GiftInbox.tsx
 #~ msgid "Got it"
 #~ msgstr "¡Listo!"
@@ -8325,6 +8328,10 @@ msgstr "¿Tienes un código de regalo?"
 #: src/routes/bbcode.tsx
 msgid "Heading"
 msgstr "Encabezado"
+
+#: src/components/supporter/loadout.ts
+msgid "Headphones"
+msgstr "Audífonos"
 
 #: src/lib/replay-overlays.ts
 msgid "Health bar"
@@ -9224,6 +9231,7 @@ msgstr "Jackspeed"
 msgid "Japanese"
 msgstr "Japonés"
 
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "JinJin dan courses"
 #~ msgstr "Dans de JinJin"
@@ -9411,6 +9419,10 @@ msgstr "Presionar una tecla reproduce el hitsound de la nota, como en el juego. 
 #: src/components/player/ProfileParts.tsx
 msgid "Key Split"
 msgstr "Distribución de modos"
+
+#: src/components/supporter/loadout.ts
+msgid "Keycaps"
+msgstr "Teclas"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10392,6 +10404,7 @@ msgstr "PP más bajo primero"
 #~ msgid "Lowest rarities first. You keep at least one of every card."
 #~ msgstr "Primero las rarezas más bajas. Conservas al menos una copia de cada carta."
 
+
 #: src/routes/__root.tsx
 msgid "made by"
 msgstr "creado por"
@@ -10624,6 +10637,7 @@ msgstr "Forma del mapa"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "mapa no disponible"
+
 
 #: src/routes/replay.tsx
 msgid "mapped by"
@@ -11498,6 +11512,10 @@ msgstr "No hay datos de actividad para este jugador"
 #: src/components/packs/album/AlbumView.tsx
 msgid "No album matches \"{0}\"."
 msgstr "Ningún álbum coincide con \"{0}\"."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "No art"
+msgstr "Sin arte"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No beatmaps found for \"{query}\""
@@ -13469,8 +13487,8 @@ msgid "Persian"
 msgstr "Persa"
 
 #: src/components/supporter/loadout.ts
-msgid "Petals"
-msgstr "Pétalos"
+#~ msgid "Petals"
+#~ msgstr "Pétalos"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Pick a colour"
@@ -13846,6 +13864,7 @@ msgstr "Por favor, no abuses del sitio, no sobrecargues los endpoints públicos,
 #: src/routes/packs.tsx
 msgid "Please wait a minute before opening another pack. This pack wasn't charged."
 msgstr "Espera un minuto antes de abrir otro sobre. No se te cobró este sobre."
+
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "points"
@@ -15546,7 +15565,7 @@ msgstr "Ruso"
 #: src/components/supporter/loadout.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Sakura"
-msgstr ""
+msgstr "Sakura"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
