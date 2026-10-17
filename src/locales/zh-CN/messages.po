@@ -566,6 +566,11 @@ msgstr "{0} 已上线"
 msgid "{0} is yours"
 msgstr "{0} 归你所有"
 
+#. placeholder {0}: likeCount.toLocaleString("en-US")
+#: src/routes/skins_.$id.tsx
+msgid "{0} likes"
+msgstr ""
+
 #. placeholder {0}: communitySkinContext.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "{0} loaded"
@@ -1302,6 +1307,10 @@ msgstr "{downloadCountLabel} 次下载"
 msgid "{downloadCountLabel} downloads, {viewCountLabel} views"
 msgstr "{downloadCountLabel} 次下载，{viewCountLabel} 次浏览"
 
+#: src/components/skins/SkinCard.tsx
+#~ msgid "{downloadCountLabel} downloads, {viewCountLabel} views, {likeCountLabel} likes"
+#~ msgstr ""
+
 #: src/routes/snipes.tsx
 #~ msgid "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the {nomodBadge} board."
 #~ msgstr "{dtBadges} 的成绩单独排榜，{htBadges} 也是。其他所有 mod 与 {nomodBadge} 共用一个榜。"
@@ -1457,6 +1466,14 @@ msgstr "还差 {left} 个 {at}pp+ 的成绩"
 #: src/components/me/GoalsPanel.tsx
 msgid "{left}% to go"
 msgstr "还差 {left}%"
+
+#: src/components/skins/SkinCard.tsx
+msgid "{likeCountLabel} likes"
+msgstr ""
+
+#: src/components/skins/SkinCard.tsx
+#~ msgid "{likeCountLabel} likes, including yours"
+#~ msgstr ""
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "{mapCount, plural, one {# top play} other {# top plays}}"
@@ -3198,6 +3215,10 @@ msgstr "所有玩家"
 #: src/components/me/MyDataPanel.tsx
 msgid "All rows"
 msgstr "全部记录"
+
+#: src/routes/skins.tsx
+msgid "all skins"
+msgstr ""
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "All three forges are used. They return after 24 hours."
@@ -9453,6 +9474,11 @@ msgstr "浅色"
 msgid "Light"
 msgstr "灯光"
 
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Like"
+msgstr ""
+
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Like this collection"
@@ -9461,6 +9487,14 @@ msgstr "喜欢这个收藏夹"
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Liked"
 msgstr "已喜欢"
+
+#: src/routes/skins.tsx
+msgid "liked by you"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "likes"
+msgstr ""
 
 #: src/components/layout/ThemePicker.tsx
 msgid "lime"
@@ -16295,6 +16329,11 @@ msgstr "登录以连接 {appNameInline}"
 msgid "Sign in to like collections"
 msgstr "登录后才能喜欢收藏夹"
 
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Sign in to like skins"
+msgstr ""
+
 #: src/components/player/ServerLinks.tsx
 msgid "Sign in to link your private server profiles."
 msgstr "登录后即可关联你的私服个人资料。"
@@ -16605,6 +16644,10 @@ msgstr "皮肤"
 #: src/routes/skins.tsx
 msgid "Skins are unavailable right now"
 msgstr "皮肤列表暂时不可用"
+
+#: src/routes/skins.tsx
+msgid "Skins you like show up here."
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Skip animations"
@@ -19731,6 +19774,11 @@ msgstr "未知谱面"
 msgid "Unknown player"
 msgstr "未知玩家"
 
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Unlike"
+msgstr ""
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
 msgstr "取消静音谱面预览"
@@ -20910,6 +20958,10 @@ msgid "You have a score, but players near you score higher on it."
 msgstr "你有成绩，但附近玩家的分数更高。"
 
 #: src/routes/skins.tsx
+msgid "You have not liked a skin yet"
+msgstr ""
+
+#: src/routes/skins.tsx
 msgid "You have not published a skin yet"
 msgstr "你还没有发布过皮肤"
 
@@ -21298,6 +21350,7 @@ msgstr "你的展示柜"
 #~ msgstr "你的技能评分会用到你每个成绩的准确度，osu! 上的成绩通常是根据判定数量估算的。如果 Companella 也上传了你在 osu! 上某个成绩的回放，就会改为根据你每个音符按早或按晚了多少来读取。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/routes/skins_.$id.tsx
 msgid "Your skin"
 msgstr "你的皮肤"
 

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Check, Download, Lock, MonitorPlay, Settings } from "lucide-react";
+import { ArrowLeft, Check, Download, Heart, Lock, MonitorPlay, Settings } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -26,6 +26,7 @@ import {
 } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
 import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, pingSkinView, readSkinsBrowseEntry, skinDownloadUrl, skinNoteShapeLabel, skinOskFileUrl, skinScreenshotLabel, type SkinSummary } from "../lib/skins";
+import { useSkinLike } from "../lib/use-liked-skins";
 import { pageSeo } from "../lib/seo";
 import { useScrollRestoreRef } from "../lib/use-scroll-restore";
 
@@ -232,6 +233,8 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
 
   const isOwner = skin != null && auth.viewer?.id === skin.ownerUserId;
   const isPrivate = skin?.visibility === "private";
+  // Only a skin everyone can see can be liked.
+  const likeable = skin?.status === "published" && !isPrivate;
   // Older cached/backend summaries only carry the primary shape, so keep that
   // as a fallback while newer ones can name every keymode's distinct art.
   const noteShapes = skin?.noteShapes?.length
@@ -427,18 +430,23 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                         )}
                       </p>
                     )}
-                    {skin.oskUrl && (
-                      <a
-                        href={(isPrivate ? null : skinDownloadUrl(skin.id)) ?? skin.oskUrl}
-                        onClick={() => track("skin_download", skinEventProperties(skin))}
-                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-5 py-2 text-[13px] font-bold text-white transition hover:brightness-110"
-                      >
-                        <Download className="h-4 w-4" aria-hidden="true" />
-                        <Trans>Download .osk</Trans>
-                        {skin.oskSizeBytes ? (
-                          <span className="font-semibold text-white/75 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
-                        ) : null}
-                      </a>
+                    {(skin.oskUrl || likeable) && (
+                      <div className="mt-4 flex gap-2">
+                        {skin.oskUrl && (
+                          <a
+                            href={(isPrivate ? null : skinDownloadUrl(skin.id)) ?? skin.oskUrl}
+                            onClick={() => track("skin_download", skinEventProperties(skin))}
+                            className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-osu-pink px-5 py-2 text-[13px] font-bold text-white transition hover:brightness-110"
+                          >
+                            <Download className="h-4 w-4" aria-hidden="true" />
+                            <Trans>Download .osk</Trans>
+                            {skin.oskSizeBytes ? (
+                              <span className="font-semibold text-white/75 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
+                            ) : null}
+                          </a>
+                        )}
+                        {likeable && <SkinLikeButton key={skin.id} skin={skin} />}
+                      </div>
                     )}
                     {auth.viewer && skin.status === "published" && skin.oskUrl && (
                       <div className="mt-2">
@@ -602,6 +610,27 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function SkinLikeButton({ skin }: { skin: SkinSummary }) {
+  const { t } = useLingui();
+  const { liked, likeCount, canLike, own, signedIn, toggle } = useSkinLike(skin);
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={!canLike}
+      aria-pressed={liked}
+      aria-label={t`${likeCount.toLocaleString("en-US")} likes`}
+      title={own ? t`Your skin` : !signedIn ? t`Sign in to like skins` : liked ? t`Unlike` : t`Like`}
+      className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-bold transition-colors ${
+        liked ? "border-osu-pink/45 bg-osu-pink/10 text-osu-pink-light" : "border-osu-b3/50 text-osu-l2"
+      } ${canLike ? "cursor-pointer hover:border-osu-pink/45 hover:text-osu-pink-light" : "cursor-default"}`}
+    >
+      <Heart className="h-4 w-4" fill={liked ? "currentColor" : "none"} aria-hidden="true" />
+      <span className="tabular-nums">{likeCount.toLocaleString("en-US")}</span>
+    </button>
   );
 }
 

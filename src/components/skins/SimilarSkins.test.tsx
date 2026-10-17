@@ -77,7 +77,7 @@ describe("SimilarSkins", () => {
 
     await waitFor(() => expect(screen.getByText("Similar skins")).toBeTruthy());
     expect(fetchSimilarSkins).toHaveBeenCalledWith("target", undefined);
-    expect(screen.getByRole("link", { name: /neighbour preview/i }).getAttribute("href")).toBe("/skins/neighbour");
+    expect(screen.getByRole("link", { name: "Neighbour" }).getAttribute("href")).toBe("/skins/neighbour");
   });
 
   const WITH_PREVIEWS: SimilarSkin = {

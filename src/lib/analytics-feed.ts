@@ -577,6 +577,8 @@ function describeNamedAnalyticsEvent(
     }
     case "skin_download":
       return { kind: "skin", verb: "downloaded", subject: row.skinName || row.skinRef || "a skin", detail: row.skinKeymodes };
+    case "skin_like":
+      return { kind: "skin", verb: "liked", subject: row.skinName || row.skinRef || "a skin", detail: null };
     case "skin_upload_published":
       return { kind: "skin", verb: "published", subject: row.skinName || row.skinRef || "a skin", detail: null };
     case "skin_previews_edited":

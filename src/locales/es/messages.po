@@ -554,6 +554,11 @@ msgstr "{0} ya está publicada"
 msgid "{0} is yours"
 msgstr "{0} ya es tuya"
 
+#. placeholder {0}: likeCount.toLocaleString("en-US")
+#: src/routes/skins_.$id.tsx
+msgid "{0} likes"
+msgstr ""
+
 #. placeholder {0}: communitySkinContext.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "{0} loaded"
@@ -1290,6 +1295,10 @@ msgstr "{downloadCountLabel} descargas"
 msgid "{downloadCountLabel} downloads, {viewCountLabel} views"
 msgstr "{downloadCountLabel} descargas, {viewCountLabel} vistas"
 
+#: src/components/skins/SkinCard.tsx
+#~ msgid "{downloadCountLabel} downloads, {viewCountLabel} views, {likeCountLabel} likes"
+#~ msgstr ""
+
 #: src/routes/snipes.tsx
 #~ msgid "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the {nomodBadge} board."
 #~ msgstr "Los scores con {dtBadges} tienen su propio leaderboard, y los de {htBadges} también. Todos los demás mods comparten el leaderboard de {nomodBadge}."
@@ -1445,6 +1454,14 @@ msgstr "quedan {left} a {at}pp o más"
 #: src/components/me/GoalsPanel.tsx
 msgid "{left}% to go"
 msgstr "falta {left}%"
+
+#: src/components/skins/SkinCard.tsx
+msgid "{likeCountLabel} likes"
+msgstr ""
+
+#: src/components/skins/SkinCard.tsx
+#~ msgid "{likeCountLabel} likes, including yours"
+#~ msgstr ""
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "{mapCount, plural, one {# top play} other {# top plays}}"
@@ -3186,6 +3203,10 @@ msgstr "Todos los jugadores"
 #: src/components/me/MyDataPanel.tsx
 msgid "All rows"
 msgstr "Todas las filas"
+
+#: src/routes/skins.tsx
+msgid "all skins"
+msgstr ""
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "All three forges are used. They return after 24 hours."
@@ -9441,6 +9462,11 @@ msgstr "claro"
 msgid "Light"
 msgstr "Luz"
 
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Like"
+msgstr ""
+
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Like this collection"
@@ -9449,6 +9475,14 @@ msgstr "Dar me gusta a esta colección"
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Liked"
 msgstr "Con me gusta"
+
+#: src/routes/skins.tsx
+msgid "liked by you"
+msgstr ""
+
+#: src/routes/skins.tsx
+msgid "likes"
+msgstr ""
 
 #: src/components/layout/ThemePicker.tsx
 msgid "lime"
@@ -16283,6 +16317,11 @@ msgstr "Inicia sesión para conectar {appNameInline}"
 msgid "Sign in to like collections"
 msgstr "Inicia sesión para dar me gusta a colecciones"
 
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Sign in to like skins"
+msgstr ""
+
 #: src/components/player/ServerLinks.tsx
 msgid "Sign in to link your private server profiles."
 msgstr "Inicia sesión para enlazar tus perfiles de servidores privados."
@@ -16593,6 +16632,10 @@ msgstr "Skins"
 #: src/routes/skins.tsx
 msgid "Skins are unavailable right now"
 msgstr "Las skins no están disponibles por ahora"
+
+#: src/routes/skins.tsx
+msgid "Skins you like show up here."
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Skip animations"
@@ -19719,6 +19762,11 @@ msgstr "Mapa desconocido"
 msgid "Unknown player"
 msgstr "Jugador desconocido"
 
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Unlike"
+msgstr ""
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
 msgstr "Activar audio de la vista previa del mapa"
@@ -20898,6 +20946,10 @@ msgid "You have a score, but players near you score higher on it."
 msgstr "Tienes puntaje, pero jugadores cerca de ti puntúan más alto."
 
 #: src/routes/skins.tsx
+msgid "You have not liked a skin yet"
+msgstr ""
+
+#: src/routes/skins.tsx
 msgid "You have not published a skin yet"
 msgstr "Todavía no has publicado una skin"
 
@@ -21286,6 +21338,7 @@ msgstr "tus destacados"
 #~ msgstr "Tus skill ratings usan tu precisión en cada play, que en las plays de osu! normalmente se estima a partir de tus conteos de juicios. Si Companella también envió la replay de una play que hiciste en osu!, se lee de qué tan temprano o tarde le diste a cada nota."
 
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/routes/skins_.$id.tsx
 msgid "Your skin"
 msgstr "Tu skin"
 

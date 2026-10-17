@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Download, Eye, Lock } from "lucide-react";
+import { Download, Eye, Heart, Lock } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { rememberSkinName, skinEventProperties } from "../../lib/analytics-skins";
@@ -7,6 +7,7 @@ import { track } from "../../lib/analytics";
 import { formatCompactCount, formatTimeAgo } from "../../lib/format";
 import { useLocale } from "../../lib/locale-context";
 import { queueSkinView } from "../../lib/skin-view-queue";
+import { useSkinLike } from "../../lib/use-liked-skins";
 import { formatSkinFileSize, keymodeLabel, rememberSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../../lib/skins";
 import { Avatar } from "../ui/Avatar";
 
@@ -200,10 +201,13 @@ export const SkinCard = memo(function SkinCard({ skin, previewKeys, preferScreen
   // Absent on a summary cached before views existed, which reads as zero until
   // the list refetches rather than rendering a hole in the row.
   const viewCount = skin.viewCount ?? 0;
+  const like = useSkinLike(skin);
+  const likeCount = like.likeCount;
   // Spelled out for the labels the icons stand in for; the icons themselves
   // carry the compact figure.
   const downloadCountLabel = downloadCount.toLocaleString("en-US");
   const viewCountLabel = viewCount.toLocaleString("en-US");
+  const likeCountLabel = likeCount.toLocaleString("en-US");
   // Only a published public skin has a public number to move, same predicate
   // as the skin page's own ping; the backend refuses anything else anyway.
   const viewRef = skin.slug ?? skin.id;
@@ -217,67 +221,73 @@ export const SkinCard = memo(function SkinCard({ skin, previewKeys, preferScreen
     return watchSeen(rootRef.current, pingView);
   }, [viewCountable, pingView]);
   return (
-    // The download sits outside the card link (an anchor cannot nest in
-    // another), overlaid on the preview's corner, so a skin can be grabbed
-    // straight from the grid without opening its page.
-    <div ref={rootRef} className="group relative">
-      <Link
-        to="/skins/$id"
-        params={{ id: skin.slug ?? skin.id }}
-        onClick={() => {
-          // The detail pageview only sees a slug, so the card hands the real
-          // name forward for the activity feed.
-          rememberSkinName(skin.slug ?? skin.id, skin.name);
-          // Lets the skin page's back button return to this exact browse state.
-          rememberSkinsBrowseEntry();
-          onClick?.();
-        }}
-        style={{ "--skin-accent": accent } as CSSProperties}
-        className="flex h-full flex-col overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 transition-[border-color,box-shadow] group-hover:border-(--skin-accent) group-hover:shadow-[0_0_18px_-8px_var(--skin-accent)]"
-      >
-        {/* overflow-hidden + absolute: an aspect-ratio box still grows to fit
-            its content, so a cover screenshot taller than 16:9 would stretch
-            this card past every other one in the grid. */}
-        <div className="relative aspect-video w-full overflow-hidden bg-osu-b5">
-          {preview.url ? (
-            <SkinPreviewImage
-              key={preview.url}
-              src={preview.url}
-              alt={t`${skin.name} preview`}
-              width={preview.width ?? 1280}
-              height={preview.height ?? 720}
-              className="absolute inset-0 h-full w-full object-cover group-hover:brightness-110"
-            />
-          ) : null}
-          <div className="absolute right-1.5 top-1.5">
-            <SkinKeymodeTags keymodes={skin.keymodes} specialKeymodes={skin.specialKeymodes} overlay />
-          </div>
-          {(skin.status === "hidden" || isPrivate) && (
-            <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase leading-none tracking-wide text-white/80">
-              {isPrivate && <Lock className="h-2.5 w-2.5" aria-hidden="true" />}
-              {isPrivate ? <Trans>private</Trans> : <Trans>hidden</Trans>}
-            </span>
-          )}
+    // The link is the skin's name, stretched over the whole card, so the
+    // download and the like can sit on the card as buttons of their own (an
+    // anchor or button cannot nest in a link). The download is overlaid on
+    // the preview's corner so a skin can be grabbed without opening its page.
+    <div
+      ref={rootRef}
+      style={{ "--skin-accent": accent } as CSSProperties}
+      className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 transition-[border-color,box-shadow] hover:border-(--skin-accent) hover:shadow-[0_0_18px_-8px_var(--skin-accent)] has-[a:focus-visible]:border-(--skin-accent)"
+    >
+      {/* overflow-hidden + absolute: an aspect-ratio box still grows to fit
+          its content, so a cover screenshot taller than 16:9 would stretch
+          this card past every other one in the grid. */}
+      <div className="relative aspect-video w-full overflow-hidden bg-osu-b5">
+        {preview.url ? (
+          <SkinPreviewImage
+            key={preview.url}
+            src={preview.url}
+            alt={t`${skin.name} preview`}
+            width={preview.width ?? 1280}
+            height={preview.height ?? 720}
+            className="absolute inset-0 h-full w-full object-cover group-hover:brightness-110"
+          />
+        ) : null}
+        <div className="absolute right-1.5 top-1.5">
+          <SkinKeymodeTags keymodes={skin.keymodes} specialKeymodes={skin.specialKeymodes} overlay />
         </div>
-        {/* Accent bar, colour sampled from the skin's own note art. */}
-        <div className="h-[3px] w-full shrink-0" style={{ backgroundColor: accent }} aria-hidden="true" />
-        <div className="flex flex-1 flex-col gap-1 px-2.5 py-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <div className="truncate text-[13px] font-bold leading-tight text-white">{skin.name}</div>
-            {/* Two counts where one spelled-out figure used to sit, so both
-                give up their words. The download glyph here is a statistic and
-                the one over the preview is the button that does something;
-                they read as a pair rather than a mistake because they are in
-                different blocks of the card, and neither number is ever the
-                only thing saying what it is - the label lives on the group, and
-                the page itself spells both out. */}
-            <span
-              className="shrink-0 text-[11px] text-osu-f1"
-              aria-label={isPrivate ? undefined : t`${downloadCountLabel} downloads, ${viewCountLabel} views`}
-            >
-              {isPrivate ? (
-                <Trans>only you</Trans>
-              ) : (
+        {(skin.status === "hidden" || isPrivate) && (
+          <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase leading-none tracking-wide text-white/80">
+            {isPrivate && <Lock className="h-2.5 w-2.5" aria-hidden="true" />}
+            {isPrivate ? <Trans>private</Trans> : <Trans>hidden</Trans>}
+          </span>
+        )}
+      </div>
+      {/* Accent bar, colour sampled from the skin's own note art. */}
+      <div className="h-[3px] w-full shrink-0" style={{ backgroundColor: accent }} aria-hidden="true" />
+      <div className="flex flex-1 flex-col gap-1 px-2.5 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <Link
+            to="/skins/$id"
+            params={{ id: skin.slug ?? skin.id }}
+            onClick={() => {
+              // The detail pageview only sees a slug, so the card hands the real
+              // name forward for the activity feed.
+              rememberSkinName(skin.slug ?? skin.id, skin.name);
+              // Lets the skin page's back button return to this exact browse state.
+              rememberSkinsBrowseEntry();
+              onClick?.();
+            }}
+            className="truncate text-[13px] font-bold leading-tight text-white outline-none after:absolute after:inset-0"
+          >
+            {skin.name}
+          </Link>
+          {/* Three counts where one spelled-out figure used to sit, so all
+              give up their words. The download glyph here is a statistic and
+              the one over the preview is the button that does something;
+              they read as a pair rather than a mistake because they are in
+              different blocks of the card, and neither number is ever the
+              only thing saying what it is - the labels live on the group and
+              the heart, and the page itself spells them out. The heart is a
+              button: it likes the skin right from the grid. */}
+          {isPrivate ? (
+            <span className="shrink-0 text-[11px] text-osu-f1">
+              <Trans>only you</Trans>
+            </span>
+          ) : (
+            <span className="inline-flex shrink-0 items-center gap-2 text-[11px] text-osu-f1">
+              <span aria-label={t`${downloadCountLabel} downloads, ${viewCountLabel} views`}>
                 <span className="inline-flex items-center gap-2" aria-hidden="true">
                   <span className="inline-flex items-center gap-1" title={t`${downloadCountLabel} downloads`}>
                     <Download className="h-3 w-3" />
@@ -288,43 +298,57 @@ export const SkinCard = memo(function SkinCard({ skin, previewKeys, preferScreen
                     <span className="tabular-nums">{formatCompactCount(viewCount)}</span>
                   </span>
                 </span>
-              )}
-            </span>
-          </div>
-          {/* Credit is for whoever made the skin. With no author on file the
-              line just drops it: standing the uploader in that spot read as a
-              claim they drew it, and the skin's page says "uploaded by" in
-              full. showUploader is the moderation shelf, where an admin is
-              looking at every uploader's skins at once and needs to tell them
-              apart; it is labelled there, never bare. */}
-          <div className="flex items-center gap-1.5 text-[11px] text-osu-f1">
-            {skin.author ? (
-              <span className="truncate">
-                <Trans>by <span className="font-semibold text-osu-l2">{skin.author}</span></Trans>
               </span>
-            ) : showUploader ? (
-              <>
-                <Avatar userId={skin.ownerUserId} size={14} shape="circle" />
-                <span className="truncate">
-                  <Trans>uploaded by <span className="font-semibold text-osu-l2">{skin.ownerUsername}</span></Trans>
-                </span>
-              </>
-            ) : null}
-            {/* How long the skin has been on /skins, which is not how old the
-                file is once it spent its first weeks private. Same date the
-                newest sort puts it in order by. */}
-            {(skin.listedAt ?? skin.publishedAt) && (
-              <>
-                {(skin.author || showUploader) && <span aria-hidden="true">·</span>}
-                <span className="shrink-0" suppressHydrationWarning>{formatTimeAgo(skin.listedAt ?? skin.publishedAt!, locale)}</span>
-              </>
-            )}
-            {skin.oskSizeBytes ? (
-              <span className="ml-auto shrink-0 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
-            ) : null}
-          </div>
+              <button
+                type="button"
+                onClick={like.toggle}
+                disabled={!like.canLike}
+                aria-pressed={like.liked}
+                aria-label={t`${likeCountLabel} likes`}
+                title={like.own ? t`${likeCountLabel} likes` : !like.signedIn ? t`Sign in to like skins` : like.liked ? t`Unlike` : t`Like`}
+                className={`relative z-[1] -m-1 inline-flex items-center gap-1 rounded p-1 transition-colors ${
+                  like.liked ? "text-osu-pink-light" : ""
+                } ${like.canLike ? "cursor-pointer hover:text-osu-pink-light" : "cursor-default"}`}
+              >
+                <Heart className="h-3 w-3" fill={like.liked ? "currentColor" : "none"} aria-hidden="true" />
+                <span className="tabular-nums">{formatCompactCount(likeCount)}</span>
+              </button>
+            </span>
+          )}
         </div>
-      </Link>
+        {/* Credit is for whoever made the skin. With no author on file the
+            line just drops it: standing the uploader in that spot read as a
+            claim they drew it, and the skin's page says "uploaded by" in
+            full. showUploader is the moderation shelf, where an admin is
+            looking at every uploader's skins at once and needs to tell them
+            apart; it is labelled there, never bare. */}
+        <div className="flex items-center gap-1.5 text-[11px] text-osu-f1">
+          {skin.author ? (
+            <span className="truncate">
+              <Trans>by <span className="font-semibold text-osu-l2">{skin.author}</span></Trans>
+            </span>
+          ) : showUploader ? (
+            <>
+              <Avatar userId={skin.ownerUserId} size={14} shape="circle" />
+              <span className="truncate">
+                <Trans>uploaded by <span className="font-semibold text-osu-l2">{skin.ownerUsername}</span></Trans>
+              </span>
+            </>
+          ) : null}
+          {/* How long the skin has been on /skins, which is not how old the
+              file is once it spent its first weeks private. Same date the
+              newest sort puts it in order by. */}
+          {(skin.listedAt ?? skin.publishedAt) && (
+            <>
+              {(skin.author || showUploader) && <span aria-hidden="true">·</span>}
+              <span className="shrink-0" suppressHydrationWarning>{formatTimeAgo(skin.listedAt ?? skin.publishedAt!, locale)}</span>
+            </>
+          )}
+          {skin.oskSizeBytes ? (
+            <span className="ml-auto shrink-0 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
+          ) : null}
+        </div>
+      </div>
       {downloadUrl && (
         // Pinned to the preview box, which is the card's leading aspect-video
         // block. Always there on touch, where there is no hover to reveal it.

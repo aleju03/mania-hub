@@ -554,6 +554,11 @@ msgstr "{0} is live"
 msgid "{0} is yours"
 msgstr "{0} is yours"
 
+#. placeholder {0}: likeCount.toLocaleString("en-US")
+#: src/routes/skins_.$id.tsx
+msgid "{0} likes"
+msgstr "{0} likes"
+
 #. placeholder {0}: communitySkinContext.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "{0} loaded"
@@ -1313,6 +1318,10 @@ msgstr "{downloadCountLabel} downloads"
 msgid "{downloadCountLabel} downloads, {viewCountLabel} views"
 msgstr "{downloadCountLabel} downloads, {viewCountLabel} views"
 
+#: src/components/skins/SkinCard.tsx
+#~ msgid "{downloadCountLabel} downloads, {viewCountLabel} views, {likeCountLabel} likes"
+#~ msgstr "{downloadCountLabel} downloads, {viewCountLabel} views, {likeCountLabel} likes"
+
 #: src/routes/snipes.tsx
 #~ msgid "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the {nomodBadge} board."
 #~ msgstr "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the {nomodBadge} board."
@@ -1468,6 +1477,14 @@ msgstr "{left} to go at {at}pp+"
 #: src/components/me/GoalsPanel.tsx
 msgid "{left}% to go"
 msgstr "{left}% to go"
+
+#: src/components/skins/SkinCard.tsx
+msgid "{likeCountLabel} likes"
+msgstr "{likeCountLabel} likes"
+
+#: src/components/skins/SkinCard.tsx
+#~ msgid "{likeCountLabel} likes, including yours"
+#~ msgstr "{likeCountLabel} likes, including yours"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "{mapCount, plural, one {# top play} other {# top plays}}"
@@ -3213,6 +3230,10 @@ msgstr "All players"
 #: src/components/me/MyDataPanel.tsx
 msgid "All rows"
 msgstr "All rows"
+
+#: src/routes/skins.tsx
+msgid "all skins"
+msgstr "all skins"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "All three forges are used. They return after 24 hours."
@@ -9480,6 +9501,11 @@ msgstr "light"
 msgid "Light"
 msgstr "Light"
 
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Like"
+msgstr "Like"
+
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Like this collection"
@@ -9488,6 +9514,14 @@ msgstr "Like this collection"
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Liked"
 msgstr "Liked"
+
+#: src/routes/skins.tsx
+msgid "liked by you"
+msgstr "liked by you"
+
+#: src/routes/skins.tsx
+msgid "likes"
+msgstr "likes"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "lime"
@@ -16330,6 +16364,11 @@ msgstr "Sign in to connect {appNameInline}"
 msgid "Sign in to like collections"
 msgstr "Sign in to like collections"
 
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Sign in to like skins"
+msgstr "Sign in to like skins"
+
 #: src/components/player/ServerLinks.tsx
 msgid "Sign in to link your private server profiles."
 msgstr "Sign in to link your private server profiles."
@@ -16640,6 +16679,10 @@ msgstr "Skins"
 #: src/routes/skins.tsx
 msgid "Skins are unavailable right now"
 msgstr "Skins are unavailable right now"
+
+#: src/routes/skins.tsx
+msgid "Skins you like show up here."
+msgstr "Skins you like show up here."
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Skip animations"
@@ -19774,6 +19817,11 @@ msgstr "Unknown map"
 msgid "Unknown player"
 msgstr "Unknown player"
 
+#: src/components/skins/SkinCard.tsx
+#: src/routes/skins_.$id.tsx
+msgid "Unlike"
+msgstr "Unlike"
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
 msgstr "Unmute chart preview"
@@ -20953,6 +21001,10 @@ msgid "You have a score, but players near you score higher on it."
 msgstr "You have a score, but players near you score higher on it."
 
 #: src/routes/skins.tsx
+msgid "You have not liked a skin yet"
+msgstr "You have not liked a skin yet"
+
+#: src/routes/skins.tsx
 msgid "You have not published a skin yet"
 msgstr "You have not published a skin yet"
 
@@ -21341,6 +21393,7 @@ msgstr "your showcase"
 #~ msgstr "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
 
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/routes/skins_.$id.tsx
 msgid "Your skin"
 msgstr "Your skin"
 

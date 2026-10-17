@@ -228,6 +228,7 @@ const ANALYTICS_EVENT_LABELS: Record<string, string> = {
   snipes_rules_open: "Snipe rules opened",
   skin_download: "Skin downloaded",
   skin_file_updated: "Skin build shipped",
+  skin_like: "Skin liked",
   skin_previews_edited: "Skin previews edited",
   skin_upload_failed: "Skin upload failed",
   skin_upload_published: "Skin published",
