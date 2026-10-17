@@ -10,6 +10,7 @@ import { peekReplayExportManager } from "#/lib/replay-export/manager";
 import { useReplayExportJob } from "#/lib/replay-export/use-replay-export-job";
 import type { ReplayExportJobView } from "#/lib/replay-export/types";
 import { formatBytes } from "#/lib/format";
+import { ShareClipButton } from "./ShareClipButton";
 
 // The export's only permanent surface. It lives in the app shell rather than
 // on /replay, because the job it reports on outlives that route: the point of
@@ -153,6 +154,10 @@ export function ReplayExportPanel() {
                   <p className="text-[11px] leading-tight text-osu-f1">
                     {t`The video is created on your device. You can browse other pages while it exports. Keep this tab open; refreshing or closing it will cancel the unfinished export.`}
                   </p>
+                )}
+
+                {(job.phase === "ready" || job.phase === "download-started" || job.phase === "saved-to-file") && (
+                  <ShareClipButton job={job} />
                 )}
 
                 <div className="flex gap-1.5">

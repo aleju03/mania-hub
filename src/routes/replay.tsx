@@ -4655,7 +4655,9 @@ function ReplayViewer({
 
     const begin = (target: ReplayExportDestinationTarget) => {
       try {
-        manager.start({ spec, capture, target, title });
+        // A local .osr has nothing in the query to come back to.
+        const replayPath = window.location.search ? `${window.location.pathname}${window.location.search}` : null;
+        manager.start({ spec, capture, target, title, replayPath });
         // Avoid running the live replay alongside its export renderer. The
         // user can resume it manually; cancelling the picker never pauses it.
         if (rendererRef.current === renderer && renderer.isPlaying) togglePlayRef.current?.();

@@ -119,7 +119,7 @@ Beatmap playback audio is prepared in `audio/beatmap-audio.ts`: MP3 packets are 
 
 ## Replay video export (backend side, dormant)
 
-**The shipping exporter does not use any of this.** Replay video export runs entirely on the user's device; see `docs/frontend.md`. Nothing below is reachable from the ordinary export flow, and no exported video is ever uploaded.
+**The shipping exporter does not use any of this.** Replay video export runs entirely on the user's device; see `docs/frontend.md`. Nothing below is reachable from the ordinary export flow. The only exported video that is ever uploaded is a supporter's shared clip (`features/shared-clips.ts`, `http/routes/shared-clips.ts`, `shared-clips/r2.ts`; see Shared clips in `docs/frontend.md`), kept 24 hours under `shared-clips/` and deleted by retention.
 
 The backend half is gated by `ENABLE_REPLAY_VIDEO` (default `false`, and off in production). When off, `/api/replay-video-job` returns 404 before auth or rate accounting, the replay-video worker lanes are not registered, `workers.ts` refuses `replay_video_server_render` / `replay_video_export` jobs even if some are already queued, and playwright-core is never imported (it is a dynamic import inside the render function).
 

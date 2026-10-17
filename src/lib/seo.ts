@@ -132,7 +132,7 @@ export interface PageSeoInput {
      `title` passes the English original here so every locale shares the one
      English card instead of forking cache keys per language. */
   imageTitle?: string;
-  type?: "website" | "article" | "profile";
+  type?: "website" | "article" | "profile" | "video.other";
   social?: boolean;
   noindex?: boolean;
   appendSiteName?: boolean;

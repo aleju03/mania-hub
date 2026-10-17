@@ -81,6 +81,7 @@ import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiTeamImageRouteImport } from './routes/api/team-image'
 import { Route as BridgeAuthorizeRouteImport } from './routes/bridge_.authorize'
 import { Route as BridgeLatestDotjsonRouteImport } from './routes/bridge_.latest[.]json'
+import { Route as ClipIdRouteImport } from './routes/clip.$id'
 import { Route as CollectionsIdRouteImport } from './routes/collections_.$id'
 import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
 import { Route as CommunitiesReviewRouteImport } from './routes/communities_.review'
@@ -107,6 +108,7 @@ import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as ApiCompanellaChartRouteImport } from './routes/api/companella/chart'
 import { Route as ApiCompanellaReplayRouteImport } from './routes/api/companella/replay'
 import { Route as ApiCompanellaUsageRouteImport } from './routes/api/companella/usage'
+import { Route as ClipMediaIdFileRouteImport } from './routes/clip-media/$id/$file'
 import { Route as CompanellaDocsOpenapiDotyamlRouteImport } from './routes/companella_.docs_.openapi[.]yaml'
 import { Route as CompanellaDocsReferenceClientDotmjsRouteImport } from './routes/companella_.docs_.reference-client[.]mjs'
 import { Route as PlayerUsernameAboutRouteImport } from './routes/player/$username/about'
@@ -495,6 +497,11 @@ const BridgeLatestDotjsonRoute = BridgeLatestDotjsonRouteImport.update({
   path: '/bridge/latest.json',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClipIdRoute = ClipIdRouteImport.update({
+  id: '/clip/$id',
+  path: '/clip/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CollectionsIdRoute = CollectionsIdRouteImport.update({
   id: '/collections_/$id',
   path: '/collections/$id',
@@ -623,6 +630,11 @@ const ApiCompanellaReplayRoute = ApiCompanellaReplayRouteImport.update({
 const ApiCompanellaUsageRoute = ApiCompanellaUsageRouteImport.update({
   id: '/api/companella/usage',
   path: '/api/companella/usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClipMediaIdFileRoute = ClipMediaIdFileRouteImport.update({
+  id: '/clip-media/$id/$file',
+  path: '/clip-media/$id/$file',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CompanellaDocsOpenapiDotyamlRoute =
@@ -846,6 +858,7 @@ export interface FileRoutesByFullPath {
   '/api/team-image': typeof ApiTeamImageRoute
   '/bridge/authorize': typeof BridgeAuthorizeRoute
   '/bridge/latest.json': typeof BridgeLatestDotjsonRoute
+  '/clip/$id': typeof ClipIdRoute
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
@@ -872,6 +885,7 @@ export interface FileRoutesByFullPath {
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
+  '/clip-media/$id/$file': typeof ClipMediaIdFileRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
@@ -972,6 +986,7 @@ export interface FileRoutesByTo {
   '/api/team-image': typeof ApiTeamImageRoute
   '/bridge/authorize': typeof BridgeAuthorizeRoute
   '/bridge/latest.json': typeof BridgeLatestDotjsonRoute
+  '/clip/$id': typeof ClipIdRoute
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
@@ -998,6 +1013,7 @@ export interface FileRoutesByTo {
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
+  '/clip-media/$id/$file': typeof ClipMediaIdFileRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
@@ -1099,6 +1115,7 @@ export interface FileRoutesById {
   '/api/team-image': typeof ApiTeamImageRoute
   '/bridge_/authorize': typeof BridgeAuthorizeRoute
   '/bridge_/latest.json': typeof BridgeLatestDotjsonRoute
+  '/clip/$id': typeof ClipIdRoute
   '/collections_/$id': typeof CollectionsIdRoute
   '/communities_/$id': typeof CommunitiesIdRoute
   '/communities_/review': typeof CommunitiesReviewRoute
@@ -1125,6 +1142,7 @@ export interface FileRoutesById {
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
+  '/clip-media/$id/$file': typeof ClipMediaIdFileRoute
   '/companella_/docs_/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella_/docs_/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
@@ -1227,6 +1245,7 @@ export interface FileRouteTypes {
     | '/api/team-image'
     | '/bridge/authorize'
     | '/bridge/latest.json'
+    | '/clip/$id'
     | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
@@ -1253,6 +1272,7 @@ export interface FileRouteTypes {
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
+    | '/clip-media/$id/$file'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
     | '/player/$username/about'
@@ -1353,6 +1373,7 @@ export interface FileRouteTypes {
     | '/api/team-image'
     | '/bridge/authorize'
     | '/bridge/latest.json'
+    | '/clip/$id'
     | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
@@ -1379,6 +1400,7 @@ export interface FileRouteTypes {
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
+    | '/clip-media/$id/$file'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
     | '/player/$username/about'
@@ -1479,6 +1501,7 @@ export interface FileRouteTypes {
     | '/api/team-image'
     | '/bridge_/authorize'
     | '/bridge_/latest.json'
+    | '/clip/$id'
     | '/collections_/$id'
     | '/communities_/$id'
     | '/communities_/review'
@@ -1505,6 +1528,7 @@ export interface FileRouteTypes {
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
+    | '/clip-media/$id/$file'
     | '/companella_/docs_/openapi.yaml'
     | '/companella_/docs_/reference-client.mjs'
     | '/player/$username/about'
@@ -1606,6 +1630,7 @@ export interface RootRouteChildren {
   ApiTeamImageRoute: typeof ApiTeamImageRoute
   BridgeAuthorizeRoute: typeof BridgeAuthorizeRoute
   BridgeLatestDotjsonRoute: typeof BridgeLatestDotjsonRoute
+  ClipIdRoute: typeof ClipIdRoute
   CollectionsIdRoute: typeof CollectionsIdRoute
   CommunitiesIdRoute: typeof CommunitiesIdRoute
   CommunitiesReviewRoute: typeof CommunitiesReviewRoute
@@ -1631,6 +1656,7 @@ export interface RootRouteChildren {
   ApiCompanellaChartRoute: typeof ApiCompanellaChartRoute
   ApiCompanellaReplayRoute: typeof ApiCompanellaReplayRoute
   ApiCompanellaUsageRoute: typeof ApiCompanellaUsageRoute
+  ClipMediaIdFileRoute: typeof ClipMediaIdFileRoute
   CompanellaDocsOpenapiDotyamlRoute: typeof CompanellaDocsOpenapiDotyamlRoute
   CompanellaDocsReferenceClientDotmjsRoute: typeof CompanellaDocsReferenceClientDotmjsRoute
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
@@ -2151,6 +2177,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BridgeLatestDotjsonRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/clip/$id': {
+      id: '/clip/$id'
+      path: '/clip/$id'
+      fullPath: '/clip/$id'
+      preLoaderRoute: typeof ClipIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/collections_/$id': {
       id: '/collections_/$id'
       path: '/collections/$id'
@@ -2331,6 +2364,13 @@ declare module '@tanstack/react-router' {
       path: '/api/companella/usage'
       fullPath: '/api/companella/usage'
       preLoaderRoute: typeof ApiCompanellaUsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clip-media/$id/$file': {
+      id: '/clip-media/$id/$file'
+      path: '/clip-media/$id/$file'
+      fullPath: '/clip-media/$id/$file'
+      preLoaderRoute: typeof ClipMediaIdFileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/companella_/docs_/openapi.yaml': {
@@ -2725,6 +2765,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiTeamImageRoute: ApiTeamImageRoute,
   BridgeAuthorizeRoute: BridgeAuthorizeRoute,
   BridgeLatestDotjsonRoute: BridgeLatestDotjsonRoute,
+  ClipIdRoute: ClipIdRoute,
   CollectionsIdRoute: CollectionsIdRoute,
   CommunitiesIdRoute: CommunitiesIdRoute,
   CommunitiesReviewRoute: CommunitiesReviewRoute,
@@ -2750,6 +2791,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCompanellaChartRoute: ApiCompanellaChartRoute,
   ApiCompanellaReplayRoute: ApiCompanellaReplayRoute,
   ApiCompanellaUsageRoute: ApiCompanellaUsageRoute,
+  ClipMediaIdFileRoute: ClipMediaIdFileRoute,
   CompanellaDocsOpenapiDotyamlRoute: CompanellaDocsOpenapiDotyamlRoute,
   CompanellaDocsReferenceClientDotmjsRoute:
     CompanellaDocsReferenceClientDotmjsRoute,

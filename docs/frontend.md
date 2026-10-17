@@ -27,7 +27,7 @@ Fade-mask cleanup destroys the texture without destroying its source: Pixi's poo
 
 ## Replay video export
 
-Export runs entirely on the user's device. No exported video is uploaded, no render job is queued, and the backend's `/api/replay-video-job` is not part of this path at all (`docs/backend.md` describes that dormant half). What still crosses the network is ordinary asset retrieval during preparation: the song, the background, the beatmap, the skin. Available to every visitor; there is no release flag.
+Export runs entirely on the user's device. No render job is queued, nothing is uploaded while it runs, and the backend's `/api/replay-video-job` is not part of this path at all (`docs/backend.md` describes that dormant half). The one exception comes after: an active supporter can turn a finished file into a share link (see Shared clips below). What still crosses the network is ordinary asset retrieval during preparation: the song, the background, the beatmap, the skin. Available to every visitor; there is no release flag.
 
 The whole thing lives in `src/lib/replay-export/`:
 
@@ -86,6 +86,15 @@ The **Custom media** overlay shows a picture, GIF or video from a link or a loca
 
 `AddScoreModal` sends pasted scores to the backend's durable import queue. It serializes only the short admission requests, then polls accepted job ids in batches for queued/running states and final score or refusal receipts. Closing the modal stops polling; accepted imports continue on the backend. Already-stored scores can return a receipt immediately.
 
+
+## Shared clips
+
+A supporter perk on a finished export: the panel's "Get a share link" (`src/components/replay/ShareClipButton.tsx`) sends the file up and copies a `/clip/<id>` link that plays inline in Discord for 24 hours. Only active supporters get a ticket, and the export itself still never leaves the device; this is a separate, explicit upload of the finished file.
+
+- `startSharedClip` (`src/lib/shared-clips.ts`) forwards the osu!-verified viewer to the backend's bridge-gated `POST /api/clips/start`, which checks `isSupporter`, the 200 MB cap, the type (`video/mp4` or `video/webm`) and 10 clips per day, opens an R2 multipart upload and returns a ticket.
+- The browser sends the file straight to the backend in 16 MiB parts (`/api/clips/part`, each its own request, retried alone, so a slow uplink never meets the server's 5-minute request timeout), a JPEG poster grabbed a third of the way in (`/api/clips/poster`), then `/api/clips/finish`. A save-to-disk export is read back through the file handle the manager keeps (`resultFile()`).
+- `/clip/$id` carries `og:video` tags (`og:type` `video.other`) pointing at `/clip-media/$id/video`, which checks the clip is live and redirects to a 6-hour signed URL on the private bucket (`getSharedClipSignedUrl`); `/clip-media/$id/poster` does the same for the poster.
+- Objects sit at `shared-clips/<id>/` in `mania-hub-replay-cache`. The backend's hourly retention deletes rows and objects past their 24 hours, and uploads abandoned after an hour; deletes run only on the live deployment, so the bucket's 1-day lifecycle rule on `shared-clips/` is the backstop.
 ## Live data flow
 
 The opt-in **MSD and dan on recent plays** preference uses `components/player/recent-play-ratings.ts` only for visible Recent rows. `RecentPlayRatingCells.tsx` shows Loading during the lookup, Pending only for missing axes backed by a real job, or Unavailable with a tap/focus explanation; failed requests offer Retry and keep any existing values. Requests are deduplicated and batched in groups of 100; Show more asks only for missing entries. The browser retains at most 20 profiles × 500 ratings and rechecks answers after ten minutes when the list is shown again. It shares the shell's passive SSE connection: matching `job_status` ids or public user/chart targets refresh affected rows automatically, coalescing events and respecting the 30-second origin cache. Pending jobs also get a slow five-minute recovery check, deferred until scheduled work is due, to cover missed events or removed jobs. Hidden tabs disconnect and stop timers, then catch up on return. Completed or unavailable rows have no polling timer. Opening Recent never queues a skill recompute; weaker attempts absent from the retained skill pool can remain Unavailable after the job completes.

@@ -34,6 +34,8 @@ type ActiveJob = {
   releaseLock: (() => void) | null;
   wakeLock: WakeLockSentinel | null;
   blob: Blob | null;
+  /** The file a save-to-disk export wrote, read back when it is shared. */
+  fileHandle: FileSystemFileHandle | null;
 };
 
 function phaseWeightedProgress(view: ReplayExportJobView): number {
@@ -118,6 +120,9 @@ export class ReplayExportManager {
       result: null,
       title: request.title,
       filename: request.spec.filename,
+      replayPath: request.replayPath ?? null,
+      width: request.spec.output.width,
+      height: request.spec.output.height,
     };
 
     this.job = {
@@ -128,6 +133,7 @@ export class ReplayExportManager {
       releaseLock: null,
       wakeLock: null,
       blob: null,
+      fileHandle: request.target.kind === "file" ? request.target.handle : null,
     };
 
     this.attachUnloadGuard();
@@ -152,6 +158,18 @@ export class ReplayExportManager {
     const job = this.job;
     if (!job || job.view.phase !== "ready") return;
     this.patch(job.view.id, { phase: "download-started" });
+  }
+
+  /**
+   * The finished video as a Blob, for sharing it as a link: the in-memory
+   * result, or the saved file read back from disk. Null while running.
+   */
+  async resultFile(): Promise<Blob | null> {
+    const job = this.job;
+    if (!job || ACTIVE_EXPORT_PHASES.has(job.view.phase) || !job.view.result) return null;
+    if (job.blob) return job.blob;
+    if (job.fileHandle) return job.fileHandle.getFile().catch(() => null);
+    return null;
   }
 
   /** Drops a finished result the user does not want, freeing its memory. */
@@ -366,6 +384,7 @@ export class ReplayExportManager {
     this.detachVisibilityWatch();
     if (job.view.result?.downloadUrl) URL.revokeObjectURL(job.view.result.downloadUrl);
     job.blob = null;
+    job.fileHandle = null;
     this.job = null;
     this.updateUnloadGuard();
   }

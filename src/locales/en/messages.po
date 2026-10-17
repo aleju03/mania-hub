@@ -4032,7 +4032,6 @@ msgstr "Black playfield"
 msgid "Blackletter"
 msgstr "Blackletter"
 
-
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
 msgstr "Blitz"
@@ -4212,7 +4211,6 @@ msgstr "Bullet list"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Burn 5 duplicate {0} copies for one {1} card"
 #~ msgstr "Burn 5 duplicate {0} copies for one {1} card"
-
 
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
@@ -4876,6 +4874,14 @@ msgstr "client"
 msgid "Client"
 msgstr "Client"
 
+#: src/routes/clip.$id.tsx
+msgid "clip"
+msgstr "clip"
+
+#: src/routes/clip.$id.tsx
+msgid "Clip not found"
+msgstr "Clip not found"
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -5286,6 +5292,7 @@ msgstr "Convert hits to notes"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/components/replay/ShareClipButton.tsx
 msgid "Copied"
 msgstr "Copied"
 
@@ -5305,6 +5312,7 @@ msgstr "copies in circulation"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/replay/ShareClipButton.tsx
 msgid "Copy"
 msgstr "Copy"
 
@@ -7971,6 +7979,10 @@ msgstr "German"
 msgid "Get {grade} {speed} on {map}"
 msgstr "Get {grade} {speed} on {map}"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Get a share link"
+msgstr "Get a share link"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Get my link"
 msgstr "Get my link"
@@ -8183,6 +8195,9 @@ msgstr "Gold wings"
 msgid "Golden hour"
 msgstr "Golden hour"
 
+#: src/routes/clip.$id.tsx
+msgid "Gone in {hoursLeft}h"
+msgstr "Gone in {hoursLeft}h"
 
 #: src/components/packs/GiftInbox.tsx
 #~ msgid "Got it"
@@ -9270,7 +9285,6 @@ msgstr "Jackspeed"
 msgid "Japanese"
 msgstr "Japanese"
 
-
 #: src/routes/dan-estimates.tsx
 #~ msgid "JinJin dan courses"
 #~ msgstr "JinJin dan courses"
@@ -10307,6 +10321,10 @@ msgstr "localized vibro detected"
 msgid "Lock for rolls"
 msgstr "Lock for rolls"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Log in to get a share link."
+msgstr "Log in to get a share link."
+
 #: src/routes/communities.tsx
 msgid "Log in to post"
 msgstr "Log in to post"
@@ -10442,7 +10460,6 @@ msgstr "Lowest PP first"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Lowest rarities first. You keep at least one of every card."
 #~ msgstr "Lowest rarities first. You keep at least one of every card."
-
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -10676,7 +10693,6 @@ msgstr "Map shape"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "map unavailable"
-
 
 #: src/routes/replay.tsx
 msgid "mapped by"
@@ -13393,6 +13409,10 @@ msgstr "Paste formatting"
 #~ msgid "Paste from clipboard"
 #~ msgstr "Paste from clipboard"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Paste it in Discord to play the clip in chat. The link works for {SHARED_CLIP_TTL_HOURS} hours."
+msgstr "Paste it in Discord to play the clip in chat. The link works for {SHARED_CLIP_TTL_HOURS} hours."
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Paste it once. It redraws when your stats change."
 msgstr "Paste it once. It redraws when your stats change."
@@ -13903,7 +13923,6 @@ msgstr "Please do not abuse the site, overload public endpoints, attempt to bypa
 #: src/routes/packs.tsx
 msgid "Please wait a minute before opening another pack. This pack wasn't charged."
 msgstr "Please wait a minute before opening another pack. This pack wasn't charged."
-
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "points"
@@ -15224,6 +15243,11 @@ msgstr "Replay (.osr)"
 #~ msgid "Replay again"
 #~ msgstr "Replay again"
 
+#. placeholder {0}: clip.ownerUsername
+#: src/routes/clip.$id.tsx
+msgid "Replay clip shared by {0}"
+msgstr "Replay clip shared by {0}"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Replay link"
 msgstr "Replay link"
@@ -16462,6 +16486,14 @@ msgstr "Share code"
 msgid "Share code copied"
 msgstr "Share code copied"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Share links are a supporter perk."
+msgstr "Share links are a supporter perk."
+
+#: src/components/replay/ShareClipButton.tsx
+msgid "Share links take videos up to 200 MB."
+msgstr "Share links take videos up to 200 MB."
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "Share map"
 msgstr "Share map"
@@ -16481,6 +16513,14 @@ msgstr "Share this replay"
 #: src/components/replay/ReplayControls.tsx
 msgid "Share…"
 msgstr "Share…"
+
+#: src/routes/clip.$id.tsx
+msgid "Shared by <0><1/></0>"
+msgstr "Shared by <0><1/></0>"
+
+#: src/routes/clip.$id.tsx
+msgid "Shared clips stay up for {SHARED_CLIP_TTL_HOURS} hours."
+msgstr "Shared clips stay up for {SHARED_CLIP_TTL_HOURS} hours."
 
 #: src/routes/replay.tsx
 msgid "Shared replay"
@@ -18386,6 +18426,10 @@ msgstr "That upload is already gone."
 msgid "That username doesn't look right."
 msgstr "That username doesn't look right."
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "That's 10 share links today. Try again tomorrow."
+msgstr "That's 10 share links today. Try again tomorrow."
+
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
 #~ msgstr "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
@@ -19187,6 +19231,10 @@ msgstr "The report was sent, but at least one image did not upload."
 #~ msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
 #~ msgstr "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "The saved video couldn't be read back. Export it again to share it."
+msgstr "The saved video couldn't be read back. Export it again to share it."
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
 msgstr "The screenshot names could not be saved. Try again."
@@ -19350,6 +19398,10 @@ msgstr "The top plays are waiting for the chart analyzer. Position in queue: {po
 #: src/components/packs/StreakGame.tsx
 msgid "The tracked player pool is too small to play right now."
 msgstr "The tracked player pool is too small to play right now."
+
+#: src/components/replay/ShareClipButton.tsx
+msgid "The upload didn't go through."
+msgstr "The upload didn't go through."
 
 #: src/lib/replay-export/errors.ts
 msgid "The video encoder stopped during the export."
@@ -19577,6 +19629,10 @@ msgstr "This chart's OD is under the dan minimum."
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"
 msgstr "This clear backs the estimate"
+
+#: src/routes/clip.$id.tsx
+msgid "This clip expired"
+msgstr "This clip expired"
 
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "This collection has no maps in it yet."
@@ -20246,6 +20302,10 @@ msgstr "Try again"
 msgid "Try again in a bit."
 msgstr "Try again in a bit."
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Try the share link again"
+msgstr "Try the share link again"
+
 #: src/routes/replay.tsx
 msgid "Try this again"
 msgstr "Try this again"
@@ -20672,6 +20732,10 @@ msgstr "Uploading screenshot {shotNumber} of {shotCount}."
 #: src/lib/skins.ts
 msgid "Uploading the {keys}K preview."
 msgstr "Uploading the {keys}K preview."
+
+#: src/components/replay/ShareClipButton.tsx
+msgid "Uploading the clip"
+msgstr "Uploading the clip"
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Uploading the new skin file, {done} of {size}."
@@ -21143,6 +21207,10 @@ msgstr "Watch replays with the player's skin"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Watch side by side"
 msgstr "Watch side by side"
+
+#: src/routes/clip.$id.tsx
+msgid "Watch the replay"
+msgstr "Watch the replay"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Watch two runs of the same map at once"

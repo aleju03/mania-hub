@@ -4014,7 +4014,6 @@ msgstr "纯黑游玩区域"
 msgid "Blackletter"
 msgstr ""
 
-
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
 msgstr "闪电战"
@@ -4194,7 +4193,6 @@ msgstr "无序列表"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Burn 5 duplicate {0} copies for one {1} card"
 #~ msgstr "熔掉 5 张重复的{0}卡，换 1 张{1}卡"
-
 
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
@@ -4858,6 +4856,14 @@ msgstr "客户端"
 msgid "Client"
 msgstr "客户端"
 
+#: src/routes/clip.$id.tsx
+msgid "clip"
+msgstr "片段"
+
+#: src/routes/clip.$id.tsx
+msgid "Clip not found"
+msgstr "找不到片段"
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -5268,6 +5274,7 @@ msgstr "把打击转成音符"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/components/replay/ShareClipButton.tsx
 msgid "Copied"
 msgstr "已复制"
 
@@ -5287,6 +5294,7 @@ msgstr "流通中的卡片"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/replay/ShareClipButton.tsx
 msgid "Copy"
 msgstr "复制"
 
@@ -7949,6 +7957,10 @@ msgstr "德语"
 msgid "Get {grade} {speed} on {map}"
 msgstr "在 {map} 上以 {speed} 拿到 {grade}"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Get a share link"
+msgstr "获取分享链接"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Get my link"
 msgstr "获取我的链接"
@@ -8161,6 +8173,9 @@ msgstr ""
 msgid "Golden hour"
 msgstr ""
 
+#: src/routes/clip.$id.tsx
+msgid "Gone in {hoursLeft}h"
+msgstr "{hoursLeft} 小时后删除"
 
 #: src/components/packs/GiftInbox.tsx
 #~ msgid "Got it"
@@ -9240,7 +9255,6 @@ msgstr "速叠"
 msgid "Japanese"
 msgstr "日语"
 
-
 #: src/routes/dan-estimates.tsx
 #~ msgid "JinJin dan courses"
 #~ msgstr "JinJin 的段位课题"
@@ -10277,6 +10291,10 @@ msgstr "检测到局部 Vibro"
 msgid "Lock for rolls"
 msgstr ""
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Log in to get a share link."
+msgstr "登录后即可获取分享链接。"
+
 #: src/routes/communities.tsx
 msgid "Log in to post"
 msgstr "登录后发布"
@@ -10412,7 +10430,6 @@ msgstr "pp 从低到高"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Lowest rarities first. You keep at least one of every card."
 #~ msgstr "优先使用低稀有度卡片。每张卡片至少保留一份。"
-
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -10646,7 +10663,6 @@ msgstr "谱面构成"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "谱面不可用"
-
 
 #: src/routes/replay.tsx
 msgid "mapped by"
@@ -13363,6 +13379,10 @@ msgstr "粘贴格式"
 #~ msgid "Paste from clipboard"
 #~ msgstr "从剪贴板粘贴"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Paste it in Discord to play the clip in chat. The link works for {SHARED_CLIP_TTL_HOURS} hours."
+msgstr "粘贴到 Discord 即可在聊天中播放。链接有效期为 {SHARED_CLIP_TTL_HOURS} 小时。"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Paste it once. It redraws when your stats change."
 msgstr "贴一次就好，数据一变它自己重画。"
@@ -13873,7 +13893,6 @@ msgstr "请不要滥用本站、使公开接口过载、试图绕过访问控制
 #: src/routes/packs.tsx
 msgid "Please wait a minute before opening another pack. This pack wasn't charged."
 msgstr "请稍等一分钟再开下一个卡包。本次开包未扣费。"
-
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "points"
@@ -15194,6 +15213,11 @@ msgstr ""
 #~ msgid "Replay again"
 #~ msgstr "再看一次"
 
+#. placeholder {0}: clip.ownerUsername
+#: src/routes/clip.$id.tsx
+msgid "Replay clip shared by {0}"
+msgstr "{0} 分享的回放片段"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Replay link"
 msgstr "回放链接"
@@ -16432,6 +16456,14 @@ msgstr "分享码"
 msgid "Share code copied"
 msgstr "分享码已复制"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Share links are a supporter perk."
+msgstr "分享链接是支持者专属功能。"
+
+#: src/components/replay/ShareClipButton.tsx
+msgid "Share links take videos up to 200 MB."
+msgstr "分享链接支持最大 200 MB 的视频。"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "Share map"
 msgstr "分享谱面"
@@ -16451,6 +16483,14 @@ msgstr "分享这份回放"
 #: src/components/replay/ReplayControls.tsx
 msgid "Share…"
 msgstr "分享…"
+
+#: src/routes/clip.$id.tsx
+msgid "Shared by <0><1/></0>"
+msgstr "分享者：<0><1/></0>"
+
+#: src/routes/clip.$id.tsx
+msgid "Shared clips stay up for {SHARED_CLIP_TTL_HOURS} hours."
+msgstr "分享的片段保留 {SHARED_CLIP_TTL_HOURS} 小时。"
 
 #: src/routes/replay.tsx
 msgid "Shared replay"
@@ -18348,6 +18388,10 @@ msgstr "这个上传已经不存在了。"
 msgid "That username doesn't look right."
 msgstr "这个用户名看起来不对。"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "That's 10 share links today. Try again tomorrow."
+msgstr "今天已生成 10 个分享链接，请明天再试。"
+
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
 #~ msgstr "这超出了此浏览器一次能导出的长度。请选择更短的范围或更低的预设。"
@@ -19141,6 +19185,10 @@ msgstr "反馈已提交，但至少有一张图片没能上传。"
 #~ msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
 #~ msgstr "同样的曲线套在每个段位表自己的通过线上，所以在 4K LN 上这套刻度以 97% 为基准，低于 93% 就不再计入。低于通过线的计入永远至少比谱面本身低一档：差一点没到永远不会被当成完整通过。"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "The saved video couldn't be read back. Export it again to share it."
+msgstr "无法读取已保存的视频。请重新导出后再分享。"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The screenshot names could not be saved. Try again."
 msgstr "截图名称保存失败。请重试。"
@@ -19304,6 +19352,10 @@ msgstr "这些最佳成绩正在等待谱面分析器。队列位置：{position
 #: src/components/packs/StreakGame.tsx
 msgid "The tracked player pool is too small to play right now."
 msgstr "已追踪的玩家池太小，现在还玩不了。"
+
+#: src/components/replay/ShareClipButton.tsx
+msgid "The upload didn't go through."
+msgstr "上传失败。"
 
 #: src/lib/replay-export/errors.ts
 msgid "The video encoder stopped during the export."
@@ -19531,6 +19583,10 @@ msgstr "这张谱面的 OD 低于段位要求的最低值。"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"
 msgstr "这次通过支撑了估算"
+
+#: src/routes/clip.$id.tsx
+msgid "This clip expired"
+msgstr "此片段已过期"
 
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "This collection has no maps in it yet."
@@ -20200,6 +20256,10 @@ msgstr "重试"
 msgid "Try again in a bit."
 msgstr "请稍后再试。"
 
+#: src/components/replay/ShareClipButton.tsx
+msgid "Try the share link again"
+msgstr "重试分享链接"
+
 #: src/routes/replay.tsx
 msgid "Try this again"
 msgstr "再试一次"
@@ -20626,6 +20686,10 @@ msgstr "正在上传第 {shotNumber} / {shotCount} 张截图。"
 #: src/lib/skins.ts
 msgid "Uploading the {keys}K preview."
 msgstr "正在上传 {keys}K 的预览图。"
+
+#: src/components/replay/ShareClipButton.tsx
+msgid "Uploading the clip"
+msgstr "正在上传片段"
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Uploading the new skin file, {done} of {size}."
@@ -21097,6 +21161,10 @@ msgstr "使用玩家自己的皮肤观看回放"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Watch side by side"
 msgstr "并排观看"
+
+#: src/routes/clip.$id.tsx
+msgid "Watch the replay"
+msgstr "观看回放"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Watch two runs of the same map at once"
