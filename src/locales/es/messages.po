@@ -1320,6 +1320,10 @@ msgstr "Solo {firstName}"
 msgid "{forNextPass} wait for the next rating pass."
 msgstr "{forNextPass} esperan el próximo cálculo."
 
+#: src/routes/gift.$code.tsx
+msgid "{from} sent you a week of supporter"
+msgstr "{from} te mandó una semana de supporter"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "{from} to {to}"
 msgstr "{from} a {to}"
@@ -1327,6 +1331,11 @@ msgstr "{from} a {to}"
 #: src/components/me/GoalsPanel.tsx
 msgid "{gap}pp to go"
 msgstr "faltan {gap}pp"
+
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+#: src/routes/supporter.tsx
+msgid "{giftFrom} gave you a week of supporter."
+msgstr "{giftFrom} te regaló una semana de supporter."
 
 #: src/routes/replay_.community.tsx
 msgid "{grade} only"
@@ -1488,6 +1497,10 @@ msgstr "hace {months}mo"
 #: src/components/CountryWarming.tsx
 msgid "{name} added to queue, come back later :)"
 msgstr "{name} se agregó a la cola, vuelve más tarde :)"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "{name} claimed your gift week. Your next support brings a new code."
+msgstr "{name} reclamó tu semana de regalo. Tu próximo apoyo trae un código nuevo."
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -2690,6 +2703,10 @@ msgstr "Un snipe es cuando tu nuevo mejor score en un mapa pasa a un jugador que
 #: src/routes/dan-estimates.tsx
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "Un crédito por debajo del mínimo siempre queda al menos un paso bajo el nivel del chart, así que quedarse corto nunca se lee como el clear completo. En 4K LN ese paso es de al menos tres cuartos de nivel."
+
+#: src/routes/gift.$code.tsx
+msgid "A week of supporter"
+msgstr "Una semana de supporter"
 
 #: src/routes/recommendations.tsx
 msgid "a while"
@@ -3976,6 +3993,10 @@ msgstr ""
 msgid "Black hole"
 msgstr ""
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Black knife"
+msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Black playfield"
 msgstr "Playfield negro"
@@ -4606,6 +4627,10 @@ msgstr "Círculos"
 #: src/components/maps/PatternRadar.tsx
 msgid "CJ"
 msgstr "CJ"
+
+#: src/routes/gift.$code.tsx
+msgid "Claim it"
+msgstr "Reclamarla"
 
 #: src/components/supporter/loadout.ts
 #: src/lib/replay-overlays.ts
@@ -5269,6 +5294,7 @@ msgstr "Copiar URL de la imagen"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/GiftCodePanel.tsx
 msgid "Copy link"
 msgstr "Copiar enlace"
 
@@ -5291,6 +5317,10 @@ msgstr "Copiando BBCode..."
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not check that invite. Try again."
 msgstr "No se pudo verificar esa invitación. Inténtalo de nuevo."
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Could not claim it. Try again in a moment."
+msgstr "No se pudo reclamar. Intenta de nuevo en un momento."
 
 #: src/routes/companella.tsx
 msgid "Could not clear the revoked connections."
@@ -6895,6 +6925,11 @@ msgstr "Termina {endsLabel}"
 msgid "English"
 msgstr "Inglés"
 
+#. placeholder {0}: viewer.username
+#: src/routes/supporter.tsx
+msgid "Enjoy your supporter week, {0}."
+msgstr "Disfruta tu semana de supporter, {0}."
+
 #: src/components/replay/ReplayControls.tsx
 #: src/routes/replay.tsx
 msgid "Enter fullscreen"
@@ -7911,6 +7946,10 @@ msgstr "Obtener mi enlace"
 msgid "Getting the map out of osu!"
 msgstr "Sacando el mapa de osu!"
 
+#: src/routes/gift.$code.tsx
+msgid "gift"
+msgstr "regalo"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Gift a card"
 msgstr "Regalar una carta"
@@ -7918,6 +7957,10 @@ msgstr "Regalar una carta"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Gift a card…"
 msgstr "Regalar una carta…"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Gift a friend a week of supporter:"
+msgstr "Regálale a un amigo una semana de supporter:"
 
 #: src/components/packs/GiftSpareDialog.tsx
 #~ msgid "Gift a spare"
@@ -8273,6 +8316,10 @@ msgstr "¿Los replays de {hidden} se han visto más o menos que los de {shown}?"
 #: src/components/me/GoalsPanel.tsx
 msgid "Have <0/> plays worth <1/> or more"
 msgstr "Ten <0/> plays que valgan <1/> o más"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Have a gift code?"
+msgstr "¿Tienes un código de regalo?"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -9748,6 +9795,7 @@ msgid "Link a private server profile"
 msgstr "Enlazar un perfil de servidor privado"
 
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/GiftCodePanel.tsx
 msgid "Link copied"
 msgstr "Enlace copiado"
 
@@ -10244,6 +10292,14 @@ msgstr "Inicia sesión con osu! de nuevo para actualizar esta skin."
 #: src/components/communities/field-options.tsx
 msgid "Log in with osu! first."
 msgstr "Primero inicia sesión con osu!."
+
+#: src/routes/gift.$code.tsx
+msgid "Log in with osu! to claim it"
+msgstr "Inicia sesión con osu! para reclamarla"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Log in with osu! to claim it."
+msgstr "Inicia sesión con osu! para reclamarla."
 
 #: src/routes/packs.tsx
 msgid "Log in with osu! to open this pack"
@@ -14116,6 +14172,15 @@ msgstr "Estadísticas del perfil"
 msgid "Profile theme"
 msgstr ""
 
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+msgid "Profile themes, avatar frames, name styles and card foils are all yours now."
+msgstr "Los temas de perfil, marcos de avatar, estilos de nombre y foils de carta ya son tuyos."
+
+#. placeholder {0}: peek.trialDays
+#: src/routes/gift.$code.tsx
+msgid "Profile themes, avatar frames, name styles and card foils, yours for {0} days."
+msgstr "Temas de perfil, marcos de avatar, estilos de nombre y foils de carta, tuyos por {0} días."
+
 #: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "profile top play"
@@ -14779,6 +14844,10 @@ msgstr "rojo"
 msgid "Red"
 msgstr "Rojo"
 
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Redeem"
+msgstr "Canjear"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Rehacer (Ctrl+Shift+Z)"
@@ -15405,6 +15474,10 @@ msgstr "Anillos"
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "Road to {target} packs"
 #~ msgstr "Camino a los {target} packs"
+
+#: src/lib/supporter-profile-themes.ts
+msgid "Roaring knight"
+msgstr ""
 
 #: src/routes/supporter.tsx
 msgid "Roll"
@@ -16249,6 +16322,10 @@ msgstr "Fijar la siguiente meta"
 #: src/components/me/GoalsPanel.tsx
 msgid "Set this goal again"
 msgstr "Repetir esta meta"
+
+#: src/routes/gift.$code.tsx
+msgid "Set up your look"
+msgstr "Arma tu look"
 
 #: src/components/packs/collections/CommunitySets.tsx
 #~ msgid "sets"
@@ -17137,9 +17214,17 @@ msgstr "Algunas funciones con sesión iniciada almacenan datos en el servidor, a
 #~ msgid "Some skillset practice packs are checked the same way the courses are. Clearing one of their charts at its ladder's bar sets that skill's dan outright, without the four passes a skill normally needs. For example, clearing <0>Volcanic ~ Delta ~</0> sets your 4K speed dan to <1>delta</1>."
 #~ msgstr "Algunos packs de práctica por skill se comprueban igual que los dans. Hacerle clear a uno de sus mapas con la accuracy que pide su ladder define el dan de esa skill directamente, sin los cuatro pases que una skill normalmente necesita. Por ejemplo, hacerle clear a <0>Volcanic ~ Delta ~</0> deja tu dan de speed en 4K en <1>delta</1>."
 
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Someone already claimed this gift."
+msgstr "Alguien ya reclamó este regalo."
+
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
 msgstr "Alguien reportó tu servidor y fue retirado por la siguiente razón{said}"
+
+#: src/routes/gift.$code.tsx
+msgid "Someone sent you a week of supporter"
+msgstr "Alguien te mandó una semana de supporter"
 
 #: src/routes/__root.tsx
 msgid "Something broke"
@@ -17737,6 +17822,11 @@ msgstr ""
 msgid "Supporter"
 msgstr "Supporter"
 
+#: src/components/layout/Nav.tsx
+msgid "Supporter perks"
+msgstr "Beneficios de supporter"
+
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
 #: src/routes/supporter.tsx
 msgid "Supporter until {until}"
 msgstr "Supporter hasta el {until}"
@@ -17766,6 +17856,10 @@ msgstr "¿Seguro? La carta sale de la colección"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Sure? The five cards are used up"
 #~ msgstr "¿Seguro? Las cinco cartas se gastan"
+
+#: src/components/supporter/loadout.ts
+msgid "Susie's idea"
+msgstr ""
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
@@ -18045,6 +18139,10 @@ msgstr ""
 #: src/routes/supporter.tsx
 msgid "Thank you for supporting, {0}."
 msgstr ""
+
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+msgid "Thank you for supporting, {username}"
+msgstr "Gracias por apoyar, {username}"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
@@ -19195,6 +19293,10 @@ msgstr "El video se crea en tu dispositivo. Puedes navegar por otras páginas mi
 msgid "The vote just closed."
 msgstr "La votación acaba de cerrar."
 
+#: src/routes/gift.$code.tsx
+msgid "The week is yours."
+msgstr "La semana es tuya."
+
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Their collection"
 #~ msgstr "Su colección"
@@ -19457,6 +19559,14 @@ msgstr "Este archivo pesa {size}. El límite es 50 MB."
 #~ msgid "This file looks like more than one known chart, so it is left out of the preview until that is resolved."
 #~ msgstr ""
 
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "This gift code doesn't exist."
+msgstr "Este código de regalo no existe."
+
+#: src/routes/gift.$code.tsx
+msgid "This gift code was already used or doesn't exist."
+msgstr "Este código de regalo ya se usó o no existe."
+
 #. placeholder {0}: communityInviteExpiryLabel(inviteCheck.preview.expiresAt)
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "This invite expires on {0}. When it does, your server gets hidden until you paste a new link."
@@ -19489,6 +19599,10 @@ msgstr "Así se ve en la página de skins."
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "This is not available yet. Check back soon."
 msgstr "Esto aún no está disponible. Vuelve pronto."
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "This is your own gift code. Send the link to a friend."
+msgstr "Este es tu propio código. Mándale el link a un amigo."
 
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -21025,6 +21139,10 @@ msgstr "mié"
 msgid "Wednesdays"
 msgstr "Miércoles"
 
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+msgid "Welcome to supporter, {username}"
+msgstr "Ya eres supporter, {username}"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "Tipo de mapas, dificultad y orden recomendado para jugarlos."
@@ -21265,6 +21383,10 @@ msgstr "Ganó por score, no por pp"
 #: src/components/layout/ChangelogModal.tsx
 msgid "working on next"
 msgstr "en lo que trabajo ahora"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Works once, for an account that isn't a supporter and hasn't had a trial."
+msgstr "Sirve una vez, para una cuenta que no sea supporter y no haya tenido una prueba."
 
 #: src/routes/report.tsx
 msgid "Write a reply"
@@ -21526,9 +21648,17 @@ msgstr "Estás en {yourPp}pp mientras los jugadores cerca de ti promedian {media
 msgid "You stopped at {streak} in a row."
 msgstr "Te detuviste en {streak} seguidos."
 
+#: src/routes/gift.$code.tsx
+msgid "You're a supporter until {until}."
+msgstr "Eres supporter hasta el {until}."
+
 #: src/routes/replay_.community.tsx
 msgid "You're all caught up."
 msgstr "Ya has visto todas las repeticiones."
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You're already a supporter, so this one is better off with a friend."
+msgstr "Ya eres supporter, así que mejor dáselo a un amigo."
 
 #. placeholder {0}: nf(reachTargetNum)
 #: src/components/me/GoalsPanel.tsx
@@ -21569,6 +21699,10 @@ msgstr "ahora mismo estás en {0}"
 #: src/components/player/SkillBreakdown.tsx
 msgid "You're strongest in <0>{0}</0>"
 msgstr "Eres más fuerte en <0>{0}</0>"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You've already had a supporter week from a gift."
+msgstr "Ya tuviste una semana de supporter de regalo."
 
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "your"
@@ -21706,6 +21840,10 @@ msgstr "Se desactivaron tus renders dinámicos."
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Your first forge"
 #~ msgstr "Tu primera forja"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Your gift week was claimed. Your next support brings a new code."
+msgstr "Ya reclamaron tu semana de regalo. Tu próximo apoyo trae un código nuevo."
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your image"
@@ -21853,6 +21991,10 @@ msgstr "tus destacados"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Your skin"
 msgstr "Tu skin"
+
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+msgid "Your support keeps the servers running and gives me the time to keep building the site."
+msgstr "Tu apoyo mantiene los servidores andando y me da el tiempo para seguir construyendo el sitio."
 
 #: src/routes/supporter.tsx
 msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks."

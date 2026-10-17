@@ -58,17 +58,22 @@ vec2 pointerP() {
   return (u_pointer - .5) * vec2(u_res.x / u_res.y, 1.);
 }
 
-/* Twinkling points: \`scale\` cells per unit, \`density\` the share of cells lit. */
+/* Twinkling points: \`scale\` cells per unit, \`density\` the share of cells lit.
+   Each layer's grid is turned its own way and a star sits anywhere in its
+   cell, mostly tiny with now and then a bigger one, so no rows show. */
 float stars(vec2 p, float scale, float density, float t) {
-  vec2 cell = p * scale;
+  vec2 cell = rot(scale * 1.37) * p * scale;
   vec2 id = floor(cell);
-  vec2 f = fract(cell) - .5;
+  vec2 f = fract(cell);
   float h = hash(id);
   if (h > density) return 0.;
-  vec2 o = (vec2(hash(id + 1.3), hash(id + 2.7)) - .5) * .7;
-  float r = max(.08, 1.4 * PX * scale);
-  float tw = .55 + .45 * sin(t * (1. + 3. * hash(id + 5.)) + h * 40.);
-  return smoothstep(r, 0., length(f - o)) * tw * (.35 + .65 * hash(id + 9.1)) * min(1., .08 / r * 1.6);
+  float size = pow(hash(id + 7.7), 5.);
+  // a pixel or two across, whatever the layer: brighter stars are a touch bigger, never a disc
+  float r = max(.02, PX * scale * (1.3 + 1.3 * size));
+  vec2 o = r + vec2(hash(id + 1.3), hash(id + 2.7)) * (1. - 2. * r);
+  float tw = .7 + .3 * sin(t * (.6 + 2.4 * hash(id + 5.)) + h * 40.);
+  // a crisp point, not a soft disc
+  return smoothstep(r, r * .35, length(f - o)) * tw * (.3 + .55 * hash(id + 9.1) + .5 * size) * min(1., .06 / r);
 }
 
 /* Distance between the nearest and second nearest cell points: 0 on a cell's edge. */
@@ -344,7 +349,7 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Nebula: clouds of violet and rose gas, three layers of stars at their own
+  // Nebula: clouds of violet and rose gas, four layers of stars at their own
   // depths, a shooting star now and then; the gas brightens near the pointer.
   cosmos: shader(`
 vec3 theme(vec2 uv, vec2 p, float t) {
@@ -362,13 +367,8 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   col += vec3(.85, .9, 1.) * stars(p - vec2(0., sc * .05), 22., .12, t);
   col += vec3(.8, .85, 1.) * stars(p - vec2(0., sc * .12) + 1.7, 44., .16, t) * .65;
   col += vec3(.75, .8, 1.) * stars(p - vec2(0., sc * .24) + 4.3, 84., .22, t) * .4;
-  // a few bright stars with spikes
-  vec2 bq = (p - vec2(0., sc * .08)) * 4.;
-  vec2 bid = floor(bq);
-  vec2 bd = fract(bq) - .5 - (vec2(hash(bid + 3.), hash(bid + 6.)) - .5) * .6;
-  float big = step(.8, hash(bid + 11.));
-  float flare = exp(-length(bd) * 40.) + (exp(-abs(bd.x) * 260.) * exp(-abs(bd.y) * 14.) + exp(-abs(bd.y) * 260.) * exp(-abs(bd.x) * 14.)) * .5;
-  col += vec3(.9, .85, 1.) * flare * big * (.6 + .4 * sin(t * 1.3 + hash(bid) * 30.));
+  // a few nearer, brighter ones
+  col += vec3(.95, .9, 1.) * stars(p - vec2(0., sc * .08) + 9.1, 9., .18, t);
   // shooting star
   float period = 7.;
   float seed = floor(t / period);
@@ -650,43 +650,104 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Thunderstorm: rain sheeting past, heavy clouds, and now and then a bolt
-  // that lights the whole sky.
+  // Thunderstorm as a flat layered illustration: four banks of cloud hang
+  // from the top, each one flat tone with a lighter lip along its scalloped
+  // underside, the far ones lighter and lower (toward the horizon), the near
+  // ones darker and overhead; a jagged flat bolt drops from behind the near
+  // banks and strobes, stepping every bank up a tone while it lasts; slanted
+  // rain dashes. No soft glow anywhere.
   storm: shader(`
+/* How far a row of round lobes hangs below its line at x. */
+float lobeRow(float x, float cells, float seed) {
+  float u = x * cells, i = floor(u), reach = 0.;
+  for (int k = -1; k <= 1; k++) {
+    float c = i + float(k);
+    float cx = c + .5 + (hash(vec2(c, seed)) - .5) * .6;
+    float r = .62 + .38 * hash(vec2(c, seed + 1.));
+    float dx = u - cx;
+    if (abs(dx) < r) reach = max(reach, sqrt(r * r - dx * dx) * (.75 + .35 * hash(vec2(c, seed + 2.))));
+  }
+  return reach / cells;
+}
+
+/* A bank's underside: a slow swell, scalloped with round bumps. */
+float bankEdge(float x, float base, float cells, float seed) {
+  return base - .13 * noise(vec2(x * 1.3, seed)) - lobeRow(x, cells, seed) - lobeRow(x + .17, cells * 2.2, seed + 5.) * .5;
+}
+
+/* Distance from p to a jagged bolt: nine legs from \`top\` downward, each kicked sideways at random. */
+float boltDist(vec2 p, vec2 top, float drop, float seed, float lean) {
+  float d = 1e9;
+  vec2 a = top;
+  for (int i = 0; i < 9; i++) {
+    float fi = float(i);
+    vec2 b = a + vec2((hash(vec2(seed, fi)) - .5) * .11 + lean * .02, -drop / 9. * (.7 + .6 * hash(vec2(seed, fi + 20.))));
+    vec2 pa = p - a, ba = b - a;
+    d = min(d, length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0., 1.)));
+    a = b;
+  }
+  return d;
+}
+
 vec3 theme(vec2 uv, vec2 p, float t) {
   float sc = u_scroll;
   float aspect = u_res.x / u_res.y;
-  float period = 5.;
+  // a strike every few seconds: on, off, on again, a flicker, then dark
+  float period = 5.5;
   float seed = floor(t / period);
-  float age = t - seed * period - (.5 + 3. * hash(vec2(seed, 1.)));
-  float flash = 0.;
-  if (age > 0. && age < .7) flash = exp(-age * 5.) * (.55 + .45 * step(.5, fract(age * 13.)));
-  vec3 col = mix(vec3(.018, .022, .03), vec3(.045, .055, .07), smoothstep(-.5, .5, p.y));
-  vec2 cp = vec2(p.x * 1.2 + t * .02, p.y * 2. - sc * .3);
-  float cl = fbm(cp * 1.5 + fbm(cp + t * .01) * 1.2);
-  float cloudMask = smoothstep(-.15, .35, p.y - sc * .25);
-  col = mix(col, vec3(.13, .145, .18) + flash * vec3(.5, .55, .7), smoothstep(.36, .75, cl) * cloudMask);
-  float bx = (hash(vec2(seed, 2.)) - .5) * aspect * .9;
-  float x = bx + (fbm(vec2(p.y * 3., seed)) - .5) * .4 + (noise(vec2(p.y * 16., seed * 3.)) - .5) * .05;
-  float dist = abs(p.x - x);
-  float bolt = exp(-dist / max(PX * 1.5, .0012)) + exp(-dist * 22.) * .3;
-  bolt *= smoothstep(-.25 - .25 * hash(vec2(seed, 4.)), .1, p.y);
-  col += vec3(.75, .8, 1.) * bolt * flash * 1.3;
-  col += vec3(.16, .18, .26) * flash;
+  float age = t - seed * period - (.4 + 3.2 * hash(vec2(seed, 1.)));
+  float flash = age < 0. ? 0. : age < .07 ? 1. : age < .12 ? .15 : age < .3 ? .75 : age < .55 ? .3 * step(.5, fract(age * 9.)) : 0.;
+  float bolt = age >= 0. && age < .3 && !(age > .07 && age < .12) ? 1. : 0.;
+  vec3 col = mix(vec3(.016, .019, .03), vec3(.03, .035, .054), smoothstep(-.5, .4, p.y));
+  col += vec3(.035, .04, .065) * flash;
+  float bx = (hash(vec2(seed, 2.)) - .5) * aspect * .85;
+  float lean = hash(vec2(seed, 5.)) - .5;
+  for (int k = 0; k < 4; k++) {
+    float fk = float(k);
+    // the bolt drops from behind the nearer banks
+    if (k == 1) {
+      vec2 top = vec2(bx, .14 + sc * .3);
+      float drop = .55 + .25 * hash(vec2(seed, 3.));
+      float d = boltDist(p, top, drop, seed, lean);
+      vec2 fork = top;
+      for (int i = 0; i < 3; i++) fork += vec2((hash(vec2(seed, float(i))) - .5) * .11 + lean * .02, -drop / 9. * (.7 + .6 * hash(vec2(seed, float(i) + 20.))));
+      d = min(d, boltDist(p, fork, drop * .45, seed + 7., -lean * 3. + .6 * sign(lean + .01)) + .0015);
+      float w = max(PX * 1.3, .002);
+      col = mix(col, vec3(.6, .7, 1.), smoothstep(w * 3. + PX, w * 3., d) * bolt);
+      col = mix(col, vec3(1.), smoothstep(w + PX, w, d) * bolt);
+    }
+    float base = .04 + fk * .12 + sc * (.22 + fk * .07);
+    float cells = 9. - fk * 1.4;
+    float x = p.x + t * (.003 + .004 * fk) + fk * 2.37;
+    float edge = bankEdge(x, base, cells, fk * 11.);
+    float aa = PX * 1.2;
+    float inside = smoothstep(edge - aa, edge + aa, p.y);
+    if (inside <= 0.) continue;
+    // far banks lighter, near banks darker; each steps up in the flash, the nearest most
+    vec3 tone = mix(vec3(.1, .11, .155), vec3(.036, .041, .062), fk / 3.);
+    tone += vec3(.07, .08, .13) * flash * (.5 + fk * .25);
+    // the lit lip along the underside: the same scallops, a little higher
+    float lip = bankEdge(x + .01, base + .022, cells, fk * 11.);
+    vec3 lipTone = tone * 1.35 + vec3(.012, .014, .024) + vec3(.2, .23, .34) * flash * (.4 + fk * .2);
+    tone = mix(lipTone, tone, smoothstep(lip - aa, lip + aa, p.y));
+    col = mix(col, tone, inside);
+  }
+  // rain: slanted dashes in two layers, a little brighter in the flash
   vec2 rp = p;
-  rp.x += rp.y * .18;
+  rp.x += rp.y * .2;
   for (int l = 0; l < 2; l++) {
     float fl = float(l);
     float s = 34. + fl * 26.;
-    vec2 q = vec2(rp.x * s, rp.y * s * .09 + t * (2.2 + fl * .8) - sc * s * .05);
+    vec2 q = vec2(rp.x * s, rp.y * s * .1 + t * (2.4 + fl * .9) - sc * s * .05);
     vec2 id = floor(q);
     vec2 f = fract(q);
-    float h = hash(id + fl * 9.);
-    if (h < .8) continue;
+    if (hash(id + fl * 9.) < .85) continue;
     float o = .2 + .6 * hash(id + 3.);
-    float streak = smoothstep(PX * s * 1.2, 0., abs(f.x - o)) * smoothstep(0., .6, f.y) * smoothstep(1., .7, f.y);
-    col += vec3(.5, .56, .68) * streak * (.2 + fl * .08 + flash * .35);
+    float len = .3 + .3 * hash(id + 5.);
+    float dash = smoothstep(PX * s * .9 + .02, PX * s * .9, abs(f.x - o)) * step(1. - len, f.y);
+    col = mix(col, vec3(.42, .48, .62) + flash * .3, dash * (.16 + fl * .08 + flash * .3));
   }
+  col *= 1. - .25 * dot(p * vec2(.6, 1.), p * vec2(.6, 1.));
   return col;
 }`),
 
@@ -777,104 +838,185 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Koi pond: koi gliding beneath dappled light, bending through their
-  // turns, lily pads drifting on top; the koi come toward the pointer.
+  // Koi pond: real-looking koi gliding round the pond under the surface,
+  // drawn in the shader so every part moves on its own: the body bends
+  // through each turn and ripples back to a tail that beats in step with how
+  // far the fish has swum, the pectoral fins open and close, the tail fin
+  // fans. Each fish is shaded round (light along the back, darker flanks, a
+  // wet sheen on the ridge) and wears its variety's markings: kohaku, sanke,
+  // tancho, ogon or showa. Shadows fall on the floor below; lily pads and
+  // lotus (koi-pads.png) drift on top, and now and then a ripple spreads.
   koi: shader(`
 uniform sampler2D u_sprite;
 
-/* Where koi i is at path time tau: a loop round the pond, pulled toward
-   wherever the pointer rests, as if coming to be fed. */
-vec2 koiPath(float i, float tau, float aspect, vec2 lure) {
-  float a = .7 + .25 * i, b = .9 + .17 * i, phase = i * 2.1;
-  vec2 roam = vec2(cos(tau * a + phase) * aspect * .4, sin(tau * b + phase * 1.3) * .36);
-  return mix(roam, lure + (roam - lure) * .35, .45);
+const int KOI = 9;
+
+/* Where koi i is on its loop at angle a, and how that changes (first and second derivative). */
+void koiLoop(int i, float a, vec2 home, out vec2 c, out vec2 v, out vec2 acc) {
+  float fi = float(i);
+  float aspect = u_res.x / u_res.y;
+  vec2 rad = vec2(aspect * (.12 + .16 * hash(vec2(fi, 1.))), .1 + .14 * hash(vec2(fi, 2.)));
+  float ph = fi * 1.7, w1 = 2.3 + fi * .3, w2 = 1.7 + fi * .2;
+  c = home + vec2(rad.x * cos(a) + .03 * sin(w1 * a + ph), rad.y * sin(a) + .025 * sin(w2 * a + ph));
+  v = vec2(-rad.x * sin(a) + .03 * w1 * cos(w1 * a + ph), rad.y * cos(a) + .025 * w2 * cos(w2 * a + ph));
+  acc = vec2(-rad.x * cos(a) - .03 * w1 * w1 * sin(w1 * a + ph), -rad.y * sin(a) - .025 * w2 * w2 * sin(w2 * a + ph));
+}
+
+/* Koi i at point q: rgb and coverage (fins partly see-through). With shadow set, only a soft
+   coverage of the body for its shadow on the floor. */
+vec4 koi(int i, vec2 q, float t, bool shadow) {
+  float fi = float(i);
+  float aspect = u_res.x / u_res.y;
+  float len = .085 + .035 * hash(vec2(fi, 7.));
+  vec2 home = vec2((hash(vec2(fi, 3.)) - .5) * aspect * .7, (hash(vec2(fi, 4.)) - .5) * .5);
+  float dirSign = hash(vec2(fi, 5.)) > .5 ? 1. : -1.;
+  // it glides, then puts on a little speed, then glides again
+  float a = dirSign * (t * (.13 + .06 * hash(vec2(fi, 6.))) + .25 * sin(t * (.35 + .2 * hash(vec2(fi, 11.))) + fi * 3.) + fi * 2.4);
+  vec2 c, v, acc;
+  koiLoop(i, a, home, c, v, acc);
+  v *= dirSign;
+  vec2 d = q - c;
+  if (dot(d, d) > len * len * 1.6) return vec4(0.);
+  float speed = max(length(v), 1e-4);
+  vec2 dir = v / speed, n = vec2(-dir.y, dir.x);
+  float along = -dot(d, dir), side = dot(d, n);
+  float u = along / len;
+  if (u < -.02 || u > 1.17) return vec4(0.);
+  // the spine: bent round the turn, and a wave running back to the tail, its beats tied to the
+  // distance swum so a gliding fish barely moves its tail
+  float kappa = clamp((v.x * acc.y - v.y * acc.x) / (speed * speed * speed), -.9 / len, .9 / len);
+  float beat = a * dirSign * 16. + fi * 5.;
+  float spine = kappa * along * max(along, 0.) * .5 + len * (.004 + .075 * u * u) * sin(beat - u * 5.5);
+  float x = side - spine;
+  // the body's outline: a rounded head, widest a quarter of the way back, then a long taper
+  float W = len * .175;
+  float fa = clamp(u / .26, 0., 1.);
+  float wid = W * sqrt(max(0., 1. - (1. - fa) * (1. - fa))) * (1. - .8 * smoothstep(.3, .88, u));
+  float aa = PX * 1.2;
+  float body = u > 0. && u < .9 ? smoothstep(aa, -aa, abs(x) - wid) : 0.;
+  if (shadow) return vec4(0., 0., 0., smoothstep(len * .05, -len * .03, abs(x) - wid) * step(0., u) * step(u, .9) * .5);
+  float variety = floor(hash(vec2(fi, 9.)) * 4.99);
+  float seed = fi * 7.31;
+  vec3 col = vec3(0.);
+  float cover = 0.;
+  // fins first, under the body: pale, half see-through, fine rays
+  vec3 finCol = variety == 3. ? vec3(.95, .74, .36) : variety == 4. ? vec3(.3, .28, .3) : vec3(.92, .9, .86);
+  // the tail fin: two lobes fanning out behind, a notch between them
+  if (u > .8 && u < 1.16) {
+    float fw = len * (.022 + .27 * smoothstep(.8, 1.1, u));
+    float notch = u > 1.01 ? (u - 1.01) * 1.4 * len : -1.;
+    float tf = smoothstep(aa, -aa, abs(x) - fw) * (1. - smoothstep(-aa, aa, notch - abs(x))) * (1. - smoothstep(1.11, 1.16, u));
+    float rays = .9 + .1 * sin(x / len * 70.);
+    tf *= 1. - .5 * smoothstep(.98, 1.14, u);
+    col = mix(col, finCol * rays, tf); cover = max(cover, tf * .5);
+  }
+  // the pectoral fins: either side just behind the head, opening and closing
+  float flap = .5 + .5 * sin(t * (2.2 + hash(vec2(fi, 12.))) + fi * 2.);
+  for (int s = 0; s < 2; s++) {
+    float sgn = s == 0 ? 1. : -1.;
+    float u0 = .21;
+    float w0 = W * sqrt(max(0., 1. - (1. - clamp(u0 / .26, 0., 1.)) * (1. - clamp(u0 / .26, 0., 1.))));
+    vec2 base = vec2(u0 * len, sgn * w0 * .8);
+    float ang = radians(30. + 40. * flap);
+    vec2 e1 = vec2(cos(ang), sgn * sin(ang));
+    vec2 p = vec2(along, x) - base;
+    float lf = len * .2, wf = len * .068;
+    vec2 pe = vec2(dot(p, e1), dot(p, vec2(-e1.y, e1.x)));
+    float inFin = smoothstep(1.02, .96, length(vec2((pe.x - lf * .5) / (lf * .5), pe.y / wf))) * step(0., pe.x);
+    float rays = .9 + .1 * sin(pe.y / wf * 8.);
+    inFin *= 1. - .45 * smoothstep(lf * .55, lf, pe.x);
+    col = mix(col, finCol * rays, inFin); cover = max(cover, inFin * .5);
+  }
+  if (body > 0.) {
+    float xn = clamp(x / max(wid, 1e-5), -1., 1.);
+    // its markings, fixed to the body so they bend with it
+    vec2 bp = vec2(u * 5.5 + seed, xn * 1.5 + seed);
+    float markings = fbm(bp) + .12 * (1. - smoothstep(.08, .24, u));
+    float red = smoothstep(.5, .53, markings) * smoothstep(.04, .09, u) * (1. - smoothstep(.7, .8, u));
+    float sumi = smoothstep(.74, .77, noise(vec2(u * 16. + seed, xn * 3.5)));
+    vec3 white = vec3(.96, .93, .87), scarlet = vec3(.82, .2, .1), ink = vec3(.09, .08, .085);
+    vec3 skin = white;
+    if (variety == 0.) skin = mix(white, scarlet, red);
+    else if (variety == 1.) skin = mix(mix(white, scarlet, red), ink, sumi * smoothstep(.15, .3, u) * (1. - smoothstep(.75, .82, u)));
+    else if (variety == 2.) skin = mix(white, scarlet, smoothstep(.042 * len, .036 * len, length(vec2((u - .11) * len, x))));
+    else if (variety == 3.) skin = mix(vec3(.86, .6, .2), vec3(1., .86, .46), .5 + .5 * xn * 0.);
+    else skin = mix(mix(ink, scarlet, red), white, smoothstep(.6, .63, fbm(bp * 1.3 + 9.)) * .9);
+    // scales: a faint net, more on the back than the flanks
+    vec2 sc = vec2(along / len * 60., x / len * 60.);
+    float net = abs(fract(sc.x + sc.y * .55) - .5) + abs(fract(sc.x - sc.y * .55) - .5);
+    skin *= 1. - .07 * smoothstep(.62, .82, net) * (1. - abs(xn));
+    // shaded round: light down the back, darker flanks, a wet sheen along the ridge
+    float round = sqrt(1. - xn * xn);
+    float lit = .48 + .52 * round + .12 * xn * dot(n, normalize(vec2(-.5, .8)));
+    skin *= lit;
+    skin += (variety == 3. ? .4 : .22) * exp(-xn * xn * 20.) * (1. - u) * vec3(1., .98, .94);
+    // the dorsal fin, a thin dark ridge down the middle of the back
+    skin *= 1. - .25 * smoothstep(.12, 0., abs(xn)) * smoothstep(.3, .36, u) * (1. - smoothstep(.62, .7, u));
+    // eyes, set at the sides of the head
+    skin = mix(skin, vec3(.05), smoothstep(.016 * len, .01 * len, length(vec2((u - .075) * len, abs(x) - wid * .62))));
+    col = mix(col, skin, body); cover = max(cover, body);
+  }
+  return vec4(col, cover);
+}
+
+vec4 padSample(float cell, vec2 c) {
+  vec2 at = vec2(mod(cell, 4.), floor(cell / 4.));
+  return texture(u_sprite, vec2((at.x + c.x) / 4., (at.y + 1. - c.y) / 2.));
 }
 
 vec3 theme(vec2 uv, vec2 p, float t) {
   float aspect = u_res.x / u_res.y;
+  // the pond floor and surface scroll by; the koi stay in view
   vec2 w = p + vec2(0., u_scroll * .35);
-  vec3 col = mix(vec3(.01, .05, .06), vec3(.03, .11, .12), fbm(w * 1.5 + t * .02));
-  vec2 lure = pointerP() + vec2(0., u_scroll * .35);
-  vec2 bent = w;
-  float caustic = 1. - smoothstep(0., .03, voronoiEdge(bent * 4.5 + vec2(t * .12, t * .08) + fbm(bent * 1.6 + t * .1) * 1.4));
-  col += vec3(.25, .5, .45) * caustic * .045 * (.4 + fbm(bent * 3. - t * .05));
-  // koi, under the surface: the sprite (head to the left, drawn straight)
-  // laid along the curve each fish has just swum, so its body bends through
-  // turns, with a tail beat that grows toward the tail
-  for (int i = 0; i < 4; i++) {
-    float fi = float(i);
-    float tau = t * (.09 + .02 * fi);
-    float len = .26 + .07 * hash(vec2(fi, 3.));
-    float thick = len * 150. / 424.;
-    // path time per body length, from how fast the head is moving
-    float speed = length(koiPath(fi, tau + .01, aspect, lure) - koiPath(fi, tau, aspect, lure)) / .01;
-    float step_ = len / 6. / max(speed, .05);
-    float beat = t * (4.5 + hash(vec2(fi, 4.))) + fi * 2.;
-    vec2 spine[7];
-    for (int j = 0; j < 7; j++) {
-      float fj = float(j);
-      vec2 c = koiPath(fi, tau - fj * step_, aspect, lure);
-      vec2 ahead = normalize(koiPath(fi, tau - fj * step_ + .002, aspect, lure) - c + 1e-6);
-      float u = fj / 6.;
-      // the beat: little at the head, a free swing at the tail
-      spine[j] = c + vec2(-ahead.y, ahead.x) * sin(beat - u * 3.2) * len * (.015 + .11 * u * u);
+  vec3 col = mix(vec3(.012, .05, .056), vec3(.026, .095, .1), fbm(w * 1.4 + t * .015));
+  float caustic = 1. - smoothstep(0., .03, voronoiEdge(w * 4.5 + vec2(t * .1, t * .07) + fbm(w * 1.6 + t * .08) * 1.4));
+  float sparkle = caustic * (.4 + fbm(w * 3. - t * .05));
+  col += vec3(.2, .45, .42) * sparkle * .04;
+  vec3 water = col;
+  // shadows on the floor first, then the koi
+  for (int i = 0; i < KOI; i++) col *= 1. - koi(i, p - vec2(.014, -.02), t, true).a;
+  for (int i = 0; i < KOI; i++) {
+    vec4 k = koi(i, p, t, false);
+    if (k.a <= 0.) continue;
+    // seen through the water: a cool tint, deeper ones more so, the surface light playing on them
+    float depth = .12 + .3 * hash(vec2(float(i), 10.));
+    vec3 fish = mix(k.rgb * vec3(.86, .95, .95), water * 1.5 + vec3(0., .03, .04), depth);
+    fish *= 1. + sparkle * .35;
+    col = mix(col, fish, k.a);
+  }
+  // lily pads on the surface, some with a lotus open on them, each casting a faint shadow;
+  // the art is pale, so the night pond darkens it
+  vec2 lq = w * 5. + vec2(t * .02, 0.);
+  vec2 lid = floor(lq);
+  if (hash(lid + 7.) > .78) {
+    vec2 ld = fract(lq) - .5 - (vec2(hash(lid + 1.), hash(lid + 2.)) - .5) * .16;
+    ld = rot(t * .04 + hash(lid) * 6.28) * ld;
+    float sz = .26 + .1 * hash(lid + 3.);
+    float pick = floor(hash(lid + 4.) * 5.99);
+    vec2 sc = (ld - vec2(.03, -.04)) / sz * .5 + .5;
+    if (sc.x > 0. && sc.x < 1. && sc.y > 0. && sc.y < 1.) col *= 1. - padSample(pick, sc).a * .35;
+    vec2 c = ld / sz * .5 + .5;
+    if (c.x > 0. && c.x < 1. && c.y > 0. && c.y < 1.) {
+      vec4 k = padSample(pick, c);
+      col = mix(col, k.rgb / max(k.a, 1e-3) * vec3(.42, .5, .44), k.a * .97);
     }
-    float best = 1e9, u = 0., side = 0.;
-    for (int j = 0; j < 6; j++) {
-      vec2 a = spine[j], b = spine[j + 1];
-      vec2 pa = w - a, ba = b - a;
-      float hseg = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-8), 0., 1.);
-      vec2 off = pa - ba * hseg;
-      float d = dot(off, off);
-      if (d < best) {
-        best = d;
-        // past the tail the projection runs on, so nothing beyond it maps onto the sprite
-        float along = j == 5 ? dot(pa, ba) / max(dot(ba, ba), 1e-8) : hseg;
-        u = (float(j) + along) / 6.;
-        side = (ba.x * pa.y - ba.y * pa.x) / max(length(ba), 1e-6);
+    if (hash(lid + 5.) > .62) {
+      vec2 bc = (ld - (vec2(hash(lid + 8.), hash(lid + 9.)) - .5) * sz * .7) / (sz * .42) * .5 + .5;
+      if (bc.x > 0. && bc.x < 1. && bc.y > 0. && bc.y < 1.) {
+        vec4 k = padSample(6. + step(.5, hash(lid + 6.)), bc);
+        col = mix(col, k.rgb / max(k.a, 1e-3) * .8, k.a);
       }
     }
-    // the head reaches a little past the front of the spine
-    vec2 front = w - spine[0];
-    vec2 headDir = normalize(spine[0] - spine[1] + 1e-6);
-    float lead = dot(front, headDir);
-    if (lead > 0.) {
-      u = -lead / len;
-      side = headDir.x * front.y - headDir.y * front.x;
-    }
-    // only near the body: further out, the nearest segment says nothing useful
-    if (sqrt(best) > thick * .9 && lead <= 0.) continue;
-    vec2 cell = vec2(u * .92 + .06, .5 + side / thick);
-    vec2 shade = cell + vec2(-.03, -.12);
-    float shadow = 0.;
-    if (shade.x > 0. && shade.x < 1. && shade.y > 0. && shade.y < 1.) shadow = textureLod(u_sprite, shade, 2.).a;
-    col *= 1. - shadow * .35;
-    if (cell.x > 0. && cell.x < 1. && cell.y > 0. && cell.y < 1.) {
-      vec4 koi = texture(u_sprite, cell);
-      vec3 fish = koi.rgb / max(koi.a, 1e-3);
-      // some are gold rather than red
-      float redness = clamp((fish.r - fish.g) * 1.5, 0., 1.);
-      if (hash(vec2(fi, 9.)) > .55) fish = mix(fish, vec3(1., .55, .12), redness);
-      fish = mix(fish, col, .18);
-      col = mix(col, fish, koi.a * .95);
-    }
   }
-  // lily pads on the surface
-  vec2 lq = w * 3. + vec2(t * .015, 0.);
-  vec2 lid = floor(lq);
-  if (hash(lid + 7.) > .72) {
-    vec2 ld = fract(lq) - .5 - (vec2(hash(lid + 1.), hash(lid + 2.)) - .5) * .3;
-    ld = rot(t * .05 + hash(lid) * 6.28) * ld;
-    float pad = length(ld) - .22;
-    float notch = step(abs(atan(ld.x, ld.y)), .25);
-    float cover = smoothstep(PX * 6., -PX * 6., pad) * (1. - notch);
-    vec3 green = mix(vec3(.05, .16, .07), vec3(.11, .27, .11), smoothstep(.22, .02, length(ld) + .05 * noise(ld * 20.)));
-    green *= .85 + .15 * smoothstep(-.1, .2, ld.x - ld.y);
-    col = mix(col, green, cover * .8);
-    if (hash(lid + 5.) > .6) {
-      float bloom = smoothstep(.07, .03, length(ld - vec2(.06, -.04)));
-      col = mix(col, vec3(1., .72, .82), bloom * .9);
-    }
+  // now and then a ring spreading on the surface, as if a koi had come up
+  for (int r = 0; r < 3; r++) {
+    float fr = float(r);
+    float cyc = t / 4.5 + fr * .37;
+    float id = floor(cyc), age = fract(cyc);
+    vec2 at = (vec2(hash(vec2(id, fr)), hash(vec2(id, fr + 5.))) - .5) * vec2(aspect * .9, .8);
+    float rr = age * .16;
+    float ring = smoothstep(PX * 2.5, 0., abs(length((p - at) * vec2(1., 1.25)) - rr));
+    col += vec3(.25, .45, .45) * ring * (1. - age) * .35;
   }
   col *= 1. - .35 * dot(p, p);
   return col;
@@ -1008,6 +1150,246 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   // a VHS line rolling down
   col += vec3(.6, .5, .8) * exp(-abs(fract(uv.y + t * .05) - .5) * 80.) * .04;
   return col * .72;
+}`),
+
+  // Roaring knight: a black void where six-pointed stars swell, flinch back,
+  // turn red, throw out white beams and burst into shards, and red warning
+  // lines (sometimes turning) snap into white slashes that crack diamonds
+  // out along the cut; now and then a roar of red streaks rushes across it.
+  // Flat white, red and mauve on black, on the game's low-res pixel grid.
+  knight: shader(`
+/* Signed distance to a six-pointed star of outer radius r. */
+float hexagram(vec2 p, float r) {
+  const vec4 k = vec4(-.5, .8660254, .5773503, 1.7320508);
+  p = abs(p);
+  p -= 2. * min(dot(k.xy, p), 0.) * k.xy;
+  p -= 2. * min(dot(k.yx, p), 0.) * k.yx;
+  p -= vec2(clamp(p.x, r * k.z, r * k.w), r);
+  return length(p) * sign(p.y);
+}
+
+float segDist(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a, ba = b - a;
+  return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0., 1.));
+}
+
+/* Signed distance to a small diamond pointing along d. */
+float diamond(vec2 p, vec2 d, float len, float wid) {
+  vec2 q = vec2(dot(p, d), dot(p, vec2(-d.y, d.x)));
+  q = abs(q);
+  return (q.x / len + q.y / wid - 1.) * min(len, wid) * .7;
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  // drawn on the game's low-res pixel grid
+  p = (floor(p * 200.) + .5) / 200.;
+  float sc = u_scroll;
+  float aspect = u_res.x / u_res.y;
+  float aa = .001;
+  vec3 col = vec3(.006, .004, .01);
+  // a low mauve haze, the colour of its starry beam, rising off as the page scrolls
+  col += vec3(.16, .05, .16) * pow(max(0., 1. - (p.y + .5 + sc * .3) * 1.4), 3.) * (.55 + .45 * noise(vec2(p.x * 2. + t * .05, t * .1)));
+  // fine white specks, far off
+  col += vec3(.7, .65, .8) * stars(p - vec2(0., sc * .06), 60., .08, t) * .35;
+  // the stars: each on its own cycle
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    float period = 5. + 2. * hash(vec2(fi, 1.));
+    float cyc = t / period + hash(vec2(fi, 2.));
+    float id = floor(cyc), a = fract(cyc) * period;
+    vec2 c = (vec2(hash(vec2(id, fi)), hash(vec2(id, fi + 7.))) - .5) * vec2(aspect * .9, .8);
+    vec2 drift = normalize(vec2(hash(vec2(id, fi + 3.)) - .5, hash(vec2(id, fi + 4.)) - .5) + 1e-3) * .025;
+    // swell and drift, a flinch back, red, beams, then shards
+    float grow = smoothstep(0., 2.2, a);
+    float back = smoothstep(2.4, 2.6, a) - smoothstep(2.6, 2.9, a);
+    vec2 at = c + drift * (a - back * 1.5) - vec2(0., sc * .1);
+    float r = mix(.008, .05, grow) * (1. - smoothstep(3.25, 3.3, a));
+    bool red = a > 2.6;
+    float spin = a * .3 + fi;
+    vec2 q = rot(spin) * (p - at);
+    if (r > .001) {
+      float d = hexagram(q, r);
+      float body = smoothstep(aa, -aa, d);
+      float rim = smoothstep(aa, -aa, abs(d + r * .12) - r * .1);
+      vec3 ink = red ? vec3(.95, .12, .16) : vec3(.95, .92, 1.);
+      col = mix(col, vec3(.02, .0, .02), body);
+      col = mix(col, ink, rim);
+    }
+    // beams from its six points just before it bursts
+    if (a > 2.95 && a < 3.25) {
+      float k = (a - 2.95) / .3;
+      for (int j = 0; j < 6; j++) {
+        vec2 dir = vec2(sin(spin + float(j) * 1.0472), cos(spin + float(j) * 1.0472));
+        dir = vec2(dir.x, dir.y);
+        float d = segDist(rot(-spin) * q, dir * .05, dir * (.05 + .6 * k));
+        col = mix(col, vec3(1.), step(d, .004) * (1. - k * .5));
+      }
+    }
+    // shards flying out
+    if (a > 3.25 && a < 4.3) {
+      float k = (a - 3.25) / 1.05;
+      for (int j = 0; j < 6; j++) {
+        vec2 dir = rot(-spin) * vec2(sin(float(j) * 1.0472), cos(float(j) * 1.0472));
+        vec2 sp = at + dir * (.03 + .32 * (1. - (1. - k) * (1. - k)));
+        float d = diamond(p - sp, dir, .024 * (1. - k * .5), .01 * (1. - k * .5));
+        col = mix(col, vec3(.95, .2, .25), smoothstep(aa, -aa, d));
+      }
+    }
+  }
+  // slashes: a red warning line, then a white cut, then diamonds out of the cut
+  for (int s = 0; s < 2; s++) {
+    float fs = float(s);
+    float period = 3.4 + fs * 1.3;
+    float cyc = t / period + fs * .45;
+    float id = floor(cyc), a = fract(cyc) * period;
+    float turning = step(.66, hash(vec2(id, fs + 9.)));
+    float ang0 = hash(vec2(id, fs + 1.)) * 3.1416;
+    float ang = ang0 + turning * min(a, .6) * 1.4;
+    vec2 n = vec2(-sin(ang), cos(ang));
+    vec2 o = (vec2(hash(vec2(id, fs + 2.)), hash(vec2(id, fs + 3.))) - .5) * vec2(aspect * .6, .5);
+    float across = dot(p - o, n);
+    float along = dot(p - o, vec2(n.y, -n.x));
+    if (a < .6) {
+      // the warning: a thin red line, flickering
+      float on = .55 + .45 * step(.5, fract(a * 14.));
+      col = mix(col, vec3(.85, .08, .12), step(abs(across), .003) * on * smoothstep(0., .08, a));
+    } else if (a < 1.05) {
+      // the cut: a white blade of light, widest in the middle, tapering to the ends, then thinning out
+      float k = (a - .6) / .45;
+      float halfLen = aspect * .9;
+      float taper = max(0., 1. - pow(along / halfLen, 2.));
+      float width = (.012 * taper) * (1. - k) + PX * .5;
+      col = mix(col, vec3(1.), smoothstep(width + aa, width, abs(across)) * (1. - k * k));
+      // diamonds out of the cut, half each way
+      for (int j = 0; j < 8; j++) {
+        float fj = float(j);
+        float pos = (hash(vec2(id + fj, fs + 4.)) - .5) * aspect * 1.4;
+        float side = j < 4 ? 1. : -1.;
+        float speed = .18 + .25 * hash(vec2(id + fj, fs + 5.));
+        vec2 dp = o + vec2(n.y, -n.x) * pos + n * side * speed * k;
+        float d = diamond(p - dp, n, .02, .009);
+        col = mix(col, vec3(.95, .9, 1.), smoothstep(aa, -aa, d) * (1. - k));
+      }
+    }
+  }
+  // now and then the roar: red streaks rushing out from off to the right, the void flushing red
+  float rc = t / 11. + .3;
+  float ra = fract(rc) * 11.;
+  if (ra < 1.2) {
+    vec2 from = vec2(aspect * (.3 + .12 * hash(vec2(floor(rc), 1.))), .05 - sc * .2);
+    vec2 d = p - from;
+    float dist = length(d);
+    col += vec3(.1, .0, .02) * (1. - ra / 1.2) * smoothstep(1.3, 0., dist);
+    float bins = 56.;
+    float ang = (atan(d.y, d.x) / 6.2832 + .5) * bins;
+    float bin = floor(ang);
+    float hb = hash(vec2(bin, floor(rc)));
+    float head = (ra - hb * .25) * (1.1 + .9 * hash(vec2(bin, 3.)));
+    float len = .1 + .25 * hash(vec2(bin, 4.));
+    float on = step(.35, hb) * step(head - len, dist) * step(dist, head) * step(.08, dist);
+    float thin = abs(fract(ang) - .5) * 6.2832 / bins * dist;
+    float wid = (.0025 + .003 * hash(vec2(bin, 5.))) * (1. - ra / 1.2);
+    col = mix(col, vec3(.92, .1, .16), on * smoothstep(wid + aa, wid, thin));
+  }
+  col *= 1. - .3 * dot(p * vec2(.7, 1.), p * vec2(.7, 1.));
+  return col;
+}`),
+
+  // Black knife: the Knight's fight, without the Knight. A smoky glow
+  // where it would hang turns from violet to deep blue to the red of its
+  // roar, light streaming out from behind it; six-pointed star bullets drift
+  // past, the far ones smeared into scanlines, the near ones circling the
+  // empty middle; now and then a flurry of white shards falls; the red SOUL
+  // keeps dodging. All drawn here.
+  knightfight: shader(`
+float hexagram(vec2 p, float r) {
+  const vec4 k = vec4(-.5, .8660254, .5773503, 1.7320508);
+  p = abs(p);
+  p -= 2. * min(dot(k.xy, p), 0.) * k.xy;
+  p -= 2. * min(dot(k.yx, p), 0.) * k.yx;
+  p -= vec2(clamp(p.x, r * k.z, r * k.w), r);
+  return length(p) * sign(p.y);
+}
+
+/* A star bullet: a six-pointed outline with a diamond in the middle; 0..1 coverage. */
+float starBullet(vec2 q, float r) {
+  float d = hexagram(q, r);
+  float rim = step(abs(d + r * .12), r * .11);
+  float inner = step(abs(hexagram(q, r * .62) + r * .07), r * .06);
+  float core = step(abs(q.x) + abs(q.y), r * .2);
+  return max(max(rim, inner * .8), core);
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float sc = u_scroll;
+  float aspect = u_res.x / u_res.y;
+  // the fight's three moods on a loop: violet, deep blue, then the red roar
+  float cyc = mod(t, 30.);
+  float wB = smoothstep(11., 13., cyc) * (1. - smoothstep(20., 21.5, cyc));
+  float wR = smoothstep(20., 21.5, cyc) * (1. - smoothstep(28.5, 30., cyc));
+  float wP = 1. - wB - wR;
+  vec3 tint = vec3(.46, .14, .7) * wP + vec3(.1, .16, .78) * wB + vec3(.75, .05, .08) * wR;
+  vec3 pale = vec3(.85, .74, 1.) * wP + vec3(.75, .82, 1.) * wB + vec3(1., .8, .8) * wR;
+  vec2 kp = vec2(aspect * .2, .1 + sc * .35) + vec2(sin(t * .7) * .012, sin(t * 1.1) * .01);
+  // smoke swirling round it, lit from the Knight
+  vec2 d = p - kp;
+  vec2 w = p * 1.6 + vec2(0., sc * .3);
+  float smoke = fbm(w + vec2(fbm(w * 1.3 + t * .05), fbm(w * 1.3 + 4. - t * .04)) * 1.6 + t * .02);
+  float glow = exp(-length(d * vec2(.8, 1.)) * 2.6);
+  vec3 col = tint * (.05 + .55 * glow) * (.45 + 1.1 * smoke);
+  col += tint * .12 * smoothstep(.45, .8, smoke);
+  // light streaming out from behind it
+  float ang = atan(d.y, d.x);
+  float rays = pow(.5 + .5 * sin(ang * 11. + noise(vec2(ang * 3., t * .3)) * 4.), 5.) * exp(-length(d) * 3.2);
+  col += mix(tint, pale, .5) * rays * .35 * smoothstep(.02, .16, length(d));
+  // far star bullets, smeared sideways into scanlines
+  for (int l = 0; l < 2; l++) {
+    float fl = float(l);
+    float cell = .36 - fl * .1;
+    vec2 q = p * vec2(1., 1.) + vec2(t * (.03 + fl * .02), -t * .015 - sc * (.15 + fl * .1));
+    vec2 id = floor(q / cell);
+    if (hash(id + fl * 7.) < .72) continue;
+    vec2 c = (id + .5 + (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .5) * cell;
+    vec2 s = rot(t * (.2 + .3 * hash(id + 3.)) * (hash(id + 4.) > .5 ? 1. : -1.)) * (q - c);
+    float r = cell * (.15 + .08 * hash(id + 5.));
+    float smear = 0.;
+    for (int k = 0; k < 4; k++) smear = max(smear, starBullet(s + vec2(float(k) * r * .22, 0.), r) * (1. - float(k) * .25));
+    float scan = step(.5, fract(gl_FragCoord.y / 3.));
+    col = mix(col, pale * .8, smear * scan * (.22 + fl * .1));
+  }
+  // nearer star bullets circling the Knight, crisp, on a pixel grid
+  vec2 pp = (floor(p * 210.) + .5) / 210.;
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    float a = t * (.25 + .05 * fi) + fi * 1.047;
+    float rad = .2 + .08 * sin(t * .4 + fi * 2.);
+    vec2 c = kp + vec2(cos(a) * rad * 1.5, sin(a) * rad);
+    float b = starBullet(rot(t * .8 + fi) * (pp - c), .028 + .006 * sin(fi * 3.));
+    col = mix(col, pale, b * .85);
+  }
+  // now and then a flurry of white shards falls through
+  float fz = mod(t, 30.);
+  if (fz > 4. && fz < 9.5) {
+    float k = fz - 4.;
+    vec2 q = pp * vec2(1., 1.) + vec2(0., k * .25);
+    vec2 id = floor(q / .15);
+    if (hash(id + 11.) > .84) {
+      vec2 f = fract(q / .15) - .5 - (vec2(hash(id + 12.), hash(id + 13.)) - .5) * .3;
+      f = rot(hash(id) * 6.28 + k * (hash(id + 14.) - .5) * 3.) * f;
+      // a chunky, jagged-edged shard, pointed at one end
+      float blob = step(max(abs(f.x) * 1.6 + f.y * .9, -f.y * 1.4) + (noise(f * 22. + id * 3.) - .5) * .12, .2);
+      float fade = smoothstep(4., 5., fz) * (1. - smoothstep(8.5, 9.5, fz));
+      col = mix(col, vec3(1.), blob * fade);
+    }
+  }
+  // the SOUL, dodging below and to the left
+  vec2 hp = kp + vec2(-.3 + .05 * sin(t * 1.3), -.2 + .04 * sin(t * 1.9 + 1.));
+  vec2 hq = (pp - hp) / .017;
+  hq.y = -hq.y;
+  float heart = step(length(vec2(abs(hq.x) - .5, hq.y + .2)), .62) + step(abs(hq.x) + hq.y * 1.1, 1.05) * step(-.2, hq.y);
+  col = mix(col, vec3(1., 0., 0.), clamp(heart, 0., 1.));
+  col *= 1. - .3 * dot(p * vec2(.6, 1.), p * vec2(.6, 1.));
+  return col;
 }`),
 
   // Black hole: a spinning accretion disk bending the starlight around a

@@ -15,6 +15,7 @@ import { useAuth } from "../../lib/auth-context";
 import { useBannedUsersAlert } from "../../lib/banned-users-alert";
 import { useBugReportAlert } from "../../lib/bug-report-alert";
 import { useReplyAlert } from "../../lib/reply-alert";
+import { useViewerIsSupporter } from "../../lib/viewer-supporter";
 import { searchPlayers, searchPlayersOnOsu } from "../../lib/player-search";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
@@ -245,6 +246,8 @@ export function Nav() {
   // The other direction: an answer the owner chose to notify the viewer about.
   // It rides their own avatar, and /report is what clears it.
   const replyAlert = useReplyAlert(Boolean(auth.viewer));
+  // supporters manage their look there; for everyone else it is the way in, so it says what is inside
+  const viewerIsSupporter = useViewerIsSupporter(auth.viewer?.id);
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
@@ -877,6 +880,7 @@ export function Nav() {
               <button
                 type="button"
                 onClick={() => setUserMenuOpen((open) => !open)}
+                data-supporter-welcome-target
                 className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 text-osu-pink-light transition hover:ring-osu-pink/60 cursor-pointer"
                 title={
                   replyAlert.count
@@ -965,8 +969,8 @@ export function Nav() {
                         className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
                         role="menuitem"
                       >
-                        <Heart className="h-3.5 w-3.5" />
-                        <Trans>Supporter</Trans>
+                        <Heart className={`h-3.5 w-3.5 ${viewerIsSupporter ? "" : "fill-osu-pink text-osu-pink"}`} />
+                        {viewerIsSupporter ? <Trans>Supporter</Trans> : <Trans>Supporter perks</Trans>}
                       </Link>
                       {/* Logout is a POST (the route rejects GET), so it needs a
                           form; `contents` keeps the button laid out as if it
@@ -1274,8 +1278,8 @@ export function Nav() {
                           }}
                           className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
                         >
-                          <Heart className="h-3.5 w-3.5 shrink-0 opacity-75" />
-                          <Trans>Supporter</Trans>
+                          <Heart className={`h-3.5 w-3.5 shrink-0 ${viewerIsSupporter ? "opacity-75" : "fill-osu-pink text-osu-pink"}`} />
+                          {viewerIsSupporter ? <Trans>Supporter</Trans> : <Trans>Supporter perks</Trans>}
                         </Link>
                         <form method="post" action={logoutHref} className="contents">
                           <button

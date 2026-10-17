@@ -1329,6 +1329,10 @@ msgstr "仅 {firstName}"
 msgid "{forNextPass} wait for the next rating pass."
 msgstr "{forNextPass} 个成绩等待下一轮评分。"
 
+#: src/routes/gift.$code.tsx
+msgid "{from} sent you a week of supporter"
+msgstr "{from} 送了你一周的支持者"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "{from} to {to}"
 msgstr "{from} 至 {to}"
@@ -1336,6 +1340,11 @@ msgstr "{from} 至 {to}"
 #: src/components/me/GoalsPanel.tsx
 msgid "{gap}pp to go"
 msgstr "还差 {gap}pp"
+
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+#: src/routes/supporter.tsx
+msgid "{giftFrom} gave you a week of supporter."
+msgstr "{giftFrom} 送了你一周的支持者。"
 
 #: src/routes/replay_.community.tsx
 msgid "{grade} only"
@@ -1497,6 +1506,10 @@ msgstr "{months} 个月前"
 #: src/components/CountryWarming.tsx
 msgid "{name} added to queue, come back later :)"
 msgstr "{name} 已加入队列，稍后再来看看吧 :)"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "{name} claimed your gift week. Your next support brings a new code."
+msgstr "{name} 已领取你赠送的一周。你下次支持时会得到新的兑换码。"
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -2699,6 +2712,10 @@ msgstr "狙击是指你在某张图上的新最佳成绩超过了原本排在你
 #: src/routes/dan-estimates.tsx
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
+
+#: src/routes/gift.$code.tsx
+msgid "A week of supporter"
+msgstr "一周支持者"
 
 #: src/routes/recommendations.tsx
 msgid "a while"
@@ -3985,6 +4002,10 @@ msgstr ""
 msgid "Black hole"
 msgstr ""
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Black knife"
+msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Black playfield"
 msgstr "纯黑游玩区域"
@@ -4615,6 +4636,10 @@ msgstr "圆形"
 #: src/components/maps/PatternRadar.tsx
 msgid "CJ"
 msgstr "CJ"
+
+#: src/routes/gift.$code.tsx
+msgid "Claim it"
+msgstr "领取"
 
 #: src/components/supporter/loadout.ts
 #: src/lib/replay-overlays.ts
@@ -5278,6 +5303,7 @@ msgstr "复制图片链接"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/GiftCodePanel.tsx
 msgid "Copy link"
 msgstr "复制链接"
 
@@ -5300,6 +5326,10 @@ msgstr "正在复制 BBCode…"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not check that invite. Try again."
 msgstr "无法核对这个邀请链接，请再试一次。"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Could not claim it. Try again in a moment."
+msgstr "领取失败，请稍后再试。"
 
 #: src/routes/companella.tsx
 msgid "Could not clear the revoked connections."
@@ -6904,6 +6934,11 @@ msgstr "{endsLabel} 结束"
 msgid "English"
 msgstr "英语"
 
+#. placeholder {0}: viewer.username
+#: src/routes/supporter.tsx
+msgid "Enjoy your supporter week, {0}."
+msgstr "好好享受你的支持者周，{0}。"
+
 #: src/components/replay/ReplayControls.tsx
 #: src/routes/replay.tsx
 msgid "Enter fullscreen"
@@ -7920,6 +7955,10 @@ msgstr "获取我的链接"
 msgid "Getting the map out of osu!"
 msgstr "从 osu! 里把谱面导出"
 
+#: src/routes/gift.$code.tsx
+msgid "gift"
+msgstr "赠送"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Gift a card"
 msgstr "赠送卡片"
@@ -7927,6 +7966,10 @@ msgstr "赠送卡片"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Gift a card…"
 msgstr "赠送卡片…"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Gift a friend a week of supporter:"
+msgstr "送朋友一周支持者："
 
 #: src/components/packs/GiftSpareDialog.tsx
 #~ msgid "Gift a spare"
@@ -8282,6 +8325,10 @@ msgstr "{hidden} 的回放观看次数比 {shown} 多还是少？"
 #: src/components/me/GoalsPanel.tsx
 msgid "Have <0/> plays worth <1/> or more"
 msgstr "持有 <0/> 个 <1/> 以上的成绩"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Have a gift code?"
+msgstr "有兑换码？"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -9757,6 +9804,7 @@ msgid "Link a private server profile"
 msgstr "关联私服个人资料"
 
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/GiftCodePanel.tsx
 msgid "Link copied"
 msgstr "链接已复制"
 
@@ -10253,6 +10301,14 @@ msgstr "请重新用 osu! 登录后再更新这套皮肤。"
 #: src/components/communities/field-options.tsx
 msgid "Log in with osu! first."
 msgstr "请先用 osu! 登录。"
+
+#: src/routes/gift.$code.tsx
+msgid "Log in with osu! to claim it"
+msgstr "登录 osu! 以领取"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Log in with osu! to claim it."
+msgstr "登录 osu! 以领取。"
 
 #: src/routes/packs.tsx
 msgid "Log in with osu! to open this pack"
@@ -14125,6 +14181,15 @@ msgstr "个人资料数据"
 msgid "Profile theme"
 msgstr ""
 
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+msgid "Profile themes, avatar frames, name styles and card foils are all yours now."
+msgstr "个人主页主题、头像框、名字样式和卡牌闪膜现在都归你了。"
+
+#. placeholder {0}: peek.trialDays
+#: src/routes/gift.$code.tsx
+msgid "Profile themes, avatar frames, name styles and card foils, yours for {0} days."
+msgstr "个人主页主题、头像框、名字样式和卡牌闪膜，{0} 天内都归你。"
+
 #: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "profile top play"
@@ -14788,6 +14853,10 @@ msgstr "红"
 msgid "Red"
 msgstr "红色"
 
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Redeem"
+msgstr "兑换"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "重做（Ctrl+Shift+Z）"
@@ -15414,6 +15483,10 @@ msgstr "圆环"
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "Road to {target} packs"
 #~ msgstr "冲向 {target} 个卡包"
+
+#: src/lib/supporter-profile-themes.ts
+msgid "Roaring knight"
+msgstr ""
 
 #: src/routes/supporter.tsx
 msgid "Roll"
@@ -16258,6 +16331,10 @@ msgstr "设定下一个里程碑"
 #: src/components/me/GoalsPanel.tsx
 msgid "Set this goal again"
 msgstr "再次设定这个目标"
+
+#: src/routes/gift.$code.tsx
+msgid "Set up your look"
+msgstr "设置你的外观"
 
 #: src/components/packs/collections/CommunitySets.tsx
 #~ msgid "sets"
@@ -17146,9 +17223,17 @@ msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID
 #~ msgid "Some skillset practice packs are checked the same way the courses are. Clearing one of their charts at its ladder's bar sets that skill's dan outright, without the four passes a skill normally needs. For example, clearing <0>Volcanic ~ Delta ~</0> sets your 4K speed dan to <1>delta</1>."
 #~ msgstr "有些技能练习包会和课题一样被核对。按对应段位系统的准度线通过其中一张谱面，就能直接定下那个技能的段位，不需要平时要求的四次通过。例如，通过 <0>Volcanic ~ Delta ~</0> 会把你的 4K 速度段位定为 <1>delta</1>。"
 
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Someone already claimed this gift."
+msgstr "这份礼物已被别人领取。"
+
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
 msgstr "有人举报了你的服务器，它已因以下原因被下架{said}"
+
+#: src/routes/gift.$code.tsx
+msgid "Someone sent you a week of supporter"
+msgstr "有人送了你一周的支持者"
 
 #: src/routes/__root.tsx
 msgid "Something broke"
@@ -17746,6 +17831,11 @@ msgstr ""
 msgid "Supporter"
 msgstr "Supporter"
 
+#: src/components/layout/Nav.tsx
+msgid "Supporter perks"
+msgstr "支持者福利"
+
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
 #: src/routes/supporter.tsx
 msgid "Supporter until {until}"
 msgstr "支持者到期：{until}"
@@ -17775,6 +17865,10 @@ msgstr "确定？这张卡片将离开收藏册"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Sure? The five cards are used up"
 #~ msgstr "确定？这五张卡会被用掉"
+
+#: src/components/supporter/loadout.ts
+msgid "Susie's idea"
+msgstr ""
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
@@ -18054,6 +18148,10 @@ msgstr ""
 #: src/routes/supporter.tsx
 msgid "Thank you for supporting, {0}."
 msgstr ""
+
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+msgid "Thank you for supporting, {username}"
+msgstr "感谢你的支持，{username}"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
@@ -19204,6 +19302,10 @@ msgstr "视频在你的设备上生成。导出期间你可以浏览其他页面
 msgid "The vote just closed."
 msgstr "投票刚刚结束。"
 
+#: src/routes/gift.$code.tsx
+msgid "The week is yours."
+msgstr "这一周归你了。"
+
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Their collection"
 #~ msgstr "TA 的收藏册"
@@ -19466,6 +19568,14 @@ msgstr "这个文件有 {size}，上限是 50 MB。"
 #~ msgid "This file looks like more than one known chart, so it is left out of the preview until that is resolved."
 #~ msgstr ""
 
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "This gift code doesn't exist."
+msgstr "这个兑换码不存在。"
+
+#: src/routes/gift.$code.tsx
+msgid "This gift code was already used or doesn't exist."
+msgstr "这个兑换码已被使用或不存在。"
+
 #. placeholder {0}: communityInviteExpiryLabel(inviteCheck.preview.expiresAt)
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "This invite expires on {0}. When it does, your server gets hidden until you paste a new link."
@@ -19498,6 +19608,10 @@ msgstr "这就是它在皮肤页面上的样子。"
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "This is not available yet. Check back soon."
 msgstr "这个功能还不可用。请稍后再来。"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "This is your own gift code. Send the link to a friend."
+msgstr "这是你自己的兑换码，把链接发给朋友吧。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -21034,6 +21148,10 @@ msgstr "三"
 msgid "Wednesdays"
 msgstr "周三"
 
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+msgid "Welcome to supporter, {username}"
+msgstr "欢迎成为支持者，{username}"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或推荐游玩顺序。"
@@ -21274,6 +21392,10 @@ msgstr "以分数取胜，而非 pp"
 #: src/components/layout/ChangelogModal.tsx
 msgid "working on next"
 msgstr "接下来在做的"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Works once, for an account that isn't a supporter and hasn't had a trial."
+msgstr "仅限使用一次，适用于不是支持者且没有试用过的账号。"
 
 #: src/routes/report.tsx
 msgid "Write a reply"
@@ -21535,9 +21657,17 @@ msgstr "你是 {yourPp}pp，而水平相近的玩家平均 {median}pp，所以�
 msgid "You stopped at {streak} in a row."
 msgstr "你在连对 {streak} 次后收手了。"
 
+#: src/routes/gift.$code.tsx
+msgid "You're a supporter until {until}."
+msgstr "你的支持者身份到期：{until}。"
+
 #: src/routes/replay_.community.tsx
 msgid "You're all caught up."
 msgstr "已浏览全部回放。"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You're already a supporter, so this one is better off with a friend."
+msgstr "你已经是支持者了，把它留给朋友吧。"
 
 #. placeholder {0}: nf(reachTargetNum)
 #: src/components/me/GoalsPanel.tsx
@@ -21578,6 +21708,10 @@ msgstr "你现在的总 pp 是 {0}"
 #: src/components/player/SkillBreakdown.tsx
 msgid "You're strongest in <0>{0}</0>"
 msgstr "你最强的是 <0>{0}</0>"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You've already had a supporter week from a gift."
+msgstr "你已经领取过一次赠送的支持者周。"
 
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "your"
@@ -21715,6 +21849,10 @@ msgstr "你的动态渲染图已被关闭。"
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Your first forge"
 #~ msgstr "你的第一次锻造"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "Your gift week was claimed. Your next support brings a new code."
+msgstr "你赠送的一周已被领取。你下次支持时会得到新的兑换码。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your image"
@@ -21862,6 +22000,10 @@ msgstr "你的展示柜"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Your skin"
 msgstr "你的皮肤"
+
+#: src/components/supporter/SupporterWelcomeOverlay.tsx
+msgid "Your support keeps the servers running and gives me the time to keep building the site."
+msgstr "你的支持让服务器继续运行，也让我有时间继续开发这个网站。"
 
 #: src/routes/supporter.tsx
 msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks."

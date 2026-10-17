@@ -9,6 +9,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { LoadoutStage } from "../components/supporter/LoadoutStage";
 import { LoadoutDrawer, LoadoutSlots, type CustomMotif } from "../components/supporter/LoadoutSlots";
 import { DiceIcon } from "../components/supporter/LoadoutIcons";
+import { GiftCodePanel, RedeemGiftCode } from "../components/supporter/GiftCodePanel";
 import { useSettled } from "../components/supporter/use-settled";
 import { useHighwayNotes } from "../components/supporter/use-highway-notes";
 import { mainKeymode, useHighwayChart } from "../components/supporter/use-highway-chart";
@@ -37,6 +38,7 @@ import {
 } from "../lib/live-backend";
 import type { SupporterLook } from "../lib/supporter-card-looks";
 import { profileThemeStyle } from "../lib/supporter-profile-themes";
+import { rememberViewerSupporter } from "../lib/viewer-supporter";
 import {
   fetchSupporterLookState,
   saveSupporterFrameSetting,
@@ -106,6 +108,8 @@ function SupporterPage() {
   const saveChain = useRef<Promise<void>>(Promise.resolve());
   const sliderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reelTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  /* Bumped when a gift code turns the viewer into a supporter, to load the page again as one. */
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (!viewer) return;
@@ -114,6 +118,7 @@ function SupporterPage() {
       .then((next) => {
         if (!alive) return;
         setState(next);
+        rememberViewerSupporter(viewer.id, next.supporter ? next.expiresAt : null);
         saved.current = loadoutOf(next);
         setEquipped(loadoutOf(next));
       })
@@ -124,7 +129,7 @@ function SupporterPage() {
     return () => {
       alive = false;
     };
-  }, [viewer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [viewer?.id, reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => {
     if (sliderTimer.current) clearTimeout(sliderTimer.current);
@@ -349,6 +354,7 @@ function SupporterPage() {
   const onAdjust = useCallback((look: SupporterLook) => latest.current.adjust(look), []);
   const onThemeOptions = useCallback((options: Loadout["themeOptions"]) => latest.current.setThemeOptions(options), []);
 
+  const giftFrom = state?.giftFrom ?? null;
   const until = supporter && state?.expiresAt
     ? new Date(state.expiresAt).toLocaleDateString(i18n.locale, { month: "short", day: "numeric", year: "numeric" })
     : null;
@@ -418,12 +424,18 @@ function SupporterPage() {
             </p>
           ) : (
             <>
-              {state?.supporter ? (
+              {state?.supporter && giftFrom ? (
+                <div className="mb-6">
+                  <p className="text-[22px] font-semibold text-white">{t`Enjoy your supporter week, ${viewer.username}.`}</p>
+                  <p className="mt-1 text-[13px] text-osu-l2">{t`${giftFrom} gave you a week of supporter.`}</p>
+                </div>
+              ) : state?.supporter ? (
                 <div className="mb-6">
                   <p className="text-[22px] font-semibold text-white">{t`Thank you for supporting, ${viewer.username}.`}</p>
                   <p className="mt-1 text-[13px] text-osu-l2">
                     {t`Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks.`}
                   </p>
+                  <GiftCodePanel viewerId={viewer.id} />
                 </div>
               ) : state ? (
                 <div className="mb-6">
@@ -433,6 +445,7 @@ function SupporterPage() {
                   <p className="mt-1 text-[13px] text-osu-f1">
                     {t`Everything here is a preview until you support. Use your osu! username as your Ko-fi name so it counts for you.`}
                   </p>
+                  <RedeemGiftCode viewerId={viewer.id} onClaimed={() => setReload((n) => n + 1)} />
                 </div>
               ) : null}
 

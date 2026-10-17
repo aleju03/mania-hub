@@ -265,6 +265,7 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
       { id: "save-star", label: msg`Save point` },
       { id: "soul-shatter", label: msg`Soul shatter` },
       { id: "hp-bar", label: msg`HP bar` },
+      { id: "susies-idea", label: msg`Susie's idea` },
     ],
   },
   {

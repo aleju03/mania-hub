@@ -91,6 +91,7 @@ import { Route as CompanellaUsageRouteImport } from './routes/companella_.usage'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as DevRecentRatingsPreviewRouteImport } from './routes/dev.recent-ratings-preview'
 import { Route as FarmHelperSplatRouteImport } from './routes/farm-helper/$'
+import { Route as GiftCodeRouteImport } from './routes/gift.$code'
 import { Route as HashiAuthorizeRouteImport } from './routes/hashi_.authorize'
 import { Route as HashiLatestDotjsonRouteImport } from './routes/hashi_.latest[.]json'
 import { Route as NewsCompanellaRouteImport } from './routes/news_.companella'
@@ -544,6 +545,11 @@ const FarmHelperSplatRoute = FarmHelperSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => FarmHelperRoute,
 } as any)
+const GiftCodeRoute = GiftCodeRouteImport.update({
+  id: '/gift/$code',
+  path: '/gift/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HashiAuthorizeRoute = HashiAuthorizeRouteImport.update({
   id: '/hashi_/authorize',
   path: '/hashi/authorize',
@@ -850,6 +856,7 @@ export interface FileRoutesByFullPath {
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
+  '/gift/$code': typeof GiftCodeRoute
   '/hashi/authorize': typeof HashiAuthorizeRoute
   '/hashi/latest.json': typeof HashiLatestDotjsonRoute
   '/news/companella': typeof NewsCompanellaRoute
@@ -975,6 +982,7 @@ export interface FileRoutesByTo {
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
+  '/gift/$code': typeof GiftCodeRoute
   '/hashi/authorize': typeof HashiAuthorizeRoute
   '/hashi/latest.json': typeof HashiLatestDotjsonRoute
   '/news/companella': typeof NewsCompanellaRoute
@@ -1101,6 +1109,7 @@ export interface FileRoutesById {
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
+  '/gift/$code': typeof GiftCodeRoute
   '/hashi_/authorize': typeof HashiAuthorizeRoute
   '/hashi_/latest.json': typeof HashiLatestDotjsonRoute
   '/news_/companella': typeof NewsCompanellaRoute
@@ -1228,6 +1237,7 @@ export interface FileRouteTypes {
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
+    | '/gift/$code'
     | '/hashi/authorize'
     | '/hashi/latest.json'
     | '/news/companella'
@@ -1353,6 +1363,7 @@ export interface FileRouteTypes {
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
+    | '/gift/$code'
     | '/hashi/authorize'
     | '/hashi/latest.json'
     | '/news/companella'
@@ -1478,6 +1489,7 @@ export interface FileRouteTypes {
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
+    | '/gift/$code'
     | '/hashi_/authorize'
     | '/hashi_/latest.json'
     | '/news_/companella'
@@ -1603,6 +1615,7 @@ export interface RootRouteChildren {
   CompanellaUsageRoute: typeof CompanellaUsageRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
   DevRecentRatingsPreviewRoute: typeof DevRecentRatingsPreviewRoute
+  GiftCodeRoute: typeof GiftCodeRoute
   HashiAuthorizeRoute: typeof HashiAuthorizeRoute
   HashiLatestDotjsonRoute: typeof HashiLatestDotjsonRoute
   NewsCompanellaRoute: typeof NewsCompanellaRoute
@@ -2208,6 +2221,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FarmHelperSplatRouteImport
       parentRoute: typeof FarmHelperRoute
     }
+    '/gift/$code': {
+      id: '/gift/$code'
+      path: '/gift/$code'
+      fullPath: '/gift/$code'
+      preLoaderRoute: typeof GiftCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/hashi_/authorize': {
       id: '/hashi_/authorize'
       path: '/hashi/authorize'
@@ -2714,6 +2734,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompanellaUsageRoute: CompanellaUsageRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
   DevRecentRatingsPreviewRoute: DevRecentRatingsPreviewRoute,
+  GiftCodeRoute: GiftCodeRoute,
   HashiAuthorizeRoute: HashiAuthorizeRoute,
   HashiLatestDotjsonRoute: HashiLatestDotjsonRoute,
   NewsCompanellaRoute: NewsCompanellaRoute,

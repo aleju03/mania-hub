@@ -13,6 +13,7 @@ import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { StaleBuildNotice } from "../components/layout/StaleBuildNotice";
 import { GoalToasts } from "../components/me/GoalToasts";
+import { SupporterWelcome } from "../components/supporter/SupporterWelcome";
 import { TrackingToasts } from "../components/me/TrackingToasts";
 import { ReplayExportPanel } from "../components/replay/ReplayExportPanel";
 import { SupportGoalBar } from "../components/layout/SupportGoalBar";
@@ -757,6 +758,7 @@ function RootLayout() {
               </main>
               <GoalToasts />
               <TrackingToasts />
+              <SupporterWelcome />
               <MascotLayer />
             </>
           )}

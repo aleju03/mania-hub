@@ -30,21 +30,23 @@ export interface SupporterLookState {
   /** The theme their whole profile wears, null for the site's own colours. */
   profileTheme: SupporterProfileThemeId | null;
   profileThemeOptions: ProfileThemeOptions;
+  /** Who gave them their current time, when it is a gift code's trial. */
+  giftFrom?: string | null;
 }
 
 const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {} };
 
-async function requireViewer(): Promise<{ userId: number; base: string } | null> {
+async function requireViewer(): Promise<{ userId: number; username: string; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
   const auth = await readCurrentAuth();
   if (!auth.viewer) return null;
   const base = getServerLiveBackendUrl();
   if (!base) return null;
-  return { userId: auth.viewer.id, base };
+  return { userId: auth.viewer.id, username: auth.viewer.username, base };
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; giftFrom?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
@@ -57,6 +59,7 @@ function readState(body: unknown): SupporterLookState {
     nameFont: isSupporterNameFont(raw.nameFont) ? raw.nameFont : null,
     profileTheme: isSupporterProfileTheme(raw.profileTheme) ? raw.profileTheme : null,
     profileThemeOptions: parseProfileThemeOptions(raw.profileThemeOptions),
+    giftFrom: typeof raw.giftFrom === "string" ? raw.giftFrom : null,
   };
 }
 
@@ -170,4 +173,99 @@ export const saveSupporterProfileThemeSetting = createServerFn({ method: "POST" 
     if (response.status === 403) throw new Error("Your supporter time has run out.");
     if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
     return readState(body);
+  });
+
+export interface SupporterWelcomeState {
+  due: boolean;
+  expiresAt: number | null;
+  /** Who gave them their time, when it came from a gift code. */
+  giftFrom: string | null;
+}
+
+/** Whether the viewer is due the site's one-time supporter thank-you, and when their time runs out. */
+export const fetchSupporterWelcome = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SupporterWelcomeState> => {
+    const viewer = await requireViewer();
+    if (!viewer) return { due: false, expiresAt: null, giftFrom: null };
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const response = await fetch(`${viewer.base}/api/supporters/self/welcome?userId=${viewer.userId}`, { headers: bridgeAuthHeaders() });
+    if (!response.ok) return { due: false, expiresAt: null, giftFrom: null };
+    const body = await response.json().catch(() => null) as { due?: unknown; expiresAt?: unknown; giftFrom?: unknown } | null;
+    const expiresAt = typeof body?.expiresAt === "number" && Number.isFinite(body.expiresAt) ? body.expiresAt : null;
+    return { due: body?.due === true && expiresAt !== null, expiresAt, giftFrom: typeof body?.giftFrom === "string" ? body.giftFrom : null };
+  },
+);
+
+export const markSupporterWelcomeSeen = createServerFn({ method: "POST" }).handler(async (): Promise<void> => {
+  const viewer = await requireViewer();
+  if (!viewer) return;
+  await fetch(`${viewer.base}/api/supporters/self/welcome`, {
+    method: "POST",
+    headers: bridgeAuthHeaders(true),
+    body: JSON.stringify({ userId: viewer.userId }),
+  });
+});
+
+/* Gift codes: a paying supporter's one-time code that gives a friend a short
+   trial (backend features/supporter-gifts.ts). */
+
+export interface SupporterGiftState {
+  /** Their unused code, null when they have none right now. */
+  code: string | null;
+  /** The last code of theirs a friend claimed. */
+  lastClaim: { username: string | null; claimedAt: number } | null;
+  trialDays: number;
+}
+
+export type GiftClaimError = "invalid_code" | "already_claimed" | "own_code" | "already_supporter" | "trial_used" | "signed_out" | "failed";
+
+const GIFT_CODE_PATTERN = /^[A-Za-z0-9-]{1,16}$/;
+
+export const fetchSupporterGiftCode = createServerFn({ method: "GET" }).handler(async (): Promise<SupporterGiftState | null> => {
+  const viewer = await requireViewer();
+  if (!viewer) return null;
+  const { setResponseHeader } = await import("@tanstack/react-start/server");
+  setResponseHeader("Cache-Control", "private, no-store");
+  const response = await fetch(`${viewer.base}/api/supporters/self/gift-code?userId=${viewer.userId}`, { headers: bridgeAuthHeaders() });
+  if (!response.ok) return null;
+  const body = await response.json().catch(() => null) as { code?: unknown; lastClaim?: { username?: unknown; claimedAt?: unknown } | null; trialDays?: unknown } | null;
+  return {
+    code: typeof body?.code === "string" ? body.code : null,
+    lastClaim: body?.lastClaim && typeof body.lastClaim.claimedAt === "number"
+      ? { username: typeof body.lastClaim.username === "string" ? body.lastClaim.username : null, claimedAt: body.lastClaim.claimedAt }
+      : null,
+    trialDays: typeof body?.trialDays === "number" ? body.trialDays : 7,
+  };
+});
+
+/** Who a live code is from; null for a code that does not exist or is used. */
+export const peekSupporterGiftCode = createServerFn({ method: "GET" })
+  .validator((data: { code?: unknown }) => ({ code: typeof data?.code === "string" && GIFT_CODE_PATTERN.test(data.code) ? data.code : "" }))
+  .handler(async ({ data }): Promise<{ from: string | null; trialDays: number } | null> => {
+    const base = getServerLiveBackendUrl();
+    if (!base || !data.code) return null;
+    const response = await fetch(`${base}/api/supporters/gift-code/${encodeURIComponent(data.code)}`);
+    if (!response.ok) return null;
+    const body = await response.json().catch(() => null) as { from?: unknown; trialDays?: unknown } | null;
+    return { from: typeof body?.from === "string" ? body.from : null, trialDays: typeof body?.trialDays === "number" ? body.trialDays : 7 };
+  });
+
+export const claimSupporterGiftCode = createServerFn({ method: "POST" })
+  .validator((data: { code?: unknown }) => ({ code: typeof data?.code === "string" && GIFT_CODE_PATTERN.test(data.code) ? data.code : "" }))
+  .handler(async ({ data }): Promise<{ ok: true; expiresAt: number | null; from: string | null } | { ok: false; error: GiftClaimError }> => {
+    const viewer = await requireViewer();
+    if (!viewer) return { ok: false, error: "signed_out" };
+    if (!data.code) return { ok: false, error: "invalid_code" };
+    const response = await fetch(`${viewer.base}/api/supporters/self/gift-code/claim`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, username: viewer.username, code: data.code }),
+    });
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; expiresAt?: unknown; from?: unknown } | null;
+    if (response.ok && body?.ok === true) {
+      return { ok: true, expiresAt: typeof body.expiresAt === "number" ? body.expiresAt : null, from: typeof body.from === "string" ? body.from : null };
+    }
+    const known: GiftClaimError[] = ["invalid_code", "already_claimed", "own_code", "already_supporter", "trial_used"];
+    return { ok: false, error: known.includes(body?.error as GiftClaimError) ? body!.error as GiftClaimError : "failed" };
   });
