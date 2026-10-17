@@ -43,6 +43,12 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-16", text: "Added the osu!lazer and osu!stable results screens to the end of replays.", to: "/replay" },
+  { date: "2026-10-16", text: "Added your global and country rank under the Overall on the Skills tab." },
+  { date: "2026-10-16", text: "Only your best rate play on each chart counts toward dan now, instead of your best two.", to: "/dan-estimates" },
+  { date: "2026-10-16", text: "Adjusted 7K dan so accuracy above 96% counts for more.", to: "/dan-estimates" },
+  { date: "2026-10-16", text: "Updated 7K skillset classification." },
+  { date: "2026-10-16", text: "Updated the Chinese translation to use the terms from the VSRG localization reference.", reference: { text: "VSRG localization reference", href: "https://github.com/inuiyumegan/vsrg-en-to-zh-localization-reference" } },
   { date: "2026-10-13", text: "Added + and - steps to the Dan filter in map search.", to: "/maps", image: { src: "/images/changelog/2026-10-13-map-search-dan-steps.webp", alt: "The Dan filter set from gamma-- to gamma-", width: 465, height: 313 } },
   { date: "2026-10-11", text: "Fixed Recommended maps showing maps you played outside your top 200 as missing.", to: "/recommendations" },
   { date: "2026-10-11", text: "Initial release of the Hashi desktop app.", bold: "Hashi", kind: "new", to: "/hashi" },
