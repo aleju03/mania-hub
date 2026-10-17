@@ -13,6 +13,7 @@ import { fetchLivePackCardGifts, fetchLivePackCardStats, isLiveBackendConfigured
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
+import { sleeveReach } from "../player/maniacard3d/cardSleeve";
 import { CountryFlag } from "../ui/CountryFlag";
 import { renderCardSkeletonThumbnail, renderCardThumbnail } from "./cardSnapshot";
 import { collectedCardRenderData } from "./cardThumbnailCache";
@@ -186,9 +187,12 @@ export function CardSpotlight({
 
   useBodyScrollLock(target != null);
 
-  /* Where the card lands: centered, leaving room for the info block below. */
+  /* Where the card lands: centered, leaving room for the info block below,
+     and for the holder's case around it: the card keeps its size in a case
+     and the case takes the room it needs. */
   const layout = useMemo(() => {
     if (!target || typeof window === "undefined") return null;
+    const reach = ownerSleeve ? sleeveReach(ownerSleeve) : { top: 0, bottom: 0, side: 0 };
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     /* Room under the card for the info block. On a narrow screen the
@@ -197,13 +201,19 @@ export function CardSpotlight({
     const infoHeight = vw < 640 ? 154 : 118;
     const gap = 16;
     const margin = 16;
-    const maxHeight = Math.min(470, vh - infoHeight - gap - margin * 2);
-    const width = Math.min(vw * 0.82, (maxHeight * 5) / 7);
+    const tall = 1 + reach.top + reach.bottom;
+    const maxHeight = Math.min(470, (vh - infoHeight - gap - margin * 2) / tall);
+    const width = Math.min((vw * 0.82) / (1 + (2 * reach.side * 7) / 5), (maxHeight * 5) / 7);
     const height = (width * 7) / 5;
     const left = (vw - width) / 2;
-    const top = Math.max(margin, (vh - (height + gap + infoHeight)) / 2);
-    return { left, top, width, height, infoTop: top + height + gap };
-  }, [target]);
+    const top = Math.max(margin, (vh - (height * tall + gap + infoHeight)) / 2) + reach.top * height;
+    return { left, top, width, height, infoTop: top + height * (1 + reach.bottom) + gap };
+  }, [target, ownerSleeve]);
+
+  // A case arriving after the card mounted moves the card; the canvas follows.
+  useEffect(() => {
+    rendererRef.current?.resize();
+  }, [layout]);
 
   /* Mount the live 3D card once the flight has mostly settled; the texture
      pipeline is heavy enough to stutter the spring if started right away.
@@ -239,6 +249,7 @@ export function CardSpotlight({
           continuousIdle: true,
           // Touch drag still tilts it, but the modal does not follow the gyro.
           gyro: false,
+          sleeveGrows: true,
           onReady: () => {
             if (!cancelled) setCanvasReady(true);
           },

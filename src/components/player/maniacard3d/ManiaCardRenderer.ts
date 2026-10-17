@@ -23,11 +23,11 @@ import {
   type InteractionState,
   type Rotation2D,
 } from "./interactions";
-import { clamp, resolveQualityProfile, type QualityProfile } from "./layout";
+import { CARD_ASPECT, clamp, resolveQualityProfile, type QualityProfile } from "./layout";
 import type { ManiaCardReadyData } from "./types";
 import { supporterFoilIndex, type SupporterFoilId } from "#/lib/supporter-foils";
 import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
-import { buildCardSleeve, sleeveFit, type CardSleeveMeshes } from "./cardSleeve";
+import { buildCardSleeve, sleeveFit, sleeveReach, type CardSleeveMeshes } from "./cardSleeve";
 import { CARD_WORLD_HEIGHT } from "./cardGeometry";
 
 // The canvas extends past the host on every side by this factor so the card can
@@ -56,6 +56,10 @@ export interface ManiaCardRendererOptions {
   // Disables the device-orientation tilt on mobile (pack reveals want a
   // steady card; touch drag still works).
   gyro?: boolean;
+  /* A case grows around the card, which keeps its size, instead of card and
+     case shrinking together into the card's frame. The host must leave room
+     for it (sleeveReach). */
+  sleeveGrows?: boolean;
   onReady?: () => void;
   onError?: (error: unknown) => void;
 }
@@ -152,9 +156,14 @@ export class ManiaCardRenderer {
   private fit = { scale: 1, offsetY: 0 };
   private fitTarget = { scale: 1, offsetY: 0 };
   private sleeveIn = 1;
+  private readonly sleeveGrows: boolean;
+  /* How much larger than the host the canvas is: the tilt's room, and a
+     growing case's. */
+  private overscan = CANVAS_OVERSCAN;
 
   constructor(options: ManiaCardRendererOptions) {
     if (options.startFaceDown) this.introRotationDeg = 180;
+    this.sleeveGrows = options.sleeveGrows ?? false;
     this.host = options.host;
     this.gyroEnabled = options.mobile && options.gyro !== false;
     this.onReady = options.onReady;
@@ -188,9 +197,7 @@ export class ManiaCardRenderer {
     // (not the oversized canvas). Without this the card would appear larger
     // because the canvas covers more world space than the host. The 1.05
     // factor preserves the small breathing-room margin the card had before.
-    const fovRad = (CAMERA_FOV_DEG * Math.PI) / 180;
-    const cameraDistance = (CARD_WORLD_HEIGHT * CANVAS_OVERSCAN * 1.05) / (2 * Math.tan(fovRad / 2));
-    this.camera.position.set(0, 0, cameraDistance);
+    this.placeCamera();
     this.scene.add(new AmbientLight(0xffffff, 1.4));
     this.scene.add(this.group);
     this.scene.add(this.sleeveGroup);
@@ -297,10 +304,22 @@ export class ManiaCardRenderer {
     while (this.sleeveGroup.children.length > 0) this.sleeveGroup.remove(this.sleeveGroup.children[0]!);
     if (!this.sleeve || !this.lastData) {
       this.fitTarget = { scale: 1, offsetY: 0 };
+      this.setOverscan(CANVAS_OVERSCAN);
       return;
     }
     this.sleeveMeshes = buildCardSleeve(this.sleeve, this.lastData);
     this.sleeveGroup.add(this.sleeveMeshes.group);
+    if (this.sleeveGrows) {
+      // The card stays where and how big it was; the canvas widens to show
+      // the case around it, with the same room to tilt as before.
+      const reach = sleeveReach(this.sleeve);
+      const tall = 1 + 2 * Math.max(reach.top, reach.bottom);
+      const wide = 1 + (2 * reach.side) / CARD_ASPECT;
+      this.fitTarget = { scale: 1, offsetY: 0 };
+      this.setOverscan(Math.max(tall, wide) * CANVAS_OVERSCAN);
+      this.sleeveIn = 0;
+      return;
+    }
     // Card and case shrink together so the case fills the frame the card did,
     // and both shift so the case, not the card, sits in the middle. The case
     // drops on from a little larger.
@@ -404,11 +423,26 @@ export class ManiaCardRenderer {
     this.start();
   }
 
+  /* Pulls the camera back in step with the canvas, so the card keeps the
+     same apparent size whatever the overscan. */
+  private placeCamera() {
+    const fovRad = (CAMERA_FOV_DEG * Math.PI) / 180;
+    const cameraDistance = (CARD_WORLD_HEIGHT * this.overscan * 1.05) / (2 * Math.tan(fovRad / 2));
+    this.camera.position.set(0, 0, cameraDistance);
+  }
+
+  private setOverscan(overscan: number) {
+    if (Math.abs(overscan - this.overscan) < 0.001) return;
+    this.overscan = overscan;
+    this.applyCanvasSize();
+    this.placeCamera();
+  }
+
   private applyCanvasSize() {
     const hostWidth = Math.max(1, this.host.clientWidth);
     const hostHeight = Math.max(1, this.host.clientHeight);
-    const canvasHeight = Math.max(1, Math.round(hostHeight * CANVAS_OVERSCAN));
-    const canvasWidth = this.clampCanvasWidth(Math.round(hostWidth * CANVAS_OVERSCAN));
+    const canvasHeight = Math.max(1, Math.round(hostHeight * this.overscan));
+    const canvasWidth = this.clampCanvasWidth(Math.round(hostWidth * this.overscan));
     this.renderer.setSize(canvasWidth, canvasHeight);
     this.camera.aspect = canvasWidth / canvasHeight;
     this.camera.updateProjectionMatrix();

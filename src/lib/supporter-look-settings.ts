@@ -7,7 +7,7 @@ import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-
 import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
 import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
-import { NO_PACK_STYLE, parsePackStyle, SUPPORTER_BINDERS, SUPPORTER_CARD_SLEEVES, SUPPORTER_WRAPPERS, type SupporterPackStyle } from "./supporter-pack-style";
+import { NO_PACK_STYLE, parsePackStyle, SUPPORTER_BINDERS, SUPPORTER_BLADES, SUPPORTER_CARD_SLEEVES, SUPPORTER_WRAPPERS, type SupporterPackStyle } from "./supporter-pack-style";
 import { isProfileStatId, parseProfileStats, PROFILE_STAT_SLOTS, type ProfileStatId } from "./profile-stats";
 
 // Server functions behind the /supporter page: the viewer's supporter status
@@ -185,7 +185,7 @@ export const saveSupporterPackStyleSetting = createServerFn({ method: "POST" })
   .validator((data: { packStyle?: unknown }) => {
     const style = parsePackStyle(data?.packStyle);
     const raw = (data?.packStyle ?? {}) as Record<string, unknown>;
-    const lists = { sleeve: SUPPORTER_CARD_SLEEVES, binder: SUPPORTER_BINDERS, wrapper: SUPPORTER_WRAPPERS } as const;
+    const lists = { sleeve: SUPPORTER_CARD_SLEEVES, binder: SUPPORTER_BINDERS, wrapper: SUPPORTER_WRAPPERS, blade: SUPPORTER_BLADES } as const;
     for (const key of Object.keys(lists) as (keyof typeof lists)[]) {
       if (raw[key] != null && style[key] === null) throw new Error("Pick from the list.");
     }

@@ -10,6 +10,9 @@ import { SupporterStyledName } from "./SupporterNameStyle";
 import { FoilPreview } from "./FoilPreview";
 import { GiftTicket3D } from "./GiftTicket3D";
 import { BinderBook, FoilCard, FrameThumb, SleeveCard, wrapperThumb } from "./LoadoutSlots";
+import { BladeSwatch } from "../packs/BladeSwatch";
+import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
+import { bladeLook } from "../packs/packBlades";
 import { FRAME_NAMES, MOTIF_LABELS } from "./loadout";
 import { formatGiftCode } from "./GiftCodePanel";
 import { Stagger, StaggerItem, useNearView } from "./SupportMotion";
@@ -33,6 +36,8 @@ import {
   SUPPORTER_CARD_SLEEVES,
   SUPPORTER_WRAPPER_LABELS,
   SUPPORTER_WRAPPERS,
+  SUPPORTER_BLADE_LABELS,
+  SUPPORTER_BLADES,
 } from "../../lib/supporter-pack-style";
 import type { ProfileStatsData } from "../../lib/profile-stats";
 import type { SupporterLook } from "../../lib/supporter-card-looks";
@@ -429,7 +434,7 @@ export function PacksShowcase() {
   const heading = "mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-osu-f1";
   const label = "mt-1.5 truncate text-center text-[11px] text-osu-l2";
   return (
-    <div className="grid gap-6 md:grid-cols-3">
+    <div className="grid gap-6 md:grid-cols-2">
       <div className={group}>
         <div className={heading}>{t`Cases`}</div>
         <Stagger className="grid grid-cols-4 gap-2">
@@ -463,6 +468,20 @@ export function PacksShowcase() {
                 <div className="mx-auto h-[84px] w-[50px] rounded-[3px] bg-osu-b6" />
               )}
               <div className={label}>{i18n._(SUPPORTER_WRAPPER_LABELS[id])}</div>
+            </StaggerItem>
+          ))}
+        </Stagger>
+      </div>
+      <div className={group}>
+        <div className={heading}>{t`Openings`}</div>
+        <Stagger className="grid grid-cols-4 gap-2">
+          {SUPPORTER_BLADES.map((id) => (
+            <StaggerItem key={id}>
+              {/* a tap plays how the pack gives */}
+              <button type="button" onPointerEnter={() => warmBladeSounds(bladeLook(id).sound)} onClick={() => playBladeRip(id, bladeLook(id).sound)} className="block w-full cursor-pointer" aria-label={i18n._(SUPPORTER_BLADE_LABELS[id])}>
+                <BladeSwatch blade={id} live className="h-[84px] w-full rounded-md bg-osu-b6" />
+              </button>
+              <div className={label}>{i18n._(SUPPORTER_BLADE_LABELS[id])}</div>
             </StaggerItem>
           ))}
         </Stagger>

@@ -7,9 +7,9 @@ import { DEFAULT_SUPPORTER_FOIL, SUPPORTER_FOILS, type SupporterFoilId } from ".
 import { SUPPORTER_NAME_FONTS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { SUPPORTER_NAME_STYLES, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SUPPORTER_PROFILE_THEMES, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
-import { SUPPORTER_BINDERS, SUPPORTER_CARD_SLEEVES, SUPPORTER_WRAPPERS, type SupporterPackStyle } from "../../lib/supporter-pack-style";
+import { SUPPORTER_BINDERS, SUPPORTER_BLADES, SUPPORTER_CARD_SLEEVES, SUPPORTER_WRAPPERS, type SupporterPackStyle } from "../../lib/supporter-pack-style";
 
-/* The /supporter loadout: everything a supporter wears as nine slots, what
+/* The /supporter loadout: everything a supporter wears as ten slots, what
    each slot can hold, and how the page reads, swaps and rolls one slot of a
    loadout. Card art and card foil are two slots over one stored look. */
 
@@ -21,16 +21,16 @@ export interface Loadout {
   nameStyle: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
   look: SupporterLook;
-  /** Packs cosmetics: card case, binder and pack wrapper. */
+  /** Packs cosmetics: card case, binder, pack wrapper and opening blade. */
   pack: SupporterPackStyle;
 }
 
-export type SlotId = "theme" | "frame" | "nameStyle" | "nameFont" | "motif" | "foil" | "sleeve" | "binder" | "wrapper";
+export type SlotId = "theme" | "frame" | "nameStyle" | "nameFont" | "motif" | "foil" | "sleeve" | "binder" | "wrapper" | "blade";
 
-export const SLOT_IDS: readonly SlotId[] = ["theme", "frame", "nameStyle", "nameFont", "foil", "motif", "sleeve", "binder", "wrapper"];
+export const SLOT_IDS: readonly SlotId[] = ["theme", "frame", "nameStyle", "nameFont", "foil", "motif", "sleeve", "binder", "wrapper", "blade"];
 
 /* The slots that dress the viewer's packs, drawn as their own group. */
-export const PACK_SLOT_IDS: readonly SlotId[] = ["sleeve", "binder", "wrapper"];
+export const PACK_SLOT_IDS: readonly SlotId[] = ["sleeve", "binder", "wrapper", "blade"];
 
 export const SLOT_LABELS: Record<SlotId, MessageDescriptor> = {
   theme: msg`Profile theme`,
@@ -42,6 +42,7 @@ export const SLOT_LABELS: Record<SlotId, MessageDescriptor> = {
   sleeve: msg`Card sleeve`,
   binder: msg`Binder`,
   wrapper: msg`Pack wrapper`,
+  blade: msg`Pack opening`,
 };
 
 export type SlotValue = string | null;
@@ -51,7 +52,7 @@ export const DEFAULT_LOOK: SupporterLook = { motif: DEFAULT_SUPPORTER_MOTIF, foi
 export function slotValue(loadout: Loadout, slot: SlotId): SlotValue {
   if (slot === "motif") return loadout.look.motif === "none" ? null : loadout.look.motif;
   if (slot === "foil") return loadout.look.foil === "none" ? null : loadout.look.foil;
-  if (slot === "sleeve" || slot === "binder" || slot === "wrapper") return loadout.pack[slot];
+  if (slot === "sleeve" || slot === "binder" || slot === "wrapper" || slot === "blade") return loadout.pack[slot];
   return loadout[slot];
 }
 
@@ -63,7 +64,7 @@ export function withSlot(loadout: Loadout, slot: SlotId, value: SlotValue, custo
     return { ...loadout, look: { motif: value as SupporterMotifId, foil: loadout.look.foil } };
   }
   if (slot === "foil") return { ...loadout, look: { ...loadout.look, foil: value === null ? "none" : value as SupporterFoilId } };
-  if (slot === "sleeve" || slot === "binder" || slot === "wrapper") return { ...loadout, pack: { ...loadout.pack, [slot]: value } as SupporterPackStyle };
+  if (slot === "sleeve" || slot === "binder" || slot === "wrapper" || slot === "blade") return { ...loadout, pack: { ...loadout.pack, [slot]: value } as SupporterPackStyle };
   return { ...loadout, [slot]: value } as Loadout;
 }
 
@@ -79,6 +80,7 @@ const ROLL_POOLS: Record<SlotId, readonly SlotValue[]> = {
   sleeve: SUPPORTER_CARD_SLEEVES,
   binder: SUPPORTER_BINDERS,
   wrapper: SUPPORTER_WRAPPERS,
+  blade: SUPPORTER_BLADES,
 };
 
 export function randomSlotValue(slot: SlotId, not?: SlotValue): SlotValue {
@@ -99,7 +101,8 @@ export const LOADOUT_COMBINATIONS =
   * (SUPPORTER_MOTIFS.length + 1)
   * (SUPPORTER_CARD_SLEEVES.length + 1)
   * (SUPPORTER_BINDERS.length + 1)
-  * (SUPPORTER_WRAPPERS.length + 1);
+  * (SUPPORTER_WRAPPERS.length + 1)
+  * (SUPPORTER_BLADES.length + 1);
 
 export function sameLook(a: SupporterLook, b: SupporterLook): boolean {
   return a.motif === b.motif && a.foil === b.foil && a.url === b.url && a.scale === b.scale && a.opacity === b.opacity;

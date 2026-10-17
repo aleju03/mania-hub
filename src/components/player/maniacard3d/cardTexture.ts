@@ -6,6 +6,7 @@ import type { ManiaCardReadyData } from "./types";
 import { cardMotifImageSrc, motifCopyOpacity, type CardMotif } from "#/lib/card-motif";
 import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilDataUrl } from "#/lib/supporter-foil-art";
 import { supporterMotifPathForUrl } from "#/lib/supporter-motif-art";
+import { isCustomMotifUrl } from "#/lib/supporter-card-looks";
 import { getCosmicTierPalette as cosmicPaletteFor, motifKeepsStarfield } from "#/lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
@@ -174,8 +175,12 @@ export async function createCardTextures(
      Under the shader it gets a layer of its own instead: the front is split
      into its background and a clear canvas with everything printed on it, and
      the renderer floats the picture, in its own paint, between the two. */
-  const paintedMotif = data.motif !== null && data.motif !== undefined && supporterMotifPathForUrl(data.motif.url) !== null;
-  const layered = options.driftingMotif === true && paintedMotif && motif !== null;
+  /* A supporter's own image is one picture behind the card (drawSingleMotif),
+     printed into the front and still: a photo cut into drifting copies reads
+     as a scatter of squares. */
+  const singleMotif = !!data.motif && isCustomMotifUrl(data.motif.url);
+  const paintedMotif = data.motif !== null && data.motif !== undefined && (singleMotif || supporterMotifPathForUrl(data.motif.url) !== null);
+  const layered = options.driftingMotif === true && paintedMotif && !singleMotif && motif !== null;
   const contentCanvas = layered ? createCanvas(textureScale) : null;
   if (contentCanvas) {
     const content = getContext(contentCanvas);
@@ -183,7 +188,7 @@ export async function createCardTextures(
     drawFront(front, data, layout, avatar, laurel, motif, true, teamCover, foil, "background");
     drawFront(content, data, layout, avatar, laurel, motif, true, teamCover, foil, "content");
   } else {
-    drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true, teamCover, foil);
+    drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true && !singleMotif, teamCover, foil);
   }
   if (!options.frontOnly) drawBack(back, data, layout, laurel);
 
@@ -1231,7 +1236,25 @@ const MOTIF_JITTER = 0.78;
 const MOTIF_BASE_SIZE = 86;
 const MOTIF_SIZE_SPREAD = 54;
 
+/* A supporter's own image: once, centred, covering the card at size 1 and
+   zoomed in or out from there, at the strength they set. */
+function drawSingleMotif(context: CanvasRenderingContext2D, motif: CardMotif, image: HTMLImageElement) {
+  const naturalWidth = image.naturalWidth || image.width || 1;
+  const naturalHeight = image.naturalHeight || image.height || 1;
+  const fit = Math.max(CARD_TEXTURE_WIDTH / naturalWidth, CARD_TEXTURE_HEIGHT / naturalHeight) * motif.scale;
+  const width = naturalWidth * fit;
+  const height = naturalHeight * fit;
+  context.save();
+  context.globalAlpha = Math.min(1, motif.opacity);
+  context.drawImage(image, (CARD_TEXTURE_WIDTH - width) / 2, (CARD_TEXTURE_HEIGHT - height) / 2, width, height);
+  context.restore();
+}
+
 function drawMotifPattern(context: CanvasRenderingContext2D, motif: CardMotif, image: HTMLImageElement) {
+  if (isCustomMotifUrl(motif.url)) {
+    drawSingleMotif(context, motif, image);
+    return;
+  }
   const naturalWidth = image.naturalWidth || image.width || 1;
   const naturalHeight = image.naturalHeight || image.height || 1;
   const aspect = naturalWidth / naturalHeight;

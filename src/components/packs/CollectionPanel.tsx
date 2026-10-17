@@ -1840,7 +1840,9 @@ export function CollectionPanel({
                 total={filteredTotal}
                 onPageChange={(page) => {
                   setCollectionPage(page);
-                  collectionControlsRef.current?.scrollIntoView({ block: "start" });
+                  // A binder turns its page in place and keeps its size, so
+                  // the reader stays by the pager to turn the next one.
+                  if (!binder) collectionControlsRef.current?.scrollIntoView({ block: "start" });
                 }}
               />
             </div>

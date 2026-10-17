@@ -74,7 +74,7 @@ const PERKS: { title: MessageDescriptor; body: MessageDescriptor }[] = [
   { title: msg`Avatar frame`, body: msg`A frame around your avatar on your profile.` },
   { title: msg`Name style and font`, body: msg`Your name in its own style and font, on your profile and in every list it shows up in.` },
   { title: msg`Card foil and art`, body: msg`The light and the art on every copy of your card in packs, or an image of your own.` },
-  { title: msg`Packs cosmetics`, body: msg`Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper.` },
+  { title: msg`Packs cosmetics`, body: msg`Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, print your packs on your own wrapper, and open them with your own blade.` },
   { title: msg`Profile stats`, body: msg`Swap the four cards under your profile for your ratio, rice / LN split, longest streak or percentile.` },
   { title: msg`Video share links`, body: msg`After exporting a replay video, get a link that plays it right in Discord chat. Links last 24 hours.` },
   { title: msg`A week for a friend`, body: msg`A one-time code that gives someone else a week of supporter.` },

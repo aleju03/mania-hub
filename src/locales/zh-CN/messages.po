@@ -2785,6 +2785,10 @@ msgstr "狙击是指你在某张图上的新最佳成绩超过了原本排在你
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
 
+#: src/components/supporter/TestPack.tsx
+msgid "A test pack: nothing is spent, open as many as you like."
+msgstr "测试卡包：不消耗任何东西，想开几次都行。"
+
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
 msgid "A week for a friend"
@@ -3125,6 +3129,10 @@ msgstr "正在加入…"
 #: src/routes/report.tsx
 #~ msgid "Additional information you sent"
 #~ msgstr "你发送的补充信息"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Adjust your image"
+msgstr "调整你的图片"
 
 #. placeholder {0}: (vibroAnalysis.excludedDurationMs / 1000).toFixed(1)
 #: src/components/maps/MapDetailModal.tsx
@@ -4346,6 +4354,7 @@ msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
 #: src/components/settings/TranslationReportForm.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
+#: src/components/supporter/CustomArtDialog.tsx
 #: src/routes/report.tsx
 msgid "Cancel"
 msgstr "取消"
@@ -7086,6 +7095,7 @@ msgid "Elite"
 msgstr "精英"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 msgid "Ember"
 msgstr "余烬"
 
@@ -8951,6 +8961,10 @@ msgstr "推荐是如何生成的"
 msgid "How to pick"
 msgstr "抽取方式"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "How your packs open: the slash you cut them with, its sparks and its sound, and what the pack does as it gives."
+msgstr "你的卡包怎么开：划开它的刀光、火花和声音，以及卡包裂开时的效果。"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "HP"
 msgstr "HP"
@@ -9411,6 +9425,10 @@ msgstr "它可能已被下架，或者还在等待审核。"
 msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 msgstr "它通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
 
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "It sits behind everything printed on your card, on every copy of it."
+msgstr "它位于卡牌上所有印刷内容的后面，每一张副本都有。"
+
 #: src/routes/hashi.tsx
 msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
 msgstr "它常驻在系统托盘，几乎不占 CPU，在 Windows 上大约只用 3 MB 内存。"
@@ -9583,6 +9601,10 @@ msgstr "刚刚"
 msgid "Kappa signal"
 msgstr ""
 
+#: src/lib/supporter-pack-style.ts
+msgid "Katana"
+msgstr "武士刀"
+
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/routes/supporter.tsx
 msgid "Keep"
@@ -9601,16 +9623,24 @@ msgid "Keep my plays"
 msgstr "保留我的成绩"
 
 #: src/routes/support.tsx
-msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper."
-msgstr "把你拥有的卡片放进 3D 卡套，用卡册页面展示你的收藏，开启印着你专属包装的卡包。"
+msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
+msgstr "把你拥有的卡片放进 3D 卡套，用卡册页面展示你的收藏，开启印着你专属包装的卡包，配上你自己的刀光、火花和声音。"
+
+#: src/routes/support.tsx
+#~ msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper."
+#~ msgstr "把你拥有的卡片放进 3D 卡套，用卡册页面展示你的收藏，开启印着你专属包装的卡包。"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
 #~ msgstr "保留"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper."
-msgstr "把卡牌放进 3D 卡壳（硬卡套、磁吸卡砖或评级盒），把收藏展示成卡册内页，并用你自己的包装印制卡包。"
+#~ msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper."
+#~ msgstr "把卡牌放进 3D 卡壳（硬卡套、磁吸卡砖或评级盒），把收藏展示成卡册内页，并用你自己的包装印制卡包。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, print your packs on your own wrapper, and open them with your own blade."
+msgstr "把卡牌放进 3D 卡壳（硬卡套、磁吸卡砖或评级盒），把收藏展示成卡册内页，用你自己的包装印制卡包，再用你自己的刀锋开包。"
 
 #: src/lib/replay-export/errors.ts
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
@@ -10026,6 +10056,10 @@ msgstr "灯光"
 #: src/components/supporter/loadout.ts
 msgid "Light wings"
 msgstr ""
+
+#: src/lib/supporter-pack-style.ts
+msgid "Lightning"
+msgstr "闪电"
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
@@ -11550,8 +11584,9 @@ msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "需要一个指向其 osu! 主页的 web.archive.org 链接。"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 msgid "Neon"
-msgstr ""
+msgstr "霓虹"
 
 #: src/components/supporter/loadout.ts
 msgid "Neon ears"
@@ -11745,6 +11780,7 @@ msgstr "下一个免费卡包"
 #~ msgstr "下一包：有 {chance}% 的几率开出其中一张"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next page"
 msgstr "下一页"
@@ -13310,6 +13346,10 @@ msgstr "正在打开剩下的…"
 msgid "Opening..."
 msgstr "正在打开…"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Openings"
+msgstr "开包特效"
+
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Opens packs without the shuffle and flip animations"
 #~ msgstr ""
@@ -13575,6 +13615,10 @@ msgstr "所有者"
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Pack open"
 #~ msgstr "开包"
+
+#: src/components/supporter/loadout.ts
+msgid "Pack opening"
+msgstr "开包特效"
 
 #. placeholder {0}: new Date(pausedUntil).toLocaleString(intlLocaleTag(i18n.locale as AppLocale), { dateStyle: "long", timeStyle: "short" })
 #: src/routes/packs.tsx
@@ -14482,6 +14526,7 @@ msgid "Previous collection page"
 msgstr "收藏册上一页"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Previous page"
 msgstr "上一页"
@@ -14668,6 +14713,10 @@ msgstr "紫"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Purple"
 msgstr "紫色"
+
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "Put it on my card"
+msgstr "放到我的卡牌上"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
@@ -17347,7 +17396,7 @@ msgstr "大小"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
-#: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/CustomArtDialog.tsx
 msgid "Size"
 msgstr "大小"
 
@@ -17917,6 +17966,10 @@ msgid "Standard"
 msgstr "标准"
 
 #: src/components/supporter/LoadoutSlots.tsx
+msgid "Standard blade"
+msgstr "标准刀锋"
+
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Standard foil"
 msgstr "标准箔"
 
@@ -18173,7 +18226,7 @@ msgstr "被双押打断的切换。"
 msgid "Streams thickened with three-note hand chords."
 msgstr "加入三押的切换。"
 
-#: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/CustomArtDialog.tsx
 msgid "Strength"
 msgstr "强度"
 
@@ -21162,6 +21215,10 @@ msgstr "正在上传新的皮肤文件，{size} 中的 {done}。"
 msgid "Uploading the skin file, {sentSize} of {totalSize}."
 msgstr "正在上传皮肤文件，{sentSize} / {totalSize}。"
 
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "Uploading..."
+msgstr "上传中..."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Upscroll"
@@ -21960,6 +22017,10 @@ msgstr "不使用 Mod"
 msgid "within a minute"
 msgstr "一分钟内"
 
+#: src/components/supporter/TestBinder.tsx
+msgid "Without a binder, your collection shows as the usual grid."
+msgstr "不用卡册时，你的收藏按平常的网格显示。"
+
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
 msgstr "以分数取胜，而非 pp"
@@ -22446,6 +22507,7 @@ msgstr "你的动态渲染图已被关闭。"
 msgid "Your gift week was claimed. Your next support brings a new code."
 msgstr "你赠送的一周已被领取。你下次支持时会得到新的兑换码。"
 
+#: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your image"
 msgstr "你的图片"
@@ -22667,3 +22729,7 @@ msgstr "YouTube 视频"
 #: src/components/supporter/SupporterFramePicker.tsx
 #~ msgid "Zenith orbit"
 #~ msgstr ""
+
+#: src/lib/supporter-pack-style.ts
+msgid "Zip binder"
+msgstr "拉链卡册"

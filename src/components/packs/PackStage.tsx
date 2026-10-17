@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import type { SupporterWrapperId } from "#/lib/supporter-pack-style";
+import type { SupporterBladeId, SupporterWrapperId } from "#/lib/supporter-pack-style";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Trans } from "@lingui/react/macro";
 import { packDamageFromCut, type PackDamage } from "#/lib/pack-damage";
@@ -19,7 +19,9 @@ import {
   PACK_TEAR_FRACTION,
 } from "./packArt";
 import { createPackScene, type PackScene } from "./packScene";
-import { playCardSlice, playPackRip, playSlashTick } from "./packSfx";
+import { BladeFx, preloadSprites } from "./bladeFx";
+import { bladeLook, bladeTrailLife, drawBladeTrail } from "./packBlades";
+import { playBladeCut, playBladeRip, playBladeTick, playCardSlice, warmBladeSounds } from "./packSfx";
 
 // The cut is tracked in vertical columns; each cut column remembers the y
 // (as a fraction of pack height) where the blade crossed it, so the tear
@@ -62,9 +64,9 @@ const DEEP_STRIP_MARGIN = 0.05;
 // Kept small: the opening reads through the real hole in the front shell,
 // not through a huge flap.
 const MAX_LIFT_FRACTION = 0.02;
-// Blade trail: how long a trail point lives and how many are kept. Short
-// lifetimes make the streak chase the cursor instead of trailing a rope.
-const TRAIL_LIFE_MS = 220;
+// Blade trail: how many points are kept (how long each lives is the blade's,
+// packBlades.ts). Short lifetimes make the streak chase the cursor instead of
+// trailing a rope.
 const TRAIL_MAX_POINTS = 36;
 // A fixed full-viewport canvas at native mobile/retina DPR can exceed 30m
 // pixels. The blade is a soft, short-lived effect, so keep its backing store
@@ -73,18 +75,11 @@ const TRAIL_PIXEL_BUDGET = 2_500_000;
 const TRAIL_MAX_SCALE = 1.5;
 const TRAIL_MIN_SCALE = 0.5;
 
-interface SlashSpark {
-  id: number;
-  x: number;
-  y: number;
-  angle: number;
-  distance: number;
-  size: number;
-}
-
 interface PackStageProps {
   /* The viewer's own wrapper (a supporter's pick): the pack is printed on it. */
   wrapper?: SupporterWrapperId | null;
+  /* The viewer's own blade (a supporter's pick): its streak, sparks and sounds. */
+  blade?: SupporterBladeId | null;
   /* Damage is non-null when the blade went through the pack's middle: the
      cards inside were cut, and the page has to deal a ruined hand. */
   onOpened: (damage: PackDamage | null) => void;
@@ -113,7 +108,7 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, controls, wrapper = null }: PackStageProps) {
+export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, controls, wrapper = null, blade = null }: PackStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
   // The blade effect below subscribes once ([] deps), so it reads the latest
@@ -149,7 +144,19 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   // The blade is below the seam and the cards are taking it; the caption says
   // so while there is still time to stop.
   const [slicing, setSlicing] = useState(false);
-  const [sparks, setSparks] = useState<SlashSpark[]>([]);
+  // Read by handlers that subscribe once.
+  const bladeRef = useRef(blade);
+  bladeRef.current = blade;
+  /* The blade's sparks, flames and bursts, drawn on the trail canvas. */
+  const fxRef = useRef<BladeFx | null>(null);
+  fxRef.current ??= new BladeFx();
+  // Travel since the stroke last threw something off (packBlades trailEvery).
+  const trailTravelRef = useRef(0);
+  useEffect(() => {
+    const look = bladeLook(blade);
+    preloadSprites(look.sprites);
+    warmBladeSounds(look.sound);
+  }, [blade]);
 
   const slashRef = useRef<{
     lastX: number;
@@ -169,7 +176,6 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   useEffect(() => () => {
     if (openedTimerRef.current !== null) window.clearTimeout(openedTimerRef.current);
   }, []);
-  const sparkIdRef = useRef(0);
   // Cut y per column as a height fraction; NaN = column not cut yet.
   const binsRef = useRef<Float32Array>(new Float32Array(BIN_COUNT).fill(Number.NaN));
   // Display-smoothed cut y per column.
@@ -508,50 +514,17 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       ctx.clearRect(0, 0, vw, vh);
 
       const now = performance.now();
-      let points = trailPointsRef.current.filter((point) => now - point.t < TRAIL_LIFE_MS);
+      const look = bladeLook(bladeRef.current);
+      const life = bladeTrailLife(look);
+      let points = trailPointsRef.current.filter((point) => now - point.t < life);
       if (points.length > TRAIL_MAX_POINTS) points = points.slice(-TRAIL_MAX_POINTS);
       trailPointsRef.current = points;
+      // The tip shows while holding, so the blade exists even when the hand pauses.
+      drawBladeTrail(ctx, look, points, now, trailHeldRef.current ? trailCursorRef.current : null);
+      const fx = fxRef.current;
+      fx?.draw(ctx, vw, vh);
 
-      if (points.length >= 2) {
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        // Glow pass under a bright core, both tapering toward the tail.
-        for (let pass = 0; pass < 2; pass += 1) {
-          for (let i = 1; i < points.length; i += 1) {
-            const taper = i / (points.length - 1);
-            const fade = Math.max(0, 1 - (now - points[i].t) / TRAIL_LIFE_MS);
-            const alpha = taper * fade;
-            if (alpha <= 0.01) continue;
-            ctx.beginPath();
-            ctx.moveTo(points[i - 1].x, points[i - 1].y);
-            ctx.lineTo(points[i].x, points[i].y);
-            if (pass === 0) {
-              ctx.lineWidth = 3 + 11 * taper;
-              ctx.strokeStyle = `rgba(167, 139, 250, ${(alpha * 0.45).toFixed(3)})`;
-            } else {
-              ctx.lineWidth = 1 + 6.5 * taper;
-              ctx.strokeStyle = `rgba(255, 255, 255, ${(alpha * 0.9).toFixed(3)})`;
-            }
-            ctx.stroke();
-          }
-        }
-      }
-
-      // Soft tip at the cursor while holding, so the blade exists even when
-      // the hand pauses.
-      if (trailHeldRef.current && trailCursorRef.current) {
-        const tip = trailCursorRef.current;
-        ctx.beginPath();
-        ctx.arc(tip.x, tip.y, 4.5, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(167, 139, 250, 0.4)";
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(tip.x, tip.y, 2.2, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-        ctx.fill();
-      }
-
-      if (trailHeldRef.current || trailPointsRef.current.length > 0) {
+      if (trailHeldRef.current || trailPointsRef.current.length > 0 || fx?.alive) {
         trailRafRef.current = requestAnimationFrame(step);
       }
     };
@@ -573,8 +546,19 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     };
     const onMove = (event: PointerEvent) => {
       if (!trailHeldRef.current) return;
+      const before = trailCursorRef.current;
       trailCursorRef.current = { x: event.clientX, y: event.clientY };
       trailPointsRef.current.push({ x: event.clientX, y: event.clientY, t: performance.now() });
+      const look = bladeLook(bladeRef.current);
+      if (look.trail && look.trailEvery && before && fxRef.current) {
+        const dx = event.clientX - before.x;
+        const dy = event.clientY - before.y;
+        trailTravelRef.current += Math.hypot(dx, dy);
+        while (trailTravelRef.current >= look.trailEvery) {
+          trailTravelRef.current -= look.trailEvery;
+          look.trail(fxRef.current, event.clientX, event.clientY, dx, dy, 1);
+        }
+      }
     };
     const onUp = () => {
       trailHeldRef.current = false;
@@ -596,11 +580,6 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     };
   }, [reducedMotion]);
 
-  useEffect(() => {
-    if (sparks.length === 0) return;
-    const timer = window.setTimeout(() => setSparks([]), 700);
-    return () => window.clearTimeout(timer);
-  }, [sparks]);
 
   const fillUncutBins = () => {
     const bins = binsRef.current;
@@ -712,7 +691,8 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     const damage = readDamage();
     onCutRef.current?.();
     if (damage) playCardSlice();
-    else playPackRip();
+    else playBladeRip(bladeRef.current, bladeLook(bladeRef.current).sound);
+    spawnBurst(damage ? 0.55 : 0.16);
     slashRef.current = null;
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
@@ -765,7 +745,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     }
     if (changed) {
       recomputeCutFields();
-      playSlashTick(cutCountRef.current / BIN_COUNT);
+      playBladeTick(bladeRef.current, cutCountRef.current / BIN_COUNT, bladeLook(bladeRef.current).sound);
       /* The moment enough of the blade is through the body to have reached
          the cards. Said out loud once, while the pack could still be dropped
          and the rest of the cut abandoned. */
@@ -778,22 +758,28 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   };
 
   const spawnSparks = (x: number, y: number) => {
-    if (reducedMotion) return;
-    setSparks((current) => {
-      const next = current.slice(-26);
-      for (let index = 0; index < 3; index += 1) {
-        sparkIdRef.current += 1;
-        next.push({
-          id: sparkIdRef.current,
-          x,
-          y,
-          angle: -Math.PI / 2 + (Math.random() - 0.5) * 1.8,
-          distance: 26 + Math.random() * 54,
-          size: 3 + Math.random() * 5,
-        });
-      }
-      return next;
-    });
+    if (reducedMotion || !fxRef.current) return;
+    bladeLook(bladeRef.current).cut(fxRef.current, x, y, 1);
+    ensureTrailLoop();
+  };
+
+  /* The pack giving: the blade's own burst along the cut, and a shake. The
+     standard blade gives with the rip alone. */
+  const spawnBurst = (cutY: number) => {
+    const look = bladeLook(bladeRef.current);
+    if (reducedMotionRef.current || !look.rip || !fxRef.current) return;
+    const pack = packRef.current;
+    const rect = pack?.getBoundingClientRect();
+    if (!pack || !rect) return;
+    look.rip(fxRef.current, rect, rect.top + rect.height * cutY, 1);
+    ensureTrailLoop();
+    if (look.shake) {
+      const k = look.shake;
+      pack.animate(
+        [0, 1, 2, 3, 4, 5].map((i) => ({ translate: i === 5 ? "0 0" : `${(Math.random() - 0.5) * 2 * k * (1 - i / 5)}px ${(Math.random() - 0.5) * 2 * k * (1 - i / 5)}px` })),
+        { duration: 260, easing: "ease-out" },
+      );
+    }
   };
 
   const onPointerMoveTilt = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -831,6 +817,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
         ? clampNumber(ny, DEEP_CUT_MIN_Y, DEEP_CUT_MAX_Y)
         : clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
       slashRef.current = { lastX: x, lastYFrac: yFrac, lastSparkX: x, deep };
+      playBladeCut(bladeLook(bladeRef.current).sound);
       setCutSpan(x, yFrac, x, yFrac, deep);
       ensureLoop();
       return;
@@ -902,33 +889,6 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
           aria-hidden="true"
         />
       )}
-      {/* Slash sparks, viewport-anchored like the trail */}
-      {sparks.length > 0 && (
-        <div className="pointer-events-none fixed inset-0 z-30" aria-hidden="true">
-          {sparks.map((spark) => (
-            <motion.div
-              key={spark.id}
-              className="absolute rounded-full"
-              style={{
-                left: spark.x,
-                top: spark.y,
-                width: spark.size,
-                height: spark.size,
-                background: "rgb(221, 214, 254)",
-                boxShadow: "0 0 8px rgba(196,181,253,0.9)",
-              }}
-              initial={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-              animate={{
-                opacity: 0,
-                x: Math.cos(spark.angle) * spark.distance,
-                y: Math.sin(spark.angle) * spark.distance,
-                scale: 0.4,
-              }}
-              transition={{ duration: 0.55, ease: "easeOut" }}
-            />
-          ))}
-        </div>
-      )}
       {/* Host for the 3D pack; the scene's canvas overflows it on purpose so
           the tilted pack and the torn strip never clip */}
       <div
@@ -985,3 +945,4 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     </div>
   );
 }
+

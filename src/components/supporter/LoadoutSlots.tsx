@@ -3,10 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 
 import {
-  CUSTOM_MOTIF_OPACITY_RANGE,
-  CUSTOM_MOTIF_SCALE_RANGE,
   SUPPORTER_MOTIFS,
-  type SupporterLook,
   type SupporterMotifId,
 } from "../../lib/supporter-card-looks";
 import { SUPPORTER_FOIL_LABELS, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
@@ -25,14 +22,20 @@ import { SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { CheckBadge, LockIcon, UploadIcon } from "./LoadoutIcons";
 import { FoilPreview } from "./FoilPreview";
 import { DEFAULT_PACK_ART_STYLE, getCachedPackFrontCanvas } from "../packs/packArt";
+import { BladeSwatch } from "../packs/BladeSwatch";
+import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
+import { bladeLook } from "../packs/packBlades";
 import {
   SUPPORTER_BINDER_LABELS,
   SUPPORTER_BINDERS,
+  SUPPORTER_BLADE_LABELS,
+  SUPPORTER_BLADES,
   SUPPORTER_CARD_SLEEVE_LABELS,
   SUPPORTER_CARD_SLEEVES,
   SUPPORTER_WRAPPER_LABELS,
   SUPPORTER_WRAPPERS,
   type SupporterBinderId,
+  type SupporterBladeId,
   type SupporterCardSleeveId,
   type SupporterWrapperId,
 } from "../../lib/supporter-pack-style";
@@ -119,6 +122,7 @@ function useSlotName() {
     if (slot === "sleeve") return value ? i18n._(SUPPORTER_CARD_SLEEVE_LABELS[value as SupporterCardSleeveId]) : t`No sleeve`;
     if (slot === "binder") return value ? i18n._(SUPPORTER_BINDER_LABELS[value as SupporterBinderId]) : t`No binder`;
     if (slot === "wrapper") return value ? i18n._(SUPPORTER_WRAPPER_LABELS[value as SupporterWrapperId]) : t`Standard foil`;
+    if (slot === "blade") return value ? i18n._(SUPPORTER_BLADE_LABELS[value as SupporterBladeId]) : t`Standard blade`;
     return value === null ? t`No foil` : i18n._(SUPPORTER_FOIL_LABELS[value as SupporterFoilId]);
   };
 }
@@ -160,6 +164,7 @@ function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; 
       ? <img src={wrapperThumb(loadout.pack.wrapper)} alt="" className="h-[40px] w-[24px] rounded-[3px] object-cover" />
       : <img src={wrapperThumb(null)} alt="" className="h-[40px] w-[24px] rounded-[3px] object-cover" />;
   }
+  if (slot === "blade") return <BladeSwatch blade={loadout.pack.blade} className="h-[30px] w-[44px]" />;
   if (loadout.look.foil === "none") return <NoArt className="h-5 w-5" />;
   return <FoilCard foil={loadout.look.foil} still className="h-[40px] w-[29px]" />;
 }
@@ -230,10 +235,11 @@ export function SleeveCard({ sleeve, className }: { sleeve: SupporterCardSleeveI
    with a spine and a label. */
 export function BinderBook({ binder, className }: { binder: SupporterBinderId; className: string }) {
   return (
-    <span className={`relative block overflow-hidden rounded-[4px] binder-cover--${binder} ${className}`}>
-      <span className="absolute inset-y-0 left-0 w-[18%] bg-black/30" />
-      <span className="absolute left-[34%] right-[14%] top-[22%] h-[16%] rounded-[2px] bg-white/30" />
-      <span className="absolute inset-[3px] left-[22%] rounded-[2px] border border-dashed border-white/30" />
+    <span className={`bnd-cover bnd--${binder} relative block overflow-hidden rounded-[5px] ${className}`}>
+      {/* the spine's hinge, the stitching in the cover's thread, and a label plate */}
+      <span className="absolute inset-y-0 left-[15%] w-[3px] bg-black/35 shadow-[1px_0_0_rgba(255,255,255,0.12)]" />
+      <span className="absolute inset-[4px] left-[calc(15%+6px)] rounded-[3px] border border-dashed opacity-80" style={{ borderColor: "var(--stitch)" }} />
+      <span className="absolute left-[38%] right-[16%] top-[20%] h-[13%] rounded-[2px] bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]" />
     </span>
   );
 }
@@ -415,8 +421,8 @@ export interface DrawerProps {
   onTry: (slot: SlotId, value: SlotValue | undefined) => void;
   onPick: (slot: SlotId, value: SlotValue) => void;
   onUpload: (file: File) => void;
-  /** Size and strength of the viewer's own image, as the sliders move. */
-  onAdjust: (look: SupporterLook) => void;
+  /** Opens the viewer's own image to adjust its size and strength. */
+  onEditCustom: () => void;
   /** The equipped theme's own switches. */
   onThemeOptions: (options: Loadout["themeOptions"]) => void;
 }
@@ -441,6 +447,7 @@ export const LoadoutDrawer = memo(function LoadoutDrawer(props: DrawerProps) {
           : props.slot === "sleeve" ? <SleeveDrawer {...props} />
           : props.slot === "binder" ? <BinderDrawer {...props} />
           : props.slot === "wrapper" ? <WrapperDrawer {...props} />
+          : props.slot === "blade" ? <BladeDrawer {...props} />
           : <FoilDrawer {...props} />}
       </motion.div>
     </AnimatePresence>
@@ -554,7 +561,7 @@ function FontDrawer({ current, disabled, username, onTry, onPick }: DrawerProps)
   );
 }
 
-function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUpload, onAdjust }: DrawerProps) {
+function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUpload, onEditCustom }: DrawerProps) {
   const { t, i18n } = useLingui();
   const fileRef = useRef<HTMLInputElement>(null);
   const look = current.look;
@@ -578,12 +585,27 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
           </Item>
         ))}
         {custom && (
-          <Item active={look.motif === "custom"} disabled={disabled} onTry={tryOn("custom")} onPick={() => onPick("motif", "custom")}>
-            <span className="grid h-[68px] w-full place-items-center rounded-md bg-osu-b6">
-              <img src={custom.url} alt="" className="h-11 w-11 rounded-sm object-contain" />
-            </span>
-            {t`Your image`}
-          </Item>
+          <div className="relative">
+            <Item active={look.motif === "custom"} disabled={disabled} onTry={tryOn("custom")} onPick={() => onPick("motif", "custom")} className="w-full">
+              <span className="block h-[68px] w-full overflow-hidden rounded-md bg-osu-b6">
+                <img src={custom.url} alt="" className="h-full w-full object-cover" />
+              </span>
+              {t`Your image`}
+            </Item>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={onEditCustom}
+              aria-label={t`Adjust your image`}
+              title={t`Adjust your image`}
+              className="absolute bottom-[30px] right-1.5 grid h-7 w-7 cursor-pointer place-items-center rounded-full bg-black/70 text-white shadow transition hover:bg-osu-pink"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20h4L19 9l-4-4L4 16v4Z" />
+                <path d="m13.5 6.5 4 4" />
+              </svg>
+            </button>
+          </div>
         )}
         {canUpload && (
           <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className={tile(false)}>
@@ -605,41 +627,18 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
           }}
         />
       </div>
-      {look.motif === "custom" && (
-        <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 text-[11px] text-osu-f1">
-          <label htmlFor="supporter-motif-size">{t`Size`}</label>
-          <input
-            id="supporter-motif-size"
-            type="range"
-            min={CUSTOM_MOTIF_SCALE_RANGE[0]}
-            max={CUSTOM_MOTIF_SCALE_RANGE[1]}
-            step={0.05}
-            value={look.scale ?? 1}
-            disabled={disabled}
-            onChange={(event) => onAdjust({ ...look, scale: Number(event.target.value) })}
-            className="accent-osu-pink"
-          />
-          <label htmlFor="supporter-motif-strength">{t`Strength`}</label>
-          <input
-            id="supporter-motif-strength"
-            type="range"
-            min={CUSTOM_MOTIF_OPACITY_RANGE[0]}
-            max={CUSTOM_MOTIF_OPACITY_RANGE[1]}
-            step={0.05}
-            value={look.opacity ?? 0.85}
-            disabled={disabled}
-            onChange={(event) => onAdjust({ ...look, opacity: Number(event.target.value) })}
-            className="accent-osu-pink"
-          />
-        </div>
-      )}
     </div>
   );
 }
 
 function FoilDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
   const { t, i18n } = useLingui();
-  const tryOn = (value: SupporterFoilId | null) => (on: boolean) => onTry("foil", on ? value : undefined);
+  // Only the foil under the pointer moves, like the theme drawer.
+  const [moving, setMoving] = useState<SupporterFoilId | null>(null);
+  const tryOn = (value: SupporterFoilId | null) => (on: boolean) => {
+    setMoving(on ? value : null);
+    onTry("foil", on ? value : undefined);
+  };
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
       <Item active={current.look.foil === "none"} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("foil", null)}>
@@ -650,7 +649,7 @@ function FoilDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
       </Item>
       {SUPPORTER_FOILS.map((id) => (
         <Item key={id} active={current.look.foil === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("foil", id)}>
-          <FoilCard foil={id} className="aspect-[5/7] w-full" />
+          <FoilCard foil={id} still={moving !== id} className="aspect-[5/7] w-full" />
           <span className="w-full truncate text-center">{i18n._(SUPPORTER_FOIL_LABELS[id])}</span>
         </Item>
       ))}
@@ -728,6 +727,39 @@ function WrapperDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
   );
 }
 
+function BladeDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
+  const { t, i18n } = useLingui();
+  // Only the blade under the pointer slashes, like the theme drawer.
+  const [moving, setMoving] = useState<SupporterBladeId | null | undefined>(undefined);
+  const tryOn = (value: SupporterBladeId | null) => (on: boolean) => {
+    if (on) warmBladeSounds(bladeLook(value).sound);
+    setMoving(on ? value : undefined);
+    onTry("blade", on ? value : undefined);
+  };
+  // Picking one plays how its pack gives, so the sound is part of the choice.
+  const pick = (value: SupporterBladeId | null) => () => {
+    playBladeRip(value, bladeLook(value).sound);
+    onPick("blade", value);
+  };
+  return (
+    <div>
+      <p className="mb-3 text-[12px] text-osu-f1">{t`How your packs open: the slash you cut them with, its sparks and its sound, and what the pack does as it gives.`}</p>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2">
+        <Item active={current.pack.blade === null} disabled={disabled} onTry={tryOn(null)} onPick={pick(null)}>
+          <BladeSwatch blade={null} live={moving === null} className="h-[64px] w-full rounded-md bg-osu-b6" />
+          <span className="w-full truncate text-center">{t`Standard blade`}</span>
+        </Item>
+        {SUPPORTER_BLADES.map((id) => (
+          <Item key={id} active={current.pack.blade === id} disabled={disabled} onTry={tryOn(id)} onPick={pick(id)}>
+            <BladeSwatch blade={id} live={moving === id} className="h-[64px] w-full rounded-md bg-osu-b6" />
+            <span className="w-full truncate text-center">{i18n._(SUPPORTER_BLADE_LABELS[id])}</span>
+          </Item>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* "No theme": the site's own colours, whichever hue the visitor picked, so a wheel rather than any one. */
 function SiteColours({ className }: { className: string }) {
   return <span className={`rounded-full ${className}`} style={{ background: "conic-gradient(#ff66ab, #ffcc22, #88b300, #66ccff, #8866ee, #ff66ab)" }} />;
@@ -735,7 +767,14 @@ function SiteColours({ className }: { className: string }) {
 
 function ThemeDrawer({ current, disabled, onTry, onPick, onThemeOptions }: DrawerProps) {
   const { t, i18n } = useLingui();
-  const tryOn = (value: SupporterProfileThemeId | null) => (on: boolean) => onTry("theme", on ? value : undefined);
+  /* Only the theme under the pointer moves; the rest hold a still frame. Every
+     live swatch is a full shader pass plus a copy off the GPU each frame, and
+     twenty of them at once is what made this page crawl. */
+  const [moving, setMoving] = useState<SupporterProfileThemeId | null>(null);
+  const tryOn = (value: SupporterProfileThemeId | null) => (on: boolean) => {
+    setMoving(on ? value : null);
+    onTry("theme", on ? value : undefined);
+  };
   return (
     <div>
       <p className="mb-3 text-[12px] text-osu-f1">{t`Your whole profile takes on the theme: its colours, and a living backdrop behind the page.`}</p>
@@ -748,7 +787,7 @@ function ThemeDrawer({ current, disabled, onTry, onPick, onThemeOptions }: Drawe
         </Item>
         {SUPPORTER_PROFILE_THEMES.map((id) => (
           <Item key={id} active={current.theme === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("theme", id)} className="items-stretch">
-            <ProfileThemeSwatch theme={id} className="aspect-[16/10] w-full rounded-md" />
+            <ProfileThemeSwatch theme={id} still={moving !== id} className="aspect-[16/10] w-full rounded-md" />
             <span className="w-full truncate text-center">{i18n._(SUPPORTER_PROFILE_THEME_LABELS[id])}</span>
           </Item>
         ))}

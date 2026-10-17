@@ -228,7 +228,7 @@ function SupportPage() {
               id="packs"
               title={t`Packs`}
               count={t`Cases, binders and wrappers`}
-              body={t`Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper.`}
+              body={t`Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound.`}
             >
               <PacksShowcase />
             </Perk>

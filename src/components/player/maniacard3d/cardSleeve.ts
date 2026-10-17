@@ -67,6 +67,17 @@ const SPECS: Record<SupporterCardSleeveId, SleeveSpec> = {
   slab: { width: CARD_W * 1.623, height: CARD_W * 2.447, depth: 0.46, radius: 0.24, bevel: 0.05, cardOffsetY: -0.8, soft: 0, haze: 0.02, edge: 0.85, tint: [0.9, 0.97, 1] },
 };
 
+/** How far a case reaches past the card it holds, in card heights, with the
+    card left at its own size: above it, below it, and out to each side. */
+export function sleeveReach(sleeve: SupporterCardSleeveId): { top: number; bottom: number; side: number } {
+  const spec = SPECS[sleeve];
+  return {
+    top: Math.max(0, spec.height / 2 - spec.cardOffsetY - CARD_H / 2) / CARD_H,
+    bottom: Math.max(0, spec.height / 2 + spec.cardOffsetY - CARD_H / 2) / CARD_H,
+    side: Math.max(0, (spec.width - CARD_W) / 2) / CARD_H,
+  };
+}
+
 /** The case's height over the card's, for the renderer's fit. */
 export function sleeveFit(sleeve: SupporterCardSleeveId): { scale: number; cardOffsetY: number } {
   const spec = SPECS[sleeve];
@@ -148,9 +159,12 @@ const shellFragment = /* glsl */ `
     float along = dot(uv - 0.5, dir) + crinkle * 0.35;
     float tilt = dot(view.xy, vec2(0.9, 0.6));
     // At rest the glint sits up by the top corner; tilting or moving the
-    // light walks it across the face.
-    float center = 0.42 + (uLight.x - 0.5) * 1.5 + (uLight.y - 0.5) * 0.7 - tilt * 1.4;
-    float sheen = exp(-pow((along - center) * 4.0, 2.0)) * 0.07;
+    // light walks it across the face, easing toward the edges rather than
+    // sliding off them, so there is always a glint somewhere on the case.
+    float drive = (uLight.x - 0.5) * 1.5 + (uLight.y - 0.5) * 0.7 - tilt * 1.4;
+    float e = exp(2.0 * (1.2 * drive + 1.1));
+    float center = 0.06 + 0.4 * (e - 1.0) / (e + 1.0);
+    float sheen = exp(-pow((along - center) * 4.0, 2.0)) * 0.08;
     float streak = exp(-pow((along - center - 0.05) * 34.0, 2.0)) * 0.42;
     float streak2 = exp(-pow((along - center + 0.16) * 60.0, 2.0)) * 0.16;
     float light = (sheen + streak + streak2) * (1.0 - side);

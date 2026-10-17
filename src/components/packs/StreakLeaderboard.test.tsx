@@ -12,7 +12,7 @@ import type { LiveStreakBoard } from "#/lib/live-backend";
 
 const removeLiveStreakBest = vi.hoisted(() => vi.fn());
 // Supporter cases come from the live look cache this file does not mock.
-vi.mock("#/lib/use-supporter-pack-style", () => ({ useSupporterSleeve: () => null, useSupporterPackStyle: () => ({ sleeve: null, binder: null, wrapper: null }) }));
+vi.mock("#/lib/use-supporter-pack-style", () => ({ useSupporterSleeve: () => null, useSupporterPackStyle: () => ({ sleeve: null, binder: null, wrapper: null, blade: null }) }));
 vi.mock("#/lib/live-backend", () => ({
   // Player names read the supporter name styles; no player here has one.
   ensureSupporterNameStyles: () => {}, getSupporterNameStyle: () => null, getSupporterNameFont: () => null, subscribeSupporterNameStyles: () => () => {},

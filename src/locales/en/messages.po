@@ -2799,6 +2799,10 @@ msgstr "A snipe is when your new best on a map passes a player who was above you
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 
+#: src/components/supporter/TestPack.tsx
+msgid "A test pack: nothing is spent, open as many as you like."
+msgstr "A test pack: nothing is spent, open as many as you like."
+
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
 msgid "A week for a friend"
@@ -3143,6 +3147,10 @@ msgstr "Adding you…"
 #: src/routes/report.tsx
 #~ msgid "Additional information you sent"
 #~ msgstr "Additional information you sent"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Adjust your image"
+msgstr "Adjust your image"
 
 #. placeholder {0}: (vibroAnalysis.excludedDurationMs / 1000).toFixed(1)
 #: src/components/maps/MapDetailModal.tsx
@@ -4364,6 +4372,7 @@ msgstr "Can't pay with Ko-fi? You can tip through lava.top."
 #: src/components/settings/TranslationReportForm.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
+#: src/components/supporter/CustomArtDialog.tsx
 #: src/routes/report.tsx
 msgid "Cancel"
 msgstr "Cancel"
@@ -7104,6 +7113,7 @@ msgid "Elite"
 msgstr "Elite"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 msgid "Ember"
 msgstr "Ember"
 
@@ -8977,6 +8987,10 @@ msgstr "How recommendations work"
 msgid "How to pick"
 msgstr "How to pick"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "How your packs open: the slash you cut them with, its sparks and its sound, and what the pack does as it gives."
+msgstr "How your packs open: the slash you cut them with, its sparks and its sound, and what the pack does as it gives."
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "HP"
 msgstr "HP"
@@ -9441,6 +9455,10 @@ msgstr "It may have been taken down, or it is still waiting for approval."
 msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 msgstr "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "It sits behind everything printed on your card, on every copy of it."
+msgstr "It sits behind everything printed on your card, on every copy of it."
+
 #: src/routes/hashi.tsx
 msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
 msgstr "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
@@ -9613,6 +9631,10 @@ msgstr "just now"
 msgid "Kappa signal"
 msgstr "Kappa signal"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Katana"
+msgstr "Katana"
+
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/routes/supporter.tsx
 msgid "Keep"
@@ -9631,16 +9653,24 @@ msgid "Keep my plays"
 msgstr "Keep my plays"
 
 #: src/routes/support.tsx
-msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper."
-msgstr "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper."
+msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
+msgstr "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
+
+#: src/routes/support.tsx
+#~ msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper."
+#~ msgstr "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper."
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
 #~ msgstr "Keep them"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper."
-msgstr "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper."
+#~ msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper."
+#~ msgstr "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, print your packs on your own wrapper, and open them with your own blade."
+msgstr "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, print your packs on your own wrapper, and open them with your own blade."
 
 #: src/lib/replay-export/errors.ts
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
@@ -10056,6 +10086,10 @@ msgstr "Light"
 #: src/components/supporter/loadout.ts
 msgid "Light wings"
 msgstr "Light wings"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Lightning"
+msgstr "Lightning"
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
@@ -11580,6 +11614,7 @@ msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "Needs a web.archive.org link to their osu! profile."
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 msgid "Neon"
 msgstr "Neon"
 
@@ -11775,6 +11810,7 @@ msgstr "next free pack"
 #~ msgstr "Next pack: {chance}% chance one of these is in it"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next page"
 msgstr "Next page"
@@ -13340,6 +13376,10 @@ msgstr "Opening what is left..."
 msgid "Opening..."
 msgstr "Opening..."
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Openings"
+msgstr "Openings"
+
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Opens packs without the shuffle and flip animations"
 #~ msgstr "Opens packs without the shuffle and flip animations"
@@ -13605,6 +13645,10 @@ msgstr "owner"
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Pack open"
 #~ msgstr "Pack open"
+
+#: src/components/supporter/loadout.ts
+msgid "Pack opening"
+msgstr "Pack opening"
 
 #. placeholder {0}: new Date(pausedUntil).toLocaleString(intlLocaleTag(i18n.locale as AppLocale), { dateStyle: "long", timeStyle: "short" })
 #: src/routes/packs.tsx
@@ -14512,6 +14556,7 @@ msgid "Previous collection page"
 msgstr "Previous collection page"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Previous page"
 msgstr "Previous page"
@@ -14698,6 +14743,10 @@ msgstr "purple"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Purple"
 msgstr "Purple"
+
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "Put it on my card"
+msgstr "Put it on my card"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
@@ -17385,7 +17434,7 @@ msgstr "size"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
-#: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/CustomArtDialog.tsx
 msgid "Size"
 msgstr "Size"
 
@@ -17955,6 +18004,10 @@ msgid "Standard"
 msgstr "Standard"
 
 #: src/components/supporter/LoadoutSlots.tsx
+msgid "Standard blade"
+msgstr "Standard blade"
+
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Standard foil"
 msgstr "Standard foil"
 
@@ -18211,7 +18264,7 @@ msgstr "Streams broken up by two-note jumps."
 msgid "Streams thickened with three-note hand chords."
 msgstr "Streams thickened with three-note hand chords."
 
-#: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/CustomArtDialog.tsx
 msgid "Strength"
 msgstr "Strength"
 
@@ -21208,6 +21261,10 @@ msgstr "Uploading the new skin file, {done} of {size}."
 msgid "Uploading the skin file, {sentSize} of {totalSize}."
 msgstr "Uploading the skin file, {sentSize} of {totalSize}."
 
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "Uploading..."
+msgstr "Uploading..."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Upscroll"
@@ -22006,6 +22063,10 @@ msgstr "with no mods"
 msgid "within a minute"
 msgstr "within a minute"
 
+#: src/components/supporter/TestBinder.tsx
+msgid "Without a binder, your collection shows as the usual grid."
+msgstr "Without a binder, your collection shows as the usual grid."
+
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
 msgstr "Won on score, not pp"
@@ -22492,6 +22553,7 @@ msgstr "Your dynamic renders were turned off."
 msgid "Your gift week was claimed. Your next support brings a new code."
 msgstr "Your gift week was claimed. Your next support brings a new code."
 
+#: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your image"
 msgstr "Your image"
@@ -22713,3 +22775,7 @@ msgstr "YouTube video"
 #: src/components/supporter/SupporterFramePicker.tsx
 #~ msgid "Zenith orbit"
 #~ msgstr "Zenith orbit"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Zip binder"
+msgstr "Zip binder"

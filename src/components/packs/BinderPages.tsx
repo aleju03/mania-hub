@@ -7,7 +7,9 @@ import type { SupporterBinderId } from "#/lib/supporter-pack-style";
    its grain lit by an SVG lighting filter in styles.css under .bnd-*), a
    chrome ring mechanism down the spine whose rings arc over into the punched
    holes of two black card-stock pages, and on each page a sheet of nine
-   welded clear pockets under one faint sheen. Nothing repaints on scroll or
+   welded clear pockets under one faint sheen. The zip binder is the ringless
+   kind: a zipper round a padded weave cover, its sheets stitched into a soft
+   spine, side-loading pockets. Nothing repaints on scroll or
    hover; the only motion is a page turn, a transform on its own layer. Turning to the next page of the collection
    turns a page: the right-hand leaf swings over the spine onto the left. */
 
@@ -30,13 +32,17 @@ function Holes() {
    plate stretches between its end caps; each ring image carries the stretch
    of plate under it, with the ring's shadow on it and on the pages, and its
    ends land on the hole centres. */
-function Mechanism() {
+function Mechanism({ turning }: { turning: boolean }) {
   return (
     <div className="bnd-spine" aria-hidden>
       <div className="bnd-plate" />
-      <img className="bnd-ring" src="/images/binders/ring.png" alt="" draggable={false} />
-      <img className="bnd-ring" src="/images/binders/ring.png" alt="" draggable={false} />
-      <img className="bnd-ring" src="/images/binders/ring.png" alt="" draggable={false} />
+      {/* Its own layer: a turning leaf rides up the rings and over the plate,
+          so for the middle of a turn the leaf is drawn above them. */}
+      <div className={`bnd-rings ${turning ? "bnd-rings--turning" : ""}`} style={{ "--turn-ms": `${TURN_MS}ms` } as CSSProperties}>
+        <img className="bnd-ring" src="/images/binders/ring.png" alt="" draggable={false} />
+        <img className="bnd-ring" src="/images/binders/ring.png" alt="" draggable={false} />
+        <img className="bnd-ring" src="/images/binders/ring.png" alt="" draggable={false} />
+      </div>
     </div>
   );
 }
@@ -141,21 +147,31 @@ export function BinderPages({ binder, page = 0, ready = true, settled = true, ch
     return () => window.clearTimeout(timer);
   }, [turn]);
 
+  /* A zip binder's sheets are bound into its spine, with no rings or holes,
+     and a zipper runs round its cover. */
+  const ringed = binder !== "zip";
   // While the next page loads, the spread on screen stays put.
   const spread = pending ? shown.current : { page, left, right };
 
   return (
     <div className={`bnd bnd--${binder} ${className}`}>
+      {!ringed && <span className="bnd-zip-pull" aria-hidden />}
       <div className="bnd-spread">
         <div className="bnd-slot bnd-slot--left">
           <Page items={turn?.direction === "next" ? turn.under : spread.left} side="left" />
         </div>
-        <Mechanism />
+        {ringed ? (
+          // Remounted per turn so its layering animation starts with the leaf's.
+          <Mechanism key={`mechanism-${turn?.id ?? 0}`} turning={turn !== null} />
+        ) : (
+          // A zip binder has no rings: its pages are stitched into a soft spine.
+          <div className="bnd-spine bnd-spine--soft" aria-hidden />
+        )}
         <div className="bnd-slot bnd-slot--right">
           <Page items={turn?.direction === "prev" ? turn.under : spread.right} side="right" />
         </div>
         {turn && (
-          <div key={turn.id} className={`bnd-leaf bnd-leaf--${turn.direction}`} style={{ "--turn-ms": `${TURN_MS}ms` } as CSSProperties}>
+          <div key={`leaf-${turn.id}`} className={`bnd-leaf bnd-leaf--${turn.direction}`} style={{ "--turn-ms": `${TURN_MS}ms` } as CSSProperties}>
             <div className="bnd-leaf-face bnd-leaf-face--front">
               <Page items={turn.front} side={turn.direction === "next" ? "right" : "left"} />
             </div>

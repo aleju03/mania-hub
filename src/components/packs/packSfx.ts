@@ -4,6 +4,8 @@
    The context is created lazily on the first call, which always happens
    inside a user gesture, so autoplay policies never block it. */
 
+import type { SupporterBladeId } from "#/lib/supporter-pack-style";
+
 let context: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuffer: AudioBuffer | null = null;
@@ -160,6 +162,55 @@ export function playPackRip() {
   playNoise(ctx, { duration: 0.05, gain: 0.2, startFreq: 3400, q: 2.5 });
   playNoise(ctx, { duration: 0.26, gain: 0.32, startFreq: 1500, endFreq: 380, q: 0.9 });
   playTone(ctx, { freq: 150, endFreq: 52, duration: 0.2, gain: 0.26, type: "sine" });
+}
+
+/* A supporter's blade (packBlades.ts) sounds like itself as it cuts, under
+   its recorded cut sounds (playBladeTick below): a fine steel tick for the
+   katana, a blip for neon, crackle for ember, and a buzz for lightning. Same
+   pacing and pitch climb as playSlashTick. */
+function synthBladeTick(ctx: AudioContext, blade: SupporterBladeId, progress: number) {
+  if (blade === "katana") {
+    playNoise(ctx, { duration: 0.028, gain: 0.34, startFreq: 5200 + progress * 2600 + Math.random() * 500, q: 14 });
+  } else if (blade === "neon") {
+    playTone(ctx, { freq: 520 + progress * 900, endFreq: 640 + progress * 1000, duration: 0.045, gain: 0.05, type: "square" });
+  } else if (blade === "ember") {
+    playNoise(ctx, { duration: 0.02, gain: 0.3, startFreq: 900 + Math.random() * 2200, q: 3 });
+    if (Math.random() < 0.5) playNoise(ctx, { at: 0.012 + Math.random() * 0.02, duration: 0.014, gain: 0.22, startFreq: 2800 + Math.random() * 2000, q: 4 });
+  } else {
+    playTone(ctx, { freq: 110 + progress * 60, duration: 0.04, gain: 0.05, type: "sawtooth", drive: true });
+    playNoise(ctx, { duration: 0.03, gain: 0.2, startFreq: 3000 + progress * 1800, q: 6 });
+  }
+}
+
+/* The pack giving, for a supporter's blade, while its recording is still
+   loading. */
+function synthBladeRip(ctx: AudioContext, blade: SupporterBladeId) {
+  if (blade === "katana") {
+    // the draw: a hiss rising to a ring that hangs in the air
+    playNoise(ctx, { duration: 0.18, gain: 0.26, startFreq: 2400, endFreq: 9000, q: 1.4 });
+    playTone(ctx, { at: 0.06, freq: 2637, duration: 0.9, gain: 0.05, type: "sine" });
+    playTone(ctx, { at: 0.06, freq: 3951, duration: 0.6, gain: 0.025, type: "sine" });
+    playTone(ctx, { freq: 140, endFreq: 50, duration: 0.18, gain: 0.2, type: "sine" });
+  } else if (blade === "neon") {
+    // an arcade arpeggio up, over a bass drop
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, index) => {
+      playTone(ctx, { at: index * 0.045, freq, duration: 0.12, gain: 0.06, type: "square" });
+    });
+    playTone(ctx, { freq: 220, endFreq: 55, duration: 0.35, gain: 0.16, type: "sawtooth", glideFraction: 0.6 });
+    playNoise(ctx, { duration: 0.2, gain: 0.12, startFreq: 1200, endFreq: 6000, q: 0.8 });
+  } else if (blade === "ember") {
+    // the whoomp of a catch, and a scatter of crackle
+    playNoise(ctx, { duration: 0.42, gain: 0.3, startFreq: 260, endFreq: 1400, q: 0.7 });
+    playTone(ctx, { freq: 120, endFreq: 48, duration: 0.3, gain: 0.24, type: "sine" });
+    for (let index = 0; index < 9; index += 1) {
+      playNoise(ctx, { at: 0.05 + Math.random() * 0.5, duration: 0.012 + Math.random() * 0.02, gain: 0.12 + Math.random() * 0.14, startFreq: 1500 + Math.random() * 3500, q: 3 });
+    }
+  } else {
+    // the crack, and the thunder rolling after it
+    playNoise(ctx, { duration: 0.06, gain: 0.42, startFreq: 4200, q: 0.6 });
+    playNoise(ctx, { at: 0.04, duration: 1.1, gain: 0.32, startFreq: 180, endFreq: 70, q: 0.9 });
+    playTone(ctx, { at: 0.02, freq: 70, endFreq: 38, duration: 0.8, gain: 0.2, type: "sine" });
+  }
 }
 
 /* The blade going through the pack's middle: card stock, not foil. Drier and
@@ -616,4 +667,89 @@ export function playRecycleClink(gained: number) {
     // Inharmonic partial that makes the tick read as metal instead of a beep.
     playTone(ctx, { at, freq: freq * 2.51, duration: 0.05, gain: 0.028, type: "sine" });
   }
+}
+
+/* --- Supporter blades: recorded sounds (packBlades.ts names the files) ---- */
+
+const bladeSamples = new Map<string, SampleSlot>();
+
+function bladeSlot(url: string): SampleSlot {
+  let slot = bladeSamples.get(url);
+  if (!slot) {
+    slot = { url, buffer: null, load: null };
+    bladeSamples.set(url, slot);
+  }
+  return slot;
+}
+
+function playBuffer(ctx: AudioContext, buffer: AudioBuffer, gain: number, rate = 1) {
+  if (!master) return;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = rate;
+  const level = ctx.createGain();
+  level.gain.value = gain;
+  source.connect(level).connect(master);
+  source.start();
+}
+
+/* Fetches and decodes a blade's two sounds ahead of the first cut. Safe
+   before any gesture: a suspended context still decodes. */
+export function warmBladeSounds(sound: { cut: string; rip: string } | undefined): void {
+  if (!sound) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  void loadSample(ctx, bladeSlot(sound.cut));
+  void loadSample(ctx, bladeSlot(sound.rip));
+}
+
+/* The blade going into the foil, once per stroke. */
+export function playBladeCut(sound: { cut: string; rip: string } | undefined): void {
+  if (!sound) return;
+  const ctx = ensureAudio();
+  const buffer = bladeSamples.get(sound.cut)?.buffer;
+  if (ctx && buffer) playBuffer(ctx, buffer, 0.75, 0.96 + Math.random() * 0.08);
+}
+
+let lastBladeSampleTickAt = 0;
+
+/* Each stretch of foil the blade gets through. Neon and lightning repeat
+   their recorded cut, pitched up as the cut nears the end; steel and fire
+   keep a light synthesized tick under the stroke. */
+export function playBladeTick(blade: SupporterBladeId | null, progress: number, sound?: { cut: string; rip: string }) {
+  if (!blade) {
+    playSlashTick(progress);
+    return;
+  }
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const now = typeof performance !== "undefined" ? performance.now() : 0;
+  if ((blade === "neon" || blade === "lightning") && sound) {
+    const buffer = bladeSamples.get(sound.cut)?.buffer;
+    if (buffer) {
+      if (now - lastBladeSampleTickAt < (blade === "neon" ? 110 : 85)) return;
+      lastBladeSampleTickAt = now;
+      playBuffer(ctx, buffer, blade === "neon" ? 0.28 : 0.4, blade === "neon" ? 0.9 + progress * 0.6 : 0.85 + Math.random() * 0.4);
+      return;
+    }
+  }
+  if (now - lastTickAt < 26) return;
+  lastTickAt = now;
+  synthBladeTick(ctx, blade, progress);
+}
+
+/* The pack giving: the blade's recording, or its synthesized stand-in if the
+   file has not arrived yet. */
+export function playBladeRip(blade: SupporterBladeId | null, sound?: { cut: string; rip: string }) {
+  if (!blade) {
+    playPackRip();
+    return;
+  }
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const buffer = sound ? bladeSamples.get(sound.rip)?.buffer : null;
+  if (buffer) playBuffer(ctx, buffer, 0.95);
+  else synthBladeRip(ctx, blade);
+  // the low thump of the pack itself, under every blade
+  playTone(ctx, { freq: 130, endFreq: 48, duration: 0.22, gain: 0.16, type: "sine" });
 }

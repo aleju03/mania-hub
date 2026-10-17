@@ -12,12 +12,17 @@ import { ProfileThemeBackdrop } from "./ProfileThemeBackdrop";
 import type { HighwayChart, HighwayNotes } from "../../lib/supporter-profile-themes";
 import type { Loadout } from "./loadout";
 import { useIsSettled } from "./use-settled";
+import { TestPack } from "./TestPack";
+import { TestBinder } from "./TestBinder";
 
 /* The stage of the /supporter loadout: the viewer's avatar with their name
    under it, and their card, wearing whatever is on show (the
    equipped loadout, a pending roll, or the item under the pointer). `pop`
    moves on every equip and roll landing, and replays the landing bounce.
-   Below lg only the part the open slot changes is shown.
+   Below lg only the part the open slot changes is shown. With the wrapper or
+   the opening slot open, a test pack takes the avatar's place, to be cut open
+   with the blade on show; with the binder slot open, the binder on show
+   holding the viewer's own cards takes the whole stage.
 
    The avatar sits in room reserved for the largest overhang of any frame, so
    neither it nor the name moves when the frame changes. */
@@ -46,7 +51,7 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
   avatar: string | undefined;
   /** Null when the viewer has no card yet. */
   card: Pick<ManiaCardPanelProps, "user" | "scores" | "loading"> | null;
-  focus: "hero" | "card";
+  focus: "hero" | "card" | "pack" | "binder";
   pop: number;
   spinning: boolean;
   footer: ReactNode;
@@ -64,6 +69,15 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
       {/* The profile theme plays behind the whole stage, as it will behind the profile. */}
       {theme && <ProfileThemeBackdrop theme={theme} notes={notes} chart={chart} maxPixels={500_000} className="absolute inset-0 -z-10" />}
       <div className="flex flex-col lg:flex-row lg:items-stretch">
+        {focus === "binder" ? (
+          <div className="min-w-0 flex-1 px-3">
+            <TestBinder binder={shown.pack.binder} />
+          </div>
+        ) : focus === "pack" ? (
+          <div className="flex min-w-0 flex-1 items-center justify-center px-4 pt-10 pb-3">
+            <TestPack wrapper={shown.pack.wrapper} blade={shown.pack.blade} />
+          </div>
+        ) : (
         <div className={`${focus === "card" ? "max-lg:hidden" : ""} flex min-w-0 flex-1 flex-col items-center justify-center px-5 py-4 [--stage-avatar:84px] sm:px-8 sm:[--stage-avatar:124px]`}>
           {/* Never shrinks: in a narrow column the side room overflows both ways evenly, and only wide wings get clipped. */}
           <div className="shrink-0" style={{ padding: ROOM_PADDING }}>
@@ -82,7 +96,8 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
               )}
           </motion.div>
         </div>
-        <div className={`${focus === "hero" ? "max-lg:hidden" : ""} border-white/[0.07] px-4 max-lg:border-t lg:w-[300px] lg:shrink-0 lg:border-l lg:px-3 ${theme ? "bg-black/25" : ""}`}>
+        )}
+        <div className={`${focus !== "card" ? "max-lg:hidden" : ""} ${focus === "binder" ? "lg:hidden" : ""} border-white/[0.07] px-4 max-lg:border-t lg:w-[300px] lg:shrink-0 lg:border-l lg:px-3 ${theme ? "bg-black/25" : ""}`}>
           <div className="mx-auto w-full max-w-[270px]">
             {card ? (
               <ManiaCardPanel user={card.user} scores={card.scores} loading={card.loading} isOwnProfile supporterLookOverride={cardLook} showTierProgress={false} sleeve={shown.pack.sleeve} />

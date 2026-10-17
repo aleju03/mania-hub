@@ -2776,6 +2776,10 @@ msgstr "Un snipe es cuando tu nuevo mejor score en un mapa pasa a un jugador que
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "Un crédito por debajo del mínimo siempre queda al menos un paso bajo el nivel del chart, así que quedarse corto nunca se lee como el clear completo. En 4K LN ese paso es de al menos tres cuartos de nivel."
 
+#: src/components/supporter/TestPack.tsx
+msgid "A test pack: nothing is spent, open as many as you like."
+msgstr "Un pack de prueba: no gastas nada, ábrelo cuantas veces quieras."
+
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
 msgid "A week for a friend"
@@ -3116,6 +3120,10 @@ msgstr "Agregándote…"
 #: src/routes/report.tsx
 #~ msgid "Additional information you sent"
 #~ msgstr "Información adicional que enviaste"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Adjust your image"
+msgstr "Ajustar tu imagen"
 
 #. placeholder {0}: (vibroAnalysis.excludedDurationMs / 1000).toFixed(1)
 #: src/components/maps/MapDetailModal.tsx
@@ -4337,6 +4345,7 @@ msgstr "¿No puedes pagar con Ko-fi? Puedes dejar una propina por lava.top."
 #: src/components/settings/TranslationReportForm.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
+#: src/components/supporter/CustomArtDialog.tsx
 #: src/routes/report.tsx
 msgid "Cancel"
 msgstr "Cancelar"
@@ -7077,6 +7086,7 @@ msgid "Elite"
 msgstr "Élite"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 msgid "Ember"
 msgstr "Brasa"
 
@@ -8942,6 +8952,10 @@ msgstr "Cómo funcionan las recomendaciones"
 msgid "How to pick"
 msgstr "Cómo elegir"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "How your packs open: the slash you cut them with, its sparks and its sound, and what the pack does as it gives."
+msgstr "Cómo se abren tus packs: el corte con el que los abres, sus chispas y su sonido, y lo que hace el pack al ceder."
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "HP"
 msgstr "HP"
@@ -9402,6 +9416,10 @@ msgstr "Puede que lo hayan retirado, o que todavía esté esperando aprobación.
 msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 msgstr "Lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
 
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "It sits behind everything printed on your card, on every copy of it."
+msgstr "Va detrás de todo lo impreso en tu carta, en cada copia de ella."
+
 #: src/routes/hashi.tsx
 msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
 msgstr "Se queda en la bandeja del sistema y casi no usa CPU, con unos 3 MB de memoria en Windows."
@@ -9574,6 +9592,10 @@ msgstr "justo ahora"
 msgid "Kappa signal"
 msgstr ""
 
+#: src/lib/supporter-pack-style.ts
+msgid "Katana"
+msgstr "Katana"
+
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/routes/supporter.tsx
 msgid "Keep"
@@ -9592,16 +9614,24 @@ msgid "Keep my plays"
 msgstr "Conservar mis jugadas"
 
 #: src/routes/support.tsx
-msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper."
-msgstr "Guarda tus cartas en una funda 3D, muestra tu colección como páginas de carpeta y abre sobres impresos en tu propio envoltorio."
+msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
+msgstr "Guarda tus cartas en una funda 3D, muestra tu colección como páginas de carpeta y abre packs impresos en tu propio envoltorio, con tu propia hoja, chispas y sonido."
+
+#: src/routes/support.tsx
+#~ msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper."
+#~ msgstr "Guarda tus cartas en una funda 3D, muestra tu colección como páginas de carpeta y abre sobres impresos en tu propio envoltorio."
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
 #~ msgstr "Conservarlas"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper."
-msgstr "Guarda tus cartas en un estuche 3D (toploader, estuche magnético o slab calificado), muestra tu colección como páginas de carpeta e imprime tus packs en tu propio envoltorio."
+#~ msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, and print your packs on your own wrapper."
+#~ msgstr "Guarda tus cartas en un estuche 3D (toploader, estuche magnético o slab calificado), muestra tu colección como páginas de carpeta e imprime tus packs en tu propio envoltorio."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, print your packs on your own wrapper, and open them with your own blade."
+msgstr "Guarda tus cartas en un estuche 3D (toploader, estuche magnético o slab calificado), muestra tu colección como páginas de carpeta, imprime tus packs en tu propio envoltorio y ábrelos con tu propia hoja."
 
 #: src/lib/replay-export/errors.ts
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
@@ -10017,6 +10047,10 @@ msgstr "Luz"
 #: src/components/supporter/loadout.ts
 msgid "Light wings"
 msgstr ""
+
+#: src/lib/supporter-pack-style.ts
+msgid "Lightning"
+msgstr "Rayo"
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
@@ -11541,8 +11575,9 @@ msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "Necesita un enlace de web.archive.org a su perfil de osu!."
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 msgid "Neon"
-msgstr ""
+msgstr "Neón"
 
 #: src/components/supporter/loadout.ts
 msgid "Neon ears"
@@ -11736,6 +11771,7 @@ msgstr "próximo pack gratis"
 #~ msgstr "Próximo pack: {chance}% de probabilidad de que traiga una de estas"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next page"
 msgstr "Página siguiente"
@@ -13301,6 +13337,10 @@ msgstr "Abriendo lo que queda..."
 msgid "Opening..."
 msgstr "Abriendo..."
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Openings"
+msgstr "Aperturas"
+
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Opens packs without the shuffle and flip animations"
 #~ msgstr ""
@@ -13566,6 +13606,10 @@ msgstr "dueño"
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Pack open"
 #~ msgstr "Apertura de pack"
+
+#: src/components/supporter/loadout.ts
+msgid "Pack opening"
+msgstr "Apertura de packs"
 
 #. placeholder {0}: new Date(pausedUntil).toLocaleString(intlLocaleTag(i18n.locale as AppLocale), { dateStyle: "long", timeStyle: "short" })
 #: src/routes/packs.tsx
@@ -14473,6 +14517,7 @@ msgid "Previous collection page"
 msgstr "Página anterior de la colección"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Previous page"
 msgstr "Página anterior"
@@ -14659,6 +14704,10 @@ msgstr "morado"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Purple"
 msgstr "Morado"
+
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "Put it on my card"
+msgstr "Ponerla en mi carta"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
@@ -17338,7 +17387,7 @@ msgstr "tamaño"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
-#: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/CustomArtDialog.tsx
 msgid "Size"
 msgstr "Tamaño"
 
@@ -17908,6 +17957,10 @@ msgid "Standard"
 msgstr "Estándar"
 
 #: src/components/supporter/LoadoutSlots.tsx
+msgid "Standard blade"
+msgstr "Hoja estándar"
+
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Standard foil"
 msgstr "Foil estándar"
 
@@ -18164,7 +18217,7 @@ msgstr "Streams interrumpidos por saltos de dos notas."
 msgid "Streams thickened with three-note hand chords."
 msgstr "Streams engrosados con acordes de tres notas."
 
-#: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/CustomArtDialog.tsx
 msgid "Strength"
 msgstr "Intensidad"
 
@@ -21153,6 +21206,10 @@ msgstr "Subiendo el nuevo archivo de la skin, {done} de {size}."
 msgid "Uploading the skin file, {sentSize} of {totalSize}."
 msgstr "Subiendo el archivo de la skin, {sentSize} de {totalSize}."
 
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "Uploading..."
+msgstr "Subiendo..."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Upscroll"
@@ -21951,6 +22008,10 @@ msgstr "sin mods"
 msgid "within a minute"
 msgstr "en menos de un minuto"
 
+#: src/components/supporter/TestBinder.tsx
+msgid "Without a binder, your collection shows as the usual grid."
+msgstr "Sin carpeta, tu colección se ve en la cuadrícula de siempre."
+
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
 msgstr "Ganó por score, no por pp"
@@ -22437,6 +22498,7 @@ msgstr "Se desactivaron tus renders dinámicos."
 msgid "Your gift week was claimed. Your next support brings a new code."
 msgstr "Ya reclamaron tu semana de regalo. Tu próximo apoyo trae un código nuevo."
 
+#: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your image"
 msgstr "Tu imagen"
@@ -22658,3 +22720,7 @@ msgstr "Video de YouTube"
 #: src/components/supporter/SupporterFramePicker.tsx
 #~ msgid "Zenith orbit"
 #~ msgstr ""
+
+#: src/lib/supporter-pack-style.ts
+msgid "Zip binder"
+msgstr "Carpeta con cierre"

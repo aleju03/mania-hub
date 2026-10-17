@@ -1186,6 +1186,7 @@ function PacksPage() {
                       // instead of remounting a fresh WebGL scene.
                       <PackStage
                         wrapper={viewerPackStyle.wrapper}
+                        blade={viewerPackStyle.blade}
                         reducedMotion={reducedMotion}
                         onOpened={handleOpened}
                         onCut={handleCut}

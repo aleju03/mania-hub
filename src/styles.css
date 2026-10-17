@@ -1745,24 +1745,32 @@ html[data-custom-cursor="true"] * {
    sheen. Everything is painted once: no filters per card, no blend modes
    over the cards, nothing driven by scroll or pointer, so scrolling past a
    binder costs nothing; only a page turn animates, as a transform. */
-.bnd {
+.bnd,
+.bnd-cover {
   --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='4' seed='4' stitchTiles='stitch'/><feDiffuseLighting lighting-color='%23ffffff' surfaceScale='2.6'><feDistantLight azimuth='235' elevation='52'/></feDiffuseLighting></filter><rect width='260' height='260' filter='url(%23f)'/></svg>");
   --cover-a: #7a4a32;
   --cover-b: #2b180f;
   --stitch: rgba(236, 204, 160, 0.9);
   --glare-x: 40%;
   --glare-y: 45%;
+  background-image: var(--grain), radial-gradient(130% 110% at 22% 0%, var(--cover-a), var(--cover-b));
+  background-blend-mode: soft-light, normal;
+}
+.bnd {
+  --spine-w: 72px;
   position: relative;
   padding: 28px;
   border-radius: 26px;
-  background-image: var(--grain), radial-gradient(130% 110% at 22% 0%, var(--cover-a), var(--cover-b));
-  background-blend-mode: soft-light, normal;
   box-shadow:
     0 34px 70px -28px rgba(0, 0, 0, 0.9),
     0 10px 20px -10px rgba(0, 0, 0, 0.7),
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
     inset 0 -3px 0 rgba(0, 0, 0, 0.5),
     inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+/* A small cover for the /supporter drawer and slot (LoadoutSlots BinderBook). */
+.bnd-cover {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 10px -4px rgba(0, 0, 0, 0.7);
 }
 .bnd::before {
   /* the padded rim */
@@ -1821,6 +1829,66 @@ html[data-custom-cursor="true"] * {
   background-position: 0 0, 0 0, 0 0, 10px 0, 0 10px, 10px 10px, 0 0, 0 0;
   background-blend-mode: soft-light, screen, normal, normal, normal, normal, normal, normal;
 }
+/* The zip binder: a padded cover in a fine black weave, a zipper running
+   round it with a pull and its tab on the right, and (below) a soft
+   stitched spine with no rings, unpunched pages and side-loading pockets. */
+.bnd--zip {
+  --spine-w: 30px;
+  --cover-a: #3a3b41;
+  --cover-b: #141518;
+  --stitch: rgba(150, 153, 162, 0.9);
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.3) 0 1px, transparent 1px 3px),
+    var(--grain),
+    radial-gradient(130% 110% at 22% 0%, var(--cover-a), var(--cover-b));
+  background-blend-mode: overlay, multiply, soft-light, normal;
+}
+.bnd.bnd--zip::before {
+  /* the zipper's tape */
+  inset: 8px;
+  border-radius: 21px;
+  border: 9px solid #0b0b0d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -2px 4px rgba(0, 0, 0, 0.6);
+}
+.bnd.bnd--zip::after {
+  /* its teeth */
+  inset: 11px;
+  border-radius: 18px;
+  border: 3px dashed #9a9da6;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.85));
+  opacity: 0.95;
+}
+.bnd-zip-pull {
+  /* the slider, with its tab hanging off it */
+  position: absolute;
+  right: 6px;
+  top: 64%;
+  z-index: 3;
+  width: 16px;
+  height: 26px;
+  border-radius: 5px 5px 4px 4px;
+  background: linear-gradient(90deg, #5d6068, #e4e6ea 40%, #a6a9b1 60%, #4a4c52);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.bnd-zip-pull::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 20px;
+  width: 9px;
+  height: 34px;
+  margin-left: -4.5px;
+  border-radius: 3px 3px 6px 6px;
+  background: linear-gradient(90deg, #7fb02a, #c8f25a 45%, #8cc232);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.6);
+  transform: rotate(-8deg);
+  transform-origin: 50% 0;
+}
+@media (max-width: 639px) {
+  .bnd.bnd--zip::before { inset: 3px; border-width: 7px; border-radius: 16px; }
+  .bnd.bnd--zip::after { inset: 5px; border-radius: 14px; }
+}
 .bnd-spread {
   /* the lining inside the cover, above the stitching so a lifted leaf is too */
   position: relative;
@@ -1840,14 +1908,13 @@ html[data-custom-cursor="true"] * {
 }
 @media (min-width: 900px) {
   .bnd-spread {
-    grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) var(--spine-w) minmax(0, 1fr);
     gap: 0;
   }
   .bnd-spine {
+    /* no z-index of its own: the plate and the rings stack against the leaf separately */
     position: relative;
     display: block;
-    /* above a turning leaf: the leaf swings round the rings, through its holes */
-    z-index: 7;
     pointer-events: none;
   }
   .bnd-leaf {
@@ -1877,10 +1944,19 @@ html[data-custom-cursor="true"] * {
     padding: 22px;
   }
 }
+@media (min-width: 1000px) {
+  /* inside a panel (the /supporter stage) the binder keeps to it */
+  .bnd.bnd--contained {
+    width: auto;
+    margin-left: 0;
+    padding: 16px;
+  }
+}
 /* The plate and rings are renders whose x origin is the spine's centre
    (plate 44px in, ring 84px in, ring 24px down to the hole line). */
 .bnd-plate {
   position: absolute;
+  z-index: 4;
   top: 2%;
   bottom: 2%;
   left: calc(50% - 44px);
@@ -1888,6 +1964,24 @@ html[data-custom-cursor="true"] * {
   border-style: solid;
   border-width: 36px 0 40px;
   border-image: url("/images/binders/plate.png") 108 0 120 0 fill stretch;
+}
+.bnd-rings {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+}
+.bnd-rings--turning {
+  /* The plate is always under a turning leaf (z 4 against its 6). The rings
+     run through the leaf's holes, so they stay over it, except while it
+     stands near upright, riding the ring tops, when it is above them: from
+     38% to 62% of the way over, which on the leaf's easing curve is 33% to
+     43% of the time. */
+  animation: bnd-rings-under var(--turn-ms) linear both;
+}
+@keyframes bnd-rings-under {
+  0%, 33% { z-index: 7; }
+  33.5%, 43% { z-index: 5; }
+  43.5%, 100% { z-index: 7; }
 }
 .bnd-ring {
   position: absolute;
@@ -1897,9 +1991,9 @@ html[data-custom-cursor="true"] * {
   max-width: none;
   user-select: none;
 }
-.bnd-ring:nth-of-type(1) { top: calc(18% - 24px); }
-.bnd-ring:nth-of-type(2) { top: calc(50% - 24px); }
-.bnd-ring:nth-of-type(3) { top: calc(82% - 24px); }
+.bnd-ring:nth-child(1) { top: calc(18% - 24px); }
+.bnd-ring:nth-child(2) { top: calc(50% - 24px); }
+.bnd-ring:nth-child(3) { top: calc(82% - 24px); }
 .bnd-slot {
   position: relative;
   min-width: 0;
@@ -2013,24 +2107,64 @@ html[data-custom-cursor="true"] * {
   z-index: 4;
   background: linear-gradient(112deg, transparent 18%, rgba(255, 255, 255, 0.035) 34%, rgba(255, 255, 255, 0.055) 42%, rgba(255, 255, 255, 0.035) 50%, transparent 66%);
 }
+.bnd-spine--soft {
+  /* the padded spine the sheets are stitched into */
+  background: linear-gradient(90deg, #08080a, #1b1b1f 30%, #2a2a30 50%, #1b1b1f 70%, #08080a);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.85);
+}
+.bnd-spine--soft::before,
+.bnd-spine--soft::after {
+  content: "";
+  position: absolute;
+  top: 3%;
+  bottom: 3%;
+  border-left: 1px dashed rgba(150, 153, 162, 0.45);
+}
+.bnd-spine--soft::before { left: 26%; }
+.bnd-spine--soft::after { right: 26%; }
+.bnd--zip .bnd-holes {
+  display: none;
+}
+.bnd.bnd--zip .bnd-page {
+  padding: 10px;
+}
+.bnd--zip .bnd-pocket::before {
+  /* side-loading: the opening runs down the pocket's spine-side edge */
+  inset: 0 auto 0 0;
+  width: 8%;
+  height: auto;
+  border-bottom: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 50% 50% 0 / 0 5px 5px 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+}
+@media (min-width: 900px) {
+  .bnd--zip .bnd-page--left .bnd-pocket::before {
+    inset: 0 0 0 auto;
+    border-right: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50% 0 0 50% / 5px 0 0 5px;
+    background: linear-gradient(270deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  }
+}
 .bnd-leaf {
   position: absolute;
   top: 10px;
   bottom: 10px;
-  width: calc((100% - 20px - 72px) / 2);
+  width: calc((100% - 20px - var(--spine-w)) / 2);
   transform-style: preserve-3d;
   will-change: transform;
   z-index: 6;
   pointer-events: none;
 }
 .bnd-leaf--next {
-  left: calc(50% + 36px);
-  transform-origin: -36px 50%;
+  left: calc(50% + var(--spine-w) / 2);
+  transform-origin: calc(var(--spine-w) / -2) 50%;
   animation: bnd-turn-next var(--turn-ms) cubic-bezier(0.45, 0.05, 0.25, 1) both;
 }
 .bnd-leaf--prev {
   left: 10px;
-  transform-origin: calc(100% + 36px) 50%;
+  transform-origin: calc(100% + var(--spine-w) / 2) 50%;
   animation: bnd-turn-prev var(--turn-ms) cubic-bezier(0.45, 0.05, 0.25, 1) both;
 }
 .bnd-leaf-face {

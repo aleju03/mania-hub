@@ -6,28 +6,33 @@ import type { MessageDescriptor } from "@lingui/core";
    3D sleeve, toploader, magnetic case or graded slab around the card
    whenever it is lifted into the spotlight or turned over in a pack; never
    painted into the card's image, since the card is someone else's), the colour of their binder (their album,
-   and their shelf when others visit it), and the wrapper their packs are
-   printed on. All three are theirs alone, change
+   and their shelf when others visit it), the wrapper their packs are
+   printed on, and the blade they open them with. All four are theirs alone, change
    nothing about a card's worth, and lapse with the status like the rest. The
    backend keeps the same ids (SUPPORTER_PACK_* in features/supporters.ts). */
 
 export const SUPPORTER_CARD_SLEEVES = ["penny", "toploader", "onetouch", "slab"] as const;
 export type SupporterCardSleeveId = (typeof SUPPORTER_CARD_SLEEVES)[number];
 
-export const SUPPORTER_BINDERS = ["leather", "denim", "holo", "carbon"] as const;
+export const SUPPORTER_BINDERS = ["leather", "denim", "holo", "carbon", "zip"] as const;
 export type SupporterBinderId = (typeof SUPPORTER_BINDERS)[number];
 
 /* The foil the viewer's packs are printed on (packArt.ts draws each). */
 export const SUPPORTER_WRAPPERS = ["holo", "playfield", "cassette", "envelope"] as const;
 export type SupporterWrapperId = (typeof SUPPORTER_WRAPPERS)[number];
 
+/* The blade a pack is opened with: its streak, sparks and sounds (packBlades.ts). */
+export const SUPPORTER_BLADES = ["katana", "neon", "ember", "lightning"] as const;
+export type SupporterBladeId = (typeof SUPPORTER_BLADES)[number];
+
 export interface SupporterPackStyle {
   sleeve: SupporterCardSleeveId | null;
   binder: SupporterBinderId | null;
   wrapper: SupporterWrapperId | null;
+  blade: SupporterBladeId | null;
 }
 
-export const NO_PACK_STYLE: SupporterPackStyle = { sleeve: null, binder: null, wrapper: null };
+export const NO_PACK_STYLE: SupporterPackStyle = { sleeve: null, binder: null, wrapper: null, blade: null };
 
 export const SUPPORTER_CARD_SLEEVE_LABELS: Record<SupporterCardSleeveId, MessageDescriptor> = {
   penny: msg`Penny sleeve`,
@@ -41,6 +46,7 @@ export const SUPPORTER_BINDER_LABELS: Record<SupporterBinderId, MessageDescripto
   denim: msg`Denim`,
   holo: msg`Holo`,
   carbon: msg`Carbon fiber`,
+  zip: msg`Zip binder`,
 };
 
 export const SUPPORTER_WRAPPER_LABELS: Record<SupporterWrapperId, MessageDescriptor> = {
@@ -48,6 +54,13 @@ export const SUPPORTER_WRAPPER_LABELS: Record<SupporterWrapperId, MessageDescrip
   playfield: msg`Playfield`,
   cassette: msg`Cassette`,
   envelope: msg`Sealed envelope`,
+};
+
+export const SUPPORTER_BLADE_LABELS: Record<SupporterBladeId, MessageDescriptor> = {
+  katana: msg`Katana`,
+  neon: msg`Neon`,
+  ember: msg`Ember`,
+  lightning: msg`Lightning`,
 };
 
 export function isSupporterCardSleeve(value: unknown): value is SupporterCardSleeveId {
@@ -73,5 +86,6 @@ export function parsePackStyle(value: unknown): SupporterPackStyle {
     sleeve: pick(SUPPORTER_CARD_SLEEVES, style.sleeve),
     binder: pick(SUPPORTER_BINDERS, style.binder),
     wrapper: pick(SUPPORTER_WRAPPERS, style.wrapper),
+    blade: pick(SUPPORTER_BLADES, style.blade),
   };
 }

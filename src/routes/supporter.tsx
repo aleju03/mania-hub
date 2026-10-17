@@ -7,6 +7,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { PageHeader } from "../components/layout/PageHeader";
 import { LoadoutStage } from "../components/supporter/LoadoutStage";
 import { LoadoutDrawer, LoadoutSlots, type CustomMotif } from "../components/supporter/LoadoutSlots";
+import { CustomArtDialog, type CustomArtDraft } from "#/components/supporter/CustomArtDialog";
 import { DiceIcon } from "../components/supporter/LoadoutIcons";
 import { GiftCodePanel, RedeemGiftCode } from "../components/supporter/GiftCodePanel";
 import { useSettled } from "../components/supporter/use-settled";
@@ -63,7 +64,6 @@ import {
 
 const NO_SCORES: [] = [];
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const SLIDER_SAVE_DELAY_MS = 450;
 /* Reels: how often a spinning slot changes, when the first stops, and the gap to the next. */
 const REEL_TICK_MS = 70;
 const REEL_FIRST_STOP_MS = 520;
@@ -108,7 +108,9 @@ function SupporterPage() {
   /* The loadout the server last confirmed, which a failed save falls back to. */
   const saved = useRef<Loadout | null>(null);
   const saveChain = useRef<Promise<void>>(Promise.resolve());
-  const sliderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [artDraft, setArtDraft] = useState<CustomArtDraft | null>(null);
+  const [artUploading, setArtUploading] = useState(false);
+  const [artError, setArtError] = useState<string | null>(null);
   const reelTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   /* Bumped when a gift code turns the viewer into a supporter, to load the page again as one. */
   const [reload, setReload] = useState(0);
@@ -134,12 +136,13 @@ function SupporterPage() {
   }, [viewer?.id, reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => {
-    if (sliderTimer.current) clearTimeout(sliderTimer.current);
     reelTimers.current.forEach(clearTimeout);
   }, []);
 
   const supporter = state?.supporter === true;
-  const customLook = equipped?.look.motif === "custom" && equipped.look.url ? equipped.look : null;
+  // A roll waiting to be kept can hold the image too (an upload lands on it).
+  const heldLook = (pending ?? equipped)?.look;
+  const customLook = heldLook?.motif === "custom" && heldLook.url ? heldLook : null;
   const customUrl = customLook?.url ?? state?.custom?.url ?? null;
   const customScale = customLook ? customLook.scale ?? 1 : state?.custom?.scale ?? 1;
   const customOpacity = customLook ? customLook.opacity ?? 0.85 : state?.custom?.opacity ?? 0.85;
@@ -166,7 +169,7 @@ function SupporterPage() {
         if (next.nameStyle !== before.nameStyle) latest = await saveSupporterNameStyleSetting({ data: { nameStyle: next.nameStyle } });
         if (next.nameFont !== before.nameFont) latest = await saveSupporterNameFontSetting({ data: { nameFont: next.nameFont } });
         if (!sameLook(next.look, before.look)) latest = await saveSupporterLookSetting({ data: next.look });
-        if (next.pack.sleeve !== before.pack.sleeve || next.pack.binder !== before.pack.binder || next.pack.wrapper !== before.pack.wrapper) {
+        if (next.pack.sleeve !== before.pack.sleeve || next.pack.binder !== before.pack.binder || next.pack.wrapper !== before.pack.wrapper || next.pack.blade !== before.pack.blade) {
           latest = await saveSupporterPackStyleSetting({ data: { packStyle: next.pack } });
           setSupporterSleeveLocally(viewer.id, next.pack.sleeve);
         }
@@ -216,40 +219,44 @@ function SupporterPage() {
     equip({ ...equipped, themeOptions });
   };
 
-  /* Sliders on the viewer's own image show every step and save once they stop. */
-  const adjust = (look: SupporterLook) => {
-    if (!equipped) return;
-    if (pending) {
-      setPending({ ...pending, look });
-      return;
-    }
-    const next = { ...equipped, look };
-    setEquipped(next);
-    if (sliderTimer.current) clearTimeout(sliderTimer.current);
-    sliderTimer.current = setTimeout(() => persist(next), SLIDER_SAVE_DELAY_MS);
-  };
-
+  /* The viewer's own image goes through CustomArtDialog: an upload opens
+     it with the upload running, the image's tile opens it to adjust, and only
+     saving puts it on the card. */
   const upload = async (file: File) => {
     setError(null);
+    setArtError(null);
     if (file.size > MAX_UPLOAD_BYTES) {
       setError(t`That image is over 5 MB.`);
       return;
     }
-    setBusy(true);
+    setArtDraft({ url: null, scale: custom?.scale ?? 1, opacity: custom?.opacity ?? 0.85 });
+    setArtUploading(true);
     try {
       const response = await fetch("/api/supporter-motif", { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file });
       const body = await response.json().catch(() => null) as { url?: unknown; error?: unknown } | null;
       if (!response.ok || typeof body?.url !== "string") throw new Error(typeof body?.error === "string" ? body.error : t`Could not upload that image.`);
-      setBusy(false);
-      const base = pending ?? equipped;
-      if (!base) return;
-      const look: SupporterLook = { motif: "custom", foil: base.look.foil, url: body.url, scale: custom?.scale ?? 1, opacity: custom?.opacity ?? 0.85 };
-      if (pending) setPending({ ...pending, look });
-      else equip({ ...base, look });
+      const url = body.url;
+      setArtDraft((draft) => (draft ? { ...draft, url } : draft));
     } catch (cause) {
-      setBusy(false);
-      setError(cause instanceof Error ? cause.message : t`Could not upload that image.`);
+      setArtError(cause instanceof Error ? cause.message : t`Could not upload that image.`);
+    } finally {
+      setArtUploading(false);
     }
+  };
+
+  const editCustom = () => {
+    if (!custom) return;
+    setArtError(null);
+    setArtDraft({ url: custom.url, scale: custom.scale, opacity: custom.opacity });
+  };
+
+  const saveArt = () => {
+    const base = pending ?? equipped;
+    if (!artDraft?.url || !base) return;
+    const look: SupporterLook = { motif: "custom", foil: base.look.foil, url: artDraft.url, scale: artDraft.scale, opacity: artDraft.opacity };
+    if (pending) setPending({ ...pending, look });
+    else equip({ ...base, look });
+    setArtDraft(null);
   };
 
   const spinning = reel !== null;
@@ -312,7 +319,7 @@ function SupporterPage() {
     setPop((n) => n + 1);
   };
   const bare = !!equipped && equipped.theme === null && equipped.frame === null && equipped.nameStyle === null && equipped.nameFont === null && sameLook(equipped.look, DEFAULT_LOOK)
-    && !equipped.pack.sleeve && !equipped.pack.binder && !equipped.pack.wrapper;
+    && !equipped.pack.sleeve && !equipped.pack.binder && !equipped.pack.wrapper && !equipped.pack.blade;
 
   const undo = () => {
     setPending(null);
@@ -353,12 +360,12 @@ function SupporterPage() {
 
   /* Stable handlers for the drawer, so a hover (which re-renders the page)
      does not re-render every tile in it. */
-  const latest = useRef({ pick, adjust, upload, setThemeOptions });
-  latest.current = { pick, adjust, upload, setThemeOptions };
+  const latest = useRef({ pick, upload, editCustom, setThemeOptions });
+  latest.current = { pick, upload, editCustom, setThemeOptions };
   const onTry = useCallback((slot: SlotId, value: SlotValue | undefined) => setHover(value === undefined ? null : { slot, value }), []);
   const onPick = useCallback((slot: SlotId, value: SlotValue) => latest.current.pick(slot, value), []);
   const onUpload = useCallback((file: File) => void latest.current.upload(file), []);
-  const onAdjust = useCallback((look: SupporterLook) => latest.current.adjust(look), []);
+  const onEditCustom = useCallback(() => latest.current.editCustom(), []);
   const onThemeOptions = useCallback((options: Loadout["themeOptions"]) => latest.current.setThemeOptions(options), []);
 
   const giftFrom = state?.giftFrom ?? null;
@@ -466,7 +473,7 @@ function SupporterPage() {
                       username={viewer.username}
                       avatar={avatar}
                       card={stageCard}
-                      focus={open === "motif" || open === "foil" || open === "sleeve" ? "card" : "hero"}
+                      focus={open === "motif" || open === "foil" || open === "sleeve" ? "card" : open === "wrapper" || open === "blade" ? "pack" : open === "binder" ? "binder" : "hero"}
                       pop={pop}
                       spinning={spinning}
                       footer={footer}
@@ -503,10 +510,23 @@ function SupporterPage() {
                         onTry={onTry}
                         onPick={onPick}
                         onUpload={onUpload}
-                        onAdjust={onAdjust}
+                        onEditCustom={onEditCustom}
                         onThemeOptions={onThemeOptions}
                       />
                       {error && <div className="mt-3 text-[12px] text-osu-red-light">{error}</div>}
+                      {artDraft && (
+                        <CustomArtDialog
+                          draft={artDraft}
+                          uploading={artUploading}
+                          error={artError}
+                          foil={held.look.foil}
+                          card={stageCard}
+                          sleeve={held.pack.sleeve}
+                          onChange={setArtDraft}
+                          onSave={saveArt}
+                          onClose={() => setArtDraft(null)}
+                        />
+                      )}
                     </div>
                   </div>
                 )}
