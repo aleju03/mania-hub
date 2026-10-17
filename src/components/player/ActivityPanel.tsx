@@ -7,7 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSPro
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { msg } from "@lingui/core/macro";
+import { msg, plural } from "@lingui/core/macro";
 import type { I18n, MessageDescriptor } from "@lingui/core";
 import {
   fetchLivePlayerActivityDirect,
@@ -52,6 +52,8 @@ type ActivityDay = {
   sessionCount: number;
   mapCount: number;
   level: 0 | 1 | 2 | 3 | 4;
+  /** Team days only: how many members played. */
+  playerCount?: number;
   maps: ActivityPlayedMap[];
   skills: ActivitySkillReadout | null;
   timeline: ActivityTimelineSegment[];
@@ -96,7 +98,11 @@ type ActivitySummary = {
   timezone: string;
 };
 
+type ActivityColorMetric = "plays" | "sessions" | "maps" | "passes" | "players";
+
 const ACTIVITY_EMPTY_CELL_CLASS = "bg-osu-b4/45 border-osu-b3/25";
+const PLAYER_ACTIVITY_METRICS: ActivityColorMetric[] = ["plays", "sessions", "maps", "passes"];
+const TEAM_ACTIVITY_METRICS: ActivityColorMetric[] = ["plays", "players", "sessions"];
 const PLAYER_ACTIVITY_COUNTRY_SCOPE = "GLOBAL";
 
 export function PlayerActivityPanel({ user }: { user: OsuUser }) {
@@ -246,6 +252,8 @@ export function PlayerActivityPanel({ user }: { user: OsuUser }) {
         }}
         onSelectDay={setSelectedDay}
         onSimulateDay={() => setDevDay(createDevActivityDay(activity.timezone))}
+        metrics={PLAYER_ACTIVITY_METRICS}
+        scaleKey="player"
       />
 
       <AnimatePresence>
@@ -356,7 +364,8 @@ export function TeamActivityPanel({ teamId, members, onReady }: {
   const selectedYear = snapshot?.year ?? requestedYear;
   const yearPending = loading && selectedYear !== requestedYear;
   const playerSnapshot = useMemo(() => (snapshot ? teamToActivitySnapshot(snapshot) : null), [snapshot]);
-  const activity = useMemo(() => buildActivityFromSnapshot(playerSnapshot, selectedYear), [playerSnapshot, selectedYear]);
+  const playerCounts = useMemo(() => new Map((snapshot?.days ?? []).map((day) => [day.date, day.members.length])), [snapshot]);
+  const activity = useMemo(() => buildActivityFromSnapshot(playerSnapshot, selectedYear, playerCounts), [playerCounts, playerSnapshot, selectedYear]);
   const yearOptions = useMemo(() => {
     const years = new Set([currentYear, requestedYear, selectedYear, ...activity.availableYears]);
     return [...years].sort((a, b) => b - a);
@@ -463,6 +472,8 @@ export function TeamActivityPanel({ teamId, members, onReady }: {
           setSelectedDate(null);
         }}
         onSelectDay={(day) => setSelectedDate(day.date)}
+        metrics={TEAM_ACTIVITY_METRICS}
+        scaleKey="team"
         subtitle={snapshot ? (
           <Plural
             value={snapshot.activeMembers}
@@ -645,6 +656,8 @@ function ActivityYearView({
   onSelectDay,
   onSimulateDay,
   subtitle,
+  metrics,
+  scaleKey,
 }: {
   activity: ActivitySummary;
   selectedYear: number;
@@ -655,18 +668,78 @@ function ActivityYearView({
   onSelectDay: (day: ActivityDay) => void;
   onSimulateDay?: () => void;
   subtitle?: ReactNode;
+  metrics: ActivityColorMetric[];
+  /* Player and team scales are kept apart: a team day runs to hundreds of plays. */
+  scaleKey: "player" | "team";
 }) {
   const { t, i18n } = useLingui();
-  const averageActiveDay = activity.activeDays > 0 ? Math.round(activity.totalScores / activity.activeDays) : 0;
   const activityGridStyle = useMemo(
     () => ({ "--activity-weeks": String(activity.weeks.length) }) as CSSProperties,
     [activity.weeks.length],
   );
-  const [hoveredCell, setHoveredCell] = useState<{ date: string; scoreCount: number; left: number; top: number } | null>(null);
-  const showCellTooltip = (event: ReactPointerEvent<HTMLElement>, date: string, scoreCount: number) => {
+  const [colorPrefs, setColorPrefs] = useState<ActivityColorPrefs>(DEFAULT_ACTIVITY_COLOR_PREFS);
+  const [keyCountFilter, setKeyCountFilter] = useState<number | null>(null);
+  useEffect(() => {
+    setColorPrefs(readActivityColorPrefs(scaleKey));
+  }, [scaleKey]);
+  const updateColorPrefs = (next: ActivityColorPrefs) => {
+    setColorPrefs(next);
+    writeActivityColorPrefs(scaleKey, next);
+  };
+  const keyCounts = useMemo(() => getActivityYearKeyCounts(activity.days), [activity.days]);
+  const activeKeyCount = keyCountFilter != null && keyCounts.includes(keyCountFilter) ? keyCountFilter : null;
+  const metric = activeKeyCount != null ? "plays" : metrics.includes(colorPrefs.metric) ? colorPrefs.metric : "plays";
+  const metricValue = (day: ActivityDay) => getActivityMetricValue(day, metric, activeKeyCount);
+  // A player's plays keep the typical-session scale; every other count, and a
+  // team's plays, scale from the year's own busy days.
+  const autoFullAt = useMemo(
+    () => (scaleKey === "player" && metric === "plays" && activeKeyCount == null
+      ? Math.max(1, Math.round(activity.typicalSession * 2.4))
+      : getActivityBusyDayValue(activity.days.map((day) => getActivityMetricValue(day, metric, activeKeyCount)))),
+    [activeKeyCount, activity.days, activity.typicalSession, metric, scaleKey],
+  );
+  const customFullAt = colorPrefs.fullAt[metric] ?? null;
+  const fullAt = customFullAt ?? autoFullAt;
+  const formatMetricCount = (value: number, countMetric: ActivityColorMetric) => {
+    switch (countMetric) {
+      case "sessions": return t`${plural(value, { one: "# session", other: "# sessions" })}`;
+      case "maps": return t`${plural(value, { one: "# map", other: "# maps" })}`;
+      case "passes": return t`${plural(value, { one: "# pass", other: "# passes" })}`;
+      case "players": return t`${plural(value, { one: "# player", other: "# players" })}`;
+      default: return t`${plural(value, { one: "# play", other: "# plays" })}`;
+    }
+  };
+  const metricUnits: Record<ActivityColorMetric, string> = {
+    plays: t`plays`,
+    sessions: t`sessions`,
+    maps: t`maps`,
+    passes: t`passes`,
+    players: t`players`,
+  };
+  const metricValues = activity.days.map(metricValue).filter((value) => value > 0);
+  const averageActiveDay = metricValues.length > 0
+    ? Math.round(metricValues.reduce((sum, value) => sum + value, 0) / metricValues.length)
+    : 0;
+  const keyModeTotal = activeKeyCount != null ? metricValues.reduce((sum, value) => sum + value, 0) : 0;
+  const keyModeLabel = activeKeyCount != null ? formatActivityKeyCount(activeKeyCount) : null;
+  const setCustomFullAt = (value: number | null) => {
+    const next = { ...colorPrefs.fullAt };
+    if (value != null) next[metric] = value;
+    else delete next[metric];
+    updateColorPrefs({ ...colorPrefs, fullAt: next });
+  };
+  const metricLabels: Record<ActivityColorMetric, string> = {
+    plays: t`Plays`,
+    sessions: t`Sessions`,
+    maps: t`Maps`,
+    passes: t`Passes`,
+    players: t`Players`,
+  };
+  const [hoveredCell, setHoveredCell] = useState<{ date: string; label: string; left: number; top: number } | null>(null);
+  const showCellTooltip = (event: ReactPointerEvent<HTMLElement>, date: string, label: string) => {
     if (event.pointerType !== "mouse") return;
     const rect = event.currentTarget.getBoundingClientRect();
-    setHoveredCell({ date, scoreCount, left: rect.left + rect.width / 2, top: rect.top });
+    setHoveredCell({ date, label, left: rect.left + rect.width / 2, top: rect.top });
   };
   useEffect(() => {
     if (!hoveredCell) return;
@@ -689,17 +762,45 @@ function ActivityYearView({
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-white">
-                  <Trans>{formatNumber(activity.totalScores)} plays in {selectedYear}</Trans>
+                  {keyModeLabel ? (
+                    <Trans>{formatNumber(keyModeTotal)} {keyModeLabel} plays in {selectedYear}</Trans>
+                  ) : (
+                    <Trans>{formatNumber(activity.totalScores)} plays in {selectedYear}</Trans>
+                  )}
                 </h2>
                 {subtitle ? <div className="mt-1 text-[11px] text-osu-f1">{subtitle}</div> : null}
               </div>
               <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-                <ActivityInlineMetric label={t`Avg active day`} value={formatNumber(averageActiveDay)} detail={t`plays`} />
+                <ActivityInlineMetric label={t`Avg active day`} value={formatNumber(averageActiveDay)} detail={metricUnits[metric]} />
                 <ActivityInlineMetric label={t`Streak`} value={t`${activity.currentStreak}d`} detail={t`now`} />
               </div>
             </div>
 
-            <div className="mt-6 sm:mt-7">
+            <div className="mt-5 flex items-center gap-3 overflow-x-auto scrollbar-hide">
+              <ActivityChoiceRow
+                options={metrics.map((value) => ({ key: value, label: metricLabels[value] }))}
+                selected={metric}
+                onSelect={(value) => {
+                  setKeyCountFilter(null);
+                  updateColorPrefs({ ...colorPrefs, metric: value });
+                }}
+              />
+              {keyCounts.length > 1 && (
+                <>
+                  <span className="h-4 w-px shrink-0 bg-white/[0.07]" />
+                  <ActivityChoiceRow
+                    options={[
+                      { key: "all", label: t`All keys` },
+                      ...keyCounts.map((keyCount) => ({ key: String(keyCount), label: formatActivityKeyCount(keyCount) ?? "" })),
+                    ]}
+                    selected={activeKeyCount == null ? "all" : String(activeKeyCount)}
+                    onSelect={(value) => setKeyCountFilter(value === "all" ? null : Number(value))}
+                  />
+                </>
+              )}
+            </div>
+
+            <div className="mt-4">
               <div className="flex gap-2">
                 {/* Row pitch must match the cells: fixed 12px rows on mobile (cells are
                     12px), 1fr rows on sm+ where pt-5 equals the month-label row (h-3 +
@@ -721,15 +822,21 @@ function ActivityYearView({
                         <div key={week.key} className="grid min-w-0 grid-rows-7 gap-1">
                           {week.days.map((day, index) => (
                             day ? (
-                              day.scoreCount > 0 ? (
+                              day.scoreCount > 0 && (activeKeyCount == null || metricValue(day) > 0) ? (
                                 <button
                                   key={day.date}
                                   type="button"
                                   aria-label={t`${formatFullActivityDate(day.date)}: ${day.scoreCount} plays, ${day.sessionCount} sessions`}
-                                  onPointerEnter={(event) => showCellTooltip(event, day.date, day.scoreCount)}
+                                  onPointerEnter={(event) => showCellTooltip(
+                                    event,
+                                    day.date,
+                                    activeKeyCount != null
+                                      ? `${formatMetricCount(metricValue(day), "plays")} (${formatActivityKeyCount(activeKeyCount)})`
+                                      : formatMetricCount(metricValue(day), metric),
+                                  )}
                                   onClick={() => onSelectDay(day)}
                                   className="aspect-square w-full min-w-0 rounded-[3px] border transition-transform hover:scale-125 hover:ring-2 hover:ring-osu-pink/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/90"
-                                  style={getActivityCellStyle(day, activity.typicalSession)}
+                                  style={getActivityCellStyle(metricValue(day), fullAt)}
                                 />
                               ) : (
                                 <span
@@ -755,6 +862,13 @@ function ActivityYearView({
               <span className="text-[11px] text-osu-f1">
                 <Trans>Typical session <span className="font-semibold text-osu-l2">{activity.typicalSession} plays</span></Trans>
               </span>
+              <ActivityScaleLegend
+                fullAt={fullAt}
+                autoFullAt={autoFullAt}
+                custom={customFullAt != null}
+                unit={metricUnits[metric]}
+                onChange={setCustomFullAt}
+              />
               {import.meta.env.DEV && onSimulateDay && (
                 <button
                   type="button"
@@ -791,9 +905,7 @@ function ActivityYearView({
           className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-full rounded-lg bg-osu-b3 px-3 py-1.5 text-center shadow-xl shadow-black/50"
           style={{ left: hoveredCell.left, top: hoveredCell.top - 6 }}
         >
-          <div className="whitespace-nowrap text-sm font-semibold text-white">
-            {hoveredCell.scoreCount === 1 ? t`1 play` : t`${formatNumber(hoveredCell.scoreCount)} plays`}
-          </div>
+          <div className="whitespace-nowrap text-sm font-semibold text-white">{hoveredCell.label}</div>
           <div className="whitespace-nowrap text-[11px] text-osu-f1">{formatShortActivityDate(hoveredCell.date)}</div>
         </div>,
         document.body,
@@ -801,6 +913,97 @@ function ActivityYearView({
     </>
   );
 }
+
+function ActivityChoiceRow<T extends string>({ options, selected, onSelect }: {
+  options: { key: T; label: string }[];
+  selected: T;
+  onSelect: (key: T) => void;
+}) {
+  return (
+    <div className="inline-flex shrink-0 rounded-lg bg-osu-b5/60 p-0.5">
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          aria-pressed={option.key === selected}
+          onClick={() => onSelect(option.key)}
+          className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold transition-colors ${option.key === selected
+              ? "bg-osu-b3 text-white"
+              : "text-osu-f1 hover:text-osu-l2"
+            }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* What the colors mean: the dimmest cell is one, the brightest is the full-color
+   count, and that count can be clicked to set it by hand. */
+function ActivityScaleLegend({ fullAt, autoFullAt, custom, unit, onChange }: {
+  fullAt: number;
+  autoFullAt: number;
+  custom: boolean;
+  unit: string;
+  onChange: (value: number | null) => void;
+}) {
+  const { t } = useLingui();
+  const [editing, setEditing] = useState(false);
+  const commit = (raw: string) => {
+    setEditing(false);
+    const value = Math.round(Number(raw));
+    if (raw.trim() === "" || !Number.isFinite(value) || value < 1 || value === autoFullAt) onChange(null);
+    else onChange(value);
+  };
+  return (
+    <div className="flex items-center gap-1.5 text-[11px] text-osu-f1">
+      <span className="tabular-nums">1</span>
+      <span className="flex gap-[3px]">
+        {ACTIVITY_LEGEND_STEPS.map((step) => (
+          <span
+            key={step}
+            className="h-3 w-3 rounded-[3px] border"
+            style={getActivityCellStyle(step, 1)}
+          />
+        ))}
+      </span>
+      {editing ? (
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          autoFocus
+          defaultValue={fullAt}
+          aria-label={t`Count for the brightest color`}
+          onBlur={(event) => commit(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Escape") setEditing(false);
+          }}
+          className="w-12 rounded-md bg-osu-b5/60 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-white outline-none focus:ring-1 focus:ring-osu-pink/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          title={t`Set the count for the brightest color`}
+          className="font-bold tabular-nums text-osu-l2 underline decoration-osu-f1/50 decoration-dashed underline-offset-2 hover:text-white"
+        >
+          {formatNumber(fullAt)}+
+        </button>
+      )}
+      <span>{unit}</span>
+      {custom && !editing ? (
+        <button type="button" onClick={() => onChange(null)} className="ml-1 font-semibold text-osu-f1 hover:text-osu-l2">
+          {t`Auto`}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+const ACTIVITY_LEGEND_STEPS = [0.04, 0.2, 0.42, 0.68, 1];
 
 function ActivityDetailMetric({ label, value }: { label: string; value: string }) {
   return (
@@ -1201,7 +1404,11 @@ function ActivityMonthLabels({ weeks, gridStyle }: { weeks: ActivityWeek[]; grid
   );
 }
 
-function buildActivityFromSnapshot(snapshot: LivePlayerActivitySnapshot | null, year: number): ActivitySummary {
+function buildActivityFromSnapshot(
+  snapshot: LivePlayerActivitySnapshot | null,
+  year: number,
+  playerCounts?: Map<string, number>,
+): ActivitySummary {
   const today = startOfLocalDay(new Date());
   const { start, end } = getActivityHeatmapRange(snapshot, year);
   const activeDays = new Map((snapshot?.days ?? []).map((day) => [day.date, day]));
@@ -1222,6 +1429,7 @@ function buildActivityFromSnapshot(snapshot: LivePlayerActivitySnapshot | null, 
       maps: active?.maps ?? [],
       skills: active?.skills ?? null,
       timeline: active?.timeline ?? [],
+      ...(playerCounts ? { playerCount: playerCounts.get(dateKey) ?? 0 } : {}),
     }, typicalSession));
   }
 
@@ -1296,8 +1504,74 @@ function getActivityLevel(scoreCount: number, typicalSession: number): 0 | 1 | 2
   return 4;
 }
 
-function getActivityCellStyle(day: ActivityDay, typicalSession: number) {
-  const ratio = Math.min(1, day.scoreCount / Math.max(1, typicalSession * 2.4));
+type ActivityColorPrefs = {
+  metric: ActivityColorMetric;
+  /** A count the player set for the brightest cell, per metric; unset is automatic. */
+  fullAt: Partial<Record<ActivityColorMetric, number>>;
+};
+
+const DEFAULT_ACTIVITY_COLOR_PREFS: ActivityColorPrefs = { metric: "plays", fullAt: {} };
+const ACTIVITY_COLOR_METRICS: ActivityColorMetric[] = ["plays", "sessions", "maps", "passes", "players"];
+
+function activityColorPrefsKey(scaleKey: string): string {
+  return `mania-hub-activity-colors:${scaleKey}`;
+}
+
+function readActivityColorPrefs(scaleKey: string): ActivityColorPrefs {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(activityColorPrefsKey(scaleKey)) ?? "null") as Partial<ActivityColorPrefs> | null;
+    if (!raw || typeof raw !== "object") return DEFAULT_ACTIVITY_COLOR_PREFS;
+    const metric = ACTIVITY_COLOR_METRICS.includes(raw.metric as ActivityColorMetric) ? raw.metric as ActivityColorMetric : "plays";
+    const fullAt: ActivityColorPrefs["fullAt"] = {};
+    for (const key of ACTIVITY_COLOR_METRICS) {
+      const value = raw.fullAt?.[key];
+      if (typeof value === "number" && Number.isFinite(value) && value >= 1) fullAt[key] = Math.round(value);
+    }
+    return { metric, fullAt };
+  } catch {
+    return DEFAULT_ACTIVITY_COLOR_PREFS;
+  }
+}
+
+function writeActivityColorPrefs(scaleKey: string, prefs: ActivityColorPrefs): void {
+  try {
+    window.localStorage.setItem(activityColorPrefsKey(scaleKey), JSON.stringify(prefs));
+  } catch {
+    // Private mode or a full quota: the choice just lasts for this visit.
+  }
+}
+
+function getActivityMetricValue(day: ActivityDay, metric: ActivityColorMetric, keyCount: number | null): number {
+  if (keyCount != null) return day.skills?.keyModes.find((mode) => mode.keyCount === keyCount)?.totalPlays ?? 0;
+  switch (metric) {
+    case "sessions": return day.sessionCount;
+    case "maps": return day.mapCount;
+    case "passes": return day.passedCount;
+    case "players": return day.playerCount ?? 0;
+    default: return day.scoreCount;
+  }
+}
+
+/** The keymodes played this year, from each day's pattern readout. */
+function getActivityYearKeyCounts(days: ActivityDay[]): number[] {
+  const keyCounts = new Set<number>();
+  for (const day of days) {
+    for (const mode of day.skills?.keyModes ?? []) {
+      if (mode.keyCount != null && mode.keyCount > 0 && mode.totalPlays > 0) keyCounts.add(mode.keyCount);
+    }
+  }
+  return [...keyCounts].sort((a, b) => a - b);
+}
+
+/** The busy end of the year: active days at or above it get the full color. */
+function getActivityBusyDayValue(values: number[]): number {
+  const active = values.filter((value) => value > 0).sort((a, b) => a - b);
+  if (active.length === 0) return 1;
+  return Math.max(1, active[Math.floor((active.length - 1) * 0.9)]);
+}
+
+function getActivityCellStyle(value: number, fullAt: number) {
+  const ratio = Math.min(1, value / Math.max(1, fullAt));
   const eased = Math.sqrt(ratio);
   const saturation = Math.round(58 + eased * 42);
   const lightness = Math.round(20 + eased * 55);

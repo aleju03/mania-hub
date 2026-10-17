@@ -361,6 +361,11 @@ msgstr "{0} ({1} estrellas)"
 msgid "{0} {1} maniacard"
 msgstr "{0} {1} maniacard"
 
+#. placeholder {0}: formatNumber(keyModeTotal)
+#: src/components/player/ActivityPanel.tsx
+msgid "{0} {keyModeLabel} plays in {selectedYear}"
+msgstr "{0} plays de {keyModeLabel} en {selectedYear}"
+
 #. placeholder {0}: binders?.length ?? 0
 #: src/components/packs/SetsView.tsx
 msgid "{0} / {BINDER_MAX_PER_COLLECTOR} sets · Up to {BINDER_MAX_CARDS} cards per set"
@@ -1889,6 +1894,26 @@ msgstr "Top {label} plays de {username}"
 msgid "{username}'s top <0>{label}</0> plays"
 msgstr "Top <0>{label}</0> plays de {username}"
 
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# map} other {# maps}}"
+msgstr "{value, plural, one {# mapa} other {# mapas}}"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# pass} other {# passes}}"
+msgstr "{value, plural, one {# pass} other {# passes}}"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# play} other {# plays}}"
+msgstr "{value, plural, one {# jugada} other {# jugadas}}"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# player} other {# players}}"
+msgstr "{value, plural, one {# jugador} other {# jugadores}}"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# session} other {# sessions}}"
+msgstr "{value, plural, one {# sesión} other {# sesiones}}"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "{value} rates per chart"
 #~ msgstr "{value} velocidades por mapa"
@@ -2178,8 +2203,8 @@ msgid "1 person has your card"
 msgstr "1 persona tiene tu carta"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "1 play"
-msgstr "1 play"
+#~ msgid "1 play"
+#~ msgstr "1 play"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "1 rate per chart"
@@ -3108,6 +3133,7 @@ msgid "All keymodes"
 msgstr "Todos los modos de teclas"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "All keys"
 msgstr "Todos los modos"
 
@@ -3554,6 +3580,7 @@ msgid "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
 msgstr "Al autorizar se te redirige a <0>{redirectHost}</0> en esta computadora."
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/signature-style.ts
 msgid "Auto"
 msgstr "Auto"
@@ -5638,6 +5665,10 @@ msgstr "No se pudo dejar de trackear en este momento. Inténtalo de nuevo en un 
 msgid "Couldn't turn on tracking right now. Try again in a moment."
 msgstr "No se pudo activar el seguimiento en este momento. Inténtalo de nuevo en un momento."
 
+#: src/components/player/ActivityPanel.tsx
+msgid "Count for the brightest color"
+msgstr "Cantidad para el color más claro"
+
 #. placeholder {0}: String(threshold)
 #: src/components/me/GoalsPanel.tsx
 msgid "counting {0}pp+ plays"
@@ -7636,6 +7667,10 @@ msgstr "Actividad completa"
 #: src/routes/recommendations.tsx
 msgid "full breakdown"
 msgstr "análisis completo"
+
+#: src/components/player/ActivityPanel.tsx
+#~ msgid "Full color at"
+#~ msgstr "Color máximo en"
 
 #: src/routes/tracker.tsx
 msgid "Full combos only (0 misses)"
@@ -10214,6 +10249,7 @@ msgid "Mapper"
 msgstr "Mapper"
 
 #: src/components/layout/Nav.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/recommendations.tsx
 msgid "maps"
 msgstr "Mapas"
@@ -12823,6 +12859,14 @@ msgstr "Pasa <0/> en {mapSlot}"
 msgid "Pass bar"
 msgstr "Clear"
 
+#: src/components/player/ActivityPanel.tsx
+msgid "passes"
+msgstr "passes"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "Passes"
+msgstr "Passes"
+
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
 msgstr "Pasar a varios jugadores con un mismo score cuenta como un solo snipe, contra el que estaba más arriba."
@@ -13192,6 +13236,7 @@ msgid "Player's skin"
 msgstr "Skin del jugador"
 
 #: src/components/layout/Nav.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/dan-estimates.tsx
 #: src/routes/maps.tsx
 #: src/routes/recommendations.tsx
@@ -15643,6 +15688,10 @@ msgstr "Los servidores no están disponibles por ahora"
 #~ msgid "Session update"
 #~ msgstr ""
 
+#: src/components/player/ActivityPanel.tsx
+msgid "sessions"
+msgstr "sesiones"
+
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
 msgid "Sessions"
@@ -15715,6 +15764,10 @@ msgstr "Fijado el {at}"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Set start"
 #~ msgstr "Fijar inicio"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "Set the count for the brightest color"
+msgstr "Elige la cantidad para el color más claro"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Set the next milestone"

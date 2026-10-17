@@ -373,6 +373,11 @@ msgstr "{0} ({1} 星)"
 msgid "{0} {1} maniacard"
 msgstr "{0} {1} maniacard"
 
+#. placeholder {0}: formatNumber(keyModeTotal)
+#: src/components/player/ActivityPanel.tsx
+msgid "{0} {keyModeLabel} plays in {selectedYear}"
+msgstr "{selectedYear} 年 {keyModeLabel} 游玩 {0} 次"
+
 #. placeholder {0}: binders?.length ?? 0
 #: src/components/packs/SetsView.tsx
 msgid "{0} / {BINDER_MAX_PER_COLLECTOR} sets · Up to {BINDER_MAX_CARDS} cards per set"
@@ -1901,6 +1906,26 @@ msgstr "{username} 的 {label} 最佳成绩"
 msgid "{username}'s top <0>{label}</0> plays"
 msgstr "{username} 的 <0>{label}</0> 最佳成绩"
 
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# map} other {# maps}}"
+msgstr "{value, plural, other {# 张谱面}}"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# pass} other {# passes}}"
+msgstr "{value, plural, other {# 次通过}}"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# play} other {# plays}}"
+msgstr "{value, plural, other {# 次游玩}}"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# player} other {# players}}"
+msgstr "{value, plural, other {# 名玩家}}"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "{value, plural, one {# session} other {# sessions}}"
+msgstr "{value, plural, other {# 个场次}}"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "{value} rates per chart"
 #~ msgstr "每张谱面 {value} 个倍速"
@@ -2190,8 +2215,8 @@ msgid "1 person has your card"
 msgstr "有 1 人持有你的卡片"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "1 play"
-msgstr "1 次游玩"
+#~ msgid "1 play"
+#~ msgstr "1 次游玩"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "1 rate per chart"
@@ -3120,6 +3145,7 @@ msgid "All keymodes"
 msgstr "全部键数"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "All keys"
 msgstr "全部键数"
 
@@ -3566,6 +3592,7 @@ msgid "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
 msgstr "授权后将跳转到这台电脑上的 <0>{redirectHost}</0>。"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/signature-style.ts
 msgid "Auto"
 msgstr "自动"
@@ -5650,6 +5677,10 @@ msgstr "暂时无法停止追踪，请稍后再试。"
 msgid "Couldn't turn on tracking right now. Try again in a moment."
 msgstr "现在无法开启追踪。请稍后再试。"
 
+#: src/components/player/ActivityPanel.tsx
+msgid "Count for the brightest color"
+msgstr "最亮颜色对应的数量"
+
 #. placeholder {0}: String(threshold)
 #: src/components/me/GoalsPanel.tsx
 msgid "counting {0}pp+ plays"
@@ -7648,6 +7679,10 @@ msgstr "完整活跃度"
 #: src/routes/recommendations.tsx
 msgid "full breakdown"
 msgstr "完整分析"
+
+#: src/components/player/ActivityPanel.tsx
+#~ msgid "Full color at"
+#~ msgstr "最深颜色对应"
 
 #: src/routes/tracker.tsx
 msgid "Full combos only (0 misses)"
@@ -10226,6 +10261,7 @@ msgid "Mapper"
 msgstr "谱师"
 
 #: src/components/layout/Nav.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/recommendations.tsx
 msgid "maps"
 msgstr "谱面"
@@ -12835,6 +12871,14 @@ msgstr "在 {mapSlot} 上通关 <0/>"
 msgid "Pass bar"
 msgstr "通过线"
 
+#: src/components/player/ActivityPanel.tsx
+msgid "passes"
+msgstr "次通过"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "Passes"
+msgstr "通过"
+
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
 msgstr "一个成绩超过多名玩家只算一次狙击，对象是其中排名最高的玩家。"
@@ -13204,6 +13248,7 @@ msgid "Player's skin"
 msgstr "玩家的皮肤"
 
 #: src/components/layout/Nav.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/dan-estimates.tsx
 #: src/routes/maps.tsx
 #: src/routes/recommendations.tsx
@@ -15655,6 +15700,10 @@ msgstr "服务器列表暂时不可用"
 #~ msgid "Session update"
 #~ msgstr ""
 
+#: src/components/player/ActivityPanel.tsx
+msgid "sessions"
+msgstr "个场次"
+
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
 msgid "Sessions"
@@ -15727,6 +15776,10 @@ msgstr "设定于 {at}"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Set start"
 #~ msgstr "设为起始点"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "Set the count for the brightest color"
+msgstr "设置最亮颜色对应的数量"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Set the next milestone"
