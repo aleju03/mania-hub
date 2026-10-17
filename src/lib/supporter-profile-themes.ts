@@ -92,16 +92,20 @@ export function parseProfileThemeOptions(value: unknown): ProfileThemeOptions {
 }
 
 /* The colour override for an element wearing the theme: everything under it
-   that uses the site colours takes the theme's hue. */
+   that uses the site colours takes the theme's hue. The site keeps its dark
+   surfaces near grey; a theme turns their tint up (--theme-surface, styles.css)
+   so the panels and buttons wear the theme's colour, not the default's. */
+const THEME_SURFACE = "3";
+
 export function profileThemeStyle(theme: SupporterProfileThemeId | null, notes: HighwayNotes | null = null): CSSProperties | undefined {
   if (!theme) return undefined;
   const look = PROFILE_THEME_LOOKS[theme];
   // The Note highway takes the colour of the player's own notes.
   if (theme === "highway" && notes?.accent) {
     const { hue, sat } = rgbToHueSat(notes.accent);
-    return { "--theme-hue": String(hue), "--theme-sat": String(Math.max(0.45, Math.min(0.9, sat))) } as CSSProperties;
+    return { "--theme-hue": String(hue), "--theme-sat": String(Math.max(0.45, Math.min(0.9, sat))), "--theme-surface": THEME_SURFACE } as CSSProperties;
   }
-  return { "--theme-hue": String(look.hue), "--theme-sat": String(look.sat) } as CSSProperties;
+  return { "--theme-hue": String(look.hue), "--theme-sat": String(look.sat), "--theme-surface": THEME_SURFACE } as CSSProperties;
 }
 
 /* A player's replay skin notes for the Note highway (loaded by

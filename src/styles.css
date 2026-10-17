@@ -48,7 +48,10 @@
 }
 .mode-icon { font-family: "osu-extra"; -webkit-font-smoothing: antialiased; }
 
-:root { --theme-hue: 333; --theme-sat: 1; }
+/* --theme-surface scales how much of the hue the dark surfaces and secondary
+   text carry. The site keeps them near grey; a supporter profile theme turns
+   it up so the panels and buttons take the theme's colour too. */
+:root { --theme-hue: 333; --theme-sat: 1; --theme-surface: 1; }
 
 html {
   scrollbar-gutter: stable;
@@ -59,15 +62,15 @@ html {
 
 @theme inline {
   --font-sans: "Torus", "Inter", "Helvetica Neue", Tahoma, Arial, sans-serif;
-  --color-osu-b6: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-b5: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(15% - 8% * (1 - var(--theme-sat))));
-  --color-osu-b4: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(20% - 8% * (1 - var(--theme-sat)))); --color-osu-b3: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(25% - 8% * (1 - var(--theme-sat))));
-  --color-osu-b2: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(30% - 8% * (1 - var(--theme-sat)))); --color-osu-b1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(40% - 8% * (1 - var(--theme-sat))));
-  --color-osu-d6: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-d5: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(15% - 8% * (1 - var(--theme-sat)))); --color-osu-d4: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(20% - 8% * (1 - var(--theme-sat))));
+  --color-osu-b6: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-b5: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(15% - 8% * (1 - var(--theme-sat))));
+  --color-osu-b4: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(20% - 8% * (1 - var(--theme-sat)))); --color-osu-b3: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(25% - 8% * (1 - var(--theme-sat))));
+  --color-osu-b2: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(30% - 8% * (1 - var(--theme-sat)))); --color-osu-b1: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(40% - 8% * (1 - var(--theme-sat))));
+  --color-osu-d6: hsl(var(--theme-hue), calc(20% * var(--theme-sat) * var(--theme-surface)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-d5: hsl(var(--theme-hue), calc(20% * var(--theme-sat) * var(--theme-surface)), calc(15% - 8% * (1 - var(--theme-sat)))); --color-osu-d4: hsl(var(--theme-hue), calc(20% * var(--theme-sat) * var(--theme-surface)), calc(20% - 8% * (1 - var(--theme-sat))));
   --color-osu-c1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 100%); --color-osu-c2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 90%);
   --color-osu-l1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 80%); --color-osu-l2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 75%);
   /* Secondary text. Most of its uses are 9-11px, so it sits higher than a
      "muted gray" normally would: 60% only cleared AA on the darkest rows. */
-  --color-osu-f1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 70%);
+  --color-osu-f1: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), 70%);
   --color-osu-h1: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 70%); --color-osu-h2: hsl(var(--theme-hue), calc(50% * var(--theme-sat)), 45%);
   --color-osu-pink: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 70%);
   --color-osu-pink-light: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 80%);
@@ -1026,14 +1029,22 @@ html[data-custom-cursor="true"] * {
   filter: drop-shadow(0 0 0.1em rgba(80, 255, 150, 0.65)) drop-shadow(0 0 0.3em rgba(40, 220, 110, 0.35));
 }
 
+/* The cursor only on a name standing on its own (the profile hero, the
+   loadout stage, the style picker): mid-sentence ("X on map") its block reads
+   as a gap before the next word. */
 .name-tag--terminal::after {
   content: "";
-  display: inline-block;
+  display: none;
   width: 0.5em;
   height: 0.72em;
   margin-left: 0.08em;
   background: #7dffa6;
   animation: name-tag-caret 1.1s steps(1, end) infinite;
+}
+
+.name-tag--terminal.name-tag--hero::after,
+.name-tag-grid .name-tag--terminal::after {
+  display: inline-block;
 }
 
 @keyframes name-tag-caret {

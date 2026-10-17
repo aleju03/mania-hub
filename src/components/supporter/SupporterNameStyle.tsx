@@ -45,7 +45,7 @@ export function SupporterStyledName({ nameStyle, nameFont = null, name, classNam
   }, [shaded, nameStyle, nameFont, name]);
 
   return (
-    <span ref={spanRef} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${shaded ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : ""}`}>
+    <span ref={spanRef} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live ? " name-tag--hero" : ""}${shaded ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : ""}`}>
       {name}
       {shaded && <span ref={hostRef} aria-hidden className="name-tag-shader" />}
     </span>

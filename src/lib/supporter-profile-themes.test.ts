@@ -32,7 +32,7 @@ describe("supporter profile themes", () => {
 
   it("re-tints whatever wears it, and nothing without one", () => {
     expect(profileThemeStyle(null)).toBeUndefined();
-    expect(profileThemeStyle("noir")).toEqual({ "--theme-hue": "0", "--theme-sat": "0" });
+    expect(profileThemeStyle("noir")).toEqual({ "--theme-hue": "0", "--theme-sat": "0", "--theme-surface": "3" });
     expect(isSupporterProfileTheme("aurora")).toBe(true);
     expect(isSupporterProfileTheme("myspace")).toBe(false);
   });

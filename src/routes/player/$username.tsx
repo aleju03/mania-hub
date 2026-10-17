@@ -2112,7 +2112,7 @@ export function PlayerProfilePage({
       // Same shape as the private server pills beside it (ServerLinkPill).
       className="inline-flex items-center gap-1.5 rounded-full bg-white/10 py-0.5 pl-0.5 pr-2 font-semibold text-white/80 transition-colors duration-150 hover:bg-white/20 hover:text-white"
     >
-      <span className="h-4 w-4 rounded-full bg-osu-pink text-white">
+      <span className="h-4 w-4 rounded-full bg-[#ff66aa] text-white">
         <OsuLogo className="h-4 w-4" />
       </span>
       <Trans>osu! profile</Trans>

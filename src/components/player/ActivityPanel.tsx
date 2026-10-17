@@ -768,7 +768,7 @@ function ActivityYearView({
               type="button"
               onClick={() => onSelectYear(year)}
               className={`min-w-24 rounded-lg px-4 py-2 text-left text-sm font-semibold transition-colors duration-200 ease-out lg:w-full ${requestedYear === year
-                  ? "bg-osu-pink text-white"
+                  ? "bg-osu-pink/15 text-osu-pink-light"
                   : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
                 }`}
             >
@@ -829,12 +829,12 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
                 type="button"
                 onClick={() => setSelectedKeyModeIndex(index)}
                 className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-colors ${selected
-                    ? "bg-osu-pink text-white"
+                    ? "bg-osu-pink/15 text-osu-pink-light"
                     : "bg-osu-b5/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
                   }`}
               >
                 {formatActivityKeyCount(keyMode.keyCount) ?? t`Other`}
-                <span className={`ml-1 font-semibold ${selected ? "text-white/75" : "text-osu-f1/80"}`}>
+                <span className={`ml-1 font-semibold ${selected ? "text-osu-pink-light/70" : "text-osu-f1/80"}`}>
                   <Plural value={keyMode.analyzedPlays} one={`${formatNumber(keyMode.analyzedPlays)} play`} other={`${formatNumber(keyMode.analyzedPlays)} plays`} />
                 </span>
               </button>
