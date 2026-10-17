@@ -2115,7 +2115,7 @@ msgstr "<0>4K LN</0> 使用同一个分析器的 LN 段位表，表格起点以�
 
 #: src/routes/dan-estimates.tsx
 msgid "<0>4K regular</0> uses the Mixed estimator from <1>Leo_Black's map analyser</1>, which blends <2>Roxy</2>, <3>Azusa</3>, <4>Daniel</4> and <5>Sunny</5>."
-msgstr "<0>4K 单点</0> 使用 <1>Leo_Black 的谱面分析器</1> 中的 Mixed 估算器，它综合了 <2>Roxy</2>、<3>Azusa</3>、<4>Daniel</4> 和 <5>Sunny</5>。"
+msgstr "<0>4K 常规</0> 使用 <1>Leo_Black 的谱面分析器</1> 中的 Mixed 估算器，它综合了 <2>Roxy</2>、<3>Azusa</3>、<4>Daniel</4> 和 <5>Sunny</5>。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "<0>6K and 7K</0> get a Sunny star rating, mapped through the published 6K and 7K dan tables."
@@ -2320,11 +2320,11 @@ msgstr "4K LN 不取平均：它的段位始终是你全部通过中最好的 20
 
 #: src/routes/dan-estimates.tsx
 msgid "4K regular"
-msgstr "4K 单点"
+msgstr "4K 常规"
 
 #: src/routes/dan-estimates.tsx
 msgid "4K regular reads the play's MSD skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
-msgstr "4K 单点读取成绩的 MSD 技能组：叠键来自 JackSpeed 和 Chordjack，技来自 Technical 和 Jumpstream，速度来自 Stream，耐力来自 Handstream 和 Stamina。速度和技按谱面的打法区分，两者都说得通的谱面同时计入两边。"
+msgstr "4K 常规读取成绩的 MSD 技能组：叠键来自 JackSpeed 和 Chordjack，技来自 Technical 和 Jumpstream，速度来自 Stream，耐力来自 Handstream 和 Stamina。速度和技按谱面的打法区分，两者都说得通的谱面同时计入两边。"
 
 #: src/routes/dan-estimates.tsx
 msgid "5. Dan courses and practice charts"
@@ -2369,11 +2369,11 @@ msgstr "6K LN"
 
 #: src/routes/dan-estimates.tsx
 msgid "6K regular"
-msgstr "6K 单点"
+msgstr "6K 常规"
 
 #: src/routes/dan-estimates.tsx
 msgid "6K regular and LN"
-msgstr "6K 单点和 LN"
+msgstr "6K 常规和 LN"
 
 #: src/routes/news_.prism.tsx
 msgid "6K, 7K and 8K are now rated by Prism"
@@ -2450,7 +2450,7 @@ msgstr "7K LN 的段位与你的综合段位相差不超过一级，因为高难
 
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
-msgstr "7K 单点"
+msgstr "7K 常规"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "95-96.25% (the bar)"
@@ -2513,7 +2513,7 @@ msgstr "有新更新时，页面底部的<2>更新日志</2>旁会出现一个<0
 
 #: src/routes/dan-estimates.tsx
 msgid "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
-msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速下这些长条仍需要真正的放手时，这张谱面算作 LN。短到可以当普通键点掉的长条会让它算作单点谱面。7K 的界线是 37.5%。"
+msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速下这些长条仍需要真正的放手时，这张谱面算作 LN。短到可以当普通键点掉的长条会让它算作常规谱面。7K 的界线是 37.5%。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
@@ -2676,7 +2676,7 @@ msgstr "有一张粘贴的图片已不可用。复制前请重新粘贴。"
 
 #: src/routes/dan-estimates.tsx
 msgid "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
-msgstr "低于所属段位表最低 OD 的成绩不计分：单点谱面为 5.5，4K LN 为 7，7K LN 为 5。<0/> 永远不计入。"
+msgstr "低于所属段位表最低 OD 的成绩不计分：常规谱面为 5.5，4K LN 为 7，7K LN 为 5。<0/> 永远不计入。"
 
 #: src/routes/hashi.tsx
 msgid "A profile showing the map its player is playing"
@@ -3571,7 +3571,7 @@ msgstr "素材"
 
 #: src/routes/dan-estimates.tsx
 msgid "At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:"
-msgstr "撰写本文时，有 12,974 名玩家拥有 4K 单点段位。分布如下："
+msgstr "撰写本文时，有 12,974 名玩家拥有 4K 常规段位。分布如下："
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
@@ -9928,7 +9928,7 @@ msgstr "本地文件"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "localized vibro detected"
-msgstr "检测到局部秒杀"
+msgstr "检测到局部 vibro"
 
 #: src/routes/communities.tsx
 msgid "Log in to post"
@@ -13422,7 +13422,7 @@ msgstr "成绩列表"
 
 #: src/components/rankings/UnratedPlaysBoard.tsx
 msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart."
-msgstr "技能评分未纳入的成绩：秒杀谱面和无法评分的谱面。每位玩家每张谱面一条成绩。"
+msgstr "技能评分未纳入的成绩：vibro 谱面和无法评分的谱面。每位玩家每张谱面一条成绩。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. pp is calculated here even when osu! gives none, and MSD counts every note."
@@ -14054,7 +14054,7 @@ msgstr "倍速"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr "根据 osu! 最佳成绩中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定区间下的 MAX:300 比例加权，局部秒杀片段已调整，持续秒杀已排除"
+msgstr "根据 osu! 最佳成绩中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定区间下的 MAX:300 比例加权，局部 vibro 片段已调整，持续 vibro 已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -14066,7 +14066,7 @@ msgstr "根据 osu! 最佳成绩中的 {plays} 个成绩评定，DT 和 HT 按�
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr "根据最佳成绩与追踪历史中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定区间下的 MAX:300 比例加权，局部秒杀片段已调整，持续秒杀已排除"
+msgstr "根据最佳成绩与追踪历史中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定区间下的 MAX:300 比例加权，局部 vibro 片段已调整，持续 vibro 已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -14078,7 +14078,7 @@ msgstr "根据最佳成绩与追踪历史中的 {plays} 个成绩评定，DT 和
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr "根据你的 osu! 最佳成绩中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定区间下的 MAX:300 比例加权，局部秒杀片段已调整，持续秒杀已排除"
+msgstr "根据你的 osu! 最佳成绩中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定区间下的 MAX:300 比例加权，局部 vibro 片段已调整，持续 vibro 已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -14090,7 +14090,7 @@ msgstr "根据你的 osu! 最佳成绩中的 {plays} 个成绩评定，DT 和 HT
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr "根据你的最佳成绩与追踪历史中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定区间下的 MAX:300 比例加权，局部秒杀片段已调整，持续秒杀已排除"
+msgstr "根据你的最佳成绩与追踪历史中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定区间下的 MAX:300 比例加权，局部 vibro 片段已调整，持续 vibro 已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -14488,24 +14488,24 @@ msgstr "区域"
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/team/TeamProfilePage.tsx
 msgid "Regular"
-msgstr "单点"
+msgstr "常规"
 
 #. placeholder {0}: verdict.label
 #: src/components/maps/MapDetailModal.tsx
 msgid "regular {0}"
-msgstr "单点 {0}"
+msgstr "常规 {0}"
 
 #: src/routes/dan-estimates.tsx
 msgid "Regular 4K/6K/7K"
-msgstr "单点 4K/6K/7K"
+msgstr "常规 4K/6K/7K"
 
 #: src/lib/signature-shared.ts
 msgid "Regular and LN"
-msgstr "单点与 LN"
+msgstr "常规与 LN"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Regular dan"
-msgstr "单点段位"
+msgstr "常规段位"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Regular ladders"
@@ -20082,29 +20082,29 @@ msgstr "通过 {0}"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "vibro"
-msgstr "秒杀"
+msgstr "vibro"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/SearchCard.tsx
 msgid "Vibro"
-msgstr "秒杀"
+msgstr "Vibro"
 
 #. placeholder {0}: rate.toFixed(2)
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "vibro at {0}x"
-msgstr "{0}倍速下为秒杀"
+msgstr "{0}倍速下为 vibro"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "vibro chart, estimate unreliable"
-msgstr "秒杀谱面，估计值不可靠"
+msgstr "vibro 谱面，估计值不可靠"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "vibro chart, estimates unreliable"
-msgstr "秒杀谱面，估计值不可靠"
+msgstr "vibro 谱面，估计值不可靠"
 
 #: src/components/maps/SearchCard.tsx
 msgid "Vibro chart: difficulty estimates are unreliable"
-msgstr "秒杀谱面：难度估算不可靠"
+msgstr "Vibro 谱面：难度估算不可靠"
 
 #: src/components/rankings/VibroLeagueBoard.tsx
 #~ msgid "Vibro counts here. Every note is rated, and a play is worth more the tighter its hit window was, so the same clear on OD 9 beats it on OD 0."
@@ -20112,7 +20112,7 @@ msgstr "秒杀谱面：难度估算不可靠"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Vibro detected"
-msgstr "检测到秒杀"
+msgstr "检测到 vibro"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
@@ -20120,15 +20120,15 @@ msgstr "检测到秒杀"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Vibro detected in this chart. This play does not count toward skill or dan ratings."
-msgstr "此谱面检测到秒杀。此成绩不计入技能或段位评分。"
+msgstr "此谱面检测到 vibro。此成绩不计入技能或段位评分。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Vibro detected. This play does not count toward skill or dan ratings."
-msgstr "检测到秒杀。此成绩不计入技能或段位评分。"
+msgstr "检测到 vibro。此成绩不计入技能或段位评分。"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
-msgstr "评分已排除秒杀片段。剩余音符的贡献采用较保守的准确率估算。"
+msgstr "评分已排除 vibro 片段。剩余音符的贡献采用较保守的准确率估算。"
 
 #: src/lib/replay-overlays.ts
 msgid "Video"
@@ -20355,11 +20355,11 @@ msgstr "请等图片调整大小完成后再保存。"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for a vibro check"
-msgstr "等待秒杀检查"
+msgstr "等待 vibro 检查"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Waiting for a vibro check pass. The play is rated right after."
-msgstr "等待秒杀检查。检查后随即评分。"
+msgstr "等待 vibro 检查。检查后随即评分。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
@@ -21189,7 +21189,7 @@ msgstr "这是你唯一的一张。对方接受后它会离开你的收藏。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Your osu! top plays, everything recorded while you were tracked, and any score links you added, keeping your best play on each chart at each rate. Charts flagged as vibro are left out. A rate nobody has rated a chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to count."
-msgstr "你的 osu! 最佳成绩、被追踪期间记录的所有成绩，以及你添加的成绩链接，每张谱面每个倍速只保留你最好的一次。被标记为秒杀的谱面不计入。某张谱面在某个倍速下还没有评级时，会在你的估算第一次需要它时计算，所以少见倍速的成绩可能要过一会儿才会计入。"
+msgstr "你的 osu! 最佳成绩、被追踪期间记录的所有成绩，以及你添加的成绩链接，每张谱面每个倍速只保留你最好的一次。被标记为 vibro 的谱面不计入。某张谱面在某个倍速下还没有评级时，会在你的估算第一次需要它时计算，所以少见倍速的成绩可能要过一会儿才会计入。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it, broken down by skill. The whole population is on the <0>Dan tab of the rankings page</0>, per country and per keymode."
