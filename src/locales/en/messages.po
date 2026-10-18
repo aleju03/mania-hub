@@ -16370,8 +16370,8 @@ msgstr "Sign in to like collections"
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
-msgid "Sign in to like skins"
-msgstr "Sign in to like skins"
+#~ msgid "Sign in to like skins"
+#~ msgstr "Sign in to like skins"
 
 #: src/components/player/ServerLinks.tsx
 msgid "Sign in to link your private server profiles."

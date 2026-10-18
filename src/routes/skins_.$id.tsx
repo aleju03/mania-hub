@@ -615,7 +615,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
 
 function SkinLikeButton({ skin }: { skin: SkinSummary }) {
   const { t } = useLingui();
-  const { liked, likeCount, canLike, own, signedIn, toggle } = useSkinLike(skin);
+  const { liked, likeCount, canLike, own, toggle } = useSkinLike(skin);
   return (
     <button
       type="button"
@@ -623,7 +623,7 @@ function SkinLikeButton({ skin }: { skin: SkinSummary }) {
       disabled={!canLike}
       aria-pressed={liked}
       aria-label={t`${likeCount.toLocaleString("en-US")} likes`}
-      title={own ? t`Your skin` : !signedIn ? t`Sign in to like skins` : liked ? t`Unlike` : t`Like`}
+      title={own ? t`Your skin` : liked ? t`Unlike` : t`Like`}
       className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-bold transition-colors ${
         liked ? "border-osu-pink/45 bg-osu-pink/10 text-osu-pink-light" : "border-osu-b3/50 text-osu-l2"
       } ${canLike ? "cursor-pointer hover:border-osu-pink/45 hover:text-osu-pink-light" : "cursor-default"}`}

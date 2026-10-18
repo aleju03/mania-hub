@@ -12,6 +12,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { OsuLogo } from "../components/ui/OsuLogo";
 import { useAuth } from "../lib/auth-context";
+import { useSkinGuestId } from "../lib/use-liked-skins";
 import { isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
 import { useBodyScrollLock } from "../lib/use-body-scroll-lock";
@@ -338,7 +339,10 @@ function SkinsPage() {
   // flag has nobody to point at, so it filters nothing.
   const owner = mine ? viewerId : null;
   const mineActive = owner != null;
-  const likedActive = liked && viewerId != null;
+  // Signed out, "liked by you" is this browser's guest likes, once it has any.
+  const guestId = useSkinGuestId();
+  const likeGuest = viewerId == null ? guestId : null;
+  const likedActive = liked && (viewerId != null || likeGuest != null);
   // Whether anything beyond the plain browse view is narrowing the grid, for
   // the empty state's wording and for where a fresh publish may land.
   const traitFilterCount = [cover, stage, shots, lazer !== stable, Boolean(shape), Boolean(res)].filter(Boolean).length;
@@ -461,12 +465,13 @@ function SkinsPage() {
     setLoading(!cached);
     setFailed(false);
     // One list for everyone, straight from the backend and cacheable there.
-    // The liked filter is the exception: whose likes those are is only taken
-    // from the signed-in viewer, so it goes through a server fn.
+    // The liked filter is the exception: a signed-in viewer's likes are only
+    // taken from the vouched-for account, so it goes through a server fn; a
+    // guest's are asked for by the browser's guest id, uncached.
     const listParams = { q, page, sort, k, variant, owner, cover, stage, shots, client, shape: shapeParam, res: resParam };
-    const request = likedActive
+    const request = likedActive && likeGuest == null
       ? fetchLikedSkinsList({ data: listParams, signal: controller.signal })
-      : fetchSkinsListDirect(listParams, { signal: controller.signal });
+      : fetchSkinsListDirect(likedActive && likeGuest ? { ...listParams, liked: true, guest: likeGuest } : listParams, { signal: controller.signal });
     request
       .then((result) => {
         writeCachedSkinsList(cacheKey, result);
@@ -481,7 +486,7 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, sort, k, variant, owner, likedActive, cover, stage, shots, client, shapeParam, resParam, reloadTick, ssrList]);
+  }, [q, page, sort, k, variant, owner, likedActive, likeGuest, cover, stage, shots, client, shapeParam, resParam, reloadTick, ssrList]);
 
   useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {
@@ -676,7 +681,7 @@ function SkinsPage() {
           </RailOption>
         </RailSection>
       )}
-      {auth.viewer && (
+      {(auth.viewer || likeGuest) && (
         <RailSection label={t`likes`}>
           <RailOption active={!likedActive} onClick={() => applySearch({ liked: false })}>
             <Trans>all skins</Trans>

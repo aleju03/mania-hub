@@ -305,7 +305,7 @@ export const SkinCard = memo(function SkinCard({ skin, previewKeys, preferScreen
                 disabled={!like.canLike}
                 aria-pressed={like.liked}
                 aria-label={t`${likeCountLabel} likes`}
-                title={like.own ? t`${likeCountLabel} likes` : !like.signedIn ? t`Sign in to like skins` : like.liked ? t`Unlike` : t`Like`}
+                title={like.own ? t`${likeCountLabel} likes` : like.liked ? t`Unlike` : t`Like`}
                 className={`relative z-[1] -m-1 inline-flex items-center gap-1 rounded p-1 transition-colors ${
                   like.liked ? "text-osu-pink-light" : ""
                 } ${like.canLike ? "cursor-pointer hover:text-osu-pink-light" : "cursor-default"}`}
