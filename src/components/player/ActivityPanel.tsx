@@ -98,10 +98,10 @@ type ActivitySummary = {
   timezone: string;
 };
 
-type ActivityColorMetric = "plays" | "sessions" | "maps" | "passes" | "players";
+type ActivityColorMetric = "plays" | "sessions" | "maps" | "players";
 
 const ACTIVITY_EMPTY_CELL_CLASS = "bg-osu-b4/45 border-osu-b3/25";
-const PLAYER_ACTIVITY_METRICS: ActivityColorMetric[] = ["plays", "sessions", "maps", "passes"];
+const PLAYER_ACTIVITY_METRICS: ActivityColorMetric[] = ["plays", "sessions", "maps"];
 const TEAM_ACTIVITY_METRICS: ActivityColorMetric[] = ["plays", "players", "sessions"];
 const PLAYER_ACTIVITY_COUNTRY_SCOPE = "GLOBAL";
 
@@ -704,7 +704,6 @@ function ActivityYearView({
     switch (countMetric) {
       case "sessions": return t`${plural(value, { one: "# session", other: "# sessions" })}`;
       case "maps": return t`${plural(value, { one: "# map", other: "# maps" })}`;
-      case "passes": return t`${plural(value, { one: "# pass", other: "# passes" })}`;
       case "players": return t`${plural(value, { one: "# player", other: "# players" })}`;
       default: return t`${plural(value, { one: "# play", other: "# plays" })}`;
     }
@@ -713,7 +712,6 @@ function ActivityYearView({
     plays: t`plays`,
     sessions: t`sessions`,
     maps: t`maps`,
-    passes: t`passes`,
     players: t`players`,
   };
   const metricValues = activity.days.map(metricValue).filter((value) => value > 0);
@@ -732,7 +730,6 @@ function ActivityYearView({
     plays: t`Plays`,
     sessions: t`Sessions`,
     maps: t`Maps`,
-    passes: t`Passes`,
     players: t`Players`,
   };
   const [hoveredCell, setHoveredCell] = useState<{ date: string; label: string; left: number; top: number } | null>(null);
@@ -1511,7 +1508,7 @@ type ActivityColorPrefs = {
 };
 
 const DEFAULT_ACTIVITY_COLOR_PREFS: ActivityColorPrefs = { metric: "plays", fullAt: {} };
-const ACTIVITY_COLOR_METRICS: ActivityColorMetric[] = ["plays", "sessions", "maps", "passes", "players"];
+const ACTIVITY_COLOR_METRICS: ActivityColorMetric[] = ["plays", "sessions", "maps", "players"];
 
 function activityColorPrefsKey(scaleKey: string): string {
   return `mania-hub-activity-colors:${scaleKey}`;
@@ -1546,7 +1543,6 @@ function getActivityMetricValue(day: ActivityDay, metric: ActivityColorMetric, k
   switch (metric) {
     case "sessions": return day.sessionCount;
     case "maps": return day.mapCount;
-    case "passes": return day.passedCount;
     case "players": return day.playerCount ?? 0;
     default: return day.scoreCount;
   }
