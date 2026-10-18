@@ -26,17 +26,11 @@ export interface LnTimelineDiagnostic {
 export interface LnTimeline4K {
   valid: boolean;
   playbackRate: number;
-  /** Object ids are indices into the notes; times are played ms from the first note. */
   objects: LnChartObject[];
   rows: LnEventRow4K[];
   diagnostics: LnTimelineDiagnostic[];
 }
 
-/**
- * A 4K chart as rows of simultaneous heads, tails and taps at the played rate.
- * Malformed, duplicate and overlapping objects are diagnosed and dropped, and
- * any diagnosis makes the timeline invalid rather than manufacturing strain.
- */
 export function buildLnTimeline4K(notes: readonly ManiaNote[], rate = 1): LnTimeline4K {
   if (!Number.isFinite(rate) || rate <= 0) throw new Error("LN playback rate must be positive and finite");
   const diagnostics: LnTimelineDiagnostic[] = [];
@@ -50,8 +44,6 @@ export function buildLnTimeline4K(notes: readonly ManiaNote[], rate = 1): LnTime
 
   const originMs = finite[0]?.note.time ?? 0;
   const objects: LnChartObject[] = [];
-  // Objects sharing a lane and start sit together in time order: the first
-  // is kept, an exact copy is a duplicate, anything else overlaps it.
   const sameStart: Array<{ startMs: number; objects: LnChartObject[] }> = [];
   const lastHold: Array<LnChartObject & { kind: "hold" } | undefined> = [];
   for (const { note, id } of finite) {

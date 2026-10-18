@@ -1,51 +1,26 @@
 import type { ManiaNote } from "../chart/beatmap";
 import type { LnFamilyVector } from "./workload";
 
-// Which of the four 4K LN course skillsets a chart reads as, from the texture
-// measures in FEATURES. Each is judged against ordinary LN charts of the same
-// row rate, because most of them rise with density on their own.
-//
-// REFERENCE: quantiles of 10.7k cached 4K charts with at least 30% holds,
-// grouped into 12 equal bins by row rate. Each entry is the bin's median
-// rows/s, then the median and interquartile range of each feature in order.
-// WEIGHTS: a multinomial logistic fit to 1,670 labeled 4K LN charts: the 64
-// stages of the 4K LN Dan Courses (1st to 16th), whose mapper names each
-// stage's skillset, plus charts whose pack title, difficulty name or mapper
-// tags name one skillset (release and LN jack packs, wall and inverse packs,
-// LN stream and speed tags), 31 charts from pack descriptions and course
-// stage names that label each difficulty, and textbook patterns (flowing
-// rolls, one-column and chord LN jacks, held walls, inverse, LN chords).
-// Classes are balanced, tags count at 0.3, description labels at 3 and course
-// stages at 5. The fit is held to physical signs: fast LN jacks and
-// between-row releases only count toward Technical, held columns under a
-// press toward Walls, rolls toward Speed, chords toward All-round and Walls.
-// Holding out a tenth of the packs at a time, it names the labeled skillset
-// on 54% of Technical, Walls and Speed charts (balanced; the previous
-// course-only fit got 39%), on 22 of the 31 description charts and on 38 of
-// 64 course stages; fitted on everything it places 47 of 64 stages and every
-// textbook pattern.
-// Full-LN stream packs are left out: every press lands under held columns,
-// so they measure as walls.
 const FEATURES = [
-  "rowSize", // notes per row
-  "chordRow", // rows of two or more notes
-  "jackRow", // rows repeating a column of the row before
-  "jackFast", // the same, at the chart's usual row gap or faster
-  "rollRow", // a row entirely left or right of the one before, at the usual gap or faster
-  "press1", // presses made while one other column is held
-  "press2", // presses made while two or more other columns are held
-  "sameHandHeld", // presses made while the same hand's other column is held
-  "inverse", // holds pressed within a row gap of their column's last release
-  "lock", // holds whose same-hand partner column is hit twice under them
-  "shortHold", // holds no longer than about half the usual row gap
-  "offGlobal", // tails between rows, measured against the usual row gap
-  "offLocal", // tails between rows, measured against the two presses around them
-  "splitRelease", // holds started together but released apart
-  "asyncRelease", // holds released together but started apart
-  "holdLength", // median hold length in row gaps
-  "holdShare", // holds among all notes
-  "pressFree", // presses made with no other column held
-  "tailOnRow", // tails landing on a press
+  "rowSize",
+  "chordRow",
+  "jackRow",
+  "jackFast",
+  "rollRow",
+  "press1",
+  "press2",
+  "sameHandHeld",
+  "inverse",
+  "lock",
+  "shortHold",
+  "offGlobal",
+  "offLocal",
+  "splitRelease",
+  "asyncRelease",
+  "holdLength",
+  "holdShare",
+  "pressFree",
+  "tailOnRow",
 ] as const;
 type Feature = typeof FEATURES[number];
 const REFERENCE: ReadonlyArray<readonly number[]> = [
@@ -63,7 +38,6 @@ const REFERENCE: ReadonlyArray<readonly number[]> = [
   [14.5, 1.3887, 0.1745, 0.3141, 0.1356, 0.0966, 0.089, 0, 0.0033, 0.5901, 0.1536, 0.3511, 0.1807, 0.1703, 0.1574, 0.2462, 0.1406, 0.5349, 0.4214, 0.11, 0.0569, 0, 0.0043, 0.1716, 0.3348, 0.331, 0.3109, 0.3088, 0.1942, 0.3072, 0.1975, 1.5319, 0.7947, 0.8011, 0.3288, 0.4449, 0.3037, 0.6633, 0.3162],
 ];
 const WEIGHTS: Record<keyof LnFamilyVector, readonly number[]> = {
-  // intercept, then one weight per FEATURES entry
   lnhybrid: [0.395, 0, 0.386, -0.244, -0.382, 0.652, -2.5, -2.491, 1.232, -0.809, 1.344, 0.226, -2.8, -1.406, -1.041, 0.322, -0.675, 1.224, -3.294, -2.703],
   lntechnical: [-0.128, -2.464, -0.3, 0.847, 0.529, 0, 1.089, 0.456, -1.436, 0.254, -0.603, -0.392, 0, 0, 1.485, -0.54, 0.568, -0.582, -0.456, 0],
   lnwalls: [0.05, -1.722, 1.073, -0.338, 0, 0.688, 0.166, 0.087, 0.771, 0.828, -0.58, -0.098, -1.977, -3.46, 0.638, 0.63, 0.146, -0.819, 0, -3.92],
@@ -74,12 +48,7 @@ const HELD_MARGIN_MS = 10;
 const TAIL_ON_ROW_MS = 8;
 const MIN_ROW_GAP_MS = 20;
 const OFFSET_LIMIT = 6;
-// A chart with clearly more jacks than its row rate's usual, both in all rows
-// and at the usual gap, is not Speed. A light hybrid with 1/2 jacks otherwise
-// reads as Speed from its free presses and short holds alone. Fast jacks must
-// also be a real share of the rows: the usual share at high row rates is near
-// zero, so a few jumpjacks between rolls would clear the offset bar alone.
-// The bar sits on 6% of the labeled Speed charts and 20% of the Technical ones.
+
 const SPEED_JACK_VETO = 0.8;
 const SPEED_JACK_VETO_MIN_SHARE = 0.05;
 
@@ -95,7 +64,7 @@ function lowerBound(values: readonly number[], x: number): number {
   return lo;
 }
 type Note = Pick<ManiaNote, "column" | "time" | "endTime" | "isHold">;
-/** Share of holds sitting in a group (keys within ROW_MS) whose other ends differ. */
+
 function unevenGroups(holds: readonly Note[], key: (hold: Note) => number, other: (hold: Note) => number): number {
   const sorted = [...holds].sort((a, b) => key(a) - key(b));
   let count = 0;
@@ -109,7 +78,6 @@ function unevenGroups(holds: readonly Note[], key: (hold: Note) => number, other
   return count / Math.max(1, holds.length);
 }
 
-/** Notes are chart-time; rate divides once, so a baked rate reads the same. */
 export function lnSkillsetFeatures(input: readonly ManiaNote[], rate = 1): LnSkillsetFeatures | null {
   if (input.length < 2) return null;
   const notes: Note[] = input.map(note => ({ column: note.column, time: note.time / rate, endTime: note.endTime / rate, isHold: note.isHold }))
@@ -192,8 +160,6 @@ function interpolate(x: number, column: number): number {
   return a[column] + (b[column] - a[column]) * (x - a[0]) / (b[0] - a[0]);
 }
 
-/** Support for at most two families: the likeliest is 1, the runner-up is its
- * probability over the leader's, and the other two are 0. */
 export function classifyLnSkillsets(notes: readonly ManiaNote[], rate = 1): LnFamilyVector | null {
   const features = lnSkillsetFeatures(notes, rate);
   if (!features || !Object.values(features).every(Number.isFinite)) return null;

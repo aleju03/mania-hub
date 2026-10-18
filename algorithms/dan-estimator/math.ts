@@ -1,7 +1,3 @@
-// Small numeric helpers shared by the chart features and pattern analysis:
-// clamps and gates, quantiles, sliding-window counts, entropies over bucketed
-// intervals, and the power-mean spikiness measure used on row density.
-
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -10,12 +6,14 @@ export function clamp01(value: number): number {
   return clamp(value, 0, 1);
 }
 
-/** The weakest of several 0-1 gates, clamped to 0-1: every condition has to hold. */
+export function gateWhen(condition: boolean, value: number): number {
+  return condition ? value : 0;
+}
+
 export function minGate(...values: number[]): number {
   return clamp01(Math.min(...values));
 }
 
-/** Lower-index quantile (no interpolation). Uses quickselect on a copy. */
 export function quantile(values: number[], q: number): number {
   if (!values.length) return 0;
   const index = quantileIndex(values.length, q);
@@ -23,101 +21,10 @@ export function quantile(values: number[], q: number): number {
   return quickselect(copy, index);
 }
 
-/** Several quantiles from one sort, with the same indexing as quantile(). */
 export function quantiles(values: number[], qs: number[]): number[] {
   if (!values.length) return qs.map(() => 0);
   const sorted = [...values].sort((a, b) => a - b);
   return qs.map((q) => sorted[quantileIndex(sorted.length, q)]);
-}
-
-/** Most entries of a sorted time list that fit inside any window of windowMs. */
-export function countInWindow(times: number[], windowMs: number): number {
-  let best = 0;
-  let start = 0;
-  for (let end = 0; end < times.length; end++) {
-    while (times[end] - times[start] > windowMs) start++;
-    best = Math.max(best, end - start + 1);
-  }
-  return best;
-}
-
-export function average(values: number[]): number {
-  if (!values.length) return 0;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-/** Shannon entropy (bits) of the values rounded to multiples of bucketSize. */
-export function bucketEntropy(values: number[], bucketSize: number): number {
-  if (!values.length || bucketSize <= 0) return 0;
-  const buckets = new Map<number, number>();
-  for (const value of values) {
-    const bucket = Math.round(value / bucketSize) * bucketSize;
-    buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1);
-  }
-
-  let entropy = 0;
-  for (const count of buckets.values()) {
-    const probability = count / values.length;
-    entropy -= probability * Math.log2(probability);
-  }
-  return entropy;
-}
-
-export function bucketValues(values: number[], bucketSize: number): number[] {
-  if (bucketSize <= 0) return values;
-  return values.map((value) => Math.round(value / bucketSize) * bucketSize);
-}
-
-/**
- * Rao's quadratic entropy: the expected distance between two values drawn at
- * random, with the distance squashed by log1p `logIterations` times so a few
- * far-apart intervals do not dominate. Higher means more varied rhythm.
- */
-export function raoQuadraticEntropyLog(values: number[], logIterations: number): number {
-  if (values.length < 2) return 0;
-  const counts = new Map<number, number>();
-  for (const value of values) {
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
-
-  const entries = [...counts.entries()];
-  const total = values.length;
-  let entropy = 0;
-  for (const [left, leftCount] of entries) {
-    for (const [right, rightCount] of entries) {
-      let distance = Math.abs(left - right);
-      for (let i = 0; i < logIterations; i++) {
-        distance = Math.log1p(distance);
-      }
-      entropy += (leftCount / total) * (rightCount / total) * distance;
-    }
-  }
-  return entropy;
-}
-
-export function powerMean(values: number[], weights: number[], exponent: number): number {
-  if (!values.length) return 0;
-  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
-  if (weightSum <= 0) return 0;
-  return (values.reduce((sum, value, index) => sum + (value ** exponent) * weights[index], 0) / weightSum) ** (1 / exponent);
-}
-
-/**
- * How far the strain values spread above and below their 5-power mean,
- * relative to that mean. A chart with a few very dense spikes scores high; an
- * even chart scores low.
- */
-export function strainSpikiness(values: number[], weights: number[]): number {
-  if (values.length < 3) return 0;
-  const mean = powerMean(values, weights, 5);
-  if (mean <= 0) return 0;
-  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
-  if (weightSum <= 0) return 0;
-  const variance = values.reduce((sum, value, index) => {
-    const diff = (value ** 8) - (mean ** 8);
-    return sum + diff * diff * weights[index];
-  }, 0) / weightSum;
-  return Math.sqrt(variance ** (1 / 8)) / mean;
 }
 
 function quantileIndex(length: number, q: number): number {
@@ -152,4 +59,82 @@ function partition(values: number[], left: number, right: number, pivotIndex: nu
 
   [values[right], values[storeIndex]] = [values[storeIndex], values[right]];
   return storeIndex;
+}
+
+export function countInWindow(times: number[], windowMs: number): number {
+  let best = 0;
+  let start = 0;
+  for (let end = 0; end < times.length; end++) {
+    while (times[end] - times[start] > windowMs) start++;
+    best = Math.max(best, end - start + 1);
+  }
+  return best;
+}
+
+export function average(values: number[]): number {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+export function bucketEntropy(values: number[], bucketSize: number): number {
+  if (!values.length || bucketSize <= 0) return 0;
+  const buckets = new Map<number, number>();
+  for (const value of values) {
+    const bucket = Math.round(value / bucketSize) * bucketSize;
+    buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1);
+  }
+
+  let entropy = 0;
+  for (const count of buckets.values()) {
+    const probability = count / values.length;
+    entropy -= probability * Math.log2(probability);
+  }
+  return entropy;
+}
+
+export function bucketValues(values: number[], bucketSize: number): number[] {
+  if (bucketSize <= 0) return values;
+  return values.map((value) => Math.round(value / bucketSize) * bucketSize);
+}
+
+export function raoQuadraticEntropyLog(values: number[], logIterations: number): number {
+  if (values.length < 2) return 0;
+  const counts = new Map<number, number>();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  const entries = [...counts.entries()];
+  const total = values.length;
+  let entropy = 0;
+  for (const [left, leftCount] of entries) {
+    for (const [right, rightCount] of entries) {
+      let distance = Math.abs(left - right);
+      for (let i = 0; i < logIterations; i++) {
+        distance = Math.log1p(distance);
+      }
+      entropy += (leftCount / total) * (rightCount / total) * distance;
+    }
+  }
+  return entropy;
+}
+
+export function powerMean(values: number[], weights: number[], exponent: number): number {
+  if (!values.length) return 0;
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+  if (weightSum <= 0) return 0;
+  return (values.reduce((sum, value, index) => sum + (value ** exponent) * weights[index], 0) / weightSum) ** (1 / exponent);
+}
+
+export function strainSpikiness(values: number[], weights: number[]): number {
+  if (values.length < 3) return 0;
+  const mean = powerMean(values, weights, 5);
+  if (mean <= 0) return 0;
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+  if (weightSum <= 0) return 0;
+  const variance = values.reduce((sum, value, index) => {
+    const diff = (value ** 8) - (mean ** 8);
+    return sum + diff * diff * weights[index];
+  }, 0) / weightSum;
+  return Math.sqrt(variance ** (1 / 8)) / mean;
 }

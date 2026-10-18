@@ -1,28 +1,23 @@
 import { parseManiaBeatmap } from "../chart/beatmap";
-import { lnRatingAtGoal, lnSkillOfWorkload, type LnSkillResult } from "./skill";
+import { isLnSkillSupported, lnRatingAtGoal, lnSkillOfWorkload, type LnSkillResult } from "./skill";
+import { prismPlayLnSkill } from "../prism/ln-skill";
+import { PRISM_BASE_GOAL, PRISM_KEY_COUNTS, PRISM_MAX_GOAL, usesPrism } from "../prism/params";
 import { buildLnWorkload } from "./workload";
 
-// Shared native/LN SSR extrapolation window. Keep both axes on the same cap.
 export const SSR_CALC_GOAL_CAP = 0.965;
 export const SSR_EXTRAPOLATION_BASE_GOAL = 0.93;
-// Safety bound on the chart’s 0.93→0.965 slope (measured ~1.07–1.11).
+
 export const SSR_EXTRAPOLATION_MAX_SLOPE = 1.2;
 
-/** The goal the LN solver actually runs at for a play. Same cap as the
- * MinaCalc SSR: the solver never sees a goal above SSR_CALC_GOAL_CAP. */
-export function lnSsrSolverGoal(goal: number): number {
-  return Math.min(SSR_CALC_GOAL_CAP, Math.max(0, Math.min(0.999, goal)));
+export function ssrGoalAnchors(keyCount: number | null | undefined): { cap: number; base: number } {
+  return usesPrism(keyCount) ? { cap: PRISM_MAX_GOAL, base: PRISM_BASE_GOAL }
+    : { cap: SSR_CALC_GOAL_CAP, base: SSR_EXTRAPOLATION_BASE_GOAL };
 }
 
-/**
- * LN SSR for a play, on the same terms as the press SSR from runMsdAtGoal:
- * solve at most at SSR_CALC_GOAL_CAP and extrapolate the cap-to-base slope
- * above it. The LN solver's own response runs away toward 100% (a perfect
- * play on a 24.8 chart solved to 38.7, above the hardest 4K LN course),
- * which is not how the press axis prices an SS. The stored scoreGoal is the
- * solver goal, so playLnSkillCurrent can tell a capped result from an old
- * uncapped one without a model version bump.
- */
+export function lnSsrSolverGoal(goal: number, keyCount?: number | null): number {
+  return Math.min(ssrGoalAnchors(keyCount).cap, Math.max(0, Math.min(0.999, goal)));
+}
+
 export function analyzeLnSsr(
   osuText: string,
   options: { rate: number; od?: number | null; scoreGoal: number },
@@ -30,13 +25,20 @@ export function analyzeLnSsr(
   const goal = Math.max(0, Math.min(0.999, options.scoreGoal));
   const solverGoal = lnSsrSolverGoal(goal);
   const map = parseManiaBeatmap(osuText);
-  // The workload does not depend on the goal, so both goals share one.
+  if (PRISM_KEY_COUNTS.has(map.keyCount)) {
+    if (!isLnSkillSupported(map.keyCount)) return null;
+    const skill = prismPlayLnSkill(map, { rate: options.rate, od: options.od, scoreGoal: goal });
+    return skill && { ...skill, scoreGoal: lnSsrSolverGoal(goal, map.keyCount) };
+  }
   const workload = buildLnWorkload(map, { rate: options.rate, od: options.od });
   if (!workload) return null;
   const capped = lnSkillOfWorkload(map, workload, { scoreGoal: solverGoal });
   if (goal <= SSR_CALC_GOAL_CAP || !(capped.rating != null && capped.rating > 0)) return capped;
-  const atCap = capped.rating, atBase = lnRatingAtGoal(workload, SSR_EXTRAPOLATION_BASE_GOAL);
-  if (!(atBase > 0) || atCap <= atBase) return capped;
+  return { ...capped, rating: extrapolated(capped.rating, lnRatingAtGoal(workload, SSR_EXTRAPOLATION_BASE_GOAL), goal) };
+}
+
+function extrapolated(atCap: number, atBase: number, goal: number): number {
+  if (!(atBase > 0) || atCap <= atBase) return atCap;
   const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
-  return { ...capped, rating: atCap * Math.pow(Math.min(atCap / atBase, SSR_EXTRAPOLATION_MAX_SLOPE), exponent) };
+  return atCap * Math.pow(Math.min(atCap / atBase, SSR_EXTRAPOLATION_MAX_SLOPE), exponent);
 }
