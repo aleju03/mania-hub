@@ -493,10 +493,11 @@ type DanBadgeVerdict = { label: string; family: string };
 
 // isUnrateableExclusion in #dan/vibro-sections, kept here so the modal does not
 // pull the detector into the client bundle.
+const UNRATEABLE_REASONS: ReadonlySet<string> = new Set(["jumptrill", "stacked_heads", "flam_chords"]);
 function isUnrateableExclusion(analysis: VibroAnalysis): boolean {
   const reasons = Object.keys(analysis.reasonShares ?? {});
   return analysis.status === "excluded" && reasons.length > 0
-    && reasons.every((reason) => reason === "jumptrill" || reason === "stacked_heads");
+    && reasons.every((reason) => UNRATEABLE_REASONS.has(reason));
 }
 
 // A rice-and-LN hybrid is one chart with two faces, so it is one badge: the
