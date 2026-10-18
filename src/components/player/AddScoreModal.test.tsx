@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { I18nProvider } from "@lingui/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getI18n, loadLocaleCatalog } from "../../lib/i18n";
-import { fetchLiveScoreImportStatuses, submitLiveMissingScore, type LiveScoreSubmissionResult } from "../../lib/live-backend";
+import { fetchLiveMamesPlays, fetchLiveScoreImportStatuses, submitLiveMamesScore, submitLiveMissingScore, type LiveScoreSubmissionResult } from "../../lib/live-backend";
 import { AddScoreModal } from "./AddScoreModal";
 import { useRecentPlayRatingLookup } from "./recent-play-ratings";
 
@@ -11,7 +11,12 @@ vi.mock("../../lib/live-backend", () => ({
   submitLiveMissingScore: vi.fn(),
   fetchLiveScoreImportStatuses: vi.fn(),
   loadLiveMapSearchEntry: vi.fn().mockResolvedValue(null),
+  submitLiveMamesScore: vi.fn(),
+  fetchLiveMamesPlays: vi.fn(),
+  isMamesLink: () => false,
+  beatmapIdFromLink: () => null,
 }));
+vi.mock("../../lib/mamestagram", () => ({ fetchOwnMamesLink: vi.fn(), changeOwnMamesLink: vi.fn() }));
 vi.mock("../../lib/analytics", () => ({ track: vi.fn() }));
 vi.mock("../../lib/auth-context", () => ({ useAuth: () => ({ canUseAdminFeatures: false }) }));
 vi.mock("../../lib/locale-context", () => ({ useLocale: () => "en" }));
@@ -198,5 +203,48 @@ describe("AddScoreModal queue", () => {
     expect(vi.mocked(useRecentPlayRatingLookup).mock.lastCall?.[1]).toEqual([
       expect.objectContaining({ id: 9001, legacy_score_id: 7001, beatmap: { id: 55, cs: 4 } }),
     ]);
+  });
+});
+
+describe("AddScoreModal Mamestagram plays", () => {
+  it("lists the linked account's plays and adds one by its id", async () => {
+    vi.mocked(fetchLiveMamesPlays).mockResolvedValue({
+      ok: true,
+      mamesName: "MamesPlayer",
+      plays: [{
+        scoreId: 4242, beatmapId: 77, title: "Chart 4242", version: "Hard", keyCount: 7,
+        accuracy: 0.91735, rank: "A", mods: [], playedAt: null, added: false,
+      }],
+    });
+    const added = success(4242);
+    if (!added.ok) throw new Error("unreachable");
+    added.play = { ...added.play, title: "Chart 4242", scoreUrl: null, source: "mamestagram" };
+    vi.mocked(submitLiveMamesScore).mockResolvedValueOnce(added);
+    const view = render(
+      <I18nProvider i18n={getI18n("en")}>
+        <AddScoreModal userId={123} username="Player" hasMamesProfile onClose={vi.fn()} />
+      </I18nProvider>,
+    );
+    await act(async () => {});
+    // Closed, it only names the account.
+    expect(fetchLiveMamesPlays).toHaveBeenCalledWith(123, "account", null);
+    expect(view.queryByRole("button", { name: "Add" })).toBeNull();
+    await act(async () => fireEvent.click(view.getByRole("button", { name: /Plays from Mamestagram/ })));
+    expect(fetchLiveMamesPlays).toHaveBeenLastCalledWith(123, "best", null);
+    expect(view.getByText("MamesPlayer")).toBeTruthy();
+    await act(async () => fireEvent.click(view.getByRole("button", { name: "Add" })));
+    expect(submitLiveMamesScore).toHaveBeenCalledWith(123, { scoreId: 4242 });
+    expect(view.getAllByText("added").length).toBeGreaterThan(0);
+  });
+
+  it("shows nothing for a profile without a linked Mamestagram account", async () => {
+    vi.mocked(fetchLiveMamesPlays).mockResolvedValue({ ok: false, reason: "mames_not_linked" });
+    const view = render(
+      <I18nProvider i18n={getI18n("en")}>
+        <AddScoreModal userId={123} username="Player" hasMamesProfile onClose={vi.fn()} />
+      </I18nProvider>,
+    );
+    await act(async () => {});
+    expect(view.queryByRole("button", { name: /Plays from Mamestagram/ })).toBeNull();
   });
 });

@@ -82,7 +82,7 @@ Fresh analyses register families; `recompute_chart_family_sweep` backfills from 
 
 ## Adding missing evidence
 
-- **Add a missing score** (Skills tab, anyone): an osu! score link is verified as a passed mania score owned by that player and goes through the ordinary `ScoreIngestor` and dan gates. It is historical ingest: projections and skills update, but no tracker, snipe, top-play, session or goal event is created. Links queue in the browser one at a time.
+- **Add a missing score** (Skills tab, anyone): an osu! score link is verified as a passed mania score owned by that player and goes through the ordinary `ScoreIngestor` and dan gates. It is historical ingest: projections and skills update, but no tracker, snipe, top-play, session or goal event is created. Links queue in the browser one at a time. Mamestagram plays take another path: on a profile that linked its Mamestagram account the dialog lists that account's plays to add, and they are stored as imports, never ingested (`docs/companella-integration.md`, "Mamestagram plays").
 - **Import a leaderboard** (admin only, same dialog; `features/leaderboard-import.ts`, `POST /api/admin/leaderboard-imports`): searches the map index with `/maps` token syntax and queues one `import_beatmap_leaderboard` job per chart for its global top 50. A seven-day per-chart cooldown comes from `leaderboard_import_history`. Scores take the manual-submission path (source `leaderboard_import`); players from untracked countries are counted, not stored.
 
 ## Refreshing stored verdicts

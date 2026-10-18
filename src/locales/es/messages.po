@@ -2951,8 +2951,8 @@ msgid "Adapted from <0>Mania Replay Master</0>."
 msgstr "Adaptado de <0>Mania Replay Master</0>."
 
 #: src/components/player/AddScoreModal.tsx
-#~ msgid "Add"
-#~ msgstr "Agregar"
+msgid "Add"
+msgstr "Agregar"
 
 #: src/components/packs/SetsView.tsx
 msgid "Add {cardCount} cards"
@@ -3075,6 +3075,10 @@ msgstr "Añadir al conjunto"
 #: src/components/packs/SetsView.tsx
 msgid "Add to set..."
 msgstr "Añadir a un set..."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Add your Mamestagram profile next to your name first."
+msgstr "Primero agrega tu perfil de Mamestagram junto a tu nombre."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "added"
@@ -3958,6 +3962,7 @@ msgstr "Por debajo del requisito de clear completo: crédito reducido, aunque la
 msgid "best"
 msgstr "mejor"
 
+#: src/components/player/AddScoreModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Best"
 msgstr "Mejores"
@@ -5228,6 +5233,10 @@ msgstr "Copiar"
 #: src/routes/bbcode.tsx
 msgid "Copy BBCode"
 msgstr "Copiar BBCode"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Copy code"
+msgstr "Copiar código"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copy formatting"
@@ -9518,6 +9527,14 @@ msgstr "texto del enlace"
 msgid "Link URL (optional)"
 msgstr "URL del enlace (opcional)"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Link your Mamestagram account"
+msgstr "Vincular tu cuenta de Mamestagram"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Link your Mamestagram account below first."
+msgstr "Primero vincula tu cuenta de Mamestagram abajo."
+
 #: src/routes/communities_.$id.tsx
 msgid "listed"
 msgstr "Listado"
@@ -10138,6 +10155,10 @@ msgstr "Verificando que el replay esté disponible."
 #: src/components/communities/field-options.tsx
 msgid "Malay"
 msgstr "Malayo"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Mamestagram didn't answer. Try again later."
+msgstr "Mamestagram no respondió. Intenta más tarde."
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Manage"
@@ -11307,6 +11328,10 @@ msgstr "Sin datos de keymodes"
 #~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
 #~ msgstr "Ningún ladder reconoce este número, y los títulos siguen saliendo solo de superar un dan real. También funciona mal como ranking. Dos jugadores separados por un escalón en la tabla de dan no están realmente separados por un escalón, y un jugador que nunca farmea precisión va a quedar por debajo de su nivel real. El número también puede cambiar solo, porque los algoritmos de rating y el análisis de charts se actualizan, y cuando un recálculo sube o baja un chart un nivel, todos los que se apoyan en ese chart se mueven con él."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "No Mamestagram plays on this chart."
+msgstr "No hay plays de Mamestagram en este chart."
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No mania difficulties"
 msgstr "Sin dificultades de mania"
@@ -11430,9 +11455,17 @@ msgstr "No hay jugadores ocultos."
 msgid "No players match."
 msgstr "Ningún jugador coincide."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "No plays here."
+msgstr "No hay plays aquí."
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "No plays match these filters"
 msgstr "Ninguna jugada coincide con estos filtros"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "No plays match."
+msgstr "Ninguna play coincide."
 
 #: src/components/companella/ProfileImportedPlays.tsx
 #~ msgid "No plays sent through Companella yet."
@@ -12981,6 +13014,10 @@ msgstr "Pega un enlace de perfil de un servidor privado"
 msgid "paste a score link for {username}"
 msgstr "pega un enlace de score de {username}"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "paste a score or beatmap link for {username}"
+msgstr "pega un enlace de score o de beatmap para {username}"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste formatting"
 msgstr "Pegar formato"
@@ -13287,6 +13324,10 @@ msgstr "Jugado el {playedOn}"
 msgid "played on Lazer"
 msgstr "jugado en Lazer"
 
+#: src/components/ui/CompanellaMark.tsx
+msgid "Played on Mamestagram"
+msgstr "Jugado en Mamestagram"
+
 #: src/components/ui/LazerBadge.tsx
 #~ msgid "Played on osu!lazer"
 #~ msgstr "Jugado en osu!lazer"
@@ -13419,6 +13460,10 @@ msgstr "Los plays se registran automáticamente para el top 100 de cada país. A
 #~ msgid "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
 #~ msgstr ""
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Plays from Mamestagram"
+msgstr "Plays de Mamestagram"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Plays list"
 msgstr "Lista de jugadas"
@@ -13462,6 +13507,10 @@ msgstr "Suena cuando se pierde un combo de más de 20."
 #: src/routes/player/$username.tsx
 msgid "Plays with <0>{playstyleValue}</0>"
 msgstr "Juega con <0>{playstyleValue}</0>"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Plays with those mods can't be added."
+msgstr "Las plays con esos mods no se pueden agregar."
 
 #: src/routes/teams.tsx
 msgid "Playtime"
@@ -13912,6 +13961,10 @@ msgstr "morado"
 msgid "Purple"
 msgstr "Morado"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Put this code on your Mamestagram userpage, then press Verify."
+msgstr "Pon este código en tu userpage de Mamestagram y luego presiona Verificar."
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
 msgstr "px"
@@ -14306,6 +14359,7 @@ msgstr "Recibida como regalo de {sendersText}"
 msgid "recent"
 msgstr "recientes"
 
+#: src/components/player/AddScoreModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/top-plays.tsx
 msgid "Recent"
@@ -15579,6 +15633,10 @@ msgstr "Busca skins por nombre"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Search the whole mania catalog"
 msgstr "Busca en todo el catálogo de mania"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Search these plays"
+msgstr "Buscar en estas plays"
 
 #: src/routes/maps.tsx
 msgid "Search title, artist, mapper, or difficulty"
@@ -17597,6 +17655,18 @@ msgstr "No se puede cargar esa dirección."
 msgid "That beatmap ID is not a mania difficulty."
 msgstr "Ese ID de beatmap no es una dificultad de mania."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "That chart has been updated on osu! since the play."
+msgstr "Ese chart se actualizó en osu! después de la play."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That chart isn't on Mamestagram."
+msgstr "Ese chart no está en Mamestagram."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That chart isn't on osu!."
+msgstr "Ese chart no está en osu!."
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "That collector is no longer available."
 msgstr "Ese coleccionista ya no está disponible."
@@ -17613,6 +17683,10 @@ msgstr "No se guardó. Inténtalo de nuevo."
 #: src/components/communities/field-options.tsx
 msgid "That does not look like a Discord invite link."
 msgstr "Eso no parece un enlace de invitación de Discord."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That doesn't look like a Mamestagram score link."
+msgstr "Eso no parece un enlace de score de Mamestagram."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "That doesn't look like an osu! score link."
@@ -17687,6 +17761,14 @@ msgstr "Ese listado no es tuyo."
 #: src/components/communities/field-options.tsx
 msgid "That listing no longer exists."
 msgstr "Ese listado ya no existe."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That Mamestagram account is linked to another osu! account."
+msgstr "Esa cuenta de Mamestagram está vinculada a otra cuenta de osu!."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That Mamestagram account isn't linked to an osu! account here."
+msgstr "Esa cuenta de Mamestagram no está vinculada a ninguna cuenta de osu! aquí."
 
 #: src/lib/replay-export/errors.ts
 msgid "That range is too short to export."
@@ -17923,6 +18005,10 @@ msgstr "El chart cambió en osu! y espera una nueva revisión. El play se calcul
 #: src/routes/replay.tsx
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "El archivo del mapa no está disponible, así que solo cargará el replay."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "The chart's file couldn't be fetched. Try again in a minute."
+msgstr "No se pudo descargar el archivo del chart. Intenta en un minuto."
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's full level"
@@ -18204,6 +18290,10 @@ msgstr "el nivel del chart +1.5"
 #: src/components/companella/TestClientPanel.tsx
 msgid "The code exchange was refused."
 msgstr ""
+
+#: src/components/player/AddScoreModal.tsx
+msgid "The code isn't on that userpage yet."
+msgstr "El código todavía no está en esa userpage."
 
 #: src/routes/companella.tsx
 msgid "The Companella beta is not switched on for this site yet."
@@ -18904,6 +18994,10 @@ msgstr "Este navegador no puede guardar el archivo de video."
 msgid "This card is not ready to gift. Open it to finish loading its stats."
 msgstr "Esta carta aún no está lista para regalar. Ábrela para terminar de cargar sus estadísticas."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "This chart"
+msgstr "Este chart"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart has no dan level at the rate it was played at."
 msgstr "Este mapa no tiene nivel de dan a la velocidad con la que se jugó."
@@ -19349,8 +19443,16 @@ msgid "Too many requests right now, so the skin file did not come down."
 msgstr "Hay demasiadas solicitudes ahora mismo, así que el archivo de la skin no se pudo descargar."
 
 #: src/components/player/AddScoreModal.tsx
+msgid "Too many requests right now. Try again later."
+msgstr "Demasiadas solicitudes ahora mismo. Intenta más tarde."
+
+#: src/components/player/AddScoreModal.tsx
 msgid "Too many submissions right now. Try again later."
 msgstr "Demasiados envíos por ahora. Inténtalo más tarde."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Too many tries. Try again in a minute."
+msgstr "Demasiados intentos. Intenta en un minuto."
 
 #: src/routes/report.tsx
 msgid "Too many updates today. Try again tomorrow."
@@ -19773,6 +19875,10 @@ msgstr "Jugador desconocido"
 msgid "Unlike"
 msgstr ""
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Unlink"
+msgstr "Desvincular"
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
 msgstr "Activar audio de la vista previa del mapa"
@@ -20112,6 +20218,10 @@ msgstr "Verificado"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Verified clear"
 msgstr "Clear verificado"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Verify"
+msgstr "Verificar"
 
 #: src/lib/replay-overlays.ts
 msgid "Vertical"
@@ -21220,6 +21330,10 @@ msgstr "Se desactivaron tus renders dinámicos."
 #: src/components/me/MyStatsInsights.tsx
 msgid "Your lowest rating is {0}."
 msgstr "Tu rating más bajo es {0}."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Your Mamestagram profile link doesn't lead to a player."
+msgstr "Tu enlace de perfil de Mamestagram no lleva a ningún jugador."
 
 #: src/routes/recommendations.tsx
 msgid "your marks"

@@ -2963,8 +2963,8 @@ msgid "Adapted from <0>Mania Replay Master</0>."
 msgstr "改编自 <0>Mania Replay Master</0>。"
 
 #: src/components/player/AddScoreModal.tsx
-#~ msgid "Add"
-#~ msgstr "添加"
+msgid "Add"
+msgstr "添加"
 
 #: src/components/packs/SetsView.tsx
 msgid "Add {cardCount} cards"
@@ -3087,6 +3087,10 @@ msgstr "添加到卡组"
 #: src/components/packs/SetsView.tsx
 msgid "Add to set..."
 msgstr "添加到卡组…"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Add your Mamestagram profile next to your name first."
+msgstr "请先在你的名字旁添加 Mamestagram 个人资料链接。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "added"
@@ -3970,6 +3974,7 @@ msgstr "未达到完整通过要求：即使段位标签不变，计入值也会
 msgid "best"
 msgstr "最佳"
 
+#: src/components/player/AddScoreModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Best"
 msgstr "最佳"
@@ -5240,6 +5245,10 @@ msgstr "复制"
 #: src/routes/bbcode.tsx
 msgid "Copy BBCode"
 msgstr "复制 BBCode"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Copy code"
+msgstr "复制代码"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copy formatting"
@@ -9530,6 +9539,14 @@ msgstr "链接文字"
 msgid "Link URL (optional)"
 msgstr "链接地址(可选)"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Link your Mamestagram account"
+msgstr "绑定你的 Mamestagram 账号"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Link your Mamestagram account below first."
+msgstr "请先在下方绑定你的 Mamestagram 账号。"
+
 #: src/routes/communities_.$id.tsx
 msgid "listed"
 msgstr "收录于"
@@ -10150,6 +10167,10 @@ msgstr "正在确认回放是否可用。"
 #: src/components/communities/field-options.tsx
 msgid "Malay"
 msgstr "马来语"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Mamestagram didn't answer. Try again later."
+msgstr "Mamestagram 没有响应，请稍后再试。"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Manage"
@@ -11319,6 +11340,10 @@ msgstr "无键数数据"
 #~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
 #~ msgstr "没有哪个段位系统承认这个数字，头衔仍然只能靠真正打过课题来拿。它当排名也不好用。段位榜上差一级的两个人并不是真的差一级，从不刷准度的玩家会落在自己真实水平之下。这个数字本身也会变，因为评级算法和谱面分析会更新，一次重算把某张谱面上调或下调一级，所有靠这张谱面撑着的人也跟着动。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "No Mamestagram plays on this chart."
+msgstr "这张谱面上没有 Mamestagram 成绩。"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No mania difficulties"
 msgstr "没有 mania 难度"
@@ -11442,9 +11467,17 @@ msgstr "没有隐藏的玩家。"
 msgid "No players match."
 msgstr "没有匹配的玩家。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "No plays here."
+msgstr "这里没有成绩。"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "No plays match these filters"
 msgstr "没有符合筛选条件的成绩"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "No plays match."
+msgstr "没有匹配的成绩。"
 
 #: src/components/companella/ProfileImportedPlays.tsx
 #~ msgid "No plays sent through Companella yet."
@@ -12993,6 +13026,10 @@ msgstr "粘贴私服个人资料链接"
 msgid "paste a score link for {username}"
 msgstr "粘贴 {username} 的成绩链接"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "paste a score or beatmap link for {username}"
+msgstr "为 {username} 粘贴成绩或谱面链接"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste formatting"
 msgstr "粘贴格式"
@@ -13299,6 +13336,10 @@ msgstr "游玩于 {playedOn}"
 msgid "played on Lazer"
 msgstr "在 Lazer 上游玩"
 
+#: src/components/ui/CompanellaMark.tsx
+msgid "Played on Mamestagram"
+msgstr "在 Mamestagram 上游玩"
+
 #: src/components/ui/LazerBadge.tsx
 #~ msgid "Played on osu!lazer"
 #~ msgstr "在 osu!lazer 上游玩"
@@ -13431,6 +13472,10 @@ msgstr "每个国家/地区前 100 名的成绩会被自动记录。你还不在
 #~ msgid "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
 #~ msgstr ""
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Plays from Mamestagram"
+msgstr "来自 Mamestagram 的成绩"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Plays list"
 msgstr "成绩列表"
@@ -13474,6 +13519,10 @@ msgstr "连击超过 20 时才会播放断连音效。"
 #: src/routes/player/$username.tsx
 msgid "Plays with <0>{playstyleValue}</0>"
 msgstr "使用 <0>{playstyleValue}</0> 游玩"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Plays with those mods can't be added."
+msgstr "带有这些 Mod 的成绩无法添加。"
 
 #: src/routes/teams.tsx
 msgid "Playtime"
@@ -13924,6 +13973,10 @@ msgstr "紫"
 msgid "Purple"
 msgstr "紫色"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Put this code on your Mamestagram userpage, then press Verify."
+msgstr "把这段代码放到你的 Mamestagram 个人页面上，然后点击验证。"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
 msgstr "px"
@@ -14318,6 +14371,7 @@ msgstr "由 {sendersText} 赠送而来"
 msgid "recent"
 msgstr "最近"
 
+#: src/components/player/AddScoreModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/top-plays.tsx
 msgid "Recent"
@@ -15591,6 +15645,10 @@ msgstr "按名称搜索皮肤"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Search the whole mania catalog"
 msgstr "搜索整个 mania 谱面库"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Search these plays"
+msgstr "搜索这些成绩"
 
 #: src/routes/maps.tsx
 msgid "Search title, artist, mapper, or difficulty"
@@ -17609,6 +17667,18 @@ msgstr "这个地址无法加载。"
 msgid "That beatmap ID is not a mania difficulty."
 msgstr "这个谱面 ID 不是 mania 难度。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "That chart has been updated on osu! since the play."
+msgstr "这张谱面在这次游玩之后已在 osu! 上更新。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That chart isn't on Mamestagram."
+msgstr "这张谱面不在 Mamestagram 上。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That chart isn't on osu!."
+msgstr "这张谱面不在 osu! 上。"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "That collector is no longer available."
 msgstr "该收藏者已不可用。"
@@ -17625,6 +17695,10 @@ msgstr "保存失败，请重试。"
 #: src/components/communities/field-options.tsx
 msgid "That does not look like a Discord invite link."
 msgstr "这看起来不像是 Discord 邀请链接。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That doesn't look like a Mamestagram score link."
+msgstr "这看起来不是 Mamestagram 的成绩链接。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "That doesn't look like an osu! score link."
@@ -17699,6 +17773,14 @@ msgstr "这个条目不是你的。"
 #: src/components/communities/field-options.tsx
 msgid "That listing no longer exists."
 msgstr "这个条目已经不存在了。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That Mamestagram account is linked to another osu! account."
+msgstr "这个 Mamestagram 账号已绑定到另一个 osu! 账号。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That Mamestagram account isn't linked to an osu! account here."
+msgstr "这个 Mamestagram 账号尚未在这里绑定 osu! 账号。"
 
 #: src/lib/replay-export/errors.ts
 msgid "That range is too short to export."
@@ -17935,6 +18017,10 @@ msgstr "谱面在 osu! 上有改动，正在等待重新检查。检查完成后
 #: src/routes/replay.tsx
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "谱面文件不可用，所以只会加载回放。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "The chart's file couldn't be fetched. Try again in a minute."
+msgstr "无法获取谱面文件，请一分钟后再试。"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's full level"
@@ -18216,6 +18302,10 @@ msgstr "谱面段位 +1.5"
 #: src/components/companella/TestClientPanel.tsx
 msgid "The code exchange was refused."
 msgstr ""
+
+#: src/components/player/AddScoreModal.tsx
+msgid "The code isn't on that userpage yet."
+msgstr "该个人页面上还没有这段代码。"
 
 #: src/routes/companella.tsx
 msgid "The Companella beta is not switched on for this site yet."
@@ -18916,6 +19006,10 @@ msgstr "此浏览器无法保存视频文件。"
 msgid "This card is not ready to gift. Open it to finish loading its stats."
 msgstr "这张卡片还不能赠送。请打开它以完成属性加载。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "This chart"
+msgstr "这张谱面"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart has no dan level at the rate it was played at."
 msgstr "该谱面在这次游玩的速度下没有段位评级。"
@@ -19361,8 +19455,16 @@ msgid "Too many requests right now, so the skin file did not come down."
 msgstr "当前请求过多，皮肤文件没能下载下来。"
 
 #: src/components/player/AddScoreModal.tsx
+msgid "Too many requests right now. Try again later."
+msgstr "当前请求过多，请稍后再试。"
+
+#: src/components/player/AddScoreModal.tsx
 msgid "Too many submissions right now. Try again later."
 msgstr "当前提交过多，请稍后再试。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Too many tries. Try again in a minute."
+msgstr "尝试次数过多，请一分钟后再试。"
 
 #: src/routes/report.tsx
 msgid "Too many updates today. Try again tomorrow."
@@ -19785,6 +19887,10 @@ msgstr "未知玩家"
 msgid "Unlike"
 msgstr ""
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Unlink"
+msgstr "解除绑定"
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
 msgstr "取消静音谱面预览"
@@ -20124,6 +20230,10 @@ msgstr "已认证"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Verified clear"
 msgstr "已认证通过"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Verify"
+msgstr "验证"
 
 #: src/lib/replay-overlays.ts
 msgid "Vertical"
@@ -21232,6 +21342,10 @@ msgstr "你的动态渲染图已被关闭。"
 #: src/components/me/MyStatsInsights.tsx
 msgid "Your lowest rating is {0}."
 msgstr "你最低的评分是 {0}。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "Your Mamestagram profile link doesn't lead to a player."
+msgstr "你的 Mamestagram 个人资料链接没有指向任何玩家。"
 
 #: src/routes/recommendations.tsx
 msgid "your marks"
