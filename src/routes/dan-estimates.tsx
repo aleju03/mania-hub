@@ -514,8 +514,10 @@ function DanEstimatesPage() {
             <p>
               <Trans>
                 Practice charts are matched by their notes and OD, so any upload of the same file
-                counts. <ModPill mod="NF" />, <ModPill mod="EZ" />, <ModPill mod="HR" />,{' '}
-                <ModPill mod="DA" /> and slowing the chart down void them.
+                counts. An upload with the same notes at a different OD counts when you play it with{' '}
+                <ModPill mod="DA" /> set to the practice chart's OD. <ModPill mod="NF" />,{' '}
+                <ModPill mod="EZ" />, <ModPill mod="HR" />, any other <ModPill mod="DA" /> and slowing the
+                chart down void them.
               </Trans>
             </p>
           </Details>

@@ -1928,8 +1928,8 @@ msgid "{value, plural, one {# map} other {# maps}}"
 msgstr "{value, plural, other {# 张谱面}}"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "{value, plural, one {# pass} other {# passes}}"
-msgstr "{value, plural, other {# 次通过}}"
+#~ msgid "{value, plural, one {# pass} other {# passes}}"
+#~ msgstr "{value, plural, other {# 次通过}}"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "{value, plural, one {# play} other {# plays}}"
@@ -12965,12 +12965,12 @@ msgid "Pass bar"
 msgstr "通过线"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "passes"
-msgstr "次通过"
+#~ msgid "passes"
+#~ msgstr "次通过"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "Passes"
-msgstr "通过"
+#~ msgid "Passes"
+#~ msgstr "通过"
 
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
@@ -13624,8 +13624,12 @@ msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 #~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
-msgid "Practice charts are matched by their notes and OD, so any upload of the same file counts. <0/>, <1/>, <2/>, <3/> and slowing the chart down void them."
-msgstr "练习谱面按物件和 OD 匹配，所以同一文件的任何上传版本都算。<0/>、<1/>、<2/>、<3/> 以及降速都会使其无效。"
+#~ msgid "Practice charts are matched by their notes and OD, so any upload of the same file counts. <0/>, <1/>, <2/>, <3/> and slowing the chart down void them."
+#~ msgstr "练习谱面按物件和 OD 匹配，所以同一文件的任何上传版本都算。<0/>、<1/>、<2/>、<3/> 以及降速都会使其无效。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Practice charts are matched by their notes and OD, so any upload of the same file counts. An upload with the same notes at a different OD counts when you play it with <0/> set to the practice chart's OD. <1/>, <2/>, <3/>, any other <4/> and slowing the chart down void them."
+msgstr "练习谱面按物件和 OD 匹配，所以同一文件的任何上传版本都算。物件相同但 OD 不同的上传版本，用 <0/> 把 OD 调到练习谱面的数值后游玩也算。<1/>、<2/>、<3/>、其他 <4/> 设置以及降速都会使其无效。"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Precision"

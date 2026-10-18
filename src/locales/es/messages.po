@@ -1916,8 +1916,8 @@ msgid "{value, plural, one {# map} other {# maps}}"
 msgstr "{value, plural, one {# mapa} other {# mapas}}"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "{value, plural, one {# pass} other {# passes}}"
-msgstr "{value, plural, one {# pass} other {# passes}}"
+#~ msgid "{value, plural, one {# pass} other {# passes}}"
+#~ msgstr "{value, plural, one {# pass} other {# passes}}"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "{value, plural, one {# play} other {# plays}}"
@@ -12953,12 +12953,12 @@ msgid "Pass bar"
 msgstr "Clear"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "passes"
-msgstr "passes"
+#~ msgid "passes"
+#~ msgstr "passes"
 
 #: src/components/player/ActivityPanel.tsx
-msgid "Passes"
-msgstr "Passes"
+#~ msgid "Passes"
+#~ msgstr "Passes"
 
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
@@ -13612,8 +13612,12 @@ msgstr "Recomendaciones de mapas por ganancia de pp adaptadas a un jugador."
 #~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
-msgid "Practice charts are matched by their notes and OD, so any upload of the same file counts. <0/>, <1/>, <2/>, <3/> and slowing the chart down void them."
-msgstr "Los charts de práctica se reconocen por sus notas y su OD, así que cualquier upload del mismo archivo cuenta. <0/>, <1/>, <2/>, <3/> y hacer el chart más lento los anulan."
+#~ msgid "Practice charts are matched by their notes and OD, so any upload of the same file counts. <0/>, <1/>, <2/>, <3/> and slowing the chart down void them."
+#~ msgstr "Los charts de práctica se reconocen por sus notas y su OD, así que cualquier upload del mismo archivo cuenta. <0/>, <1/>, <2/>, <3/> y hacer el chart más lento los anulan."
+
+#: src/routes/dan-estimates.tsx
+msgid "Practice charts are matched by their notes and OD, so any upload of the same file counts. An upload with the same notes at a different OD counts when you play it with <0/> set to the practice chart's OD. <1/>, <2/>, <3/>, any other <4/> and slowing the chart down void them."
+msgstr "Los charts de práctica se reconocen por sus notas y su OD, así que cualquier upload del mismo archivo cuenta. Un upload con las mismas notas y otro OD cuenta si lo juegas con <0/> ajustado al OD del chart de práctica. <1/>, <2/>, <3/>, cualquier otro uso de <4/> y hacer el chart más lento los anulan."
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Precision"
