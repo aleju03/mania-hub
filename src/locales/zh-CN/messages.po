@@ -10537,6 +10537,7 @@ msgid "MinaCalc was made for 4K. On 6K to 8K it rated charts with the same skill
 msgstr "MinaCalc 是为 4K 做的。在 6K 到 8K 上，它用和 4K 一样的技能组来评谱面，没有技巧，也不给任何谱面 LN 数值。"
 
 #: src/components/maps/UserCollectionsSection.tsx
+#: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Mine"
 msgstr "我的"
 
@@ -13787,6 +13788,7 @@ msgstr "隐私"
 msgid "Privacy Policy"
 msgstr "隐私政策"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/skins/SkinCard.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx

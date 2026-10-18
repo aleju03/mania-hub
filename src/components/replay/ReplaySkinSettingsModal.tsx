@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { createPortal } from "react-dom";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Copy, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, Copy, GripHorizontal, Lock, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { I18n, MessageDescriptor } from "@lingui/core";
@@ -86,6 +86,7 @@ import {
   communityPresetCacheKey,
   dehydrateReplaySkinSettings,
   fetchMyReplaySkinCached,
+  fetchSkinArchive,
   loadOwnerReplaySkin,
   readAppliedCommunityReplaySkin,
   rehydrateOwnerReplaySkinSettings,
@@ -95,7 +96,7 @@ import {
   writeMyReplaySkinMemory,
 } from "#/lib/replay-owner-skin";
 import type { AppliedCommunitySkinDraft, OwnerReplaySkinRecord } from "#/lib/replay-owner-skin";
-import { fetchSkinsListDirect, formatKeymodes, skinOskFileUrl } from "#/lib/skins";
+import { fetchSkinsListDirect, fetchViewerSkinsList, formatKeymodes, skinOskFileUrl } from "#/lib/skins";
 import type { SkinSummary } from "#/lib/skins";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
@@ -1066,14 +1067,9 @@ export function ReplaySkinSettingsModal({
     const cache = archiveCacheRef.current;
     const cached = cache.get(skin.id);
     if (cached) return cached;
-    const promise = (async () => {
-      const url = skinOskFileUrl(skin);
-      if (!url) return null;
-      // The streaming endpoint is CORS-safe and does not count as a download.
-      const response = await fetch(url, { credentials: "omit" });
-      if (!response.ok) return null;
-      return openOskArchive(await response.arrayBuffer());
-    })().catch(() => null);
+    // Shared with the stages' loader, which also recovers a private skin
+    // whose stored summary is the redacted copy without an .osk URL.
+    const promise = fetchSkinArchive(skin).catch(() => null);
     cache.set(skin.id, promise);
     // A failed download must not poison the cache for the next attempt.
     void promise.then((archive) => {
@@ -5249,8 +5245,8 @@ function ReplaySkinKeyDialog({
 const CATALOG_KEYMODE_FILTERS = [0, 4, 5, 6, 7, 8, 9, 10];
 
 // The "Browse skins" picker: the published /skins catalog inside the modal,
-// searched against the live backend's public list endpoint. Picking a card
-// hands the SkinSummary back; the modal downloads and imports from there.
+// plus the signed-in viewer's own private skins. Picking a card hands the
+// SkinSummary back; the modal downloads and imports from there.
 function ReplaySkinCatalogBrowserDialog({
   onPick,
   onClose,
@@ -5259,9 +5255,11 @@ function ReplaySkinCatalogBrowserDialog({
   onClose: () => void;
 }) {
   const { t } = useLingui();
+  const signedIn = useAuth().viewer != null;
   const [query, setQuery] = useState("");
   // 0 is no filter, matching the /skins catalog's own keys row.
   const [keymode, setKeymode] = useState(0);
+  const [mine, setMine] = useState(false);
   const [results, setResults] = useState<SkinSummary[]>([]);
   const [status, setStatus] = useState<"loading" | "idle" | "error">("loading");
   const requestRef = useRef(0);
@@ -5272,7 +5270,10 @@ function ReplaySkinCatalogBrowserDialog({
     // The first page loads immediately; typing debounces ~300ms.
     const timer = window.setTimeout(async () => {
       try {
-        const result = await fetchSkinsListDirect({ q: query.trim(), page: 0, k: keymode });
+        const params = { q: query.trim(), page: 0, k: keymode };
+        const result = signedIn
+          ? await fetchViewerSkinsList({ data: { ...params, mine } })
+          : await fetchSkinsListDirect(params);
         if (requestRef.current !== requestId) return;
         setResults(result.skins);
         setStatus("idle");
@@ -5283,7 +5284,7 @@ function ReplaySkinCatalogBrowserDialog({
       }
     }, query.trim() ? 300 : 0);
     return () => window.clearTimeout(timer);
-  }, [query, keymode]);
+  }, [query, keymode, mine, signedIn]);
 
   return (
     <>
@@ -5337,6 +5338,23 @@ function ReplaySkinCatalogBrowserDialog({
                 {keys === 0 ? t`any` : `${keys}K`}
               </button>
             ))}
+            {signedIn ? (
+              <>
+                <span aria-hidden="true" className="mx-1 h-4 w-px bg-white/[0.12]" />
+                <button
+                  type="button"
+                  onClick={() => setMine(!mine)}
+                  aria-pressed={mine}
+                  className={`cursor-pointer rounded-md px-2 py-1 text-[11px] font-bold transition-colors ${
+                    mine
+                      ? "bg-osu-pink/20 text-osu-pink-light"
+                      : "bg-osu-b5/70 text-osu-f1 hover:bg-osu-b3/60 hover:text-white"
+                  }`}
+                >
+                  {t`Mine`}
+                </button>
+              </>
+            ) : null}
           </div>
           <div className="max-h-[340px] overflow-y-auto rounded-md border border-osu-b3/50 bg-osu-b5/40">
             {status === "error" ? (
@@ -5361,7 +5379,10 @@ function ReplaySkinCatalogBrowserDialog({
                     )}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold text-osu-l1">{skin.name}</span>
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-osu-l1">
+                      {skin.visibility === "private" ? <Lock aria-label={t`private`} className="h-3 w-3 shrink-0 text-osu-f1" /> : null}
+                      <span className="truncate">{skin.name}</span>
+                    </span>
                     <span className="block truncate text-[10px] text-osu-f1">
                       {/* No author on file means no credit line, not the
                           uploader standing in for one. */}

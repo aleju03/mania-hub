@@ -950,6 +950,29 @@ export const fetchLikedSkinsList = createServerFn({ method: "GET" })
     return (await response.json()) as SkinsListResult;
   });
 
+// The catalog plus the signed-in viewer's own private skins, for the replay
+// skin picker. The backend only adds an owner's private rows (with their
+// capability URLs) to a bridge-token request, so this cannot go direct.
+export const fetchViewerSkinsList = createServerFn({ method: "GET" })
+  .validator((data: Pick<SkinsListParams, "q" | "page" | "k"> & { mine?: boolean }) => ({
+    q: typeof data?.q === "string" ? data.q.slice(0, 80) : undefined,
+    page: Number.isInteger(data?.page) && Number(data.page) > 0 ? Number(data.page) : 0,
+    k: Number.isInteger(data?.k) ? data.k : undefined,
+    // Narrows to the viewer's own uploads; the id is filled in server-side.
+    mine: data?.mine === true,
+  }))
+  .handler(async ({ data }): Promise<SkinsListResult> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return fetchSkinsListDirect({ q: data.q, page: data.page, k: data.k });
+    const query = skinsListQuery({ q: data.q, page: data.page, k: data.k, owner: data.mine ? cfg.userId : null });
+    query.set("viewerUserId", String(cfg.userId));
+    const response = await fetch(`${cfg.base}/api/skins/list?${query.toString()}`, { headers: cfg.headers });
+    if (!response.ok) throw new Error(`Server ${response.status}`);
+    return (await response.json()) as SkinsListResult;
+  });
+
 // Every skin the signed-in viewer liked, for the hearts on the grid's cards.
 // A guest id from likes made signed out comes along once, and the backend
 // moves those likes onto the account before answering.

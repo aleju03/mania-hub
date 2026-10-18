@@ -530,8 +530,15 @@ const SKIN_ARCHIVE_CACHE_MAX = 3;
 // Downloads the .osk through the catalog's CORS-safe streaming endpoint (which
 // does not count as a download). The archive rides HTTP caching too: the
 // endpoint serves immutable cache headers.
-export function fetchSkinArchive(skin: SkinSummary, init?: RequestInit): Promise<OskArchive | null> {
-  return fetchArchiveFrom(skinOskFileUrl(skin), init);
+export async function fetchSkinArchive(skin: SkinSummary, init?: RequestInit): Promise<OskArchive | null> {
+  const url = skinOskFileUrl(skin);
+  if (url || skin.visibility !== "private") return fetchArchiveFrom(url, init);
+  // A redacted private summary (the /api/replay-skin pointer's copy) has no
+  // .osk URL. Presets saved from it carry that copy, so ask for the owner's
+  // summary, which only its owner gets back with the file's capability URL.
+  const { fetchSkinById } = await import("./skins");
+  const owned = await fetchSkinById({ data: { id: skin.id } }).catch(() => null);
+  return fetchArchiveFrom(owned ? skinOskFileUrl(owned) : null, init);
 }
 
 // The private-skin counterpart: a zip the backend assembled from just the
@@ -589,9 +596,7 @@ async function fetchRecordArchive(
 ): Promise<OskArchive | null> {
   if (!record.private) return fetchSkinArchive(record.skin, init);
   if (access === "viewer") return fetchArchiveFrom(replaySkinBundleUrl(record), init);
-  const { fetchSkinById } = await import("./skins");
-  const owned = await fetchSkinById({ data: { id: record.skin.id } }).catch(() => null);
-  return owned ? fetchSkinArchive(owned, init) : null;
+  return fetchSkinArchive(record.skin, init);
 }
 
 // The archive behind a player's skin as a viewer may see it: the whole .osk

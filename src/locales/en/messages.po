@@ -10564,6 +10564,7 @@ msgid "MinaCalc was made for 4K. On 6K to 8K it rated charts with the same skill
 msgstr "MinaCalc was made for 4K. On 6K to 8K it rated charts with the same skillsets it uses on 4K, without Technical, and gave no chart an LN number."
 
 #: src/components/maps/UserCollectionsSection.tsx
+#: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Mine"
 msgstr "Mine"
 
@@ -13814,6 +13815,7 @@ msgstr "Privacy"
 msgid "Privacy Policy"
 msgstr "Privacy Policy"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/skins/SkinCard.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
