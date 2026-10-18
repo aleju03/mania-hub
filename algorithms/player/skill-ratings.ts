@@ -7,8 +7,7 @@ import { estimateManiaWifeAccuracy, estimateManiaWifeAccuracyFromAccuracy, type 
 import { parseJson, readSameChartChecksums, readChartJson } from "../chart/cells";
 import { LN_EFFECTIVE_KEY_COUNTS, chartIsLn, lnTailPassText } from "../dan-estimator/ln-effective";
 import type { MotionFeatures } from "../classification/motion-features";
-import { PRISM_GOAL_FLOOR } from "../prism/params";
-import { prismLnLeadValues } from "../prism/ln-lead";
+import { PRISM_GOAL_FLOOR, prismLnLeadValues } from "../msd/prism";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, isMsdSupportedKeyCount, msdChartErrorFallback, usesPrism } from "../msd/msd";
 import { hybridLnSectionsCredit, isHybridChart } from "../classification/chart-analysis";
 import { invertManiaOsuText } from "../chart/invert";

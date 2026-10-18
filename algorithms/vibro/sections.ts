@@ -1,6 +1,6 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "../chart/beatmap";
 import { REPEATED_QUAD_GAP_MS, SLOW_QUAD_MIN_ROWS, scanMotionVibro } from "./motion";
-import { usesPrism } from "../prism/switch";
+import { usesPrism } from "../msd/prism";
 import { inspectChartDanEligibility } from "../classification/dan-eligibility";
 
 export const VIBRO_SECTION_VERSION = 11;

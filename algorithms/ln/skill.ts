@@ -4,8 +4,7 @@ import { lnPrimaryMinRatioFor } from "../dan-estimator/ln";
 import { classifyLnSkillsets } from "./skillset-classifier";
 import { buildLnWorkload, emptyLnFamilyVector, type LnFamilyVector, type LnWorkload } from "./workload";
 import { LN_AXIS_KEY_COUNTS } from "./axis-keymodes";
-import { prismLnLeadValues } from "../prism/ln-lead";
-import { PRISM_KEY_COUNTS } from "../prism/switch";
+import { prismLnLeadValues, PRISM_KEY_COUNTS } from "../msd/prism";
 
 export const LN_SKILL_VERSION = 15;
 

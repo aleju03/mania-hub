@@ -2,9 +2,8 @@
 import type { ManiaBeatmap } from "../chart/beatmap";
 import { chartClassificationData } from "../classification/chart-classification-data";
 import { classifyChart, classifyChartRc, type ClassifyChartInput } from "../classification/chart-classifier";
-import { analyzeAnyLnSkillFromText } from "../prism/ln-skill";
 import { analyzeLnSsr } from "../ln/ssr";
-import { analyzePrismFromText } from "../prism";
+import { analyzeAnyLnSkillFromText, analyzePrismFromText } from "./prism";
 import { checkRateVibro } from "../vibro/rate";
 import { analyzeEtternaFromText } from "./minacalc";
 import type { MsdOptions, MsdResult } from "./msd";

@@ -1,5 +1,5 @@
 import { analyzeLnSkillOnThread, analyzePrismOnThread, AnalysisThreadUnavailableError, computeMsdOnThread, MsdThreadUnavailableError } from "./inline";
-import { PRISM_VERSION, PRISM_ENABLED, usesPrism } from "../prism/params";
+import { PRISM_VERSION, PRISM_ENABLED, usesPrism } from "./prism";
 import { analyzeVibroSections, prepareVibroChart, usesSectionVibro, VIBRO_SECTION_VERSION, type VibroAnalysis } from "../vibro/sections";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../chart/beatmap";
 import { isLnSkillSupported, lnSkillDisplayValues, type LnSkillResult } from "../ln/skill";

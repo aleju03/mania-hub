@@ -1,7 +1,6 @@
 import { parseManiaBeatmap } from "../chart/beatmap";
 import { isLnSkillSupported, lnRatingAtGoal, lnSkillOfWorkload, type LnSkillResult } from "./skill";
-import { prismPlayLnSkill } from "../prism/ln-skill";
-import { PRISM_BASE_GOAL, PRISM_KEY_COUNTS, PRISM_MAX_GOAL, usesPrism } from "../prism/params";
+import { prismPlayLnSkill, PRISM_BASE_GOAL, PRISM_KEY_COUNTS, PRISM_MAX_GOAL, usesPrism } from "../msd/prism";
 import { buildLnWorkload } from "./workload";
 
 export const SSR_CALC_GOAL_CAP = 0.965;
