@@ -236,6 +236,7 @@ function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyC
     .filter(({ value }) => Number.isFinite(value) && value >= 1)
     .sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...skills.map(({ value }) => value));
+  const floored = prismFlooredSkillsets(keyCount, skills);
   return (
     <div className="flex flex-col gap-4 border-t border-white/[0.07] pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
       <div className="flex items-center justify-between gap-3">
@@ -255,9 +256,9 @@ function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyC
             <HoverTip key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2" tip={halvesTip(i18n, name, keyCount, play.skillRatings)}>
               <span className="text-[10px] text-osu-l2">{skillsetLabel(i18n, name, keyCount)}</span>
               <span className="h-1.5 overflow-hidden rounded-full bg-white/5">
-                <span className="block h-full rounded-full bg-osu-pink/70" style={{ width: `${value / max * 100}%` }} />
+                <span className={`block h-full rounded-full ${floored.has(name) ? "bg-white/15" : "bg-osu-pink/70"}`} style={{ width: `${value / max * 100}%` }} />
               </span>
-              <span className="text-right text-[11px] font-semibold tabular-nums text-osu-l1">{value.toFixed(2)}</span>
+              <span className={`text-right text-[11px] font-semibold tabular-nums ${floored.has(name) ? "text-osu-f1/45" : "text-osu-l1"}`}>{value.toFixed(2)}</span>
             </HoverTip>
           ))}
           {skills.length === 0 && <p className="text-[11px] text-osu-f1/70"><Trans>Skill breakdown unavailable</Trans></p>}
