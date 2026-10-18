@@ -1991,6 +1991,8 @@ export interface RestrictedPpPlay {
   receivedAt: string;
   /** The client id of the app that sent it, for the row's icon. */
   app?: string | null;
+  /** False for a play an admin entered by hand, which has no replay. Absent on a backend older than the field. */
+  hasReplay?: boolean;
 }
 
 export interface RestrictedPpPlayer {
