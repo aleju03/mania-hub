@@ -1,6 +1,6 @@
 # Card Packs, Arcade, GOAT Poll
 
-Deep reference for the maniacard pack economy, the streak/blitz games, and the temporary GOAT nomination poll. Other feature models live in `docs/features.md`.
+Deep reference for the maniacard pack economy, the streak/blitz games, and the temporary GOAT nomination poll. Other feature models live in `docs/features/`.
 
 ## Card packs
 

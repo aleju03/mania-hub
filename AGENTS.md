@@ -9,7 +9,7 @@ Countries are dynamic: `country_registry` holds each one's status (cold -> warm 
 
 ## Docs
 
-`docs/` is the reference; read only the file for your area: `backend.md` (modules, ingest, jobs, HTTP and rate buckets, replay video, retention, caching), `features.md` (per-feature models, uploaded replays, skins privacy), `packs.md` (pack economy, streak/blitz, GOAT poll), `discord.md` (maniabot, `/communities`), `admin.md` (admin surfaces, analytics, `bugs:pull` setup), `frontend.md` (routes, live data flow, client state, replay video export, OG images, BBCode editor), `companella-integration.md` (the off-by-default Companella import beta, with its `companella-*` spec, client guide and runbook).
+`docs/` is the reference; read only the file for your area: `backend.md` (modules, ingest, jobs, HTTP and rate buckets, replay video, retention, caching), `features/` (per-feature models, one file per area; index in its `README.md`), `packs.md` (pack economy, streak/blitz, GOAT poll), `discord.md` (maniabot, `/communities`), `admin.md` (admin surfaces, analytics, `bugs:pull` setup), `frontend.md` (routes, live data flow, client state, replay video export, OG images, BBCode editor), `companella-integration.md` (the off-by-default Companella import beta, with its `companella-*` spec, client guide and runbook).
 
 One-off audits and investigation notes go in `local-notes/` (gitignored), never `docs/`, and are never committed.
 

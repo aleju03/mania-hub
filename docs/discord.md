@@ -1,6 +1,6 @@
 # Discord Bot and Communities Directory
 
-Deep reference for the maniabot Discord subsystem and the `/communities` server directory. Other feature models live in `docs/features.md` and `docs/packs.md`.
+Deep reference for the maniabot Discord subsystem and the `/communities` server directory. Other feature models live in `docs/features/` and `docs/packs.md`.
 
 ## Discord bot (maniabot)
 

@@ -1,6 +1,6 @@
 # Live Backend Reference
 
-Deep reference for `backend/`: module map, ingest flow, job queue, HTTP surface, replay video export, retention and storage. The condensed guides are `AGENTS.md` at the repo root and `backend/AGENTS.md`. Per-feature models live in `docs/features.md`, `docs/packs.md`, `docs/discord.md`.
+Deep reference for `backend/`: module map, ingest flow, job queue, HTTP surface, replay video export, retention and storage. The condensed guides are `AGENTS.md` at the repo root and `backend/AGENTS.md`. Per-feature models live in `docs/features/`, `docs/packs.md`, `docs/discord.md`.
 
 The Companella score-import beta has its own reference, `docs/companella-integration.md`: `backend/src/integrations/companella/` (its own `companella_*` tables, its own `companella` worker lane, `/api/integrations/companella/{native,manage}/*`, plus the admin-token-only `POST /api/admin/companella/review`), off unless `COMPANELLA_MODE` is set. It reads official tables and never writes them, except the merged skill rating's `player_skill_history` and `unrated_plays` rows (`skill-merge.ts`). Its checked imports reach the tracker snapshot and the profile recent section (`imports`) as a read-time merge from `public-feed.ts`, and new ones go out as their own `companella_score` SSE event.
 
