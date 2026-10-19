@@ -80,10 +80,13 @@ export function getPublicBucketBaseUrl(): string | null {
   return getBaseUrl();
 }
 
+/* What the bucket holds: images, and supporters' 3D companions (binary glTF). */
+export type PublicObjectMime = SniffedImageMime | "model/gltf-binary";
+
 /** Content-addressed key for an image, identical for identical bytes. */
-export function getPublicImageKey(buffer: Buffer, mime: SniffedImageMime, prefix = IMAGE_PREFIX): string {
+export function getPublicImageKey(buffer: Buffer, mime: PublicObjectMime, prefix = IMAGE_PREFIX): string {
   const hash = crypto.createHash("sha256").update(buffer).digest("hex");
-  return `${prefix}${hash}.${imageMimeExtension(mime)}`;
+  return `${prefix}${hash}.${mime === "model/gltf-binary" ? "glb" : imageMimeExtension(mime)}`;
 }
 
 export interface StoredImage {
@@ -100,10 +103,11 @@ export interface StoredImage {
  */
 export async function storePublicImage(
   buffer: Buffer,
-  mime: SniffedImageMime,
+  mime: PublicObjectMime,
   uploadedBy: string,
-  /* supporter-motifs/ for supporters' card images; bbcode/ otherwise. Same
-     rule for both: permanent, no lifecycle expiry. */
+  /* supporter-motifs/ for supporters' card images, companions/ for their
+     companions; bbcode/ otherwise. Same rule for all: permanent, no
+     lifecycle expiry. */
   prefix = IMAGE_PREFIX,
 ): Promise<StoredImage> {
   const s3 = getClient();

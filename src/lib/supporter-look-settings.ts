@@ -9,6 +9,7 @@ import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOpt
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import { NO_PACK_STYLE, parsePackStyle, SUPPORTER_BINDERS, SUPPORTER_BLADES, SUPPORTER_CARD_SLEEVES, SUPPORTER_WRAPPERS, type SupporterPackStyle } from "./supporter-pack-style";
 import { isProfileStatId, parseProfileStats, PROFILE_STAT_SLOTS, type ProfileStatId } from "./profile-stats";
+import { COMPANION_NAME_MAX, companionId, parseSubmittedCompanion, parseSupporterCompanion, type CompanionKind, type SubmittedCompanion } from "./supporter-companions";
 import { isProfilePlayMetric, parseProfilePlayChoice, parseProfilePlays, parseProfilePlaySnapshot, PROFILE_PLAY_SORTS, type ProfilePlayChoice, type ProfilePlayPick, type ProfilePlays, type ProfilePlaySnapshot, type ProfilePlaySort } from "./profile-plays";
 
 // Server functions behind the /supporter page: the viewer's supporter status
@@ -386,4 +387,54 @@ export const claimSupporterGiftCode = createServerFn({ method: "POST" })
     }
     const known: GiftClaimError[] = ["invalid_code", "already_claimed", "own_code", "already_supporter", "trial_used"];
     return { ok: false, error: known.includes(body?.error as GiftClaimError) ? body!.error as GiftClaimError : "failed" };
+  });
+
+const COMPANION_ERRORS: Record<string, string> = {
+  not_supporter: "Your supporter time has run out.",
+  too_many_submissions: "That's five companions today; try again tomorrow.",
+  invalid_companion: "That companion isn't available.",
+};
+
+/* Sets or clears (null) the viewer's companion; answers the id it saved. */
+export const saveSupporterCompanionSetting = createServerFn({ method: "POST" })
+  .validator((data: { companion?: unknown }) => {
+    const companion = data?.companion ?? null;
+    if (companion !== null && (typeof companion !== "string" || companion.length > 40)) throw new Error("Pick a companion.");
+    return { companion: companion as string | null };
+  })
+  .handler(async ({ data }): Promise<{ companion: string | null }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/companion`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, companion: data.companion }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown; companion?: unknown } | null;
+    if (!response.ok) throw new Error(COMPANION_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
+    const saved = parseSupporterCompanion(body?.companion);
+    return { companion: saved ? companionId(saved) : null };
+  });
+
+/* Puts an uploaded companion (/api/supporter-companion) on the list. */
+export const submitSupporterCompanion = createServerFn({ method: "POST" })
+  .validator((data: { name?: unknown; kind?: unknown; url?: unknown }) => {
+    const name = typeof data?.name === "string" ? data.name.trim().slice(0, COMPANION_NAME_MAX) : "";
+    if (!name) throw new Error("Give it a name.");
+    if (data?.kind !== "model" && data?.kind !== "image") throw new Error("Upload a file first.");
+    if (typeof data?.url !== "string") throw new Error("Upload a file first.");
+    return { name, kind: data.kind as CompanionKind, url: data.url };
+  })
+  .handler(async ({ data }): Promise<{ companion: SubmittedCompanion }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/companions`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, ...data }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown; companion?: unknown } | null;
+    const companion = parseSubmittedCompanion(body?.companion);
+    if (!response.ok || !companion) throw new Error(COMPANION_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
+    return { companion };
   });

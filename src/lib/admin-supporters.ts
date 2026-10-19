@@ -112,3 +112,12 @@ export const clearAdminSupporterMotif = createServerFn({ method: "POST" })
     return { userId };
   })
   .handler(({ data }) => adminRequest<{ ok: true; cleared: boolean }>("/api/admin/supporters/clear-motif", data));
+
+/* Takes a submitted companion off the list and off everyone wearing it. */
+export const deleteAdminCompanion = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a companion.");
+    return { id };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; deleted: boolean }>("/api/admin/supporters/delete-companion", data));

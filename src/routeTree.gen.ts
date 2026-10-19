@@ -77,6 +77,7 @@ import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiOszRouteImport } from './routes/api/osz'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
+import { Route as ApiSupporterCompanionRouteImport } from './routes/api/supporter-companion'
 import { Route as ApiSupporterMotifRouteImport } from './routes/api/supporter-motif'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiTeamImageRouteImport } from './routes/api/team-image'
@@ -479,6 +480,11 @@ const ApiSignaturePreviewRoute = ApiSignaturePreviewRouteImport.update({
   path: '/api/signature-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSupporterCompanionRoute = ApiSupporterCompanionRouteImport.update({
+  id: '/api/supporter-companion',
+  path: '/api/supporter-companion',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSupporterMotifRoute = ApiSupporterMotifRouteImport.update({
   id: '/api/supporter-motif',
   path: '/api/supporter-motif',
@@ -866,6 +872,7 @@ export interface FileRoutesByFullPath {
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
+  '/api/supporter-companion': typeof ApiSupporterCompanionRoute
   '/api/supporter-motif': typeof ApiSupporterMotifRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
@@ -996,6 +1003,7 @@ export interface FileRoutesByTo {
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
+  '/api/supporter-companion': typeof ApiSupporterCompanionRoute
   '/api/supporter-motif': typeof ApiSupporterMotifRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
@@ -1127,6 +1135,7 @@ export interface FileRoutesById {
   '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
+  '/api/supporter-companion': typeof ApiSupporterCompanionRoute
   '/api/supporter-motif': typeof ApiSupporterMotifRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
@@ -1259,6 +1268,7 @@ export interface FileRouteTypes {
     | '/api/osz'
     | '/api/replay-upload'
     | '/api/signature-preview'
+    | '/api/supporter-companion'
     | '/api/supporter-motif'
     | '/api/sync'
     | '/api/team-image'
@@ -1389,6 +1399,7 @@ export interface FileRouteTypes {
     | '/api/osz'
     | '/api/replay-upload'
     | '/api/signature-preview'
+    | '/api/supporter-companion'
     | '/api/supporter-motif'
     | '/api/sync'
     | '/api/team-image'
@@ -1519,6 +1530,7 @@ export interface FileRouteTypes {
     | '/api/osz'
     | '/api/replay-upload'
     | '/api/signature-preview'
+    | '/api/supporter-companion'
     | '/api/supporter-motif'
     | '/api/sync'
     | '/api/team-image'
@@ -1650,6 +1662,7 @@ export interface RootRouteChildren {
   ApiOszRoute: typeof ApiOszRoute
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
+  ApiSupporterCompanionRoute: typeof ApiSupporterCompanionRoute
   ApiSupporterMotifRoute: typeof ApiSupporterMotifRoute
   ApiSyncRoute: typeof ApiSyncRoute
   ApiTeamImageRoute: typeof ApiTeamImageRoute
@@ -2173,6 +2186,13 @@ declare module '@tanstack/react-router' {
       path: '/api/signature-preview'
       fullPath: '/api/signature-preview'
       preLoaderRoute: typeof ApiSignaturePreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/supporter-companion': {
+      id: '/api/supporter-companion'
+      path: '/api/supporter-companion'
+      fullPath: '/api/supporter-companion'
+      preLoaderRoute: typeof ApiSupporterCompanionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/supporter-motif': {
@@ -2801,6 +2821,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiOszRoute: ApiOszRoute,
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
+  ApiSupporterCompanionRoute: ApiSupporterCompanionRoute,
   ApiSupporterMotifRoute: ApiSupporterMotifRoute,
   ApiSyncRoute: ApiSyncRoute,
   ApiTeamImageRoute: ApiTeamImageRoute,

@@ -40,7 +40,7 @@ import {
 import type { SupporterLook } from "../lib/supporter-card-looks";
 import { profileThemeStyle } from "../lib/supporter-profile-themes";
 import { rememberViewerSupporter } from "../lib/viewer-supporter";
-import { ProfileStatsSection, SupporterPerks } from "../components/supporter/SupporterExtras";
+import { CompanionSection, ProfileStatsSection, SupporterPerks } from "../components/supporter/SupporterExtras";
 import { NO_PACK_STYLE } from "../lib/supporter-pack-style";
 import {
   fetchSupporterLookState,
@@ -535,7 +535,10 @@ function SupporterPage() {
               </div>
 
               <div className="mt-10 grid gap-8 border-t border-white/[0.07] pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <ProfileStatsSection viewerId={viewer.id} supporter={supporter} />
+                <div className="flex flex-col gap-8">
+                  <ProfileStatsSection viewerId={viewer.id} supporter={supporter} />
+                  <CompanionSection viewerId={viewer.id} supporter={supporter} />
+                </div>
                 <SupporterPerks avatar={avatar} />
               </div>
             </>

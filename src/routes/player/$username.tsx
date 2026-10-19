@@ -1,3 +1,5 @@
+import { ProfileCompanion } from "../../components/supporter/Companion";
+import { builtInCompanion, type SupporterCompanion } from "../../lib/supporter-companions";
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,6 +20,7 @@ import {
   fetchLivePlayerRecentScoresDirect,
   fetchLivePlayerSkillsDirect,
   fetchLiveSupporterProfileLook,
+  peekLiveSupporterCompanion,
   fetchRestrictedPpPlayerDirect,
   isLiveBackendConfigured,
   peekLiveSupporterFrame,
@@ -249,11 +252,6 @@ const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
 const RECENT_PRIORITY_DEFER_MS = 1200;
-const TUNG_TUNG_SAHUR_AUDIO_SRC = "/audio/tung-tung-sahur-keycap.mp3";
-const TUNG_TUNG_SAHUR_GLOW_COLORS = ["#38d9ff", "#ff3f57", "#8bff3f", "#b45cff", "#ffd53d", "#ff7a2f"];
-const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
-const TUNG_TUNG_SAHUR_TOP_REST = { x: -3.25, y: 4, scaleY: 1, filter: "brightness(1)" };
-const TUNG_TUNG_SAHUR_ACTUATION_MS = 49;
 export type PlayerTab = "best" | "recent" | "card" | "about" | "activity" | "skills";
 const PLAYER_TABS: PlayerTab[] = ["best", "recent", "skills", "about", "card", "activity"];
 
@@ -1131,6 +1129,7 @@ export function PlayerProfilePage({
     profileStats: ProfileStatId[] | null;
     profileStatsData: ProfileStatsData;
     profilePlays: ProfilePlays | null;
+    companion: SupporterCompanion | null;
     /* Only an active supporter has a card look. */
     supporter: boolean;
   } | null>(null);
@@ -1149,11 +1148,12 @@ export function PlayerProfilePage({
         profileStats: peekLiveSupporterProfileStats(profileUserId)?.stats ?? null,
         profileStatsData: peekLiveSupporterProfileStats(profileUserId)?.data ?? {},
         profilePlays: peekLiveSupporterProfileStats(profileUserId)?.plays ?? null,
+        companion: peekLiveSupporterCompanion(profileUserId) ?? null,
         supporter: peekLiveSupporterLook(profileUserId) != null,
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, supporter: value.look !== null });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, supporter: value.look !== null });
     });
     return () => {
       alive = false;
@@ -2084,7 +2084,10 @@ export function PlayerProfilePage({
   const rankDelta90d = rankHistoryPoints.length >= 2
     ? rankHistoryPoints[0] - rankHistoryPoints[rankHistoryPoints.length - 1]
     : null;
-  const showTungTungSahur = user.username.toLowerCase() === "sebasrj";
+  /* A supporter's companion beside the numbers. SebasRJ's keycap came first,
+     as a one-off, and stays his until he picks one. */
+  const companion: SupporterCompanion | null = (supporterFrame?.userId === profileUserId ? supporterFrame.companion : null)
+    ?? (user.username.toLowerCase() === "sebasrj" ? { builtIn: builtInCompanion("sahur-keycap")! } : null);
   // The tab strip sits flush on the section edge unless a filter/sort bar
   // follows it, which then needs the breathing room back.
   const hasTabControls = tab === "recent" || (tab === "best" && bestWindowLoaded && shownBest.length > 0);
@@ -2540,7 +2543,7 @@ export function PlayerProfilePage({
 
           {/* The keycap easter egg stands on the rail below and leans into this
               corner, so on narrow screens the numbers step out of its way. */}
-          <div className={`mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12 sm:pr-0 ${showTungTungSahur ? "pr-16" : ""}`}>
+          <div className={`mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12 sm:pr-0 ${companion ? "pr-24" : ""}`}>
             <HeroStat
               label={t`Global`}
               value={restrictedPpPending ? heroValueSkeleton : shownGlobalRank ? `#${formatNumber(shownGlobalRank)}` : "-"}
@@ -2597,7 +2600,7 @@ export function PlayerProfilePage({
           {/* Play totals and the grade tally share one flat rail: no boxes, just
               the numbers with a hairline under them. */}
           <div className="relative flex flex-wrap items-center gap-x-8 gap-y-5 border-b border-osu-b3/25 py-5 sm:gap-x-12">
-            {showTungTungSahur && <TungTungSahurKeycap />}
+            {companion && <ProfileCompanion companion={companion} />}
             <RailStat
               label={t`Accuracy`}
               value={restrictedPpPending
@@ -3100,166 +3103,6 @@ export function PlayerProfilePage({
         </div>
       </div>
     </div>
-  );
-}
-
-function TungTungSahurKeycap() {
-  const { t } = useLingui();
-  const [pressed, setPressed] = useState(false);
-  const [actuated, setActuated] = useState(false);
-  const [glowColor, setGlowColor] = useState(TUNG_TUNG_SAHUR_GLOW_COLORS[0]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const actuationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearActuationTimer = useCallback(() => {
-    if (!actuationTimerRef.current) return;
-    clearTimeout(actuationTimerRef.current);
-    actuationTimerRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      clearActuationTimer();
-      const audio = audioRef.current;
-      if (!audio) return;
-      audio.pause();
-      audio.currentTime = 0;
-    };
-  }, [clearActuationTimer]);
-
-  const triggerActuation = useCallback(() => {
-    actuationTimerRef.current = null;
-    setActuated(true);
-    setGlowColor((current) => {
-      const choices = TUNG_TUNG_SAHUR_GLOW_COLORS.filter((color) => color !== current);
-      return choices[Math.floor(Math.random() * choices.length)] ?? current;
-    });
-
-    const audio = audioRef.current ?? new Audio(TUNG_TUNG_SAHUR_AUDIO_SRC);
-    audioRef.current = audio;
-    audio.volume = 0.8;
-    audio.currentTime = 0;
-    void audio.play().catch(() => undefined);
-  }, []);
-
-  const release = useCallback(() => {
-    clearActuationTimer();
-    setPressed(false);
-    setActuated(false);
-  }, [clearActuationTimer]);
-
-  const press = useCallback(() => {
-    clearActuationTimer();
-    setPressed(true);
-    setActuated(false);
-    actuationTimerRef.current = setTimeout(triggerActuation, TUNG_TUNG_SAHUR_ACTUATION_MS);
-  }, [clearActuationTimer, triggerActuation]);
-
-  return (
-    <button
-      type="button"
-      aria-label={t`Tung tung sahur keycap`}
-      className="group absolute right-3 bottom-full z-20 h-28 w-16 translate-y-1 cursor-pointer touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/80 focus-visible:ring-offset-2 focus-visible:ring-offset-osu-b5 sm:right-5 sm:h-32 sm:w-[4.5rem]"
-      onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId);
-        press();
-      }}
-      onPointerUp={release}
-      onPointerCancel={release}
-      onPointerLeave={release}
-      onBlur={release}
-      onKeyDown={(event) => {
-        if ((event.key === " " || event.key === "Enter") && !event.repeat) press();
-      }}
-      onKeyUp={(event) => {
-        if (event.key === " " || event.key === "Enter") release();
-      }}
-    >
-      <span className="absolute inset-x-5 bottom-0 h-3 rounded-full bg-black/35 blur-md transition-opacity duration-200 group-hover:opacity-90" />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-base.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-0 z-10 mx-auto w-[61%] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.38)]"
-        initial={TUNG_TUNG_SAHUR_BASE_REST}
-        animate={{ y: pressed ? 1 : 0, scaleY: pressed ? 0.985 : 1 }}
-        transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.65 }}
-      />
-      <motion.span
-        className="absolute left-1/2 bottom-[37.5%] z-[18] h-3 w-8 -translate-x-1/2 rounded-full blur-sm"
-        style={{
-          background: `radial-gradient(ellipse, ${glowColor} 0%, ${glowColor}bb 38%, transparent 74%)`,
-          boxShadow: `0 0 10px 3px ${glowColor}`,
-        }}
-        initial={{ opacity: 0, scale: 0.78 }}
-        animate={{ opacity: actuated ? 1 : 0, scale: actuated ? 1.08 : 0.78 }}
-        transition={{ duration: actuated ? 0.05 : 0.24, ease: "easeOut" }}
-      />
-      <motion.span
-        className="absolute left-1/2 bottom-[38.6%] z-[19] h-1.5 w-6 -translate-x-1/2 rounded-full blur-[1px]"
-        style={{
-          background: `radial-gradient(ellipse, white 0%, ${glowColor} 45%, transparent 78%)`,
-          boxShadow: `0 0 7px 2px ${glowColor}`,
-        }}
-        initial={{ opacity: 0, scaleX: 0.86 }}
-        animate={{ opacity: actuated ? 1 : 0, scaleX: actuated ? 1.08 : 0.86 }}
-        transition={{ duration: actuated ? 0.04 : 0.2, ease: "easeOut" }}
-      />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-[35%] z-20 mx-auto w-[78%] object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.42)]"
-        initial={TUNG_TUNG_SAHUR_TOP_REST}
-        animate={{
-          x: -3.25,
-          y: pressed ? 17 : 4,
-          scaleY: pressed ? 0.972 : 1,
-          filter: pressed ? "brightness(0.92)" : "brightness(1)",
-        }}
-        transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
-      />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-base.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-0 z-30 mx-auto w-[61%] object-contain"
-        style={{ clipPath: "inset(12% 0 0 0)" }}
-        initial={TUNG_TUNG_SAHUR_BASE_REST}
-        animate={{ y: pressed ? 1 : 0, scaleY: pressed ? 0.985 : 1 }}
-        transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.65 }}
-      />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"
-        style={{ clipPath: "inset(0 70% 0 0)" }}
-        initial={TUNG_TUNG_SAHUR_TOP_REST}
-        animate={{
-          x: -3.25,
-          y: pressed ? 17 : 4,
-          scaleY: pressed ? 0.972 : 1,
-          filter: pressed ? "brightness(0.92)" : "brightness(1)",
-        }}
-        transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
-      />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"
-        style={{ clipPath: "inset(0 0 0 84%)" }}
-        initial={TUNG_TUNG_SAHUR_TOP_REST}
-        animate={{
-          x: -3.25,
-          y: pressed ? 17 : 4,
-          scaleY: pressed ? 0.972 : 1,
-          filter: pressed ? "brightness(0.92)" : "brightness(1)",
-        }}
-        transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
-      />
-    </button>
   );
 }
 

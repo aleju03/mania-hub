@@ -13,6 +13,20 @@ declare module "three" {
     traverse(callback: (object: Object3D) => void): void;
     getWorldPosition(target: Vector3): Vector3;
     worldToLocal(vector: Vector3): Vector3;
+    lookAt(x: number, y: number, z: number): void;
+  }
+
+  export interface Material {
+    dispose(): void;
+  }
+
+  export class Box3 {
+    min: Vector3;
+    max: Vector3;
+    constructor(...args: any[]);
+    setFromObject(object: Object3D): this;
+    getSize(target: Vector3): Vector3;
+    getCenter(target: Vector3): Vector3;
   }
 
   export class Mesh extends Object3D {
@@ -138,6 +152,10 @@ declare module "three" {
     constructor(...args: any[]);
   }
 
+  export class HemisphereLight extends Object3D {
+    constructor(...args: any[]);
+  }
+
   export class Group extends Object3D {
     constructor(...args: any[]);
   }
@@ -156,7 +174,9 @@ declare module "three" {
   }
 
   export class WebGLRenderer {
-    domElement: HTMLElement;
+    domElement: HTMLCanvasElement;
+    outputColorSpace: unknown;
+    toneMapping: unknown;
     capabilities: { getMaxAnisotropy(): number };
     constructor(...args: any[]);
     setSize(...args: any[]): void;
@@ -194,6 +214,7 @@ declare module "three" {
 
   export const LinearFilter: unknown;
   export const SRGBColorSpace: unknown;
+  export const NeutralToneMapping: unknown;
   export const ClampToEdgeWrapping: unknown;
   export const RGBAFormat: unknown;
   export const DoubleSide: unknown;

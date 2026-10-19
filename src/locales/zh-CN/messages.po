@@ -2352,6 +2352,10 @@ msgstr "96%，1 段以下为 95%"
 msgid "97%, on ScoreV2 accuracy"
 msgstr "97%，按 ScoreV2 准确率"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
+msgstr "一个 .glb 模型（最多 100,000 个三角面，贴图需内嵌）或一张图片，最大 10 MB。提交后会立即对所有人显示，并署上你的名字。"
+
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
 #: src/components/player/DanEvidenceModal.tsx
@@ -2402,6 +2406,14 @@ msgstr "一张可以自定义的图片，放在你的 osu! 个人资料里，还
 #: src/lib/pack-run.ts
 msgid "A fifth charm slot"
 msgstr "第五个护符栏位"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A figure that stands beside your profile's numbers. Drag a 3D one to turn it."
+msgstr "站在你个人资料数据旁的小伙伴。拖动 3D 的可以转动它。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A figure that stands beside your profile's numbers. Pick one from the list, or submit your own."
+msgstr "站在你个人资料数据旁的小伙伴。从列表里挑一个，或者提交你自己的。"
 
 #: src/lib/pack-run.ts
 msgid "A fourth charm slot"
@@ -4033,6 +4045,11 @@ msgstr "无序列表"
 msgid "Buy"
 msgstr "购买"
 
+#. placeholder {0}: by.username || by.id
+#: src/components/supporter/SupporterExtras.tsx
+msgid "by {0}"
+msgstr "来自 {0}"
+
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -4520,6 +4537,10 @@ msgstr "选择收藏者"
 msgid "Choose a different replay"
 msgstr "换一个回放"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Choose a file"
+msgstr "选择文件"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Choose a mania difficulty"
 msgstr "选择一个 mania 难度"
@@ -4579,6 +4600,10 @@ msgstr "圆形"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Circles"
 msgstr "圆形"
+
+#: src/lib/supporter-companions.ts
+msgid "Cirno fumo"
+msgstr "琪露诺 fumo"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "CJ"
@@ -5106,6 +5131,10 @@ msgstr "Companella"
 msgid "Companella also sends the replay of the plays you set on osu!, so your skill ratings use your accuracy based on your hit timings."
 msgstr "Companella 也会上传你在 osu! 上打出的成绩的回放，这样你的技能评分会使用根据你的击打时机算出的准确度。"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Companion"
+msgstr "小伙伴"
+
 #: src/routes/recommendations.tsx
 msgid "compared to {range} pp"
 msgstr "对比 {range} pp"
@@ -5459,6 +5488,10 @@ msgstr ""
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not submit that. Try again."
 msgstr "提交失败，请再试一次。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Could not upload that file."
+msgstr "无法上传该文件。"
 
 #: src/routes/supporter.tsx
 msgid "Could not upload that image."
@@ -6134,6 +6167,10 @@ msgstr "从你的上传中删除 {rowTitle}"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Delete area"
 msgstr "删除区域"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Delete for everyone"
+msgstr "为所有人删除"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete for good?"
@@ -7575,6 +7612,10 @@ msgstr "已修复"
 msgid "Fixed"
 msgstr "修复"
 
+#: src/lib/supporter-companions.ts
+msgid "Flandre fumo"
+msgstr "芙兰朵露 fumo"
+
 #: src/lib/pack-run.ts
 msgid "Flashlight"
 msgstr "Flashlight"
@@ -8953,6 +8994,10 @@ msgstr "国际服务器"
 msgid "Introduction"
 msgstr "介绍"
 
+#: src/lib/supporter-companions.ts
+msgid "Inu Sakuya"
+msgstr "犬咲夜"
+
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Invalid beatmap id."
 msgstr "谱面 ID 无效。"
@@ -9009,6 +9054,10 @@ msgstr "意大利语"
 #: src/routes/bbcode.tsx
 msgid "Italic"
 msgstr "斜体"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Its name"
+msgstr "名字"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -10753,6 +10802,10 @@ msgstr ""
 msgid "Mods have no effect."
 msgstr "Mod 无效。"
 
+#: src/lib/supporter-companions.ts
+msgid "Mokou fumo"
+msgstr "妹红 fumo"
+
 #: src/lib/supporter-name-styles.ts
 msgid "Molten gold"
 msgstr ""
@@ -11414,6 +11467,10 @@ msgstr "这里还没有收藏册，来发布第一个吧。"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "No collector found. They need to open a pack first."
 msgstr "未找到收藏者。对方需要先打开一个卡包。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "No companion"
+msgstr "无小伙伴"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
@@ -13381,6 +13438,10 @@ msgstr "粉"
 msgid "Pink"
 msgstr "粉色"
 
+#: src/lib/supporter-companions.ts
+msgid "Pink blob"
+msgstr "粉色团子"
+
 #: src/components/supporter/loadout.ts
 msgid "Pink halo"
 msgstr ""
@@ -13951,6 +14012,10 @@ msgstr "上一段试听"
 #: src/routes/snipes.tsx
 msgid "Previously"
 msgstr "此前"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Prime"
+msgstr ""
 
 #: src/lib/pack-run.ts
 #: src/routes/news_.prism.tsx
@@ -14740,6 +14805,14 @@ msgstr "单点与长条"
 msgid "Regular dan"
 msgstr "常规段位"
 
+#: src/lib/supporter-companions.ts
+msgid "Reimu fumo"
+msgstr "灵梦 fumo"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Reimu fumo (V2)"
+#~ msgstr "灵梦 fumo（V2）"
+
 #: src/lib/skill-axes.ts
 msgid "Release"
 msgstr "放手"
@@ -15492,6 +15565,11 @@ msgstr "缩放图片以适应"
 msgid "Scales the skin's hitburst art."
 msgstr "缩放皮肤的打击特效图。"
 
+#. placeholder {0}: credit.author
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Scan by {0}"
+msgstr "扫描：{0}"
+
 #: src/lib/supporter-foils.ts
 msgid "Scanline"
 msgstr ""
@@ -16219,6 +16297,10 @@ msgstr "多变而不规则的谱型，读谱不好就吃亏。"
 #: src/lib/pack-run.ts
 msgid "Shine"
 msgstr "闪耀"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Shion fumo"
+#~ msgstr "紫苑 fumo"
 
 #: src/components/packs/run/chain/ChainTable.tsx
 #: src/components/packs/run/RunHud.tsx
@@ -17465,6 +17547,7 @@ msgid "Submission sent"
 msgstr "已提交"
 
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/supporter/SupporterExtras.tsx
 msgid "Submit"
 msgstr "提交"
 
@@ -17475,6 +17558,10 @@ msgstr ""
 #: src/routes/news_.companella.tsx
 msgid "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
 msgstr "无论你是离线、在私服上游玩，还是被 osu! 限制，都可以通过 Companella 向你的账号上传成绩。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Submit your own"
+msgstr "提交你自己的"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
@@ -19644,7 +19731,8 @@ msgstr "周二"
 msgid "tune your recs"
 msgstr "调整你的推荐"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/TungTungSahurKeycap.tsx
+#: src/lib/supporter-companions.ts
 msgid "Tung tung sahur keycap"
 msgstr "Tung tung sahur 键帽"
 
@@ -21173,6 +21261,10 @@ msgstr "你最强的是 <0>{0}</0>"
 msgid "You've already had a supporter week from a gift."
 msgstr "你已经领取过一次赠送的支持者周。"
 
+#: src/lib/supporter-companions.ts
+msgid "Youmu fumo"
+msgstr "妖梦 fumo"
+
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "your"
 msgstr "你的"
@@ -21479,6 +21571,14 @@ msgstr "你的心愿单"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube 视频"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Yuuka fumo"
+#~ msgstr "幽香 fumo"
+
+#: src/lib/supporter-companions.ts
+msgid "Yuyuko fumo"
+msgstr "幽幽子 fumo"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Zip binder"

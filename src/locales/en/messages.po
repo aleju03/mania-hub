@@ -2343,6 +2343,10 @@ msgstr "96%, or 95% below 1st dan"
 msgid "97%, on ScoreV2 accuracy"
 msgstr "97%, on ScoreV2 accuracy"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
+msgstr "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
+
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
 #: src/components/player/DanEvidenceModal.tsx
@@ -2393,6 +2397,14 @@ msgstr "A customizable picture for your osu! profile that keeps itself updated."
 #: src/lib/pack-run.ts
 msgid "A fifth charm slot"
 msgstr "A fifth charm slot"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A figure that stands beside your profile's numbers. Drag a 3D one to turn it."
+msgstr "A figure that stands beside your profile's numbers. Drag a 3D one to turn it."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A figure that stands beside your profile's numbers. Pick one from the list, or submit your own."
+msgstr "A figure that stands beside your profile's numbers. Pick one from the list, or submit your own."
 
 #: src/lib/pack-run.ts
 msgid "A fourth charm slot"
@@ -4024,6 +4036,11 @@ msgstr "Bullet list"
 msgid "Buy"
 msgstr "Buy"
 
+#. placeholder {0}: by.username || by.id
+#: src/components/supporter/SupporterExtras.tsx
+msgid "by {0}"
+msgstr "by {0}"
+
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -4511,6 +4528,10 @@ msgstr "Choose a collector"
 msgid "Choose a different replay"
 msgstr "Choose a different replay"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Choose a file"
+msgstr "Choose a file"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Choose a mania difficulty"
 msgstr "Choose a mania difficulty"
@@ -4570,6 +4591,10 @@ msgstr "circles"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Circles"
 msgstr "Circles"
+
+#: src/lib/supporter-companions.ts
+msgid "Cirno fumo"
+msgstr "Cirno fumo"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "CJ"
@@ -5097,6 +5122,10 @@ msgstr "Companella"
 msgid "Companella also sends the replay of the plays you set on osu!, so your skill ratings use your accuracy based on your hit timings."
 msgstr "Companella also sends the replay of the plays you set on osu!, so your skill ratings use your accuracy based on your hit timings."
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Companion"
+msgstr "Companion"
+
 #: src/routes/recommendations.tsx
 msgid "compared to {range} pp"
 msgstr "compared to {range} pp"
@@ -5450,6 +5479,10 @@ msgstr "Could not start an authorization request ({0})."
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not submit that. Try again."
 msgstr "Could not submit that. Try again."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Could not upload that file."
+msgstr "Could not upload that file."
 
 #: src/routes/supporter.tsx
 msgid "Could not upload that image."
@@ -6125,6 +6158,10 @@ msgstr "Delete {rowTitle} from your uploads"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Delete area"
 msgstr "Delete area"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Delete for everyone"
+msgstr "Delete for everyone"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete for good?"
@@ -7566,6 +7603,10 @@ msgstr "fixed"
 msgid "Fixed"
 msgstr "Fixed"
 
+#: src/lib/supporter-companions.ts
+msgid "Flandre fumo"
+msgstr "Flandre fumo"
+
 #: src/lib/pack-run.ts
 msgid "Flashlight"
 msgstr "Flashlight"
@@ -8944,6 +8985,10 @@ msgstr "international servers"
 msgid "Introduction"
 msgstr "Introduction"
 
+#: src/lib/supporter-companions.ts
+msgid "Inu Sakuya"
+msgstr "Inu Sakuya"
+
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Invalid beatmap id."
 msgstr "Invalid beatmap id."
@@ -9000,6 +9045,10 @@ msgstr "Italian"
 #: src/routes/bbcode.tsx
 msgid "Italic"
 msgstr "Italic"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Its name"
+msgstr "Its name"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -10744,6 +10793,10 @@ msgstr "Mods beaten"
 msgid "Mods have no effect."
 msgstr "Mods have no effect."
 
+#: src/lib/supporter-companions.ts
+msgid "Mokou fumo"
+msgstr "Mokou fumo"
+
 #: src/lib/supporter-name-styles.ts
 msgid "Molten gold"
 msgstr "Molten gold"
@@ -11405,6 +11458,10 @@ msgstr "No collections here yet. Post the first one."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "No collector found. They need to open a pack first."
 msgstr "No collector found. They need to open a pack first."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "No companion"
+msgstr "No companion"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
@@ -13372,6 +13429,10 @@ msgstr "pink"
 msgid "Pink"
 msgstr "Pink"
 
+#: src/lib/supporter-companions.ts
+msgid "Pink blob"
+msgstr "Pink blob"
+
 #: src/components/supporter/loadout.ts
 msgid "Pink halo"
 msgstr "Pink halo"
@@ -13942,6 +14003,10 @@ msgstr "Previous preview"
 #: src/routes/snipes.tsx
 msgid "Previously"
 msgstr "Previously"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Prime"
+msgstr "Prime"
 
 #: src/lib/pack-run.ts
 #: src/routes/news_.prism.tsx
@@ -14731,6 +14796,14 @@ msgstr "Regular and LN"
 msgid "Regular dan"
 msgstr "Regular dan"
 
+#: src/lib/supporter-companions.ts
+msgid "Reimu fumo"
+msgstr "Reimu fumo"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Reimu fumo (V2)"
+#~ msgstr "Reimu fumo (V2)"
+
 #: src/lib/skill-axes.ts
 msgid "Release"
 msgstr "Release"
@@ -15483,6 +15556,11 @@ msgstr "Scale the image to fit"
 msgid "Scales the skin's hitburst art."
 msgstr "Scales the skin's hitburst art."
 
+#. placeholder {0}: credit.author
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Scan by {0}"
+msgstr "Scan by {0}"
+
 #: src/lib/supporter-foils.ts
 msgid "Scanline"
 msgstr "Scanline"
@@ -16210,6 +16288,10 @@ msgstr "Shifting, irregular patterns that punish bad reading."
 #: src/lib/pack-run.ts
 msgid "Shine"
 msgstr "Shine"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Shion fumo"
+#~ msgstr "Shion fumo"
 
 #: src/components/packs/run/chain/ChainTable.tsx
 #: src/components/packs/run/RunHud.tsx
@@ -17456,6 +17538,7 @@ msgid "Submission sent"
 msgstr "Submission sent"
 
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/supporter/SupporterExtras.tsx
 msgid "Submit"
 msgstr "Submit"
 
@@ -17466,6 +17549,10 @@ msgstr "Submit play"
 #: src/routes/news_.companella.tsx
 msgid "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
 msgstr "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Submit your own"
+msgstr "Submit your own"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
@@ -19635,7 +19722,8 @@ msgstr "Tuesdays"
 msgid "tune your recs"
 msgstr "tune your recs"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/TungTungSahurKeycap.tsx
+#: src/lib/supporter-companions.ts
 msgid "Tung tung sahur keycap"
 msgstr "Tung tung sahur keycap"
 
@@ -21164,6 +21252,10 @@ msgstr "You're strongest in <0>{0}</0>"
 msgid "You've already had a supporter week from a gift."
 msgstr "You've already had a supporter week from a gift."
 
+#: src/lib/supporter-companions.ts
+msgid "Youmu fumo"
+msgstr "Youmu fumo"
+
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "your"
 msgstr "your"
@@ -21466,6 +21558,14 @@ msgstr "Your wishlist"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube video"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Yuuka fumo"
+#~ msgstr "Yuuka fumo"
+
+#: src/lib/supporter-companions.ts
+msgid "Yuyuko fumo"
+msgstr "Yuyuko fumo"
 
 #: src/components/supporter/SupporterFramePicker.tsx
 #~ msgid "Zenith orbit"

@@ -1,3 +1,4 @@
+import { parseSubmittedCompanion, parseSupporterCompanion, type SubmittedCompanion, type SupporterCompanion } from "./supporter-companions";
 import { isSupporterCardSleeve, NO_PACK_STYLE, parsePackStyle, type SupporterCardSleeveId, type SupporterPackStyle } from "./supporter-pack-style";
 import { parseProfileStats, parseProfileStatsData, type ProfileStatId, type ProfileStatsData } from "./profile-stats";
 import { parseProfilePlays, type ProfilePlays } from "./profile-plays";
@@ -4660,8 +4661,10 @@ export interface SupporterProfileLook {
   profilePlays: ProfilePlays | null;
   /* Their sleeve, binder and reveal confetti in packs. */
   packStyle: SupporterPackStyle;
+  /* The figure beside their profile's numbers, null for none. */
+  companion: SupporterCompanion | null;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4686,7 +4689,7 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
   if (cached) return cached.value;
   const entry: SupporterLookCacheEntry = { at: Date.now(), value: Promise.resolve(NO_SUPPORTER_LOOK) };
   const reload = supporterLooksToReload.delete(id);
-  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; profileStats?: unknown; profileStatsData?: unknown; profilePlays?: unknown; packStyle?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
+  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; profileStats?: unknown; profileStatsData?: unknown; profilePlays?: unknown; packStyle?: unknown; companion?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
     .then((body) => {
       const value = {
         look: parseSupporterLook(body?.look ?? null),
@@ -4699,6 +4702,7 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
         profileStatsData: parseProfileStatsData(body?.profileStatsData),
         profilePlays: parseProfilePlays(body?.profilePlays),
         packStyle: parsePackStyle(body?.packStyle),
+        companion: parseSupporterCompanion(body?.companion),
       };
       entry.settled = value;
       return value;
@@ -4748,6 +4752,16 @@ export function peekLiveSupporterProfileTheme(userId: number): SupporterProfileT
 
 export function peekLiveSupporterProfileThemeOptions(userId: number): ProfileThemeOptions | undefined {
   return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.profileThemeOptions;
+}
+
+export function peekLiveSupporterCompanion(userId: number): SupporterCompanion | null | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.companion;
+}
+
+/* Every companion supporters submitted, newest first. */
+export async function fetchLiveSubmittedCompanions(): Promise<SubmittedCompanion[]> {
+  const body = await fetchLiveJson<{ companions?: unknown }>("/api/supporters/companions", { cache: "no-store" });
+  return Array.isArray(body?.companions) ? body.companions.map(parseSubmittedCompanion).filter((entry): entry is SubmittedCompanion => entry !== null) : [];
 }
 
 export function peekLiveSupporterPackStyle(userId: number): SupporterPackStyle | undefined {

@@ -2343,6 +2343,10 @@ msgstr "96%, o 95% por debajo de 1er dan"
 msgid "97%, on ScoreV2 accuracy"
 msgstr "97%, con acc de ScoreV2"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
+msgstr "Un modelo .glb (hasta 100.000 triángulos, con las texturas adentro) o una imagen, de hasta 10 MB. Aparece para todos al instante, con tu nombre."
+
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
 #: src/components/player/DanEvidenceModal.tsx
@@ -2393,6 +2397,14 @@ msgstr "Una imagen personalizable para tu perfil de osu! que se actualiza sola."
 #: src/lib/pack-run.ts
 msgid "A fifth charm slot"
 msgstr "Un quinto espacio de amuleto"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A figure that stands beside your profile's numbers. Drag a 3D one to turn it."
+msgstr "Una figura que se queda junto a los números de tu perfil. Arrastra una en 3D para girarla."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A figure that stands beside your profile's numbers. Pick one from the list, or submit your own."
+msgstr "Una figura que se queda junto a los números de tu perfil. Elige una de la lista o sube la tuya."
 
 #: src/lib/pack-run.ts
 msgid "A fourth charm slot"
@@ -4024,6 +4036,11 @@ msgstr "Lista con viñetas"
 msgid "Buy"
 msgstr "Comprar"
 
+#. placeholder {0}: by.username || by.id
+#: src/components/supporter/SupporterExtras.tsx
+msgid "by {0}"
+msgstr "por {0}"
+
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -4511,6 +4528,10 @@ msgstr "Elige un coleccionista"
 msgid "Choose a different replay"
 msgstr "Elige otro replay"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Choose a file"
+msgstr "Elegir archivo"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Choose a mania difficulty"
 msgstr "Elige una dificultad de mania"
@@ -4570,6 +4591,10 @@ msgstr "círculos"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Circles"
 msgstr "Círculos"
+
+#: src/lib/supporter-companions.ts
+msgid "Cirno fumo"
+msgstr "Fumo de Cirno"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "CJ"
@@ -5097,6 +5122,10 @@ msgstr "Companella"
 msgid "Companella also sends the replay of the plays you set on osu!, so your skill ratings use your accuracy based on your hit timings."
 msgstr "Companella también envía el replay de las plays que haces en osu!, así que tus skill ratings usan tu precisión según los timings de tus hits."
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Companion"
+msgstr "Compañero"
+
 #: src/routes/recommendations.tsx
 msgid "compared to {range} pp"
 msgstr "comparado con {range} pp"
@@ -5450,6 +5479,10 @@ msgstr ""
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not submit that. Try again."
 msgstr "No se pudo enviar. Inténtalo de nuevo."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Could not upload that file."
+msgstr "No se pudo subir ese archivo."
 
 #: src/routes/supporter.tsx
 msgid "Could not upload that image."
@@ -6125,6 +6158,10 @@ msgstr "Eliminar {rowTitle} de tus subidas"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Delete area"
 msgstr "Eliminar área"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Delete for everyone"
+msgstr "Borrar para todos"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete for good?"
@@ -7566,6 +7603,10 @@ msgstr "arreglado"
 msgid "Fixed"
 msgstr "Arreglos"
 
+#: src/lib/supporter-companions.ts
+msgid "Flandre fumo"
+msgstr "Fumo de Flandre"
+
 #: src/lib/pack-run.ts
 msgid "Flashlight"
 msgstr "Flashlight"
@@ -8944,6 +8985,10 @@ msgstr "servidores internacionales"
 msgid "Introduction"
 msgstr "Introducción"
 
+#: src/lib/supporter-companions.ts
+msgid "Inu Sakuya"
+msgstr "Inu Sakuya"
+
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Invalid beatmap id."
 msgstr "ID de beatmap no válido."
@@ -9000,6 +9045,10 @@ msgstr "Italiano"
 #: src/routes/bbcode.tsx
 msgid "Italic"
 msgstr "Cursiva"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Its name"
+msgstr "Su nombre"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -10744,6 +10793,10 @@ msgstr ""
 msgid "Mods have no effect."
 msgstr "Los mods no tienen efecto."
 
+#: src/lib/supporter-companions.ts
+msgid "Mokou fumo"
+msgstr "Fumo de Mokou"
+
 #: src/lib/supporter-name-styles.ts
 msgid "Molten gold"
 msgstr ""
@@ -11405,6 +11458,10 @@ msgstr "Todavía no hay colecciones. Publica la primera."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "No collector found. They need to open a pack first."
 msgstr "No se encontró al coleccionista. Primero debe abrir un pack."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "No companion"
+msgstr "Sin compañero"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
@@ -13372,6 +13429,10 @@ msgstr "rosa"
 msgid "Pink"
 msgstr "Rosa"
 
+#: src/lib/supporter-companions.ts
+msgid "Pink blob"
+msgstr "Blob rosa"
+
 #: src/components/supporter/loadout.ts
 msgid "Pink halo"
 msgstr ""
@@ -13942,6 +14003,10 @@ msgstr "Vista previa anterior"
 #: src/routes/snipes.tsx
 msgid "Previously"
 msgstr "Antes"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Prime"
+msgstr ""
 
 #: src/lib/pack-run.ts
 #: src/routes/news_.prism.tsx
@@ -14731,6 +14796,14 @@ msgstr "Regular y LN"
 msgid "Regular dan"
 msgstr "Dan regular"
 
+#: src/lib/supporter-companions.ts
+msgid "Reimu fumo"
+msgstr "Fumo de Reimu"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Reimu fumo (V2)"
+#~ msgstr "Fumo de Reimu (V2)"
+
 #: src/lib/skill-axes.ts
 msgid "Release"
 msgstr "Release"
@@ -15483,6 +15556,11 @@ msgstr "Escalar la imagen para que quepa"
 msgid "Scales the skin's hitburst art."
 msgstr "Escala el arte de hitbursts de la skin."
 
+#. placeholder {0}: credit.author
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Scan by {0}"
+msgstr "Escaneo de {0}"
+
 #: src/lib/supporter-foils.ts
 msgid "Scanline"
 msgstr ""
@@ -16210,6 +16288,10 @@ msgstr "Patrones cambiantes e irregulares que castigan la mala lectura."
 #: src/lib/pack-run.ts
 msgid "Shine"
 msgstr "Brillo"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Shion fumo"
+#~ msgstr "Fumo de Shion"
 
 #: src/components/packs/run/chain/ChainTable.tsx
 #: src/components/packs/run/RunHud.tsx
@@ -17456,6 +17538,7 @@ msgid "Submission sent"
 msgstr "Envío realizado"
 
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/supporter/SupporterExtras.tsx
 msgid "Submit"
 msgstr "Enviar"
 
@@ -17466,6 +17549,10 @@ msgstr ""
 #: src/routes/news_.companella.tsx
 msgid "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
 msgstr "Envía plays a tu cuenta aunque estés offline, en un servidor privado o restringido de osu!, con Companella."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Submit your own"
+msgstr "Sube el tuyo"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
@@ -19635,7 +19722,8 @@ msgstr "Martes"
 msgid "tune your recs"
 msgstr "ajusta tus recs"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/TungTungSahurKeycap.tsx
+#: src/lib/supporter-companions.ts
 msgid "Tung tung sahur keycap"
 msgstr "Tecla Tung tung sahur"
 
@@ -21164,6 +21252,10 @@ msgstr "Eres más fuerte en <0>{0}</0>"
 msgid "You've already had a supporter week from a gift."
 msgstr "Ya tuviste una semana de supporter de regalo."
 
+#: src/lib/supporter-companions.ts
+msgid "Youmu fumo"
+msgstr "Fumo de Youmu"
+
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "your"
 msgstr "tu"
@@ -21470,6 +21562,14 @@ msgstr "Tu lista de deseos"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "Video de YouTube"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Yuuka fumo"
+#~ msgstr "Fumo de Yuuka"
+
+#: src/lib/supporter-companions.ts
+msgid "Yuyuko fumo"
+msgstr "Fumo de Yuyuko"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Zip binder"
