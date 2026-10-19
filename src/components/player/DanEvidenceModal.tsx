@@ -378,354 +378,360 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
 
   return (
     <>
-      <AnimatePresence>
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 backdrop-blur-sm sm:p-4"
-          onClick={onClose}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.16 }}
-        >
+      {/* Rendered directly under <body> like the other site modals, so no
+          ancestor in the Skills tab can clip or restack the dim layer (one
+          Firefox setup left the bottom 16px of the page uncovered). */}
+      {typeof document !== "undefined" ? createPortal(
+        <AnimatePresence>
           <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-label={t`${username}'s ${sideLabel} dan estimate`}
-            className="modal-card-mobile-safe flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-osu-b3/25 bg-osu-b5 shadow-[0_18px_70px_rgba(0,0,0,0.65)] sm:max-h-[calc(100vh-2rem)]"
-            onClick={(event) => event.stopPropagation()}
-            initial={{ opacity: 0, y: 10, scale: 0.985 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.985 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 backdrop-blur-sm sm:p-4"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
           >
-            {/* The estimate leads: course artwork on the left, then the keymode,
-                the sentence, and one line with the exact number and the clear
-                count. No panel, bar or eyebrow. */}
-            <header className="relative shrink-0 px-4 pb-3 pt-4 sm:px-6 sm:pt-5">
-              <div className="flex flex-row-reverse items-center justify-end gap-5 pr-10">
-                <div className="flex flex-col items-start">
-                  <div className="flex items-center gap-1.5 text-[12px] text-osu-f1">
-                    <Trans>{keyCount}K {sideLabel} dan</Trans>
-                    {/* The rules used to be spelled out under the title. Everyone has read
-                        the article by now, so this is just a quiet way back to it. */}
-                    <Link
-                      to="/dan-estimates"
-                      aria-label={t`How dans are estimated`}
-                      title={t`How dans are estimated`}
-                      className="text-osu-f1/60 transition-colors hover:text-white"
-                    >
-                      <CircleHelp size={12} />
-                    </Link>
-                  </div>
-                  <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">
-                    {dan && beyond ? (
-                      <Trans>{username} is beyond <span style={{ color }}>{formatDan(danLabel)}</span></Trans>
-                    ) : dan && atClearedLevel ? (
-                      <Trans>{username} is <span style={{ color }}>{formatDan(danBareLabel(danLabel))}</span></Trans>
-                    ) : dan ? (
-                      <Trans>{username} is around <span style={{ color }}>{danTierName(danLabel, formatDan)}</span></Trans>
-                    ) : (
-                      <Trans>{username}'s {sideLabel} dan estimate</Trans>
-                    )}
-                  </h2>
-                  {dan && !beyond ? (
-                    <div className="mt-1">
-                      <button
-                        ref={stepsButtonRef}
-                        type="button"
-                        onClick={toggleSteps}
-                        aria-expanded={stepsAt != null}
-                        className="inline-flex cursor-pointer items-center gap-1 text-[11px] tabular-nums text-osu-f1 transition-colors hover:text-white"
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={t`${username}'s ${sideLabel} dan estimate`}
+              className="modal-card-mobile-safe flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-osu-b3/25 bg-osu-b5 shadow-[0_18px_70px_rgba(0,0,0,0.65)] sm:max-h-[calc(100vh-2rem)]"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 10, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.985 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+            >
+              {/* The estimate leads: course artwork on the left, then the keymode,
+                  the sentence, and one line with the exact number and the clear
+                  count. No panel, bar or eyebrow. */}
+              <header className="relative shrink-0 px-4 pb-3 pt-4 sm:px-6 sm:pt-5">
+                <div className="flex flex-row-reverse items-center justify-end gap-5 pr-10">
+                  <div className="flex flex-col items-start">
+                    <div className="flex items-center gap-1.5 text-[12px] text-osu-f1">
+                      <Trans>{keyCount}K {sideLabel} dan</Trans>
+                      {/* The rules used to be spelled out under the title. Everyone has read
+                          the article by now, so this is just a quiet way back to it. */}
+                      <Link
+                        to="/dan-estimates"
+                        aria-label={t`How dans are estimated`}
+                        title={t`How dans are estimated`}
+                        className="text-osu-f1/60 transition-colors hover:text-white"
                       >
-                        <Trans>Exact estimate: {dan.rawDan.toFixed(2)}</Trans>
-                        <ChevronDown size={12} className={`transition-transform ${stepsAt ? "rotate-180" : ""}`} />
-                      </button>
-                      {allInHeader && evidence ? (
-                        <>
-                          <span className="mx-2 hidden h-3 w-px translate-y-0.5 bg-white/15 sm:inline-block" aria-hidden="true" />
+                        <CircleHelp size={12} />
+                      </Link>
+                    </div>
+                    <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">
+                      {dan && beyond ? (
+                        <Trans>{username} is beyond <span style={{ color }}>{formatDan(danLabel)}</span></Trans>
+                      ) : dan && atClearedLevel ? (
+                        <Trans>{username} is <span style={{ color }}>{formatDan(danBareLabel(danLabel))}</span></Trans>
+                      ) : dan ? (
+                        <Trans>{username} is around <span style={{ color }}>{danTierName(danLabel, formatDan)}</span></Trans>
+                      ) : (
+                        <Trans>{username}'s {sideLabel} dan estimate</Trans>
+                      )}
+                    </h2>
+                    {dan && !beyond ? (
+                      <div className="mt-1">
+                        <button
+                          ref={stepsButtonRef}
+                          type="button"
+                          onClick={toggleSteps}
+                          aria-expanded={stepsAt != null}
+                          className="inline-flex cursor-pointer items-center gap-1 text-[11px] tabular-nums text-osu-f1 transition-colors hover:text-white"
+                        >
+                          <Trans>Exact estimate: {dan.rawDan.toFixed(2)}</Trans>
+                          <ChevronDown size={12} className={`transition-transform ${stepsAt ? "rotate-180" : ""}`} />
+                        </button>
+                        {allInHeader && evidence ? (
+                          <>
+                            <span className="mx-2 hidden h-3 w-px translate-y-0.5 bg-white/15 sm:inline-block" aria-hidden="true" />
+                            <button
+                              type="button"
+                              onClick={() => setOpenSection(openSection === "all" ? null : "all")}
+                              aria-expanded={openSection === "all"}
+                              className="mt-1 flex w-fit cursor-pointer items-center gap-1 text-[11px] tabular-nums text-osu-f1 transition-colors hover:text-white sm:mt-0 sm:inline-flex"
+                            >
+                              {t`${evidence.totalClears} plays`}
+                              <ChevronDown size={12} className={`transition-transform ${openSection === "all" ? "rotate-180" : ""}`} />
+                            </button>
+                          </>
+                        ) : null}
+                        {/* A popover, so opening it never pushes the clears list down. */}
+                        {typeof document !== "undefined" ? createPortal(
+                          <AnimatePresence>
+                            {stepsAt ? (
+                              <motion.div
+                                ref={stepsPopoverRef}
+                                initial={{ opacity: 0, y: -4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                transition={{ duration: 0.12 }}
+                                className="fixed z-[60] rounded-lg bg-osu-b3 px-3 py-3 shadow-xl shadow-black/50"
+                                style={{ left: stepsAt.left, top: stepsAt.top }}
+                              >
+                                <DanStepRail
+                                  rawDan={dan.rawDan}
+                                  context={danScaleContextFor(keyCount, side === "ln" ? "ln" : null)}
+                                  formatDan={formatDan}
+                                />
+                              </motion.div>
+                            ) : null}
+                          </AnimatePresence>,
+                          document.body,
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {beyond ? (
+                      <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-white/70 sm:text-xs">
+                        <Trans>
+                          The {keyCount}K {sideLabel} course ladder ends at {formatDan(danLabel)}, so the analyzer cannot rate
+                          anything above it. The real level may be higher.
+                        </Trans>
+                      </p>
+                    ) : null}
+                    {courseClear ? (
+                      <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-white/70 sm:text-xs">
+                        {courseUnderBar ? (
+                          <Trans>{courseAccuracy} on {courseName}, under its {courseBar}.</Trans>
+                        ) : (
+                          <Trans>Cleared {courseName} at {courseAccuracy}.</Trans>
+                        )}{' '}
+                        {courseScoreUrl ? (
+                          <a
+                            href={courseScoreUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
+                          >
+                            <Trans>See the score</Trans>
+                          </a>
+                        ) : onOpenCourseScore ? (
                           <button
                             type="button"
-                            onClick={() => setOpenSection(openSection === "all" ? null : "all")}
-                            aria-expanded={openSection === "all"}
-                            className="mt-1 flex w-fit cursor-pointer items-center gap-1 text-[11px] tabular-nums text-osu-f1 transition-colors hover:text-white sm:mt-0 sm:inline-flex"
+                            onClick={() => onOpenCourseScore(courseClear)}
+                            className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
                           >
-                            {t`${evidence.totalClears} plays`}
-                            <ChevronDown size={12} className={`transition-transform ${openSection === "all" ? "rotate-180" : ""}`} />
+                            <Trans>See the score</Trans>
                           </button>
-                        </>
-                      ) : null}
-                      {/* A popover, so opening it never pushes the clears list down. */}
-                      {typeof document !== "undefined" ? createPortal(
-                        <AnimatePresence>
-                          {stepsAt ? (
-                            <motion.div
-                              ref={stepsPopoverRef}
-                              initial={{ opacity: 0, y: -4 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -4 }}
-                              transition={{ duration: 0.12 }}
-                              className="fixed z-[60] rounded-lg bg-osu-b3 px-3 py-3 shadow-xl shadow-black/50"
-                              style={{ left: stepsAt.left, top: stepsAt.top }}
-                            >
-                              <DanStepRail
-                                rawDan={dan.rawDan}
-                                context={danScaleContextFor(keyCount, side === "ln" ? "ln" : null)}
-                                formatDan={formatDan}
-                              />
-                            </motion.div>
-                          ) : null}
-                        </AnimatePresence>,
-                        document.body,
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {beyond ? (
-                    <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-white/70 sm:text-xs">
-                      <Trans>
-                        The {keyCount}K {sideLabel} course ladder ends at {formatDan(danLabel)}, so the analyzer cannot rate
-                        anything above it. The real level may be higher.
-                      </Trans>
-                    </p>
-                  ) : null}
-                  {courseClear ? (
-                    <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-white/70 sm:text-xs">
-                      {courseUnderBar ? (
-                        <Trans>{courseAccuracy} on {courseName}, under its {courseBar}.</Trans>
-                      ) : (
-                        <Trans>Cleared {courseName} at {courseAccuracy}.</Trans>
-                      )}{' '}
-                      {courseScoreUrl ? (
-                        <a
-                          href={courseScoreUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
-                        >
-                          <Trans>See the score</Trans>
-                        </a>
-                      ) : onOpenCourseScore ? (
-                        <button
-                          type="button"
-                          onClick={() => onOpenCourseScore(courseClear)}
-                          className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
-                        >
-                          <Trans>See the score</Trans>
-                        </button>
-                      ) : null}
-                    </p>
+                        ) : null}
+                      </p>
+                    ) : null}
+                  </div>
+                  {image ? (
+                    <img src={image} alt={formatDan(danLabel)} className="h-16 w-auto max-w-none shrink-0 object-contain sm:h-20" />
+                  ) : loading ? (
+                    <Skeleton className="h-16 w-16 shrink-0 rounded-full sm:h-20 sm:w-20" />
                   ) : null}
                 </div>
-                {image ? (
-                  <img src={image} alt={formatDan(danLabel)} className="h-16 w-auto max-w-none shrink-0 object-contain sm:h-20" />
-                ) : loading ? (
-                  <Skeleton className="h-16 w-16 shrink-0 rounded-full sm:h-20 sm:w-20" />
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label={t`Close dan details`}
-                className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white sm:right-4 sm:top-4"
-              >
-                <X size={16} />
-              </button>
-            </header>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label={t`Close dan details`}
+                  className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white sm:right-4 sm:top-4"
+                >
+                  <X size={16} />
+                </button>
+              </header>
 
-            <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-3 [scrollbar-gutter:stable] sm:px-4">
-              {loading && clearsFirst ? (
-                <div className="space-y-2.5 px-2 py-1">
-                  {Array.from({ length: 8 }).map((_, index) => (
-                    <Skeleton key={index} className="h-4 w-full" />
-                  ))}
-                </div>
-              ) : loading ? (
-                <div className="flex flex-wrap border-y border-white/[0.07]">
-                  {Array.from({ length: skeletonColumns }).map((_, index) => (
-                    <div
-                      key={index}
-                      className={`flex min-w-0 ${columnBasis(skeletonColumns)} flex-col items-center gap-1.5 border-l border-white/[0.07] px-2 py-3 first:border-l-0 max-sm:odd:border-l-0 sm:basis-0 sm:flex-1`}
-                    >
-                      <Skeleton className="h-3 w-14" />
-                      <Skeleton className="h-12 w-12 rounded-full" />
-                      <Skeleton className="h-3.5 w-16" />
-                      <Skeleton className="h-2.5 w-12" />
-                    </div>
-                  ))}
-                </div>
-              ) : pendingOpen && evidence?.pending && evidence.pending.length > 0 ? (
-                <PendingPlaysView evidence={evidence} onBack={() => setPendingOpen(false)} onOpen={(play) => openDetail(play, null)} />
-              ) : !evidence || (evidence.clears.length === 0 && !evidence.skillsets.some((skill) => skill.skillsetClear)) ? (
-                <div className="px-4 py-14 text-center">
-                  <div className="text-sm font-semibold text-osu-l2">
-                    {error ? t`Could not load the clears` : t`No qualifying clears yet`}
+              <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-3 [scrollbar-gutter:stable] sm:px-4">
+                {loading && clearsFirst ? (
+                  <div className="space-y-2.5 px-2 py-1">
+                    {Array.from({ length: 8 }).map((_, index) => (
+                      <Skeleton key={index} className="h-4 w-full" />
+                    ))}
                   </div>
-                  <div className="mt-1 text-xs text-osu-f1">
-                    {error ?? t`The estimate appears once ${quorum} clears at ${minAccuracyPercent}%+ accuracy land on rated charts. A ${barAccuracyPercent}%+ pass credits the chart's full level; anything under that credits less.`}
+                ) : loading ? (
+                  <div className="flex flex-wrap border-y border-white/[0.07]">
+                    {Array.from({ length: skeletonColumns }).map((_, index) => (
+                      <div
+                        key={index}
+                        className={`flex min-w-0 ${columnBasis(skeletonColumns)} flex-col items-center gap-1.5 border-l border-white/[0.07] px-2 py-3 first:border-l-0 max-sm:odd:border-l-0 sm:basis-0 sm:flex-1`}
+                      >
+                        <Skeleton className="h-3 w-14" />
+                        <Skeleton className="h-12 w-12 rounded-full" />
+                        <Skeleton className="h-3.5 w-16" />
+                        <Skeleton className="h-2.5 w-12" />
+                      </div>
+                    ))}
                   </div>
-                  {error ? (
-                    <button
-                      type="button"
-                      onClick={() => setReloadKey((key) => key + 1)}
-                      className="mt-4 rounded-lg bg-osu-pink/15 px-4 py-2 text-xs font-semibold text-osu-pink-light hover:bg-osu-pink/25"
-                    >
-                      <Trans>Try again</Trans>
-                    </button>
-                  ) : null}
-                  {/* A profile with nothing rated yet is exactly the one
-                      whose plays are all still in line. */}
-                  {evidence ? (
-                    <div className="mt-4">
-                      <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
+                ) : pendingOpen && evidence?.pending && evidence.pending.length > 0 ? (
+                  <PendingPlaysView evidence={evidence} onBack={() => setPendingOpen(false)} onOpen={(play) => openDetail(play, null)} />
+                ) : !evidence || (evidence.clears.length === 0 && !evidence.skillsets.some((skill) => skill.skillsetClear)) ? (
+                  <div className="px-4 py-14 text-center">
+                    <div className="text-sm font-semibold text-osu-l2">
+                      {error ? t`Could not load the clears` : t`No qualifying clears yet`}
                     </div>
-                  ) : null}
-                </div>
-              ) : (
-                <>
-                  {!dan ? (
-                    <div className="px-2 pb-2 text-[11px] text-osu-l2">
-                      <Trans>
-                        Not enough qualifying clears for an estimate yet ({evidence.totalClears} of {quorum}).
-                      </Trans>
+                    <div className="mt-1 text-xs text-osu-f1">
+                      {error ?? t`The estimate appears once ${quorum} clears at ${minAccuracyPercent}%+ accuracy land on rated charts. A ${barAccuracyPercent}%+ pass credits the chart's full level; anything under that credits less.`}
                     </div>
-                  ) : null}
-                  {clearsFirst && listSection ? (
-                    <>
-                      {/* The skillsets only filter the list here: a 4K LN skillset
-                          has no dan of its own worth reading, so each is a name
-                          and a play count. */}
-                      {skillsetSections.length > 0 ? (
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/[0.07] px-2 pb-2">
-                          {sections.map((section) => {
-                            const active = listSection.id === section.id;
+                    {error ? (
+                      <button
+                        type="button"
+                        onClick={() => setReloadKey((key) => key + 1)}
+                        className="mt-4 rounded-lg bg-osu-pink/15 px-4 py-2 text-xs font-semibold text-osu-pink-light hover:bg-osu-pink/25"
+                      >
+                        <Trans>Try again</Trans>
+                      </button>
+                    ) : null}
+                    {/* A profile with nothing rated yet is exactly the one
+                        whose plays are all still in line. */}
+                    {evidence ? (
+                      <div className="mt-4">
+                        <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <>
+                    {!dan ? (
+                      <div className="px-2 pb-2 text-[11px] text-osu-l2">
+                        <Trans>
+                          Not enough qualifying clears for an estimate yet ({evidence.totalClears} of {quorum}).
+                        </Trans>
+                      </div>
+                    ) : null}
+                    {clearsFirst && listSection ? (
+                      <>
+                        {/* The skillsets only filter the list here: a 4K LN skillset
+                            has no dan of its own worth reading, so each is a name
+                            and a play count. */}
+                        {skillsetSections.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/[0.07] px-2 pb-2">
+                            {sections.map((section) => {
+                              const active = listSection.id === section.id;
+                              return (
+                                <button
+                                  key={section.id}
+                                  type="button"
+                                  onClick={() => showSkillsetClears(section.id === "all" ? null : section.id)}
+                                  aria-pressed={active}
+                                  className={`relative inline-flex cursor-pointer items-baseline gap-1.5 py-1 text-[12px] font-semibold transition-colors ${
+                                    active ? "text-white" : "text-osu-f1 hover:text-white"
+                                  }`}
+                                >
+                                  {section.label}
+                                  <span className="text-[11px] font-normal tabular-nums text-osu-f1">{section.clears}</span>
+                                  {active ? (
+                                    <span className="absolute inset-x-0 -bottom-[9px] h-[2px]" style={{ backgroundColor: section.color }} />
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                        {listSection.id === "all" ? (
+                          <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
+                        ) : null}
+                        <div className="pt-2">{renderClears(listSection)}</div>
+                      </>
+                    ) : (
+                      <>
+                        {/* The breakdown is the window. Each skill is a column with
+                            its course artwork at a size you can actually read, and
+                            the clears behind it open underneath the one you pick -
+                            so nothing is a list of plays until you ask for one. */}
+                        <div className="flex flex-wrap border-y border-white/[0.07]">
+                          {stripSections.map((section) => {
+                            const open = openSection === section.id;
+                            const sectionBeyond = section.id === "all" && beyond;
+                            const bare = section.dan ? danBareLabel(section.dan.label) : null;
+                            const sectionLabel = section.dan ? formatDan(sectionBeyond ? bare! : section.dan.label) : null;
+                            const sectionImage = section.dan ? getDanTierImageSrc(sectionBeyond ? bare! : section.dan.label, side === "ln" ? "ln" : undefined, keyCount) : null;
                             return (
                               <button
                                 key={section.id}
                                 type="button"
-                                onClick={() => showSkillsetClears(section.id === "all" ? null : section.id)}
-                                aria-pressed={active}
-                                className={`relative inline-flex cursor-pointer items-baseline gap-1.5 py-1 text-[12px] font-semibold transition-colors ${
-                                  active ? "text-white" : "text-osu-f1 hover:text-white"
+                                onClick={() => setOpenSection(open ? null : section.id)}
+                                aria-expanded={open}
+                                title={open ? t`Hide the ${section.label} clears` : t`Show the ${section.label} clears`}
+                                className={`relative flex min-w-0 ${columnBasis(stripSections.length)} flex-col items-center gap-1.5 border-l border-white/[0.07] px-2 py-3 text-center transition-colors first:border-l-0 max-sm:odd:border-l-0 sm:basis-0 sm:flex-1 ${
+                                  open ? "bg-osu-b4" : "hover:bg-osu-b4/50"
                                 }`}
                               >
-                                {section.label}
-                                <span className="text-[11px] font-normal tabular-nums text-osu-f1">{section.clears}</span>
-                                {active ? (
-                                  <span className="absolute inset-x-0 -bottom-[9px] h-[2px]" style={{ backgroundColor: section.color }} />
+                                <span className="max-w-full truncate text-[12px] font-semibold text-osu-f1">
+                                  {section.label}
+                                </span>
+                                <span className="flex h-12 items-center justify-center">
+                                  {sectionImage ? (
+                                    <img src={sectionImage} alt="" className="h-12 w-auto max-w-none object-contain" />
+                                  ) : (
+                                    <span className="text-2xl font-black leading-none text-osu-b3">-</span>
+                                  )}
+                                </span>
+                                {sectionLabel ? (
+                                  <span className="max-w-full truncate text-[15px] font-black leading-none text-white">
+                                    {sectionBeyond ? ">" : section.verified ? "" : "~"}{sectionLabel}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] leading-none text-osu-f1">
+                                    <Trans>needs {quorum}</Trans>
+                                  </span>
+                                )}
+                                <span className="text-[11px] tabular-nums text-osu-f1">
+                                  {/* Under the averaging window the count reads as
+                                      progress toward it: this dan is averaged from
+                                      fewer plays than it wants. */}
+                                  {section.verified ? t`Verified clear` : section.nearClear ? t`Near clear` : t`${section.clears} plays`}
+                                  {!section.verified && !section.nearClear && section.weightedClears < averageWindow ? (
+                                    <span className="ml-1">
+                                      {t`· ${(Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")}/${averageWindow} counted`}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                {open ? (
+                                  <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
                                 ) : null}
                               </button>
                             );
                           })}
                         </div>
-                      ) : null}
-                      {listSection.id === "all" ? (
-                        <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
-                      ) : null}
-                      <div className="pt-2">{renderClears(listSection)}</div>
-                    </>
-                  ) : (
-                    <>
-                      {/* The breakdown is the window. Each skill is a column with
-                          its course artwork at a size you can actually read, and
-                          the clears behind it open underneath the one you pick -
-                          so nothing is a list of plays until you ask for one. */}
-                      <div className="flex flex-wrap border-y border-white/[0.07]">
-                        {stripSections.map((section) => {
-                          const open = openSection === section.id;
-                          const sectionBeyond = section.id === "all" && beyond;
-                          const bare = section.dan ? danBareLabel(section.dan.label) : null;
-                          const sectionLabel = section.dan ? formatDan(sectionBeyond ? bare! : section.dan.label) : null;
-                          const sectionImage = section.dan ? getDanTierImageSrc(sectionBeyond ? bare! : section.dan.label, side === "ln" ? "ln" : undefined, keyCount) : null;
-                          return (
-                            <button
-                              key={section.id}
-                              type="button"
-                              onClick={() => setOpenSection(open ? null : section.id)}
-                              aria-expanded={open}
-                              title={open ? t`Hide the ${section.label} clears` : t`Show the ${section.label} clears`}
-                              className={`relative flex min-w-0 ${columnBasis(stripSections.length)} flex-col items-center gap-1.5 border-l border-white/[0.07] px-2 py-3 text-center transition-colors first:border-l-0 max-sm:odd:border-l-0 sm:basis-0 sm:flex-1 ${
-                                open ? "bg-osu-b4" : "hover:bg-osu-b4/50"
-                              }`}
-                            >
-                              <span className="max-w-full truncate text-[12px] font-semibold text-osu-f1">
-                                {section.label}
-                              </span>
-                              <span className="flex h-12 items-center justify-center">
-                                {sectionImage ? (
-                                  <img src={sectionImage} alt="" className="h-12 w-auto max-w-none object-contain" />
-                                ) : (
-                                  <span className="text-2xl font-black leading-none text-osu-b3">-</span>
-                                )}
-                              </span>
-                              {sectionLabel ? (
-                                <span className="max-w-full truncate text-[15px] font-black leading-none text-white">
-                                  {sectionBeyond ? ">" : section.verified ? "" : "~"}{sectionLabel}
-                                </span>
-                              ) : (
-                                <span className="text-[11px] leading-none text-osu-f1">
-                                  <Trans>needs {quorum}</Trans>
-                                </span>
-                              )}
-                              <span className="text-[11px] tabular-nums text-osu-f1">
-                                {/* Under the averaging window the count reads as
-                                    progress toward it: this dan is averaged from
-                                    fewer plays than it wants. */}
-                                {section.verified ? t`Verified clear` : section.nearClear ? t`Near clear` : t`${section.clears} plays`}
-                                {!section.verified && !section.nearClear && section.weightedClears < averageWindow ? (
-                                  <span className="ml-1">
-                                    {t`· ${(Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")}/${averageWindow} counted`}
-                                  </span>
-                                ) : null}
-                              </span>
-                              {open ? (
-                                <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {/* Shown only while some column is short of the window, so a
-                          filled-out breakdown carries no caveat at all. */}
-                      {sections.some((section) => !section.verified && !section.nearClear && section.weightedClears < averageWindow) ? (
-                        <div className="px-2 pt-2 text-[11px] text-osu-f1">
-                          <Trans>
-                            Each skillset averages up to {averageWindow} clears. Only your best rate play per chart counts.
-                            With less evidence, it averages what you have and the estimate is still filling in.
-                          </Trans>
-                        </div>
-                      ) : null}
-                      {anchorSection && sections.length > 2 ? (
-                        <div className="px-2 pt-2 text-[11px] text-osu-f1">
-                          <Trans>
-                            The estimate stays within one level of your {anchorSection.label} dan,
-                            whichever way the other skillsets point.
-                          </Trans>
-                        </div>
-                      ) : null}
-                      {/* A pass that ran out of budget publishes what it has; say
-                          so here, where the dan is read, not only on the card. */}
-                      <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
-                      <AnimatePresence initial={false}>
-                        {openedSection ? (
-                          <motion.div
-                            key={openedSection.id}
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.16, ease: "easeOut" }}
-                            className="overflow-hidden"
-                          >
-                            <div className="pt-2">{renderClears(openedSection)}</div>
-                          </motion.div>
+                        {/* Shown only while some column is short of the window, so a
+                            filled-out breakdown carries no caveat at all. */}
+                        {sections.some((section) => !section.verified && !section.nearClear && section.weightedClears < averageWindow) ? (
+                          <div className="px-2 pt-2 text-[11px] text-osu-f1">
+                            <Trans>
+                              Each skillset averages up to {averageWindow} clears. Only your best rate play per chart counts.
+                              With less evidence, it averages what you have and the estimate is still filling in.
+                            </Trans>
+                          </div>
                         ) : null}
-                      </AnimatePresence>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
+                        {anchorSection && sections.length > 2 ? (
+                          <div className="px-2 pt-2 text-[11px] text-osu-f1">
+                            <Trans>
+                              The estimate stays within one level of your {anchorSection.label} dan,
+                              whichever way the other skillsets point.
+                            </Trans>
+                          </div>
+                        ) : null}
+                        {/* A pass that ran out of budget publishes what it has; say
+                            so here, where the dan is read, not only on the card. */}
+                        <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
+                        <AnimatePresence initial={false}>
+                          {openedSection ? (
+                            <motion.div
+                              key={openedSection.id}
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.16, ease: "easeOut" }}
+                              className="overflow-hidden"
+                            >
+                              <div className="pt-2">{renderClears(openedSection)}</div>
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body,
+      ) : null}
       {detail ? (
         <MapDetailModal
           entry={detail.entry}

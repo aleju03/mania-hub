@@ -1,5 +1,6 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -3499,8 +3500,11 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           }))}
         />
       ) : null}
-      {courseScore ? (
-        <ScoreDetailModal score={courseScore} onClose={() => setCourseScore(null)} />
+      {/* Opened from the dan modal, which renders into <body>, so this has to
+          follow it there to stack on top. */}
+      {courseScore && typeof document !== "undefined" ? createPortal(
+        <ScoreDetailModal score={courseScore} onClose={() => setCourseScore(null)} />,
+        document.body,
       ) : null}
     </div>
   );
