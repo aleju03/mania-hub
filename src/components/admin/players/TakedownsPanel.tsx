@@ -11,6 +11,7 @@ import {
   previewOwnerTakedown,
   restoreOwnerTakedown,
   runOwnerTakedown,
+  runOwnerTakedownHold,
   type OwnerTakedownPreview,
   type TakenDownUser,
 } from "../../../lib/owner-takedown";
@@ -22,7 +23,9 @@ import {
  * them again. Their account keeps working: sign-in, the packs they own, goals,
  * skins. Unlike the banned-account wipe it can be undone: Restore turns
  * tracking back on and the profile rebuilds from what osu! still serves.
- * Confirm the request came from the account's owner before running it. */
+ * Confirm the request came from the account's owner before running it.
+ * Until they confirm, Hide puts the takedown on hold: the account is hidden
+ * the same way but nothing is deleted, so Restore brings all of it back. */
 
 const BUTTON_CLASS =
   "inline-flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] sm:py-1 sm:text-[11px] transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-default cursor-pointer";
@@ -31,6 +34,7 @@ const DANGER_CLASS = `${BUTTON_CLASS} border-osu-red/40 bg-osu-red/10 text-osu-r
 
 type Ask =
   | { kind: "takedown"; preview: OwnerTakedownPreview }
+  | { kind: "hold"; preview: OwnerTakedownPreview }
   | { kind: "restore"; user: TakenDownUser };
 
 function plural(count: number, noun: string): string {
@@ -109,16 +113,23 @@ export function TakedownsPanel() {
               <div className="text-[11px] text-osu-f1">
                 #{preview.userId}
                 {preview.countryCode ? ` · ${preview.countryCode}` : ""}
-                {preview.takenDown ? " · taken down" : preview.wiped ? " · wiped" : preview.active ? " · active" : " · inactive"}
+                {preview.held ? " · hidden, data kept" : preview.takenDown ? " · taken down" : preview.wiped ? " · wiped" : preview.active ? " · active" : " · inactive"}
               </div>
             </div>
-            <div className="ml-auto">
+            <div className="ml-auto flex flex-wrap gap-2">
               {preview.wiped ? (
                 <span className="text-[12px] text-osu-f1">Already purged by the banned-account wipe.</span>
               ) : (
-                <button disabled={busy} onClick={() => setAsk({ kind: "takedown", preview })} className={DANGER_CLASS}>
-                  {preview.takenDown ? "Run again" : "Take down"}
-                </button>
+                <>
+                  {!preview.takenDown || preview.held ? (
+                    <button disabled={busy} onClick={() => setAsk({ kind: "hold", preview })} className={ACTION_CLASS}>
+                      {preview.held ? "Hide again" : "Hide, keep data"}
+                    </button>
+                  ) : null}
+                  <button disabled={busy} onClick={() => setAsk({ kind: "takedown", preview })} className={DANGER_CLASS}>
+                    {preview.takenDown && !preview.held ? "Run again" : "Take down"}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -152,6 +163,7 @@ export function TakedownsPanel() {
                   <div className="text-[13px] text-white">{user.username}</div>
                   <div className="text-[11px] text-osu-f1">
                     #{user.userId} · <span title={user.takenDownAt}>{formatTimeAgo(user.takenDownAt)}</span>
+                    {user.held ? " · hidden, data kept" : ""}
                     {user.companellaBlocked ? " · Companella blocked by the takedown" : ""}
                   </div>
                 </div>
@@ -188,10 +200,30 @@ export function TakedownsPanel() {
           }}
           onClose={() => setAsk(null)}
         />
+      ) : ask?.kind === "hold" ? (
+        <ConfirmModal
+          title={`Hide ${ask.preview.username}?`}
+          body={`Hides them exactly like a takedown (#${ask.preview.userId}): their profile becomes a 404, they drop out of search, rankings, boards and feeds, nothing tracks them and Companella refuses their imports. Nothing is deleted: Restore brings everything back as it was, and Take down deletes it once they confirm.`}
+          confirmLabel="Hide"
+          onConfirm={() => {
+            const target = ask.preview;
+            setAsk(null);
+            void run(async () => {
+              const result = await runOwnerTakedownHold({
+                data: { userId: target.userId, expectedUsername: target.username, confirmation: `HOLD ${target.userId}` },
+              });
+              setPreview(await previewOwnerTakedown({ data: { query: `#${target.userId}` } }).catch(() => null));
+              return `Hid ${result.username}. Nothing was deleted.`;
+            });
+          }}
+          onClose={() => setAsk(null)}
+        />
       ) : ask?.kind === "restore" ? (
         <ConfirmModal
           title={`Restore ${ask.user.username}?`}
-          body="Their profile shows again and tracking starts over from what osu! still serves. Nothing the takedown deleted comes back."
+          body={ask.user.held
+            ? "Their profile shows again and tracking resumes. The takedown was on hold, so all their data is still there."
+            : "Their profile shows again and tracking starts over from what osu! still serves. Nothing the takedown deleted comes back."}
           confirmLabel="Restore"
           onConfirm={() => {
             const target = ask.user;

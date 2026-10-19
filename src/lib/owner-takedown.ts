@@ -8,7 +8,11 @@ import { getServerLiveBackendUrl } from "./live-backend";
    able to sign in and use what it owns (backend features/owner-takedown.ts).
    This side then deletes what lives in our half of the R2 bucket: their
    uploaded .osr files and the cached copies of their osu! replays. Every step
-   is idempotent, so a partial failure is fixed by running it again. */
+   is idempotent, so a partial failure is fixed by running it again.
+
+   A hold (runOwnerTakedownHold) hides the account the same way but deletes
+   nothing on either side, for a request the owner has not confirmed yet:
+   Restore puts it back as it was, and the takedown finishes it. */
 
 export interface OwnerTakedownPreview {
   userId: number;
@@ -17,6 +21,8 @@ export interface OwnerTakedownPreview {
   countryCode: string | null;
   active: boolean;
   takenDown: boolean;
+  /** Taken down on hold: hidden, nothing deleted. */
+  held: boolean;
   wiped: boolean;
   impact: {
     trackerScores: number;
@@ -45,6 +51,7 @@ export interface TakenDownUser {
   username: string;
   takenDownAt: string;
   companellaBlocked: boolean;
+  held: boolean;
 }
 
 const UPLOAD_PAGE_SIZE = 50;
@@ -146,13 +153,39 @@ export const runOwnerTakedown = createServerFn({ method: "POST" })
     };
   });
 
+export const runOwnerTakedownHold = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown; expectedUsername?: unknown; confirmation?: unknown }) => {
+    const userId = validUserId(data?.userId);
+    const expectedUsername = typeof data?.expectedUsername === "string" ? data.expectedUsername.slice(0, 120) : "";
+    if (!expectedUsername || data?.confirmation !== `HOLD ${userId}`) {
+      throw new Error("Preview the account again before hiding it.");
+    }
+    return { userId, expectedUsername, confirmation: `HOLD ${userId}` };
+  })
+  .handler(async ({ data }): Promise<{ username: string; scoreIds: number }> => {
+    const { requireTrueAdminAccess } = await import("./auth");
+    await requireTrueAdminAccess("Hide an account");
+    const response = await adminFetch("/api/admin/takedown-hold", { method: "POST", body: JSON.stringify(data) });
+    if (!response.ok) {
+      const code = await readError(response, "/api/admin/takedown-hold");
+      if (code === "user_changed_since_preview") throw new Error("The stored username changed after preview; preview the account again.");
+      if (code === "user_wiped") throw new Error("This account was already purged by the banned-account wipe.");
+      if (code === "already_taken_down") throw new Error("This account is already taken down; its data is gone.");
+      if (code === "user_not_found") throw new Error("That previewed user no longer exists.");
+      throw new Error(code);
+    }
+    const body = await response.json() as { username: string; scoreIds: number };
+    await forgetUser(data.userId, body.username);
+    return body;
+  });
+
 export const restoreOwnerTakedown = createServerFn({ method: "POST" })
   .validator((data: { userId?: unknown; confirmation?: unknown }) => {
     const userId = validUserId(data?.userId);
     if (data?.confirmation !== `RESTORE ${userId}`) throw new Error("Confirm the restore first.");
     return { userId, confirmation: `RESTORE ${userId}` };
   })
-  .handler(async ({ data }): Promise<{ username: string; retrackedRosters: number }> => {
+  .handler(async ({ data }): Promise<{ username: string; retrackedRosters: number; held: boolean }> => {
     const { requireTrueAdminAccess } = await import("./auth");
     await requireTrueAdminAccess("Restore a taken-down account");
     const response = await adminFetch("/api/admin/takedown-restore", { method: "POST", body: JSON.stringify(data) });
@@ -161,7 +194,7 @@ export const restoreOwnerTakedown = createServerFn({ method: "POST" })
       if (code === "not_taken_down") throw new Error("That account is not taken down.");
       throw new Error(code);
     }
-    const body = await response.json() as { username: string; retrackedRosters: number };
+    const body = await response.json() as { username: string; retrackedRosters: number; held: boolean };
     await forgetUser(data.userId, body.username);
     return body;
   });
