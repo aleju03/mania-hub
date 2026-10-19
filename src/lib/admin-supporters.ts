@@ -5,10 +5,10 @@ import { getServerLiveBackendUrl } from "./live-backend";
 
 /* /admin/players?tab=supporters, backed by backend features/supporters.ts:
    every donation with who gave and how it was linked to an osu! account, the
-   supporter list, and the owner's link, unlink, grant and Ko-fi CSV import
-   actions. */
+   supporter list, and the owner's link, unlink, grant, Ko-fi CSV import and
+   Google contributor export import actions. */
 
-export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked";
+export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked" | "claim";
 
 export interface AdminDonationRow {
   provider: string;
@@ -23,6 +23,8 @@ export interface AdminDonationRow {
   linkedUserId: number | null;
   linkedUsername: string | null;
   linkMethod: DonationLinkMethod | null;
+  /** A Google claim awaiting the export, or one the export proved made up. */
+  claimStatus?: "pending" | "revoked" | null;
 }
 
 export interface AdminSupporterRow {
@@ -121,3 +123,14 @@ export const deleteAdminCompanion = createServerFn({ method: "POST" })
     return { id };
   })
   .handler(({ data }) => adminRequest<{ ok: true; deleted: boolean }>("/api/admin/supporters/delete-companion", data));
+
+/* Publisher Center's contributor export: confirms Google claims, adds unclaimed
+   orders, revokes claims it does not list. */
+export const importAdminGoogleExport = createServerFn({ method: "POST" })
+  .validator((data: { csv?: unknown }) => {
+    const csv = typeof data?.csv === "string" ? data.csv : "";
+    if (!csv.trim()) throw new Error("Pick a CSV file.");
+    if (csv.length > 8 * 1024 * 1024) throw new Error("That file is too large.");
+    return { csv };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; rows: number; confirmed: number; added: number; revoked: number; pending: number }>("/api/admin/supporters/import-google", data));

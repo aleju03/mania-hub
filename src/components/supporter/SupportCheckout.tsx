@@ -8,9 +8,12 @@ import { SupportGoalBar } from "../layout/SupportGoalBar";
 import { useAuth } from "../../lib/auth-context";
 import { track } from "../../lib/analytics";
 import { readEdgeCountry } from "../../lib/country-cookie";
+import { GOOGLE_RRM_PUBLICATION_ID, startGoogleContributions } from "../../lib/google-contributions";
+import { claimGoogleContribution } from "../../lib/supporter-look-settings";
 
 /* Where a visitor pays, at the end of /support: the month's hosting bar, the
-   Ko-fi panel, and lava.top for the countries Ko-fi cannot take a card from. */
+   Ko-fi panel, lava.top for the countries Ko-fi cannot take a card from, and
+   Google's checkout once its publication id is set. */
 
 export const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 const LAVA_TIP_URL = "https://app.lava.top/mania-tracker?tabId=donate";
@@ -33,6 +36,73 @@ const getSupportUsesLava = createServerFn({ method: "GET" }).handler(() => {
   const country = readEdgeCountry(getRequest().headers);
   return country != null && LAVA_SUPPORT_COUNTRIES.has(country);
 });
+
+/* Google's checkout: its own button and dialog. A signed-in payer's order is
+   claimed for them on the spot; anyone can paste one from Google's receipt. */
+function GoogleContribution({ viewerId }: { viewerId: number | null | undefined }) {
+  const { t, i18n } = useLingui();
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [orderId, setOrderId] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const claim = (order: string, amountUsd: number | null) => {
+    setBusy(true);
+    setStatus(null);
+    claimGoogleContribution({ data: { orderId: order, amountUsd } })
+      .then(() => {
+        setStatus({ ok: true, text: t`Thank you! Your supporter time is on.` });
+        setOrderId("");
+        track("support_google_claimed");
+      })
+      .catch((error: unknown) => setStatus({ ok: false, text: error instanceof Error ? error.message : String(error) }))
+      .finally(() => setBusy(false));
+  };
+
+  useEffect(() => {
+    startGoogleContributions((purchase) => {
+      if (purchase.orderId && viewerId) claim(purchase.orderId, purchase.amountUsd);
+      else setStatus({ ok: true, text: t`Thank you! Sign in and paste the order number from Google's receipt email below to get your supporter time.` });
+    }, i18n.locale);
+  }, [viewerId, i18n.locale]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="border-b border-white/[0.07] px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[12px] text-osu-f1">
+          {viewerId ? t`Or pay with Google. Your supporter time starts right away.` : t`Or pay with Google. Sign in first so it counts toward your account.`}
+        </p>
+        <button type="button" {...{ "swg-standard-button": "contribution" }} />
+      </div>
+      {status && <p className={`mt-2 text-[12px] ${status.ok ? "text-osu-l2" : "text-osu-red-light"}`}>{status.text}</p>}
+      {viewerId ? (
+        <form
+          className="mt-2 flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (orderId.trim()) claim(orderId.trim(), null);
+          }}
+        >
+          <label htmlFor="google-order" className="text-[11.5px] text-osu-f1">{t`Paid with Google already?`}</label>
+          <input
+            id="google-order"
+            value={orderId}
+            onChange={(event) => setOrderId(event.target.value)}
+            placeholder={t`Order number from the receipt`}
+            maxLength={64}
+            className="h-7 min-w-0 flex-1 rounded-md bg-osu-b5 px-2 text-[12px] text-white outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-osu-f1 focus:ring-osu-pink/60"
+          />
+          <button
+            type="submit"
+            disabled={busy || !orderId.trim()}
+            className="h-7 cursor-pointer rounded-md bg-osu-b3 px-3 text-[12px] font-semibold text-white transition hover:bg-osu-b2 disabled:cursor-default disabled:opacity-40"
+          >
+            {t`Claim`}
+          </button>
+        </form>
+      ) : null}
+    </div>
+  );
+}
 
 export function SupportCheckout() {
   const { t } = useLingui();
@@ -67,6 +137,7 @@ export function SupportCheckout() {
           </a>
         </div>
       ) : null}
+      {GOOGLE_RRM_PUBLICATION_ID ? <GoogleContribution viewerId={viewerId} /> : null}
       {useLava != null ? (
         <iframe
           src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true`}

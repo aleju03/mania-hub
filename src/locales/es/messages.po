@@ -1375,8 +1375,12 @@ msgid "{name} added to queue, come back later :)"
 msgstr "{name} se agregó a la cola, vuelve más tarde :)"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "{name} claimed your gift week. Your next support brings a new code."
-msgstr "{name} reclamó tu semana de regalo. Tu próximo apoyo trae un código nuevo."
+msgid "{name} claimed your gift week. Every $3 you give brings a new code."
+msgstr "{name} reclamó tu semana de regalo. Cada $3 que das trae un código nuevo."
+
+#: src/components/supporter/GiftCodePanel.tsx
+#~ msgid "{name} claimed your gift week. Your next support brings a new code."
+#~ msgstr "{name} reclamó tu semana de regalo. Tu próximo apoyo trae un código nuevo."
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -4600,6 +4604,10 @@ msgstr "Fumo de Cirno"
 msgid "CJ"
 msgstr "CJ"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Claim"
+msgstr "Reclamar"
+
 #: src/routes/gift.$code.tsx
 msgid "Claim it"
 msgstr "Reclamarla"
@@ -6636,8 +6644,8 @@ msgid "Each pattern scores only once."
 msgstr "Cada patrón puntúa una sola vez."
 
 #: src/routes/support.tsx
-msgid "Each payment gives you a one-time code that gives someone else a week of supporter."
-msgstr "Cada pago te da un código de un solo uso que le da a otra persona una semana de supporter."
+#~ msgid "Each payment gives you a one-time code that gives someone else a week of supporter."
+#~ msgstr "Cada pago te da un código de un solo uso que le da a otra persona una semana de supporter."
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
@@ -6901,6 +6909,10 @@ msgstr "Incluso con esas salvaguardas, los datos pueden estar retrasados, incomp
 #: src/lib/pack-run.ts
 msgid "Every +combo is halved."
 msgstr ""
+
+#: src/routes/support.tsx
+msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
+msgstr "Cada $3 que das, en un pago o en varios, te dan un código de un solo uso que le regala a otra persona una semana de supporter."
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "every card"
@@ -9325,6 +9337,7 @@ msgstr "Teclas presionadas por segundo."
 #: src/lib/pack-run.ts
 msgid "Kiai Time"
 msgstr ""
+
 
 #: src/components/supporter/loadout.ts
 msgid "Knob lasers"
@@ -12517,8 +12530,12 @@ msgid "Once you connect Companella to your account, it sends every mania play yo
 msgstr "Cuando conectas Companella a tu cuenta, envía cada play de mania que terminas, con su replay. Esas plays salen en la pestaña Recientes de tu perfil y en el tracker con el ícono de Companella. Si osu! también tiene la play, sale una sola vez."
 
 #: src/routes/support.tsx
-msgid "One code per payment"
-msgstr "Un código por pago"
+msgid "One code per $3"
+msgstr "Un código por cada $3"
+
+#: src/routes/support.tsx
+#~ msgid "One code per payment"
+#~ msgstr "Un código por pago"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -12818,6 +12835,14 @@ msgstr "Aperturas"
 msgid "optional"
 msgstr "opcional"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Or pay with Google. Sign in first so it counts toward your account."
+msgstr "O paga con Google. Inicia sesión primero para que cuente en tu cuenta."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Or pay with Google. Your supporter time starts right away."
+msgstr "O paga con Google. Tu tiempo de supporter empieza al instante."
+
 #: src/routes/recommendations.tsx
 msgid "or pick someone else"
 msgstr "o elige a alguien más"
@@ -12837,6 +12862,10 @@ msgstr ""
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Order"
 msgstr "Orden"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Order number from the receipt"
+msgstr "Número de pedido del recibo"
 
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
@@ -13119,6 +13148,10 @@ msgstr "Página 1"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Page number, 1 to {totalPages}"
 msgstr "Número de página, de 1 a {totalPages}"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Paid with Google already?"
+msgstr "¿Ya pagaste con Google?"
 
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
@@ -17915,6 +17948,14 @@ msgstr ""
 msgid "Thank you for supporting, {username}"
 msgstr "Gracias por apoyar, {username}"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Thank you! Sign in and paste the order number from Google's receipt email below to get your supporter time."
+msgstr "¡Gracias! Inicia sesión y pega abajo el número de pedido del correo de recibo de Google para recibir tu tiempo de supporter."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Thank you! Your supporter time is on."
+msgstr "¡Gracias! Ya tienes tu tiempo de supporter."
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
 msgstr "No se puede cargar esa dirección."
@@ -21348,8 +21389,12 @@ msgid "Your dynamic renders were turned off."
 msgstr "Se desactivaron tus renders dinámicos."
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "Your gift week was claimed. Your next support brings a new code."
-msgstr "Ya reclamaron tu semana de regalo. Tu próximo apoyo trae un código nuevo."
+msgid "Your gift week was claimed. Every $3 you give brings a new code."
+msgstr "Ya reclamaron tu semana de regalo. Cada $3 que das trae un código nuevo."
+
+#: src/components/supporter/GiftCodePanel.tsx
+#~ msgid "Your gift week was claimed. Your next support brings a new code."
+#~ msgstr "Ya reclamaron tu semana de regalo. Tu próximo apoyo trae un código nuevo."
 
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx

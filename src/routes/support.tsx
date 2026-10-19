@@ -254,8 +254,8 @@ function SupportPage() {
             <Perk
               id="gift"
               title={t`A week for a friend`}
-              count={t`One code per payment`}
-              body={t`Each payment gives you a one-time code that gives someone else a week of supporter.`}
+              count={t`One code per $3`}
+              body={t`Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter.`}
             >
               <GiftShowcase />
             </Perk>

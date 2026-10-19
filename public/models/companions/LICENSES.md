@@ -14,4 +14,4 @@ Changed here: textures re-encoded as WebP; nothing else.
 | fumo-yuyuko.glb | https://sketchfab.com/3d-models/6d5d0483009942fb916eedc60ea383a4 |
 | fumo-sakuya-inu.glb | https://sketchfab.com/3d-models/7a573802931f485db8118a9d64f26362 |
 
-blob-pink.glb is the site's own, built by local-notes/companions/blob/make_blob.py.
+blob-pink.glb is the site's own model, built by local-notes/companions/blob/make_blob.py.

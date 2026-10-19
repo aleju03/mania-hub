@@ -1384,8 +1384,12 @@ msgid "{name} added to queue, come back later :)"
 msgstr "{name} 已加入队列，稍后再来看看吧 :)"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "{name} claimed your gift week. Your next support brings a new code."
-msgstr "{name} 已领取你赠送的一周。你下次支持时会得到新的兑换码。"
+msgid "{name} claimed your gift week. Every $3 you give brings a new code."
+msgstr "{name} 领取了你赠送的一周。你每支持 $3 就会获得一个新兑换码。"
+
+#: src/components/supporter/GiftCodePanel.tsx
+#~ msgid "{name} claimed your gift week. Your next support brings a new code."
+#~ msgstr "{name} 已领取你赠送的一周。你下次支持时会得到新的兑换码。"
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -4609,6 +4613,10 @@ msgstr "琪露诺 fumo"
 msgid "CJ"
 msgstr "CJ"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Claim"
+msgstr "领取"
+
 #: src/routes/gift.$code.tsx
 msgid "Claim it"
 msgstr "领取"
@@ -6645,8 +6653,8 @@ msgid "Each pattern scores only once."
 msgstr "每种谱型只计分一次。"
 
 #: src/routes/support.tsx
-msgid "Each payment gives you a one-time code that gives someone else a week of supporter."
-msgstr "每次付款都会给你一个一次性兑换码，可以送给别人一周的支持者。"
+#~ msgid "Each payment gives you a one-time code that gives someone else a week of supporter."
+#~ msgstr "每次付款都会给你一个一次性兑换码，可以送给别人一周的支持者。"
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
@@ -6910,6 +6918,10 @@ msgstr "即便有这些防护措施，数据仍可能出现延迟、不完整、
 #: src/lib/pack-run.ts
 msgid "Every +combo is halved."
 msgstr ""
+
+#: src/routes/support.tsx
+msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
+msgstr "你每支持 $3（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "every card"
@@ -9334,6 +9346,7 @@ msgstr "每秒按键次数。"
 #: src/lib/pack-run.ts
 msgid "Kiai Time"
 msgstr ""
+
 
 #: src/components/supporter/loadout.ts
 msgid "Knob lasers"
@@ -12526,8 +12539,12 @@ msgid "Once you connect Companella to your account, it sends every mania play yo
 msgstr "把 Companella 连接到你的账号后，它会上传你完成的每一局 mania 成绩，并附带回放。这些成绩会带着 Companella 图标显示在你个人资料的最近标签页和追踪器中。osu! 也收录的成绩只显示一次。"
 
 #: src/routes/support.tsx
-msgid "One code per payment"
-msgstr "每次付款一个兑换码"
+msgid "One code per $3"
+msgstr "每 $3 一个兑换码"
+
+#: src/routes/support.tsx
+#~ msgid "One code per payment"
+#~ msgstr "每次付款一个兑换码"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -12827,6 +12844,14 @@ msgstr "开包特效"
 msgid "optional"
 msgstr "选填"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Or pay with Google. Sign in first so it counts toward your account."
+msgstr "也可以用 Google 支付。请先登录，这样才会计入你的账号。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Or pay with Google. Your supporter time starts right away."
+msgstr "也可以用 Google 支付，支持者时长立即生效。"
+
 #: src/routes/recommendations.tsx
 msgid "or pick someone else"
 msgstr "或选择其他玩家"
@@ -12846,6 +12871,10 @@ msgstr ""
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Order"
 msgstr "排序"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Order number from the receipt"
+msgstr "收据上的订单号"
 
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
@@ -13128,6 +13157,10 @@ msgstr "第 1 页"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Page number, 1 to {totalPages}"
 msgstr "页码，1 到 {totalPages}"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Paid with Google already?"
+msgstr "已经用 Google 付款了？"
 
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
@@ -17924,6 +17957,14 @@ msgstr ""
 msgid "Thank you for supporting, {username}"
 msgstr "感谢你的支持，{username}"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Thank you! Sign in and paste the order number from Google's receipt email below to get your supporter time."
+msgstr "谢谢！请登录，并在下方粘贴 Google 收据邮件中的订单号来获得支持者时长。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Thank you! Your supporter time is on."
+msgstr "谢谢！你的支持者时长已生效。"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
 msgstr "这个地址无法加载。"
@@ -21357,8 +21398,12 @@ msgid "Your dynamic renders were turned off."
 msgstr "你的动态渲染图已被关闭。"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "Your gift week was claimed. Your next support brings a new code."
-msgstr "你赠送的一周已被领取。你下次支持时会得到新的兑换码。"
+msgid "Your gift week was claimed. Every $3 you give brings a new code."
+msgstr "你赠送的一周已被领取。你每支持 $3 就会获得一个新兑换码。"
+
+#: src/components/supporter/GiftCodePanel.tsx
+#~ msgid "Your gift week was claimed. Your next support brings a new code."
+#~ msgstr "你赠送的一周已被领取。你下次支持时会得到新的兑换码。"
 
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx

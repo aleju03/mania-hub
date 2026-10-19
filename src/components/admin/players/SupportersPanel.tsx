@@ -8,6 +8,7 @@ import { SearchInput } from "../../ui/SearchInput";
 import {
   clearAdminSupporterMotif,
   grantAdminSupporterDays,
+  importAdminGoogleExport,
   importAdminKofiCsv,
   linkAdminDonation,
   loadAdminSupporters,
@@ -37,7 +38,14 @@ const METHOD_LABEL: Record<DonationLinkMethod, string> = {
   message_match: "message match",
   manual: "linked by hand",
   unlinked: "unlinked by hand",
+  claim: "claimed by them",
 };
+
+const PROVIDER_LABEL: Record<string, string> = { kofi: "Ko-fi", lava: "lava.top", google: "Google" };
+
+function providerLabel(provider: string): string {
+  return PROVIDER_LABEL[provider] ?? provider;
+}
 
 const CHIP_CLASS =
   "inline-flex items-center gap-1 rounded-full bg-white/[0.07] px-3 py-1 text-[12px] font-medium text-osu-l2 transition hover:bg-white/[0.12] hover:text-white disabled:opacity-50 cursor-pointer disabled:cursor-default";
@@ -117,6 +125,12 @@ export function SupportersPanel() {
     return `Imported ${result.inserted} of ${result.rows} rows, ${result.linked} linked to a player.`;
   });
 
+  const importGoogle = (file: File) => run(async () => {
+    const result = await importAdminGoogleExport({ data: { csv: await file.text() } });
+    return `Read ${result.rows} Google orders: ${result.confirmed} claims confirmed, ${result.added} new, ${result.revoked} claims revoked, ${result.pending} still waiting.`;
+  });
+  const pendingClaims = (view?.donations ?? []).filter((row) => row.claimStatus === "pending").length;
+
   const supporters = view?.supporters ?? [];
   const activeCount = supporters.filter((row) => row.active).length;
   const inbox = useMemo(() => (view?.donations ?? []).filter((row) => row.linkedUserId == null && row.amount > 0), [view]);
@@ -153,7 +167,27 @@ export function SupportersPanel() {
               </div>
               <div className="mt-1 text-[12px] text-osu-f1">need linking</div>
             </div>
+            <div>
+              <div className={`text-[44px] font-semibold leading-none tabular-nums ${pendingClaims > 0 ? "text-osu-yellow" : "text-white/30"}`}>
+                {view ? pendingClaims : "–"}
+              </div>
+              <div className="mt-1 text-[12px] text-osu-f1">Google claims to check</div>
+            </div>
             <label className={`${CHIP_CLASS} ml-auto ${busy ? "pointer-events-none opacity-50" : ""}`}>
+              <Upload size={13} />
+              Import Google export
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void importGoogle(file);
+                }}
+              />
+            </label>
+            <label className={`${CHIP_CLASS} ${busy ? "pointer-events-none opacity-50" : ""}`}>
               <Upload size={13} />
               Import Ko-fi CSV
               <input
@@ -382,9 +416,9 @@ function InboxCard({ row, busy, run }: { row: AdminDonationRow; busy: boolean; r
     >
       <div className="w-[96px] shrink-0 text-[22px] font-semibold tabular-nums text-white">{formatMoney(row.amount, row.currency)}</div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[14px] text-white">{row.donorName ?? (row.provider === "lava" ? "lava.top buyer" : "No name given")}</div>
+        <div className="truncate text-[14px] text-white">{row.donorName ?? (row.provider === "lava" ? "lava.top buyer" : row.provider === "google" ? "Google contributor" : "No name given")}</div>
         <div className="text-[11px] text-osu-f1">
-          {formatShortDate(row.occurredAt)} on {row.provider === "kofi" ? "Ko-fi" : "lava.top"}
+          {formatShortDate(row.occurredAt)} on {providerLabel(row.provider)}
           {row.imported ? ", imported" : ""}
           {row.linkMethod === "unlinked" ? ", unlinked by hand" : ""}
         </div>
@@ -428,9 +462,10 @@ function HistoryRow({ row, busy, run }: { row: AdminDonationRow; busy: boolean; 
           </span>
         </div>
         <div className="truncate text-[11px] text-osu-f1">
-          {formatShortDate(row.occurredAt)} on {row.provider === "kofi" ? "Ko-fi" : "lava.top"}
+          {formatShortDate(row.occurredAt)} on {providerLabel(row.provider)}
           {row.donorName && row.donorName !== row.linkedUsername ? `, as ${row.donorName}` : ""}
           {row.linkMethod ? `, ${METHOD_LABEL[row.linkMethod]}` : ""}
+          {row.claimStatus === "pending" ? ", not in a Google export yet" : row.claimStatus === "revoked" ? ", revoked: not in Google's export" : ""}
           {row.message ? `, "${row.message}"` : ""}
         </div>
       </div>

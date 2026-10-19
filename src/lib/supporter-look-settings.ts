@@ -438,3 +438,33 @@ export const submitSupporterCompanion = createServerFn({ method: "POST" })
     if (!response.ok || !companion) throw new Error(COMPANION_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
     return { companion };
   });
+
+const GOOGLE_CLAIM_ERRORS: Record<string, string> = {
+  invalid_order: "That doesn't look like a Google order number.",
+  claimed_by_someone_else: "Someone else already claimed that order.",
+  revoked: "Google has no order with that number.",
+  too_many_pending: "You have a few Google payments waiting to be checked already; try again once they are.",
+};
+
+/* A Google contribution the viewer says is theirs: its order number, from the
+   checkout or Google's receipt email, and what the checkout said was paid.
+   It counts at once and is checked against Google's export later. */
+export const claimGoogleContribution = createServerFn({ method: "POST" })
+  .validator((data: { orderId?: unknown; amountUsd?: unknown }) => {
+    const orderId = typeof data?.orderId === "string" ? data.orderId.trim() : "";
+    if (!orderId || orderId.length > 64) throw new Error(GOOGLE_CLAIM_ERRORS.invalid_order);
+    const amountUsd = Number(data?.amountUsd);
+    return { orderId, amountUsd: Number.isFinite(amountUsd) && amountUsd > 0 ? amountUsd : null };
+  })
+  .handler(async ({ data }): Promise<{ expiresAt: number | null }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/google-claim`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, username: viewer.username, orderId: data.orderId, amountUsd: data.amountUsd }),
+    });
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; expiresAt?: unknown } | null;
+    if (!response.ok || body?.ok !== true) throw new Error(GOOGLE_CLAIM_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
+    return { expiresAt: typeof body.expiresAt === "number" ? body.expiresAt : null };
+  });
