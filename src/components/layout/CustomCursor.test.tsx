@@ -27,10 +27,10 @@ function drawFrame(time: number) {
   act(() => pending.forEach((callback) => callback(time)));
 }
 
-function movePointer() {
-  const event = new MouseEvent("pointermove", { clientX: 120, clientY: 80 });
+function movePointer(clientX = 120, clientY = 80, target: Window | Element = window) {
+  const event = new MouseEvent("pointermove", { clientX, clientY, bubbles: true });
   Object.defineProperty(event, "pointerType", { value: "mouse" });
-  fireEvent(window, event);
+  fireEvent(target, event);
 }
 
 beforeEach(() => {
@@ -100,6 +100,38 @@ it("keeps even the largest pressed cursor within native image limits and updates
   act(() => writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, color: "#66baff" }));
   expect(cursor()).not.toBe(previous);
   expect(encodedSizes.every((size) => size <= 128)).toBe(true);
+});
+
+it("draws the orb itself where the browser would drop the native image at the page edge", () => {
+  render(<CustomCursor />);
+  const native = cursor();
+  movePointer(window.innerWidth - 4, 300);
+  expect(cursor()).toBe("none");
+  drawFrame(16);
+  expect(context.drawImage).toHaveBeenCalledOnce();
+
+  movePointer(300, 300);
+  expect(cursor()).toBe(native);
+  context.drawImage.mockClear();
+  drawFrame(32);
+  expect(context.drawImage).not.toHaveBeenCalled();
+});
+
+it("draws the orb itself over CSS-zoomed content, which would rescale the native image", () => {
+  render(<CustomCursor />);
+  const zoomedNode = document.createElement("div");
+  Object.defineProperty(zoomedNode, "currentCSSZoom", { value: 0.7 });
+  document.body.appendChild(zoomedNode);
+  movePointer(300, 300, zoomedNode);
+  expect(cursor()).toBe("none");
+  drawFrame(16);
+  expect(context.drawImage).toHaveBeenCalledOnce();
+
+  context.drawImage.mockClear();
+  fireEvent.mouseLeave(root);
+  drawFrame(32);
+  expect(context.drawImage).not.toHaveBeenCalled();
+  zoomedNode.remove();
 });
 
 it("keeps the trail animated, then stops rendering once it has faded", () => {

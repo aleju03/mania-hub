@@ -12,6 +12,10 @@ const TRAIL_LIFETIME_MS = 240;
 const TRAIL_MIN_DISTANCE = 4;
 const SMOKE_MIN_DISTANCE = 3;
 const SMOKE_MAX_POINTS = 4000;
+/* Chromium and Firefox drop a cursor image larger than this whose box crosses
+   the edge of the page (it could pass for browser UI) and show the fallback
+   arrow instead. */
+const NATIVE_CURSOR_EDGE_LIMIT = 32;
 
 interface TrailPoint {
   x: number;
@@ -47,15 +51,30 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']") != null;
 }
 
+interface NativeCursor {
+  css: string;
+  image: HTMLCanvasElement | null;
+  size: number;
+}
+
+/* Firefox scales a cursor image by the CSS zoom of the element under it, which
+   shrinks the orb over the BBCode editor's fitted column. */
+function hasCssZoom(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const zoom = (target as Element & { currentCSSZoom?: number }).currentCSSZoom;
+  return zoom != null && Math.abs(zoom - 1) > 0.001;
+}
+
 function cursorRadius(settings: CursorSettings): number {
   return 15 * (settings.size / 100);
 }
 
 /* Let the browser move the orb as a native cursor, independently of page
-   rendering. Only the decorative trail/smoke should wait for animation frames.
+   rendering. Only the decorative trail/smoke, and the orb where the native
+   image would be dropped or rescaled, wait for animation frames.
    Keep PNGs within Chromium/Firefox's 128px limit, including the pressed orb;
    constrain the outer glow at extreme settings without shrinking the core. */
-function buildNativeCursor(settings: CursorSettings, pressScale = 1): string {
+function buildNativeCursor(settings: CursorSettings, pressScale = 1): NativeCursor {
   const radius = cursorRadius(settings) * pressScale;
   const glowRadius = Math.min(62, radius * (1 + 1.8 * (settings.glow / 100)));
   const size = Math.ceil((glowRadius * 2 + 4) / 2) * 2;
@@ -63,7 +82,7 @@ function buildNativeCursor(settings: CursorSettings, pressScale = 1): string {
   canvas.width = size;
   canvas.height = size;
   const context = canvas.getContext("2d");
-  if (!context) return "auto";
+  if (!context) return { css: "auto", image: null, size: 0 };
   const c = size / 2;
   const color = settings.color;
 
@@ -96,7 +115,7 @@ function buildNativeCursor(settings: CursorSettings, pressScale = 1): string {
   context.arc(c, c, radius * 0.34, 0, Math.PI * 2);
   context.fill();
 
-  return `url("${canvas.toDataURL("image/png")}") ${c} ${c}, auto`;
+  return { css: `url("${canvas.toDataURL("image/png")}") ${c} ${c}, auto`, image: canvas, size };
 }
 
 function buildTrailSprite(settings: CursorSettings, scale: number): { canvas: HTMLCanvasElement; size: number } {
@@ -147,7 +166,7 @@ function CursorOverlay() {
     if (!canvas) return;
 
     let settings: CursorSettings = readCursorSettings();
-    const pointer = { x: -100, y: -100, pressed: false };
+    const pointer = { x: -100, y: -100, pressed: false, inside: false };
     let pressScale = 1;
     let smoking = false;
     let smokeStartsStroke = true;
@@ -166,8 +185,30 @@ function CursorOverlay() {
     const root = document.documentElement;
     let normalCursor = buildNativeCursor(settings);
     let pressedCursor = buildNativeCursor(settings, 1.25);
+    // Where the browser would drop or rescale the native image, hide it and
+    // draw the orb on the canvas instead.
+    let drawnOrb = false;
+    let appliedCursor = "";
+    let zoomTarget: EventTarget | null = null;
+    let zoomed = false;
     const updateNativeCursor = () => {
-      root.style.setProperty("--custom-cursor", pointer.pressed ? pressedCursor : normalCursor);
+      const next = drawnOrb ? "none" : (pointer.pressed ? pressedCursor : normalCursor).css;
+      if (next === appliedCursor) return;
+      appliedCursor = next;
+      root.style.setProperty("--custom-cursor", next);
+    };
+    const needsDrawnOrb = (target: EventTarget | null) => {
+      if (target !== zoomTarget) {
+        zoomTarget = target;
+        zoomed = hasCssZoom(target);
+      }
+      if (zoomed) return true;
+      const size = Math.max(normalCursor.size, pressedCursor.size);
+      if (size <= NATIVE_CURSOR_EDGE_LIMIT) return false;
+      const half = size / 2 + 1;
+      const width = root.clientWidth || window.innerWidth;
+      const height = root.clientHeight || window.innerHeight;
+      return pointer.x < half || pointer.y < half || pointer.x > width - half || pointer.y > height - half;
     };
     updateNativeCursor();
     root.dataset.customCursor = "true";
@@ -228,6 +269,11 @@ function CursorOverlay() {
         context.globalAlpha = 1;
       }
 
+      if (drawnOrb && pointer.inside && normalCursor.image) {
+        const size = normalCursor.size * pressScale;
+        context.drawImage(normalCursor.image, pointer.x - size / 2, pointer.y - size / 2, size, size);
+      }
+
       const targetScale = pointer.pressed ? 1.25 : 1;
       pressScale += (targetScale - pressScale) * Math.min(1, dt * 18);
 
@@ -253,6 +299,12 @@ function CursorOverlay() {
       const now = performance.now();
       pointer.x = event.clientX;
       pointer.y = event.clientY;
+      pointer.inside = true;
+      const drawn = needsDrawnOrb(event.target);
+      if (drawn !== drawnOrb) {
+        drawnOrb = drawn;
+        updateNativeCursor();
+      }
 
       if (settings.trail) {
         const last = trail[trail.length - 1];
@@ -314,6 +366,16 @@ function CursorOverlay() {
 
     const handleMouseLeave = () => {
       smokeStartsStroke = true;
+      pointer.inside = false;
+      ensureRunning();
+    };
+
+    // Moves inside an iframe never reach this page, so a drawn orb would
+    // freeze at its edge.
+    const handlePointerOver = (event: PointerEvent) => {
+      if (!(event.target instanceof HTMLIFrameElement)) return;
+      pointer.inside = false;
+      ensureRunning();
     };
 
     const handleVisibilityChange = () => {
@@ -341,6 +403,7 @@ function CursorOverlay() {
 
     window.addEventListener("resize", resize, { passive: true });
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointerover", handlePointerOver, { passive: true });
     window.addEventListener("pointerdown", handlePointerDown, { passive: true });
     window.addEventListener("pointerup", handlePointerUp, { passive: true });
     window.addEventListener("pointercancel", handlePointerUp, { passive: true });
@@ -358,6 +421,7 @@ function CursorOverlay() {
       unsubscribeSettings();
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerover", handlePointerOver);
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
