@@ -1,5 +1,6 @@
 import { isSupporterCardSleeve, NO_PACK_STYLE, parsePackStyle, type SupporterCardSleeveId, type SupporterPackStyle } from "./supporter-pack-style";
 import { parseProfileStats, parseProfileStatsData, type ProfileStatId, type ProfileStatsData } from "./profile-stats";
+import { parseProfilePlays, type ProfilePlays } from "./profile-plays";
 import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
@@ -4516,10 +4517,12 @@ export interface SupporterProfileLook {
   /* The supporter's four insight cards, null for the usual four. */
   profileStats: ProfileStatId[] | null;
   profileStatsData: ProfileStatsData;
+  /* Plays they put in place of the newest and oldest top play, null for those two. */
+  profilePlays: ProfilePlays | null;
   /* Their sleeve, binder and reveal confetti in packs. */
   packStyle: SupporterPackStyle;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, packStyle: NO_PACK_STYLE };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4544,7 +4547,7 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
   if (cached) return cached.value;
   const entry: SupporterLookCacheEntry = { at: Date.now(), value: Promise.resolve(NO_SUPPORTER_LOOK) };
   const reload = supporterLooksToReload.delete(id);
-  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; profileStats?: unknown; profileStatsData?: unknown; packStyle?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
+  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; profileStats?: unknown; profileStatsData?: unknown; profilePlays?: unknown; packStyle?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
     .then((body) => {
       const value = {
         look: parseSupporterLook(body?.look ?? null),
@@ -4555,6 +4558,7 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
         profileThemeOptions: parseProfileThemeOptions(body?.profileThemeOptions),
         profileStats: parseProfileStats(body?.profileStats),
         profileStatsData: parseProfileStatsData(body?.profileStatsData),
+        profilePlays: parseProfilePlays(body?.profilePlays),
         packStyle: parsePackStyle(body?.packStyle),
       };
       entry.settled = value;
@@ -4611,9 +4615,9 @@ export function peekLiveSupporterPackStyle(userId: number): SupporterPackStyle |
   return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.packStyle;
 }
 
-export function peekLiveSupporterProfileStats(userId: number): { stats: ProfileStatId[] | null; data: ProfileStatsData } | undefined {
+export function peekLiveSupporterProfileStats(userId: number): { stats: ProfileStatId[] | null; data: ProfileStatsData; plays: ProfilePlays | null } | undefined {
   const settled = freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled;
-  return settled ? { stats: settled.profileStats, data: settled.profileStatsData } : undefined;
+  return settled ? { stats: settled.profileStats, data: settled.profileStatsData, plays: settled.profilePlays } : undefined;
 }
 
 /* Every active supporter's name tag style and name font, for names in lists. One

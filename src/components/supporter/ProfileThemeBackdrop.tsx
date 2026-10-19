@@ -65,8 +65,12 @@ export function ProfileThemeSwatch({ theme, still = false, className }: { theme:
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(canvas.clientWidth * ratio);
-    canvas.height = Math.round(canvas.clientHeight * ratio);
+    // Setting a canvas's size wipes it even to the same size, which flashed the
+    // placeholder behind it every time a swatch went live on hover.
+    const width = Math.round(canvas.clientWidth * ratio);
+    const height = Math.round(canvas.clientHeight * ratio);
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
     let cleanup: (() => void) | undefined;
     let cancelled = false;
     void import("../../lib/profile-theme-gl").then(({ mountThemeSwatch }) => {

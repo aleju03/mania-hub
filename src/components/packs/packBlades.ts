@@ -27,6 +27,12 @@ export interface PackBox {
 }
 
 export interface BladeLook {
+  /* How the WebGL renderer (bladeGl.ts) shades the streak: a plain bright
+     blade, two-tone tube light, fire licking off it, or a bolt (with
+     `jitter`). The strokes give its colours and widths either way. */
+  style?: "neon" | "fire";
+  /* How far its light spreads (bloom), 1 for the standard blade. */
+  bloom?: number;
   /* Drawn under to over: the widest glow first, the bright core last. */
   strokes: readonly Stroke[];
   /* Pixels a bolt's joints are knocked sideways, fresh every frame: lightning. */
@@ -89,6 +95,7 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
   /* Steel: a razor line, white-hot streaks off the foil, and one clean
      crescent through the pack with a glint at its end. */
   katana: {
+    bloom: 0.9,
     strokes: [
       { rgb: [170, 205, 255], alpha: 0.25, width: [2, 9] },
       { rgb: [255, 255, 255], alpha: 1, width: [0.6, 3.6] },
@@ -117,9 +124,13 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
     shake: 4,
     sound: { cut: `${SOUNDS}katana-cut.mp3`, rip: `${SOUNDS}katana-rip.mp3` },
   },
-  /* Sign tubes: pink in a cyan haze, light left hanging in the air, and two
-     rings that blow out from the cut. */
+  /* Sign tubes: pink in a cyan haze and light left hanging in the air. When
+     the pack gives, the cut is a tube of its own that shorts: it stutters
+     on the way a sign does, crackles along its length, and breaks, its glass
+     falling away still lit. */
   neon: {
+    style: "neon",
+    bloom: 1.25,
     strokes: [
       { rgb: [40, 225, 255], alpha: 0.32, width: [6, 22] },
       { rgb: [255, 64, 200], alpha: 0.62, width: [3, 11] },
@@ -127,7 +138,7 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
     ],
     life: 260,
     tip: { glow: "rgba(255, 64, 200, 0.5)", core: "rgba(255, 236, 250, 1)", radius: 5 },
-    sprites: ["circle-05", "flare-01", "circle-02", "magic-05", "star-07"],
+    sprites: ["circle-05", "flare-01", "trace-07", "spark-07"],
     trailEvery: 22,
     trail: (fx, x, y, _dx, _dy, scale) => {
       fx.emit({ sprite: "circle-05", color: pick(["#ff4fd8", "#3ef0ff"]), x: x + rand(-6, 6) * scale, y: y + rand(-6, 6) * scale, vy: rand(-30, 30) * scale, vx: rand(-30, 30) * scale, size: rand(7, 12) * scale, endSize: 2 * scale, life: rand(0.5, 0.8), flicker: Math.random() < 0.3 });
@@ -136,17 +147,49 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
       spray(fx, x, y, scale, 3, { sprite: "flare-01", colors: ["#ff4fd8", "#3ef0ff"], speed: [160, 360], size: [30, 46], life: [0.35, 0.55], drag: 3, gravity: 60 });
     },
     rip: (fx, box, y, scale) => {
-      const cx = box.left + box.width / 2;
-      fx.emit({ sprite: "circle-02", color: "#ff4fd8", x: cx, y, size: 40 * scale, endSize: box.width * 2.6, life: 0.55, alpha: 1 });
-      fx.emit({ sprite: "circle-02", color: "#3ef0ff", x: cx, y, size: 30 * scale, endSize: box.width * 2.1, life: 0.6, alpha: 0.9, delay: 0.08 });
-      fx.emit({ sprite: "magic-05", color: "#ff7ae6", x: cx, y, size: box.width * 1.4, endSize: box.width * 0.6, life: 0.4, alpha: 0.9 });
-      fx.emit({ sprite: "star-07", color: "#ffffff", x: cx, y, size: box.width * 0.9, endSize: box.width * 0.2, life: 0.3, spin: 3 });
-      for (let i = 0; i < 26; i += 1) {
-        const angle = (i / 26) * Math.PI * 2 + rand(-0.1, 0.1);
-        const speed = rand(380, 820) * scale;
-        fx.emit({ sprite: "circle-05", color: i % 2 ? "#ff4fd8" : "#3ef0ff", x: cx, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed * 0.7, drag: 3.2, size: rand(10, 16) * scale, endSize: 3 * scale, life: rand(0.5, 0.8), flicker: Math.random() < 0.4 });
+      // The tube is a row of short lit lengths, each trace-07 (a soft upright
+      // bar) turned on its side and overlapping the next, so it reads as one
+      // tube and can break into its own pieces.
+      const pieces = 16;
+      const span = box.width * 1.15;
+      const left = box.left + (box.width - span) / 2;
+      const step = span / pieces;
+      const lit = (x: number, delay: number, life: number, flicker: boolean) => {
+        fx.emit({ sprite: "trace-07", color: "#36e8ff", x, y, size: step * 3.4, aspect: (120 * scale) / (step * 3.4), rotation: Math.PI / 2, life, alpha: 0.1, flicker, delay });
+        fx.emit({ sprite: "trace-07", color: "#ff3fc8", x, y, size: step * 3.2, aspect: (44 * scale) / (step * 3.2), rotation: Math.PI / 2, life, alpha: 0.5, flicker, delay });
+      };
+      for (let i = 0; i < pieces; i += 1) {
+        const x = left + step * (i + 0.5);
+        // on, off, on, off, then it holds until it breaks
+        lit(x, 0, 0.05, false);
+        lit(x, 0.1, 0.04, true);
+        lit(x, 0.19, 0.36, Math.random() < 0.25);
+        // and breaks: each length falls and turns, still lit
+        fx.emit({
+          sprite: "trace-07",
+          color: pick(["#ff3fc8", "#ff3fc8", "#ff7be0", "#36e8ff"]),
+          x: x + rand(-3, 3) * scale,
+          y,
+          vx: ((x - box.left) / box.width - 0.5) * rand(160, 420) * scale,
+          vy: rand(-220, -60) * scale,
+          gravity: 1500 * scale,
+          drag: 0.4,
+          size: step * rand(1.4, 2.2),
+          endSize: step * 1.1,
+          aspect: (34 * scale) / step,
+          rotation: Math.PI / 2 + rand(-0.2, 0.2),
+          spin: rand(-12, 12),
+          life: rand(0.55, 0.8),
+          alpha: 0.85,
+          flicker: Math.random() < 0.3,
+          delay: 0.52 + rand(0, 0.05),
+        });
       }
-      fx.flash("#ff4fd8", 0.12, 0.18);
+      // it crackles along its length while it holds
+      for (let i = 0; i < 6; i += 1) {
+        fx.emit({ sprite: "spark-07", color: pick(["#ffb8ef", "#a8f6ff"]), x: box.left + rand(0.05, 0.95) * box.width, y: y + rand(-3, 3) * scale, size: rand(22, 34) * scale, aspect: rand(2.2, 3.4), rotation: rand(-0.15, 0.15), life: rand(0.06, 0.12), alpha: 0.7, flicker: true, delay: 0.19 + rand(0, 0.3) });
+      }
+      fx.flash("#ff3fc8", 0.05, 0.08);
     },
     shake: 3,
     sound: { cut: `${SOUNDS}neon-cut.mp3`, rip: `${SOUNDS}neon-rip.mp3` },
@@ -156,6 +199,8 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
      from white-yellow through orange to a dim red as it rises and sways,
      added together until they read as one body of flame. */
   ember: {
+    style: "fire",
+    bloom: 1.1,
     strokes: [
       { rgb: [255, 70, 20], alpha: 0.42, width: [4, 18] },
       { rgb: [255, 150, 40], alpha: 0.6, width: [2, 9] },
@@ -164,26 +209,24 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
     life: 300,
     tip: { glow: "rgba(255, 110, 30, 0.5)", core: "rgba(255, 240, 190, 1)", radius: 5 },
     sprites: ["circle-05", "fire-01", "smoke-04"],
-    trailEvery: 7,
+    trailEvery: 5,
     trail: (fx, x, y, _dx, _dy, scale) => {
-      for (let i = 0; i < 2; i += 1) {
-        fx.emit({ sprite: "circle-05", color: FIRE[0], ramp: FIRE, x: x + rand(-4, 4) * scale, y: y + rand(-3, 3) * scale, vx: rand(-15, 15) * scale, vy: rand(-90, -40) * scale, gravity: -70 * scale, wobble: 30 * scale, size: rand(14, 24) * scale, endSize: rand(26, 40) * scale, life: rand(0.35, 0.6), alpha: 0.42 });
-      }
+      // Born already orange and a little above the blade: the streak itself
+      // is the hot part, these are the flames it throws up.
+      fx.emit({ sprite: "fire-01", color: FIRE[2], ramp: FIRE.slice(2), x: x + rand(-8, 8) * scale, y: y - rand(4, 12) * scale, vx: rand(-15, 15) * scale, vy: rand(-110, -50) * scale, gravity: -80 * scale, wobble: 30 * scale, size: rand(22, 40) * scale, endSize: rand(46, 76) * scale, life: rand(0.3, 0.55), alpha: 0.12, fadeIn: 0.06, rotation: rand(0, 6.28), spin: rand(-2, 2) });
     },
     cut: (fx, x, y, scale) => {
       spray(fx, x, y, scale, 4, { sprite: "circle-05", colors: ["#ffd76b", "#ff9a2e", "#ff5a1f"], speed: [60, 200], size: [5, 10], life: [0.7, 1.2], spread: 1.6, gravity: -90, drag: 1.2, flicker: true });
     },
     rip: (fx, box, y, scale) => {
       const cx = box.left + box.width / 2;
-      // a glow the width of the cut, under everything
-      fx.emit({ sprite: "circle-05", color: "#ff7a1f", x: cx, y: y - 10 * scale, size: box.width * 1.1, endSize: box.width * 1.4, aspect: 1.6, life: 0.9, alpha: 0.32, fadeIn: 0.08 });
       // the body of the fire: puffs released along the cut over half a
       // second, outward from the middle, so it catches and spreads
       for (let i = 0; i < 230; i += 1) {
         const u = rand(0, 1);
         const delay = Math.abs(u - 0.5) * 0.28 + rand(0, 0.45);
         fx.emit({
-          sprite: Math.random() < 0.35 ? "fire-01" : "circle-05",
+          sprite: Math.random() < 0.7 ? "fire-01" : "circle-05",
           color: FIRE[0],
           ramp: FIRE,
           x: box.left + u * box.width,
@@ -193,10 +236,10 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
           gravity: -110 * scale,
           drag: 0.6,
           wobble: rand(20, 55) * scale,
-          size: rand(16, 30) * scale,
-          endSize: rand(34, 56) * scale,
+          size: rand(28, 46) * scale,
+          endSize: rand(60, 90) * scale,
           life: rand(0.45, 0.8),
-          alpha: 0.36,
+          alpha: 0.14,
           rotation: rand(0, 6.28),
           spin: rand(-2, 2),
           fadeIn: 0.05,
@@ -207,8 +250,8 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
       for (let i = 0; i < 5; i += 1) {
         fx.emit({ sprite: "smoke-04", color: "#2a1d18", x: cx + rand(-0.4, 0.4) * box.width, y: y - 80 * scale, vy: rand(-60, -30) * scale, vx: rand(-15, 15) * scale, size: box.width * 0.3, endSize: box.width * 0.7, life: rand(1.1, 1.5), alpha: 0.18, fadeIn: 0.4, normal: true, spin: rand(-0.4, 0.4), delay: 0.3 + rand(0, 0.2) });
       }
-      for (let i = 0; i < 40; i += 1) {
-        fx.emit({ sprite: "circle-05", color: pick(["#ffe08a", "#ffb347", "#ff7a1f"]), x: box.left + rand(0, 1) * box.width, y, vx: rand(-110, 110) * scale, vy: rand(-360, -140) * scale, gravity: -30 * scale, drag: 1.3, wobble: 40 * scale, size: rand(4, 8) * scale, endSize: 1.5 * scale, life: rand(0.9, 1.6), flicker: true, delay: rand(0.05, 0.5) });
+      for (let i = 0; i < 24; i += 1) {
+        fx.emit({ sprite: "circle-05", color: pick(["#ffe08a", "#ffb347", "#ff7a1f"]), x: box.left + rand(0, 1) * box.width, y, vx: rand(-110, 110) * scale, vy: rand(-360, -140) * scale, gravity: -30 * scale, drag: 1.3, wobble: 40 * scale, size: rand(3, 6) * scale, endSize: 1 * scale, life: rand(0.9, 1.6), alpha: 0.8, flicker: true, delay: rand(0.05, 0.5) });
       }
       fx.flash("#ff7a2a", 0.1, 0.35);
     },
@@ -218,6 +261,7 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
   /* A storm: the stroke is a bolt that crackles, and when the pack gives,
      lightning comes down on the cut. */
   lightning: {
+    bloom: 1.4,
     strokes: [
       { rgb: [90, 150, 255], alpha: 0.2, width: [12, 24] },
       { rgb: [110, 180, 255], alpha: 0.5, width: [5, 9] },
@@ -313,7 +357,7 @@ function fillRibbon(
 
 /* A bolt along the stroke: a few straight legs between kinked joints, and a
    fork or two off it, all re-thrown every frame so it crackles. */
-function bolt(path: readonly Point[], kick: number): { main: Point[]; forks: Point[][] } {
+export function bolt(path: readonly Point[], kick: number): { main: Point[]; forks: Point[][] } {
   const main: Point[] = [path[0]];
   let travelled = 0;
   for (let i = 1; i < path.length; i += 1) {

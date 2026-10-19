@@ -9,6 +9,7 @@ import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOpt
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import { NO_PACK_STYLE, parsePackStyle, SUPPORTER_BINDERS, SUPPORTER_BLADES, SUPPORTER_CARD_SLEEVES, SUPPORTER_WRAPPERS, type SupporterPackStyle } from "./supporter-pack-style";
 import { isProfileStatId, parseProfileStats, PROFILE_STAT_SLOTS, type ProfileStatId } from "./profile-stats";
+import { isProfilePlayMetric, parseProfilePlayChoice, parseProfilePlays, parseProfilePlaySnapshot, PROFILE_PLAY_SORTS, type ProfilePlayChoice, type ProfilePlayPick, type ProfilePlays, type ProfilePlaySnapshot, type ProfilePlaySort } from "./profile-plays";
 
 // Server functions behind the /supporter page: the viewer's supporter status
 // and the look their card wears. The viewer always comes from the osu! login
@@ -227,6 +228,69 @@ export const saveSupporterProfileStatsSetting = createServerFn({ method: "POST" 
     if (response.status === 403) throw new Error("Your supporter time has run out.");
     if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
     return { profileStats: parseProfileStats(body?.profileStats) };
+  });
+
+/* Sets the two plays under the viewer's profile stats, each a play the site
+   tracked of them under their own title, or null for the usual top play.
+   Answers with what was stored. */
+export const saveSupporterProfilePlaysSetting = createServerFn({ method: "POST" })
+  .validator((data: { profilePlays?: unknown }) => {
+    const slots = data?.profilePlays ?? null;
+    if (slots !== null && !(Array.isArray(slots) && slots.length === 2)) throw new Error("Two slots.");
+    const picks = slots === null ? null : (slots as unknown[]).map((slot): ProfilePlayPick | null => {
+      if (slot == null) return null;
+      const raw = slot as Record<string, unknown>;
+      if (typeof raw.title !== "string" || typeof raw.day !== "string" || !isProfilePlayMetric(raw.show)) throw new Error("Pick a play.");
+      return { title: raw.title, beatmapId: Number(raw.beatmapId), day: raw.day, show: raw.show };
+    });
+    return { profilePlays: picks };
+  })
+  .handler(async ({ data }): Promise<{ profilePlays: ProfilePlays | null }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/profile-plays`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, profilePlays: data.profilePlays }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown; profilePlays?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return { profilePlays: parseProfilePlays(body?.profilePlays) };
+  });
+
+/* One page of the viewer's tracked plays for the picker. */
+export const fetchProfilePlayChoices = createServerFn({ method: "GET" })
+  .validator((data: { query?: unknown; sort?: unknown; offset?: unknown }) => ({
+    query: typeof data?.query === "string" ? data.query.slice(0, 80) : "",
+    sort: (PROFILE_PLAY_SORTS as readonly unknown[]).includes(data?.sort) ? data.sort as ProfilePlaySort : "pp",
+    offset: Math.max(0, Math.floor(Number(data?.offset) || 0)),
+  }))
+  .handler(async ({ data }): Promise<{ plays: ProfilePlayChoice[]; more: boolean }> => {
+    const viewer = await requireViewer();
+    if (!viewer) return { plays: [], more: false };
+    const params = new URLSearchParams({ userId: String(viewer.userId), q: data.query, sort: data.sort, offset: String(data.offset) });
+    const response = await fetch(`${viewer.base}/api/supporters/self/profile-plays/choices?${params}`, { headers: bridgeAuthHeaders() });
+    if (!response.ok) throw new Error(`Server ${response.status}`);
+    const body = await response.json().catch(() => null) as { plays?: unknown; more?: unknown } | null;
+    const plays = Array.isArray(body?.plays) ? body.plays.map(parseProfilePlayChoice).filter((play): play is ProfilePlayChoice => play !== null) : [];
+    return { plays, more: body?.more === true };
+  });
+
+/* One play as it would be saved: its MSD and dan at the rate it was set at. */
+export const fetchProfilePlayPreview = createServerFn({ method: "GET" })
+  .validator((data: { beatmapId?: unknown; day?: unknown }) => ({
+    beatmapId: Math.floor(Number(data?.beatmapId) || 0),
+    day: typeof data?.day === "string" ? data.day : "",
+  }))
+  .handler(async ({ data }): Promise<ProfilePlaySnapshot | null> => {
+    const viewer = await requireViewer();
+    if (!viewer) return null;
+    const params = new URLSearchParams({ userId: String(viewer.userId), beatmapId: String(data.beatmapId), day: data.day });
+    const response = await fetch(`${viewer.base}/api/supporters/self/profile-plays/preview?${params}`, { headers: bridgeAuthHeaders() });
+    if (!response.ok) return null;
+    const body = await response.json().catch(() => null) as { play?: unknown } | null;
+    return parseProfilePlaySnapshot(body?.play);
   });
 
 export interface SupporterWelcomeState {

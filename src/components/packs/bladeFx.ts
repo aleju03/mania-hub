@@ -18,9 +18,19 @@ export function preloadSprites(ids: readonly SpriteId[]): void {
     if (images.has(id)) continue;
     const image = new Image();
     image.decoding = "async";
-    image.src = `${SPRITE_ROOT}${id}.png`;
+    image.src = spriteUrl(id);
     images.set(id, image);
   }
+}
+
+/* The sprite's image once it has loaded, for renderers that upload it. */
+export function spriteImage(id: SpriteId): HTMLImageElement | null {
+  const image = images.get(id);
+  if (!image) {
+    preloadSprites([id]);
+    return null;
+  }
+  return image.complete && image.naturalWidth ? image : null;
 }
 
 /* The sprite in one colour, made once and kept. Null until the image is in. */
@@ -96,6 +106,31 @@ export interface Flash {
   flicker: boolean;
 }
 
+/* One particle as it is drawn this frame: a sprite in one colour, centred
+   at x, y, w by h, turned by angle. `heat` runs 1 to 0 over a ramped
+   (fire) particle's life, for renderers that make hot light brighter. */
+export interface FxItem {
+  sprite: SpriteId;
+  color: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  angle: number;
+  alpha: number;
+  additive: boolean;
+  heat: number;
+}
+
+export interface FxFlash {
+  color: string;
+  alpha: number;
+}
+
+export function spriteUrl(id: SpriteId): string {
+  return `${SPRITE_ROOT}${id}.png`;
+}
+
 export class BladeFx {
   private particles: Particle[] = [];
   private flashes: Flash[] = [];
@@ -140,22 +175,22 @@ export class BladeFx {
     this.flashes = [];
   }
 
-  /* Steps and draws everything onto ctx (already transformed to CSS px). */
-  draw(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  /* Moves everything on to now and lays out what each particle and flash
+     looks like this frame, for whichever renderer draws it. */
+  frame(): { items: FxItem[]; flashes: FxFlash[] } {
     const now = this.clock();
     const dt = Math.min(0.05, Math.max(0, (now - (this.last || now)) / 1000));
     this.last = now;
 
+    const flashes: FxFlash[] = [];
     for (const flash of this.flashes) {
       const k = (now - flash.born) / 1000 / flash.life;
-      if (k >= 1) continue;
-      ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = flash.alpha * (1 - k) * (flash.flicker ? 0.4 + Math.random() * 0.6 : 1);
-      ctx.fillStyle = flash.color;
-      ctx.fillRect(0, 0, width, height);
+      if (k < 0 || k >= 1) continue;
+      flashes.push({ color: flash.color, alpha: flash.alpha * (1 - k) * (flash.flicker ? 0.4 + Math.random() * 0.6 : 1) });
     }
     this.flashes = this.flashes.filter((flash) => now - flash.born < flash.life * 1000);
 
+    const items: FxItem[] = [];
     const keep: Particle[] = [];
     for (const p of this.particles) {
       const age = (now - p.born) / 1000;
@@ -173,8 +208,6 @@ export class BladeFx {
       p.rotation += p.spin * dt;
       const k = age / p.life;
       const color = p.ramp.length ? p.ramp[Math.min(p.ramp.length - 1, Math.floor(k * p.ramp.length))] : p.color;
-      const sprite = tintedSprite(p.sprite, color);
-      if (!sprite) continue;
       const fade = p.fadeIn > 0 && age < p.fadeIn ? age / p.fadeIn : 1 - k * k;
       const alpha = p.alpha * fade * (p.flicker ? 0.35 + Math.random() * 0.65 : 1);
       if (alpha <= 0.01) continue;
@@ -189,15 +222,32 @@ export class BladeFx {
         w = size * (1 + (speed / 300) * p.stretch);
         h = size * 0.35;
       }
-      ctx.globalCompositeOperation = p.normal ? "source-over" : "lighter";
-      ctx.globalAlpha = Math.min(1, alpha);
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      if (angle) ctx.rotate(angle);
-      ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
-      ctx.restore();
+      items.push({ sprite: p.sprite, color, x: p.x, y: p.y, w, h, angle, alpha: Math.min(1, alpha), additive: !p.normal, heat: p.ramp.length ? 1 - k : 0 });
     }
     this.particles = keep;
+    return { items, flashes };
+  }
+
+  /* Steps and draws everything onto a 2D ctx (already transformed to CSS px). */
+  draw(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const { items, flashes } = this.frame();
+    for (const flash of flashes) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = flash.alpha;
+      ctx.fillStyle = flash.color;
+      ctx.fillRect(0, 0, width, height);
+    }
+    for (const item of items) {
+      const sprite = tintedSprite(item.sprite, item.color);
+      if (!sprite) continue;
+      ctx.globalCompositeOperation = item.additive ? "lighter" : "source-over";
+      ctx.globalAlpha = item.alpha;
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      if (item.angle) ctx.rotate(item.angle);
+      ctx.drawImage(sprite, -item.w / 2, -item.h / 2, item.w, item.h);
+      ctx.restore();
+    }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
   }

@@ -541,6 +541,11 @@ msgstr "{0} going now"
 #~ msgid "{0} holds their own card"
 #~ msgstr "{0} holds their own card"
 
+#. placeholder {0}: length.value
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0} hours"
+msgstr "{0} hours"
+
 #. placeholder {0}: row.name
 #: src/routes/communities_.$id.tsx
 msgid "{0} icon"
@@ -604,6 +609,11 @@ msgstr "{0} maps · rotated {1}"
 #: src/routes/maps.tsx
 msgid "{0} maps · updated {1}"
 msgstr "{0} maps · updated {1}"
+
+#. placeholder {0}: length.value
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0} min"
+msgstr "{0} min"
 
 #. placeholder {0}: missingCount.toLocaleString("en-US")
 #: src/components/packs/CollectionPanel.tsx
@@ -804,6 +814,11 @@ msgstr "{0} plays"
 #: src/components/player/ActivityPanel.tsx
 msgid "{0} plays in {selectedYear}"
 msgstr "{0} plays in {selectedYear}"
+
+#. placeholder {0}: formatNumber(session.plays)
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0} plays in one sitting"
+msgstr "{0} plays in one sitting"
 
 #. placeholder {0}: compact(judgement.plays)
 #. placeholder {1}: formatMonth(judgement.since)
@@ -2267,6 +2282,10 @@ msgstr "1 person has your card"
 msgid "1 play"
 msgstr "1 play"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "1 play in one sitting"
+msgstr "1 play in one sitting"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "1 rate per chart"
 msgstr "1 rate per chart"
@@ -2875,6 +2894,7 @@ msgstr "accuracy"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -3171,8 +3191,13 @@ msgstr "Aero window"
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
-msgid "After exporting a replay video, get a link that plays it right in Discord chat. Links last 24 hours."
-msgstr "After exporting a replay video, get a link that plays it right in Discord chat. Links last 24 hours."
+msgid "After exporting a replay video, get a link that plays it right in Discord chat."
+msgstr "After exporting a replay video, get a link that plays it right in Discord chat."
+
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+#~ msgid "After exporting a replay video, get a link that plays it right in Discord chat. Links last 24 hours."
+#~ msgstr "After exporting a replay video, get a link that plays it right in Discord chat. Links last 24 hours."
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Age"
@@ -3487,6 +3512,10 @@ msgstr "Any picture, GIF or video, from a link or a file."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #~ msgid "Any picture, GIF, video or web page, from a link or a file."
 #~ msgstr "Any picture, GIF, video or web page, from a link or a file."
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Any play the site tracked of you, under a title of your own, in place of your {slotLabel}."
+msgstr "Any play the site tracked of you, under a title of your own, in place of your {slotLabel}."
 
 #: src/routes/skins.tsx
 msgid "anyone"
@@ -3815,6 +3844,10 @@ msgstr "back to collection"
 msgid "Back to menu"
 msgstr "Back to menu"
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "Back to my {slotLabel}"
+msgstr "Back to my {slotLabel}"
+
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/StreakGame.tsx
 msgid "Back to packs"
@@ -4082,6 +4115,10 @@ msgstr "best {best}pp"
 #: src/routes/player/$username.tsx
 msgid "Best Performance"
 msgstr "Best Performance"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Best play"
+msgstr "Best play"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Best Scores"
@@ -4365,6 +4402,7 @@ msgstr "Can't pay with Ko-fi? You can tip through lava.top."
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/DisplayNameEditor.tsx
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -4570,6 +4608,10 @@ msgstr "Change name on {0}"
 #: src/routes/recommendations.tsx
 msgid "change player"
 msgstr "change player"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Change this play"
+msgstr "Change this play"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Change this stat"
@@ -5249,6 +5291,10 @@ msgstr "Combo font"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "ComboPosition"
 msgstr "ComboPosition"
+
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "Comfort map"
+#~ msgstr "Comfort map"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Comic"
@@ -6252,11 +6298,13 @@ msgstr "Cyan"
 msgid "Czech"
 msgstr "Czech"
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "dan"
 msgstr "dan"
 
 #: src/components/companella/SubmissionDetail.tsx
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
@@ -6730,6 +6778,7 @@ msgstr "done"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Done"
 msgstr "Done"
@@ -7300,6 +7349,10 @@ msgstr "Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for 
 msgid "Every rate of a chart"
 msgstr "Every rate of a chart"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Every stat"
+msgstr "Every stat"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
 #~ msgstr "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
@@ -7526,6 +7579,10 @@ msgstr "Fastest"
 #: src/lib/supporter-name-fonts.ts
 msgid "Fatface"
 msgstr "Fatface"
+
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "Favourite map"
+#~ msgstr "Favourite map"
 
 #: src/routes/maps.tsx
 msgid "Favourited by"
@@ -7832,6 +7889,10 @@ msgstr "First collection page"
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "First Eternal"
 #~ msgstr "First Eternal"
+
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "First ever SS"
+#~ msgstr "First ever SS"
 
 #: src/components/packs/PackSummary.tsx
 msgid "first ever to pull this"
@@ -8491,6 +8552,10 @@ msgstr "hard"
 #~ msgid "hardest cards to find"
 #~ msgstr "hardest cards to find"
 
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "Hardest pass"
+#~ msgstr "Hardest pass"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Hardware encoding isn't available here. Smaller file uses your CPU."
 msgstr "Hardware encoding isn't available here. Smaller file uses your CPU."
@@ -8913,6 +8978,14 @@ msgstr "Horizontal"
 msgid "Horror"
 msgstr "Horror"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "hour"
+msgstr "hour"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "hours"
+msgstr "hours"
+
 #: src/routes/dan-estimates.tsx
 msgid "How a chart's skill is picked"
 msgstr "How a chart's skill is picked"
@@ -9261,6 +9334,11 @@ msgstr "in queue"
 msgid "In server discovery"
 msgstr "In server discovery"
 
+#. placeholder {0}: at + 1
+#: src/components/player/ProfileStatCards.tsx
+msgid "In slot {0}"
+msgstr "In slot {0}"
+
 #: src/components/player/LivePresence.tsx
 msgid "In song select"
 msgstr "In song select"
@@ -9268,6 +9346,10 @@ msgstr "In song select"
 #: src/components/player/LivePresence.tsx
 msgid "In the main menu"
 msgstr "In the main menu"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "In this slot"
+msgstr "In this slot"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "In your collection."
@@ -10239,6 +10321,7 @@ msgstr "LN Body color"
 #~ msgid "LN Coordination"
 #~ msgstr "LN Coordination"
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "LN dan"
 msgstr "LN dan"
@@ -10673,6 +10756,11 @@ msgstr "Longest"
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "Longest blitz streaks"
 msgstr "Longest blitz streaks"
+
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Longest session"
+msgstr "Longest session"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ProfileStatCards.tsx
@@ -11167,6 +11255,10 @@ msgstr "Method"
 msgid "Middle lane thumb"
 msgstr "Middle lane thumb"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "min"
+msgstr "min"
+
 #: src/routes/maps.tsx
 msgid "Min PP"
 msgstr "Min PP"
@@ -11415,6 +11507,10 @@ msgstr "Most played in {countryName}"
 #~ msgid "Most Played, Favourites and Random are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries, switch to Global, or open Farmed."
 #~ msgstr "Most Played, Favourites and Random are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries, switch to Global, or open Farmed."
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "Most pp"
+msgstr "Most pp"
+
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most unique cards"
 msgstr "most unique cards"
@@ -11456,6 +11552,7 @@ msgstr "msd"
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/player/FeaturedPlays.tsx
 #: src/routes/rankings.tsx
 msgid "MSD"
 msgstr "MSD"
@@ -11742,6 +11839,7 @@ msgstr "newest"
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/player/FeaturedPlays.tsx
 msgid "Newest"
 msgstr "Newest"
 
@@ -12155,6 +12253,10 @@ msgstr "No players hidden."
 msgid "No players match."
 msgstr "No players match."
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "No plays match that."
+msgstr "No plays match that."
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "No plays match these filters"
 msgstr "No plays match these filters"
@@ -12162,6 +12264,10 @@ msgstr "No plays match these filters"
 #: src/components/companella/ProfileImportedPlays.tsx
 #~ msgid "No plays sent through Companella yet."
 #~ msgstr "No plays sent through Companella yet."
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "No pp on this play"
+msgstr "No pp on this play"
 
 #: src/routes/recommendations.tsx
 msgid "no pp range"
@@ -12398,6 +12504,10 @@ msgstr "No tracked plays match those controls."
 #: src/components/maps/MapScoresBoard.tsx
 msgid "No tracked plays on this difficulty yet."
 msgstr "No tracked plays on this difficulty yet."
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "No tracked plays yet."
+msgstr "No tracked plays yet."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays. Play some ranked maps and they show up here live, or check your top plays."
@@ -12674,6 +12784,10 @@ msgstr "not played yet"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "not rated"
 msgstr "not rated"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Not rated at this rate"
+msgstr "Not rated at this rate"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not rated."
@@ -12976,6 +13090,7 @@ msgid "oldest"
 msgstr "oldest"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/FeaturedPlays.tsx
 msgid "Oldest"
 msgstr "Oldest"
 
@@ -13059,6 +13174,10 @@ msgstr "On this page"
 #: src/routes/hashi.tsx
 msgid "On Windows"
 msgstr "On Windows"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "On your profile"
+msgstr "On your profile"
 
 #: src/routes/news_.companella.tsx
 msgid "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
@@ -13927,6 +14046,22 @@ msgstr "Pick a different file"
 msgid "pick a difficulty below"
 msgstr "pick a difficulty below"
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "Pick a play"
+msgstr "Pick a play"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Pick a play below."
+msgstr "Pick a play below."
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Pick a slot, then the card to put in it, or drag a card onto a slot."
+msgstr "Pick a slot, then the card to put in it, or drag a card onto a slot."
+
+#: src/components/player/ProfileStatCards.tsx
+#~ msgid "Pick a slot, then the card to put in it."
+#~ msgstr "Pick a slot, then the card to put in it."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Pick a target above. Progress updates as your mania plays land."
 msgstr "Pick a target above. Progress updates as your mania plays land."
@@ -14363,6 +14498,7 @@ msgstr "Post your server"
 msgid "posted by"
 msgstr "posted by"
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/ProfileParts.tsx
 msgid "pp"
 msgstr "pp"
@@ -14493,6 +14629,7 @@ msgstr "Press feedback from your skin or the default samples. Turn off to hear o
 msgid "preview"
 msgstr "preview"
 
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/skins/SkinPreviewPickers.tsx
 #: src/routes/skins_.$id.tsx
@@ -14629,6 +14766,7 @@ msgstr "Profile banner"
 msgid "Profile link"
 msgstr "Profile link"
 
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/supporter/SupporterExtras.tsx
 #: src/lib/signature-shared.ts
 #: src/routes/support.tsx
@@ -14687,6 +14825,10 @@ msgstr "Progression"
 msgid "Promoted to {tierLabel}"
 msgstr "Promoted to {tierLabel}"
 
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "Proudest moment"
+#~ msgstr "Proudest moment"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "provisional"
 msgstr "provisional"
@@ -14744,9 +14886,17 @@ msgstr "purple"
 msgid "Purple"
 msgstr "Purple"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
+msgstr "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
+
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "Put it on my card"
 msgstr "Put it on my card"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Put it on my profile"
+msgstr "Put it on my profile"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
@@ -16161,6 +16311,7 @@ msgstr "Saving."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/DisplayNameEditor.tsx
+#: src/components/player/FeaturedPlays.tsx
 msgid "Saving..."
 msgstr "Saving..."
 
@@ -16510,6 +16661,10 @@ msgstr "Search title, artist, mapper, or filter: keys=7 stars>5 status=ranked"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Search updates"
 msgstr "Search updates"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Search your plays"
+msgstr "Search your plays"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Search your servers"
@@ -16985,6 +17140,10 @@ msgstr "Shifting, irregular patterns that punish bad reading."
 msgid "Shot {0}"
 msgstr "Shot {0}"
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "Show"
+msgstr "Show"
+
 #. placeholder {0}: item.label
 #: src/routes/skins_.$id.tsx
 msgid "Show {0}"
@@ -17078,6 +17237,7 @@ msgstr "Show fewer"
 msgid "show more"
 msgstr "show more"
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -17424,6 +17584,10 @@ msgstr "Single-note jacks"
 #~ msgid "Single-note streams {singleText}, chordstreams {chordText}"
 #~ msgstr "Single-note streams {singleText}, chordstreams {chordText}"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Singularity"
+msgstr "Singularity"
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Site colours"
 msgstr "Site colours"
@@ -17625,6 +17789,11 @@ msgstr "Skips the last few players and maps you were shown."
 #: src/components/packs/PackSummary.tsx
 msgid "sliced"
 msgstr "sliced"
+
+#. placeholder {0}: slot + 1
+#: src/components/player/ProfileStatCards.tsx
+msgid "Slot {0}"
+msgstr "Slot {0}"
 
 #: src/components/communities/field-options.tsx
 msgid "Slovak"
@@ -18428,8 +18597,8 @@ msgid "SV"
 msgstr "SV"
 
 #: src/components/player/ProfileStatCards.tsx
-msgid "swap"
-msgstr "swap"
+#~ msgid "swap"
+#~ msgstr "swap"
 
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -18441,8 +18610,12 @@ msgid "Swap any of the four cards under your profile for your ratio, rice / LN s
 msgstr "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak or percentile among tracked players."
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak or percentile."
-msgstr "Swap the four cards under your profile for your ratio, rice / LN split, longest streak or percentile."
+#~ msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak or percentile."
+#~ msgstr "Swap the four cards under your profile for your ratio, rice / LN split, longest streak or percentile."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
+msgstr "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
 
 #: src/components/communities/field-options.tsx
 msgid "Swedish"
@@ -18731,6 +18904,7 @@ msgstr "That did not go through. Try again."
 msgid "That did not save. Try again."
 msgstr "That did not save. Try again."
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/supporter/SupporterExtras.tsx
 msgid "That didn't save. Try again."
 msgstr "That didn't save. Try again."
@@ -20259,6 +20433,10 @@ msgstr "This play counts for nothing on the dan estimate."
 msgid "This play does not count toward dan."
 msgstr "This play does not count toward dan."
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "This play has no pp, MSD or dan to show."
+msgstr "This play has no pp, MSD or dan to show."
+
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is below the accuracy needed for an MSD rating."
 msgstr "This play is below the accuracy needed for an MSD rating."
@@ -20480,6 +20658,7 @@ msgstr "title"
 
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/player/FeaturedPlays.tsx
 msgid "Title"
 msgstr "Title"
 
@@ -22612,6 +22791,10 @@ msgstr "Your osu! top plays, everything recorded while you were tracked, and any
 msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it. Everyone else is on the <0>Dan tab of the rankings page</0>."
 msgstr "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it. Everyone else is on the <0>Dan tab of the rankings page</0>."
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Your own plays"
+msgstr "Your own plays"
+
 #: src/routes/dan-estimates.tsx
 msgid "Your pass"
 msgstr "Your pass"
@@ -22635,6 +22818,10 @@ msgstr "Your plays are being recorded now"
 #: src/components/me/MyDataPanel.tsx
 msgid "Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
 msgstr "Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Your plays didn't load. Try again."
+msgstr "Your plays didn't load. Try again."
 
 #: src/routes/skins.tsx
 msgid "Your private skins"
@@ -22729,6 +22916,10 @@ msgstr "Your support pays for the servers and gives me the time to keep working 
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "Your teams could not be loaded just now. Try again in a moment."
 #~ msgstr "Your teams could not be loaded just now. Try again in a moment."
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Your title"
+msgstr "Your title"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."

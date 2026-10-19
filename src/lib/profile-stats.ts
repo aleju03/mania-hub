@@ -8,7 +8,7 @@ import type { MessageDescriptor } from "@lingui/core";
    pick (profileStatsData), counted over everything the site tracked of the
    player rather than the top plays osu! lists. */
 
-export const PROFILE_STATS = ["keySplit", "mostUsedMod", "medianBpm", "ppRange", "ratio", "lnSplit", "streak", "percentile"] as const;
+export const PROFILE_STATS = ["keySplit", "mostUsedMod", "medianBpm", "ppRange", "ratio", "lnSplit", "streak", "percentile", "session"] as const;
 export type ProfileStatId = (typeof PROFILE_STATS)[number];
 export const PROFILE_STAT_SLOTS = 4;
 export const DEFAULT_PROFILE_STATS: readonly ProfileStatId[] = PROFILE_STATS.slice(0, PROFILE_STAT_SLOTS);
@@ -22,6 +22,7 @@ export const PROFILE_STAT_LABELS: Record<ProfileStatId, MessageDescriptor> = {
   lnSplit: msg`Rice / LN`,
   streak: msg`Longest streak`,
   percentile: msg`Percentile`,
+  session: msg`Longest session`,
 };
 
 export function isProfileStatId(value: unknown): value is ProfileStatId {
@@ -36,12 +37,14 @@ export function parseProfileStats(value: unknown): ProfileStatId[] | null {
 
 /* From everything the site tracked of the player, not just their top
    plays: MAX and 300 judgements over every map's best score each day,
-   plays on LN charts against the rest, the day streaks, and their place
-   among the players the site tracks. */
+   plays on LN charts against the rest, the day streaks, their longest
+   sitting, and their place among the players the site tracks. */
 export interface ProfileStatsData {
   ratio?: { perfect: number; great: number };
   lnSplit?: { ln: number; rice: number };
   streak?: { longest: number; current: number };
+  /* First play to last play of their longest sitting (plays under 45 minutes apart). */
+  session?: { minutes: number; plays: number; startedAt: string };
   /* Their place among the players the site tracks, by pp. */
   percentile?: { rank: number; players: number };
 }
@@ -66,6 +69,12 @@ export function parseProfileStatsData(value: unknown): ProfileStatsData {
   if (streak && Number.isFinite(Number(streak.longest)) && Number.isFinite(Number(streak.current))) {
     data.streak = { longest: Math.max(0, Number(streak.longest)), current: Math.max(0, Number(streak.current)) };
   }
+  const session = raw.session as Record<string, unknown> | undefined;
+  const minutes = Number(session?.minutes);
+  const plays = Number(session?.plays);
+  if (Number.isFinite(minutes) && minutes > 0 && Number.isInteger(plays) && plays > 0 && typeof session?.startedAt === "string") {
+    data.session = { minutes, plays, startedAt: session.startedAt };
+  }
   const percentile = raw.percentile as Record<string, unknown> | undefined;
   const rank = Number(percentile?.rank);
   const players = Number(percentile?.players);
@@ -79,4 +88,11 @@ export function formatTopPercent(rank: number, players: number): string | null {
   const share = Math.min(100, (rank / players) * 100);
   const digits = share < 0.1 ? 3 : share < 1 ? 2 : share < 10 ? 1 : 0;
   return share.toFixed(digits).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+}
+
+/* "4.5" hours, or whole minutes under an hour. */
+export function sessionLength(minutes: number): { value: string; hours: boolean } {
+  if (minutes < 60) return { value: String(Math.max(1, Math.round(minutes))), hours: false };
+  const hours = minutes / 60;
+  return { value: (hours >= 10 ? Math.round(hours) : Math.round(hours * 10) / 10).toString(), hours: true };
 }

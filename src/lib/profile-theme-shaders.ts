@@ -1442,42 +1442,379 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Black hole: a spinning accretion disk bending the starlight around a
-  // dark shadow, the far side of the disk lensed up and over it.
+  // Black hole: a Schwarzschild hole, ray traced. Each pixel near it follows
+  // its light back through the curved space (units of M: horizon at 2, photon
+  // sphere at 3), so the far side of the disk arches over and under the
+  // shadow, a thin photon ring rims it and the stars behind smear into arcs.
+  // The disk turns at Kepler speed (inner streaks lap the outer ones), is
+  // hotter inward, and is brighter and bluer on the side coming at us. Rays
+  // that pass far away get the weak-field bend in closed form instead.
   blackhole: shader(`
+const float BH_PI = 3.14159265, BH_TAU = 6.2831853;
+const float BH_D = 55.;     // camera distance
+const float BH_K = .72;     // ray angle (radians) per canvas height
+const float BH_RIN = 6., BH_ROUT = 19.;
+const float BH_TRACE = 23.; // impact parameter inside which rays are traced
+// How much of the bend the starfield shows: all of it smears the stars into
+// streaks half a screen away, as if the stars sat just behind the hole.
+const float BH_SKYBEND = .4;
+
+// The sky behind the hole: blue and rose nebula, richest near the hole so
+// the lensing has something to bend, and stars, a few of them bright.
+vec3 bhSky(vec2 q, vec2 c, float t) {
+  vec3 col = vec3(.006, .004, .012);
+  float n1 = fbm(q * 1.3 + vec2(t * .004, 0.));
+  float n2 = fbm(q * 2.7 - 3.1 + vec2(0., t * .003));
+  float near = .45 + 1.3 * exp(-length(q - c) * 1.7);
+  col += (vec3(.03, .09, .22) * smoothstep(.42, .85, n1) + vec3(.2, .05, .14) * smoothstep(.48, .9, n2) * n1) * near;
+  vec2 sq = q - vec2(0., u_scroll * .05);
+  col += vec3(.85, .9, 1.) * stars(sq, 36., .14, t);
+  col += vec3(.8, .85, 1.) * stars(sq + 2.3, 80., .2, t) * .5;
+  col += mix(vec3(1., .85, .7), vec3(.7, .85, 1.), step(.5, hash(floor(sq * 12.)))) * stars(sq - 5.7, 12., .05, t) * 1.8;
+  return col;
+}
+
+// Glow colour for a relative temperature: ember red, orange, gold, white, blue-white.
+vec3 bhHeat(float T) {
+  vec3 c = mix(vec3(.3, .025, .008), vec3(1., .3, .05), smoothstep(.12, .45, T));
+  c = mix(c, vec3(1., .66, .3), smoothstep(.4, .72, T));
+  c = mix(c, vec3(1., .92, .8), smoothstep(.68, 1., T));
+  return mix(c, vec3(.8, .88, 1.), smoothstep(1., 1.45, T));
+}
+
+// Disk streaks around the ring, seamless where the angle wraps.
+float bhStreak(float a, float lr, vec2 f) {
+  float w = (BH_PI - a) / BH_TAU;
+  return mix(fbm(vec2(a, lr) * f), fbm(vec2(a + BH_TAU, lr) * f), w);
+}
+
+// The disk where a ray crosses its plane: light (premultiplied) and cover.
+vec4 bhDisk(vec3 hit, vec3 dir, float t) {
+  float r = length(hit.xz);
+  if (r < BH_RIN * .92 || r > BH_ROUT) return vec4(0.);
+  float a = atan(hit.z, hit.x) - t * 3.2 * pow(r, -1.5);
+  a = mod(a + BH_PI, BH_TAU) - BH_PI;
+  float lr = log(r);
+  float coarse = bhStreak(a, lr, vec2(2., 11.));
+  float fine = bhStreak(a, lr, vec2(5., 38.));
+  float dens = smoothstep(.2, .85, coarse * .75 + fine * .45);
+  float lane = smoothstep(.56, .7, fine) * smoothstep(.4, .6, coarse);
+  // hot knots riding the flow
+  float knot = smoothstep(.68, .88, bhStreak(a, lr, vec2(8., 70.))) * smoothstep(.45, .7, coarse);
+  // brightest a little outside the inner edge, falling off outward
+  float x = BH_RIN / r;
+  float prof = pow(x, 3.) * max(1. - sqrt(x), 0.) / .057 + .25 * smoothstep(BH_RIN * .92, BH_RIN, r) * smoothstep(BH_RIN * 1.4, BH_RIN, r);
+  // orbital speed seen by a static observer, Doppler shift and the climb out
+  float beta = min(1. / sqrt(max(r - 2., 1.)), .55);
+  float cosT = dot(normalize(vec3(-hit.z, 0., hit.x)), -dir);
+  float g = sqrt(1. - 2. / r) / (inversesqrt(1. - beta * beta) * (1. - beta * cosT));
+  float T = .8 * pow(prof, .25) * mix(1., g, .85);
+  float beam = mix(1., g * g * g, .8);
+  float edge = smoothstep(BH_ROUT, BH_ROUT - 6., r) * smoothstep(BH_RIN * .92, BH_RIN * 1.05, r);
+  vec3 light = bhHeat(T + .25 * knot) * prof * beam * (.45 + 1.1 * dens + 1.6 * knot) * (1. - .7 * lane) * 2.;
+  float cover = clamp(.4 + dens * .7 - lane * .3, 0., .97) * edge;
+  return vec4(light * cover, cover);
+}
+
 vec3 theme(vec2 uv, vec2 p, float t) {
   float aspect = u_res.x / u_res.y;
-  vec2 c = vec2(aspect * .27, .27 + u_scroll);
-  vec2 d = p - c;
-  float r = length(d);
-  float Rs = .055;
-  vec2 dir = d / max(r, 1e-4);
-  // the background, sampled through the bend
-  vec2 bentP = p - dir * (Rs * Rs * 2.4) / max(r, Rs * .5);
-  vec3 col = vec3(.006, .004, .01);
-  float neb = fbm(bentP * 1.6 + vec2(t * .005, 0.));
-  col += mix(vec3(.08, .03, .12), vec3(.2, .07, .05), neb) * smoothstep(.35, .8, neb) * .5;
-  col += vec3(.85, .9, 1.) * stars(bentP - vec2(0., u_scroll * .05), 36., .14, t);
-  col += vec3(.8, .85, 1.) * stars(bentP + 2.3, 80., .2, t) * .5;
-  // the disk, in its own tilted plane
-  vec2 dd = vec2(d.x, d.y / .2);
-  float rd = length(dd);
-  float ang = atan(dd.y, dd.x);
-  float swirl = fbm(vec2(ang * 2.5 - t * .5 + rd * 25., rd * 12.));
-  float band = smoothstep(Rs * 1.5, Rs * 2.2, rd) * smoothstep(Rs * 6., Rs * 3., rd);
-  float doppler = 1. + .75 * cos(ang + .4);
-  vec3 disk = mix(vec3(1., .42, .1), vec3(1., .88, .65), swirl) * band * (.35 + .9 * swirl) * doppler;
-  // the far side of the disk, bent up and over the shadow
-  float halo = smoothstep(Rs * 1.3, Rs * 1.65, r) * smoothstep(Rs * 2.7, Rs * 1.8, r);
-  float haloSwirl = fbm(vec2(atan(d.y, d.x) * 2. - t * .5, r * 30.));
-  col += mix(vec3(1., .45, .12), vec3(1., .85, .6), haloSwirl) * halo * (.25 + .75 * abs(dir.y)) * (.5 + haloSwirl) * .9;
-  col += disk * step(0., dd.y) * .9;
-  // the shadow and the thin photon ring at its edge
-  col *= smoothstep(Rs * 1.18, Rs * 1.28, r);
-  col += vec3(1., .8, .55) * exp(-abs(r - Rs * 1.3) / max(PX * 1.5, .0012)) * .8;
-  // the near side of the disk passes in front of it all
-  col = mix(col, col + disk, step(dd.y, 0.));
-  col += vec3(1., .5, .2) * exp(-r / Rs * .45) * .06;
+  // right of centre with the whole disk on screen, centred on a narrow one
+  vec2 c = vec2(max(min(aspect * .2, aspect * .5 - .5), 0.), .24 + u_scroll);
+  // the pointer turns the view a few degrees around the hole
+  vec2 pp = pointerP();
+  float incl = .1 + pp.y * .07;
+  float yaw = pp.x * .08;
+  float roll = -.2;
+  vec2 q = rot(roll) * (p - c);
+  float qLen = length(q);
+  vec2 qDir = q / max(qLen, 1e-5);
+  float b = qLen * BH_D * BH_K; // impact parameter
+  // weak-field bend toward the hole, for a camera at BH_D
+  float bb = max(b, 1.);
+  float bend = (4. / bb + 11.8 / (bb * bb)) * .5 * (1. + BH_D / sqrt(BH_D * BH_D + bb * bb));
+  vec2 bg = q - qDir * min(bend, 1.5) * BH_SKYBEND / BH_K;
+  vec3 disk = vec3(0.);
+  float cover = 0.;
+  float dark = 0.;
+  vec3 haze = vec3(0.);
+  if (b < BH_TRACE) {
+    vec3 cam = BH_D * vec3(sin(yaw) * cos(incl), sin(incl), -cos(yaw) * cos(incl));
+    vec3 fwd = -cam / BH_D;
+    vec3 right = normalize(cross(vec3(0., 1., 0.), fwd));
+    vec3 up = cross(fwd, right);
+    float a0 = qLen * BH_K;
+    vec3 dir = fwd * cos(a0) + (qDir.x * right + qDir.y * up) * sin(a0);
+    // straight in to r = 30, where the bending starts to matter
+    vec3 pos = cam;
+    float along = -dot(pos, dir);
+    vec3 near = pos + dir * along;
+    pos = near - dir * sqrt(max(900. - dot(near, near), 0.));
+    vec3 hv = cross(pos, dir);
+    float h2 = dot(hv, hv);
+    bool out_ = false;
+    for (int i = 0; i < 180; i++) {
+      float r = length(pos);
+      float dt = clamp(.07 * r, .04, 2.) * mix(.4, 1., smoothstep(2.6, 5., r));
+      vec3 prev = pos;
+      // the light's path in Schwarzschild space, as a force in flat space:
+      // a = -3 M h^2 x / r^5 (M = 1), stepped leapfrog
+      dir -= 3. * h2 * pos / pow(r, 5.) * dt * .5;
+      pos += dir * dt;
+      r = length(pos);
+      dir -= 3. * h2 * pos / pow(r, 5.) * dt * .5;
+      if (prev.y * pos.y < 0.) {
+        vec4 d = bhDisk(mix(prev, pos, prev.y / (prev.y - pos.y)), normalize(dir), t);
+        disk += (1. - cover) * d.rgb;
+        cover += (1. - cover) * d.a;
+      }
+      // a thin warm haze hugging the disk, so it has some depth
+      haze += (1. - cover) * vec3(1., .48, .18) * exp(-pos.y * pos.y * .9) * smoothstep(21., 8., r) * smoothstep(4.5, 7.5, r) * dt * .016;
+      if (r < 2.02 || cover > .985) break;
+      if (r > 31. && dot(pos, dir) > 0.) { out_ = true; break; }
+    }
+    if (!out_) dark = 1.;
+    // haze on a ray that falls in would fog the shadow
+    if (out_) disk += haze;
+    // where the ray left for, in the same screen units
+    vec3 v = normalize(dir);
+    vec2 side = vec2(dot(v, right), dot(v, up));
+    vec2 traced = side / max(length(side), 1e-5) * atan(length(side), dot(v, fwd)) / BH_K;
+    bg = mix(q + (traced - q) * BH_SKYBEND, bg, smoothstep(BH_TRACE - 6., BH_TRACE - .5, b));
+  }
+  vec3 col = bhSky(rot(-roll) * bg + c, c, t) * (1. - dark) * (1. - cover) + disk;
+  // the photon ring: light that circled the hole before escaping piles up
+  // just outside the shadow (b = 3 sqrt 3)
+  col += vec3(1., .8, .55) * exp(-abs(b - 5.25) * 5.) * .5 * (1. - cover);
+  // light spilling off the disk: a halo round the shadow and a flare along
+  // the disk's plane, stronger on the side coming at us (left)
+  col += vec3(1., .5, .2) * exp(-max(b - 5.2, 0.) * .18) * smoothstep(4.6, 5.3, b) * .09 * (1. - cover);
+  vec2 qd = vec2(q.x, (q.y + .012) / max(sin(incl) + .06, .06)) * BH_D * BH_K;
+  float flare = exp(-abs(qd.y) * .09) * exp(-abs(qd.x) * .08) * (1. - .45 * clamp(q.x * 6., -1., 1.));
+  col += vec3(1., .55, .25) * flare * .1 * (1. - cover);
+  // jets: thin blue plasma flowing out along the spin axis, both ways, behind
+  // the disk where it crosses them
+  float ay = abs(q.y);
+  float jw = .008 + .045 * ay;
+  float jflow = .45 + .9 * noise(vec2(q.x / jw * 1.5 + sign(q.y) * 7., ay * 9. - t * 2.2));
+  float jet = exp(-q.x * q.x / (jw * jw)) * smoothstep(.1, .2, ay) * exp(-ay * 2.6) * jflow;
+  col += vec3(.5, .72, 1.) * jet * .3 * (1. - cover) * (1. - dark * step(q.y, 0.));
+  return 1. - exp(-col * 1.25);
+}`),
+
+  // Singularity: after the Parallel Universe Shifter jacket. A ray-marched
+  // orb of glossy liquid, its surface carved into ribbons that spiral down a
+  // funnel to a white-hot core; the ribbons mirror the rushing light, their
+  // edges glow magenta and blue, and the core lights the funnel red. Glossy
+  // black ink bursts off its top-left side in strands and drops, and a drip
+  // stretches from its underside and lets go. Behind it a tunnel of light
+  // rushes out past the orb, with arcs of light swirling in a pool below. It
+  // fades to deep blue toward the rest of the page and scrolls with the hero.
+  singularity: shader(`
+const float SG_PI = 3.14159265, SG_TAU = 6.2831853;
+const float SG_R = .22; // the orb's radius, canvas heights
+// The swirl's axis, tipped toward us and down-left; the core sits down it.
+const vec3 SG_AX = vec3(-.3, -.14, .944);
+const vec3 SG_CORE = SG_AX * .3;
+
+// Light rushing out past the orb, in direction ca at log-distance lr.
+float sgStreaks(vec2 ca, float lr, float t) {
+  vec2 flow = vec2(lr * 1.6 - t * 1.1, 0.);
+  return pow(noise(ca * 22. + flow), 3.) * .9 + pow(noise(ca * 64. + flow * 1.4 + 3.), 6.) * 2.2 + pow(noise(ca * 150. + flow * 1.8 + 7.), 9.) * 2.;
+}
+
+vec3 sgTunnel(vec2 d, float t) {
+  vec2 o = d - vec2(.05, .03);
+  float r = length(o);
+  vec2 ca = o / max(r, 1e-4);
+  vec3 col = mix(vec3(.006, .015, .1), vec3(.03, .2, .85), smoothstep(1.3, .15, r));
+  float near = smoothstep(.12, .45, r) * (.2 + .8 * exp(-r * 1.3));
+  col += vec3(.4, .75, 1.) * sgStreaks(ca, log(max(r, 1e-3)), t) * near;
+  float sect = smoothstep(.35, .9, dot(ca, vec2(.8, .6)));
+  col += vec3(1., .1, .3) * pow(noise(ca * 30. + vec2(log(max(r, 1e-3)) * 1.9 - t * 1.3, 11.)), 4.) * 4. * sect * near;
+  col += vec3(.8, .93, 1.) * exp(-length((d - vec2(.7, -.08)) * vec2(.7, 1.5)) * 2.6);
   return col;
+}
+
+// Arcs of light winding in a pool under the orb.
+vec3 sgPool(vec2 d, float t) {
+  vec2 f = d - vec2(-.02, -.5);
+  f.y /= .34;
+  float fr = length(f);
+  float fa = atan(f.y, f.x);
+  float u = fr * 3.2 + fa / SG_TAU * 3. + t * .12;
+  float arc = exp(-abs(fract(u) - .5) * 18.) * smoothstep(1.4, .3, fr) * smoothstep(.05, .25, fr);
+  // each arc brightens and fades along its length, never cut off, and fades
+  // before the tight turns at the pool's ends, which read as corners
+  arc *= smoothstep(.3, .8, noise(vec2(cos(fa), sin(fa)) * 2. + vec2(fr * 1.5 - t * .3, 0.)));
+  arc *= smoothstep(.97, .55, abs(cos(fa)));
+  float pink = smoothstep(.55, .75, noise(vec2(cos(fa), sin(fa)) * 1.5 + vec2(fr * 2. + 9., 0.)));
+  return mix(vec3(.6, .9, 1.), vec3(1., .3, .62), pink) * arc * smoothstep(-.1, -.35, d.y);
+}
+
+// Where a point of the orb sits in the swirl: x = along the spiral (its
+// fraction is across a ribbon), y = angle from the axis.
+vec2 sgSwirl(vec3 p, float t) {
+  vec3 pn = normalize(p);
+  vec3 b1 = normalize(cross(SG_AX, vec3(0., 1., 0.)));
+  vec3 b2 = cross(SG_AX, b1);
+  float th = acos(clamp(dot(pn, SG_AX), -1., 1.));
+  float ph = atan(dot(pn, b2), dot(pn, b1));
+  // (clamped short of the far pole, where tan blows up and the march would NaN)
+  return vec2(ph * 3. / SG_TAU + log(clamp(tan(min(th, 2.9) * .5), 1e-3, 1e3)) * .6 - t * .06, th);
+}
+
+float sgRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2) {
+  vec3 ba = b - a;
+  float h = clamp(dot(p - a, ba) / dot(ba, ba), 0., 1.);
+  return length(p - a - ba * h) - mix(r1, r2, h);
+}
+
+float sgSmin(float a, float b, float k) {
+  float h = clamp(.5 + .5 * (b - a) / k, 0., 1.);
+  return mix(b, a, h) - k * h * (1. - h);
+}
+
+// The scene in orb radii: x = distance, y = 0 on the orb, 1 on the ink.
+vec2 sgMap(vec3 p, float t) {
+  float r = length(p);
+  vec2 sw = sgSwirl(p, t);
+  // ribbons overlapping like a shell's: each rises across its width to a
+  // rounded lip and drops onto the next
+  float f = fract(sw.x);
+  float rise = smoothstep(0., .25, f) * (.45 + .55 * f) * smoothstep(1., .92, f);
+  float orb = r - 1. + .13 * (1. - rise) * smoothstep(.1, .45, sw.y);
+  // the funnel the ribbons spiral down, narrowing toward the core, its lip rounded
+  orb = -sgSmin(-orb, -r * sin(.12 + .45 * r - sw.y), .08);
+  orb *= .7;
+  float ink = 1e3;
+  // the drip: a thin string of goo stretching from the underside, the end
+  // pinching off now and then
+  float ph = fract(t / 7.);
+  float len = .35 + .45 * smoothstep(0., .85, ph);
+  vec3 da = vec3(.12, -.86, .25);
+  vec3 db = da + vec3(.03, -len, 0.);
+  float drip = sgRoundCone(p, da, db, .1, .012);
+  float fall = max(ph - .85, 0.) / .15;
+  drip = min(drip, fall > 0. ? length((p - vec3(.15, -1.25 - len - fall * fall * 1.5, .25)) * vec3(1., .6, 1.)) - .025 : 1e3);
+  ink = min(ink, drip);
+  float m = step(ink, orb);
+  return vec2(sgSmin(orb, ink, .1), m);
+}
+
+vec3 sgNormal(vec3 p, float t) {
+  const vec2 e = vec2(.004, -.004);
+  return normalize(e.xyy * sgMap(p + e.xyy, t).x + e.yyx * sgMap(p + e.yyx, t).x + e.yxy * sgMap(p + e.yxy, t).x + e.xxx * sgMap(p + e.xxx, t).x);
+}
+
+// What the glossy surfaces mirror: the blue tunnel, its streaks and the glare.
+vec3 sgEnv(vec3 R, float t) {
+  vec3 env = mix(vec3(.01, .05, .4), vec3(.25, .6, 1.2), smoothstep(-.6, .8, R.x * .55 + R.y * .5));
+  vec2 rc = normalize(R.xy + 1e-4);
+  env += vec3(.5, .8, 1.) * pow(noise(rc * 4. + vec2(R.z * 1.5 - t * .4, 0.)), 2.) * 1.2;
+  env += vec3(.95, .98, 1.) * pow(max(dot(R, normalize(vec3(.6, .4, .7))), 0.), 50.) * 3.5;
+  env += vec3(.7, .88, 1.) * pow(max(dot(R, normalize(vec3(.75, -.1, .65))), 0.), 12.) * .9;
+  env += vec3(.55, .78, 1.) * pow(max(dot(R, normalize(vec3(-.6, -.55, .55))), 0.), 30.) * .8;
+  return env;
+}
+
+// The orb and the ink, ray marched: colour and coverage.
+vec4 sgOrb(vec2 d, float t) {
+  vec2 s = d / SG_R;
+  if (length(s) > 2.4) return vec4(0.);
+  vec3 ro = vec3(s, 3.), rd = vec3(0., 0., -1.);
+  float z = 0., near = 1e3, edge = PX * 1.5 / SG_R;
+  vec2 h = vec2(1e3, 0.);
+  for (int i = 0; i < 72; i++) {
+    h = sgMap(ro + rd * z, t);
+    near = min(near, h.x);
+    if (h.x < .001 || z > 6.) break;
+    z += h.x;
+  }
+  float cover = smoothstep(edge, 0., near);
+  // light from the tunnel wrapping the silhouette, as a lens would bloom it
+  vec3 halo = vec3(.45, .7, 1.) * exp(-near * 9.) * .35;
+  if (cover <= 0.) return vec4(halo, 0.);
+  vec3 p = ro + rd * z;
+  vec3 n = sgNormal(p, t);
+  vec3 R = reflect(rd, n);
+  float fres = .1 + .9 * pow(1. - max(n.z, 0.), 3.);
+  // how buried the point is: darker down the grooves and the funnel
+  float ao = clamp(.35 + 4. * sgMap(p + n * .12, t).x + 2. * sgMap(p + n * .3, t).x, 0., 1.);
+  vec3 col = (h.y > .5 ? vec3(.002, .004, .014) : vec3(.005, .012, .07)) + sgEnv(R, t) * fres * (h.y > .5 ? .8 : 1.1) * ao;
+  // the core's red light, falling off from inside the funnel
+  vec3 L = SG_CORE - p;
+  float ld = dot(L, L);
+  col += vec3(1., .38, .1) * max(dot(n, L * inversesqrt(ld)), 0.) * .5 / (ld + .03);
+  if (h.y < .5) {
+    vec2 sw = sgSwirl(p, t);
+    float f = fract(sw.x);
+    // the ribbons' edges glow, magenta on some and blue on the rest, and
+    // hot trails wind up out of the core
+    // each ribbon's lip catches one bright rim, magenta on one, blue on the
+    // others, and the core's red runs a little way up the ribbons
+    vec3 tint = mod(floor(sw.x), 3.) < 1. ? vec3(1., .2, .6) : vec3(.35, .65, 1.);
+    col *= .65 + .55 * f; // each ribbon brightens toward its lip
+    col += tint * exp(-abs(f - .94) * 24.) * (.6 + 1.4 * fres) * smoothstep(.2, .5, sw.y) * 2.;
+    col += vec3(1., .22, .2) * exp(-abs(f - .6) * 10.) * exp(-sw.y * 6.) * 1.2;
+  }
+  return vec4(col, cover);
+}
+
+// The ink splash off the orb's top-left side, painted flat like the jacket's:
+// jagged spikes of uneven reach, broken toward their tips, and spray past
+// them. x = coverage, y = how near its edge (for the sheen).
+vec2 sgSplash(vec2 d, float t) {
+  vec2 s = d / SG_R;
+  float r = length(s);
+  float a = atan(s.y, s.x);
+  a += a < -1.5 ? SG_TAU : 0.; // keep counting past straight left, no seam
+  float sect = smoothstep(1.75, 2.25, a) * smoothstep(3.75, 3.2, a);
+  if (sect <= 0. || r < .8) return vec2(0.);
+  float aa = PX * 2. / SG_R;
+  vec2 ca = vec2(a * 1.3, t * .04);
+  float reach = .12 + 1.3 * pow(noise(ca * 7.), 3.5) + .8 * pow(noise(ca * 19. + 4.), 6.) + .35 * pow(noise(ca * 41. + 9.), 8.);
+  reach = 1. + reach * sect;
+  // ragged edges, and strands breaking up toward the tips
+  float rr = r + .06 * (fbm(s * 9. + t * .05) - .5);
+  float cover = smoothstep(reach, reach - aa * 2., rr) * smoothstep(.72, 1., r);
+  float tip = smoothstep(.55, 1., (rr - 1.) / max(reach - 1., .01));
+  cover *= 1. - tip * smoothstep(.45, .6, noise(vec2(a * 60., r * 5.)));
+  // spray: streaked drops past the spikes
+  vec2 cell = vec2(a * 24., r * 6. - t * .3);
+  vec2 id = floor(cell);
+  vec2 g = fract(cell) - .5 - (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .6;
+  float size = .06 + .16 * hash(id + 3.);
+  float drop = step(hash(id), .2) * smoothstep(size, size - aa * 6., length(g * vec2(2.4, .6))) * step(1.15, r) * smoothstep(3.4, 1.8, r) * sect;
+  // glossy streaks running out along the spikes
+  float gloss = pow(noise(vec2(a * 70., r * 1.5 + t * .1)), 6.) * smoothstep(1., 1.3, r) + exp(-max(reach - rr, 0.) * 14.) * .6;
+  return vec2(max(cover, drop), gloss);
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float aspect = u_res.x / u_res.y;
+  vec2 c = vec2(max(min(aspect * .2, aspect * .5 - .45), 0.), .13 + u_scroll) + pointerP() * .025;
+  vec2 d = p - c;
+  // the tunnel splits a little at the edges, red out and blue in
+  float ca = .005 + .012 * length(d);
+  vec3 col = vec3(sgTunnel(d * (1. - ca), t).r, sgTunnel(d, t).g, sgTunnel(d * (1. + ca), t).b);
+  col += sgPool(d, t);
+  vec4 orb = sgOrb(d, t);
+  col = orb.a > 0. ? mix(col, orb.rgb, orb.a) : col + orb.rgb;
+  // the splash: the orb's surface tearing off. Over the orb it darkens the
+  // ribbons into it rather than covering them; out past the rim it is the
+  // same deep navy, glossy along its spikes
+  vec2 sp = sgSplash(d, t);
+  vec3 inkCol = vec3(.018, .035, .13) + vec3(.3, .55, 1.) * sp.y * 1.3;
+  col = mix(col, mix(orb.rgb * .45 + inkCol * .5, inkCol, 1. - orb.a), sp.x);
+  // the core, white-hot in a red flare, seen down the funnel
+  vec2 k = d - SG_CORE.xy * SG_R;
+  float kr = length(k);
+  // a molten ball: a white-hot disc, a gold-orange rim, a red glow round it
+  col += vec3(1., .98, .9) * exp(-pow(kr / .034, 2.)) * 6.;
+  col += vec3(1., .55, .15) * exp(-pow(kr / .05, 2.)) * 2.5;
+  col += vec3(1., .2, .06) * exp(-kr / .055) * 1.6 + vec3(1., .3, .12) * exp(-kr / .13) * .4;
+  // fade to deep blue away from the orb, so the page below stays readable
+  col = mix(col, vec3(.01, .02, .07), smoothstep(.25, 1.2, length(d * vec2(.75, 1.))) * .85);
+  return 1. - exp(-col * 1.1);
 }`),
 };

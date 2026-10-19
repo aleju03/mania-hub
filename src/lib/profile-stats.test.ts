@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTopPercent, parseProfileStats, parseProfileStatsData } from "./profile-stats";
+import { formatTopPercent, parseProfileStats, parseProfileStatsData, sessionLength } from "./profile-stats";
 
 describe("profile stats", () => {
   it("takes four distinct known stats only", () => {
@@ -14,6 +14,14 @@ describe("profile stats", () => {
     expect(parseProfileStatsData({ streak: "x", percentile: { rank: 30, players: 20 } })).toEqual({});
     expect(parseProfileStatsData({ ratio: { perfect: 300, great: 100 }, lnSplit: { ln: 2, rice: 5 } })).toEqual({ ratio: { perfect: 300, great: 100 }, lnSplit: { ln: 2, rice: 5 } });
     expect(parseProfileStatsData({ ratio: { perfect: 0, great: 0 }, lnSplit: { ln: -1, rice: 5 } })).toEqual({});
+    expect(parseProfileStatsData({ session: { minutes: 270, plays: 88, startedAt: "2026-10-01T10:00:00.000Z" } })).toEqual({ session: { minutes: 270, plays: 88, startedAt: "2026-10-01T10:00:00.000Z" } });
+    expect(parseProfileStatsData({ session: { minutes: 0, plays: 1, startedAt: "2026-10-01T10:00:00.000Z" } })).toEqual({});
+  });
+
+  it("reads a session in hours past the first hour", () => {
+    expect(sessionLength(42)).toEqual({ value: "42", hours: false });
+    expect(sessionLength(270)).toEqual({ value: "4.5", hours: true });
+    expect(sessionLength(731)).toEqual({ value: "12", hours: true });
   });
 
   it("shows enough digits to tell top players apart", () => {

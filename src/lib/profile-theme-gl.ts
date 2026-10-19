@@ -370,12 +370,18 @@ export function mountProfileBackdrop(
     }
   };
 
+  let drawnScroll = -1;
   const loop = (now: number) => {
     frame = 0;
     if (disposed) return;
-    // ~60fps at most: a 120Hz or 144Hz screen draws every other frame.
-    if (visible && now - last >= 15) {
+    // ~60fps at most: a 120Hz or 144Hz screen draws every other frame. While
+    // the page scrolls it draws every frame, or whatever the shader ties to
+    // the page (the hero's sun, the black hole) trails the content and steps,
+    // plainly so on a 240Hz screen.
+    const scrolling = scroll && window.scrollY !== drawnScroll;
+    if (visible && (scrolling || now - last >= 15)) {
       last = now;
+      drawnScroll = window.scrollY;
       render(now);
     }
     frame = requestAnimationFrame(loop);
@@ -441,13 +447,14 @@ interface Swatch {
   target: CanvasRenderingContext2D | null;
   theme: SupporterProfileThemeId;
   visible: boolean;
+  /* When it went live: it runs on from the still frame it showed before. */
+  start: number;
 }
 
 const swatches = new Set<Swatch>();
 let shared: { canvas: HTMLCanvasElement; context: ThemeContext } | null | undefined;
 let swatchFrame = 0;
 let swatchLast = 0;
-const swatchStart = typeof performance === "undefined" ? 0 : performance.now();
 
 function sharedContext() {
   if (shared !== undefined) return shared;
@@ -473,7 +480,7 @@ function drawSwatch(swatch: Swatch, time: number) {
 function swatchLoop(now: number) {
   if (now - swatchLast >= 1000 / 30) {
     swatchLast = now;
-    for (const swatch of swatches) if (swatch.visible) drawSwatch(swatch, (now - swatchStart) / 1000);
+    for (const swatch of swatches) if (swatch.visible) drawSwatch(swatch, STILL_TIME + (now - swatch.start) / 1000);
   }
   swatchFrame = swatches.size > 0 ? requestAnimationFrame(swatchLoop) : 0;
 }
@@ -481,12 +488,14 @@ function swatchLoop(now: number) {
 /* Draws the theme into `canvas` (sized by the caller), live while on screen
    unless `still`. Returns the cleanup. */
 export function mountThemeSwatch(canvas: HTMLCanvasElement, theme: SupporterProfileThemeId, still: boolean): () => void {
-  const swatch: Swatch = { canvas, target: null, theme, visible: true };
+  const swatch: Swatch = { canvas, target: null, theme, visible: true, start: performance.now() };
   if (still || reducedMotion()) {
     drawSwatch(swatch, STILL_TIME);
     return () => {};
   }
   swatches.add(swatch);
+  // The first live frame now, not on the loop's next turn.
+  drawSwatch(swatch, STILL_TIME);
   const watcher = new IntersectionObserver(([entry]) => {
     swatch.visible = entry.isIntersecting;
   });

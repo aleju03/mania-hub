@@ -4,7 +4,7 @@ import { useLingui } from "@lingui/react/macro";
 
 import { ManiaCard3DPanel } from "../player/maniacard3d/LazyManiaCard3DPanel";
 import { SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
-import { LnSplitCard, PercentileCard, RatioCard, StreakCard } from "../player/ProfileStatCards";
+import { LnSplitCard, PercentileCard, RatioCard, SessionCard, StreakCard } from "../player/ProfileStatCards";
 import { ProfileThemeBackdrop, ProfileThemeSwatch } from "./ProfileThemeBackdrop";
 import { SupporterStyledName } from "./SupporterNameStyle";
 import { FoilPreview } from "./FoilPreview";
@@ -497,18 +497,19 @@ const SAMPLE_STATS: Required<ProfileStatsData> = {
   lnSplit: { ln: 1_288, rice: 3_402 },
   streak: { longest: 41, current: 6 },
   percentile: { rank: 812, players: 24_310 },
+  session: { minutes: 287, plays: 96, startedAt: "2026-09-12T19:40:00.000Z" },
 };
 
 export function StatsShowcase() {
   const { t } = useLingui();
   const viewerId = useAuth().viewer?.id ?? null;
-  const [own, setOwn] = useState<Required<ProfileStatsData> | null>(null);
+  const [own, setOwn] = useState<ProfileStatsData | null>(null);
   useEffect(() => {
     if (!viewerId) return;
     let alive = true;
     void fetchLiveSupporterProfileLook(viewerId).then((look) => {
       const data = look.profileStatsData;
-      if (alive && data.ratio && data.lnSplit && data.streak && data.percentile) setOwn(data as Required<ProfileStatsData>);
+      if (alive && data.ratio && data.lnSplit && data.streak && data.percentile) setOwn(data);
     });
     return () => {
       alive = false;
@@ -517,11 +518,12 @@ export function StatsShowcase() {
   const data = own ?? SAMPLE_STATS;
   return (
     <div>
-      <Stagger className="grid grid-cols-1 gap-px overflow-hidden rounded-xl sm:grid-cols-2 lg:grid-cols-4">
+      <Stagger className="grid grid-cols-1 gap-px overflow-hidden rounded-xl sm:grid-cols-3 lg:grid-cols-5">
         <StaggerItem lift={false} className="grid"><RatioCard ratio={data.ratio} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><LnSplitCard lnSplit={data.lnSplit} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><StreakCard streak={data.streak} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><PercentileCard percentile={data.percentile} /></StaggerItem>
+        <StaggerItem lift={false} className="grid"><SessionCard session={data.session} /></StaggerItem>
       </Stagger>
       <p className="mt-2 text-[11px] text-osu-f1">{own ? t`Your numbers.` : t`Example numbers.`}</p>
     </div>

@@ -10,7 +10,7 @@ import { mountFoilSource } from "./FoilPreview";
    across the body, with a soft gloss where the tilt catches the light. It drops in the first time
    it scrolls into view and the code's characters spin and land one by one; a
    click flicks the ticket round and rolls the code again. Draws only while on
-   screen. It can be grabbed: dragged round any way, and let go it spins on
+   screen. It can be grabbed: spun round side to side and tipped a little, and let go it spins on
    the speed it had until it slows onto its front or its back, which is
    printed too. `fallback` shows instead where WebGL is missing. */
 
@@ -31,6 +31,9 @@ const DRAG_RADIANS_PER_PX = 0.011;
 const MAX_SPIN = 28;
 /* Below this speed (radians a second) a let-go ticket starts settling onto a face. */
 const SETTLE_SPEED = 2.2;
+/* How far it tips forward or back (radians). It spins freely side to side,
+   but tipping over the long edge would land it upside down. */
+const MAX_TILT = 0.55;
 
 const VERTEX = `
 uniform vec2 uSize;
@@ -390,10 +393,15 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
         // Seen from behind, the long axis points the other way, so a drag down still tips the near edge down.
         const facing = Math.cos(rot.y) < 0 ? -1 : 1;
         const turnY = dx * DRAG_RADIANS_PER_PX, turnX = dy * DRAG_RADIANS_PER_PX * facing;
+        // Tipping further out gets stiffer, like bending card stock.
+        const outward = Math.sign(turnX) === Math.sign(rot.x);
+        const give = outward ? Math.max(0, 1 - (Math.abs(rot.x) / MAX_TILT) ** 2) : 1;
+        const nextX = Math.max(-MAX_TILT, Math.min(MAX_TILT, rot.x + turnX * give));
+        const movedX = nextX - rot.x;
         rot.y += turnY;
-        rot.x += turnX;
+        rot.x = nextX;
         vel.y = vel.y * 0.4 + (turnY / dt) * 0.6;
-        vel.x = vel.x * 0.4 + (turnX / dt) * 0.6;
+        vel.x = vel.x * 0.4 + (movedX / dt) * 0.6;
         drag.x = event.clientX;
         drag.y = event.clientY;
         drag.at = now;
@@ -413,7 +421,7 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
           vel.y += 11;
           scramble = performance.now() + 150;
         }
-        vel.x = Math.max(-MAX_SPIN, Math.min(MAX_SPIN, vel.x));
+        vel.x = Math.max(-6, Math.min(6, vel.x));
         vel.y = Math.max(-MAX_SPIN, Math.min(MAX_SPIN, vel.y));
         queue();
       };
@@ -451,13 +459,18 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
 
         if (!drag) {
           rot.x += vel.x * dt;
+          if (Math.abs(rot.x) > MAX_TILT) {
+            rot.x = Math.sign(rot.x) * MAX_TILT;
+            vel.x *= -0.3;
+          }
           rot.y += vel.y * dt;
           const friction = Math.exp(-dt * 1.1);
           vel.x *= friction;
           vel.y *= friction;
           // Slow enough, it springs to the nearest face (either side) and upright.
           if (Math.abs(vel.y) < SETTLE_SPEED) vel.y += ((Math.round(rot.y / Math.PI) * Math.PI - rot.y) * 26 - vel.y * 6) * dt;
-          if (Math.abs(vel.x) < SETTLE_SPEED) vel.x += ((Math.round(rot.x / (Math.PI * 2)) * Math.PI * 2 - rot.x) * 26 - vel.x * 6) * dt;
+          // Tipped, it always comes back level.
+          vel.x += (-rot.x * 30 - vel.x * 7) * dt;
         }
 
         // At rest it sways and leans toward the pointer; while it is handled, it does not.

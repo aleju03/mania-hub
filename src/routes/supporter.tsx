@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { LoadoutStage } from "../components/supporter/LoadoutStage";
@@ -514,6 +514,7 @@ function SupporterPage() {
                         onThemeOptions={onThemeOptions}
                       />
                       {error && <div className="mt-3 text-[12px] text-osu-red-light">{error}</div>}
+                      <AnimatePresence>
                       {artDraft && (
                         <CustomArtDialog
                           draft={artDraft}
@@ -527,6 +528,7 @@ function SupporterPage() {
                           onClose={() => setArtDraft(null)}
                         />
                       )}
+                      </AnimatePresence>
                     </div>
                   </div>
                 )}

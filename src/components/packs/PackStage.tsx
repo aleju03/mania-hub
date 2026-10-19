@@ -20,7 +20,8 @@ import {
 } from "./packArt";
 import { createPackScene, type PackScene } from "./packScene";
 import { BladeFx, preloadSprites } from "./bladeFx";
-import { bladeLook, bladeTrailLife, drawBladeTrail } from "./packBlades";
+import { bladeLook, bladeTrailLife } from "./packBlades";
+import { createBladeRenderer, type BladeRenderer } from "./bladeGl";
 import { playBladeCut, playBladeRip, playBladeTick, playCardSlice, warmBladeSounds } from "./packSfx";
 
 // The cut is tracked in vertical columns; each cut column remembers the y
@@ -152,6 +153,12 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   fxRef.current ??= new BladeFx();
   // Travel since the stroke last threw something off (packBlades trailEvery).
   const trailTravelRef = useRef(0);
+  /* Draws the trail canvas: WebGL with bloom, or canvas 2D without it (bladeGl.ts). */
+  const bladeRendererRef = useRef<{ canvas: HTMLCanvasElement; renderer: BladeRenderer } | null>(null);
+  useEffect(() => () => {
+    bladeRendererRef.current?.renderer.dispose();
+    bladeRendererRef.current = null;
+  }, []);
   useEffect(() => {
     const look = bladeLook(blade);
     preloadSprites(look.sprites);
@@ -508,10 +515,10 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
         canvas.width = Math.round(vw * renderScale);
         canvas.height = Math.round(vh * renderScale);
       }
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
-      ctx.clearRect(0, 0, vw, vh);
+      if (bladeRendererRef.current?.canvas !== canvas) {
+        bladeRendererRef.current?.renderer.dispose();
+        bladeRendererRef.current = { canvas, renderer: createBladeRenderer(canvas) };
+      }
 
       const now = performance.now();
       const look = bladeLook(bladeRef.current);
@@ -519,10 +526,18 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       let points = trailPointsRef.current.filter((point) => now - point.t < life);
       if (points.length > TRAIL_MAX_POINTS) points = points.slice(-TRAIL_MAX_POINTS);
       trailPointsRef.current = points;
-      // The tip shows while holding, so the blade exists even when the hand pauses.
-      drawBladeTrail(ctx, look, points, now, trailHeldRef.current ? trailCursorRef.current : null);
       const fx = fxRef.current;
-      fx?.draw(ctx, vw, vh);
+      // The tip shows while holding, so the blade exists even when the hand pauses.
+      bladeRendererRef.current.renderer.draw({
+        look,
+        points,
+        now,
+        tip: trailHeldRef.current ? trailCursorRef.current : null,
+        fx,
+        width: vw,
+        height: vh,
+        pixelRatio: renderScale,
+      });
 
       if (trailHeldRef.current || trailPointsRef.current.length > 0 || fx?.alive) {
         trailRafRef.current = requestAnimationFrame(step);
@@ -772,6 +787,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     const rect = pack?.getBoundingClientRect();
     if (!pack || !rect) return;
     look.rip(fxRef.current, rect, rect.top + rect.height * cutY, 1);
+    bladeRendererRef.current?.renderer.impact(rect.left + rect.width / 2, rect.top + rect.height * cutY);
     ensureTrailLoop();
     if (look.shake) {
       const k = look.shake;

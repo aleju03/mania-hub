@@ -3,7 +3,7 @@ import { useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 
-import { ProfileStatPicker, useExtraStatPreviews } from "#/components/player/ProfileStatCards";
+import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, StatPreviewCell, StreakCard, useExtraStatPreviews } from "#/components/player/ProfileStatCards";
 import { fetchLiveSupporterProfileLook, forgetLiveSupporterLook } from "#/lib/live-backend";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "#/lib/profile-stats";
 import { saveSupporterProfileStatsSetting } from "#/lib/supporter-look-settings";
@@ -32,6 +32,19 @@ export function ProfileStatsSection({ viewerId, supporter }: { viewerId: number;
     };
   }, [viewerId]);
 
+  // The usual four need the profile's own numbers, which this page has not
+  // loaded; they show by name, the extras as the real cards.
+  const renderCell = (stat: ProfileStatId) => {
+    switch (stat) {
+      case "ratio": return <RatioCard ratio={data.ratio} />;
+      case "lnSplit": return <LnSplitCard lnSplit={data.lnSplit} />;
+      case "streak": return <StreakCard streak={data.streak} />;
+      case "percentile": return <PercentileCard percentile={data.percentile} />;
+      case "session": return <SessionCard session={data.session} />;
+      default: return <StatPreviewCell stat={stat} preview={previews[stat] ?? t`On your profile`} />;
+    }
+  };
+
   const change = (next: ProfileStatId[]) => {
     const before = stats;
     setStats(next);
@@ -59,6 +72,7 @@ export function ProfileStatsSection({ viewerId, supporter }: { viewerId: number;
             slot={slot}
             slots={stats}
             previews={previews}
+            renderCell={renderCell}
             onChange={change}
             disabled={!supporter}
           />
@@ -75,8 +89,9 @@ const PERKS: { title: MessageDescriptor; body: MessageDescriptor }[] = [
   { title: msg`Name style and font`, body: msg`Your name in its own style and font, on your profile and in every list it shows up in.` },
   { title: msg`Card foil and art`, body: msg`The light and the art on every copy of your card in packs, or an image of your own.` },
   { title: msg`Packs cosmetics`, body: msg`Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, print your packs on your own wrapper, and open them with your own blade.` },
-  { title: msg`Profile stats`, body: msg`Swap the four cards under your profile for your ratio, rice / LN split, longest streak or percentile.` },
-  { title: msg`Video share links`, body: msg`After exporting a replay video, get a link that plays it right in Discord chat. Links last 24 hours.` },
+  { title: msg`Profile stats`, body: msg`Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile.` },
+  { title: msg`Your own plays`, body: msg`Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan.` },
+  { title: msg`Video share links`, body: msg`After exporting a replay video, get a link that plays it right in Discord chat.` },
   { title: msg`A week for a friend`, body: msg`A one-time code that gives someone else a week of supporter.` },
 ];
 

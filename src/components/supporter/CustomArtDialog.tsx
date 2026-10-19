@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 import { Loader2 } from "lucide-react";
 
@@ -56,8 +57,12 @@ export function CustomArtDialog({ draft, uploading, error, foil, card, sleeve, o
   const slider = "w-full cursor-pointer accent-osu-pink disabled:cursor-default";
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[140] flex justify-center overflow-y-auto bg-black/75 p-3 sm:p-6"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[140] flex justify-center overflow-y-auto bg-black/75 p-3 sm:p-6 sm:backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={t`Your image`}
@@ -65,7 +70,7 @@ export function CustomArtDialog({ draft, uploading, error, foil, card, sleeve, o
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="my-auto grid w-full max-w-[640px] gap-5 rounded-2xl border border-osu-b3/30 bg-osu-b5 p-4 sm:grid-cols-[260px_minmax(0,1fr)] sm:p-5">
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.16, ease: "easeOut" }} className="my-auto grid w-full max-w-[640px] gap-5 rounded-2xl border border-osu-b3/30 bg-osu-b5 p-4 sm:grid-cols-[260px_minmax(0,1fr)] sm:p-5">
         <div className="relative mx-auto w-full max-w-[260px]">
           {card && look ? (
             <ManiaCardPanel user={card.user} scores={card.scores} loading={card.loading} isOwnProfile supporterLookOverride={look} showTierProgress={false} sleeve={sleeve} />
@@ -121,8 +126,8 @@ export function CustomArtDialog({ draft, uploading, error, foil, card, sleeve, o
             </button>
           </div>
         </div>
-      </div>
-    </div>,
+      </motion.div>
+    </motion.div>,
     document.body,
   );
 }

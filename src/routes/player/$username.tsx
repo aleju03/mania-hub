@@ -49,6 +49,7 @@ import {
   
   getScoreIdentity,
   getScoreTimeMs,
+  getScoreUrl,
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
 import { Segmented, SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
@@ -78,16 +79,18 @@ import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "../../components/supporter/SupporterNameStyle";
 import { ProfileThemeBackdrop } from "../../components/supporter/ProfileThemeBackdrop";
-import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
+import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "../../lib/profile-stats";
-import { saveSupporterProfileStatsSetting } from "../../lib/supporter-look-settings";
+import { saveSupporterProfilePlaysSetting, saveSupporterProfileStatsSetting } from "../../lib/supporter-look-settings";
+import { profilePlayAsTrackedPlay, type ProfilePlayPick, type ProfilePlays } from "../../lib/profile-plays";
+import { FeaturedPlayCard, FeaturedPlayDialog, FeaturedPlayEditButton } from "../../components/player/FeaturedPlays";
 import { useViewerIsSupporter } from "../../lib/viewer-supporter";
 import { useHighwayNotes } from "../../components/supporter/use-highway-notes";
 import { useHighwayChart } from "../../components/supporter/use-highway-chart";
 import { PROFILE_THEME_LOOKS, profileThemeStyle, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
 import { buildRestrictedBestList, profileRailTotals } from "../../components/player/restricted-best-scores";
 import { companellaImportsToScores, dropCompanellaOsuTwins } from "../../lib/companella-scores";
-import type { OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
+import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
 import { buildCourseClearScore, buildTrackedPlayScore } from "../../lib/tracked-play-score";
 import {
@@ -1127,6 +1130,7 @@ export function PlayerProfilePage({
     profileThemeOptions: ProfileThemeOptions;
     profileStats: ProfileStatId[] | null;
     profileStatsData: ProfileStatsData;
+    profilePlays: ProfilePlays | null;
     /* Only an active supporter has a card look. */
     supporter: boolean;
   } | null>(null);
@@ -1144,11 +1148,12 @@ export function PlayerProfilePage({
         profileThemeOptions: peekLiveSupporterProfileThemeOptions(profileUserId) ?? {},
         profileStats: peekLiveSupporterProfileStats(profileUserId)?.stats ?? null,
         profileStatsData: peekLiveSupporterProfileStats(profileUserId)?.data ?? {},
+        profilePlays: peekLiveSupporterProfileStats(profileUserId)?.plays ?? null,
         supporter: peekLiveSupporterLook(profileUserId) != null,
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, supporter: value.look !== null });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, supporter: value.look !== null });
     });
     return () => {
       alive = false;
@@ -1186,6 +1191,21 @@ export function PlayerProfilePage({
           : current);
       })
       .catch(() => setStatsOverride(null));
+  };
+  /* The two plays under the stats: the supporter's own picks, or the usual
+     newest and oldest top play. Saved before they show, since the backend
+     works out each play's numbers. */
+  const profilePlays = supporterFrame?.userId === profileUserId ? supporterFrame.profilePlays : null;
+  const [editingPlay, setEditingPlay] = useState<number | null>(null);
+  const saveProfilePlay = async (slot: number, pick: ProfilePlayPick | null) => {
+    const picks = [0, 1].map((index): ProfilePlayPick | null => {
+      if (index === slot) return pick;
+      const kept = profilePlays?.[index];
+      return kept ? { title: kept.title, beatmapId: kept.play.beatmapId, day: kept.play.day, show: kept.show } : null;
+    });
+    const saved = await saveSupporterProfilePlaysSetting({ data: { profilePlays: picks.some(Boolean) ? picks : null } });
+    forgetLiveSupporterLook(profileUserId);
+    setSupporterFrame((current) => current?.userId === profileUserId ? { ...current, profilePlays: saved.profilePlays } : current);
   };
   const restrictedBest = useMemo(
     () => restrictedStanding
@@ -1328,6 +1348,14 @@ export function PlayerProfilePage({
       country_code: user.country_code,
     }));
   }, [user]);
+
+  /* The newest and oldest top play open the same details card as their rows
+     in the Best tab, found there by score; one the list no longer holds keeps
+     its link to osu!. */
+  const openTopPlay = (snapshot: InsightScoreSnapshot | null) => {
+    const score = snapshot?.scoreUrl ? best.find((entry) => getScoreUrl(entry) === snapshot.scoreUrl) : undefined;
+    return score ? () => setDetailScore(score) : undefined;
+  };
 
   /* Tracked plays for the keymode the Best tab is filtered to, minus every map
      the window already lists. Empty for "all", for an untracked player, and
@@ -2744,6 +2772,8 @@ export function PlayerProfilePage({
                     return <StreakCard streak={profileStatsData.streak} />;
                   case "percentile":
                     return <PercentileCard percentile={profileStatsData.percentile} />;
+                  case "session":
+                    return <SessionCard session={profileStatsData.session} />;
                 }
               };
               return (
@@ -2755,7 +2785,7 @@ export function PlayerProfilePage({
                     <div key={`${slot}:${stat}`} className="group/stat relative grid">
                       {renderStatCell(stat)}
                       {canSwapStats && (
-                        <ProfileStatPicker slot={slot} slots={profileStatSlots} previews={statPreviews} onChange={setProfileStats} />
+                        <ProfileStatPicker slot={slot} slots={profileStatSlots} previews={statPreviews} renderCell={renderStatCell} onChange={setProfileStats} />
                       )}
                     </div>
                   ))}
@@ -2763,8 +2793,33 @@ export function PlayerProfilePage({
 
                 {/* Row 2: Newest + Oldest top play with map backgrounds */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <TopPlayCard label={t`Newest Top Play`} snapshot={displayedProfileInsights.newestTopPlay} />
-                  <TopPlayCard label={t`Oldest Top Play`} snapshot={displayedProfileInsights.oldestTopPlay} />
+                  {([
+                    [t`Newest Top Play`, displayedProfileInsights.newestTopPlay],
+                    [t`Oldest Top Play`, displayedProfileInsights.oldestTopPlay],
+                  ] as const).map(([label, snapshot], slot) => {
+                    const featured = profilePlays?.[slot] ?? null;
+                    return (
+                      <div key={slot} className="group/featured relative">
+                        {featured ? (
+                          <FeaturedPlayCard entry={featured} onOpen={() => openTrackedPlayDetails(profilePlayAsTrackedPlay(featured.play))} />
+                        ) : (
+                          <TopPlayCard label={label} snapshot={snapshot} onOpen={openTopPlay(snapshot)} />
+                        )}
+                        {canSwapStats && <FeaturedPlayEditButton onClick={() => setEditingPlay(slot)} />}
+                        <AnimatePresence>
+                        {editingPlay === slot && (
+                          <FeaturedPlayDialog
+                            slotLabel={label}
+                            current={featured}
+                            onSave={(pick) => saveProfilePlay(slot, pick)}
+                            onReset={featured ? () => saveProfilePlay(slot, null) : null}
+                            onClose={() => setEditingPlay(null)}
+                          />
+                        )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               );

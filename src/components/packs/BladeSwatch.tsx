@@ -2,12 +2,15 @@ import { useEffect, useRef } from "react";
 
 import type { SupporterBladeId } from "#/lib/supporter-pack-style";
 import { BladeFx, preloadSprites } from "./bladeFx";
+import { createBladeRenderer } from "./bladeGl";
 import { bladeLook, bladeTrailLife, drawBladeTrail, type TrailPoint } from "./packBlades";
 
 /* A blade in a small box, for the /supporter loadout and /support: the same
    streak, sparks and burst the pack stage draws (packBlades.ts, bladeFx.ts),
    scaled down. While `live` it slashes across, the pack gives, and it goes
-   again; otherwise it holds one moment of the stroke. Only runs on screen. */
+   again, drawn with the same WebGL bloom as the stage (bladeGl.ts);
+   otherwise it holds one moment of the stroke on a plain 2D canvas, so a
+   page of still swatches holds no GPU contexts. Only runs on screen. */
 
 const SWEEP_MS = 340;
 const LOOP_MS = 1700;
@@ -30,13 +33,13 @@ export function BladeSwatch({ blade, live = false, className = "" }: { blade: Su
     const h = canvas.clientHeight;
     canvas.width = Math.max(1, Math.round(w * ratio));
     canvas.height = Math.max(1, Math.round(h * ratio));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
     // The stage draws for a whole viewport; a box this size gets everything smaller.
     const scale = Math.min(1, Math.max(0.3, h / 220));
 
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (!live || reduced) {
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
       // One moment of the stroke: most of the sweep done, the tail fading.
       const now = 1000;
       const points: TrailPoint[] = [];
@@ -49,6 +52,7 @@ export function BladeSwatch({ blade, live = false, className = "" }: { blade: Su
       return;
     }
 
+    const renderer = createBladeRenderer(canvas);
     const fx = new BladeFx();
     const box = { left: w * 0.3, top: h * 0.2, width: w * 0.4, height: h * 0.6 };
     let frame = 0;
@@ -94,12 +98,10 @@ export function BladeSwatch({ blade, live = false, className = "" }: { blade: Su
       } else if (!ripped) {
         ripped = true;
         look.rip?.(fx, box, box.top + box.height * 0.3, scale);
+        renderer.impact(box.left + box.width / 2, box.top + box.height * 0.3, 0.6);
       }
       while (points.length && now - points[0].t > life) points.shift();
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-      drawBladeTrail(ctx, look, points, now, sweeping ? points[points.length - 1] ?? null : null, scale);
-      fx.draw(ctx, w, h);
+      renderer.draw({ look, points, now, tip: sweeping ? points[points.length - 1] ?? null : null, fx, width: w, height: h, pixelRatio: ratio, scale });
       if (visible) frame = requestAnimationFrame(step);
     };
     const observer = new IntersectionObserver(([entry]) => {
@@ -110,8 +112,10 @@ export function BladeSwatch({ blade, live = false, className = "" }: { blade: Su
     return () => {
       observer.disconnect();
       if (frame) cancelAnimationFrame(frame);
+      renderer.dispose();
     };
   }, [blade, live]);
 
-  return <canvas ref={ref} aria-hidden="true" className={className} />;
+  // A canvas holds one kind of context for good, so the live one is its own element.
+  return <canvas key={live ? "live" : "still"} ref={ref} aria-hidden="true" className={className} />;
 }

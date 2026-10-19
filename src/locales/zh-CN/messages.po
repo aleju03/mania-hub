@@ -550,6 +550,11 @@ msgstr "当前连续 {0}"
 #~ msgid "{0} holds their own card"
 #~ msgstr "{0} 持有自己的卡片"
 
+#. placeholder {0}: length.value
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0} hours"
+msgstr "{0} 小时"
+
 #. placeholder {0}: row.name
 #: src/routes/communities_.$id.tsx
 msgid "{0} icon"
@@ -613,6 +618,11 @@ msgstr "{0} 张谱面 · {1}轮换"
 #: src/routes/maps.tsx
 msgid "{0} maps · updated {1}"
 msgstr "{0} 张谱面 · 更新于 {1}"
+
+#. placeholder {0}: length.value
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0} min"
+msgstr "{0} 分钟"
 
 #. placeholder {0}: missingCount.toLocaleString("en-US")
 #: src/components/packs/CollectionPanel.tsx
@@ -795,6 +805,11 @@ msgstr "{0} 次游玩"
 #: src/components/player/ActivityPanel.tsx
 msgid "{0} plays in {selectedYear}"
 msgstr "{selectedYear} 年游玩 {0} 次"
+
+#. placeholder {0}: formatNumber(session.plays)
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0} plays in one sitting"
+msgstr "一次连续游玩 {0} 次"
 
 #. placeholder {0}: compact(judgement.plays)
 #. placeholder {1}: formatMonth(judgement.since)
@@ -2253,6 +2268,10 @@ msgstr "有 1 人持有你的卡片"
 msgid "1 play"
 msgstr "1 次游玩"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "1 play in one sitting"
+msgstr "一次连续游玩 1 次"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "1 rate per chart"
 msgstr "每张谱面 1 个倍速"
@@ -2861,6 +2880,7 @@ msgstr "准确率"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -3153,8 +3173,13 @@ msgstr ""
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
-msgid "After exporting a replay video, get a link that plays it right in Discord chat. Links last 24 hours."
-msgstr "导出回放视频后，获取可在 Discord 聊天中直接播放的链接。链接有效期 24 小时。"
+msgid "After exporting a replay video, get a link that plays it right in Discord chat."
+msgstr "导出回放视频后，获取可在 Discord 聊天中直接播放的链接。"
+
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+#~ msgid "After exporting a replay video, get a link that plays it right in Discord chat. Links last 24 hours."
+#~ msgstr "导出回放视频后，获取可在 Discord 聊天中直接播放的链接。链接有效期 24 小时。"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Age"
@@ -3469,6 +3494,10 @@ msgstr "任意图片、GIF 或视频，来自链接或文件。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #~ msgid "Any picture, GIF, video or web page, from a link or a file."
 #~ msgstr "任意图片、GIF、视频或网页，来自链接或文件。"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Any play the site tracked of you, under a title of your own, in place of your {slotLabel}."
+msgstr "用本站记录过的任意一次游玩，配上你自己的标题，替换你的{slotLabel}。"
 
 #: src/routes/skins.tsx
 msgid "anyone"
@@ -3797,6 +3826,10 @@ msgstr "返回收藏册"
 msgid "Back to menu"
 msgstr "返回菜单"
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "Back to my {slotLabel}"
+msgstr "换回我的{slotLabel}"
+
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/StreakGame.tsx
 msgid "Back to packs"
@@ -4063,6 +4096,10 @@ msgstr "最好 {best}pp"
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Best Performance"
+msgstr "最佳成绩"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Best play"
 msgstr "最佳成绩"
 
 #: src/components/replay/ReplayBrowseView.tsx
@@ -4347,6 +4384,7 @@ msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/DisplayNameEditor.tsx
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -4552,6 +4590,10 @@ msgstr "{0} 可更改名字"
 #: src/routes/recommendations.tsx
 msgid "change player"
 msgstr "更换玩家"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Change this play"
+msgstr "更换这次游玩"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Change this stat"
@@ -5231,6 +5273,10 @@ msgstr "连击数字体"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "ComboPosition"
 msgstr "ComboPosition"
+
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "Comfort map"
+#~ msgstr "舒适图"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Comic"
@@ -6234,11 +6280,13 @@ msgstr "青色"
 msgid "Czech"
 msgstr "捷克语"
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "dan"
 msgstr "段位"
 
 #: src/components/companella/SubmissionDetail.tsx
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
@@ -6712,6 +6760,7 @@ msgstr "刷够"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Done"
 msgstr "完成"
@@ -7278,6 +7327,10 @@ msgstr "每个卡包都给 {PACK_OPEN_SHARD_REWARD} 个碎片。回收重复卡�
 msgid "Every rate of a chart"
 msgstr "谱面的所有倍速"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Every stat"
+msgstr "全部数据"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
 #~ msgstr "上面每一步都是本站在猜。通过一个段位课题不是猜：有一条及格线，而你过了。所以只要本站看到这么一次，你在那一侧的估算<0>就不会低于你通过的那个课题</0>，不管技能平均下来是多少。打过 EXTRA-EPSILON，你就读作 epsilon，哪怕你的技能平均下来只到 delta。"
@@ -7504,6 +7557,10 @@ msgstr "最快"
 #: src/lib/supporter-name-fonts.ts
 msgid "Fatface"
 msgstr ""
+
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "Favourite map"
+#~ msgstr "最爱的图"
 
 #: src/routes/maps.tsx
 msgid "Favourited by"
@@ -7810,6 +7867,10 @@ msgstr "收藏册首页"
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "First Eternal"
 #~ msgstr "首张 Eternal"
+
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "First ever SS"
+#~ msgstr "第一个 SS"
 
 #: src/components/packs/PackSummary.tsx
 msgid "first ever to pull this"
@@ -8469,6 +8530,10 @@ msgstr "难"
 #~ msgid "hardest cards to find"
 #~ msgstr "最难找到的卡片"
 
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "Hardest pass"
+#~ msgstr "最难的通过"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Hardware encoding isn't available here. Smaller file uses your CPU."
 msgstr "此处无法使用硬件编码。“更小文件”会使用 CPU。"
@@ -8891,6 +8956,14 @@ msgstr "横向"
 msgid "Horror"
 msgstr ""
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "hour"
+msgstr "小时"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "hours"
+msgstr "小时"
+
 #: src/routes/dan-estimates.tsx
 msgid "How a chart's skill is picked"
 msgstr "谱面的技能是怎么选的"
@@ -9231,6 +9304,11 @@ msgstr "排队中"
 msgid "In server discovery"
 msgstr "已加入服务器发现"
 
+#. placeholder {0}: at + 1
+#: src/components/player/ProfileStatCards.tsx
+msgid "In slot {0}"
+msgstr "在第 {0} 格"
+
 #: src/components/player/LivePresence.tsx
 msgid "In song select"
 msgstr "选歌中"
@@ -9238,6 +9316,10 @@ msgstr "选歌中"
 #: src/components/player/LivePresence.tsx
 msgid "In the main menu"
 msgstr "在主菜单"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "In this slot"
+msgstr "在这一格"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "In your collection."
@@ -10209,6 +10291,7 @@ msgstr "长条主体颜色"
 #~ msgid "LN Coordination"
 #~ msgstr "LN 协调"
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "LN dan"
 msgstr "长条段位"
@@ -10643,6 +10726,11 @@ msgstr "最长"
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "Longest blitz streaks"
 msgstr "闪电战最长连胜"
+
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Longest session"
+msgstr "最长连续游玩"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ProfileStatCards.tsx
@@ -11137,6 +11225,10 @@ msgstr "计算方式"
 msgid "Middle lane thumb"
 msgstr "中间轨道拇指"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "min"
+msgstr "分钟"
+
 #: src/routes/maps.tsx
 msgid "Min PP"
 msgstr "最低 PP"
@@ -11385,6 +11477,10 @@ msgstr "{countryName} 游玩最多"
 #~ msgid "Most Played, Favourites and Random are built per country, plus one combined board for Global. There isn't one for {countryName} yet, so pick one of its countries, switch to Global, or open Farmed."
 #~ msgstr "游玩最多、收藏和随机按国家/地区构建，另有一个合并的全球榜单。{countryName} 还没有自己的榜单，请选择其中的某个国家/地区、切换到全球，或打开刷图热门。"
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "Most pp"
+msgstr "最多 pp"
+
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most unique cards"
 msgstr "最多不重复卡牌"
@@ -11426,6 +11522,7 @@ msgstr "msd"
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/player/FeaturedPlays.tsx
 #: src/routes/rankings.tsx
 msgid "MSD"
 msgstr "MSD"
@@ -11712,6 +11809,7 @@ msgstr "最新"
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/player/FeaturedPlays.tsx
 msgid "Newest"
 msgstr "最新"
 
@@ -12125,6 +12223,10 @@ msgstr "没有隐藏的玩家。"
 msgid "No players match."
 msgstr "没有匹配的玩家。"
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "No plays match that."
+msgstr "没有匹配的游玩。"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "No plays match these filters"
 msgstr "没有符合筛选条件的成绩"
@@ -12132,6 +12234,10 @@ msgstr "没有符合筛选条件的成绩"
 #: src/components/companella/ProfileImportedPlays.tsx
 #~ msgid "No plays sent through Companella yet."
 #~ msgstr "还没有通过 Companella 提交的成绩。"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "No pp on this play"
+msgstr "这次游玩没有 pp"
 
 #: src/routes/recommendations.tsx
 msgid "no pp range"
@@ -12368,6 +12474,10 @@ msgstr "没有符合筛选条件的追踪成绩。"
 #: src/components/maps/MapScoresBoard.tsx
 msgid "No tracked plays on this difficulty yet."
 msgstr "这个难度还没有追踪成绩。"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "No tracked plays yet."
+msgstr "还没有记录到的游玩。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays. Play some ranked maps and they show up here live, or check your top plays."
@@ -12644,6 +12754,10 @@ msgstr "还没打过"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "not rated"
 msgstr "未评级"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Not rated at this rate"
+msgstr "该速率下未评级"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not rated."
@@ -12946,6 +13060,7 @@ msgid "oldest"
 msgstr "最早"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/FeaturedPlays.tsx
 msgid "Oldest"
 msgstr "最早"
 
@@ -13029,6 +13144,10 @@ msgstr "本页内容"
 #: src/routes/hashi.tsx
 msgid "On Windows"
 msgstr "在 Windows 上"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "On your profile"
+msgstr "在你的主页上"
 
 #: src/routes/news_.companella.tsx
 msgid "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
@@ -13897,6 +14016,22 @@ msgstr "换一个文件"
 msgid "pick a difficulty below"
 msgstr "在下方选择难度"
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "Pick a play"
+msgstr "选择一次游玩"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Pick a play below."
+msgstr "在下方选择一次游玩。"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Pick a slot, then the card to put in it, or drag a card onto a slot."
+msgstr "先选一格再选卡片，或者把卡片拖到格子里。"
+
+#: src/components/player/ProfileStatCards.tsx
+#~ msgid "Pick a slot, then the card to put in it."
+#~ msgstr "先选一格，再选要放进去的卡片。"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Pick a target above. Progress updates as your mania plays land."
 msgstr "在上面选一个目标，你的 mania 成绩一落地进度就会更新。"
@@ -14333,6 +14468,7 @@ msgstr "发布你的服务器"
 msgid "posted by"
 msgstr "发布者"
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/ProfileParts.tsx
 msgid "pp"
 msgstr "pp"
@@ -14463,6 +14599,7 @@ msgstr "来自皮肤或默认采样的按键反馈音。关闭后只听谱面自
 msgid "preview"
 msgstr "预览"
 
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/skins/SkinPreviewPickers.tsx
 #: src/routes/skins_.$id.tsx
@@ -14599,6 +14736,7 @@ msgstr "个人资料横幅"
 msgid "Profile link"
 msgstr "主页链接"
 
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/supporter/SupporterExtras.tsx
 #: src/lib/signature-shared.ts
 #: src/routes/support.tsx
@@ -14657,6 +14795,10 @@ msgstr "成长记录"
 msgid "Promoted to {tierLabel}"
 msgstr "晋升至 {tierLabel}"
 
+#: src/components/player/FeaturedPlays.tsx
+#~ msgid "Proudest moment"
+#~ msgstr "最骄傲的时刻"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "provisional"
 msgstr "暂定"
@@ -14714,9 +14856,17 @@ msgstr "紫"
 msgid "Purple"
 msgstr "紫色"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
+msgstr "把本站记录过的任意一次游玩放在主页数据下方，配上你自己的标题，并显示它的 pp、MSD 或段位。"
+
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "Put it on my card"
 msgstr "放到我的卡牌上"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Put it on my profile"
+msgstr "放到我的主页"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
@@ -16131,6 +16281,7 @@ msgstr "正在保存。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/DisplayNameEditor.tsx
+#: src/components/player/FeaturedPlays.tsx
 msgid "Saving..."
 msgstr "正在保存..."
 
@@ -16480,6 +16631,10 @@ msgstr "搜索标题、艺术家、谱师，或使用筛选：keys=7 stars>5 sta
 #: src/components/layout/ChangelogModal.tsx
 msgid "Search updates"
 msgstr "搜索更新"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Search your plays"
+msgstr "搜索你的游玩"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Search your servers"
@@ -16955,6 +17110,10 @@ msgstr "多变而不规则的谱型，读谱不好就吃亏。"
 msgid "Shot {0}"
 msgstr "截图 {0}"
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "Show"
+msgstr "显示"
+
 #. placeholder {0}: item.label
 #: src/routes/skins_.$id.tsx
 msgid "Show {0}"
@@ -17048,6 +17207,7 @@ msgstr "收起"
 msgid "show more"
 msgstr "显示更多"
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -17386,6 +17546,10 @@ msgstr "单点叠"
 #~ msgid "Single-note streams {singleText}, chordstreams {chordText}"
 #~ msgstr "单点切 {singleText}，大切 {chordText}"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Singularity"
+msgstr "奇点"
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Site colours"
 msgstr ""
@@ -17587,6 +17751,11 @@ msgstr "跳过最近展示过的玩家和谱面。"
 #: src/components/packs/PackSummary.tsx
 msgid "sliced"
 msgstr "已撕开"
+
+#. placeholder {0}: slot + 1
+#: src/components/player/ProfileStatCards.tsx
+msgid "Slot {0}"
+msgstr "第 {0} 格"
 
 #: src/components/communities/field-options.tsx
 msgid "Slovak"
@@ -18390,8 +18559,8 @@ msgid "SV"
 msgstr "SV"
 
 #: src/components/player/ProfileStatCards.tsx
-msgid "swap"
-msgstr "互换"
+#~ msgid "swap"
+#~ msgstr "互换"
 
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -18403,8 +18572,12 @@ msgid "Swap any of the four cards under your profile for your ratio, rice / LN s
 msgstr "可将个人资料下方的四张数据卡换成你的 ratio、rice / LN 占比、最长连续天数或在已追踪玩家中的百分位。"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak or percentile."
-msgstr "把个人资料下方的四项数据换成你的 ratio、rice / LN 比例、最长连续天数或百分位。"
+#~ msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak or percentile."
+#~ msgstr "把个人资料下方的四项数据换成你的 ratio、rice / LN 比例、最长连续天数或百分位。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
+msgstr "把主页下方的四张卡片换成你的比率、Rice / LN 占比、最长连续天数、最长连续游玩或百分位。"
 
 #: src/components/communities/field-options.tsx
 msgid "Swedish"
@@ -18693,6 +18866,7 @@ msgstr "操作没有成功。请重试。"
 msgid "That did not save. Try again."
 msgstr "保存失败，请重试。"
 
+#: src/components/player/FeaturedPlays.tsx
 #: src/components/supporter/SupporterExtras.tsx
 msgid "That didn't save. Try again."
 msgstr "保存失败，请重试。"
@@ -20213,6 +20387,10 @@ msgstr "这次成绩不计入段位估算。"
 msgid "This play does not count toward dan."
 msgstr "这个成绩不计入段位。"
 
+#: src/components/player/FeaturedPlays.tsx
+msgid "This play has no pp, MSD or dan to show."
+msgstr "这次游玩没有可显示的 pp、MSD 或段位。"
+
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is below the accuracy needed for an MSD rating."
 msgstr "这次成绩的准确率未达到 MSD 评级要求。"
@@ -20434,6 +20612,7 @@ msgstr "标题"
 
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/player/FeaturedPlays.tsx
 msgid "Title"
 msgstr "标题"
 
@@ -22566,6 +22745,10 @@ msgstr "你的 osu! 最佳成绩、被追踪期间记录的所有成绩，以及
 msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it. Everyone else is on the <0>Dan tab of the rankings page</0>."
 msgstr "你自己的估算在玩家页面的技能页。点击那里的任意段位徽章，可以看到背后的通过。其他人的段位在<0>排行榜页面的段位标签</0>里。"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Your own plays"
+msgstr "你自己的游玩"
+
 #: src/routes/dan-estimates.tsx
 msgid "Your pass"
 msgstr "你的通过"
@@ -22589,6 +22772,10 @@ msgstr "你的成绩已经开始被记录"
 #: src/components/me/MyDataPanel.tsx
 msgid "Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
 msgstr "你的成绩还没有被记录，因为你不在本国家/地区的前 100 名里。把自己加进追踪器，这个页面就活起来了：实时的成绩流、你的打法特征和各项记录。之后你还可以设定目标，打图时自动完成。"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Your plays didn't load. Try again."
+msgstr "你的游玩没有加载出来，请重试。"
 
 #: src/routes/skins.tsx
 msgid "Your private skins"
@@ -22683,6 +22870,10 @@ msgstr ""
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "Your teams could not be loaded just now. Try again in a moment."
 #~ msgstr "暂时无法加载你的战队，请稍后再试。"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "Your title"
+msgstr "你的标题"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."
