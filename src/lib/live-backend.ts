@@ -4156,6 +4156,44 @@ export async function fetchLivePackCardGifts(ownerUserId: number, cardKey: strin
   return fetchLiveJson(`/api/packs/card-gifts?owner=${ownerUserId}&card=${encodeURIComponent(cardKey)}`);
 }
 
+/* Every edition one collector has pulled, card key to editions (best first).
+   Public like the shelf it decorates (live-backend pack-run.ts). */
+export async function fetchLivePackEditions(userId: number): Promise<Record<string, string[]>> {
+  const body = await fetchLiveJson<{ editions?: Record<string, string[]> }>(`/api/packs/editions/${userId}`);
+  return body.editions && typeof body.editions === "object" ? body.editions : {};
+}
+
+export interface LivePackRunBoardEntry {
+  userId: number;
+  username: string;
+  bestAnte: number;
+  bestHand: number;
+  runsWon: number;
+  level: number;
+}
+
+export async function fetchLivePackRunBoard(): Promise<LivePackRunBoardEntry[]> {
+  const body = await fetchLiveJson<{ entries?: LivePackRunBoardEntry[] }>("/api/packs/run/board");
+  return Array.isArray(body.entries) ? body.entries : [];
+}
+
+export interface LiveChainRunBoardEntry {
+  rank: number;
+  userId: number;
+  username: string;
+  round: number;
+  bestRow: number;
+  rows: number;
+  finished: boolean;
+  updatedAt: number;
+}
+
+/* The chain run's board: each player's best run, by round reached then best row. */
+export async function fetchLiveChainRunBoard(limit = 20): Promise<LiveChainRunBoardEntry[]> {
+  const body = await fetchLiveJson<{ entries?: LiveChainRunBoardEntry[] }>(`/api/chain-run/board?limit=${Math.max(1, Math.min(50, Math.floor(limit)))}`);
+  return Array.isArray(body.entries) ? body.entries : [];
+}
+
 /* How the community holds one player's own card ("your card got pulled"). */
 export async function fetchLivePackPulledStats(userId: number): Promise<LivePackPulledStats> {
   return fetchLiveJson(`/api/packs/pulled-stats/${userId}`);

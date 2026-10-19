@@ -119,6 +119,7 @@ export function createOverlayMaterial(
       uAvatarRadius: { value: layout.front.avatar.radius },
       uFlagMask: { value: flag ? textureRectUv(flag.rect) : new Vector4(-1, -1, 0, 0) },
       uFlagRadius: { value: flag?.radius ?? 0 },
+      uEdition: { value: data.edition === "foil" ? 1 : data.edition === "holo" ? 2 : data.edition === "polychrome" ? 3 : 0 },
     },
   });
 }

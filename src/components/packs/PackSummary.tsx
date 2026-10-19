@@ -23,6 +23,9 @@ import type { FlightRect, RevealedCard } from "./RevealStage";
 import { SlicedFace } from "./SlicedFace";
 import { rememberTeamName } from "../../lib/analytics-teams";
 import { UsernameText } from "../ui/UsernameText";
+import type { PackRunOpenPayload } from "#/lib/pack-run";
+import { EditionSheen } from "./run/EditionSheen";
+import { HandScore } from "./run/HandScore";
 
 interface PackSummaryProps {
   cards: RevealedCard[];
@@ -51,6 +54,9 @@ interface PackSummaryProps {
      the grid renders in place (no enter stagger) and each tile flies from
      its handed-off rect into its slot. */
   flyFrom?: Map<number, FlightRect> | null;
+  /* The pack run's side of this open (live-backend pack-run.ts): the tally
+     plays between the figures and the grid. Null without a run. */
+  run?: PackRunOpenPayload | null;
 }
 
 /* One card's journey from its reveal rect into its summary slot. */
@@ -132,6 +138,7 @@ export function PackSummary({
   damage = null,
   reducedMotion,
   flyFrom = null,
+  run = null,
 }: PackSummaryProps) {
   const { t } = useLingui();
   const locale = useLocale();
@@ -547,6 +554,8 @@ export function PackSummary({
         )}
       </div>
 
+      {run && <HandScore run={run} cardCount={cards.length} reducedMotion={reducedMotion} startDelayMs={flyFrom ? 900 : 650 + cards.length * 70} />}
+
       <div ref={gridRef} className="mt-7 flex flex-wrap items-start justify-center gap-4 sm:gap-5">
         {cards.map((card, position) => {
           const isBest = position === bestPosition;
@@ -624,6 +633,7 @@ export function PackSummary({
                     ),
                     thumbnail: card.thumbnail,
                     rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+                    edition: card.player.edition ?? null,
                   });
                   setLiftedPosition(position);
                 }}
@@ -717,6 +727,7 @@ export function PackSummary({
                     );
                     return damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face;
                   })()}
+                  {!isRecycled && !damage && <EditionSheen edition={card.player.edition} />}
                   {selecting && !isRecycled && !card.player.milestone && (
                     <>
                       <span
