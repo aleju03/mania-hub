@@ -6527,6 +6527,11 @@ msgstr "arrastra para recortar"
 msgid "Drag to resize"
 msgstr "Arrastra para cambiar el tamaño"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Drag to resize, double-click to reset"
+msgstr "Arrastra para cambiar el tamaño, doble clic para restablecer"
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "Draw a different set of charts"
 msgstr "Dibujar otro conjunto de mapas"
@@ -14985,6 +14990,10 @@ msgstr "Redimensionar / recortar"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resize / crop…"
 msgstr "Redimensionar / recortar…"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Resize panes"
+msgstr "Redimensionar paneles"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Resize to"

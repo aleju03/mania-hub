@@ -6539,6 +6539,11 @@ msgstr "拖动以裁剪"
 msgid "Drag to resize"
 msgstr "拖动调整大小"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Drag to resize, double-click to reset"
+msgstr "拖动调整大小，双击恢复"
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "Draw a different set of charts"
 msgstr "换一组谱面"
@@ -14997,6 +15002,10 @@ msgstr "调整尺寸 / 裁剪"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resize / crop…"
 msgstr "调整尺寸 / 裁剪…"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Resize panes"
+msgstr "调整面板大小"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Resize to"

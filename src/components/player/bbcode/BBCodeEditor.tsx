@@ -2,6 +2,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -99,6 +100,11 @@ const DRAFT_KEY_PREFIX = "mania-hub-bbcode-draft-v1:";
 // Fit-the-pane or osu!'s own size, kept out of the draft so it survives a reset
 // and follows the device rather than the page being written.
 const COLUMN_ZOOM_KEY = "mania-hub-bbcode-zoom-v1";
+// The code pane's share of the split view, per device like the zoom.
+const PANE_SPLIT_KEY = "mania-hub-bbcode-split-v1";
+const PANE_SPLIT_DEFAULT = 0.5;
+const PANE_SPLIT_MIN_PX = 240;
+const PANE_SPLIT_KEY_STEP = 0.02;
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
 const VISUAL_SYNC_DEBOUNCE_MS = 300;
 // How long a resize may run before it is worth saying so. Below this it reads
@@ -749,9 +755,12 @@ export function BBCodeEditor({
   // "fit" shrinks osu!'s 890px column into the pane, which on a phone leaves it
   // too small to read; "full" shows the column at osu!'s size and scrolls.
   const [columnZoom, setColumnZoom] = useState<"fit" | "full">("fit");
-  // How far the column has to shrink to fit. Below 1 the pane is narrower than
-  // a profile, which is the only time the zoom is worth a control.
-  const [fitScale, setFitScale] = useState(1);
+  // Whether the column has to shrink to fit, i.e. the pane is narrower than a
+  // profile, which is the only time the zoom is worth a control.
+  const [fitNeeded, setFitNeeded] = useState(false);
+  const [paneSplit, setPaneSplit] = useState(PANE_SPLIT_DEFAULT);
+  const [paneSplitDragging, setPaneSplitDragging] = useState(false);
+  const splitGridRef = useRef<HTMLDivElement>(null);
   // Set once the zoom is settled, by a stored choice or by the pane being too
   // narrow to read, so measuring the pane again never overrides it.
   const zoomChosenRef = useRef(false);
@@ -2808,7 +2817,9 @@ export function BBCodeEditor({
     if (frames.length === 0) return;
     const fit = (frame: HTMLDivElement) => {
       const scale = columnFitScale(frame.clientWidth);
-      setFitScale((prev) => (Math.abs(prev - scale) < 0.001 ? prev : scale));
+      // Only the crossing re-renders: dragging the split resizes the pane on
+      // every pointer move.
+      setFitNeeded(scale < 0.999);
       if (!zoomChosenRef.current && shouldOpenAtActualSize(frame.clientWidth)) {
         zoomChosenRef.current = true;
         setColumnZoom("full");
@@ -2849,6 +2860,63 @@ export function BBCodeEditor({
     setColumnZoom(next);
     writeStored(COLUMN_ZOOM_KEY, next);
   }, []);
+
+  useEffect(() => {
+    const stored = Number.parseFloat(readStored(PANE_SPLIT_KEY) ?? "");
+    if (Number.isFinite(stored)) setPaneSplit(Math.min(0.9, Math.max(0.1, stored)));
+  }, []);
+
+  // Written straight to the grid so a drag can move it without re-rendering
+  // the editor, and committed to state once the drag ends.
+  useLayoutEffect(() => {
+    splitGridRef.current?.style.setProperty("--bbcode-split", `${paneSplit * 100}%`);
+  }, [paneSplit, editMode]);
+
+  const clampPaneSplit = useCallback((value: number) => {
+    const width = splitGridRef.current?.clientWidth ?? 0;
+    const min = width > 0 ? Math.min(0.5, Math.max(0.1, PANE_SPLIT_MIN_PX / width)) : 0.1;
+    return Math.min(1 - min, Math.max(min, value));
+  }, []);
+
+  const commitPaneSplit = useCallback((value: number) => {
+    setPaneSplit(value);
+    writeStored(PANE_SPLIT_KEY, value.toFixed(3));
+  }, []);
+
+  const startPaneSplitDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const grid = splitGridRef.current;
+    if (!grid || event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    // A pane dragged narrow must not flip the preview to actual size.
+    zoomChosenRef.current = true;
+    setPaneSplitDragging(true);
+    let latest = paneSplit;
+    const move = (moveEvent: PointerEvent) => {
+      const rect = grid.getBoundingClientRect();
+      latest = clampPaneSplit((moveEvent.clientX - rect.left) / rect.width);
+      grid.style.setProperty("--bbcode-split", `${latest * 100}%`);
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      setPaneSplitDragging(false);
+      commitPaneSplit(latest);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }, [clampPaneSplit, commitPaneSplit, paneSplit]);
+
+  const handlePaneSplitKey = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    zoomChosenRef.current = true;
+    const step = event.key === "ArrowLeft" ? -PANE_SPLIT_KEY_STEP : PANE_SPLIT_KEY_STEP;
+    commitPaneSplit(clampPaneSplit(paneSplit + step));
+  }, [clampPaneSplit, commitPaneSplit, paneSplit]);
 
   /** Wraps/updates/unwraps the [url] around the selected image. */
   const mutateImageLinkDom = useCallback((value: string) => {
@@ -4126,7 +4194,31 @@ export function BBCodeEditor({
             ))}
           </div>
 
-          <div className={`grid lg:grid-cols-2 ${paneGrowClass}`}>
+          <div
+            ref={splitGridRef}
+            className={`relative grid lg:grid-cols-[minmax(0,var(--bbcode-split,50%))_minmax(0,1fr)] ${paneGrowClass}`}
+          >
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t`Resize panes`}
+              aria-valuemin={10}
+              aria-valuemax={90}
+              aria-valuenow={Math.round(paneSplit * 100)}
+              title={t`Drag to resize, double-click to reset`}
+              tabIndex={0}
+              onPointerDown={startPaneSplitDrag}
+              onKeyDown={handlePaneSplitKey}
+              onDoubleClick={() => commitPaneSplit(PANE_SPLIT_DEFAULT)}
+              style={{ left: "var(--bbcode-split, 50%)" }}
+              className="group absolute inset-y-0 z-10 hidden w-3 -translate-x-1/2 cursor-col-resize touch-none focus:outline-none lg:block"
+            >
+              <div
+                className={`mx-auto h-full w-0.5 transition-colors group-hover:bg-osu-h1/70 group-focus-visible:bg-osu-h1/70 ${
+                  paneSplitDragging ? "bg-osu-h1/70" : ""
+                }`}
+              />
+            </div>
             <div className={`${mobilePane === "write" ? "block" : "hidden"} lg:block lg:border-r border-osu-b3/30 min-h-0`}>
               <div className={`relative ${isPage ? "h-full" : ""}`}>
                 <div
@@ -4203,7 +4295,7 @@ export function BBCodeEditor({
           <span className="hidden sm:inline text-osu-c1"><Trans>formatting copied - right-click text to paste</Trans></span>
         ) : null}
         {/* Only worth offering while the pane is too narrow for a profile. */}
-        {fitScale < 0.999 ? (
+        {fitNeeded ? (
           <div className="flex items-center gap-0.5">
             {([["fit", t`Fit`], ["full", t`Actual size`]] as const).map(([mode, label]) => (
               <button

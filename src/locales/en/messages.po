@@ -6554,6 +6554,11 @@ msgstr "drag to crop"
 msgid "Drag to resize"
 msgstr "Drag to resize"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/routes/bbcode.tsx
+msgid "Drag to resize, double-click to reset"
+msgstr "Drag to resize, double-click to reset"
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "Draw a different set of charts"
 msgstr "Draw a different set of charts"
@@ -15024,6 +15029,10 @@ msgstr "Resize / crop"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resize / crop…"
 msgstr "Resize / crop…"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Resize panes"
+msgstr "Resize panes"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Resize to"
