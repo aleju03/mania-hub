@@ -1,15 +1,5 @@
-// Whether a play on a chart may count as evidence of a player's dan.
-// This reads the notes only, never chart identity or metadata. A chart that
-// fails the gate still shows its ordinary dan verdict; clears on it are just
-// not credited to the player.
 import type { ManiaBeatmap } from "../chart/beatmap";
 
-// Several objects on one column at the same instant still ask for one key
-// press. A small overlap is an ordinary mapping mistake, but a large pile
-// inflates star rating: the difficulty calculator counts every stored object
-// while gameplay collapses them. Eight sits far above an accidental double and
-// still catches the abusive piles, which carry 190, 1,000 and 1,248 stacked
-// heads in the cases that motivated the gate.
 export const DAN_INELIGIBLE_STACKED_HEAD_MIN = 8;
 
 export interface ChartDanEligibility {

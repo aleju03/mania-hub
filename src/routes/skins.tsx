@@ -12,12 +12,14 @@ import { Pagination } from "../components/ui/Pagination";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { OsuLogo } from "../components/ui/OsuLogo";
 import { useAuth } from "../lib/auth-context";
+import { useSkinGuestId } from "../lib/use-liked-skins";
 import { isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
 import { useBodyScrollLock } from "../lib/use-body-scroll-lock";
 import { useScrollRestoreRef } from "../lib/use-scroll-restore";
 import {
   fetchPrivateSkinsShelf,
+  fetchLikedSkinsList,
   fetchSkinsListDirect,
   fetchSkinsListSsr,
   isSkinNoteShape,
@@ -53,6 +55,9 @@ interface SkinsSearch {
   // Nobody's id is in the URL, so the filter travels as a plain flag and means
   // whoever is signed in when the link is opened; signed out it means nothing.
   mine?: boolean;
+  // Only the skins the signed-in viewer liked; like mine, a plain flag that
+  // means nothing signed out.
+  liked?: boolean;
   // The trait filters, each narrowing to skins the backend's archive analysis
   // said yes about: ships a lane cover, ships its own mania stage art, has
   // screenshots attached.
@@ -76,6 +81,7 @@ const DEFAULT_SKINS_SEARCH = {
   k: 0,
   special: false,
   mine: false,
+  liked: false,
   cover: false,
   stage: false,
   shots: false,
@@ -93,12 +99,13 @@ const SORT_OPTIONS: Array<{ key: string; label: ReturnType<typeof msg>; ascLabel
   { key: "newest", label: msg`newest`, ascLabel: msg`oldest`, desc: "newest", asc: "oldest" },
   { key: "downloads", label: msg`downloads`, desc: "downloads", asc: "downloads-asc" },
   { key: "views", label: msg`views`, desc: "views", asc: "views-asc" },
+  { key: "likes", label: msg`likes`, desc: "likes", asc: "likes-asc" },
   { key: "size", label: msg`size`, desc: "size", asc: "size-asc" },
 ];
 
 // Every filter in the rail back at its default; search text and sort stay.
 const CLEARED_FILTERS = {
-  k: 0, special: false, mine: false, cover: false, stage: false, shots: false,
+  k: 0, special: false, mine: false, liked: false, cover: false, stage: false, shots: false,
   lazer: false, stable: false, shape: "" as const, res: "",
 };
 
@@ -143,6 +150,7 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
     k,
     special: k === 8 && searchFlag(search.special),
     mine: searchFlag(search.mine),
+    liked: searchFlag(search.liked),
     cover: searchFlag(search.cover),
     stage: searchFlag(search.stage),
     shots: searchFlag(search.shots),
@@ -158,7 +166,7 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
 // Every page of the unfiltered newest catalogue is crawlable. Filtered and
 // sorted views stay client-fetched and noindexed to avoid duplicate listings.
 export function isSkinsBrowseView(search: SkinsSearch): boolean {
-  return !search.q && !search.k && !search.mine
+  return !search.q && !search.k && !search.mine && !search.liked
     && !search.cover && !search.stage && !search.shots && !search.lazer && !search.stable
     && !search.shape && !search.res
     && (search.sort ?? "newest") === "newest";
@@ -313,7 +321,7 @@ function SkinCardSkeleton() {
 
 function SkinsPage() {
   const {
-    q = "", page = 0, sort = "newest", k = 0, special = false, mine = false,
+    q = "", page = 0, sort = "newest", k = 0, special = false, mine = false, liked = false,
     cover = false, stage = false, shots = false, lazer = false, stable = false, shape = "", res = "",
   } = Route.useSearch();
   const { t, i18n } = useLingui();
@@ -331,6 +339,10 @@ function SkinsPage() {
   // flag has nobody to point at, so it filters nothing.
   const owner = mine ? viewerId : null;
   const mineActive = owner != null;
+  // Signed out, "liked by you" is this browser's guest likes, once it has any.
+  const guestId = useSkinGuestId();
+  const likeGuest = viewerId == null ? guestId : null;
+  const likedActive = liked && (viewerId != null || likeGuest != null);
   // Whether anything beyond the plain browse view is narrowing the grid, for
   // the empty state's wording and for where a fresh publish may land.
   const traitFilterCount = [cover, stage, shots, lazer !== stable, Boolean(shape), Boolean(res)].filter(Boolean).length;
@@ -343,7 +355,7 @@ function SkinsPage() {
 
   // Each unfiltered catalogue page can seed its grid on a cold load.
   const ssrList = Route.useLoaderData();
-  const isBrowse = isSkinsBrowseView({ q, sort, k, mine, cover, stage, shots, lazer, stable, shape, res });
+  const isBrowse = isSkinsBrowseView({ q, sort, k, mine, liked, cover, stage, shots, lazer, stable, shape, res });
   const ssrSeeded = ssrList != null && ssrList.page === page && isBrowse;
 
   // Seeded from the in-memory list cache so walking back from a skin page
@@ -351,7 +363,7 @@ function SkinsPage() {
   // server-rendered page starts on its own skins rather than on skeletons it
   // would replace a moment later.
   const [data, setData] = useState<SkinsListResult | null>(
-    () => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant, owner, cover, stage, shots, client, shape: shapeParam, res: resParam }))
+    () => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant, owner, liked: likedActive, cover, stage, shots, client, shape: shapeParam, res: resParam }))
       ?? (ssrSeeded ? ssrList : null),
   );
   const [loading, setLoading] = useState(!ssrSeeded);
@@ -395,7 +407,7 @@ function SkinsPage() {
       wide.removeEventListener("change", onWide);
     };
   }, [filtersOpen]);
-  const activeFilterCount = traitFilterCount + (k ? 1 : 0) + (mineActive ? 1 : 0);
+  const activeFilterCount = traitFilterCount + (k ? 1 : 0) + (mineActive ? 1 : 0) + (likedActive ? 1 : 0);
 
   // The resolutions worth offering are the ones the catalog answers to, which
   // the list ships as a facet. A filter already in the URL joins them either
@@ -409,11 +421,11 @@ function SkinsPage() {
     (patch: SkinsSearch) => {
       void navigate({
         to: "/skins",
-        search: { q, sort, k, special, mine, cover, stage, shots, lazer, stable, shape, res, page: 0, ...patch },
+        search: { q, sort, k, special, mine, liked, cover, stage, shots, lazer, stable, shape, res, page: 0, ...patch },
         replace: true,
       });
     },
-    [navigate, q, sort, k, special, mine, cover, stage, shots, lazer, stable, shape, res],
+    [navigate, q, sort, k, special, mine, liked, cover, stage, shots, lazer, stable, shape, res],
   );
 
   // Debounced text search: typing updates local state, the URL follows.
@@ -432,7 +444,7 @@ function SkinsPage() {
       setFailed(true);
       return;
     }
-    const cacheKey = skinsListCacheKey({ q, page, sort, k, variant, owner, cover, stage, shots, client, shape: shapeParam, res: resParam });
+    const cacheKey = skinsListCacheKey({ q, page, sort, k, variant, owner, liked: likedActive, cover, stage, shots, client, shape: shapeParam, res: resParam });
     // The server-rendered grid is already on screen and was fetched for this
     // very request, so the first pass has nothing to do: fetching here would
     // pull the same 24 rows a second time, once in the HTML and once over the
@@ -453,7 +465,14 @@ function SkinsPage() {
     setLoading(!cached);
     setFailed(false);
     // One list for everyone, straight from the backend and cacheable there.
-    fetchSkinsListDirect({ q, page, sort, k, variant, owner, cover, stage, shots, client, shape: shapeParam, res: resParam }, { signal: controller.signal })
+    // The liked filter is the exception: a signed-in viewer's likes are only
+    // taken from the vouched-for account, so it goes through a server fn; a
+    // guest's are asked for by the browser's guest id, uncached.
+    const listParams = { q, page, sort, k, variant, owner, cover, stage, shots, client, shape: shapeParam, res: resParam };
+    const request = likedActive && likeGuest == null
+      ? fetchLikedSkinsList({ data: listParams, signal: controller.signal })
+      : fetchSkinsListDirect(likedActive && likeGuest ? { ...listParams, liked: true, guest: likeGuest } : listParams, { signal: controller.signal });
+    request
       .then((result) => {
         writeCachedSkinsList(cacheKey, result);
         if (controller.signal.aborted) return;
@@ -467,7 +486,7 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, sort, k, variant, owner, cover, stage, shots, client, shapeParam, resParam, reloadTick, ssrList]);
+  }, [q, page, sort, k, variant, owner, likedActive, likeGuest, cover, stage, shots, client, shapeParam, resParam, reloadTick, ssrList]);
 
   useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {
@@ -662,6 +681,16 @@ function SkinsPage() {
           </RailOption>
         </RailSection>
       )}
+      {(auth.viewer || likeGuest) && (
+        <RailSection label={t`likes`}>
+          <RailOption active={!likedActive} onClick={() => applySearch({ liked: false })}>
+            <Trans>all skins</Trans>
+          </RailOption>
+          <RailOption active={likedActive} onClick={() => applySearch({ liked: true })}>
+            <Trans>liked by you</Trans>
+          </RailOption>
+        </RailSection>
+      )}
     </>
   );
 
@@ -824,16 +853,20 @@ function SkinsPage() {
                 ) : skins.length === 0 ? (
                   <div className="mx-auto max-w-md px-4 py-16 text-center">
                     <div className="text-sm font-bold text-white">
-                      {mineActive && !q && !k && !traitFiltersActive
+                      {likedActive && !mineActive && !q && !k && !traitFiltersActive
+                        ? <Trans>You have not liked a skin yet</Trans>
+                        : mineActive && !likedActive && !q && !k && !traitFiltersActive
                         ? <Trans>You have not published a skin yet</Trans>
-                        : q || k || mineActive || traitFiltersActive ? <Trans>No skins match</Trans> : <Trans>No skins yet</Trans>}
+                        : q || k || mineActive || likedActive || traitFiltersActive ? <Trans>No skins match</Trans> : <Trans>No skins yet</Trans>}
                     </div>
                     <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-                      {mineActive && !q && !k && !traitFiltersActive
+                      {likedActive && !mineActive && !q && !k && !traitFiltersActive
+                        ? <Trans>Skins you like show up here.</Trans>
+                        : mineActive && !likedActive && !q && !k && !traitFiltersActive
                         ? privateSkins.length > 0
                           ? <Trans>Your private skins are on the shelf above; anything you publish lands here.</Trans>
                           : <Trans>Upload a skin and it lands here.</Trans>
-                        : q || k || mineActive || traitFiltersActive
+                        : q || k || mineActive || likedActive || traitFiltersActive
                           ? <Trans>Clear the filters, or upload the skin yourself.</Trans>
                           : <Trans>The first uploaded skin lands here.</Trans>}
                     </p>

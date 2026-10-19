@@ -3447,6 +3447,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       <AddScoreModal
         userId={user.id}
         username={user.username}
+        hasMamesProfile={(user.server_links ?? []).some((link) => link.server === "mamestagram")}
         onClose={() => setAddScoreOpen(false)}
         onSubmitted={() => setSkillsRefreshKey((key) => key + 1)}
       />

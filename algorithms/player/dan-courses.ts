@@ -1,97 +1,31 @@
-// The real dan courses and how a pass of one becomes a player credential.
-// Clearing a course at its bar settles the player's dan at that level. Nothing
-// here rates a chart. Practice charts matched by content fingerprint use the
-// same shape to certify one skillset tile at a level.
 import { danTableLevelForLabel } from "../classification/chart-classifier";
 import { danCreditOffset, type DanCreditAnchors } from "./dan-credit";
 import { danLevelForLabel } from "../dan-estimator/labels";
 import { LN_LADDER_TOP } from "../dan-estimator/ln";
-import type { OsuMod } from "../chart/score";
+import type { CompanellaScoreMark, OscScore, OsuMod } from "../chart/score";
 
 export type DanCourseSide = "rc" | "ln";
 
 export interface DanCourse {
-  /** Practice-chart credentials floor only this player skillset. */
   skillset?: string;
-  /** The registered practice chart a fingerprint-matched upload stands for. */
   referenceBeatmapId?: number;
-  /** For a fingerprint-matched upload: the file checksum the match was made on. */
   checksum?: string;
   beatmapId: number;
   keyCount: number;
   side: DanCourseSide;
-  /**
-   * The bare ladder label for this course, with no +/- variant ("10", "gamma").
-   * Resolved through the same ladder the label is printed from.
-   */
   level: string;
-  /** The course's name as the evidence surfaces show it. */
   courseName: string;
-}
-
-/** One credited course pass. */
-export interface DanCourseClear {
-  skillset?: string;
-  referenceBeatmapId?: number;
-  keyCount: number;
-  side: DanCourseSide;
-  beatmapId: number;
-  courseName: string;
-  /** The course's own ladder label, before the accuracy offset. */
-  level: string;
-  /** Credited level: the course's level plus the accuracy offset. */
-  rawDan: number;
-  /** The accuracy the credit was judged on, in the ladder's own currency. */
-  accuracy: number;
-  /** Which formula that accuracy is in. A lazer play displays ScoreV2. */
-  currency: "stable" | "v2";
-  /** The threshold it was judged against, after any stable conversion. */
-  bar: number;
-  /** What the client showed, when that is a different number. */
-  displayedAccuracy: number | null;
-}
-
-/** The accuracy bar a ladder's course rules set (danClearBarFor in dan-clears.ts). */
-export interface DanCourseBar {
-  accuracy: number;
-  currency: "stable" | "v2";
-}
-
-export interface DanCourseCreditOptions {
-  /** danClearBarFor: the one place the community bars are written down. */
-  barFor: (side: DanCourseSide, keyCount: number, chartDan: number) => DanCourseBar;
-  /** STABLE_EQUIVALENT_V2_BAR_OFFSET, for reading a v2 bar off stable counts. */
-  stableEquivalentV2BarOffset: number;
-}
-
-/** One passed run on a registered course, as the credit rules read it. */
-export interface DanCoursePass {
-  beatmapId: number;
-  /** Null when the play's mods were never recorded, which credits nothing. */
-  mods: Array<OsuMod | string> | null;
-  /** The accuracy the client displayed. */
-  displayed: number;
-  /** Stable-formula accuracy from the judgement counts; null when counts are gone. */
-  stable?: number | null;
-  /** ScoreV2 accuracy from the judgement counts; null when counts are gone. */
-  scoreV2?: number | null;
-  /** The checksum of the file the play was set on, when known. */
-  checksum?: string | null;
+  added?: string;
 }
 
 const REFORM = "Dan ~ REFORM ~";
 
-// One upload per course. A re-upload is added only once checked to be the same
-// chart, with no edits or rate shift.
 const DAN_COURSES: DanCourse[] = [
-  // 4K rice. The greek levels are 11 (alpha) to 17 (eta). Courses below level 1
-  // are left out.
   { beatmapId: 2259503, keyCount: 4, side: "rc", level: "1", courseName: `${REFORM} 1st` },
   { beatmapId: 2259504, keyCount: 4, side: "rc", level: "2", courseName: `${REFORM} 2nd` },
   { beatmapId: 2259505, keyCount: 4, side: "rc", level: "3", courseName: `${REFORM} 3rd` },
   { beatmapId: 2259506, keyCount: 4, side: "rc", level: "4", courseName: `${REFORM} 4th` },
   { beatmapId: 2259507, keyCount: 4, side: "rc", level: "5", courseName: `${REFORM} 5th` },
-  // Two uploads of the 6th, both registered.
   { beatmapId: 2588623, keyCount: 4, side: "rc", level: "6", courseName: `${REFORM} 6th` },
   { beatmapId: 2259540, keyCount: 4, side: "rc", level: "6", courseName: `${REFORM} 6th` },
   { beatmapId: 2259541, keyCount: 4, side: "rc", level: "7", courseName: `${REFORM} 7th` },
@@ -104,9 +38,11 @@ const DAN_COURSES: DanCourse[] = [
   { beatmapId: 2259546, keyCount: 4, side: "rc", level: "delta", courseName: `${REFORM} EXTRA-DELTA` },
   { beatmapId: 2259547, keyCount: 4, side: "rc", level: "epsilon", courseName: `${REFORM} EXTRA-EPSILON` },
   { beatmapId: 2738788, keyCount: 4, side: "rc", level: "zeta", courseName: `${REFORM} FINAL-ZETA` },
+  { beatmapId: 4123991, keyCount: 4, side: "rc", level: "zeta", courseName: `${REFORM} EXTRA-ZETA`, added: "2026-10-11" },
+  { beatmapId: 5236209, keyCount: 4, side: "rc", level: "zeta", courseName: `${REFORM} EXTRA-ZETA`, added: "2026-10-11" },
+  { beatmapId: 4777121, keyCount: 4, side: "rc", level: "zeta", courseName: `${REFORM} EXTRA-ZETA`, added: "2026-10-11" },
   { beatmapId: 2738787, keyCount: 4, side: "rc", level: "eta", courseName: `${REFORM} FINAL-ETA` },
 
-  // 4K LN.
   { beatmapId: 1862813, keyCount: 4, side: "ln", level: "1", courseName: "4K LN Dan 1st" },
   { beatmapId: 1862814, keyCount: 4, side: "ln", level: "2", courseName: "4K LN Dan 2nd" },
   { beatmapId: 1862815, keyCount: 4, side: "ln", level: "3", courseName: "4K LN Dan 3rd" },
@@ -125,7 +61,6 @@ const DAN_COURSES: DanCourse[] = [
   { beatmapId: 4767800, keyCount: 4, side: "ln", level: "16", courseName: "4K LN Dan 16th - Yokaze" },
   { beatmapId: 5029140, keyCount: 4, side: "ln", level: "17", courseName: "4K LN Dan 17th - Yeehee" },
 
-  // 7K rice.
   { beatmapId: 965651, keyCount: 7, side: "rc", level: "0", courseName: "7K Regular Dan 0th" },
   { beatmapId: 965652, keyCount: 7, side: "rc", level: "1", courseName: "7K Regular Dan 1st" },
   { beatmapId: 965653, keyCount: 7, side: "rc", level: "2", courseName: "7K Regular Dan 2nd" },
@@ -142,8 +77,6 @@ const DAN_COURSES: DanCourse[] = [
   { beatmapId: 2194084, keyCount: 7, side: "rc", level: "zenith", courseName: "7K Regular Zenith Dan" },
   { beatmapId: 2221603, keyCount: 7, side: "rc", level: "stellium", courseName: "7K Regular Stellium Dan" },
 
-  // 7K LN. The 0th to 2nd are left out because the 7K LN table opens at 3, and
-  // a credit below it would clamp up to the table's first label.
   { beatmapId: 966816, keyCount: 7, side: "ln", level: "3", courseName: "7K LN Dan 3rd" },
   { beatmapId: 1875999, keyCount: 7, side: "ln", level: "4", courseName: "7K LN Dan 4th" },
   { beatmapId: 1872112, keyCount: 7, side: "ln", level: "5", courseName: "7K LN Dan 5th" },
@@ -157,7 +90,6 @@ const DAN_COURSES: DanCourse[] = [
   { beatmapId: 2764028, keyCount: 7, side: "ln", level: "zenith", courseName: "7K LN Zenith Dan" },
   { beatmapId: 3170990, keyCount: 7, side: "ln", level: "stellium", courseName: "7K LN Stellium Dan" },
 
-  // 6K rice. An older, superseded cut of the 4th to 6th is not registered.
   { beatmapId: 3197348, keyCount: 6, side: "rc", level: "0", courseName: "6K Regular Start Dan" },
   { beatmapId: 2335444, keyCount: 6, side: "rc", level: "1", courseName: "6K Regular Dan 1st" },
   { beatmapId: 2335445, keyCount: 6, side: "rc", level: "2", courseName: "6K Regular Dan 2nd" },
@@ -169,7 +101,6 @@ const DAN_COURSES: DanCourse[] = [
   { beatmapId: 3770230, keyCount: 6, side: "rc", level: "8", courseName: "6K Regular Dan 8th" },
   { beatmapId: 3770231, keyCount: 6, side: "rc", level: "9", courseName: "6K Regular Dan 9th" },
 
-  // 6K LN.
   { beatmapId: 2507666, keyCount: 6, side: "ln", level: "0", courseName: "6K LN Start Dan" },
   { beatmapId: 2507667, keyCount: 6, side: "ln", level: "1", courseName: "6K LN Dan 1st" },
   { beatmapId: 2507668, keyCount: 6, side: "ln", level: "2", courseName: "6K LN Dan 2nd" },
@@ -187,64 +118,7 @@ const DAN_COURSES: DanCourse[] = [
   { beatmapId: 2609888, keyCount: 6, side: "ln", level: "finish", courseName: "6K LN Finish Dan" },
 ];
 
-const COURSES_BY_BEATMAP = new Map<number, DanCourse>();
-for (const course of DAN_COURSES) COURSES_BY_BEATMAP.set(course.beatmapId, course);
-
-// Mods that make a run not the course. These remove failure, slow or reshuffle
-// the chart, rewrite its settings or notes, or play for the player. Mods the
-// course rules allow are left alone, since a harder run credited at the
-// course's level is a lower bound.
-const DISALLOWED_COURSE_MODS = new Set([
-  "EZ", "NF", "HT", "DC", "DA", "HO", "IN", "NR", "RD", "AT", "CN", "SO", "RX", "AP", "WU", "WD", "AS", "DP",
-  "1K", "2K", "3K", "4K", "5K", "6K", "7K", "8K", "9K", "10K",
-]);
-
-// Skillset credentials use an allowlist so an unknown mod cannot change the
-// reference's OD or notes.
-const SKILLSET_ALLOWED_MODS = new Set(["NM", "MR", "HD", "FI", "FL", "SD", "PF", "DT", "NC", "CL", "V2", "SV2"]);
-
-// A course pass credits at most 2 points under its bar, tighter than the
-// chart-clear curve, since it is a single run with no quorum behind it.
-const COURSE_CREDIT_BELOW_BAR_WINDOW = 0.02;
-
-// Sub-bar course curve. A run under the bar drops straight to -0.26, inside the
-// "-" tier, so it never prints as a bare level. The knee one point under puts
-// the "-"/"--" boundary there. Anchors sit just inside their tiers, since a
-// value on a boundary rounds across it.
-const COURSE_CREDIT_BELOW_BAR: DanCreditAnchors = [
-  [0, -0.26],
-  [0.5, -0.29],
-  [1, -0.5],
-];
-
-// 7K LN lets a run well short of its 95% bar fall toward the level below, down
-// to -0.70 at 93%. Credit at the bar is unchanged.
-const COURSE_CREDIT_7K_LN_BELOW_BAR: DanCreditAnchors = [
-  [0, -0.26],
-  [0.28, -0.29],
-  [0.5, -0.6],
-  [1, -0.7],
-];
-
-// Course bonus in absolute points over the bar. Capped under +0.5 so a maxed
-// run cannot round onto the next level. The same play still earns the
-// chart-clear bonus as an ordinary clear.
-const COURSE_CREDIT_ANCHORS: DanCreditAnchors = [
-  [0, 0],
-  [0.015, 0.11],
-  [0.02, 0.31],
-  [0.035, 0.45],
-];
-
-// Minimum deduction for a sub-bar course run, keeping it inside the "-" tier.
-const COURSE_NEAR_BAR_CAP = 0.26;
-
-/**
- * The numeric level of a course's label on its keymode and side's ladder, or
- * null when the label is not on that ladder.
- */
 export function danCourseLevelFor(course: DanCourse): number | null {
-  // Practice credentials also certify 7K LN 0th-2nd, below the estimator table.
   if (course.skillset && course.keyCount === 7 && course.side === "ln" && /^[012]$/.test(course.level)) return Number(course.level);
   if (course.keyCount !== 4) return danTableLevelForLabel(course.level, course.side, course.keyCount);
   if (course.side === "ln") {
@@ -254,6 +128,8 @@ export function danCourseLevelFor(course: DanCourse): number | null {
   return danLevelForLabel(course.level);
 }
 
+const COURSES_BY_BEATMAP = new Map<number, DanCourse>();
+
 export function listDanCourses(): readonly DanCourse[] {
   return DAN_COURSES;
 }
@@ -262,11 +138,12 @@ export function danCourseForBeatmap(beatmapId: number): DanCourse | undefined {
   return COURSES_BY_BEATMAP.get(beatmapId);
 }
 
-/**
- * Whether a play's mods leave the course intact. Unrecorded mods (null) credit
- * nothing, since a fifth of above-bar passes on the top 4K courses are HT.
- */
-export function danCourseModsAllowed(mods: Array<OsuMod | string> | null | undefined): boolean {
+const DISALLOWED_COURSE_MODS = new Set([
+  "EZ", "NF", "HT", "DC", "DA", "HO", "IN", "NR", "RD", "AT", "CN", "SO", "RX", "AP", "WU", "WD", "AS", "DP",
+  "1K", "2K", "3K", "4K", "5K", "6K", "7K", "8K", "9K", "10K",
+]);
+
+export function danCourseModsAllowed(mods: OsuMod[] | null | undefined): boolean {
   if (!Array.isArray(mods)) return false;
   for (const mod of mods) {
     const acronym = (typeof mod === "string" ? mod : String(mod?.acronym ?? "")).toUpperCase();
@@ -277,11 +154,30 @@ export function danCourseModsAllowed(mods: Array<OsuMod | string> | null | undef
   return true;
 }
 
-/**
- * Credited level offset for a course run, or null when it is too far under the
- * bar. `allowBelowBar` is off for 4K LN, whose labels have no minus tier, so a
- * sub-bar credit would round up to a full clear.
- */
+const COURSE_CREDIT_BELOW_BAR_WINDOW = 0.02;
+
+const SKILLSET_CREDIT_BELOW_BAR_WINDOW = 0.01;
+
+const COURSE_CREDIT_BELOW_BAR: DanCreditAnchors = [
+  [0, -0.26],
+  [0.5, -0.29],
+  [1, -0.5],
+];
+
+const COURSE_CREDIT_7K_LN_BELOW_BAR: DanCreditAnchors = [
+  [0, -0.26],
+  [0.28, -0.29],
+  [0.5, -0.6],
+  [1, -0.7],
+];
+
+const COURSE_CREDIT_ANCHORS: DanCreditAnchors = [
+  [0, 0],
+  [0.015, 0.11],
+  [0.02, 0.31],
+  [0.035, 0.45],
+];
+
 export function danCourseCreditOffset(
   accuracy: number,
   bar: number,
@@ -295,53 +191,66 @@ export function danCourseCreditOffset(
       ? COURSE_CREDIT_7K_LN_BELOW_BAR
       : COURSE_CREDIT_BELOW_BAR,
     belowBarWindow: COURSE_CREDIT_BELOW_BAR_WINDOW,
-    nearBarCap: COURSE_NEAR_BAR_CAP,
+    nearBarCap: 0.26,
     allowBelowBar,
   });
 }
 
-/**
- * Every credited course from a player's passed runs, best per course, strongest
- * first. Pass `courses` with fingerprint-matched practice charts to credit
- * skillset credentials. Failed runs do not belong in `passes`.
- */
-export function creditDanCoursePasses(
-  passes: DanCoursePass[],
-  options: DanCourseCreditOptions,
-  courses: ReadonlyMap<number, DanCourse> = COURSES_BY_BEATMAP,
-): DanCourseClear[] {
-  const credited: DanCourseClear[] = [];
-  for (const pass of passes) {
-    const course = courses.get(pass.beatmapId);
-    if (!course || !registeredModsAllowed(course, pass.mods)) continue;
-    // A fingerprint-matched upload only counts on the file it was matched on.
-    if (course.checksum && pass.checksum && course.checksum !== pass.checksum.toLowerCase()) continue;
-    const clear = creditPass(course, pass.displayed, pass.stable ?? null, pass.scoreV2 ?? null, options);
-    if (clear) credited.push(clear);
-  }
-  return bestPerCourse(credited);
+export interface DanCoursePlay {
+  scoreId: number | null;
+  soloScoreId: number | null;
+  legacyScoreId: number | null;
+  mods: OsuMod[];
+  statistics: OscScore["statistics"] | null;
+  maxCombo: number | null;
+  totalScore: number | null;
+  rank: string | null;
+  playedAt: string | null;
+  hasReplay: boolean | null;
+  isLazer: boolean | null;
+  companella?: Pick<CompanellaScoreMark, "importId" | "replay" | "app" | "video" | "client">;
 }
 
-function registeredModsAllowed(course: DanCourse, mods: Array<OsuMod | string> | null | undefined): boolean {
-  if (!danCourseModsAllowed(mods)) return false;
-  return !course.skillset || mods!.every((mod) => SKILLSET_ALLOWED_MODS.has(
-    (typeof mod === "string" ? mod : String(mod.acronym)).toUpperCase(),
-  ));
+export interface DanCourseClear {
+  skillset?: string;
+  referenceBeatmapId?: number;
+  keyCount: number;
+  side: DanCourseSide;
+  beatmapId: number;
+  courseName: string;
+  level: string;
+  rawDan: number;
+  accuracy: number;
+  currency: "stable" | "v2";
+  bar: number;
+  displayedAccuracy: number | null;
+  beatmapStatus: string | null;
+  play: DanCoursePlay;
 }
 
-function creditPass(
-  course: DanCourse,
-  displayed: number,
-  stable: number | null,
-  scoreV2: number | null,
-  options: DanCourseCreditOptions,
-): DanCourseClear | null {
+export interface DanCourseBar {
+  accuracy: number;
+  currency: "stable" | "v2";
+}
+
+export interface DanCourseCreditOptions {
+  barFor: (side: DanCourseSide, keyCount: number, chartDan: number) => DanCourseBar;
+  stableEquivalentV2BarOffset: number;
+}
+
+interface CoursePass {
+  course: DanCourse;
+  displayed: number;
+  stable: number | null;
+  scoreV2: number | null;
+  play: DanCoursePlay;
+}
+
+function creditPass(pass: CoursePass, options: DanCourseCreditOptions, statusByBeatmap?: Map<number, string>): DanCourseClear | null {
+  const { course, displayed, stable, scoreV2 } = pass;
   const level = danCourseLevelFor(course);
   if (level == null) return null;
   const bar = options.barFor(course.side, course.keyCount, level);
-  // Same currency walk as collectDanClears, so course passes and rated clears
-  // are judged alike. A displayed accuracy that differs from the stable one
-  // marks a lazer play, which displays ScoreV2.
   const isLazerPlay = stable != null && Math.abs(displayed - stable) > 1e-9;
   let threshold = bar.accuracy;
   let accuracy: number;
@@ -355,11 +264,12 @@ function creditPass(
     accuracy = stable ?? displayed;
     threshold += options.stableEquivalentV2BarOffset;
   }
-  // 4K LN courses have nothing under their bar, so a sub-bar run is a fail.
   const allowBelowBar = !(course.keyCount === 4 && course.side === "ln");
-  // A skillset credential needs the full bar and grants exactly its level.
   const offset = course.skillset
-    ? (Number.isFinite(accuracy) && accuracy <= 1 && accuracy + 1e-9 >= threshold ? 0 : null)
+    ? (!Number.isFinite(accuracy) || accuracy > 1 ? null
+      : accuracy + 1e-9 >= threshold ? 0
+      : accuracy + SKILLSET_CREDIT_BELOW_BAR_WINDOW + 1e-9 >= threshold ? danCourseCreditOffset(accuracy, threshold, allowBelowBar, course)
+      : null)
     : danCourseCreditOffset(accuracy, threshold, allowBelowBar, course);
   if (offset == null) return null;
   return {
@@ -374,10 +284,11 @@ function creditPass(
     currency: bar.currency,
     bar: threshold,
     displayedAccuracy: Math.abs(displayed - accuracy) > 1e-9 ? displayed : null,
+    beatmapStatus: statusByBeatmap?.get(course.beatmapId) ?? null,
+    play: { ...pass.play, isLazer: pass.play.isLazer ?? isLazerPlay },
   };
 }
 
-/** Best credit per course, strongest first. */
 function bestPerCourse(clears: DanCourseClear[]): DanCourseClear[] {
   const best = new Map<number, DanCourseClear>();
   for (const clear of clears) {
@@ -385,4 +296,39 @@ function bestPerCourse(clears: DanCourseClear[]): DanCourseClear[] {
     if (!current || clear.rawDan > current.rawDan) best.set(clear.beatmapId, clear);
   }
   return [...best.values()].sort((a, b) => b.rawDan - a.rawDan);
+}
+
+const SKILLSET_ALLOWED_MODS = new Set(["NM", "MR", "HD", "FI", "FL", "SD", "PF", "DT", "NC", "CL", "V2", "SV2"]);
+
+function registeredModsAllowed(course: DanCourse, mods: OsuMod[] | null | undefined): boolean {
+  if (!danCourseModsAllowed(mods)) return false;
+  return !course.skillset || mods!.every((mod) => SKILLSET_ALLOWED_MODS.has(
+    (typeof mod === "string" ? mod : String(mod.acronym)).toUpperCase(),
+  ));
+}
+
+export interface DanCoursePass {
+  beatmapId: number;
+  mods: OsuMod[] | null;
+  displayed: number;
+  stable?: number | null;
+  scoreV2?: number | null;
+  checksum?: string | null;
+  play: DanCoursePlay;
+}
+
+export function creditDanCoursePasses(
+  passes: DanCoursePass[],
+  options: DanCourseCreditOptions,
+  courses: ReadonlyMap<number, DanCourse> = COURSES_BY_BEATMAP,
+): DanCourseClear[] {
+  const credited: DanCourseClear[] = [];
+  for (const pass of passes) {
+    const course = courses.get(pass.beatmapId);
+    if (!course || !registeredModsAllowed(course, pass.mods)) continue;
+    if (course.checksum && pass.checksum && course.checksum !== pass.checksum.toLowerCase()) continue;
+    const clear = creditPass({ course, displayed: pass.displayed, stable: pass.stable ?? null, scoreV2: pass.scoreV2 ?? null, play: pass.play }, options);
+    if (clear) credited.push(clear);
+  }
+  return bestPerCourse(credited);
 }

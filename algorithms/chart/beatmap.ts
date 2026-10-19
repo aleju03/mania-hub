@@ -1,12 +1,7 @@
-// Parses a mania .osu file into the note list every rating module reads:
-// columns, note and hold times, key count, OD, breaks, red-line timing, and
-// the scroll velocity changes the player sees (normalized so the chart's main
-// tempo scrolls at 1.0x).
-
 export interface ManiaNote {
-  column: number; // 0-indexed
-  time: number; // start time, ms
-  endTime: number; // end time, ms (equals time for a tap, later for a hold)
+  column: number;
+  time: number;
+  endTime: number;
   isHold: boolean;
 }
 
@@ -41,7 +36,6 @@ export interface ManiaBeatmap {
   backgroundFilename: string;
   breakPeriods: ManiaBreakPeriod[];
   scrollVelocities: ManiaScrollVelocity[];
-  /** Uninherited (red line) timing points in file order; optional so hand-built maps need none. */
   timingPoints?: ManiaTimingPoint[];
 }
 
@@ -51,17 +45,110 @@ type ParsedControlPoint =
   | { kind: "effect"; order: number; time: number; scrollSpeed: number };
 
 const DEFAULT_BEAT_LENGTH = 1000;
-// Scroll multipliers this close to 1 (or to the previous one) count as no change.
 const SCROLL_MULTIPLIER_EPSILON = 1e-4;
 
+function normalizeKeyCount(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 4;
+  return Math.max(1, Math.min(18, roundHalfEven(value)));
+}
+
+function roundHalfEven(value: number): number {
+  const floor = Math.floor(value);
+  const diff = value - floor;
+  if (diff > 0.5) return floor + 1;
+  if (diff < 0.5) return floor;
+  return floor % 2 === 0 ? floor : floor + 1;
+}
+
+function getMostCommonBeatLength(timingPoints: TimingPoint[], lastObjectTime: number): number {
+  if (timingPoints.length === 0) return DEFAULT_BEAT_LENGTH;
+
+  const lastTime = lastObjectTime > 0 ? lastObjectTime : timingPoints.at(-1)?.time ?? 0;
+  const durations = new Map<number, number>();
+
+  for (let i = 0; i < timingPoints.length; i++) {
+    const point = timingPoints[i];
+    if (point.time > lastTime) {
+      durations.set(point.beatLength, durations.get(point.beatLength) ?? 0);
+      continue;
+    }
+
+    const currentTime = i === 0 ? 0 : point.time;
+    const nextTime = i === timingPoints.length - 1 ? lastTime : timingPoints[i + 1].time;
+    const duration = Math.max(0, nextTime - currentTime);
+    const roundedBeatLength = Math.round(point.beatLength * 1000) / 1000;
+    durations.set(roundedBeatLength, (durations.get(roundedBeatLength) ?? 0) + duration);
+  }
+
+  let mostCommonBeatLength = 0;
+  let longestDuration = -1;
+  for (const [beatLength, duration] of durations) {
+    if (duration > longestDuration) {
+      mostCommonBeatLength = beatLength;
+      longestDuration = duration;
+    }
+  }
+
+  if (mostCommonBeatLength <= 0) return DEFAULT_BEAT_LENGTH;
+
+  let minBeatLength = Infinity;
+  let maxBeatLength = -Infinity;
+  for (const point of timingPoints) {
+    if (point.beatLength < minBeatLength) minBeatLength = point.beatLength;
+    if (point.beatLength > maxBeatLength) maxBeatLength = point.beatLength;
+  }
+  return Math.max(minBeatLength, Math.min(maxBeatLength, mostCommonBeatLength));
+}
+
+function buildManiaScrollVelocities(
+  timingPoints: TimingPoint[],
+  controlPoints: ParsedControlPoint[],
+  lastObjectTime: number,
+): ManiaScrollVelocity[] {
+  if (controlPoints.length === 0 || timingPoints.length === 0) return [];
+
+  const baseBeatLength = getMostCommonBeatLength(timingPoints, lastObjectTime);
+  const collapsed: ManiaScrollVelocity[] = [];
+  let currentBeatLength = DEFAULT_BEAT_LENGTH;
+  let currentScrollSpeed = 1;
+
+  for (const point of [...controlPoints].sort((a, b) => a.time - b.time || a.order - b.order)) {
+    if (point.time > lastObjectTime) break;
+
+    if (point.kind === "timing") currentBeatLength = point.beatLength;
+    else currentScrollSpeed = point.scrollSpeed;
+
+    const rawMultiplier = Math.max(0.01, Math.min(20, currentScrollSpeed * baseBeatLength / currentBeatLength));
+    const multiplier = Math.abs(rawMultiplier - 1) <= SCROLL_MULTIPLIER_EPSILON ? 1 : rawMultiplier;
+    const previous = collapsed[collapsed.length - 1];
+
+    if (previous && previous.time === point.time) {
+      previous.multiplier = multiplier;
+    } else {
+      collapsed.push({ time: point.time, multiplier });
+    }
+  }
+
+  const output: ManiaScrollVelocity[] = [];
+  let previousMultiplier = 1;
+
+  for (const point of collapsed) {
+    if (Math.abs(point.multiplier - previousMultiplier) <= SCROLL_MULTIPLIER_EPSILON) continue;
+    output.push(point);
+    previousMultiplier = point.multiplier;
+  }
+
+  return output;
+}
+
 export function parseManiaBeatmap(content: string): ManiaBeatmap {
-  const lines = content.split("\n").map((line) => line.trim());
+  const lines = content.split("\n").map((l) => l.trim());
 
   let title = "";
   let artist = "";
   let version = "";
   let creator = "";
-  let circleSize = 4; // CS is the key count in mania
+  let circleSize = 4;
   let overallDifficulty = 8;
   let beatmapsetId: number | null = null;
   let audioFilename = "";
@@ -120,11 +207,9 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
       if (parts.length >= 2) {
         const time = parseFloat(parts[0]);
         const beatLength = parseFloat(parts[1]);
-        // Old files have no uninherited flag, so a short line is a red line.
         const uninherited = parts.length < 7 || parts[6].trim() !== "0";
         if (beatLength > 0 && uninherited) {
           timingPoints.push({ time, beatLength });
-          // A red line also resets the green-line scroll speed to 1.
           controlPoints.push({ kind: "timing", order: controlPointOrder++, time, beatLength });
           controlPoints.push({ kind: "effect", order: controlPointOrder++, time, scrollSpeed: 1 });
         } else if (beatLength < 0 && !uninherited) {
@@ -143,14 +228,16 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
       if (parts.length >= 5) {
         const x = parseInt(parts[0], 10);
         const time = parseInt(parts[2], 10);
+        if (!Number.isFinite(time)) continue;
         const type = parseInt(parts[3], 10);
         const keyCount = normalizeKeyCount(circleSize);
+
         const column = Math.floor((x * keyCount) / 512);
+
         const isHold = (type & 128) !== 0;
         let endTime = time;
 
         if (isHold && parts.length >= 6) {
-          // A hold stores its end in the extras field as "endTime:hitSample".
           const extras = parts[5].split(":");
           endTime = parseInt(extras[0], 10) || time;
         }
@@ -160,14 +247,11 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
     }
   }
 
-  // Nominal BPM is the first red line in file order.
   const bpm = timingPoints.length > 0 ? Math.round(60000 / timingPoints[0].beatLength) : 0;
 
-  // Last note end. A loop rather than Math.max(...notes): hour-long charts
-  // have 100k+ notes, which overflows the call stack as spread arguments.
   let totalLength = 0;
-  for (const note of notes) {
-    if (note.endTime > totalLength) totalLength = note.endTime;
+  for (const n of notes) {
+    if (n.endTime > totalLength) totalLength = n.endTime;
   }
   const sortedNotes = notes.sort((a, b) => a.time - b.time);
 
@@ -189,102 +273,4 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
     scrollVelocities: buildManiaScrollVelocities(timingPoints, controlPoints, totalLength),
     timingPoints,
   };
-}
-
-// Missing or invalid CS reads as 4K; fractional CS rounds up; clamped to 1-18 keys.
-function normalizeKeyCount(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 4;
-  return Math.max(1, Math.min(18, Number.isInteger(value) ? value : Math.ceil(value)));
-}
-
-// The beat length that covers the most playing time, which osu! uses as the
-// 1.0x reference for mania scroll speed.
-function getMostCommonBeatLength(timingPoints: TimingPoint[], lastObjectTime: number): number {
-  if (timingPoints.length === 0) return DEFAULT_BEAT_LENGTH;
-
-  const lastTime = lastObjectTime > 0 ? lastObjectTime : timingPoints.at(-1)?.time ?? 0;
-  const durations = new Map<number, number>();
-
-  for (let i = 0; i < timingPoints.length; i++) {
-    const point = timingPoints[i];
-    if (point.time > lastTime) {
-      // Note: this key is the unrounded beat length, while the timed entries
-      // below use the length rounded to 0.001ms.
-      durations.set(point.beatLength, durations.get(point.beatLength) ?? 0);
-      continue;
-    }
-
-    // osu! treats the first timing point as starting at 0 for mania scroll speed.
-    const currentTime = i === 0 ? 0 : point.time;
-    const nextTime = i === timingPoints.length - 1 ? lastTime : timingPoints[i + 1].time;
-    const duration = Math.max(0, nextTime - currentTime);
-    const roundedBeatLength = Math.round(point.beatLength * 1000) / 1000;
-    durations.set(roundedBeatLength, (durations.get(roundedBeatLength) ?? 0) + duration);
-  }
-
-  let mostCommonBeatLength = 0;
-  let longestDuration = -1;
-  for (const [beatLength, duration] of durations) {
-    if (duration > longestDuration) {
-      mostCommonBeatLength = beatLength;
-      longestDuration = duration;
-    }
-  }
-
-  if (mostCommonBeatLength <= 0) return DEFAULT_BEAT_LENGTH;
-
-  // Single pass rather than spreading into Math.min/max, which overflows on
-  // charts with a huge number of timing points.
-  let minBeatLength = Infinity;
-  let maxBeatLength = -Infinity;
-  for (const point of timingPoints) {
-    if (point.beatLength < minBeatLength) minBeatLength = point.beatLength;
-    if (point.beatLength > maxBeatLength) maxBeatLength = point.beatLength;
-  }
-  return Math.max(minBeatLength, Math.min(maxBeatLength, mostCommonBeatLength));
-}
-
-// Effective scroll multiplier over time: green-line speed times the tempo
-// ratio against the chart's main beat length, clamped to 0.01-20. Points at
-// the same time collapse to the last one, and points that do not change the
-// multiplier are dropped.
-function buildManiaScrollVelocities(
-  timingPoints: TimingPoint[],
-  controlPoints: ParsedControlPoint[],
-  lastObjectTime: number,
-): ManiaScrollVelocity[] {
-  if (controlPoints.length === 0 || timingPoints.length === 0) return [];
-
-  const baseBeatLength = getMostCommonBeatLength(timingPoints, lastObjectTime);
-  const collapsed: ManiaScrollVelocity[] = [];
-  let currentBeatLength = DEFAULT_BEAT_LENGTH;
-  let currentScrollSpeed = 1;
-
-  for (const point of [...controlPoints].sort((a, b) => a.time - b.time || a.order - b.order)) {
-    if (point.time > lastObjectTime) break;
-
-    if (point.kind === "timing") currentBeatLength = point.beatLength;
-    else currentScrollSpeed = point.scrollSpeed;
-
-    const rawMultiplier = Math.max(0.01, Math.min(20, currentScrollSpeed * baseBeatLength / currentBeatLength));
-    const multiplier = Math.abs(rawMultiplier - 1) <= SCROLL_MULTIPLIER_EPSILON ? 1 : rawMultiplier;
-    const previous = collapsed[collapsed.length - 1];
-
-    if (previous && previous.time === point.time) {
-      previous.multiplier = multiplier;
-    } else {
-      collapsed.push({ time: point.time, multiplier });
-    }
-  }
-
-  const output: ManiaScrollVelocity[] = [];
-  let previousMultiplier = 1;
-
-  for (const point of collapsed) {
-    if (Math.abs(point.multiplier - previousMultiplier) <= SCROLL_MULTIPLIER_EPSILON) continue;
-    output.push(point);
-    previousMultiplier = point.multiplier;
-  }
-
-  return output;
 }

@@ -1,19 +1,3 @@
-// osu!lazer's mania star rating (ManiaDifficultyCalculator, upstream version
-// 20241007): a Strain skill built from individual (per-column) and overall
-// strain, peaks taken per 400ms section, weighted 0.9^n from the highest, and
-// scaled by 0.018. It runs on the parsed note list, so any clock rate works,
-// including lazer's custom speed_change rates. Matches the osu! API's
-// star_rating for nomod, DT and HT. The legacy unstable sort, banker's
-// rounding and DefinitelyBigger's 1ms epsilon all change the result and must
-// stay.
-//
-// calculateManiaStarRatingTimeline mirrors lazer's
-// DifficultyCalculator.CalculateTimed (the in-game pp counter): the star
-// rating of the chart played so far, one point per strain object. Mid-map
-// points use an incremental weighted-peak sum whose float summation order
-// differs from the final full sort, so the last point is overwritten with the
-// exact whole-map value.
-
 export interface StarRatingNote {
   time: number;
   endTime: number;
@@ -21,29 +5,23 @@ export interface StarRatingNote {
 }
 
 export interface ManiaStarRatingTimelinePoint {
-  // Raw (not rate-adjusted) beatmap ms of the object that produced this
-  // value, clamped monotone so the list stays binary-searchable by time.
   time: number;
   stars: number;
 }
 
 const INDIVIDUAL_DECAY_BASE = 0.125;
 const OVERALL_DECAY_BASE = 0.3;
-// Release gap (ms) at which the hold-release bonus is half its maximum.
 const RELEASE_THRESHOLD = 30;
-const SECTION_LENGTH = 400; // ms
+const SECTION_LENGTH = 400;
 const DECAY_WEIGHT = 0.9;
 const DIFFICULTY_MULTIPLIER = 0.018;
 
-// Difficulty hit object: one note with its timing already divided by the clock rate.
 interface Dho {
   startTime: number;
   endTime: number;
   deltaTime: number;
   columnStrainTime: number;
   column: number;
-  // Last object seen in each column before this one, in processing order.
-  // Lazer depends on processing order here on purpose, to match live values.
   prevs: (Dho | null)[];
 }
 
@@ -80,8 +58,6 @@ export function calculateManiaStarRatingTimeline(
     onSectionFlush: (peak) => flushedPeaks.add(peak),
     onObject: (note, sectionPeak) => {
       const stars = flushedPeaks.totalWith(sectionPeak) * DIFFICULTY_MULTIPLIER;
-      // The legacy sort orders by rounded-ms start time, so raw times can
-      // regress by sub-ms amounts across ties; clamp to keep them monotone.
       const time = points.length > 0 ? Math.max(points[points.length - 1].time, note.time) : note.time;
       if (points.length > 0 && points[points.length - 1].time === time) {
         points[points.length - 1].stars = stars;
@@ -106,14 +82,11 @@ function runStrainLoop(
   const sorted = notes.slice();
   legacySort(sorted, (a, b) => roundHalfToEven(a.time) - roundHalfToEven(b.time));
 
-  // Strain skill state (Strain.cs). StrainDecayBase is 1, so currentStrain
-  // never decays and always equals highestIndividualStrain + overallStrain.
   const individualStrains = new Array<number>(columnCount).fill(0);
   let highestIndividualStrain = 0;
   let overallStrain = 1;
   let currentStrain = 0;
 
-  // Section-peak state (StrainSkill.cs).
   const strainPeaks: number[] = [];
   let currentSectionPeak = 0;
   let currentSectionEnd = 0;
@@ -137,14 +110,12 @@ function runStrainLoop(
     };
     if (prevDho) dho.prevs[prevDho.column] = prevDho;
 
-    // StrainSkill.ProcessInternal: flush section peaks up to this object.
     if (prevDho === null) {
       currentSectionEnd = Math.ceil(startTime / SECTION_LENGTH) * SECTION_LENGTH;
     }
     while (startTime > currentSectionEnd) {
       strainPeaks.push(currentSectionPeak);
       callbacks?.onSectionFlush(currentSectionPeak);
-      // Strain.CalculateInitialStrain, with Previous(0) = the last processed object.
       const elapsed = currentSectionEnd - prevStartTime;
       currentSectionPeak =
         applyDecay(highestIndividualStrain, elapsed, INDIVIDUAL_DECAY_BASE) +
@@ -152,7 +123,6 @@ function runStrainLoop(
       currentSectionEnd += SECTION_LENGTH;
     }
 
-    // Strain.StrainValueOf.
     const col = dho.column;
     individualStrains[col] = applyDecay(individualStrains[col], dho.columnStrainTime, INDIVIDUAL_DECAY_BASE);
     individualStrains[col] += evaluateIndividualStrain(dho);
@@ -162,8 +132,6 @@ function runStrainLoop(
     overallStrain = applyDecay(overallStrain, dho.deltaTime, OVERALL_DECAY_BASE);
     overallStrain += evaluateOverallStrain(dho);
 
-    // StrainDecaySkill.StrainValueAt: currentStrain += StrainValueOf, which
-    // subtracts the pre-update currentStrain.
     currentStrain += highestIndividualStrain + overallStrain - currentStrain;
     currentSectionPeak = Math.max(currentStrain, currentSectionPeak);
 
@@ -177,7 +145,6 @@ function runStrainLoop(
   return { strainPeaks, currentSectionPeak };
 }
 
-// StrainSkill.DifficultyValue: weighted sum of section peaks, highest first.
 function aggregateDifficulty(strainPeaks: readonly number[], currentSectionPeak: number): number {
   const peaks = [...strainPeaks, currentSectionPeak].filter((p) => p > 0).sort((a, b) => b - a);
   let difficulty = 0;
@@ -189,13 +156,9 @@ function aggregateDifficulty(strainPeaks: readonly number[], currentSectionPeak:
   return difficulty;
 }
 
-// Incremental form of aggregateDifficulty for the timeline. Flushed section
-// peaks stay sorted descending with prefix sums of peak * 0.9^rank, so each
-// timeline point costs one binary search instead of a full re-sort.
 class WeightedPeakSum {
   private readonly sorted: number[] = [];
   private readonly powers: number[] = [1];
-  // prefix[i] = sum of sorted[j] * 0.9^j for j < i
   private readonly prefix: number[] = [0];
 
   add(peak: number): void {
@@ -210,9 +173,6 @@ class WeightedPeakSum {
     }
   }
 
-  // Difficulty as if `extraPeak` (the still-open section's peak) were a
-  // section of its own: inserting it at its rank shifts every lower peak one
-  // weight step down, i.e. multiplies their summed contribution by 0.9.
   totalWith(extraPeak: number): number {
     const total = this.prefix[this.sorted.length];
     if (!(extraPeak > 0)) return total;
@@ -232,8 +192,6 @@ class WeightedPeakSum {
   }
 }
 
-// IndividualStrainEvaluator: bonus if this note starts and ends inside
-// another column's hold.
 function evaluateIndividualStrain(dho: Dho): number {
   let holdFactor = 1.0;
   for (const prev of dho.prevs) {
@@ -246,7 +204,6 @@ function evaluateIndividualStrain(dho: Dho): number {
   return 2.0 * holdFactor;
 }
 
-// OverallStrainEvaluator: hold-release awkwardness bonus.
 function evaluateOverallStrain(dho: Dho): number {
   let closestEndTime = Math.abs(dho.endTime - dho.startTime);
   let holdFactor = 1.0;
@@ -271,12 +228,10 @@ function applyDecay(value: number, deltaTime: number, decayBase: number): number
   return value * Math.pow(decayBase, deltaTime / 1000);
 }
 
-// osu.Framework Precision.DefinitelyBigger with the calculator's 1ms epsilon.
 function definitelyBigger(value1: number, value2: number): boolean {
   return value1 - 1 > value2;
 }
 
-// C# Math.Round default: round half to even (banker's rounding).
 function roundHalfToEven(value: number): number {
   const floor = Math.floor(value);
   const diff = value - floor;
@@ -285,10 +240,6 @@ function roundHalfToEven(value: number): number {
   return floor % 2 === 0 ? floor : floor + 1;
 }
 
-// .NET 4.0 unstable Array.Sort (LegacySortHelper.cs): depth-limited quicksort
-// falling back to heapsort. The tie order it produces feeds the strain
-// calculation's processing-order dependence, so a stable sort is NOT a valid
-// substitute.
 function legacySort<T>(keys: T[], compare: (a: T, b: T) => number): void {
   if (keys.length === 0) return;
   depthLimitedQuickSort(keys, 0, keys.length - 1, compare, 32);

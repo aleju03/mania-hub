@@ -1,16 +1,8 @@
-/*
- * Stable mania replay frames: the raw .osr input rows, turned into absolute
- * key-state samples the judge can read.
- *
- * The replay viewer and the judge read one replay the same way through it.
- */
-
 export const MANIA_REPLAY_KEY_MASK = (1 << 20) - 1;
 
-/** One decoded input sample. */
 export interface ReplayInputFrame {
-  time: number;     // absolute time in ms
-  keyState: number; // bitmask: bit N = column N pressed
+  time: number;
+  keyState: number;
 }
 
 export type RawReplayFrameLike = {
@@ -75,8 +67,6 @@ export function decodeStableManiaReplayFrames(rawFrames: RawReplayFrameLike[]): 
     })
     .filter((frame) => Number.isFinite(frame.time) && Number.isFinite(frame.x) && Number.isFinite(frame.y));
 
-  // Mirrored from lazer's LegacyScoreDecoder, which cites stable's
-  // ReplayWatcher.cs at e53980dd76857ee899f66ce519ba1597e7874f28.
   if (frames.length >= 2 && frames[1].time < frames[0].time) {
     frames[1].time = frames[0].time;
     frames[0].time = 0;

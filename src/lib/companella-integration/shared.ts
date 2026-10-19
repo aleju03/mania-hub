@@ -54,6 +54,9 @@ export const REPLAY_IMPORT_APP = "replay-import";
 /** The client id of plays an admin entered by hand (old or offline plays with no replay); not an app either. */
 export const MANUAL_ENTRY_APP = "manual-entry";
 
+/** The client id of plays added from a Mamestagram score link; a private server, not an app. */
+export const MAMESTAGRAM_APP = "mamestagram";
+
 /** The known app for a client id, or null. Own keys only: a client id like "toString" is not an app. */
 export function knownApp(clientId: string | null | undefined): (typeof KNOWN_APPS)[string] | null {
   return clientId && Object.hasOwn(KNOWN_APPS, clientId) ? KNOWN_APPS[clientId] : null;

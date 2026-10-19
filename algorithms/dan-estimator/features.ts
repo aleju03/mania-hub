@@ -1,24 +1,128 @@
-// Reads a chart's notes (at the played rate) into the feature metrics every
-// other part of this folder works from: density windows, chord and hold
-// shares, jack/stream/jumpstream pressure, rhythm and row-pattern entropy,
-// repetition, LN density and overlap, and the off-grid (delay) row share.
-
 import type { ManiaBeatmap, ManiaNote } from "../chart/beatmap";
 import type { DanEstimateInput, DanFeatureExtractionResult } from "./types";
-import {
-  average,
-  bucketEntropy,
-  bucketValues,
-  countInWindow,
-  quantile,
-  quantiles,
-  raoQuadraticEntropyLog,
-  strainSpikiness,
-} from "./math";
+import { average, bucketEntropy, bucketValues, countInWindow, quantile, quantiles, raoQuadraticEntropyLog, strainSpikiness } from "./math";
 
-// Beat fractions a row gap can snap to. Divisors of 6 and up count as off the
-// 16th grid.
+function getRatedNotes(map: ManiaBeatmap, rate: number): ManiaNote[] {
+  const notes: ManiaNote[] = [];
+  for (const note of map.notes) {
+    if (note.column < 0 || note.column >= map.keyCount) continue;
+    notes.push(rate === 1 ? note : {
+      ...note,
+      time: note.time / rate,
+      endTime: note.endTime / rate,
+    });
+  }
+  return notes;
+}
+
+function groupNotesByTime(notes: ManiaNote[]): Array<[number, ManiaNote[]]> {
+  const rows = new Map<number, ManiaNote[]>();
+  for (const note of notes) {
+    const row = rows.get(note.time);
+    if (row) row.push(note);
+    else rows.set(note.time, [note]);
+  }
+  return [...rows.entries()].sort((a, b) => a[0] - b[0]);
+}
+
+function bitCount(value: number): number {
+  let count = 0;
+  let remaining = value;
+  while (remaining > 0) {
+    count += remaining & 1;
+    remaining >>= 1;
+  }
+  return count;
+}
+
+function numericNgramRepeatRatio(values: number[], size: number, base: number): number {
+  if (values.length < size + 1) return 0;
+
+  const seen = new Set<number>();
+  let repeated = 0;
+  let total = 0;
+  for (let index = 0; index <= values.length - size; index++) {
+    let key = 0;
+    for (let offset = 0; offset < size; offset++) {
+      key = key * base + values[index + offset];
+    }
+    if (seen.has(key)) repeated++;
+    else seen.add(key);
+    total++;
+  }
+
+  return total ? repeated / total : 0;
+}
+
+function adjacentNgramRepeatRatio(values: Array<number | string>, size: number): number {
+  if (values.length < size * 2) return 0;
+
+  let repeated = 0;
+  let total = 0;
+  for (let index = size; index <= values.length - size; index++) {
+    total++;
+    let matches = true;
+    for (let offset = 0; offset < size; offset++) {
+      if (values[index + offset] !== values[index - size + offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) repeated++;
+  }
+
+  return total ? repeated / total : 0;
+}
+
+function sampledWindowNps(noteTimes: number[], windowMs: number, durationMs: number): number[] {
+  if (noteTimes.length === 0 || durationMs <= 0) return [];
+
+  const samples: number[] = [];
+  let left = 0;
+  let right = 0;
+  for (let start = 0; start <= durationMs; start += 1000) {
+    while (left < noteTimes.length && noteTimes[left] < start) left++;
+    while (right < noteTimes.length && noteTimes[right] < start + windowMs) right++;
+    samples.push((right - left) / (windowMs / 1000));
+  }
+  return samples;
+}
+
 const SNAP_DIVISORS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32];
+
+function gapSnapDivisor(gapMs: number, beatLengthMs: number): number {
+  const tolerance = 2 + gapMs * 0.01;
+  for (const divisor of SNAP_DIVISORS) {
+    const unit = beatLengthMs / divisor;
+    const steps = Math.round(gapMs / unit);
+    if (steps >= 1 && Math.abs(steps * unit - gapMs) <= tolerance) return divisor;
+  }
+  return 0;
+}
+
+function offGridRowShare(map: ManiaBeatmap): number {
+  const timingPoints = (map.timingPoints ?? [])
+    .filter((point) => Number.isFinite(point.time) && point.beatLength > 0)
+    .sort((a, b) => a.time - b.time);
+  const fallbackBeatLength = map.bpm > 0 ? 60000 / map.bpm : Infinity;
+  const rows = groupNotesByTime(map.notes.filter((note) => note.column >= 0 && note.column < map.keyCount));
+  if (rows.length < 2) return 0;
+  let offGrid = 0;
+  let timingIndex = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const time = rows[i][0];
+    while (timingIndex + 1 < timingPoints.length && timingPoints[timingIndex + 1].time <= time + 1) timingIndex++;
+    const beatLength = timingPoints.length > 0 && timingPoints[timingIndex].time <= time + 1
+      ? timingPoints[timingIndex].beatLength
+      : timingPoints[0]?.beatLength ?? fallbackBeatLength;
+    const gap = time - rows[i - 1][0];
+    if (gap <= 55) { offGrid++; continue; }
+    if (gap > beatLength) continue;
+    const divisor = gapSnapDivisor(gap, beatLength);
+    if (divisor >= 6 || (divisor === 0 && gap <= beatLength / 2)) offGrid++;
+  }
+  return offGrid / rows.length;
+}
 
 export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: number): DanFeatureExtractionResult {
   const notes = getRatedNotes(map, rate);
@@ -55,7 +159,6 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
 
   if (!noteTimesSorted) noteTimes.sort((a, b) => a - b);
   if (!releaseTimesSorted) releaseTimes.sort((a, b) => a - b);
-  // Longest of the given length, the parsed length and the last note, all at rate.
   const durationMs = Math.max(input.totalLength ? (input.totalLength * 1000) / rate : 0, map.totalLength / rate, noteTimes.at(-1) ?? 0);
 
   if (notes.length < 50 || durationMs <= 0) {
@@ -102,8 +205,6 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   let rowPatternChangeSum = 0;
   const rowMasks: number[] = [];
   const rowTimes: number[] = [];
-  // Row column mask combined with the gap to the previous row in 5ms buckets,
-  // so a repeated signature means the same shape at the same rhythm.
   const rowSignatures: number[] = [];
   const rowMaskBase = Math.max(32, 2 ** Math.max(1, map.keyCount) + 1);
   const rowSignatureBase = rowMaskBase * 256;
@@ -126,11 +227,6 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       if (columns.length >= 2) lnChordRows++;
     }
 
-    // Chord-jack repetition: of adjacent chord rows (under 1s apart, both 2+
-    // notes), how many re-hit a column. Real chordjack repeats columns on
-    // consecutive chords; dense bracket/jumpstream alternates hands and barely
-    // overlaps at the same chord density. Reads the previous-row state, so it
-    // runs before that state is updated below.
     if (
       previousRowMask != null && previousChordSize >= 2 && columns.length >= 2
       && previousRowTime != null && time - previousRowTime < 1000
@@ -182,7 +278,6 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
     previousRowTime = time;
 
     for (const column of columns) {
-      // Same-column re-hit under 1s: 15000 / gap, capped at 230 (a 65ms jack).
       const sameDelta = time - lastByColumn[column];
       if (sameDelta > 0 && sameDelta < 1000) {
         jackValues.push(Math.min(230, 15000 / sameDelta));
@@ -192,7 +287,6 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
         columnRates.push(1000 / sameDelta);
       }
 
-      // Neighbour-column hit under 260ms: a stream step, stronger the closer it is.
       const leftNeighbor = column - 1;
       if (leftNeighbor >= 0) {
         const delta = time - lastByColumn[leftNeighbor];
@@ -258,7 +352,6 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const repeatedRowPatternRatio = orderedRows.length > 1 ? repeatedRowPatterns / (orderedRows.length - 1) : 0;
   const alternatingRowPatternRatio = orderedRows.length > 2 ? alternatingRowPatterns / (orderedRows.length - 2) : 0;
   const rowPatternChangeRate = orderedRows.length > 1 ? rowPatternChangeSum / (orderedRows.length - 1) : 0;
-  // Rhythm variety across row gaps, same-column gaps and release gaps.
   const patternVariety = 0.5 * raoQuadraticEntropyLog(bucketValues(rowIntervals, 5), 1)
     + 1.125 * raoQuadraticEntropyLog(bucketValues(columnIntervals, 5), 2)
     + 0.11 * raoQuadraticEntropyLog(bucketValues(tailIntervals, 5), 1);
@@ -276,8 +369,6 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const lnChordPressure = holdRows ? lnChordRows / holdRows : 0;
   const lnHoldDurationAvg = average(holdDurations);
   const lnHoldDurationP90 = quantile(holdDurations, 0.9);
-  // Sweep hold starts and ends (starts first on ties) for the time-averaged
-  // and peak number of holds down at once.
   holdEvents.sort((left, right) => left.time - right.time || right.delta - left.delta);
   let activeHolds = 0;
   let activeHoldPeak = 0;
@@ -362,143 +453,4 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       staminaPressure: sustainedNps10s,
     },
   };
-}
-
-/** Notes inside the key range, with times divided by the rate. */
-function getRatedNotes(map: ManiaBeatmap, rate: number): ManiaNote[] {
-  const notes: ManiaNote[] = [];
-  for (const note of map.notes) {
-    if (note.column < 0 || note.column >= map.keyCount) continue;
-    notes.push(rate === 1 ? note : {
-      ...note,
-      time: note.time / rate,
-      endTime: note.endTime / rate,
-    });
-  }
-  return notes;
-}
-
-/** Notes grouped into rows by exact start time, in time order. */
-function groupNotesByTime(notes: ManiaNote[]): Array<[number, ManiaNote[]]> {
-  const rows = new Map<number, ManiaNote[]>();
-  for (const note of notes) {
-    const row = rows.get(note.time);
-    if (row) row.push(note);
-    else rows.set(note.time, [note]);
-  }
-  return [...rows.entries()].sort((a, b) => a[0] - b[0]);
-}
-
-function bitCount(value: number): number {
-  let count = 0;
-  let remaining = value;
-  while (remaining > 0) {
-    count += remaining & 1;
-    remaining >>= 1;
-  }
-  return count;
-}
-
-/** Share of length-`size` windows that repeat a window seen anywhere earlier. */
-function numericNgramRepeatRatio(values: number[], size: number, base: number): number {
-  if (values.length < size + 1) return 0;
-
-  const seen = new Set<number>();
-  let repeated = 0;
-  let total = 0;
-  for (let index = 0; index <= values.length - size; index++) {
-    let key = 0;
-    for (let offset = 0; offset < size; offset++) {
-      key = key * base + values[index + offset];
-    }
-    if (seen.has(key)) repeated++;
-    else seen.add(key);
-    total++;
-  }
-
-  return total ? repeated / total : 0;
-}
-
-/** Share of length-`size` windows identical to the window right before them. */
-function adjacentNgramRepeatRatio(values: Array<number | string>, size: number): number {
-  if (values.length < size * 2) return 0;
-
-  let repeated = 0;
-  let total = 0;
-  for (let index = size; index <= values.length - size; index++) {
-    total++;
-    let matches = true;
-    for (let offset = 0; offset < size; offset++) {
-      if (values[index + offset] !== values[index - size + offset]) {
-        matches = false;
-        break;
-      }
-    }
-    if (matches) repeated++;
-  }
-
-  return total ? repeated / total : 0;
-}
-
-/** Notes per second in a window of windowMs, sampled every second across the chart. */
-function sampledWindowNps(noteTimes: number[], windowMs: number, durationMs: number): number[] {
-  if (noteTimes.length === 0 || durationMs <= 0) return [];
-
-  const samples: number[] = [];
-  let left = 0;
-  let right = 0;
-  for (let start = 0; start <= durationMs; start += 1000) {
-    while (left < noteTimes.length && noteTimes[left] < start) left++;
-    while (right < noteTimes.length && noteTimes[right] < start + windowMs) right++;
-    samples.push((right - left) / (windowMs / 1000));
-  }
-  return samples;
-}
-
-/**
- * Share of note rows off the 16th grid. A row counts when the gap back to the
- * previous row is 1/6, 1/8, 1/12, 1/16, 1/24 or 1/32 of the beat at that
- * point, an off-snap gap inside half a beat, or 55ms or less whatever the grid
- * says (charts timed at double tempo put their 1/4 there). This is the shape
- * 7K players call delay: 1/8 and 1/12 flow around 128-150 BPM, or 1/6 around
- * 158-177 BPM, as single notes and small chords staggered across the columns.
- * Over 232 7K charts named as delay the share sits at p10 0.43 / p50 0.74,
- * against p90 0.12 for jack charts, p90 0.10 for stream charts and p50 0.07 /
- * p75 0.23 for 700 random 7K charts. Read at the chart's own tempo, so rate
- * leaves it alone. Rows more than a beat apart count toward the denominator
- * but never as off-grid.
- */
-function offGridRowShare(map: ManiaBeatmap): number {
-  const timingPoints = (map.timingPoints ?? [])
-    .filter((point) => Number.isFinite(point.time) && point.beatLength > 0)
-    .sort((a, b) => a.time - b.time);
-  const fallbackBeatLength = map.bpm > 0 ? 60000 / map.bpm : Infinity;
-  const rows = groupNotesByTime(map.notes.filter((note) => note.column >= 0 && note.column < map.keyCount));
-  if (rows.length < 2) return 0;
-  let offGrid = 0;
-  let timingIndex = 0;
-  for (let i = 1; i < rows.length; i++) {
-    const time = rows[i][0];
-    while (timingIndex + 1 < timingPoints.length && timingPoints[timingIndex + 1].time <= time + 1) timingIndex++;
-    const beatLength = timingPoints.length > 0 && timingPoints[timingIndex].time <= time + 1
-      ? timingPoints[timingIndex].beatLength
-      : timingPoints[0]?.beatLength ?? fallbackBeatLength;
-    const gap = time - rows[i - 1][0];
-    if (gap <= 55) { offGrid++; continue; }
-    if (gap > beatLength) continue;
-    const divisor = gapSnapDivisor(gap, beatLength);
-    if (divisor >= 6 || (divisor === 0 && gap <= beatLength / 2)) offGrid++;
-  }
-  return offGrid / rows.length;
-}
-
-/** Smallest divisor d with the gap at k/d beats (k >= 1) within 2ms + 1%, or 0 when nothing fits. */
-function gapSnapDivisor(gapMs: number, beatLengthMs: number): number {
-  const tolerance = 2 + gapMs * 0.01;
-  for (const divisor of SNAP_DIVISORS) {
-    const unit = beatLengthMs / divisor;
-    const steps = Math.round(gapMs / unit);
-    if (steps >= 1 && Math.abs(steps * unit - gapMs) <= tolerance) return divisor;
-  }
-  return 0;
 }

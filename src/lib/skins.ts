@@ -87,6 +87,11 @@ export interface SkinSummary {
   // Also public: opens of the skin's own page, counted once per visitor per
   // 6h. Optional because summaries cached before the field existed lack it.
   viewCount?: number;
+  // Also public: accounts that liked the skin. Optional for the same reason.
+  likeCount?: number;
+  // Whether the signed-in viewer liked it. Only a single-skin read made for a
+  // signed-in viewer carries it; the grid reads the viewer's liked ids instead.
+  liked?: boolean;
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
@@ -154,11 +159,11 @@ export function canModerateSkinKeymodes(userId: number | null | undefined): bool
   return userId != null && SKIN_KEYMODE_MODERATOR_USER_IDS.includes(userId);
 }
 
-// Four sort options, each a pair: the browse page shows one label per pair and
+// Five sort options, each a pair: the browse page shows one label per pair and
 // clicking the active one flips it to the other direction.
-export type SkinsSort = "newest" | "oldest" | "downloads" | "downloads-asc" | "views" | "views-asc" | "size" | "size-asc";
+export type SkinsSort = "newest" | "oldest" | "downloads" | "downloads-asc" | "views" | "views-asc" | "likes" | "likes-asc" | "size" | "size-asc";
 
-const SKINS_SORTS: readonly string[] = ["newest", "oldest", "downloads", "downloads-asc", "views", "views-asc", "size", "size-asc"];
+const SKINS_SORTS: readonly string[] = ["newest", "oldest", "downloads", "downloads-asc", "views", "views-asc", "likes", "likes-asc", "size", "size-asc"];
 
 export function isSkinsSort(value: unknown): value is SkinsSort {
   return typeof value === "string" && SKINS_SORTS.includes(value);
@@ -210,6 +215,11 @@ export interface SkinsListParams {
   // one, so this shows that uploader's public skins only; their private ones
   // live on the shelf above the grid.
   owner?: number | null;
+  // Only the skins the viewer liked. Signed in, fetched through
+  // fetchLikedSkinsList, since the backend only trusts a vouched-for viewer;
+  // signed out, the public list narrowed by the browser's guest id.
+  liked?: boolean;
+  guest?: string;
   // The trait filters: skins that ship a lane cover, their own mania stage
   // art, uploader-attached screenshots.
   cover?: boolean;
@@ -250,7 +260,7 @@ const skinsListMemory = new Map<string, { at: number; result: SkinsListResult }>
 
 export function skinsListCacheKey(params: SkinsListParams): string {
   return [
-    params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0, params.variant ?? "", params.owner ?? "",
+    params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0, params.variant ?? "", params.owner ?? "", params.liked ? 1 : "",
     params.cover ? 1 : "", params.stage ? 1 : "", params.shots ? 1 : "", params.client ?? "", params.shape ?? "", params.res ?? "",
   ].join("|");
 }
@@ -319,6 +329,13 @@ function skinsListCacheMode(): RequestCache | undefined {
 export async function fetchSkinsListDirect(params: SkinsListParams, init?: RequestInit): Promise<SkinsListResult> {
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Server is not configured.");
+  const query = skinsListQuery(params);
+  const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", cache: skinsListCacheMode(), ...init });
+  if (!response.ok) throw new Error(`Server ${response.status}`);
+  return response.json() as Promise<SkinsListResult>;
+}
+
+function skinsListQuery(params: SkinsListParams): URLSearchParams {
   const query = new URLSearchParams();
   const q = params.q?.trim() ?? "";
   if (q) query.set("q", q.slice(0, 80));
@@ -336,10 +353,12 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   if (params.client) query.set("client", params.client);
   if (params.shape) query.set("shape", params.shape);
   if (params.res) query.set("res", params.res);
+  if (params.liked && params.guest) {
+    query.set("liked", "1");
+    query.set("guest", params.guest);
+  }
   query.set("pageSize", String(SKINS_PAGE_SIZE));
-  const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", cache: skinsListCacheMode(), ...init });
-  if (!response.ok) throw new Error(`Server ${response.status}`);
-  return response.json() as Promise<SkinsListResult>;
+  return query;
 }
 
 // How long a server render waits on the backend before giving up and shipping
@@ -898,6 +917,299 @@ export const setMySkinVisibility = createServerFn({ method: "POST" })
       return { ok: false };
     }
   });
+
+// The grid narrowed to the skins the signed-in viewer liked. Same list as
+// fetchSkinsListDirect, but through a server fn: who liked what is the
+// viewer's own, so the backend only reads it off a bridge-token request.
+export const fetchLikedSkinsList = createServerFn({ method: "GET" })
+  .validator((data: SkinsListParams) => ({
+    q: typeof data?.q === "string" ? data.q.slice(0, 80) : undefined,
+    page: Number.isInteger(data?.page) && Number(data.page) > 0 ? Number(data.page) : 0,
+    sort: isSkinsSort(data?.sort) ? data.sort : undefined,
+    k: Number.isInteger(data?.k) ? data.k : undefined,
+    variant: data?.variant === "special" || data?.variant === "regular" ? data.variant : undefined,
+    owner: Number.isInteger(data?.owner) ? data.owner : null,
+    cover: data?.cover === true,
+    stage: data?.stage === true,
+    shots: data?.shots === true,
+    client: data?.client === "lazer" || data?.client === "stable" ? data.client : undefined,
+    shape: isSkinNoteShape(data?.shape) ? data.shape : undefined,
+    res: typeof data?.res === "string" ? normalizeSkinResolution(data.res) ?? undefined : undefined,
+  }))
+  .handler(async ({ data }): Promise<SkinsListResult> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const empty: SkinsListResult = { skins: [], total: 0, page: data.page, pageSize: SKINS_PAGE_SIZE, resolutions: [] };
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return empty;
+    const query = skinsListQuery(data);
+    query.set("liked", "1");
+    query.set("viewerUserId", String(cfg.userId));
+    const response = await fetch(`${cfg.base}/api/skins/list?${query.toString()}`, { headers: cfg.headers });
+    if (!response.ok) throw new Error(`Server ${response.status}`);
+    return (await response.json()) as SkinsListResult;
+  });
+
+// The catalog plus the signed-in viewer's own private skins, for the replay
+// skin picker. The backend only adds an owner's private rows (with their
+// capability URLs) to a bridge-token request, so this cannot go direct.
+export const fetchViewerSkinsList = createServerFn({ method: "GET" })
+  .validator((data: Pick<SkinsListParams, "q" | "page" | "k"> & { mine?: boolean }) => ({
+    q: typeof data?.q === "string" ? data.q.slice(0, 80) : undefined,
+    page: Number.isInteger(data?.page) && Number(data.page) > 0 ? Number(data.page) : 0,
+    k: Number.isInteger(data?.k) ? data.k : undefined,
+    // Narrows to the viewer's own uploads; the id is filled in server-side.
+    mine: data?.mine === true,
+  }))
+  .handler(async ({ data }): Promise<SkinsListResult> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return fetchSkinsListDirect({ q: data.q, page: data.page, k: data.k });
+    const query = skinsListQuery({ q: data.q, page: data.page, k: data.k, owner: data.mine ? cfg.userId : null });
+    query.set("viewerUserId", String(cfg.userId));
+    const response = await fetch(`${cfg.base}/api/skins/list?${query.toString()}`, { headers: cfg.headers });
+    if (!response.ok) throw new Error(`Server ${response.status}`);
+    return (await response.json()) as SkinsListResult;
+  });
+
+// Every skin the signed-in viewer liked, for the hearts on the grid's cards.
+// A guest id from likes made signed out comes along once, and the backend
+// moves those likes onto the account before answering.
+export const fetchMyLikedSkinIds = createServerFn({ method: "GET" })
+  .validator((data: { guestId?: unknown } | undefined) => ({
+    guestId: typeof data?.guestId === "string" && SKIN_GUEST_ID_PATTERN.test(data.guestId) ? data.guestId : null,
+  }))
+  .handler(async ({ data }): Promise<{ ids: string[]; claimed: boolean }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ids: [], claimed: false };
+    let claimed = false;
+    if (data.guestId) {
+      try {
+        const response = await fetch(`${cfg.base}/api/skins/claim-guest-likes`, {
+          method: "POST",
+          headers: cfg.headers,
+          body: JSON.stringify({ userId: cfg.userId, guestId: data.guestId }),
+        });
+        claimed = response.ok;
+      } catch {
+        // Left for the next load; the guest likes still count meanwhile.
+      }
+    }
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/liked-ids?viewerUserId=${cfg.userId}`, { headers: cfg.headers });
+      if (!response.ok) return { ids: [], claimed };
+      const body = (await response.json()) as { ids?: unknown };
+      return { ids: Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === "string") : [], claimed };
+    } catch {
+      return { ids: [], claimed };
+    }
+  });
+
+// Signed out, a like is keyed by a random id this browser keeps, made on its
+// first like and handed to the account at sign-in. It goes from the browser
+// straight to the backend so the caller's address is the visitor's own: the
+// count takes one guest like per network.
+const SKIN_GUEST_ID_KEY = "mania-hub-skin-guest-id";
+const SKIN_GUEST_ID_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
+let skinGuestId: string | null | undefined;
+const skinGuestIdListeners = new Set<() => void>();
+
+export function subscribeSkinGuestId(listener: () => void): () => void {
+  skinGuestIdListeners.add(listener);
+  return () => {
+    skinGuestIdListeners.delete(listener);
+  };
+}
+
+export function readSkinGuestId(): string | null {
+  if (typeof window === "undefined") return null;
+  if (skinGuestId === undefined) {
+    try {
+      const stored = window.localStorage.getItem(SKIN_GUEST_ID_KEY);
+      skinGuestId = stored && SKIN_GUEST_ID_PATTERN.test(stored) ? stored : null;
+    } catch {
+      skinGuestId = null;
+    }
+  }
+  return skinGuestId;
+}
+
+function writeSkinGuestId(id: string | null): void {
+  skinGuestId = id;
+  try {
+    if (id) window.localStorage.setItem(SKIN_GUEST_ID_KEY, id);
+    else window.localStorage.removeItem(SKIN_GUEST_ID_KEY);
+  } catch {
+    // Without storage the id lasts this tab, which is still a working heart.
+  }
+  for (const listener of skinGuestIdListeners) listener();
+}
+
+// The guest id, made on the spot for a first like. A new one has liked
+// nothing, so its (empty) liked set is in place before anyone asks the
+// backend for it.
+export function ensureSkinGuestId(): string {
+  const existing = readSkinGuestId();
+  if (existing) return existing;
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  const id = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  likedSkins = { viewerKey: skinGuestViewerKey(id), ids: new Set() };
+  writeSkinGuestId(id);
+  return id;
+}
+
+export function skinGuestViewerKey(guestId: string): string {
+  return `g:${guestId}`;
+}
+
+export function skinUserViewerKey(viewerId: number): string {
+  return `u:${viewerId}`;
+}
+
+export async function guestLikeSkin(id: string, liked: boolean): Promise<LikeSkinResult> {
+  const base = getLiveBackendUrl();
+  if (!base) return { ok: false, error: "unavailable" };
+  const guestId = ensureSkinGuestId();
+  try {
+    // A text/plain body, like the view pings, so the browser sends it without
+    // a preflight; the backend parses it as JSON anyway.
+    const response = await fetch(`${base}/api/skins/guest-like`, {
+      method: "POST",
+      credentials: "omit",
+      cache: "no-store",
+      body: JSON.stringify({ guestId, id, liked }),
+    });
+    const body = (await response.json().catch(() => null)) as { ok?: boolean; liked?: boolean; likeCount?: number; error?: string } | null;
+    if (body?.ok) {
+      return { ok: true, liked: body.liked === true, likeCount: Math.max(0, Math.floor(Number(body.likeCount)) || 0) };
+    }
+    if (body?.error === "not_found") return { ok: false, error: "not_found" };
+    return { ok: false, error: "unavailable" };
+  } catch {
+    return { ok: false, error: "unavailable" };
+  }
+}
+
+async function fetchGuestLikedSkinIds(guestId: string): Promise<string[]> {
+  const base = getLiveBackendUrl();
+  if (!base) return [];
+  const response = await fetch(`${base}/api/skins/guest-liked-ids?guest=${encodeURIComponent(guestId)}`, { credentials: "omit", cache: "no-store" });
+  if (!response.ok) return [];
+  const body = (await response.json()) as { ids?: unknown };
+  return Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === "string") : [];
+}
+
+export type LikeSkinResult =
+  | { ok: true; liked: boolean; likeCount: number }
+  | { ok: false; error: "not_logged_in" | "own_skin" | "not_found" | "unavailable" };
+
+export const likeSkin = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; liked?: unknown }) => {
+    const id = typeof data.id === "string" ? data.id.trim() : "";
+    if (!id || id.length > 64) throw new Error("Invalid skin id.");
+    return { id, liked: data.liked === true };
+  })
+  .handler(async ({ data }): Promise<LikeSkinResult> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false, error: "not_logged_in" };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/like`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({ userId: cfg.userId, id: data.id, liked: data.liked }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; liked?: boolean; likeCount?: number; error?: string } | null;
+      if (body?.ok) {
+        return { ok: true, liked: body.liked === true, likeCount: Math.max(0, Math.floor(Number(body.likeCount)) || 0) };
+      }
+      if (body?.error === "own_skin" || body?.error === "not_found") return { ok: false, error: body.error };
+      return { ok: false, error: "unavailable" };
+    } catch {
+      return { ok: false, error: "unavailable" };
+    }
+  });
+
+// The viewer's liked skin ids, shared by every card on the page and the skin
+// page's button so a like shows on the grid the moment it lands. Browser only
+// and keyed by viewer (an account, or a signed-out browser's guest id), like
+// the private shelf: this module also runs on the server, where one viewer's
+// likes must never sit where another request reads.
+let likedSkins: { viewerKey: string; ids: Set<string> } | null = null;
+let likedSkinsLoading: { viewerKey: string; promise: Promise<void> } | null = null;
+// The count a like or unlike came back with, so a card already on screen (or
+// a list still in the memory cache) shows it before the next list fetch does.
+const skinLikeCounts = new Map<string, number>();
+const likedSkinsListeners = new Set<() => void>();
+
+function emitLikedSkins(): void {
+  for (const listener of likedSkinsListeners) listener();
+}
+
+export function subscribeLikedSkins(listener: () => void): () => void {
+  likedSkinsListeners.add(listener);
+  return () => {
+    likedSkinsListeners.delete(listener);
+  };
+}
+
+export function readLikedSkinIds(viewerKey: string | null): Set<string> | null {
+  if (typeof window === "undefined" || viewerKey == null) return null;
+  return likedSkins?.viewerKey === viewerKey ? likedSkins.ids : null;
+}
+
+// Signed in, a guest id still in storage means likes made before signing in:
+// they ride along with the read and move onto the account, and once that
+// lands the browser forgets the id.
+export function loadLikedSkinIds(viewerKey: string): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (likedSkins?.viewerKey === viewerKey) return Promise.resolve();
+  if (likedSkinsLoading?.viewerKey === viewerKey) return likedSkinsLoading.promise;
+  const guestId = viewerKey.startsWith("g:") ? viewerKey.slice(2) : null;
+  const read = guestId
+    ? fetchGuestLikedSkinIds(guestId)
+    : (() => {
+      const pendingGuestId = readSkinGuestId();
+      return fetchMyLikedSkinIds({ data: { guestId: pendingGuestId ?? undefined } }).then((result) => {
+        if (pendingGuestId && result.claimed && readSkinGuestId() === pendingGuestId) {
+          writeSkinGuestId(null);
+          markSkinsListStale();
+        }
+        return result.ids;
+      });
+    })();
+  const promise = read
+    .then((ids) => {
+      likedSkins = { viewerKey, ids: new Set(ids) };
+      emitLikedSkins();
+    })
+    .catch(() => {})
+    .finally(() => {
+      if (likedSkinsLoading?.promise === promise) likedSkinsLoading = null;
+    });
+  likedSkinsLoading = { viewerKey, promise };
+  return promise;
+}
+
+export function readSkinLikeCount(skinId: string): number | null {
+  if (typeof window === "undefined") return null;
+  return skinLikeCounts.get(skinId) ?? null;
+}
+
+export function rememberSkinLiked(viewerKey: string, skinId: string, liked: boolean, likeCount: number): void {
+  if (typeof window === "undefined") return;
+  const ids = new Set(likedSkins?.viewerKey === viewerKey ? likedSkins.ids : []);
+  if (liked) ids.add(skinId);
+  else ids.delete(skinId);
+  likedSkins = { viewerKey, ids };
+  skinLikeCounts.set(skinId, likeCount);
+  emitLikedSkins();
+}
 
 // The private-skins shelf. For a normal viewer that is their own private skins:
 // absent from the browse grid by design, so this is the only way back to their

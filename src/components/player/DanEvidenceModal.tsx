@@ -688,7 +688,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                       {sections.some((section) => !section.verified && !section.nearClear && section.weightedClears < averageWindow) ? (
                         <div className="px-2 pt-2 text-[11px] text-osu-f1">
                           <Trans>
-                            Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count.
+                            Each skillset averages up to {averageWindow} clears. Only your best rate play per chart counts.
                             With less evidence, it averages what you have and the estimate is still filling in.
                           </Trans>
                         </div>

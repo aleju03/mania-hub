@@ -42,7 +42,7 @@ const REPLAY_CACHE_LOCK_TTL_MS = 30_000;
 const REPLAY_CACHE_LOCK_WAIT_MS = 500;
 const REPLAY_CACHE_LOCK_WAIT_RETRIES = 8;
 const REPLAY_PARSED_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
-const REPLAY_PARSED_CACHE_VERSION = 4;
+export const REPLAY_PARSED_CACHE_VERSION = 4;
 
 type ReplayDownload = {
   buffer: Buffer;
@@ -157,16 +157,26 @@ async function getReplayBuffer(data: { scoreId: number; mode: string }): Promise
   return download.buffer;
 }
 
+function parsedReplayCacheKey(scoreId: number, mode: string, keyCount: number): string {
+  return [`replay-parsed:v${REPLAY_PARSED_CACHE_VERSION}`, scoreId, mode, keyCount].join(":");
+}
+
+/** Drops this instance's memory copies of these scores' parsed replays, for an
+    owner takedown (owner-takedown.ts). Every key-count variant a request can name. */
+export async function forgetParsedReplays(scoreIds: readonly number[]): Promise<void> {
+  const { invalidatePersistentCache } = await import("../api");
+  for (const scoreId of scoreIds) {
+    for (let keyCount = 0; keyCount <= 18; keyCount++) {
+      await invalidatePersistentCache(parsedReplayCacheKey(scoreId, "mania", keyCount));
+    }
+  }
+}
+
 export const getReplayParsed = createServerFn({ method: "GET" })
   .validator(normalizeReplayParsedPayload)
   .handler(async ({ data }: { data: { scoreId: number; mode: string; keyCount?: number } }) => {
     edgeCache(86400, 604800);
-    const cacheKey = [
-      `replay-parsed:v${REPLAY_PARSED_CACHE_VERSION}`,
-      data.scoreId,
-      data.mode,
-      data.keyCount ?? 0,
-    ].join(":");
+    const cacheKey = parsedReplayCacheKey(data.scoreId, data.mode, data.keyCount ?? 0);
 
     return fetchWithCacheLock<ParsedReplayResponse>(cacheKey, REPLAY_PARSED_CACHE_TTL, async () => {
       // Cross-instance tier: parsing is the most expensive replay-viewer step, so

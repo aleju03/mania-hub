@@ -18,7 +18,8 @@ import type { OsuGradeCounts, OsuScore, OsuUserStatistics } from "../../lib/type
  *
  * Best first, as the profile's rows, filters and insights read a window. Each
  * score carries the Companella mark with its import, which is what the row's
- * replay link opens: every play here counts, so every one has a public replay.
+ * replay link opens: every play here counts, so every one with a stored replay
+ * has a public one (a play an admin entered by hand has none).
  */
 export function buildRestrictedBestList(plays: RestrictedPpPlay[], owner: TrackedPlayViewer): OsuScore[] {
   return plays.map((play, index) => {
@@ -79,7 +80,7 @@ export function buildRestrictedBestList(plays: RestrictedPpPlay[], owner: Tracke
         creator: play.creator ?? undefined,
         covers: cover ? { cover, "cover@2x": cover } : {},
       },
-      companella: { importId: play.scoreId, replay: true, ...(play.app ? { app: play.app } : {}) },
+      companella: { importId: play.scoreId, replay: play.hasReplay !== false, ...(play.app ? { app: play.app } : {}) },
       // Absent fields stay absent, which no full OsuScore shape can express.
     } as unknown as OsuScore;
   });

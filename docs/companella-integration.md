@@ -113,6 +113,7 @@ Backend, all under `backend/src/integrations/companella/`:
 | `official-timing.ts` | Stores an import's timing for the official play osu! delivers for the same run, and pairs and clamps it for the skill compute. |
 | `replay-import.ts` | Admin replay imports: a player's `.osr` files dropped on `/admin/bridgers?tab=import`, staged as ordinary submissions and fed to the lane a few at a time (see "Admin replay imports"). |
 | `manual-scores.ts` | Plays an admin enters by hand on `/admin/players?tab=add`, with no replay: staged as submissions the ordinary job rates (see "Admin manual entries"). |
+| `mamestagram.ts` | Mamestagram plays in "Add a missing score": the account link, the rate-limited API client, the cached play lists, and staging a play as a manual entry (see "Mamestagram plays"). |
 | `analysis.ts` | Per-play MSD / SSR / LN / chart-dan through the existing engines. |
 | `preview.ts` | The experimental aggregate, and its deduplication. |
 | `process.ts` | The job body: validate, store, match, analyze, recompute. |
@@ -1307,6 +1308,49 @@ judgement counts, combo, score and a video link. `POST
   stays false, so nothing offers Watch, and the row's mark is a link to the
   video (`companella.video`), or no mark without one. The map Scores board
   ranks an entry without counts on its accuracy.
+
+## Mamestagram plays
+
+"Add a missing score" also takes plays from Mamestagram, a private osu! server
+with a public, keyless API (`https://api.mamesosu.net`,
+`MAMESTAGRAM_API_ORIGIN`, empty turns it off). A play becomes a manual entry
+under the account's `mamestagram` installation, so everything in "Admin manual
+entries" applies, with provenance `mamestagram`; rows carry the server's logo
+(`companella.app` is `mamestagram`) and the details line reads "via
+Mamestagram".
+
+- **Account link.** A Mamestagram account carries no osu! id. The account is
+  the one the owner's Mamestagram profile link names (`user_server_links`,
+  `/profile/<id>/mania`), and the dialog shows anything Mamestagram only while
+  that profile link exists. The backend hands out a code
+  (`companella_mames_links`), the owner puts it on their Mamestagram userpage,
+  and `get_player_info` must return it in `userpage_content`. One Mamestagram
+  account links to one osu! account. Unlinking keeps the plays already added.
+  The link routes (`/api/mamestagram/link/<userId>`) answer the bridge token
+  only, with the viewer the site verified.
+- **Picking a play.** Plays on Mamestagram's site have no page or link of
+  their own, so the dialog lists a linked account's plays
+  (`GET /api/mamestagram/plays?userId=&list=best|recent|map&beatmapId=`):
+  its best 100, loved maps included (`get_player_scores`), its latest (the last pages of
+  `/v2/scores`, which sorts oldest first, named through the site's files and
+  `get_player_most_played`), or its plays on the chart of a pasted osu! or
+  Mamestagram beatmap link (`/v2/scores?map_md5=`). Fails are left out.
+  Anyone can list and add a linked account's plays, as with osu! links. A
+  `render.mamesosu.net/embed/<id>` link (the replay popup, the one URL that
+  names a play) is taken as a link too.
+- **Adding.** `POST /api/mamestagram/scores` with `scoreId` or `link`, on the
+  score-submission rate buckets. Other modes, automated or contradictory mods,
+  a chart osu! does not have and a chart whose current osu! file differs from
+  the one played are refused. The idempotency key `mamestagram:<score id>`
+  makes a repeat answer "already tracked".
+- **Requests.** Lists and the plays in them are cached in memory for 10
+  minutes, so adding a listed play costs nothing, except a play only read
+  from `/v2/scores`, which lacks the geki count and is read again with
+  `get_score_info`. One client per process, one request at a time, at least a
+  second apart and at most `MAMESTAGRAM_REQUESTS_PER_MINUTE` (default 20), with
+  a User-Agent naming the site. A 429 pauses every request for its
+  `Retry-After` (10 minutes without one), a Cloudflare challenge for 30
+  minutes. Nothing is crawled or synced.
 
 ## Retention and quotas
 

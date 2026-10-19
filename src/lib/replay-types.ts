@@ -30,6 +30,13 @@ export interface ServerReplay {
   stableScrollSpeedScale?: number;
 }
 
+/** One judged hit: its map-time offset (negative is early) and judgement,
+ *  indexed like the renderer's counts (1 = MAX ... 5 = 50). */
+export interface ReplayHitEvent {
+  offsetMs: number;
+  judgment: number;
+}
+
 /** Running totals at the playback clock, for chrome drawn outside the canvas
  *  (the side-by-side comparison's stats column). Only populated on renderers
  *  created with `liveStats`; everything here is what the HUD would be showing
@@ -141,6 +148,10 @@ export interface ReplayRendererLike {
   getHitsoundSchedule?: () => ReplayHitsoundSchedule;
   ready: () => Promise<void>;
   getLiveStats?: () => ReplayLiveStats;
+  getHitEvents?: () => ReplayHitEvent[];
+  getLifeBarFrames?: () => ReplayLifeBarFrame[];
+  getNotesEndTime?: () => number;
+  getClockRate?: () => number;
   getDiagnostics?: () => { rendererBackend: string; judgementBuildMs: number | null };
 }
 

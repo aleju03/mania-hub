@@ -8,32 +8,20 @@ export type LnFamilyVector = Record<LnSkillsetId, number>;
 export const emptyLnFamilyVector = (): LnFamilyVector => ({ lnhybrid: 0, lntechnical: 0, lnwalls: 0, lnspeed: 0 });
 
 export const LN_SECTION_MS = 500;
-// Short strain memory, and a sustained one four times as long whose impulses
-// are divided by four to keep steady-state units. Design conventions, not
-// parameters estimated from charts or players.
+
 export const LN_STRAIN_HALF_LIFE_MS = 700;
 const SUSTAIN_RATIO = 4;
-// A release costs a third of a press, and half that when its row only has
-// presses on the other hand. Same-player scores (2026-10-02, 244k plays)
-// found releases priced at the ScoreV2 window ratio (2/3) too dear.
+
 const RELEASE_WORK = 1 / 3;
 const CROSS_HAND_RELEASE = 0.5;
-// A press on a lane whose last object was a tap is a jack: JACK_UNITS at no
-// gap, falling linearly to nothing at JACK_WINDOW_MS. Charts full of 1/4
-// tap-into-head jacks at 80-100ms read 3-6 levels low without it.
+
 const JACK_UNITS = 8;
 const JACK_WINDOW_MS = 200;
-// The LN identity tiebreak (ln-identity.ts) compares a rating to Overall on
-// lines drawn and reviewed under v14's pricing: no jack term, releases at the
-// ScoreV2 window ratio, no cross-hand discount. It keeps that pricing, so a
-// change to how hard charts read moves no chart between rice and LN.
+
 const IDENTITY_RELEASE_WORK = 1 / 1.5;
 const TOLERANCE = LN_SAME_MOTION_TOLERANCE_MS;
 const HANDS = [3, 12];
 
-/** Fast and sustained strain are two observations of the same hand's work;
- * RMS keeps a constant load in the same units. Hands then combine as
- * max + 0.3 * min, the convention the rating scale was fitted on. */
 export function combineLnDemand(leftFast: number, leftSustain: number, rightFast: number, rightSustain: number): number {
   const left = Math.hypot(leftFast, leftSustain) / Math.SQRT2;
   const right = Math.hypot(rightFast, rightSustain) / Math.SQRT2;
@@ -47,11 +35,9 @@ export interface LnWorkSection {
 }
 export interface LnWorkload {
   timeline: LnTimeline4K;
-  /** The OD the release windows were read at, clamped to 0-10. */
   od: number;
   effective: EffectiveLnAnalysis;
   sections: LnWorkSection[];
-  /** Objects in consecutive rice phrases, excluding taps threaded through LN. */
   riceShare: number;
 }
 
@@ -59,19 +45,11 @@ const bits = (mask: number) => { let n = 0; for (; mask; mask &= mask - 1) n += 
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const laneMask = (ids: number[], lane: Int8Array) => { let mask = 0; for (const id of ids) mask |= 1 << lane[id]; return mask; };
 
-/** Overlapping head/tail judgement windows, outside a shared motion, need
- * independent timing. */
 function timingConflict(gap: number, headWindow: number, tailWindow: number): number {
   if (!(gap > TOLERANCE)) return 0;
   return clamp((gap - TOLERANCE) / headWindow) * clamp((headWindow + tailWindow - gap) / headWindow);
 }
 
-/**
- * Objects in consecutive rice phrases, read on the holds that demand a
- * release (dan-estimator/ln-effective.ts) so a hold a tap releases in time
- * plays as a tap here: four rows in a row with no release-demanding head,
- * tail or hold establish a phrase, and taps threaded through LN do not.
- */
 function riceShareOf(timeline: LnTimeline4K, effective: boolean[], lane: Int8Array, end: Float64Array): number {
   const held = [-1, -1, -1, -1];
   let last = 0, runObjects = 0, runRows = 0, riceObjects = 0;
@@ -95,30 +73,6 @@ function riceShareOf(timeline: LnTimeline4K, effective: boolean[], lane: Int8Arr
   return timeline.objects.length ? riceObjects / timeline.objects.length : 0;
 }
 
-/**
- * The required LN actions of a 4K chart, as strain per 500ms section. Each
- * press and independence task adds one unit of work to its hand, a release a
- * third of one, a jack from a tap up to JACK_UNITS. Only notes, rate and OD
- * enter.
- *
- * Every written hold is priced as a hold, including one a tap would release
- * in time, and a chord costs each finger in it. Measured on same-player
- * scores (2026-09-30; 7,550 players, 218k pairs of 1.0x plays on charts of
- * 75%+ holds, 19.7k pairs at 1.5x, OD held as a covariate), the harder chart
- * of a pair read harder 86.0% of the time at 1.0x and 85.2% at 1.5x, against
- * 82.7% and 66.5% when tap-releasable holds were discounted by that chance
- * and chords were concave, and 85.3% and 80.8% for native Overall. The tap
- * discount read dense short-hold charts as easy, and at 1.5x most of a
- * chart's holds as free. The tap reading still decides identity and the rice
- * share.
- *
- * v15 (2026-10-02) re-measured over every LN-rated chart, not only 75%+ holds:
- * 244k plays, ~1M same-player pairs split by mapset. The jack term and the
- * cheaper releases took ordering from 72.1/77.0% to 77.7/79.7% across the two
- * halves; the Overall blend in ln-skill.ts adds the rest. Reading the
- * same-motion tolerance in chart time scored no better once blended and would
- * rate a rate-mod play apart from the same notes baked into a file.
- */
 export function buildLnWorkload(
   map: Pick<ManiaBeatmap, "notes" | "keyCount" | "od">,
   options: { rate?: number; od?: number | null; pricing?: "rating" | "identity" } = {},
@@ -133,7 +87,6 @@ export function buildLnWorkload(
   const result: LnWorkload = { timeline, od, effective: holds.analysis, sections: [], riceShare: 0 };
   if (!timeline.valid) return result;
 
-  // Per object id (the note index): lane, times, kind, and the lane's next object.
   const count = map.notes.length;
   const lane = new Int8Array(count), start = new Float64Array(count), end = new Float64Array(count);
   const isHold = new Uint8Array(count), next = new Int32Array(count).fill(-1);
@@ -161,15 +114,12 @@ export function buildLnWorkload(
   const sections = new Map<number, LnWorkSection>();
   const origin = rows.find(row => row.heads.length)?.timeMs ?? 0;
   let last = 0;
-  // The row and hand being priced, read by the helpers below.
   let time = 0, hand = 0, handMask = 0, headMask = 0, tailMask = 0, inside = 0, work = 0;
   const add = (units: number) => {
     if (!(units > 0)) return;
     fast[hand] += units; sustain[hand] += units / SUSTAIN_RATIO;
     work += units;
   };
-  // A tap is LN work when it shields or follows a release, sits under the
-  // partner's hold, or shares the hand with a head or tail.
   const relevant = (l: number, id: number) => {
     const shield = next[id] >= 0 && isHold[next[id]] && start[next[id]] - time <= headWindow * 2;
     return shield || time - releaseAt[l] <= tailWindow || (inside & (1 << (l ^ 1))) !== 0
@@ -183,7 +133,6 @@ export function buildLnWorkload(
     const slowDecay = Math.pow(0.5, elapsed / (LN_STRAIN_HALF_LIFE_MS * SUSTAIN_RATIO));
     last = time;
     headMask = row.headMask; tailMask = row.tailMask;
-    // Held columns with this row strictly inside the body.
     inside = 0;
     for (let l = 0; l < 4; l += 1) {
       const id = held[l];
@@ -206,8 +155,6 @@ export function buildLnWorkload(
       const otherHandPresses = (row.headMask | row.tapMask) & HANDS[hand ^ 1];
       add(identityPricing ? IDENTITY_RELEASE_WORK * bits(releases)
         : (otherHandPresses && !(presses & ~releases) ? CROSS_HAND_RELEASE : 1) * RELEASE_WORK * bits(releases));
-      // One independence task per constrained finger, however many names
-      // (anchor, lock, nested hold) describe it.
       for (let l = hand * 2; l < hand * 2 + 2; l += 1) {
         const bit = 1 << l;
         if (!(moves & bit)) continue;
@@ -225,8 +172,6 @@ export function buildLnWorkload(
       const cursor = handPressCursor[hand];
       const gap = Math.min(time - (times[cursor - 1] ?? -Infinity), Math.abs((times[cursor] ?? Infinity) - time));
       add(timingConflict(gap, headWindow, tailWindow));
-      // A chord started together and released apart across the hands is one
-      // shared timing task; this hand owns half of it.
       const split = row.tails.some(id => handMask & (1 << lane[id]) && held.some(other => other >= 0 && !(handMask & (1 << lane[other]))
         && Math.abs(start[other] - start[id]) <= TOLERANCE && end[other] - time > TOLERANCE));
       if (split) add(1 / 2);

@@ -1,15 +1,5 @@
-/*
- * The stable/lazer mania replay judge: which key press belongs to which note,
- * and what each press was judged.
- *
- * The replay viewer draws with it, and imported plays are rated from the
- * offsets it finds. It reproduces a replay's own judgements very closely but
- * not exactly, so nothing may reject a play for disagreeing with it by a few
- * judgements.
- */
-
-import type { ManiaNote } from "../chart/beatmap.js";
-import type { ReplayInputFrame } from "./stable-frames.js";
+import type { ManiaNote } from "../chart/beatmap";
+import type { ReplayInputFrame } from "./stable-frames";
 
 function hasManiaScoreV2Mod(mods: string[]): boolean {
   return mods.some((mod) => ["SV2", "V2"].includes(mod.toUpperCase()));
@@ -55,8 +45,6 @@ export interface ReplayJudgementEvent {
 }
 
 export interface ManiaReplaySimulationOptions {
-  /** Lazer No Release (NR): a hold still held when its tail is reached is
-   *  awarded Perfect immediately (capped to Meh after a hold break). */
   lazerNoReleaseTails?: boolean;
   stableBodyBreakCapJudgment?: Judgment | null;
   stableBrokenTailPressAfterTailMisses?: boolean;
@@ -88,6 +76,7 @@ export interface ManiaReplaySimulationOptions {
   stableMissedInsideConsumedSegmentJudgment?: Judgment;
   stableMissedInsideConsumedNoAdvanceJudgment?: Judgment;
   stableDensePreHeadReleaseMissConsumesRecoveryMaxMedian?: number;
+  stableEarlyReleasedLongNoteAbsorbsPressBeforeHead?: boolean;
   stablePreHeadReleaseMissRecoveryExcludeBeforeTap?: boolean;
   stablePreHeadReleaseMissRecoveryExcludeNextShortMaxDuration?: number;
   stablePreHeadReleaseMissRecoveryExcludeNextShortMaxGap?: number;
@@ -227,8 +216,6 @@ export function getManiaReplayModSetting(
   return undefined;
 }
 
-// ControlPointInfo.TimingPointAt: last timing point at or before `time`; falls
-// back to the first point, or the default beat length when the map has none.
 const DEFAULT_TIMING_BEAT_LENGTH = 1000;
 
 function timingBeatLengthAt(
@@ -244,9 +231,7 @@ function timingBeatLengthAt(
   return active.beatLength;
 }
 
-// Port of .NET's seeded System.Random (Knuth subtractive generator). Lazer's
-// Random mod shuffles columns with `new Random((int)seed)`, so replaying the
-// shuffle requires bit-exact Next() values.
+// Bit-exact port of .NET's seeded System.Random, which lazer's Random mod shuffles columns with.
 class CSharpRandom {
   private seedArray: number[] = new Array(56).fill(0);
   private inext = 0;
@@ -255,8 +240,6 @@ class CSharpRandom {
   constructor(seed: number) {
     seed = seed | 0;
     const subtraction = seed === -2147483648 ? 2147483647 : Math.abs(seed);
-    // The `| 0` casts reproduce C#'s wrapping int arithmetic; seeds above
-    // 161803398 make intermediate values overflow int32 in .NET.
     let mj = (161803398 - subtraction) | 0;
     this.seedArray[55] = mj;
     let mk = 1;
@@ -294,8 +277,6 @@ class CSharpRandom {
   }
 }
 
-// ManiaModRandom: Enumerable.Range(0, columns).OrderBy(_ => rng.Next()) - keys
-// are drawn once per column in order, then stable-sorted.
 export function getManiaRandomColumnMap(keyCount: number, seed: number): number[] {
   const rng = new CSharpRandom(seed);
   return Array.from({ length: keyCount }, (_, column) => ({ column, key: rng.next() }))
@@ -303,8 +284,6 @@ export function getManiaRandomColumnMap(keyCount: number, seed: number): number[
     .map((entry) => entry.column);
 }
 
-// ManiaModInvert: every object start in a column becomes a hold that reaches
-// (almost) to the next object start; the last object in each column is dropped.
 function applyManiaInvertMod<T extends ManiaNote>(
   notes: T[],
   timingPoints: ManiaReplayTimingPoint[] | undefined,
@@ -324,13 +303,9 @@ function applyManiaInvertMod<T extends ManiaNote>(
       const nextStart = locations[i + 1].time;
       const beatLength = timingBeatLengthAt(timingPoints, nextStart);
 
-      // Decrease the duration by at most a 1/4 beat to ensure there's no
-      // instantaneous notes.
       const fullDuration = nextStart - location.time;
       const duration = Math.max(fullDuration / 2, fullDuration - beatLength / 4);
 
-      // The head keeps the object's samples (the rest of the note rides
-      // along); the release is silent.
       result.push({
         ...location,
         endTime: location.time + duration,
@@ -351,8 +326,6 @@ export function applyManiaReplayModsToNotes<T extends ManiaNote>(
   const acronyms = mods.map(getManiaReplayModAcronym);
   let result = [...notes];
 
-  // Lazer applies IApplicableAfterBeatmapConversion mods (Hold Off, Invert -
-  // mutually incompatible) before IApplicableToBeatmap mods (Random, Mirror).
   if (acronyms.includes("HO")) {
     result = result.map((note) => (note.isHold ? { ...note, endTime: note.time, isHold: false } : note));
   } else if (acronyms.includes("IN")) {
@@ -362,7 +335,6 @@ export function applyManiaReplayModsToNotes<T extends ManiaNote>(
   for (let i = 0; i < mods.length; i++) {
     if (acronyms[i] === "RD") {
       const rawSeed = Number(getManiaReplayModSetting(mods[i], ["seed"]));
-      // Without the seed the shuffle is unknowable; leave columns untouched.
       if (!Number.isFinite(rawSeed)) continue;
       const columnMap = getManiaRandomColumnMap(keyCount, rawSeed);
       result = result.map((note) => ({ ...note, column: columnMap[note.column] ?? note.column }));
@@ -378,10 +350,6 @@ export function getManiaReplayHitWindows(
   rawOd: number,
   ruleset: ManiaReplayRuleset,
 ): ManiaReplayHitWindows {
-  // A non-finite OD (e.g. a beatmap whose OverallDifficulty failed to parse)
-  // would make every window NaN. NaN windows disable the early-exit guards in
-  // the judgement simulation loops, turning them quadratic-to-cubic - enough
-  // work to freeze the tab until the browser kills it.
   const od = Number.isFinite(rawOd) ? Math.min(10, Math.max(0, rawOd)) : 8;
   const totalMultiplier = ruleset.speedMultiplier / ruleset.difficultyMultiplier;
 
@@ -530,8 +498,6 @@ function getRoundedLegacyTailPossibleJudgments(
 }
 
 function getStableScoreV2TailJudgment(offsetMs: number, windows: ManiaReplayHitWindows): Judgment {
-  // Truncate the window before release lenience. Rounding the divided error
-  // instead incorrectly upgrades boundary releases (e.g. 92ms at DT OD7.6).
   const delta = Math.abs(Math.round(offsetMs));
   if (delta <= Math.floor(windows.perfect) * RELEASE_WINDOW_LENIENCE) return 1;
   if (delta <= Math.floor(windows.great) * RELEASE_WINDOW_LENIENCE) return 2;
@@ -548,18 +514,12 @@ function getStableHeadJudgmentForOffset(
   windows: ManiaReplayHitWindows,
 ): Judgment {
   offsetMs = Math.round(offsetMs);
-  // Stable's score-v1 mania late OK window is open. For example, OD5 has
-  // late OK at 111ms, while 112ms is already a miss.
   if (offsetMs >= Math.floor(windows.ok)) {
     return offsetMs <= windows.miss ? 6 : 0;
   }
   return getJudgmentForOffset(offsetMs, windows);
 }
 
-// Stable .osr data gives us sampled key states, not exact input-edge times.
-// When a key flips between two samples, estimate the edge inside that interval
-// tightly for high-resolution transitions, and conservatively for coarser
-// frame gaps.
 const STABLE_PRECISE_EDGE_INTERVAL = 4;
 const STABLE_PRECISE_EDGE_POSITION = 1;
 const STABLE_COARSE_EDGE_PLAYBACK_DELAY = 0;
@@ -645,9 +605,6 @@ function getStableTapPressRange(segment: ReplaySegment): { min: number; max: num
 }
 
 function getStableNextNoteEdgeGrace(transitionMedian: number): number {
-  // Stable .osg comparisons currently favor a fixed next-note edge allowance:
-  // sampled edges just past a following object still belong to the earlier
-  // active LN often enough that lowering this regresses more exact captures.
   return transitionMedian > 0
     ? STABLE_MAX_NEXT_NOTE_EDGE_GRACE
     : STABLE_MIN_NEXT_NOTE_EDGE_GRACE;
@@ -707,10 +664,6 @@ function getStableTransitionMedian(segments: ReplaySegment[][]): number {
 }
 
 function getStableHiddenBodyBreakGapThreshold(transitionMedian: number, speedMultiplier: number | undefined): number {
-  // DT replays are sampled in beatmap time, so the same real frame gap spans
-  // more milliseconds in replay time. Keep the threshold near the first truly
-  // skipped-frame gaps there, while using a median-scaled threshold for normal
-  // playback so dense, high-fps LN play does not invent dropped holds.
   if (speedMultiplier != null && speedMultiplier > 1.01) {
     return STABLE_HIDDEN_BODY_BREAK_MIN_GAP;
   }
@@ -784,11 +737,6 @@ function getStableTapPossibleJudgments(
   return [...possible].sort((a, b) => a - b);
 }
 
-// Stable (ScoreV1) long-note combined judgement rule.
-// Wiki: https://osu.ppy.sh/wiki/en/Gameplay/Judgement/osu%21mania
-// The final judgement for an LN depends on head error AND the combined error
-// (|headErr| + |tailErr|). Each tier tightens both independently. Stable's
-// dropped-hold flag caps MAX/300 results to GOOD/200.
 function judgeStableLongNoteCombined(
   headOffsetMs: number,
   tailOffsetMs: number,
@@ -891,13 +839,6 @@ function judgeStableLongNoteScoreV1(
   };
 }
 
-// Stable downloaded replays sample the key state once per game frame (typically
-// ~16-17ms at 60fps). Two consecutive pressed samples spaced one frame apart do
-// NOT plausibly hide a release/re-press: the user would have had to drop and
-// recover the key inside a single frame. We only treat a hidden body break as
-// possible when the gap between adjacent observed events is substantially
-// longer than normal sampling cadence, indicating that at least one full
-// frame's worth of input state was actually skipped.
 function getStableSegmentHiddenBodyBreakTime(
   segment: ReplaySegment,
   startTime: number,
@@ -925,10 +866,6 @@ function getStableSegmentHiddenBodyBreakTime(
     previousPressedSample = sample;
   }
 
-  // The release edge itself can hide a release/re-press/release sequence in
-  // the gap between the last observed pressed sample and the end-of-segment
-  // sample. Same threshold rule: only flag it when the gap is wide enough to
-  // contain a real release, not when it's just one frame of normal sampling.
   if (segment.end <= endTime && segment.endPrevious != null) {
     const lowerBound = Math.max(segment.endPrevious, startTime);
     if (segment.end - lowerBound > gapThreshold) {
@@ -1008,9 +945,6 @@ function getStableLongNotePossibleJudgments(
     for (const tailOffset of tailOffsets) {
       possible.add(judgeStableLongNoteCombined(headOffset, tailOffset, bodyBreakCapJudgment, windows));
 
-      // Downloaded stable replays are sampled key states, not the full input
-      // stream. Around short drops, the sampled edge can make the body-break
-      // cap ambiguous even though the score header has the original result.
       if (bodyBreakCapJudgment != null) {
         possible.add(judgeStableLongNoteCombined(headOffset, tailOffset, null, windows));
       }
@@ -1102,9 +1036,6 @@ function createMissState(
     };
   }
 
-  // Stable fires a passive LN head miss as soon as the head times out. The
-  // tail/body can still produce hit-error entries later, but the score bucket
-  // has already moved.
   const combinedTime = headTime;
   const stableJudgment = stableJudgmentOverride ?? 6;
   events.push({
@@ -1145,8 +1076,6 @@ export function simulateManiaReplayJudgements(
   const stableScoreV2 = accuracyMode === "stable-scorev2";
   const separateHeadWindow = stableScoreV2 ? windows.ok : windows.meh;
   const separateTailWindow = stableScoreV2 ? windows.ok : windows.meh;
-  // Stable gates input on its unscaled miss window even though the judgement
-  // bands are expressed in rate-adjusted replay time.
   const stableScoreV2InputWindow = Math.floor(windows.miss / (options.speedMultiplier ?? 1));
   const stableScoreV2TailInputWindow = stableScoreV2InputWindow * RELEASE_WINDOW_LENIENCE;
   const noReleaseTails = accuracyMode === "lazer" && Boolean(options.lazerNoReleaseTails);
@@ -1197,14 +1126,10 @@ export function simulateManiaReplayJudgements(
   const stablePreHeadReleaseMissRecoveryMaxHeadOffset = options.stablePreHeadReleaseMissRecoveryMaxHeadOffset;
   const stablePreHeadReleaseMissRecoveryMaxNextNoteGap = options.stablePreHeadReleaseMissRecoveryMaxNextNoteGap;
   const stablePreHeadReleaseMissRecoveryMaxTailOffset = options.stablePreHeadReleaseMissRecoveryMaxTailOffset ?? -200;
-  // Consumption only fires when the note after next leaves a real gap: inside
-  // a continuing dense chain the recovery press stays with the chain. The
-  // 2026-08-20 4K full-LN +DT capture needs no consumption anywhere in its
-  // 75ms noodle chains, while the consuming events the rule was validated on
-  // (7K NC, 4K Cyber Attack) all precede a next-next gap of ~110ms or more;
-  // thresholds in (75, 110] score identically across all seven captures.
   const stablePreHeadReleaseMissRecoveryMinNextNextNoteGap = options.stablePreHeadReleaseMissRecoveryMinNextNextNoteGap ?? 100;
   const stablePreHeadReleaseMissesAtHead = options.stablePreHeadReleaseMissesAtHead ?? true;
+  const stableEarlyReleasedLongNoteAbsorbsPressBeforeHead = options.stableEarlyReleasedLongNoteAbsorbsPressBeforeHead
+    ?? (!separateHoldJudgements && Boolean(options.legacyReplayFrameRounding));
   const stablePreserveLongNoteScoringPressAfterBreak = options.stablePreserveLongNoteScoringPressAfterBreak ?? false;
   const stablePreserveLongNoteScoringPressAfterTailBreak = options.stablePreserveLongNoteScoringPressAfterTailBreak ?? false;
   const stablePreserveLongNoteScoringPressTime = options.stablePreserveLongNoteScoringPressTime ?? false;
@@ -1255,10 +1180,6 @@ export function simulateManiaReplayJudgements(
       const nextNextNoteIndex = columnNotes[notePosition + 2] ?? null;
       const nextNextNote = nextNextNoteIndex != null ? notes[nextNextNoteIndex] : null;
       const isLN = note.isHold && note.endTime > note.time;
-      // Stable tap replay frames can straddle a press across the next note's
-      // start time. Keep those ambiguous taps eligible for the earlier note;
-      // LN heads have separate hold/body behaviour and should keep scrolling
-      // when they are held late.
       const canUseStableCrossedHeadEdge = !isLN || stableScoreV2;
       const stableNextEdgeGrace = !separateHoldJudgements
         && options.legacyReplayFrameRounding
@@ -1300,9 +1221,6 @@ export function simulateManiaReplayJudgements(
           ? isLN ? getStableSegmentPressRange(segment) : getStableTapPressRange(segment)
           : null;
         if (stableRangeIsPastHeadDeadline(pressRange?.min ?? segment.start, latestHeadHitTime, stableHeadEdgeGrace)) break;
-        // Stable expires the object on its frame update before processing
-        // input. A sampled edge can straddle the deadline only if the prior
-        // frame was strictly before it.
         if (stableScoreV2 && (pressRange?.min ?? segment.start) >= note.time + headWindow) break;
 
         let currentHeadTime = pressRange
@@ -1315,8 +1233,6 @@ export function simulateManiaReplayJudgements(
           if (!pressRange || stableRangeIsPastHeadDeadline(pressRange.min, latestHeadHitTime, stableHeadEdgeGrace)) break;
         }
         if (currentHeadTime > stableColumnInputOwnershipEnd) break;
-        // Subtracting Number.EPSILON from large map timestamps does not make
-        // the next-note cutoff exclusive; compare the timestamp directly.
         if (stableScoreV2 && nextNote && currentHeadTime >= nextNote.time) break;
         const currentHeadOffsetMs = currentHeadTime - note.time;
         const previousNoteIsLongNote = previousNote != null
@@ -1339,25 +1255,15 @@ export function simulateManiaReplayJudgements(
             : isLN
               ? getStableLongNoteHeadPreviewJudgment(currentHeadOffsetMs, windows)
               : getStableHeadJudgmentForOffset(currentHeadOffsetMs, windows);
-        // An early press can be in a judgement band while the object is not
-        // hittable yet. This gate applies to taps and hold heads alike.
         if (stableScoreV2 && currentHeadOffsetMs < 0
           && (currentHeadJudgment === 6 || currentHeadOffsetMs < -stableScoreV2InputWindow)) continue;
         if (currentHeadJudgment !== 0) {
-          const stableTimedOutCrossedLongNoteHead = !separateHoldJudgements
-            && isLN
-            && stableTransitionMedian === STABLE_CROSSED_LN_HEAD_MEDIAN_TRANSITION
-            && currentHeadOffsetMs > windows.meh;
           if (
             !separateHoldJudgements
             && isLN
             && nextNote
             && currentHeadTime >= nextNote.time
-            && currentHeadJudgment >= 5
-            && (
-              stableTransitionMedian < STABLE_CROSSED_LN_HEAD_MEDIAN_TRANSITION
-              || stableTimedOutCrossedLongNoteHead
-            )
+            && currentHeadOffsetMs > windows.meh
           ) {
             break;
           }
@@ -1411,9 +1317,6 @@ export function simulateManiaReplayJudgements(
         }
       }
 
-      // Rate-down replays compress the scaled head window; live captures show
-      // stable still honors presses out to the unscaled window, but only when
-      // the next note has no claim on the press.
       if (
         matchedSegmentIndex === -1
         && !separateHoldJudgements
@@ -1444,10 +1347,6 @@ export function simulateManiaReplayJudgements(
         }
       }
 
-      // Stable lets a press grab a hold at any point in its body, not just
-      // inside the head window: the late grab scores through the combined
-      // rule (which floors far-from-head starts at Meh) or misses via the
-      // broken-tail rules if the grab does not survive to the tail.
       if (
         matchedSegmentIndex === -1
         && !separateHoldJudgements
@@ -1468,8 +1367,6 @@ export function simulateManiaReplayJudgements(
           );
           if (pressTime > note.endTime) break;
           if (pressTime <= note.time + windows.meh) continue;
-          // Only grabs that survive into the tail window score; a grab that
-          // lets go again mid-body leaves the note to miss like any drop.
           if (segment.end < note.endTime - Math.floor(windows.meh)) continue;
           matchedSegmentIndex = s;
           headJudgment = 5;
@@ -1479,16 +1376,6 @@ export function simulateManiaReplayJudgements(
       }
 
       if (matchedSegmentIndex === -1) {
-        // Lazer holds can still earn a user-triggered tail judgement after the
-        // head timed out: DrawableHoldNote.OnPressed calls beginHoldAt before
-        // Head.UpdateResult() decides whether the input is consumed, so a
-        // press that falls through to a later note (or to nothing) still
-        // starts holding this note, and the non-consuming OnReleased then
-        // fires Tail.UpdateResult() on every held note in the column. The
-        // press must be no earlier than the head miss window (guaranteed by
-        // the segment cursor) and no later than the tail's raw Meh window;
-        // the release judges via the 1.5x lenience windows and is capped to
-        // Meh because the head was not hit.
         if (separateHoldJudgements && isLN) {
           const tailDeadline = note.endTime + separateTailWindow * RELEASE_WINDOW_LENIENCE;
           let regrabTail: { judgment: Judgment; offsetMs: number; time: number } | null = null;
@@ -1499,10 +1386,6 @@ export function simulateManiaReplayJudgements(
             if (segment.start > note.endTime + windows.meh) break;
             if (!noReleaseTails && segment.end > tailDeadline) break;
 
-            // Note lock (OrderedHitPolicy.IsHittable): the press only reaches
-            // this hold if it lands strictly before the next alive object's
-            // start time. Approximate "alive" as not yet timed out at press
-            // time.
             let nextAliveStart: number | null = null;
             for (let p = notePosition + 1; p < columnNotes.length; p++) {
               const laterNote = notes[columnNotes[p]];
@@ -1513,16 +1396,9 @@ export function simulateManiaReplayJudgements(
             }
             if (nextAliveStart != null) {
               if (segment.start >= nextAliveStart) continue;
-              // A successful hit on the next object triggers
-              // OrderedHitPolicy.HandleHit, which force-misses every earlier
-              // unjudged nested object ending before it - including this
-              // tail. Only presses that miss (or fall short of) the next
-              // object's hit window leave the tail judgeable.
               if (!stableScoreV2 && nextAliveStart - segment.start <= windows.meh && note.endTime < nextAliveStart) break;
             }
 
-            // No Release: once the re-grab is holding at the tail, Perfect is
-            // applied immediately (capped to Meh because the head was missed).
             if (noReleaseTails && segment.end >= note.endTime) {
               regrabTail = {
                 judgment: capLazerTailJudgment(1, true),
@@ -1538,8 +1414,6 @@ export function simulateManiaReplayJudgements(
               ? getStableScoreV2TailJudgment(segment.end - note.endTime, windows)
               : getJudgmentForOffset(releaseOffset, windows);
             if (rawTailJudgment === 0 || (stableScoreV2 && rawTailJudgment === 6 && releaseOffset < 0)) continue;
-            // Stable gives this press to the recovering hold. Lazer can
-            // deliver the same press to a later head through its hit policy.
             if (stableScoreV2) segmentCursor = s + 1;
             regrabTail = {
               judgment: capLazerTailJudgment(rawTailJudgment, true),
@@ -1622,11 +1496,6 @@ export function simulateManiaReplayJudgements(
           && previousConsumedSegment.start < note.time
           && previousConsumedSegment.end > note.time;
 
-        // A key still held across the head (its press consumed by an earlier
-        // note) activates the hold when the head scrolls by, with an on-time
-        // head delta; the tail then judges from the same segment's release.
-        // Only keys that stay held into the tail window count: letting go
-        // mid-body leaves the untouched hold to miss like any other.
         if (
           stableMissedInsideConsumedSegment
           && stableHeldKeyActivatesLongNoteHead
@@ -1679,11 +1548,6 @@ export function simulateManiaReplayJudgements(
         && headSegment.start < previousNote.endTime
         && headSegment.end > note.time;
 
-      // A stable press that lands in the miss tier (|offset| in (meh, miss])
-      // registers the LN as a miss at the real press time. Lazer is different:
-      // the head is counted as a miss but the tail still gets its own judgement
-      // (capped to Meh by the head-miss combo-break rule), so we let lazer fall
-      // through to the regular flow.
       if (headJudgment === 6 && !separateHoldJudgements && !isLN) {
         noteStates[noteIndex] = createMissState(
           note,
@@ -1701,7 +1565,6 @@ export function simulateManiaReplayJudgements(
         continue;
       }
 
-      // Regular note (or a "hold" whose endTime == time which we treat as a tap)
       if (!isLN) {
         events.push({
           column,
@@ -1732,7 +1595,6 @@ export function simulateManiaReplayJudgements(
         continue;
       }
 
-      // --- Long note ---
       if (separateHoldJudgements) {
         events.push({
           column,
@@ -1754,8 +1616,6 @@ export function simulateManiaReplayJudgements(
         let tailTime = tailDeadline;
         let possibleTailJudgments: Judgment[] | undefined;
 
-        // Lazer's DrawableHoldNoteTail.GetCappedResult: the tail is capped to
-        // Meh if the head was missed OR the body had a hold break.
         const headMissed = headJudgment === 6;
 
         while (scanIndex < columnSegments.length) {
@@ -1767,10 +1627,6 @@ export function simulateManiaReplayJudgements(
           }
           releaseTime = Math.max(releaseTime, segment.end);
 
-          // No Release: NoReleaseDrawableHoldNoteTail applies Perfect as soon
-          // as the tail is reached while the key is down (a press between the
-          // tail and its late Meh window re-holds and judges immediately too),
-          // capped to Meh after a head miss or hold break.
           if (noReleaseTails && segment.end >= note.endTime && segment.start <= tailDeadline) {
             const hasComboBreak = bodyBreakTime != null || headMissed;
             tailJudgment = capLazerTailJudgment(1, hasComboBreak);
@@ -1791,12 +1647,7 @@ export function simulateManiaReplayJudgements(
             ? getStableScoreV2TailJudgment(segment.end - note.endTime, windows)
             : getJudgmentForOffset(releaseOffsetMs, windows);
 
-          // The input gate uses the unscaled miss window with tail lenience.
-          // A release inside it can end the hold; an earlier one breaks it.
           if (rawTailJudgment !== 0 && !(stableScoreV2 && segment.end < note.endTime - stableScoreV2TailInputWindow)) {
-            // Stable's hold-state update and its recorded release edge can
-            // fall on adjacent frames. Estimate the state-update time from
-            // that edge interval; the hit-error value remains the raw edge.
             const releaseUpdateTime = segment.end + (segment.end - (segment.endPrevious ?? segment.end));
             const hasComboBreak = bodyBreakTime != null || headMissed
               || (stableScoreV2 && releaseUpdateTime < note.endTime - windows.meh);
@@ -1832,8 +1683,6 @@ export function simulateManiaReplayJudgements(
           }
 
           if (stableScoreV2 && releasedTailTimeoutTime == null) {
-            // A released hold can receive Meh as its tail enters the early
-            // window. Waiting for a later release delays (or loses) this grade.
             const earlyTailTime = Math.max(segment.end, note.endTime - windows.meh);
             const next = columnSegments[scanIndex + 1];
             if (earlyTailTime <= note.endTime && (!next || next.start > earlyTailTime)) {
@@ -1880,8 +1729,6 @@ export function simulateManiaReplayJudgements(
         };
 
         if (matchedSegmentIndex >= segmentCursor) {
-          // Consume re-grabs as well as the head press, but leave an unvisited
-          // segment beyond the tail deadline available for the next note.
           const holdEndCursor = !unconsumedRecovery && scanIndex < columnSegments.length && columnSegments[scanIndex].start <= tailDeadline
             ? scanIndex + 1
             : scanIndex;
@@ -1890,10 +1737,6 @@ export function simulateManiaReplayJudgements(
         continue;
       }
 
-      // --- Stable LN: one ScoreV1 combined judgement event. Stable stores the
-      // last press/release times for the hold object, reflects early heads and
-      // late releases around the note boundaries, and only times out held tails
-      // at the 50 window.
       const stableMeh = Math.floor(windows.meh);
       const tailEarlyBound = note.endTime - stableMeh;
       const tailTimeout = note.endTime + stableMeh;
@@ -1902,9 +1745,6 @@ export function simulateManiaReplayJudgements(
       let bodyBreakTime: number | null = null;
       const bodyBreakTimes: number[] = [];
       let bodyBreakCapJudgment: Judgment | null = null;
-      // A release beyond the tail's miss window is a hard drop: the hold is
-      // dead and only misses from there (a soft drop inside the miss window
-      // keeps the hold judgeable, usually recovering a Meh).
       let hadHardDrop = false;
       const heldSegments: ReplaySegment[] = [];
       let releaseTime = headSegment.end;
@@ -1956,10 +1796,6 @@ export function simulateManiaReplayJudgements(
         const segmentPressEstimate = options.legacyReplayFrameRounding
           ? getStablePressEstimate(segment, note.time, useStableCoarsePressPlayback, stableCoarseEdgePlaybackDelay, stablePreciseEdgePosition)
           : segment.start;
-        // A re-grab close enough to still count as a head hit keeps the
-        // original head delta (the break cap still applies); only re-grabs
-        // beyond the Ok window re-base the scoring press, which floors the
-        // combined result at Meh.
         const regrabKeepsHeadDelta = stableRegrabWithinOkKeepsHeadDelta
           && bodyBreakTime != null
           && columnSegments[matchedSegmentIndex].end > note.time
@@ -2067,9 +1903,6 @@ export function simulateManiaReplayJudgements(
             && nextSegmentCoversTailEdge;
 
           if (!canBridgeTailEdgeGap && (releasedAfterHead || releasedMatchedPreHeadPress)) {
-            // The hard/soft boundary is the tighter of the replay-time and
-            // real-time miss windows (rate-up mods keep the real window,
-            // rate-down mods keep the scaled one).
             if (segment.end < note.endTime - Math.floor(Math.min(windows.miss, windows.miss / (options.speedMultiplier ?? 1)))) {
               hadHardDrop = true;
             }
@@ -2103,6 +1936,7 @@ export function simulateManiaReplayJudgements(
                 && stablePreHeadReleaseMissConsumesRecovery
                 && nextSegment != null
                 && (nextSegmentPressRange?.min ?? nextSegment.start) < note.endTime
+                && nextSegment.start < note.time
                 && (!stablePreHeadReleaseMissRecoveryExcludeBeforeTap || nextNote?.isHold !== false)
                 && !recoveryWouldStealCloseShortNextNote
                 && (
@@ -2187,9 +2021,6 @@ export function simulateManiaReplayJudgements(
       let hiddenBodyBreakPossible = false;
       let freeTailSegmentForNextNote = false;
 
-      // A dropped hold that was re-grabbed later than the head's Ok window can
-      // recover at most a Meh: the re-grab is too far from the head for the
-      // combined rule to score above 50 in stable.
       const brokenRegrabTail = bodyBreakTime != null
         && hadHardDrop
         && tailSegmentIndex != null
@@ -2205,12 +2036,6 @@ export function simulateManiaReplayJudgements(
           : Math.max(bodyBreakCapJudgment, 5) as Judgment;
       }
 
-      // After a HARD drop, a press that starts after the tail never counts as
-      // the dropped hold's tail: the hold misses and the press stays available
-      // for the next note. After a SOFT drop the hold is still judgeable: a
-      // press inside the tail's Ok window regrabs it (usually recovering a
-      // Meh) while the segment also stays available for the next note, and a
-      // press beyond the Ok window leaves the hold to miss.
       const dropTailPressAfterTail = bodyBreakTime != null
         && tailSegmentIndex != null
         && tailSegmentIndex !== matchedSegmentIndex
@@ -2219,8 +2044,6 @@ export function simulateManiaReplayJudgements(
       const brokenTailPressAfterTail = stableBrokenTailPressAfterTailMisses
         && dropTailPressAfterTail
         && hadHardDrop;
-      // Soft-dropped hold with the key up at the tail: judged at the tail from
-      // the drop release; an after-tail press belongs to the next note.
       const softDropJudgedAtTail = stableBrokenTailPressAfterTailMisses
         && dropTailPressAfterTail
         && !hadHardDrop;
@@ -2394,7 +2217,14 @@ export function simulateManiaReplayJudgements(
         }
       }
 
-      const nextSegmentCursor = Math.max(matchedSegmentIndex + 1, lastConsumedSegmentIndex + 1);
+      let nextSegmentCursor = Math.max(matchedSegmentIndex + 1, lastConsumedSegmentIndex + 1);
+      if (stableEarlyReleasedLongNoteAbsorbsPressBeforeHead && releaseTime > 0 && releaseTime < note.time) {
+        while (nextSegmentCursor < columnSegments.length) {
+          const candidate = columnSegments[nextSegmentCursor];
+          if (candidate.start >= note.time) break;
+          nextSegmentCursor++;
+        }
+      }
       noteStates[noteIndex] = {
         bodyBreakTime,
         bodyBreakTimes,

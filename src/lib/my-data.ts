@@ -86,6 +86,15 @@ export interface MyDataSkillPercentile {
   population: number;
 }
 
+// A place on one skill leaderboard column, worldwide and in the player's country.
+export interface MyDataSkillRank {
+  global: number;
+  globalTotal: number;
+  country: string;
+  countryRank: number;
+  countryTotal: number;
+}
+
 export interface MyDataSkillMode {
   keyCount: number;
   analyzedPlays: number;
@@ -96,6 +105,9 @@ export interface MyDataSkillMode {
   dan?: { rc: MyDataSkillDanSide | null; ln: MyDataSkillDanSide | null };
   // Keys are skillset names or `pattern:{id}` axes.
   percentiles?: Record<string, MyDataSkillPercentile>;
+  // Overall leaderboard ranks keyed by axis (Overall, EtternaOverall); absent
+  // until the backend's board is in memory.
+  ranks?: Record<string, MyDataSkillRank>;
   // Thin evidence base (few analyzed plays): ratings are served shrunk toward
   // the population median and should read as rough estimates.
   provisional?: boolean;

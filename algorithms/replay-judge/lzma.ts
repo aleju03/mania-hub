@@ -1,27 +1,8 @@
-/*
- * A bounded LZMA1 decoder for the replay frame stream inside an .osr.
- *
- * About 18x faster than the lzma-js package, with no imports and no Node
- * Buffer, so it runs in the browser too.
- *
- * Why not a package: replay uploads are untrusted input, and the thing that has
- * to be bounded is not just the declared output size but the dictionary
- * allocation, the actual emitted byte count and the decode's own running time.
- * A general-purpose decompressor gives the first and none of the others. The
- * algorithm below is the reference LZMA decoder (range coder +
- * literal/match/rep state machine); no cryptography and no novel compression
- * work is being invented here.
- *
- * The output is materialised into one pre-sized buffer that doubles as the
- * dictionary, so the decoder never allocates more than `maxOutputBytes` no
- * matter what the header claims.
- */
-
 const PROB_INIT = 1024;
 const NUM_BIT_MODEL_TOTAL_BITS = 11;
 const NUM_MOVE_BITS = 5;
 const BIT_MODEL_TOTAL = 1 << NUM_BIT_MODEL_TOTAL_BITS;
-// range < 2^24 is tested as "no bit above bit 23 is set".
+
 const TOP_MASK = 0xff000000 | 0;
 
 const NUM_POS_BITS_MAX = 4;
@@ -32,8 +13,6 @@ const END_POS_MODEL_INDEX = 14;
 const NUM_FULL_DISTANCES = 1 << (END_POS_MODEL_INDEX >> 1);
 const MATCH_MIN_LEN = 2;
 
-// Every probability lives in one flat Uint16Array at these offsets. A length
-// coder is two choice bits, a low and a mid tree per posState, and a high tree.
 const LEN_LOW = 2;
 const LEN_MID = LEN_LOW + (1 << (NUM_POS_BITS_MAX + 3));
 const LEN_HIGH = LEN_MID + (1 << (NUM_POS_BITS_MAX + 3));
@@ -59,18 +38,10 @@ export class LzmaError extends Error {
 }
 
 export interface LzmaLimits {
-  /** Hard ceiling on emitted bytes. The declared size is clamped to it. */
   maxOutputBytes: number;
-  /** Hard ceiling on the declared dictionary size, so the header cannot ask for a huge window. */
   maxDictionaryBytes?: number;
 }
 
-/**
- * range and code hold the int32 bit patterns of their uint32 values: V8 keeps
- * int32 fields unboxed, which roughly halves the decode time against storing
- * the uint32 values (anything above 2^31 becomes a heap double). Only the
- * compare in bit() reads them as unsigned.
- */
 class RangeDecoder {
   range = -1;
   code = 0;
@@ -78,7 +49,6 @@ class RangeDecoder {
 
   constructor(private readonly input: Uint8Array, private readonly probs: Uint16Array, start: number) {
     if (input.length - start < 5) throw new LzmaError("LZMA stream is truncated.");
-    // The first byte of the range-coded payload is always zero.
     if (input[start] !== 0) throw new LzmaError("LZMA range coder header is invalid.");
     this.code = (input[start + 1] << 24) | (input[start + 2] << 16) | (input[start + 3] << 8) | input[start + 4];
     this.pos = start + 5;
@@ -87,8 +57,6 @@ class RangeDecoder {
   normalize(): void {
     if ((this.range & TOP_MASK) === 0) {
       this.range <<= 8;
-      // Running past the end is a truncated stream, not a zero fill: a crafted
-      // replay must not be able to have the decoder invent its own tail.
       if (this.pos >= this.input.length) throw new LzmaError("LZMA stream ended early.");
       this.code = (this.code << 8) | this.input[this.pos++];
     }
@@ -152,11 +120,9 @@ export interface LzmaHeader {
   lp: number;
   pb: number;
   dictionarySize: number;
-  /** null when the header carries the "unknown size" marker. */
   declaredSize: bigint | null;
 }
 
-/** Reads the 13-byte .osr-style header (5 properties + 8 size) without decoding. */
 export function readLzmaHeader(buffer: Uint8Array): LzmaHeader {
   if (buffer.length < 13) throw new LzmaError("LZMA header is truncated.");
   const properties = buffer[0];
@@ -174,13 +140,6 @@ export function readLzmaHeader(buffer: Uint8Array): LzmaHeader {
   };
 }
 
-/**
- * Decodes an LZMA1 stream that begins with the 13-byte header.
- *
- * Bounds applied, in order: the declared dictionary size, the declared output
- * size, and then the actual emitted byte count - so a stream that lies about
- * its size in either direction stops at the ceiling instead of past it.
- */
 export function decodeLzma(buffer: Uint8Array, limits: LzmaLimits): Uint8Array {
   const header = readLzmaHeader(buffer);
   const maxDictionary = limits.maxDictionaryBytes ?? 64 * 1024 * 1024;
@@ -213,8 +172,6 @@ export function decodeLzma(buffer: Uint8Array, limits: LzmaLimits): Uint8Array {
       const base = LITERAL + 0x300 * (((outPos & literalPosMask) << lc) + (prevByte >>> (8 - lc)));
       let symbol = 1;
       if (state >= 7) {
-        // A literal that follows a match is coded against the byte the match
-        // would have produced.
         let matchByte = out[outPos - rep0 - 1];
         do {
           const matchBit = (matchByte >>> 7) & 1;
@@ -273,21 +230,17 @@ export function decodeLzma(buffer: Uint8Array, limits: LzmaLimits): Uint8Array {
         if (posSlot < END_POS_MODEL_INDEX) {
           rep0 += rc.reverseTree(POS_DECODERS + rep0 - posSlot, directBits);
         } else {
-          // Only here can rep0 pass 2^31, so it is kept as a uint32 value.
           rep0 = (rep0 + (rc.directBits(directBits - NUM_ALIGN_BITS) << NUM_ALIGN_BITS)) >>> 0;
           rep0 = (rep0 + rc.reverseTree(ALIGN, NUM_ALIGN_BITS)) >>> 0;
         }
-        if (rep0 === 0xffffffff) break; // end-of-stream marker
+        if (rep0 === 0xffffffff) break;
       }
     }
 
     if (rep0 >= outPos) throw new LzmaError("LZMA match distance is out of range.");
-    // Truncating instead of throwing would let a crafted stream decide its own
-    // tail; the declared size is the contract and overrunning it is corruption.
     if (outPos + len > outputSize) throw new LzmaError("LZMA output overran its declared size.");
     let source = outPos - rep0 - 1;
     if (rep0 >= len) {
-      // The source ends before the target starts, so a block copy is exact.
       out.copyWithin(outPos, source, source + len);
       outPos += len;
     } else {

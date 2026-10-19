@@ -114,7 +114,7 @@ describe("SkinCard", () => {
   it("keeps the download out of the card link, which cannot hold an anchor", () => {
     render(<SkinCard skin={SKIN} />);
 
-    const cardLink = screen.getByRole("link", { name: /aleju03 lazer preview/i });
+    const cardLink = screen.getByRole("link", { name: SKIN.name });
     expect(cardLink.getAttribute("href")).toBe("/skins/aleju03-lazer");
     // closest() walks up from the download itself: a nested anchor would show
     // up here, and nested anchors do not survive the browser's parser.
@@ -159,13 +159,15 @@ describe("SkinCard", () => {
     expect(screen.queryByLabelText("Download aleju03 lazer")).toBeNull();
   });
 
-  it("shows downloads and views compactly, spelling both out for a screen reader", () => {
-    render(<SkinCard skin={{ ...SKIN, downloadCount: 1203, viewCount: 45_600 }} />);
-    // Two counts share the space one spelled-out figure held, so both shorten.
+  it("shows downloads, views and likes compactly, spelling them out for a screen reader", () => {
+    render(<SkinCard skin={{ ...SKIN, downloadCount: 1203, viewCount: 45_600, likeCount: 12 }} />);
+    // Three counts share the space one spelled-out figure held, so they shorten.
     expect(screen.getByText("1.2k")).toBeTruthy();
     expect(screen.getByText("46k")).toBeTruthy();
+    expect(screen.getByText("12")).toBeTruthy();
     // The exact numbers stay reachable, since the icons carry no words.
     expect(screen.getByLabelText("1,203 downloads, 45,600 views")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "12 likes" })).toBeTruthy();
   });
 
   it("counts nothing on a private skin, which only its owner can see", () => {

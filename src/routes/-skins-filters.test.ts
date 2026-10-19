@@ -9,6 +9,7 @@ const DEFAULTS = {
   k: 0,
   special: false,
   mine: false,
+  liked: false,
   cover: false,
   stage: false,
   shots: false,
@@ -35,8 +36,14 @@ describe("skins search params", () => {
     expect(parseSkinsSearch({ mine: "aleju03" }).mine).toBe(false);
   });
 
+  it("reads the liked filter from either the boolean or its URL form", () => {
+    expect(parseSkinsSearch({ liked: true }).liked).toBe(true);
+    expect(parseSkinsSearch({ liked: "1" }).liked).toBe(true);
+    expect(parseSkinsSearch({ liked: "0" }).liked).toBe(false);
+  });
+
   it("accepts both directions of every sort and rejects unknown ones", () => {
-    for (const sort of ["oldest", "downloads", "downloads-asc", "views", "views-asc", "size", "size-asc"]) {
+    for (const sort of ["oldest", "downloads", "downloads-asc", "views", "views-asc", "likes", "likes-asc", "size", "size-asc"]) {
       expect(parseSkinsSearch({ sort }).sort).toBe(sort);
     }
     expect(parseSkinsSearch({ sort: "newest-asc" }).sort).toBe("newest");

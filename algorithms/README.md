@@ -1,6 +1,6 @@
 # Mania Tracker algorithms
 
-The code that rates charts and players on [mania-tracker.com](https://mania-tracker.com): dan estimates, skillset tags, vibro detection, the LN model, and how a player's plays become skill ratings and a dan.
+The code that rates charts and players on [mania-tracker.com](https://mania-tracker.com): dan estimates, skillset tags, vibro detection, the LN model, Prism (the 6K-8K MSD calculator), and how a player's plays become skill ratings and a dan.
 
 ## Layout
 
@@ -11,7 +11,8 @@ The code that rates charts and players on [mania-tracker.com](https://mania-trac
 | `classification/` | A chart's dan verdict and pattern tags at a given rate, and whether it can count toward a player's dan |
 | `dan-estimator/` | Chart features, pattern analysis, dan labels, LN identity and the in-house LN estimator |
 | `ln/` | The LN model: hold timeline, required-action workload, the 4K LN rating and its four skillsets |
-| `msd/` | How MinaCalc is called and how its skillsets become a chart's MSD |
+| `msd/` | How a chart's MSD is computed: MinaCalc, or Prism on 6K-8K |
+| `prism/` | Prism 0.25, the MSD calculator for 6K, 7K and 8K, in Rust |
 | `leoblack/` | The wrapper around LeoBlack's estimators and the Companella refinement |
 | `player/` | Accuracy to Wife3 goal, per-play SSRs, skill ratings, dan clears, dan courses |
 | `replay-judge/` | Reading `.osr` replay frames and judging each key press against the chart, for stable and lazer |
@@ -20,9 +21,25 @@ The code that rates charts and players on [mania-tracker.com](https://mania-trac
 
 A chart goes through `classification/chart-classifier.ts`, which picks the engine per keymode (LeoBlack for 4K, 6K and 7K, the in-house LN estimator as a fallback), runs vibro detection and LN identity, and returns a dan verdict and pattern tags.
 
-A play goes through `player/skill-ratings.ts`: its accuracy becomes a Wife3 goal, MinaCalc rates the chart at that goal and rate, and a player's best plays per skillset are aggregated into their ratings. One play is kept per chart, rate and Invert setting.
+A play goes through `player/skill-ratings.ts`: its accuracy becomes a Wife3 goal (a ScoreV2 goal on 6K-8K), MinaCalc or Prism rates the chart at that goal and rate, and a player's best plays per skillset are aggregated into their ratings. One play is kept per chart, rate and Invert setting.
 
 `player/dan-clears.ts` turns plays into dan clears: each pass is judged against the accuracy bar of that dan ladder, credited at the chart's dan at the played rate, filed into skillset tiles, and averaged into a dan per tile and a headline dan.
+
+## Prism
+
+Prism 0.25 rates 6K, 7K and 8K charts, the keymodes MinaCalc was never built for. Its numbers are on the MSD scale and in MinaCalc's skillset slots.
+
+It is a Cargo workspace (`cargo build --release` in `prism/`):
+
+- `crates/prism/src/workload.rs` splits the columns into two hands and builds each hand's strain from what it has to press, jack, hold and release, filing every unit of work under the pattern that asked for it. On 7K the centre column stays on one thumb for the whole chart, and the assignment that rates lower is used.
+- `crates/prism/src/lib.rs` solves the 500ms section strains for the skill that scores a goal, maps that skill onto the MSD scale through fitted knots, and rates each skillset by how much of each section's work its pattern carried.
+- `crates/prism/src/params.rs` holds the fitted constants per keymode.
+- `crates/prism/src/ln_sections.rs`, `ln_lead.rs` and `crates/ln-skill/src/prism_ln.rs` give 6K-8K their LN rating: the same workload on constants fitted to LN charts, read over a hybrid's LN sections when it has enough of them.
+- `crates/dan-core`, `crates/ln-skill`, `crates/chart-parser` and `crates/jsmath` are the parts of the chart code it reads, ported from the TypeScript in this folder. `jsmath` reproduces JavaScript's floating-point math so both give the same numbers.
+
+The TypeScript calls it through the declarations in `msd/prism.ts`.
+
+Goals are ScoreV2 accuracy, with no Wife3 conversion.
 
 ## External code
 

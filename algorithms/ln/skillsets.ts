@@ -5,7 +5,6 @@ import { buildLnWorkload, type LnFamilyVector } from "./workload";
 export { LN_SKILLSET_IDS, type LnSkillsetId } from "./workload";
 export interface LnSkillsets {
   scores: LnFamilyVector;
-  /** Objects in consecutive rice phrases, excluding taps threaded through LN. */
   riceShare: number;
 }
 

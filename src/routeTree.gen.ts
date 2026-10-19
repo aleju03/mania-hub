@@ -97,6 +97,7 @@ import { Route as GiftCodeRouteImport } from './routes/gift.$code'
 import { Route as HashiAuthorizeRouteImport } from './routes/hashi_.authorize'
 import { Route as HashiLatestDotjsonRouteImport } from './routes/hashi_.latest[.]json'
 import { Route as NewsCompanellaRouteImport } from './routes/news_.companella'
+import { Route as NewsPrismRouteImport } from './routes/news_.prism'
 import { Route as PacksCollectionsRouteImport } from './routes/packs_.collections'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ReplayCommunityRouteImport } from './routes/replay_.community'
@@ -578,6 +579,11 @@ const NewsCompanellaRoute = NewsCompanellaRouteImport.update({
   path: '/news/companella',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NewsPrismRoute = NewsPrismRouteImport.update({
+  id: '/news_/prism',
+  path: '/news/prism',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PacksCollectionsRoute = PacksCollectionsRouteImport.update({
   id: '/packs_/collections',
   path: '/packs/collections',
@@ -880,6 +886,7 @@ export interface FileRoutesByFullPath {
   '/hashi/authorize': typeof HashiAuthorizeRoute
   '/hashi/latest.json': typeof HashiLatestDotjsonRoute
   '/news/companella': typeof NewsCompanellaRoute
+  '/news/prism': typeof NewsPrismRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay/community': typeof ReplayCommunityRoute
@@ -1009,6 +1016,7 @@ export interface FileRoutesByTo {
   '/hashi/authorize': typeof HashiAuthorizeRoute
   '/hashi/latest.json': typeof HashiLatestDotjsonRoute
   '/news/companella': typeof NewsCompanellaRoute
+  '/news/prism': typeof NewsPrismRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay/community': typeof ReplayCommunityRoute
@@ -1139,6 +1147,7 @@ export interface FileRoutesById {
   '/hashi_/authorize': typeof HashiAuthorizeRoute
   '/hashi_/latest.json': typeof HashiLatestDotjsonRoute
   '/news_/companella': typeof NewsCompanellaRoute
+  '/news_/prism': typeof NewsPrismRoute
   '/packs_/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay_/community': typeof ReplayCommunityRoute
@@ -1270,6 +1279,7 @@ export interface FileRouteTypes {
     | '/hashi/authorize'
     | '/hashi/latest.json'
     | '/news/companella'
+    | '/news/prism'
     | '/packs/collections'
     | '/player/$username'
     | '/replay/community'
@@ -1399,6 +1409,7 @@ export interface FileRouteTypes {
     | '/hashi/authorize'
     | '/hashi/latest.json'
     | '/news/companella'
+    | '/news/prism'
     | '/packs/collections'
     | '/player/$username'
     | '/replay/community'
@@ -1528,6 +1539,7 @@ export interface FileRouteTypes {
     | '/hashi_/authorize'
     | '/hashi_/latest.json'
     | '/news_/companella'
+    | '/news_/prism'
     | '/packs_/collections'
     | '/player/$username'
     | '/replay_/community'
@@ -1657,6 +1669,7 @@ export interface RootRouteChildren {
   HashiAuthorizeRoute: typeof HashiAuthorizeRoute
   HashiLatestDotjsonRoute: typeof HashiLatestDotjsonRoute
   NewsCompanellaRoute: typeof NewsCompanellaRoute
+  NewsPrismRoute: typeof NewsPrismRoute
   PacksCollectionsRoute: typeof PacksCollectionsRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
   ReplayCommunityRoute: typeof ReplayCommunityRoute
@@ -2302,6 +2315,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NewsCompanellaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/news_/prism': {
+      id: '/news_/prism'
+      path: '/news/prism'
+      fullPath: '/news/prism'
+      preLoaderRoute: typeof NewsPrismRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/packs_/collections': {
       id: '/packs_/collections'
       path: '/packs/collections'
@@ -2800,6 +2820,7 @@ const rootRouteChildren: RootRouteChildren = {
   HashiAuthorizeRoute: HashiAuthorizeRoute,
   HashiLatestDotjsonRoute: HashiLatestDotjsonRoute,
   NewsCompanellaRoute: NewsCompanellaRoute,
+  NewsPrismRoute: NewsPrismRoute,
   PacksCollectionsRoute: PacksCollectionsRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
   ReplayCommunityRoute: ReplayCommunityRoute,

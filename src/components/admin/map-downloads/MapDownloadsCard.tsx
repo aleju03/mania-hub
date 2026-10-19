@@ -151,7 +151,7 @@ export function MapDownloadsCard() {
   return (
     <SectionCard
       title="Map downloads"
-      subtitle="Beatmap archives come from mirrors: osu.direct (per-IP daily budget, kept for audio), then hinai, nekoha, sayobot and the fallbacks. .osu files come from osu! on their own lane."
+      subtitle="Beatmap archives come from the free mirrors (hinai, nekoha, Mirria, sayobot, then the fallbacks). osu.direct (per-IP daily budget) is asked only for a song or background no free mirror has. .osu files come from osu! on their own lane."
     >
       {error ? <div className="mb-2 text-[11px] text-osu-red">{error}</div> : null}
       {!report ? (

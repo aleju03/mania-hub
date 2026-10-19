@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { BEATMAP_MIRRORS, mirrorHas, type BeatmapMirror, type BeatmapMirrorName } from "./beatmap-mirrors";
+import { BEATMAP_MIRRORS } from "./beatmap-mirrors";
 import { hasOsuFileHeader } from "./osu-file-shape";
 
 const ARCHIVE_CACHE_TTL = 15 * 60 * 1000;
@@ -12,9 +12,46 @@ const MAX_ZIP_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
 const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
 
-const ARCHIVE_SOURCES = BEATMAP_MIRRORS;
+type ArchiveSource = {
+  name: string;
+  url: (beatmapsetId: string) => string;
+  resolveRedirectBeforeRange?: boolean;
+  wholeArchiveOnly?: boolean;
+  // An error status about this one set rather than the mirror, so it does
+  // not bench the mirror for every other set.
+  isSetMiss?: (status: number) => boolean;
+};
 
-type ArchiveSourceName = BeatmapMirrorName;
+type ArchiveSourceName = string;
+
+// Server-side extraction order, unlike the browser download list: the free
+// mirrors first, then osu.direct, whose per-IP 8 GiB/day budget this server
+// shares with the live backend's song audio. Asked first, background pulls
+// spent about half of it on 2026-10-15. catboy drops this server's
+// connections, so it only cost a 15s timeout here.
+const FREE_ARCHIVE_SOURCES: readonly ArchiveSource[] = [
+  ...BEATMAP_MIRRORS.filter((mirror) => mirror.name !== "osu.direct" && mirror.name !== "catboy" && mirror.name !== "sayobot"),
+  {
+    // Mirria: per-IP 10 uncached / 50 cached downloads per 5s, no byte
+    // budget, no range support (mirror.lisek.cc/docs). A set it cannot get
+    // from upstream comes back 502.
+    name: "mirria",
+    url: (beatmapsetId) => `https://mirror.lisek.cc/d/${encodeURIComponent(beatmapsetId)}?video=false`,
+    wholeArchiveOnly: true,
+    isSetMiss: (status) => status === 502,
+  },
+  ...BEATMAP_MIRRORS.filter((mirror) => mirror.name === "sayobot"),
+];
+
+// Only for a set no free mirror served. noVideo=true is charged the
+// video-less copy (26.1 MB instead of 67.0 MB on a set with a video).
+const LAST_RESORT_ARCHIVE_SOURCES: readonly ArchiveSource[] = [
+  {
+    name: "osu.direct",
+    url: (beatmapsetId) => `https://osu.direct/api/d/${encodeURIComponent(beatmapsetId)}?noVideo=true`,
+    resolveRedirectBeforeRange: true,
+  },
+];
 
 type ArchiveCacheEntry = {
   expiresAt: number;
@@ -358,9 +395,9 @@ function isRedirectStatus(status: number): boolean {
 
 // The URL the range reads go to. A mirror that charges every request against
 // a download budget is asked once, and its redirect target serves the reads.
-async function resolveArchiveRangeUrl(source: BeatmapMirror, beatmapsetId: string, signal: AbortSignal): Promise<string> {
+async function resolveArchiveRangeUrl(source: ArchiveSource, beatmapsetId: string, signal: AbortSignal): Promise<string> {
   const url = source.url(beatmapsetId);
-  if (!mirrorHas(source, "resolveRedirectBeforeRange")) return url;
+  if (!source.resolveRedirectBeforeRange) return url;
 
   const response = await fetch(url, { signal, redirect: "manual", headers: { Range: "bytes=0-0" } });
   await response.body?.cancel().catch(() => {});
@@ -373,10 +410,14 @@ async function resolveArchiveRangeUrl(source: BeatmapMirror, beatmapsetId: strin
   throw new ArchiveHttpStatusError(response.status, `redirect probe returned ${response.status}`);
 }
 
-async function extractArchiveFileByRange(beatmapsetId: string, filename: string): Promise<Buffer> {
+async function extractArchiveFileByRange(
+  beatmapsetId: string,
+  filename: string,
+  sources: readonly ArchiveSource[],
+): Promise<Buffer> {
   const errors: string[] = [];
-  for (const source of ARCHIVE_SOURCES) {
-    if (mirrorHas(source, "wholeArchiveOnly")) continue;
+  for (const source of sources) {
+    if (source.wholeArchiveOnly) continue;
     if (isArchiveSourceCoolingDown(source.name)) {
       errors.push(`${source.name}: cooling down`);
       continue;
@@ -423,7 +464,7 @@ export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
 
   const request = (async () => {
     const errors: string[] = [];
-    for (const source of ARCHIVE_SOURCES) {
+    for (const source of FREE_ARCHIVE_SOURCES) {
       if (isArchiveSourceCoolingDown(source.name)) {
         errors.push(`${source.name}: cooling down`);
         continue;
@@ -434,7 +475,7 @@ export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
       try {
         const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), { signal: controller.signal }));
         if (!archiveResponse.ok) {
-          shouldCooldown = shouldCooldownArchiveSource(archiveResponse.status);
+          shouldCooldown = shouldCooldownArchiveSource(archiveResponse.status) && !source.isSetMiss?.(archiveResponse.status);
           throw new Error(`${source.name} returned ${archiveResponse.status}`);
         }
 
@@ -494,14 +535,21 @@ export function findBeatmapArchiveFile(zip: JSZip, filename: string): JSZip.JSZi
 
 export async function extractBeatmapArchiveFile(beatmapsetId: string, filename: string): Promise<Buffer> {
   try {
-    return await extractArchiveFileByRange(beatmapsetId, filename);
+    return await extractArchiveFileByRange(beatmapsetId, filename, FREE_ARCHIVE_SOURCES);
   } catch {
     // Mirrors do not all support HTTP range requests. Fall back to the older
     // full-archive path so uncached assets still load when partial extraction
     // is unavailable.
   }
 
-  const zip = await getBeatmapArchive(beatmapsetId);
+  let zip: JSZip;
+  try {
+    zip = await getBeatmapArchive(beatmapsetId);
+  } catch {
+    // No free mirror carries the set. A copy that merely lacks the file
+    // never gets here, so osu.direct's budget goes only to a real miss.
+    return extractArchiveFileByRange(beatmapsetId, filename, LAST_RESORT_ARCHIVE_SOURCES);
+  }
   const file = findBeatmapArchiveFile(zip, filename);
   if (!file) {
     throw new Error(`File "${filename}" not found in archive`);

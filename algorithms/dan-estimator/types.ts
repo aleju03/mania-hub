@@ -1,23 +1,15 @@
-// Shared types for the chart features, the pattern analyzer and dan
-// estimates: the input a chart is rated with, the feature metrics read off its
-// notes, the estimate that comes back, and the pattern tags.
-
 import type { ManiaNote } from "../chart/beatmap";
 
 export type DanSkillFamily = "jack" | "stream" | "jumpstream" | "handstream" | "stamina" | "chordjack" | "tech" | "ln" | "dan";
 export type DanPrimaryFamily = Exclude<DanSkillFamily, "ln" | "dan">;
 
-// Every rice pattern family. Consumers iterate this list instead of naming
-// families themselves.
 export const DAN_PRIMARY_FAMILIES: DanPrimaryFamily[] = ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech"];
 
 export interface DanEstimateInput {
   starRating?: number;
-  /** Seconds, at 1.0x. */
   totalLength?: number;
   title?: string;
   version?: string;
-  /** Playback rate (DT is 1.5, HT is 0.75). */
   rate?: number;
 }
 
@@ -32,7 +24,7 @@ export interface DanEstimate {
   metrics: DanFeatureMetrics;
   skillScores: Record<DanSkillFamily, number>;
   warnings: string[];
-  debug?: unknown;
+  debug?: DanEstimateDebug;
 }
 
 export interface DanFeatureMetrics {
@@ -57,15 +49,7 @@ export interface DanFeatureMetrics {
   streamPressure: number;
   jumpstreamPressure: number;
   chordjackPressure: number;
-  // Of adjacent chord rows (under 1s apart, both 2+ notes), the share that
-  // re-hit at least one column. This is the chord-jack signal: dense
-  // bracket/jumpstream charts sit near 0.1 at the same chord density where
-  // real chordjack sits at 0.7+.
   chordColumnOverlapRatio: number;
-  // Note-weighted column re-hits on the adjacent row and two rows back, both
-  // within 500ms. Their difference is the alternating reload strain of 4K
-  // quadstream/minijack charts: the same fingers return on A-B-A shapes even
-  // when neither adjacent row is a conventional jack.
   adjacentColumnRehitShare: number;
   twoBackColumnRehitShare: number;
   twoBackColumnRehitExcess: number;
@@ -73,7 +57,6 @@ export interface DanFeatureMetrics {
   rowBurstPressure: number;
   fastRowRatio: number;
   rowIntervalEntropy: number;
-  /** Share of note rows off the 16th grid (1/6, 1/8, 1/12 and finer, or off-snap). See offGridRowShare in features.ts. */
   offGridRowShare: number;
   patternVariety: number;
   rowPatternEntropy: number;
@@ -96,6 +79,17 @@ export interface DanFeatureMetrics {
   chordSizeChangeRate: number;
   directionChangeRate: number;
   staminaPressure: number;
+}
+
+export interface DanEstimateDebug {
+  familyChoice: DanFamilyChoiceDebug;
+}
+
+export interface DanFamilyChoiceDebug {
+  topFamily: DanSkillFamily;
+  topScore: number;
+  selectedFamily: DanSkillFamily;
+  reason: string;
 }
 
 export interface DanFeatureExtractionResult {
@@ -122,6 +116,10 @@ export type ManiaPatternId =
   | "bracket"
   | "chordstream"
   | "ln"
+  | "lnhybrid"
+  | "lntechnical"
+  | "lnwalls"
+  | "lnspeed"
   | "lngeneral"
   | "lnrelease"
   | "lninverse"
