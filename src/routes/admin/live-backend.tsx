@@ -224,6 +224,8 @@ interface LiveBackendStatus {
     worker: EventLoopStatus | null;
   };
   mapsSnapshotThread?: MapsSnapshotThreadStatus;
+  // The skill and clears board builds, on their own thread of the same kind.
+  boardsSnapshotThread?: MapsSnapshotThreadStatus;
   // Same shape as the maps thread, since it is the same pattern.
   packCommunityThread?: MapsSnapshotThreadStatus;
   packCommunitySnapshots?: PackCommunitySnapshotsStatus;
@@ -2173,6 +2175,8 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
   const globalRefresh = status?.globalMapsRefresh ?? null;
   const thread = status?.mapsSnapshotThread;
   const threadView = getSnapshotThreadView(thread);
+  const boardsThread = status?.boardsSnapshotThread;
+  const boardsThreadView = getSnapshotThreadView(boardsThread);
   const packThread = status?.packCommunityThread;
   const packThreadView = getSnapshotThreadView(packThread);
   const packReads = status?.packCommunitySnapshots;
@@ -2404,6 +2408,15 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
           ) : (
             <DetailRow label="Snapshot thread" value="not reported" />
           )}
+          {boardsThread ? (
+            <DetailRow
+              label="Boards thread"
+              value={`${boardsThreadView.value}${boardsThread.lastBuildAt
+                ? ` · ${formatTimeAgo(boardsThread.lastBuildAt)}${boardsThread.lastBuildKind ? ` · ${boardsThread.lastBuildKind}` : ""}${boardsThread.lastBuildMs == null ? "" : ` · ${formatCallMs(boardsThread.lastBuildMs)}`}`
+                : ""}`}
+              tone={boardsThread.lastError ? "warn" : boardsThreadView.tone}
+            />
+          ) : null}
         </>
       ),
     },
