@@ -31,7 +31,7 @@ const hex = (value: string): Rgb => {
 export const RUN_MOODS: Record<RunMood, MoodPalette> = {
   calm: { base: hex("#120f1a"), mid: hex("#231a33"), ink: hex("#46306a"), glint: hex("#ff66aa"), speed: 1, swirl: 0.9 },
   mod: { base: hex("#170c14"), mid: hex("#341526"), ink: hex("#6e2244"), glint: hex("#ff6b6b"), speed: 1.35, swirl: 1.25 },
-  fire: { base: hex("#1a0e0a"), mid: hex("#3d1a10"), ink: hex("#8a3416"), glint: hex("#ffb347"), speed: 2.1, swirl: 1.5 },
+  fire: { base: hex("#170806"), mid: hex("#3b130a"), ink: hex("#a83c14"), glint: hex("#ffc04d"), speed: 2.1, swirl: 1.5 },
   failed: { base: hex("#0f0d10"), mid: hex("#1d1619"), ink: hex("#3b2226"), glint: hex("#6d6878"), speed: 0.35, swirl: 0.5 },
   won: { base: hex("#0d1512"), mid: hex("#16302a"), ink: hex("#2f6a55"), glint: hex("#ffd36b"), speed: 1.2, swirl: 1.1 },
 };
@@ -220,7 +220,10 @@ export function RunBackdrop({ mood, reducedMotion }: { mood: RunMood; reducedMot
         for (let i = 0; i < 3; i += 1) live[key][i] += (target[key][i] - live[key][i]) * k;
       }
       live.speed += (target.speed - live.speed) * k;
-      live.swirl += (target.swirl - live.swirl) * k;
+      // The swirl winds up fast and unwinds slowly (feel §9).
+      const swirlGap = target.swirl - live.swirl;
+      const swirlStep = (dt / 1000) * (swirlGap > 0 ? RUN_FEEL.backdrop.swirlUpPerSec : RUN_FEEL.backdrop.swirlDownPerSec);
+      live.swirl = dt <= 0 ? target.swirl : live.swirl + Math.sign(swirlGap) * Math.min(Math.abs(swirlGap), swirlStep);
       fieldTime += (dt / 1000) * live.speed;
       resize();
       gl.uniform2f(uRes, canvas.width, canvas.height);

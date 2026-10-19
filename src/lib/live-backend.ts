@@ -4068,6 +4068,23 @@ export async function fetchLivePackRunBoard(): Promise<LivePackRunBoardEntry[]> 
   return Array.isArray(body.entries) ? body.entries : [];
 }
 
+export interface LiveChainRunBoardEntry {
+  rank: number;
+  userId: number;
+  username: string;
+  round: number;
+  bestRow: number;
+  rows: number;
+  finished: boolean;
+  updatedAt: number;
+}
+
+/* The chain run's board: each player's best run, by round reached then best row. */
+export async function fetchLiveChainRunBoard(limit = 20): Promise<LiveChainRunBoardEntry[]> {
+  const body = await fetchLiveJson<{ entries?: LiveChainRunBoardEntry[] }>(`/api/chain-run/board?limit=${Math.max(1, Math.min(50, Math.floor(limit)))}`);
+  return Array.isArray(body.entries) ? body.entries : [];
+}
+
 /* How the community holds one player's own card ("your card got pulled"). */
 export async function fetchLivePackPulledStats(userId: number): Promise<LivePackPulledStats> {
   return fetchLiveJson(`/api/packs/pulled-stats/${userId}`);

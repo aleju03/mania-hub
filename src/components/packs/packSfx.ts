@@ -619,38 +619,74 @@ export function playRecycleClink(gained: number) {
   }
 }
 
-/* The pack run's tally (HandScore.tsx). Rendered cues, not live synth:
-   scripts/audio/pack-run-sfx.py builds each one (plucks for notes, a
-   supersaw stab for combo, a sub boom under a bell for a multiplied combo,
-   a riser into a pumping chord drop for a cleared song, stage or run) and
-   writes public/audio/packs/run/. Notes and combo climb a
-   major scale by playback rate, so a long tally rises the way a held combo
-   feels like it should. Each cue falls back to a small synth patch while its
-   file is still loading or if it never loads. */
-const RUN_SAMPLE_NAMES = [
-  "note-1",
-  "note-2",
-  "combo",
-  "finish",
-  "miss",
-  "tick",
-  "slam",
-  "shards",
-  "clear-song",
-  "clear-stage",
-  "run-cleared",
-  "run-failed",
-] as const;
-type RunSampleName = (typeof RUN_SAMPLE_NAMES)[number];
+/* The pack run's sounds. Rendered cues, not live synth:
+   scripts/audio/pack-run-sfx.py layers recorded foley with sampled acoustic
+   instruments for each beat of the run (see public/audio/packs/run/README.md)
+   and writes public/audio/packs/run/. A cue that has not decoded yet stays
+   silent; prefetchRunSounds() starts every decode ahead of the table.
+
+   Some files are sprites: fixed-length slots laid end to end, each slot a
+   different take of the same cue, so back-to-back plays differ. The scoring
+   steps are four takes each at one base pitch; runSound.ts raises the whole
+   hit by playback rate as a chain grows. `slot` and `count` here mirror the renderer's Sprite(...)
+   calls; change both together. runSound.ts owns which beat plays what. */
+interface RunCueShape {
+  slot?: number;
+  count?: number;
+}
+
+const RUN_CUES = {
+  "pack-open": {},
+  deal: { slot: 0.3, count: 3 },
+  flip: { slot: 0.18, count: 3 },
+  hover: { slot: 0.2, count: 3 },
+  "step-notes": { slot: 0.42, count: 4 },
+  "step-combo": { slot: 0.5, count: 4 },
+  "step-multiplier": { slot: 0.6, count: 4 },
+  "step-again": { slot: 0.5, count: 4 },
+  "charm-fire": { slot: 0.5, count: 4 },
+  "step-miss": {},
+  finish: {},
+  "count-tick": { slot: 0.1, count: 4 },
+  slam: {},
+  "slam-heavy": {},
+  "fire-ignite": {},
+  "fire-loop": {},
+  "tally-line": {},
+  "tally-total": {},
+  "clear-song": {},
+  "clear-stage": {},
+  "run-cleared": {},
+  "run-failed": {},
+  shards: {},
+  "shop-in": { slot: 0.45, count: 2 },
+  reroll: {},
+  buy: {},
+  sell: {},
+  "charm-move": { slot: 0.3, count: 2 },
+  refuse: {},
+  "ui-tap": { slot: 0.14, count: 2 },
+  /* A 727 on the table: the owner's clip, not rendered by the script. */
+  wysi: {},
+} satisfies Record<string, RunCueShape>;
+
+export type RunCueName = keyof typeof RUN_CUES;
+
+/* Takes per scoring step type (the step sprites' slot count). */
+export const RUN_CHAIN_TAKES = 4;
+
 /* Bumped whenever scripts/audio/pack-run-sfx.py re-renders the set, so a
    cached copy of the old file is never decoded. */
-const RUN_SAMPLES_VERSION = 3;
+const RUN_SAMPLES_VERSION = 7;
 
-const runSamples = new Map<RunSampleName, SampleSlot>(
-  RUN_SAMPLE_NAMES.map((name) => [name, { url: `/audio/packs/run/${name}.mp3?v=${RUN_SAMPLES_VERSION}`, buffer: null, load: null }]),
+const runSamples = new Map<RunCueName, SampleSlot>(
+  (Object.keys(RUN_CUES) as RunCueName[]).map((name) => [
+    name,
+    { url: `/audio/packs/run/${name}.mp3?v=${RUN_SAMPLES_VERSION}`, buffer: null, load: null },
+  ]),
 );
 
-/* Decodes every run cue ahead of the tally. Safe before a gesture and to
+/* Decodes every run cue ahead of the table. Safe before a gesture and to
    call repeatedly, like the Eternal prefetch. */
 export function prefetchRunSounds(): void {
   const ctx = ensureAudio();
@@ -658,125 +694,163 @@ export function prefetchRunSounds(): void {
   for (const slot of runSamples.values()) void loadSample(ctx, slot);
 }
 
-/* Plays a run cue if it is decoded; false sends the caller to its synth. */
-function playRunSample(name: RunSampleName, options: { rate?: number; gain?: number; at?: number } = {}): boolean {
+export interface RunCueOptions {
+  /* Which slot of a sprite (clamped to its count); ignored by single cues. */
+  slot?: number;
+  rate?: number;
+  gain?: number;
+  /* Seconds from now. */
+  at?: number;
+}
+
+/* Plays a run cue if it has decoded; a cue still loading is skipped. A sprite
+   slot stops 30 ms before its end, inside the silent margin the renderer
+   leaves, so the mp3's pre-echo of the next slot never sounds. */
+export function playRunCue(name: RunCueName, options: RunCueOptions = {}): void {
   const ctx = ensureAudio();
-  const slot = runSamples.get(name);
-  if (!ctx || !slot || !master) return false;
-  if (!slot.buffer) {
-    void loadSample(ctx, slot);
-    return false;
+  const sample = runSamples.get(name);
+  if (!ctx || !sample || !master) return;
+  if (!sample.buffer) {
+    void loadSample(ctx, sample);
+    return;
   }
+  const shape: RunCueShape = RUN_CUES[name];
   const source = ctx.createBufferSource();
-  source.buffer = slot.buffer;
+  source.buffer = sample.buffer;
   source.playbackRate.value = options.rate ?? 1;
   const gain = ctx.createGain();
   gain.gain.value = options.gain ?? 0.8;
   source.connect(gain).connect(master);
-  source.start(ctx.currentTime + (options.at ?? 0));
-  return true;
+  const when = ctx.currentTime + (options.at ?? 0);
+  if (shape.slot && shape.count) {
+    const index = Math.max(0, Math.min(shape.count - 1, Math.floor(options.slot ?? 0)));
+    const offset = index * shape.slot;
+    if (offset >= sample.buffer.duration) return;
+    source.start(when, offset, Math.min(shape.slot - 0.03, sample.buffer.duration - offset));
+  } else {
+    source.start(when);
+  }
 }
 
-/* Semitones up a major scale for the nth hit, capped so a long tally stays
-   inside an octave and a half. */
-const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19];
-function runRate(step: number): number {
-  return 2 ** (MAJOR_STEPS[Math.min(MAJOR_STEPS.length - 1, Math.max(0, step))] / 12);
-}
-
-const RUN_SCALE = [523.25, 587.33, 659.25, 698.46, 783.99, 880, 987.77];
-
-function runPitch(step: number): number {
-  const index = Math.max(0, step);
-  const octave = Math.min(2, Math.floor(index / RUN_SCALE.length));
-  return RUN_SCALE[index % RUN_SCALE.length] * 2 ** octave * 0.5;
-}
+/* The calls below predate runSound.ts and are kept for HandScore.tsx; they
+   route onto the same cues. */
 
 export function playRunNote(step: number) {
-  if (playRunSample(step % 2 === 0 ? "note-1" : "note-2", { rate: runRate(step), gain: 0.75 })) return;
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  const freq = runPitch(step);
-  playNoise(ctx, { duration: 0.035, gain: 0.07, startFreq: 5200, q: 0.9, filter: "highpass" });
-  playTone(ctx, { freq: freq * 2, duration: 0.11, gain: 0.07, type: "triangle" });
+  playRunCue("step-notes", { slot: step % RUN_CHAIN_TAKES, rate: Math.min(1.4, 0.9 + 0.016 * step), gain: 0.78 });
 }
 
 export function playRunCombo(step: number) {
-  if (playRunSample("combo", { rate: runRate(step) * 0.9, gain: 0.85 })) return;
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  playNoise(ctx, { duration: 0.05, gain: 0.08, startFreq: 1500, q: 1.1 });
-  playTone(ctx, { freq: runPitch(step + 2) * 2, duration: 0.16, gain: 0.06, type: "square" });
+  playRunCue("step-combo", { slot: step % RUN_CHAIN_TAKES, rate: Math.min(1.4, 0.9 + 0.016 * step), gain: 0.78 });
 }
 
 export function playRunFinish() {
-  if (playRunSample("finish", { gain: 0.7 })) {
-    playRunSample("combo", { rate: 0.75, gain: 0.6 });
-    return;
-  }
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  playNoise(ctx, { duration: 0.75, gain: 0.07, startFreq: 6500, q: 0.5, filter: "highpass" });
-  playTone(ctx, { freq: 130, endFreq: 48, duration: 0.32, gain: 0.16, type: "sine", glideFraction: 0.5 });
+  playRunCue("finish", { gain: 0.75 });
 }
 
 /* A card that scores nothing. */
 export function playRunMiss() {
-  if (playRunSample("miss", { rate: 0.85, gain: 0.8 })) return;
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  playTone(ctx, { freq: 330, endFreq: 140, duration: 0.2, gain: 0.07, type: "triangle" });
+  playRunCue("step-miss", { gain: 0.8 });
 }
 
 /* Shards in or out. */
 export function playRunCredit(gain: boolean) {
-  if (playRunSample("shards", { rate: gain ? 1 : 0.8, gain: 0.8 })) return;
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  playTone(ctx, { freq: gain ? 1975.53 : 987.77, duration: 0.09, gain: 0.05, type: "square" });
+  playRunCue(gain ? "shards" : "buy", { gain: 0.6 });
 }
 
 let lastMeterTickAt = 0;
+let lastMeterTake = 0;
 
-/* One tick of the score meter rolling up; `progress` 0..1 lifts the pitch
-   as it nears the total. Throttled so a fast roll is a buzz, not mush. */
+/* One notch of the score meter rolling up; `progress` 0..1 lifts the pitch
+   as it nears the total. Throttled to one notch per 45 ms, so a fast roll is
+   a ratchet rather than a smear, and each notch takes a different recording
+   than the last with a little pitch jitter. */
 export function playRunMeterTick(progress: number) {
   const ctx = ensureAudio();
   if (!ctx) return;
-  if (ctx.currentTime - lastMeterTickAt < 0.035) return;
+  if (ctx.currentTime - lastMeterTickAt < 0.045) return;
   lastMeterTickAt = ctx.currentTime;
+  lastMeterTake = (lastMeterTake + 1 + Math.floor(Math.random() * 3)) % 4;
   const lift = Math.max(0, Math.min(1, progress));
-  if (playRunSample("tick", { rate: 1 + lift * 0.8, gain: 0.45 })) return;
-  playTone(ctx, { freq: 1400 + lift * 1400, duration: 0.025, gain: 0.025, type: "square" });
+  const jitter = 1 + (Math.random() * 2 - 1) * 0.03;
+  playRunCue("count-tick", { slot: lastMeterTake, rate: (0.92 + lift * 0.3) * jitter, gain: 0.42 });
 }
 
-/* The total landing on the meter, heavier the more of the song it covered. */
+const RUN_SLAM_GAIN = 1.0;
+const RUN_SLAM_HEAVY_GAIN = 0.8;
+
+/* The total landing on the meter. `share` is how much of the song's target
+   it covered: the weight layer under it starts at 35% and reaches full at
+   the target, so even a small total lands harder than any scoring step. */
 export function playRunTotal(share: number) {
   const lift = Math.max(0, Math.min(1, share));
-  if (playRunSample("slam", { rate: 0.9 + lift * 0.2, gain: 0.7 + lift * 0.25 })) {
-    playRunSample("shards", { at: 0.05, gain: 0.5 });
+  playRunCue("slam", { rate: 1 - lift * 0.04, gain: RUN_SLAM_GAIN });
+  playRunCue("slam-heavy", { rate: 1 - lift * 0.04, gain: RUN_SLAM_HEAVY_GAIN * (0.35 + 0.65 * lift) });
+}
+
+/* The fire-loop file holds FIRE_LOOP_SECONDS of flame padded on each side
+   with FIRE_LOOP_PAD of its own wrap (scripts/audio/pack-run-sfx.py), so
+   looping between those points is seamless whether or not a decoder trims
+   the mp3's encoder delay. */
+const FIRE_LOOP_PAD = 0.1;
+const FIRE_LOOP_SECONDS = 6;
+
+let fireLoop: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+let fireLoopWanted = false;
+let fireLoopLevel = 0.3;
+
+/* Starts the quiet flame loop with a soft fade in; a call while it already
+   plays only updates its level. If the file is still decoding it starts once
+   it lands, unless it was stopped in the meantime. */
+export function startRunFireLoop(level = 0.3): void {
+  fireLoopWanted = true;
+  fireLoopLevel = level;
+  const ctx = ensureAudio();
+  const sample = runSamples.get("fire-loop");
+  if (!ctx || !sample || !master) return;
+  if (fireLoop) {
+    fireLoop.gain.gain.cancelScheduledValues(ctx.currentTime);
+    fireLoop.gain.gain.setTargetAtTime(level, ctx.currentTime, 0.25);
     return;
   }
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  playTone(ctx, { freq: 110, endFreq: 55, duration: 0.3, gain: 0.15, type: "sine", glideFraction: 0.4 });
+  if (!sample.buffer) {
+    void loadSample(ctx, sample).then(() => {
+      if (fireLoopWanted && !fireLoop && sample.buffer) startRunFireLoop(fireLoopLevel);
+    });
+    return;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = sample.buffer;
+  source.loop = true;
+  source.loopStart = FIRE_LOOP_PAD;
+  source.loopEnd = Math.min(sample.buffer.duration, FIRE_LOOP_PAD + FIRE_LOOP_SECONDS);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  gain.gain.setTargetAtTime(level, ctx.currentTime, 0.35);
+  source.connect(gain).connect(master);
+  source.start(ctx.currentTime, FIRE_LOOP_PAD);
+  fireLoop = { source, gain };
+}
+
+/* Fades the flame loop out over about a second and releases it. */
+export function stopRunFireLoop(): void {
+  fireLoopWanted = false;
+  const ctx = context;
+  const loop = fireLoop;
+  fireLoop = null;
+  if (!ctx || !loop) return;
+  loop.gain.gain.cancelScheduledValues(ctx.currentTime);
+  loop.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.25);
+  loop.source.stop(ctx.currentTime + 1.5);
 }
 
 /* A song, a stage (its final song) or the whole run cleared. */
 export function playRunBlindCleared(kind: "song" | "stage" | "run" = "song") {
-  const name = kind === "run" ? "run-cleared" : kind === "stage" ? "clear-stage" : "clear-song";
-  if (playRunSample(name, { gain: 0.8 })) return;
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  [523.25, 659.25, 783.99, 1046.5].forEach((freq, index) => {
-    playTone(ctx, { at: index * 0.06, freq, duration: 0.45, gain: 0.06, type: "triangle" });
+  playRunCue(kind === "run" ? "run-cleared" : kind === "stage" ? "clear-stage" : "clear-song", {
+    gain: kind === "run" ? 0.9 : 0.8,
   });
 }
 
 /* A failed run. */
 export function playRunOver() {
-  if (playRunSample("run-failed", { gain: 0.8 })) return;
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  playTone(ctx, { freq: 392, endFreq: 98, duration: 0.9, gain: 0.07, type: "sawtooth", glideFraction: 1 });
+  playRunCue("run-failed", { gain: 0.9 });
 }

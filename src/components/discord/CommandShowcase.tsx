@@ -25,6 +25,7 @@ import {
   writeDiscordShowcaseCache,
 } from "../../lib/discord-showcase-cache";
 import { getRankings } from "../../lib/osu";
+import { MANIA_GLYPH_D, maniaTriangleOverlaySvg } from "../../lib/maniacard";
 import { useCountryWarming } from "../../lib/use-country-warming";
 import type { LeanRankingEntry, RankingsResponse } from "../../lib/types";
 import { useAppStore, useNoDans, useSelectedCountry } from "../../store";
@@ -578,50 +579,8 @@ function MapRow({ rank, title, stars, avg, players }: {
   );
 }
 
-// osu! mania mode glyph, the same logo the in-app card stamps top-left. The
-// path is authored y-up (canvas flips it), so flip it for svg's y-down space.
-const MANIA_GLYPH_D =
-  "M500 48q-21 0-35 15t-15 35v504q0 21 15 36t35 14 36-14 14-36v-504q0-21-14-35t-36-15z m-110 192v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m320 0v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m-210 500q-106 0-197-53-88-52-140-140-53-91-53-197t53-197q52-88 140-140 91-53 197-53t197 53q88 52 140 140 53 91 53 197t-53 197q-52 88-140 140-91 53-197 53z m0 80q97 0 182-36t150-102q64-62 101-148t37-184-36-182-102-150q-62-64-148-101t-184-37-182 36-150 102q-64 62-101 149t-37 183 37 182 101 150q62 64 149 101t183 37v0z";
-
-// Floating osu-style triangles: a jittered grid so positions never line up,
-// varied sizes, up or down but never tilted, overlapping into soft facets.
-const TRIANGLES = triBuilder();
-function triBuilder() {
-  const rand = (n: number) => {
-    const v = Math.sin(n) * 43758.5453123;
-    return v - Math.floor(v);
-  };
-  const poly = (pts: Array<[number, number]>, fill: string) =>
-    `<path d="${pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ")} Z" fill="${fill}"/>`;
-  // Coords are authored on a 1000x1400 grid then scaled to the card.
-  return (w: number, h: number): string => {
-    const sx = w / 1000;
-    const sy = h / 1400;
-    let paths = "";
-    for (let row = 0; row < 6; row += 1) {
-      for (let col = 0; col < 5; col += 1) {
-        const i = row * 11 + col;
-        if (rand(i * 19.17 + 4.2) < 0.4) continue;
-        const cx = (col * 200 + 100 + (rand(i * 43.91 + 8.5) - 0.5) * 130) * sx;
-        const cy = (row * 233 + 117 + (rand(i * 29.37 + 12.4) - 0.5) * 130) * sy;
-        const side = (230 + rand(i * 13.81 + 2.7) * 300) * sx;
-        const hgt = side * 0.866;
-        const up = rand(i * 7.3 + 3.1) > 0.5;
-        const pts: Array<[number, number]> = up
-          ? [[cx, cy - (hgt * 2) / 3], [cx + side / 2, cy + hgt / 3], [cx - side / 2, cy + hgt / 3]]
-          : [[cx, cy + (hgt * 2) / 3], [cx + side / 2, cy - hgt / 3], [cx - side / 2, cy - hgt / 3]];
-        // Fewer, larger, low-contrast facets (subtle like the reference). Dark
-        // ones stay extra faint since dark-on-light reads strongly; ~50/50
-        // light/dark so the pale top and dark bottom each show some.
-        const dark = rand(i * 3.11 + 6.9) > 0.5;
-        const a = dark ? 0.035 + rand(i * 5.21 + 1.3) * 0.04 : 0.05 + rand(i * 5.21 + 1.3) * 0.06;
-        paths += poly(pts, dark ? `rgba(0,0,0,${a.toFixed(3)})` : `rgba(255,255,255,${a.toFixed(3)})`);
-      }
-    }
-    return `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}' viewBox='0 0 ${w} ${h}'>${paths}</svg>`;
-  };
-}
-const TRI_BG = `url("data:image/svg+xml,${encodeURIComponent(TRIANGLES(300, 420))}")`;
+// osu-style triangle texture, the same facets the card front draws.
+const TRI_BG = `url("data:image/svg+xml,${encodeURIComponent(maniaTriangleOverlaySvg(300, 420))}")`;
 
 function ManiaGlyph({ size }: { size: number }) {
   return (

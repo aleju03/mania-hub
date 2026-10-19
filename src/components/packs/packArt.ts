@@ -30,7 +30,7 @@ function random01(value: number) {
 /* What the foil does behind the medallion. The packs are told apart at
    selector-thumbnail size (76px wide), where a tint alone is not enough, so
    each type gets its own field treatment as well as its own colour. */
-export type PackMotif = "triangles" | "scatter" | "lanes4" | "lanes7" | "rays" | "burst" | "flags";
+export type PackMotif = "triangles" | "scatter" | "lanes4" | "lanes7" | "rays" | "burst" | "flags" | "ribbons";
 
 export interface PackArtStyle {
   accent: { r: number; g: number; b: number };
@@ -46,6 +46,16 @@ export interface PackArtStyle {
      foil's treatment gets. */
   rank: number;
   motif: PackMotif;
+  /* Optional, used by the chain run's themed packs (the /packs page's own
+     packs set none of these): */
+  /* The band's fill, when it is not the accent. */
+  band?: { r: number; g: number; b: number };
+  /* Drawn in the seal's disc in place of the mania glyph (a country pack's
+     flag), with `emblemKey` naming it for the cache. */
+  emblem?: CanvasImageSource | null;
+  emblemKey?: string;
+  /* The "ribbons" motif's colours (a flag's), in order. */
+  ribbons?: Array<{ r: number; g: number; b: number }>;
 }
 
 const PACK_ART_RECIPES: Record<PackTypeId, { motif: PackMotif; rank: number }> = {
@@ -102,6 +112,9 @@ function packArtCacheKey(style: PackArtStyle): string {
     style.poolLabel,
     style.rank,
     style.motif,
+    style.band ? `${style.band.r},${style.band.g},${style.band.b}` : "",
+    style.emblem ? (style.emblemKey ?? "emblem") : "",
+    (style.ribbons ?? []).map((color) => `${color.r},${color.g},${color.b}`).join("/"),
   ].join(":");
 }
 
@@ -263,7 +276,7 @@ export function createPackFrontCanvas(style: PackArtStyle = DEFAULT_PACK_ART_STY
   drawSheen(context, width, height);
   // The team pack's seal is a crest; every player pack keeps the coin.
   if (style.motif === "flags") drawCrest(context, width / 2, emblemY, style.accent);
-  else drawEmblem(context, width, height, style.accent);
+  else drawEmblem(context, width, height, style.accent, style.emblem ?? null);
   drawPrint(context, width, height, style);
   drawCrimp(context, width, height, 0, style.accent);
   drawCrimp(context, width, height, height - PACK_CRIMP_FRACTION * height, style.accent);
@@ -374,7 +387,28 @@ function drawMotif(
     case "flags":
       drawFlagWall(context, width, height, style.accent);
       return;
+    case "ribbons":
+      drawRibbons(context, width, height, style.ribbons?.length ? style.ribbons : [style.accent]);
+      return;
   }
+}
+
+/* Wide diagonal ribbons in a flag's colours, faint over the stock, so a
+   country pack reads as its flag at a glance without becoming one. */
+function drawRibbons(context: CanvasRenderingContext2D, width: number, height: number, colors: Rgb[]) {
+  context.save();
+  context.translate(width / 2, height / 2);
+  context.rotate(-0.38);
+  const ribbon = 74;
+  const span = Math.hypot(width, height);
+  let index = 0;
+  for (let x = -span / 2; x < span / 2; x += ribbon, index += 1) {
+    const color = colors[index % colors.length];
+    const light = (color.r * 0.299 + color.g * 0.587 + color.b * 0.114) / 255;
+    context.fillStyle = rgba(color, light > 0.85 ? 0.1 : 0.2);
+    context.fillRect(x, -span / 2, ribbon - 6, span);
+  }
+  context.restore();
 }
 
 /* Rows of small blank flags on poles, staggered like a wall of them. The
@@ -651,7 +685,7 @@ function drawVignette(context: CanvasRenderingContext2D, width: number, height: 
    gradient disc under the glyph. A struck coin with milled edges and a domed
    face was tried in its place and read heavier than the rest of the print;
    rank lives on the band, the pips and the motif instead. */
-function drawEmblem(context: CanvasRenderingContext2D, width: number, height: number, accent: Rgb) {
+function drawEmblem(context: CanvasRenderingContext2D, width: number, height: number, accent: Rgb, emblem: CanvasImageSource | null = null) {
   const cx = width / 2;
   const cy = height * 0.4;
 
@@ -688,6 +722,33 @@ function drawEmblem(context: CanvasRenderingContext2D, width: number, height: nu
     context.lineWidth = prominent ? 2.4 : 1.4;
     context.lineCap = "round";
     context.stroke();
+  }
+
+  if (emblem) {
+    // An image in the disc (a country pack's flag), cover-fit and clipped.
+    const sourceWidth = Number((emblem as { width?: number }).width) || 1;
+    const sourceHeight = Number((emblem as { height?: number }).height) || 1;
+    const scale = Math.max(192 / sourceWidth, 192 / sourceHeight);
+    context.save();
+    context.beginPath();
+    context.arc(cx, cy, 96, 0, Math.PI * 2);
+    context.clip();
+    context.drawImage(emblem, cx - (sourceWidth * scale) / 2, cy - (sourceHeight * scale) / 2, sourceWidth * scale, sourceHeight * scale);
+    // A little dome of light over it, like the plain disc's gradient.
+    const dome = context.createLinearGradient(cx - 96, cy - 96, cx + 96, cy + 96);
+    dome.addColorStop(0, "rgba(255,255,255,0.18)");
+    dome.addColorStop(0.55, "rgba(255,255,255,0)");
+    dome.addColorStop(1, "rgba(0,0,0,0.28)");
+    context.fillStyle = dome;
+    context.fillRect(cx - 96, cy - 96, 192, 192);
+    context.restore();
+    context.beginPath();
+    context.arc(cx, cy, 96, 0, Math.PI * 2);
+    context.strokeStyle = "rgba(255,255,255,0.7)";
+    context.lineWidth = 3.4;
+    context.stroke();
+    context.restore();
+    return;
   }
 
   context.beginPath();
@@ -784,13 +845,16 @@ function drawTypeBand(
   const bandWidth = trackedWidth(context, style.name, spacing) + 64;
   context.beginPath();
   pathRoundRect(context, cx - bandWidth / 2, cy - bandHeight / 2, bandWidth, bandHeight, bandHeight / 2);
-  context.fillStyle = rgba(mixRgb(style.accent, WHITE, 0.04), 0.92);
+  const bandFill = style.band ?? mixRgb(style.accent, WHITE, 0.04);
+  context.fillStyle = rgba(bandFill, 0.92);
   context.fill();
 
   // Dark ink on the colour, the way a printed band reads. Every accent here is
   // light enough to carry it, and it keeps the four looking like one family
-  // instead of white-on-some, black-on-others.
-  context.fillStyle = "rgba(12,9,22,0.86)";
+  // instead of white-on-some, black-on-others. A chain run band in a dark
+  // flag colour takes white ink instead.
+  const bandLight = (bandFill.r * 0.299 + bandFill.g * 0.587 + bandFill.b * 0.114) / 255;
+  context.fillStyle = style.band && bandLight < 0.45 ? "rgba(255,255,255,0.94)" : "rgba(12,9,22,0.86)";
   context.font = `900 ${size}px ${FONT}`;
   drawTracked(context, style.name, cx, cy + size * 0.35, spacing);
   context.restore();

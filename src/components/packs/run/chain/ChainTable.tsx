@@ -1,0 +1,1170 @@
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useMotionValue, useSpring } from "framer-motion";
+import { Trans, useLingui } from "@lingui/react/macro";
+import {
+  CHAIN_RULES,
+  CHAIN_SCENE_INK,
+  chainPackName,
+  chainRefusalMessage,
+  chainSharedTraits,
+  chainCardFace,
+  chainWouldLink,
+  scoreChainRow,
+  type ChainAction,
+  type ChainBoardEntry,
+  type ChainCard,
+  type ChainCardInstance,
+  type ChainPayLine,
+  type ChainPlayOutcome,
+  type ChainWysiField,
+  type ChainWysiStamp,
+  type ChainRowResult,
+  type ChainRunView,
+  type ChainSceneId,
+} from "#/lib/chain-run";
+import type { PackTypeId } from "#/lib/packs";
+import { getCachedCardBackDataUrl } from "../../packArt";
+import { TriangleBackdrop } from "./TriangleBackdrop";
+import { RUN_FEEL } from "../runFeel";
+import { juice } from "../runJuice";
+import { runSound } from "../runSound";
+import { useShudder } from "../shopMotion";
+import { Shards } from "../Shards";
+import { ChainBoard, type CardEnter, type LinkFx } from "./ChainBoard";
+import { ChainDetailsLayer, hideChainDetails } from "./ChainDetails";
+import { ChainOver, ChainStart } from "./ChainEnd";
+import { CHAIN_FEEL } from "./chainFeel";
+import { ChainScenes, ChainTopBar, HudDeck } from "./ChainHud";
+import { setWysiRunKey } from "./wysiSeen";
+import { boardLayout, type BoardLayout } from "./chainLayout";
+import { ChainPackStage, chainPackType, DeckPile, type PackKeepOutcome, type StageName } from "./ChainPackStage";
+import { ChainScoring } from "./ChainScoring";
+import { ChainShop, type ShopActResult } from "./ChainShop";
+import type { ChainActOutcome } from "./useChainRun";
+
+/* Dev fixture hooks (dev/chainFixtures.tsx). */
+export interface ChainTableScript {
+  /* Packs tear and pick on their own. */
+  autoPack?: boolean;
+  /* A row laid out on mount (hand uids), the first `place` of it. */
+  row?: number[] | null;
+  place?: number;
+  /* Then play it after a beat. */
+  autoPlay?: boolean;
+  /* Land the row on its slam at once. */
+  skipReplay?: boolean;
+  /* The round's pack counts as dealt already. */
+  dealt?: boolean;
+  /* The run's end plays its moment on mount. */
+  fresh?: boolean;
+  onSignal?: (signal: string) => void;
+}
+
+export interface ChainTableProps {
+  view: ChainRunView | null;
+  best: ChainBoardEntry | null;
+  busy: boolean;
+  act: (action: ChainAction) => Promise<ChainActOutcome>;
+  reducedMotion: boolean;
+  packThumbs: Partial<Record<PackTypeId, string>>;
+  loadBoard: () => Promise<ChainBoardEntry[]>;
+  onExit: () => void;
+  script?: ChainTableScript;
+}
+
+interface PlayState {
+  row: ChainRowResult;
+  outcome: ChainPlayOutcome;
+  pay: ChainPayLine[];
+  forgotten: "grew" | "gone" | null;
+  ascended: boolean;
+  before: ChainRunView;
+  /* A 727 the row left on the table, stamped once the row lands. */
+  wysi: ChainWysiStamp | null;
+}
+
+type Aftermath =
+  | { kind: "clear"; round: number; total: number }
+  | { kind: "banner"; text: string; tone: "red" | "gold" };
+
+const DEALT_KEY = "chain-run-dealt";
+
+function roundKey(view: ChainRunView): string {
+  return `${view.runNo}:${view.round}:${view.rebirths}`;
+}
+
+function readDealt(): string | null {
+  try {
+    return window.sessionStorage.getItem(DEALT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeDealt(key: string) {
+  try {
+    window.sessionStorage.setItem(DEALT_KEY, key);
+  } catch {
+    // Private mode: the round pack may play again on a reload.
+  }
+}
+
+function useBoardBox() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => setSize({ width: element.clientWidth, height: element.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, size] as const;
+}
+
+/* The chain run as a game table: the round's meter across the top, the row
+   of six in the middle with its links, the hand under it, the scene cards in
+   a corner, over the run's living backdrop. Packs open here as moments (torn,
+   dealt, turned over), rows play out step by step and slam into the round
+   score, and the shop and the run's end take the middle in turn. The server
+   owns the run; this replays what it answers and keeps only the row being
+   arranged. */
+export function ChainTable(props: ChainTableProps) {
+  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, onExit, script } = props;
+  const { i18n, t } = useLingui();
+  const [boxRef, box] = useBoardBox();
+  const narrow = box.width > 0 ? box.width < 700 : typeof window !== "undefined" && window.innerWidth < 700;
+
+  const [hold, setHold] = useState<ChainRunView | null>(null);
+  const shown = hold ?? view;
+  // Hover stats remember their 727s per run (wysiSeen.ts).
+  const wysiRunKey = view ? `${view.runNo}:${view.startedAt}` : "";
+  useEffect(() => setWysiRunKey(wysiRunKey), [wysiRunKey]);
+  const [rowUids, setRowUids] = useState<number[]>(() => (script?.row ? script.row.slice(0, script.place ?? script.row.length) : []));
+  const [play, setPlay] = useState<PlayState | null>(null);
+  /* A drag's row as it would land if dropped now; previews read it. */
+  const [dragRow, setDragRow] = useState<number[] | null>(null);
+  const arrangedUids = dragRow ?? rowUids;
+  /* The hand's order on this table: a card dragged back from the row keeps
+     the place it was dropped at. Cards the server deals later go last. */
+  const [handOrder, setHandOrder] = useState<number[]>([]);
+  /* Several cards picked to move at once, in the order they were picked. */
+  const [selected, setSelected] = useState<number[]>([]);
+  const [selectMode, setSelectMode] = useState(false);
+  const [linkFx, setLinkFx] = useState<Record<string, LinkFx> | null>(null);
+  const baseLayout: BoardLayout | null = box.width > 0 && box.height > 0 ? boardLayout(box.width, box.height) : null;
+  /* On a phone the deck pile lives in the bar; draws and kept cards fly
+     from and to where it sits there, in board px. */
+  const [hudDeck, setHudDeck] = useState<BoardLayout["deck"] | null>(null);
+  useLayoutEffect(() => {
+    if (!baseLayout?.narrow) {
+      if (hudDeck) setHudDeck(null);
+      return;
+    }
+    const chip = document.querySelector<HTMLElement>("[data-chain-hud-deck] > div");
+    const origin = boxRef.current?.getBoundingClientRect();
+    const rect = chip?.getBoundingClientRect();
+    if (!chip || !origin || !rect) return;
+    const next = { x: rect.left - origin.left, y: rect.top - origin.top, w: rect.width, h: rect.height };
+    if (!hudDeck || Math.abs(hudDeck.x - next.x) > 1 || Math.abs(hudDeck.y - next.y) > 1) setHudDeck(next);
+  });
+  const layout: BoardLayout | null = baseLayout && baseLayout.narrow && hudDeck ? { ...baseLayout, deck: hudDeck } : baseLayout;
+  const [cardCombo, setCardCombo] = useState<Record<number, number>>({});
+  const [handsLit, setHandsLit] = useState<number[]>([]);
+  const [scoreOverride, setScoreOverride] = useState<number | null>(null);
+  const [shardOverride, setShardOverride] = useState<number | null>(null);
+  const [aftermath, setAftermath] = useState<Aftermath | null>(null);
+  const [dealt, setDealt] = useState<string | null>(() => (script?.dealt && view ? roundKey(view) : typeof window === "undefined" ? null : readDealt()));
+  const [enters, setEnters] = useState<Map<number, CardEnter>>(new Map());
+  const [overFresh, setOverFresh] = useState(Boolean(script?.fresh));
+  const [message, setMessage] = useState<string | null>(null);
+  const [heat, setHeat] = useState<"mod" | "fire" | null>(null);
+  /* The table's last beats of a round: cards leaving for the deck, or the
+     row a run failed on greying out. */
+  const [leaving, setLeaving] = useState(false);
+  const [failedRow, setFailedRow] = useState(false);
+  /* The chain's running total while a row plays, and the target crossing. */
+  const [live, setLive] = useState(0);
+  const [crossFlash, setCrossFlash] = useState(0);
+  const [backUrl, setBackUrl] = useState<string | null>(null);
+  const [playShudderX, playShudder] = useShudder(reducedMotion);
+  const signal = useCallback((name: string) => script?.onSignal?.(name), [script]);
+
+  useEffect(() => {
+    setBackUrl(getCachedCardBackDataUrl());
+    runSound.prefetch();
+  }, []);
+
+  /* The table owns the viewport while it is up. */
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = "hidden";
+    window.scrollTo(0, 0);
+    return () => {
+      root.style.overflow = previous;
+      runSound.fireLoopStop();
+      hideChainDetails();
+    };
+  }, []);
+
+  /* Room shake and lean, as the pack run's table (feel §5). */
+  const shakeX = useMotionValue(0);
+  const shakeY = useMotionValue(0);
+  const shakeRotate = useMotionValue(0);
+  const jiggleRef = useRef({ value: 0, frame: 0, last: 0, t: 0 });
+  const leanX = useMotionValue(0);
+  const leanY = useMotionValue(0);
+  const leanSpringX = useSpring(leanX, RUN_FEEL.lean.spring);
+  const leanSpringY = useSpring(leanY, RUN_FEEL.lean.spring);
+  const shake = useCallback(
+    (amount: number) => {
+      if (reducedMotion || amount <= 0) return;
+      const jiggle = jiggleRef.current;
+      jiggle.value = Math.min(3, jiggle.value + amount);
+      if (jiggle.frame) return;
+      const feel = RUN_FEEL.shake;
+      jiggle.last = performance.now();
+      const tick = (now: number) => {
+        const dt = Math.min(50, now - jiggle.last);
+        jiggle.last = now;
+        jiggle.t += dt / 1000;
+        jiggle.value *= Math.exp(-dt / feel.tauMs);
+        const reach = window.innerWidth * feel.magnitudeWidthFraction * jiggle.value;
+        const tau = Math.PI * 2;
+        shakeX.set(reach * Math.sin(tau * feel.xHz * jiggle.t));
+        shakeY.set(reach * 0.8 * Math.sin(tau * feel.yHz * jiggle.t + 1.3));
+        shakeRotate.set(feel.rollDeg * jiggle.value * Math.sin(tau * feel.rollHz * jiggle.t));
+        if (jiggle.value > 0.01) {
+          jiggle.frame = window.requestAnimationFrame(tick);
+        } else {
+          jiggle.frame = 0;
+          jiggle.value = 0;
+          shakeX.set(0);
+          shakeY.set(0);
+          shakeRotate.set(0);
+        }
+      };
+      jiggle.frame = window.requestAnimationFrame(tick);
+    },
+    [reducedMotion, shakeRotate, shakeX, shakeY],
+  );
+  useEffect(() => () => window.cancelAnimationFrame(jiggleRef.current.frame), []);
+
+  const flash = useCallback(
+    (text: string) => {
+      setMessage(text);
+      window.setTimeout(() => setMessage((current) => (current === text ? null : current)), 2600);
+    },
+    [],
+  );
+
+  /* A 727 on the table: the stamp on each number it showed on, the clip.
+     A played row's stamp waits for the row to land (onReplayDone). */
+  const [hudWysi, setHudWysi] = useState<{ id: number; on: ChainWysiField[] } | null>(null);
+  const wysiIdRef = useRef(0);
+  const stampWysi = useCallback((stamp: ChainWysiStamp, only?: (on: ChainWysiField) => boolean) => {
+    const on = stamp.hits.map((hit) => hit.on).filter((field) => !only || only(field));
+    if (!on.length) return;
+    const id = ++wysiIdRef.current;
+    setHudWysi({ id, on });
+    runSound.wysi(false);
+    window.setTimeout(() => setHudWysi((current) => (current?.id === id ? null : current)), 1800);
+  }, []);
+
+  const doAct = useCallback(
+    async (action: ChainAction): Promise<ChainActOutcome> => {
+      const outcome = await act(action);
+      if (!outcome.ok && outcome.error !== "stale") flash(chainRefusalMessage(outcome.error, i18n));
+      if (outcome.ok && outcome.result.wysi && outcome.result.kind !== "playRow") stampWysi(outcome.result.wysi);
+      return outcome;
+    },
+    [act, flash, i18n, stampWysi],
+  );
+
+  /* Row cards that left the hand (a resync, a redraw) leave the row too. */
+  const handUids = shown?.hand.map((entry) => entry.uid).join(",") ?? "";
+  useEffect(() => {
+    if (!shown) return;
+    const inHand = new Set(shown.hand.map((entry) => entry.uid));
+    setRowUids((current) => (current.every((uid) => inHand.has(uid)) ? current : current.filter((uid) => inHand.has(uid))));
+    // Keyed on the hand's uids.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handUids]);
+
+  /* A round's pack opens once per round (and again after a rebirth). A run
+     picked up mid-round skips it. */
+  useEffect(() => {
+    if (!shown || shown.phase !== "play" || play) return;
+    const key = roundKey(shown);
+    if (dealt === key) return;
+    if (shown.rowsLeft < CHAIN_RULES.rows || shown.redrawsLeft < CHAIN_RULES.redraws || !shown.hand.some((entry) => entry.pack)) {
+      setDealt(key);
+      writeDealt(key);
+    }
+  }, [dealt, play, shown]);
+  const needsRoundPack = Boolean(shown && shown.phase === "play" && !play && dealt !== roundKey(shown));
+
+  /* ------------------------------------------------------------ arranging */
+
+  const handEntries = useMemo(() => {
+    const hand = shown?.hand ?? [];
+    if (!handOrder.length) return hand;
+    const rank = new Map(handOrder.map((uid, index) => [uid, index]));
+    return hand
+      .map((entry, index) => ({ entry, index }))
+      .sort((a, b) => (rank.get(a.entry.uid) ?? 1000 + a.index) - (rank.get(b.entry.uid) ?? 1000 + b.index))
+      .map(({ entry }) => entry);
+  }, [handOrder, shown?.hand]);
+  const orderedHandRef = useRef(handEntries);
+  orderedHandRef.current = handEntries;
+  /* The hand's order is the player's own and lasts the whole run (deck
+     cards keep their uid from round to round), kept on this device only.
+     Cards dealt later go to the right end; row cards keep their old place
+     in it, so one tapped back returns there. */
+  const orderKey = shown ? `${HAND_ORDER_PREFIX}${shown.runNo}:${shown.startedAt}` : null;
+  useEffect(() => {
+    if (!orderKey) return;
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(orderKey) ?? "[]");
+      setHandOrder(Array.isArray(stored) ? stored.filter((value): value is number => Number.isSafeInteger(value)) : []);
+    } catch {
+      setHandOrder([]);
+    }
+  }, [orderKey]);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const commitOrder = useCallback(
+    (next: number[]) => {
+      setHandOrder(next);
+      if (!orderKey) return;
+      try {
+        const live = viewRef.current;
+        const known = new Set([...(live?.hand ?? []), ...(live?.deck ?? [])].map((entry) => entry.uid));
+        window.localStorage.setItem(orderKey, JSON.stringify(next.filter((uid) => known.size === 0 || known.has(uid))));
+        // Only the current run's order is kept.
+        for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+          const key = window.localStorage.key(index);
+          if (key && key.startsWith(HAND_ORDER_PREFIX) && key !== orderKey) window.localStorage.removeItem(key);
+        }
+      } catch {
+        // Storage full or blocked: the order lasts this visit only.
+      }
+    },
+    [orderKey],
+  );
+  const rowEntries = useMemo(
+    () => arrangedUids.map((uid) => handEntries.find((entry) => entry.uid === uid)).filter(Boolean) as ChainCardInstance[],
+    [handEntries, arrangedUids],
+  );
+  /* The arranged row with the scene cards held: what its links draw. */
+  // Previews are blind to 727s: one lands as a surprise, never something to search for.
+  const preview = useMemo(() => (shown && rowEntries.length ? scoreChainRow(shown, rowEntries, { blind: true }) : null), [rowEntries, shown]);
+  /* The number the row shows before it plays: its plain links and combos
+     only. Second passes, scene card effects and row multipliers are left
+     out, so a strong build can beat it. */
+  const plainTotal = useMemo(() => (rowEntries.length ? scoreChainRow({ scenes: [] }, rowEntries, { blind: true }).total : 0), [rowEntries]);
+  /* Hand cards against the row's last card: the marks a linking card shares
+     with it (lit on the card), and the ones that would break (dimmed). */
+  const { wouldLink, breakers } = useMemo(() => {
+    const map = new Map<number, { level: number; traits: Set<string> }>();
+    const breaks = new Set<number>();
+    if (!shown || !rowEntries.length || rowEntries.length >= CHAIN_RULES.rowMax) return { wouldLink: map, breakers: breaks };
+    const last = rowEntries[rowEntries.length - 1];
+    for (const entry of handEntries) {
+      if (arrangedUids.includes(entry.uid)) continue;
+      if (!chainWouldLink(shown, rowEntries, entry)) {
+        breaks.add(entry.uid);
+        continue;
+      }
+      const shared = chainSharedTraits(last.card, entry.card).filter((trait) => trait.trait !== "scene");
+      map.set(entry.uid, { level: 0, traits: new Set(shared.map((trait) => trait.trait)) });
+    }
+    return { wouldLink: map, breakers: breaks };
+  }, [handEntries, rowEntries, arrangedUids, shown]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setSelected([]);
+      setSelectMode(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const arranging = Boolean(shown && shown.phase === "play" && !play && !needsRoundPack && !aftermath && !busy);
+
+  const toRow = useCallback(
+    (uid: number) => {
+      hideChainDetails();
+      setRowUids((current) => {
+        if (current.includes(uid)) return current;
+        if (current.length >= CHAIN_RULES.rowMax) {
+          runSound.refuse();
+          return current;
+        }
+        runSound.deal(current.length);
+        return [...current, uid];
+      });
+    },
+    [],
+  );
+  const toHand = useCallback((uid: number) => {
+    hideChainDetails();
+    runSound.uiTap();
+    setRowUids((current) => current.filter((value) => value !== uid));
+  }, []);
+  const dragRowRef = useRef<number[] | null>(null);
+  const onDragRow = useCallback((row: number[] | null) => {
+    dragRowRef.current = row;
+    setDragRow(row);
+  }, []);
+  const rowUidsRef = useRef(rowUids);
+  rowUidsRef.current = rowUids;
+  /* Picks only live while arranging, and only for cards still in hand. */
+  useEffect(() => {
+    if (!arranging) {
+      setSelected((current) => (current.length ? [] : current));
+      setSelectMode(false);
+      return;
+    }
+    const inHand = new Set(handEntries.map((entry) => entry.uid));
+    setSelected((current) => (current.every((uid) => inHand.has(uid)) ? current : current.filter((uid) => inHand.has(uid))));
+  }, [arranging, handEntries]);
+  const onDragEnd = useCallback(
+    (uids: number[], handIndex: number | null) => {
+      const proposed = dragRowRef.current;
+      dragRowRef.current = null;
+      setDragRow(null);
+      if (proposed) setRowUids(proposed);
+      const finalRow = proposed ?? rowUidsRef.current;
+      const landed = uids.filter((uid) => finalRow.includes(uid));
+      const rest = uids.filter((uid) => !finalRow.includes(uid));
+      const fromHand = !rowUidsRef.current.includes(uids[0]);
+      if (landed.length && fromHand) {
+        runSound.deal(finalRow.indexOf(landed[0]));
+        // Cards that did not fit stay picked, in the hand.
+        if (rest.length) runSound.refuse();
+        setSelected(rest.length > 1 || (rest.length === 1 && uids.length > 1) ? rest : []);
+        return;
+      }
+      setSelected([]);
+      if (!rest.length) return;
+      if (handIndex === null) {
+        if (proposed) runSound.uiTap();
+        return;
+      }
+      // In the hand where they were let go, in order: before the card now
+      // at that spot among the visible hand cards, every other card keeping
+      // its place.
+      runSound.charmMove();
+      const order = orderedHandRef.current.map((entry) => entry.uid).filter((value) => !rest.includes(value));
+      const visible = order.filter((value) => !finalRow.includes(value));
+      const at = handIndex < visible.length ? order.indexOf(visible[handIndex]) : visible.length ? order.indexOf(visible[visible.length - 1]) + 1 : order.length;
+      order.splice(Math.max(0, at), 0, ...rest);
+      commitOrder(order);
+    },
+    [commitOrder],
+  );
+
+  /* Picking several cards: Ctrl/Cmd-click toggles one, Shift-click adds the
+     run of cards between the last pick and this one; all picks stay on one
+     side (row or hand). */
+  const onSelect = useCallback(
+    (uid: number, range: boolean) => {
+      hideChainDetails();
+      const inRow = rowUidsRef.current.includes(uid);
+      const line = inRow
+        ? rowUidsRef.current
+        : orderedHandRef.current.map((entry) => entry.uid).filter((value) => !rowUidsRef.current.includes(value));
+      setSelected((current) => {
+        const sameSide = current.length > 0 && current.every((value) => line.includes(value));
+        const base = sameSide ? current : [];
+        if (range && base.length) {
+          const from = line.indexOf(base[base.length - 1]);
+          const to = line.indexOf(uid);
+          const step = to >= from ? 1 : -1;
+          const add: number[] = [];
+          for (let index = from + step; step > 0 ? index <= to : index >= to; index += step) {
+            if (!base.includes(line[index])) add.push(line[index]);
+          }
+          return [...base, ...add];
+        }
+        return base.includes(uid) ? base.filter((value) => value !== uid) : [...base, uid];
+      });
+      runSound.uiTap();
+    },
+    [],
+  );
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  /* Send the picks: hand cards into the next free slots in pick order (the
+     ones that do not fit stay picked), row cards back to the hand. */
+  const onSendGroup = useCallback(() => {
+    const group = selectedRef.current;
+    if (!group.length) return;
+    hideChainDetails();
+    const row = rowUidsRef.current;
+    if (row.includes(group[0])) {
+      setRowUids(row.filter((uid) => !group.includes(uid)));
+      setSelected([]);
+      setSelectMode(false);
+      runSound.uiTap();
+      return;
+    }
+    const room = Math.max(0, CHAIN_RULES.rowMax - row.length);
+    const going = group.slice(0, room);
+    const left = group.slice(room);
+    if (going.length) {
+      setRowUids([...row, ...going]);
+      going.forEach((_, index) => window.setTimeout(() => runSound.deal(row.length + index), index * 60));
+    }
+    if (left.length) runSound.refuse();
+    setSelected(left);
+    if (!left.length) setSelectMode(false);
+  }, []);
+  const onClearSelection = useCallback(() => setSelected([]), []);
+
+  /* Cards dealt in from the deck pile, turning over as they land. */
+  const enterFromDeck = useCallback(
+    (uids: number[], lead = 0) => {
+      if (!layout) return;
+      const deck = layout.deck;
+      const scale = deck.w / layout.cardW;
+      setEnters((current) => {
+        const next = new Map(current);
+        uids.forEach((uid, index) => {
+          next.set(uid, {
+            x: deck.x + deck.w / 2 - layout.cardW / 2,
+            y: deck.y + deck.h / 2 - layout.cardH / 2,
+            scale,
+            rotate: 12,
+            delayMs: lead + index * RUN_FEEL.deal.staggerMs,
+            flipAtMs: lead + index * RUN_FEEL.deal.staggerMs + 260,
+          });
+        });
+        return next;
+      });
+      uids.forEach((_, index) => window.setTimeout(() => runSound.deal(index), reducedMotion ? 0 : lead + index * RUN_FEEL.deal.staggerMs));
+    },
+    [layout, reducedMotion],
+  );
+
+  const playRow = useCallback(async () => {
+    if (!shown || !arranging || !rowUids.length) {
+      if (shown && !rowUids.length) {
+        playShudder();
+        runSound.refuse();
+      }
+      return;
+    }
+    hideChainDetails();
+    const before = shown;
+    setHold(before);
+    const outcome = await doAct({ kind: "playRow", uids: rowUids });
+    if (!outcome.ok || outcome.result.kind !== "playRow") {
+      setHold(null);
+      if (!outcome.ok && outcome.error === "stale") setRowUids([]);
+      else {
+        playShudder();
+        runSound.refuse();
+      }
+      return;
+    }
+    const result = outcome.result;
+    setLinkFx({});
+    setCardCombo({});
+    setHandsLit([]);
+    setScoreOverride(before.roundScore);
+    setPlay({ row: result.row, outcome: result.outcome, pay: result.pay, forgotten: result.forgotten, ascended: result.ascended, before, wysi: result.wysi ?? null });
+    signal("play:start");
+  }, [arranging, doAct, playShudder, rowUids, shown, signal]);
+
+  const redraw = useCallback(async () => {
+    if (!shown || !arranging || !rowUids.length || shown.redrawsLeft <= 0) return;
+    hideChainDetails();
+    const outcome = await doAct({ kind: "redraw", uids: rowUids });
+    if (!outcome.ok || outcome.result.kind !== "redraw") {
+      runSound.refuse();
+      return;
+    }
+    setRowUids([]);
+    runSound.reroll();
+    enterFromDeck(outcome.result.drawn, 200);
+  }, [arranging, doAct, enterFromDeck, rowUids, shown]);
+
+  /* Fixtures: a row laid out on mount, played after a beat. */
+  const autoPlayedRef = useRef(false);
+  useEffect(() => {
+    if (!script?.autoPlay || autoPlayedRef.current || !arranging || !layout) return;
+    const timer = window.setTimeout(() => {
+      autoPlayedRef.current = true;
+      void playRow();
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [arranging, layout, playRow, script?.autoPlay]);
+
+  /* ------------------------------------------------------------ the row plays */
+
+  const finishPlay = useCallback((keepBanner = false) => {
+    setPlay(null);
+    setHeat(null);
+    setLeaving(false);
+    setFailedRow(false);
+    setLive(0);
+    setLinkFx(null);
+    setCardCombo({});
+    setHandsLit([]);
+    setScoreOverride(null);
+    setShardOverride(null);
+    if (!keepBanner) setAftermath(null);
+    setHold(null);
+    setRowUids([]);
+  }, []);
+
+  const onReplayDone = useCallback(async () => {
+    if (!play) return;
+    const { outcome, pay, forgotten, before, row, wysi } = play;
+    signal("play:slam");
+    // The round score (or round and target) lands now; shards with the pay.
+    if (wysi) stampWysi(wysi, (on) => on !== "shards" || outcome !== "cleared");
+    const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, reducedMotion ? Math.min(ms, 200) : ms));
+    if (forgotten === "gone") {
+      setAftermath({ kind: "banner", text: t`Past the star. Once Forgotten left.`, tone: "red" });
+      runSound.refuse();
+      await wait(1300);
+    } else if (forgotten === "grew") {
+      const scene = document.querySelector("[data-chain-scene='forgotten']");
+      if (scene && !reducedMotion) juice(scene, RUN_FEEL.juice.firingCharm);
+      runSound.charmFire(4);
+    }
+    if (outcome === "continue") {
+      const drawn = view?.hand.filter((entry) => !before.hand.some((old) => old.uid === entry.uid)).map((entry) => entry.uid) ?? [];
+      finishPlay();
+      enterFromDeck(drawn, 320);
+      signal("play:done");
+      return;
+    }
+    if (outcome === "cleared") {
+      runSound.songCleared("song");
+      shake(1);
+      // One shard total for the round, no itemised lines.
+      const total = pay.reduce((sum, line) => sum + line.amount, 0);
+      setShardOverride(before.shards + total);
+      setAftermath({ kind: "clear", round: before.round, total });
+      runSound.tallyTotal();
+      if (wysi) stampWysi(wysi, (on) => on === "shards");
+      await wait(CHAIN_FEEL.pay.bannerMs + CHAIN_FEEL.pay.afterMs);
+      runSound.fireLoopStop();
+      setAftermath(null);
+      // The row and hand leave for the deck before the keep pick deals in.
+      setLeaving(true);
+      await wait(reducedMotion ? 0 : 40 * Math.min(12, before.hand.length) + 320);
+      finishPlay();
+      signal("clear:done");
+      return;
+    }
+    if (outcome === "reborn") {
+      setAftermath({ kind: "banner", text: t`Ascension to Heaven burns. Round ${before.round} again.`, tone: "gold" });
+      runSound.fireIgnite();
+      shake(1.2);
+      await wait(1500);
+      finishPlay();
+      signal("play:done");
+      return;
+    }
+    // failed: the row greys out and the table holds on it a beat before
+    // the board comes in.
+    void row;
+    runSound.fireLoopStop();
+    setFailedRow(true);
+    runSound.stepMiss();
+    shake(0.6);
+    await wait(800);
+    setOverFresh(true);
+    finishPlay();
+    signal("over");
+  }, [enterFromDeck, finishPlay, play, reducedMotion, shake, signal, stampWysi, t, view]);
+
+  const readoutAt = useCallback(() => {
+    const element = boxRef.current;
+    if (!element || !layout) return null;
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left + layout.width / 2, y: rect.top + layout.readoutY, size: layout.narrow ? 40 : 68, top: rect.top, narrow: layout.narrow };
+  }, [boxRef, layout]);
+
+  /* ------------------------------------------------------------ packs */
+
+  const packKeyRef = useRef("");
+  const pack = shown?.phase === "pack" ? shown.pack : null;
+  const packKey = pack && shown ? `${shown.runNo}|${shown.round}|${pack.reason}|${pack.startIndex ?? ""}|${pack.offer?.kind ?? ""}|${shown.totalRows}` : "";
+  if (packKey) packKeyRef.current = packKey;
+
+  const openPack = useCallback(async (): Promise<ChainCard[] | null> => {
+    const outcome = await doAct({ kind: "openPack" });
+    if (outcome.ok && outcome.result.kind === "openPack") return outcome.result.cards;
+    if (!outcome.ok && outcome.error === "pack_open" && outcome.view?.pack?.cards) return outcome.view.pack.cards;
+    if (!outcome.ok && outcome.error === "stale" && outcome.view?.pack?.cards) return outcome.view.pack.cards;
+    return null;
+  }, [doAct]);
+
+  const keepCards = useCallback(
+    async (ids: number[]): Promise<PackKeepOutcome | null> => {
+      if (!shown) return null;
+      setHold(shown);
+      setShardOverride(shown.shards);
+      const outcome = await doAct({ kind: "keep", ids });
+      if (outcome.ok && outcome.result.kind === "keep") return outcome.result;
+      setHold(null);
+      setShardOverride(null);
+      return null;
+    },
+    [doAct, shown],
+  );
+
+  const onKept = useCallback(() => {
+    setHold(null);
+    setShardOverride(null);
+    signal("pack:kept");
+  }, [signal]);
+
+  const onShards = useCallback((delta: number) => setShardOverride((current) => (current === null ? null : current + delta)), []);
+
+  const roundPackCards = useMemo(() => (needsRoundPack && shown ? shown.hand.filter((entry) => entry.pack) : []), [needsRoundPack, shown]);
+
+  const onJoin = useCallback(
+    (rects: DOMRect[]) => {
+      if (!shown || !layout) return;
+      const element = boxRef.current;
+      const origin = element?.getBoundingClientRect();
+      const next = new Map<number, CardEnter>();
+      roundPackCards.forEach((entry, index) => {
+        const rect = rects[index];
+        if (!rect || !origin || rect.width === 0) return;
+        const scale = rect.width / layout.cardW;
+        const cx = rect.left - origin.left + rect.width / 2;
+        const cy = rect.top - origin.top + (rect.width * 1.4) / 2;
+        next.set(entry.uid, { x: cx - layout.cardW / 2, y: cy - layout.cardH / 2, scale, rotate: 0, delayMs: index * CHAIN_FEEL.pack.joinStaggerMs });
+      });
+      setEnters(next);
+      const key = roundKey(shown);
+      setDealt(key);
+      writeDealt(key);
+      roundPackCards.forEach((_, index) => window.setTimeout(() => runSound.deal(index), reducedMotion ? 0 : index * CHAIN_FEEL.pack.joinStaggerMs));
+      const deckCards = shown.hand.filter((entry) => !entry.pack).map((entry) => entry.uid);
+      window.setTimeout(() => enterFromDeck(deckCards, 0), reducedMotion ? 0 : roundPackCards.length * CHAIN_FEEL.pack.joinStaggerMs + 120);
+      window.setTimeout(() => signal("round:dealt"), reducedMotion ? 0 : 1400);
+    },
+    [boxRef, enterFromDeck, layout, reducedMotion, roundPackCards, shown, signal],
+  );
+
+  const onStage = useCallback((stage: StageName) => signal(`stage:${stage}`), [signal]);
+
+  /* ------------------------------------------------------------ shop */
+
+  const shopAct = useCallback(
+    async (action: ChainAction): Promise<ShopActResult> => {
+      const outcome = await act(action);
+      return outcome.ok ? { ok: true } : { ok: false, error: outcome.error };
+    },
+    [act],
+  );
+  const sell = useCallback(
+    async (scene: ChainSceneId) => {
+      const outcome = await doAct({ kind: "sell", scene });
+      if (outcome.ok) {
+        runSound.sell();
+        shake(0.2);
+      } else runSound.refuse();
+    },
+    [doAct, shake],
+  );
+
+  /* ------------------------------------------------------------ the look */
+
+  const roundScore = scoreOverride ?? shown?.roundScore ?? 0;
+  const target = shown?.target ?? 0;
+  const fire = Boolean(shown && target > 0 && roundScore >= target && (play || aftermath?.kind === "clear"));
+  const overNow = Boolean(shown?.phase === "over" && !play);
+  /* The room only brightens with heat: more, faster, lighter triangles. */
+  const roomHeat = overNow ? 0 : fire ? 1 : play && heat === "fire" ? 0.85 : play && heat === "mod" ? 0.45 : 0;
+  const shards = shardOverride ?? shown?.shards ?? 0;
+  const showRound = Boolean(shown && shown.round > 0 && shown.phase !== "over");
+  const scenesNode = shown ? (
+    <ChainScenes
+      scenes={shown.scenes}
+      compact={narrow}
+      ascension={shown.ascension}
+      startCombo={shown.startCombo}
+      onSell={shown.phase === "shop" ? (id) => void sell(id) : undefined}
+      sellDisabled={busy}
+    />
+  ) : null;
+
+  useEffect(() => {
+    if (!shown) return;
+    if (shown.phase === "shop") signal("shop");
+    if (shown.phase === "over" && !play) signal("over:shown");
+  }, [play, shown, signal]);
+
+  const stagePack = shown?.phase === "pack" && pack ? pack : null;
+  const surfaceTitle =
+    stagePack && shown
+      ? stagePack.reason === "round"
+        ? t`Keep one`
+        : chainPackName(stagePack, shown.round, i18n)
+      : needsRoundPack && shown
+        ? chainPackName({ reason: "round" }, shown.round, i18n)
+        : view?.phase === "shop" && !play && !overNow
+          ? t`Shop`
+          : null;
+  const showBoard = Boolean(shown && (shown.phase === "play" || play));
+  const actionsVisible = Boolean(showBoard && !play && !needsRoundPack && !aftermath && !leaving && !failedRow && layout);
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 top-[60px] z-40 overflow-hidden bg-osu-b6 text-white" translate="no">
+      <TriangleBackdrop heat={roomHeat} dim={overNow} reducedMotion={reducedMotion} />
+      <motion.div
+        className="relative h-full"
+        style={{ x: leanSpringX, y: leanSpringY }}
+        onPointerMove={(event) => {
+          if (reducedMotion || event.pointerType === "touch") return;
+          leanX.set((event.clientX - window.innerWidth / 2) * RUN_FEEL.lean.fraction);
+          leanY.set((event.clientY - window.innerHeight / 2) * RUN_FEEL.lean.fraction);
+        }}
+        onPointerLeave={() => {
+          leanX.set(0);
+          leanY.set(0);
+        }}
+      >
+        <motion.div style={{ x: shakeX, y: shakeY, rotate: shakeRotate }} className="relative flex h-full flex-col">
+          <ChainTopBar
+            narrow={narrow}
+            round={shown?.round ?? 0}
+            target={target}
+            roundScore={roundScore}
+            meterScore={play ? play.before.roundScore + live : roundScore}
+            ghostFuzzy={!play}
+            heatScore={play ? play.before.roundScore + live : aftermath?.kind === "clear" ? roundScore : 0}
+            ghostScore={play ? play.before.roundScore + live : arranging ? roundScore + plainTotal : roundScore}
+            crossFlash={crossFlash}
+            star={shown?.star ?? null}
+            rowsLeft={shown?.rowsLeft ?? 0}
+            redrawsLeft={shown?.redrawsLeft ?? 0}
+            shards={shards}
+            showRound={showRound}
+            showMeter={Boolean(showRound && (shown?.phase === "play" || play))}
+            scoreBanked={Boolean(play) && scoreOverride === play?.before.roundScore}
+            reducedMotion={reducedMotion}
+            onExit={onExit}
+            scenes={narrow && !overNow ? scenesNode : null}
+            wysi={hudWysi}
+            deck={
+              narrow && shown && !overNow ? (
+                <HudDeck count={shown.phase === "play" ? shown.drawPileCount : shown.deck.length} backUrl={backUrl} />
+              ) : null
+            }
+          />
+
+          <div ref={boxRef} className="relative min-h-0 flex-1">
+            {layout && shown && showBoard && !needsRoundPack && (
+              <>
+                {/* The row's total as it stands, quiet until it plays. */}
+                <ChainBoard
+                  layout={layout}
+                  hand={handEntries}
+                  rowUids={play ? play.row.uids : arrangedUids}
+                  committedRow={rowUids}
+                  hiddenUids={needsRoundPack ? new Set(shown.hand.map((entry) => entry.uid)) : EMPTY}
+                  mode={arranging ? "arrange" : "locked"}
+                  preview={play ? play.row : preview}
+                  wouldLink={wouldLink}
+                  breakers={breakers}
+                  linkFx={play ? linkFx : null}
+                  cardCombo={play ? cardCombo : {}}
+                  handsLit={handsLit}
+                  enters={enters}
+                  backUrl={backUrl}
+                  reducedMotion={reducedMotion}
+                  onToRow={toRow}
+                  onToHand={toHand}
+                  onDragRow={onDragRow}
+                  onDragEnd={onDragEnd}
+                  leaving={leaving}
+                  failed={failedRow}
+                  selected={selected}
+                  selectMode={selectMode}
+                  onSelect={onSelect}
+                  onSendGroup={onSendGroup}
+                  onClearSelection={onClearSelection}
+                />
+                {!needsRoundPack && !layout.narrow && <DeckPile layout={layout} count={shown.drawPileCount} backUrl={backUrl} bump={0} reducedMotion={reducedMotion} />}
+                {actionsVisible && (
+                  <div className="absolute inset-x-0 flex items-center justify-center gap-3" style={{ top: layout.actionsY, height: layout.narrow ? 48 : 52 }}>
+                    {/* Pick several: tap cards to pick them, tap a picked one
+                        to send them all. */}
+                    <button
+                      type="button"
+                      aria-pressed={selectMode}
+                      aria-label={t`Pick several cards`}
+                      title={t`Pick several cards`}
+                      onClick={() => {
+                        runSound.uiTap();
+                        setSelectMode((current) => {
+                          if (current) setSelected([]);
+                          return !current;
+                        });
+                      }}
+                      className={`grid shrink-0 place-items-center rounded-full transition hover:brightness-125 ${layout.narrow ? "h-10 w-10" : "h-11 w-11"} ${selectMode ? "bg-osu-pink text-[#120f1a]" : "bg-white/10 text-white"}`}
+                    >
+                      <PickSeveralGlyph />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!rowUids.length || shown.redrawsLeft <= 0 || busy}
+                      onClick={() => void redraw()}
+                      className={`inline-flex items-center gap-2 rounded-full bg-white/10 font-black text-white transition hover:brightness-125 disabled:opacity-35 ${layout.narrow ? "px-4 py-2 text-[14px]" : "px-6 py-2.5 text-[16px]"}`}
+                    >
+                      <Trans>Redraw</Trans>
+                      <span className="tabular-nums text-[#8fc1ff]">{shown.redrawsLeft}</span>
+                    </button>
+                    <motion.button
+                      type="button"
+                      style={{ x: playShudderX }}
+                      disabled={busy}
+                      onClick={() => void playRow()}
+                      className={`rounded-full font-black transition hover:brightness-110 ${rowUids.length ? "bg-osu-pink text-[#120f1a]" : "bg-white/10 text-white/45"} ${layout.narrow ? "px-6 py-2 text-[15px]" : "px-9 py-2.5 text-[17px]"}`}
+                    >
+                      <Trans>Play row</Trans>
+                    </motion.button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* One title at a time across the table's surfaces: the old one
+                leaves before the next comes in. */}
+            <AnimatePresence mode="wait">
+              {layout && surfaceTitle && (
+                <motion.div
+                  key={surfaceTitle}
+                  className="pointer-events-none absolute inset-x-0 z-[30] text-center"
+                  style={{ top: layout.narrow ? 14 : 26 }}
+                  initial={reducedMotion ? false : { opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8, transition: { duration: 0.14 } }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <div className={`font-black italic uppercase leading-none ${layout.narrow ? "text-[22px]" : "text-[32px]"}`}>{surfaceTitle}</div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* The shop comes in from the live run, under a pack stage that
+                is still finishing its keep, so it lands as the kept card
+                leaves. */}
+            {layout && view && view.phase === "shop" && !play && (
+              <ChainShop
+                view={view}
+                layout={layout}
+                busy={busy}
+                packThumbs={packThumbs}
+                reducedMotion={reducedMotion}
+                act={shopAct}
+                shake={shake}
+                enterDelayMs={stagePack ? 300 : 0}
+              />
+            )}
+
+            {layout && shown && needsRoundPack && (
+              <ChainPackStage
+                key={`round-${roundKey(shown)}`}
+                layout={layout}
+                title={chainPackName({ reason: "round" }, shown.round, i18n)}
+                packType="standard"
+                packThumb={packThumbs.standard ?? null}
+                art={{ reason: "round", round: shown.round }}
+                mode="join"
+                sealed
+                autoTear
+                cards={roundPackCards.map((entry) => entry.card)}
+                keep={0}
+                backUrl={backUrl}
+                reducedMotion={reducedMotion}
+                deckCount={shown.deck.length}
+                onOpen={async () => roundPackCards.map((entry) => entry.card)}
+                onKeep={async () => null}
+                onJoin={onJoin}
+                onKept={() => {}}
+                onShards={() => {}}
+                shake={shake}
+                auto={script?.autoPack}
+                showTitle={false}
+                onStageChange={onStage}
+              />
+            )}
+
+            {layout && shown && stagePack && (
+              <ChainPackStage
+                key={`pack-${packKeyRef.current}`}
+                layout={layout}
+                title={stagePack.reason === "round" ? t`Keep one` : chainPackName(stagePack, shown.round, i18n)}
+                packType={chainPackType(stagePack.reason, stagePack.offer)}
+                packThumb={packThumbs[chainPackType(stagePack.reason, stagePack.offer)] ?? packThumbs.standard ?? null}
+                art={{ reason: stagePack.reason, offer: stagePack.offer, round: shown.round }}
+                mode="keep"
+                sealed={stagePack.sealed}
+                cards={stagePack.cards}
+                keep={stagePack.keep}
+                backUrl={backUrl}
+                reducedMotion={reducedMotion}
+                deckCount={shown.deck.length}
+                onOpen={openPack}
+                onKeep={keepCards}
+                onJoin={() => {}}
+                onKept={onKept}
+                onShards={onShards}
+                shake={shake}
+                auto={script?.autoPack}
+                autoTear={stagePack.reason === "shop" || (stagePack.reason === "start" && (stagePack.startIndex ?? 1) > 1)}
+                showTitle={false}
+                instant={stagePack.reason === "round"}
+                quick={stagePack.reason === "start" && (stagePack.startIndex ?? 1) > 1}
+                deckCards={stagePack.reason === "round" ? [] : shown.deck.map((entry) => entry.card)}
+                onStageChange={onStage}
+              />
+            )}
+
+
+            {shown && overNow && (
+              <ChainOver
+                view={shown}
+                best={best}
+                fresh={overFresh}
+                busy={busy}
+                narrow={narrow}
+                reducedMotion={reducedMotion}
+                loadBoard={loadBoard}
+                onNewRun={() => {
+                  setOverFresh(false);
+                  void doAct({ kind: "start" });
+                }}
+                onShake={shake}
+              />
+            )}
+
+            {!shown && view === null && (
+              <ChainStart
+                best={best}
+                busy={busy}
+                narrow={narrow}
+                packThumb={packThumbs.standard ?? null}
+                reducedMotion={reducedMotion}
+                loadBoard={loadBoard}
+                onNewRun={() => void doAct({ kind: "start" })}
+              />
+            )}
+
+            {/* A cleared round's pay, or a banner, over the board. */}
+            <AnimatePresence>
+              {aftermath && (
+                <motion.div
+                  key={aftermath.kind}
+                  className={`pointer-events-none absolute inset-x-0 top-0 z-[60] flex flex-wrap items-center justify-center gap-x-4 gap-y-1 bg-[#0c0a10] px-3 ${narrow ? "py-2" : "py-2.5"}`}
+                  initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scaleY: 0.4 }}
+                  animate={{ opacity: 1, scaleY: 1 }}
+                  exit={{ opacity: 0, transition: { duration: 0.18 } }}
+                  transition={{ type: "spring", stiffness: 420, damping: 30 }}
+                >
+                  {aftermath.kind === "clear" ? (
+                    <motion.div
+                      className={`flex items-baseline gap-3 font-black italic uppercase leading-none ${narrow ? "text-[22px]" : "text-[32px]"}`}
+                      initial={reducedMotion ? false : { scale: 1.6, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", stiffness: 520, damping: 20 }}
+                    >
+                      <span className="text-[#ffd36b]">
+                        <Trans>Round {aftermath.round} cleared</Trans>
+                      </span>
+                      <Shards value={aftermath.total} sign className={`not-italic text-osu-pink-light ${narrow ? "text-[18px]" : "text-[24px]"}`} />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      className={`px-4 text-center font-black italic uppercase leading-tight ${narrow ? "text-[24px]" : "text-[40px]"}`}
+                      style={{ color: aftermath.tone === "red" ? "#ff8a8a" : CHAIN_SCENE_INK.ascension }}
+                      initial={reducedMotion ? false : { scale: 1.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", stiffness: 520, damping: 20 }}
+                    >
+                      {aftermath.text}
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {message && (
+                <motion.div
+                  key={message}
+                  className="pointer-events-none absolute inset-x-0 top-3 z-[70] flex justify-center"
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <span className="rounded-full bg-[#0c0a10]/90 px-4 py-1.5 text-[13px] font-bold text-[#ff8a8a]">{message}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {!narrow && shown && !overNow && shown.scenes.length > 0 && (
+            <div className="absolute bottom-6 left-6 z-[4]">{scenesNode}</div>
+          )}
+
+          {play && (
+            <ChainScoring
+              key={`${play.before.runNo}-${play.before.totalRows}`}
+              row={play.row}
+              names={play.row.uids.map((uid) => {
+                const card = play.before.hand.find((entry) => entry.uid === uid)?.card;
+                return card ? chainCardFace(card).name : "";
+              })}
+              roundBefore={play.before.roundScore}
+              target={play.before.target}
+              readoutAt={readoutAt}
+              reducedMotion={reducedMotion}
+              skip={script?.skipReplay}
+              onLinkFx={(update) => setLinkFx((current) => update(current ?? {}))}
+              onCardCombo={(index, combo) => setCardCombo((current) => (current[index] === combo ? current : { ...current, [index]: combo }))}
+              onHandLit={(hand) => setHandsLit((current) => (current.includes(hand) ? current : [...current, hand]))}
+              onShake={shake}
+              onSlam={(score) => setScoreOverride(score)}
+              onRunning={setLive}
+              onCross={() => setCrossFlash((value) => value + 1)}
+              onHeat={(next) => setHeat((current) => (current === "fire" ? current : next))}
+              onDone={() => void onReplayDone()}
+            />
+          )}
+        </motion.div>
+      </motion.div>
+      <ChainDetailsLayer />
+    </div>
+  );
+}
+
+const EMPTY = new Set<number>();
+
+/* Two cards fanned, the front one ticked: picking several at once. */
+function PickSeveralGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinejoin="round" aria-hidden="true">
+      <rect x="3.5" y="5" width="9" height="13" rx="1.6" transform="rotate(-10 8 11.5)" opacity={0.6} />
+      <rect x="10" y="4" width="10" height="14.5" rx="1.8" fill="currentColor" fillOpacity={0.18} />
+      <path d="M12.6 11.4 L14.6 13.4 L17.8 9.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+const HAND_ORDER_PREFIX = "chain-hand-order:";

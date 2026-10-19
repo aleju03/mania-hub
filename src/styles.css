@@ -828,6 +828,40 @@ html[data-custom-cursor="true"] * {
   from { filter: hue-rotate(0deg); }
   to { filter: hue-rotate(360deg); }
 }
+/* Chain card finishes (run/chain/ChainCardFace.tsx). Transform and opacity
+   only: up to ~20 faces are on screen while a chain plays. */
+.chain-face-sweep {
+  position: absolute; top: -10%; bottom: -10%; left: -70%; width: 60%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.75) 50%, rgba(255, 255, 255, 0) 70%, transparent 100%);
+  mix-blend-mode: overlay;
+  animation: chain-face-sweep 3.6s cubic-bezier(0.5, 0, 0.4, 1) infinite;
+}
+.chain-face-sweep-cosmic {
+  background: linear-gradient(100deg, transparent 0%, rgba(74, 222, 128, 0) 25%, rgba(74, 222, 128, 0.32) 45%, rgba(6, 182, 212, 0.26) 55%, rgba(190, 242, 100, 0) 75%, transparent 100%);
+  mix-blend-mode: screen;
+  animation-duration: 5s;
+}
+@keyframes chain-face-sweep {
+  0% { transform: translateX(0); }
+  70%, 100% { transform: translateX(300%); }
+}
+/* Full holo: vertical rainbow bands tiled at half the strip's width, the
+   strip slid one tile per loop (seamless), the whole wrapper turned. */
+.chain-face-holo { position: absolute; inset: -30%; transform: rotate(24deg); mix-blend-mode: soft-light; opacity: 0.95; }
+.chain-face-holo > i {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 200%;
+  background: linear-gradient(90deg, #ff8fd0, #ffd36b, #a5f3c4, #7fd3ff, #c4b2ff, #ff8fd0) 0 0 / 25% 100% repeat-x;
+  animation: chain-face-holo 6s linear infinite;
+}
+@keyframes chain-face-holo { to { transform: translateX(-50%); } }
+.chain-face-glint { pointer-events: none; opacity: 0.85; animation: chain-face-glint 2.6s ease-in-out infinite; }
+@keyframes chain-face-glint {
+  0%, 100% { opacity: 0.15; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chain-face-sweep, .chain-face-holo > i, .chain-face-glint { animation: none; }
+}
 /* The pack run's tally, drawn as a mania playfield (run/HandScore.tsx). */
 @keyframes run-lane-flash {
   0% { opacity: 0.5; }
@@ -879,4 +913,47 @@ html[data-custom-cursor="true"] * {
   0% { transform: scale(1); }
   35% { transform: scale(1.14) rotate(-3deg); }
   100% { transform: scale(1); }
+}
+
+/* Pack run table (components/packs/run/RunCard.tsx, RunTable.tsx): the idle
+   life of hand cards and charms, a rotation sway and a slower bob on their
+   own clocks (each element sets the periods, phases and --sway-* amounts
+   inline), and the unopened pack's bob. The individual rotate/translate
+   properties keep the two from fighting over transform. */
+@keyframes run-sway-rotate {
+  0%, 100% { rotate: calc(var(--sway-r, 1deg) * -1); }
+  50% { rotate: var(--sway-r, 1deg); }
+}
+@keyframes run-sway-bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 calc(var(--sway-y, 3px) * -1); }
+}
+.run-card-sway { animation: run-sway-rotate 3140ms ease-in-out infinite, run-sway-bob 9400ms ease-in-out infinite; }
+@keyframes run-pack-bob {
+  0%, 100% { translate: 0 0; rotate: -0.6deg; }
+  50% { translate: 0 -5px; rotate: 0.6deg; }
+}
+.run-pack-bob { animation: run-pack-bob 2600ms ease-in-out infinite; }
+/* The chain run's ink flame: each layer sways and breathes on its own clock. */
+@keyframes chain-flame-sway {
+  0%, 100% { transform: skewX(-7deg) scaleY(0.9) translateX(-2px); }
+  50% { transform: skewX(7deg) scaleY(1.1) translateX(2px); }
+}
+@keyframes chain-flame-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  30% { transform: scale(1.04, 0.94); }
+  65% { transform: scale(0.97, 1.08); }
+}
+@keyframes chain-ember {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(6px, -110px) rotate(140deg); opacity: 0; }
+}
+.chain-flame-a { animation: chain-flame-sway 1300ms ease-in-out infinite; }
+.chain-flame-b { animation: chain-flame-sway 900ms ease-in-out infinite reverse; }
+.chain-flame-c { animation: chain-flame-sway 620ms ease-in-out infinite; }
+.chain-flame-breathe { animation: chain-flame-breathe 1700ms ease-in-out infinite; }
+.chain-ember { animation: chain-ember 1800ms ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .run-card-sway, .run-pack-bob, .chain-flame-a, .chain-flame-b, .chain-flame-c, .chain-flame-breathe, .chain-ember { animation: none; }
 }

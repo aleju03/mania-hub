@@ -1,12 +1,16 @@
 import { useLingui } from "@lingui/react/macro";
 import { BOSS_COPY, MOD_TINT, type BossId } from "#/lib/pack-run";
 
+/* osu! files Wind Up, Wind Down and Muted under its Fun mods, drawn pink. */
+const FUN_MODS = new Set<BossId>(["windUp", "windDown", "muted"]);
+const FUN_TINT = "#ff66ab";
+
 /* A final song's mod as an osu! mod icon: the acronym on a pill in the
    colour of its kind. */
 export function ModBadge({ boss, size = "md" }: { boss: BossId; size?: "sm" | "md" }) {
   const { i18n } = useLingui();
   const copy = BOSS_COPY[boss];
-  const tint = MOD_TINT[copy.kind];
+  const tint = FUN_MODS.has(boss) ? FUN_TINT : MOD_TINT[copy.kind];
   return (
     <span
       title={`${i18n._(copy.name)}: ${i18n._(copy.text)}`}
