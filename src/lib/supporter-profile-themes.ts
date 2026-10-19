@@ -77,7 +77,7 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
   hanabi: msg`Hanabi`,
   vaporwave: msg`Vaporwave`,
   blackhole: msg`Black hole`,
-  singularity: msg`Singularity`,
+  singularity: msg`Universe Shifter`,
   knight: msg`Shattered stars`,
   knightfight: msg`Bullet hell`,
 };

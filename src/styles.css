@@ -2226,6 +2226,8 @@ html[data-custom-cursor="true"] * {
 }
 @media (prefers-reduced-motion: reduce) {
   .gift-ticket-glint { animation: none; opacity: 0; }
+}
+
 /* Pack run editions on a flat card (EditionSheen.tsx). The 3D card draws its
    own in the overlay shader; these are the same three looks for thumbnails. */
 .edition-sheen { pointer-events: none; position: absolute; inset: 0; border-radius: inherit; }

@@ -1,3 +1,4 @@
+import { createSakuraPetals, type ThemeOverlay } from "./profile-theme-petals";
 import { PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
 import { HIGHWAY_MAX_LANES, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "./supporter-profile-themes";
 
@@ -44,6 +45,11 @@ const THEME_SPRITES: Partial<Record<SupporterProfileThemeId, string>> = {
   vaporwave: "/images/profile-themes/palm.png",
 };
 
+/* Geometry a theme draws over its shader, in the same canvas. */
+const THEME_OVERLAYS: Partial<Record<SupporterProfileThemeId, (gl: WebGL2RenderingContext) => ThemeOverlay | null>> = {
+  sakura: createSakuraPetals,
+};
+
 const STILL_TIME = 6.5;
 
 function reducedMotion(): boolean {
@@ -52,6 +58,8 @@ function reducedMotion(): boolean {
 
 class ThemeContext {
   private programs = new Map<SupporterProfileThemeId, Compiled | null>();
+  private overlays = new Map<SupporterProfileThemeId, ThemeOverlay | null>();
+  private quad: WebGLBuffer | null;
   private vertex: WebGLShader | null;
   private noteTexture: WebGLTexture | null;
   private noteKey: string | null = null;
@@ -67,8 +75,8 @@ class ThemeContext {
   private defaultJudgements: HTMLCanvasElement | null | undefined;
 
   constructor(readonly gl: WebGL2RenderingContext) {
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    this.quad = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     this.vertex = this.compile(gl.VERTEX_SHADER, PROFILE_THEME_VERTEX);
     // Unit 0 always holds something, so a shader that samples it never reads an unbound unit.
@@ -249,12 +257,20 @@ class ThemeContext {
     return compiled;
   }
 
+  private overlay(theme: SupporterProfileThemeId): ThemeOverlay | null {
+    const make = THEME_OVERLAYS[theme];
+    if (!make) return null;
+    if (!this.overlays.has(theme)) this.overlays.set(theme, make(this.gl));
+    return this.overlays.get(theme) ?? null;
+  }
+
   draw(theme: SupporterProfileThemeId, width: number, height: number, time: number, pointer: [number, number], scroll: number, notes: HighwayNotes | null = null, chart: HighwayChart | null = null): boolean {
     const compiled = this.compiled(theme);
     if (!compiled) return false;
     const { gl } = this;
     gl.viewport(0, 0, width, height);
     gl.useProgram(compiled.program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.uniform1f(compiled.time, time);
@@ -296,15 +312,62 @@ class ThemeContext {
       gl.uniform1i(compiled.judgements, 3);
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    this.overlay(theme)?.draw(width, height, time, pointer, scroll);
     return true;
   }
 }
 
+/* With a depth buffer, for an overlay's geometry (the Sakura petals). */
 function webgl2(canvas: HTMLCanvasElement): WebGL2RenderingContext | null {
-  return canvas.getContext("webgl2", { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: "low-power" });
+  return canvas.getContext("webgl2", { alpha: false, antialias: false, depth: true, stencil: false, powerPreference: "low-power" });
 }
 
 /* --- Backdrops ----------------------------------------------------------- */
+
+const GOVERNOR_WINDOW = 30;
+/* Below ~42fps a backdrop is costing the page frames. */
+const SLOW_FRAME_MS = 24;
+const FAST_FRAME_MS = 18;
+const MIN_PIXEL_SCALE = 0.12;
+
+/* Lowers a backdrop's pixel budget while frames run slow (a weak GPU, a
+   phone, a heavy theme), and raises it again once they have run fast for a
+   while, never back to a level that proved too slow. Fed the gap after each
+   drawn frame to the next animation frame: a frame the GPU cannot finish in
+   time pushes that gap past the display's refresh. */
+export class ResolutionGovernor {
+  /* The share of the pixel budget to draw at. */
+  scale = 1;
+  private ceiling = 1;
+  private gaps: number[] = [];
+  private fastWindows = 0;
+
+  /* Returns true when the scale changed. */
+  frame(gapMs: number): boolean {
+    // a hidden tab or a long hitch says nothing about the GPU
+    if (gapMs > 250) {
+      this.gaps.length = 0;
+      return false;
+    }
+    this.gaps.push(gapMs);
+    if (this.gaps.length < GOVERNOR_WINDOW) return false;
+    const median = this.gaps.sort((a, b) => a - b)[GOVERNOR_WINDOW >> 1];
+    this.gaps.length = 0;
+    if (median > SLOW_FRAME_MS) {
+      this.fastWindows = 0;
+      if (this.scale <= MIN_PIXEL_SCALE) return false;
+      this.ceiling = this.scale * 0.8;
+      this.scale = Math.max(MIN_PIXEL_SCALE, this.scale * 0.55);
+      return true;
+    }
+    if (median < FAST_FRAME_MS && ++this.fastWindows >= 8 && this.scale < this.ceiling) {
+      this.fastWindows = 0;
+      this.scale = Math.min(this.ceiling, this.scale * 1.25);
+      return true;
+    }
+    return false;
+  }
+}
 
 export interface ProfileBackdrop {
   setTheme(theme: SupporterProfileThemeId): void;
@@ -341,11 +404,12 @@ export function mountProfileBackdrop(
   const pointer: [number, number] = [0.5, 0.65];
   let target: [number, number] = [0.5, 0.65];
   let client: [number, number] | null = null;
+  const governor = new ResolutionGovernor();
 
   const size = () => {
     const width = host.clientWidth, height = host.clientHeight;
     if (!width || !height) return false;
-    const ratio = Math.min(window.devicePixelRatio || 1, Math.sqrt(maxPixels / (width * height)));
+    const ratio = Math.min(window.devicePixelRatio || 1, Math.sqrt((maxPixels * governor.scale) / (width * height)));
     const w = Math.max(1, Math.round(width * ratio)), h = Math.max(1, Math.round(height * ratio));
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
@@ -371,9 +435,12 @@ export function mountProfileBackdrop(
   };
 
   let drawnScroll = -1;
+  let drewAt = 0;
   const loop = (now: number) => {
     frame = 0;
     if (disposed) return;
+    if (drewAt) governor.frame(now - drewAt);
+    drewAt = 0;
     // ~60fps at most: a 120Hz or 144Hz screen draws every other frame. While
     // the page scrolls it draws every frame, or whatever the shader ties to
     // the page (the hero's sun, the black hole) trails the content and steps,
@@ -383,6 +450,7 @@ export function mountProfileBackdrop(
       last = now;
       drawnScroll = window.scrollY;
       render(now);
+      drewAt = now;
     }
     frame = requestAnimationFrame(loop);
   };

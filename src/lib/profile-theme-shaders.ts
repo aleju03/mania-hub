@@ -136,101 +136,10 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Sakura: cherry blossom petals drifting down through dusk in four layers,
-  // the nearest and farthest out of focus, under a soft blossom canopy along
-  // the top of the hero. Each petal is a cupped surface tumbling in 3D: it
-  // foreshortens whichever way it turns, catches a warm light from above,
-  // glows when the light comes through it, and shows fine veins fanning
-  // from its base. Each one flutters on its own; gusts sweep through now
-  // and then.
+  // Sakura: dusk under a soft blossom canopy along the top of the hero,
+  // with lantern glows far behind. The petals falling through it are real
+  // geometry, drawn over this by profile-theme-petals.ts.
   sakura: shader(`
-const vec3 LIGHT = vec3(.45, .7, .55);
-
-/* Signed distance to a petal, in petal units: base at y = -1, tip at y = 1. */
-float petalShape(vec2 q) {
-  float y = q.y;
-  float hw = .64 * sqrt(max(0., 1. - y * y)) * (.58 + .42 * smoothstep(-1., .3, y));
-  float side = abs(q.x) - hw;
-  float notch = y - (1. - .2 * max(0., 1. - abs(q.x) / .17));
-  return max(side, max(notch, -1. - y));
-}
-
-mat3 rotAxis(vec3 a, float angle) {
-  a = normalize(a);
-  float s = sin(angle), c = cos(angle), oc = 1. - c;
-  return mat3(
-    oc * a.x * a.x + c, oc * a.x * a.y + a.z * s, oc * a.z * a.x - a.y * s,
-    oc * a.x * a.y - a.z * s, oc * a.y * a.y + c, oc * a.y * a.z + a.x * s,
-    oc * a.z * a.x + a.y * s, oc * a.y * a.z - a.x * s, oc * a.z * a.z + c);
-}
-
-/* One layer of petals: colour premultiplied by coverage, and the coverage. */
-vec4 petals(vec2 p, float t, float layer, float s, float focus, float bright, float density) {
-  float gust = smoothstep(.55, 1., sin(t * .23 + layer)) * 1.4;
-  vec2 q = p * s;
-  q.y += t * (.3 + layer * .09) * (s / 9.) - u_scroll * s * (.12 + layer * .1);
-  q.x += t * (.1 + layer * .04) * (s / 9.) + gust * (s / 9.) * sin(t * .5) + sin(q.y * .4 + t * .45 + layer * 2.) * .4;
-  vec2 id = floor(q);
-  float h = hash(id + layer * 17.);
-  if (h > density) return vec4(0.);
-  float size = .13 + .07 * hash(id + 8.);
-  // its own flutter: a sway and a bob, kept inside its cell
-  float f1 = .7 + .8 * hash(id + 11.), f2 = 1.1 + hash(id + 12.);
-  vec2 centre = (vec2(hash(id + 1.7), hash(id + 3.3)) - .5) * .3
-    + vec2(sin(t * f1 + h * 6.28) * .1, cos(t * f2 + h * 4.) * .05);
-  vec2 d = fract(q) - .5 - centre;
-  // tumbling in 3D: the petal plane's axes as seen from the front
-  vec3 axis = vec3(hash(id + 13.) - .5, hash(id + 14.) - .5, hash(id + 15.) - .5) + vec3(.0, .0, .2);
-  mat3 R = rotAxis(axis, t * (.6 + .9 * hash(id + 5.1)) * (hash(id + 6.) > .5 ? 1. : -1.) + h * 20.);
-  vec3 u = R[0], v = R[1];
-  float det = u.x * v.y - v.x * u.y;
-  // edge-on it is a sliver of its true length, never a streak
-  float sdet = det < 0. ? min(det, -1e-3) : max(det, 1e-3);
-  vec2 local = vec2(v.y * d.x - v.x * d.y, -u.y * d.x + u.x * d.y) / sdet / size;
-  // curled: the petal bends along its length, so its outline is a crescent,
-  // and it flexes as it falls
-  float curl = (hash(id + 16.) - .5) * 1.1 + .25 * sin(t * 1.7 + h * 13.);
-  vec2 straight = local;
-  local.x += curl * (local.y * local.y - .35);
-  float squash = sqrt(max(abs(det), .02));
-  float sd = petalShape(local) * size * squash;
-  float aa = PX * s * 1.2 + focus;
-  float cover = smoothstep(aa, -aa, sd);
-  if (focus > 0.) {
-    float r = length(vec2(straight.x / .62, straight.y * .95));
-    cover = smoothstep(1. + focus / (size * squash), 1. - focus / (size * squash), r) * .85;
-  }
-  // a petal edge-on is a thin sliver that hardly catches the light
-  cover *= smoothstep(.03, .3, abs(det));
-  if (cover <= 0.) return vec4(0.);
-  // a cupped, curled surface: its normal leans hard toward the rims and
-  // across the bend, so one flank catches the light and the other falls
-  // into the fold
-  vec3 n = normalize(R * vec3(-1.5 * local.x + 1.6 * curl * local.y, -.45 * local.y, 1.));
-  vec3 facing = n * sign(n.z);
-  vec3 L = normalize(LIGHT);
-  float lit = max(dot(facing, L), 0.);
-  float through = max(dot(-facing, L), 0.);
-  float sheen = pow(max(dot(reflect(-L, facing), vec3(0., 0., 1.)), 0.), 10.);
-  float along = clamp(local.y * .5 + .5, 0., 1.);
-  vec3 base = mix(vec3(.93, .38, .58), vec3(1., .6, .74), hash(id + 9.));
-  vec3 albedo = mix(base, vec3(1., .88, .92), smoothstep(.0, .85, along));
-  albedo = n.z > 0. ? albedo : mix(albedo, vec3(1., .92, .95), .25);
-  // fine veins fanning out from the base
-  float fan = atan(local.x, local.y + 1.15);
-  float vein = .5 + .5 * cos(fan * 46. + 2.5 * noise(vec2(fan * 9., along * 3. + h * 20.)));
-  albedo *= 1. - .045 * vein * smoothstep(1., .15, along) * smoothstep(-.9, -.5, local.y);
-  // shade stays rosy: light still passes through a petal turned away
-  // deeper pink along the rim, paler and pearly in the middle
-  float inner = smoothstep(0., -.4, petalShape(local));
-  albedo = mix(albedo * vec3(.97, .8, .88), albedo, .45 + .55 * inner);
-  albedo = mix(albedo, vec3(1., .96, .97), .25 * inner * smoothstep(.2, .8, along));
-  vec3 c = albedo * mix(vec3(.5, .3, .42), vec3(1.12), pow(lit, .8)) + albedo * vec3(1., .82, .78) * through * .45;
-  c += vec3(1., .97, .98) * sheen * .32;
-  c += vec3(1., .82, .88) * smoothstep(-.02, 0., sd) * .12;
-  return vec4(c * bright * cover, cover);
-}
-
 vec3 theme(vec2 uv, vec2 p, float t) {
   float aspect = u_res.x / u_res.y;
   vec3 col = mix(vec3(.04, .012, .03), vec3(.11, .035, .075), smoothstep(-.5, .55, p.y));
@@ -249,14 +158,6 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   vec2 bf = fract(bq) - .5 - (vec2(hash(bid + 2.), hash(bid + 4.)) - .5) * .4;
   float bok = exp(-dot(bf, bf) * 30.) * step(.75, hash(bid));
   col += mix(vec3(1., .5, .65), vec3(1., .75, .55), hash(bid + 6.)) * bok * .06;
-  vec4 l0 = petals(p, t, 0., 22., .025, .6, .2);
-  vec4 l1 = petals(p + 1.3, t, 1., 13., 0., .72, .22);
-  vec4 l2 = petals(p + 2.9, t, 2., 7.5, 0., .92, .22);
-  vec4 l3 = petals(p + 5.1, t, 3., 5., .06, .92, .18);
-  col = col * (1. - l0.a * .8) + mix(l0.rgb, vec3(.55, .25, .38) * l0.a, .35);
-  col = col * (1. - l1.a * .9) + l1.rgb;
-  col = col * (1. - l2.a * .92) + l2.rgb;
-  col = col * (1. - l3.a * .75) + l3.rgb * .85;
   return col;
 }`),
 
@@ -894,8 +795,10 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   // far the fish has swum, the pectoral fins open and close, the tail fin
   // fans. Each fish is shaded round (light along the back, darker flanks, a
   // wet sheen on the ridge) and wears its variety's markings: kohaku, sanke,
-  // tancho, ogon or showa. Shadows fall on the floor below; lily pads and
-  // lotus (koi-pads.png) drift on top, and now and then a ripple spreads.
+  // tancho, ogon or showa. Shadows fall on the floor below. The surface
+  // bends the floor, its stones and caustics and the koi under it, and
+  // catches the moon in glints; now and then a ripple spreads across it.
+  // Lily pads and lotus (koi-pads.png) float on top, rocking as it passes.
   koi: shader(`
 uniform sampler2D u_sprite;
 
@@ -910,6 +813,18 @@ void koiLoop(int i, float a, vec2 home, out vec2 c, out vec2 v, out vec2 acc) {
   c = home + vec2(rad.x * cos(a) + .03 * sin(w1 * a + ph), rad.y * sin(a) + .025 * sin(w2 * a + ph));
   v = vec2(-rad.x * sin(a) + .03 * w1 * cos(w1 * a + ph), rad.y * cos(a) + .025 * w2 * cos(w2 * a + ph));
   acc = vec2(-rad.x * cos(a) - .03 * w1 * w1 * sin(w1 * a + ph), -rad.y * sin(a) - .025 * w2 * w2 * sin(w2 * a + ph));
+}
+
+/* Where koi i's head is at time t. */
+vec2 koiHead(int i, float t) {
+  float fi = float(i);
+  float aspect = u_res.x / u_res.y;
+  vec2 home = vec2((hash(vec2(fi, 3.)) - .5) * aspect * .7, (hash(vec2(fi, 4.)) - .5) * .5);
+  float dirSign = hash(vec2(fi, 5.)) > .5 ? 1. : -1.;
+  float a = dirSign * (t * (.13 + .06 * hash(vec2(fi, 6.))) + .25 * sin(t * (.35 + .2 * hash(vec2(fi, 11.))) + fi * 3.) + fi * 2.4);
+  vec2 c, v, acc;
+  koiLoop(i, a, home, c, v, acc);
+  return c;
 }
 
 /* Koi i at point q: rgb and coverage (fins partly see-through). With shadow set, only a soft
@@ -1014,33 +929,119 @@ vec4 padSample(float cell, vec2 c) {
   return texture(u_sprite, vec2((at.x + c.x) / 4., (at.y + 1. - c.y) / 2.));
 }
 
+/* Light focused by the surface onto the floor: soft, wandering bright
+   threads. 0..1. */
+float pondCaustic(vec2 uv, float time) {
+  vec2 p = uv * 6.28318 - 250.;
+  vec2 i = p;
+  float c = 1.;
+  for (int n = 0; n < 3; n++) {
+    float tt = time * (1. - (3.5 / float(n + 1)));
+    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+    c += 1. / length(vec2(p.x / (sin(i.x + tt) / .005), p.y / (cos(i.y + tt) / .005)));
+  }
+  c /= 3.;
+  c = 1.17 - pow(c, 1.4);
+  return clamp(pow(abs(c), 7.), 0., 1.);
+}
+
+/* The surface's slope at w: a few long slow swells, and the ripples a koi
+   leaves when it comes up, each a short train of waves spreading and dying
+   away. Ripple i of 3 is at ring[i] (centre, radius, strength). */
+vec2 pondSlope(vec2 w, float t, vec4 ring[3]) {
+  vec2 g = vec2(.8, .3) * cos(dot(w, vec2(.8, .3)) * 9. + t * .6) * .09;
+  g += vec2(-.4, .9) * cos(dot(w, vec2(-.4, .9)) * 14. - t * .75) * .07;
+  g += vec2(.6, -.7) * cos(dot(w, vec2(.6, -.7)) * 23. + t * 1.1) * .05;
+  for (int r = 0; r < 3; r++) {
+    vec2 dl = (w - ring[r].xy) * vec2(1., 1.25);
+    float d = length(dl), x = d - ring[r].z;
+    float env = exp(-x * x * 900.) * ring[r].w;
+    g += dl / max(d, 1e-4) * cos(x * 120.) * env * 1.6;
+  }
+  return g;
+}
+
 vec3 theme(vec2 uv, vec2 p, float t) {
   float aspect = u_res.x / u_res.y;
   // the pond floor and surface scroll by; the koi stay in view
   vec2 w = p + vec2(0., u_scroll * .35);
-  vec3 col = mix(vec3(.012, .05, .056), vec3(.026, .095, .1), fbm(w * 1.4 + t * .015));
-  float caustic = 1. - smoothstep(0., .03, voronoiEdge(w * 4.5 + vec2(t * .1, t * .07) + fbm(w * 1.6 + t * .08) * 1.4));
-  float sparkle = caustic * (.4 + fbm(w * 3. - t * .05));
-  col += vec3(.2, .45, .42) * sparkle * .04;
+  // now and then a koi comes up to the surface, and a ring spreads from
+  // where its head broke it; the ring stays where it started as the fish
+  // swims on
+  vec4 ring[3];
+  // which koi broke the surface (and when), and which will next (and in how long)
+  int riser[3], nextRiser[3];
+  float riseAge[3];
+  for (int r = 0; r < 3; r++) {
+    float fr = float(r);
+    float cyc = t / 4.5 + fr * .37;
+    float id = floor(cyc), age = fract(cyc);
+    int k = int(hash(vec2(id, fr + 2.)) * float(KOI)) % KOI;
+    vec2 at = koiHead(k, (id - fr * .37) * 4.5) + vec2(0., u_scroll * .35);
+    ring[r] = vec4(at, .03 + age * .19, pow(1. - age, 1.6) * smoothstep(0., .12, age));
+    riser[r] = k;
+    nextRiser[r] = int(hash(vec2(id + 1., fr + 2.)) * float(KOI)) % KOI;
+    riseAge[r] = age * 4.5;
+  }
+  vec2 g = pondSlope(w, t, ring);
+  // everything under the surface is seen bent by it
+  vec2 fw = w - g * .035;
+  // the floor: deep hollows and shallow banks, smooth stones lying in the shallows
+  float deep = smoothstep(.36, .66, fbm(fw * .9 + 3.));
+  vec3 col = mix(vec3(.045, .135, .12), vec3(.012, .045, .055), deep);
+  vec2 sq = fw * 13.;
+  vec2 sid = floor(sq);
+  vec2 sf = fract(sq) - .5 - (vec2(hash(sid + 1.), hash(sid + 2.)) - .5) * .4;
+  float sr = .2 + .16 * hash(sid + 3.);
+  float stone = smoothstep(sr, sr - .07, length(sf * vec2(1., 1.3))) * step(.45, hash(sid)) * (1. - deep);
+  vec3 stoneCol = mix(vec3(.1, .14, .12), vec3(.17, .18, .14), hash(sid + 4.)) * (.7 + .6 * smoothstep(.1, -.2, sf.x + sf.y));
+  col = mix(col, stoneCol, stone * .9);
+  // caustics: the surface's light gathered into soft wandering threads, brightest in the shallows
+  float caustic = pondCaustic(fw * .55, t * .22 + 31.);
+  col += vec3(.2, .52, .46) * caustic * (.09 + .2 * (1. - deep));
   vec3 water = col;
   // shadows on the floor first, then the koi
-  for (int i = 0; i < KOI; i++) col *= 1. - koi(i, p - vec2(.014, -.02), t, true).a;
+  vec2 kp = p - g * .03;
+  for (int i = 0; i < KOI; i++) col *= 1. - koi(i, kp - vec2(.014, -.02), t, true).a;
   for (int i = 0; i < KOI; i++) {
-    vec4 k = koi(i, p, t, false);
+    vec4 k = koi(i, kp, t, false);
     if (k.a <= 0.) continue;
     // seen through the water: a cool tint, deeper ones more so, the surface light playing on them
     float depth = .12 + .3 * hash(vec2(float(i), 10.));
+    // the one coming up rises to just under the surface and sinks back
+    float shallow = 0.;
+    for (int r = 0; r < 3; r++) {
+      if (nextRiser[r] == i) shallow = max(shallow, smoothstep(1.2, 0., 4.5 - riseAge[r]));
+      if (riser[r] == i) shallow = max(shallow, smoothstep(1.4, .2, riseAge[r]));
+    }
+    depth *= 1. - .85 * shallow;
     vec3 fish = mix(k.rgb * vec3(.86, .95, .95), water * 1.5 + vec3(0., .03, .04), depth);
-    fish *= 1. + sparkle * .35;
+    fish *= 1. + caustic * .3;
     col = mix(col, fish, k.a);
   }
-  // lily pads on the surface, some with a lotus open on them, each casting a faint shadow;
-  // the art is pale, so the night pond darkens it
+  // the surface, lit from the upper left: each swell and ripple bright on the
+  // side tilted toward the light and dim on the far side, so the rings read
+  // as raised crests, and crisp sparks where a slope catches it squarely
+  vec2 lightDir = normalize(vec2(-.35, .55));
+  float tilt = clamp(dot(g, lightDir), -.6, .6);
+  col += vec3(.1, .22, .23) * max(tilt, 0.) * 1.2;
+  col *= 1. - .9 * max(-tilt, 0.);
+  float spark = smoothstep(.15, .2, tilt) * smoothstep(.55, .75, noise(w * 34. + t * .4));
+  col += vec3(.72, .9, .92) * spark * .45;
+  // moonlight lying on the water, a soft column broken up by the swells
+  vec2 mq = w - vec2(aspect * .3, .25 + u_scroll * .35) + g * .6;
+  float moon = exp(-mq.x * mq.x * 60.) * exp(-mq.y * mq.y * 3.);
+  col += vec3(.4, .55, .58) * moon * (.06 + .5 * smoothstep(.08, .16, tilt));
+  // lily pads on the surface, over the water and its ripples, some with a lotus
+  // open on them, each casting a faint shadow; a passing ripple rocks them.
+  // The art is pale, so the night pond darkens it.
   vec2 lq = w * 5. + vec2(t * .02, 0.);
   vec2 lid = floor(lq);
   if (hash(lid + 7.) > .78) {
-    vec2 ld = fract(lq) - .5 - (vec2(hash(lid + 1.), hash(lid + 2.)) - .5) * .16;
-    ld = rot(t * .04 + hash(lid) * 6.28) * ld;
+    vec2 centre = (lid + .5 + (vec2(hash(lid + 1.), hash(lid + 2.)) - .5) * .16 - vec2(t * .02, 0.)) / 5.;
+    vec2 bob = pondSlope(centre, t, ring);
+    vec2 ld = fract(lq) - .5 - (vec2(hash(lid + 1.), hash(lid + 2.)) - .5) * .16 + bob * .06;
+    ld = rot(t * .04 + hash(lid) * 6.28 + bob.x * .3) * ld;
     float sz = .26 + .1 * hash(lid + 3.);
     float pick = floor(hash(lid + 4.) * 5.99);
     vec2 sc = (ld - vec2(.03, -.04)) / sz * .5 + .5;
@@ -1057,16 +1058,6 @@ vec3 theme(vec2 uv, vec2 p, float t) {
         col = mix(col, k.rgb / max(k.a, 1e-3) * .8, k.a);
       }
     }
-  }
-  // now and then a ring spreading on the surface, as if a koi had come up
-  for (int r = 0; r < 3; r++) {
-    float fr = float(r);
-    float cyc = t / 4.5 + fr * .37;
-    float id = floor(cyc), age = fract(cyc);
-    vec2 at = (vec2(hash(vec2(id, fr)), hash(vec2(id, fr + 5.))) - .5) * vec2(aspect * .9, .8);
-    float rr = age * .16;
-    float ring = smoothstep(PX * 2.5, 0., abs(length((p - at) * vec2(1., 1.25)) - rr));
-    col += vec3(.25, .45, .45) * ring * (1. - age) * .35;
   }
   col *= 1. - .35 * dot(p, p);
   return col;

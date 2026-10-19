@@ -536,7 +536,7 @@ function SupporterPage() {
 
               <div className="mt-10 grid gap-8 border-t border-white/[0.07] pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                 <ProfileStatsSection viewerId={viewer.id} supporter={supporter} />
-                <SupporterPerks />
+                <SupporterPerks avatar={avatar} />
               </div>
             </>
           )}
