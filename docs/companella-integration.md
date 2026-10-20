@@ -1057,8 +1057,10 @@ import with no official beatmap and no `reference`.
 `GET /api/companella/local-charts/<id>` (public rate bucket) answers
 `{ entry }` in the map search entry shape, built with the index's own
 derivations: status `local`, set id 0, no play count, ranked date, other
-difficulties or rate sweeps; 404 without a stored analysis. It never serves
-the file. `/api/chart-analysis` and `/api/chart-analysis/rate` take the
+difficulties or rate sweeps; 404 without a stored analysis.
+`GET /api/companella/local-charts/<id>/file` (public costly bucket) answers
+`{ content }`, the chart's `.osu` text, for the map card's chart preview,
+which plays it without audio; same 404. `/api/chart-analysis` and `/api/chart-analysis/rate` take the
 negative id too and read the chart from the integration's storage; a rate
 answer is kept in a small in-memory cache, since no official table may hold
 it.
@@ -1217,8 +1219,10 @@ reservation first looks for the exact bytes in the pool, then in the site's own
 `beatmap_osu_files` copy by declared md5 (re-hashed against the manifest before
 it counts, `seedChartFromSiteCopy`), and only then asks the client for the
 file. Contributed charts go into one shared pool: reuse is keyed by sha256, so
-another account benefits only if it already holds the identical file, and the
-bytes are served solely through the owner-scoped score routes. The consent
+another account benefits only if it already holds the identical file. The
+bytes are served through the owner-scoped score routes, and a local chart's
+(one osu! does not have, with a stored analysis) through its public `/file`
+route for the chart preview. The consent
 screen says the file may be sent; there is no separate opt-in.
 
 Deletion is owner-scoped and idempotent: access and eligibility go first, then

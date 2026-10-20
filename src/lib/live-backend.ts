@@ -3300,6 +3300,19 @@ export function isLocalChartId(beatmapId: number | null | undefined): boolean {
   return typeof beatmapId === "number" && Number.isFinite(beatmapId) && beatmapId < 0;
 }
 
+// A local chart's .osu text, for the map card's chart preview. Null when the
+// backend has no ready analysis for it or cannot read the file.
+export async function fetchLiveLocalChartFile(beatmapId: number): Promise<string | null> {
+  if (!isLocalChartId(beatmapId)) return null;
+  try {
+    const result = await fetchLiveJson<{ content?: unknown }>(`/api/companella/local-charts/${Math.floor(beatmapId)}/file`);
+    return typeof result.content === "string" ? result.content : null;
+  } catch (error) {
+    if (error instanceof LiveBackendRequestError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 // Single set entry for /maps?map=<beatmapId> share links; the requested diff is
 // the representative and `diffs` carries the whole set. Null when the map is
 // unknown to the catalog; throws when the backend could not answer at all, so a
