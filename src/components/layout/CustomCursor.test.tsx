@@ -53,7 +53,7 @@ beforeEach(() => {
     encodedSizes.push(this.width);
     return `data:image/png;base64,${encodedSizes.length}`;
   });
-  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, trail: false });
+  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, trail: false, glow: 0 });
 });
 
 afterEach(() => {
@@ -79,6 +79,22 @@ it("uses a native cursor without waiting for frames and never paints a second cu
   expect(frames.size).toBe(0);
 });
 
+it("paints the glow on the canvas under the native orb, which stays within the edge limit", () => {
+  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, trail: false });
+  render(<CustomCursor />);
+  expect(encodedSizes.every((size) => size <= 32)).toBe(true);
+  movePointer(window.innerWidth - 4, 300);
+  drawFrame(16);
+  expect(cursor()).toMatch(/^url\(/);
+  expect(context.drawImage).toHaveBeenCalledOnce();
+  expect(frames.size).toBe(0);
+
+  context.drawImage.mockClear();
+  fireEvent.mouseLeave(root);
+  drawFrame(32);
+  expect(context.drawImage).not.toHaveBeenCalled();
+});
+
 it("switches the pressed image immediately and releases it on blur", () => {
   render(<CustomCursor />);
   const normal = cursor();
@@ -94,26 +110,30 @@ it("switches the pressed image immediately and releases it on blur", () => {
 it("keeps even the largest pressed cursor within native image limits and updates settings", () => {
   writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, size: 200, glow: 100 });
   render(<CustomCursor />);
-  expect(encodedSizes).toEqual([128, 128]);
-  expect(cursor()).toContain("64 64, auto");
+  expect(encodedSizes).toEqual([50, 62]);
+  expect(cursor()).toContain("25 25, auto");
   const previous = cursor();
   act(() => writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, color: "#66baff" }));
   expect(cursor()).not.toBe(previous);
   expect(encodedSizes.every((size) => size <= 128)).toBe(true);
 });
 
-it("draws the orb itself where the browser would drop the native image at the page edge", () => {
+it("draws a large orb itself where the browser would drop the native image at the page edge", () => {
+  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, trail: false, glow: 0, size: 200 });
   render(<CustomCursor />);
   const native = cursor();
   movePointer(window.innerWidth - 4, 300);
-  expect(cursor()).toBe("none");
+  // Swapped in the frame that paints the orb, never before it.
+  expect(cursor()).toBe(native);
   drawFrame(16);
+  expect(cursor()).toBe("none");
   expect(context.drawImage).toHaveBeenCalledOnce();
 
   movePointer(300, 300);
-  expect(cursor()).toBe(native);
+  expect(cursor()).toBe("none");
   context.drawImage.mockClear();
   drawFrame(32);
+  expect(cursor()).toBe(native);
   expect(context.drawImage).not.toHaveBeenCalled();
 });
 
@@ -123,8 +143,8 @@ it("draws the orb itself over CSS-zoomed content, which would rescale the native
   Object.defineProperty(zoomedNode, "currentCSSZoom", { value: 0.7 });
   document.body.appendChild(zoomedNode);
   movePointer(300, 300, zoomedNode);
-  expect(cursor()).toBe("none");
   drawFrame(16);
+  expect(cursor()).toBe("none");
   expect(context.drawImage).toHaveBeenCalledOnce();
 
   context.drawImage.mockClear();
@@ -137,7 +157,7 @@ it("draws the orb itself over CSS-zoomed content, which would rescale the native
 it("keeps the trail animated, then stops rendering once it has faded", () => {
   let now = 0;
   vi.spyOn(performance, "now").mockImplementation(() => now);
-  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true });
+  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, glow: 0 });
   render(<CustomCursor />);
   movePointer();
   drawFrame(16);

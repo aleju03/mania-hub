@@ -70,14 +70,13 @@ function cursorRadius(settings: CursorSettings): number {
 }
 
 /* Let the browser move the orb as a native cursor, independently of page
-   rendering. Only the decorative trail/smoke, and the orb where the native
-   image would be dropped or rescaled, wait for animation frames.
-   Keep PNGs within Chromium/Firefox's 128px limit, including the pressed orb;
-   constrain the outer glow at extreme settings without shrinking the core. */
+   rendering. Only the decorative glow, trail and smoke, and the orb where the
+   native image would be dropped or rescaled, wait for animation frames.
+   The glow stays off the native image: Firefox on Windows paints its faint
+   pixels nearly black, and it would push the image past the edge limit. */
 function buildNativeCursor(settings: CursorSettings, pressScale = 1): NativeCursor {
   const radius = cursorRadius(settings) * pressScale;
-  const glowRadius = Math.min(62, radius * (1 + 1.8 * (settings.glow / 100)));
-  const size = Math.ceil((glowRadius * 2 + 4) / 2) * 2;
+  const size = Math.ceil((radius * 1.6 + 2) / 2) * 2;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -85,17 +84,6 @@ function buildNativeCursor(settings: CursorSettings, pressScale = 1): NativeCurs
   if (!context) return { css: "auto", image: null, size: 0 };
   const c = size / 2;
   const color = settings.color;
-
-  if (settings.glow > 0) {
-    const glow = context.createRadialGradient(c, c, 0, c, c, glowRadius);
-    glow.addColorStop(0, withAlpha(color, 0.5));
-    glow.addColorStop(0.45, withAlpha(color, 0.16));
-    glow.addColorStop(1, withAlpha(color, 0));
-    context.fillStyle = glow;
-    context.beginPath();
-    context.arc(c, c, glowRadius, 0, Math.PI * 2);
-    context.fill();
-  }
 
   const bloom = context.createRadialGradient(c, c, 0, c, c, radius * 0.8);
   bloom.addColorStop(0, withAlpha(color, 0.95));
@@ -116,6 +104,28 @@ function buildNativeCursor(settings: CursorSettings, pressScale = 1): NativeCurs
   context.fill();
 
   return { css: `url("${canvas.toDataURL("image/png")}") ${c} ${c}, auto`, image: canvas, size };
+}
+
+function buildGlowSprite(settings: CursorSettings, scale: number): { canvas: HTMLCanvasElement; size: number } | null {
+  if (settings.glow <= 0) return null;
+  const glowRadius = cursorRadius(settings) * (1 + 1.8 * (settings.glow / 100));
+  const size = Math.ceil(glowRadius * 2);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(size * scale);
+  canvas.height = Math.ceil(size * scale);
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.scale(scale, scale);
+  const c = size / 2;
+  const glow = context.createRadialGradient(c, c, 0, c, c, glowRadius);
+  glow.addColorStop(0, withAlpha(settings.color, 0.5));
+  glow.addColorStop(0.45, withAlpha(settings.color, 0.16));
+  glow.addColorStop(1, withAlpha(settings.color, 0));
+  context.fillStyle = glow;
+  context.beginPath();
+  context.arc(c, c, glowRadius, 0, Math.PI * 2);
+  context.fill();
+  return { canvas, size };
 }
 
 function buildTrailSprite(settings: CursorSettings, scale: number): { canvas: HTMLCanvasElement; size: number } {
@@ -213,12 +223,18 @@ function CursorOverlay() {
     updateNativeCursor();
     root.dataset.customCursor = "true";
     let trailSprite = buildTrailSprite(settings, dpr);
+    let glowSprite = buildGlowSprite(settings, dpr);
 
+    /* Size the buffer from the canvas box, not the window: a fixed canvas stops
+       at the scrollbar, and a buffer wider than its box squeezes every drawing
+       toward the left. */
     const resize = () => {
-      canvas.width = Math.round(window.innerWidth * dpr);
-      canvas.height = Math.round(window.innerHeight * dpr);
+      const box = canvas.getBoundingClientRect();
+      canvas.width = Math.round((box.width || window.innerWidth) * dpr);
+      canvas.height = Math.round((box.height || window.innerHeight) * dpr);
+      ensureRunning();
     };
-    resize();
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
 
     /* Effects still animate when hovering an unfocused window, but pause in
        hidden tabs. The native cursor doesn't depend on this render loop. */
@@ -230,6 +246,9 @@ function CursorOverlay() {
       const dt = lastFrameAt == null ? 0.016 : Math.min(0.05, (time - lastFrameAt) / 1000);
       lastFrameAt = time;
 
+      // Switch between the native and drawn orb in the frame that paints the
+      // canvas, so neither shows a frame without the other.
+      updateNativeCursor();
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
@@ -269,6 +288,11 @@ function CursorOverlay() {
         context.globalAlpha = 1;
       }
 
+      if (glowSprite && pointer.inside) {
+        const size = glowSprite.size * pressScale;
+        context.drawImage(glowSprite.canvas, pointer.x - size / 2, pointer.y - size / 2, size, size);
+      }
+
       if (drawnOrb && pointer.inside && normalCursor.image) {
         const size = normalCursor.size * pressScale;
         context.drawImage(normalCursor.image, pointer.x - size / 2, pointer.y - size / 2, size, size);
@@ -300,11 +324,7 @@ function CursorOverlay() {
       pointer.x = event.clientX;
       pointer.y = event.clientY;
       pointer.inside = true;
-      const drawn = needsDrawnOrb(event.target);
-      if (drawn !== drawnOrb) {
-        drawnOrb = drawn;
-        updateNativeCursor();
-      }
+      drawnOrb = needsDrawnOrb(event.target);
 
       if (settings.trail) {
         const last = trail[trail.length - 1];
@@ -397,10 +417,13 @@ function CursorOverlay() {
       pressedCursor = buildNativeCursor(next, 1.25);
       updateNativeCursor();
       trailSprite = buildTrailSprite(next, dpr);
+      glowSprite = buildGlowSprite(next, dpr);
       if (!next.trail) trail.length = 0;
       ensureRunning();
     });
 
+    resize();
+    resizeObserver?.observe(canvas);
     window.addEventListener("resize", resize, { passive: true });
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
     window.addEventListener("pointerover", handlePointerOver, { passive: true });
@@ -419,6 +442,7 @@ function CursorOverlay() {
       root.style.removeProperty("--custom-cursor");
       if (rafId != null) cancelAnimationFrame(rafId);
       unsubscribeSettings();
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerover", handlePointerOver);
