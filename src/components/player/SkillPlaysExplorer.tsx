@@ -1,4 +1,4 @@
-import { skillPlaySharePath } from "../../lib/skill-play-share";
+import { skillPlayShareLink } from "../../lib/skill-play-share";
 // The Skills tab's plays explorer: the rated plays behind a profile, listed
 // rather than summarized.
 //
@@ -748,7 +748,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
             mods: playModAcronyms(detail.play),
             daOd: detail.play.daOd ?? null,
             scoreId: detail.play.scoreId,
-            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, view === "unrated" ? "Overall" : detail.dan ? `dan:${detail.dan.family ?? side}` : axis),
+            sharePath: skillPlayShareLink(username, detail.play, view === "unrated" ? "Overall" : detail.dan ? `dan:${detail.dan.family ?? side}` : axis),
             score: detail.play.score,
             skillRatings: detail.play.skillRatings,
             dan: detail.dan,

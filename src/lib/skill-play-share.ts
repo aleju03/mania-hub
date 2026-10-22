@@ -1,3 +1,4 @@
+import { sharedImportPath } from "./companella-scores";
 import { MSD_SKILLSET_META, skillAxisMeta } from "./skill-axes";
 
 export interface SharedSkillPlaySearch {
@@ -61,4 +62,10 @@ export function skillPlaySharePath(username: string, scoreId: number | null | un
     || !validRating(rating)) return null;
   const slug = ratingSlug(rating);
   return `/player/${encodeURIComponent(username)}/skills?play=${keyCount}k-${scoreId}${slug ? `-${slug}` : ""}`;
+}
+
+// An import has no osu! score id; its link opens the play on the Recent tab.
+export function skillPlayShareLink(username: string, play: { scoreId: number | null; importId?: string; keyCount: number }, rating: string): string | null {
+  return skillPlaySharePath(username, play.scoreId, play.keyCount, rating)
+    ?? (play.importId ? sharedImportPath(username, play.importId) : null);
 }

@@ -1,4 +1,4 @@
-import { skillPlaySharePath } from "../../lib/skill-play-share";
+import { skillPlayShareLink } from "../../lib/skill-play-share";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -748,7 +748,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
             mods: detail.play.mods ?? null,
             daOd: detail.play.daOd ?? null,
             scoreId: detail.play.scoreId,
-            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, `dan:${side}`),
+            sharePath: skillPlayShareLink(username, detail.play, `dan:${side}`),
             score: detail.play.score,
             skillRatings: detail.play.skillRatings,
             rating: detail.clear?.chartDan ?? 0,
