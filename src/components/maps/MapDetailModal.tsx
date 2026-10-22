@@ -83,7 +83,8 @@ function buildPreviewBeatmapset(entry: LiveMapSearchEntry, diffs: LiveMapSearchE
     status: entry.status,
     globalPlayCount: entry.playCount,
     globalFavouriteCount: 0,
-    previewUrl: `https://b.ppy.sh/preview/${entry.beatmapsetId}.mp3`,
+    // A local chart has no osu! set, so no song: its preview plays silently.
+    previewUrl: entry.beatmapsetId > 0 ? `https://b.ppy.sh/preview/${entry.beatmapsetId}.mp3` : "",
     maniaKeys: [...new Set(diffs.map((diff) => diff.keyCount))],
     maniaBeatmaps: diffs.map((diff) => ({
       id: diff.beatmapId,
@@ -958,10 +959,11 @@ export function MapDetailModal({
   // from a play row may not know the set either; both leave the set id at 0.
   const setKnown = entry != null && !local && entry.beatmapsetId > 0;
   // Never from a stub: its diffs carry no star rating, and the panel's own
-  // footer would show the map as 0.00 stars.
+  // footer would show the map as 0.00 stars. A local chart's notes come from
+  // the Companella chart route, without audio.
   const previewSet = useMemo(
-    () => (entry && setKnown && numbersKnown && diffs.length > 0 ? buildPreviewBeatmapset(entry, diffs) : null),
-    [entry, setKnown, numbersKnown, diffs],
+    () => (entry && (setKnown || local) && numbersKnown && diffs.length > 0 ? buildPreviewBeatmapset(entry, diffs) : null),
+    [entry, setKnown, local, numbersKnown, diffs],
   );
 
   const patterns = useMemo(
