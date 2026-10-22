@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
+import { resolveSkillsetDanPick,
   accentHex,
   normalizeHexColor,
   normalizeSignatureStyle,
@@ -35,7 +35,7 @@ describe("normalizeSignatureStyle", () => {
     const style = {
       background: "cover", accent: "#3fd4d0", color: "#112233",
       opacity: 40, blur: 12, brightness: 80, imageUrl: null, keyCount: 7, lnKeyCount: 4,
-      watermark: false,
+      watermark: false, skillsetSide: "ln",
     };
     expect(normalizeSignatureStyle(style)).toEqual(style);
   });
@@ -51,6 +51,15 @@ describe("normalizeSignatureStyle", () => {
     const map = normalizeSignatureStyleMap({ goals: { watermark: false } });
     expect(JSON.parse(serializeSignatureStyleMap(map)).goals.watermark).toBe(false);
     expect(JSON.parse(serializeSignatureStyleMap(map)).skills.watermark).toBe(true);
+  });
+
+  it("lands a stale skillsets pick on a ladder and keymode that has a breakdown", () => {
+    const modes = { rc: [7, 4, 6], ln: [7] };
+    const style = (input: object) => normalizeSignatureStyle(input, "dan");
+    expect(resolveSkillsetDanPick(style({ keyCount: 4 }), modes)).toEqual({ side: "rc", keyCount: 4 });
+    expect(resolveSkillsetDanPick(style({ skillsetSide: "ln", keyCount: 6, lnKeyCount: 6 }), modes)).toEqual({ side: "ln", keyCount: 7 });
+    expect(resolveSkillsetDanPick(style({ skillsetSide: "ln" }), { rc: [4], ln: [] })).toEqual({ side: "rc", keyCount: 4 });
+    expect(resolveSkillsetDanPick(style({}), { rc: [], ln: [] })).toBeNull();
   });
 
   it("falls back to the default for a background outside the allowlist", () => {

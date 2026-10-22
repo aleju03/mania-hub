@@ -97,7 +97,7 @@ function Editor({
       </motion.div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2.5">
-        <KeyModeControls renders={renders} type={type} />
+        <KeyModeControls renders={renders} type={type} design={spec.design} />
         <div className="flex min-w-[260px] flex-1 gap-2">
           <input
             readOnly

@@ -11,6 +11,7 @@ import type { SignatureImageProbe } from "../../../routes/api/signature/-backgro
 import type { SignatureDesign, SignatureType } from "../../../lib/signature-shared";
 import {
   normalizeSignatureImageUrl,
+  resolveSkillsetDanPick,
   signatureBackground,
   signatureBackgroundsFor,
   styleIsCustomImage,
@@ -97,11 +98,37 @@ export function KeyModePicker({
 }
 
 /* Skills and dan are drawn per keymode. Dan carries two, because a player's
-   rice and LN ladders are routinely in different keymodes. */
-export function KeyModeControls({ renders, type }: { renders: DynamicRenders; type: SignatureType }) {
+   rice and LN ladders are routinely in different keymodes. The dan skillsets
+   layout draws one ladder, so its pickers choose the ladder and keymode
+   together, offering only the keymodes that have a skillset breakdown. */
+export function KeyModeControls({ renders, type, design }: { renders: DynamicRenders; type: SignatureType; design?: number }) {
   const { t } = useLingui();
-  const { keyModes, styles, patchStyle } = renders;
+  const { keyModes, skillsetKeyModes, styles, patchStyle } = renders;
   const style = styles[type];
+  if (type === "dan" && design === 4) {
+    const pick = resolveSkillsetDanPick(style, skillsetKeyModes);
+    if (!pick || skillsetKeyModes.rc.length + skillsetKeyModes.ln.length < 2) return null;
+    return (
+      <>
+        {skillsetKeyModes.rc.length > 0 ? (
+          <KeyModePicker
+            label={t`Regular`}
+            keyModes={skillsetKeyModes.rc}
+            value={pick.side === "rc" ? pick.keyCount : -1}
+            onChange={(keys) => patchStyle(type, { skillsetSide: "rc", keyCount: keys })}
+          />
+        ) : null}
+        {skillsetKeyModes.ln.length > 0 ? (
+          <KeyModePicker
+            label={t`LN`}
+            keyModes={skillsetKeyModes.ln}
+            value={pick.side === "ln" ? pick.keyCount : -1}
+            onChange={(keys) => patchStyle(type, { skillsetSide: "ln", lnKeyCount: keys })}
+          />
+        ) : null}
+      </>
+    );
+  }
   if (keyModes.length < 2) return null;
   if (type === "skills") {
     return (

@@ -36,12 +36,16 @@ import {
   skillModeEntries,
   type SkillAxisEntry,
   modeOverall,
+  DAN_SKILLSET_META,
+  danSkillsetModes,
 } from "../../../lib/skill-axes";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../../lib/my-data";
-import { getDanTierImageSrc } from "../../../lib/dan-images";
+import { danBareLabel, danTierName, danTierSuffix, getDanTierImageSrc } from "../../../lib/dan-images";
+import type { LivePlayerDanEvidence } from "../../../lib/live-backend";
 import { signatureDesign, type SignatureType } from "../../../lib/signature-shared";
 import {
   accentHex,
+  resolveSkillsetDanPick,
   stylePaintedBackground,
   styleNeedsProfileImage,
   styleUsesImage,
@@ -1546,6 +1550,14 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
   ].filter((entry) => entry.side != null && !entry.side.skillsetsOnly && entry.keyCount != null) as Array<{
     id: string; label: string; keyCount: number; side: { rawDan: number; label: string; clears: number };
   }>;
+  if (ctx.design === 4) {
+    const pick = resolveSkillsetDanPick(ctx.style, {
+      rc: danSkillsetModes(skills, "rc").map((mode) => mode.keyCount),
+      ln: danSkillsetModes(skills, "ln").map((mode) => mode.keyCount),
+    });
+    if (!pick) return renderPlate(ctx, "Not enough dan-level clears yet.");
+    return renderDanSkillsets(ctx, pick.keyCount, pick.side);
+  }
   if (sides.length === 0) return renderPlate(ctx, "Not enough dan-level clears yet.");
 
   const chosen = ctx.design === 1
@@ -1633,6 +1645,103 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
       style: { position: "absolute", left: "16px", bottom: "12px", fontSize: "12px", color: dim },
     }, clamp(ctx.resolved.username, 22)),
     wordmark(ctx.style),
+  ]));
+}
+
+async function fetchDanEvidence(userId: number, keyCount: number, side: "rc" | "ln"): Promise<LivePlayerDanEvidence | null> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return null;
+  // limit=1: the render reads the per-skillset dans, not the clear lists.
+  const query = new URLSearchParams({ keys: String(keyCount), side, limit: "1" });
+  const response = await fetch(`${base}/api/profiles/${userId}/dan-evidence?${query}`, { signal: AbortSignal.timeout(5_000) });
+  if (!response.ok) return null;
+  return (await response.json()) as LivePlayerDanEvidence;
+}
+
+/* Same colours as the dan popup's headline. */
+const DAN_SIDE_COLOR: Record<"rc" | "ln", string> = { rc: "#e0b04c", ln: "#f07474" };
+
+/* Design 4: the dan popup's header and skillset columns, from the
+   same evidence read, so the image says what the popup says. */
+async function renderDanSkillsets(ctx: SignatureRenderContext, keyCount: number, side: "rc" | "ln"): Promise<Buffer> {
+  const spec = signatureDesign(ctx.type, ctx.design)!;
+  const evidence = await fetchDanEvidence(ctx.resolved.userId, keyCount, side);
+  if (!evidence) return renderPlate(ctx, "Dan estimates are unavailable right now.");
+  const dan = evidence.dan;
+  const skillsets = evidence.skillsets;
+  if (!dan || skillsets.length === 0) return renderPlate(ctx, "Not enough dan-level clears yet.");
+
+  const beyond = dan.beyondTable === true;
+  const danLabel = beyond ? danBareLabel(dan.label) : dan.label;
+  const courseClear = evidence.courseClear;
+  const atClearedLevel = !beyond && courseClear != null && courseClear.accuracy >= courseClear.bar
+    && !danTierSuffix(danLabel).startsWith("+")
+    && danBareLabel(danLabel) === danBareLabel(courseClear.level);
+  const level = beyond || atClearedLevel ? formatDanChip(danBareLabel(danLabel)) : danTierName(danLabel, formatDanChip);
+  const lead = beyond ? "is beyond" : atClearedLevel ? "is" : "is around";
+
+  const family = side === "ln" ? "ln" : "rc";
+  const columns = await Promise.all(skillsets.map(async (skillset) => {
+    const clear = skillset.skillsetClear;
+    const verified = clear != null && clear.accuracy + 1e-9 >= clear.bar;
+    const near = clear != null && !verified;
+    const emblem = skillset.dan ? await danEmblemDataUrl(ctx.request, skillset.dan.label, family, keyCount) : null;
+    return { skillset, verified, near, emblem };
+  }));
+  const headEmblem = await danEmblemDataUrl(ctx.request, danLabel, family, keyCount);
+
+  const background = await styleLayers(ctx, spec, await fetchBackgroundSources(ctx));
+  const dim = background.custom ? TEXT_DIM_ON_ART : TEXT_DIM;
+  const accent = accentHex(ctx.style, DAN_SIDE_COLOR[side]);
+  const hairline = "rgba(255,255,255,0.07)";
+
+  const emblemImg = (emblem: { url: string; aspect: number } | null, height: number, maxWidth: number, key: string) => {
+    if (!emblem) return h("div", { key, style: { fontSize: `${Math.round(height / 2)}px`, fontWeight: 900, color: "rgba(255,255,255,0.18)" } }, "-");
+    const fitted = Math.min(height, Math.round(maxWidth / emblem.aspect));
+    const width = Math.round(fitted * emblem.aspect);
+    return h("img", { key, src: emblem.url, width, height: fitted, style: { width: `${width}px`, height: `${fitted}px`, objectFit: "contain" } });
+  };
+
+  const header = h("div", { key: "head", style: { display: "flex", alignItems: "center", gap: "20px", padding: "18px 26px 14px" } }, [
+    h("div", { key: "e", style: { display: "flex", width: "100px", justifyContent: "center", flexShrink: 0 } }, [emblemImg(headEmblem, 72, 100, "img")]),
+    h("div", { key: "t", style: { display: "flex", flexDirection: "column", gap: "6px", minWidth: "0" } }, [
+      h("div", { key: "k", style: { fontSize: "13px", color: dim } }, `${keyCount}K ${side === "ln" ? "LN" : "Regular"} dan`),
+      h("div", { key: "h", style: { display: "flex", gap: "8px", fontSize: "28px", fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap" } }, [
+        h("span", { key: "n" }, `${clamp(ctx.resolved.username, 18)} ${lead}`),
+        h("span", { key: "l", style: { color: accent } }, level),
+      ]),
+    ]),
+  ]);
+
+  const columnNodes = columns.map(({ skillset, verified, near, emblem }, index) => {
+    const meta = DAN_SKILLSET_META[skillset.id];
+    const label = skillset.dan
+      ? `${skillset.dan.beyondTable ? ">" : verified ? "" : "~"}${formatDanChip(skillset.dan.beyondTable ? danBareLabel(skillset.dan.label) : skillset.dan.label)}`
+      : null;
+    return h("div", {
+      key: skillset.id,
+      style: {
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "7px", flex: 1, minWidth: "0", padding: "12px 6px 0",
+        borderLeft: index === 0 ? "none" : `1px solid ${hairline}`,
+      },
+    }, [
+      h("div", { key: "s", style: { fontSize: "13px", fontWeight: 700, color: dim } }, meta?.label ?? skillset.id),
+      h("div", { key: "e", style: { display: "flex", height: "48px", alignItems: "center", justifyContent: "center" } }, [emblemImg(emblem, 48, 96, "img")]),
+      label
+        ? h("div", { key: "v", style: { fontSize: "17px", fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap" } }, label)
+        : h("div", { key: "v", style: { fontSize: "12px", lineHeight: "17px", color: dim, whiteSpace: "nowrap" } }, `needs ${evidence.quorum}`),
+      h("div", { key: "c", style: { fontSize: "11px", color: dim, whiteSpace: "nowrap" } },
+        verified ? "Verified clear" : near ? "Near clear" : `${skillset.clears} plays`),
+    ]);
+  });
+
+  return renderPng(ctx, frame(spec.width, spec.height, [
+    ...background.layers,
+    h("div", { key: "body", style: { display: "flex", flexDirection: "column", width: "100%" } }, [
+      header,
+      h("div", { key: "cols", style: { display: "flex", margin: "0 18px", borderTop: `1px solid ${hairline}` } }, columnNodes),
+    ]),
+    headerWordmark(ctx.style),
   ]));
 }
 

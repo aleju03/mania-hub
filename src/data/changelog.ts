@@ -43,6 +43,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-22", text: "Added a Skillsets layout to the Dan rating dynamic render.", to: "/dynamic-renders", image: { src: "/images/changelog/2026-10-22-dan-skillsets-render.webp", alt: "The Skillsets dan render", width: 704, height: 200 } },
   { date: "2026-10-17", text: "Added likes to skins, with a likes sort and a liked by you filter on the skins page.", to: "/skins" },
   { date: "2026-10-17", text: "Initial release of Prism, a difficulty calculator made for 6K, 7K and 8K that replaces MinaCalc on those keymodes. Your 6K, 7K and 8K ratings take a while to recalculate after the release, so they might not show up right away.", bold: "Prism", kind: "new", to: "/news/prism" },
   { date: "2026-10-17", text: "Added sessions and maps colors and a keymode filter to the activity calendar, and a setting for the count that gets the brightest color." },

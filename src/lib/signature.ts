@@ -161,17 +161,25 @@ export const fetchSignatureSettings = createServerFn({ method: "GET" }).handler(
    these, so nobody selects 4K, gets silently fallen back to their 7K radar,
    and concludes the setting is broken. */
 export const fetchSignatureKeyModes = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ keyCounts: number[] }> => {
+  async (): Promise<{ keyCounts: number[]; skillsetKeyCounts: { rc: number[]; ln: number[] } }> => {
+    const empty = { keyCounts: [], skillsetKeyCounts: { rc: [], ln: [] } };
     const viewer = await requireViewer();
-    if (!viewer) return { keyCounts: [] };
+    if (!viewer) return empty;
     try {
       const response = await fetch(`${viewer.base}/api/profiles/${viewer.userId}/skills`);
-      if (!response.ok) return { keyCounts: [] };
-      const { qualifyingSkillModes } = await import("./skill-axes");
+      if (!response.ok) return empty;
+      const { danSkillsetModes, qualifyingSkillModes } = await import("./skill-axes");
       const skills = await response.json();
-      return { keyCounts: qualifyingSkillModes(skills).map((mode) => mode.keyCount) };
+      return {
+        keyCounts: qualifyingSkillModes(skills).map((mode) => mode.keyCount),
+        // The dan skillset layouts can only draw these.
+        skillsetKeyCounts: {
+          rc: danSkillsetModes(skills, "rc").map((mode) => mode.keyCount),
+          ln: danSkillsetModes(skills, "ln").map((mode) => mode.keyCount),
+        },
+      };
     } catch {
-      return { keyCounts: [] };
+      return empty;
     }
   },
 );

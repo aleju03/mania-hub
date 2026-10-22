@@ -68,6 +68,9 @@ export const SIGNATURE_DESIGNS: Record<SignatureType, SignatureDesign[]> = {
     { design: 1, slug: "rice-and-ln", label: msg`Regular and LN`, width: 880, height: 200 },
     { design: 2, slug: "single", label: msg`Single`, width: 420, height: 160 },
     { design: 3, slug: "badge", label: msg`Badge`, width: 300, height: 300 },
+    /* The dan popup's breakdown: the headline over one column per skillset,
+       for one ladder, picked with style.skillsetSide. */
+    { design: 4, slug: "skillsets", label: msg`Skillsets`, width: 880, height: 250 },
   ],
   insights: [
     { design: 1, slug: "stats-and-top-play", label: msg`Stats and top play`, width: 880, height: 230 },

@@ -67,6 +67,9 @@ export interface MyDataSkillDanSide {
   // side with one thin skill is short even when the others are deep). Absent
   // on a verdict stored before it shipped and on one a course clear set.
   clearWindow?: { have: number; need: number; skills?: { full: number; total: number } };
+  // The per-skillset dans behind the headline, keyed by skillset id. Empty on
+  // ladders without a skillset breakdown.
+  skillsets?: Record<string, { rawDan: number; label: string; clears: number }>;
 }
 
 export interface MyDataSkillDanCourseClear {
