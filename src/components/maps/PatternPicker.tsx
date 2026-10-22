@@ -48,8 +48,15 @@ const KEYMODE_SUBFAMILIES: Record<string, Record<string, string[]>> = {
   other: {},
 };
 
+// A single key facet's vocabulary: 4K and 7K have their own, every other
+// keymode (one picked from the Other chip, or Other itself) shares "other".
+function keymodeVocabularyKey(keys: string[]): string | null {
+  if (keys.length !== 1) return null;
+  return keys[0] === "4k" || keys[0] === "7k" ? keys[0] : "other";
+}
+
 function pickerVocabulary(keys: string[]): { options: string[]; subfamilies: Record<string, string[]> } {
-  const context = keys.length === 1 ? keys[0] : null;
+  const context = keymodeVocabularyKey(keys);
   if (context && KEYMODE_PATTERN_OPTIONS[context]) {
     return { options: KEYMODE_PATTERN_OPTIONS[context], subfamilies: KEYMODE_SUBFAMILIES[context] ?? {} };
   }
@@ -74,7 +81,7 @@ const KEYMODE_SKILL_OPTIONS: Record<string, string[]> = {
 };
 
 function skillVocabulary(keys: string[]): string[] {
-  const context = keys.length === 1 ? keys[0] : null;
+  const context = keymodeVocabularyKey(keys);
   return (context && KEYMODE_SKILL_OPTIONS[context]) || SKILL_OPTIONS;
 }
 

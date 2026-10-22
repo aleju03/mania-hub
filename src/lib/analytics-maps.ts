@@ -110,9 +110,9 @@ function formatRange(min: number, max: number, format: (value: number) => string
 // Which dan ladder the picked levels sit on, mirroring danLadderGroups() in
 // MapSearchSection: the keymode's own ladder when the key facet is exactly 4K
 // or 7K (4K otherwise, as the picker shows), swapped for the LN courses when
-// the pattern facet is LN-flavoured.
-function danContext(keys: string[], patterns: string[]): DanScaleContext {
-  const lnFlavoured = patterns.some((pattern) => pattern === "ln" || pattern.startsWith("ln"));
+// the LN toggle is on (it follows an LN-flavoured pattern facet until set).
+function danContext(keys: string[], patterns: string[], danLn: string | null): DanScaleContext {
+  const lnFlavoured = danLn === "true" || (danLn !== "false" && patterns.some((pattern) => pattern === "ln" || pattern.startsWith("ln")));
   const only = keys.length === 1 ? keys[0] : null;
   if (only === "7k") return lnFlavoured ? "7k-ln" : "7k";
   return lnFlavoured ? "ln" : "reform";
@@ -122,7 +122,7 @@ function describeDanRange(params: URLSearchParams, keys: string[], patterns: str
   const min = danLevel(params, "sDanMin");
   const max = danLevel(params, "sDanMax");
   if (min == null && max == null) return null;
-  const context = danContext(keys, patterns);
+  const context = danContext(keys, patterns, params.get("sDanLn"));
   const lo = min != null ? danScaleLabel(min, context) : null;
   const hi = max != null ? danScaleLabel(max, context) : null;
   if (lo && hi) return lo === hi ? `dan ${lo}` : `dan ${lo}-${hi}`;

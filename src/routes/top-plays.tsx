@@ -45,6 +45,8 @@ type TimeRange = TopPlaysRange;
 type SortMode = "recent" | "pp" | "gain";
 type SortDirection = "desc" | "asc";
 type KeyFilter = "all" | "4k" | "other";
+// All time only: every play, or one row per player with their best or 200th play.
+type AllTimeView = "plays" | "best" | "floor";
 
 const RANGE_WIDTH: Record<TimeRange, number> = {
   "24h": 0,
@@ -67,6 +69,7 @@ type TopPlaysSearch = {
   keys: KeyFilter;
   /** Rate mods kept, "-"-joined in RATE_FILTERS order; "" keeps all. */
   rates: string;
+  view: AllTimeView;
 };
 
 // nm: no rate mod, dt: DT/NC, ht: HT/DC.
@@ -95,6 +98,7 @@ const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   dir: "desc",
   keys: "all",
   rates: "",
+  view: "plays",
 };
 
 function hasPopoffsInRange(popoffs: PopOff[], range: TimeRange): boolean {
@@ -141,6 +145,7 @@ export const Route = createFileRoute("/top-plays")({
         ? search.keys
         : DEFAULT_TOP_PLAYS_SEARCH.keys,
     rates: parseRates(search.rates).join("-"),
+    view: search.view === "best" || search.view === "floor" ? search.view : DEFAULT_TOP_PLAYS_SEARCH.view,
   }),
   component: PopOffsPage,
 });
@@ -165,7 +170,8 @@ function preloadPopoffCover(popoff: PopOff): void {
 
 function PopOffsPage() {
   const { t } = useLingui();
-  const { range, country, sort, dir, keys, rates } = Route.useSearch();
+  const { range, country, sort, dir, keys, rates, view: requestedView } = Route.useSearch();
+  const view: AllTimeView = range === "all" ? requestedView : "plays";
   const rateFilters = useMemo(() => parseRates(rates), [rates]);
   const location = useLocation();
   const navigate = useNavigate();
@@ -243,11 +249,11 @@ function PopOffsPage() {
 
     navigate({
       to: "/top-plays",
-      search: { range: rememberedRange, country, sort, dir, keys, rates },
+      search: { range: rememberedRange, country, sort, dir, keys, rates, view: rememberedRange === "all" ? view : "plays" },
       replace: true,
       resetScroll: false,
     });
-  }, [country, location.searchStr, navigate, range, rememberedRange, sort, dir, keys, rates]);
+  }, [country, location.searchStr, navigate, range, rememberedRange, sort, dir, keys, rates, view]);
 
   useEffect(() => {
     if (rememberedRange === range) return;
@@ -270,7 +276,7 @@ function PopOffsPage() {
   useEffect(() => {
     if (!liveBackendEnabled || !windowActive) return;
     const selectedPlayersKey = selectedPlayerIds.join(",");
-    const snapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${rates}:${page}:${selectedPlayersKey}`;
+    const snapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${rates}:${view}:${page}:${selectedPlayersKey}`;
     const cacheNeedsRefresh = shouldRefreshTopPlays({
       fetchedAt: popoffsFetchedAt,
       cachedWindow: popoffsWindow,
@@ -301,6 +307,7 @@ function PopOffsPage() {
       includePpGains: true,
       userIds: selectedPlayerIds,
       rates: rateFilters,
+      view,
     })
       .then((snapshot) => {
         if (cancelled || currentCountryRef.current !== requestedCountry) return;
@@ -334,7 +341,7 @@ function PopOffsPage() {
     return () => {
       cancelled = true;
     };
-  }, [dir, keys, liveBackendEnabled, livePagePopoffs.length, mergePopoffs, page, popoffsFetchedAt, popoffsWindow, range, rateFilters, selectedCountry, selectedPlayerIds, setCachedPopoffs, sort, windowActive]);
+  }, [dir, keys, liveBackendEnabled, livePagePopoffs.length, mergePopoffs, page, popoffsFetchedAt, popoffsWindow, range, rateFilters, selectedCountry, selectedPlayerIds, setCachedPopoffs, sort, view, windowActive]);
 
   // Stays connected while unfocused so new top plays still appear on a second
   // monitor during play (same rationale as the tracker feed). top_play is
@@ -368,7 +375,7 @@ function PopOffsPage() {
   }, []);
 
   const selectedPlayersKey = selectedPlayerIds.join(",");
-  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${rates}:${page}:${selectedPlayersKey}`;
+  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${rates}:${view}:${page}:${selectedPlayersKey}`;
   const hasCurrentLiveSnapshot = currentLiveSnapshotKeyRef.current === liveSnapshotKey;
   const cachedPagePopoffs = useMemo(
     () => selectCachedTopPlaysPage(popoffs, {
@@ -513,7 +520,7 @@ function PopOffsPage() {
             )}
             {hasCurrentLiveSnapshot && !refreshing && !loading && !showingInitialLiveSnapshot && !showingLivePageTransition && (
               <span className="text-[10px] text-osu-f1">
-                <Trans>{totalCount} top plays found</Trans>
+                {view === "plays" ? <Trans>{totalCount} top plays found</Trans> : <Trans>{totalCount} players</Trans>}
               </span>
             )}
           </div>
@@ -534,7 +541,7 @@ function PopOffsPage() {
             const nextSort = nextRange === "all" ? "pp" : sort;
             navigate({
               to: "/top-plays",
-              search: { range: nextRange, country, sort: nextSort, dir: nextRange === "all" ? "desc" : dir, keys, rates },
+              search: { range: nextRange, country, sort: nextSort, dir: nextRange === "all" ? "desc" : dir, keys, rates, view: nextRange === "all" ? view : "plays" },
               replace: true,
               resetScroll: false,
             });
@@ -545,7 +552,32 @@ function PopOffsPage() {
 
       <div className="relative z-10 bg-osu-d5/90 border-b border-osu-b3/20 backdrop-blur-[1px]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2 flex items-center justify-between gap-2">
-          <div className="min-h-7 flex items-center">
+          <div className="min-h-7 flex items-center gap-0.5">
+            {range === "all" && ([
+              ["plays", t`All plays`, undefined],
+              ["best", t`Best play`, t`Each player's best play`],
+              ["floor", t`200th play`, t`Each player's 200th best play, for players with 200 top plays`],
+            ] as [AllTimeView, string, string | undefined][]).map(([id, label, title]) => (
+              <button
+                key={id}
+                onClick={() => {
+                  navigate({
+                    to: "/top-plays",
+                    search: { range, country, sort, dir, keys, rates, view: id },
+                    replace: true,
+                    resetScroll: false,
+                  });
+                  setPage(0);
+                }}
+                title={title}
+                aria-pressed={view === id}
+                className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                  view === id ? "bg-osu-b3 text-osu-l2" : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
             {selectedPlayerIds.length > 0 && (
               <button
                 onClick={clearPlayerFilter}
@@ -556,6 +588,8 @@ function PopOffsPage() {
             )}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+            {/* The 200th play is read from the whole top 200, so it takes no key or rate filter. */}
+            {view !== "floor" && (<>
             {/* Nothing picked keeps everything; clicking a picked filter clears it. */}
             <div className="flex items-center gap-0.5">
               {keymodes.map((item) => {
@@ -566,7 +600,7 @@ function PopOffsPage() {
                     onClick={() => {
                       navigate({
                         to: "/top-plays",
-                        search: { range, country, sort, dir, keys: active ? "all" : item.id, rates },
+                        search: { range, country, sort, dir, keys: active ? "all" : item.id, rates, view },
                         replace: true,
                         resetScroll: false,
                       });
@@ -600,7 +634,7 @@ function PopOffsPage() {
                       const next = active ? rateFilters.filter((rate) => rate !== id) : [...rateFilters, id];
                       navigate({
                         to: "/top-plays",
-                        search: { range, country, sort, dir, keys, rates: parseRates(next.join("-")).join("-") },
+                        search: { range, country, sort, dir, keys, rates: parseRates(next.join("-")).join("-"), view },
                         replace: true,
                         resetScroll: false,
                       });
@@ -618,6 +652,7 @@ function PopOffsPage() {
               })}
             </div>
             <span className="h-4 w-px bg-white/[0.07]" />
+            </>)}
             {([
               ["pp", "PP"],
               ["recent", t`Recent`],
@@ -631,7 +666,7 @@ function PopOffsPage() {
                   const nextDir: SortDirection = sort === id ? (dir === "desc" ? "asc" : "desc") : "desc";
                   navigate({
                     to: "/top-plays",
-                    search: { range, country, sort: id, dir: nextDir, keys, rates },
+                    search: { range, country, sort: id, dir: nextDir, keys, rates, view },
                     replace: true,
                     resetScroll: false,
                   });

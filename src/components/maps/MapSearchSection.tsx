@@ -44,13 +44,12 @@ const SEARCH_DEBOUNCE_MS = 300;
 // never lands, fetch with the default rather than strand the page on skeletons.
 const SAVED_SORT_RESTORE_TIMEOUT_MS = 1500;
 
-// "4K"/"7K" are keymode names and render as written; "Other" is copy, so
-// KeysChips swaps in the translated label for that one.
-const KEY_OPTIONS = [
-  { id: "4k", label: "4K" },
-  { id: "7k", label: "7K" },
-  { id: "other", label: "Other" },
-];
+// 4K and 7K get their own chips; the Other chip opens a picker over "other"
+// (every keymode but those two) and each remaining keymode on its own. The
+// list matches the backend's MAP_SEARCH_KEYMODES.
+const OTHER_KEYMODES = ["1k", "2k", "3k", "5k", "6k", "8k", "9k", "10k", "12k", "14k", "16k", "18k"];
+export const SEARCH_KEY_VALUES = ["4k", "7k", "other", ...OTHER_KEYMODES];
+const isOtherKeySlot = (id: string) => id !== "4k" && id !== "7k";
 
 const STATUS_OPTIONS = [
   { id: "ranked", label: msg`Ranked` },
@@ -98,6 +97,12 @@ export interface MapSearchUiState {
   // Step on each dan bound, -2..2 for "--" through "++"; null is the whole dan.
   danMinStep: number | null;
   danMaxStep: number | null;
+  // The keymode whose ladder the dan bounds are read on (4, 6 or 7); null on
+  // links from before it, where the Keys facet scoped the dan instead.
+  danKeys: number | null;
+  // Whether the dan bounds are read on the LN ladders; null follows the
+  // pattern facet (LN-flavoured patterns pick the LN ladders).
+  danLn: boolean | null;
   sort: string;
   dir: string;
   page: number;
@@ -148,7 +153,7 @@ function stateKey(s: MapSearchUiState): string {
     [...s.skillsExclude].sort(),
     s.vibro,
     serializeMsdRanges(s.msd),
-    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax, s.danMinStep, s.danMaxStep,
+    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax, s.danMinStep, s.danMaxStep, s.danKeys, s.danLn,
     s.sort, s.dir, s.page,
   ]);
 }
@@ -166,30 +171,86 @@ function pruneForKeys(ui: MapSearchUiState, keys: string[]): Partial<MapSearchUi
     skills: ui.skills.filter((skill) => skills.has(skill)),
     skillsExclude: ui.skillsExclude.filter((skill) => skills.has(skill)),
     msd: msdRangesForFacet(ui.msd, keys),
+    // A dan read on a keymode the new Keys pick leaves out would match nothing.
+    ...(ui.danKeys != null && keys.length > 0 && !keys.includes(`${ui.danKeys}k`) && !(ui.danKeys === 6 && keys.includes("other"))
+      ? { danMin: null, danMax: null, danMinStep: null, danMaxStep: null, danKeys: null }
+      : {}),
   };
 }
 
-function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+function KeysChips({ ui, apply, inline = false }: { ui: MapSearchUiState; apply: ApplyFn; inline?: boolean }) {
   const { t } = useLingui();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  usePopoverDismiss(open && !inline, rootRef, () => setOpen(false));
   // A keymode switch changes the skill and pattern vocabulary; drop picks the
   // new keymode can't express so no filter survives without a visible chip.
-  const cycleKey = (id: string, reverse = false) => {
-    const next = cycleFacet(ui.keys, ui.keysExclude, id, reverse);
+  const applyKeys = (next: { includes: string[]; excludes: string[] }) => {
     apply({ keys: next.includes, keysExclude: next.excludes, ...pruneForKeys(ui, next.includes), page: 0 });
   };
-  return (
-    <ChipGroup label={t`Keys`}>
-      {KEY_OPTIONS.map((option) => (
+  const hasAnyActive = ui.keys.length + ui.keysExclude.length > 0;
+  // The Other chip holds one value at a time: "other" or a single keymode.
+  const slot = ui.keys.find(isOtherKeySlot) ?? ui.keysExclude.find(isOtherKeySlot) ?? null;
+  const cycleSlot = (id: string, reverse: boolean) => {
+    const keep = (list: string[]) => list.filter((item) => !isOtherKeySlot(item) || item === id);
+    applyKeys(cycleFacet(keep(ui.keys), keep(ui.keysExclude), id, reverse));
+  };
+  const slotLabel = (id: string | null) => (id == null || id === "other" ? t`Other` : id.toUpperCase());
+  const picker = (
+    <div className="grid grid-cols-5 gap-1.5">
+      {["other", ...OTHER_KEYMODES].map((id) => (
         <TriStatePill
-          key={option.id}
-          mode={facetMode(ui.keys, ui.keysExclude, option.id)}
-          hasAnyActive={ui.keys.length + ui.keysExclude.length > 0}
-          onClick={() => cycleKey(option.id)}
-          onContextMenu={() => cycleKey(option.id, true)}
+          key={id}
+          mode={facetMode(ui.keys, ui.keysExclude, id)}
+          hasAnyActive={slot != null}
+          onClick={() => cycleSlot(id, false)}
+          onContextMenu={() => cycleSlot(id, true)}
         >
-          {option.id === "other" ? t`Other` : option.label}
+          {id === "other" ? t`Any` : id.toUpperCase()}
         </TriStatePill>
       ))}
+    </div>
+  );
+  return (
+    <ChipGroup label={t`Keys`}>
+      {(["4k", "7k"] as const).map((id) => (
+        <TriStatePill
+          key={id}
+          mode={facetMode(ui.keys, ui.keysExclude, id)}
+          hasAnyActive={hasAnyActive}
+          onClick={() => applyKeys(cycleFacet(ui.keys, ui.keysExclude, id))}
+          onContextMenu={() => applyKeys(cycleFacet(ui.keys, ui.keysExclude, id, true))}
+        >
+          {id.toUpperCase()}
+        </TriStatePill>
+      ))}
+      <div ref={rootRef} className={inline ? "contents" : "relative"}>
+        <TriStatePill
+          mode={slot ? facetMode(ui.keys, ui.keysExclude, slot) : undefined}
+          hasAnyActive={hasAnyActive}
+          onClick={() => setOpen((value) => !value)}
+          onContextMenu={() => cycleSlot(slot ?? "other", true)}
+        >
+          <span className="inline-flex items-center gap-1">
+            {slotLabel(slot)}
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            >
+              <path d="M5.25 7.5 10 12.25 14.75 7.5H5.25Z" />
+            </svg>
+          </span>
+        </TriStatePill>
+        {open && (inline ? (
+          <div className="basis-full">{picker}</div>
+        ) : (
+          <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-max rounded-lg bg-osu-b4 p-3 ring-1 ring-white/10 shadow-xl">
+            {picker}
+          </div>
+        ))}
+      </div>
     </ChipGroup>
   );
 }
@@ -311,29 +372,50 @@ function LengthSlider({ ui, apply, heading }: { ui: MapSearchUiState; apply: App
 // pick from a ladder only means what its badge says when the search is scoped
 // to that ladder's keymode.
 interface DanLadderGroup {
-  keysId: "4k" | "7k";
+  id: string;
+  keysId: "4k" | "6k" | "7k";
+  ln: boolean;
   label: string;
   context: DanScaleContext;
 }
 
-// Which ladders the picker offers: the keymode's own ladder when the key facet
-// resolves to exactly 4K or 7K, otherwise both (empty, mixed, or "other" key
-// facets are ambiguous, and the 4K and 7K courses share numbers but not
-// difficulty). An LN-flavoured pattern facet swaps in the LN ladders.
+// Which ladders the picker offers: the rice and LN ladders of the keymodes the
+// key facet picks among 4K, 6K and 7K, or of all three (the courses share
+// numbers but not difficulty). Rice ladders come first, then the LN ones.
+const DAN_LADDERS: DanLadderGroup[] = [
+  { id: "4k", keysId: "4k", ln: false, label: "4K", context: "reform" },
+  { id: "6k", keysId: "6k", ln: false, label: "6K", context: "6k" },
+  { id: "7k", keysId: "7k", ln: false, label: "7K", context: "7k" },
+  { id: "4k-ln", keysId: "4k", ln: true, label: "4K LN", context: "ln" },
+  { id: "6k-ln", keysId: "6k", ln: true, label: "6K LN", context: "6k-ln" },
+  { id: "7k-ln", keysId: "7k", ln: true, label: "7K LN", context: "7k-ln" },
+];
+
 function danLadderGroups(ui: MapSearchUiState): DanLadderGroup[] {
-  const lnFlavoured = ui.patterns.some((pattern) => pattern === "ln" || pattern.startsWith("ln"));
-  const fourKey: DanLadderGroup = { keysId: "4k", label: "4K", context: lnFlavoured ? "ln" : "reform" };
-  const sevenKey: DanLadderGroup = { keysId: "7k", label: "7K", context: lnFlavoured ? "7k-ln" : "7k" };
-  const only = ui.keys.length === 1 ? ui.keys[0] : null;
-  if (only === "4k") return [fourKey];
-  if (only === "7k") return [sevenKey];
-  return [fourKey, sevenKey];
+  const picked = DAN_LADDERS.filter((group) => ui.keys.includes(group.keysId));
+  return picked.length > 0 ? picked : DAN_LADDERS;
 }
 
-// The context that annotates the collapsed trigger chip; with both ladders on
-// offer the selection is a bare rawDan range, shown with the 4K badges.
+// Whether the dan is read on an LN ladder; links from before danLn follow an
+// LN-flavoured pattern facet.
+function danLnOn(ui: MapSearchUiState): boolean {
+  return ui.danLn ?? ui.patterns.some((pattern) => pattern === "ln" || pattern.startsWith("ln"));
+}
+
+// The ladder the committed dan is read on: its own keymode, or the only one
+// on offer. Null for a bare rawDan range from an old link with the tabs shown.
+function danSelectionGroup(ui: MapSearchUiState): DanLadderGroup | null {
+  const groups = danLadderGroups(ui);
+  const ln = danLnOn(ui);
+  const onFamily = groups.filter((group) => group.ln === ln);
+  if (ui.danKeys != null) return onFamily.find((group) => group.keysId === `${ui.danKeys}k`) ?? null;
+  return onFamily.length === 1 ? onFamily[0] : null;
+}
+
+// The context that annotates the collapsed trigger chip; a bare rawDan range
+// shows with the 4K badges.
 function danSliderContext(ui: MapSearchUiState): DanScaleContext {
-  return danLadderGroups(ui)[0].context;
+  return (danSelectionGroup(ui) ?? danLadderGroups(ui)[0]).context;
 }
 
 // The ladder's badge rows: numeric courses on top, boss/greek courses below.
@@ -341,6 +423,7 @@ function danSliderContext(ui: MapSearchUiState): DanScaleContext {
 function danLadderRows(context: DanScaleContext): number[][] {
   const seq = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
   if (context === "7k" || context === "7k-ln") return [seq(0, 10), seq(11, 14)];
+  if (context === "6k" || context === "6k-ln") return [seq(0, 9), seq(10, 14)];
   // LN runs 1-17 (16 Yokaze, 17 Yeehee are the extra-level courses), split into
   // a row of nine and a row of eight.
   if (context === "ln") return [seq(1, 9), seq(10, 17)];
@@ -394,16 +477,29 @@ function danSelectionReadout(
 // whatever is hovered or selected, so the layout never moves. Only charts with
 // a stored chart analysis match while set.
 //
-// With an ambiguous key facet the wall stacks the 4K and 7K ladders, and a
-// pick also applies its ladder's keymode to the Keys facet (pruning pattern
-// picks the keymode can't express, same as the Keys chips): without the scope
-// a "4K 5th dan" pick would match 7K 5th-dan charts at the same rawDan.
+// The wall shows one ladder at a time under 4K / 6K / 7K and LN tabs, and a
+// pick carries its ladder's keymode as danKeys and its side as danLn: without
+// the scope a "4K 5th dan" pick would match 7K 5th-dan or LN charts at the
+// same rawDan.
 // Clearing the dan never touches the keys facet.
-function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+// The tab is held by DanPicker, which outlives the popover, so closing and
+// reopening it stays on the ladder last looked at.
+function DanBadgeWall({
+  ui,
+  apply,
+  tabId,
+  setTabId,
+}: {
+  ui: MapSearchUiState;
+  apply: ApplyFn;
+  tabId: string;
+  setTabId: (id: string) => void;
+}) {
   const { t, i18n } = useLingui();
   const groups = danLadderGroups(ui);
-  const ambiguous = groups.length > 1;
+  const activeGroup = groups.find((group) => group.id === tabId) ?? groups[0];
   const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
+  const selectedGroup = danSelectionGroup(ui);
   const [hoveredStep, setHoveredStep] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ group: DanLadderGroup; anchor: number; current: number } | null>(null);
   const [hovered, setHovered] = useState<{ group: DanLadderGroup; level: number } | null>(null);
@@ -412,17 +508,13 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
 
   const commit = (lo: number | null, hi: number | null, group: DanLadderGroup) => {
     playPatternHit(lo != null);
-    if (ambiguous && lo != null) {
-      const keys = [group.keysId];
-      apply({ danMin: lo, danMax: hi, danMinStep: null, danMaxStep: null, keys, keysExclude: [], ...pruneForKeys(ui, keys), page: 0 });
-      return;
-    }
-    apply({ danMin: lo, danMax: hi, danMinStep: null, danMaxStep: null, page: 0 });
+    const danKeys = lo == null ? null : Number.parseInt(group.keysId, 10);
+    apply({ danMin: lo, danMax: hi, danMinStep: null, danMaxStep: null, danKeys, danLn: lo == null ? null : group.ln, page: 0 });
   };
   const toggleSingle = (level: number, group: DanLadderGroup) => {
-    // Re-click toggles off only on a single ladder; with both ladders shown the
-    // same number sits on each, so a tap always means "select on this ladder".
-    if (!ambiguous && selection && selection.lo === level && selection.hi === level) commit(null, null, group);
+    // Re-click toggles off only on the ladder the dan was picked on.
+    const same = selection && selection.lo === level && selection.hi === level && selectedGroup?.id === group.id;
+    if (same) commit(null, null, group);
     else commit(level, level, group);
   };
 
@@ -436,7 +528,7 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
       const level = Number(badge.getAttribute("data-dan-level"));
       const groupId = badge.getAttribute("data-dan-group");
       setDrag((state) =>
-        state && state.group.keysId === groupId && state.current !== level ? { ...state, current: level } : state,
+        state && state.group.id === groupId && state.current !== level ? { ...state, current: level } : state,
       );
     };
     const onUp = () => {
@@ -460,36 +552,51 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   }, [dragging]);
 
   // Live paint while dragging (only on the ladder the drag started in); the
-  // committed selection otherwise. A committed range with both ladders shown is
-  // a bare rawDan filter, so it highlights on each.
+  // committed selection otherwise, on its own ladder. A bare rawDan range
+  // from an old link highlights on each.
   const paintFor = (group: DanLadderGroup) => {
     if (drag) {
-      if (drag.group.keysId !== group.keysId) return null;
+      if (drag.group.id !== group.id) return null;
       return { lo: Math.min(drag.anchor, drag.current), hi: Math.max(drag.anchor, drag.current) };
     }
-    return selection;
+    return selectedGroup == null || selectedGroup.id === group.id ? selection : null;
   };
   const describe = (group: DanLadderGroup, lo: number, hi?: number) => {
     const name = hi == null || hi === lo
       ? danReadout(lo, group.context, i18n)
       : danRangeReadout(lo, hi, group.context, i18n);
     // The prefix is the keymode itself ("4K", "7K"), so it stays as written.
-    return ambiguous ? `${group.label} ${name}` : name;
+    return `${group.label} ${name}`;
   };
   return (
     <div className="flex flex-col gap-2 select-none" style={{ touchAction: "pan-y" }} onPointerLeave={() => setHovered(null)}>
-      {groups.map((group) => (
-        <div key={group.keysId} className="flex flex-col gap-1.5">
-          {ambiguous && (
-            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{group.label}</span>
-          )}
+      <div className="flex items-center gap-3" role="tablist">
+        {groups.map((group) => (
+          <button
+            key={group.id}
+            type="button"
+            role="tab"
+            aria-selected={group.id === activeGroup.id}
+            onClick={() => setTabId(group.id)}
+            className={`cursor-pointer text-[12px] font-bold uppercase tracking-wide transition-colors ${
+              group.id === activeGroup.id ? "text-osu-pink-light" : "text-osu-f1/55 hover:text-osu-l1"
+            }`}
+          >
+            {group.label}
+          </button>
+        ))}
+      </div>
+      {[activeGroup].map((group) => (
+        // Sized to the widest ladder (7K's eleven) so switching tabs never
+        // resizes the popover.
+        <div key={group.id} className="flex flex-col gap-1.5 sm:min-w-[412px]">
           {danLadderRows(group.context).map((row, rowIndex) => {
             const groupPaint = paintFor(group);
             return (
               <div key={rowIndex} className="flex items-center gap-1 sm:gap-1.5">
                 {row.map((level) => {
                   const active = groupPaint != null && level >= groupPaint.lo && level <= groupPaint.hi;
-                  const isHovered = hovered != null && hovered.group.keysId === group.keysId && hovered.level === level;
+                  const isHovered = hovered != null && hovered.group.id === group.id && hovered.level === level;
                   const src = danScaleImage(level, group.context);
                   const label = danScaleLabel(level, group.context);
                   return (
@@ -497,7 +604,7 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
                       key={`${group.context}:${level}`}
                       type="button"
                       data-dan-level={level}
-                      data-dan-group={group.keysId}
+                      data-dan-group={group.id}
                       title={describe(group, level)}
                       aria-pressed={active}
                       onPointerDown={(event) => {
@@ -518,7 +625,7 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
                         if (event.pointerType === "mouse") setHovered({ group, level });
                       }}
                       onPointerLeave={() => setHovered((value) => (
-                        value && value.group.keysId === group.keysId && value.level === level ? null : value
+                        value && value.group.id === group.id && value.level === level ? null : value
                       ))}
                       animate={{ scale: active ? 1.12 : 1 }}
                       transition={{ type: "spring", stiffness: 560, damping: 24 }}
@@ -549,7 +656,7 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
         </div>
       ))}
       {selection != null && drag == null && (
-        <DanStepGauges ui={ui} apply={apply} lo={selection.lo} hi={selection.hi} context={groups[0].context} onHover={setHoveredStep} />
+        <DanStepGauges ui={ui} apply={apply} lo={selection.lo} hi={selection.hi} context={(selectedGroup ?? activeGroup).context} onHover={setHoveredStep} />
       )}
       <div className="flex h-4 items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-osu-f1/70">
         <span>
@@ -560,13 +667,13 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
               : hoveredStep != null
                 ? hoveredStep
                 : selection
-                  ? danSelectionReadout({ ...selection, loStep: ui.danMinStep, hiStep: ui.danMaxStep }, groups[0].context, i18n)
+                  ? danSelectionReadout({ ...selection, loStep: ui.danMinStep, hiStep: ui.danMaxStep }, (selectedGroup ?? activeGroup).context, i18n)
                   : t`any`}
         </span>
         {selection != null && drag == null && (
           <button
             type="button"
-            onClick={() => commit(null, null, groups[0])}
+            onClick={() => commit(null, null, activeGroup)}
             className="lowercase text-osu-f1/50 hover:text-osu-pink-light transition-colors cursor-pointer"
           >
             <Trans>clear</Trans>
@@ -917,6 +1024,29 @@ function DanMini({ level, context }: { level: number; context: DanScaleContext }
   );
 }
 
+// Closes an open panel on a press outside its root or on Escape.
+function usePopoverDismiss(open: boolean, rootRef: React.RefObject<HTMLElement | null>, close: () => void) {
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) closeRef.current();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeRef.current();
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, rootRef]);
+}
+
 // A filter chip that opens a floating panel anchored under it, overlay-style
 // so the filter row never grows. Shared by the dan and MSD pickers.
 function FilterPopover({ active, trigger, children }: { active: boolean; trigger: ReactNode; children: ReactNode }) {
@@ -957,23 +1087,7 @@ function FilterPopover({ active, trigger, children }: { active: boolean; trigger
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent | TouchEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  usePopoverDismiss(open, rootRef, () => setOpen(false));
 
   return (
     <div ref={rootRef} className="relative">
@@ -1020,7 +1134,8 @@ function FilterPopover({ active, trigger, children }: { active: boolean; trigger
 function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply: ApplyFn; inline?: boolean }) {
   const context = danSliderContext(ui);
   const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
-  if (inline) return <DanBadgeWall ui={ui} apply={apply} />;
+  const [tabId, setTabId] = useState(() => (danSelectionGroup(ui) ?? danLadderGroups(ui).find((group) => group.ln === danLnOn(ui)) ?? danLadderGroups(ui)[0]).id);
+  if (inline) return <DanBadgeWall ui={ui} apply={apply} tabId={tabId} setTabId={setTabId} />;
   // Whole dans keep the bare badges; once a bound has a step both ends show
   // theirs, so "Gamma--" alone reads as one badge with its mark.
   const stepped = ui.danMinStep != null || ui.danMaxStep != null;
@@ -1045,7 +1160,7 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
         <span><Trans>Any</Trans></span>
       )}
     >
-      <DanBadgeWall ui={ui} apply={apply} />
+      <DanBadgeWall ui={ui} apply={apply} tabId={tabId} setTabId={setTabId} />
     </FilterPopover>
   );
 }
@@ -1057,9 +1172,9 @@ function msdFilterMeta(skillsets: typeof MSD_SKILLSET_META) {
   return meta;
 }
 const MSD_FILTER_META = msdFilterMeta(MSD_SKILLSET_META);
-// Prism's names (Chordstream, Bracket, Jack, Delay) for a 7K-only key facet.
+// Prism's names (Chordstream, Bracket, Jack, Delay) for a 6K-8K key facet.
 const PRISM_MSD_FILTER_META = msdFilterMeta(msdSkillsetMeta(7));
-// A key's chip: Prism's name and colour for the Prism keys and on a 7K-only
+// A key's chip: Prism's name and colour for the Prism keys and on a 6K-8K
 // facet, MinaCalc's otherwise.
 const msdFilterMetaFor = (keys: readonly string[]) => (key: string): SkillAxisMeta | undefined =>
   (isPrismKeyFacet(keys) || isPrismOnlyMsdKey(key) ? PRISM_MSD_FILTER_META : MSD_FILTER_META)[MSD_FILTER_SKILLSET[key]];
@@ -1077,7 +1192,7 @@ const SKILL_MSD_FOCUS: Record<string, string> = {
   jack: "jackspeed",
   stream: "stream",
 };
-// The same on a 7K-only key facet, where Prism folds Stream and JackSpeed into
+// The same on a 6K-8K key facet, where Prism folds Stream and JackSpeed into
 // Chordstream and Jack and rates Delay instead of Stamina.
 const PRISM_SKILL_MSD_FOCUS: Record<string, string> = {
   speed: "speed",
@@ -1384,7 +1499,7 @@ function MobileFilterSheet({
           <span className="block px-4 pt-2 text-[13px] font-bold text-osu-l1"><Trans>Filters</Trans></span>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
-          <KeysChips ui={ui} apply={apply} />
+          <KeysChips ui={ui} apply={apply} inline />
           <StatusChips ui={ui} apply={apply} />
           <ChipGroup label={t`Difficulty`}>
             <StarSlider ui={ui} apply={apply} />
@@ -1536,7 +1651,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
 
   useEffect(() => {
     if (!noDans || (uiRef.current.danMin == null && uiRef.current.danMax == null)) return;
-    apply({ danMin: null, danMax: null, danMinStep: null, danMaxStep: null, page: 0 });
+    apply({ danMin: null, danMax: null, danMinStep: null, danMaxStep: null, danKeys: null, page: 0 });
     // `apply` intentionally follows the latest local UI through uiRef.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noDans]);
@@ -1611,6 +1726,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       danMax: noDans ? null : ui.danMax,
       danMinStep: noDans ? null : ui.danMinStep,
       danMaxStep: noDans ? null : ui.danMaxStep,
+      danKeys: noDans ? null : ui.danKeys,
+      danLn: noDans ? null : danLnOn(ui),
       country: null,
       sort: ui.sort,
       dir: ui.dir,
@@ -1700,7 +1817,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       q: "", keys: [], keysExclude: [], statuses: [], statusesExclude: [], patterns: [], patternsExclude: [],
       skills: [], skillsExclude: [], msd: {},
       starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, lenMin: 0, lenMax: 0, lnMin: 0, lnMax: 0,
-      danMin: null, danMax: null, danMinStep: null, danMaxStep: null,
+      danMin: null, danMax: null, danMinStep: null, danMaxStep: null, danKeys: null, danLn: null,
       page: 0,
     });
   };

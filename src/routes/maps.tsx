@@ -20,7 +20,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { OsuLogo } from "../components/ui/OsuLogo";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { ModGlyph } from "../components/maps/ModGlyph";
-import { MapSearchSection, type MapSearchUiState } from "../components/maps/MapSearchSection";
+import { MapSearchSection, SEARCH_KEY_VALUES, type MapSearchUiState } from "../components/maps/MapSearchSection";
 import {
   DEFAULT_SEARCH_SORT,
   SEARCH_SORT_VALUES,
@@ -185,6 +185,10 @@ type MapsSearch = {
   // Step on each dan bound, -2..2 for "--" through "++"; null is the whole dan.
   sDanMinStep: number | null;
   sDanMaxStep: number | null;
+  // The keymode whose ladder the dan bounds are read on; null is a bare rawDan range.
+  sDanKeys: number | null;
+  // Whether the dan bounds are read on the LN ladders; null follows the pattern facet.
+  sDanLn: boolean | null;
   sPatterns: string;
   sSkills: string;
   sVibro: "only" | "hide" | "";
@@ -289,6 +293,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sDanMax: null,
   sDanMinStep: null,
   sDanMaxStep: null,
+  sDanKeys: null,
+  sDanLn: null,
   sPatterns: "",
   sSkills: "",
   sVibro: "",
@@ -304,7 +310,6 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   country: undefined,
 };
 
-const SEARCH_KEY_VALUES = ["4k", "7k", "other"];
 const SEARCH_STATUS_VALUES = ["ranked", "qualified", "loved", "graveyard", "other"];
 const SEARCH_PATTERN_VALUES = [
   "jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln",
@@ -735,6 +740,8 @@ export const Route = createFileRoute("/maps")({
     sDanMax: clampDanLevel(search.sDanMax),
     sDanMinStep: search.sDanMin == null ? null : clampDanStep(search.sDanMinStep, -2),
     sDanMaxStep: search.sDanMax == null ? null : clampDanStep(search.sDanMaxStep, 2),
+    sDanKeys: search.sDanMin == null && search.sDanMax == null ? null : [4, 6, 7].find((keys) => keys === Number(search.sDanKeys)) ?? null,
+    sDanLn: typeof search.sDanLn === "boolean" ? search.sDanLn : null,
     sPatterns: sanitizeSearchTriStateCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
     sSkills: sanitizeSearchTriStateCsv(search.sSkills, SEARCH_SKILL_VALUES),
     sVibro: search.sVibro === "only" || search.sVibro === "hide" ? search.sVibro : DEFAULT_MAPS_SEARCH.sVibro,
@@ -1150,6 +1157,8 @@ function MapsPage() {
       danMax: mapsSearch.sDanMax,
       danMinStep: mapsSearch.sDanMinStep,
       danMaxStep: mapsSearch.sDanMaxStep,
+      danKeys: mapsSearch.sDanKeys,
+      danLn: mapsSearch.sDanLn,
       sort: mapsSearch.sSort,
       dir: mapsSearch.sDir,
       page: mapsSearch.page,
@@ -1193,6 +1202,8 @@ function MapsPage() {
     if (patch.danMax !== undefined) next.sDanMax = patch.danMax;
     if (patch.danMinStep !== undefined) next.sDanMinStep = patch.danMinStep;
     if (patch.danMaxStep !== undefined) next.sDanMaxStep = patch.danMaxStep;
+    if (patch.danKeys !== undefined) next.sDanKeys = patch.danKeys;
+    if (patch.danLn !== undefined) next.sDanLn = patch.danLn;
     if (patch.sort !== undefined) next.sSort = patch.sort;
     if (patch.dir !== undefined) next.sDir = patch.dir;
     if (patch.page !== undefined) next.page = patch.page;

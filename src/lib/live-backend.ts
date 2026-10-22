@@ -3004,6 +3004,8 @@ export async function fetchLiveTopPlaysSnapshot(
     includePpGains?: boolean;
     userIds?: number[];
     rates?: ("nm" | "dt" | "ht")[];
+    /** All time only: one row per player, their best or their 200th play. */
+    view?: "plays" | "best" | "floor";
   },
 ): Promise<LiveTopPlaysSnapshot> {
   const query = new URLSearchParams({ country, window });
@@ -3016,6 +3018,7 @@ export async function fetchLiveTopPlaysSnapshot(
   if (options?.includePpGains) query.set("includePpGains", "1");
   if (options?.userIds && options.userIds.length > 0) query.set("userIds", options.userIds.join(","));
   if (options?.rates && options.rates.length > 0) query.set("rates", options.rates.join(","));
+  if (options?.view && options.view !== "plays" && window === "all") query.set("view", options.view);
   return fetchLiveJson(`/api/snapshots/top-plays?${query.toString()}`);
 }
 
@@ -3202,6 +3205,10 @@ export interface LiveMapSearchParams {
   // Step on each dan bound, -2..2 for "--" through "++"; null is the whole dan.
   danMinStep?: number | null;
   danMaxStep?: number | null;
+  // The keymode whose dan ladder the bounds are read on (4, 6 or 7).
+  danKeys?: number | null;
+  // Read the dan bounds on the LN ladders (true) or the rice ones (false).
+  danLn?: boolean | null;
   // Hold share of the chart's objects, in percent.
   lnMin: number | null;
   lnMax: number | null;
@@ -3275,6 +3282,8 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.danMax != null) query.set("danMax", String(params.danMax));
   if (params.danMin != null && params.danMinStep != null) query.set("danMinStep", String(params.danMinStep));
   if (params.danMax != null && params.danMaxStep != null) query.set("danMaxStep", String(params.danMaxStep));
+  if ((params.danMin != null || params.danMax != null) && params.danKeys != null) query.set("danKeys", String(params.danKeys));
+  if ((params.danMin != null || params.danMax != null) && params.danLn != null) query.set("danLn", params.danLn ? "1" : "0");
   if (params.lnMin != null) query.set("lnMin", String(params.lnMin));
   if (params.lnMax != null) query.set("lnMax", String(params.lnMax));
   if (params.country) query.set("country", params.country);
