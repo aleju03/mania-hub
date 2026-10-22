@@ -67,7 +67,7 @@ export async function searchPickerMaps(query: string): Promise<LiveMapSearchEntr
   return entry ? [entry] : [];
 }
 
-function emptySearchParams(query: string): LiveMapSearchParams {
+export function emptySearchParams(query: string): LiveMapSearchParams {
   return {
     q: query,
     keys: [],
