@@ -382,6 +382,12 @@ default. A lazer play is stored with `game_client = 'lazer'` and is shown on
 lazer's accuracy and grade; the public feed gives its row no legacy total,
 which is how the site tells a lazer row from a stable one.
 
+`mods_json` keeps the acronyms; `lazer_mods_json` keeps lazer's mods with
+their settings as the replay carries them. The feed puts Difficulty Adjust's
+settings back on its mod, which is how a practice-chart credential reads the
+OD a DA play was set to. Lazer rows stored before the column get it back from
+their replay in the maintenance pass (`fillLazerModSettings`, DA rows only).
+
 Only 4K to 10K is judged and rated (`isImportRatedKeyCount`). 11K and wider are
 stored unrated as `keymode_unsupported`, without judging, a timing row or a
 header review.
@@ -1096,8 +1102,11 @@ import on a registered course's exact file (its pinned checksum, else the
 site's copy of the map) is read as a course pass beside the osu! ones
 (`DanClearSources` in `features/dan-courses.ts`), by the overlay, by a
 restricted profile (imports alone) and by the `/rankings` Clears board.
-`player_skill_ratings` reads osu! plays only; the merged rating takes the
-app-passed courses in. A clear opens as its import on the score card.
+A DA import on a practice chart's OD variant counts by the official rule
+(DA set to the reference's OD, HP at or above the upload's), though the play
+itself stays unrated. `player_skill_ratings` reads osu! plays only; the merged
+rating takes the app-passed courses in. A clear opens as its import on the
+score card.
 
 Nothing official is written. `player_skill_ratings`, pp, score ingest, snipes,
 goals and packs (card snapshots included) keep reading osu! plays only; skill
