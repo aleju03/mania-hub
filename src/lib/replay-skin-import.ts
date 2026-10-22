@@ -188,6 +188,13 @@ export async function importReplaySkinFromOsk(
     }
   }
 
+  // Set either way: profiles start from the base settings, which may still
+  // carry the flag from a lazer skin imported before this one.
+  const lazerBodies = isLazerSkinArchive(lookup, skinIni);
+  for (const [key, profile] of Object.entries(keymodeProfiles)) {
+    keymodeProfiles[key] = { ...profile, lazerBodies };
+  }
+
   const selectedProfile = keymodeProfiles[String(selectedBlock.keys)];
   const selectedBlockSettings = settingsFromManiaBlock(selectedBlock.block);
   nextSettings = normalizeReplaySkinSettings({
@@ -553,6 +560,25 @@ export async function readLazerComboLayout(lookup: Map<string, JSZip.JSZipObject
 }
 
 const LAZER_HUD_HEIGHT = 768;
+
+// What lazer's skin editor leaves behind when it saves (skininfo.json plus a
+// layout json per edited target), or the comment older lazer builds appended
+// to a skin.ini they rewrote. The backend's archive-meta detector uses the
+// same list for the catalog's lazer trait.
+const LAZER_MARKER_FILES = new Set([
+  "skininfo.json",
+  "mainhudcomponents.json",
+  "songselect.json",
+  "playfield.json",
+]);
+const LAZER_INI_MARKER = "automatically added by osu!";
+
+export function isLazerSkinArchive(lookup: Map<string, JSZip.JSZipObject>, rawIni?: string | null): boolean {
+  for (const path of lookup.keys()) {
+    if (LAZER_MARKER_FILES.has(path.slice(path.lastIndexOf("/") + 1))) return true;
+  }
+  return Boolean(rawIni?.includes(LAZER_INI_MARKER));
+}
 
 function stripBom(value: string): string {
   return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
@@ -1024,6 +1050,7 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
   const textureCap = getSkinTextureCap();
   let src = `data:${resolved.mime};base64,${data}`;
   let size: { width: number; height: number } | null = null;
+  let sourceHeight: number | undefined;
   let capped = false;
   // Some skins ship TIFFs renamed to .png (Percy-style LN bodies especially;
   // osu!stable decodes by content, so they work in game). Browsers cannot
@@ -1039,6 +1066,7 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
     if (decoded && transcoded) {
       src = transcoded;
       size = plan?.crop ? { width: plan.width, height: plan.height } : { width: decoded.width, height: decoded.height };
+      if (plan?.crop && plan.height < decoded.height) sourceHeight = decoded.height;
       capped = true;
     }
   }
@@ -1049,7 +1077,10 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
     if (shrunk) {
       src = shrunk;
       // A cropped strip really is shorter now; a scaled-down image is not.
-      if (plan.crop) size = { width: plan.width, height: plan.height };
+      if (plan.crop) {
+        if (plan.height < size!.height) sourceHeight = size!.height;
+        size = { width: plan.width, height: plan.height };
+      }
     }
   }
   return {
@@ -1058,6 +1089,7 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
     src,
     width: size?.width,
     height: size?.height,
+    ...(sourceHeight ? { sourceHeight } : {}),
     scale: resolved.scale,
   };
 }

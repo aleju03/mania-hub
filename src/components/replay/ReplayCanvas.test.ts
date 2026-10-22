@@ -396,6 +396,19 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).not.toContain("bodyAlpha * bodyVisibilityAlpha");
   });
 
+  it("draws a lazer skin's LN body the way lazer's LegacyBodyPiece does", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // One copy stretched to 32800 of lazer's 768-space units, from the tail
+    // whatever the NoteBodyStyle, sized by the strip's pre-crop height.
+    expect(source).toContain("const LAZER_LN_BODY_SPAN = 32800 * (480 / 768);");
+    expect(source).toContain("? LAZER_LN_BODY_SPAN * lazerScale * (sourceHeight / fullSourceHeight)");
+    expect(source).toContain("const anchorAtTop = lazer ? !upscroll : (bodyStyle === 2) === upscroll;");
+    // The body runs half a tail note past the end line, unclipped by the cap.
+    expect(source).toContain("bodyTailY = this.skinSettings.upscroll ? tailEndY + lazerTailHeight / 2 : tailEndY - lazerTailHeight / 2;");
+    expect(source).toContain("if (tailHeight > 0 && !lazerBodies) {");
+  });
+
   it("cascades skin LN bodies from the tail instead of stretching one copy", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
@@ -403,14 +416,14 @@ describe("ManiaReplayRenderer skin customization", () => {
     // rounded cap hides behind a transparent lead-in) came out with a flat
     // tail while one copy was squashed over the whole hold.
     expect(source).toContain("private lnBodyTiles(");
-    expect(source).toContain("const tileHeight = sourceHeight * (colWidth / sourceWidth);");
+    expect(source).toContain(": sourceHeight * (colWidth / sourceWidth);");
     expect(source).toContain("if (span > tileHeight * MAX_LN_BODY_TILES) return stretched;");
     expect(source).toContain("const MAX_LN_BODY_TILES = 8;");
     // The old whole-span stretch is gone from the skin body path.
     expect(source).not.toContain("(segmentTop - bodyTop) / bodyHeight,");
     // The cascade anchors at the tail (style 1) or head (style 2), and the
     // tiles stack upward mirrored whenever that anchor sits at the bottom.
-    expect(source).toContain("const anchorAtTop = (bodyStyle === 2) === upscroll;");
+    expect(source).toContain(": (bodyStyle === 2) === upscroll;");
     expect(source).toContain("top: anchorAtTop ? bodyTop + near : bodyBottom - far,");
     expect(source).toContain("flipY: !anchorAtTop,");
     // NoteBodyStyle 0 stretches one copy instead of cascading.
@@ -424,7 +437,7 @@ describe("ManiaReplayRenderer skin customization", () => {
     // the GPU texture limit), so repeating it would replay the art's
     // transparent lead-in partway up and cut the hold in half.
     expect(source).toContain("const LN_BODY_STRIP_ASPECT = 8;");
-    expect(source).toContain("if (sourceHeight / sourceWidth >= LN_BODY_STRIP_ASPECT) {");
+    expect(source).toContain("if (lazer || sourceHeight / sourceWidth >= LN_BODY_STRIP_ASPECT) {");
     expect(source).toContain("if (span - covered > 0.5) push(covered, span, Math.max(0, 1 - LN_BODY_FILLER_ROWS / sourceHeight), 1);");
   });
 
@@ -574,7 +587,7 @@ describe("ManiaReplayRenderer skin customization", () => {
     // The cascade counts from the tail box's far edge, which is the origin a
     // Percy body's transparent lead-in is authored against. A centre stop, or
     // the "cut LN tail" trim, slides that lead-in down and opens a gap.
-    expect(source).toContain("const bodyTailY = this.skinSettings.upscroll ? tailBoxTop + tailHeight : tailBoxTop;");
+    expect(source).toContain("let bodyTailY = this.skinSettings.upscroll ? tailBoxTop + tailHeight : tailBoxTop;");
     expect(source).not.toContain("renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, tailTrimDelta");
     // The built-in bar/circle/arrow styles keep the trim: there it is a look,
     // not a compensation for where a skin's own art sits.

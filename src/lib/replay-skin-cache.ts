@@ -14,8 +14,9 @@ const CACHE_MAX_ENTRIES = 4;
 // Bumped whenever the importer learns a new element, or corrects one it was
 // already reading: entries decoded by an older build carry the old answer, and
 // nothing else in the key would change. v6 also re-decodes on mobile so the
-// adaptive 2048px texture cap replaces previously cached 4096px skin art.
-const CACHE_VERSION = "v6";
+// adaptive 2048px texture cap replaces previously cached 4096px skin art; v7
+// picks up the lazer-skin flag and the source height of cropped body strips.
+const CACHE_VERSION = "v7";
 
 function versionedKey(key: string): string {
   return `${CACHE_VERSION}:${key}`;

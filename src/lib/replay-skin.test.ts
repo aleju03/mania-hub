@@ -188,6 +188,7 @@ describe("replay skin settings", () => {
           comboHidden: false,
           keysUnderNotes: false,
           noteBodyStyles: [],
+          lazerBodies: false,
           comboScale: 1,
           noteHeightScale: 50,
           assets: {

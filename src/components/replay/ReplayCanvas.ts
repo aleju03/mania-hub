@@ -263,6 +263,10 @@ const LN_BODY_STRIP_ASPECT = 8;
 // How much of a strip's far end is stretched over a hold that outruns it. Far
 // from the cap these bodies are uniform, so a few rows carry any distance.
 const LN_BODY_FILLER_ROWS = 8;
+// lazer's LegacyBodyPiece stretches any body that is not NoteBodyStyle 0 to
+// 32800 of its units, which are 768ths of the stage height: 20500 in the
+// 480-space the layout scale is measured in.
+const LAZER_LN_BODY_SPAN = 32800 * (480 / 768);
 // What the inline mobile canvas used to be (~390-430px tall). Inline portrait
 // layouts anchor skin scale and scroll speed to this instead of the real
 // height, so the taller redesigned stage adds lookahead rather than speed.
@@ -7564,7 +7568,15 @@ export class ManiaReplayRenderer {
     // band of backdrop under the cap, so it stays with the built-in styles.
     const tailBoxTop = this.skinSettings.upscroll ? tailEndY : tailEndY - tailHeight;
     const bodyHeadY = this.skinSettings.upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
-    const bodyTailY = this.skinSettings.upscroll ? tailBoxTop + tailHeight : tailBoxTop;
+    let bodyTailY = this.skinSettings.upscroll ? tailBoxTop + tailHeight : tailBoxTop;
+    // lazer runs the body half a tail note past the end line, blank cap or
+    // not (lazer falls back to the head art when there is no tail), and draws
+    // the cap over it with no clip.
+    const lazerBodies = this.skinProfile.lazerBodies;
+    if (lazerBodies) {
+      const lazerTailHeight = tailAsset ? this.getNoteAssetHeight(tailAsset, colWidth, layout, layout.noteHeight) : headHeight;
+      bodyTailY = this.skinSettings.upscroll ? tailEndY + lazerTailHeight / 2 : tailEndY - lazerTailHeight / 2;
+    }
     // Directional, NOT min/max: the body runs from the tail end toward the
     // head and is spent once the tail reaches the head's centre, which every
     // hold played through does in its last half-cap at the receptor. Taking
@@ -7582,7 +7594,7 @@ export class ManiaReplayRenderer {
     // A blank cap has no box (tailHeight 0) and so nothing to clip against.
     let clipTop = bodyTop;
     let clipBottom = bodyBottom;
-    if (tailHeight > 0) {
+    if (tailHeight > 0 && !lazerBodies) {
       const centreY = tailBoxTop + tailHeight / 2;
       let capEdgeY = centreY;
       // Downscroll draws the cap flipped, so the texture's top edge is the one
@@ -7597,7 +7609,9 @@ export class ManiaReplayRenderer {
 
     if (bodyAsset && clipBottom > clipTop) {
       const baseAlpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55);
-      for (const full of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom, this.skinProfile.noteBodyStyles[col] ?? 1)) {
+      const bodyStyle = this.skinProfile.noteBodyStyles[col] ?? 1;
+      const lazerScale = lazerBodies ? layout.layoutScale : undefined;
+      for (const full of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom, bodyStyle, lazerScale)) {
         const tile = clipLnBodyTile(full, clipTop, clipBottom);
         if (!tile) continue;
         const tileHeight = tile.bottom - tile.top;
@@ -7677,6 +7691,9 @@ export class ManiaReplayRenderer {
     bodyTop: number,
     bodyBottom: number,
     bodyStyle: number,
+    // Set for a lazer skin: px per 480-space unit, which sizes lazer's one
+    // stretched copy.
+    lazerLayoutScale?: number,
   ): LnBodyTile[] {
     // The upscroll flip on the stretched copy keeps the art's cap end facing
     // the tail, the same orientation every cascade path below draws with.
@@ -7688,7 +7705,16 @@ export class ManiaReplayRenderer {
     const sourceWidth = asset.width && asset.width > 0 ? asset.width : texture.width;
     const sourceHeight = asset.height && asset.height > 0 ? asset.height : texture.height;
     if (!(sourceWidth > 0) || !(sourceHeight > 0)) return stretched;
-    const tileHeight = sourceHeight * (colWidth / sourceWidth);
+    // lazer: one copy, 32800 units from the tail, whatever the art's aspect.
+    // A Percy strip comes out about four times taller than at natural aspect,
+    // so its transparent lead-in reads as a gap and the step into the body is
+    // magnified into a soft fade. A cropped strip keeps its share of the span.
+    const lazerScale = lazerLayoutScale && lazerLayoutScale > 0 ? lazerLayoutScale : 0;
+    const lazer = lazerScale > 0;
+    const fullSourceHeight = asset.sourceHeight && asset.sourceHeight > sourceHeight ? asset.sourceHeight : sourceHeight;
+    const tileHeight = lazer
+      ? LAZER_LN_BODY_SPAN * lazerScale * (sourceHeight / fullSourceHeight)
+      : sourceHeight * (colWidth / sourceWidth);
     if (!(tileHeight > 0)) return stretched;
 
     const upscroll = this.skinSettings.upscroll;
@@ -7696,7 +7722,7 @@ export class ManiaReplayRenderer {
     // the head for style 2. When that anchor sits at the bottom of the span
     // the tiles stack upward and the art mirrors, so its top row keeps facing
     // the anchor; that is exactly the old flipY-on-upscroll rule, generalised.
-    const anchorAtTop = (bodyStyle === 2) === upscroll;
+    const anchorAtTop = lazer ? !upscroll : (bodyStyle === 2) === upscroll;
     const tiles: LnBodyTile[] = [];
     // Whole-pixel edges: two half-covered rows composited one after the other
     // come to less than full opacity, which reads as a seam at every boundary.
@@ -7714,7 +7740,7 @@ export class ManiaReplayRenderer {
       });
     };
 
-    if (sourceHeight / sourceWidth >= LN_BODY_STRIP_ASPECT) {
+    if (lazer || sourceHeight / sourceWidth >= LN_BODY_STRIP_ASPECT) {
       // A strip this tall is drawn to cover any hold on its own, and ours may
       // have been cropped at import to fit the GPU's texture limit. Repeating
       // it would replay the art's transparent lead-in partway up the hold,

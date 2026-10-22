@@ -833,6 +833,11 @@ function drawTapNote(
   fillRoundedRect(ctx, laneX + 1, top, laneWidth - 2, height, 4);
 }
 
+// lazer's LegacyBodyPiece stretches any body that is not NoteBodyStyle 0 to
+// 32800 of its units, which are 768ths of the stage height: 20500 in the
+// 480-space the preview layout scale is measured in.
+const LAZER_LN_BODY_SPAN = 32800 * (480 / 768);
+
 export interface SkinPreviewBodyTile {
   top: number;
   height: number;
@@ -1034,7 +1039,17 @@ function drawLongNote(
     headHeight,
     tailHeight,
   });
-  const { headBoxTop, tailBoxTop, bodyTop, bodyBottom } = geometry;
+  const { headBoxTop, tailBoxTop } = geometry;
+  let { bodyTop, bodyBottom } = geometry;
+  // lazer runs the body half a tail note past the end line, blank cap or not
+  // (lazer falls back to the head art when there is no tail), and draws the
+  // cap over it with no clip.
+  const lazerBodies = profile.lazerBodies;
+  if (lazerBodies) {
+    const lazerTailHeight = tailImage ? noteAssetHeight(tailImage) : headHeight;
+    if (upscroll) bodyBottom = tailEndY + lazerTailHeight / 2;
+    else bodyTop = tailEndY - lazerTailHeight / 2;
+  }
 
   // Where the body stops is a separate question from where its cascade starts.
   // It stops at the cap's CENTRE, stable's rule: cap art is widest there, so
@@ -1047,7 +1062,7 @@ function drawLongNote(
   // box's far edge, which is what puts a Percy lead-in under the cap.
   let visibleTop = bodyTop;
   let visibleBottom = bodyBottom;
-  if (tailHeight > 0 && tailBounds) {
+  if (tailHeight > 0 && tailBounds && !lazerBodies) {
     const centreY = tailBoxTop + tailHeight / 2;
     const artEdgeY = tailBoxTop + lnTailArtEdgeFraction(tailBounds.top, upscroll) * tailHeight;
     const capEdgeY = upscroll ? Math.max(centreY, artEdgeY + 1) : Math.min(centreY, artEdgeY - 1);
@@ -1076,7 +1091,7 @@ function drawLongNote(
     // end - the tail for cascade styles 0/1, the head for 2 - sits at the
     // bottom. That both repositions the tiles and mirrors the art so its top
     // row keeps facing the anchor, the same rule the replay canvas draws by.
-    const anchorAtBottom = bodyStyle === 2 ? !upscroll : upscroll;
+    const anchorAtBottom = bodyStyle === 2 && !lazerBodies ? !upscroll : upscroll;
     if (anchorAtBottom) {
       ctx.translate(0, bodyTop + bodyBottom);
       ctx.scale(1, -1);
@@ -1084,7 +1099,13 @@ function drawLongNote(
     if (bodyStyle === 0) {
       ctx.drawImage(bodyImage, 0, 0, sourceWidth, sourceHeight, laneX, bodyTop, laneWidth, bodyBottom - bodyTop);
     } else {
-      for (const tile of bodyTileRects(bodyTop, bodyBottom, sourceHeight, laneWidth / sourceWidth)) {
+      // lazer stretches one copy to 32800 of its 768-space units from the
+      // tail, whatever the art's aspect: a Percy strip comes out about four
+      // times taller than at natural aspect, its lead-in a visible gap and
+      // its edge a soft fade. A cropped strip keeps its share of the span.
+      const fullHeight = Math.max(sourceHeight, assets.lnBody?.sourceHeight ?? 0);
+      const rowScale = lazerBodies ? (LAZER_LN_BODY_SPAN * layout.scale) / fullHeight : laneWidth / sourceWidth;
+      for (const tile of bodyTileRects(bodyTop, bodyBottom, sourceHeight, rowScale)) {
         ctx.drawImage(bodyImage, 0, 0, sourceWidth, tile.sourceRows, laneX, tile.top, laneWidth, tile.height);
       }
     }
