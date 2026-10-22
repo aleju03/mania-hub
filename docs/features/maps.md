@@ -4,7 +4,7 @@ The `/maps` browser, map collections and the farm helper (`/recommendations`). P
 
 ## Farmed, Most Played and Favourites
 
-- `refresh_user_maps_farmed_scores` pulls a roster user's top 200 and extracts the scores that entered their top plays; `refresh_country_maps` aggregates them into `country_maps_snapshots`; `refresh_global_maps` rolls countries into a global snapshot. Progress is in `live_meta`, served by `/api/snapshots/maps-progress`.
+- `refresh_user_maps_farmed_scores` pulls a roster user's top 200 and extracts the scores that entered their top plays; `refresh_country_maps` aggregates them into `country_maps_snapshots`; `refresh_global_maps` rolls countries into a global snapshot. Progress is in `live_meta`, served by `/api/snapshots/maps-progress`. Unranked roster members (opt-in or score-sourced, rank null) get no osu! refresh: ingest writes their best play per map from the stored score straight into `country_maps_farmed_scores`, capped at 200 maps by pp, and `backfill_unranked_maps_farmed_sweep` seeded their earlier stored plays once. Removing one of their own plays re-derives that map.
 - **Regions store nothing**. Farmed is GLOBAL's packed board narrowed on the maps thread to players whose osu! country is in the region, aggregates recomputed and cached per GLOBAL board revision. Most Played and Favourites fold the member countries' snapshots with `foldCountryMapsSnapshots`. Random and the map modals filter per-country tables with `mapsScopeMatch`.
 
 ## Search index
