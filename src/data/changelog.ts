@@ -43,7 +43,17 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-10-22", text: "Added a Skillsets layout to the Dan rating dynamic render.", to: "/dynamic-renders", image: { src: "/images/changelog/2026-10-22-dan-skillsets-render.webp", alt: "The Skillsets dan render", width: 704, height: 200 } },
+  { date: "2026-10-22", text: "Added a Skillsets layout to the Dan rating dynamic render.", to: "/dynamic-renders", image: { src: "/images/changelog/2026-10-22-dan-skillsets-render-4.webp", alt: "The Skillsets dan render", width: 704, height: 200 } },
+  { date: "2026-10-22", text: "Added Updates and Visualizer tabs to the Prism page. The Visualizer shows how Prism reads each part of a chart.", to: "/news/prism", search: { tab: "visualizer" }, image: { src: "/images/changelog/2026-10-22-prism-visualizer.webp", alt: "The Prism visualizer on a 7K chart", width: 770, height: 590 } },
+  { date: "2026-10-22", text: "Updated Prism to v26, which nerfs inflated low star and inverse LN charts, rates charts you can mash lower and makes Bracket stricter.", to: "/news/prism", search: { tab: "updates" } },
+  { date: "2026-10-22", text: "Added Best play and 200th play views to All time top plays.", to: "/top-plays", search: { range: "all", view: "best" } },
+  { date: "2026-10-22", text: "Added custom HT and DT rates to the map card.", to: "/maps", image: { src: "/images/changelog/2026-10-22-map-card-custom-rates.webp", alt: "A custom DT rate on the map card", width: 527, height: 374 } },
+  { date: "2026-10-22", text: "Added the 6K, 7K and LN ladders to the Dan filter in map search, and MSD ranges for every keymode.", to: "/maps", image: { src: "/images/changelog/2026-10-22-map-search-dan-ladders.webp", alt: "The Dan filter on the 4K LN ladder", width: 474, height: 217 } },
+  { date: "2026-10-22", text: "Added single keymodes from 1K to 18K to the Other filter in map search.", to: "/maps", image: { src: "/images/changelog/2026-10-22-map-search-other-keymodes.webp", alt: "The keymodes under Other in map search", width: 333, height: 190 } },
+  { date: "2026-10-22", text: "Added Hide plays on charts that are not on osu! to skill plays, and the graveyard option now also hides WIP and pending charts." },
+  { date: "2026-10-22", text: "Farmed maps now counts plays from every tracked player, not only the country top 100.", to: "/maps" },
+  { date: "2026-10-22", text: "Fixed lazer skin LN bodies looking different in replays than in lazer.", to: "/replay" },
+  { date: "2026-10-22", text: "Fixed the custom cursor showing black on Firefox on Windows." },
   { date: "2026-10-17", text: "Added likes to skins, with a likes sort and a liked by you filter on the skins page.", to: "/skins" },
   { date: "2026-10-17", text: "Initial release of Prism, a difficulty calculator made for 6K, 7K and 8K that replaces MinaCalc on those keymodes. Your 6K, 7K and 8K ratings take a while to recalculate after the release, so they might not show up right away.", bold: "Prism", kind: "new", to: "/news/prism" },
   { date: "2026-10-17", text: "Added sessions and maps colors and a keymode filter to the activity calendar, and a setting for the count that gets the brightest color." },

@@ -101,6 +101,13 @@ const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   view: "plays",
 };
 
+const { sort: _defaultSort, ...DEFAULT_SEARCH_WITHOUT_SORT } = DEFAULT_TOP_PLAYS_SEARCH;
+
+// All time ranks stored bests, so it opens on PP; the feed windows open on Recent.
+function defaultSortFor(range: TimeRange): SortMode {
+  return range === "all" ? "pp" : "recent";
+}
+
 function hasPopoffsInRange(popoffs: PopOff[], range: TimeRange): boolean {
   const now = Date.now();
   return popoffs.some((popoff) => now - new Date(popoff.time).getTime() < RANGE_MS[range]);
@@ -123,22 +130,33 @@ export const Route = createFileRoute("/top-plays")({
     });
   },
   search: {
-    middlewares: [stripSearchParams(DEFAULT_TOP_PLAYS_SEARCH)],
+    middlewares: [
+      stripSearchParams(DEFAULT_SEARCH_WITHOUT_SORT),
+      // The default sort depends on the destination's range, so it is stripped here.
+      ({ search, next }) => {
+        const result = next(search);
+        if (result.sort !== defaultSortFor(result.range ?? DEFAULT_TOP_PLAYS_SEARCH.range)) return result;
+        const { sort: _sort, ...rest } = result;
+        return rest as typeof result;
+      },
+    ],
   },
-  validateSearch: (search: Record<string, unknown>): TopPlaysSearch => ({
-    range:
+  validateSearch: (search: Record<string, unknown>): TopPlaysSearch => {
+    const range: TimeRange =
       search.range === "24h" ||
       search.range === "3d" ||
       search.range === "7d" ||
       search.range === "30d" ||
       search.range === "all"
         ? search.range
-        : DEFAULT_TOP_PLAYS_SEARCH.range,
+        : DEFAULT_TOP_PLAYS_SEARCH.range;
+    return {
+    range,
     country: parseCountrySearchParam(search.country),
     sort:
       search.sort === "recent" || search.sort === "pp" || search.sort === "gain"
         ? search.sort
-        : DEFAULT_TOP_PLAYS_SEARCH.sort,
+        : defaultSortFor(range),
     dir: search.dir === "asc" || search.dir === "desc" ? search.dir : DEFAULT_TOP_PLAYS_SEARCH.dir,
     keys:
       search.keys === "all" || search.keys === "4k" || search.keys === "other"
@@ -146,7 +164,8 @@ export const Route = createFileRoute("/top-plays")({
         : DEFAULT_TOP_PLAYS_SEARCH.keys,
     rates: parseRates(search.rates).join("-"),
     view: search.view === "best" || search.view === "floor" ? search.view : DEFAULT_TOP_PLAYS_SEARCH.view,
-  }),
+    };
+  },
   component: PopOffsPage,
 });
 
@@ -249,7 +268,15 @@ function PopOffsPage() {
 
     navigate({
       to: "/top-plays",
-      search: { range: rememberedRange, country, sort, dir, keys, rates, view: rememberedRange === "all" ? view : "plays" },
+      search: {
+        range: rememberedRange,
+        country,
+        sort: new URLSearchParams(location.searchStr).has("sort") ? sort : defaultSortFor(rememberedRange),
+        dir,
+        keys,
+        rates,
+        view: rememberedRange === "all" ? view : "plays",
+      },
       replace: true,
       resetScroll: false,
     });
