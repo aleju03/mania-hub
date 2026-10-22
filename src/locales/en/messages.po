@@ -9946,7 +9946,6 @@ msgstr "LN Release"
 msgid "LN share"
 msgstr "LN share"
 
-
 #: src/lib/pattern-labels.ts
 msgid "LN Speed"
 msgstr "LN Speed"
@@ -14939,7 +14938,6 @@ msgstr "Regular dan"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Regular ladders"
 #~ msgstr "Regular ladders"
-
 
 #: src/lib/skill-axes.ts
 msgid "Release"
