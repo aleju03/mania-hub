@@ -8215,8 +8215,16 @@ msgid "Hide players"
 msgstr "Hide players"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Hide plays on graveyarded charts"
-msgstr "Hide plays on graveyarded charts"
+msgid "Hide plays on charts that are not on osu!"
+msgstr "Hide plays on charts that are not on osu!"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Hide plays on graveyarded charts"
+#~ msgstr "Hide plays on graveyarded charts"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on graveyarded, WIP and pending charts"
+msgstr "Hide plays on graveyarded, WIP and pending charts"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Hide plays on loved charts"
@@ -20032,6 +20040,10 @@ msgstr "Unstable Rate"
 #: src/components/replay/StableResultsScreen.tsx
 msgid "Unstable Rate: {0}"
 msgstr "Unstable Rate: {0}"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "unsubmitted"
+msgstr "unsubmitted"
 
 #: src/routes/teams.tsx
 #~ msgid "Until someone opens a team's page, its pp only counts tracked members."

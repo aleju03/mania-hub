@@ -8196,8 +8196,16 @@ msgid "Hide players"
 msgstr "隐藏玩家"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Hide plays on graveyarded charts"
-msgstr "隐藏坟场谱面上的成绩"
+msgid "Hide plays on charts that are not on osu!"
+msgstr "隐藏不在 osu! 上的谱面的成绩"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Hide plays on graveyarded charts"
+#~ msgstr "隐藏坟场谱面上的成绩"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on graveyarded, WIP and pending charts"
+msgstr "隐藏坟场、WIP 和待定谱面上的成绩"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Hide plays on loved charts"
@@ -19989,6 +19997,10 @@ msgstr "不稳定率"
 #: src/components/replay/StableResultsScreen.tsx
 msgid "Unstable Rate: {0}"
 msgstr "UR：{0}"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "unsubmitted"
+msgstr "未上传"
 
 #: src/routes/teams.tsx
 #~ msgid "Until someone opens a team's page, its pp only counts tracked members."

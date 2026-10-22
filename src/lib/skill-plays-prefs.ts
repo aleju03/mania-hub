@@ -26,6 +26,8 @@ export interface SkillPlaysPrefs {
   hideRanked: boolean;
   hideGraveyard: boolean;
   hideLoved: boolean;
+  /** Plays on charts osu! does not have, imported from a player's own files. */
+  hideLocal: boolean;
   maxPerChart: number;
   /**
    * Dan list only: whether the plays the clear rules turned away are listed
@@ -45,6 +47,7 @@ export const DEFAULT_SKILL_PLAYS_PREFS: SkillPlaysPrefs = {
   hideRanked: false,
   hideGraveyard: false,
   hideLoved: false,
+  hideLocal: false,
   maxPerChart: 0,
   showRejected: true,
   unratedSort: "msd",
@@ -69,6 +72,7 @@ export function normalizeSkillPlaysPrefs(raw: unknown): SkillPlaysPrefs {
     hideRanked: value.hideRanked === true,
     hideGraveyard: value.hideGraveyard === true,
     hideLoved: value.hideLoved === true,
+    hideLocal: value.hideLocal === true,
     // Defaults on, so an entry written before this existed keeps showing them.
     showRejected: value.showRejected !== false,
     maxPerChart: (SKILL_PLAYS_RATE_CAPS as readonly number[]).includes(maxPerChart) ? maxPerChart : 0,
