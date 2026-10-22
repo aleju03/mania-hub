@@ -1868,6 +1868,10 @@ msgid "{total, plural, one {# server} other {# servers}}"
 msgstr "{total, plural, one {# server} other {# servers}}"
 
 #: src/routes/top-plays.tsx
+msgid "{totalCount} players"
+msgstr "{totalCount} players"
+
+#: src/routes/top-plays.tsx
 msgid "{totalCount} top plays found"
 msgstr "{totalCount} top plays found"
 
@@ -2293,6 +2297,10 @@ msgid "200"
 msgstr "200"
 
 #: src/routes/top-plays.tsx
+msgid "200th play"
+msgstr "200th play"
+
+#: src/routes/top-plays.tsx
 msgid "24 hours"
 msgstr "24 hours"
 
@@ -2317,6 +2325,18 @@ msgstr "30 days"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "300"
 msgstr "300"
+
+#: src/components/prism/MashOdExplorer.tsx
+msgid "300 window ±{window300}ms"
+msgstr "300 window ±{window300}ms"
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "300 window ±{window300}ms. At OD 5 and up Prism doesn't check mashing."
+#~ msgstr "300 window ±{window300}ms. At OD 5 and up Prism doesn't check mashing."
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "300 window ±{window300}ms. Under OD 5 Prism checks whether mashing pays off."
+#~ msgstr "300 window ±{window300}ms. Under OD 5 Prism checks whether mashing pays off."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "300g"
@@ -2472,6 +2492,18 @@ msgstr "7K LN"
 #~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. The skill rows themselves are untouched."
 #~ msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. The skill rows themselves are untouched."
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "7K LN rating in v25"
+msgstr "7K LN rating in v25"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "7K LN ratings"
+msgstr "7K LN ratings"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
+msgstr "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
+
 #: src/routes/dan-estimates.tsx
 msgid "7K LN stays within one level of your General dan, because few hard Tech, Inverse and Release charts exist. Those three still show their own numbers."
 msgstr "7K LN stays within one level of your General dan, because few hard Tech, Inverse and Release charts exist. Those three still show their own numbers."
@@ -2543,6 +2575,10 @@ msgstr "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the 
 msgid "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 msgstr "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 
+#: src/components/prism/PrismClip.tsx
+#~ msgid "A chart as written and mashed"
+#~ msgstr "A chart as written and mashed"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 #~ msgstr "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
@@ -2554,6 +2590,14 @@ msgstr "A 4K chart is LN when holds make up at least 45% of its notes and those 
 #: src/routes/news_.prism.tsx
 msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
 msgstr "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "A chart where mashing carries most of its hardest parts shows as Unrateable, and plays on it don't count toward skill or dan ratings."
+msgstr "A chart where mashing carries most of its hardest parts shows as Unrateable, and plays on it don't count toward skill or dan ratings."
+
+#: src/components/prism/PrismClip.tsx
+#~ msgid "A chart's releases in v25 and v26"
+#~ msgstr "A chart's releases in v25 and v26"
 
 #. placeholder {0}: formatAccuracy(bar)
 #. placeholder {1}: formatAccuracy(accuracy)
@@ -2698,6 +2742,14 @@ msgstr "A pass has to be on one of these exact difficulties. REFORM's three INTR
 msgid "A pass that counts in two skills only counts toward the four-pass minimum of the stronger one, so it can raise a skill you already have but cannot start one."
 msgstr "A pass that counts in two skills only counts toward the four-pass minimum of the stronger one, so it can raise a skill you already have but cannot start one."
 
+#: src/components/prism/MashOdExplorer.tsx
+msgid "A passage mashed on a steady beat at OD {current}"
+msgstr "A passage mashed on a steady beat at OD {current}"
+
+#: src/components/prism/BracketFigure.tsx
+msgid "A passage's rows as v25 and v26 file them"
+msgstr "A passage's rows as v25 and v26 file them"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "A pasted image is no longer available. Paste it again before copying."
 msgstr "A pasted image is no longer available. Paste it again before copying."
@@ -2705,6 +2757,10 @@ msgstr "A pasted image is no longer available. Paste it again before copying."
 #: src/routes/dan-estimates.tsx
 msgid "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
 msgstr "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "A play with a mod only lazer has (DA, IN, HO, NR and others) now counts as a lazer play when the site can't tell which client it was set on, so its LN accuracy is read the way lazer judges holds."
+#~ msgstr "A play with a mod only lazer has (DA, IN, HO, NR and others) now counts as a lazer play when the site can't tell which client it was set on, so its LN accuracy is read the way lazer judges holds."
 
 #: src/routes/hashi.tsx
 msgid "A profile showing the map its player is playing"
@@ -2831,6 +2887,7 @@ msgstr "accuracy"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/prism/MashOdExplorer.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -3231,6 +3288,10 @@ msgstr "All overlays are shown"
 msgid "All players"
 msgstr "All players"
 
+#: src/routes/top-plays.tsx
+msgid "All plays"
+msgstr "All plays"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "All rows"
 msgstr "All rows"
@@ -3569,9 +3630,17 @@ msgstr "arrows"
 msgid "Arrows"
 msgstr "Arrows"
 
+#: src/routes/news_.prism.tsx
+msgid "Article"
+msgstr "Article"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "As shown"
 msgstr "As shown"
+
+#: src/components/prism/PrismClip.tsx
+#~ msgid "As written"
+#~ msgstr "As written"
 
 #: src/routes/skins.tsx
 msgid "ascending"
@@ -3580,6 +3649,26 @@ msgstr "ascending"
 #: src/components/maps/FilterChips.tsx
 msgid "Ascending"
 msgstr "Ascending"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Asgard [lvl 88] at 2:34, a chart at OD 2. The pink lines are presses on a steady beat, and each note takes the colour of what the nearest press in its lane scores on it: blue for a 300, green 200, yellow 100, orange 50, red a miss. Move the slider to see the same presses at other ODs."
+#~ msgstr "Asgard [lvl 88] at 2:34, a chart at OD 2. The pink lines are presses on a steady beat, and each note takes the colour of what the nearest press in its lane scores on it: blue for a 300, green 200, yellow 100, orange 50, red a miss. Move the slider to see the same presses at other ODs."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Asgard [lvl 88] at 2:34, an OD 2 chart, played by pressing every key on a steady beat instead of reading the notes. Move the slider to judge the same presses at another OD."
+msgstr "Asgard [lvl 88] at 2:34, an OD 2 chart, played by pressing every key on a steady beat instead of reading the notes. Move the slider to judge the same presses at another OD."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Asgard [lvl 88] at 2:34, an OD 2 chart, played by pressing every key on a steady beat instead of reading the notes. The keys light up on each press and each note shows what it gets. Move the slider to play it again at another OD."
+#~ msgstr "Asgard [lvl 88] at 2:34, an OD 2 chart, played by pressing every key on a steady beat instead of reading the notes. The keys light up on each press and each note shows what it gets. Move the slider to play it again at another OD."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Asgard [lvl 88] at 2:34, an OD 2 chart, played by pressing every key on a steady beat instead of reading the notes. The keys light up on each press, each note shows what it gets, and the bar under the keys shows how early or late each press lands against that OD's windows. Move the slider to play it again at another OD."
+#~ msgstr "Asgard [lvl 88] at 2:34, an OD 2 chart, played by pressing every key on a steady beat instead of reading the notes. The keys light up on each press, each note shows what it gets, and the bar under the keys shows how early or late each press lands against that OD's windows. Move the slider to play it again at another OD."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Asgard [lvl 88] at 2:34, at 0.35x speed, OD 2. On the right, the pink bars are presses on a steady beat, and each note takes the colour of what the nearest press in its lane scores on it: blue for a 300, green 200, yellow 100, orange 50, red a miss."
+#~ msgstr "Asgard [lvl 88] at 2:34, at 0.35x speed, OD 2. On the right, the pink bars are presses on a steady beat, and each note takes the colour of what the nearest press in its lane scores on it: blue for a 300, green 200, yellow 100, orange 50, red a miss."
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Aspect ratio locked"
@@ -3592,6 +3681,10 @@ msgstr "Aspect ratio unlocked"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Assets"
 msgstr "Assets"
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "At OD 5 and up, Prism doesn't check mashing."
+#~ msgstr "At OD 5 and up, Prism doesn't check mashing."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
@@ -3919,6 +4012,10 @@ msgstr "Beatmap difficulty at this play's rate"
 msgid "Beatmap hitsounds"
 msgstr "Beatmap hitsounds"
 
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Beatmap link or id"
+#~ msgstr "Beatmap link or id"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Beatmap Lookup"
 msgstr "Beatmap Lookup"
@@ -4010,6 +4107,10 @@ msgstr "best {best}pp"
 #: src/routes/player/$username.tsx
 msgid "Best Performance"
 msgstr "Best Performance"
+
+#: src/routes/top-plays.tsx
+msgid "Best play"
+msgstr "Best play"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Best Scores"
@@ -4126,11 +4227,21 @@ msgstr "BPM Breakdown"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/components/prism/PrismUpdates.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
 msgid "Bracket"
 msgstr "Bracket"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Bracket dropped by more than 2 on 1,957 6K-8K charts and went up on none. No chart's Overall moved by more than 0.1."
+msgstr "Bracket dropped by more than 2 on 1,957 6K-8K charts and went up on none. No chart's Overall moved by more than 0.1."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Brackets have to come back"
+msgstr "Brackets have to come back"
 
 #: src/components/replay/ReplaySkinColorPanel.tsx
 msgid "Bright"
@@ -4376,6 +4487,10 @@ msgstr "Change"
 msgid "Change {0}"
 msgstr "Change {0}"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Change in 7K LN rating by v25 LN rating"
+msgstr "Change in 7K LN rating by v25 LN rating"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
 msgstr "Change map"
@@ -4518,6 +4633,10 @@ msgstr "Chart preview volume"
 msgid "Charts that only repeat the same full chord rate closer to a jack now."
 msgstr "Charts that only repeat the same full chord rate closer to a jack now."
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Charts you can mash rate lower"
+msgstr "Charts you can mash rate lower"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "chasing your first {chaseTarget}pp play"
 msgstr "chasing your first {chaseTarget}pp play"
@@ -4604,7 +4723,12 @@ msgstr "Chordjack"
 msgid "Chordjacks"
 msgstr "Chordjacks"
 
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Chords as written above, steady presses below, every chord inside a press's 300 window"
+#~ msgstr "Chords as written above, steady presses below, every chord inside a press's 300 window"
+
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
@@ -6173,6 +6297,7 @@ msgid "Default volume"
 msgstr "Default volume"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
@@ -6241,6 +6366,16 @@ msgstr "Deleted {0}"
 #: src/components/replay/ReplayInfo.tsx
 msgid "Deleting"
 msgstr "Deleting"
+
+#. placeholder {0}: explanation.sections.length
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "demand, #{rank} of {0}"
+#~ msgstr "demand, #{rank} of {0}"
+
+#. placeholder {0}: Math.round(harderThan * 100)
+#: src/components/prism/PrismVisualizer.tsx
+msgid "demand, harder than {0}% of the chart"
+msgstr "demand, harder than {0}% of the chart"
 
 #: src/routes/skins.tsx
 msgid "descending"
@@ -6680,6 +6815,18 @@ msgstr "Each pass goes into the skill its chart asks for most. A chart that is c
 msgid "Each player is equally likely, no matter how many favourites they have."
 msgstr "Each player is equally likely, no matter how many favourites they have."
 
+#: src/routes/top-plays.tsx
+msgid "Each player's 200th best play, for players with 200 top plays"
+msgstr "Each player's 200th best play, for players with 200 top plays"
+
+#: src/routes/top-plays.tsx
+msgid "Each player's best play"
+msgstr "Each player's best play"
+
+#: src/components/prism/ReleaseFigure.tsx
+msgid "Each release in a passage, labelled with the share of its v25 cost it keeps in v26"
+msgstr "Each release in a passage, labelled with the share of its v25 cost it keeps in v26"
+
 #: src/routes/dan-estimates.tsx
 msgid "Each skill's dan is the average of your best 20 passes in it, by the level each one credited. A skill needs at least four passes. Your dan is the average of your skill dans, so skills at 10, 9, 7 and 6 give 8."
 msgstr "Each skill's dan is the average of your best 20 passes in it, by the level each one credited. A skill needs at least four passes. Your dan is the average of your skill dans, so skills at 10, 9, 7 and 6 give 8."
@@ -6703,6 +6850,10 @@ msgstr "Each skillset averages up to {averageWindow} clears. Only your best rate
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
 #~ msgstr "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Each steady press lands inside the 300 window of the chord near it, so mashing scores as well as reading the chart."
+#~ msgstr "Each steady press lands inside the 300 window of the chord near it, so mashing scores as well as reading the chart."
 
 #: src/routes/dan-estimates.tsx
 msgid "each the average of your best 20 passes in it"
@@ -7211,6 +7362,10 @@ msgstr "Fast export isn't available in this browser at this size. Try a lower pr
 msgid "Fast single-note runs flowing across the keys."
 msgstr "Fast single-note runs flowing across the keys."
 
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Faster scroll"
+msgstr "Faster scroll"
+
 #: src/components/player/InsightModals.tsx
 msgid "Fastest"
 msgstr "Fastest"
@@ -7470,6 +7625,11 @@ msgstr "find player..."
 #: src/routes/replay_.community.tsx
 msgid "Finding more replays..."
 msgstr "Finding more replays..."
+
+#. placeholder {0}: Math.round(section.heldPressShare * 100)
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Finger held under {0}% of presses"
+msgstr "Finger held under {0}% of presses"
 
 #: src/routes/companella_.test-callback.tsx
 msgid "Finishing the connection..."
@@ -7797,6 +7957,14 @@ msgstr "Full width"
 msgid "Fullscreen"
 msgstr "Fullscreen"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
+msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 1:18, at half speed. Each ring is a release. On the right it is as big and bright as the share of its cost it keeps in v26."
+#~ msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ at 1:18, at half speed. Each ring is a release. On the right it is as big and bright as the share of its cost it keeps in v26."
+
 #: src/lib/skill-axes.ts
 msgid "General"
 msgstr "General"
@@ -8050,6 +8218,10 @@ msgstr "Grid"
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
 msgstr "Guess at random"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Hand busy"
+#~ msgstr "Hand busy"
 
 #: src/lib/pattern-labels.ts
 msgid "Handjack"
@@ -8440,6 +8612,11 @@ msgstr "Holds <0>{0}</0> of the <1>{1}</1> collectible cards, <2>{poolPercent}%<
 #: src/components/packs/collections/CollectorShelf.tsx
 #~ msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
 #~ msgstr "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
+
+#. placeholder {0}: Math.round(section.holdShare * 100)
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Holds: {0}% of notes"
+msgstr "Holds: {0}% of notes"
 
 #: src/components/layout/Nav.tsx
 msgid "home"
@@ -8986,6 +9163,7 @@ msgstr "Italic"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
@@ -9399,6 +9577,10 @@ msgstr "lazer and stable"
 msgid "lazer edits"
 msgstr "lazer edits"
 
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Lazer mods"
+#~ msgstr "Lazer mods"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer scores are recalculated from their judgements, Classic mod or not, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
 #~ msgstr "Lazer scores are recalculated from their judgements, Classic mod or not, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
@@ -9514,6 +9696,10 @@ msgstr "Less score"
 #: src/lib/streak-game.ts
 msgid "Less watched"
 msgstr "Less watched"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Letting go of a hold on its own costs less"
+msgstr "Letting go of a hold on its own costs less"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "light"
@@ -9642,6 +9828,7 @@ msgstr "Live updates on"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -9759,6 +9946,7 @@ msgstr "LN Release"
 msgid "LN share"
 msgstr "LN share"
 
+
 #: src/lib/pattern-labels.ts
 msgid "LN Speed"
 msgstr "LN Speed"
@@ -9796,6 +9984,10 @@ msgstr "LN Technical"
 #: src/lib/pattern-labels.ts
 msgid "LN Walls"
 msgstr "LN Walls"
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Load"
+#~ msgstr "Load"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."
@@ -9880,6 +10072,10 @@ msgstr "Loading board…"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Loading both replays..."
 msgstr "Loading both replays..."
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Loading chart"
+msgstr "Loading chart"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Loading chart…"
@@ -10326,6 +10522,10 @@ msgstr "Maniacard packs"
 msgid "Maniacard pull"
 msgstr "Maniacard pull"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "MANIERA [7K] Masterpiece at 1:29. Purple rows are Bracket, orange rows are Chordstream."
+msgstr "MANIERA [7K] Masterpiece at 1:29. Purple rows are Bracket, orange rows are Chordstream."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "map"
 msgstr "map"
@@ -10468,6 +10668,33 @@ msgstr "marked easy"
 #: src/routes/recommendations.tsx
 msgid "marked hard"
 msgstr "marked hard"
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Mash accuracy"
+#~ msgstr "Mash accuracy"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Mashed"
+msgstr "Mashed"
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Mashed accuracy"
+#~ msgstr "Mashed accuracy"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Mashed on a steady beat"
+#~ msgstr "Mashed on a steady beat"
+
+#. placeholder {0}: Math.round(section.mash.accuracy * 100)
+#. placeholder {1}: section.mash.demand.toFixed(1)
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Mashed: {0}% accuracy at demand {1}"
+msgstr "Mashed: {0}% accuracy at demand {1}"
+
+#. placeholder {0}: (accuracy * 100).toFixed(1)
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Mashed: <0>{0}%</0>"
+#~ msgstr "Mashed: <0>{0}%</0>"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
@@ -10908,6 +11135,10 @@ msgstr "MSD with Inverse"
 msgid "Music"
 msgstr "Music"
 
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Mute"
+msgstr "Mute"
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Mute chart preview"
 msgstr "Mute chart preview"
@@ -11221,6 +11452,10 @@ msgstr "No {keyFilter}K collections yet."
 msgid "No {selectedKeymode}K preview yet."
 msgstr "No {selectedKeymode}K preview yet."
 
+#: src/components/prism/PrismVisualizer.tsx
+msgid "No 6K-8K charts matched that"
+msgstr "No 6K-8K charts matched that"
+
 #: src/routes/player/$username.tsx
 msgid "No About content found."
 msgstr "No About content found."
@@ -11474,6 +11709,14 @@ msgstr "No nearby players have farmed this yet."
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "No new top-play maps in this update."
 #~ msgstr "No new top-play maps in this update."
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "No notes"
+msgstr "No notes"
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "No notes here."
+#~ msgstr "No notes here."
 
 #: src/components/ui/SearchInput.tsx
 msgid "No osu! player named \"{trimmedQuery}\""
@@ -12083,6 +12326,18 @@ msgstr "notes"
 msgid "Notes"
 msgstr "Notes"
 
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Notes take the colour of the pattern Prism files their row under, and hold bodies are drawn faint. The strip under the controls is each half second's demand, coloured by its main pattern, or LN where holds make up as much of its notes as on a chart Prism rates LN."
+#~ msgstr "Notes take the colour of the pattern Prism files their row under, and hold bodies are drawn faint. The strip under the controls is each half second's demand, coloured by its main pattern, or LN where holds make up as much of its notes as on a chart Prism rates LN."
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Notes take the colour of the pattern Prism files their row under, and hold bodies are drawn faint. The strip under the controls is each half second's demand, coloured by its main pattern."
+#~ msgstr "Notes take the colour of the pattern Prism files their row under, and hold bodies are drawn faint. The strip under the controls is each half second's demand, coloured by its main pattern."
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Notes take the colour of the pattern Prism files their row under. Hold bodies are drawn faint."
+#~ msgstr "Notes take the colour of the pattern Prism files their row under. Hold bodies are drawn faint."
+
 #: src/routes/dan-estimates.tsx
 msgid "nothing"
 msgstr "nothing"
@@ -12361,6 +12616,10 @@ msgstr "On 4K jack charts the bonus above the bar is halved, since very high acc
 #: src/routes/dan-estimates.tsx
 #~ msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
 #~ msgstr "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not checked."
+msgstr "On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not checked."
 
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "on a map"
@@ -12923,10 +13182,16 @@ msgid "overall"
 msgstr "overall"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/prism/PrismUpdates.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
 msgid "Overall"
 msgstr "Overall"
+
+#: src/components/prism/MashOdExplorer.tsx
+msgid "Overall difficulty"
+msgstr "Overall difficulty"
 
 #: src/components/player/OverallMethodToggle.tsx
 msgid "Overall method"
@@ -13054,6 +13319,10 @@ msgstr "Passing several players with one score counts as one snipe, against the 
 msgid "Paste"
 msgstr "Paste"
 
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Paste a beatmap link or id."
+#~ msgstr "Paste a beatmap link or id."
+
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Paste a link to one of {username}'s scores on the osu! website."
 #~ msgstr "Paste a link to one of {username}'s scores on the osu! website."
@@ -13122,6 +13391,10 @@ msgstr "Patterns"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "pause"
 msgstr "pause"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Pause"
+msgstr "Pause"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Pause both replays"
@@ -13290,6 +13563,10 @@ msgstr "Pinned"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "play"
 msgstr "play"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Play"
+msgstr "Play"
 
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Play added"
@@ -13469,6 +13746,10 @@ msgstr "Playing"
 #: src/components/player/LivePresence.tsx
 msgid "Playing {mode}"
 msgstr "Playing {mode}"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Playing it as written scores higher, so Prism rates it as written."
+msgstr "Playing it as written scores higher, so Prism rates it as written."
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
@@ -13853,13 +14134,26 @@ msgstr "Prism"
 msgid "Prism also reads the chart's OD. Wider hit windows make a chart easier to score on, so the same notes rate lower at a low OD, and more so on LN charts."
 msgstr "Prism also reads the chart's OD. Wider hit windows make a chart easier to score on, so the same notes rate lower at a low OD, and more so on LN charts."
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that don't are Chordstream."
+msgstr "Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that don't are Chordstream."
+
 #: src/routes/news_.prism.tsx
 msgid "Prism is a difficulty calculator made for 6K, 7K and 8K. It now rates every chart and play on those keymodes instead of MinaCalc, which still rates 4K, 5K and 9K and up."
 msgstr "Prism is a difficulty calculator made for 6K, 7K and 8K. It now rates every chart and play on those keymodes instead of MinaCalc, which still rates 4K, 5K and 9K and up."
 
+#. placeholder {0}: map.keyCount
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Prism rates 6K, 7K and 8K charts. This one is {0}K."
+msgstr "Prism rates 6K, 7K and 8K charts. This one is {0}K."
+
 #: src/routes/news_.prism.tsx
 msgid "Prism rates Chordstream, Bracket, Jack, Technical and Delay, and LN on charts with enough holds."
 msgstr "Prism rates Chordstream, Bracket, Jack, Technical and Delay, and LN on charts with enough holds."
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Prism rates this section as mashed, since that scores higher than playing it as written."
+msgstr "Prism rates this section as mashed, since that scores higher than playing it as written."
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Prismatic"
@@ -14161,6 +14455,7 @@ msgstr "Ranks can differ from osu! because some teams' pp only counts tracked me
 msgid "Rarity"
 msgstr "Rarity"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Rate"
 msgstr "Rate"
@@ -14645,9 +14940,14 @@ msgstr "Regular dan"
 #~ msgid "Regular ladders"
 #~ msgstr "Regular ladders"
 
+
 #: src/lib/skill-axes.ts
 msgid "Release"
 msgstr "Release"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Release alone"
+#~ msgstr "Release alone"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "Release Chords"
@@ -14656,6 +14956,10 @@ msgstr "Release"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Release days"
 msgstr "Release days"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
+msgstr "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
 
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
@@ -15508,6 +15812,7 @@ msgstr "screenshots"
 msgid "Screenshots"
 msgstr "Screenshots"
 
+#: src/components/prism/PrismVisualizer.tsx
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll"
 msgstr "Scroll"
@@ -15725,6 +16030,10 @@ msgstr "Second pull"
 #: src/components/packs/collections/CardMarks.tsx
 msgid "Second to pull this card"
 msgstr "Second to pull this card"
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Section {songTime}"
+#~ msgstr "Section {songTime}"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "See every command"
@@ -16066,6 +16375,14 @@ msgstr "Settings for {0}"
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Settings that differ from that file:"
 msgstr "Settings that differ from that file:"
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Shaded: the 300 window around each press"
+#~ msgstr "Shaded: the 300 window around each press"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Shaded: the 300 window at OD 0 around each press"
+#~ msgstr "Shaded: the 300 window at OD 0 around each press"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -16560,6 +16877,10 @@ msgstr "Single"
 msgid "Single focus"
 msgstr "Single focus"
 
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Single notes"
+#~ msgstr "Single notes"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "Single-note jacks"
 msgstr "Single-note jacks"
@@ -16704,6 +17025,7 @@ msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic
 #~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
 #~ msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
 
+#: src/lib/signature-shared.ts
 #: src/routes/news_.prism.tsx
 msgid "Skillsets"
 msgstr "Skillsets"
@@ -16784,6 +17106,10 @@ msgstr "Slovak"
 #: src/components/replay/ReplayControls.tsx
 msgid "Slower export with more CPU use."
 msgstr "Slower export with more CPU use."
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Slower scroll"
+msgstr "Slower scroll"
 
 #: src/components/player/InsightModals.tsx
 msgid "Slowest"
@@ -16932,6 +17258,10 @@ msgstr "Something went wrong. Try again."
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Song, artist or mapper"
 msgstr "Song, artist or mapper"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Song, artist, mapper, or a beatmap link"
+msgstr "Song, artist, mapper, or a beatmap link"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "soon"
@@ -17640,6 +17970,7 @@ msgid "TECH"
 msgstr "TECH"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
 msgid "Technical"
@@ -17718,6 +18049,10 @@ msgstr "That address cannot be loaded."
 #: src/components/me/GoalsPanel.tsx
 msgid "That beatmap ID is not a mania difficulty."
 msgstr "That beatmap ID is not a mania difficulty."
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "That chart could not be loaded."
+msgstr "That chart could not be loaded."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "That chart has been updated on osu! since the play."
@@ -17941,6 +18276,10 @@ msgstr "The {level} chart of this skillset ladder: a run within one point of the
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {selectedKeymode}K block resolves no note images, so this preview uses flat colours."
 msgstr "The {selectedKeymode}K block resolves no note images, so this preview uses flat colours."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "The <0>Visualizer</0> marks the sections Prism rates as mashed."
+msgstr "The <0>Visualizer</0> marks the sections Prism rates as mashed."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The 4K LN courses are meant to be played on ScoreV2, and osu! only files a play under that formula if you are on lazer. Most people are on stable (I think), so the site works ScoreV2 accuracy out from your judgements rather than asking for a ScoreV2 play at all. On an old archived pass with nothing left but its accuracy, a stable play has to reach 97.5% instead of 97%. The stable formula is the more forgiving of the two, so the same play shows about half a percent higher on it than it would on ScoreV2, and the bar moves up by the same amount to match."
@@ -18704,6 +19043,10 @@ msgstr "The replays you have uploaded to Mania Tracker, with their share links a
 msgid "The report was sent, but at least one image did not upload."
 msgstr "The report was sent, but at least one image did not upload."
 
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
+#~ msgstr "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "the same 96% and 95%"
 #~ msgstr "the same 96% and 95%"
@@ -19085,6 +19428,12 @@ msgstr "This chart is not built in a way a dan level can be read off a clear of 
 #: src/components/maps/MapDetailModal.tsx
 msgid "This chart is not in the map catalog, so there is nothing to show beyond the play itself."
 msgstr "This chart is not in the map catalog, so there is nothing to show beyond the play itself."
+
+#. placeholder {0}: loaded.explanation.od
+#. placeholder {1}: loaded.explanation.sections.length
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "This chart is OD {0}, and {mashedCount} of its {1} sections score higher mashed than played as written, so Prism rates them as mashed. They show in white on the strip, over their as-written demand."
+#~ msgstr "This chart is OD {0}, and {mashedCount} of its {1} sections score higher mashed than played as written, so Prism rates them as mashed. They show in white on the strip, over their as-written demand."
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "This chart isn't analyzed yet."
@@ -19759,6 +20108,10 @@ msgstr "Try this again"
 msgid "Try turning a filter off."
 msgstr "Try turning a filter off."
 
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Try:"
+msgstr "Try:"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Tue"
 msgstr "Tue"
@@ -19814,6 +20167,10 @@ msgstr "Turns the notes into hold notes that fill the gaps between them."
 #: src/routes/dan-estimates.tsx
 #~ msgid "Twenty passes are a body of work, not a lucky handful. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 #~ msgstr "Twenty passes are a body of work, not a lucky handful. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Two hands letting go of a hold: one with other notes around the release, one with none"
+#~ msgstr "Two hands letting go of a hold: one with other notes around the release, one with none"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
@@ -19872,6 +20229,10 @@ msgstr "Unavailable"
 #: src/components/packs/album/AlbumView.tsx
 msgid "Uncollected GOAT"
 msgstr "Uncollected GOAT"
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Under OD 5, Prism checks whether mashing scores better than playing the notes."
+#~ msgstr "Under OD 5, Prism checks whether mashing scores better than playing the notes."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -19950,6 +20311,10 @@ msgstr "Unlike"
 #: src/components/player/AddScoreModal.tsx
 msgid "Unlink"
 msgstr "Unlink"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Unmute"
+msgstr "Unmute"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
@@ -20095,9 +20460,9 @@ msgstr "updated {updatedAtLabel}"
 msgid "Updated just now"
 msgstr "Updated just now"
 
-#: src/routes/report.tsx
-#~ msgid "Updates"
-#~ msgstr "Updates"
+#: src/routes/news_.prism.tsx
+msgid "Updates"
+msgstr "Updates"
 
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -20286,6 +20651,22 @@ msgstr "Username"
 #: src/routes/recommendations.tsx
 msgid "username..."
 msgstr "username..."
+
+#: src/components/prism/PrismClip.tsx
+#~ msgid "v25"
+#~ msgstr "v25"
+
+#: src/components/prism/PrismClip.tsx
+#~ msgid "v26"
+#~ msgstr "v26"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+msgstr "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "v26 mostly changes 7K LN ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+#~ msgstr "v26 mostly changes 7K LN ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
 
 #: src/components/communities/field-options.tsx
 msgid "Verified"
@@ -20537,6 +20918,10 @@ msgstr "Visible to"
 #: src/routes/bbcode.tsx
 msgid "Visual"
 msgstr "Visual"
+
+#: src/routes/news_.prism.tsx
+msgid "Visualizer"
+msgstr "Visualizer"
 
 #. placeholder {0}: nominee.username
 #: src/components/packs/GoatPoll.tsx
@@ -21571,3 +21956,7 @@ msgstr "Your wishlist"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube video"
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Zoom {value}"
+#~ msgstr "Zoom {value}"

@@ -1857,6 +1857,10 @@ msgid "{total, plural, one {# server} other {# servers}}"
 msgstr "{total, plural, other {# 个服务器}}"
 
 #: src/routes/top-plays.tsx
+msgid "{totalCount} players"
+msgstr "{totalCount} 名玩家"
+
+#: src/routes/top-plays.tsx
 msgid "{totalCount} top plays found"
 msgstr "找到 {totalCount} 个最佳成绩"
 
@@ -2282,6 +2286,10 @@ msgid "200"
 msgstr "200"
 
 #: src/routes/top-plays.tsx
+msgid "200th play"
+msgstr "第 200 个成绩"
+
+#: src/routes/top-plays.tsx
 msgid "24 hours"
 msgstr "24 小时"
 
@@ -2306,6 +2314,18 @@ msgstr "30 天"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "300"
 msgstr "300"
+
+#: src/components/prism/MashOdExplorer.tsx
+msgid "300 window ±{window300}ms"
+msgstr ""
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "300 window ±{window300}ms. At OD 5 and up Prism doesn't check mashing."
+#~ msgstr ""
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "300 window ±{window300}ms. Under OD 5 Prism checks whether mashing pays off."
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "300g"
@@ -2461,6 +2481,18 @@ msgstr "7K LN"
 #~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. The skill rows themselves are untouched."
 #~ msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以无论 Tech、Inverse 和 Release 偏向哪边，估计值都不会偏离你的 General 段位超过一个段位。几乎所有人的这两项段位都远低于 General，可能是因为这类高难度谱面很少，也可能是因为站点没有识别出全部，所以它们不再单独决定这个数字。各技能行本身不变。"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "7K LN rating in v25"
+msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "7K LN ratings"
+msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 msgid "7K LN stays within one level of your General dan, because few hard Tech, Inverse and Release charts exist. Those three still show their own numbers."
 msgstr "7K LN 的段位与你的综合段位相差不超过一级，因为高难度的技、反键和放手谱面很少。这三项仍然显示各自的数值。"
@@ -2532,6 +2564,10 @@ msgstr "有新更新时，页面底部的<2>更新日志</2>旁会出现一个<0
 msgid "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速下这些长条仍需要真正的放手时，这张谱面算作 LN。短到可以当普通键点掉的长条会让它算作常规谱面。7K 的界线是 37.5%。"
 
+#: src/components/prism/PrismClip.tsx
+#~ msgid "A chart as written and mashed"
+#~ msgstr ""
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 #~ msgstr "长条占到 45% 或以上的谱面算 LN 谱面，低于这个比例就算单点谱面。7K 的线改为 37.5%，因为它的作图文化会产出社区当作 LN 来看的混合谱面。这和谱面页面给谱面打标签用的是同一条线，所以一张谱面不可能一边喂你的 LN 评分，一边挂着单点的标签。"
@@ -2543,6 +2579,14 @@ msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速�
 #: src/routes/news_.prism.tsx
 msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
 msgstr "7K 谱面中至少 37.5% 的音符是长条（6K 和 8K 为 45%），或者有一个长条贯穿谱面大部分时间、其他手指在它下面继续按键时，谱面就会有 LN 数值。长条能直接点一下并及时放手的谱面没有 LN 数值。有 30 秒以上 LN 段落的谱面，会按这些段落评 LN。"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "A chart where mashing carries most of its hardest parts shows as Unrateable, and plays on it don't count toward skill or dan ratings."
+msgstr ""
+
+#: src/components/prism/PrismClip.tsx
+#~ msgid "A chart's releases in v25 and v26"
+#~ msgstr ""
 
 #. placeholder {0}: formatAccuracy(bar)
 #. placeholder {1}: formatAccuracy(accuracy)
@@ -2687,6 +2731,14 @@ msgstr "通过必须是在这些指定难度上。REFORM 的三个 INTRO 段位�
 msgid "A pass that counts in two skills only counts toward the four-pass minimum of the stronger one, so it can raise a skill you already have but cannot start one."
 msgstr "同时计入两个技能的通过，只算进较强那一项的四次通过门槛，所以它能提高你已有的技能，但不能单独开启一个技能。"
 
+#: src/components/prism/MashOdExplorer.tsx
+msgid "A passage mashed on a steady beat at OD {current}"
+msgstr ""
+
+#: src/components/prism/BracketFigure.tsx
+msgid "A passage's rows as v25 and v26 file them"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "A pasted image is no longer available. Paste it again before copying."
 msgstr "有一张粘贴的图片已不可用。复制前请重新粘贴。"
@@ -2694,6 +2746,10 @@ msgstr "有一张粘贴的图片已不可用。复制前请重新粘贴。"
 #: src/routes/dan-estimates.tsx
 msgid "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
 msgstr "低于所属段位表最低 OD 的成绩不计分：常规谱面为 5.5，4K LN 为 7，7K LN 为 5。<0/> 永远不计入。"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "A play with a mod only lazer has (DA, IN, HO, NR and others) now counts as a lazer play when the site can't tell which client it was set on, so its LN accuracy is read the way lazer judges holds."
+#~ msgstr ""
 
 #: src/routes/hashi.tsx
 msgid "A profile showing the map its player is playing"
@@ -2820,6 +2876,7 @@ msgstr "准确率"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/prism/MashOdExplorer.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -3216,6 +3273,10 @@ msgstr "所有覆盖层都已显示"
 msgid "All players"
 msgstr "所有玩家"
 
+#: src/routes/top-plays.tsx
+msgid "All plays"
+msgstr "全部成绩"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "All rows"
 msgstr "全部记录"
@@ -3554,9 +3615,17 @@ msgstr "箭头"
 msgid "Arrows"
 msgstr "箭头"
 
+#: src/routes/news_.prism.tsx
+msgid "Article"
+msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "As shown"
 msgstr "保持当前画面"
+
+#: src/components/prism/PrismClip.tsx
+#~ msgid "As written"
+#~ msgstr ""
 
 #: src/routes/skins.tsx
 msgid "ascending"
@@ -3565,6 +3634,26 @@ msgstr "升序"
 #: src/components/maps/FilterChips.tsx
 msgid "Ascending"
 msgstr "升序"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Asgard [lvl 88] at 2:34, a chart at OD 2. The pink lines are presses on a steady beat, and each note takes the colour of what the nearest press in its lane scores on it: blue for a 300, green 200, yellow 100, orange 50, red a miss. Move the slider to see the same presses at other ODs."
+#~ msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Asgard [lvl 88] at 2:34, an OD 2 chart, played by pressing every key on a steady beat instead of reading the notes. Move the slider to judge the same presses at another OD."
+msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Asgard [lvl 88] at 2:34, an OD 2 chart, played by pressing every key on a steady beat instead of reading the notes. The keys light up on each press and each note shows what it gets. Move the slider to play it again at another OD."
+#~ msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Asgard [lvl 88] at 2:34, an OD 2 chart, played by pressing every key on a steady beat instead of reading the notes. The keys light up on each press, each note shows what it gets, and the bar under the keys shows how early or late each press lands against that OD's windows. Move the slider to play it again at another OD."
+#~ msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Asgard [lvl 88] at 2:34, at 0.35x speed, OD 2. On the right, the pink bars are presses on a steady beat, and each note takes the colour of what the nearest press in its lane scores on it: blue for a 300, green 200, yellow 100, orange 50, red a miss."
+#~ msgstr ""
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Aspect ratio locked"
@@ -3577,6 +3666,10 @@ msgstr "未锁定宽高比"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Assets"
 msgstr "素材"
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "At OD 5 and up, Prism doesn't check mashing."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "At the time of writing the site had skill ratings for 14,229 players on 4K, 4,035 on 7K and 2,824 on 6K. Of the 4K players, 12,800 had enough qualifying passes for a regular dan and 5,504 for an LN dan. This is where the 4K regular estimates landed:"
@@ -3904,6 +3997,10 @@ msgstr "该游玩倍速下的谱面难度"
 msgid "Beatmap hitsounds"
 msgstr "谱面打击音"
 
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Beatmap link or id"
+#~ msgstr ""
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Beatmap Lookup"
 msgstr "谱面查找"
@@ -3994,6 +4091,10 @@ msgstr "最好 {best}pp"
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Best Performance"
+msgstr "最佳成绩"
+
+#: src/routes/top-plays.tsx
+msgid "Best play"
 msgstr "最佳成绩"
 
 #: src/components/replay/ReplayBrowseView.tsx
@@ -4111,11 +4212,21 @@ msgstr "BPM 分布"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/components/prism/PrismUpdates.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
 msgid "Bracket"
 msgstr "衩"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Bracket dropped by more than 2 on 1,957 6K-8K charts and went up on none. No chart's Overall moved by more than 0.1."
+msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Brackets have to come back"
+msgstr ""
 
 #: src/components/replay/ReplaySkinColorPanel.tsx
 msgid "Bright"
@@ -4361,6 +4472,10 @@ msgstr "变化"
 msgid "Change {0}"
 msgstr "更换{0}"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Change in 7K LN rating by v25 LN rating"
+msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
 msgstr "更换谱面"
@@ -4503,6 +4618,10 @@ msgstr "谱面预览音量"
 msgid "Charts that only repeat the same full chord rate closer to a jack now."
 msgstr "只重复同一个全押的谱面，现在的评分更接近叠键。"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Charts you can mash rate lower"
+msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 msgid "chasing your first {chaseTarget}pp play"
 msgstr "正在冲击你的第一个 {chaseTarget}pp 成绩"
@@ -4589,7 +4708,12 @@ msgstr "大叠"
 msgid "Chordjacks"
 msgstr "大叠"
 
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Chords as written above, steady presses below, every chord inside a press's 300 window"
+#~ msgstr ""
+
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
@@ -6158,6 +6282,7 @@ msgid "Default volume"
 msgstr "默认音量"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
@@ -6226,6 +6351,16 @@ msgstr "已删除 {0}"
 #: src/components/replay/ReplayInfo.tsx
 msgid "Deleting"
 msgstr "删除中"
+
+#. placeholder {0}: explanation.sections.length
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "demand, #{rank} of {0}"
+#~ msgstr ""
+
+#. placeholder {0}: Math.round(harderThan * 100)
+#: src/components/prism/PrismVisualizer.tsx
+msgid "demand, harder than {0}% of the chart"
+msgstr ""
 
 #: src/routes/skins.tsx
 msgid "descending"
@@ -6665,6 +6800,18 @@ msgstr "每次通过都会归到谱面最主要考验的技能。明显同时属
 msgid "Each player is equally likely, no matter how many favourites they have."
 msgstr "每位玩家被抽中的概率相同，与其收藏数量无关。"
 
+#: src/routes/top-plays.tsx
+msgid "Each player's 200th best play, for players with 200 top plays"
+msgstr "每位玩家的第 200 个最佳成绩，仅限有 200 个最佳成绩的玩家"
+
+#: src/routes/top-plays.tsx
+msgid "Each player's best play"
+msgstr "每位玩家的最佳成绩"
+
+#: src/components/prism/ReleaseFigure.tsx
+msgid "Each release in a passage, labelled with the share of its v25 cost it keeps in v26"
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 msgid "Each skill's dan is the average of your best 20 passes in it, by the level each one credited. A skill needs at least four passes. Your dan is the average of your skill dans, so skills at 10, 9, 7 and 6 give 8."
 msgstr "每个技能的段位是你在该技能中最好的 20 次通过按各自计入段位的平均。一个技能至少需要四次通过。你的段位是各技能段位的平均，所以技能分别为 10、9、7 和 6 时结果是 8。"
@@ -6688,6 +6835,10 @@ msgstr "每个技能组最多平均 {averageWindow} 次通过。同一张谱面�
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
 #~ msgstr "每个技能取你最好的通过成绩，直到权重总和达到 {averageWindow}。证据不足时，就按已有的成绩取加权平均，估计仍在逐步完善。"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Each steady press lands inside the 300 window of the chord near it, so mashing scores as well as reading the chart."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "each the average of your best 20 passes in it"
@@ -7192,6 +7343,10 @@ msgstr "此浏览器不支持以该分辨率快速导出。请降低分辨率或
 msgid "Fast single-note runs flowing across the keys."
 msgstr "在各键之间快速流动的单点串。"
 
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Faster scroll"
+msgstr ""
+
 #: src/components/player/InsightModals.tsx
 msgid "Fastest"
 msgstr "最快"
@@ -7451,6 +7606,11 @@ msgstr "查找玩家..."
 #: src/routes/replay_.community.tsx
 msgid "Finding more replays..."
 msgstr "正在查找更多回放..."
+
+#. placeholder {0}: Math.round(section.heldPressShare * 100)
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Finger held under {0}% of presses"
+msgstr ""
 
 #: src/routes/companella_.test-callback.tsx
 msgid "Finishing the connection..."
@@ -7778,6 +7938,14 @@ msgstr "满宽"
 msgid "Fullscreen"
 msgstr "全屏"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
+msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 1:18, at half speed. Each ring is a release. On the right it is as big and bright as the share of its cost it keeps in v26."
+#~ msgstr ""
+
 #: src/lib/skill-axes.ts
 msgid "General"
 msgstr "综合"
@@ -8031,6 +8199,10 @@ msgstr "网格"
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
 msgstr "随机猜一个"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Hand busy"
+#~ msgstr ""
 
 #: src/lib/pattern-labels.ts
 msgid "Handjack"
@@ -8421,6 +8593,11 @@ msgstr "在 <1>{1}</1> 张可收集卡牌中持有 <0>{0}</0> 张，占 <2>{pool
 #: src/components/packs/collections/CollectorShelf.tsx
 #~ msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
 #~ msgstr "在 <1>{1}</1> 名可抽取玩家中持有 <0>{0}</0> 名，占 <2>{poolPercent}%</2>"
+
+#. placeholder {0}: Math.round(section.holdShare * 100)
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Holds: {0}% of notes"
+msgstr ""
 
 #: src/components/layout/Nav.tsx
 msgid "home"
@@ -8959,6 +9136,7 @@ msgstr "斜体"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
@@ -9372,6 +9550,10 @@ msgstr "lazer 和 stable"
 msgid "lazer edits"
 msgstr "lazer 改动"
 
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Lazer mods"
+#~ msgstr ""
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer scores are recalculated from their judgements, Classic mod or not, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear."
 #~ msgstr "无论是否开启 Classic mod，lazer 成绩都会根据判定数重新计算，所以这里使用的准确率可能高于游戏显示的数值。例如，一次 95.5% 的成绩可能会按 96% 的通过计入。"
@@ -9487,6 +9669,10 @@ msgstr "更少分数"
 #: src/lib/streak-game.ts
 msgid "Less watched"
 msgstr "更少观看"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Letting go of a hold on its own costs less"
+msgstr ""
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "light"
@@ -9615,6 +9801,7 @@ msgstr "实时更新已开启"
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -9732,6 +9919,7 @@ msgstr "LN 放手"
 msgid "LN share"
 msgstr "LN 占比"
 
+
 #: src/lib/pattern-labels.ts
 msgid "LN Speed"
 msgstr "LN 速度"
@@ -9769,6 +9957,10 @@ msgstr "LN 技巧"
 #: src/lib/pattern-labels.ts
 msgid "LN Walls"
 msgstr "LN 墙"
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Load"
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."
@@ -9853,6 +10045,10 @@ msgstr "正在加载榜单…"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Loading both replays..."
 msgstr "正在加载两份回放…"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Loading chart"
+msgstr ""
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Loading chart…"
@@ -10299,6 +10495,10 @@ msgstr "Maniacard 卡包"
 msgid "Maniacard pull"
 msgstr "Maniacard 抽卡"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "MANIERA [7K] Masterpiece at 1:29. Purple rows are Bracket, orange rows are Chordstream."
+msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 msgid "map"
 msgstr "谱面"
@@ -10441,6 +10641,33 @@ msgstr "已标记太易"
 #: src/routes/recommendations.tsx
 msgid "marked hard"
 msgstr "已标记太难"
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Mash accuracy"
+#~ msgstr ""
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Mashed"
+msgstr ""
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Mashed accuracy"
+#~ msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Mashed on a steady beat"
+#~ msgstr ""
+
+#. placeholder {0}: Math.round(section.mash.accuracy * 100)
+#. placeholder {1}: section.mash.demand.toFixed(1)
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Mashed: {0}% accuracy at demand {1}"
+msgstr ""
+
+#. placeholder {0}: (accuracy * 100).toFixed(1)
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Mashed: <0>{0}%</0>"
+#~ msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
@@ -10881,6 +11108,10 @@ msgstr "Inverse 下的 MSD"
 msgid "Music"
 msgstr "音乐"
 
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Mute"
+msgstr ""
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Mute chart preview"
 msgstr "静音谱面预览"
@@ -11194,6 +11425,10 @@ msgstr "还没有 {keyFilter}K 的收藏夹。"
 msgid "No {selectedKeymode}K preview yet."
 msgstr "还没有 {selectedKeymode}K 预览。"
 
+#: src/components/prism/PrismVisualizer.tsx
+msgid "No 6K-8K charts matched that"
+msgstr ""
+
 #: src/routes/player/$username.tsx
 msgid "No About content found."
 msgstr "没有找到关于内容。"
@@ -11446,6 +11681,14 @@ msgstr "还没有水平相近的玩家刷过这张。"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "No new top-play maps in this update."
+#~ msgstr ""
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "No notes"
+msgstr ""
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "No notes here."
 #~ msgstr ""
 
 #: src/components/ui/SearchInput.tsx
@@ -12056,6 +12299,18 @@ msgstr "音符"
 msgid "Notes"
 msgstr "音符"
 
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Notes take the colour of the pattern Prism files their row under, and hold bodies are drawn faint. The strip under the controls is each half second's demand, coloured by its main pattern, or LN where holds make up as much of its notes as on a chart Prism rates LN."
+#~ msgstr ""
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Notes take the colour of the pattern Prism files their row under, and hold bodies are drawn faint. The strip under the controls is each half second's demand, coloured by its main pattern."
+#~ msgstr ""
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Notes take the colour of the pattern Prism files their row under. Hold bodies are drawn faint."
+#~ msgstr ""
+
 #: src/routes/dan-estimates.tsx
 msgid "nothing"
 msgstr "不计入"
@@ -12334,6 +12589,10 @@ msgstr "在 4K 叠键谱面上，通过线以上的加分减半，因为这类�
 #: src/routes/dan-estimates.tsx
 #~ msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
 #~ msgstr "4K 这边的分项来自成绩本身的 MSD 技能项评分，按谱面上最强的那一项归类：叠(JackSpeed 和 Chordjack)、技(Technical 和 Jumpstream)、速度(Stream)、耐力(Handstream 和 Stamina)。把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密集对拍上会飙得很高，而那种谱面打起来更像技而不是速度，所以一旦把它和 Stream 归在一起，Blastix Riotz [GRAVITY] 这类谱面就会被贴到速度那一格。拿一个装了 25 张真正 gamma 速度谱的谱包来验证，只用 Stream 能把这 25 张全部选中，并且以很大的差距把对拍谱排除掉。"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not checked."
+msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "on a map"
@@ -12896,10 +13155,16 @@ msgid "overall"
 msgstr "总体"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/prism/PrismUpdates.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
 msgid "Overall"
 msgstr "总体"
+
+#: src/components/prism/MashOdExplorer.tsx
+msgid "Overall difficulty"
+msgstr ""
 
 #: src/components/player/OverallMethodToggle.tsx
 msgid "Overall method"
@@ -13027,6 +13292,10 @@ msgstr "一个成绩超过多名玩家只算一次狙击，对象是其中排名
 msgid "Paste"
 msgstr "粘贴"
 
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Paste a beatmap link or id."
+#~ msgstr ""
+
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Paste a link to one of {username}'s scores on the osu! website."
 #~ msgstr "粘贴 {username} 在 osu! 网站上的成绩链接。"
@@ -13095,6 +13364,10 @@ msgstr "键型"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "pause"
 msgstr "暂停"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Pause"
+msgstr ""
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Pause both replays"
@@ -13263,6 +13536,10 @@ msgstr "已置顶"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "play"
 msgstr "播放"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Play"
+msgstr ""
 
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Play added"
@@ -13442,6 +13719,10 @@ msgstr "游玩中"
 #: src/components/player/LivePresence.tsx
 msgid "Playing {mode}"
 msgstr "{mode} 游玩中"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Playing it as written scores higher, so Prism rates it as written."
+msgstr ""
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
@@ -13826,13 +14107,26 @@ msgstr "Prism"
 msgid "Prism also reads the chart's OD. Wider hit windows make a chart easier to score on, so the same notes rate lower at a low OD, and more so on LN charts."
 msgstr "Prism 也会读取谱面的 OD。判定区间越宽，谱面越容易打出分数，所以同样的音符在低 OD 下评分更低，LN 谱面更明显。"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that don't are Chordstream."
+msgstr ""
+
 #: src/routes/news_.prism.tsx
 msgid "Prism is a difficulty calculator made for 6K, 7K and 8K. It now rates every chart and play on those keymodes instead of MinaCalc, which still rates 4K, 5K and 9K and up."
 msgstr "Prism 是专为 6K、7K 和 8K 打造的难度计算器。这些键数的所有谱面和成绩现在都由它评分，不再使用 MinaCalc；MinaCalc 继续负责 4K、5K 以及 9K 及以上。"
 
+#. placeholder {0}: map.keyCount
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Prism rates 6K, 7K and 8K charts. This one is {0}K."
+msgstr ""
+
 #: src/routes/news_.prism.tsx
 msgid "Prism rates Chordstream, Bracket, Jack, Technical and Delay, and LN on charts with enough holds."
 msgstr "Prism 评分的技能组有胶囊、衩、叠键、技巧和延迟，长条足够多的谱面还有 LN。"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Prism rates this section as mashed, since that scores higher than playing it as written."
+msgstr ""
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Prismatic"
@@ -14134,6 +14428,7 @@ msgstr "排名可能与 osu! 不同，因为部分战队的 pp 只计算已追�
 msgid "Rarity"
 msgstr "稀有度"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Rate"
 msgstr "倍速"
@@ -14618,9 +14913,14 @@ msgstr "常规段位"
 #~ msgid "Regular ladders"
 #~ msgstr "普通段位表"
 
+
 #: src/lib/skill-axes.ts
 msgid "Release"
 msgstr "放手"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Release alone"
+#~ msgstr ""
 
 #: src/lib/pattern-labels.ts
 #~ msgid "Release Chords"
@@ -14629,6 +14929,10 @@ msgstr "放手"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Release days"
 msgstr "更新日期"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
+msgstr ""
 
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
@@ -15481,6 +15785,7 @@ msgstr "截图"
 msgid "Screenshots"
 msgstr "截图"
 
+#: src/components/prism/PrismVisualizer.tsx
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll"
 msgstr "流速"
@@ -15698,6 +16003,10 @@ msgstr "第二个抽到"
 #: src/components/packs/collections/CardMarks.tsx
 msgid "Second to pull this card"
 msgstr "第二个抽到这张卡片"
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Section {songTime}"
+#~ msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "See every command"
@@ -16039,6 +16348,14 @@ msgstr "{0} 的设置"
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Settings that differ from that file:"
 msgstr ""
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Shaded: the 300 window around each press"
+#~ msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Shaded: the 300 window at OD 0 around each press"
+#~ msgstr ""
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -16525,6 +16842,10 @@ msgstr "单项"
 msgid "Single focus"
 msgstr "单项聚焦"
 
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Single notes"
+#~ msgstr ""
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "Single-note jacks"
 msgstr "单点叠键"
@@ -16669,6 +16990,7 @@ msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Vo
 #~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
 #~ msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Volcanic ~ Delta ~</0>，就会把你的 4K 速度段位设为 <1>delta</1>，无需一个技能通常要求的四次通过。除 6K 外每个段位表都有练习谱面。"
 
+#: src/lib/signature-shared.ts
 #: src/routes/news_.prism.tsx
 msgid "Skillsets"
 msgstr "技能组"
@@ -16749,6 +17071,10 @@ msgstr "斯洛伐克语"
 #: src/components/replay/ReplayControls.tsx
 msgid "Slower export with more CPU use."
 msgstr "导出较慢，CPU 占用更高。"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Slower scroll"
+msgstr ""
 
 #: src/components/player/InsightModals.tsx
 msgid "Slowest"
@@ -16897,6 +17223,10 @@ msgstr "出错了。请重试。"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Song, artist or mapper"
 msgstr "歌曲、艺术家或谱师"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Song, artist, mapper, or a beatmap link"
+msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "soon"
@@ -17303,11 +17633,11 @@ msgstr "连续天数"
 #: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stream"
-msgstr "乱键"
+msgstr "切"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "STREAM"
-msgstr "乱键"
+msgstr "切"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Streams"
@@ -17315,11 +17645,11 @@ msgstr "单乱"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Streams broken up by two-note jumps."
-msgstr "夹双押的乱键。"
+msgstr "夹双押的切。"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Streams thickened with three-note hand chords."
-msgstr "夹三押的乱键。"
+msgstr "夹三押的切。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -17605,6 +17935,7 @@ msgid "TECH"
 msgstr "技"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/prism/PrismVisualizer.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
 msgid "Technical"
@@ -17683,6 +18014,10 @@ msgstr "这个地址无法加载。"
 #: src/components/me/GoalsPanel.tsx
 msgid "That beatmap ID is not a mania difficulty."
 msgstr "这个谱面 ID 不是 mania 难度。"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "That chart could not be loaded."
+msgstr ""
 
 #: src/components/player/AddScoreModal.tsx
 msgid "That chart has been updated on osu! since the play."
@@ -17906,6 +18241,10 @@ msgstr "这条技能组段位表的 {level} 谱面：距离门槛不到一个百
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {selectedKeymode}K block resolves no note images, so this preview uses flat colours."
 msgstr "{selectedKeymode}K 配置没有解析出任何音符图像，所以这个预览使用纯色。"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "The <0>Visualizer</0> marks the sections Prism rates as mashed."
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The 4K LN courses are meant to be played on ScoreV2, and osu! only files a play under that formula if you are on lazer. Most people are on stable (I think), so the site works ScoreV2 accuracy out from your judgements rather than asking for a ScoreV2 play at all. On an old archived pass with nothing left but its accuracy, a stable play has to reach 97.5% instead of 97%. The stable formula is the more forgiving of the two, so the same play shows about half a percent higher on it than it would on ScoreV2, and the bar moves up by the same amount to match."
@@ -18661,6 +19000,10 @@ msgstr "你上传到 Mania Tracker 的回放，附带分享链接和删除操作
 msgid "The report was sent, but at least one image did not upload."
 msgstr "反馈已提交，但至少有一张图片没能上传。"
 
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
+#~ msgstr ""
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "the same 96% and 95%"
 #~ msgstr "同样是 96% 和 95%"
@@ -19042,6 +19385,12 @@ msgstr "该谱面的构成方式无法从通过成绩中读出段位水平。"
 #: src/components/maps/MapDetailModal.tsx
 msgid "This chart is not in the map catalog, so there is nothing to show beyond the play itself."
 msgstr "这张谱面不在谱面库里，所以除了成绩本身没有别的可显示。"
+
+#. placeholder {0}: loaded.explanation.od
+#. placeholder {1}: loaded.explanation.sections.length
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "This chart is OD {0}, and {mashedCount} of its {1} sections score higher mashed than played as written, so Prism rates them as mashed. They show in white on the strip, over their as-written demand."
+#~ msgstr ""
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "This chart isn't analyzed yet."
@@ -19716,6 +20065,10 @@ msgstr "再试一次"
 msgid "Try turning a filter off."
 msgstr "试试关掉一个筛选条件。"
 
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Try:"
+msgstr ""
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Tue"
 msgstr "二"
@@ -19771,6 +20124,10 @@ msgstr "把音符变成填满其间空隙的长条。"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Twenty passes are a body of work, not a lucky handful. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 #~ msgstr "20 次通过是一份扎实的积累，而不是运气好的那几次。达标通过不足 20 次时，就取你现有的求平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Two hands letting go of a hold: one with other notes around the release, one with none"
+#~ msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
@@ -19829,6 +20186,10 @@ msgstr "不可用"
 #: src/components/packs/album/AlbumView.tsx
 msgid "Uncollected GOAT"
 msgstr "未收集的 GOAT"
+
+#: src/components/prism/MashOdExplorer.tsx
+#~ msgid "Under OD 5, Prism checks whether mashing scores better than playing the notes."
+#~ msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -19907,6 +20268,10 @@ msgstr ""
 #: src/components/player/AddScoreModal.tsx
 msgid "Unlink"
 msgstr "解除绑定"
+
+#: src/components/prism/PrismVisualizer.tsx
+msgid "Unmute"
+msgstr ""
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
@@ -20052,9 +20417,9 @@ msgstr "更新于 {updatedAtLabel}"
 msgid "Updated just now"
 msgstr "刚刚更新过"
 
-#: src/routes/report.tsx
-#~ msgid "Updates"
-#~ msgstr "更新"
+#: src/routes/news_.prism.tsx
+msgid "Updates"
+msgstr "更新"
 
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -20243,6 +20608,22 @@ msgstr "用户名"
 #: src/routes/recommendations.tsx
 msgid "username..."
 msgstr "用户名…"
+
+#: src/components/prism/PrismClip.tsx
+#~ msgid "v25"
+#~ msgstr ""
+
+#: src/components/prism/PrismClip.tsx
+#~ msgid "v26"
+#~ msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "v26 mostly changes 7K LN ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+#~ msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Verified"
@@ -20494,6 +20875,10 @@ msgstr "可见范围"
 #: src/routes/bbcode.tsx
 msgid "Visual"
 msgstr "可视化"
+
+#: src/routes/news_.prism.tsx
+msgid "Visualizer"
+msgstr ""
 
 #. placeholder {0}: nominee.username
 #: src/components/packs/GoatPoll.tsx
@@ -21528,3 +21913,7 @@ msgstr "你的心愿单"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube 视频"
+
+#: src/components/prism/PrismVisualizer.tsx
+#~ msgid "Zoom {value}"
+#~ msgstr ""
