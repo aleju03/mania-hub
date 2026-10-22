@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export const MOD_BADGE_FILE_NAMES: Record<string, string> = {
   // Classic / stable mods
   HD: "hidden", HR: "hard-rock", DT: "double-time", FL: "flashlight",
@@ -57,8 +59,10 @@ const iconInset: Record<string, number> = {
   NC: 1,
 };
 
-/** `plain` drops the native title tooltip, for callers that draw their own. */
-export function ModBadge({ mod, size = 1, rate, color, detail, plain = false }: { mod: string; size?: number; rate?: number; color?: string; detail?: string; plain?: boolean }) {
+/** `plain` drops the native title tooltip, for callers that draw their own.
+ *  `tail` replaces the tail's text with a node of its own (the map modal's rate
+ *  input), drawn in the tail's font and color. */
+export function ModBadge({ mod, size = 1, rate, color, detail, plain = false, tail }: { mod: string; size?: number; rate?: number; color?: string; detail?: string; plain?: boolean; tail?: ReactNode }) {
   if (!mod) return null;
   const file = MOD_BADGE_FILE_NAMES[mod];
   const bg = color ?? MOD_BADGE_TYPE_COLORS[mod] ?? "#ff6666";
@@ -77,7 +81,7 @@ export function ModBadge({ mod, size = 1, rate, color, detail, plain = false }: 
   const rateText = rate != null ? `${rate.toFixed(2)}×` : null;
   const title = plain ? undefined : [mod, rateText, detail].filter(Boolean).join(" ");
   // The tail text: a rate for speed mods, otherwise a short setting like "OD 9".
-  const tailText = rateText ?? detail ?? null;
+  const tailText = rateText ?? detail ?? (tail != null ? "0.00×" : null);
   // Spans, not divs: the badge also renders inside <p> prose (dan-estimates
   // explainer), where a div would make the SSR HTML invalid and break hydration.
   const iconPill = file ? (
@@ -144,7 +148,7 @@ export function ModBadge({ mod, size = 1, rate, color, detail, plain = false }: 
           }}
         >
           <span className="font-bold leading-none whitespace-nowrap" style={{ fontSize, color: bg }}>
-            {tailText}
+            {tail ?? tailText}
           </span>
         </span>
       </span>

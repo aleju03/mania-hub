@@ -311,6 +311,85 @@ function PendingStat({ label }: { label: string }) {
 // The MSD strip's frame while the entry is in flight. Every play in a skill
 // list is rated, so this block is coming for all of them; holding its shape
 // keeps the modal from resizing under the cursor when the numbers arrive.
+// A speed mod as its badge: the icon turns it on and off, and the rate in its
+// tail is typed, committed on Enter or on leaving the field and clamped to the
+// mod's range.
+function SpeedModBadge({ mod, rate, on, min, max, onToggle, onRate }: {
+  mod: "HT" | "DT";
+  rate: number;
+  on: boolean;
+  min: number;
+  max: number;
+  onToggle: () => void;
+  onRate: (rate: number) => void;
+}) {
+  const { t } = useLingui();
+  const [draft, setDraft] = useState<string | null>(null);
+  const cancelled = useRef(false);
+  const size = 0.85;
+  const text = draft ?? rate.toFixed(2);
+  const commit = (force: boolean) => {
+    const text = draft;
+    setDraft(null);
+    if (cancelled.current || text == null) {
+      cancelled.current = false;
+      return;
+    }
+    const value = Number(text.trim().replace(",", "."));
+    if (!text.trim() || !Number.isFinite(value)) return;
+    const next = Math.min(max, Math.max(min, Math.round(value * 100) / 100));
+    if (force || next !== rate || on) onRate(next);
+  };
+  return (
+    <span className={`relative inline-flex transition-opacity hover:brightness-110 ${on ? "" : "opacity-40 grayscale"}`}>
+      <ModBadge
+        mod={mod}
+        size={size}
+        plain
+        tail={(
+          <>
+            <input
+              type="text"
+              inputMode="decimal"
+              aria-label={t`Rate`}
+              value={text}
+              onFocus={(e) => {
+                setDraft(rate.toFixed(2));
+                e.currentTarget.select();
+              }}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commit(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  commit(true);
+                  e.currentTarget.blur();
+                } else if (e.key === "Escape") {
+                  e.stopPropagation();
+                  cancelled.current = true;
+                  e.currentTarget.blur();
+                }
+              }}
+              // Sized to its text (digits are tabular, 1ch each), so the
+              // rate sits centered in the tail like a plain badge's.
+              style={{ width: `${Math.max(1, text.replace(/[.,]/g, "").length + (/[.,]/.test(text) ? 0.4 : 0))}ch` }}
+              className="cursor-text bg-transparent p-0 text-center font-bold tabular-nums outline-none"
+            />
+            ×
+          </>
+        )}
+      />
+      <button
+        type="button"
+        aria-pressed={on}
+        aria-label={mod}
+        onClick={onToggle}
+        className="absolute inset-y-0 left-0 z-[2] cursor-pointer outline-none"
+        style={{ width: 36 * size }}
+      />
+    </span>
+  );
+}
+
 function PendingMsdBlock({ label }: { label?: string }) {
   const { t } = useLingui();
   return (
@@ -494,7 +573,7 @@ type DanBadgeVerdict = { label: string; family: string };
 
 // isUnrateableExclusion in #dan/vibro-sections, kept here so the modal does not
 // pull the detector into the client bundle.
-const UNRATEABLE_REASONS: ReadonlySet<string> = new Set(["jumptrill", "stacked_heads", "flam_chords"]);
+const UNRATEABLE_REASONS: ReadonlySet<string> = new Set(["jumptrill", "stacked_heads", "flam_chords", "mash"]);
 function isUnrateableExclusion(analysis: VibroAnalysis): boolean {
   const reasons = Object.keys(analysis.reasonShares ?? {});
   return analysis.status === "excluded" && reasons.length > 0
@@ -573,6 +652,7 @@ export function MsdBlock({
   rateSecondaryDan = null,
   vibroAnalysis,
   inverse = false,
+  pending = false,
 }: {
   entry: LiveMapSearchEntry;
   msdLn?: Record<string, number> | null;
@@ -592,9 +672,12 @@ export function MsdBlock({
   vibroAnalysis?: VibroAnalysis;
   // The play was set under Invert: the rate values are the inverted chart's.
   inverse?: boolean;
+  // A rate is loading: the block dims.
+  pending?: boolean;
 }) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
+  const [sectionsOpen, setSectionsOpen] = useState(false);
   // Under a rate mod the chart the play met is not the stored one, so its own
   // MSD and dan replace the 1.0x pair wholesale: a rate-adjusted MSD next to a
   // 1.0x dan badge would describe two different charts. When the rate values
@@ -644,9 +727,23 @@ export function MsdBlock({
   const otherDan = dan && other && other.family !== dan.family ? other : null;
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{heading}</span>
+    <div className={`flex flex-col gap-1.5 transition-opacity ${pending ? "opacity-50" : ""}`}>
+      {/* The sections toggle shares the heading line: a rate whose verdict
+          finds vibro must not add a row and push the panel below it down. */}
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="flex items-baseline gap-3">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{heading}</span>
+          {vibroAnalysis && vibroAnalysis.status !== "clean" && (
+            <button
+              type="button"
+              aria-expanded={sectionsOpen}
+              onClick={() => setSectionsOpen((open) => !open)}
+              className="cursor-pointer text-[11px] text-osu-f1/75 hover:brightness-110"
+            >
+              <span aria-hidden="true">{sectionsOpen ? "▾" : "▸"} </span><Trans>Detected sections</Trans>
+            </button>
+          )}
+        </span>
         {(vibroAnalysis ? vibroAnalysis.status !== "clean" : entry.vibro) && (
           <span className="text-[9.5px] font-semibold text-[#ffcf70]">
             {vibroAnalysis?.status === "adjusted" ? t`localized vibro detected`
@@ -655,16 +752,15 @@ export function MsdBlock({
         )}
       </div>
       {vibroAnalysis && vibroAnalysis.status !== "clean" && (
-        <details className="text-[11px] text-osu-f1/75">
-          <summary className="w-fit cursor-pointer"><Trans>Detected sections</Trans></summary>
-          <ul className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+        <div hidden={!sectionsOpen} className="text-[11px] text-osu-f1/75">
+          <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
             {displaySections.map((section) => (
               <li key={section.startTime} className="whitespace-nowrap rounded bg-osu-b4/40 px-2 py-1 font-mono text-osu-f1/85 tabular-nums">
                 {formatSectionTime(section.startTime / sectionRate)}–{formatSectionTime(section.endTime / sectionRate)}
               </li>
             ))}
           </ul>
-        </details>
+        </div>
       )}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
         {/* Verdict group: dan badge + Overall, split from the skillset grid.
@@ -916,18 +1012,29 @@ export function MapDetailModal({
   const playedInverse = !!(play && active && play.beatmapId === active.beatmapId && play.mods?.includes("IN"));
   // Without a play, the chart can be read at DT or HT: the preview plays at
   // that speed and the MSD and dan are rated there.
-  const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(initialRate);
+  // Each mod keeps the rate last typed into it, so turning it back on returns
+  // to that rate.
+  const [modRate, setModRate] = useState<number>(initialRate);
+  const [htRate, setHtRate] = useState<number>(initialRate < 1 ? initialRate : 0.75);
+  const [dtRate, setDtRate] = useState<number>(initialRate > 1 ? initialRate : 1.5);
   useEffect(() => {
     setModRate(initialRate);
+    if (initialRate < 1) setHtRate(initialRate);
+    if (initialRate > 1) setDtRate(initialRate);
   }, [entry?.beatmapId, initialRate]);
   // The panel is centered, so a rate switch that changes its height would move
   // all of it. Switching pins its top where it was and lets it grow down.
   const panelRef = useRef<HTMLDivElement>(null);
   const [pinnedTop, setPinnedTop] = useState<number | null>(null);
-  const switchModRate = (rate: 1.5 | 0.75) => {
+  const pinPanel = () => {
     const top = panelRef.current?.getBoundingClientRect().top;
     if (top != null && pinnedTop == null) setPinnedTop(top);
-    setModRate((current) => (current === rate ? 1 : rate));
+  };
+  const setSpeedRate = (rate: number) => {
+    pinPanel();
+    if (rate < 1) setHtRate(rate);
+    if (rate > 1) setDtRate(rate);
+    setModRate(rate);
   };
   const pinKey = entry && active ? active.beatmapId : null;
   useEffect(() => {
@@ -1017,6 +1124,14 @@ export function MapDetailModal({
   const fileStats = fileStatsId != null ? fileStatsById[fileStatsId] : undefined;
   const fileStatsPending = fileStatsId != null && fileStats === undefined;
   const shownStars = active ? rateStars ?? fileStats?.stars ?? active.stars : 0;
+  const msdShown = !!(active?.msd || activeAnalysis?.msd || (offCatalog && rateMsd));
+  // Both tails always show their rate, so turning one on never shifts the other.
+  const speedMods = playedRate === 1 && previewSet ? (
+    <span className="flex items-center gap-1.5">
+      <SpeedModBadge mod="HT" rate={htRate} on={modRate < 1} min={0.5} max={0.99} onToggle={() => setSpeedRate(modRate < 1 ? 1 : htRate)} onRate={setSpeedRate} />
+      <SpeedModBadge mod="DT" rate={dtRate} on={modRate > 1} min={1.01} max={2} onToggle={() => setSpeedRate(modRate > 1 ? 1 : dtRate)} onRate={setSpeedRate} />
+    </span>
+  ) : null;
 
   // Score and Map info only when a score opened the card. A local chart whose
   // analysis has not landed has no map detail to show, so the play is the whole card.
@@ -1236,11 +1351,12 @@ export function MapDetailModal({
 
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
-                {active.msd || activeAnalysis?.msd || (offCatalog && rateMsd) ? (
+                {msdShown ? (
                   // While a rate loads, the 1.0x block stays up dimmed, so
                   // the panel keeps its height instead of dropping to a skeleton.
-                  <div className={`transition-opacity ${ratePending ? "opacity-50" : ""}`} aria-busy={ratePending}>
+                  <div aria-busy={ratePending}>
                     <MsdBlock
+                      pending={ratePending}
                       entry={active}
                       msdLn={activeAnalysis?.msdLn ?? null}
                       analysisMsd={offCatalog && playRate === 1 ? rateMsd : activeAnalysis?.msd}
@@ -1306,21 +1422,7 @@ export function MapDetailModal({
 
                 {/* Chart preview, held as an empty box of its own height while
                     the entry is in flight so it lands without moving. */}
-                {playedRate === 1 && previewSet ? (
-                  <div className="-mb-1 flex justify-end gap-1">
-                    {([["HT", 0.75], ["DT", 1.5]] as const).map(([mod, rate]) => (
-                      <button
-                        key={mod}
-                        type="button"
-                        aria-pressed={modRate === rate}
-                        onClick={() => switchModRate(rate)}
-                        className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-bold hover:brightness-110 ${modRate === rate ? "bg-osu-pink/20 text-osu-pink" : "text-osu-f1"}`}
-                      >
-                        {mod}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+                {speedMods ? <div className="-mb-1 flex justify-end">{speedMods}</div> : null}
                 {previewSet ? (
                   <ChartPreviewPanel
                     beatmapset={previewSet}
