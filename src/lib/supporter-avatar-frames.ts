@@ -42,7 +42,7 @@ const FRAME_GEOMETRY = {
   "disc-bounce": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0, 0, 0] },
   "error-cascade": { box: [-0.2419, -0.2419, 1.6129, 1.4839], overhang: [0, 0.1815, 0.3387, 0] },
   "fairy-lights": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0927, 0.0565, 0.0927, 0] },
-  "five-star-pull": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3589, 0.1008, 0.3468, 0.2823] },
+  "five-star-pull": { box: [-0.4032, -0.3226, 1.8065, 1.6935], overhang: [0.3508, 0, 0.3589, 0.1532] },
   "gamma-orbit": { box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.246, 0, 0.254, 0] },
   "hakurei-torii": { box: [-0.3548, -0.4839, 1.7097, 1.8226], overhang: [0.3548, 0.4839, 0.3548, 0.2419] },
   "halo-cyan": { box: [-0.371, -0.5, 1.7419, 1.6129], overhang: [0, 0.4919, 0, 0] },
@@ -115,7 +115,7 @@ const FRAME_GEOMETRY = {
   "zenith-orbit": { box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
   sakura: { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2419, 0.0363, 0.2419] },
   stardust: { box: [-0.8548, -0.3548, 2.1935, 2.129], overhang: [0.8427, 0, 0.2823, 0.7742] },
-  storm: { box: [-0.3226, -0.5968, 1.6452, 1.9194], overhang: [0.3145, 0.4798, 0.3105, 0.1129] },
+  storm: { box: [-0.3226, -0.6129, 1.6935, 1.8226], overhang: [0, 0.5766, 0.3468, 0] },
   wisteria: { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2258, 0, 0.2419] },
 } as const satisfies Record<string, FrameGeometry>;
 
@@ -144,7 +144,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 40;
+const FRAME_ART_VERSION = 44;
 
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still"): string {
   return `/images/supporter-frames/${id}.${kind === "video" ? "webm" : "png"}?v=${FRAME_ART_VERSION}`;

@@ -3002,6 +3002,7 @@ msgstr "todos"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
@@ -11565,6 +11566,7 @@ msgid "Next pack"
 msgstr "Siguiente pack"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next page"
@@ -14323,6 +14325,7 @@ msgid "Previous pack"
 msgstr "Pack anterior"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Previous page"

@@ -1,4 +1,4 @@
-import { Fragment, memo, useRef, useState, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 
@@ -398,12 +398,14 @@ function Item({ active, disabled, onTry, onPick, className, children, label }: {
   );
 }
 
-function Chips<K extends string>({ value, options, onChange }: { value: K; options: { value: K; label: string }[]; onChange: (value: K) => void }) {
+/* `scroll`: one row that scrolls sideways on phones, wrapping from sm up. */
+function Chips<K extends string>({ value, options, onChange, scroll = false }: { value: K; options: { value: K; label: string; count?: number }[]; onChange: (value: K) => void; scroll?: boolean }) {
   return (
-    <div className="mb-3 flex flex-wrap gap-1.5">
+    <div className={`mb-3 flex gap-1.5 ${scroll ? "-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden" : "flex-wrap"}`}>
       {options.map((option) => (
         <button key={option.value} type="button" onClick={() => onChange(option.value)} aria-pressed={value === option.value} className={chip(value === option.value)}>
           {option.label}
+          {option.count != null && <span className={`ml-1.5 tabular-nums ${value === option.value ? "text-white/75" : "text-osu-f1"}`}>{option.count}</span>}
         </button>
       ))}
     </div>
@@ -458,41 +460,99 @@ export const LoadoutDrawer = memo(function LoadoutDrawer(props: DrawerProps) {
   );
 });
 
+const ALL_FRAMES = "all";
+const FRAME_ROWS = 3;
+const FRAME_TILE_MIN = 84;
+const FRAME_GAP = 8;
+
+/* How many tiles fit across the grid, so a page is always FRAME_ROWS full rows. */
+function useColumns(min: number, gap: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState(6);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const measure = () => {
+      const width = node.clientWidth;
+      if (width > 0) setColumns(Math.max(1, Math.floor((width + gap) / (min + gap))));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [min, gap]);
+  return [ref, columns] as const;
+}
+
+/* Every frame, three rows at a time; the theme chips narrow it down. */
 function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) {
   const { t, i18n } = useLingui();
   const frame = current.frame;
-  const [tab, setTab] = useState(() => (frame && FRAME_NAMES.get(frame)?.group) || FRAME_GROUPS[0].key);
-  const group = FRAME_GROUPS.find((g) => g.key === tab) ?? FRAME_GROUPS[0];
-  const activeSet = group.entries.find((entry) => "set" in entry && holds(entry, frame));
+  const [tab, setTab] = useState(ALL_FRAMES);
+  const entries = tab === ALL_FRAMES ? FRAME_GROUPS.flatMap((g) => g.entries) : (FRAME_GROUPS.find((g) => g.key === tab) ?? FRAME_GROUPS[0]).entries;
+  const activeSet = entries.find((entry) => "set" in entry && holds(entry, frame));
   const tryOn = (value: SupporterAvatarFrameId | null) => (on: boolean) => onTry("frame", on ? value : undefined);
+  const [gridRef, columns] = useColumns(FRAME_TILE_MIN, FRAME_GAP);
+  // "No frame" leads every list
+  const perPage = columns * FRAME_ROWS;
+  const tiles = entries.length + 1;
+  const pages = Math.max(1, Math.ceil(tiles / perPage));
+  // until a page is turned, show the one that holds the equipped frame (it moves with the column count)
+  const [page, setPage] = useState<number | null>(null);
+  const at = entries.findIndex((entry) => holds(entry, frame));
+  const shownPage = Math.min(page ?? (at < 0 ? 0 : Math.floor((at + 1) / perPage)), pages - 1);
+  const first = shownPage * perPage;
+  const pick = (key: string) => {
+    setTab(key);
+    setPage(0);
+  };
+
+  const tileFor = (entry: FrameEntry) => {
+    if ("id" in entry) {
+      return (
+        <Item key={entry.id} active={frame === entry.id} disabled={disabled} onTry={tryOn(entry.id)} onPick={() => onPick("frame", entry.id)}>
+          <FrameThumb frame={entry.id} avatar={avatar} size={68} />
+          <span className="w-full truncate text-center">{i18n._(entry.label)}</span>
+        </Item>
+      );
+    }
+    const active = entry === activeSet;
+    const shown = active ? frame! : entry.variants[entry.shown].id;
+    return (
+      <Item key={entry.set} active={active} disabled={disabled} onTry={tryOn(shown)} onPick={() => !active && onPick("frame", shown)}>
+        <FrameThumb frame={shown} avatar={avatar} size={68} />
+        <span className="w-full truncate text-center">{i18n._(entry.label)}</span>
+      </Item>
+    );
+  };
 
   return (
     <div>
-      <Chips value={tab} options={FRAME_GROUPS.map((g) => ({ value: g.key, label: i18n._(g.title) }))} onChange={setTab} />
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2">
-        <Item active={frame === null} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("frame", null)}>
-          <FrameThumb frame={null} avatar={avatar} size={68} />
-          {t`No frame`}
-        </Item>
-        {group.entries.map((entry) => {
-          if ("id" in entry) {
-            return (
-              <Item key={entry.id} active={frame === entry.id} disabled={disabled} onTry={tryOn(entry.id)} onPick={() => onPick("frame", entry.id)}>
-                <FrameThumb frame={entry.id} avatar={avatar} size={68} />
-                <span className="w-full truncate text-center">{i18n._(entry.label)}</span>
-              </Item>
-            );
-          }
-          const active = entry === activeSet;
-          const shown = active ? frame! : entry.variants[entry.shown].id;
-          return (
-            <Item key={entry.set} active={active} disabled={disabled} onTry={tryOn(shown)} onPick={() => !active && onPick("frame", shown)}>
-              <FrameThumb frame={shown} avatar={avatar} size={68} />
-              <span className="w-full truncate text-center">{i18n._(entry.label)}</span>
-            </Item>
-          );
-        })}
+      <Chips
+        value={tab}
+        options={[
+          { value: ALL_FRAMES, label: t`All`, count: FRAME_GROUPS.reduce((sum, g) => sum + g.entries.length, 0) },
+          ...FRAME_GROUPS.map((g) => ({ value: g.key, label: i18n._(g.title), count: g.entries.length })),
+        ]}
+        onChange={pick}
+        scroll
+      />
+      <div ref={gridRef} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+        {first === 0 && (
+          <Item active={frame === null} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("frame", null)}>
+            <FrameThumb frame={null} avatar={avatar} size={68} />
+            {t`No frame`}
+          </Item>
+        )}
+        {entries.slice(Math.max(0, first - 1), first + perPage - 1).map(tileFor)}
       </div>
+      {pages > 1 && (
+        <div className="mt-3 flex items-center justify-center gap-3">
+          <PageTurn direction={-1} label={t`Previous page`} disabled={shownPage === 0} onClick={() => setPage(shownPage - 1)} />
+          <span className="min-w-[4ch] text-center text-[12px] tabular-nums text-osu-f1">{shownPage + 1} / {pages}</span>
+          <PageTurn direction={1} label={t`Next page`} disabled={shownPage === pages - 1} onClick={() => setPage(shownPage + 1)} />
+        </div>
+      )}
       {activeSet && "set" in activeSet && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] text-osu-f1">
           <span className="mr-1">{i18n._(activeSet.chips)}</span>
@@ -513,6 +573,23 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
         </div>
       )}
     </div>
+  );
+}
+
+function PageTurn({ direction, label, disabled, onClick }: { direction: 1 | -1; label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-osu-b4 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white disabled:cursor-default disabled:opacity-35 disabled:hover:bg-osu-b4 disabled:hover:text-osu-l2"
+    >
+      <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
+        <path d={direction === 1 ? "M6 3.5 10.5 8 6 12.5" : "M10 3.5 5.5 8 10 12.5"} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
   );
 }
 

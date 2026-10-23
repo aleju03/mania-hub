@@ -3011,6 +3011,7 @@ msgstr "全部"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
@@ -11574,6 +11575,7 @@ msgid "Next pack"
 msgstr "下一包"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next page"
@@ -14332,6 +14334,7 @@ msgid "Previous pack"
 msgstr "上一包"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/components/supporter/TestBinder.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Previous page"
