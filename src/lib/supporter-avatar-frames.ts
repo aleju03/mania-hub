@@ -113,7 +113,7 @@ const FRAME_GEOMETRY = {
   "xp-window": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0887, 0.2016, 0.0887, 0.0887] },
   "yinyang-orbs": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3427, 0.3226, 0.3427, 0.3629] },
   "zenith-orbit": { box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
-  sakura: { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2419, 0.0363, 0.2419] },
+  sakura: { box: [-0.4355, -0.4194, 1.629, 1.6613], overhang: [0.3589, 0.3387, 0.1935, 0.2016] },
   stardust: { box: [-0.8548, -0.3548, 2.1935, 2.129], overhang: [0.8427, 0, 0.2823, 0.7742] },
   storm: { box: [-0.3226, -0.6129, 1.6935, 1.8226], overhang: [0, 0.3024, 0.3468, 0] },
   wisteria: { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2258, 0, 0.2419] },
@@ -144,7 +144,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 47;
+const FRAME_ART_VERSION = 48;
 
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still"): string {
   return `/images/supporter-frames/${id}.${kind === "video" ? "webm" : "png"}?v=${FRAME_ART_VERSION}`;
