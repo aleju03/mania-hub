@@ -1102,7 +1102,9 @@ A practice chart also counts on any imported file with its notes, as osu!'s
 plays do, including an upload the site never cached: each stored chart gets
 its practice-chart fingerprint (`companella_local_charts.dan_skillset_fingerprint`,
 checked against the registry `dan_skillset_stamp` names) when stored, and the
-maintenance sweep checks older charts. The full courses stay on their exact files.
+maintenance sweep checks older charts. A full course counts the same way on an
+exact copy (same notes, OD and HP; see "Course clears" in `docs/features/dan-estimates.md`),
+credited under the listed upload; a cut or edited re-upload does not.
 `player_skill_ratings` reads osu! plays only; the merged rating takes the
 app-passed courses in. A clear opens as its import on the score card.
 

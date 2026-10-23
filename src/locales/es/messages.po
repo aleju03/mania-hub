@@ -2640,8 +2640,12 @@ msgstr "Acaba de llegar una nueva actualización. Recargando..."
 #~ msgstr "Un pase en el mínimo acredita el nivel completo del chart, igual que pasar el dan, y el primer punto por encima también: un 96.9% en una escala de 96% es un clear normal, sin bono. Por encima de eso el bono se mantiene pequeño hasta el 99%, y ahí sube. Por debajo del mínimo la play sigue contando, como clear de un nivel más bajo, hasta un nivel y cuarto menos en el corte. Las escalas regulares acreditan hasta 4 puntos por debajo del mínimo y 6K/7K LN hasta 1. 4K LN usa sus propios números: acredita hasta 94.5%, con un nivel y medio menos ahí, y su bono llega a su tope en 99.7%:"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
-msgstr "El pase tiene que ser en una de estas dificultades exactas. Los tres cursos INTRO de REFORM y del 0 al 2 del LN Phase I de Jinjin quedan fuera, porque están por debajo del primer nivel que mide su escala."
+msgid "A pass has to be on one of these difficulties, or on another upload of one with the same notes, OD and HP; a cut or edited reupload does not count. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
+msgstr"El pase tiene que ser en una de estas dificultades, o en otra subida de una de ellas con las mismas notas, OD y HP; una versión recortada o editada no cuenta. Los tres cursos INTRO de REFORM y del 0 al 2 del LN Phase I de Jinjin quedan fuera, porque están por debajo del primer nivel que mide su escala."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
+#~ msgstr "El pase tiene que ser en una de estas dificultades exactas. Los tres cursos INTRO de REFORM y del 0 al 2 del LN Phase I de Jinjin quedan fuera, porque están por debajo del primer nivel que mide su escala."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass only counts if it was really that chart, played straight. <0/>, <1/> and anything that changes the OD (<2/>, <3/>) disqualify it, and so does slowing the chart down; Mirror, the visibility mods and <4/>/<5/> are fine. The charts are matched by their notes and OD rather than by beatmap id, so any upload of the same file counts, while edits and rate versions do not."
