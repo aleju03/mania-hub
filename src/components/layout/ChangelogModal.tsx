@@ -278,7 +278,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
   const matches = useMemo(() => {
     const result = new Map<string, ChangelogUpdate[]>();
     for (const day of DAYS) {
-      const shown = needle ? day.updates.filter((update) => update.text.toLowerCase().includes(needle)) : day.updates;
+      const shown = needle ? day.updates.filter((update) => [update.text, ...(update.more ?? []).map((part) => part.text)].some((text) => text.toLowerCase().includes(needle))) : day.updates;
       if (shown.length > 0) result.set(day.date, shown);
     }
     return result;
@@ -519,16 +519,27 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                         <div className="mt-1.5">
                           {lines.map((update) => {
                             const row = "group flex items-baseline gap-2 py-1.5 text-[14.5px] leading-relaxed text-osu-c2/90";
-                            const image = update.image ? (
+                            const picture = (src: NonNullable<ChangelogUpdate["image"]>) => (
                               <img
-                                src={update.image.src}
-                                alt={update.image.alt}
-                                width={update.image.width}
-                                height={update.image.height}
+                                src={src.src}
+                                alt={src.alt}
+                                width={src.width}
+                                height={src.height}
                                 loading="lazy"
                                 decoding="async"
                                 className="mb-3 mt-1.5 h-auto max-w-full rounded-lg"
                               />
+                            );
+                            const image = update.image || update.more ? (
+                              <>
+                                {update.image ? picture(update.image) : null}
+                                {update.more?.map((part) => (
+                                  <div key={part.text}>
+                                    <p className="py-1.5 text-[14.5px] leading-relaxed text-osu-c2/90">{part.text}</p>
+                                    {picture(part.image)}
+                                  </div>
+                                ))}
+                              </>
                             ) : null;
                             if (!update.to || update.reference) {
                               return (

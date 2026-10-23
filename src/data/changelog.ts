@@ -32,6 +32,9 @@ export interface ChangelogUpdate {
       new name each time, since the service worker serves /images/ cache-first.
       width and height are the display size in CSS pixels. */
   image?: { src: string; alt: string; width: number; height: number };
+  /** More lines, each with its own picture, shown after the first picture so
+      one update can walk through several of them. */
+  more?: { text: string; image: { src: string; alt: string; width: number; height: number } }[];
   /** Optional in-app path, which makes the whole row clickable. */
   to?: string;
   /** Query parameters belong in Link.search, never inside its pathname. */
@@ -43,8 +46,15 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-10-23", text: "Added an Activity graph to dynamic renders.", to: "/dynamic-renders", image: { src: "/images/changelog/2026-10-23-activity-render.webp", alt: "The Year activity render", width: 704, height: 176 } },
-  { date: "2026-10-23", text: "Added a Skillsets layout to the Dan rating dynamic render.", to: "/dynamic-renders", image: { src: "/images/changelog/2026-10-22-dan-skillsets-render-4.webp", alt: "The Skillsets dan render", width: 704, height: 200 } },
+  {
+    date: "2026-10-23",
+    text: "Added new dynamic renders, one for skillsets:",
+    to: "/dynamic-renders",
+    image: { src: "/images/changelog/2026-10-22-dan-skillsets-render-4.webp", alt: "The Skillsets dan render", width: 704, height: 200 },
+    more: [
+      { text: "And one for activity, with Year, Half year and Weekly bars layouts:", image: { src: "/images/changelog/2026-10-23-activity-render.webp", alt: "The Year activity render", width: 704, height: 176 } },
+    ],
+  },
   { date: "2026-10-23", text: "Added Updates and Visualizer tabs to the Prism page. The Visualizer shows how Prism reads each part of a chart.", to: "/news/prism", search: { tab: "visualizer" }, image: { src: "/images/changelog/2026-10-22-prism-visualizer.webp", alt: "The Prism visualizer on a 7K chart", width: 770, height: 590 } },
   { date: "2026-10-23", text: "Updated Prism to v26, which nerfs inflated low star and inverse LN charts, rates charts you can mash lower and makes Bracket stricter.", to: "/news/prism", search: { tab: "updates" } },
   { date: "2026-10-23", text: "Added Best play and 200th play views to All time top plays.", to: "/top-plays", search: { range: "all", view: "best" } },
