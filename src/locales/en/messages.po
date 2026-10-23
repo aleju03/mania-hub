@@ -599,8 +599,11 @@ msgstr "{0} ms late"
 
 #. placeholder {0}: formatPp(recs.length)
 #. placeholder {0}: index + 1
+#. placeholder {0}: spin + 1
 #. placeholder {1}: entries.length
 #. placeholder {1}: formatPp(totalQualifying)
+#. placeholder {1}: prizes.length
+#: src/components/packs/run/chain/ChainReel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/routes/recommendations.tsx
 msgid "{0} of {1}"
@@ -1566,6 +1569,10 @@ msgstr "{rate} of {0}"
 msgid "{rated, plural, one {# member} other {# members}}"
 msgstr "{rated, plural, one {# member} other {# members}}"
 
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "{reached} of {goal}"
+msgstr "{reached} of {goal}"
+
 #: src/components/packs/run/RunShop.tsx
 msgid "{rerolls, plural, one {# left} other {# left}}"
 msgstr "{rerolls, plural, one {# left} other {# left}}"
@@ -1796,6 +1803,12 @@ msgstr "#{0} of {1} tracked players"
 msgid "#{grouped}"
 msgstr "#{grouped}"
 
+#. placeholder {0}: E.jumpstream[band]
+#. placeholder {1}: E.jumpstreamCap
+#: src/lib/chain-run.ts
+msgid "+{0} base for each Jumpstream in your deck (up to {1})."
+msgstr "+{0} base for each Jumpstream in your deck (up to {1})."
+
 #. placeholder {0}: N.extraKey.slots
 #: src/lib/pack-run.ts
 msgid "+{0} charm slots."
@@ -1923,10 +1936,24 @@ msgstr "+{0} notes on the first song of a stage."
 msgid "+{0} notes, {1} fewer after every pack."
 msgstr "+{0} notes, {1} fewer after every pack."
 
+#. placeholder {0}: prize.amount ?? 0
+#: src/lib/chain-run.ts
+msgid "+{0} shards now."
+msgstr "+{0} shards now."
+
 #. placeholder {0}: (step.start - rawDan).toFixed(2)
 #: src/components/player/DanStepRail.tsx
 msgid "+{0} to go"
 msgstr "+{0} to go"
+
+#. placeholder {0}: pct(E.tech[band])
+#: src/lib/chain-run.ts
+msgid "+{0}% points for each other skillset in the row."
+msgstr "+{0}% points for each other skillset in the row."
+
+#: src/lib/chain-run.ts
+msgid "+{amount} shards to your pack wallet."
+msgstr "+{amount} shards to your pack wallet."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "+{gap}pp to go"
@@ -3055,6 +3082,10 @@ msgstr "already reported"
 msgid "Already set"
 msgstr "Already set"
 
+#: src/lib/chain-run.ts
+msgid "Already spun this visit."
+msgstr "Already spun this visit."
+
 #: src/components/player/AddScoreModal.tsx
 msgid "already tracked"
 msgstr "already tracked"
@@ -3094,6 +3125,11 @@ msgstr "An old PB you could probably beat."
 #: src/routes/recommendations.tsx
 msgid "an old score you could probably beat"
 msgstr "an old score you could probably beat"
+
+#. placeholder {0}: E.stamina[band]
+#: src/lib/chain-run.ts
+msgid "An unbroken row of 6 trains every Stamina in your deck +{0} base."
+msgstr "An unbroken row of 6 trains every Stamina in your deck +{0} base."
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "analysis"
@@ -3602,6 +3638,12 @@ msgstr "Base LN head color used for any column without a per-column override."
 msgid "Base tap color used for any column without a per-column override."
 msgstr "Base tap color used for any column without a per-column override."
 
+#. placeholder {0}: CHAIN_VARIANT.silverCleanBase
+#. placeholder {1}: CHAIN_VARIANT.silverBase
+#: src/lib/chain-run.ts
+msgid "Base x{0} while the row has no break before it, else x{1}."
+msgstr "Base x{0} while the row has no break before it, else x{1}."
+
 #: src/routes/recommendations.tsx
 msgid "based on what players near the same pp are farming:"
 msgstr "based on what players near the same pp are farming:"
@@ -3882,6 +3924,11 @@ msgstr "Bonus chance per eligible pack: {chance}"
 msgid "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
 msgstr "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
 
+#: src/components/packs/run/chain/ChainReel.tsx
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Bonus spin"
+msgstr "Bonus spin"
+
 #: src/routes/communities_.$id.tsx
 msgid "boosts"
 msgstr "boosts"
@@ -3889,6 +3936,10 @@ msgstr "boosts"
 #: src/components/supporter/loadout.ts
 msgid "Boot box"
 msgstr "Boot box"
+
+#: src/lib/chain-run.ts
+msgid "BORROW"
+msgstr "BORROW"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bottom"
@@ -4296,8 +4347,8 @@ msgid "Chain pulls and a third shop slot"
 msgstr "Chain pulls and a third shop slot"
 
 #: src/components/packs/run/chain/ChainHud.tsx
-msgid "Chain run"
-msgstr "Chain run"
+#~ msgid "Chain run"
+#~ msgstr "Chain run"
 
 #: src/lib/pack-run.ts
 msgid "Chained cards score twice."
@@ -5028,6 +5079,7 @@ msgstr "combo"
 
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/lib/chain-run.ts
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Combo"
@@ -5778,6 +5830,7 @@ msgstr "country"
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/lib/chain-run.ts
 #: src/routes/player/$username.tsx
 msgid "Country"
 msgstr "Country"
@@ -6404,6 +6457,10 @@ msgstr "Double Time"
 msgid "Doubles the columns into two stages."
 msgstr "Doubles the columns into two stages."
 
+#: src/lib/chain-run.ts
+msgid "Doubles the combo before it scores."
+msgstr "Doubles the combo before it scores."
+
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Download"
@@ -6634,6 +6691,11 @@ msgstr "Each ladder has a pass bar, taken from its real dan courses:"
 #: src/routes/dan-estimates.tsx
 msgid "Each level is split into five steps, so a chart can be 7--, 7-, 7, 7+ or 7++, from the easy end of 7th dan to the hard end."
 msgstr "Each level is split into five steps, so a chart can be 7--, 7-, 7, 7+ or 7++, from the easy end of 7th dan to the hard end."
+
+#. placeholder {0}: pct(E.stream[band])
+#: src/lib/chain-run.ts
+msgid "Each link after it lifts the combo {0}% more, until a break."
+msgstr "Each link after it lifts the combo {0}% more, until a break."
 
 #: src/routes/dan-estimates.tsx
 msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long tech chart, counts in both."
@@ -7558,6 +7620,10 @@ msgstr "First Places"
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "First pull"
 msgstr "First pull"
+
+#: src/components/packs/run/chain/ChainReel.tsx
+msgid "First row"
+msgstr "First row"
 
 #: src/components/CountryWarming.tsx
 msgid "First time anyone has visited {name}. Its rankings, maps and live tracking are being set up in the background."
@@ -8487,6 +8553,18 @@ msgstr "Hitburst and judgement height."
 msgid "Hits only"
 msgstr "Hits only"
 
+#: src/lib/chain-run.ts
+msgid "Hits twice; the link into it adds half its combo."
+msgstr "Hits twice; the link into it adds half its combo."
+
+#: src/lib/chain-run.ts
+msgid "Hits twice; the link into it adds no combo."
+msgstr "Hits twice; the link into it adds no combo."
+
+#: src/lib/chain-run.ts
+msgid "Hits twice."
+msgstr "Hits twice."
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hitsounds"
@@ -9297,6 +9375,7 @@ msgstr "Keycaps"
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/lib/chain-run.ts
 #: src/routes/dan-estimates.tsx
 msgid "Keymode"
 msgstr "Keymode"
@@ -9337,7 +9416,6 @@ msgstr "Keys pressed per second."
 #: src/lib/pack-run.ts
 msgid "Kiai Time"
 msgstr "Kiai Time"
-
 
 #: src/components/supporter/loadout.ts
 msgid "Knob lasers"
@@ -9383,6 +9461,15 @@ msgstr "Land a {pp}pp play"
 #: src/components/me/GoalsPanel.tsx
 msgid "Land a play worth <0/>"
 msgstr "Land a play worth <0/>"
+
+#. placeholder {0}: E.delay[band]
+#: src/lib/chain-run.ts
+msgid "Lands late: scores at the combo the row ends on, x{0}."
+msgstr "Lands late: scores at the combo the row ends on, x{0}."
+
+#: src/lib/chain-run.ts
+msgid "Lands late: scores at the combo the row ends on."
+msgstr "Lands late: scores at the combo the row ends on."
 
 #: src/routes/skins_.$id.tsx
 #: src/routes/skins.tsx
@@ -9462,6 +9549,10 @@ msgstr "last year"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Late"
 msgstr "Late"
+
+#: src/lib/chain-run.ts
+msgid "LATE"
+msgstr "LATE"
 
 #: src/lib/streak-game.ts
 msgid "Later"
@@ -9701,6 +9792,15 @@ msgstr "Link your Mamestagram account"
 #: src/components/player/AddScoreModal.tsx
 msgid "Link your Mamestagram account below first."
 msgstr "Link your Mamestagram account below first."
+
+#. placeholder {0}: E.handstream[band]
+#: src/lib/chain-run.ts
+msgid "Linked on both sides: it and both neighbours score x{0}."
+msgstr "Linked on both sides: it and both neighbours score x{0}."
+
+#: src/lib/chain-run.ts
+msgid "Links to each side with the traits of the card on its other side too."
+msgstr "Links to each side with the traits of the card on its other side too."
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Links to the cards next to it on every trait. The first GOAT in a row doubles the combo."
@@ -10525,7 +10625,6 @@ msgstr "maps players near you farm that sit above your shown skills"
 msgid "Maps ready."
 msgstr "Maps ready."
 
-#: src/components/packs/GamePacks.tsx
 #: src/lib/pack-run.ts
 msgid "Marathon"
 msgstr "Marathon"
@@ -11355,6 +11454,43 @@ msgstr "Next players"
 msgid "Next preview"
 msgstr "Next preview"
 
+#. placeholder {0}: CHAIN_REEL.redraws
+#: src/lib/chain-run.ts
+msgid "Next round has {0} more redraws."
+msgstr "Next round has {0} more redraws."
+
+#. placeholder {0}: CHAIN_REEL.retryRows
+#: src/lib/chain-run.ts
+msgid "Next round has {0} more row."
+msgstr "Next round has {0} more row."
+
+#: src/lib/chain-run.ts
+msgid "Next round's first row can't break."
+msgstr "Next round's first row can't break."
+
+#. placeholder {0}: CHAIN_REEL.dt
+#: src/lib/chain-run.ts
+msgid "Next round's first row scores x{0}."
+msgstr "Next round's first row scores x{0}."
+
+#. placeholder {0}: CHAIN_REEL.warmupCombo
+#: src/lib/chain-run.ts
+msgid "Next round's first row starts at +{0} combo."
+msgstr "Next round's first row starts at +{0} combo."
+
+#: src/lib/chain-run.ts
+msgid "Next round's first row starts on 727 combo."
+msgstr "Next round's first row starts on 727 combo."
+
+#: src/lib/chain-run.ts
+msgid "Next round's first row: {trait} links add double."
+msgstr "Next round's first row: {trait} links add double."
+
+#. placeholder {0}: Math.round((1 - CHAIN_REEL.ezTarget) * 100)
+#: src/lib/chain-run.ts
+msgid "Next round's target is {0}% lower."
+msgstr "Next round's target is {0}% lower."
+
 #: src/routes/recommendations.tsx
 msgid "next tier"
 msgstr "next tier"
@@ -11421,6 +11557,10 @@ msgstr "No binder"
 #: src/routes/snipes.tsx
 msgid "No board stored for this lane yet."
 msgstr "No board stored for this lane yet."
+
+#: src/lib/chain-run.ts
+msgid "No break"
+msgstr "No break"
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "No card on the wall wears this yet."
@@ -12561,6 +12701,10 @@ msgstr "One pack to clear it."
 msgid "one skill, no split"
 msgstr "one skill, no split"
 
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "One spin of the reel: a prize for the next round."
+msgstr "One spin of the reel: a prize for the next round."
+
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
 msgid "One week of supporter"
@@ -13049,6 +13193,10 @@ msgstr "Overdrive"
 msgid "Overflow"
 msgstr "Overflow"
 
+#: src/lib/chain-run.ts
+msgid "Overjoy"
+msgstr "Overjoy"
+
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Overlay scroll speed"
 msgstr "Overlay scroll speed"
@@ -13152,6 +13300,11 @@ msgstr "Page number, 1 to {totalPages}"
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Paid with Google already?"
 msgstr "Paid with Google already?"
+
+#. placeholder {0}: pct(E.bracket[band])
+#: src/lib/chain-run.ts
+msgid "Pairs with the next Bracket: the cards between score +{0}% from each."
+msgstr "Pairs with the next Bracket: the cards between score +{0}% from each."
 
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
@@ -14395,6 +14548,7 @@ msgid "Rare Form"
 msgstr "Rare Form"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/lib/chain-run.ts
 msgid "Rarity"
 msgstr "Rarity"
 
@@ -14762,6 +14916,7 @@ msgid "Redraw"
 msgstr "Redraw"
 
 #: src/components/packs/run/chain/ChainHud.tsx
+#: src/lib/chain-run.ts
 msgid "Redraws"
 msgstr "Redraws"
 
@@ -15394,6 +15549,10 @@ msgstr "Round {0} cleared"
 msgid "Round {round} pack"
 msgstr "Round {round} pack"
 
+#: src/lib/chain-run.ts
+msgid "Row"
+msgstr "Row"
+
 #: src/components/packs/run/chain/ChainHud.tsx
 msgid "Rows"
 msgstr "Rows"
@@ -15654,6 +15813,11 @@ msgstr "Scores as a copy of the charm to its right."
 #: src/routes/snipes.tsx
 msgid "Scores with {excludedBadges}, a key mod that changes the map's key count, or {customRateBadges} at a custom rate don't count."
 msgstr "Scores with {excludedBadges}, a key mod that changes the map's key count, or {customRateBadges} at a custom rate don't count."
+
+#. placeholder {0}: E.chordstream[band]
+#: src/lib/chain-run.ts
+msgid "Scores with the previous card's base x{0}, if higher."
+msgstr "Scores with the previous card's base x{0}, if higher."
 
 #: src/routes/dan-estimates.tsx
 msgid "ScoreV2 acc (97%)"
@@ -16230,6 +16394,7 @@ msgstr "shards"
 
 #: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/RunHud.tsx
+#: src/lib/chain-run.ts
 msgid "Shards"
 msgstr "Shards"
 
@@ -16820,6 +16985,10 @@ msgstr "Skills"
 msgid "Skills with fewer than four passes are left out rather than counted as zero. At the top of a ladder the \"~\" becomes \">\", meaning beyond that level."
 msgstr "Skills with fewer than four passes are left out rather than counted as zero. At the top of a ladder the \"~\" becomes \">\", meaning beyond that level."
 
+#: src/lib/chain-run.ts
+msgid "Skillset"
+msgstr "Skillset"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "Skillset clears"
 msgstr "Skillset clears"
@@ -17216,6 +17385,10 @@ msgstr "Speeds the song up to 1.5x."
 msgid "Spell card"
 msgstr "Spell card"
 
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Spin"
+msgstr "Spin"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -17224,6 +17397,10 @@ msgstr "Spoiler text"
 #: src/lib/pack-run.ts
 msgid "Spotlight"
 msgstr "Spotlight"
+
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Spun this visit."
+msgstr "Spun this visit."
 
 #: src/components/supporter/loadout.ts
 msgid "SSR card"
@@ -17311,6 +17488,10 @@ msgstr "STAM"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stamina"
 msgstr "Stamina"
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Stamina trained: {cards} cards +{trained} base"
+msgstr "Stamina trained: {cards} cards +{trained} base"
 
 #: src/lib/pack-run.ts
 #: src/lib/packs.ts
@@ -17508,6 +17689,7 @@ msgstr "Streak"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/lib/chain-run.ts
 #: src/lib/pack-run.ts
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -18546,6 +18728,18 @@ msgstr "The light and the art on every copy of your card in packs, or an image o
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The link and the .osk filename stay as published."
 msgstr "The link and the .osk filename stay as published."
+
+#: src/lib/chain-run.ts
+msgid "The link into it fires twice."
+msgstr "The link into it fires twice."
+
+#: src/lib/chain-run.ts
+msgid "The links into and out of it fire twice."
+msgstr "The links into and out of it fire twice."
+
+#: src/lib/chain-run.ts
+msgid "The links on both its sides never break."
+msgstr "The links on both its sides never break."
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "The live feed is connected. New plays will start showing up as players submit them."
@@ -20589,10 +20783,16 @@ msgstr "waiting for the next rating pass"
 msgid "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
 msgstr "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
 
+#: src/lib/chain-run.ts
+msgid "Wallet"
+msgstr "Wallet"
+
 #: src/lib/skill-axes.ts
 msgid "Walls"
 msgstr "Walls"
 
+#: src/components/packs/run/chain/ChainScoring.tsx
+#: src/lib/chain-run.ts
 #: src/lib/pack-run.ts
 msgid "Warm-up"
 msgstr "Warm-up"
@@ -21053,6 +21253,10 @@ msgstr "x1 combo plus x{0} for each different mod beaten this run."
 #: src/lib/pack-run.ts
 msgid "x1 combo plus x{0} for each Legendary or better card in the pack."
 msgstr "x1 combo plus x{0} for each Legendary or better card in the pack."
+
+#: src/lib/chain-run.ts
+msgid "x2 HIT"
+msgstr "x2 HIT"
 
 #: src/components/supporter/loadout.ts
 msgid "XP window"

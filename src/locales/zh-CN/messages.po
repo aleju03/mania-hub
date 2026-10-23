@@ -470,7 +470,7 @@ msgstr "{0} 张重复"
 #. placeholder {0}: line.each
 #: src/components/packs/run/RunTally.tsx
 msgid "{0} each"
-msgstr ""
+msgstr "每个 {0}"
 
 #. placeholder {0}: eternalFinale.username
 #: src/components/packs/RevealStage.tsx
@@ -535,7 +535,7 @@ msgstr "{0} 归你所有"
 #. placeholder {0}: likeCount.toLocaleString("en-US")
 #: src/routes/skins_.$id.tsx
 msgid "{0} likes"
-msgstr ""
+msgstr "{0} 个赞"
 
 #. placeholder {0}: communitySkinContext.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -545,7 +545,7 @@ msgstr "已加载 {0}"
 #. placeholder {0}: locks.size
 #: src/routes/supporter.tsx
 msgid "{0} locked"
-msgstr ""
+msgstr "已锁定 {0} 项"
 
 #. placeholder {0}: activeData.user.username
 #. placeholder {0}: card.player.user.username
@@ -608,8 +608,11 @@ msgstr "晚 {0} ms"
 
 #. placeholder {0}: formatPp(recs.length)
 #. placeholder {0}: index + 1
+#. placeholder {0}: spin + 1
 #. placeholder {1}: entries.length
 #. placeholder {1}: formatPp(totalQualifying)
+#. placeholder {1}: prizes.length
+#: src/components/packs/run/chain/ChainReel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/routes/recommendations.tsx
 msgid "{0} of {1}"
@@ -861,12 +864,12 @@ msgstr "{0}，由 {1} 上传的 {keymodes} osu!mania 皮肤。下载 .osk 或浏
 #. placeholder {0}: entry.card.name
 #: src/components/packs/run/chain/ChainBoard.tsx
 msgid "{0}, in the hand"
-msgstr ""
+msgstr "{0}，在手牌中"
 
 #. placeholder {0}: entry.card.name
 #: src/components/packs/run/chain/ChainBoard.tsx
 msgid "{0}, in the row"
-msgstr ""
+msgstr "{0}，在该排中"
 
 #. placeholder {0}: formatFullActivityDate(day.date)
 #. placeholder {1}: day.scoreCount
@@ -940,7 +943,7 @@ msgstr "{0}% 的物件"
 #. placeholder {0}: pct(N.overflow.share)
 #: src/lib/pack-run.ts
 msgid "{0}% of the score past a cleared song's target carries into the next song."
-msgstr ""
+msgstr "超出已通过曲目目标的分数，有 {0}% 会带入下一首曲目。"
 
 #. placeholder {0}: top.pct
 #. placeholder {1}: mode.keyCount
@@ -1024,7 +1027,7 @@ msgstr "{caption}，点击播放"
 
 #: src/lib/chain-run.ts
 msgid "{cc} pack"
-msgstr ""
+msgstr "{cc} 卡包"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "{changedKeymodeLabels} re-rendered"
@@ -1032,7 +1035,7 @@ msgstr "已重新渲染 {changedKeymodeLabels}"
 
 #: src/components/packs/run/RunTable.tsx
 msgid "{charges} of {maxCharges} packs"
-msgstr ""
+msgstr "{charges} / {maxCharges} 个卡包"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{checked}/{toCheck} players checked · {replaysFound} replays found"
@@ -1062,7 +1065,7 @@ msgstr "{count} 个 7K 最佳成绩"
 #: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/chain/ChainPackStage.tsx
 msgid "{count} cards in the deck"
-msgstr ""
+msgstr "牌组共 {count} 张卡片"
 
 #: src/lib/streak-game.ts
 msgid "{count} DT top plays"
@@ -1277,7 +1280,7 @@ msgstr "{hours} 小时前"
 
 #: src/lib/chain-run.ts
 msgid "{key}K pack"
-msgstr ""
+msgstr "{key}K 卡包"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{keyCount}K {sideLabel} dan"
@@ -1328,7 +1331,7 @@ msgstr "还差 {left}%"
 
 #: src/components/skins/SkinCard.tsx
 msgid "{likeCountLabel} likes"
-msgstr ""
+msgstr "{likeCountLabel} 个赞"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "{mapCount, plural, one {# top play} other {# top plays}}"
@@ -1575,6 +1578,10 @@ msgstr "{0} 的 {rate}"
 msgid "{rated, plural, one {# member} other {# members}}"
 msgstr "{rated, plural, other {# 名成员}}"
 
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "{reached} of {goal}"
+msgstr "{reached} / {goal}"
+
 #: src/components/packs/run/RunShop.tsx
 msgid "{rerolls, plural, one {# left} other {# left}}"
 msgstr "{rerolls, plural, other {剩余 #}}"
@@ -1645,7 +1652,7 @@ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段�
 
 #: src/lib/chain-run.ts
 msgid "{skill} pack"
-msgstr ""
+msgstr "{skill} 卡包"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{skillsetLabel} dan"
@@ -1805,10 +1812,16 @@ msgstr "已追踪的 {1} 名玩家中第 #{0}"
 msgid "#{grouped}"
 msgstr "第 {grouped}"
 
+#. placeholder {0}: E.jumpstream[band]
+#. placeholder {1}: E.jumpstreamCap
+#: src/lib/chain-run.ts
+msgid "+{0} base for each Jumpstream in your deck (up to {1})."
+msgstr "牌组中每有一张 Jumpstream，基础分 +{0}（最多 {1}）。"
+
 #. placeholder {0}: N.extraKey.slots
 #: src/lib/pack-run.ts
 msgid "+{0} charm slots."
-msgstr ""
+msgstr "+{0} 个护符栏位。"
 
 #. placeholder {0}: EDITION_EFFECTS.holo.mult
 #: src/lib/pack-run.ts
@@ -1828,7 +1841,7 @@ msgstr "卡包中每张卡片 +{0} 连击。"
 #. placeholder {0}: N.abroad.mult
 #: src/lib/pack-run.ts
 msgid "+{0} combo for each card not from your country."
-msgstr ""
+msgstr "每张不是来自你所在国家/地区的卡片 +{0} 连击。"
 
 #. placeholder {0}: N.patriot.mult
 #: src/lib/pack-run.ts
@@ -1838,12 +1851,12 @@ msgstr "与卡包中其他卡片同国家的每张卡片 +{0} 连击。"
 #. placeholder {0}: N.worldTour.mult
 #: src/lib/pack-run.ts
 msgid "+{0} combo for each different country among the cards scored this song."
-msgstr ""
+msgstr "本曲目已计分的卡片中，每有一个不同的国家/地区 +{0} 连击。"
 
 #. placeholder {0}: N.keyOverlay.mult
 #: src/lib/pack-run.ts
 msgid "+{0} combo for each different key mode in the pack."
-msgstr ""
+msgstr "卡包中每有一种不同的键数 +{0} 连击。"
 
 #. placeholder {0}: N.newBlood.mult
 #: src/lib/pack-run.ts
@@ -1853,17 +1866,17 @@ msgstr "每张新卡片 +{0} 连击。"
 #. placeholder {0}: N.scrollSpeed.mult
 #: src/lib/pack-run.ts
 msgid "+{0} combo for each pack already played this song."
-msgstr ""
+msgstr "本曲目中每已开过一个卡包 +{0} 连击。"
 
 #. placeholder {0}: N.overallDifficulty.mult
 #: src/lib/pack-run.ts
 msgid "+{0} combo for each stage up to and including this one."
-msgstr ""
+msgstr "到当前关卡为止，每个关卡 +{0} 连击。"
 
 #. placeholder {0}: N.comboCounter.step
 #: src/lib/pack-run.ts
 msgid "+{0} combo for every card scored earlier in this song."
-msgstr ""
+msgstr "本曲目中此前每张已计分的卡片 +{0} 连击。"
 
 #. placeholder {0}: N.trio.mult
 #: src/lib/pack-run.ts
@@ -1878,7 +1891,7 @@ msgstr "卡包出现双押时 +{0} 连击。"
 #. placeholder {0}: N.trill.mult
 #: src/lib/pack-run.ts
 msgid "+{0} combo if the pack has a jumptrill."
-msgstr ""
+msgstr "卡包出现对拍时 +{0} 连击。"
 
 #. placeholder {0}: N.monochrome.mult
 #: src/lib/pack-run.ts
@@ -1893,12 +1906,12 @@ msgstr "卡包出现楼梯时 +{0} 连击。"
 #. placeholder {0}: N.singleTap.mult
 #: src/lib/pack-run.ts
 msgid "+{0} combo if the pack's pattern is a Single."
-msgstr ""
+msgstr "卡包的键型是单项时 +{0} 连击。"
 
 #. placeholder {0}: N.opener.mult
 #: src/lib/pack-run.ts
 msgid "+{0} combo on the first pack of a song."
-msgstr ""
+msgstr "曲目的第一个卡包 +{0} 连击。"
 
 #. placeholder {0}: N.collector.mult
 #: src/lib/pack-run.ts
@@ -1919,12 +1932,12 @@ msgstr "+{0} 音符"
 #. placeholder {0}: N.setlist.chips
 #: src/lib/pack-run.ts
 msgid "+{0} notes for each song cleared this run."
-msgstr ""
+msgstr "本局每通过一首曲目 +{0} 音符。"
 
 #. placeholder {0}: N.warmUp.chips
 #: src/lib/pack-run.ts
 msgid "+{0} notes on the first song of a stage."
-msgstr ""
+msgstr "每个关卡的第一首曲目 +{0} 音符。"
 
 #. placeholder {0}: N.freshPaint.chips
 #. placeholder {1}: N.freshPaint.decay
@@ -1932,10 +1945,24 @@ msgstr ""
 msgid "+{0} notes, {1} fewer after every pack."
 msgstr "+{0} 音符，每开一包减少 {1}。"
 
+#. placeholder {0}: prize.amount ?? 0
+#: src/lib/chain-run.ts
+msgid "+{0} shards now."
+msgstr "立即获得 {0} 碎片。"
+
 #. placeholder {0}: (step.start - rawDan).toFixed(2)
 #: src/components/player/DanStepRail.tsx
 msgid "+{0} to go"
 msgstr "还差 +{0}"
+
+#. placeholder {0}: pct(E.tech[band])
+#: src/lib/chain-run.ts
+msgid "+{0}% points for each other skillset in the row."
+msgstr "该排中每有一个其他技能组，得分 +{0}%。"
+
+#: src/lib/chain-run.ts
+msgid "+{amount} shards to your pack wallet."
+msgstr "卡包钱包 +{amount} 碎片。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "+{gap}pp to go"
@@ -2338,7 +2365,7 @@ msgstr "7K LN 的段位与你的综合段位相差不超过一级，因为高难
 
 #: src/components/supporter/loadout.ts
 msgid "7K orbit"
-msgstr ""
+msgstr "7K 轨道"
 
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
@@ -2385,11 +2412,11 @@ msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速�
 
 #: src/lib/chain-run.ts
 msgid "A break halves the combo instead of ending it, and each break multiplies the row by 1.4."
-msgstr ""
+msgstr "断连只会让连击减半而不会中断，且每次断连使该排得分 x1.4。"
 
 #: src/lib/chain-run.ts
 msgid "A break only halves the combo."
-msgstr ""
+msgstr "断连只会让连击减半。"
 
 #: src/routes/news_.prism.tsx
 msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
@@ -2434,7 +2461,7 @@ msgstr "正在根据最新成绩重新计算评分，这些数字稍后可能会
 
 #: src/lib/chain-run.ts
 msgid "A full row with no break scores x3."
-msgstr ""
+msgstr "没有断连的满排 x3。"
 
 #: src/components/packs/GiftInbox.tsx
 msgid "A gift from"
@@ -2481,7 +2508,7 @@ msgstr "一次性兑换码，送给别人一周支持者身份。"
 #. placeholder {0}: pct(B.perfect.share)
 #: src/lib/pack-run.ts
 msgid "A pack scoring under {0}% of the target fails the song."
-msgstr ""
+msgstr "得分低于目标 {0}% 的卡包会使该曲目失败。"
 
 #: src/routes/dan-estimates.tsx
 msgid "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
@@ -2509,19 +2536,19 @@ msgstr "此谱面或模组组合暂不支持评级。"
 
 #: src/lib/chain-run.ts
 msgid "A row of 4 cards or fewer scores x3."
-msgstr ""
+msgstr "不超过 4 张卡片的一排 x3。"
 
 #: src/lib/chain-run.ts
 msgid "A row of 6 cards with no break is an SS and scores x3."
-msgstr ""
+msgstr "没有断连的 6 张卡片一排算作 SS，x3。"
 
 #: src/lib/chain-run.ts
 msgid "A row of only 7K cards is multiplied by her multiplier, which starts at 1.5 and rises by 0.25 each time. If you would fail a round, she burns and the round starts over."
-msgstr ""
+msgstr "只有 7K 卡片的一排会乘上她的倍率，倍率从 1.5 起，每次增加 0.25。如果你本会输掉一个回合，她会燃尽，该回合重新开始。"
 
 #: src/lib/chain-run.ts
 msgid "A row where every card is a different rarity scores x3.5."
-msgstr ""
+msgstr "每张卡片稀有度都不同的一排 x3.5。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -2554,7 +2581,7 @@ msgstr "狙击是指你在某张图上的新最佳成绩超过了原本排在你
 
 #: src/lib/chain-run.ts
 msgid "A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it."
-msgstr ""
+msgstr "星星位于目标的 3 倍处。通过一个回合且回合得分没有超过它，之后每一排的起始连击 +2。超过它，她就会带着全部离开。"
 
 #: src/components/supporter/TestPack.tsx
 msgid "A test pack: nothing is spent, open as many as you like."
@@ -2607,7 +2634,7 @@ msgstr "账号"
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Account activity"
-msgstr ""
+msgstr "账号动态"
 
 #: src/components/layout/Nav.tsx
 msgid "Account menu"
@@ -2865,7 +2892,7 @@ msgstr "正在加入…"
 #. placeholder {0}: pct(N.endurance.share)
 #: src/lib/pack-run.ts
 msgid "Adds the notes it has kept, then keeps {0}% of the pack's notes."
-msgstr ""
+msgstr "先加上已存下的音符，再存下卡包音符的 {0}%。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Adjust your image"
@@ -2881,7 +2908,7 @@ msgstr "高级"
 
 #: src/components/supporter/loadout.ts
 msgid "Aero window"
-msgstr ""
+msgstr "Aero 窗口"
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
@@ -2890,7 +2917,7 @@ msgstr "导出回放视频后，获取可在 Discord 聊天中直接播放的链
 
 #: src/lib/chain-run.ts
 msgid "After the row scores, every link and card fires again, and the combo carries on from where it ended."
-msgstr ""
+msgstr "该排计分后，所有连线和卡片再触发一次，连击从结束处继续累计。"
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
@@ -2996,7 +3023,7 @@ msgstr "全部记录"
 
 #: src/routes/skins.tsx
 msgid "all skins"
-msgstr ""
+msgstr "全部皮肤"
 
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/routes/top-plays.tsx
@@ -3009,7 +3036,7 @@ msgstr "全部上传"
 
 #: src/lib/chain-run.ts
 msgid "All-7K rows multiply."
-msgstr ""
+msgstr "全 7K 的排会倍增。"
 
 #: src/lib/skill-axes.ts
 msgid "All-round"
@@ -3064,6 +3091,10 @@ msgstr "已有人反馈"
 msgid "Already set"
 msgstr "已设置"
 
+#: src/lib/chain-run.ts
+msgid "Already spun this visit."
+msgstr "本次访问已转过。"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "already tracked"
 msgstr "已记录"
@@ -3074,7 +3105,7 @@ msgstr "Alt = 从中心"
 
 #: src/lib/pack-run.ts
 msgid "Always available."
-msgstr ""
+msgstr "始终可用。"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Always reveal all"
@@ -3103,6 +3134,11 @@ msgstr "一个你多半能超过的旧 PB。"
 #: src/routes/recommendations.tsx
 msgid "an old score you could probably beat"
 msgstr "一个你多半能超过的旧成绩"
+
+#. placeholder {0}: E.stamina[band]
+#: src/lib/chain-run.ts
+msgid "An unbroken row of 6 trains every Stamina in your deck +{0} base."
+msgstr "没有断连的 6 张一排，牌组中每张 Stamina 基础分 +{0}。"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "analysis"
@@ -3140,7 +3176,7 @@ msgstr "此外还有 {0} 次排在这些之后"
 
 #: src/components/supporter/loadout.ts
 msgid "Angel wings"
-msgstr ""
+msgstr "天使翅膀"
 
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Another player already goes by that name."
@@ -3232,7 +3268,7 @@ msgstr "不限地区"
 
 #: src/routes/companella.tsx
 msgid "API docs"
-msgstr ""
+msgstr "API 文档"
 
 #: src/components/settings/settings-tabs.ts
 msgid "appearance"
@@ -3279,7 +3315,7 @@ msgstr "阿拉伯语"
 #: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Arcade"
-msgstr ""
+msgstr "街机"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Archive filter"
@@ -3320,7 +3356,7 @@ msgstr "保持当前画面"
 
 #: src/lib/chain-run.ts
 msgid "Ascendant"
-msgstr ""
+msgstr "Ascendant"
 
 #: src/routes/skins.tsx
 msgid "ascending"
@@ -3337,7 +3373,7 @@ msgstr "飞升"
 #. placeholder {0}: before.round
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Ascension to Heaven burns. Round {0} again."
-msgstr ""
+msgstr "Ascension to Heaven 燃尽了。重打第 {0} 回合。"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Aspect ratio locked"
@@ -3358,7 +3394,7 @@ msgstr "至少一张卡片带有卡面。"
 #. placeholder {0}: N.graveyard.perShard
 #: src/lib/pack-run.ts
 msgid "At the start of each song, removes the charm to its right and gains +{0} combo for each shard that charm would sell for."
-msgstr ""
+msgstr "每首曲目开始时，移除右侧的护符，并按该护符的出售价，每 1 碎片获得 +{0} 连击。"
 
 #: src/routes/dan-estimates.tsx
 msgid "At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:"
@@ -3385,7 +3421,7 @@ msgstr "音频波形"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Audiowide"
-msgstr ""
+msgstr "Audiowide"
 
 #: src/routes/terms.tsx
 msgid "August 23, 2026"
@@ -3421,7 +3457,7 @@ msgstr "自动追踪从 2026 年 6 月 9 日开始。更早的成绩只要还在
 
 #: src/components/supporter/loadout.ts
 msgid "Autumn maple"
-msgstr ""
+msgstr "秋枫"
 
 #: src/components/ui/Avatar.tsx
 msgid "avatar"
@@ -3601,7 +3637,7 @@ msgstr "条形"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Base"
-msgstr ""
+msgstr "基础分"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Base LN head color used for any column without a per-column override."
@@ -3611,13 +3647,19 @@ msgstr "没有单独设置的列所使用的长条头基础颜色。"
 msgid "Base tap color used for any column without a per-column override."
 msgstr "没有单独设置的列所使用的单点基础颜色。"
 
+#. placeholder {0}: CHAIN_VARIANT.silverCleanBase
+#. placeholder {1}: CHAIN_VARIANT.silverBase
+#: src/lib/chain-run.ts
+msgid "Base x{0} while the row has no break before it, else x{1}."
+msgstr "该排此前没有断连时基础分 x{0}，否则 x{1}。"
+
 #: src/routes/recommendations.tsx
 msgid "based on what players near the same pp are farming:"
 msgstr "基于相近 pp 的玩家都在刷什么："
 
 #: src/components/supporter/loadout.ts
 msgid "Battle menu"
-msgstr ""
+msgstr "战斗菜单"
 
 #: src/routes/bbcode.tsx
 msgid "BBCode"
@@ -3670,7 +3712,7 @@ msgstr "谱面打击音"
 
 #: src/lib/pack-run.ts
 msgid "Beatmap Listing"
-msgstr ""
+msgstr "谱面列表"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Beatmap Lookup"
@@ -3704,7 +3746,7 @@ msgstr "成为支持者"
 
 #: src/lib/pack-run.ts
 msgid "Beginner"
-msgstr ""
+msgstr "Beginner"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Beginning of recorded history"
@@ -3750,11 +3792,11 @@ msgstr "最好 {best}pp"
 
 #: src/lib/pack-run.ts
 msgid "Best card"
-msgstr ""
+msgstr "最佳卡片"
 
 #: src/lib/pack-run.ts
 msgid "Best pack"
-msgstr ""
+msgstr "最佳卡包"
 
 #. placeholder {0}: formatScore(state.over.bestHand)
 #: src/components/packs/run/RunView.tsx
@@ -3772,11 +3814,11 @@ msgstr "最佳成绩"
 
 #: src/components/packs/GamePacks.tsx
 msgid "best round"
-msgstr ""
+msgstr "最佳回合"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Best row"
-msgstr ""
+msgstr "最佳排"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Best Scores"
@@ -3789,7 +3831,7 @@ msgstr "最佳关卡 {0}"
 
 #: src/components/packs/GamePacks.tsx
 msgid "best streak"
-msgstr ""
+msgstr "最佳连胜"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "BG Dim"
@@ -3797,7 +3839,7 @@ msgstr "背景变暗"
 
 #: src/lib/chain-run.ts
 msgid "Big pack"
-msgstr ""
+msgstr "大卡包"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Big play"
@@ -3834,11 +3876,11 @@ msgstr "卡夹"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Bitmap"
-msgstr ""
+msgstr "点阵"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Black hole"
-msgstr ""
+msgstr "黑洞"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Black playfield"
@@ -3846,11 +3888,11 @@ msgstr "纯黑游玩区域"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Blackletter"
-msgstr ""
+msgstr "哥特体"
 
 #: src/lib/pack-run.ts
 msgid "Blacklight"
-msgstr ""
+msgstr "黑光"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
@@ -3858,7 +3900,7 @@ msgstr "闪电战"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Block"
-msgstr ""
+msgstr "方块"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "blue"
@@ -3891,13 +3933,22 @@ msgstr "每个符合条件的卡包的额外概率：{chance}"
 msgid "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
 msgstr "这里不计入游玩次数带来的奖励 pp，所以数值会比 osu! 个人主页上的 4K 和 7K 总量略低。"
 
+#: src/components/packs/run/chain/ChainReel.tsx
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Bonus spin"
+msgstr "奖励转盘"
+
 #: src/routes/communities_.$id.tsx
 msgid "boosts"
 msgstr "加成"
 
 #: src/components/supporter/loadout.ts
 msgid "Boot box"
-msgstr ""
+msgstr "启动框"
+
+#: src/lib/chain-run.ts
+msgid "BORROW"
+msgstr "借用"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bottom"
@@ -3943,11 +3994,11 @@ msgstr "衩"
 
 #: src/components/packs/run/chain/ChainBoard.tsx
 msgid "break"
-msgstr ""
+msgstr "断连"
 
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "BREAK"
-msgstr ""
+msgstr "断连"
 
 #: src/components/replay/ReplaySkinColorPanel.tsx
 msgid "Bright"
@@ -3972,7 +4023,7 @@ msgstr "损坏"
 
 #: src/components/supporter/loadout.ts
 msgid "Bronze laurel"
-msgstr ""
+msgstr "青铜桂冠"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Browse"
@@ -4033,7 +4084,7 @@ msgstr "保加利亚语"
 
 #: src/components/supporter/loadout.ts
 msgid "Bullet board"
-msgstr ""
+msgstr "弹幕板"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Bullet hell"
@@ -4119,7 +4170,7 @@ msgstr "卡片"
 
 #: src/lib/chain-run.ts
 msgid "Card 2 copies card 1."
-msgstr ""
+msgstr "第 2 张卡片复制第 1 张。"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "Card albums"
@@ -4127,7 +4178,7 @@ msgstr "卡册"
 
 #: src/components/supporter/loadout.ts
 msgid "Card art"
-msgstr ""
+msgstr "卡牌图案"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "Card collection"
@@ -4141,7 +4192,7 @@ msgstr "卡片封面"
 
 #: src/components/supporter/loadout.ts
 msgid "Card foil"
-msgstr ""
+msgstr "卡牌闪膜"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Card foil and art"
@@ -4178,15 +4229,15 @@ msgstr "卡片"
 #. placeholder {0}: N.modReader.mult
 #: src/lib/pack-run.ts
 msgid "Cards a mod stops from scoring give +{0} combo."
-msgstr ""
+msgstr "被 Mod 阻止计分的卡片 +{0} 连击。"
 
 #: src/lib/chain-run.ts
 msgid "Cards also link two back."
-msgstr ""
+msgstr "卡片还会与往前第 2 张连线。"
 
 #: src/lib/chain-run.ts
 msgid "Cards can't be dealt right now. Try again in a moment."
-msgstr ""
+msgstr "暂时无法发牌，请稍后再试。"
 
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "cards collected"
@@ -4202,7 +4253,7 @@ msgstr "来自你所在国家/地区的卡片不计分。"
 
 #: src/lib/pack-run.ts
 msgid "Cards from your country score twice."
-msgstr ""
+msgstr "来自你所在国家/地区的卡片计分两次。"
 
 #. placeholder {0}: N.hoarder.chips
 #: src/lib/pack-run.ts
@@ -4231,11 +4282,11 @@ msgstr "全球前 1,000 名的卡片 +{0} 音符。"
 
 #: src/lib/pack-run.ts
 msgid "Cards score only once."
-msgstr ""
+msgstr "卡片只计分一次。"
 
 #: src/lib/pack-run.ts
 msgid "Cards that share no country with another card score nothing."
-msgstr ""
+msgstr "与其他卡片没有相同国家/地区的卡片不计分。"
 
 #. placeholder {0}: N.gallery.mult
 #: src/lib/pack-run.ts
@@ -4256,7 +4307,7 @@ msgstr "你持有的、已经抽不到的玩家卡片：他们在每个已追踪
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Cartoon"
-msgstr ""
+msgstr "卡通"
 
 #: src/components/supporter/SupportShowcase.tsx
 msgid "Cases"
@@ -4272,16 +4323,16 @@ msgstr "磁带"
 
 #: src/components/supporter/loadout.ts
 msgid "Cat parade"
-msgstr ""
+msgstr "猫猫游行"
 
 #: src/components/supporter/loadout.ts
 msgid "Cats"
-msgstr ""
+msgstr "猫"
 
 #: src/lib/supporter-foils.ts
 #: src/lib/supporter-name-styles.ts
 msgid "Caustics"
-msgstr ""
+msgstr "焦散"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -4305,18 +4356,18 @@ msgid "Chain pulls and a third shop slot"
 msgstr "连锁抽卡和第三个商店栏位"
 
 #: src/components/packs/run/chain/ChainHud.tsx
-msgid "Chain run"
-msgstr ""
+#~ msgid "Chain run"
+#~ msgstr "连锁模式"
 
 #: src/lib/pack-run.ts
 msgid "Chained cards score twice."
-msgstr ""
+msgstr "连锁的卡片计分两次。"
 
 #. placeholder {0}: N.fever.factor
 #. placeholder {1}: N.fever.factor
 #: src/lib/pack-run.ts
 msgid "Chances on your charms are {0} times as likely, and Sightread rolls {1} times and keeps the highest."
-msgstr ""
+msgstr "护符上的概率变为 {0} 倍，视奏会掷 {1} 次并取最高值。"
 
 #: src/routes/recommendations.tsx
 msgid "change"
@@ -4402,7 +4453,7 @@ msgstr "修改皮肤可见范围失败。请重试。"
 #. placeholder {0}: index + 1
 #: src/components/packs/run/RunCharmRail.tsx
 msgid "Charm {0} of {count}"
-msgstr ""
+msgstr "护符 {0} / {count}"
 
 #: src/components/packs/run/RunView.tsx
 #~ msgid "Charm icons by Lorc, Delapouite and contributors at <0>game-icons.net</0>, CC BY 3.0"
@@ -4410,7 +4461,7 @@ msgstr ""
 
 #: src/components/packs/run/RunInfo.tsx
 msgid "Charm icons by Lorc, Delapouite, Skoll, Sbed, Faithtoken and Carl Olsen at <0>game-icons.net</0>, CC BY 3.0"
-msgstr ""
+msgstr "护符图标由 Lorc、Delapouite、Skoll、Sbed、Faithtoken 和 Carl Olsen 制作，来自 <0>game-icons.net</0>，CC BY 3.0"
 
 #: src/components/packs/run/RunEnd.tsx
 msgid "Charms"
@@ -4418,19 +4469,19 @@ msgstr "护符"
 
 #: src/lib/pack-run.ts
 msgid "Charms bought"
-msgstr ""
+msgstr "购买的护符"
 
 #: src/lib/pack-run.ts
 msgid "Charms fire from the last slot to the first."
-msgstr ""
+msgstr "护符从最后一个栏位向第一个栏位依次触发。"
 
 #: src/lib/pack-run.ts
 msgid "Charms give no notes."
-msgstr ""
+msgstr "护符不提供音符。"
 
 #: src/lib/pack-run.ts
 msgid "Charms sold"
-msgstr ""
+msgstr "出售的护符"
 
 #: src/components/companella/SubmissionDetail.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
@@ -4440,7 +4491,7 @@ msgstr "谱面"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Chart (.osu)"
-msgstr ""
+msgstr "谱面 (.osu)"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "chart changed on osu!, waiting for a fresh check"
@@ -4594,7 +4645,7 @@ msgstr "铬面"
 #. placeholder {0}: LOADOUT_NUMBERS.storyboard.finishTimes
 #: src/lib/pack-run.ts
 msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
-msgstr ""
+msgstr "铬面、霓虹和彩虹卡面在计分时生效 {0} 次。"
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -4629,7 +4680,7 @@ msgstr "经典"
 
 #: src/components/supporter/loadout.ts
 msgid "Classic window"
-msgstr ""
+msgstr "经典窗口"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
@@ -4908,7 +4959,7 @@ msgstr "不开放"
 
 #: src/lib/pack-run.ts
 msgid "Clutch"
-msgstr ""
+msgstr "绝境"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -4917,7 +4968,7 @@ msgstr "代码块"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Code rain"
-msgstr ""
+msgstr "代码雨"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Collapse"
@@ -4984,7 +5035,7 @@ msgstr "收藏家等级 {0}"
 
 #: src/components/packs/run/RunTally.tsx
 msgid "Collector XP"
-msgstr ""
+msgstr "收藏家经验"
 
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "collectors"
@@ -5037,6 +5088,7 @@ msgstr "连击"
 
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/lib/chain-run.ts
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Combo"
@@ -5045,7 +5097,7 @@ msgstr "连击"
 #. placeholder {0}: formatChainScore(link.strength)
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Combo +{0}"
-msgstr ""
+msgstr "连击 +{0}"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Combo break sound"
@@ -5053,11 +5105,11 @@ msgstr "断连音效"
 
 #: src/lib/pack-run.ts
 msgid "Combo Burst"
-msgstr ""
+msgstr "连击爆发"
 
 #: src/lib/pack-run.ts
 msgid "Combo Counter"
-msgstr ""
+msgstr "连击计数器"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Combo counter height."
@@ -5066,7 +5118,7 @@ msgstr "连击数高度。"
 #. placeholder {0}: pct(B.windDown.step)
 #: src/lib/pack-run.ts
 msgid "Combo drops {0}% for each pack already played this song."
-msgstr ""
+msgstr "本曲目中每已开过一个卡包，连击下降 {0}%。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Combo font"
@@ -5078,7 +5130,7 @@ msgstr "ComboPosition"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Comic"
-msgstr ""
+msgstr "漫画"
 
 #: src/components/communities/TagInput.tsx
 msgid "Comma after each one. Up to {COMMUNITY_MAX_TAGS}, and they become filters people browse by, so use words someone would actually search for."
@@ -5086,7 +5138,7 @@ msgstr "每个标签后面加逗号。最多 {COMMUNITY_MAX_TAGS} 个，它们�
 
 #: src/lib/chain-run.ts
 msgid "Common"
-msgstr ""
+msgstr "Common"
 
 #. placeholder {0}: N.grassroots.chips
 #: src/lib/pack-run.ts
@@ -5099,7 +5151,7 @@ msgstr "普通卡片不计分。"
 
 #: src/lib/pack-run.ts
 msgid "Common cards score twice."
-msgstr ""
+msgstr "Common 卡片计分两次。"
 
 #: src/routes/recommendations.tsx
 msgid "common pick"
@@ -5149,7 +5201,7 @@ msgstr "对比 {range} pp"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Condensed"
-msgstr ""
+msgstr "窄体"
 
 #: src/routes/companella_.authorize.tsx
 #: src/routes/hashi_.authorize.tsx
@@ -5158,7 +5210,7 @@ msgstr "连接应用"
 
 #: src/routes/companella.tsx
 msgid "Connect Companella to Mania Tracker and review the plays it imported."
-msgstr ""
+msgstr "把 Companella 连接到本站，查看它导入的成绩。"
 
 #: src/routes/hashi.tsx
 msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
@@ -5170,12 +5222,12 @@ msgstr "请先关联你的 Discord 账号。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected"
-msgstr ""
+msgstr "已连接"
 
 #. placeholder {0}: result.username
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected as {0}."
-msgstr ""
+msgstr "已连接为 {0}。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "connected to Discord"
@@ -5200,7 +5252,7 @@ msgstr "连接"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connection"
-msgstr ""
+msgstr "连接"
 
 #. placeholder {0}: index + 1
 #: src/components/settings/CompanellaGroup.tsx
@@ -5222,7 +5274,7 @@ msgstr "连接"
 
 #: src/lib/pack-run.ts
 msgid "Constant Speed"
-msgstr ""
+msgstr "Constant Speed"
 
 #: src/routes/legal.tsx
 msgid "Contact"
@@ -5238,7 +5290,7 @@ msgstr "大洲"
 
 #: src/components/packs/run/RunTally.tsx
 msgid "Continue"
-msgstr ""
+msgstr "继续"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Continue with Discord"
@@ -5491,7 +5543,7 @@ msgstr "提交失败，请重试。"
 #. placeholder {0}: created.error ?? "unknown"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Could not start an authorization request ({0})."
-msgstr ""
+msgstr "无法发起授权请求（{0}）。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not submit that. Try again."
@@ -5787,6 +5839,7 @@ msgstr "国内"
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/lib/chain-run.ts
 #: src/routes/player/$username.tsx
 msgid "Country"
 msgstr "国家/地区"
@@ -5813,7 +5866,7 @@ msgstr "课题"
 
 #: src/lib/pack-run.ts
 msgid "Cover"
-msgstr ""
+msgstr "Cover"
 
 #: src/components/layout/SupportGoalBar.tsx
 msgid "Covered"
@@ -5821,11 +5874,11 @@ msgstr "已覆盖"
 
 #: src/lib/supporter-foils.ts
 msgid "Cracked ice"
-msgstr ""
+msgstr "碎冰"
 
 #: src/components/supporter/loadout.ts
 msgid "Crayon"
-msgstr ""
+msgstr "蜡笔"
 
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -5838,7 +5891,7 @@ msgstr "创建卡组来整理你的卡片。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Create test connection"
-msgstr ""
+msgstr "创建测试连接"
 
 #. placeholder {0}: preset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -5851,7 +5904,7 @@ msgstr "创建于 <0>{createdValue}</0>"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Creating"
-msgstr ""
+msgstr "创建中"
 
 #: src/routes/dan-estimates.tsx
 msgid "Credit"
@@ -5877,11 +5930,11 @@ msgstr "王冠"
 
 #: src/components/supporter/loadout.ts
 msgid "CRT monitor"
-msgstr ""
+msgstr "CRT 显示器"
 
 #: src/components/supporter/loadout.ts
 msgid "Crystal wings"
-msgstr ""
+msgstr "水晶翅膀"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
@@ -6054,11 +6107,11 @@ msgstr "段位技能"
 
 #: src/components/supporter/loadout.ts
 msgid "Dan skip"
-msgstr ""
+msgstr "段位跳过"
 
 #: src/components/supporter/loadout.ts
 msgid "Dance pad"
-msgstr ""
+msgstr "跳舞毯"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Danger"
@@ -6070,7 +6123,7 @@ msgstr "丹麦语"
 
 #: src/components/supporter/loadout.ts
 msgid "Dans"
-msgstr ""
+msgstr "段位"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "dark"
@@ -6098,7 +6151,7 @@ msgstr "天"
 
 #: src/lib/pack-run.ts
 msgid "Daycore"
-msgstr ""
+msgstr "Daycore"
 
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/supporter/GiftTicket3D.tsx
@@ -6138,7 +6191,7 @@ msgstr "减少"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Deep sea"
-msgstr ""
+msgstr "深海"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "default"
@@ -6146,7 +6199,7 @@ msgstr "默认"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Default"
-msgstr ""
+msgstr "默认"
 
 #: src/components/maps/MapPreviewAudio.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -6206,7 +6259,7 @@ msgstr "删除皮肤"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
-msgstr ""
+msgstr "删除这条导入的成绩？它的回放会被移除，预览会重新计算。"
 
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/replay_.uploads.tsx
@@ -6229,7 +6282,7 @@ msgstr "删除中"
 
 #: src/components/supporter/loadout.ts
 msgid "Delta crest"
-msgstr ""
+msgstr "三角徽章"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Denim"
@@ -6269,11 +6322,11 @@ msgstr "开发预览"
 
 #: src/components/supporter/loadout.ts
 msgid "DFJK"
-msgstr ""
+msgstr "DFJK"
 
 #: src/components/supporter/loadout.ts
 msgid "Dialogue box"
-msgstr ""
+msgstr "对话框"
 
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
@@ -6350,7 +6403,7 @@ msgstr "显示"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Dither"
-msgstr ""
+msgstr "抖动"
 
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
@@ -6399,11 +6452,11 @@ msgstr "刷够了"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Dots"
-msgstr ""
+msgstr "圆点"
 
 #: src/lib/pack-run.ts
 msgid "Double Tap"
-msgstr ""
+msgstr "双击"
 
 #: src/lib/pack-run.ts
 msgid "Double Time"
@@ -6412,6 +6465,10 @@ msgstr "Double Time"
 #: src/routes/snipes.tsx
 msgid "Doubles the columns into two stages."
 msgstr "把轨道翻倍，分成两个舞台。"
+
+#: src/lib/chain-run.ts
+msgid "Doubles the combo before it scores."
+msgstr "计分前将连击翻倍。"
 
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
@@ -6442,7 +6499,7 @@ msgstr "下载 {name} 版"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Download replay"
-msgstr ""
+msgstr "下载回放"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Download started"
@@ -6508,7 +6565,7 @@ msgstr "拖动调整大小"
 
 #: src/lib/pack-run.ts
 msgid "Drain Time"
-msgstr ""
+msgstr "Drain Time"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "Draw a different set of charts"
@@ -6573,7 +6630,7 @@ msgstr "DT/NC"
 
 #: src/lib/pack-run.ts
 msgid "Dual Stages"
-msgstr ""
+msgstr "Dual Stages"
 
 #: src/lib/pack-run.ts
 msgid "Duet"
@@ -6609,7 +6666,7 @@ msgstr "例如：4K 跳叠热身"
 
 #: src/lib/chain-run.ts
 msgid "Each card also links to the card two slots back. A card breaks only if it links to neither."
-msgstr ""
+msgstr "每张卡片还会与往前第 2 个位置的卡片连线。只有两边都连不上时，卡片才会断连。"
 
 #. placeholder {0}: N.chainLink.chance * 100
 #: src/lib/pack-run.ts
@@ -6620,17 +6677,17 @@ msgstr "每张卡片有 {0}% 几率额外发一张卡。"
 #. placeholder {1}: N.maxJudgement.chips
 #: src/lib/pack-run.ts
 msgid "Each card has a 1 in {0} chance to give +{1} notes."
-msgstr ""
+msgstr "每张卡片有 1/{0} 的概率提供 +{1} 音符。"
 
 #. placeholder {0}: N.comboBurst.odds
 #. placeholder {1}: N.comboBurst.xMult
 #: src/lib/pack-run.ts
 msgid "Each card has a 1 in {0} chance to give x{1} combo."
-msgstr ""
+msgstr "每张卡片有 1/{0} 的概率提供 x{1} 连击。"
 
 #: src/lib/chain-run.ts
 msgid "Each card you recycle or remove while you hold it adds 1 to every card's base for the rest of the run."
-msgstr ""
+msgstr "持有它期间，每回收或移除一张卡片，本局剩余时间内所有卡片的基础分 +1。"
 
 #: src/routes/player/$username.tsx
 msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
@@ -6643,6 +6700,11 @@ msgstr "每个段位表都有一条通过线，取自它真实的段位课程：
 #: src/routes/dan-estimates.tsx
 msgid "Each level is split into five steps, so a chart can be 7--, 7-, 7, 7+ or 7++, from the easy end of 7th dan to the hard end."
 msgstr "每一级分成五档，所以一张谱面可以是 7--、7-、7、7+ 或 7++，从 7 段的简单一端到困难一端。"
+
+#. placeholder {0}: pct(E.stream[band])
+#: src/lib/chain-run.ts
+msgid "Each link after it lifts the combo {0}% more, until a break."
+msgstr "此后每条连线让连击再提高 {0}%，直到断连。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long tech chart, counts in both."
@@ -6790,7 +6852,7 @@ msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到你
 
 #: src/components/supporter/loadout.ts
 msgid "Effects"
-msgstr ""
+msgstr "特效"
 
 #: src/components/BackendOfflineScreen.tsx
 msgid "Either restarting or under maintenance. Try again later."
@@ -6828,7 +6890,7 @@ msgstr "{endsLabel} 结束"
 
 #: src/lib/pack-run.ts
 msgid "Endurance"
-msgstr ""
+msgstr "耐久"
 
 #: src/components/communities/field-options.tsx
 msgid "English"
@@ -6858,7 +6920,7 @@ msgstr "错误"
 
 #: src/components/supporter/loadout.ts
 msgid "Error cascade"
-msgstr ""
+msgstr "报错瀑布"
 
 #. placeholder {0}: hitError.early
 #. placeholder {1}: hitError.late
@@ -6901,7 +6963,7 @@ msgstr "爱沙尼亚语"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Ethereal"
-msgstr ""
+msgstr "空灵"
 
 #: src/components/player/OverallMethodToggle.tsx
 msgid "Etterna"
@@ -6917,7 +6979,7 @@ msgstr "即便有这些防护措施，数据仍可能出现延迟、不完整、
 
 #: src/lib/pack-run.ts
 msgid "Every +combo is halved."
-msgstr ""
+msgstr "所有 +连击 减半。"
 
 #: src/routes/support.tsx
 msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
@@ -6942,7 +7004,7 @@ msgstr "所有卡片带有相同卡面。"
 #. placeholder {0}: N.replay.extra
 #: src/lib/pack-run.ts
 msgid "Every card scores {0} more times on the last pack of a song."
-msgstr ""
+msgstr "曲目的最后一个卡包中，每张卡片多计分 {0} 次。"
 
 #. placeholder {0}: N.hotStreak.packs
 #: src/lib/pack-run.ts
@@ -7005,11 +7067,11 @@ msgstr "每个卡包都给 {PACK_OPEN_SHARD_REWARD} 个碎片。回收重复卡�
 #. placeholder {1}: B.nightcore.last
 #: src/lib/pack-run.ts
 msgid "Every pack scores x{0} combo except the last, which scores x{1}."
-msgstr ""
+msgstr "除最后一个卡包为 x{1} 连击外，每个卡包 x{0} 连击。"
 
 #: src/lib/pack-run.ts
 msgid "Every pattern starts with the notes and combo of a Single."
-msgstr ""
+msgstr "每种键型都以单项的音符和连击起步。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Every rate of a chart"
@@ -7017,23 +7079,23 @@ msgstr "谱面的所有倍速"
 
 #: src/lib/chain-run.ts
 msgid "Every scene card slot is full. Sell one first."
-msgstr ""
+msgstr "场景卡栏位已满，请先出售一张。"
 
 #. placeholder {0}: N.quickRetry.packs
 #: src/lib/pack-run.ts
 msgid "Every song from the next one on gets +{0} pack."
-msgstr ""
+msgstr "从下一首曲目起，每首曲目 +{0} 个卡包。"
 
 #. placeholder {0}: STAKE_NUMBERS.fewerPacks
 #: src/lib/pack-run.ts
 msgid "Every song has {0} pack fewer."
-msgstr ""
+msgstr "每首曲目少 {0} 个卡包。"
 
 #. placeholder {0}: LOADOUT_NUMBERS.stamina.packs
 #. placeholder {1}: -LOADOUT_NUMBERS.stamina.slots
 #: src/lib/pack-run.ts
 msgid "Every song has +{0} pack and you have {1} charm slot fewer."
-msgstr ""
+msgstr "每首曲目 +{0} 个卡包，护符栏位少 {1} 个。"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Every stat"
@@ -7063,7 +7125,7 @@ msgstr "压缩包里的其他所有文件"
 
 #: src/routes/supporter.tsx
 msgid "Everything here is a preview until you support. Use your osu! username as your Ko-fi name so it counts for you."
-msgstr ""
+msgstr "在你支持之前，这里的一切都只是预览。请把 Ko-fi 名称设为你的 osu! 用户名，这样才会记到你名下。"
 
 #. placeholder {0}: dan.rawDan.toFixed(2)
 #: src/components/player/DanEvidenceModal.tsx
@@ -7094,11 +7156,11 @@ msgstr "退出全屏"
 
 #: src/lib/pack-run.ts
 msgid "Expert"
-msgstr ""
+msgstr "Expert"
 
 #: src/lib/pack-run.ts
 msgid "Expert+"
-msgstr ""
+msgstr "Expert+"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Export cancelled."
@@ -7126,7 +7188,7 @@ msgstr "导出的视频无法使用此链接，因为其网站阻止了访问。
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Extended"
-msgstr ""
+msgstr "宽体"
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Extended statistics are only available after watching a replay!"
@@ -7138,11 +7200,11 @@ msgstr "外部应用"
 
 #: src/lib/pack-run.ts
 msgid "Extra Key"
-msgstr ""
+msgstr "额外键"
 
 #: src/lib/pack-run.ts
 msgid "Extra slot"
-msgstr ""
+msgstr "额外栏位"
 
 #: src/lib/pack-run.ts
 msgid "Fade In"
@@ -7188,7 +7250,7 @@ msgstr "回放渲染器启动失败。"
 
 #: src/components/supporter/loadout.ts
 msgid "Fairy lights"
-msgstr ""
+msgstr "彩灯串"
 
 #: src/lib/signature-style.ts
 msgid "Falling notes"
@@ -7232,7 +7294,7 @@ msgstr "最快"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Fatface"
-msgstr ""
+msgstr "Fatface"
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Favourite on osu!"
@@ -7281,7 +7343,7 @@ msgstr "仅 FC 断连（1 miss）"
 
 #: src/components/supporter/loadout.ts
 msgid "Feather wings"
-msgstr ""
+msgstr "羽翼"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Feeds"
@@ -7309,7 +7371,7 @@ msgstr "正在获取两份成绩和谱面。"
 
 #: src/lib/pack-run.ts
 msgid "Fever"
-msgstr ""
+msgstr "狂热"
 
 #: src/lib/streak-game.ts
 msgid "Fewer 7K"
@@ -7487,7 +7549,7 @@ msgstr "正在查找更多回放..."
 
 #: src/lib/pack-run.ts
 msgid "Finish"
-msgstr ""
+msgstr "卡面"
 
 #: src/lib/pack-run.ts
 msgid "Finishes are three times as likely."
@@ -7495,11 +7557,11 @@ msgstr "卡面出现几率为三倍。"
 
 #: src/lib/pack-run.ts
 msgid "Finishes do nothing."
-msgstr ""
+msgstr "卡面无效。"
 
 #: src/lib/pack-run.ts
 msgid "Finishes pulled"
-msgstr ""
+msgstr "抽到的卡面"
 
 #: src/lib/pack-run.ts
 msgid "Finishes roll twice as often."
@@ -7507,7 +7569,7 @@ msgstr "卡面出现几率翻倍。"
 
 #: src/routes/companella_.test-callback.tsx
 msgid "Finishing the connection..."
-msgstr ""
+msgstr "正在完成连接…"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Finishing the file"
@@ -7515,7 +7577,7 @@ msgstr "正在收尾文件"
 
 #: src/routes/companella_.test-callback.tsx
 msgid "Finishing the test client connection."
-msgstr ""
+msgstr "正在完成测试客户端连接。"
 
 #: src/routes/recommendations.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
@@ -7529,7 +7591,7 @@ msgstr "芬兰语"
 #. placeholder {0}: link.fires
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Fires {0} times in a hand."
-msgstr ""
+msgstr "在一组三押中触发 {0} 次。"
 
 #. placeholder {0}: formatTimeAgo(new Date(collector.joinedAt).toISOString(), locale)
 #: src/components/packs/collections/CollectorShelf.tsx
@@ -7554,7 +7616,7 @@ msgstr "首发现"
 
 #: src/lib/pack-run.ts
 msgid "First Note"
-msgstr ""
+msgstr "第一个音符"
 
 #: src/components/ui/Pagination.tsx
 msgid "First page"
@@ -7567,6 +7629,10 @@ msgstr "第一名成绩"
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "First pull"
 msgstr "第一个抽到"
+
+#: src/components/packs/run/chain/ChainReel.tsx
+msgid "First row"
+msgstr "第一排"
 
 #: src/components/CountryWarming.tsx
 msgid "First time anyone has visited {name}. Its rankings, maps and live tracking are being set up in the background."
@@ -7590,7 +7656,7 @@ msgstr "第一个抽到这张卡片"
 
 #: src/lib/pack-run.ts
 msgid "First Try"
-msgstr ""
+msgstr "一次成功"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Fit"
@@ -7614,7 +7680,7 @@ msgstr "五个连续的稀有度。"
 
 #: src/components/supporter/loadout.ts
 msgid "Five-star pull"
-msgstr ""
+msgstr "五星抽卡"
 
 #: src/routes/report.tsx
 msgid "fixed"
@@ -7663,7 +7729,7 @@ msgstr "跟随 SV 变化"
 
 #: src/components/supporter/loadout.ts
 msgid "Font"
-msgstr ""
+msgstr "字体"
 
 #: src/routes/recommendations.tsx
 msgid "for"
@@ -7679,7 +7745,7 @@ msgstr "针对被封禁或已删除的账号"
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "For review"
-msgstr ""
+msgstr "待审查"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "For screenshots that have nothing to do with the skin."
@@ -7720,7 +7786,7 @@ msgstr "免费"
 
 #: src/lib/pack-run.ts
 msgid "Free charm"
-msgstr ""
+msgstr "免费护符"
 
 #: src/components/communities/field-options.tsx
 msgid "French"
@@ -7728,7 +7794,7 @@ msgstr "法语"
 
 #: src/lib/pack-run.ts
 msgid "Fresh Eyes"
-msgstr ""
+msgstr "新鲜视角"
 
 #: src/lib/pack-run.ts
 msgid "Fresh Paint"
@@ -7754,7 +7820,7 @@ msgstr "来自真实成绩（非模拟）"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "From this round's pack. Used up once played."
-msgstr ""
+msgstr "来自本回合的卡包，打出后即用完。"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Fronts the browse card"
@@ -7763,7 +7829,7 @@ msgstr "作为浏览卡片的封面"
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Frost"
-msgstr ""
+msgstr "霜冻"
 
 #: src/components/packs/SetsView.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -7780,7 +7846,7 @@ msgstr "完整分析"
 
 #: src/lib/pack-run.ts
 msgid "Full Combo"
-msgstr ""
+msgstr "FC"
 
 #: src/routes/tracker.tsx
 msgid "Full combos only (0 misses)"
@@ -7810,7 +7876,7 @@ msgstr "全屏"
 
 #: src/components/supporter/loadout.ts
 msgid "Fun"
-msgstr ""
+msgstr "趣味"
 
 #: src/components/packs/run/RunInfo.tsx
 msgid "Furthest stages"
@@ -7818,7 +7884,7 @@ msgstr "最远关卡"
 
 #: src/components/supporter/loadout.ts
 msgid "Gacha"
-msgstr ""
+msgstr "抽卡"
 
 #. placeholder {0}: N.snowball.step
 #: src/lib/pack-run.ts
@@ -7828,28 +7894,28 @@ msgstr "每开出带双押的卡包获得 +{0} 连击。"
 #. placeholder {0}: N.overdrive.step
 #: src/lib/pack-run.ts
 msgid "Gains +{0} combo for every pack that is not a Single and drops to 0 on a Single."
-msgstr ""
+msgstr "每开出一个非单项的卡包获得 +{0} 连击，遇到单项则降为 0。"
 
 #. placeholder {0}: N.grind.step
 #. placeholder {1}: N.grind.level
 #: src/lib/pack-run.ts
 msgid "Gains +{0} combo for every pack with a card at mastery level {1} or higher."
-msgstr ""
+msgstr "每开出一个含有精通等级 {1} 及以上卡片的卡包获得 +{0} 连击。"
 
 #. placeholder {0}: N.metronome.step
 #: src/lib/pack-run.ts
 msgid "Gains +{0} notes every pack."
-msgstr ""
+msgstr "每开一个卡包获得 +{0} 音符。"
 
 #. placeholder {0}: N.practice.step
 #: src/lib/pack-run.ts
 msgid "Gains +{0} notes for every pack that is a Single."
-msgstr ""
+msgstr "每开出一个单项卡包获得 +{0} 音符。"
 
 #. placeholder {0}: N.marathon.step
 #: src/lib/pack-run.ts
 msgid "Gains x{0} combo every pack."
-msgstr ""
+msgstr "每开一个卡包获得 x{0} 连击。"
 
 #. placeholder {0}: N.ascension.step
 #: src/lib/pack-run.ts
@@ -7859,7 +7925,7 @@ msgstr "每通过一首最终曲目获得 x{0} 连击。"
 #. placeholder {0}: N.herd.step
 #: src/lib/pack-run.ts
 msgid "Gains x{0} combo for every GOAT or Eternal card in your packs."
-msgstr ""
+msgstr "你的卡包中每有一张 GOAT 或 Eternal 卡片获得 x{0} 连击。"
 
 #. placeholder {0}: N.archivist.step
 #: src/lib/pack-run.ts
@@ -7869,11 +7935,11 @@ msgstr "本轮每张新卡片获得 x{0} 连击。"
 #. placeholder {0}: N.fullCombo.step
 #: src/lib/pack-run.ts
 msgid "Gains x{0} combo for every song cleared with a pack to spare and goes back to x1 when a song takes its last pack."
-msgstr ""
+msgstr "每通过一首还剩余卡包的曲目获得 x{0} 连击，有曲目用到最后一个卡包时回到 x1。"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Galaxy"
-msgstr ""
+msgstr "银河"
 
 #: src/lib/pack-run.ts
 msgid "Gallery"
@@ -7881,7 +7947,7 @@ msgstr "画廊"
 
 #: src/components/supporter/loadout.ts
 msgid "Game and tech"
-msgstr ""
+msgstr "游戏与科技"
 
 #: src/lib/skill-axes.ts
 msgid "General"
@@ -7955,15 +8021,15 @@ msgstr "给卡组起个名字。"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Glitch"
-msgstr ""
+msgstr "故障"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Glitched"
-msgstr ""
+msgstr "故障体"
 
 #: src/lib/supporter-foils.ts
 msgid "Glitter"
-msgstr ""
+msgstr "闪粉"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/maps.tsx
@@ -8003,7 +8069,7 @@ msgstr "光晕"
 
 #: src/components/supporter/loadout.ts
 msgid "Glow and retro"
-msgstr ""
+msgstr "发光与复古"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "go again"
@@ -8048,7 +8114,7 @@ msgstr "目标（{0} 个进行中）"
 
 #: src/lib/chain-run.ts
 msgid "GOAT"
-msgstr ""
+msgstr "GOAT"
 
 #. placeholder {0}: N.crown.xMult
 #. placeholder {1}: N.crown.highXMult
@@ -8097,11 +8163,11 @@ msgstr "金色卡包"
 
 #: src/components/supporter/loadout.ts
 msgid "Gold wings"
-msgstr ""
+msgstr "金色翅膀"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Golden hour"
-msgstr ""
+msgstr "黄金时刻"
 
 #: src/routes/clip.$id.tsx
 msgid "Gone in {hoursLeft}h"
@@ -8128,7 +8194,7 @@ msgstr "渐变文字"
 
 #: src/components/supporter/loadout.ts
 msgid "Gradients"
-msgstr ""
+msgstr "渐变"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgctxt "skill history view"
@@ -8169,11 +8235,11 @@ msgstr "网格"
 
 #: src/lib/pack-run.ts
 msgid "Grind"
-msgstr ""
+msgstr "苦练"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Groovy"
-msgstr ""
+msgstr "律动"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
@@ -8181,7 +8247,7 @@ msgstr "随机猜一个"
 
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "HALF"
-msgstr ""
+msgstr "减半"
 
 #: src/lib/pack-run.ts
 msgid "Half Time"
@@ -8189,15 +8255,15 @@ msgstr "Half Time"
 
 #: src/lib/pack-run.ts
 msgid "Hall of Fame"
-msgstr ""
+msgstr "名人堂"
 
 #: src/components/supporter/loadout.ts
 msgid "Halo"
-msgstr ""
+msgstr "光环"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Hanabi"
-msgstr ""
+msgstr "花火"
 
 #: src/lib/pack-run.ts
 msgid "Hand"
@@ -8205,7 +8271,7 @@ msgstr "三押"
 
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "HAND"
-msgstr ""
+msgstr "三押"
 
 #: src/lib/pattern-labels.ts
 msgid "Handjack"
@@ -8223,7 +8289,7 @@ msgstr "三押切"
 
 #: src/components/supporter/loadout.ts
 msgid "Handwritten"
-msgstr ""
+msgstr "手写"
 
 #: src/routes/recommendations.tsx
 msgid "hard"
@@ -8231,7 +8297,7 @@ msgstr "难"
 
 #: src/lib/pack-run.ts
 msgid "Hard"
-msgstr ""
+msgstr "Hard"
 
 #: src/lib/pack-run.ts
 msgid "Hard Rock"
@@ -8308,11 +8374,11 @@ msgstr "爱心"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Heatmap"
-msgstr ""
+msgstr "热力图"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Heavy"
-msgstr ""
+msgstr "粗体"
 
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
@@ -8328,7 +8394,7 @@ msgstr "羊群"
 
 #: src/components/supporter/loadout.ts
 msgid "Hex HUD"
-msgstr ""
+msgstr "六边形 HUD"
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -8434,7 +8500,7 @@ msgstr "先按等级从高到低，再按 pp"
 
 #: src/components/supporter/loadout.ts
 msgid "Highlighter"
-msgstr ""
+msgstr "荧光笔"
 
 #: src/components/communities/field-options.tsx
 msgid "Hindi"
@@ -8474,7 +8540,7 @@ msgstr "打击误差条"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Hit light"
-msgstr ""
+msgstr "击打光"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit position"
@@ -8495,6 +8561,18 @@ msgstr "打击特效与判定文字的高度。"
 #: src/lib/replay-overlays.ts
 msgid "Hits only"
 msgstr "仅显示击打"
+
+#: src/lib/chain-run.ts
+msgid "Hits twice; the link into it adds half its combo."
+msgstr "命中两次；连入它的连线只增加一半连击。"
+
+#: src/lib/chain-run.ts
+msgid "Hits twice; the link into it adds no combo."
+msgstr "命中两次；连入它的连线不增加连击。"
+
+#: src/lib/chain-run.ts
+msgid "Hits twice."
+msgstr "命中两次。"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -8519,7 +8597,7 @@ msgstr "按住并沿虚线拖动"
 
 #: src/lib/pack-run.ts
 msgid "Hold Note"
-msgstr ""
+msgstr "长条"
 
 #: src/routes/snipes.tsx
 msgid "Hold notes don't need their release timed."
@@ -8527,7 +8605,7 @@ msgstr "长条的松开不需要掐准时机。"
 
 #: src/lib/pack-run.ts
 msgid "Hold Off"
-msgstr ""
+msgstr "Hold Off"
 
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "hold to delete"
@@ -8570,7 +8648,7 @@ msgstr "镭射箔"
 
 #: src/lib/supporter-foils.ts
 msgid "Holo lattice"
-msgstr ""
+msgstr "镭射网格"
 
 #: src/components/layout/Nav.tsx
 msgid "home"
@@ -8582,7 +8660,7 @@ msgstr "本国"
 
 #: src/lib/pack-run.ts
 msgid "Home Stage"
-msgstr ""
+msgstr "主场"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "Honorary roster"
@@ -8594,7 +8672,7 @@ msgstr "横向"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Horror"
-msgstr ""
+msgstr "恐怖"
 
 #: src/lib/pack-run.ts
 msgid "Hot Streak"
@@ -8672,7 +8750,7 @@ msgstr "HP"
 
 #: src/components/supporter/loadout.ts
 msgid "HP bar"
-msgstr ""
+msgstr "HP 条"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "HP bar bg"
@@ -8722,7 +8800,7 @@ msgstr "混合谱面：{0}，{1}"
 
 #: src/components/supporter/loadout.ts
 msgid "Ice fairy"
-msgstr ""
+msgstr "冰之妖精"
 
 #: src/routes/news_.prism.tsx
 msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
@@ -8730,7 +8808,7 @@ msgstr "如果你觉得某张谱面的评分不对，可以通过<0>问题反馈
 
 #: src/lib/pack-run.ts
 msgid "If the pack has a GOAT or Eternal card, every card scores twice."
-msgstr ""
+msgstr "卡包中有 GOAT 或 Eternal 卡片时，每张卡片计分两次。"
 
 #: src/routes/__root.tsx
 #~ msgid "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
@@ -8825,7 +8903,7 @@ msgstr "导入的音符图片高度缩放。"
 
 #: src/components/companella/SubmissionList.tsx
 msgid "Imported plays"
-msgstr ""
+msgstr "导入的成绩"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Imported plays that pass the checks show on the tracker and your Mania Tracker profile."
@@ -8936,7 +9014,7 @@ msgstr "印尼语"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Inferno"
-msgstr ""
+msgstr "炼狱"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Influence in this average; Dan credit is unchanged"
@@ -8944,7 +9022,7 @@ msgstr "在这个平均值中的影响；段位贡献不变"
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Info"
-msgstr ""
+msgstr "信息"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
@@ -8952,11 +9030,11 @@ msgstr "游戏内排行榜，实时显示名次变化。按 Tab 开关。"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Ink marble"
-msgstr ""
+msgstr "墨纹大理石"
 
 #: src/components/supporter/loadout.ts
 msgid "Ink plum"
-msgstr ""
+msgstr "墨梅"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -8973,7 +9051,7 @@ msgstr "输入"
 
 #: src/lib/pack-run.ts
 msgid "Insane"
-msgstr ""
+msgstr "Insane"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Insert"
@@ -9020,7 +9098,7 @@ msgstr "反键"
 
 #: src/lib/pack-run.ts
 msgid "Invert"
-msgstr ""
+msgstr "Invert"
 
 #: src/routes/communities_.$id.tsx
 msgid "invite"
@@ -9140,15 +9218,15 @@ msgstr "已判定"
 #. placeholder {1}: timing.fileOd
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Judged at OD {0}, the original map's, instead of this file's OD {1}."
-msgstr ""
+msgstr "按原谱面的 OD {0} 判定，而非该文件的 OD {1}。"
 
 #: src/components/supporter/loadout.ts
 msgid "Judgement line"
-msgstr ""
+msgstr "判定线"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Judgement rain"
-msgstr ""
+msgstr "判定雨"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Judgement set"
@@ -9210,7 +9288,7 @@ msgstr "刚刚"
 
 #: src/components/supporter/loadout.ts
 msgid "Kappa signal"
-msgstr ""
+msgstr "Kappa 信号"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Katana"
@@ -9236,7 +9314,7 @@ msgstr "保留我的成绩"
 
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Keep one"
-msgstr ""
+msgstr "选一张保留"
 
 #: src/routes/support.tsx
 msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
@@ -9253,7 +9331,7 @@ msgstr "此浏览器不支持在该倍速下保持音高。请用 1x 导出，�
 #. placeholder {0}: offer.keep
 #: src/components/packs/run/chain/ChainShop.tsx
 msgid "Keeps {0}"
-msgstr ""
+msgstr "保留 {0} 张"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Keeps the layout you're watching."
@@ -9280,7 +9358,7 @@ msgstr "键数模式"
 
 #: src/lib/pack-run.ts
 msgid "Key Overlay"
-msgstr ""
+msgstr "按键显示"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Key press hitsounds"
@@ -9306,6 +9384,7 @@ msgstr "键帽"
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/lib/chain-run.ts
 #: src/routes/dan-estimates.tsx
 msgid "Keymode"
 msgstr "键数"
@@ -9345,12 +9424,11 @@ msgstr "每秒按键次数。"
 
 #: src/lib/pack-run.ts
 msgid "Kiai Time"
-msgstr ""
-
+msgstr "Kiai Time"
 
 #: src/components/supporter/loadout.ts
 msgid "Knob lasers"
-msgstr ""
+msgstr "旋钮激光"
 
 #: src/routes/__root.tsx
 #~ msgid "Ko-fi page"
@@ -9358,7 +9436,7 @@ msgstr ""
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
-msgstr ""
+msgstr "锦鲤池"
 
 #: src/components/communities/field-options.tsx
 msgid "Korean"
@@ -9392,6 +9470,15 @@ msgstr "打出一个 {pp}pp 的成绩"
 #: src/components/me/GoalsPanel.tsx
 msgid "Land a play worth <0/>"
 msgstr "打出一个价值 <0/> 的成绩"
+
+#. placeholder {0}: E.delay[band]
+#: src/lib/chain-run.ts
+msgid "Lands late: scores at the combo the row ends on, x{0}."
+msgstr "延迟落地：按该排结束时的连击计分，x{0}。"
+
+#: src/lib/chain-run.ts
+msgid "Lands late: scores at the combo the row ends on."
+msgstr "延迟落地：按该排结束时的连击计分。"
 
 #: src/routes/skins_.$id.tsx
 #: src/routes/skins.tsx
@@ -9472,6 +9559,10 @@ msgstr "去年"
 msgid "Late"
 msgstr "偏晚"
 
+#: src/lib/chain-run.ts
+msgid "LATE"
+msgstr "延迟"
+
 #: src/lib/streak-game.ts
 msgid "Later"
 msgstr "更晚"
@@ -9495,11 +9586,11 @@ msgstr "拉脱维亚语"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Lava lamp"
-msgstr ""
+msgstr "熔岩灯"
 
 #: src/components/supporter/loadout.ts
 msgid "Layers"
-msgstr ""
+msgstr "图层"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
@@ -9574,7 +9665,7 @@ msgstr "左右手各自的 Miss 总数。"
 
 #: src/lib/pack-run.ts
 msgid "Legacy"
-msgstr ""
+msgstr "传承"
 
 #: src/components/player/OverallMethodToggle.tsx
 msgctxt "overall rating method"
@@ -9591,7 +9682,7 @@ msgstr "传奇"
 
 #: src/lib/chain-run.ts
 msgid "Legendary"
-msgstr ""
+msgstr "Legendary"
 
 #: src/lib/pack-run.ts
 msgid "Legendary and better cards score nothing."
@@ -9640,7 +9731,7 @@ msgstr "灯光"
 
 #: src/components/supporter/loadout.ts
 msgid "Light wings"
-msgstr ""
+msgstr "光之翼"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Lightning"
@@ -9649,7 +9740,7 @@ msgstr "闪电"
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Like"
-msgstr ""
+msgstr "点赞"
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
@@ -9662,11 +9753,11 @@ msgstr "已喜欢"
 
 #: src/routes/skins.tsx
 msgid "liked by you"
-msgstr ""
+msgstr "你已点赞"
 
 #: src/routes/skins.tsx
 msgid "likes"
-msgstr ""
+msgstr "点赞"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "lime"
@@ -9711,9 +9802,18 @@ msgstr "绑定你的 Mamestagram 账号"
 msgid "Link your Mamestagram account below first."
 msgstr "请先在下方绑定你的 Mamestagram 账号。"
 
+#. placeholder {0}: E.handstream[band]
+#: src/lib/chain-run.ts
+msgid "Linked on both sides: it and both neighbours score x{0}."
+msgstr "两侧都有连线：它和两侧相邻的卡片都 x{0}。"
+
+#: src/lib/chain-run.ts
+msgid "Links to each side with the traits of the card on its other side too."
+msgstr "与两侧的卡片连线时，也带上另一侧卡片的特征。"
+
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Links to the cards next to it on every trait. The first GOAT in a row doubles the combo."
-msgstr ""
+msgstr "在所有特征上都与相邻卡片连线。一排中的第一张 GOAT 让连击翻倍。"
 
 #: src/routes/communities_.$id.tsx
 msgid "listed"
@@ -9837,7 +9937,7 @@ msgstr "长条头颜色"
 
 #: src/components/supporter/loadout.ts
 msgid "LN hold"
-msgstr ""
+msgstr "LN 长按"
 
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
@@ -9953,7 +10053,7 @@ msgstr "正在加载试听音频…"
 
 #: src/components/supporter/loadout.ts
 msgid "Loading bar"
-msgstr ""
+msgstr "加载条"
 
 #: src/routes/snipes.tsx
 msgid "Loading board…"
@@ -10089,7 +10189,7 @@ msgstr "加载中…"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Lobster"
-msgstr ""
+msgstr "Lobster"
 
 #: src/components/replay/ReplayCustomMediaControls.tsx
 msgid "Local file"
@@ -10101,7 +10201,7 @@ msgstr "检测到局部 Vibro"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Lock for rolls"
-msgstr ""
+msgstr "随机时锁定"
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "Log in to get a share link."
@@ -10300,7 +10400,7 @@ msgstr "尽量用永久邀请：临时邀请一到期，你的服务器就会被
 
 #: src/components/supporter/loadout.ts
 msgid "Makiba"
-msgstr ""
+msgstr "Makiba"
 
 #: src/routes/replay.tsx
 msgid "Making sure a replay is available."
@@ -10534,10 +10634,9 @@ msgstr "你附近的玩家在刷、但难度超出你目前水平的图"
 msgid "Maps ready."
 msgstr "谱面数据已就绪。"
 
-#: src/components/packs/GamePacks.tsx
 #: src/lib/pack-run.ts
 msgid "Marathon"
-msgstr ""
+msgstr "马拉松"
 
 #. placeholder {0}: formatNumber(Math.max(0, event.totalScore - event.victimTotalScore!))
 #: src/routes/snipes.tsx
@@ -10546,7 +10645,7 @@ msgstr "领先 <0>+{0}</0>"
 
 #: src/components/supporter/loadout.ts
 msgid "Margin doodles"
-msgstr ""
+msgstr "页边涂鸦"
 
 #: src/routes/recommendations.tsx
 msgid "marked done"
@@ -10562,7 +10661,7 @@ msgstr "已标记太难"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Marker"
-msgstr ""
+msgstr "马克笔"
 
 #: src/components/packs/run/RunInfo.tsx
 msgid "Master sets"
@@ -10586,7 +10685,7 @@ msgstr "正在为回放匹配对应谱面。"
 
 #: src/components/supporter/loadout.ts
 msgid "Matrix rain"
-msgstr ""
+msgstr "矩阵雨"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/lib/pack-run.ts
@@ -10627,7 +10726,7 @@ msgstr "平均偏差"
 
 #: src/lib/pack-run.ts
 msgid "Medal Hunter"
-msgstr ""
+msgstr "奖章猎人"
 
 #: src/routes/recommendations.tsx
 msgid "median"
@@ -10667,7 +10766,7 @@ msgstr "成员"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Mesh gradient"
-msgstr ""
+msgstr "网格渐变"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Message"
@@ -10684,7 +10783,7 @@ msgstr "计算方式"
 
 #: src/lib/pack-run.ts
 msgid "Metronome"
-msgstr ""
+msgstr "节拍器"
 
 #: src/routes/replay.tsx
 msgid "Middle lane thumb"
@@ -10772,7 +10871,7 @@ msgstr "Mod 筛选"
 
 #: src/lib/pack-run.ts
 msgid "Mod Reader"
-msgstr ""
+msgstr "读 Mod"
 
 #: src/components/player/InsightModals.tsx
 msgid "Mod Usage"
@@ -10809,7 +10908,7 @@ msgstr "Mod"
 
 #: src/lib/pack-run.ts
 msgid "Mods beaten"
-msgstr ""
+msgstr "击败的 Mod"
 
 #: src/lib/pack-run.ts
 msgid "Mods have no effect."
@@ -10821,7 +10920,7 @@ msgstr "妹红 fumo"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Molten gold"
-msgstr ""
+msgstr "熔金"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Mon"
@@ -11024,7 +11123,7 @@ msgstr "Inverse 下的 MSD"
 
 #: src/lib/pack-run.ts
 msgid "Multiplayer"
-msgstr ""
+msgstr "多人游戏"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
@@ -11040,7 +11139,7 @@ msgstr "静音"
 
 #: src/lib/pack-run.ts
 msgid "Muted"
-msgstr ""
+msgstr "静音"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "My mania skin"
@@ -11065,11 +11164,11 @@ msgstr "我的数据"
 
 #: src/lib/chain-run.ts
 msgid "Mythic"
-msgstr ""
+msgstr "Mythic"
 
 #: src/lib/pack-run.ts
 msgid "Mythic and better cards score twice."
-msgstr ""
+msgstr "Mythic 及以上卡片计分两次。"
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "N/A"
@@ -11102,7 +11201,7 @@ msgstr "为预设命名"
 
 #: src/components/supporter/loadout.ts
 msgid "Name style"
-msgstr ""
+msgstr "名字样式"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Name style and font"
@@ -11123,7 +11222,7 @@ msgstr "已命名为 {0}"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Nameplate"
-msgstr ""
+msgstr "名牌"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Near clear"
@@ -11135,7 +11234,7 @@ msgstr "附近玩家的分数比你高"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Nebula"
-msgstr ""
+msgstr "星云"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "needs {quorum}"
@@ -11154,15 +11253,15 @@ msgstr "霓虹"
 #. placeholder {0}: N.blacklight.xMult
 #: src/lib/pack-run.ts
 msgid "Neon cards give x{0} combo."
-msgstr ""
+msgstr "霓虹卡片 x{0} 连击。"
 
 #: src/components/supporter/loadout.ts
 msgid "Neon ears"
-msgstr ""
+msgstr "霓虹耳朵"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Neon lines"
-msgstr ""
+msgstr "霓虹线条"
 
 #: src/routes/recommendations.tsx
 msgid "never loaded here"
@@ -11198,7 +11297,7 @@ msgstr "新卡片不计分。"
 
 #: src/lib/pack-run.ts
 msgid "New cards score twice."
-msgstr ""
+msgstr "新卡片计分两次。"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "new collection"
@@ -11344,7 +11443,7 @@ msgstr "下一个免费卡包"
 #: src/components/packs/run/RunShop.tsx
 #: src/components/packs/run/RunTable.tsx
 msgid "Next pack"
-msgstr ""
+msgstr "下一包"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/supporter/TestBinder.tsx
@@ -11364,13 +11463,50 @@ msgstr "下一批玩家"
 msgid "Next preview"
 msgstr "下一段试听"
 
+#. placeholder {0}: CHAIN_REEL.redraws
+#: src/lib/chain-run.ts
+msgid "Next round has {0} more redraws."
+msgstr "下一回合多 {0} 次重抽。"
+
+#. placeholder {0}: CHAIN_REEL.retryRows
+#: src/lib/chain-run.ts
+msgid "Next round has {0} more row."
+msgstr "下一回合多 {0} 排。"
+
+#: src/lib/chain-run.ts
+msgid "Next round's first row can't break."
+msgstr "下一回合第一排不会断链。"
+
+#. placeholder {0}: CHAIN_REEL.dt
+#: src/lib/chain-run.ts
+msgid "Next round's first row scores x{0}."
+msgstr "下一回合第一排计分 x{0}。"
+
+#. placeholder {0}: CHAIN_REEL.warmupCombo
+#: src/lib/chain-run.ts
+msgid "Next round's first row starts at +{0} combo."
+msgstr "下一回合第一排以 +{0} 连击 开始。"
+
+#: src/lib/chain-run.ts
+msgid "Next round's first row starts on 727 combo."
+msgstr "下一回合第一排以 727 连击 开始。"
+
+#: src/lib/chain-run.ts
+msgid "Next round's first row: {trait} links add double."
+msgstr "下一回合第一排：{trait} 连锁加成翻倍。"
+
+#. placeholder {0}: Math.round((1 - CHAIN_REEL.ezTarget) * 100)
+#: src/lib/chain-run.ts
+msgid "Next round's target is {0}% lower."
+msgstr "下一回合的目标降低 {0}%。"
+
 #: src/routes/recommendations.tsx
 msgid "next tier"
 msgstr "下一阶段"
 
 #: src/lib/pack-run.ts
 msgid "Nightcore"
-msgstr ""
+msgstr "Nightcore"
 
 #: src/components/player/InsightModals.tsx
 msgid "NM is excluded from mod usage"
@@ -11431,6 +11567,10 @@ msgstr "无卡册"
 msgid "No board stored for this lane yet."
 msgstr "此栏目还没有榜单数据。"
 
+#: src/lib/chain-run.ts
+msgid "No break"
+msgstr "不断链"
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "No card on the wall wears this yet."
 msgstr "墙上还没有卡片带有这个标记。"
@@ -11463,7 +11603,7 @@ msgstr "最近 7 天无变化"
 
 #: src/lib/pack-run.ts
 msgid "No changes."
-msgstr ""
+msgstr "没有变化。"
 
 #: src/routes/recommendations.tsx
 msgid "no charts"
@@ -11519,7 +11659,7 @@ msgstr "无闪膜"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "No frame"
-msgstr ""
+msgstr "无头像框"
 
 #: src/routes/recommendations.tsx
 msgid "no gains here"
@@ -11743,7 +11883,7 @@ msgstr "暂无最近最佳成绩"
 
 #: src/lib/chain-run.ts
 msgid "No redraws left this round."
-msgstr ""
+msgstr "本回合没有剩余重抽次数。"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "No regions found"
@@ -11751,7 +11891,7 @@ msgstr "未找到区域"
 
 #: src/lib/pack-run.ts
 msgid "No Release"
-msgstr ""
+msgstr "无放手"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No replayable scores here"
@@ -11775,7 +11915,7 @@ msgstr "本次商店没有剩余刷新次数。"
 
 #: src/lib/chain-run.ts
 msgid "No rows left this round."
-msgstr ""
+msgstr "本回合没有剩余排数。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No score found at that link."
@@ -12001,7 +12141,7 @@ msgstr "我们追踪的玩家里没有人在这张谱面上有成绩。搜索一
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Noir"
-msgstr ""
+msgstr "黑白"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "Nominate"
@@ -12083,7 +12223,7 @@ msgstr "不是有效的战队 ID。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not analyzed yet."
-msgstr ""
+msgstr "尚未分析。"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not available for this account yet."
@@ -12103,7 +12243,7 @@ msgstr "暂不可用。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Not connected"
-msgstr ""
+msgstr "未连接"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not connected. Connect from inside {appName}."
@@ -12138,7 +12278,7 @@ msgstr "碎片不足。"
 
 #: src/components/packs/run/RunTable.tsx
 msgid "Not enough to open this pack."
-msgstr ""
+msgstr "不足以开启这个卡包。"
 
 #: src/routes/recommendations.tsx
 msgid "not found"
@@ -12179,7 +12319,7 @@ msgstr "该速率下未评级"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not rated."
-msgstr ""
+msgstr "未评分。"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not reachable right now."
@@ -12207,7 +12347,7 @@ msgstr "尚未追踪"
 
 #: src/lib/pack-run.ts
 msgid "Not unlocked yet."
-msgstr ""
+msgstr "尚未解锁。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note"
@@ -12223,7 +12363,7 @@ msgstr "音符高度"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Note highway"
-msgstr ""
+msgstr "音符公路"
 
 #: src/routes/dan-estimates.tsx
 msgid "note on this"
@@ -12232,7 +12372,7 @@ msgstr "关于这个的说明"
 #: src/lib/supporter-foils.ts
 #: src/lib/supporter-name-styles.ts
 msgid "Note rain"
-msgstr ""
+msgstr "音符雨"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -12266,7 +12406,7 @@ msgstr "没有叫这个名字的。"
 
 #: src/components/companella/SubmissionList.tsx
 msgid "Nothing has been submitted yet."
-msgstr ""
+msgstr "还没有提交任何内容。"
 
 #: src/routes/recommendations.tsx
 msgid "Nothing here would move your total"
@@ -12319,7 +12459,7 @@ msgstr "没有略高于你 {axisLabel} 评分且你还没玩过的 ranked 谱面
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Nothing recorded yet."
-msgstr ""
+msgstr "暂无记录。"
 
 #: src/components/player/bbcode/BBCodePreview.tsx
 msgid "Nothing to preview yet."
@@ -12353,7 +12493,7 @@ msgstr "当前第 {nowRank} 名"
 #. placeholder {0}: formatChainX(ascension)
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Now x{0}"
-msgstr ""
+msgstr "现为 x{0}"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -12448,7 +12588,7 @@ msgstr "旧 PB"
 
 #: src/components/supporter/loadout.ts
 msgid "Old photo"
-msgstr ""
+msgstr "老照片"
 
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
@@ -12556,7 +12696,7 @@ msgstr "每次商店免费刷新一次"
 
 #: src/lib/pack-run.ts
 msgid "One more charm slot until this stage ends, when any charm past your slots is sold."
-msgstr ""
+msgstr "本关卡结束前多一个护符栏位，结束时超出栏位的护符会被卖掉。"
 
 #: src/lib/replay-export/errors.ts
 msgid "One of the images can't be recorded into a video because of its origin."
@@ -12569,6 +12709,10 @@ msgstr "只有一包的机会。"
 #: src/routes/dan-estimates.tsx
 msgid "one skill, no split"
 msgstr "单一技能，不细分"
+
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "One spin of the reel: a prize for the next round."
+msgstr "转动一次转盘：为下一回合赢取奖励。"
 
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
@@ -12623,7 +12767,7 @@ msgstr "当前只有提升技能的谱面"
 #. placeholder {0}: B.keyThree.cards
 #: src/lib/pack-run.ts
 msgid "Only the first {0} cards score."
-msgstr ""
+msgstr "只有前 {0} 张卡片计分。"
 
 #: src/routes/snipes.tsx
 msgid "Only the global top 100 take part."
@@ -12800,7 +12944,7 @@ msgstr "在浏览器里打开某个成绩的回放播放器。"
 #: src/components/packs/run/chain/ChainPack.tsx
 #: src/components/packs/run/RunTable.tsx
 msgid "Open the pack"
-msgstr ""
+msgstr "开启卡包"
 
 #: src/routes/support.tsx
 msgid "Open the supporter page"
@@ -12866,7 +13010,7 @@ msgstr "橙"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Orbitron"
-msgstr ""
+msgstr "Orbitron"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Order"
@@ -12929,7 +13073,7 @@ msgstr "osu! 战队"
 
 #: src/components/supporter/loadout.ts
 msgid "osu!mania"
-msgstr ""
+msgstr "osu!mania"
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -13044,7 +13188,7 @@ msgstr "总体"
 
 #: src/lib/pack-run.ts
 msgid "Overall Difficulty"
-msgstr ""
+msgstr "总体难度"
 
 #: src/components/player/OverallMethodToggle.tsx
 msgid "Overall method"
@@ -13052,11 +13196,15 @@ msgstr "总体计算方式"
 
 #: src/lib/pack-run.ts
 msgid "Overdrive"
-msgstr ""
+msgstr "超载"
 
 #: src/lib/pack-run.ts
 msgid "Overflow"
-msgstr ""
+msgstr "溢出"
+
+#: src/lib/chain-run.ts
+msgid "Overjoy"
+msgstr "Overjoy"
 
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Overlay scroll speed"
@@ -13085,7 +13233,7 @@ msgstr "所有者"
 #: src/components/packs/run/RunHud.tsx
 #: src/lib/chain-run.ts
 msgid "Pack"
-msgstr ""
+msgstr "卡包"
 
 #: src/components/supporter/loadout.ts
 msgid "Pack opening"
@@ -13098,7 +13246,7 @@ msgstr "此账号的开包已暂停，直到 {0}。"
 
 #: src/components/packs/run/RunTable.tsx
 msgid "Pack opening is paused on this account until {until}."
-msgstr ""
+msgstr "此账号的开包已暂停，至 {until} 恢复。"
 
 #: src/components/supporter/loadout.ts
 msgid "Pack wrapper"
@@ -13123,7 +13271,7 @@ msgstr "卡包装饰"
 
 #: src/components/packs/run/RunTally.tsx
 msgid "Packs left"
-msgstr ""
+msgstr "剩余卡包"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx
@@ -13132,12 +13280,12 @@ msgstr "已开卡包"
 
 #: src/lib/pack-run.ts
 msgid "Packs opened"
-msgstr ""
+msgstr "已开卡包"
 
 #. placeholder {0}: page + 1
 #: src/components/companella/SubmissionList.tsx
 msgid "Page {0}"
-msgstr ""
+msgstr "第 {0} 页"
 
 #. placeholder {0}: page + 1
 #. placeholder {1}: lastPage + 1
@@ -13161,6 +13309,11 @@ msgstr "页码，1 到 {totalPages}"
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Paid with Google already?"
 msgstr "已经用 Google 付款了？"
+
+#. placeholder {0}: pct(E.bracket[band])
+#: src/lib/chain-run.ts
+msgid "Pairs with the next Bracket: the cards between score +{0}% from each."
+msgstr "与下一个衩配对：两者之间的卡片从每个衩获得 +{0}% 分数。"
 
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
@@ -13197,7 +13350,7 @@ msgstr "一个成绩超过多名玩家只算一次狙击，对象是其中排名
 
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Past the star. Once Forgotten left."
-msgstr ""
+msgstr "越过了星星，Forgotten 已经离开。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"
@@ -13288,11 +13441,11 @@ msgstr "最高"
 
 #: src/lib/pack-run.ts
 msgid "Peak Performance"
-msgstr ""
+msgstr "巅峰状态"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Pearl"
-msgstr ""
+msgstr "珍珠"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "peers farming"
@@ -13304,7 +13457,7 @@ msgstr "玩家平均"
 
 #: src/components/supporter/loadout.ts
 msgid "Pencil test"
-msgstr ""
+msgstr "铅笔稿"
 
 #: src/lib/beatmap-status.ts
 msgid "pending"
@@ -13352,7 +13505,7 @@ msgstr "百分位是在已追踪玩家中的排名"
 
 #: src/lib/pack-run.ts
 msgid "Perfect"
-msgstr ""
+msgstr "Perfect"
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
@@ -13376,7 +13529,7 @@ msgstr "波斯语"
 #. placeholder {0}: need - selected.length
 #: src/components/packs/run/chain/ChainPackStage.tsx
 msgid "Pick {0}"
-msgstr ""
+msgstr "选择 {0}"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Pick a colour"
@@ -13416,11 +13569,11 @@ msgstr "换一个文件"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Pick both a .osr and the .osu it was played on."
-msgstr ""
+msgstr "请同时选择 .osr 文件和对应游玩的 .osu 文件。"
 
 #: src/lib/pack-run.ts
 msgid "Pick one of two common charms."
-msgstr ""
+msgstr "从两个普通护符中选一个。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Pick one to load it into the editor."
@@ -13428,7 +13581,7 @@ msgstr "选一个载入编辑器。"
 
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Pick several cards"
-msgstr ""
+msgstr "选择多张卡片"
 
 #: src/routes/recommendations.tsx
 msgid "pick the active one again to flip direction"
@@ -13452,7 +13605,7 @@ msgstr "挑选你的展示柜"
 
 #: src/lib/pack-run.ts
 msgid "Pick your skip reward first."
-msgstr ""
+msgstr "请先选择跳过奖励。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk while preserving its other saved choice. Patterns are cut from real charts, one keymode at a time. Keymodes left alone keep the previews they were published with."
@@ -13477,11 +13630,11 @@ msgstr "粉色团子"
 
 #: src/components/supporter/loadout.ts
 msgid "Pink halo"
-msgstr ""
+msgstr "粉色光环"
 
 #: src/components/supporter/loadout.ts
 msgid "Pink wings"
-msgstr ""
+msgstr "粉色翅膀"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Pinned"
@@ -13489,23 +13642,23 @@ msgstr "已置顶"
 
 #: src/components/supporter/loadout.ts
 msgid "Pity counter"
-msgstr ""
+msgstr "保底计数"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Pixel"
-msgstr ""
+msgstr "像素"
 
 #: src/components/supporter/loadout.ts
 msgid "Pixel hearts"
-msgstr ""
+msgstr "像素爱心"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Plain"
-msgstr ""
+msgstr "简约"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Plasma"
-msgstr ""
+msgstr "等离子"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "play"
@@ -13538,7 +13691,7 @@ msgstr "游玩习惯与打法分析：活跃天数、游玩场次和技能构成
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Play my top plays"
-msgstr ""
+msgstr "播放我的最佳成绩"
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Play preview"
@@ -13547,11 +13700,11 @@ msgstr "播放试听"
 #. placeholder {0}: view.round + 1
 #: src/components/packs/run/chain/ChainShop.tsx
 msgid "Play round {0}"
-msgstr ""
+msgstr "开始第 {0} 回合"
 
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Play row"
-msgstr ""
+msgstr "打出这一排"
 
 #: src/routes/recommendations.tsx
 msgid "play this"
@@ -13809,7 +13962,7 @@ msgstr "葡萄牙语"
 
 #: src/routes/supporter.tsx
 msgid "possible looks"
-msgstr ""
+msgstr "种可能的外观"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Post a Discord server"
@@ -13906,7 +14059,7 @@ msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 
 #: src/lib/pack-run.ts
 msgid "Practice"
-msgstr ""
+msgstr "练习"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Practice charts are matched by their notes and OD, so any upload of the same file counts. <0/>, <1/>, <2/>, <3/> and slowing the chart down void them."
@@ -14026,7 +14179,7 @@ msgstr "收藏册上一页"
 
 #: src/components/packs/run/RunTable.tsx
 msgid "Previous pack"
-msgstr ""
+msgstr "上一包"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/supporter/TestBinder.tsx
@@ -14048,7 +14201,7 @@ msgstr "此前"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Prime"
-msgstr ""
+msgstr "Prime"
 
 #: src/lib/pack-run.ts
 #: src/routes/news_.prism.tsx
@@ -14238,7 +14391,7 @@ msgstr "四押"
 
 #: src/lib/pack-run.ts
 msgid "Quadjack"
-msgstr ""
+msgstr "四押叠"
 
 #: src/lib/pattern-labels.ts
 msgid "Quadstream"
@@ -14266,7 +14419,7 @@ msgstr "排队中：{0} 金包，{1} 彩虹包"
 
 #: src/lib/pack-run.ts
 msgid "Quick Retry"
-msgstr ""
+msgstr "快速重试"
 
 #: src/routes/bbcode.tsx
 msgid "Quote"
@@ -14282,11 +14435,11 @@ msgstr "雷达图与坐标轴"
 
 #: src/components/supporter/loadout.ts
 msgid "Rail pass"
-msgstr ""
+msgstr "乘车卡"
 
 #: src/components/supporter/loadout.ts
 msgid "Rain cloud"
-msgstr ""
+msgstr "雨云"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/lib/pack-run.ts
@@ -14297,7 +14450,7 @@ msgstr "彩虹"
 #. placeholder {0}: N.prism.xMult
 #: src/lib/pack-run.ts
 msgid "Rainbow cards give x{0} combo."
-msgstr ""
+msgstr "彩虹卡片 x{0} 连击。"
 
 #: src/lib/pack-run.ts
 msgid "Rainbow pack"
@@ -14384,7 +14537,7 @@ msgstr "排名可能与 osu! 不同，因为部分战队的 pp 只计算已追�
 
 #: src/lib/chain-run.ts
 msgid "Rare"
-msgstr ""
+msgstr "Rare"
 
 #. placeholder {0}: N.rareForm.mult
 #: src/lib/pack-run.ts
@@ -14404,6 +14557,7 @@ msgid "Rare Form"
 msgstr "状态正佳"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/lib/chain-run.ts
 msgid "Rarity"
 msgstr "稀有度"
 
@@ -14500,7 +14654,7 @@ msgstr "已重新渲染，尚未保存"
 #. placeholder {0}: LOADOUT_UNLOCKS.stream.distinct.toLocaleString("en-US")
 #: src/lib/pack-run.ts
 msgid "Reach {0} on the collection ladder."
-msgstr ""
+msgstr "在收藏榜上达到 {0}。"
 
 #: src/lib/goal-format.ts
 msgid "Reach {pp} total pp"
@@ -14531,7 +14685,7 @@ msgstr "总 pp"
 #. placeholder {0}: LOADOUT_UNLOCKS.storyboard.bestAnte
 #: src/lib/pack-run.ts
 msgid "Reach stage {0}."
-msgstr ""
+msgstr "到达第 {0} 关。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
@@ -14586,7 +14740,7 @@ msgstr "重建中…"
 
 #: src/components/companella/SubmissionList.tsx
 msgid "Received"
-msgstr ""
+msgstr "已接收"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Received as a gift {timesText} times, from {sendersText}"
@@ -14743,7 +14897,7 @@ msgstr "回收这一张 +{value}"
 
 #: src/lib/chain-run.ts
 msgid "Recycling raises every base."
-msgstr ""
+msgstr "回收会提高所有基础分。"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -14768,11 +14922,12 @@ msgstr "重做（Ctrl+Shift+Z）"
 
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Redraw"
-msgstr ""
+msgstr "重抽"
 
 #: src/components/packs/run/chain/ChainHud.tsx
+#: src/lib/chain-run.ts
 msgid "Redraws"
-msgstr ""
+msgstr "重抽次数"
 
 #: src/components/packs/SetsView.tsx
 msgid "Reduce this set to {BINDER_MAX_CARDS} cards to show it on Showcase."
@@ -14917,7 +15072,7 @@ msgstr "移除 {tag}"
 
 #: src/components/packs/run/chain/ChainShop.tsx
 msgid "Remove a card"
-msgstr ""
+msgstr "移除一张卡片"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Remove all"
@@ -15061,7 +15216,7 @@ msgstr "回放"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Replay (.osr)"
-msgstr ""
+msgstr "回放 (.osr)"
 
 #. placeholder {0}: clip.ownerUsername
 #: src/routes/clip.$id.tsx
@@ -15162,7 +15317,7 @@ msgstr "重抽设置"
 #: src/components/packs/run/RunHud.tsx
 #: src/lib/pack-run.ts
 msgid "Rerolls"
-msgstr ""
+msgstr "刷新次数"
 
 #: src/components/layout/ThemePicker.tsx
 #: src/components/replay/ReplayMasterOverlayControls.tsx
@@ -15192,7 +15347,7 @@ msgstr "重置大小"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Reset test key"
-msgstr ""
+msgstr "重置测试密钥"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Reset to {defaultValue}"
@@ -15241,7 +15396,7 @@ msgstr "数据保留与控制"
 #: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Retro"
-msgstr ""
+msgstr "复古"
 
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/run/RunTable.tsx
@@ -15287,7 +15442,7 @@ msgstr "撤销此连接？"
 
 #: src/routes/companella.tsx
 msgid "Revoke this connection? It stops submitting right away."
-msgstr ""
+msgstr "撤销这个连接？它会立即停止上传。"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "rice"
@@ -15330,7 +15485,7 @@ msgstr "圆环"
 
 #: src/routes/supporter.tsx
 msgid "Roll"
-msgstr ""
+msgstr "随机"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
@@ -15342,7 +15497,7 @@ msgstr "随机抽一张热门刷分谱面。默认使用全球刷分榜，可按
 
 #: src/routes/supporter.tsx
 msgid "Roll again"
-msgstr ""
+msgstr "再随机一次"
 
 #: src/routes/news_.prism.tsx
 msgid "Rolls this fast get played as chords, and Prism rates them as chords."
@@ -15387,33 +15542,37 @@ msgstr "粗略估算，可能有偏差"
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
 msgid "Round"
-msgstr ""
+msgstr "回合"
 
 #. placeholder {0}: entry.round
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Round {0}"
-msgstr ""
+msgstr "第 {0} 回合"
 
 #. placeholder {0}: aftermath.round
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Round {0} cleared"
-msgstr ""
+msgstr "第 {0} 回合通过"
 
 #: src/lib/chain-run.ts
 msgid "Round {round} pack"
-msgstr ""
+msgstr "第 {round} 回合卡包"
+
+#: src/lib/chain-run.ts
+msgid "Row"
+msgstr "排"
 
 #: src/components/packs/run/chain/ChainHud.tsx
 msgid "Rows"
-msgstr ""
+msgstr "排数"
 
 #: src/lib/chain-run.ts
 msgid "Rows of all different rarities score x3.5."
-msgstr ""
+msgstr "稀有度各不相同的一排计分 x3.5。"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Rows start at combo {startCombo}"
-msgstr ""
+msgstr "每排以 {startCombo} 连击 开始"
 
 #: src/routes/snipes.tsx
 msgid "Rules"
@@ -15440,12 +15599,12 @@ msgstr "通关"
 
 #: src/components/packs/run/RunEnd.tsx
 msgid "Run failed"
-msgstr ""
+msgstr "挑战失败"
 
 #: src/components/packs/run/RunHud.tsx
 #: src/components/packs/run/RunInfo.tsx
 msgid "Run info"
-msgstr ""
+msgstr "挑战信息"
 
 #: src/components/communities/field-options.tsx
 msgid "Russian"
@@ -15488,7 +15647,7 @@ msgstr "对所有人保存"
 
 #: src/components/supporter/loadout.ts
 msgid "Save point"
-msgstr ""
+msgstr "存档点"
 
 #: src/components/packs/SetsView.tsx
 msgid "Save set"
@@ -15605,15 +15764,15 @@ msgstr "扫描：{0}"
 
 #: src/lib/supporter-foils.ts
 msgid "Scanline"
-msgstr ""
+msgstr "扫描线"
 
 #: src/components/supporter/loadout.ts
 msgid "Scarlet moon"
-msgstr ""
+msgstr "绯红之月"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Scopes"
-msgstr ""
+msgstr "权限范围"
 
 #: src/components/player/ScoreRows.tsx
 msgid "score"
@@ -15658,11 +15817,16 @@ msgstr "手动添加的成绩会更新榜单，但不会算作狙击。以这种
 
 #: src/lib/pack-run.ts
 msgid "Scores as a copy of the charm to its right."
-msgstr ""
+msgstr "效果等同于其右侧护符的复制品。"
 
 #: src/routes/snipes.tsx
 msgid "Scores with {excludedBadges}, a key mod that changes the map's key count, or {customRateBadges} at a custom rate don't count."
 msgstr "带有 {excludedBadges}、改变图键数的键数 mod，或自定义倍速的 {customRateBadges} 的成绩不计入。"
+
+#. placeholder {0}: E.chordstream[band]
+#: src/lib/chain-run.ts
+msgid "Scores with the previous card's base x{0}, if higher."
+msgstr "若更高，则按前一张卡片基础分的 x{0} 计分。"
 
 #: src/routes/dan-estimates.tsx
 msgid "ScoreV2 acc (97%)"
@@ -15674,11 +15838,11 @@ msgstr "ScoreV2 准确率"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Scrawl"
-msgstr ""
+msgstr "涂鸦"
 
 #: src/components/supporter/loadout.ts
 msgid "Screensaver"
-msgstr ""
+msgstr "屏保"
 
 #: src/components/ui/ImageLightbox.tsx
 msgid "Screenshot"
@@ -15702,7 +15866,7 @@ msgstr "截图"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Script"
-msgstr ""
+msgstr "手写体"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll"
@@ -15720,7 +15884,7 @@ msgstr "下落速度"
 
 #: src/lib/pack-run.ts
 msgid "Scroll Speed"
-msgstr ""
+msgstr "流速"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll speed:"
@@ -15928,7 +16092,7 @@ msgstr "搜索中"
 
 #: src/components/supporter/loadout.ts
 msgid "Seasons and nature"
-msgstr ""
+msgstr "四季与自然"
 
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Second pull"
@@ -16024,7 +16188,7 @@ msgstr "出售"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Sells for {sell} shards"
-msgstr ""
+msgstr "售价 {sell} 个碎片"
 
 #: src/routes/report.tsx
 msgid "Send"
@@ -16090,7 +16254,7 @@ msgstr "塞尔维亚语"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Serif"
-msgstr ""
+msgstr "衬线体"
 
 #: src/routes/communities_.$id.tsx
 msgid "server made"
@@ -16179,7 +16343,7 @@ msgstr "设置你的外观"
 
 #: src/lib/pack-run.ts
 msgid "Setlist"
-msgstr ""
+msgstr "曲目单"
 
 #: src/routes/packs.tsx
 msgid "Sets"
@@ -16224,7 +16388,7 @@ msgstr "{0} 的设置"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Settings that differ from that file:"
-msgstr ""
+msgstr "与该文件不同的设置："
 
 #: src/lib/pack-run.ts
 msgid "Seven Keys"
@@ -16239,12 +16403,13 @@ msgstr "碎片"
 
 #: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/RunHud.tsx
+#: src/lib/chain-run.ts
 msgid "Shards"
-msgstr ""
+msgstr "碎片"
 
 #: src/lib/pack-run.ts
 msgid "Shards earned"
-msgstr ""
+msgstr "获得碎片"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/UserCollectionDetail.tsx
@@ -16343,7 +16508,7 @@ msgstr "商店"
 
 #: src/lib/chain-run.ts
 msgid "Short rows score x3."
-msgstr ""
+msgstr "较短的排计分 x3。"
 
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
@@ -16558,15 +16723,15 @@ msgstr "开包时卡片直接淡入，不播放完整的揭晓动画"
 
 #: src/components/supporter/loadout.ts
 msgid "Shrine and magic"
-msgstr ""
+msgstr "神社与魔法"
 
 #: src/components/supporter/loadout.ts
 msgid "Shrine gate"
-msgstr ""
+msgstr "神社鸟居"
 
 #: src/components/supporter/loadout.ts
 msgid "Shrine ribbon"
-msgstr ""
+msgstr "神社缎带"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
@@ -16652,7 +16817,7 @@ msgstr "请先用 osu! 登录，再关联 Discord。"
 
 #: src/routes/companella.tsx
 msgid "Sign in with osu! to connect Companella and see the plays it imported."
-msgstr ""
+msgstr "使用 osu! 登录以连接 Companella，并查看它导入的成绩。"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Sign in with osu! to connect it."
@@ -16683,12 +16848,12 @@ msgstr "当前登录为 {0}"
 #. placeholder {0}: auth.viewer.username
 #: src/routes/companella.tsx
 msgid "Signed in as {0}. {activeInstallations} connected."
-msgstr ""
+msgstr "当前登录为 {0}，已连接 {activeInstallations} 个。"
 
 #. placeholder {0}: auth.viewer.username
 #: src/routes/companella.tsx
 msgid "Signed in as {0}. Nothing is connected yet."
-msgstr ""
+msgstr "当前登录为 {0}，尚未连接任何设备。"
 
 #: src/lib/pack-run.ts
 msgid "Silver pack"
@@ -16726,7 +16891,7 @@ msgstr "单项聚焦"
 
 #: src/lib/pack-run.ts
 msgid "Single Tap"
-msgstr ""
+msgstr "单点"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Single-note jacks"
@@ -16734,7 +16899,7 @@ msgstr "单点叠"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Site colours"
-msgstr ""
+msgstr "站点配色"
 
 #: src/routes/skins.tsx
 msgid "size"
@@ -16748,7 +16913,7 @@ msgstr "大小"
 
 #: src/components/supporter/loadout.ts
 msgid "Sketchbook"
-msgstr ""
+msgstr "素描本"
 
 #: src/routes/recommendations.tsx
 msgid "skill"
@@ -16829,6 +16994,10 @@ msgstr "技能"
 msgid "Skills with fewer than four passes are left out rather than counted as zero. At the top of a ladder the \"~\" becomes \">\", meaning beyond that level."
 msgstr "通过少于四次的技能不参与平均，而不是按零计算。到了段位表顶端，“~”会变成“>”，表示超出该段位。"
 
+#: src/lib/chain-run.ts
+msgid "Skillset"
+msgstr "技能组"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "Skillset clears"
 msgstr "技能组通过记录"
@@ -16896,7 +17065,7 @@ msgstr "皮肤列表暂时不可用"
 
 #: src/routes/skins.tsx
 msgid "Skins you like show up here."
-msgstr ""
+msgstr "你喜欢的皮肤会显示在这里。"
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/supporter/loadout.ts
@@ -16909,11 +17078,11 @@ msgstr "跳过动画"
 
 #: src/components/packs/run/RunScoring.tsx
 msgid "Skip to the score"
-msgstr ""
+msgstr "跳到分数"
 
 #: src/lib/pack-run.ts
 msgid "Skipping songs is not available yet."
-msgstr ""
+msgstr "暂不支持跳过曲目。"
 
 #: src/routes/maps.tsx
 msgid "Skips the last few players and maps you were shown."
@@ -17006,7 +17175,7 @@ msgstr "滚雪球"
 
 #: src/components/supporter/loadout.ts
 msgid "Soft wings"
-msgstr ""
+msgstr "柔软的翅膀"
 
 #: src/lib/signature-style.ts
 msgid "Solid"
@@ -17074,7 +17243,7 @@ msgstr "曲目 1 通过"
 
 #: src/lib/pack-run.ts
 msgid "Song 1 of every stage carries a mod."
-msgstr ""
+msgstr "每个关卡的曲目 1 都带有模组。"
 
 #: src/lib/pack-run.ts
 msgid "Song 2"
@@ -17086,7 +17255,7 @@ msgstr "曲目 2 通过"
 
 #: src/lib/pack-run.ts
 msgid "Song 2 of every stage carries a mod."
-msgstr ""
+msgstr "每个关卡的曲目 2 都带有模组。"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Song, artist or mapper"
@@ -17094,11 +17263,11 @@ msgstr "歌曲、艺术家或谱师"
 
 #: src/lib/pack-run.ts
 msgid "Songs cleared"
-msgstr ""
+msgstr "通过曲目数"
 
 #: src/lib/pack-run.ts
 msgid "Songs skipped"
-msgstr ""
+msgstr "跳过曲目数"
 
 #. placeholder {0}: N.allowance.shards
 #: src/lib/pack-run.ts
@@ -17144,19 +17313,19 @@ msgstr "按星级从低到高排序 - 左键清除，右键切换降序"
 
 #: src/components/supporter/loadout.ts
 msgid "Soul"
-msgstr ""
+msgstr "灵魂"
 
 #: src/components/supporter/loadout.ts
 msgid "Soul shatter"
-msgstr ""
+msgstr "灵魂破碎"
 
 #: src/lib/pack-run.ts
 msgid "Space Key"
-msgstr ""
+msgstr "空格键"
 
 #: src/lib/pack-run.ts
 msgid "Spam"
-msgstr ""
+msgstr "乱按"
 
 #: src/components/communities/field-options.tsx
 msgid "Spam or advertising"
@@ -17176,7 +17345,7 @@ msgstr "正在观战 {player}"
 
 #: src/lib/pack-run.ts
 msgid "Spectator"
-msgstr ""
+msgstr "观战"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Spectators"
@@ -17184,7 +17353,7 @@ msgstr "观众"
 
 #: src/lib/pack-run.ts
 msgid "Spectrum"
-msgstr ""
+msgstr "频谱"
 
 #: src/lib/pack-run.ts
 #: src/lib/skill-axes.ts
@@ -17203,7 +17372,7 @@ msgstr "速度"
 
 #: src/components/packs/run/RunScoring.tsx
 msgid "Speed up"
-msgstr ""
+msgstr "加速"
 
 #: src/lib/pattern-labels.ts
 msgid "Speedjack"
@@ -17223,7 +17392,11 @@ msgstr "把歌曲加快到 1.5 倍。"
 
 #: src/components/supporter/loadout.ts
 msgid "Spell card"
-msgstr ""
+msgstr "符卡"
+
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Spin"
+msgstr "转动"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -17232,11 +17405,15 @@ msgstr "剧透文字"
 
 #: src/lib/pack-run.ts
 msgid "Spotlight"
-msgstr ""
+msgstr "聚光灯"
+
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Spun this visit."
+msgstr "本次已转过。"
 
 #: src/components/supporter/loadout.ts
 msgid "SSR card"
-msgstr ""
+msgstr "SSR 卡"
 
 #: src/routes/skins.tsx
 msgid "stable"
@@ -17276,7 +17453,7 @@ msgstr "关卡 {0}"
 #. placeholder {0}: before.ante
 #: src/components/packs/run/RunTally.tsx
 msgid "Stage {0} cleared"
-msgstr ""
+msgstr "第 {0} 关通过"
 
 #: src/lib/replay-overlays.ts
 msgid "Stage art (bottom)"
@@ -17296,7 +17473,7 @@ msgstr "关卡通过"
 
 #: src/components/packs/run/RunEnd.tsx
 msgid "Stage reached"
-msgstr ""
+msgstr "到达关卡"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage's left edge, skin.ini ColumnStart."
@@ -17320,6 +17497,10 @@ msgstr "耐力"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stamina"
 msgstr "耐力"
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Stamina trained: {cards} cards +{trained} base"
+msgstr "耐力训练：{cards} 张卡片 +{trained} 基础分"
 
 #: src/lib/pack-run.ts
 #: src/lib/packs.ts
@@ -17348,7 +17529,7 @@ msgstr "星级按 1.0x 显示"
 
 #: src/components/supporter/loadout.ts
 msgid "Stardust"
-msgstr ""
+msgstr "星尘"
 
 #: src/routes/recommendations.tsx
 msgid "stars"
@@ -17374,7 +17555,7 @@ msgstr "开始"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Start a run"
-msgstr ""
+msgstr "开始挑战"
 
 #. placeholder {0}: formatReplayMs(sharePlayheadWallMs)
 #: src/components/replay/ReplayControls.tsx
@@ -17405,7 +17586,7 @@ msgstr "带声音开始"
 
 #: src/lib/chain-run.ts
 msgid "Starting pack {index} of 3"
-msgstr ""
+msgstr "起始卡包 {index}/3"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
@@ -17432,15 +17613,15 @@ msgstr "Stellium"
 
 #: src/components/supporter/loadout.ts
 msgid "Stellium charm"
-msgstr ""
+msgstr "Stellium 护符"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Stencil"
-msgstr ""
+msgstr "模板体"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Sticker"
-msgstr ""
+msgstr "贴纸"
 
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
@@ -17483,7 +17664,7 @@ msgstr "停止追踪"
 
 #: src/components/packs/run/RunEnd.tsx
 msgid "Stopped at"
-msgstr ""
+msgstr "止步于"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stopping…"
@@ -17491,11 +17672,11 @@ msgstr "正在停止…"
 
 #: src/routes/companella.tsx
 msgid "Storage is not configured, so uploads will fail until it is."
-msgstr ""
+msgstr "尚未配置存储，在配置完成前上传都会失败。"
 
 #: src/components/supporter/loadout.ts
 msgid "Storm"
-msgstr ""
+msgstr "风暴"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -17517,6 +17698,7 @@ msgstr "连续天数"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/lib/chain-run.ts
 #: src/lib/pack-run.ts
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
@@ -17568,12 +17750,12 @@ msgstr "样式"
 #. placeholder {0}: result.submissionId ?? ""
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submission {0} finished."
-msgstr ""
+msgstr "提交 {0} 已完成。"
 
 #. placeholder {0}: result.error ?? "unknown"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submission refused: {0}"
-msgstr ""
+msgstr "提交被拒绝：{0}"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Submission sent"
@@ -17586,7 +17768,7 @@ msgstr "提交"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submit play"
-msgstr ""
+msgstr "上传成绩"
 
 #: src/routes/news_.companella.tsx
 msgid "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
@@ -17610,7 +17792,7 @@ msgstr "日"
 
 #: src/lib/supporter-foils.ts
 msgid "Sunburst"
-msgstr ""
+msgstr "日芒"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Sundays"
@@ -17622,7 +17804,7 @@ msgstr "日落橙"
 
 #: src/lib/chain-run.ts
 msgid "Super Rare"
-msgstr ""
+msgstr "Super Rare"
 
 #: src/routes/__root.tsx
 #: src/routes/support.tsx
@@ -17648,7 +17830,7 @@ msgstr "在 Ko-fi 上支持"
 
 #: src/routes/supporter.tsx
 msgid "supporter"
-msgstr ""
+msgstr "支持者"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/supporter.tsx
@@ -17709,7 +17891,7 @@ msgstr "瑞典语"
 
 #: src/components/supporter/loadout.ts
 msgid "Swept wings"
-msgstr ""
+msgstr "后掠翅膀"
 
 #. placeholder {0}: displayCountryName(viewerCountryCode, locale)
 #: src/components/layout/Nav.tsx
@@ -17731,7 +17913,7 @@ msgstr "正在同步到你的 osu! 账号…"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Synthwave"
-msgstr ""
+msgstr "Synthwave"
 
 #: src/routes/communities.tsx
 msgid "tags"
@@ -17768,7 +17950,7 @@ msgstr "点击卡堆，或拖走最上面的卡片来抽卡"
 
 #: src/components/supporter/loadout.ts
 msgid "Taped page"
-msgstr ""
+msgstr "胶带纸页"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "target"
@@ -17777,12 +17959,12 @@ msgstr "目标"
 #: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/RunHud.tsx
 msgid "Target"
-msgstr ""
+msgstr "目标"
 
 #. placeholder {0}: formatScore(line.target)
 #: src/components/packs/run/RunTally.tsx
 msgid "Target {0}"
-msgstr ""
+msgstr "目标 {0}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Target accuracy"
@@ -17807,7 +17989,7 @@ msgstr "目标总 pp"
 #. placeholder {0}: pct(STAKE_NUMBERS.targetFactor - 1)
 #: src/lib/pack-run.ts
 msgid "Targets are {0}% higher."
-msgstr ""
+msgstr "目标提高 {0}%。"
 
 #: src/routes/recommendations.tsx
 msgid "targets on this chart will aim higher until you set the score"
@@ -17879,11 +18061,11 @@ msgstr "暂时离线"
 #: src/lib/supporter-name-fonts.ts
 #: src/lib/supporter-name-styles.ts
 msgid "Terminal"
-msgstr ""
+msgstr "终端"
 
 #: src/components/supporter/loadout.ts
 msgid "Terminal window"
-msgstr ""
+msgstr "终端窗口"
 
 #: src/routes/__root.tsx
 msgid "terms"
@@ -17899,15 +18081,15 @@ msgstr "服务条款"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Test"
-msgstr ""
+msgstr "测试"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Test client"
-msgstr ""
+msgstr "测试客户端"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Test key cleared."
-msgstr ""
+msgstr "测试密钥已清除。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Text"
@@ -17946,12 +18128,12 @@ msgstr "泰语"
 #. placeholder {0}: viewer.username
 #: src/routes/supporter.tsx
 msgid "Thank you for supporting before, {0}."
-msgstr ""
+msgstr "感谢你此前的支持，{0}。"
 
 #. placeholder {0}: viewer.username
 #: src/routes/supporter.tsx
 msgid "Thank you for supporting, {0}."
-msgstr ""
+msgstr "感谢你的支持，{0}。"
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Thank you for supporting, {username}"
@@ -18005,7 +18187,7 @@ msgstr "保存失败，请重试。"
 
 #: src/lib/chain-run.ts
 msgid "That didn't go through. Try again."
-msgstr ""
+msgstr "没有成功，请重试。"
 
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/supporter/SupporterExtras.tsx
@@ -18240,11 +18422,11 @@ msgstr "浏览器无法保存该文件。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "The calculation could not run; it will be retried."
-msgstr ""
+msgstr "计算未能运行，稍后会重试。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "The callback did not match this browser's transaction; connect again."
-msgstr ""
+msgstr "回调与此浏览器的事务不匹配，请重新连接。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The card cover could not be changed. Try again."
@@ -18260,12 +18442,12 @@ msgstr "这张卡片已被回收、从未同步，或者链接有误。"
 
 #: src/lib/chain-run.ts
 msgid "The card with the lowest base in each row matches every trait of the cards next to it."
-msgstr ""
+msgstr "每排中基础分最低的卡片与相邻卡片的所有特征都匹配。"
 
 #. placeholder {0}: N.spotlight.xMult
 #: src/lib/pack-run.ts
 msgid "The card with the most notes gives x{0} combo."
-msgstr ""
+msgstr "音符最多的卡片 x{0} 连击。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The case your cards sit in whenever you lift one out of your collection or turn one over in a pack. Anyone opening a card from your shelf sees it too."
@@ -18273,7 +18455,7 @@ msgstr "你从收藏中取出卡牌或在卡包中翻开卡牌时，卡牌所在
 
 #: src/lib/pack-run.ts
 msgid "The charm in the first slot does nothing, apart from any slots or shop offers it adds."
-msgstr ""
+msgstr "第一个栏位的护符没有任何效果，只会提供它自带的栏位或商店选项。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The chart analyzer is rating the top plays right now."
@@ -18430,7 +18612,7 @@ msgstr "谱面段位 +1.5"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "The code exchange was refused."
-msgstr ""
+msgstr "授权码兑换被拒绝。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "The code isn't on that userpage yet."
@@ -18438,7 +18620,7 @@ msgstr "该个人页面上还没有这段代码。"
 
 #: src/routes/companella.tsx
 msgid "The Companella beta is not switched on for this site yet."
-msgstr ""
+msgstr "本站尚未开启 Companella 测试。"
 
 #: src/routes/dan-estimates.tsx
 msgid "The credit as a table"
@@ -18484,20 +18666,20 @@ msgstr "导出在完成前被中断。"
 
 #: src/lib/chain-run.ts
 msgid "The first break becomes a link."
-msgstr ""
+msgstr "第一次断链会变成连锁。"
 
 #: src/lib/chain-run.ts
 msgid "The first break in each row becomes a 3-trait link."
-msgstr ""
+msgstr "每排的第一次断链会变成 3 特征连锁。"
 
 #. placeholder {0}: N.firstNote.chips
 #: src/lib/pack-run.ts
 msgid "The first card gives +{0} notes."
-msgstr ""
+msgstr "第一张卡片 +{0} 音符。"
 
 #: src/lib/pack-run.ts
 msgid "The first card scores twice."
-msgstr ""
+msgstr "第一张卡片计分两次。"
 
 #. placeholder {0}: N.headliner.xMult
 #: src/lib/pack-run.ts
@@ -18518,7 +18700,7 @@ msgstr "个人资料数字下方的四项数据。可以在这里更换，也可
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway streams a section of your best play in your main keymode, instead of random notes."
-msgstr ""
+msgstr "音符公路会播放你主键数下最佳成绩中的一段，而不是随机音符。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
@@ -18530,7 +18712,7 @@ msgstr "安装程序没有签名，因为微软对代码签名收费，所以 Wi
 
 #: src/routes/companella.tsx
 msgid "The integration backend is not reachable right now."
-msgstr ""
+msgstr "暂时无法连接集成后端。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "The judgement counts for this play are gone, so there is no accuracy to check it against."
@@ -18538,15 +18720,15 @@ msgstr "该成绩的判定数据已丢失，无法据此核对准确率。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "The judgements saved in this replay don't match its key presses, so it's held for review."
-msgstr ""
+msgstr "此回放中保存的判定与按键记录不一致，已转入人工审核。"
 
 #: src/lib/chain-run.ts
 msgid "The last 3 cards always link."
-msgstr ""
+msgstr "最后 3 张卡片必定连锁。"
 
 #: src/lib/chain-run.ts
 msgid "The last 3 cards of a row always link as if they shared 3 traits. Any of them that would not have linked to a neighbour on its own scores half its base."
-msgstr ""
+msgstr "每排最后 3 张卡片总是按共享 3 个特征来连锁。其中本来无法与相邻卡片连锁的，只计一半基础分。"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "The light and the art on every copy of your card in packs, or an image of your own."
@@ -18555,6 +18737,18 @@ msgstr "卡包中你每张卡牌上的光效和图案，也可以用自己的图
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The link and the .osk filename stay as published."
 msgstr "链接和 .osk 文件名保持发布时的样子。"
+
+#: src/lib/chain-run.ts
+msgid "The link into it fires twice."
+msgstr "连入它的连锁触发两次。"
+
+#: src/lib/chain-run.ts
+msgid "The links into and out of it fire twice."
+msgstr "连入和连出它的连锁各触发两次。"
+
+#: src/lib/chain-run.ts
+msgid "The links on both its sides never break."
+msgstr "它两侧的连锁永不断开。"
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "The live feed is connected. New plays will start showing up as players submit them."
@@ -18566,7 +18760,7 @@ msgstr "某个国家/地区的实时成绩 feed，最新的在前。"
 
 #: src/lib/chain-run.ts
 msgid "The lowest base fits anywhere."
-msgstr ""
+msgstr "基础分最低的卡片可连到任何位置。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The map's own samples and keysounds, when it has them."
@@ -18575,7 +18769,7 @@ msgstr "谱面自带的采样和键音（如果有的话）。"
 #. placeholder {0}: N.spaceKey.xMult
 #: src/lib/pack-run.ts
 msgid "The middle card gives x{0} combo."
-msgstr ""
+msgstr "中间的卡片 x{0} 连击。"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "The most farmed maps in a country, ranked by activity."
@@ -18711,7 +18905,7 @@ msgstr "反馈已提交，但至少有一张图片没能上传。"
 
 #: src/lib/chain-run.ts
 msgid "The row plays twice."
-msgstr ""
+msgstr "这一排打两遍。"
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "The saved video couldn't be read back. Export it again to share it."
@@ -18723,7 +18917,7 @@ msgstr "截图名称保存失败。请重试。"
 
 #: src/lib/chain-run.ts
 msgid "The second card in each row also has every trait of the first."
-msgstr ""
+msgstr "每排第二张卡片同时拥有第一张的所有特征。"
 
 #: src/routes/legal.tsx
 msgid "The server defaults to a global osu! API limiter that targets 45 requests per minute and enforces a hard cap of 60 requests per minute."
@@ -18759,7 +18953,7 @@ msgstr "本次游玩的评分变化为 {0} 点，谱面贡献的估算合计为 
 #. placeholder {0}: N.beatmapListing.offers
 #: src/lib/pack-run.ts
 msgid "The shop shows +{0} charm."
-msgstr ""
+msgstr "商店多展示 {0} 个护符。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
@@ -18826,15 +19020,15 @@ msgstr "此浏览器无法解码该音频文件。请关闭音频导出，或选
 #. placeholder {0}: pct(N.drainTime.share)
 #: src/lib/pack-run.ts
 msgid "The song's target drops {0}% after every pack that does not clear it."
-msgstr ""
+msgstr "每开一包仍未通过，该曲目的目标降低 {0}%。"
 
 #: src/lib/pack-run.ts
 msgid "The standard run."
-msgstr ""
+msgstr "标准挑战。"
 
 #: src/lib/chain-run.ts
 msgid "The star was not meant for you."
-msgstr ""
+msgstr "星星不属于你。"
 
 #: src/lib/pack-run.ts
 msgid "The strongest card in the pack scores twice."
@@ -18847,11 +19041,11 @@ msgstr "目标分数翻倍。"
 #. placeholder {0}: pct(B.windUp.growth)
 #: src/lib/pack-run.ts
 msgid "The target rises {0}% after every pack."
-msgstr ""
+msgstr "每开一包，目标提高 {0}%。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
-msgstr ""
+msgstr "测试客户端把签名密钥保存在此浏览器中，令牌只存在内存里，所以刷新页面后需要重新连接。它提交的所有内容都会标记为测试数据，一周后自动删除。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -18923,7 +19117,7 @@ msgstr "主题饱和度"
 
 #: src/lib/pack-run.ts
 msgid "There is no reward to pick."
-msgstr ""
+msgstr "没有可选的奖励。"
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -18947,7 +19141,7 @@ msgstr "这些设置超出了此浏览器的导出限制。请缩短片段、降
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "These two share nothing."
-msgstr ""
+msgstr "这两张没有任何共同点。"
 
 #: src/components/packs/GiftInbox.tsx
 msgid "They no longer have that card to give."
@@ -18963,7 +19157,7 @@ msgstr "它们会从本站你的追踪成绩、最近成绩和活动中移除。
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Thin mono"
-msgstr ""
+msgstr "细等宽体"
 
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Third pull"
@@ -18980,7 +19174,7 @@ msgstr "无法读取这个 .osk。"
 
 #: src/routes/companella.tsx
 msgid "This account is not in the Companella beta."
-msgstr ""
+msgstr "此账号不在 Companella 测试名单中。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
@@ -19301,7 +19495,7 @@ msgstr "这个皮肤的设置太大，无法保存。"
 
 #: src/lib/pack-run.ts
 msgid "This song cannot be skipped."
-msgstr ""
+msgstr "这首曲目无法跳过。"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "This special-edition Eternal stays with its collector."
@@ -19333,7 +19527,7 @@ msgstr "这些图片已无法查看。"
 
 #: src/lib/chain-run.ts
 msgid "Three alike form a hand."
-msgstr ""
+msgstr "三张同类构成牌型。"
 
 #: src/lib/pack-run.ts
 msgid "Three cards from the same country."
@@ -19341,7 +19535,7 @@ msgstr "三张卡片来自同一国家/地区。"
 
 #: src/lib/chain-run.ts
 msgid "Three cards in a row that share one trait form a hand, and its two links fire three times. Each hand after the first multiplies the row by 1.3."
-msgstr ""
+msgstr "一排中连续三张共享同一特征的卡片构成牌型，其两条连锁各触发三次。第一个之后的每个牌型都会让这一排 x1.3。"
 
 #: src/lib/pack-run.ts
 msgid "Three from one country and two from another."
@@ -19349,7 +19543,7 @@ msgstr "三张来自一个国家/地区，两张来自另一个。"
 
 #: src/lib/pack-run.ts
 msgid "Three Keys"
-msgstr ""
+msgstr "三键"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Thu"
@@ -19357,7 +19551,7 @@ msgstr "四"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Thunderstorm"
-msgstr ""
+msgstr "雷雨"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Thursdays"
@@ -19365,7 +19559,7 @@ msgstr "周四"
 
 #: src/components/supporter/loadout.ts
 msgid "Tier"
-msgstr ""
+msgstr "等级"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Tier changed to {tierLabel}"
@@ -19381,7 +19575,7 @@ msgstr "游玩时长"
 
 #: src/components/supporter/loadout.ts
 msgid "Time-stop knives"
-msgstr ""
+msgstr "时停飞刀"
 
 #. placeholder {0}: Math.round(active.bpm)
 #: src/components/maps/MapDetailModal.tsx
@@ -19444,7 +19638,7 @@ msgstr "要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如有隐�
 
 #: src/routes/supporter.tsx
 msgid "to set up your avatar frame, name tag and card look."
-msgstr ""
+msgstr "来设置你的头像框、名牌和卡片外观。"
 
 #: src/lib/changelog.ts
 msgid "today"
@@ -19608,7 +19802,7 @@ msgstr "最高 pp"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Top skillset"
-msgstr ""
+msgstr "最高技能组"
 
 #: src/lib/pack-run.ts
 msgid "Top Thousand"
@@ -19624,7 +19818,7 @@ msgstr "硬卡套"
 
 #: src/components/packs/run/RunTally.tsx
 msgid "Total"
-msgstr ""
+msgstr "总计"
 
 #: src/routes/maps.tsx
 msgid "total plays"
@@ -19636,7 +19830,7 @@ msgstr "总 pp"
 
 #: src/components/supporter/loadout.ts
 msgid "Touch ring"
-msgstr ""
+msgstr "触控环"
 
 #: src/lib/pack-run.ts
 #: src/routes/maps.tsx
@@ -19709,7 +19903,7 @@ msgstr "三角形"
 
 #: src/lib/pack-run.ts
 msgid "Trill"
-msgstr ""
+msgstr "交互"
 
 #: src/lib/pack-run.ts
 msgid "Trio"
@@ -19807,7 +20001,7 @@ msgstr "把音符变成填满其间空隙的长条。"
 
 #: src/components/supporter/loadout.ts
 msgid "Turntable"
-msgstr ""
+msgstr "唱盘"
 
 #: src/lib/pack-run.ts
 msgid "Twin"
@@ -19860,7 +20054,7 @@ msgstr "乌克兰语"
 
 #: src/lib/chain-run.ts
 msgid "Ultra Rare"
-msgstr ""
+msgstr "Ultra Rare"
 
 #: src/components/settings/LazySettingsPanel.tsx
 msgid "Unable to load settings."
@@ -19956,7 +20150,7 @@ msgstr "未知玩家"
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Unlike"
-msgstr ""
+msgstr "取消喜欢"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "Unlink"
@@ -19964,7 +20158,7 @@ msgstr "解除绑定"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Unlock for rolls"
-msgstr ""
+msgstr "解锁后可随机"
 
 #: src/components/packs/run/RunInfo.tsx
 msgid "Unlocks at 1,000 cards"
@@ -20273,7 +20467,7 @@ msgstr "用户名…"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Vaporwave"
-msgstr ""
+msgstr "Vaporwave"
 
 #: src/components/communities/field-options.tsx
 msgid "Verified"
@@ -20598,13 +20792,19 @@ msgstr "等待下一轮评分"
 msgid "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
 msgstr "等待下一轮评分。届时会评分，此列表会自动更新。"
 
+#: src/lib/chain-run.ts
+msgid "Wallet"
+msgstr "钱包"
+
 #: src/lib/skill-axes.ts
 msgid "Walls"
 msgstr "条墙"
 
+#: src/components/packs/run/chain/ChainScoring.tsx
+#: src/lib/chain-run.ts
 #: src/lib/pack-run.ts
 msgid "Warm-up"
-msgstr ""
+msgstr "热身"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Warming this player up... first draws can take a moment"
@@ -20838,7 +21038,7 @@ msgstr "谱面为何出现在这里"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Wide"
-msgstr ""
+msgstr "宽体"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Width of the exported image, in pixels"
@@ -20850,19 +21050,19 @@ msgstr "狂野"
 
 #: src/lib/pack-run.ts
 msgid "Win a run on the difficulty below to unlock it."
-msgstr ""
+msgstr "通关下方难度的挑战即可解锁。"
 
 #: src/lib/pack-run.ts
 msgid "Win a run."
-msgstr ""
+msgstr "赢下一局挑战。"
 
 #: src/lib/pack-run.ts
 msgid "Wind Down"
-msgstr ""
+msgstr "Wind Down"
 
 #: src/lib/pack-run.ts
 msgid "Wind Up"
-msgstr ""
+msgstr "Wind Up"
 
 #: src/routes/hashi.tsx
 msgid "Windows and Linux"
@@ -20870,11 +21070,11 @@ msgstr "Windows 和 Linux"
 
 #: src/components/supporter/loadout.ts
 msgid "Wings"
-msgstr ""
+msgstr "翅膀"
 
 #: src/components/supporter/loadout.ts
 msgid "Winter pine"
-msgstr ""
+msgstr "冬日松树"
 
 #: src/components/packs/MissingPlayerTile.tsx
 msgid "Wish"
@@ -20899,15 +21099,15 @@ msgstr "愿望单已满（5）"
 
 #: src/components/supporter/loadout.ts
 msgid "Wisteria"
-msgstr ""
+msgstr "紫藤"
 
 #: src/components/supporter/loadout.ts
 msgid "Witch hat"
-msgstr ""
+msgstr "女巫帽"
 
 #: src/components/supporter/loadout.ts
 msgid "Witch hat and broom"
-msgstr ""
+msgstr "女巫帽与扫帚"
 
 #: src/routes/recommendations.tsx
 msgid "with {mods}"
@@ -20943,11 +21143,11 @@ msgstr "仅限使用一次，适用于不是支持者且没有试用过的账号
 
 #: src/lib/chain-run.ts
 msgid "World Class"
-msgstr ""
+msgstr "World Class"
 
 #: src/lib/pack-run.ts
 msgid "World Cup"
-msgstr ""
+msgstr "世界杯"
 
 #: src/components/supporter/SupportShowcase.tsx
 msgid "Wrappers"
@@ -21013,18 +21213,18 @@ msgstr "卡包出现三押切或更好时 x{0} 连击。"
 #. placeholder {0}: N.quadJack.xMult
 #: src/lib/pack-run.ts
 msgid "x{0} combo if the pack has a quad."
-msgstr ""
+msgstr "卡包出现四押时 x{0} 连击。"
 
 #. placeholder {0}: N.kiai.xMult
 #. placeholder {1}: N.kiai.every
 #: src/lib/pack-run.ts
 msgid "x{0} combo on every {1}th pack of the run."
-msgstr ""
+msgstr "本轮每第 {1} 包 x{0} 连击。"
 
 #. placeholder {0}: N.modded.xMult
 #: src/lib/pack-run.ts
 msgid "x{0} combo on songs with a mod."
-msgstr ""
+msgstr "带模组的曲目 x{0} 连击。"
 
 #. placeholder {0}: N.lastPack.xMult
 #: src/lib/pack-run.ts
@@ -21034,13 +21234,13 @@ msgstr "曲目最后一包 x{0} 连击。"
 #. placeholder {0}: N.clutch.xMult
 #: src/lib/pack-run.ts
 msgid "x{0} combo when a song is still under half its target after its first pack."
-msgstr ""
+msgstr "曲目首包后分数仍不足目标一半时 x{0} 连击。"
 
 #. placeholder {0}: N.luckyStrike.xMult
 #. placeholder {1}: N.luckyStrike.breakOdds
 #: src/lib/pack-run.ts
 msgid "x{0} combo, with a 1 in {1} chance to break after each pack."
-msgstr ""
+msgstr "x{0} 连击，每开一包有 1/{1} 的几率断掉。"
 
 #. placeholder {0}: N.luckyStrike.xMult
 #. placeholder {1}: N.luckyStrike.breakOdds
@@ -21051,21 +21251,25 @@ msgstr ""
 #. placeholder {0}: N.spectrum.step
 #: src/lib/pack-run.ts
 msgid "x1 combo plus x{0} for each different finish in the pack."
-msgstr ""
+msgstr "x1 连击，卡包中每有一种不同卡面再 +x{0}。"
 
 #. placeholder {0}: N.medalHunter.step
 #: src/lib/pack-run.ts
 msgid "x1 combo plus x{0} for each different mod beaten this run."
-msgstr ""
+msgstr "x1 连击，本轮每击败一种不同模组再 +x{0}。"
 
 #. placeholder {0}: N.peakForm.step
 #: src/lib/pack-run.ts
 msgid "x1 combo plus x{0} for each Legendary or better card in the pack."
-msgstr ""
+msgstr "x1 连击，卡包中每有一张 Legendary 及以上卡片再 +x{0}。"
+
+#: src/lib/chain-run.ts
+msgid "x2 HIT"
+msgstr "x2 HIT"
 
 #: src/components/supporter/loadout.ts
 msgid "XP window"
-msgstr ""
+msgstr "XP 窗口"
 
 #: src/routes/dan-estimates.tsx
 msgid "Yes, this is saragi"
@@ -21077,7 +21281,7 @@ msgstr "昨天"
 
 #: src/components/supporter/loadout.ts
 msgid "Yin-yang orbs"
-msgstr ""
+msgstr "阴阳玉"
 
 #: src/components/farm-helper/NeighborhoodGraph.tsx
 #: src/components/packs/CardCollectors.tsx
@@ -21182,13 +21386,13 @@ msgstr "你答对了 {streak} 题。"
 #. placeholder {0}: STAKE_NUMBERS.fewerSlots
 #: src/lib/pack-run.ts
 msgid "You have {0} charm slot fewer."
-msgstr ""
+msgstr "护符栏位减少 {0} 个。"
 
 #. placeholder {0}: LOADOUT_NUMBERS.speed.slots
 #. placeholder {1}: -LOADOUT_NUMBERS.speed.packs
 #: src/lib/pack-run.ts
 msgid "You have +{0} charm slot and every song has {1} pack fewer."
-msgstr ""
+msgstr "护符栏位 +{0}，每首曲目少 {1} 个卡包。"
 
 #: src/components/communities/field-options.tsx
 msgid "You have a few reports waiting to be read already. Give a moderator a chance to catch up."
@@ -21200,7 +21404,7 @@ msgstr "你有成绩，但附近玩家的分数更高。"
 
 #: src/routes/skins.tsx
 msgid "You have not liked a skin yet"
-msgstr ""
+msgstr "你还没有喜欢过任何皮肤"
 
 #: src/routes/skins.tsx
 msgid "You have not published a skin yet"
@@ -21248,11 +21452,11 @@ msgstr "你是 {yourPp}pp，而水平相近的玩家平均 {median}pp，所以�
 
 #: src/lib/pack-run.ts
 msgid "You start with a random rare charm."
-msgstr ""
+msgstr "开局获得一个随机稀有护符。"
 
 #: src/lib/pack-run.ts
 msgid "You start with Hold Note."
-msgstr ""
+msgstr "开局自带「长条」。"
 
 #: src/components/packs/StreakGame.tsx
 msgid "You stopped at {streak} in a row."
@@ -21352,7 +21556,7 @@ msgstr "你的卡片"
 
 #: src/components/supporter/LoadoutStage.tsx
 msgid "Your card is not ready yet."
-msgstr ""
+msgstr "你的卡片还没准备好。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your collection as binder pages, three by three in plastic pockets, for you and anyone visiting your shelf."
@@ -21387,7 +21591,7 @@ msgstr "你的段位"
 
 #: src/lib/chain-run.ts
 msgid "Your deck can't go below 4 cards."
-msgstr ""
+msgstr "牌组不能少于 4 张卡片。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your description shows up here."
@@ -21430,15 +21634,15 @@ msgstr "你的名字拥有专属样式和字体，显示在个人资料和所有
 
 #: src/lib/pack-run.ts
 msgid "Your next pack has at least one card with a finish."
-msgstr ""
+msgstr "下一个卡包至少有一张带卡面的卡片。"
 
 #: src/lib/pack-run.ts
 msgid "Your next pack is a Gold pack."
-msgstr ""
+msgstr "下一个卡包是金色卡包。"
 
 #: src/lib/pack-run.ts
 msgid "Your next pack is a Rainbow pack."
-msgstr ""
+msgstr "下一个卡包是彩虹卡包。"
 
 #: src/components/packs/run/RunInfo.tsx
 msgid "Your next pack is plain."
@@ -21565,7 +21769,7 @@ msgstr "你的支持让服务器继续运行，也让我有时间继续开发这
 
 #: src/routes/supporter.tsx
 msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks."
-msgstr ""
+msgstr "你的支持用来支付服务器费用，也让我有时间继续完善这个网站。这对我意义重大，这些附加内容就是我表达感谢的方式。"
 
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "Your teams could not be loaded just now. Try again in a moment."
@@ -21606,7 +21810,7 @@ msgstr "整个个人资料换上主题，并带有动态背景。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your whole profile takes on the theme: its colours, and a living backdrop behind the page."
-msgstr ""
+msgstr "整个个人资料都会采用这个主题：配色，以及页面背后的动态背景。"
 
 #: src/components/packs/WishlistLine.tsx
 msgid "Your wishlist"
