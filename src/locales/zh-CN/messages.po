@@ -9735,6 +9735,10 @@ msgid "Leader"
 msgstr "队长"
 
 #: src/lib/replay-overlays.ts
+#: src/lib/supporter-companions.ts
+msgid "Leek"
+msgstr "大葱"
+
 #: src/routes/snipes.tsx
 msgid "Leaderboard"
 msgstr "排行榜"

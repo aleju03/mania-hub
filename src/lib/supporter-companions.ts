@@ -18,6 +18,7 @@ export const SUPPORTER_COMPANION_IDS = [
   "fumo-youmu",
   "fumo-yuyuko",
   "fumo-sakuya-inu",
+  "leek",
 ] as const;
 
 export type BuiltInCompanionId = (typeof SUPPORTER_COMPANION_IDS)[number];
@@ -63,6 +64,7 @@ export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   fumo("fumo-youmu", msg`Youmu fumo`, "0031ed6284ac4310952095302aad77c2", -1.67),
   fumo("fumo-yuyuko", msg`Yuyuko fumo`, "6d5d0483009942fb916eedc60ea383a4", 3.04),
   fumo("fumo-sakuya-inu", msg`Inu Sakuya`, "7a573802931f485db8118a9d64f26362", 0.15),
+  { id: "leek", name: msg`Leek`, kind: "model", url: "/models/companions/leek.glb", thumb: "/models/companions/thumbs/leek.webp" },
 ];
 
 export interface SubmittedCompanion {

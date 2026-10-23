@@ -15,3 +15,4 @@ Changed here: textures re-encoded as WebP; nothing else.
 | fumo-sakuya-inu.glb | https://sketchfab.com/3d-models/7a573802931f485db8118a9d64f26362 |
 
 blob-pink.glb is the site's own model, built by local-notes/companions/blob/make_blob.py.
+leek.glb is the site's own model, made in Blender (~/Projects/3d-modelling/leek); its cel shading is drawn by src/lib/companion-toon.ts from the materials' toon extras.

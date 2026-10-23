@@ -17,6 +17,8 @@ declare module "three" {
   }
 
   export interface Material {
+    userData?: Record<string, any>;
+    toneMapped?: boolean;
     dispose(): void;
   }
 
@@ -30,6 +32,7 @@ declare module "three" {
   }
 
   export class Mesh extends Object3D {
+    isMesh?: boolean;
     geometry?: { dispose: () => void };
     material?: { dispose: () => void } | Array<{ dispose: () => void }>;
     constructor(...args: any[]);
@@ -85,6 +88,7 @@ declare module "three" {
 
   export class Color {
     constructor(...args: any[]);
+    setRGB(r: number, g: number, b: number, colorSpace?: unknown): this;
   }
 
   export class Vector2 {
@@ -101,6 +105,7 @@ declare module "three" {
     constructor(...args: any[]);
     set(x: number, y: number, z: number): this;
     applyQuaternion(quaternion: Quaternion): this;
+    normalize(): this;
   }
 
   export class Vector4 {
@@ -214,6 +219,7 @@ declare module "three" {
 
   export const LinearFilter: unknown;
   export const SRGBColorSpace: unknown;
+  export const LinearSRGBColorSpace: unknown;
   export const NeutralToneMapping: unknown;
   export const ClampToEdgeWrapping: unknown;
   export const RGBAFormat: unknown;

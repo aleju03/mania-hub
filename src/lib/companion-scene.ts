@@ -14,6 +14,7 @@ import {
   type Object3D,
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { applyCompanionToon } from "./companion-toon";
 
 /* A 3D companion (supporter-companions.ts) in its own small canvas. Loaded on
    demand. The model stands on the floor of its box, scaled to fill its
@@ -43,7 +44,13 @@ function loadModel(url: string): Promise<Object3D> {
     pending.catch(() => files.delete(url));
     files.set(url, pending);
   }
-  return pending.then((bytes) => loader.parseAsync(bytes.slice(0), "")).then((gltf) => gltf.scene);
+  return pending
+    .then((bytes) => loader.parseAsync(bytes.slice(0), ""))
+    .then((gltf) => {
+      // models exported with cel-shading settings get their toon look
+      applyCompanionToon(gltf.scene);
+      return gltf.scene;
+    });
 }
 
 function lights(scene: Scene) {

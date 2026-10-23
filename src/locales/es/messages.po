@@ -9726,6 +9726,10 @@ msgid "Leader"
 msgstr "Líder"
 
 #: src/lib/replay-overlays.ts
+#: src/lib/supporter-companions.ts
+msgid "Leek"
+msgstr "Puerro"
+
 #: src/routes/snipes.tsx
 msgid "Leaderboard"
 msgstr "Leaderboard"
