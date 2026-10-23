@@ -286,35 +286,66 @@ export function ThemesShowcase() {
 
 /* --- Avatar frames ------------------------------------------------------------ */
 
-const SHOWN_FRAMES: SupporterAvatarFrameId[] = [
-  "wings-pink-3", "witch-hat", "term-window", "sakura",
-  "ln-hold-9", "five-star-pull", "crt-monitor", "halo-pink",
+/* Hand-picked, a page of eight at a time, the strongest first. One of each
+   set (wings, LN holds, dan skips), so a page never shows the same idea twice. */
+const SHOWN_FRAME_PAGES: SupporterAvatarFrameId[][] = [
+  ["crown", "spell-card", "crt-monitor", "wings-pink-3", "sakura", "ssr-card", "storm", "hakurei-torii"],
+  ["term-window", "wash-ring", "step-pad", "light-wings-3", "autumn-maple", "ln-hold-9", "reimu-ribbon", "old-photo"],
+  ["scratch-deck", "zenith-orbit", "time-stop-knives", "rail-pass", "wings-gold-3", "knob-lasers", "margin-doodles", "scarlet-moon"],
+  ["winter-pine", "five-star-pull", "dan-skip-5-gamma", "delta-crest", "wings-feather-3", "ice-fairy", "aero-window", "witch-hat"],
 ];
 
 /* Eight frame videos at once are a lot for a weak machine: there only the one
    under the pointer plays. */
 export function FramesShowcase() {
-  const { i18n } = useLingui();
+  const { t, i18n } = useLingui();
   const you = useShowcaseViewer();
   const [ref, near] = useNearView<HTMLDivElement>();
   const lowEnd = useLowEndDevice();
   const [hovered, setHovered] = useState<SupporterAvatarFrameId | null>(null);
+  const [page, setPage] = useState(0);
+  const pages = SHOWN_FRAME_PAGES.length;
+  const turn = (by: number) => {
+    setHovered(null);
+    setPage((current) => (current + by + pages) % pages);
+  };
   return (
     <div ref={ref}>
-    <Stagger className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4">
-      {SHOWN_FRAMES.map((frame) => {
-        const name = FRAME_NAMES.get(frame);
-        return (
-          <StaggerItem key={frame} className="flex flex-col items-center" onPointerEnter={() => setHovered(frame)} onPointerLeave={() => setHovered(null)}>
-            <FrameThumb frame={frame} avatar={you.avatar} size={118} live={near && (!lowEnd || hovered === frame)} />
-            <div className="mt-1 text-center text-[11px] text-osu-f1">
-              {name ? `${i18n._(name.label)}${name.variant ? ` ${name.variant}` : ""}` : frame}
-            </div>
-          </StaggerItem>
-        );
-      })}
-    </Stagger>
+      <Stagger key={page} className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4">
+        {SHOWN_FRAME_PAGES[page].map((frame) => {
+          const name = FRAME_NAMES.get(frame);
+          return (
+            <StaggerItem key={frame} className="flex flex-col items-center" onPointerEnter={() => setHovered(frame)} onPointerLeave={() => setHovered(null)}>
+              <FrameThumb frame={frame} avatar={you.avatar} size={118} live={near && (!lowEnd || hovered === frame)} />
+              <div className="mt-1 text-center text-[11px] text-osu-f1">
+                {name ? `${i18n._(name.label)}${name.variant ? ` ${name.variant}` : ""}` : frame}
+              </div>
+            </StaggerItem>
+          );
+        })}
+      </Stagger>
+      <div className="mt-4 flex items-center justify-center gap-3">
+        <PageButton direction={-1} label={t`Previous frames`} onClick={() => turn(-1)} />
+        <span className="min-w-[3ch] text-center text-[12px] tabular-nums text-osu-f1">{page + 1} / {pages}</span>
+        <PageButton direction={1} label={t`More frames`} onClick={() => turn(1)} />
+      </div>
     </div>
+  );
+}
+
+function PageButton({ direction, label, onClick }: { direction: 1 | -1; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-osu-b4 text-osu-l2 transition hover:bg-osu-b3 hover:text-white"
+    >
+      <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
+        <path d={direction === 1 ? "M6 3.5 10.5 8 6 12.5" : "M10 3.5 5.5 8 10 12.5"} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
   );
 }
 

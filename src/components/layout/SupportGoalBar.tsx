@@ -59,7 +59,7 @@ export function SupportGoalBar() {
     <div className="border-b border-white/[0.07] px-4 py-3">
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <span className="truncate text-[13px] font-semibold text-white">
-          <Trans>{filling} hosting</Trans>
+          <Trans>{filling} goal</Trans>
         </span>
         <span className="shrink-0 text-[13px] font-semibold tabular-nums text-white">
           {covered ? <Trans>Covered</Trans> : <Trans>{raised} of {target}</Trans>}

@@ -1214,8 +1214,8 @@ msgid "{files} files in {groupCount} groups"
 msgstr "{groupCount} 组共 {files} 个文件"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "{filling} hosting"
-msgstr "{filling}托管费用"
+msgid "{filling} goal"
+msgstr "{filling}目标"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid "{firstName} and {others} more"
@@ -11070,6 +11070,10 @@ msgstr "更多 DT"
 msgid "More followers"
 msgstr "更多关注者"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "More frames"
+msgstr "更多头像框"
+
 #: src/routes/communities_.$id.tsx
 msgid "More international servers"
 msgstr "更多国际服务器"
@@ -14319,6 +14323,10 @@ msgstr "{0} 中的上一组卡片"
 msgid "Previous collection page"
 msgstr "收藏册上一页"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Previous frames"
+msgstr "上一页头像框"
+
 #: src/components/packs/run/RunTable.tsx
 msgid "Previous pack"
 msgstr "上一包"
@@ -14342,8 +14350,8 @@ msgid "Previously"
 msgstr "此前"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Prime"
-msgstr "Prime"
+#~ msgid "Prime"
+#~ msgstr "Prime"
 
 #: src/lib/pack-run.ts
 #: src/routes/news_.prism.tsx

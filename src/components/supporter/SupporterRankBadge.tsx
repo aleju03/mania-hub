@@ -98,7 +98,7 @@ export function SupporterRankLadder({ runStartedAt }: { runStartedAt: number }) 
       </p>
       <ol className="mt-2 flex items-center gap-1 sm:gap-1.5" aria-label={t`Supporter ranks`}>
         {SUPPORTER_RANKS.map((def, i) => (
-          <li key={def.id} title={i18n._(def.name)} className={i > rank.index ? "opacity-25 grayscale" : undefined}>
+          <li key={def.id} title={i18n._(def.name)} className={i > rank.index ? "opacity-25 grayscale transition-[opacity,filter] duration-200 hover:opacity-100 hover:grayscale-0" : undefined}>
             <SupporterRankIcon rank={def} className={i === rank.index ? "h-8 w-8 sm:h-9 sm:w-9" : "h-5 w-5 sm:h-6 sm:w-6"} />
           </li>
         ))}

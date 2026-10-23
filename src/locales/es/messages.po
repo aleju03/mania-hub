@@ -1205,8 +1205,8 @@ msgid "{files} files in {groupCount} groups"
 msgstr "{files} archivos en {groupCount} grupos"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "{filling} hosting"
-msgstr "Hosting de {filling}"
+msgid "{filling} goal"
+msgstr "Meta de {filling}"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid "{firstName} and {others} more"
@@ -11061,6 +11061,10 @@ msgstr "Más DT"
 msgid "More followers"
 msgstr "Más seguidores"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "More frames"
+msgstr "Más marcos"
+
 #: src/routes/communities_.$id.tsx
 msgid "More international servers"
 msgstr "Más servidores internacionales"
@@ -14310,6 +14314,10 @@ msgstr "Cartas anteriores de {0}"
 msgid "Previous collection page"
 msgstr "Página anterior de la colección"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Previous frames"
+msgstr "Marcos anteriores"
+
 #: src/components/packs/run/RunTable.tsx
 msgid "Previous pack"
 msgstr "Pack anterior"
@@ -14333,8 +14341,8 @@ msgid "Previously"
 msgstr "Antes"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Prime"
-msgstr "Prime"
+#~ msgid "Prime"
+#~ msgstr "Prime"
 
 #: src/lib/pack-run.ts
 #: src/routes/news_.prism.tsx

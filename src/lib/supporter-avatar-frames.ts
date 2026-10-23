@@ -143,7 +143,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 38;
+const FRAME_ART_VERSION = 39;
 
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still"): string {
   return `/images/supporter-frames/${id}.${kind === "video" ? "webm" : "png"}?v=${FRAME_ART_VERSION}`;

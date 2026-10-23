@@ -318,7 +318,6 @@ function PackThumb() {
 
 /* Each perk's tile: a small piece of the real thing where there is one. */
 function PerkArt({ id, avatar }: { id: PerkId; avatar: string | undefined }) {
-  const { t } = useLingui();
   switch (id) {
     case "theme":
       return <ProfileThemeSwatch theme="sakura" still className="absolute inset-0 h-full w-full" />;
@@ -346,20 +345,23 @@ function PerkArt({ id, avatar }: { id: PerkId; avatar: string | undefined }) {
         </span>
       );
     case "plays":
-      // a tiny featured-play card: the owner's own title, the song, its number
+      // a featured play pinned up: the title and song as lines, its pp big, as on the profile
       return (
-        <span className="block w-[48px] overflow-hidden rounded-[6px] bg-osu-b4 ring-1 ring-inset ring-white/[0.08]">
-          <span className="block h-[11px] bg-gradient-to-r from-[#5b2a1c] via-[#8a3a1e] to-[#3a1a14]" />
-          <span className="block px-1 pb-1 pt-0.5 leading-none">
-            <span className="flex items-center gap-0.5 text-[6.5px] font-bold uppercase tracking-[0.08em] text-osu-pink">
-              {t`Prime`}
-              <svg viewBox="0 0 10 10" aria-hidden className="h-[6px] w-[6px]"><path d="M1.5 8.5 L2 6.5 L7 1.5 L8.5 3 L3.5 8 Z" fill="currentColor" /></svg>
-            </span>
-            <span className="mt-0.5 flex items-baseline justify-between">
-              <span className="truncate text-[6.5px] text-osu-l2">volcanic</span>
-              <span className="text-[9px] font-bold text-white">33.6</span>
+        <span className="relative block -rotate-6">
+          <span className="block h-[34px] w-[46px] overflow-hidden rounded-[5px] bg-gradient-to-br from-[#45305e] via-[#2a1d3a] to-[#140f1b] shadow-[0_3px_8px_rgba(0,0,0,0.55)] ring-1 ring-inset ring-white/[0.1]">
+            <span className="flex h-full flex-col justify-between p-[5px]">
+              <span className="block">
+                <span className="block h-[2px] w-[12px] rounded-full bg-osu-pink-light/80" />
+                <span className="mt-[3px] block h-[3px] w-[24px] rounded-full bg-white/85" />
+              </span>
+              <span className="self-end text-[15px] font-black leading-none tabular-nums text-osu-pink-light">512</span>
             </span>
           </span>
+          <svg viewBox="0 0 12 16" aria-hidden className="absolute -top-[7px] left-[17px] h-[14px] w-[11px] rotate-12 drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
+            <path d="M6 8.5 V15" stroke="#d6d3dc" strokeWidth="1.3" strokeLinecap="round" />
+            <circle cx="6" cy="5" r="4" fill="var(--color-osu-pink)" />
+            <circle cx="4.6" cy="3.6" r="1.2" fill="#fff" fillOpacity="0.55" />
+          </svg>
         </span>
       );
     case "companion":
