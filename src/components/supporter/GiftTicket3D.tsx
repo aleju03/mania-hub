@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
 
 import { mountFoilSource } from "./FoilPreview";
+import { useWebGlSlot } from "../../lib/gl-budget";
 import { queueGpuWork } from "../../lib/gpu-queue";
 
 /* The gift ticket on /support as a real object: a thick ticket in 3D with its
@@ -217,10 +218,11 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
   const labels: Labels = { gift: t`Gift`, title: t`One week of supporter`, days: t`days` };
   const labelsRef = useRef(labels);
   labelsRef.current = labels;
+  const glSlot = useWebGlSlot(hostRef);
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    if (!host || !glSlot) return;
     let disposed = false;
     let cleanup: (() => void) | undefined;
     let unqueue: (() => void) | undefined;
@@ -541,7 +543,7 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
       unqueue?.();
       cleanup?.();
     };
-  }, []);
+  }, [glSlot]);
 
   if (failed) return <>{fallback}</>;
   return <div ref={hostRef} className="mx-auto aspect-[2.25/1] w-full max-w-[640px] cursor-grab touch-pan-y select-none" role="img" aria-label={`${labels.title}: ${CODE.slice(0, 4)}-${CODE.slice(4)}`} />;

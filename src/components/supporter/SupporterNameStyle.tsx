@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { isShaderNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { useWebGlSlot } from "../../lib/gl-budget";
 
 /* A supporter's name in their name tag style and/or name font. One element whose look comes
    from the `name-tag--<id>` rules in styles.css, so the caller's sizing,
@@ -27,10 +28,12 @@ export function SupporterStyledName({ nameStyle, nameFont = null, name, classNam
   const spanRef = useRef<HTMLSpanElement>(null);
   const hostRef = useRef<HTMLSpanElement>(null);
   const [ready, setReady] = useState(false);
+  // name tags give way to bigger pieces (gl-budget.ts) and keep their CSS look meanwhile
+  const glSlot = useWebGlSlot(spanRef, { enabled: shaded, low: true });
 
   useEffect(() => {
     const span = spanRef.current, host = hostRef.current;
-    if (!shaded || !span || !host) return;
+    if (!shaded || !glSlot || !span || !host) return;
     let cleanup: (() => void) | undefined;
     let cancelled = false;
     void import("../../lib/name-tag-shaders").then(({ mountNameShader }) => {
@@ -42,7 +45,7 @@ export function SupporterStyledName({ nameStyle, nameFont = null, name, classNam
       cleanup?.();
       setReady(false);
     };
-  }, [shaded, nameStyle, nameFont, name]);
+  }, [shaded, glSlot, nameStyle, nameFont, name]);
 
   return (
     <span ref={spanRef} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live ? " name-tag--hero" : ""}${shaded ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : ""}`}>

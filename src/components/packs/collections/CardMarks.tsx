@@ -106,7 +106,7 @@ export function CardMarks({ card, collectorUserId }: {
   const marks = cardMarksFor(card, collectorUserId);
   if (marks.length === 0) return null;
   return (
-    <span className="pointer-events-none absolute -bottom-2 right-1 flex items-center gap-0.5" data-card-marks="">
+    <span className="pointer-events-none absolute -bottom-2 right-1 z-[7] flex items-center gap-0.5" data-card-marks="">
       {marks.map((mark) => {
         switch (mark.kind) {
           case "only": {

@@ -25,7 +25,11 @@ import { TestBinder } from "./TestBinder";
    holding the viewer's own cards takes the whole stage.
 
    The avatar sits in room reserved for the largest overhang of any frame, so
-   neither it nor the name moves when the frame changes. */
+   neither it nor the name moves when the frame changes. On a phone the stage
+   stays in view while the drawers scroll under it, so it is kept short there:
+   a smaller avatar with the name beside it, as in the profile hero, and that
+   room capped (`--stage-room-cap`, in avatar widths), so the widest wings are
+   cut at the stage's edge. */
 
 /* [top, sides, bottom] in avatar widths: the most any frame reaches past the
    avatar, with the sides evened so the avatar stays centred. */
@@ -36,9 +40,10 @@ const ROOM = SUPPORTER_AVATAR_FRAMES.reduce(
   },
   [0, 0, 0],
 );
-const ROOM_PADDING = `calc(var(--stage-avatar) * ${ROOM[0]}) calc(var(--stage-avatar) * ${ROOM[1]}) calc(var(--stage-avatar) * ${ROOM[2]})`;
+const room = (share: number) => `calc(var(--stage-avatar) * min(${share}, var(--stage-room-cap)))`;
+const ROOM_PADDING = `${room(ROOM[0])} ${room(ROOM[1])} ${room(ROOM[2])}`;
 
-const NAME_CLASS = "min-w-0 max-w-full truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]";
+const NAME_CLASS = "min-w-0 max-w-full truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[22px] font-black leading-none text-white sm:text-[40px]";
 
 export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, card, focus, pop, spinning, footer }: {
   shown: Loadout;
@@ -78,17 +83,17 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
             <TestPack wrapper={shown.pack.wrapper} blade={shown.pack.blade} />
           </div>
         ) : (
-        <div className={`${focus === "card" ? "max-lg:hidden" : ""} flex min-w-0 flex-1 flex-col items-center justify-center px-5 py-4 [--stage-avatar:84px] sm:px-8 sm:[--stage-avatar:124px]`}>
+        <div className={`${focus === "card" ? "max-lg:hidden" : ""} flex min-w-0 flex-1 flex-row items-center justify-center px-3 py-1 [--stage-avatar:64px] [--stage-room-cap:0.42] sm:flex-col sm:px-8 sm:py-4 sm:[--stage-avatar:124px] sm:[--stage-room-cap:9]`}>
           {/* Never shrinks: in a narrow column the side room overflows both ways evenly, and only wide wings get clipped. */}
           <div className="shrink-0" style={{ padding: ROOM_PADDING }}>
             <motion.div key={`avatar-${pop}`} {...landing} className="relative">
-              <img src={avatar} alt="" className="h-[84px] w-[84px] max-w-none rounded-2xl object-cover sm:h-[124px] sm:w-[124px]" style={framedAvatarStyle(frame)} />
+              <img src={avatar} alt="" className="h-[64px] w-[64px] max-w-none rounded-2xl object-cover sm:h-[124px] sm:w-[124px]" style={framedAvatarStyle(frame)} />
               {frame && <SupporterAvatarFrame frame={frame} still={!frameSettled} />}
             </motion.div>
           </div>
           {/* Shrinks to its text as in the hero's h1, so a style's gradient
               and plate size to the name. */}
-          <motion.div key={`name-${pop}`} {...landing} className="mt-2 flex w-full min-w-0 justify-center">
+          <motion.div key={`name-${pop}`} {...landing} className="flex min-w-0 flex-1 justify-start sm:mt-2 sm:w-full sm:flex-none sm:justify-center">
               {nameStyle || nameFont ? (
                 <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} name={username} className={NAME_CLASS} live={!spinning && nameSettled} />
               ) : (
@@ -107,7 +112,7 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
           </div>
         </div>
       </div>
-      <div className={`flex flex-wrap items-center gap-2 border-t border-white/[0.07] px-4 py-3 ${theme ? "bg-osu-b6/70" : ""}`}>{footer}</div>
+      <div className={`flex flex-wrap items-center gap-2 border-t border-white/[0.07] px-4 py-2 sm:py-3 ${theme ? "bg-osu-b6/70" : ""}`}>{footer}</div>
     </div>
   );
 }

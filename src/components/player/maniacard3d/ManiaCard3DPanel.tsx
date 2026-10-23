@@ -16,6 +16,7 @@ import type { ManiaCardPanelProps, ManiaCardReadyData } from "./types";
 import { isWindowActive, subscribeWindowActivity } from "#/lib/window-activity";
 import { fetchLiveSupporterLook, peekLiveSupporterLook } from "#/lib/live-backend";
 import { parseSupporterLook, supporterLookSignature, type SupporterLook } from "#/lib/supporter-card-looks";
+import { useWebGlSlot } from "../../../lib/gl-budget";
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -171,6 +172,8 @@ export function ManiaCard3DPanel({
   );
   const rendererTextureSignatureRef = useRef<string | null>(null);
   const rendererReady = readySignature === dataSignature;
+  // a context only while it holds a slot (gl-budget.ts); the placeholder shows otherwise
+  const glSlot = useWebGlSlot(hostRef, { enabled: !loading && data.status === "ready" && !renderError });
 
   useEffect(() => {
     if (data.status === "ready") {
@@ -185,7 +188,7 @@ export function ManiaCard3DPanel({
 
   useEffect(() => {
     setReadySignature(null);
-    if (loading || data.status !== "ready") return;
+    if (loading || data.status !== "ready" || !glSlot) return;
     const host = hostRef.current;
     const initialData = latestReadyDataRef.current;
     const initialSignature = latestReadySignatureRef.current;
@@ -261,7 +264,7 @@ export function ManiaCard3DPanel({
     });
 
     return cleanup;
-  }, [data.status, loading, reducedMotion]);
+  }, [data.status, loading, reducedMotion, glSlot]);
 
   // The case goes on and off without repainting the card.
   const sleeveRef = useRef(sleeve);

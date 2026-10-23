@@ -5,6 +5,7 @@ import { BladeFx, preloadSprites } from "./bladeFx";
 import { createBladeRenderer } from "./bladeGl";
 import { bladeLook, bladeTrailLife, drawBladeTrail, type TrailPoint } from "./packBlades";
 import { queueGpuWork } from "../../lib/gpu-queue";
+import { useWebGlSlot } from "../../lib/gl-budget";
 
 /* A blade in a small box, for the /supporter loadout and /support: the same
    streak, sparks and burst the pack stage draws (packBlades.ts, bladeFx.ts),
@@ -20,8 +21,10 @@ function pathAt(u: number, w: number, h: number) {
   return { x: w * (0.06 + 0.88 * u), y: h * (0.62 - 0.22 * u) - Math.sin(u * Math.PI) * h * 0.1 };
 }
 
-export function BladeSwatch({ blade, live = false, className = "" }: { blade: SupporterBladeId | null; live?: boolean; className?: string }) {
+export function BladeSwatch({ blade, live: wantsLive = false, className = "" }: { blade: SupporterBladeId | null; live?: boolean; className?: string }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  // live only while it holds a WebGL slot (gl-budget.ts); the still stroke shows otherwise
+  const live = useWebGlSlot(ref, { enabled: wantsLive, low: true });
 
   useEffect(() => {
     const canvas = ref.current;

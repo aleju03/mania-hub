@@ -4,6 +4,7 @@ import { useLingui } from "@lingui/react/macro";
 import type { SupporterCompanion } from "../../lib/supporter-companions";
 import type { CompanionScene } from "../../lib/companion-scene";
 import { queueGpuWork } from "../../lib/gpu-queue";
+import { useWebGlSlot } from "../../lib/gl-budget";
 import { TungTungSahurKeycap } from "../player/TungTungSahurKeycap";
 
 /* Draws a companion (lib/supporter-companions.ts): the keycap as its own
@@ -15,10 +16,11 @@ function ModelCompanion({ url, facing, matte, label }: { url: string; facing?: n
   const sceneRef = useRef<CompanionScene | null>(null);
   const modelRef = useRef({ url, facing, matte });
   modelRef.current = { url, facing, matte };
+  const glSlot = useWebGlSlot(hostRef);
   // one canvas for as long as this stays a model; it waits for a quiet moment to start
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    if (!host || !glSlot) return;
     let cancelled = false;
     let unqueue: (() => void) | undefined;
     void import("../../lib/companion-scene").then(({ mountCompanionScene }) => {
@@ -34,8 +36,9 @@ function ModelCompanion({ url, facing, matte, label }: { url: string; facing?: n
       unqueue?.();
       sceneRef.current?.dispose();
       sceneRef.current = null;
+      shown.current = modelRef.current.url;
     };
-  }, []);
+  }, [glSlot]);
   // swapping the model keeps the canvas, its context and compiled shaders
   const shown = useRef(url);
   useEffect(() => {

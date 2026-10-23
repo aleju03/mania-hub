@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { PROFILE_THEME_LOOKS, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
 import type { ProfileBackdrop } from "../../lib/profile-theme-gl";
 import { queueGpuWork } from "../../lib/gpu-queue";
+import { useWebGlSlot } from "../../lib/gl-budget";
 
 /* A profile theme's living backdrop, filling the box it is given. Shows the
    theme's flat colour until the shader (loaded on demand) draws, and fades
@@ -26,10 +27,12 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
   notesRef.current = notes;
   const chartRef = useRef(chart);
   chartRef.current = chart;
+  // a context only while it holds a slot (gl-budget.ts); the flat colour shows otherwise
+  const glSlot = useWebGlSlot(hostRef);
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    if (!host || !glSlot) return;
     let cancelled = false;
     let unqueue: (() => void) | undefined;
     // a new WebGL context is heavy, so it waits for a quiet moment (gpu-queue.ts)
@@ -48,7 +51,7 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
       backdropRef.current?.dispose();
       backdropRef.current = null;
     };
-  }, [scroll, maxPixels]);
+  }, [scroll, maxPixels, glSlot]);
 
   useEffect(() => {
     backdropRef.current?.setTheme(theme);
