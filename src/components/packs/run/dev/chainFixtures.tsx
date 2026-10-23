@@ -20,6 +20,8 @@
      goat     a row with a GOAT in it: both its links at full strength and
               the combo doubling as the chain reaches it; the row clears,
               then the shop's pack turns a GOAT with its ceremony
+     skills   an arranged row showing the skillset hints: a Delay landing
+              late, a Bracket pair's span, Tech, Jack and Chordstream
      reel     the shop's bonus spin bought: the reel spins and lands
      variants a row holding one card of each variant (Silver SS, Mirror,
               PFC, MAX) playing out, with more in the hand
@@ -44,6 +46,7 @@ import {
   type ChainAction,
   type ChainBoardEntry,
   type ChainPool,
+  type ChainCard,
   type ChainRunState,
   type ChainVariant,
   type ChainRunView,
@@ -53,7 +56,7 @@ import { getCachedPackFrontCanvas, PACK_ASPECT, packArtStyleFor } from "../../pa
 import { ChainTable, type ChainTableScript } from "../chain/ChainTable";
 import type { ChainActOutcome } from "../chain/useChainRun";
 
-export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "variants", "reel"] as const;
+export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "variants", "reel", "skills"] as const;
 export type ChainFixtureMoment = (typeof CHAIN_FIXTURE_MOMENTS)[number];
 
 /* Real osu! ids, used only for avatars on the synthetic players. */
@@ -124,6 +127,18 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
     if (total > 0) state.roundScore = Math.max(0, state.target - Math.floor(total * 0.6));
     state.rowsLeft = 2;
     return { state, pool, script: { row: f.row, dealt: true, autoPlay: true, skipReplay: true, autoPack: true }, best: null };
+  }
+  if (moment === "skills") {
+    const pool = fixturePool(3);
+    const f = makeFixtureRun(3, { round: 2, phase: "arranged", pool });
+    const state = f.state;
+    const row = f.row ?? [];
+    const looks: Array<[ChainCard["skill"], 4 | 7]> = [["Delay", 7], ["Bracket", 7], ["Tech", 7], ["Bracket", 7], ["Jack", 7], ["Chordstream", 7]];
+    row.slice(0, looks.length).forEach((uid, index) => {
+      const [skill, key] = looks[index];
+      for (const entry of [...state.hand, ...state.deck]) if (entry.uid === uid) entry.card = { ...entry.card, skill, key, cc: "KR" };
+    });
+    return { state, pool, script: { row, dealt: true }, best: null };
   }
   if (moment === "reel") {
     const pool = fixturePool(6);
@@ -312,7 +327,7 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
 
   /* Moments with no sequence of their own. */
   useEffect(() => {
-    if (moment === "arrange" || moment === "over") {
+    if (moment === "arrange" || moment === "over" || moment === "skills") {
       const frame = window.requestAnimationFrame(ready);
       done(moment === "over" ? 2600 : 1600);
       return () => window.cancelAnimationFrame(frame);

@@ -14,6 +14,9 @@ import {
   type ChainVariant,
   CHAIN_VARIANT,
   CHAIN_REEL,
+  CHAIN_SKILL_EFFECT,
+  chainEffectSkill,
+  chainSkillBand,
   type ChainReelId,
   type ChainReelPrize,
   type ChainTrait,
@@ -288,6 +291,55 @@ export function chainReelTile(prize: ChainReelPrize, i18n: I18n): { mark: string
       const amount = (prize.amount ?? CHAIN_REEL.wallet).toLocaleString("en-US");
       return { mark: `+${amount}`, word: i18n._(msg`Wallet`), text: i18n._(msg`+${amount} shards to your pack wallet.`) };
     }
+  }
+}
+
+/* The words a skillset effect leaves under its card, in the row preview and
+   as the row plays. */
+export const CHAIN_SKILL_WORD = {
+  late: msg`LATE`,
+  twice: msg`x2 HIT`,
+  borrow: msg`BORROW`,
+  stream: msg`Stream`,
+};
+
+/* What a card's skillset does, as its hover line, with the numbers of its
+   band (chainSkillBand). One line each, osu!mania words. */
+const pct = (share: number) => Math.round(share * 1000) / 10;
+export function chainSkillEffectText(card: Pick<ChainCard, "skill" | "goat" | "tier">, i18n: I18n): string | null {
+  const skill = chainEffectSkill(card);
+  if (!skill) return null;
+  const band = chainSkillBand(card);
+  const E = CHAIN_SKILL_EFFECT;
+  switch (skill) {
+    case "Stream":
+      return i18n._(msg`Each link after it lifts the combo ${pct(E.stream[band])}% more, until a break.`);
+    case "Jumpstream":
+      return i18n._(msg`+${E.jumpstream[band]} base for each Jumpstream in your deck (up to ${E.jumpstreamCap}).`);
+    case "Handstream":
+      return i18n._(msg`Linked on both sides: it and both neighbours score x${E.handstream[band]}.`);
+    case "Stamina":
+      return i18n._(msg`An unbroken row of 6 trains every Stamina in your deck +${E.stamina[band]} base.`);
+    case "Jack":
+      return band === 2
+        ? i18n._(msg`Hits twice.`)
+        : band === 1
+          ? i18n._(msg`Hits twice; the link into it adds half its combo.`)
+          : i18n._(msg`Hits twice; the link into it adds no combo.`);
+    case "Chordjack":
+      return band === 2 ? i18n._(msg`The links into and out of it fire twice.`) : i18n._(msg`The link into it fires twice.`);
+    case "Tech":
+      return i18n._(msg`+${pct(E.tech[band])}% points for each other skillset in the row.`);
+    case "Chordstream":
+      return i18n._(msg`Scores with the previous card's base x${E.chordstream[band]}, if higher.`);
+    case "Bracket":
+      return i18n._(msg`Pairs with the next Bracket: the cards between score +${pct(E.bracket[band])}% from each.`);
+    case "Delay":
+      return E.delay[band] === 1
+        ? i18n._(msg`Lands late: scores at the combo the row ends on.`)
+        : i18n._(msg`Lands late: scores at the combo the row ends on, x${E.delay[band]}.`);
+    default:
+      return null;
   }
 }
 

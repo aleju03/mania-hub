@@ -65,7 +65,10 @@ export const CHAIN_FEEL = {
     dragPx: 7,
     /* Long-press on touch for a card's details. */
     longPressMs: 450,
-    hoverDetailsMs: 380,
+    // The details panel waits for the pointer to rest this long on a thing
+    // (any real movement restarts it), so passing over cards never covers them.
+    hoverDetailsMs: 900,
+    hoverStillPx: 6,
   },
   /* The pack stage. */
   pack: {

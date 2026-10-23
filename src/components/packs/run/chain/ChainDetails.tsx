@@ -12,6 +12,7 @@ import {
   chainCardColor,
   chainCardFace,
   chainCardRarityLabel,
+  chainSkillEffectText,
   formatChainScore,
   formatChainX,
   isChainTier,
@@ -65,12 +66,14 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-/* Pointer handlers that raise `content` over the element: after a short
-   hover on a mouse, after a long-press on touch (which also swallows the
-   tap that would follow). `disabled` stops both. */
+/* Pointer handlers that raise `content` over the element: once a mouse has
+   rested on it for a beat (moving restarts the wait), after a long-press on
+   touch (which also swallows the tap that would follow). `disabled` stops
+   both. */
 export function useChainDetailsTrigger(content: () => ChainDetailsContent | null, disabled = false) {
   const timer = useRef(0);
   const pressed = useRef(false);
+  const rest = useRef<{ x: number; y: number; element: Element } | null>(null);
   const contentRef = useRef(content);
   contentRef.current = content;
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -78,22 +81,44 @@ export function useChainDetailsTrigger(content: () => ChainDetailsContent | null
     const value = contentRef.current();
     if (value) showChainDetails(value, element.getBoundingClientRect());
   }, []);
+  const wait = useCallback(
+    (element: Element) => {
+      window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => {
+        rest.current = null;
+        raise(element);
+      }, CHAIN_FEEL.move.hoverDetailsMs);
+    },
+    [raise],
+  );
   const onPointerEnter = useCallback(
     (event: React.PointerEvent) => {
       if (disabled || event.pointerType === "touch") return;
-      const element = event.currentTarget;
-      window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => raise(element), CHAIN_FEEL.move.hoverDetailsMs);
+      rest.current = { x: event.clientX, y: event.clientY, element: event.currentTarget };
+      wait(event.currentTarget);
     },
-    [disabled, raise],
+    [disabled, wait],
+  );
+  /* Still waiting and the pointer moved on: wait again from here. */
+  const onPointerMove = useCallback(
+    (event: React.PointerEvent) => {
+      const at = rest.current;
+      if (!at || event.pointerType === "touch") return;
+      if (Math.hypot(event.clientX - at.x, event.clientY - at.y) < CHAIN_FEEL.move.hoverStillPx) return;
+      rest.current = { ...at, x: event.clientX, y: event.clientY };
+      wait(at.element);
+    },
+    [wait],
   );
   const onPointerLeave = useCallback(() => {
     window.clearTimeout(timer.current);
+    rest.current = null;
     hideChainDetails();
   }, []);
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
       pressed.current = false;
+      rest.current = null;
       window.clearTimeout(timer.current);
       if (disabled || event.pointerType !== "touch") {
         hideChainDetails();
@@ -114,7 +139,7 @@ export function useChainDetailsTrigger(content: () => ChainDetailsContent | null
     pressed.current = false;
     return was;
   }, []);
-  return { onPointerEnter, onPointerLeave, onPointerDown, onPointerUp: cancelPress, onPointerCancel: cancelPress, consumeLongPress };
+  return { onPointerEnter, onPointerMove, onPointerLeave, onPointerDown, onPointerUp: cancelPress, onPointerCancel: cancelPress, consumeLongPress };
 }
 
 function Row({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
@@ -158,8 +183,10 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
     rank: card.rank !== null ? `#${card.rank.toLocaleString("en-US")}` : null,
     pp: Math.round(card.pp).toLocaleString("en-US"),
     plays: card.plays !== null ? card.plays.toLocaleString("en-US") : null,
-    base: String(card.base),
+    base: String(card.base + (card.grown ?? 0)),
   };
+  // What its skillset does, at its rarity's band.
+  const skillEffect = chainSkillEffectText(card, i18n);
   const wysi = Object.values(stats).some((text) => text !== null && hasWysiText(text));
   useEffect(() => {
     if (wysi && firstWysiSight(card.id)) runSound.wysi(false);
@@ -218,8 +245,15 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
         {card.acc !== null && <Row label={<Trans>Accuracy</Trans>}>{card.acc.toLocaleString("en-US", { maximumFractionDigits: 2 })}%</Row>}
         <Row label={<Trans>Base</Trans>}>
           <WysiDigits text={stats.base} />
+          {card.grown ? <span className="ml-1 text-[11px] font-bold text-[#8ff2b7]">(+{card.grown})</span> : null}
         </Row>
       </div>
+      {skillEffect && (
+        <div className="mt-2 border-t border-white/[0.07] pt-2 text-[12px] leading-snug text-white/85">
+          <span className="mr-1.5 font-black text-[#8ff2b7]">{card.skill === "Speed" ? "Stream" : card.skill}</span>
+          {skillEffect}
+        </div>
+      )}
       {entry.pack && (
         <div className="mt-2 border-t border-white/[0.07] pt-2 text-[11px] text-osu-f1">
           <Trans>From this round's pack. Used up once played.</Trans>

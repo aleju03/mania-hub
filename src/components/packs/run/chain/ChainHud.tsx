@@ -434,6 +434,7 @@ function SceneItem({
         data-chain-scene={scene.id}
         className="relative shrink-0 cursor-default"
         onPointerEnter={details.onPointerEnter}
+        onPointerMove={details.onPointerMove}
         onPointerLeave={details.onPointerLeave}
         onPointerDown={details.onPointerDown}
         onPointerUp={details.onPointerUp}

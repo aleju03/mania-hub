@@ -6,6 +6,7 @@ import { useLingui } from "@lingui/react/macro";
 import {
   CHAIN_GOAT_COLOR,
   CHAIN_REEL_INK,
+  CHAIN_SKILL_WORD,
   CHAIN_VARIANT,
   CHAIN_VARIANT_COPY,
   CHAIN_GOAT_LABEL,
@@ -59,6 +60,7 @@ const msgBreak = msg`BREAK`;
 const msgHand = msg`HAND`;
 const msgHalf = msg`HALF`;
 const msgWarmup = msg`Warm-up`;
+const SKILL_INK = "#8ff2b7";
 
 type FloatSize = "trait" | "points" | "word" | "big";
 
@@ -531,6 +533,19 @@ export function ChainScoring(props: ChainScoringProps) {
           say(p().names[event.index] ?? "", POINTS);
           if (event.halved) popAt(card, `half-${event.index}`, i18n._(msgHalf), CHAIN_SCENE_INK.makiba, "trait", holdMs, "below");
           else if (event.silver) popAt(card, `silver-${event.index}`, `SS x${formatChainX(event.silver)}`, CHAIN_VARIANT_COPY.silver.ink, "trait", holdMs, "below");
+          else {
+            // The card's skillset at work, under it: one word for what it did.
+            const word = event.late
+              ? i18n._(CHAIN_SKILL_WORD.late)
+              : event.hits === 2
+                ? i18n._(CHAIN_SKILL_WORD.twice)
+                : event.borrowed
+                  ? i18n._(CHAIN_SKILL_WORD.borrow)
+                  : event.x && event.x !== 1
+                    ? `x${formatChainX(event.x)}`
+                    : null;
+            if (word) popAt(card, `skill-${event.index}`, word, SKILL_INK, "trait", holdMs, "below");
+          }
           if (card && !reducedMotion) juice(card.element, RUN_FEEL.juice.scoringCard);
           if (event.pass > 0) runSound.stepAgain(chain);
           else runSound.stepNotes(chain);
@@ -600,6 +615,15 @@ export function ChainScoring(props: ChainScoringProps) {
           playGoatFanfare();
           fx.onShake(feel.multiplierShake * 1.3);
           riseCombo(event.from, event.combo, holdMs);
+          break;
+        }
+        case "skill": {
+          // Stream lifts the combo after the link.
+          const badge = rectOf(`[data-chain-link="l${event.link}"]`);
+          popAt(badge, `lift-${event.link}`, `+${formatChainScore(event.add)}`, SKILL_INK, "trait", holdMs, "below");
+          say(`${i18n._(CHAIN_SKILL_WORD.stream)} +${formatChainScore(event.add)}`, SKILL_INK);
+          runSound.stepCombo(chain);
+          fx.onShake(stepShake(event.combo));
           break;
         }
         case "boost": {

@@ -87,7 +87,7 @@ interface PlayState {
 
 type Aftermath =
   | { kind: "clear"; round: number; total: number }
-  | { kind: "banner"; text: string; tone: "red" | "gold" };
+  | { kind: "banner"; text: string; tone: "red" | "gold" | "green" };
 
 const DEALT_KEY = "chain-run-dealt";
 
@@ -643,6 +643,15 @@ export function ChainTable(props: ChainTableProps) {
     // The round score (or round and target) lands now; shards with the pay.
     if (wysi) stampWysi(wysi, (on) => on !== "shards" || outcome !== "cleared");
     const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, reducedMotion ? Math.min(ms, 200) : ms));
+    // An unbroken row of 6 trained the deck's Stamina cards.
+    if (row.growth?.length) {
+      const trained = row.growth.reduce((most, grow) => Math.max(most, grow.add), 0);
+      const cards = row.growth.length;
+      setAftermath({ kind: "banner", text: t`Stamina trained: ${cards} cards +${trained} base`, tone: "green" });
+      runSound.charmFire(3);
+      await wait(1100);
+      setAftermath(null);
+    }
     if (forgotten === "gone") {
       setAftermath({ kind: "banner", text: t`Past the star. Once Forgotten left.`, tone: "red" });
       runSound.refuse();
@@ -1145,7 +1154,7 @@ export function ChainTable(props: ChainTableProps) {
                   ) : (
                     <motion.div
                       className={`px-4 text-center font-black italic uppercase leading-tight ${narrow ? "text-[24px]" : "text-[40px]"}`}
-                      style={{ color: aftermath.tone === "red" ? "#ff8a8a" : CHAIN_SCENE_INK.ascension }}
+                      style={{ color: aftermath.tone === "red" ? "#ff8a8a" : aftermath.tone === "green" ? "#8ff2b7" : CHAIN_SCENE_INK.ascension }}
                       initial={reducedMotion ? false : { scale: 1.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ type: "spring", stiffness: 520, damping: 20 }}

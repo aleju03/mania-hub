@@ -204,6 +204,7 @@ function StageCard({
           transition={{ duration: reducedMotion ? 0 : RUN_FEEL.flip.durationMs / 1000, ease: [...RUN_FEEL.flip.ease] as [number, number, number, number] }}
           whileHover={selectable && !reducedMotion ? { scale: 1.04 } : undefined}
           onPointerEnter={details.onPointerEnter}
+          onPointerMove={details.onPointerMove}
           onPointerLeave={details.onPointerLeave}
           onPointerDown={details.onPointerDown}
           onPointerUp={details.onPointerUp}

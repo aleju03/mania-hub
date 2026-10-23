@@ -3,8 +3,11 @@ import { AnimatePresence, animate, motion, useIsPresent, useMotionValue, useSpri
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   CHAIN_SCENE_INK,
+  CHAIN_SKILL_WORD,
   CHAIN_TIER_COLOR,
+  chainEffectSkill,
   formatChainScore,
+  formatChainX,
   isChainTier,
   type ChainCardInstance,
   type ChainLink,
@@ -233,6 +236,7 @@ const BoardCard = memo(function BoardCard({
                 pointerY.set(0);
               }}
               onPointerMove={(event) => {
+                details.onPointerMove(event);
                 if (event.pointerType === "touch" || reducedMotion) return;
                 const rect = event.currentTarget.getBoundingClientRect();
                 pointerX.set((event.clientX - rect.left) / rect.width - 0.5);
@@ -816,7 +820,95 @@ export function ChainBoard(props: ChainBoardProps) {
           </div>
         );
       })}
+
+      {/* Before it plays: what each card's skillset will do in this row,
+          under it, and a bracket under each Bracket pair's span. */}
+      {!leaving && preview && <SkillHints layout={layout} rowEntries={rowEntries} preview={preview} cardCombo={cardCombo} />}
     </div>
+  );
+}
+
+const DAMPED = "#9aa4b2";
+const SKILL_INK = "#8ff2b7";
+
+function SkillHints({
+  layout,
+  rowEntries,
+  preview,
+  cardCombo,
+}: {
+  layout: BoardLayout;
+  rowEntries: readonly ChainCardInstance[];
+  preview: ChainRowResult;
+  cardCombo: Record<number, number>;
+}) {
+  const { i18n } = useLingui();
+  // The first pass's card events say what each card's effect does here.
+  const hints = new Map<number, string>();
+  for (const event of preview.events) {
+    if (event.kind !== "card" || event.pass !== 0 || hints.has(event.index)) continue;
+    const word = event.late
+      ? i18n._(CHAIN_SKILL_WORD.late)
+      : event.hits === 2
+        ? i18n._(CHAIN_SKILL_WORD.twice)
+        : event.borrowed
+          ? i18n._(CHAIN_SKILL_WORD.borrow)
+          : event.x && event.x !== 1
+            ? `x${formatChainX(event.x)}`
+            : "";
+    hints.set(event.index, word);
+  }
+  // Bracket pairs, left to right, as the engine pairs them.
+  const brackets = rowEntries.map((entry, index) => (chainEffectSkill(entry.card) === "Bracket" ? index : -1)).filter((index) => index >= 0);
+  const spans: Array<[number, number]> = [];
+  for (let k = 0; k + 1 < brackets.length; k += 2) spans.push([brackets[k], brackets[k + 1]]);
+  const below = (index: number) => layout.slots[index].y + layout.cardH + (layout.narrow ? 1 : 6);
+  return (
+    <>
+      {rowEntries.map((entry, index) => {
+        const word = hints.get(index);
+        // Once the row plays, the combo it scored at takes the spot.
+        if (!word || cardCombo[index] !== undefined) return null;
+        const slot = layout.slots[index];
+        return (
+          <div
+            key={`hint-${entry.uid}`}
+            className="pointer-events-none absolute z-[40] flex justify-center"
+            style={{ left: slot.x, top: below(index), width: layout.cardW }}
+          >
+            <span
+              className="rounded-md px-1.5 py-0.5 font-black italic leading-none"
+              style={{ fontSize: layout.narrow ? 11 : 13, color: SKILL_INK, background: "rgba(143,242,183,0.12)", boxShadow: "inset 0 0 0 1px rgba(143,242,183,0.4)" }}
+            >
+              {word}
+            </span>
+          </div>
+        );
+      })}
+      <svg className="pointer-events-none absolute inset-0 z-[39] overflow-visible" width={layout.width} height={layout.height} aria-hidden="true">
+        {spans.map(([a, b]) => {
+          const from = layout.slots[a];
+          const to = layout.slots[b];
+          // A span across a phone's two lines is not drawn; its cards' hints still show.
+          if (Math.abs(from.y - to.y) > 2) return null;
+          const y = below(a) + (layout.narrow ? 18 : 26);
+          const x1 = from.x + layout.cardW / 2;
+          const x2 = to.x + layout.cardW / 2;
+          return (
+            <path
+              key={`bracket-${a}-${b}`}
+              d={`M ${x1} ${y - 8} L ${x1} ${y} L ${x2} ${y} L ${x2} ${y - 8}`}
+              fill="none"
+              stroke={SKILL_INK}
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={0.85}
+            />
+          );
+        })}
+      </svg>
+    </>
   );
 }
 
@@ -915,7 +1007,8 @@ function ChainLinks({
         // the playback restamps it as it gets there.
         const pending = Boolean(fx) && (!entry || entry.state === "pending");
         const half = entry?.state === "half";
-        const value = fx && !pending ? entry?.value ?? 0 : link.strength;
+        // Into a Jack the link adds only its share: its pill shows what it gives.
+        const value = fx && !pending ? entry?.value ?? 0 : link.value ?? link.strength;
         return (
           <LinkBadge
             key={key}
@@ -966,13 +1059,22 @@ function LinkBadge({
   narrow: boolean;
 }) {
   const details = useChainDetailsTrigger(() => ({ kind: "link", link }));
-  const fill = broken ? BREAK_RED : skip ? CHAIN_SCENE_INK.tree : link.traits[0]?.trait === "scene" && link.scenes[0] ? CHAIN_SCENE_INK[link.scenes[0]] : PINK;
+  const fill = broken
+    ? BREAK_RED
+    : link.damp !== undefined && link.damp < 1
+      ? DAMPED
+      : skip
+        ? CHAIN_SCENE_INK.tree
+        : link.traits[0]?.trait === "scene" && link.scenes[0]
+          ? CHAIN_SCENE_INK[link.scenes[0]]
+          : PINK;
   return (
     <div
       data-chain-link={id}
       className={`absolute -translate-x-1/2 -translate-y-1/2 ${raised ? "z-[70]" : "z-[45]"}`}
       style={{ left: x, top: y }}
       onPointerEnter={details.onPointerEnter}
+      onPointerMove={details.onPointerMove}
       onPointerLeave={details.onPointerLeave}
       onPointerDown={details.onPointerDown}
       onPointerUp={details.onPointerUp}
