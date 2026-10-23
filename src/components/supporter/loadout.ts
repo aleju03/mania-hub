@@ -226,6 +226,11 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
     entries: [{ id: "storm", label: msg`Storm` }],
   },
   {
+    key: "crowns",
+    title: msg`Crowns`,
+    entries: [{ id: "crown", label: msg`Crown` }],
+  },
+  {
     key: "shrine",
     title: msg`Shrine and magic`,
     entries: [
