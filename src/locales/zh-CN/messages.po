@@ -2700,8 +2700,12 @@ msgstr "刚刚有新更新。正在刷新..."
 #~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，和通过段位课题一样；通过线上方的第一个百分点也一样：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成一直很小，到 99% 才开始上升。低于通过线的成绩仍然计入，按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表计入到通过线以下 4 个百分点，6K/7K LN 到 1 个百分点。4K LN 用自己的一套数值：向下计入到 94.5%，在那里比谱面段位低一级半，加成在 99.7% 到顶："
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
-msgstr "通过必须是在这些指定难度上。REFORM 的三个 INTRO 段位，以及 Jinjin LN Phase I 的 0 到 2 段不计入，因为它们低于所属段位表衡量的最低一级。"
+msgid "A pass has to be on one of these difficulties, or on another upload of one with the same notes, OD and HP; a cut or edited reupload does not count. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
+msgstr"通过必须是在这些难度之一上，或是在音符、OD 和 HP 完全相同的其他上传版本上；删减或修改过的重新上传不算。REFORM 的三个 INTRO 段位和 Jinjin LN Phase I 的 0 到 2 段不计入，因为它们低于各自段位体系能衡量的最低等级。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
+#~ msgstr "通过必须是在这些指定难度上。REFORM 的三个 INTRO 段位，以及 Jinjin LN Phase I 的 0 到 2 段不计入，因为它们低于所属段位表衡量的最低一级。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass only counts if it was really that chart, played straight. <0/>, <1/> and anything that changes the OD (<2/>, <3/>) disqualify it, and so does slowing the chart down; Mirror, the visibility mods and <4/>/<5/> are fine. The charts are matched by their notes and OD rather than by beatmap id, so any upload of the same file counts, while edits and rate versions do not."

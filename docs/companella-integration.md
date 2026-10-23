@@ -1106,12 +1106,13 @@ site's copy of the map) is read as a course pass beside the osu! ones
 restricted profile (imports alone) and by the `/rankings` Clears board.
 A DA import on a practice chart's OD variant counts by the official rule
 (DA set to the reference's OD, HP at or above the upload's), though the play
-itself stays unrated. A practice chart also counts on any imported file with
-its notes, as osu!'s plays do, including an upload the site never cached: each
-stored chart gets its practice-chart fingerprint
-(`companella_local_charts.dan_skillset_fingerprint`, checked against the
-registry `dan_skillset_stamp` names) when stored, and the maintenance sweep
-checks older charts. The full courses stay on their exact files.
+itself stays unrated. A practice chart also counts on any imported file with its notes, as osu!'s
+plays do, including an upload the site never cached: each stored chart gets
+its practice-chart fingerprint (`companella_local_charts.dan_skillset_fingerprint`,
+checked against the registry `dan_skillset_stamp` names) when stored, and the
+maintenance sweep checks older charts. A full course counts the same way on an
+exact copy (same notes, OD and HP; see "Course clears" in `docs/features/dan-estimates.md`),
+credited under the listed upload; a cut or edited re-upload does not.
 `player_skill_ratings` reads osu! plays only; the merged rating takes the
 app-passed courses in. A clear opens as its import on the score card.
 

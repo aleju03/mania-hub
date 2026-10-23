@@ -499,7 +499,8 @@ function DanEstimatesPage() {
             <CourseList />
             <p>
               <Trans>
-                A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and
+                A pass has to be on one of these difficulties, or on another upload of one with the same
+                notes, OD and HP; a cut or edited reupload does not count. REFORM's three INTRO courses and
                 the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first
                 level their ladder measures.
               </Trans>

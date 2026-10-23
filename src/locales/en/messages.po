@@ -2711,8 +2711,12 @@ msgstr "A new update just came in. Refreshing..."
 #~ msgstr "A pass at the bar credits the chart's full level, the same as passing the course, and so does the first point above it: a 96.9% on a 96% ladder is a normal clear, not a bonus. Above that the bonus stays small until 99%, then it climbs. Under the bar a pass still counts, as a clear of a lower level, down to a level and a quarter less at the cutoff. Regular ladders credit to 4 points under the bar and 6K/7K LN to 1. 4K LN uses its own numbers: it credits down to 94.5%, a level and a half less there, and its bonus tops out at 99.7%:"
 
 #: src/routes/dan-estimates.tsx
-msgid "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
-msgstr "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
+msgid "A pass has to be on one of these difficulties, or on another upload of one with the same notes, OD and HP; a cut or edited reupload does not count. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
+msgstr "A pass has to be on one of these difficulties, or on another upload of one with the same notes, OD and HP; a cut or edited reupload does not count. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
+#~ msgstr "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass only counts if it was really that chart, played straight. <0/>, <1/> and anything that changes the OD (<2/>, <3/>) disqualify it, and so does slowing the chart down; Mirror, the visibility mods and <4/>/<5/> are fine. The charts are matched by their notes and OD rather than by beatmap id, so any upload of the same file counts, while edits and rate versions do not."
