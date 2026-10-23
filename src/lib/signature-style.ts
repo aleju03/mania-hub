@@ -201,7 +201,7 @@ export const SIGNATURE_BLUR_RANGE = { min: 0, max: 24 } as const;
    control jump at the default and run backwards below it. */
 export const SIGNATURE_BRIGHTNESS_RANGE = { min: 20, max: 140 } as const;
 /** Must stay in step with ALLOWED_KEY_COUNTS in the backend's signature route. */
-export const SIGNATURE_KEY_COUNTS = [4, 6, 7] as const;
+export const SIGNATURE_KEY_COUNTS: readonly number[] = Array.from({ length: 18 }, (_, i) => i + 1);
 /** Long enough for a real CDN url with a cache-busting query, short enough that
     four of them cannot crowd out the stored style. */
 export const SIGNATURE_IMAGE_URL_MAX = 400;
@@ -289,7 +289,7 @@ export function resolveSkillsetDanPick(
 
 function normalizeSignatureKeyCount(raw: unknown): number | null {
   const value = Number(raw);
-  return (SIGNATURE_KEY_COUNTS as readonly number[]).includes(value) ? value : null;
+  return SIGNATURE_KEY_COUNTS.includes(value) ? value : null;
 }
 
 export type SignatureStyleMap = Record<SignatureType, SignatureStyle>;

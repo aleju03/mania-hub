@@ -246,7 +246,7 @@ describe("keyCount and imageUrl", () => {
       expect(normalizeSignatureStyle({ keyCount: keys }).keyCount).toBe(keys);
       expect(normalizeSignatureStyle({ lnKeyCount: keys }).lnKeyCount).toBe(keys);
     }
-    for (const bad of [5, 8, 0, -4, "nope", null, undefined, Number.NaN]) {
+    for (const bad of [19, 4.5, 0, -4, "nope", null, undefined, Number.NaN]) {
       expect(normalizeSignatureStyle({ keyCount: bad }).keyCount).toBeNull();
       expect(normalizeSignatureStyle({ lnKeyCount: bad }).lnKeyCount).toBeNull();
     }
