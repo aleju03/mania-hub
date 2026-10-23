@@ -14,6 +14,8 @@ import {
   GiftShowcase,
   HeroStage,
   NamesShowcase,
+  CompanionsShowcase,
+  SHOWCASE_COMPANIONS,
   PacksShowcase,
   StatsShowcase,
   ThemesShowcase,
@@ -39,7 +41,7 @@ export const Route = createFileRoute("/support")({
     return {
       meta: [
         { title: i18n._(msg`Support`) },
-        { name: "description", content: i18n._(msg`Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, card foils, packs cosmetics, extra profile stats and video share links.`) },
+        { name: "description", content: i18n._(msg`Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links.`) },
       ],
     };
   },
@@ -51,6 +53,7 @@ const SECTIONS: { id: string; label: MessageDescriptor }[] = [
   { id: "themes", label: msg`Profile themes` },
   { id: "frames", label: msg`Avatar frames` },
   { id: "names", label: msg`Name styles` },
+  { id: "companions", label: msg`Companions` },
   { id: "card", label: msg`Your card` },
   { id: "packs", label: msg`Packs` },
   { id: "stats", label: msg`Profile stats` },
@@ -242,6 +245,15 @@ function SupportPage() {
               body={t`Your name in its own style and font, on your profile and in every list it shows up in.`}
             >
               <NamesShowcase />
+            </Perk>
+
+            <Perk
+              id="companions"
+              title={t`Companions`}
+              count={<Trans><CountUp value={SHOWCASE_COMPANIONS.length} /> to pick, or your own</Trans>}
+              body={t`A small figure that stands beside the numbers on your profile. Drag a 3D one to turn it around.`}
+            >
+              <CompanionsShowcase />
             </Perk>
 
             <Perk

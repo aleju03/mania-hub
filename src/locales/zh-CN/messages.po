@@ -2050,6 +2050,10 @@ msgstr "<0/> 种样式，<1/> 种字体"
 msgid "<0/> themes"
 msgstr "<0/> 个主题"
 
+#: src/routes/support.tsx
+msgid "<0/> to pick, or your own"
+msgstr "<0/> 个可选，或用你自己的"
+
 #. placeholder {0}: formatNumber(totals.cardsRecycled)
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "<0>{0}</0> copies have been recycled."
@@ -2621,6 +2625,10 @@ msgstr "一张可分享的技能等级卡：等级徽章下方是控制、速度
 #: src/lib/pack-run.ts
 msgid "A sixth charm slot"
 msgstr "第六个护符栏位"
+
+#: src/routes/support.tsx
+msgid "A small figure that stands beside the numbers on your profile. Drag a 3D one to turn it around."
+msgstr "站在你个人资料数据旁的小人偶。拖动 3D 的可以转动它。"
 
 #: src/routes/snipes.tsx
 msgid "A snipe is when your new best on a map passes a player who was above you."
@@ -5248,6 +5256,10 @@ msgstr "Companella 也会上传你在 osu! 上打出的成绩的回放，这样�
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Companion"
+msgstr "小伙伴"
+
+#: src/routes/support.tsx
+msgid "Companions"
 msgstr "小伙伴"
 
 #: src/routes/recommendations.tsx
@@ -13121,6 +13133,10 @@ msgstr "也可以用 Google 支付，支持者时长立即生效。"
 msgid "or pick someone else"
 msgstr "或选择其他玩家"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Or send in your own 3D model or image from your supporter page."
+msgstr "也可以在你的支持者页面上传自己的 3D 模型或图片。"
+
 #: src/routes/recommendations.tsx
 msgid "or someone else"
 msgstr "或其他玩家"
@@ -15911,6 +15927,7 @@ msgstr "缩放皮肤的打击特效图。"
 
 #. placeholder {0}: credit.author
 #: src/components/supporter/SupporterExtras.tsx
+#: src/components/supporter/SupportShowcase.tsx
 msgid "Scan by {0}"
 msgstr "扫描：{0}"
 
@@ -16387,6 +16404,11 @@ msgstr "已把 #{0} 送给 {1}。"
 #: src/routes/report.tsx
 msgid "Sent along with it:"
 msgstr "将一并发送："
+
+#. placeholder {0}: shown.submitted.submittedBy.username
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Sent in by {0}"
+msgstr "由 {0} 上传"
 
 #. placeholder {0}: known.name
 #: src/components/ui/CompanellaMark.tsx
@@ -18022,8 +18044,12 @@ msgid "Supporter until {until}"
 msgstr "支持者到期：{until}"
 
 #: src/routes/support.tsx
-msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, card foils, packs cosmetics, extra profile stats and video share links."
-msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、卡片闪膜、卡包外观、额外的个人资料数据和视频分享链接。"
+#~ msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, card foils, packs cosmetics, extra profile stats and video share links."
+#~ msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、卡片闪膜、卡包外观、额外的个人资料数据和视频分享链接。"
+
+#: src/routes/support.tsx
+msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
+msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、小伙伴、卡片闪膜、卡包外观、额外的个人资料数据和视频分享链接。"
 
 #: src/components/packs/SetsView.tsx
 #: src/components/settings/SettingsPanel.tsx

@@ -9,6 +9,7 @@ import { ProfileThemeBackdrop, ProfileThemeSwatch } from "./ProfileThemeBackdrop
 import { SupporterStyledName } from "./SupporterNameStyle";
 import { FoilPreview } from "./FoilPreview";
 import { GiftTicket3D } from "./GiftTicket3D";
+import { CompanionFigure, CompanionThumb } from "./Companion";
 import { BinderBook, FoilCard, FrameThumb, SleeveCard, wrapperThumb } from "./LoadoutSlots";
 import { BladeSwatch } from "../packs/BladeSwatch";
 import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
@@ -18,7 +19,8 @@ import { formatGiftCode } from "./GiftCodePanel";
 import { Stagger, StaggerItem, useLowEndDevice, useNearView } from "./SupportMotion";
 import { useAuth } from "../../lib/auth-context";
 import { isScrolling, queueGpuWork } from "../../lib/gpu-queue";
-import { fetchLivePackCardSnapshotDirect, fetchLiveSupporterProfileLook, type LivePackCardSnapshot } from "../../lib/live-backend";
+import { fetchLivePackCardSnapshotDirect, fetchLiveSubmittedCompanions, fetchLiveSupporterProfileLook, type LivePackCardSnapshot } from "../../lib/live-backend";
+import { BUILT_IN_COMPANIONS, type SupporterCompanion } from "../../lib/supporter-companions";
 import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_FOIL_LABELS, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
 import { SUPPORTER_MOTIF_IDS, supporterMotifPath, type SupporterMotifId } from "../../lib/supporter-motif-art";
@@ -349,6 +351,80 @@ export function NamesShowcase() {
         </StaggerItem>
       ))}
     </Stagger>
+    </div>
+  );
+}
+
+/* --- Companions ------------------------------------------------------------------ */
+
+/* Submitted ones shown after the site's own, newest first. */
+const SHOWN_SUBMITTED = 8;
+/* The site's own models; the keycap stays a /supporter pick. */
+export const SHOWCASE_COMPANIONS = BUILT_IN_COMPANIONS.filter((entry) => entry.kind === "model");
+
+/* One companion standing on a stretch of the profile's rail, live (drag a
+   model to turn it), and the rest as stills to tap through: the site's own,
+   then a few that supporters sent in. Nothing cycles on its own, since every
+   model is its own download. */
+export function CompanionsShowcase() {
+  const { t, i18n } = useLingui();
+  const [ref, near] = useNearView<HTMLDivElement>();
+  const [submitted, setSubmitted] = useState<SupporterCompanion[]>([]);
+  const [picked, setPicked] = useState(0);
+  useEffect(() => {
+    if (!near) return;
+    let alive = true;
+    fetchLiveSubmittedCompanions()
+      .then((list) => {
+        if (alive) setSubmitted(list.slice(0, SHOWN_SUBMITTED).map((entry) => ({ submitted: entry })));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [near]);
+  const all = useMemo<SupporterCompanion[]>(() => [...SHOWCASE_COMPANIONS.map((entry) => ({ builtIn: entry })), ...submitted], [submitted]);
+  const shown = all[Math.min(picked, all.length - 1)];
+  const label = (companion: SupporterCompanion) => ("builtIn" in companion ? i18n._(companion.builtIn.name) : companion.submitted.name);
+  const credit = "builtIn" in shown ? shown.builtIn.credit : null;
+  const keycap = "builtIn" in shown && shown.builtIn.kind === "keycap";
+  return (
+    <div ref={ref} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] sm:items-center">
+      <div className="relative h-[230px] overflow-hidden rounded-xl bg-osu-b6 sm:h-[260px]">
+        <div className="absolute inset-x-0 bottom-0 h-[30%] border-t border-white/[0.08] bg-white/[0.035]" />
+        <div className={`absolute bottom-[30%] left-1/2 translate-y-2 -translate-x-1/2 ${keycap ? "h-32 w-[4.5rem]" : "h-36 w-28"}`}>
+          {!keycap && <span className="pointer-events-none absolute inset-x-6 bottom-0 h-3 rounded-full bg-black/35 blur-md" />}
+          {near && <CompanionFigure companion={shown} />}
+        </div>
+        <div className="absolute inset-x-0 bottom-0 flex h-[30%] flex-col items-center justify-center px-3 text-center">
+          <div className="truncate text-[14px] font-semibold text-white">{label(shown)}</div>
+          {credit ? (
+            <a href={credit.url} target="_blank" rel="noreferrer" className="text-[11px] text-osu-f1 hover:text-white">
+              {t`Scan by ${credit.author}`} ({credit.license})
+            </a>
+          ) : "submitted" in shown ? (
+            <div className="truncate text-[11px] text-osu-f1">{t`Sent in by ${shown.submitted.submittedBy.username}`}</div>
+          ) : null}
+        </div>
+      </div>
+      <div>
+        <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-6">
+          {all.map((companion, i) => (
+            <button
+              key={"builtIn" in companion ? companion.builtIn.id : companion.submitted.id}
+              type="button"
+              onClick={() => setPicked(i)}
+              aria-label={label(companion)}
+              aria-pressed={companion === shown}
+              title={label(companion)}
+              className={`grid aspect-square cursor-pointer place-items-center rounded-lg bg-osu-b5 p-1 transition ${companion === shown ? "ring-2 ring-white" : "opacity-75 hover:opacity-100"}`}
+            >
+              <CompanionThumb companion={companion} className="h-full w-full" />
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-[12px] text-osu-f1">{t`Or send in your own 3D model or image from your supporter page.`}</p>
+      </div>
     </div>
   );
 }

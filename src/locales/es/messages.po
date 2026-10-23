@@ -2041,6 +2041,10 @@ msgstr "<0/> estilos, <1/> fuentes"
 msgid "<0/> themes"
 msgstr "<0/> temas"
 
+#: src/routes/support.tsx
+msgid "<0/> to pick, or your own"
+msgstr "<0/> para elegir, o el tuyo"
+
 #. placeholder {0}: formatNumber(totals.cardsRecycled)
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "<0>{0}</0> copies have been recycled."
@@ -2612,6 +2616,10 @@ msgstr "Una carta de nivel de habilidad para compartir: control, velocidad y acc
 #: src/lib/pack-run.ts
 msgid "A sixth charm slot"
 msgstr "Un sexto espacio de amuleto"
+
+#: src/routes/support.tsx
+msgid "A small figure that stands beside the numbers on your profile. Drag a 3D one to turn it around."
+msgstr "Una figurita junto a los números de tu perfil. Arrastra una en 3D para girarla."
 
 #: src/routes/snipes.tsx
 msgid "A snipe is when your new best on a map passes a player who was above you."
@@ -5240,6 +5248,10 @@ msgstr "Companella también envía el replay de las plays que haces en osu!, as�
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Companion"
 msgstr "Compañero"
+
+#: src/routes/support.tsx
+msgid "Companions"
+msgstr "Compañeros"
 
 #: src/routes/recommendations.tsx
 msgid "compared to {range} pp"
@@ -13112,6 +13124,10 @@ msgstr "O paga con Google. Tu tiempo de supporter empieza al instante."
 msgid "or pick someone else"
 msgstr "o elige a alguien más"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Or send in your own 3D model or image from your supporter page."
+msgstr "O sube tu propio modelo 3D o imagen desde tu página de supporter."
+
 #: src/routes/recommendations.tsx
 msgid "or someone else"
 msgstr "o alguien más"
@@ -15902,6 +15918,7 @@ msgstr "Escala el arte de hitbursts de la skin."
 
 #. placeholder {0}: credit.author
 #: src/components/supporter/SupporterExtras.tsx
+#: src/components/supporter/SupportShowcase.tsx
 msgid "Scan by {0}"
 msgstr "Escaneo de {0}"
 
@@ -16378,6 +16395,11 @@ msgstr "Enviaste la #{0} a {1}."
 #: src/routes/report.tsx
 msgid "Sent along with it:"
 msgstr "Se envía también:"
+
+#. placeholder {0}: shown.submitted.submittedBy.username
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Sent in by {0}"
+msgstr "Subido por {0}"
 
 #. placeholder {0}: known.name
 #: src/components/ui/CompanellaMark.tsx
@@ -18013,8 +18035,12 @@ msgid "Supporter until {until}"
 msgstr "Supporter hasta el {until}"
 
 #: src/routes/support.tsx
-msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, card foils, packs cosmetics, extra profile stats and video share links."
-msgstr "Apoyar paga los servidores. Los supporters tienen temas de perfil, marcos de avatar, estilos de nombre, foils de carta, cosméticos de sobres, estadísticas extra de perfil y enlaces para compartir videos."
+#~ msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, card foils, packs cosmetics, extra profile stats and video share links."
+#~ msgstr "Apoyar paga los servidores. Los supporters tienen temas de perfil, marcos de avatar, estilos de nombre, foils de carta, cosméticos de sobres, estadísticas extra de perfil y enlaces para compartir videos."
+
+#: src/routes/support.tsx
+msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
+msgstr "Apoyar paga los servidores. Los supporters tienen temas de perfil, marcos de avatar, estilos de nombre, compañeros, foils de carta, cosméticos de sobres, estadísticas extra de perfil y enlaces para compartir videos."
 
 #: src/components/packs/SetsView.tsx
 #: src/components/settings/SettingsPanel.tsx
