@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Gift, Loader2, Search } from "lucide-react";
 import { useLingui } from "@lingui/react/macro";
 import { packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
-import { GIFT_MESSAGE_MAX_CHARS, searchOwnGiftRecipients, sendOwnPackGift, type GiftCollector, type PackGiftError } from "#/lib/pack-gifts";
+import { GIFT_MESSAGE_MAX_CHARS, fetchOwnHeldCopies, searchOwnGiftRecipients, sendOwnPackGift, type GiftCollector, type HeldCopies, type PackGiftError } from "#/lib/pack-gifts";
 import { PackDialog } from "./PackDialog";
 import { CollectionCardTile } from "./CardTile";
 import { useCardThumbnails } from "./useCardThumbnails";
@@ -23,6 +23,22 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef<string | null>(null);
   const [attempted, setAttempted] = useState(false);
+  /* Every copy has its own number, so the sender picks which one goes. Left
+     alone it is their highest, decided when the gift is accepted (what they
+     would part with first); picking one promises that exact copy. */
+  const [held, setHeld] = useState<HeldCopies | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const cardKey = packCardKeyOf(card);
+  useEffect(() => {
+    let cancelled = false;
+    fetchOwnHeldCopies({ data: { cardKey } })
+      .then((next) => { if (!cancelled) setHeld(next); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [cardKey]);
+  const highest = held?.serials.at(-1)?.serial ?? null;
+  const sendSerial = picked != null && picked !== highest ? picked : null;
+  const shown = picked ?? highest;
   const remaining = card.copies - 1;
   const thumbnails = useCardThumbnails([card]);
   useEffect(() => {
@@ -44,6 +60,7 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
     if (reason === "recipient_not_found") return t`That collector is no longer available.`;
     if (reason === "self_gift") return t`Choose another collector for your gift.`;
     if (reason === "gift_not_found") return t`That gift is no longer there.`;
+    if (reason === "serial_not_held") return t`That copy is already promised to someone or no longer yours. Pick another.`;
     return t`Your collection changed. Nothing was sent. Refresh and try again.`;
   };
   const send = async () => {
@@ -51,7 +68,7 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
     requestId.current ??= crypto.randomUUID();
     setAttempted(true); setBusy(true); setError(null);
     try {
-      const result = await sendOwnPackGift({ data: { recipientUserId: recipient.userId, cardKey: packCardKeyOf(card), requestId: requestId.current, message } });
+      const result = await sendOwnPackGift({ data: { recipientUserId: recipient.userId, cardKey: packCardKeyOf(card), requestId: requestId.current, message, serial: sendSerial } });
       if (!result) { setError(t`Sign in again to send a gift.`); return; }
       if (!result.ok) { setError(refusal(result.error)); return; }
       setSent(true); onSent();
@@ -65,9 +82,11 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold text-white"><UsernameText username={card.username} userId={card.userId} /></p>
-        <p className="mt-1 text-[12px] text-osu-f1">{remaining > 0 ? t`One copy for a friend. You keep ${remaining}.` : t`Your only copy. It leaves your collection when they accept.`}</p>
+        <p className="mt-1 text-[12px] text-osu-f1">{remaining > 0
+          ? shown ? t`One copy for a friend, #${shown.toLocaleString("en-US")}. You keep ${remaining}.` : t`One copy for a friend. You keep ${remaining}.`
+          : t`Your only copy. It leaves your collection when they accept.`}</p>
         {sent ? <div role="status" className="mt-4">
-          <p className="flex items-center gap-2 text-[13px] text-white"><Check className="shrink-0 text-emerald-300" size={16} />{t`Sent to ${recipient?.username ?? ""}.`}</p>
+          <p className="flex items-center gap-2 text-[13px] text-white"><Check className="shrink-0 text-emerald-300" size={16} />{sendSerial ? t`Sent #${sendSerial.toLocaleString("en-US")} to ${recipient?.username ?? ""}.` : t`Sent to ${recipient?.username ?? ""}.`}</p>
           <p className="mt-1 text-[12px] text-osu-f1">{t`The card stays yours until they accept it.`}</p>
           {message.trim() && <p className="mt-2 break-words text-[12px] italic text-osu-f1 [overflow-wrap:anywhere]">{message.trim()}</p>}
           <button type="button" onClick={onClose} className="mt-4 rounded-lg bg-osu-pink/20 px-4 py-2 text-[12px] font-semibold text-white">{t`Done`}</button>
@@ -89,6 +108,7 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
               <img src={person.avatarUrl} alt="" width={24} height={24} className="h-6 w-6 rounded-full" /><UsernameText username={person.username} userId={person.userId} className="truncate" />
             </button>)}</div>
           </>}
+          {held && held.serials.length > 1 ? <CopyPicker held={held} picked={shown} locked={attempted} onPick={setPicked} /> : null}
           <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={2} maxLength={GIFT_MESSAGE_MAX_CHARS}
             placeholder={t`Add a message (optional)`} aria-label={t`Message`}
             className="mt-3 w-full resize-none rounded-lg border border-osu-b3/40 bg-osu-b4/50 px-2 py-2 text-[12px] text-white outline-none focus:border-osu-pink/50" />
@@ -101,4 +121,25 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
       </div>
     </div>
   </PackDialog>;
+}
+
+/* Which numbered copy goes. The lowest numbers lead and the first three wear
+   the medal colours, so giving away a #1 is never an accident. */
+function CopyPicker({ held, picked, locked, onPick }: { held: HeldCopies; picked: number | null; locked: boolean; onPick: (serial: number) => void }) {
+  const { t } = useLingui();
+  const tone = (serial: number) => serial === 1 ? "text-amber-300" : serial === 2 ? "text-slate-200" : serial === 3 ? "text-orange-300" : "text-white";
+  return <div className="mt-3">
+    <p className="text-[11px] text-osu-f1">{t`Which copy`}</p>
+    <div role="radiogroup" aria-label={t`Which copy`} className="mt-1.5 flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+      {held.serials.map(({ serial, pulledBy }) => {
+        const on = serial === picked;
+        return <button key={serial} type="button" role="radio" aria-checked={on} disabled={locked} onClick={() => onPick(serial)}
+          title={pulledBy ? t`Pulled by ${pulledBy.username}` : undefined}
+          className={`rounded-md border px-2 py-1 text-[12px] font-semibold tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${tone(serial)} ${on ? "border-osu-pink/70 bg-osu-pink/20" : "border-osu-b3/40 bg-white/[0.03] hover:bg-white/5"}`}>
+          #{serial.toLocaleString("en-US")}
+        </button>;
+      })}
+    </div>
+    {held.minted > 0 && <p className="mt-1 text-[11px] text-osu-f1">{t`Out of ${held.minted.toLocaleString("en-US")} copies numbered so far.`}</p>}
+  </div>;
 }

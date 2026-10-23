@@ -5,10 +5,10 @@ import type { ServerPackCollectionCard } from "./pack-wallet-sync";
 export const GIFT_MESSAGE_MAX_CHARS = 140;
 export interface GiftCollector { userId: number; username: string; avatarUrl: string; countryCode: string | null }
 export type PackGiftStatus = "pending" | "accepted" | "declined";
-export interface PackGiftReceipt { id: number; sender: GiftCollector; card: ServerPackCollectionCard | null; message: string | null; status: PackGiftStatus }
+export interface PackGiftReceipt { id: number; sender: GiftCollector; card: ServerPackCollectionCard | null; message: string | null; status: PackGiftStatus; serial?: number | null }
 export interface PackGiftInbox { gifts: PackGiftReceipt[]; total: number; page: number }
-export type PackGiftError = "invalid_request" | "self_gift" | "recipient_not_found" | "no_spare" | "card_not_ready" | "unverified_card" | "special_card" | "collection_changed" | "gift_not_found";
-export type PackGiftResult = { ok: true; giftId: number; recipient: GiftCollector; remainingCopies: number; replayed: boolean } | { ok: false; error: PackGiftError };
+export type PackGiftError = "invalid_request" | "self_gift" | "recipient_not_found" | "no_spare" | "card_not_ready" | "unverified_card" | "special_card" | "collection_changed" | "gift_not_found" | "serial_not_held";
+export type PackGiftResult = { ok: true; giftId: number; recipient: GiftCollector; remainingCopies: number; serial?: number | null; replayed: boolean } | { ok: false; error: PackGiftError };
 
 async function giftTarget() {
   const { readCurrentAuth } = await import("./auth-server");
@@ -31,12 +31,30 @@ export const searchOwnGiftRecipients = createServerFn({ method: "GET" })
     if (!response.ok) throw new Error("Recipient search failed.");
     return ((await response.json()) as { collectors: GiftCollector[] }).collectors;
   });
+/* The numbers the viewer holds of one card, lowest first, for choosing which
+   copy to give. Copies someone else pulled name their puller. */
+export interface HeldCopies { serials: { serial: number; pulledBy: { userId: number; username: string } | null }[]; minted: number }
+export const fetchOwnHeldCopies = createServerFn({ method: "GET" })
+  .validator((input: { cardKey: string }) => {
+    if (typeof input?.cardKey !== "string" || input.cardKey.length > 40) throw new Error("Invalid card.");
+    return { cardKey: input.cardKey };
+  })
+  .handler(async ({ data }): Promise<HeldCopies | null> => {
+    const target = await giftTarget();
+    if (!target) return null;
+    const response = await fetch(`${target.url}?copies=${encodeURIComponent(data.cardKey)}`, { headers: target.headers });
+    if (!response.ok) throw new Error("Copies lookup failed.");
+    return response.json() as Promise<HeldCopies>;
+  });
 export const sendOwnPackGift = createServerFn({ method: "POST" })
-  .validator((input: { recipientUserId: number; cardKey: string; requestId: string; message?: string }) => {
+  .validator((input: { recipientUserId: number; cardKey: string; requestId: string; message?: string; serial?: number | null }) => {
     if (!Number.isSafeInteger(input?.recipientUserId) || input.recipientUserId <= 0 || typeof input.cardKey !== "string" || input.cardKey.length > 40 || typeof input.requestId !== "string" || !/^[a-zA-Z0-9_-]{16,80}$/.test(input.requestId)) throw new Error("Invalid gift.");
     // The backend normalizes and caps the note; this only keeps a pasted essay
     // off the wire.
-    return { recipientUserId: input.recipientUserId, cardKey: input.cardKey, requestId: input.requestId, message: typeof input.message === "string" ? input.message.slice(0, GIFT_MESSAGE_MAX_CHARS) : "" };
+    // The number of the copy to give, when the sender picked one; without it
+    // the backend gives their highest unpromised copy. It checks they hold it.
+    const serial = Number.isSafeInteger(input.serial) && Number(input.serial) > 0 ? Number(input.serial) : null;
+    return { recipientUserId: input.recipientUserId, cardKey: input.cardKey, requestId: input.requestId, message: typeof input.message === "string" ? input.message.slice(0, GIFT_MESSAGE_MAX_CHARS) : "", serial };
   })
   .handler(async ({ data }): Promise<PackGiftResult | null> => {
     const target = await giftTarget();

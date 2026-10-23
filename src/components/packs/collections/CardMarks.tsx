@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { useId } from "react";
-import type { CollectedCard } from "#/lib/pack-collection";
+import { serialWasPulled, type CollectedCard } from "#/lib/pack-collection";
 import { teamImageProxyUrl } from "#/lib/team-image";
 
 /* What makes one holding of a card different from every other holding of it,
@@ -32,7 +32,8 @@ const EARLY_SERIALS = 3;
 /* The marks a holding earns, in the order they are worn. A card the desk
    handed out has a serial like any other but was never pulled, so its place in
    the mint order says nothing (grantedAt is what tells the two apart, same as
-   the spotlight) and it wears no ordinal medal.
+   the spotlight) and it wears no ordinal medal. A serial gifted on with its
+   copy keeps the medal of the pull it came from.
 
    1/1 is the exception, because it is a claim about the card rather than about
    the race for it: one serial ever minted means this copy is the only one that
@@ -40,7 +41,7 @@ const EARLY_SERIALS = 3;
    Eternal, a variant nobody else holds) as of a card nobody else ever pulled. */
 export function cardMarksFor(card: CollectedCard, collectorUserId: number | null | undefined): CardMark[] {
   const marks: CardMark[] = [];
-  const pulled = !card.grantedAt;
+  const pulled = serialWasPulled(card);
   if (card.serial === 1 && card.mintedTotal === 1) marks.push({ kind: "only" });
   else if (pulled && card.serial === 1) marks.push({ kind: "first" });
   else if (pulled && card.serial && card.serial <= EARLY_SERIALS) marks.push({ kind: "early", serial: card.serial });
@@ -117,7 +118,7 @@ export function CardMarks({ card, collectorUserId }: {
           case "first":
             return <span key={mark.kind} className="pointer-events-auto" title={t`First to pull this card`}><Seal finish="gold" label="1" title={t`First to pull this card`} /></span>;
           case "early": {
-            const title = mark.serial === 2 ? t`Second to pull this card` : t`Third to pull this card`;
+            const title = mark.serial === 2 ? t`The second copy ever pulled` : t`The third copy ever pulled`;
             return <span key={mark.kind} className="pointer-events-auto" title={title}><Seal finish={mark.serial === 2 ? "silver" : "bronze"} label={String(mark.serial)} title={title} /></span>;
           }
           case "self": {

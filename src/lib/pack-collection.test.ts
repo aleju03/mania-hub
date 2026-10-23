@@ -592,3 +592,16 @@ describe("the Eternal tier", () => {
     expect(MANIA_CARD_TIER_THRESHOLDS.some((rung) => rung.tier === "eternal")).toBe(false);
   });
 });
+
+describe("mastery recycle bonus", () => {
+  it("adds 3% a level on spares, capped at level 4, matching the server's rounding", async () => {
+    const { sparesShardValue, copiesShardValue, masteryRecycleBonusPercent } = await import("./pack-collection");
+    expect(masteryRecycleBonusPercent(1)).toBe(0);
+    expect(masteryRecycleBonusPercent(2)).toBe(3);
+    expect(masteryRecycleBonusPercent(16)).toBe(12);
+    expect(masteryRecycleBonusPercent(1024)).toBe(12);
+    // Legendary spares are 10 shards; the server test pins the same numbers.
+    expect(sparesShardValue("legendary", 5, 16)).toBe(56);
+    expect(copiesShardValue("legendary", 3, 3, 1024)).toBe(20 + 22);
+  });
+});

@@ -128,7 +128,7 @@ describe("PackSummary", () => {
 
     const filledSlot = container.querySelector('[data-pull-serial-slot="0"]');
     expect(filledSlot?.classList.contains("min-h-8")).toBe(true);
-    expect(filledSlot?.textContent).toBe("3rd of 8 to pull this");
+    expect(filledSlot?.textContent).toBe("copy #3 of 8");
   });
 
   it("lands cut cards at their recycled size before auto-recycling resolves", () => {

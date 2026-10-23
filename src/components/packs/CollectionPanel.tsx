@@ -154,8 +154,8 @@ interface CollectionPanelProps {
     full: boolean;
   };
   /* Set while the collector has pack runs: the grid then wears each card's
-     best edition and its mastery gem, and a new value refetches the
-     editions (it moves with every scored pack). */
+     best edition, and a new value refetches the editions (it moves with
+     every scored pack). */
   editionsVersion?: string | null;
 }
 
@@ -1765,7 +1765,7 @@ export function CollectionPanel({
                     aria-pressed={cardSelected}
                     aria-label={cardSelected ? t`Deselect ${card.username}` : t`Select ${card.username}`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} edition={(editions[cardKey]?.[0] as RunEdition | undefined) ?? null} mastery={editionsVersion !== null} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} edition={(editions[cardKey]?.[0] as RunEdition | undefined) ?? null} />
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-[10px] ${
                         cardSelected ? "ring-2 ring-osu-pink" : "bg-black/45"
@@ -1794,7 +1794,7 @@ export function CollectionPanel({
                     style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
                     aria-label={t`View ${card.username}'s card`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} edition={(editions[cardKey]?.[0] as RunEdition | undefined) ?? null} mastery={editionsVersion !== null} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} edition={(editions[cardKey]?.[0] as RunEdition | undefined) ?? null} />
                   </button>
                 )}
                 {/* A binder pocket holds the card alone; recycling goes through Select there. */}

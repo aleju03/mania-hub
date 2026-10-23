@@ -8,9 +8,8 @@ import { renderCardSkeletonThumbnail, renderCardThumbnail } from "../../../compo
 import { ManiaCardRenderer } from "../../../components/player/maniacard3d/ManiaCardRenderer";
 import { buildManiaCardRenderDataFromSkills } from "../../../components/player/maniacard3d/renderData";
 import { CountryFlag } from "../../../components/ui/CountryFlag";
-import { formatDate, formatOrdinal } from "../../../lib/format";
+import { formatDate } from "../../../lib/format";
 import { useViewerTimeZone } from "../../../lib/use-viewer-time-zone";
-import { useLocale } from "../../../lib/locale-context";
 import {
   fetchLivePackSharedCard,
   isLiveBackendConfigured,
@@ -307,7 +306,6 @@ function PullPage() {
 
 function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
   const { t, i18n } = useLingui();
-  const locale = useLocale();
   const tier = sharedCardTier(shared);
   const accent = tierAccentRgb(tier);
   const team = shared.team ?? null;
@@ -357,19 +355,16 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           )}
         </div>
         {typeof shared.serial === "number" && shared.serial > 0 && (
-          // Pull order, not copy count. Plain ordinal, not "first ever": the
-          // permalink describes a holding, and a serial-1 card may by now sit
-          // in hundreds of collections.
+          // The lowest copy this collector pulled. A plain number, not "first
+          // ever": the permalink describes a holding, and a #1 card may by now
+          // sit in hundreds of collections.
           <div
             className={`text-[13px] tabular-nums ${shared.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
           >
-            <Trans>{formatOrdinal(shared.serial, locale)} person to pull this card</Trans>
-            {shared.mintedTotal > 0 && shared.mintedTotal !== shared.serial && (
-              // Skip the total when it just repeats the serial ("61st ... out of 61").
-              <span className="text-osu-f1">
-                {" "}
-                <Trans>out of {shared.mintedTotal.toLocaleString("en-US")}</Trans>
-              </span>
+            {shared.mintedTotal > 0 && shared.mintedTotal !== shared.serial ? (
+              <Trans>Copy #{shared.serial.toLocaleString("en-US")} of {shared.mintedTotal.toLocaleString("en-US")}</Trans>
+            ) : (
+              <Trans>Copy #{shared.serial.toLocaleString("en-US")}</Trans>
             )}
           </div>
         )}

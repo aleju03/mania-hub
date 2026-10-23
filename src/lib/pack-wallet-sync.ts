@@ -46,8 +46,8 @@ export interface ServerPackCollectionCard {
   recycledCopies: number;
   firstPulledAt: number;
   lastPulledAt: number;
-  /* Mint order for this collector, and the serials the card has handed out in
-     total. Server-side only: a browser-local wallet has no serials. */
+  /* The holding's lowest copy number, and the numbers the card has handed out
+     in total. Server-side only: a browser-local wallet has no serials. */
   serial?: number | null;
   mintedTotal?: number;
   /* When this holding was granted or gifted, null for a pulled one. */
@@ -55,6 +55,8 @@ export interface ServerPackCollectionCard {
   /* Who gave it, for a holding that arrived as an accepted gift. Null for a
      pull and for a grant-desk card, which has no person behind it. */
   giftedBy?: { userId: number; username: string } | null;
+  /* Who pulled the copy shown, when someone else did and gifted it on. */
+  serialFrom?: { userId: number; username: string; pulledAt: number; pulled: boolean } | null;
   /* A team card pinned to a showcase ("team:<id>", userId the negative team
      id), and whether the showcase's owner is on that team. */
   team?: PackTeamCard;
@@ -415,8 +417,8 @@ function sanitizeCardKey(value: string): string | null {
   return variant > 0 ? `${userId}:v${variant}` : null;
 }
 
-/* What the pull log minted: the serial this account now holds each card at,
-   and how many serials that card has ever handed out. */
+/* What the pull log minted: the number of the copy just pulled of each card,
+   and how many numbers that card has ever handed out. */
 export interface PackPullMint {
   userId: number;
   cardKey: string;

@@ -4,8 +4,6 @@ import { motion } from "framer-motion";
 import { Check, Recycle } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { formatOrdinal } from "#/lib/format";
-import { useLocale } from "#/lib/locale-context";
 import {
   copiesShardValue,
   duplicateShardValueForTier,
@@ -141,7 +139,6 @@ export function PackSummary({
   run = null,
 }: PackSummaryProps) {
   const { t } = useLingui();
-  const locale = useLocale();
   const instant = flyFrom !== null;
   /* The ring marks the best card in the hand, which is a tier question before
      it is a rank one: an honorary card carries no meaningful global rank, so
@@ -797,16 +794,12 @@ export function PackSummary({
                 </div>
                 {(() => {
                   const mint = serials?.get(card.player.cardKey ?? packCardKey(card.player.user.id, card.tier));
-                  // "First ever" is the server's call, not serial 1: a repull
-                  // of a card you already hold hands back your old serial, so
-                  // a serial-1 holding resurfacing months later must not read
-                  // as if this pull were the card's first anywhere. Everything
-                  // short of first-global renders as a plain ordinal with the
-                  // pull count ("1st of 97 to pull this"), so being an early
-                  // number never masquerades as being the only one.
+                  // "First ever" is the server's call: the pull log knows
+                  // whether anyone had this card before. Everything else is
+                  // the number of the copy just pulled.
                   const first = mint?.isFirstGlobal ?? false;
-                  // Being the newest holder makes the count repeat the serial
-                  // ("61st of 61"), so drop the total in that case.
+                  // The newest copy makes the count repeat the number
+                  // ("#61 of 61"), so drop the total in that case.
                   const latest = mint ? mint.serial === mint.mintedTotal : false;
                   return (
                     <div
@@ -823,8 +816,8 @@ export function PackSummary({
                         ? first
                           ? t`first ever to pull this`
                           : latest
-                            ? t`${formatOrdinal(mint.serial, locale)} to pull this`
-                            : t`${formatOrdinal(mint.serial, locale)} of ${mint.mintedTotal.toLocaleString("en-US")} to pull this`
+                            ? t`copy #${mint.serial.toLocaleString("en-US")}`
+                            : t`copy #${mint.serial.toLocaleString("en-US")} of ${mint.mintedTotal.toLocaleString("en-US")}`
                         : null}
                     </div>
                   );

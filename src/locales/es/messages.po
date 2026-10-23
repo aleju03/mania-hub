@@ -32,17 +32,25 @@ msgid " or "
 msgstr " o "
 
 #: src/components/packs/CardSpotlight.tsx
-msgid ", {ordinalText} of {totalText} to pull it"
-msgstr ", {ordinalText} de {totalText} en sacar esta carta"
+#~ msgid ", {ordinalText} of {totalText} to pull it"
+#~ msgstr ", {ordinalText} de {totalText} en sacar esta carta"
 
 #: src/components/packs/CardSpotlight.tsx
-msgid ", {ordinalText} to pull it"
-msgstr ", {ordinalText} en sacar esta carta"
+#~ msgid ", {ordinalText} to pull it"
+#~ msgstr ", {ordinalText} en sacar esta carta"
 
 #. placeholder {0}: formatNumber(collector.firstFinds)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid ", and got to <0>{0}</0> of their cards first"
 msgstr ", y llegó primero a <0>{0}</0> de sus cartas"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid ", copy #{serialText}"
+msgstr ", copia #{serialText}"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid ", copy #{serialText} of {totalText}"
+msgstr ", copia #{serialText} de {totalText}"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid ", hidden from everyone else"
@@ -174,6 +182,11 @@ msgstr "{0, plural, one {# equipo coincidente} other {# equipos coincidentes}}"
 #: src/components/communities/CommunityCard.tsx
 msgid "{0, plural, one {# member} other {# members}}"
 msgstr "{0, plural, one {# miembro} other {# miembros}}"
+
+#. placeholder {0}: rank.months
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{0, plural, one {# month} other {# months}} in a row"
+msgstr "{0, plural, one {# mes seguido} other {# meses seguidos}}"
 
 #. placeholder {0}: visibleSnapshot?.belowGainFloorCount ?? 0
 #: src/routes/recommendations.tsx
@@ -642,8 +655,8 @@ msgstr "{0} de {1} plays analizadas"
 #. placeholder {0}: formatOrdinal(mint.serial, locale)
 #. placeholder {1}: mint.mintedTotal.toLocaleString("en-US")
 #: src/components/packs/PackSummary.tsx
-msgid "{0} of {1} to pull this"
-msgstr "{0} de {1} en sacar esta carta"
+#~ msgid "{0} of {1} to pull this"
+#~ msgstr "{0} de {1} en sacar esta carta"
 
 #. placeholder {0}: maps.length
 #: src/components/player/ActivityPanel.tsx
@@ -697,8 +710,8 @@ msgstr "{0} personas tienen tu carta"
 
 #. placeholder {0}: formatOrdinal(shared.serial, locale)
 #: src/routes/pull/$ownerId/$cardId.tsx
-msgid "{0} person to pull this card"
-msgstr "{0} persona en sacar esta carta"
+#~ msgid "{0} person to pull this card"
+#~ msgstr "{0} persona en sacar esta carta"
 
 #. placeholder {0}: formatNumber(segment.playCount)
 #: src/components/player/ActivityPanel.tsx
@@ -815,8 +828,8 @@ msgstr "{0} a {1}"
 
 #. placeholder {0}: formatOrdinal(mint.serial, locale)
 #: src/components/packs/PackSummary.tsx
-msgid "{0} to pull this"
-msgstr "{0} en sacar esta carta"
+#~ msgid "{0} to pull this"
+#~ msgstr "{0} en sacar esta carta"
 
 #. placeholder {0}: compact(sessions.sessions)
 #: src/components/me/MyStatsInsights.tsx
@@ -1036,6 +1049,10 @@ msgstr "{checked}/{toCheck} jugadores revisados · {replaysFound} replays encont
 #: src/components/packs/album/AlbumView.tsx
 msgid "{collectedShown}/{0} collected"
 msgstr "{collectedShown}/{0} obtenidas"
+
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "{copies} copies held, next level at {next}"
+msgstr "{copies} copias obtenidas, siguiente nivel a las {next}"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "{count, plural, one {# card} other {# cards}}"
@@ -1359,6 +1376,10 @@ msgstr "hace {mins}m"
 msgid "{mod}: {pct}% of plays"
 msgstr "{mod}: {pct}% de las plays"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{months, plural, one {# month} other {# months}} in a row"
+msgstr "{months, plural, one {# mes seguido} other {# meses seguidos}}"
+
 #: src/lib/changelog.ts
 #: src/lib/format.ts
 msgid "{months} months ago"
@@ -1425,6 +1446,11 @@ msgstr "{name} no está entre ellos."
 msgid "{name} joined in {month}."
 msgstr "{name} se unió en {month}."
 
+#. placeholder {0}: rank.months
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{name}, {0, plural, one {# month} other {# months}} in a row"
+msgstr "{name}, {0, plural, one {# mes seguido} other {# meses seguidos}}"
+
 #: src/lib/streak-game.ts
 msgid "{name}'s oldest top play is from {month}."
 msgstr "El top play más antiguo de {name} es de {month}."
@@ -1460,6 +1486,10 @@ msgstr "{giverLink} le regaló esta carta a {nameLink} el {dateText}"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "{newCount} new this rotation"
 msgstr "{newCount} nuevos en esta rotación"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{nextName} in {days, plural, one {# day} other {# days}}"
+msgstr "{nextName} en {days, plural, one {# día} other {# días}}"
 
 #: src/components/packs/PackSummary.tsx
 msgid "{nextPackShardCost} shards"
@@ -1803,6 +1833,15 @@ msgstr "#{0} de {1} jugadores registrados"
 msgid "#{grouped}"
 msgstr "#{grouped}"
 
+#: src/components/packs/GiftInbox.tsx
+msgid "#{serialText}"
+msgstr "#{serialText}"
+
+#. placeholder {0}: card.mintedTotal.toLocaleString("en-US")
+#: src/components/packs/GiftInbox.tsx
+msgid "#{serialText} of {0}"
+msgstr "#{serialText} de {0}"
+
 #. placeholder {0}: E.jumpstream[band]
 #. placeholder {1}: E.jumpstreamCap
 #: src/lib/chain-run.ts
@@ -1989,6 +2028,10 @@ msgstr "<0/> foils"
 #: src/routes/support.tsx
 msgid "<0/> frames"
 msgstr "<0/> marcos"
+
+#: src/routes/support.tsx
+msgid "<0/> ranks"
+msgstr "<0/> rangos"
 
 #: src/routes/support.tsx
 msgid "<0/> styles, <1/> fonts"
@@ -2400,6 +2443,10 @@ msgstr "Aparece un <0><1>punto</1></0> junto a <2>novedades</2> al final de la p
 #: src/routes/dan-estimates.tsx
 msgid "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 msgstr "Un chart de 4K es LN cuando los holds son al menos el 45% de sus notas y esos holds todavía piden soltar de verdad a la velocidad que jugaste. Si los holds son tan cortos que se tocan como notas normales, el chart es regular. En 7K la línea está en 37.5%."
+
+#: src/routes/support.tsx
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
+msgstr "Una insignia junto a tu nombre que sube un rango por cada mes seguido que eres supporter, desde Cobre hasta Holo."
 
 #: src/lib/chain-run.ts
 msgid "A break halves the combo instead of ending it, and each break multiplies the row by 1.4."
@@ -3105,6 +3152,10 @@ msgstr "Revelar todas siempre"
 #: src/components/layout/ThemePicker.tsx
 msgid "amber"
 msgstr "ámbar"
+
+#: src/lib/supporter-ranks.ts
+msgid "Amethyst"
+msgstr "Amatista"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "an external application"
@@ -4011,6 +4062,10 @@ msgstr "Traer al frente"
 #: src/components/packs/run/RunScoring.tsx
 msgid "BROKE"
 msgstr "ROTO"
+
+#: src/lib/supporter-ranks.ts
+msgid "Bronze"
+msgstr "Bronce"
 
 #: src/components/supporter/loadout.ts
 msgid "Bronze laurel"
@@ -5318,12 +5373,38 @@ msgstr "Copias"
 msgid "copies in circulation"
 msgstr "copias en circulación"
 
+#: src/lib/supporter-ranks.ts
+msgid "Copper"
+msgstr "Cobre"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/replay/ShareClipButton.tsx
 msgid "Copy"
 msgstr "Copiar"
+
+#. placeholder {0}: mint.serial.toLocaleString("en-US")
+#: src/components/packs/PackSummary.tsx
+msgid "copy #{0}"
+msgstr "copia #{0}"
+
+#. placeholder {0}: shared.serial.toLocaleString("en-US")
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "Copy #{0}"
+msgstr "Copia #{0}"
+
+#. placeholder {0}: mint.serial.toLocaleString("en-US")
+#. placeholder {1}: mint.mintedTotal.toLocaleString("en-US")
+#: src/components/packs/PackSummary.tsx
+msgid "copy #{0} of {1}"
+msgstr "copia #{0} de {1}"
+
+#. placeholder {0}: shared.serial.toLocaleString("en-US")
+#. placeholder {1}: shared.mintedTotal.toLocaleString("en-US")
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "Copy #{0} of {1}"
+msgstr "Copia #{0} de {1}"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -5915,9 +5996,14 @@ msgstr "Croata"
 msgid "crop {0}×{1}"
 msgstr "recortar {0}×{1}"
 
+#: src/components/supporter/loadout.ts
 #: src/lib/pack-run.ts
 msgid "Crown"
 msgstr "Corona"
+
+#: src/components/supporter/loadout.ts
+msgid "Crowns"
+msgstr "Coronas"
 
 #: src/components/supporter/loadout.ts
 msgid "CRT monitor"
@@ -6318,6 +6404,10 @@ msgstr "DFJK"
 #: src/components/supporter/loadout.ts
 msgid "Dialogue box"
 msgstr "Cuadro de diálogo"
+
+#: src/lib/supporter-ranks.ts
+msgid "Diamond"
+msgstr "Diamante"
 
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
@@ -6858,6 +6948,10 @@ msgstr "Élite"
 #: src/lib/supporter-pack-style.ts
 msgid "Ember"
 msgstr "Brasa"
+
+#: src/lib/supporter-ranks.ts
+msgid "Emerald"
+msgstr "Esmeralda"
 
 #: src/lib/pack-run.ts
 msgid "Encore"
@@ -8148,6 +8242,11 @@ msgstr "Se basa en el país de la cuenta de osu! de cada quien, y cualquiera que
 msgid "Gold"
 msgstr "Dorado"
 
+#: src/lib/supporter-ranks.ts
+msgctxt "supporter rank"
+msgid "Gold"
+msgstr "Oro"
+
 #: src/lib/pack-run.ts
 msgid "Gold pack"
 msgstr "Pack dorado"
@@ -8630,6 +8729,7 @@ msgstr "Tiene <0>{0}</0> de las <1>{1}</1> cartas coleccionables, <2>{poolPercen
 
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
+#: src/lib/supporter-ranks.ts
 msgid "Holo"
 msgstr "Holo"
 
@@ -10659,8 +10759,16 @@ msgid "Master sets"
 msgstr "Colecciones maestras"
 
 #: src/components/packs/run/MasteryBadge.tsx
-msgid "Mastery {level}: {copies} copies held, next at {next}"
-msgstr "Maestría {level}: {copies} copias obtenidas, la siguiente a las {next}"
+msgid "Mastery {level}"
+msgstr "Maestría {level}"
+
+#: src/components/packs/run/MasteryBadge.tsx
+#~ msgid "Mastery {level}: {copies} copies held, next at {next}"
+#~ msgstr "Maestría {level}: {copies} copias obtenidas, la siguiente a las {next}"
+
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
+msgstr "Maestría {level}: {copies} copias obtenidas, la siguiente a las {next}. Los duplicados se reciclan con +{bonus}%."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
@@ -10920,6 +11028,10 @@ msgstr "Lun"
 #: src/components/me/MyDataPanel.tsx
 msgid "Mondays"
 msgstr "Lunes"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Month {month}"
+msgstr "Mes {month}"
 
 #: src/components/layout/Nav.tsx
 msgid "more"
@@ -12499,6 +12611,10 @@ msgstr "Solo números"
 msgid "objects"
 msgstr "objetos"
 
+#: src/lib/supporter-ranks.ts
+msgid "Obsidian"
+msgstr "Obsidiana"
+
 #: src/components/packs/CardSpotlight.tsx
 msgid "Obtained"
 msgstr "Obtenida"
@@ -12676,6 +12792,11 @@ msgstr "Un código por cada $3"
 #: src/routes/support.tsx
 #~ msgid "One code per payment"
 #~ msgstr "Un código por pago"
+
+#. placeholder {0}: shown.toLocaleString("en-US")
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "One copy for a friend, #{0}. You keep {remaining}."
+msgstr "Una copia para un amigo, la #{0}. Te quedas con {remaining}."
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -13131,8 +13252,13 @@ msgstr "Otras reglas"
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
-msgid "out of {0}"
-msgstr "de {0}"
+#~ msgid "out of {0}"
+#~ msgstr "de {0}"
+
+#. placeholder {0}: held.minted.toLocaleString("en-US")
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Out of {0} copies numbered so far."
+msgstr "De {0} copias numeradas hasta ahora."
 
 #: src/components/packs/StreakGame.tsx
 msgid "Out of time."
@@ -14343,6 +14469,24 @@ msgstr "Sacada de nuevo por"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "Pulled by"
 msgstr "Sacada por"
+
+#. placeholder {0}: card.serialFrom.username
+#: src/components/packs/GiftInbox.tsx
+msgid "pulled by {0}"
+msgstr "sacada por {0}"
+
+#. placeholder {0}: pulledBy.username
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Pulled by {0}"
+msgstr "Sacada por {0}"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "Pulled by {pullerLink}"
+msgstr "Sacada por {pullerLink}"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "Pulled by {pullerLink} on {pulledText}"
+msgstr "Sacada por {pullerLink} el {pulledText}"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Pulled on {dateText}"
@@ -15565,6 +15709,10 @@ msgstr "Las filas con todas las rarezas distintas puntúan x3.5."
 msgid "Rows start at combo {startCombo}"
 msgstr "Las filas empiezan con {startCombo} de combo"
 
+#: src/lib/supporter-ranks.ts
+msgid "Ruby"
+msgstr "Rubí"
+
 #: src/routes/snipes.tsx
 msgid "Rules"
 msgstr "Reglas"
@@ -15605,6 +15753,10 @@ msgstr "Ruso"
 #: src/lib/supporter-profile-themes.ts
 msgid "Sakura"
 msgstr "Sakura"
+
+#: src/lib/supporter-ranks.ts
+msgid "Sapphire"
+msgstr "Zafiro"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
@@ -16090,8 +16242,8 @@ msgid "Second pull"
 msgstr "Segunda en sacarse"
 
 #: src/components/packs/collections/CardMarks.tsx
-msgid "Second to pull this card"
-msgstr "Segundo en sacar esta carta"
+#~ msgid "Second to pull this card"
+#~ msgstr "Segundo en sacar esta carta"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "See every command"
@@ -16216,6 +16368,12 @@ msgstr "Enviando..."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Sending…"
 msgstr "Enviando…"
+
+#. placeholder {0}: sendSerial.toLocaleString("en-US")
+#. placeholder {1}: recipient?.username ?? ""
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Sent #{0} to {1}."
+msgstr "Enviaste la #{0} a {1}."
 
 #: src/routes/report.tsx
 msgid "Sent along with it:"
@@ -16846,6 +17004,10 @@ msgstr "Sesión iniciada como {0}. Conexiones activas: {activeInstallations}."
 msgid "Signed in as {0}. Nothing is connected yet."
 msgstr "Sesión iniciada como {0}. Todavía no hay nada conectado."
 
+#: src/lib/supporter-ranks.ts
+msgid "Silver"
+msgstr "Plata"
+
 #: src/lib/pack-run.ts
 msgid "Silver pack"
 msgstr "Pack plateado"
@@ -17326,6 +17488,10 @@ msgstr "Spam o publicidad"
 msgid "Spanish"
 msgstr "Español"
 
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "Spares recycle for +{bonus}%"
+msgstr "Los duplicados se reciclan con +{bonus}%"
+
 #: src/components/player/LivePresence.tsx
 msgid "Spectating"
 msgstr "Espectando"
@@ -17598,6 +17764,10 @@ msgstr "Estadísticas y top play"
 msgid "Status"
 msgstr "Estado"
 
+#: src/lib/supporter-ranks.ts
+msgid "Steel"
+msgstr "Acero"
+
 #: src/components/supporter/loadout.ts
 msgid "Stellium"
 msgstr "Stellium"
@@ -17831,6 +18001,11 @@ msgstr "Supporter"
 #: src/components/layout/Nav.tsx
 msgid "Supporter perks"
 msgstr "Beneficios de supporter"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+#: src/routes/support.tsx
+msgid "Supporter ranks"
+msgstr "Rangos de supporter"
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 #: src/routes/supporter.tsx
@@ -18161,6 +18336,10 @@ msgstr "Ese chart no está en osu!."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "That collector is no longer available."
 msgstr "Ese coleccionista ya no está disponible."
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "That copy is already promised to someone or no longer yours. Pick another."
+msgstr "Esa copia ya está prometida a alguien o ya no es tuya. Elige otra."
 
 #: src/components/packs/run/RunCharmRail.tsx
 #: src/components/packs/run/RunShop.tsx
@@ -18910,6 +19089,10 @@ msgstr "No se pudieron guardar los nombres de las capturas. Inténtalo de nuevo.
 msgid "The second card in each row also has every trait of the first."
 msgstr "La segunda carta de cada fila también tiene todos los rasgos de la primera."
 
+#: src/components/packs/collections/CardMarks.tsx
+msgid "The second copy ever pulled"
+msgstr "La segunda copia que se sacó"
+
 #: src/routes/legal.tsx
 msgid "The server defaults to a global osu! API limiter that targets 45 requests per minute and enforces a hard cap of 60 requests per minute."
 msgstr "El servidor usa de forma predeterminada un limitador global de la API de osu! que apunta a 45 peticiones por minuto e impone un tope estricto de 60 peticiones por minuto."
@@ -19038,6 +19221,10 @@ msgstr "El objetivo sube {0}% después de cada pack."
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
 msgstr "El cliente de prueba guarda su clave de firma en este navegador y sus tokens solo en memoria, así que al recargar la página hay que conectar de nuevo. Todo lo que envía se marca como evidencia de prueba y se elimina automáticamente después de una semana."
 
+#: src/components/packs/collections/CardMarks.tsx
+msgid "The third copy ever pulled"
+msgstr "La tercera copia que se sacó"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
 msgstr "El analizador de mapas está calificando los top plays. El primer pase tarda uno o dos minutos."
@@ -19049,6 +19236,10 @@ msgstr "Los top plays ya tienen turno en el analizador de charts. El próximo c�
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are waiting for the chart analyzer. Position in queue: {position}"
 msgstr "Los top plays están esperando al analizador de mapas. Posición en la fila: {position}"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "The top rank"
+msgstr "El rango más alto"
 
 #: src/components/packs/StreakGame.tsx
 msgid "The tracked player pool is too small to play right now."
@@ -19155,8 +19346,8 @@ msgid "Third pull"
 msgstr "Tercera en sacarse"
 
 #: src/components/packs/collections/CardMarks.tsx
-msgid "Third to pull this card"
-msgstr "Tercero en sacar esta carta"
+#~ msgid "Third to pull this card"
+#~ msgstr "Tercero en sacar esta carta"
 
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -20981,6 +21172,10 @@ msgstr "Dónde quedan los jugadores"
 msgid "Where to see it"
 msgstr "Dónde verlo"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Which copy"
+msgstr "Qué copia"
+
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"
 msgstr "Qué plays se miran"
@@ -21823,87 +22018,3 @@ msgstr "Fumo de Yuyuko"
 #: src/lib/supporter-pack-style.ts
 msgid "Zip binder"
 msgstr "Carpeta con cierre"
-
-#. placeholder {0}: rank.months
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "{0, plural, one {# month} other {# months}} in a row"
-msgstr "{0, plural, one {# mes seguido} other {# meses seguidos}}"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "{months, plural, one {# month} other {# months}} in a row"
-msgstr "{months, plural, one {# mes seguido} other {# meses seguidos}}"
-
-#. placeholder {0}: rank.months
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "{name}, {0, plural, one {# month} other {# months}} in a row"
-msgstr "{name}, {0, plural, one {# mes seguido} other {# meses seguidos}}"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "{nextName} in {days, plural, one {# day} other {# days}}"
-msgstr "{nextName} en {days, plural, one {# día} other {# días}}"
-
-#: src/routes/support.tsx
-msgid "<0/> ranks"
-msgstr "<0/> rangos"
-
-#: src/routes/support.tsx
-msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
-msgstr "Una insignia junto a tu nombre que sube un rango por cada mes seguido que eres supporter, desde Cobre hasta Holo."
-
-#: src/lib/supporter-ranks.ts
-msgid "Amethyst"
-msgstr "Amatista"
-
-#: src/lib/supporter-ranks.ts
-msgid "Bronze"
-msgstr "Bronce"
-
-#: src/lib/supporter-ranks.ts
-msgid "Copper"
-msgstr "Cobre"
-
-#: src/lib/supporter-ranks.ts
-msgid "Diamond"
-msgstr "Diamante"
-
-#: src/lib/supporter-ranks.ts
-msgid "Emerald"
-msgstr "Esmeralda"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "Month {month}"
-msgstr "Mes {month}"
-
-#: src/lib/supporter-ranks.ts
-msgid "Obsidian"
-msgstr "Obsidiana"
-
-#: src/lib/supporter-ranks.ts
-msgid "Ruby"
-msgstr "Rubí"
-
-#: src/lib/supporter-ranks.ts
-msgid "Sapphire"
-msgstr "Zafiro"
-
-#: src/lib/supporter-ranks.ts
-msgid "Silver"
-msgstr "Plata"
-
-#: src/lib/supporter-ranks.ts
-msgid "Steel"
-msgstr "Acero"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-#: src/routes/support.tsx
-msgid "Supporter ranks"
-msgstr "Rangos de supporter"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "The top rank"
-msgstr "El rango más alto"
-
-#: src/lib/supporter-ranks.ts
-msgctxt "supporter rank"
-msgid "Gold"
-msgstr "Oro"

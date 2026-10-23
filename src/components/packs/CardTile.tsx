@@ -9,7 +9,7 @@ import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnap
 import { effectiveCardLook } from "#/lib/supporter-card-looks";
 import type { RunEdition } from "#/lib/pack-run";
 import { EditionSheen } from "./run/EditionSheen";
-import { MasteryBadge } from "./run/MasteryBadge";
+import { MasteryBadge, MasteryRim } from "./run/MasteryBadge";
 import {
   cardThumbnailKeyForCollectionCard,
   cardThumbnailKeyForData,
@@ -226,13 +226,14 @@ export function CollectionCardTile({
   onThumbnailError,
   showCopies = true,
   edition = null,
-  mastery = false,
+  mastery = true,
 }: {
   card: CollectedCard;
   thumbnail: string | null;
   /* The best edition this collector has pulled the card in (the pack run). */
   edition?: RunEdition | null;
-  /* Draw the mastery gem; on for the holder's own shelf while runs are on. */
+  /* Draw the mastery gem and rim. Off where the copy counts on the card are
+     not the holder's (a gift still on offer). */
   mastery?: boolean;
   /* Repairing a card collected before skills snapshots existed is the holder's
      business and costs an osu! read, so a surface showing somebody else's
@@ -318,6 +319,7 @@ export function CollectionCardTile({
           x{card.copies}
         </span>
       )}
+      {mastery && <MasteryRim copies={card.copies + (card.recycledCopies ?? 0)} />}
       {mastery && <MasteryBadge copies={card.copies + (card.recycledCopies ?? 0)} />}
     </div>
   );

@@ -6,7 +6,8 @@ import { Check, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
-import { formatDate, formatOrdinal } from "#/lib/format";
+import { formatDate } from "#/lib/format";
+import { MasteryLine } from "./run/MasteryBadge";
 import { useLocale } from "#/lib/locale-context";
 import { useViewerTimeZone } from "#/lib/use-viewer-time-zone";
 import { fetchLivePackCardGifts, fetchLivePackCardStats, isLiveBackendConfigured, packCollectorParam, type LivePackCardGifts } from "#/lib/live-backend";
@@ -513,22 +514,50 @@ export function CardSpotlight({
                       }
                       return dateText ? <Trans>Pulled on {dateText}</Trans> : <Trans>Pulled</Trans>;
                     })()}
-                    {!card.grantedAt && card.serial ? (
+                    {/* The copy's number, whoever pulled it and however it
+                        got here: every copy has one, so it says nothing a
+                        grant or a gift would make untrue. */}
+                    {card.serial ? (
                       <span className={`tabular-nums ${card.serial === 1 ? "font-bold text-amber-300" : ""}`}>
                         {(() => {
-                          const ordinalText = formatOrdinal(card.serial, locale);
-                          // Skip the total when it just repeats the serial ("61st of 61").
+                          const serialText = card.serial.toLocaleString("en-US");
+                          // Skip the total when it just repeats the number ("#61 of 61").
                           if (card.mintedTotal && card.mintedTotal !== card.serial) {
                             const totalText = card.mintedTotal.toLocaleString("en-US");
-                            return <Trans>, {ordinalText} of {totalText} to pull it</Trans>;
+                            return <Trans>, copy #{serialText} of {totalText}</Trans>;
                           }
-                          return <Trans>, {ordinalText} to pull it</Trans>;
+                          return <Trans>, copy #{serialText}</Trans>;
                         })()}
                       </span>
                     ) : null}
+                    {/* A copy that came from someone else still says who
+                        pulled it. Its own line: the one above is about how
+                        this holder got the card. */}
+                    {card.serialFrom?.pulled ? (() => {
+                      const from = card.serialFrom;
+                      const pullerLink = (
+                        <Link
+                          to="/packs/collections"
+                          search={{ collector: packCollectorParam(from) }}
+                          preload="intent"
+                          className="font-semibold text-white transition-colors hover:text-osu-pink-light"
+                        >
+                          <UsernameText username={from.username} userId={from.userId} />
+                        </Link>
+                      );
+                      const pulledText = from.pulledAt > 0 ? formatDate(new Date(from.pulledAt).toISOString(), viewerTimeZone, locale) : null;
+                      return (
+                        <span className="mt-0.5 block">
+                          {pulledText ? <Trans>Pulled by {pullerLink} on {pulledText}</Trans> : <Trans>Pulled by {pullerLink}</Trans>}
+                        </span>
+                      );
+                    })() : null}
                   </span>
                 </div>
               ) : null}
+              {/* Mastery, for anyone looking: the copies a collector has
+                  been through are part of what a card on their shelf says. */}
+              <MasteryLine copies={card.copies + (card.recycledCopies ?? 0)} own={!showcasedBy && target?.ownerUserId == null} />
               {/* The gifts the holding itself cannot account for. One line
                   however many there were: a card given ten times is a tally,
                   not ten receipts. Said as history rather than as a count of

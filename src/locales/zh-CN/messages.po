@@ -41,17 +41,25 @@ msgid " or "
 msgstr " 或 "
 
 #: src/components/packs/CardSpotlight.tsx
-msgid ", {ordinalText} of {totalText} to pull it"
-msgstr "，是{ordinalText} 个抽到的（共 {totalText} 人）"
+#~ msgid ", {ordinalText} of {totalText} to pull it"
+#~ msgstr "，是{ordinalText} 个抽到的（共 {totalText} 人）"
 
 #: src/components/packs/CardSpotlight.tsx
-msgid ", {ordinalText} to pull it"
-msgstr "，是{ordinalText} 个抽到的"
+#~ msgid ", {ordinalText} to pull it"
+#~ msgstr "，是{ordinalText} 个抽到的"
 
 #. placeholder {0}: formatNumber(collector.firstFinds)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid ", and got to <0>{0}</0> of their cards first"
 msgstr "，并且抢先拿到了其中 <0>{0}</0> 张卡片"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid ", copy #{serialText}"
+msgstr "，第 #{serialText} 份"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid ", copy #{serialText} of {totalText}"
+msgstr "，第 #{serialText} 份（共 {totalText} 份）"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid ", hidden from everyone else"
@@ -183,6 +191,11 @@ msgstr "{0, plural, other {# 个匹配的战队}}"
 #: src/components/communities/CommunityCard.tsx
 msgid "{0, plural, one {# member} other {# members}}"
 msgstr "{0, plural, other {# 名成员}}"
+
+#. placeholder {0}: rank.months
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{0, plural, one {# month} other {# months}} in a row"
+msgstr "连续 {0, plural, other {# 个月}}"
 
 #. placeholder {0}: visibleSnapshot?.belowGainFloorCount ?? 0
 #: src/routes/recommendations.tsx
@@ -651,8 +664,8 @@ msgstr "已分析 {1} 次游玩中的 {0} 次"
 #. placeholder {0}: formatOrdinal(mint.serial, locale)
 #. placeholder {1}: mint.mintedTotal.toLocaleString("en-US")
 #: src/components/packs/PackSummary.tsx
-msgid "{0} of {1} to pull this"
-msgstr "是 {1} 人中{0} 个抽到这张的"
+#~ msgid "{0} of {1} to pull this"
+#~ msgstr "是 {1} 人中{0} 个抽到这张的"
 
 #. placeholder {0}: maps.length
 #: src/components/player/ActivityPanel.tsx
@@ -706,8 +719,8 @@ msgstr "有 {0} 人持有你的卡片"
 
 #. placeholder {0}: formatOrdinal(shared.serial, locale)
 #: src/routes/pull/$ownerId/$cardId.tsx
-msgid "{0} person to pull this card"
-msgstr "{0} 位抽到这张卡片的人"
+#~ msgid "{0} person to pull this card"
+#~ msgstr "{0} 位抽到这张卡片的人"
 
 #. placeholder {0}: formatNumber(segment.playCount)
 #: src/components/player/ActivityPanel.tsx
@@ -824,8 +837,8 @@ msgstr "{0} 到 {1}"
 
 #. placeholder {0}: formatOrdinal(mint.serial, locale)
 #: src/components/packs/PackSummary.tsx
-msgid "{0} to pull this"
-msgstr "是{0} 个抽到这张的"
+#~ msgid "{0} to pull this"
+#~ msgstr "是{0} 个抽到这张的"
 
 #. placeholder {0}: compact(sessions.sessions)
 #: src/components/me/MyStatsInsights.tsx
@@ -1045,6 +1058,10 @@ msgstr "已检查 {checked}/{toCheck} 名玩家 · 找到 {replaysFound} 个回�
 #: src/components/packs/album/AlbumView.tsx
 msgid "{collectedShown}/{0} collected"
 msgstr "已收集 {collectedShown}/{0}"
+
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "{copies} copies held, next level at {next}"
+msgstr "已获得 {copies} 张，下一级需要 {next} 张"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "{count, plural, one {# card} other {# cards}}"
@@ -1368,6 +1385,10 @@ msgstr "{mins} 分钟前"
 msgid "{mod}: {pct}% of plays"
 msgstr "{mod}：占 {pct}% 的成绩"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{months, plural, one {# month} other {# months}} in a row"
+msgstr "连续 {months, plural, other {# 个月}}"
+
 #: src/lib/changelog.ts
 #: src/lib/format.ts
 msgid "{months} months ago"
@@ -1434,6 +1455,11 @@ msgstr "{name} 不在其中。"
 msgid "{name} joined in {month}."
 msgstr "{name} 于 {month} 加入。"
 
+#. placeholder {0}: rank.months
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{name}, {0, plural, one {# month} other {# months}} in a row"
+msgstr "{name}，连续 {0, plural, other {# 个月}}"
+
 #: src/lib/streak-game.ts
 msgid "{name}'s oldest top play is from {month}."
 msgstr "{name} 最早的最佳成绩来自 {month}。"
@@ -1469,6 +1495,10 @@ msgstr "{giverLink} 于 {dateText} 把这张卡片赠送给了 {nameLink}"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "{newCount} new this rotation"
 msgstr "本次轮换新增 {newCount} 张"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{nextName} in {days, plural, one {# day} other {# days}}"
+msgstr "{days, plural, other {# 天}}后升为{nextName}"
 
 #: src/components/packs/PackSummary.tsx
 msgid "{nextPackShardCost} shards"
@@ -1812,6 +1842,15 @@ msgstr "已追踪的 {1} 名玩家中第 #{0}"
 msgid "#{grouped}"
 msgstr "第 {grouped}"
 
+#: src/components/packs/GiftInbox.tsx
+msgid "#{serialText}"
+msgstr "#{serialText}"
+
+#. placeholder {0}: card.mintedTotal.toLocaleString("en-US")
+#: src/components/packs/GiftInbox.tsx
+msgid "#{serialText} of {0}"
+msgstr "#{serialText}（共 {0}）"
+
 #. placeholder {0}: E.jumpstream[band]
 #. placeholder {1}: E.jumpstreamCap
 #: src/lib/chain-run.ts
@@ -1998,6 +2037,10 @@ msgstr "<0/> 种闪膜"
 #: src/routes/support.tsx
 msgid "<0/> frames"
 msgstr "<0/> 个头像框"
+
+#: src/routes/support.tsx
+msgid "<0/> ranks"
+msgstr "<0/> 个段位"
 
 #: src/routes/support.tsx
 msgid "<0/> styles, <1/> fonts"
@@ -2409,6 +2452,10 @@ msgstr "有新更新时，页面底部的<2>更新日志</2>旁会出现一个<0
 #: src/routes/dan-estimates.tsx
 msgid "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速下这些长条仍需要真正的放手时，这张谱面算作 LN。短到可以当普通键点掉的长条会让它算作单点谱面。7K 的界线是 37.5%。"
+
+#: src/routes/support.tsx
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
+msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从铜一路升到镭射。"
 
 #: src/lib/chain-run.ts
 msgid "A break halves the combo instead of ending it, and each break multiplies the row by 1.4."
@@ -3114,6 +3161,10 @@ msgstr "始终全部揭晓"
 #: src/components/layout/ThemePicker.tsx
 msgid "amber"
 msgstr "琥珀"
+
+#: src/lib/supporter-ranks.ts
+msgid "Amethyst"
+msgstr "紫水晶"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "an external application"
@@ -4020,6 +4071,10 @@ msgstr "置于顶层"
 #: src/components/packs/run/RunScoring.tsx
 msgid "BROKE"
 msgstr "损坏"
+
+#: src/lib/supporter-ranks.ts
+msgid "Bronze"
+msgstr "青铜"
 
 #: src/components/supporter/loadout.ts
 msgid "Bronze laurel"
@@ -5327,12 +5382,38 @@ msgstr "数量"
 msgid "copies in circulation"
 msgstr "流通中的卡片"
 
+#: src/lib/supporter-ranks.ts
+msgid "Copper"
+msgstr "铜"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/replay/ShareClipButton.tsx
 msgid "Copy"
 msgstr "复制"
+
+#. placeholder {0}: mint.serial.toLocaleString("en-US")
+#: src/components/packs/PackSummary.tsx
+msgid "copy #{0}"
+msgstr "第 #{0} 份"
+
+#. placeholder {0}: shared.serial.toLocaleString("en-US")
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "Copy #{0}"
+msgstr "第 #{0} 份"
+
+#. placeholder {0}: mint.serial.toLocaleString("en-US")
+#. placeholder {1}: mint.mintedTotal.toLocaleString("en-US")
+#: src/components/packs/PackSummary.tsx
+msgid "copy #{0} of {1}"
+msgstr "第 #{0} 份（共 {1} 份）"
+
+#. placeholder {0}: shared.serial.toLocaleString("en-US")
+#. placeholder {1}: shared.mintedTotal.toLocaleString("en-US")
+#: src/routes/pull/$ownerId/$cardId.tsx
+msgid "Copy #{0} of {1}"
+msgstr "第 #{0} 份（共 {1} 份）"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -5924,8 +6005,13 @@ msgstr "克罗地亚语"
 msgid "crop {0}×{1}"
 msgstr "裁剪 {0}×{1}"
 
+#: src/components/supporter/loadout.ts
 #: src/lib/pack-run.ts
 msgid "Crown"
+msgstr "王冠"
+
+#: src/components/supporter/loadout.ts
+msgid "Crowns"
 msgstr "王冠"
 
 #: src/components/supporter/loadout.ts
@@ -6327,6 +6413,10 @@ msgstr "DFJK"
 #: src/components/supporter/loadout.ts
 msgid "Dialogue box"
 msgstr "对话框"
+
+#: src/lib/supporter-ranks.ts
+msgid "Diamond"
+msgstr "钻石"
 
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
@@ -6867,6 +6957,10 @@ msgstr "精英"
 #: src/lib/supporter-pack-style.ts
 msgid "Ember"
 msgstr "余烬"
+
+#: src/lib/supporter-ranks.ts
+msgid "Emerald"
+msgstr "祖母绿"
 
 #: src/lib/pack-run.ts
 msgid "Encore"
@@ -8157,6 +8251,11 @@ msgstr "以对方 osu! 账号上的国家/地区为准，已经加入的人仍�
 msgid "Gold"
 msgstr "金色"
 
+#: src/lib/supporter-ranks.ts
+msgctxt "supporter rank"
+msgid "Gold"
+msgstr "金"
+
 #: src/lib/pack-run.ts
 msgid "Gold pack"
 msgstr "金色卡包"
@@ -8639,6 +8738,7 @@ msgstr "在 <1>{1}</1> 张可收集卡牌中持有 <0>{0}</0> 张，占 <2>{pool
 
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
+#: src/lib/supporter-ranks.ts
 msgid "Holo"
 msgstr "镭射"
 
@@ -10668,8 +10768,16 @@ msgid "Master sets"
 msgstr "大师套组"
 
 #: src/components/packs/run/MasteryBadge.tsx
-msgid "Mastery {level}: {copies} copies held, next at {next}"
-msgstr "熟练度 {level}：已获得 {copies} 张，下一级需要 {next} 张"
+msgid "Mastery {level}"
+msgstr "熟练度 {level}"
+
+#: src/components/packs/run/MasteryBadge.tsx
+#~ msgid "Mastery {level}: {copies} copies held, next at {next}"
+#~ msgstr "熟练度 {level}：已获得 {copies} 张，下一级需要 {next} 张"
+
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
+msgstr "熟练度 {level}：已获得 {copies} 张，下一级需要 {next} 张。回收重复时多得 {bonus}%。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
@@ -10929,6 +11037,10 @@ msgstr "一"
 #: src/components/me/MyDataPanel.tsx
 msgid "Mondays"
 msgstr "周一"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Month {month}"
+msgstr "第 {month} 个月"
 
 #: src/components/layout/Nav.tsx
 msgid "more"
@@ -12508,6 +12620,10 @@ msgstr "仅数字"
 msgid "objects"
 msgstr "物件数"
 
+#: src/lib/supporter-ranks.ts
+msgid "Obsidian"
+msgstr "黑曜石"
+
 #: src/components/packs/CardSpotlight.tsx
 msgid "Obtained"
 msgstr "已获得"
@@ -12685,6 +12801,11 @@ msgstr "每 $3 一个兑换码"
 #: src/routes/support.tsx
 #~ msgid "One code per payment"
 #~ msgstr "每次付款一个兑换码"
+
+#. placeholder {0}: shown.toLocaleString("en-US")
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "One copy for a friend, #{0}. You keep {remaining}."
+msgstr "送一份给朋友（#{0}），你还保留 {remaining} 份。"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -13140,8 +13261,13 @@ msgstr "其他规则"
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
-msgid "out of {0}"
-msgstr "共 {0} 人"
+#~ msgid "out of {0}"
+#~ msgstr "共 {0} 人"
+
+#. placeholder {0}: held.minted.toLocaleString("en-US")
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Out of {0} copies numbered so far."
+msgstr "目前共编号 {0} 份。"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Out of time."
@@ -14352,6 +14478,24 @@ msgstr "再次抽到的人"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "Pulled by"
 msgstr "抽到的人"
+
+#. placeholder {0}: card.serialFrom.username
+#: src/components/packs/GiftInbox.tsx
+msgid "pulled by {0}"
+msgstr "由 {0} 抽到"
+
+#. placeholder {0}: pulledBy.username
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Pulled by {0}"
+msgstr "由 {0} 抽到"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "Pulled by {pullerLink}"
+msgstr "由 {pullerLink} 抽到"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "Pulled by {pullerLink} on {pulledText}"
+msgstr "由 {pullerLink} 于 {pulledText} 抽到"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Pulled on {dateText}"
@@ -15574,6 +15718,10 @@ msgstr "稀有度各不相同的一排计分 x3.5。"
 msgid "Rows start at combo {startCombo}"
 msgstr "每排以 {startCombo} 连击 开始"
 
+#: src/lib/supporter-ranks.ts
+msgid "Ruby"
+msgstr "红宝石"
+
 #: src/routes/snipes.tsx
 msgid "Rules"
 msgstr "规则"
@@ -15614,6 +15762,10 @@ msgstr "俄语"
 #: src/lib/supporter-profile-themes.ts
 msgid "Sakura"
 msgstr "樱花"
+
+#: src/lib/supporter-ranks.ts
+msgid "Sapphire"
+msgstr "蓝宝石"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
@@ -16099,8 +16251,8 @@ msgid "Second pull"
 msgstr "第二个抽到"
 
 #: src/components/packs/collections/CardMarks.tsx
-msgid "Second to pull this card"
-msgstr "第二个抽到这张卡片"
+#~ msgid "Second to pull this card"
+#~ msgstr "第二个抽到这张卡片"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "See every command"
@@ -16225,6 +16377,12 @@ msgstr "正在发送..."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Sending…"
 msgstr "正在发送…"
+
+#. placeholder {0}: sendSerial.toLocaleString("en-US")
+#. placeholder {1}: recipient?.username ?? ""
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Sent #{0} to {1}."
+msgstr "已把 #{0} 送给 {1}。"
 
 #: src/routes/report.tsx
 msgid "Sent along with it:"
@@ -16855,6 +17013,10 @@ msgstr "当前登录为 {0}，已连接 {activeInstallations} 个。"
 msgid "Signed in as {0}. Nothing is connected yet."
 msgstr "当前登录为 {0}，尚未连接任何设备。"
 
+#: src/lib/supporter-ranks.ts
+msgid "Silver"
+msgstr "银"
+
 #: src/lib/pack-run.ts
 msgid "Silver pack"
 msgstr "银色卡包"
@@ -17335,6 +17497,10 @@ msgstr "垃圾信息或广告"
 msgid "Spanish"
 msgstr "西班牙语"
 
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "Spares recycle for +{bonus}%"
+msgstr "回收重复时多得 {bonus}%"
+
 #: src/components/player/LivePresence.tsx
 msgid "Spectating"
 msgstr "观战中"
@@ -17607,6 +17773,10 @@ msgstr "数据与最佳成绩"
 msgid "Status"
 msgstr "状态"
 
+#: src/lib/supporter-ranks.ts
+msgid "Steel"
+msgstr "钢"
+
 #: src/components/supporter/loadout.ts
 msgid "Stellium"
 msgstr "Stellium"
@@ -17840,6 +18010,11 @@ msgstr "Supporter"
 #: src/components/layout/Nav.tsx
 msgid "Supporter perks"
 msgstr "支持者福利"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+#: src/routes/support.tsx
+msgid "Supporter ranks"
+msgstr "支持者段位"
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 #: src/routes/supporter.tsx
@@ -18170,6 +18345,10 @@ msgstr "这张谱面不在 osu! 上。"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "That collector is no longer available."
 msgstr "该收藏者已不可用。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "That copy is already promised to someone or no longer yours. Pick another."
+msgstr "这份已经许给别人，或已不在你手上。请换一份。"
 
 #: src/components/packs/run/RunCharmRail.tsx
 #: src/components/packs/run/RunShop.tsx
@@ -18919,6 +19098,10 @@ msgstr "截图名称保存失败。请重试。"
 msgid "The second card in each row also has every trait of the first."
 msgstr "每排第二张卡片同时拥有第一张的所有特征。"
 
+#: src/components/packs/collections/CardMarks.tsx
+msgid "The second copy ever pulled"
+msgstr "史上第二份被抽到的"
+
 #: src/routes/legal.tsx
 msgid "The server defaults to a global osu! API limiter that targets 45 requests per minute and enforces a hard cap of 60 requests per minute."
 msgstr "服务器默认使用一个全局 osu! API 限流器，目标为每分钟 45 次请求，并强制执行每分钟 60 次请求的硬上限。"
@@ -19047,6 +19230,10 @@ msgstr "每开一包，目标提高 {0}%。"
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
 msgstr "测试客户端把签名密钥保存在此浏览器中，令牌只存在内存里，所以刷新页面后需要重新连接。它提交的所有内容都会标记为测试数据，一周后自动删除。"
 
+#: src/components/packs/collections/CardMarks.tsx
+msgid "The third copy ever pulled"
+msgstr "史上第三份被抽到的"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
 msgstr "谱面分析器正在为这些最佳成绩评分。第一轮需要一两分钟。"
@@ -19058,6 +19245,10 @@ msgstr "最佳成绩已预约谱面分析器。下一轮将在{when}进行。"
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are waiting for the chart analyzer. Position in queue: {position}"
 msgstr "这些最佳成绩正在等待谱面分析器。队列位置：{position}"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "The top rank"
+msgstr "最高段位"
 
 #: src/components/packs/StreakGame.tsx
 msgid "The tracked player pool is too small to play right now."
@@ -19164,8 +19355,8 @@ msgid "Third pull"
 msgstr "第三个抽到"
 
 #: src/components/packs/collections/CardMarks.tsx
-msgid "Third to pull this card"
-msgstr "第三个抽到这张卡片"
+#~ msgid "Third to pull this card"
+#~ msgstr "第三个抽到这张卡片"
 
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -20990,6 +21181,10 @@ msgstr "玩家分布"
 msgid "Where to see it"
 msgstr "在哪里看"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Which copy"
+msgstr "送哪一份"
+
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"
 msgstr "哪些成绩会被考虑"
@@ -21832,87 +22027,3 @@ msgstr "幽幽子 fumo"
 #: src/lib/supporter-pack-style.ts
 msgid "Zip binder"
 msgstr "拉链卡册"
-
-#. placeholder {0}: rank.months
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "{0, plural, one {# month} other {# months}} in a row"
-msgstr "连续 {0, plural, other {# 个月}}"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "{months, plural, one {# month} other {# months}} in a row"
-msgstr "连续 {months, plural, other {# 个月}}"
-
-#. placeholder {0}: rank.months
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "{name}, {0, plural, one {# month} other {# months}} in a row"
-msgstr "{name}，连续 {0, plural, other {# 个月}}"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "{nextName} in {days, plural, one {# day} other {# days}}"
-msgstr "{days, plural, other {# 天}}后升为{nextName}"
-
-#: src/routes/support.tsx
-msgid "<0/> ranks"
-msgstr "<0/> 个段位"
-
-#: src/routes/support.tsx
-msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
-msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从铜一路升到镭射。"
-
-#: src/lib/supporter-ranks.ts
-msgid "Amethyst"
-msgstr "紫水晶"
-
-#: src/lib/supporter-ranks.ts
-msgid "Bronze"
-msgstr "青铜"
-
-#: src/lib/supporter-ranks.ts
-msgid "Copper"
-msgstr "铜"
-
-#: src/lib/supporter-ranks.ts
-msgid "Diamond"
-msgstr "钻石"
-
-#: src/lib/supporter-ranks.ts
-msgid "Emerald"
-msgstr "祖母绿"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "Month {month}"
-msgstr "第 {month} 个月"
-
-#: src/lib/supporter-ranks.ts
-msgid "Obsidian"
-msgstr "黑曜石"
-
-#: src/lib/supporter-ranks.ts
-msgid "Ruby"
-msgstr "红宝石"
-
-#: src/lib/supporter-ranks.ts
-msgid "Sapphire"
-msgstr "蓝宝石"
-
-#: src/lib/supporter-ranks.ts
-msgid "Silver"
-msgstr "银"
-
-#: src/lib/supporter-ranks.ts
-msgid "Steel"
-msgstr "钢"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-#: src/routes/support.tsx
-msgid "Supporter ranks"
-msgstr "支持者段位"
-
-#: src/components/supporter/SupporterRankBadge.tsx
-msgid "The top rank"
-msgstr "最高段位"
-
-#: src/lib/supporter-ranks.ts
-msgctxt "supporter rank"
-msgid "Gold"
-msgstr "金"
