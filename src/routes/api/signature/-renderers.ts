@@ -979,6 +979,17 @@ function pickMode(
   return modes.find((mode) => mode.keyCount === preferred) ?? modes[0]!;
 }
 
+/* "7K", or "7K | provisional" with a thin vertical rule between the two. */
+function keyModeLabel(mode: MyDataSkillMode, rule: string) {
+  const keys = `${mode.keyCount}K`;
+  if (!mode.provisional) return keys;
+  return [
+    h("span", { key: "keys" }, keys),
+    h("div", { key: "rule", style: { width: "1px", height: "0.9em", margin: "0 7px", background: rule } }),
+    h("span", { key: "provisional" }, "provisional"),
+  ];
+}
+
 function skillsUnavailable(skills: MyDataSkillBreakdown | null): string | null {
   if (!skills) return "Skill ratings are unavailable right now.";
   if (skills.status === "pending") return "The chart analyzer is rating these plays.";
@@ -1187,7 +1198,7 @@ function skillsScoreline(ctx: SignatureRenderContext, scene: SkillsScene): React
     h("div", { key: "body", style: { display: "flex", flexDirection: "column", width: "100%", padding: "14px 24px", gap: "10px" } }, [
       h("div", { key: "head", style: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" } }, [
         h("div", { key: "n", style: { fontWeight: 900 } }, clamp(ctx.resolved.username, 24)),
-        h("div", { key: "k", style: { color: dim } }, `${mode.keyCount}K${mode.provisional ? " · provisional" : ""}`),
+        h("div", { key: "k", style: { display: "flex", alignItems: "center", color: dim } }, keyModeLabel(mode, "rgba(255,255,255,0.18)")),
       ]),
       h("div", { key: "cells", style: { display: "flex", alignItems: "flex-end" } }, [
         cell("overall", scene.overall.toFixed(2), "Overall", accent, 36, 0, overallWidth),
@@ -1371,9 +1382,9 @@ async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
     key: "keys",
     style: {
       display: "flex", padding: "3px 10px", borderRadius: "999px", background: "rgba(255,255,255,0.10)",
-      fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.78)",
+      alignItems: "center", fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.78)",
     },
-  }, `${mode.keyCount}K${mode.provisional ? " · provisional" : ""}`);
+  }, keyModeLabel(mode, "rgba(255,255,255,0.22)"));
 
   const scene: SkillsScene = {
     width: spec.width, height: spec.height, mode, entries, accent, dim, overall, keyChip, layers: background.layers,
