@@ -60,12 +60,13 @@ const FIELD_HEIGHT = 520;
 const HIT_FROM_BOTTOM = 40;
 const KEY_FILTER = ["6k", "7k", "8k"];
 
-// Charts from the article, to start from.
+// Well-played ranked 7K charts, one per kind of pattern, to start from.
 const EXAMPLES: Array<{ beatmapId: number; label: string }> = [
-  { beatmapId: 5074941, label: "Sea of Stars" },
-  { beatmapId: 2617975, label: "Exterminate" },
-  { beatmapId: 2500146, label: "Sink to the Deep Sea World" },
-  { beatmapId: 1527715, label: "STEP by STEP UP" },
+  { beatmapId: 646681, label: "MANIERA" },
+  { beatmapId: 3797369, label: "Materialize Anything" },
+  { beatmapId: 831204, label: "The Limit Does Not Exist" },
+  { beatmapId: 421369, label: "FREEDOM DiVE" },
+  { beatmapId: 1920630, label: "Kawaki Wo Ameku" },
 ];
 
 /** A beatmap id from a pasted id or osu! / site link. */

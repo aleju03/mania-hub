@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useLocale } from "../../lib/locale-context";
+import { formatDate } from "../../lib/format";
 import { ChartTitle, Rating } from "./chart-rows";
 import { ReleaseFigure } from "./ReleaseFigure";
 import { BracketFigure } from "./BracketFigure";
@@ -70,7 +71,7 @@ function LnScaleChart() {
   const { t } = useLingui();
   const locale = useLocale();
   const [hover, setHover] = useState<number | null>(null);
-  const width = 520, height = 220, left = 44, right = 16, top = 16, bottom = 36;
+  const width = 520, height = 220, left = 64, right = 16, top = 16, bottom = 36;
   const xMin = 20, xMax = 45, yMin = -2.5, yMax = 1;
   const x = (v: number) => left + ((v - xMin) / (xMax - xMin)) * (width - left - right);
   const y = (v: number) => top + ((yMax - v) / (yMax - yMin)) * (height - top - bottom);
@@ -87,6 +88,16 @@ function LnScaleChart() {
             <text x={left - 8} y={y(v) + 4} textAnchor="end" fontSize={11} fill="#8f879c">{v > 0 ? `+${v}` : v}</text>
           </g>
         ))}
+        <text
+          x={14}
+          y={(top + height - bottom) / 2}
+          transform={`rotate(-90 14 ${(top + height - bottom) / 2})`}
+          textAnchor="middle"
+          fontSize={11}
+          fill="#8f879c"
+        >
+          {t`Change in v26`}
+        </text>
         {[20, 25, 30, 35, 40, 45].map((v) => (
           <text key={v} x={x(v)} y={height - 14} textAnchor="middle" fontSize={11} fill="#8f879c">{v}</text>
         ))}
@@ -145,36 +156,39 @@ const LN_SCALE_CHARTS: UpdateChart[] = [
 
 function V26() {
   const { t } = useLingui();
+  const locale = useLocale();
   return (
     <article>
       <div className="flex items-baseline gap-3">
         <h2 className="text-2xl font-semibold text-white">Prism v26</h2>
+        <span className="text-[13px] text-osu-f1">{formatDate("2026-10-22", "UTC", locale)}</span>
       </div>
       <p className="mt-4 text-[15px] leading-relaxed text-osu-l2">
         <Trans>
-          v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5.
+          v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts.
         </Trans>
       </p>
 
-      <Change title={<Trans>Letting go of a hold on its own costs less</Trans>}>
+      <Change title={<Trans>Releases with nothing around them count for less</Trans>}>
         <p>
           <Trans>
-            Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or
-            let go around it on the same hand now costs less, so slow charts made of long holds rate lower.
+            Before v26, letting go of a long note counted the same no matter what the rest of your hand was doing. Now a release counts
+            for less when that hand isn't pressing or letting go of anything else around the same time. This mostly lowers slow charts
+            made of long holds.
           </Trans>
         </p>
-        <Figure caption={<Trans>Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26.</Trans>}>
+        <Figure caption={<Trans>Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. The number on each release is how much of its v25 difficulty it still counts for in v26.</Trans>}>
           <ReleaseFigure beatmapId={737488} fromMs={12378} toMs={14878} />
         </Figure>
         <ChartChanges charts={RELEASE_CHARTS} label="LN" />
       </Change>
 
-      <Change title={<Trans>Charts you can mash rate lower</Trans>}>
+      <Change title={<Trans>Mash nerf</Trans>}>
         <p>
           <Trans>
-            On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and
-            rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not
-            checked.
+            On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now
+            judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than
+            reading it, the section is rated as the mash.
           </Trans>
         </p>
         <p>
@@ -218,7 +232,7 @@ function V26() {
         <p>
           <Trans>
             7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with
-            scores on both. They are lower now, and the top of the range is a little higher.
+            scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5.
           </Trans>
         </p>
         <Figure>

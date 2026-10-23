@@ -2490,8 +2490,12 @@ msgid "7K LN ratings"
 msgstr "7K LN 评分"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
-msgstr "根据同时有 LN 和单点成绩的玩家，7K LN 评分在 20 出头到 35 左右这一段，比同水平的单点评分高约 1.5。现在这一段降低了，最高的那一段略有提高。"
+msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
+msgstr "根据同时有 LN 和单点成绩的玩家，7K LN 评分在 20 出头到 35 左右这一段，比同水平的单点评分高约 1.5。v26 中这一段最多降低 1.9，40 以上的评分最多提高 0.5。"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
+#~ msgstr "根据同时有 LN 和单点成绩的玩家，7K LN 评分在 20 出头到 35 左右这一段，比同水平的单点评分高约 1.5。现在这一段降低了，最高的那一段略有提高。"
 
 #: src/routes/dan-estimates.tsx
 msgid "7K LN stays within one level of your General dan, because few hard Tech, Inverse and Release charts exist. Those three still show their own numbers."
@@ -4026,6 +4030,10 @@ msgstr "你的国家/地区玩过的谱面"
 msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Before v26, letting go of a long note counted the same no matter what the rest of your hand was doing. Now a release counts for less when that hand isn't pressing or letting go of anything else around the same time. This mostly lowers slow charts made of long holds."
+msgstr "在 v26 之前，不管同一只手的其他手指在做什么，长条放手的难度都一样。现在，如果这只手在放手前后没有按下或松开别的键，这次放手的难度就会降低。受影响最大的是由长条组成的慢速谱面。"
+
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Beginning of recorded history"
 msgstr "历史记录起点"
@@ -4476,6 +4484,10 @@ msgstr "更换{0}"
 msgid "Change in 7K LN rating by v25 LN rating"
 msgstr "按 v25 LN 评分划分的 7K LN 评分变化"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Change in v26"
+msgstr "v26 中的变化"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
 msgstr "更换谱面"
@@ -4619,8 +4631,8 @@ msgid "Charts that only repeat the same full chord rate closer to a jack now."
 msgstr "只重复同一个全押的谱面，现在的评分更接近叠键。"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Charts you can mash rate lower"
-msgstr "能靠乱拍蒙过的谱面评分更低"
+#~ msgid "Charts you can mash rate lower"
+#~ msgstr "能靠乱拍蒙过的谱面评分更低"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "chasing your first {chaseTarget}pp play"
@@ -7939,8 +7951,12 @@ msgid "Fullscreen"
 msgstr "全屏"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
-msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ 的 0:12。每次放手都标出它在 v26 中保留的 v25 难度比例。"
+#~ msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
+#~ msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ 的 0:12。每次放手都标出它在 v26 中保留的 v25 难度比例。"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. The number on each release is how much of its v25 difficulty it still counts for in v26."
+msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ 的 0:12。每次放手上的数字，是它在 v26 中仍保留的 v25 难度比例。"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 1:18, at half speed. Each ring is a release. On the right it is as big and bright as the share of its cost it keeps in v26."
@@ -9671,8 +9687,8 @@ msgid "Less watched"
 msgstr "更少观看"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Letting go of a hold on its own costs less"
-msgstr "单独放手的难度降低"
+#~ msgid "Letting go of a hold on its own costs less"
+#~ msgstr "单独放手的难度降低"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "light"
@@ -10644,6 +10660,10 @@ msgstr "已标记太难"
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Mash accuracy"
 #~ msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Mash nerf"
+msgstr "乱拍削弱"
 
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Mashed"
@@ -12590,8 +12610,8 @@ msgstr "在 4K 叠键谱面上，通过线以上的加分减半，因为这类�
 #~ msgstr "4K 这边的分项来自成绩本身的 MSD 技能项评分，按谱面上最强的那一项归类：叠(JackSpeed 和 Chordjack)、技(Technical 和 Jumpstream)、速度(Stream)、耐力(Handstream 和 Stamina)。把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密集对拍上会飙得很高，而那种谱面打起来更像技而不是速度，所以一旦把它和 Stream 归在一起，Blastix Riotz [GRAVITY] 这类谱面就会被贴到速度那一格。拿一个装了 25 张真正 gamma 速度谱的谱包来验证，只用 Stream 能把这 25 张全部选中，并且以很大的差距把对拍谱排除掉。"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not checked."
-msgstr "在 OD 低于 5 的谱面上，以固定节拍按下所有键，得分可能接近正常打音符。Prism 现在会检查这一点：如果一段乱拍的得分高于按谱面水平正常游玩，就按乱拍来评分。OD 5 及以上的谱面不做检查。"
+#~ msgid "On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not checked."
+#~ msgstr "在 OD 低于 5 的谱面上，以固定节拍按下所有键，得分可能接近正常打音符。Prism 现在会检查这一点：如果一段乱拍的得分高于按谱面水平正常游玩，就按乱拍来评分。OD 5 及以上的谱面不做检查。"
 
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "on a map"
@@ -12600,6 +12620,10 @@ msgstr "在 OD 低于 5 的谱面上，以固定节拍按下所有键，得分�
 #: src/routes/dan-estimates.tsx
 #~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
 #~ msgstr "在密集谱面上，Stream 和 Technical 的评分经常只差一丝，哪个略微领先几乎等于抛硬币。这种几乎持平的情况通常判给速度，但当 Technical 咬得这么紧、而谱面分析本身也确信这张谱是技时，这次通过就会改归到技。"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
+msgstr "在低 OD 谱面上，判定区间很宽，以固定节拍按下所有键也能打中大部分音符。Prism 现在会用谱面的判定区间来判定这种乱拍：如果一段乱拍能打到 90% 以上，而且比读谱打简单得多，这一段就按乱拍来评分。"
 
 #: src/components/packs/SetsView.tsx
 msgid "On Showcase"
@@ -14929,8 +14953,12 @@ msgid "Release days"
 msgstr "更新日期"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
-msgstr "以前不管同一只手的其他手指忙不忙，长条放手的难度都一样。现在，如果同一只手附近没有其他按下或放手，这次放手的难度更低，所以由长条组成的慢速谱面评分会降低。"
+msgid "Releases with nothing around them count for less"
+msgstr "周围没有其他操作的放手难度降低"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
+#~ msgstr "以前不管同一只手的其他手指忙不忙，长条放手的难度都一样。现在，如果同一只手附近没有其他按下或放手，这次放手的难度更低，所以由长条组成的慢速谱面评分会降低。"
 
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
@@ -20185,6 +20213,14 @@ msgstr "不可用"
 msgid "Uncollected GOAT"
 msgstr "未收集的 GOAT"
 
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Under OD 5 the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
+#~ msgstr "OD 低于 5 时判定区间很宽，以固定节拍按下所有键也能打中大部分音符。Prism 现在会用谱面的判定区间来判定这种乱拍：如果一段乱拍能打到 90% 以上，而且比读谱打简单得多，这一段就按乱拍来评分。"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Under OD 5 the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash. Charts at OD 5 and up are not checked."
+#~ msgstr "OD 低于 5 时判定区间很宽，以固定节拍按下所有键也能打中大部分音符。Prism 现在会用谱面的判定区间来判定这种乱拍：如果一段乱拍能打到 90% 以上，而且比读谱打简单得多，这一段就按乱拍来评分。OD 5 及以上的谱面不做检查。"
+
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Under OD 5, Prism checks whether mashing scores better than playing the notes."
 #~ msgstr ""
@@ -20616,8 +20652,12 @@ msgstr "用户名…"
 #~ msgstr ""
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
-msgstr "v26 主要改动 7K LN 和衩的评分。48,129 张 6K-8K 谱面中有 331 张的总体评分变动，几乎都是 OD 低于 5 的未上架谱面。"
+#~ msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+#~ msgstr "v26 主要改动 7K LN 和衩的评分。48,129 张 6K-8K 谱面中有 331 张的总体评分变动，几乎都是 OD 低于 5 的未上架谱面。"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
+msgstr "v26 主要改动 7K LN 和衩的评分。48,129 张 6K-8K 谱面中有 331 张的总体评分变动，几乎都是低 OD 的未上架谱面。"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "v26 mostly changes 7K LN ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."

@@ -190,7 +190,7 @@ export function MashOdExplorer({ beatmapId, fromMs, toMs }: { beatmapId: number;
 const OD_MAX = 10;
 const OD_STEP = 0.5;
 
-/** OD 0 to 10 in half steps, dragged or keyed. The OD 5 tick is marked: Prism checks mashing only below it. */
+/** OD 0 to 10 in half steps, dragged or keyed. */
 function OdSlider({ value, onChange, label }: { value: number; onChange: (od: number) => void; label: string }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const dragging = useRef(false);
@@ -237,7 +237,7 @@ function OdSlider({ value, onChange, label }: { value: number; onChange: (od: nu
             type="button"
             tabIndex={-1}
             onClick={() => set(od)}
-            className={`absolute -translate-x-1/2 cursor-pointer ${od === 5 ? "font-semibold text-osu-l2" : "text-osu-f1"} hover:text-white`}
+            className={`absolute -translate-x-1/2 cursor-pointer text-osu-f1 hover:text-white`}
             style={{ left: `${(od / OD_MAX) * 100}%` }}
           >
             {od}

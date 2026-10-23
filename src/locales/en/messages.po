@@ -2501,8 +2501,12 @@ msgid "7K LN ratings"
 msgstr "7K LN ratings"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
-msgstr "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
+msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
+msgstr "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
+#~ msgstr "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
 
 #: src/routes/dan-estimates.tsx
 msgid "7K LN stays within one level of your General dan, because few hard Tech, Inverse and Release charts exist. Those three still show their own numbers."
@@ -4041,6 +4045,10 @@ msgstr "Beatmaps played by your country"
 msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps played in {countryName}"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Before v26, letting go of a long note counted the same no matter what the rest of your hand was doing. Now a release counts for less when that hand isn't pressing or letting go of anything else around the same time. This mostly lowers slow charts made of long holds."
+msgstr "Before v26, letting go of a long note counted the same no matter what the rest of your hand was doing. Now a release counts for less when that hand isn't pressing or letting go of anything else around the same time. This mostly lowers slow charts made of long holds."
+
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Beginning of recorded history"
 msgstr "Beginning of recorded history"
@@ -4491,6 +4499,10 @@ msgstr "Change {0}"
 msgid "Change in 7K LN rating by v25 LN rating"
 msgstr "Change in 7K LN rating by v25 LN rating"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Change in v26"
+msgstr "Change in v26"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
 msgstr "Change map"
@@ -4634,8 +4646,8 @@ msgid "Charts that only repeat the same full chord rate closer to a jack now."
 msgstr "Charts that only repeat the same full chord rate closer to a jack now."
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Charts you can mash rate lower"
-msgstr "Charts you can mash rate lower"
+#~ msgid "Charts you can mash rate lower"
+#~ msgstr "Charts you can mash rate lower"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "chasing your first {chaseTarget}pp play"
@@ -7958,8 +7970,12 @@ msgid "Fullscreen"
 msgstr "Fullscreen"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
-msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
+#~ msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
+#~ msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. The number on each release is how much of its v25 difficulty it still counts for in v26."
+msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. The number on each release is how much of its v25 difficulty it still counts for in v26."
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 1:18, at half speed. Each ring is a release. On the right it is as big and bright as the share of its cost it keeps in v26."
@@ -9698,8 +9714,8 @@ msgid "Less watched"
 msgstr "Less watched"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Letting go of a hold on its own costs less"
-msgstr "Letting go of a hold on its own costs less"
+#~ msgid "Letting go of a hold on its own costs less"
+#~ msgstr "Letting go of a hold on its own costs less"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "light"
@@ -10671,6 +10687,10 @@ msgstr "marked hard"
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Mash accuracy"
 #~ msgstr "Mash accuracy"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Mash nerf"
+msgstr "Mash nerf"
 
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Mashed"
@@ -12617,8 +12637,8 @@ msgstr "On 4K jack charts the bonus above the bar is halved, since very high acc
 #~ msgstr "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not checked."
-msgstr "On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not checked."
+#~ msgid "On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not checked."
+#~ msgstr "On a chart under OD 5, pressing every key on a steady beat can score close to playing the notes. Prism now checks that, and rates a section as mashed when mashing it scores higher than playing it at the chart's level. Charts at OD 5 and up are not checked."
 
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "on a map"
@@ -12627,6 +12647,10 @@ msgstr "On a chart under OD 5, pressing every key on a steady beat can score clo
 #: src/routes/dan-estimates.tsx
 #~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
 #~ msgstr "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
+msgstr "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
 
 #: src/components/packs/SetsView.tsx
 msgid "On Showcase"
@@ -14956,8 +14980,12 @@ msgid "Release days"
 msgstr "Release days"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
-msgstr "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
+msgid "Releases with nothing around them count for less"
+msgstr "Releases with nothing around them count for less"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
+#~ msgstr "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
 
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
@@ -20228,6 +20256,14 @@ msgstr "Unavailable"
 msgid "Uncollected GOAT"
 msgstr "Uncollected GOAT"
 
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Under OD 5 the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
+#~ msgstr "Under OD 5 the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Under OD 5 the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash. Charts at OD 5 and up are not checked."
+#~ msgstr "Under OD 5 the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash. Charts at OD 5 and up are not checked."
+
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Under OD 5, Prism checks whether mashing scores better than playing the notes."
 #~ msgstr "Under OD 5, Prism checks whether mashing scores better than playing the notes."
@@ -20659,8 +20695,12 @@ msgstr "username..."
 #~ msgstr "v26"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
-msgstr "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+#~ msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+#~ msgstr "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
+msgstr "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "v26 mostly changes 7K LN ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
