@@ -2991,6 +2991,7 @@ msgid "active days"
 msgstr "活跃天数"
 
 #: src/components/team/TeamProfilePage.tsx
+#: src/lib/signature-shared.ts
 #: src/routes/player/$username.tsx
 msgid "Activity"
 msgstr "活跃度"
@@ -8215,6 +8216,10 @@ msgstr "网格"
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
 msgstr "随机猜一个"
+
+#: src/lib/signature-shared.ts
+msgid "Half year"
+msgstr "半年"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Hand busy"
@@ -21112,6 +21117,10 @@ msgstr "三"
 msgid "Wednesdays"
 msgstr "周三"
 
+#: src/lib/signature-shared.ts
+msgid "Weekly bars"
+msgstr "每周柱状图"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或推荐游玩顺序。"
@@ -21365,6 +21374,10 @@ msgstr "写入视频文件失败。"
 #: src/components/packs/StreakGame.tsx
 msgid "wrong"
 msgstr "答错"
+
+#: src/lib/signature-shared.ts
+msgid "Year"
+msgstr "年"
 
 #: src/routes/dan-estimates.tsx
 msgid "Yes, this is saragi"

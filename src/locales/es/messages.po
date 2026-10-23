@@ -2979,6 +2979,7 @@ msgid "active days"
 msgstr "días activos"
 
 #: src/components/team/TeamProfilePage.tsx
+#: src/lib/signature-shared.ts
 #: src/routes/player/$username.tsx
 msgid "Activity"
 msgstr "Actividad"
@@ -8203,6 +8204,10 @@ msgstr "Cuadrícula"
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
 msgstr "Adivinar al azar"
+
+#: src/lib/signature-shared.ts
+msgid "Half year"
+msgstr "Medio año"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Hand busy"
@@ -21100,6 +21105,10 @@ msgstr "mié"
 msgid "Wednesdays"
 msgstr "Miércoles"
 
+#: src/lib/signature-shared.ts
+msgid "Weekly bars"
+msgstr "Barras semanales"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "Tipo de mapas, dificultad y orden recomendado para jugarlos."
@@ -21353,6 +21362,10 @@ msgstr "Falló la escritura del archivo de video."
 #: src/components/packs/StreakGame.tsx
 msgid "wrong"
 msgstr "mal"
+
+#: src/lib/signature-shared.ts
+msgid "Year"
+msgstr "Año"
 
 #: src/routes/dan-estimates.tsx
 msgid "Yes, this is saragi"

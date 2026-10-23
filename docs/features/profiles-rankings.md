@@ -33,6 +33,8 @@ Filling older rows:
 
 Dynamic signatures read `getCachedSignatureProfileSnapshot` (projected best-200, identity, artwork). Image versions hash those inputs rather than timestamps, so unchanged refreshes and below-window plays reuse the finished image.
 
+The Activity type draws the last 53 weeks (26 for Half year) of the public `/activity` read, GLOBAL scope, so it counts what the Activity tab counts, app imports included. Its version hashes the name and avatar url, the user's `player_activity_days` totals, their `companella_local_scores` stamps and today's date in the activity country's zone, so it re-renders on a new play and once a day when the window moves.
+
 ## Rankings
 
 - **pp board** (`global-rankings.ts`): the union of every tracked country's ranked roster members, by mania pp, with 7-day deltas from `rank-snapshots.ts`. `pool=packs` also merges tracked rank-null members (`source in ('manual', 'score')`) so they are pullable maniacards while staying off every leaderboard. `keys=4|7` narrows the pack pool by main keymode (`users.pp_4k`/`pp_7k`, falling back to `farm_helper_user_key_stats`); a failed keymode build fails the request rather than serving the unfiltered pool.

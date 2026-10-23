@@ -41,7 +41,14 @@ import {
 } from "../../../lib/skill-axes";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../../lib/my-data";
 import { danBareLabel, danTierName, danTierSuffix, getDanTierImageSrc } from "../../../lib/dan-images";
-import type { LivePlayerDanEvidence } from "../../../lib/live-backend";
+import type { LivePlayerActivitySnapshot, LivePlayerDanEvidence } from "../../../lib/live-backend";
+import {
+  activityTodayKey,
+  activityWindowStart,
+  buildSignatureActivityWindow,
+  type SignatureActivityCell,
+  type SignatureActivityWindow,
+} from "../../../lib/signature-activity";
 import { signatureDesign, type SignatureType } from "../../../lib/signature-shared";
 import {
   accentHex,
@@ -2414,6 +2421,183 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
   ]));
 }
 
+// --- activity ----------------------------------------------------------
+
+/* The same public read the Activity tab makes, GLOBAL scope included, so the
+   render counts what the tab counts: tracked plays plus app imports, and the
+   imports alone for an account osu! turned away. */
+async function fetchActivityYear(userId: number, year: number): Promise<LivePlayerActivitySnapshot | null> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return null;
+  const response = await fetch(
+    `${base}/api/profiles/${userId}/activity?country=GLOBAL&year=${year}`,
+    { signal: AbortSignal.timeout(5_000) },
+  );
+  if (!response.ok) return null;
+  return (await response.json()) as LivePlayerActivitySnapshot;
+}
+
+/* Today is read in the zone the backend bucketed the days in, which the first
+   answer names. The window crosses New Year for most of the year, so the year
+   before is read too whenever the window starts in it. */
+async function fetchActivityWindow(ctx: SignatureRenderContext, weekCount: number): Promise<SignatureActivityWindow | null> {
+  return measure(ctx, "activity", async () => {
+    const userId = ctx.resolved.userId;
+    const nowYear = new Date().getUTCFullYear();
+    const current = await fetchActivityYear(userId, nowYear);
+    if (!current?.available) return null;
+    const todayKey = activityTodayKey(current.timezone ?? "UTC");
+    let snapshots = [current];
+    const todayYear = Number(todayKey.slice(0, 4));
+    if (todayYear !== nowYear) {
+      const local = await fetchActivityYear(userId, todayYear);
+      if (local) snapshots = [local, current];
+    }
+    const startYear = Number(activityWindowStart(todayKey, weekCount).slice(0, 4));
+    for (let year = todayYear - 1; year >= startYear; year--) {
+      if (snapshots.some((snapshot) => snapshot.year === year)) continue;
+      if (!current.availableYears.includes(year)) continue;
+      const earlier = await fetchActivityYear(userId, year);
+      if (earlier) snapshots.push(earlier);
+    }
+    return buildSignatureActivityWindow(snapshots.flatMap((snapshot) => snapshot.days), todayKey, weekCount);
+  });
+}
+
+function activityCellColor(cell: SignatureActivityCell, fullAt: number, accent: string): string {
+  if (cell.plays <= 0) return "rgba(255,255,255,0.07)";
+  const eased = Math.sqrt(Math.min(1, cell.plays / fullAt));
+  return hexAlpha(accent, 0.22 + eased * 0.78);
+}
+
+/* The calendar itself: one column per week, Sunday on top, with the month
+   names over the weeks they start in. */
+function activityGrid(
+  window: SignatureActivityWindow,
+  width: number,
+  gap: number,
+  accent: string,
+  dim: string,
+): ReactNode {
+  // Fractional on purpose: rounding the pitch down left up to a cell's width
+  // of empty space at the right end.
+  const pitch = (width + gap) / window.weeks.length;
+  const cell = pitch - gap;
+  const radius = Math.max(2, Math.round(cell * 0.22));
+  return h("div", { key: "grid", style: { display: "flex", flexDirection: "column", gap: "5px" } }, [
+    h("div", { key: "months", style: { display: "flex", position: "relative", height: "12px", width: `${width}px` } },
+      window.months.map((month) => h("div", {
+        key: `${month.week}`,
+        style: { position: "absolute", left: `${month.week * pitch}px`, top: "0", fontSize: "11px", color: dim },
+      }, month.label))),
+    h("div", { key: "weeks", style: { display: "flex", gap: `${gap}px` } },
+      window.weeks.map((week, index) => h("div", {
+        key: `${index}`,
+        style: { display: "flex", flexDirection: "column", gap: `${gap}px` },
+      }, week.map((day, weekday) => h("div", {
+        key: `${weekday}`,
+        style: {
+          width: `${cell}px`, height: `${cell}px`, borderRadius: `${radius}px`,
+          background: day ? activityCellColor(day, window.fullAt, accent) : "transparent",
+        },
+      }))))),
+  ]);
+}
+
+/* Plays per week as bars, for a profile where a strip reads better than a
+   grid. The month names sit under the weeks they start in. */
+function activityBars(
+  window: SignatureActivityWindow,
+  width: number,
+  height: number,
+  accent: string,
+  dim: string,
+): ReactNode {
+  const gap = 3;
+  const pitch = (width + gap) / window.weeklyPlays.length;
+  const bar = pitch - gap;
+  const peak = Math.max(1, ...window.weeklyPlays);
+  return h("div", { key: "bars", style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
+    h("div", { key: "cols", style: { display: "flex", alignItems: "flex-end", gap: `${gap}px`, height: `${height}px` } },
+      window.weeklyPlays.map((plays, index) => h("div", {
+        key: `${index}`,
+        style: {
+          width: `${bar}px`,
+          height: `${plays > 0 ? Math.max(3, Math.round((plays / peak) * height)) : 2}px`,
+          borderRadius: "2px",
+          background: plays > 0 ? accent : "rgba(255,255,255,0.10)",
+        },
+      }))),
+    h("div", { key: "months", style: { display: "flex", position: "relative", height: "12px", width: `${width}px` } },
+      window.months.map((month) => h("div", {
+        key: `${month.week}`,
+        style: { position: "absolute", left: `${month.week * pitch}px`, top: "0", fontSize: "11px", color: dim },
+      }, month.label))),
+  ]);
+}
+
+function activityStat(key: string, value: string, label: string, dim: string): ReactNode {
+  return h("div", { key, style: { display: "flex", alignItems: "baseline", gap: "6px" } }, [
+    h("div", { key: "v", style: { fontSize: "15px", fontWeight: 900, color: "#ffffff" } }, value),
+    h("div", { key: "l", style: { fontSize: "11px", color: dim } }, label),
+  ]);
+}
+
+async function renderActivity(ctx: SignatureRenderContext): Promise<Buffer> {
+  const spec = signatureDesign(ctx.type, ctx.design)!;
+  const weekCount = ctx.design === 2 ? 26 : 53;
+  const window = await fetchActivityWindow(ctx, weekCount).catch(() => null);
+  if (!window) return renderPlate(ctx, "No tracked plays yet.");
+
+  const avatarSize = 34;
+  const [background, avatarSrc] = await Promise.all([
+    measure(ctx, "background", async () => styleLayers(ctx, spec, await fetchBackgroundSources(ctx))),
+    // osu! serves the current avatar under the id; the version carries the
+    // stored avatar url so a new one re-renders.
+    measure(ctx, "avatar", () => avatarSquareDataUrl(`https://a.ppy.sh/${ctx.resolved.userId}`, avatarSize)),
+  ]);
+  const accent = accentHex(ctx.style, ACCENT);
+  const dim = background.custom ? TEXT_DIM_ON_ART : TEXT_DIM;
+  const padX = 28;
+  const inner = spec.width - padX * 2;
+
+  // Centred rather than on a shared baseline: beside the avatar, a small
+  // uppercase label on the name's baseline reads as sitting low.
+  const header = h("div", { key: "head", style: { display: "flex", alignItems: "center", gap: "12px" } }, [
+    ...(avatarSrc ? [avatarBox(avatarSrc, avatarSize)] : []),
+    h("div", { key: "n", style: { display: "flex", fontSize: "18px", fontWeight: 900, lineHeight: 1 } }, clamp(ctx.resolved.username, 22)),
+    h("div", {
+      key: "l",
+      style: { display: "flex", fontSize: "11px", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: dim, lineHeight: 1 },
+    }, "Activity"),
+  ]);
+  const span = ctx.design === 2 ? "in 6 months" : "in the past year";
+  const divider = (key: string) => h("div", { key, style: { width: "1px", height: "12px", background: "rgba(255,255,255,0.14)" } });
+  const stats = h("div", { key: "stats", style: { display: "flex", alignItems: "center", gap: "14px" } }, [
+    activityStat("plays", nf(window.plays), window.plays === 1 ? `play ${span}` : `plays ${span}`, dim),
+    divider("d1"),
+    activityStat("days", nf(window.activeDays), window.activeDays === 1 ? "active day" : "active days", dim),
+    ...(window.streak > 1
+      ? [divider("d2"), activityStat("streak", `${window.streak}d`, "streak", dim)]
+      : []),
+  ]);
+  const chart = ctx.design === 3
+    ? activityBars(window, inner, 80, accent, dim)
+    : activityGrid(window, inner, 3, accent, dim);
+
+  return renderPng(ctx, frame(spec.width, spec.height, [
+    ...background.layers,
+    h("div", {
+      key: "body",
+      style: {
+        display: "flex", flexDirection: "column", justifyContent: "space-between",
+        padding: `18px ${padX}px 14px`, width: "100%",
+      },
+    }, [header, chart, stats]),
+    wordmark(ctx.style),
+  ]));
+}
+
 // --- dispatch ----------------------------------------------------------
 
 function measure<T>(ctx: SignatureRenderContext, name: string, task: () => Promise<T>): Promise<T> {
@@ -2444,6 +2628,7 @@ async function renderLayout(ctx: SignatureRenderContext): Promise<Buffer> {
     case "skills": return renderSkills(ctx);
     case "dan": return renderDan(ctx);
     case "insights": return renderInsights(ctx);
+    case "activity": return renderActivity(ctx);
   }
 }
 

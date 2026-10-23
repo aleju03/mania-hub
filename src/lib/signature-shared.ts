@@ -11,7 +11,7 @@ import type { MessageDescriptor } from "@lingui/core";
 
 import { OSU_PROFILE_COLUMN_WIDTH } from "./bbcode-layout";
 
-export const SIGNATURE_TYPES = ["insights", "goals", "skills", "dan", "maniacard"] as const;
+export const SIGNATURE_TYPES = ["insights", "goals", "skills", "dan", "maniacard", "activity"] as const;
 export type SignatureType = (typeof SIGNATURE_TYPES)[number];
 
 export interface SignatureDesign {
@@ -58,7 +58,7 @@ export const SIGNATURE_DESIGNS: Record<SignatureType, SignatureDesign[]> = {
     { design: 1, slug: "radar-and-axes", label: msg`Radar and axes`, width: 880, height: 260 },
     { design: 2, slug: "bars", label: msg`Bars`, width: 700, height: 220 },
     { design: 3, slug: "radar", label: msg`Radar`, width: 320, height: 320 },
-    { design: 4, slug: "lanes", label: msg`Lanes`, width: 880, height: 180 },
+    { design: 4, slug: "lanes", label: msg`Lanes`, width: 880, height: 190 },
     { design: 5, slug: "scoreline", label: msg`Scoreline`, width: 880, height: 110 },
     /* Wider than tall for the radar's reason: the side labels need the room. */
     { design: 6, slug: "rose", label: msg`Rose`, width: 420, height: 320 },
@@ -81,6 +81,13 @@ export const SIGNATURE_DESIGNS: Record<SignatureType, SignatureDesign[]> = {
        length is the player's own pp spread. */
     { design: 4, slug: "pp-distribution", label: msg`PP distribution`, width: 560, height: 300 },
   ],
+  /* The Activity tab's calendar, rolling to today instead of a calendar year,
+     since the url is pasted once and has to keep moving with the player. */
+  activity: [
+    { design: 1, slug: "year", label: msg`Year`, width: 880, height: 220 },
+    { design: 2, slug: "half-year", label: msg`Half year`, width: 560, height: 250 },
+    { design: 3, slug: "weekly-bars", label: msg`Weekly bars`, width: 880, height: 190 },
+  ],
 };
 
 export const SIGNATURE_TYPE_LABELS: Record<SignatureType, MessageDescriptor> = {
@@ -89,6 +96,7 @@ export const SIGNATURE_TYPE_LABELS: Record<SignatureType, MessageDescriptor> = {
   skills: msg`Skill radar`,
   dan: msg`Dan rating`,
   insights: msg`Profile stats`,
+  activity: msg`Activity`,
 };
 
 /* The render version cannot live in the URL the way OG_IMAGE_VERSION does -
