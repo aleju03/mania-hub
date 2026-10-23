@@ -231,16 +231,20 @@ export function SleeveCard({ sleeve, className }: { sleeve: SupporterCardSleeveI
   );
 }
 
-/* A closed binder in its cover (the .binder-cover-* rules in styles.css),
-   with a spine and a label. */
+/* A closed binder in its cover: a still rendered ahead of time from the
+   .bnd-cover rules in styles.css (spine, stitching, label plate), since the
+   covers' blended grain and shadows are slow to rasterize live, which dropped
+   frames when a row of them scrolled into view. Re-render them (3x, 64x84)
+   if a cover's CSS changes. */
 export function BinderBook({ binder, className }: { binder: SupporterBinderId; className: string }) {
   return (
-    <span className={`bnd-cover bnd--${binder} relative block overflow-hidden rounded-[5px] ${className}`}>
-      {/* the spine's hinge, the stitching in the cover's thread, and a label plate */}
-      <span className="absolute inset-y-0 left-[15%] w-[3px] bg-black/35 shadow-[1px_0_0_rgba(255,255,255,0.12)]" />
-      <span className="absolute inset-[4px] left-[calc(15%+6px)] rounded-[3px] border border-dashed opacity-80" style={{ borderColor: "var(--stitch)" }} />
-      <span className="absolute left-[38%] right-[16%] top-[20%] h-[13%] rounded-[2px] bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]" />
-    </span>
+    <img
+      src={`/images/binders/covers/${binder}.webp`}
+      alt=""
+      aria-hidden
+      draggable={false}
+      className={`block rounded-[5px] shadow-[0_4px_10px_-4px_rgba(0,0,0,0.7)] ${className}`}
+    />
   );
 }
 

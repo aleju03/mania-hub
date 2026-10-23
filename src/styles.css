@@ -1202,6 +1202,15 @@ html[data-custom-cursor="true"] * {
   background-image: linear-gradient(180deg, #fff3c4 15%, #f2c35e 55%, #b47a1e 100%);
 }
 
+/* Most name tag animations move a background under text-clipped, filtered
+   type, which repaints the name every frame; while the page scrolls
+   (gpu-queue.ts sets the class) they hold still, so a list of names never
+   competes with the scroll for frames. */
+.is-scrolling .name-tag,
+.is-scrolling .name-tag * {
+  animation-play-state: paused !important;
+}
+
 /* A live shader over the name: the canvas fills the padding box and the text
    stays, transparent, for layout, selection and truncation. */
 .name-tag-shader {
@@ -1748,7 +1757,10 @@ html[data-custom-cursor="true"] * {
    binder costs nothing; only a page turn animates, as a transform. */
 .bnd,
 .bnd-cover {
-  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='4' seed='4' stitchTiles='stitch'/><feDiffuseLighting lighting-color='%23ffffff' surfaceScale='2.6'><feDistantLight azimuth='235' elevation='52'/></feDiffuseLighting></filter><rect width='260' height='260' filter='url(%23f)'/></svg>");
+  /* the grain is a tile rendered once from an feTurbulence lighting filter:
+     as an inline SVG the browser re-ran that filter on the CPU every time a
+     cover was rasterized, which dropped frames while scrolling past them */
+  --grain: url("/images/binders/grain-leather.webp");
   --cover-a: #7a4a32;
   --cover-b: #2b180f;
   --stitch: rgba(236, 204, 160, 0.9);
@@ -1794,7 +1806,7 @@ html[data-custom-cursor="true"] * {
   pointer-events: none;
 }
 .bnd--denim {
-  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.9 0.25' numOctaves='3' seed='9' stitchTiles='stitch'/><feDiffuseLighting lighting-color='%23ffffff' surfaceScale='1.8'><feDistantLight azimuth='225' elevation='58'/></feDiffuseLighting></filter><rect width='200' height='200' filter='url(%23f)'/></svg>");
+  --grain: url("/images/binders/grain-denim.webp");
   --cover-a: #5683bd;
   --cover-b: #1b3459;
   --stitch: rgba(236, 150, 60, 0.95);
@@ -2402,4 +2414,41 @@ html[data-custom-cursor="true"] * {
 .companion-bob { animation: companion-bob 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
 @media (prefers-reduced-motion: reduce) {
   .companion-bob { animation: none; }
+}
+
+/* /support's entrances (SupportMotion.tsx): sections rise, a perk's items pop
+   in one after another. Keyframes on opacity and transform only, so they run
+   on the compositor; `backwards` holds the start until each one's delay is up
+   and then lets go, so the hover lift's transform works afterwards. */
+@keyframes sm-rise {
+  from { opacity: 0; transform: translateY(36px); }
+}
+@keyframes sm-pop {
+  0% { opacity: 0; transform: translateY(18px) scale(0.86); }
+  60% { opacity: 1; transform: translateY(-2px) scale(1.02); }
+  100% { opacity: 1; transform: none; }
+}
+.sm-rise:not(.is-in),
+.sm-stagger:not(.is-in) > .sm-pop {
+  opacity: 0;
+}
+.sm-rise.is-in {
+  animation: sm-rise 0.7s cubic-bezier(0.2, 0.9, 0.25, 1.04) var(--sm-delay, 0s) backwards;
+}
+.sm-stagger.is-in > .sm-pop {
+  animation: sm-pop 0.5s cubic-bezier(0.3, 0.8, 0.4, 1) calc(0.1s + var(--sm-i, 0) * 0.055s) backwards;
+}
+.sm-lift {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sm-lift:hover {
+    transform: translateY(-5px) scale(1.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sm-rise.is-in,
+  .sm-stagger.is-in > .sm-pop {
+    animation: none;
+  }
 }

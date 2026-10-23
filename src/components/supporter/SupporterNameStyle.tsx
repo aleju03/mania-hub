@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { isShaderNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { watchScroll } from "../../lib/gpu-queue";
 
 /* A supporter's name in their name tag style and/or name font. One element whose look comes
    from the `name-tag--<id>` rules in styles.css, so the caller's sizing,
@@ -27,6 +28,10 @@ export function SupporterStyledName({ nameStyle, nameFont = null, name, classNam
   const spanRef = useRef<HTMLSpanElement>(null);
   const hostRef = useRef<HTMLSpanElement>(null);
   const [ready, setReady] = useState(false);
+  // so its CSS animation holds still while the page scrolls
+  useEffect(() => {
+    if (nameStyle) watchScroll();
+  }, [nameStyle]);
 
   useEffect(() => {
     const span = spanRef.current, host = hostRef.current;

@@ -17,7 +17,7 @@ import { FRAME_NAMES, MOTIF_LABELS } from "./loadout";
 import { formatGiftCode } from "./GiftCodePanel";
 import { Stagger, StaggerItem, useLowEndDevice, useNearView } from "./SupportMotion";
 import { useAuth } from "../../lib/auth-context";
-import { queueGpuWork } from "../../lib/gpu-queue";
+import { isScrolling, queueGpuWork } from "../../lib/gpu-queue";
 import { fetchLivePackCardSnapshotDirect, fetchLiveSupporterProfileLook, type LivePackCardSnapshot } from "../../lib/live-backend";
 import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_FOIL_LABELS, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
@@ -61,14 +61,18 @@ export function useShowcaseViewer() {
   };
 }
 
-/* Steps through `count` items every `ms` until the visitor picks one, which holds it. */
+/* Steps through `count` items every `ms` until the visitor picks one, which
+   holds it. A step builds a new look (a backdrop's theme, a name's shader), so
+   it waits while the page is being scrolled. */
 function useCycle(count: number, ms: number, active: boolean) {
   const reduced = useReducedMotion();
   const [index, setIndex] = useState(0);
   const [held, setHeld] = useState(false);
   useEffect(() => {
     if (held || reduced || count < 2 || !active) return;
-    const timer = window.setInterval(() => setIndex((n) => (n + 1) % count), ms);
+    const timer = window.setInterval(() => {
+      if (!isScrolling()) setIndex((n) => (n + 1) % count);
+    }, ms);
     return () => window.clearInterval(timer);
   }, [held, reduced, count, ms, active]);
   const pick = (next: number) => {

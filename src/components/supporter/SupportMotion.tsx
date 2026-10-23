@@ -1,70 +1,65 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { animate, motion, useInView, useReducedMotion, type Variants } from "framer-motion";
-import { isLowEndDevice } from "../../lib/gpu-queue";
+import { Children, cloneElement, isValidElement, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { animate, useInView, useReducedMotion } from "framer-motion";
+import { isLowEndDevice, isScrolling, onScrollingChange } from "../../lib/gpu-queue";
 
 /* The motion on /support: sections rise in as they scroll into view, the
    items in a perk's picture pop in one after another, counts run up to their
    number, and items lift under the pointer. All of it stands still under
-   reduced motion. */
+   reduced motion.
 
-const SPRING = { type: "spring" as const, stiffness: 260, damping: 22 };
+   The rises and pops are CSS animations (the sm-* rules in styles.css) that
+   only an IntersectionObserver starts: opacity and transform animate on the
+   compositor, so a page of them coming in costs the main thread nothing
+   while it scrolls, where a JS spring per item ran every frame. */
+
+function useShownOnce<T extends Element>(margin: string) {
+  const ref = useRef<T>(null);
+  const shown = useInView(ref, { once: true, margin: margin as `${number}px` });
+  return [ref, shown] as const;
+}
 
 export function Reveal({ children, className, delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
   const reduced = useReducedMotion();
+  const [ref, shown] = useShownOnce<HTMLDivElement>("0px 0px -12% 0px");
   if (reduced) return <div className={className}>{children}</div>;
   return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y: 36 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "0px 0px -12% 0px" }}
-      transition={{ ...SPRING, delay }}
-    >
+    <div ref={ref} className={`sm-rise ${shown ? "is-in" : ""} ${className ?? ""}`} style={delay ? ({ "--sm-delay": `${delay}s` } as CSSProperties) : undefined}>
       {children}
-    </motion.div>
+    </div>
   );
 }
-
-const STAGGER: Variants = {
-  hidden: {},
-  shown: { transition: { staggerChildren: 0.055, delayChildren: 0.1 } },
-};
-
-const POP: Variants = {
-  hidden: { opacity: 0, y: 18, scale: 0.86 },
-  shown: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 420, damping: 20 } },
-};
 
 /* A grid or row whose StaggerItems pop in in order once it is on screen. */
 export function Stagger({ children, className }: { children: ReactNode; className?: string }) {
   const reduced = useReducedMotion();
+  const [ref, shown] = useShownOnce<HTMLDivElement>("0px 0px -10% 0px");
   if (reduced) return <div className={className}>{children}</div>;
+  let index = 0;
   return (
-    <motion.div className={className} variants={STAGGER} initial="hidden" whileInView="shown" viewport={{ once: true, margin: "0px 0px -10% 0px" }}>
-      {children}
-    </motion.div>
+    <div ref={ref} className={`sm-stagger ${shown ? "is-in" : ""} ${className ?? ""}`}>
+      {Children.map(children, (child) => (isValidElement<{ index?: number }>(child) ? cloneElement(child, { index: index++ }) : child))}
+    </div>
   );
 }
 
-export function StaggerItem({ children, className, lift = true, onPointerEnter, onPointerLeave }: {
+export function StaggerItem({ children, className, lift = true, index = 0, onPointerEnter, onPointerLeave }: {
   children: ReactNode;
   className?: string;
   lift?: boolean;
+  /* Its place in the Stagger, set by it. */
+  index?: number;
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;
 }) {
-  const reduced = useReducedMotion();
-  if (reduced) return <div className={className} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>{children}</div>;
   return (
-    <motion.div
-      className={className}
-      variants={POP}
-      whileHover={lift ? { y: -5, scale: 1.05, transition: { type: "spring", stiffness: 500, damping: 18 } } : undefined}
+    <div
+      className={`sm-pop ${lift ? "sm-lift" : ""} ${className ?? ""}`}
+      style={{ "--sm-i": index } as CSSProperties}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
@@ -73,13 +68,15 @@ export function CountUp({ value, className }: { value: number; className?: strin
   const reduced = useReducedMotion();
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: "0px 0px -10% 0px" });
-  const [shown, setShown] = useState(reduced ? value : 0);
   useEffect(() => {
-    if (!inView || reduced) return;
-    const controls = animate(0, value, { duration: 1.1, ease: [0.16, 1, 0.3, 1], onUpdate: (n) => setShown(Math.round(n)) });
+    const node = ref.current;
+    if (!inView || reduced || !node) return;
+    // straight into the text, not through React state: no render per frame
+    const controls = animate(0, value, { duration: 1.1, ease: [0.16, 1, 0.3, 1], onUpdate: (n) => (node.textContent = String(Math.round(n))) });
     return () => controls.stop();
   }, [inView, reduced, value]);
-  return <span ref={ref} className={`tabular-nums ${className ?? ""}`}>{shown}</span>;
+  // (React keeps rendering the 0 it started with, so it never writes over the count)
+  return <span ref={ref} className={`tabular-nums ${className ?? ""}`}>{reduced ? value : 0}</span>;
 }
 
 /* Whether the element is on screen or close to it, for pictures that should
@@ -90,9 +87,21 @@ export function useNearView<T extends Element>(margin = "200px 0px") {
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
-    const observer = new IntersectionObserver(([entry]) => setNear(entry.isIntersecting), { rootMargin: margin });
+    // Going live (videos, shaders) or back to stills is a burst of work, so
+    // a change that comes mid-scroll waits for the scroll to pause.
+    let wanted = false;
+    const observer = new IntersectionObserver(([entry]) => {
+      wanted = entry.isIntersecting;
+      if (!isScrolling()) setNear(wanted);
+    }, { rootMargin: margin });
     observer.observe(node);
-    return () => observer.disconnect();
+    const unwatch = onScrollingChange((scrolling) => {
+      if (!scrolling) setNear(wanted);
+    });
+    return () => {
+      observer.disconnect();
+      unwatch();
+    };
   }, [margin]);
   return [ref, near] as const;
 }

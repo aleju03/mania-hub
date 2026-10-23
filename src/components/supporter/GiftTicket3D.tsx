@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
 
 import { mountFoilSource } from "./FoilPreview";
-import { queueGpuWork } from "../../lib/gpu-queue";
+import { isScrolling, queueGpuWork } from "../../lib/gpu-queue";
 
 /* The gift ticket on /support as a real object: a thick ticket in 3D with its
    two notches and a gap where it tears, floating and swaying, tipping toward
@@ -448,9 +448,16 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
       const queue = () => {
         if (!frame && !disposed) frame = requestAnimationFrame(tick);
       };
+      let foilDrawn = -1;
       const tick = (now: number) => {
         frame = 0;
         if (disposed || !visible) return;
+        // it holds still while the page scrolls
+        if (isScrolling()) {
+          last = now;
+          frame = requestAnimationFrame(tick);
+          return;
+        }
         const time = (now - start) / 1000;
         const dt = Math.min(0.05, (now - last) / 1000);
         last = now;
@@ -503,7 +510,11 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
 
         material.uniforms.uLight.value.set(0.5 + Math.sin(rotY) * 0.9, 0.55 - Math.sin(rotX) * 0.9);
         foilSource.setPointer([0.5 + rotY * 1.1, 0.5 - rotX * 1.1]);
-        foilTexture.needsUpdate = true;
+        // re-upload the foil only when it has drawn a new frame (it runs at 30fps)
+        if (foilSource.drawn() !== foilDrawn) {
+          foilDrawn = foilSource.drawn();
+          foilTexture.needsUpdate = true;
+        }
         renderer.render(scene, camera);
         queue();
       };

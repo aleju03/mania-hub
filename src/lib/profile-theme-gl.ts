@@ -1,7 +1,7 @@
 import { createSakuraPetals, type ThemeOverlay } from "./profile-theme-petals";
 import { PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
 import { HIGHWAY_MAX_LANES, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "./supporter-profile-themes";
-import { takeGpuSlot } from "./gpu-queue";
+import { isScrolling, takeGpuSlot } from "./gpu-queue";
 
 /* Runs the profile theme backdrops (profile-theme-shaders.ts). Loaded on
    demand, the first time a themed profile or the theme drawer shows.
@@ -489,7 +489,10 @@ export function mountProfileBackdrop(
     // the page (the hero's sun, the black hole) trails the content and steps,
     // plainly so on a 240Hz screen.
     const scrolling = scroll && window.scrollY !== drawnScroll;
-    if (visible && (scrolling || now - last >= 15)) {
+    // one that doesn't follow the page holds still while the page scrolls,
+    // so the GPU has only the scroll to draw
+    const held = !scroll && shown && isScrolling();
+    if (visible && !held && (scrolling || now - last >= 15)) {
       last = now;
       drawnScroll = window.scrollY;
       render(now);
@@ -595,7 +598,8 @@ function drawSwatch(swatch: Swatch, time: number): boolean {
 }
 
 function swatchLoop(now: number) {
-  if (now - swatchLast >= 1000 / 30) {
+  // they hold still while the page scrolls
+  if (now - swatchLast >= 1000 / 30 && !isScrolling()) {
     swatchLast = now;
     // every copy out of the shared canvas waits on the GPU, so a page of
     // stills fills in a few per frame instead of all in one long one

@@ -10,6 +10,7 @@ import { track } from "../../lib/analytics";
 import { readEdgeCountry } from "../../lib/country-cookie";
 import { GOOGLE_RRM_PUBLICATION_ID, startGoogleContributions } from "../../lib/google-contributions";
 import { claimGoogleContribution } from "../../lib/supporter-look-settings";
+import { useNearView } from "./SupportMotion";
 
 /* Where a visitor pays, at the end of /support: the month's hosting bar, the
    Ko-fi panel, lava.top for the countries Ko-fi cannot take a card from, and
@@ -109,6 +110,12 @@ export function SupportCheckout() {
   const viewerId = useAuth().viewer?.id;
   // null until the server answers; Ko-fi shows meanwhile only if it says no.
   const [useLava, setUseLava] = useState<boolean | null>(null);
+  // once loaded it stays, so scrolling away and back never reloads it
+  const [frameRef, near] = useNearView<HTMLDivElement>("800px 0px");
+  const [frameNear, setFrameNear] = useState(false);
+  useEffect(() => {
+    if (near) setFrameNear(true);
+  }, [near]);
   useEffect(() => {
     let cancelled = false;
     getSupportUsesLava()
@@ -138,7 +145,10 @@ export function SupportCheckout() {
         </div>
       ) : null}
       {GOOGLE_RRM_PUBLICATION_ID ? <GoogleContribution viewerId={viewerId} /> : null}
-      {useLava != null ? (
+      {/* Ko-fi's page is heavy to start, so it loads once the visitor has
+          paused near it rather than mid-scroll on the way down */}
+      <div ref={frameRef}>
+      {useLava != null && frameNear ? (
         <iframe
           src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true`}
           title={t`Support on Ko-fi`}
@@ -147,8 +157,9 @@ export function SupportCheckout() {
           className="block h-[600px] w-full border-0 bg-[#f9f9f9]"
         />
       ) : (
-        <div className="h-[600px]" />
+        <div className="h-[600px] bg-[#f9f9f9]/5" />
       )}
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import type { SupporterBladeId } from "#/lib/supporter-pack-style";
 import { BladeFx, preloadSprites } from "./bladeFx";
 import { createBladeRenderer } from "./bladeGl";
 import { bladeLook, bladeTrailLife, drawBladeTrail, type TrailPoint } from "./packBlades";
+import { isScrolling, queueGpuWork } from "../../lib/gpu-queue";
 
 /* A blade in a small box, for the /supporter loadout and /support: the same
    streak, sparks and burst the pack stage draws (packBlades.ts, bladeFx.ts),
@@ -52,68 +53,84 @@ export function BladeSwatch({ blade, live = false, className = "" }: { blade: Su
       return;
     }
 
-    const renderer = createBladeRenderer(canvas);
-    const fx = new BladeFx();
-    const box = { left: w * 0.3, top: h * 0.2, width: w * 0.4, height: h * 0.6 };
-    let frame = 0;
-    let visible = true;
-    const points: TrailPoint[] = [];
-    let start = performance.now();
-    let travelled = 0;
-    let sparked = 0;
-    let ripped = false;
-    let last: { x: number; y: number } | null = null;
-    const step = (now: number) => {
-      frame = 0;
-      if (now - start > LOOP_MS) {
-        start = now;
-        points.length = 0;
-        travelled = 0;
-        sparked = 0;
-        ripped = false;
-        last = null;
-      }
-      const t = now - start;
-      const sweeping = t <= SWEEP_MS;
-      if (sweeping) {
-        const u = 1 - (1 - t / SWEEP_MS) ** 3;
-        const point = pathAt(u, w, h);
-        points.push({ ...point, t: now });
-        if (last) {
-          const dx = point.x - last.x;
-          const dy = point.y - last.y;
-          travelled += Math.hypot(dx, dy) / scale;
-          if (look.trail && look.trailEvery) {
-            while (travelled >= look.trailEvery) {
-              travelled -= look.trailEvery;
-              look.trail(fx, point.x, point.y, dx, dy, scale);
+    // a WebGL context is heavy to start, so it waits for a quiet moment
+    // (gpu-queue.ts), not the frame the swatch scrolled into view on
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    const unqueue = queueGpuWork(() => {
+      if (!cancelled) stop = run();
+    });
+    return () => {
+      cancelled = true;
+      unqueue();
+      stop?.();
+    };
+
+    function run() {
+      const renderer = createBladeRenderer(canvas!);
+      const fx = new BladeFx();
+      const box = { left: w * 0.3, top: h * 0.2, width: w * 0.4, height: h * 0.6 };
+      let frame = 0;
+      let visible = true;
+      const points: TrailPoint[] = [];
+      let start = performance.now();
+      let travelled = 0;
+      let sparked = 0;
+      let ripped = false;
+      let last: { x: number; y: number } | null = null;
+      const step = (now: number) => {
+        frame = 0;
+        if (now - start > LOOP_MS) {
+          start = now;
+          points.length = 0;
+          travelled = 0;
+          sparked = 0;
+          ripped = false;
+          last = null;
+        }
+        const t = now - start;
+        const sweeping = t <= SWEEP_MS;
+        if (sweeping) {
+          const u = 1 - (1 - t / SWEEP_MS) ** 3;
+          const point = pathAt(u, w, h);
+          points.push({ ...point, t: now });
+          if (last) {
+            const dx = point.x - last.x;
+            const dy = point.y - last.y;
+            travelled += Math.hypot(dx, dy) / scale;
+            if (look.trail && look.trailEvery) {
+              while (travelled >= look.trailEvery) {
+                travelled -= look.trailEvery;
+                look.trail(fx, point.x, point.y, dx, dy, scale);
+              }
             }
           }
+          last = point;
+          if (u - sparked > 0.22) {
+            sparked = u;
+            look.cut(fx, point.x, point.y, scale);
+          }
+        } else if (!ripped) {
+          ripped = true;
+          look.rip?.(fx, box, box.top + box.height * 0.3, scale);
+          renderer.impact(box.left + box.width / 2, box.top + box.height * 0.3, 0.6);
         }
-        last = point;
-        if (u - sparked > 0.22) {
-          sparked = u;
-          look.cut(fx, point.x, point.y, scale);
-        }
-      } else if (!ripped) {
-        ripped = true;
-        look.rip?.(fx, box, box.top + box.height * 0.3, scale);
-        renderer.impact(box.left + box.width / 2, box.top + box.height * 0.3, 0.6);
-      }
-      while (points.length && now - points[0].t > life) points.shift();
-      renderer.draw({ look, points, now, tip: sweeping ? points[points.length - 1] ?? null : null, fx, width: w, height: h, pixelRatio: ratio, scale });
-      if (visible) frame = requestAnimationFrame(step);
-    };
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      if (visible && !frame) frame = requestAnimationFrame(step);
-    });
-    observer.observe(canvas);
-    return () => {
-      observer.disconnect();
-      if (frame) cancelAnimationFrame(frame);
-      renderer.dispose();
-    };
+        while (points.length && now - points[0].t > life) points.shift();
+        // it holds still while the page scrolls
+        if (!isScrolling()) renderer.draw({ look, points, now, tip: sweeping ? points[points.length - 1] ?? null : null, fx, width: w, height: h, pixelRatio: ratio, scale });
+        if (visible) frame = requestAnimationFrame(step);
+      };
+      const observer = new IntersectionObserver(([entry]) => {
+        visible = entry.isIntersecting;
+        if (visible && !frame) frame = requestAnimationFrame(step);
+      });
+      observer.observe(canvas!);
+      return () => {
+        observer.disconnect();
+        if (frame) cancelAnimationFrame(frame);
+        renderer.dispose();
+      };
+    }
   }, [blade, live]);
 
   // A canvas holds one kind of context for good, so the live one is its own element.

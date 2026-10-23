@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { cardOverlayFragmentShader } from "../player/maniacard3d/cardShaders";
 import { supporterFoilIndex, type SupporterFoilId } from "../../lib/supporter-foils";
-import { takeGpuSlot } from "../../lib/gpu-queue";
+import { isScrolling, takeGpuSlot } from "../../lib/gpu-queue";
 
 /* A live swatch of a supporter foil: the card's own overlay shader on a blank
    card, without the tier's sparkle, its light circling, or following the pointer while it is over the
@@ -32,6 +32,8 @@ interface Swatch {
   pointer: [number, number] | null;
   /* Drawn once, then dropped from the loop. */
   still?: boolean;
+  /* Frames drawn so far, so a texture made from it uploads only new ones. */
+  drawn?: number;
 }
 
 interface Shared {
@@ -157,12 +159,14 @@ function draw(now: number, only?: Swatch): boolean {
     if (!swatch.target) continue;
     swatch.target.clearRect(0, 0, width, height);
     swatch.target.drawImage(canvas, 0, 0);
+    swatch.drawn = (swatch.drawn ?? 0) + 1;
   }
   return true;
 }
 
 function loop(now: number) {
-  if (now - lastDraw >= FRAME_MS) {
+  // they hold still while the page scrolls
+  if (now - lastDraw >= FRAME_MS && !isScrolling()) {
     lastDraw = now;
     // stills draw a few per frame (each copy waits on the GPU), then leave the loop
     let stills = STILLS_PER_FRAME;
@@ -234,6 +238,7 @@ export function FoilPreview({ foil, className, still = false }: { foil: Supporte
    elsewhere, through the same shared context and 30fps loop as the swatches.
    The caller says when it is on screen and where the light is (null: it circles). */
 export function mountFoilSource(canvas: HTMLCanvasElement, foil: SupporterFoilId): {
+  drawn: () => number;
   setVisible: (visible: boolean) => void;
   setPointer: (pointer: [number, number] | null) => void;
   dispose: () => void;
@@ -243,6 +248,7 @@ export function mountFoilSource(canvas: HTMLCanvasElement, foil: SupporterFoilId
   draw(start + 4000, swatch);
   if (!frame) frame = requestAnimationFrame(loop);
   return {
+    drawn: () => swatch.drawn ?? 0,
     setVisible: (visible) => {
       swatch.visible = visible;
       if (visible && !frame) frame = requestAnimationFrame(loop);

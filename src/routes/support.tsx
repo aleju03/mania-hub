@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -58,25 +58,61 @@ const SECTIONS: { id: string; label: MessageDescriptor }[] = [
   { id: "checkout", label: msg`Support` },
 ];
 
-/* The section nearest the top of the screen, for the side nav. */
+/* The section nearest the top of the screen, for the side nav. Read once a
+   frame at most while scrolling, and only the nav and the floating button use
+   it: when it lived in the page, every section change re-rendered the whole
+   page, every showcase included, mid-scroll. */
 function useCurrentSection(): string {
   const [current, setCurrent] = useState(SECTIONS[0].id);
   useEffect(() => {
     const nodes = SECTIONS.map((section) => document.getElementById(section.id)).filter((node): node is HTMLElement => !!node);
+    let frame = 0;
     const update = () => {
+      frame = 0;
       let next = nodes[0]?.id ?? SECTIONS[0].id;
       for (const node of nodes) if (node.getBoundingClientRect().top < 160) next = node.id;
       setCurrent(next);
     };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
     update();
-    window.addEventListener("scroll", update, { passive: true });
-    return () => window.removeEventListener("scroll", update);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
   }, []);
   return current;
 }
 
+function SectionNav() {
+  const { t, i18n } = useLingui();
+  const current = useCurrentSection();
+  return (
+    <nav className="max-lg:hidden" aria-label={t`On this page`}>
+      <ul className="sticky top-[84px] space-y-0.5">
+        {SECTIONS.map((section) => (
+          <li key={section.id}>
+            <a
+              href={`#${section.id}`}
+              className={`block rounded-md px-3 py-1.5 text-[13px] transition-colors ${current === section.id ? "bg-white/[0.06] font-semibold text-white" : "text-osu-f1 hover:text-white"}`}
+            >
+              {i18n._(section.label)}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/* Each section hydrates in its own Suspense boundary (nothing in them
+   suspends), so React hydrates the page a section at a time and lets a
+   scroll through in between, rather than in one long task. */
 function Perk({ id, title, count, body, children }: { id: string; title: string; count: ReactNode; body: string; children: ReactNode }) {
   return (
+    <Suspense fallback={null}>
     <section id={id} className="scroll-mt-[76px] border-t border-white/[0.07] pt-8">
       <Reveal>
       <div className="mb-5 max-w-[620px]">
@@ -89,6 +125,7 @@ function Perk({ id, title, count, body, children }: { id: string; title: string;
       <Reveal delay={0.08}>{children}</Reveal>
       </Reveal>
     </section>
+    </Suspense>
   );
 }
 
@@ -117,7 +154,10 @@ function SupportButton({ className = "" }: { className?: string }) {
 
 /* The same button, floating at the bottom once the hero has scrolled away and
    until the Ko-fi panel is reached. */
-function FloatingSupportButton({ show }: { show: boolean }) {
+function FloatingSupportButton({ heroRef }: { heroRef: RefObject<HTMLDivElement | null> }) {
+  const current = useCurrentSection();
+  const heroInView = useInView(heroRef);
+  const show = !heroInView && current !== "checkout";
   return (
     <AnimatePresence>
       {show && (
@@ -136,12 +176,9 @@ function FloatingSupportButton({ show }: { show: boolean }) {
 }
 
 function SupportPage() {
-  const { t, i18n } = useLingui();
-  const current = useCurrentSection();
+  const { t } = useLingui();
   const reduced = useReducedMotion();
   const heroRef = useRef<HTMLDivElement>(null);
-  const heroInView = useInView(heroRef);
-  const floating = !heroInView && current !== "checkout";
   const steps = [
     { title: t`Tip on Ko-fi`, body: t`Use your osu! username as your name there, so the time lands on your account.` },
     { title: t`$3 is a month`, body: t`Any amount works and is counted to the day. Every tip adds to the time you have left.` },
@@ -153,20 +190,7 @@ function SupportPage() {
       <PageHeader iconSrc="/images/icons/supporter-heart.svg" title={t`support`} />
       <div className="bg-osu-b5">
         <div className="mx-auto grid max-w-[1200px] gap-8 px-3 py-6 sm:px-5 sm:py-8 lg:grid-cols-[180px_minmax(0,1fr)]">
-          <nav className="max-lg:hidden" aria-label={t`On this page`}>
-            <ul className="sticky top-[84px] space-y-0.5">
-              {SECTIONS.map((section) => (
-                <li key={section.id}>
-                  <a
-                    href={`#${section.id}`}
-                    className={`block rounded-md px-3 py-1.5 text-[13px] transition-colors ${current === section.id ? "bg-white/[0.06] font-semibold text-white" : "text-osu-f1 hover:text-white"}`}
-                  >
-                    {i18n._(section.label)}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          <SectionNav />
 
           <div className="min-w-0 space-y-12">
             <section id="introduction" className="scroll-mt-[76px] grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -189,7 +213,9 @@ function SupportPage() {
                 animate={{ opacity: 1, scale: 1, rotate: 0 }}
                 transition={{ type: "spring", stiffness: 180, damping: 18, delay: 0.15 }}
               >
-                <HeroStage />
+                <Suspense fallback={null}>
+                  <HeroStage />
+                </Suspense>
               </motion.div>
             </section>
 
@@ -299,7 +325,7 @@ function SupportPage() {
           </div>
         </div>
       </div>
-      <FloatingSupportButton show={floating} />
+      <FloatingSupportButton heroRef={heroRef} />
     </div>
   );
 }

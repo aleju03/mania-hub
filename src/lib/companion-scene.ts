@@ -15,6 +15,8 @@ import {
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
+import { isScrolling } from "./gpu-queue";
+
 /* A 3D companion (supporter-companions.ts) in its own small canvas. Loaded on
    demand. The model stands on the floor of its box, scaled to fill its
    height, and faces the viewer; dragging sideways turns it left or right, and
@@ -162,7 +164,8 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
       if (Math.abs(velocity) < 0.002) yaw += (target - yaw) * 0.05 * settle;
     }
     turntable.rotation.y = yaw;
-    renderer.render(scene, camera);
+    // it holds still while the page scrolls, unless it is being turned
+    if (dragging || !isScrolling()) renderer.render(scene, camera);
     if (visible && (!still || dragging || Math.abs(velocity) > 0.001)) raf = requestAnimationFrame(tick);
   };
   const wake = () => {
