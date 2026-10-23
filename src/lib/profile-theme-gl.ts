@@ -1,6 +1,7 @@
 import { createSakuraPetals, type ThemeOverlay } from "./profile-theme-petals";
 import { PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
 import { HIGHWAY_MAX_LANES, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "./supporter-profile-themes";
+import { takeGpuSlot } from "./gpu-queue";
 
 /* Runs the profile theme backdrops (profile-theme-shaders.ts). Loaded on
    demand, the first time a themed profile or the theme drawer shows.
@@ -58,6 +59,10 @@ function reducedMotion(): boolean {
 
 class ThemeContext {
   private programs = new Map<SupporterProfileThemeId, Compiled | null>();
+  /* Linked but not yet checked: with KHR_parallel_shader_compile the driver
+     compiles in the background and the check waits until it says it is done. */
+  private pending = new Map<SupporterProfileThemeId, { program: WebGLProgram; fragment: WebGLShader }>();
+  private parallel: { COMPLETION_STATUS_KHR: number } | null;
   private overlays = new Map<SupporterProfileThemeId, ThemeOverlay | null>();
   private quad: WebGLBuffer | null;
   private vertex: WebGLShader | null;
@@ -75,6 +80,7 @@ class ThemeContext {
   private defaultJudgements: HTMLCanvasElement | null | undefined;
 
   constructor(readonly gl: WebGL2RenderingContext) {
+    this.parallel = gl.getExtension("KHR_parallel_shader_compile");
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
@@ -216,51 +222,80 @@ class ThemeContext {
     return null;
   }
 
-  /* Compiled once per theme and kept, so switching back is instant. Null if it failed. */
-  private compiled(theme: SupporterProfileThemeId): Compiled | null {
+  /* Compiled once per theme and kept, so switching back is instant. Null if
+     it failed, undefined while it is still compiling: a compile holds the main
+     thread until it finishes, so without the parallel extension they take
+     turns (gpu-queue.ts) and a page of swatches fills in over a few frames
+     instead of freezing while every one compiles. */
+  private compiled(theme: SupporterProfileThemeId): Compiled | null | undefined {
     if (this.programs.has(theme)) return this.programs.get(theme)!;
     const { gl } = this;
-    const fragment = this.compile(gl.FRAGMENT_SHADER, PROFILE_THEME_SHADERS[theme]);
-    const program = gl.createProgram();
-    let compiled: Compiled | null = null;
-    if (this.vertex && fragment && program) {
+    let pending = this.pending.get(theme);
+    if (!pending) {
+      if (!this.parallel && !takeGpuSlot()) return undefined;
+      const fragment = gl.createShader(gl.FRAGMENT_SHADER);
+      const program = gl.createProgram();
+      if (!this.vertex || !fragment || !program) {
+        this.programs.set(theme, null);
+        return null;
+      }
+      gl.shaderSource(fragment, PROFILE_THEME_SHADERS[theme]);
+      gl.compileShader(fragment);
       gl.attachShader(program, this.vertex);
       gl.attachShader(program, fragment);
       gl.bindAttribLocation(program, 0, "a_position");
       gl.linkProgram(program);
-      if (gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        compiled = {
-          program,
-          time: gl.getUniformLocation(program, "u_time"),
-          res: gl.getUniformLocation(program, "u_res"),
-          pointer: gl.getUniformLocation(program, "u_pointer"),
-          scroll: gl.getUniformLocation(program, "u_scroll"),
-          lanes: gl.getUniformLocation(program, "u_lanes"),
-          noteArt: gl.getUniformLocation(program, "u_noteArt"),
-          noteColors: gl.getUniformLocation(program, "u_noteColors"),
-          noteAspect: gl.getUniformLocation(program, "u_noteAspect"),
-          noteColor: gl.getUniformLocation(program, "u_noteColor"),
-          notes: gl.getUniformLocation(program, "u_notes"),
-          accent: gl.getUniformLocation(program, "u_accent"),
-          chart: gl.getUniformLocation(program, "u_chart"),
-          chartNotes: gl.getUniformLocation(program, "u_chartNotes"),
-          chartIndex: gl.getUniformLocation(program, "u_chartIndex"),
-          chartPeriod: gl.getUniformLocation(program, "u_chartPeriod"),
-          chartBucket: gl.getUniformLocation(program, "u_chartBucket"),
-          chartLaneEnd: gl.getUniformLocation(program, "u_chartLaneEnd"),
-          judgements: gl.getUniformLocation(program, "u_judgements"),
-          sprite: gl.getUniformLocation(program, "u_sprite"),
-        };
-      }
+      pending = { program, fragment };
+      this.pending.set(theme, pending);
     }
+    if (this.parallel && !gl.getProgramParameter(pending.program, this.parallel.COMPLETION_STATUS_KHR)) return undefined;
+    this.pending.delete(theme);
+    const { program, fragment } = pending;
+    let compiled: Compiled | null = null;
+    if (gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      compiled = {
+        program,
+        time: gl.getUniformLocation(program, "u_time"),
+        res: gl.getUniformLocation(program, "u_res"),
+        pointer: gl.getUniformLocation(program, "u_pointer"),
+        scroll: gl.getUniformLocation(program, "u_scroll"),
+        lanes: gl.getUniformLocation(program, "u_lanes"),
+        noteArt: gl.getUniformLocation(program, "u_noteArt"),
+        noteColors: gl.getUniformLocation(program, "u_noteColors"),
+        noteAspect: gl.getUniformLocation(program, "u_noteAspect"),
+        noteColor: gl.getUniformLocation(program, "u_noteColor"),
+        notes: gl.getUniformLocation(program, "u_notes"),
+        accent: gl.getUniformLocation(program, "u_accent"),
+        chart: gl.getUniformLocation(program, "u_chart"),
+        chartNotes: gl.getUniformLocation(program, "u_chartNotes"),
+        chartIndex: gl.getUniformLocation(program, "u_chartIndex"),
+        chartPeriod: gl.getUniformLocation(program, "u_chartPeriod"),
+        chartBucket: gl.getUniformLocation(program, "u_chartBucket"),
+        chartLaneEnd: gl.getUniformLocation(program, "u_chartLaneEnd"),
+        judgements: gl.getUniformLocation(program, "u_judgements"),
+        sprite: gl.getUniformLocation(program, "u_sprite"),
+      };
+    } else if (import.meta.env.DEV) {
+      console.warn("profile theme shader", gl.getShaderInfoLog(fragment) || gl.getProgramInfoLog(program));
+    }
+    gl.deleteShader(fragment);
     this.programs.set(theme, compiled);
     return compiled;
+  }
+
+  /* Whether the theme's program is still on its way (draw() skips it until then). */
+  compiling(theme: SupporterProfileThemeId): boolean {
+    return !this.programs.has(theme);
   }
 
   private overlay(theme: SupporterProfileThemeId): ThemeOverlay | null {
     const make = THEME_OVERLAYS[theme];
     if (!make) return null;
-    if (!this.overlays.has(theme)) this.overlays.set(theme, make(this.gl));
+    // its own program, so it waits its turn too; the backdrop draws without it until then
+    if (!this.overlays.has(theme)) {
+      if (!takeGpuSlot()) return null;
+      this.overlays.set(theme, make(this.gl));
+    }
     return this.overlays.get(theme) ?? null;
   }
 
@@ -433,6 +468,14 @@ export function mountProfileBackdrop(
       canvas.style.opacity = "1";
     }
   };
+  /* A still frame, tried again each frame while the theme's program compiles. */
+  let stillFrame = 0;
+  const renderStill = () => {
+    stillFrame = 0;
+    if (disposed) return;
+    render(performance.now());
+    if (context.compiling(theme)) stillFrame = requestAnimationFrame(renderStill);
+  };
 
   let drawnScroll = -1;
   let drewAt = 0;
@@ -459,7 +502,7 @@ export function mountProfileBackdrop(
     client = [event.clientX, event.clientY];
   };
   const resizer = new ResizeObserver(() => {
-    if (still) render(performance.now());
+    if (still && !stillFrame) renderStill();
   });
   resizer.observe(host);
   const watcher = new IntersectionObserver(([entry]) => {
@@ -473,7 +516,7 @@ export function mountProfileBackdrop(
   };
   canvas.addEventListener("webglcontextlost", onLost);
 
-  if (still) render(performance.now());
+  if (still) renderStill();
   else {
     window.addEventListener("pointermove", onPointer, { passive: true });
     frame = requestAnimationFrame(loop);
@@ -483,21 +526,22 @@ export function mountProfileBackdrop(
     setTheme(next) {
       if (next === theme) return;
       theme = next;
-      if (still) render(performance.now());
+      if (still && !stillFrame) renderStill();
     },
     setNotes(next) {
       if (next === notes) return;
       notes = next;
-      if (still) render(performance.now());
+      if (still && !stillFrame) renderStill();
     },
     setChart(next) {
       if (next === chart) return;
       chart = next;
-      if (still) render(performance.now());
+      if (still && !stillFrame) renderStill();
     },
     dispose() {
       disposed = true;
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(stillFrame);
       resizer.disconnect();
       watcher.disconnect();
       window.removeEventListener("pointermove", onPointer);
@@ -515,6 +559,8 @@ interface Swatch {
   target: CanvasRenderingContext2D | null;
   theme: SupporterProfileThemeId;
   visible: boolean;
+  /* Drawn once, then dropped from the loop. */
+  still: boolean;
   /* When it went live: it runs on from the still frame it showed before. */
   start: number;
 }
@@ -523,6 +569,7 @@ const swatches = new Set<Swatch>();
 let shared: { canvas: HTMLCanvasElement; context: ThemeContext } | null | undefined;
 let swatchFrame = 0;
 let swatchLast = 0;
+const STILLS_PER_FRAME = 3;
 
 function sharedContext() {
   if (shared !== undefined) return shared;
@@ -532,38 +579,48 @@ function sharedContext() {
   return shared;
 }
 
-function drawSwatch(swatch: Swatch, time: number) {
+/* False while the theme's program is still compiling. */
+function drawSwatch(swatch: Swatch, time: number): boolean {
   const context = sharedContext();
   const { width, height } = swatch.canvas;
-  if (!context || !width || !height) return;
+  if (!context || !width || !height) return true;
   if (context.canvas.width !== width || context.canvas.height !== height) {
     context.canvas.width = width;
     context.canvas.height = height;
   }
-  if (!context.context.draw(swatch.theme, width, height, time, [0.5, 0.6], 0)) return;
+  if (!context.context.draw(swatch.theme, width, height, time, [0.5, 0.6], 0)) return !context.context.compiling(swatch.theme);
   swatch.target ??= swatch.canvas.getContext("2d");
   swatch.target?.drawImage(context.canvas, 0, 0);
+  return true;
 }
 
 function swatchLoop(now: number) {
   if (now - swatchLast >= 1000 / 30) {
     swatchLast = now;
-    for (const swatch of swatches) if (swatch.visible) drawSwatch(swatch, STILL_TIME + (now - swatch.start) / 1000);
+    // every copy out of the shared canvas waits on the GPU, so a page of
+    // stills fills in a few per frame instead of all in one long one
+    let stills = STILLS_PER_FRAME;
+    for (const swatch of swatches) {
+      if (!swatch.visible) continue;
+      if (!swatch.still) drawSwatch(swatch, STILL_TIME + (now - swatch.start) / 1000);
+      else if (stills > 0) {
+        stills -= 1;
+        if (drawSwatch(swatch, STILL_TIME)) swatches.delete(swatch);
+      }
+    }
   }
   swatchFrame = swatches.size > 0 ? requestAnimationFrame(swatchLoop) : 0;
 }
 
 /* Draws the theme into `canvas` (sized by the caller), live while on screen
-   unless `still`. Returns the cleanup. */
+   unless `still`. A swatch whose theme has not compiled yet waits in the loop
+   and draws once it has, so a drawer of new themes fills in over a few frames.
+   Returns the cleanup. */
 export function mountThemeSwatch(canvas: HTMLCanvasElement, theme: SupporterProfileThemeId, still: boolean): () => void {
-  const swatch: Swatch = { canvas, target: null, theme, visible: true, start: performance.now() };
-  if (still || reducedMotion()) {
-    drawSwatch(swatch, STILL_TIME);
-    return () => {};
-  }
+  const swatch: Swatch = { canvas, target: null, theme, visible: true, still: still || reducedMotion(), start: performance.now() };
+  // A live one draws its first frame now, not on the loop's next turn; stills take turns in the loop.
+  if (!swatch.still) drawSwatch(swatch, STILL_TIME);
   swatches.add(swatch);
-  // The first live frame now, not on the loop's next turn.
-  drawSwatch(swatch, STILL_TIME);
   const watcher = new IntersectionObserver(([entry]) => {
     swatch.visible = entry.isIntersecting;
   });

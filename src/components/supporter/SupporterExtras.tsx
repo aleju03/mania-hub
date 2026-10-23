@@ -16,6 +16,7 @@ import { UploadIcon } from "./LoadoutIcons";
 import { BinderBook, FoilCard, FrameThumb, wrapperThumb } from "./LoadoutSlots";
 import { ProfileThemeSwatch } from "./ProfileThemeBackdrop";
 import { SupporterStyledName } from "./SupporterNameStyle";
+import { queueGpuWork } from "../../lib/gpu-queue";
 
 /* The /supporter page's two sections under the loadout: the four stat cards
    under the viewer's profile (the same picker as the profile's own corner
@@ -192,7 +193,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
             {shown && (
               <>
                 <span className="pointer-events-none absolute inset-x-5 bottom-0 h-3 rounded-full bg-black/40 blur-md" />
-                <CompanionFigure key={shownId} companion={shown} />
+                <CompanionFigure companion={shown} />
               </>
             )}
           </div>
@@ -307,10 +308,11 @@ const PERKS: { id: PerkId; title: MessageDescriptor; body: MessageDescriptor }[]
   { id: "gift", title: msg`A week for a friend`, body: msg`A one-time code that gives someone else a week of supporter.` },
 ];
 
-/* A pack printed on the holo wrapper, drawn once on the client (the art is a canvas). */
+/* A pack printed on the holo wrapper, drawn once on the client (the art is a
+   canvas), in a quiet moment after the page has loaded. */
 function PackThumb() {
   const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => setSrc(wrapperThumb("holo")), []);
+  useEffect(() => queueGpuWork(() => setSrc(wrapperThumb("holo"))), []);
   return src ? <img src={src} alt="" className="h-[46px] w-[28px] rounded-[2px] object-cover shadow-[0_2px_6px_rgba(0,0,0,0.5)]" /> : null;
 }
 

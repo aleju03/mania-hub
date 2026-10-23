@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
 
 import { mountFoilSource } from "./FoilPreview";
+import { queueGpuWork } from "../../lib/gpu-queue";
 
 /* The gift ticket on /support as a real object: a thick ticket in 3D with its
    two notches and a gap where it tears, floating and swaying, tipping toward
@@ -222,7 +223,13 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
     if (!host) return;
     let disposed = false;
     let cleanup: (() => void) | undefined;
+    let unqueue: (() => void) | undefined;
+    // its context and shaders wait for a quiet moment (gpu-queue.ts)
     void import("three").then((THREE) => {
+      if (disposed) return;
+      unqueue = queueGpuWork(() => build(THREE));
+    });
+    const build = (THREE: typeof import("three")) => {
       if (disposed) return;
       let renderer: InstanceType<typeof THREE.WebGLRenderer>;
       try {
@@ -523,9 +530,10 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
         renderer.forceContextLoss();
         canvas.remove();
       };
-    });
+    };
     return () => {
       disposed = true;
+      unqueue?.();
       cleanup?.();
     };
   }, []);

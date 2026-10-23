@@ -20,6 +20,8 @@ import {
   fetchLivePlayerRecentScoresDirect,
   fetchLivePlayerSkillsDirect,
   fetchLiveSupporterProfileLook,
+  fetchServerSupporterLook,
+  seedLiveSupporterLook,
   peekLiveSupporterCompanion,
   fetchRestrictedPpPlayerDirect,
   isLiveBackendConfigured,
@@ -310,6 +312,9 @@ function hasLegacyShowCountryParam(searchStr: string): boolean {
 
 export type PlayerLoaderData = {
   cachedSnapshot: LivePlayerProfileSnapshot | null;
+  /* The player's supporter look as the backend sent it (theme, frame, name,
+     stats, plays, companion), so a reload renders it from the first paint. */
+  cachedSupporterLook?: unknown;
   cachedInsights: UserProfileInsights | null;
   cachedBestFilters: PlayerBestFilterMetadata | null;
   cachedManiaCardSkills: ManiaSkills | null;
@@ -432,9 +437,10 @@ function slimLoaderSnapshot(snapshot: LivePlayerProfileSnapshot): LivePlayerProf
 // Keep the SSR score payload capped without changing full-window UI: insights,
 // filter options, and Maniacard skills are tiny projections calculated before
 // trimming the scores used to paint the initial list.
-export function buildPlayerLoaderData(snapshot: LivePlayerProfileSnapshot | null): PlayerLoaderData {
+export function buildPlayerLoaderData(snapshot: LivePlayerProfileSnapshot | null, supporterLook: unknown = null): PlayerLoaderData {
   const bestScores = snapshot ? dedupeScores(snapshot.bestScores) : [];
   return {
+    cachedSupporterLook: supporterLook,
     cachedSnapshot: snapshot ? slimLoaderSnapshot({ ...snapshot, bestScores }) : null,
     cachedInsights: bestScores.length
       ? calculateUserProfileInsights(bestScores)
@@ -447,6 +453,8 @@ export function buildPlayerLoaderData(snapshot: LivePlayerProfileSnapshot | null
       : null,
   };
 }
+
+const PROFILE_SUPPORTER_LOOK_LOADER_TIMEOUT_MS = 300;
 
 function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -487,8 +495,13 @@ export async function loadPlayerRouteData(username: string): Promise<PlayerLoade
   } catch {
     cachedSnapshot = null;
   }
+  // a quick read, so the page renders in the player's look rather than
+  // switching to it after it loads
+  const supporterLook = cachedSnapshot?.user.id
+    ? await fetchServerSupporterLook(cachedSnapshot.user.id, PROFILE_SUPPORTER_LOOK_LOADER_TIMEOUT_MS)
+    : null;
 
-  return buildPlayerLoaderData(cachedSnapshot);
+  return buildPlayerLoaderData(cachedSnapshot, supporterLook);
 }
 
 export function buildPlayerRouteHead({
@@ -1132,7 +1145,13 @@ export function PlayerProfilePage({
     companion: SupporterCompanion | null;
     /* Only an active supporter has a card look. */
     supporter: boolean;
-  } | null>(null);
+  } | null>(() => {
+    // the look the server render fetched, so the first paint already wears it
+    const raw = loaderData?.cachedSupporterLook;
+    if (!raw || !profileUserId) return null;
+    const value = seedLiveSupporterLook(profileUserId, raw);
+    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, supporter: value.look !== null };
+  });
   useEffect(() => {
     if (!profileUserId) return;
     let alive = true;

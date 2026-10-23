@@ -98,7 +98,10 @@ export function FeaturedPlayCard({ entry, link = true, onOpen }: { entry: Profil
     : <div className={frame}>{body}</div>;
 }
 
-/* The owner's button on either play card. */
+/* The owner's button on either play card: shown while the card is pointed
+   at or the button has focus, and always on touch screens, which can't hover.
+   (The site's own group-hover variant in styles.css ignores named groups, so
+   the card's hover is spelled out.) */
 export function FeaturedPlayEditButton({ onClick }: { onClick: () => void }) {
   const { t } = useLingui();
   return (
@@ -106,7 +109,7 @@ export function FeaturedPlayEditButton({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       aria-label={t`Change this play`}
-      className="absolute right-2 top-2 z-10 grid h-7 w-7 cursor-pointer place-items-center rounded-md bg-black/40 text-white/70 opacity-70 backdrop-blur-sm transition-[opacity,color,background-color] hover:bg-black/60 hover:text-white focus-visible:opacity-100 group-hover/featured:opacity-100"
+      className="absolute right-2 top-2 z-10 grid h-7 w-7 cursor-pointer place-items-center rounded-md bg-black/40 text-white/70 opacity-0 backdrop-blur-sm transition-[opacity,color,background-color] hover:bg-black/60 hover:text-white focus-visible:opacity-100 [.group\/featured:hover_&]:opacity-100 [@media(hover:none)]:opacity-100"
     >
       <PencilIcon className="h-3.5 w-3.5" />
     </button>

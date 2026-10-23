@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
+import { animate, AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 
 import { ManiaCard3DPanel } from "../player/maniacard3d/LazyManiaCard3DPanel";
@@ -15,8 +15,9 @@ import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
 import { bladeLook } from "../packs/packBlades";
 import { FRAME_NAMES, MOTIF_LABELS } from "./loadout";
 import { formatGiftCode } from "./GiftCodePanel";
-import { Stagger, StaggerItem, useNearView } from "./SupportMotion";
+import { Stagger, StaggerItem, useLowEndDevice, useNearView } from "./SupportMotion";
 import { useAuth } from "../../lib/auth-context";
+import { queueGpuWork } from "../../lib/gpu-queue";
 import { fetchLivePackCardSnapshotDirect, fetchLiveSupporterProfileLook, type LivePackCardSnapshot } from "../../lib/live-backend";
 import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_FOIL_LABELS, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
@@ -38,6 +39,7 @@ import {
   SUPPORTER_WRAPPERS,
   SUPPORTER_BLADE_LABELS,
   SUPPORTER_BLADES,
+  type SupporterBladeId,
 } from "../../lib/supporter-pack-style";
 import type { ProfileStatsData } from "../../lib/profile-stats";
 import type { SupporterLook } from "../../lib/supporter-card-looks";
@@ -79,40 +81,65 @@ function useCycle(count: number, ms: number, active: boolean) {
 /* --- Theme stage ------------------------------------------------------------- */
 
 /* A theme's living backdrop that changes theme by revealing the next one,
-   live, through a soft-edged circle that grows from the middle. The revealed
-   backdrop stays as it is once it covers the box (the one under it goes), so
-   its animation runs on without a restart. */
+   live, through a soft-edged circle that grows from the middle. Two backdrops
+   take turns: the next theme goes on the one underneath, which then grows over
+   the other, and the covered one stops drawing. Each keeps its WebGL context
+   and the programs it has compiled, so the cycle never builds one again, and
+   the revealed theme's animation runs on without a restart. */
 const REVEAL_MS = 900;
 
 const ThemeStage = forwardRef<HTMLDivElement, { theme: SupporterProfileThemeId; className?: string; children: ReactNode }>(function ThemeStage({ theme, className = "", children }, ref) {
   const reduced = useReducedMotion();
-  const [layers, setLayers] = useState<{ id: number; theme: SupporterProfileThemeId }[]>(() => [{ id: 0, theme }]);
-  const top = layers[layers.length - 1];
+  // the second backdrop is only made for the first change
+  const [slots, setSlots] = useState<[SupporterProfileThemeId, SupporterProfileThemeId | null]>(() => [theme, null]);
+  const [front, setFront] = useState(0);
+  const [reveal, setReveal] = useState(0);
+  const [revealing, setRevealing] = useState(false);
+  const layers = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
+  const shown = slots[front] ?? theme;
+
   useEffect(() => {
-    if (theme === top.theme) return;
-    const id = performance.now();
-    setLayers((current) => (reduced ? [{ id, theme }] : [...current.slice(-1), { id, theme }]));
+    if (theme === shown) return;
+    const next = reduced ? front : 1 - front;
+    setSlots((current) => (next === 0 ? [theme, current[1]] : [current[0], theme]));
     if (reduced) return;
-    const settle = window.setTimeout(() => setLayers((current) => current.filter((layer) => layer.id >= id)), REVEAL_MS + 100);
-    return () => window.clearTimeout(settle);
+    setFront(next);
+    setRevealing(true);
+    setReveal((n) => n + 1);
   }, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // grows the front one over the other, once it is in the page
+  useEffect(() => {
+    const layer = layers[front].current;
+    if (!reveal || !layer) return;
+    const controls = animate(layer, { "--reveal": ["0%", "135%"], scale: [1.06, 1] } as never, { duration: REVEAL_MS / 1000, ease: [0.45, 0, 0.2, 1] });
+    const settle = window.setTimeout(() => setRevealing(false), REVEAL_MS + 100);
+    return () => {
+      controls.stop();
+      window.clearTimeout(settle);
+    };
+  }, [reveal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mask = "radial-gradient(circle at 50% 55%, #000 calc(var(--reveal) - 18%), transparent var(--reveal))";
   return (
-    <div ref={ref} className={`relative isolate overflow-hidden bg-osu-b6 ${className}`} style={profileThemeStyle(top.theme)}>
-      {layers.map((layer, index) => (
-        <motion.div
-          key={layer.id}
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{ zIndex: index - 10, ...(layer.id === 0 ? {} : { maskImage: mask, WebkitMaskImage: mask }) } as CSSProperties}
-          initial={layer.id === 0 ? false : ({ "--reveal": "0%", scale: 1.06 } as never)}
-          animate={{ "--reveal": "135%", scale: 1 } as never}
-          transition={{ duration: REVEAL_MS / 1000, ease: [0.45, 0, 0.2, 1] }}
-        >
-          <ProfileThemeBackdrop theme={layer.theme} maxPixels={420_000} className="absolute inset-0" />
-        </motion.div>
-      ))}
+    <div ref={ref} className={`relative isolate overflow-hidden bg-osu-b6 ${className}`} style={profileThemeStyle(shown)}>
+      {slots.map((slot, index) => {
+        if (!slot) return null;
+        const onTop = index === front;
+        // the one underneath only shows while the other grows over it
+        const hidden = !onTop && !revealing;
+        return (
+          <div
+            key={index}
+            ref={layers[index]}
+            aria-hidden
+            className={`pointer-events-none absolute inset-0 ${hidden ? "hidden" : ""}`}
+            style={{ zIndex: onTop ? -9 : -10, ...(onTop && revealing ? { "--reveal": "0%", maskImage: mask, WebkitMaskImage: mask } : {}) } as CSSProperties}
+          >
+            <ProfileThemeBackdrop theme={slot} maxPixels={420_000} className="absolute inset-0" />
+          </div>
+        );
+      })}
       <div className="relative h-full">{children}</div>
     </div>
   );
@@ -258,18 +285,22 @@ const SHOWN_FRAMES: SupporterAvatarFrameId[] = [
   "ln-hold-9", "five-star-pull", "crt-monitor", "halo-pink",
 ];
 
+/* Eight frame videos at once are a lot for a weak machine: there only the one
+   under the pointer plays. */
 export function FramesShowcase() {
   const { i18n } = useLingui();
   const you = useShowcaseViewer();
   const [ref, near] = useNearView<HTMLDivElement>();
+  const lowEnd = useLowEndDevice();
+  const [hovered, setHovered] = useState<SupporterAvatarFrameId | null>(null);
   return (
     <div ref={ref}>
     <Stagger className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4">
       {SHOWN_FRAMES.map((frame) => {
         const name = FRAME_NAMES.get(frame);
         return (
-          <StaggerItem key={frame} className="flex flex-col items-center">
-            <FrameThumb frame={frame} avatar={you.avatar} size={118} live={near} />
+          <StaggerItem key={frame} className="flex flex-col items-center" onPointerEnter={() => setHovered(frame)} onPointerLeave={() => setHovered(null)}>
+            <FrameThumb frame={frame} avatar={you.avatar} size={118} live={near && (!lowEnd || hovered === frame)} />
             <div className="mt-1 text-center text-[11px] text-osu-f1">
               {name ? `${i18n._(name.label)}${name.variant ? ` ${name.variant}` : ""}` : frame}
             </div>
@@ -293,16 +324,20 @@ const SHOWN_NAMES: [SupporterNameStyleId, SupporterNameFontId | null][] = [
   ["ink", "marker"],
 ];
 
+/* Each shader name is its own WebGL context; on a weak machine the rows keep
+   their CSS look and only the one under the pointer runs live. */
 export function NamesShowcase() {
   const { i18n } = useLingui();
   const you = useShowcaseViewer();
   const [ref, near] = useNearView<HTMLDivElement>();
+  const lowEnd = useLowEndDevice();
+  const [hovered, setHovered] = useState<SupporterNameStyleId | null>(null);
   return (
     <div ref={ref}>
     <Stagger className="divide-y divide-white/[0.07]">
       {SHOWN_NAMES.map(([style, font]) => (
-        <StaggerItem key={style} lift={false} className="flex items-center justify-between gap-4 py-2.5">
-          <SupporterStyledName nameStyle={style} nameFont={font} name={you.name} live={near} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[30px]" />
+        <StaggerItem key={style} lift={false} className="flex items-center justify-between gap-4 py-2.5" onPointerEnter={() => setHovered(style)} onPointerLeave={() => setHovered(null)}>
+          <SupporterStyledName nameStyle={style} nameFont={font} name={you.name} live={near && (!lowEnd || hovered === style)} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[30px]" />
           <span className="shrink-0 text-right text-[11px] text-osu-f1">
             {i18n._(SUPPORTER_NAME_STYLE_LABELS[style])}
             {font ? `, ${i18n._(SUPPORTER_NAME_FONT_LABELS[font])}` : ""}
@@ -427,14 +462,22 @@ function CardHand({ foil, motif }: { foil: SupporterFoilId; motif: SupporterMoti
 
 export function PacksShowcase() {
   const { t, i18n } = useLingui();
-  const [wrappers, setWrappers] = useState<string[] | null>(null);
-  // Drawn on a canvas, so only after mount.
-  useEffect(() => setWrappers(SUPPORTER_WRAPPERS.map((id) => wrapperThumb(id))), []);
+  const [ref, near] = useNearView<HTMLDivElement>();
+  const lowEnd = useLowEndDevice();
+  const [hovered, setHovered] = useState<SupporterBladeId | null>(null);
+  const [wrappers, setWrappers] = useState<Partial<Record<string, string>>>({});
+  // Each is a whole pack drawn on a canvas, so they wait until the section is
+  // near and then come in one per quiet moment.
+  useEffect(() => {
+    if (!near) return;
+    const cancels = SUPPORTER_WRAPPERS.map((id) => queueGpuWork(() => setWrappers((current) => ({ ...current, [id]: wrapperThumb(id) }))));
+    return () => cancels.forEach((cancel) => cancel());
+  }, [near]);
   const group = "min-w-0";
   const heading = "mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-osu-f1";
   const label = "mt-1.5 truncate text-center text-[11px] text-osu-l2";
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div ref={ref} className="grid gap-6 md:grid-cols-2">
       <div className={group}>
         <div className={heading}>{t`Cases`}</div>
         <Stagger className="grid grid-cols-4 gap-2">
@@ -460,10 +503,10 @@ export function PacksShowcase() {
       <div className={group}>
         <div className={heading}>{t`Wrappers`}</div>
         <Stagger className="grid grid-cols-4 gap-2">
-          {SUPPORTER_WRAPPERS.map((id, i) => (
+          {SUPPORTER_WRAPPERS.map((id) => (
             <StaggerItem key={id}>
-              {wrappers ? (
-                <img src={wrappers[i]} alt="" className="mx-auto h-[84px] w-[50px] rounded-[3px] object-cover" />
+              {wrappers[id] ? (
+                <img src={wrappers[id]} alt="" className="mx-auto h-[84px] w-[50px] rounded-[3px] object-cover" />
               ) : (
                 <div className="mx-auto h-[84px] w-[50px] rounded-[3px] bg-osu-b6" />
               )}
@@ -478,8 +521,18 @@ export function PacksShowcase() {
           {SUPPORTER_BLADES.map((id) => (
             <StaggerItem key={id}>
               {/* a tap plays how the pack gives */}
-              <button type="button" onPointerEnter={() => warmBladeSounds(bladeLook(id).sound)} onClick={() => playBladeRip(id, bladeLook(id).sound)} className="block w-full cursor-pointer" aria-label={i18n._(SUPPORTER_BLADE_LABELS[id])}>
-                <BladeSwatch blade={id} live className="h-[84px] w-full rounded-md bg-osu-b6" />
+              <button
+                type="button"
+                onPointerEnter={() => {
+                  setHovered(id);
+                  warmBladeSounds(bladeLook(id).sound);
+                }}
+                onPointerLeave={() => setHovered(null)}
+                onClick={() => playBladeRip(id, bladeLook(id).sound)}
+                className="block w-full cursor-pointer"
+                aria-label={i18n._(SUPPORTER_BLADE_LABELS[id])}
+              >
+                <BladeSwatch blade={id} live={near && (!lowEnd || hovered === id)} className="h-[84px] w-full rounded-md bg-osu-b6" />
               </button>
               <div className={label}>{i18n._(SUPPORTER_BLADE_LABELS[id])}</div>
             </StaggerItem>

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useLingui } from "@lingui/react/macro";
 
 import type { SupporterCompanion } from "../../lib/supporter-companions";
+import type { CompanionScene } from "../../lib/companion-scene";
+import { queueGpuWork } from "../../lib/gpu-queue";
 import { TungTungSahurKeycap } from "../player/TungTungSahurKeycap";
 
 /* Draws a companion (lib/supporter-companions.ts): the keycap as its own
@@ -10,18 +12,36 @@ import { TungTungSahurKeycap } from "../player/TungTungSahurKeycap";
 
 function ModelCompanion({ url, facing, matte, label }: { url: string; facing?: number; matte?: boolean; label: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<CompanionScene | null>(null);
+  const modelRef = useRef({ url, facing, matte });
+  modelRef.current = { url, facing, matte };
+  // one canvas for as long as this stays a model; it waits for a quiet moment to start
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     let cancelled = false;
-    let scene: { dispose(): void } | undefined;
+    let unqueue: (() => void) | undefined;
     void import("../../lib/companion-scene").then(({ mountCompanionScene }) => {
-      if (!cancelled) scene = mountCompanionScene(host, url, { facing, matte });
+      if (cancelled) return;
+      unqueue = queueGpuWork(() => {
+        if (cancelled) return;
+        const { url: first, facing: turn, matte: flat } = modelRef.current;
+        sceneRef.current = mountCompanionScene(host, first, { facing: turn, matte: flat });
+      });
     });
     return () => {
       cancelled = true;
-      scene?.dispose();
+      unqueue?.();
+      sceneRef.current?.dispose();
+      sceneRef.current = null;
     };
+  }, []);
+  // swapping the model keeps the canvas, its context and compiled shaders
+  const shown = useRef(url);
+  useEffect(() => {
+    if (shown.current === url) return;
+    shown.current = url;
+    sceneRef.current?.setModel(url, { facing, matte });
   }, [url, facing, matte]);
   return <div ref={hostRef} role="img" aria-label={label} className="relative h-full w-full" />;
 }
@@ -83,31 +103,44 @@ function KeycapStill({ className }: { className?: string }) {
   );
 }
 
-/* A still of a companion for a list tile: models are drawn once by a shared
-   renderer, so a grid of them costs one WebGL context. */
+/* A still of a companion for a list tile: the site's models have one
+   rendered ahead of time; a submitted model is drawn once by a shared
+   renderer, so a grid of them costs one WebGL context, and only once its tile
+   is near the screen, one at a time. */
 export function CompanionThumb({ companion, className }: { companion: SupporterCompanion; className?: string }) {
   const [src, setSrc] = useState<string | null>(null);
-  const model = "builtIn" in companion
-    ? (companion.builtIn.kind === "model" ? { url: companion.builtIn.url!, facing: companion.builtIn.facing ?? 0, matte: !!companion.builtIn.matte } : null)
-    : (companion.submitted.kind === "model" ? { url: companion.submitted.url, facing: 0, matte: false } : null);
-  const modelUrl = model?.url;
-  const modelFacing = model?.facing ?? 0;
-  const modelMatte = model?.matte ?? false;
+  const ref = useRef<HTMLSpanElement>(null);
+  const model = "submitted" in companion && companion.submitted.kind === "model" ? companion.submitted.url : null;
   useEffect(() => {
-    if (!modelUrl) return;
+    const node = ref.current;
+    if (!model || !node) return;
     let alive = true;
+    let unqueue: (() => void) | undefined;
     setSrc(null);
-    void import("../../lib/companion-scene")
-      .then(({ companionThumbnail }) => companionThumbnail(modelUrl, modelFacing, modelMatte))
-      .then((next) => {
-        if (alive) setSrc(next);
-      })
-      .catch(() => {});
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      unqueue = queueGpuWork(() => {
+        void import("../../lib/companion-scene")
+          .then(({ companionThumbnail }) => companionThumbnail(model))
+          .then((next) => {
+            if (alive) setSrc(next);
+          })
+          .catch(() => {});
+      });
+    }, { rootMargin: "200px 0px" });
+    observer.observe(node);
     return () => {
       alive = false;
+      observer.disconnect();
+      unqueue?.();
     };
-  }, [modelUrl, modelFacing, modelMatte]);
-  if ("builtIn" in companion && companion.builtIn.kind === "keycap") return <KeycapStill className={className} />;
-  const still = model ? src : "submitted" in companion ? companion.submitted.url : null;
-  return still ? <img src={still} alt="" draggable={false} className={`object-contain ${className ?? ""}`} /> : <span className={className} />;
+  }, [model]);
+  if ("builtIn" in companion) {
+    const entry = companion.builtIn;
+    if (entry.kind === "keycap") return <KeycapStill className={className} />;
+    return <img src={entry.thumb} alt="" draggable={false} loading="lazy" className={`object-contain ${className ?? ""}`} />;
+  }
+  const still = model ? src : companion.submitted.url;
+  return still ? <img src={still} alt="" draggable={false} className={`object-contain ${className ?? ""}`} /> : <span ref={ref} className={className} />;
 }

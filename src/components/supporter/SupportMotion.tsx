@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { animate, motion, useInView, useReducedMotion, type Variants } from "framer-motion";
+import { isLowEndDevice } from "../../lib/gpu-queue";
 
 /* The motion on /support: sections rise in as they scroll into view, the
    items in a perk's picture pop in one after another, counts run up to their
@@ -45,14 +46,22 @@ export function Stagger({ children, className }: { children: ReactNode; classNam
   );
 }
 
-export function StaggerItem({ children, className, lift = true }: { children: ReactNode; className?: string; lift?: boolean }) {
+export function StaggerItem({ children, className, lift = true, onPointerEnter, onPointerLeave }: {
+  children: ReactNode;
+  className?: string;
+  lift?: boolean;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
+}) {
   const reduced = useReducedMotion();
-  if (reduced) return <div className={className}>{children}</div>;
+  if (reduced) return <div className={className} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>{children}</div>;
   return (
     <motion.div
       className={className}
       variants={POP}
       whileHover={lift ? { y: -5, scale: 1.05, transition: { type: "spring", stiffness: 500, damping: 18 } } : undefined}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
     >
       {children}
     </motion.div>
@@ -86,4 +95,12 @@ export function useNearView<T extends Element>(margin = "200px 0px") {
     return () => observer.disconnect();
   }, [margin]);
   return [ref, near] as const;
+}
+
+/* True on a machine where several live previews at once cost more than they
+   show (gpu-queue.ts); false until mounted, so the server render matches. */
+export function useLowEndDevice(): boolean {
+  const [low, setLow] = useState(false);
+  useEffect(() => setLow(isLowEndDevice()), []);
+  return low;
 }

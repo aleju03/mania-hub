@@ -4689,21 +4689,9 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
   if (cached) return cached.value;
   const entry: SupporterLookCacheEntry = { at: Date.now(), value: Promise.resolve(NO_SUPPORTER_LOOK) };
   const reload = supporterLooksToReload.delete(id);
-  entry.value = fetchLiveJson<{ look?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; profileStats?: unknown; profileStatsData?: unknown; profilePlays?: unknown; packStyle?: unknown; companion?: unknown }>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
+  entry.value = fetchLiveJson<unknown>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
     .then((body) => {
-      const value = {
-        look: parseSupporterLook(body?.look ?? null),
-        frame: isSupporterAvatarFrame(body?.frame) ? body.frame : null,
-        nameStyle: isSupporterNameStyle(body?.nameStyle) ? body.nameStyle : null,
-        nameFont: isSupporterNameFont(body?.nameFont) ? body.nameFont : null,
-        profileTheme: isSupporterProfileTheme(body?.profileTheme) ? body.profileTheme : null,
-        profileThemeOptions: parseProfileThemeOptions(body?.profileThemeOptions),
-        profileStats: parseProfileStats(body?.profileStats),
-        profileStatsData: parseProfileStatsData(body?.profileStatsData),
-        profilePlays: parseProfilePlays(body?.profilePlays),
-        packStyle: parsePackStyle(body?.packStyle),
-        companion: parseSupporterCompanion(body?.companion),
-      };
+      const value = parseSupporterProfileLook(body);
       entry.settled = value;
       return value;
     })
@@ -4713,6 +4701,50 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
     });
   supporterLookCache.set(id, entry);
   return entry.value;
+}
+
+/* The backend's answer for one player's look, checked field by field. */
+export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
+  const body = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    look: parseSupporterLook(body.look ?? null),
+    frame: isSupporterAvatarFrame(body.frame) ? body.frame : null,
+    nameStyle: isSupporterNameStyle(body.nameStyle) ? body.nameStyle : null,
+    nameFont: isSupporterNameFont(body.nameFont) ? body.nameFont : null,
+    profileTheme: isSupporterProfileTheme(body.profileTheme) ? body.profileTheme : null,
+    profileThemeOptions: parseProfileThemeOptions(body.profileThemeOptions),
+    profileStats: parseProfileStats(body.profileStats),
+    profileStatsData: parseProfileStatsData(body.profileStatsData),
+    profilePlays: parseProfilePlays(body.profilePlays),
+    packStyle: parsePackStyle(body.packStyle),
+    companion: parseSupporterCompanion(body.companion),
+  };
+}
+
+/* A look the server render already fetched (the profile route's loader),
+   handed to the browser's cache so the page and everything that peeks at it
+   start from it instead of fetching it again. */
+export function seedLiveSupporterLook(userId: number, raw: unknown): SupporterProfileLook {
+  const id = Math.floor(Number(userId) || 0);
+  const value = parseSupporterProfileLook(raw);
+  if (id > 0 && typeof window !== "undefined" && !freshSupporterLookEntry(id)) {
+    supporterLookCache.set(id, { at: Date.now(), value: Promise.resolve(value), settled: value });
+  }
+  return value;
+}
+
+/* The raw look for the server render, from the backend directly; null if it
+   doesn't answer within `timeoutMs`, so a slow backend never holds the page. */
+export async function fetchServerSupporterLook(userId: number, timeoutMs: number): Promise<unknown> {
+  const id = Math.floor(Number(userId) || 0);
+  const base = getServerLiveBackendUrl();
+  if (id <= 0 || !base) return null;
+  try {
+    const response = await fetch(`${base}/api/supporters/look/${id}`, { signal: AbortSignal.timeout(timeoutMs) });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
 }
 
 export function fetchLiveSupporterLook(userId: number): Promise<SupporterLook | null> {

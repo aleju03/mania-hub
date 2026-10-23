@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { cardOverlayFragmentShader } from "../player/maniacard3d/cardShaders";
 import { supporterFoilIndex, type SupporterFoilId } from "../../lib/supporter-foils";
+import { takeGpuSlot } from "../../lib/gpu-queue";
 
 /* A live swatch of a supporter foil: the card's own overlay shader on a blank
    card, without the tier's sparkle, its light circling, or following the pointer while it is over the
@@ -9,7 +10,9 @@ import { supporterFoilIndex, type SupporterFoilId } from "../../lib/supporter-fo
    in turn and copied into each swatch's 2D canvas, so a drawer of them costs
    one context rather than one each (browsers cap those near 16, and the 3D
    card and name tags need theirs). They redraw at 30fps and only while on
-   screen; a `still` swatch draws once. */
+   screen; a `still` swatch draws once. The shader compiles in the background
+   where the browser can (KHR_parallel_shader_compile), and otherwise waits
+   its turn (gpu-queue.ts); the swatches show their flat backing until then. */
 
 const VERTEX = `
 attribute vec2 position;
@@ -27,6 +30,8 @@ interface Swatch {
   style: number;
   phase: number;
   pointer: [number, number] | null;
+  /* Drawn once, then dropped from the loop. */
+  still?: boolean;
 }
 
 interface Shared {
@@ -40,31 +45,48 @@ let shared: Shared | null | undefined;
 let frame = 0;
 let lastDraw = 0;
 const FRAME_MS = 1000 / 30;
+const STILLS_PER_FRAME = 3;
 const start = typeof performance === "undefined" ? 0 : performance.now();
+
+interface Building {
+  gl: WebGLRenderingContext;
+  canvas: HTMLCanvasElement;
+  program: WebGLProgram;
+  parallel: { COMPLETION_STATUS_KHR: number } | null;
+}
+let building: Building | null = null;
 
 function compile(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
   const shader = gl.createShader(type);
   if (!shader) return null;
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
-  return gl.getShaderParameter(shader, gl.COMPILE_STATUS) ? shader : null;
+  return shader;
 }
 
-/* Null once it has failed, so a browser without WebGL leaves the swatches as their flat backing. */
-function setUp(): Shared | null {
+/* The shared context once its program has linked; undefined while it is
+   still compiling, null once it has failed, so a browser without WebGL leaves
+   the swatches as their flat backing. */
+function setUp(): Shared | null | undefined {
   if (shared !== undefined) return shared;
-  shared = null;
-  const canvas = document.createElement("canvas");
-  const gl = canvas.getContext("webgl", { premultipliedAlpha: false, alpha: true, antialias: false });
-  if (!gl) return null;
-  const vertex = compile(gl, gl.VERTEX_SHADER, VERTEX);
-  const fragment = compile(gl, gl.FRAGMENT_SHADER, `#define MC_MEDIUM 1\n${cardOverlayFragmentShader}`);
-  const program = gl.createProgram();
-  if (!vertex || !fragment || !program) return null;
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+  if (!building) {
+    if (!takeGpuSlot()) return undefined;
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl", { premultipliedAlpha: false, alpha: true, antialias: false });
+    if (!gl) return (shared = null);
+    const vertex = compile(gl, gl.VERTEX_SHADER, VERTEX);
+    const fragment = compile(gl, gl.FRAGMENT_SHADER, `#define MC_MEDIUM 1\n${cardOverlayFragmentShader}`);
+    const program = gl.createProgram();
+    if (!vertex || !fragment || !program) return (shared = null);
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    building = { gl, canvas, program, parallel: gl.getExtension("KHR_parallel_shader_compile") };
+  }
+  const { gl, canvas, program, parallel } = building;
+  if (parallel && !gl.getProgramParameter(program, parallel.COMPLETION_STATUS_KHR)) return undefined;
+  building = null;
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return (shared = null);
   gl.useProgram(program);
 
   const buffer = gl.createBuffer();
@@ -109,14 +131,15 @@ function setUp(): Shared | null {
   return shared;
 }
 
-function draw(now: number, only?: Swatch) {
+/* False while the shader is still compiling. */
+function draw(now: number, only?: Swatch): boolean {
   const context = setUp();
-  if (!context) return;
+  if (!context) return context === null;
   const { gl, canvas, uniforms } = context;
   const time = (now - start) / 1000;
   gl.uniform1f(uniforms.uTime, time);
   for (const swatch of only ? [only] : swatches) {
-    if (!only && !swatch.visible) continue;
+    if (!only && (swatch.still || !swatch.visible)) continue;
     const { width, height } = swatch.canvas;
     if (!width || !height) continue;
     if (canvas.width !== width || canvas.height !== height) {
@@ -135,11 +158,19 @@ function draw(now: number, only?: Swatch) {
     swatch.target.clearRect(0, 0, width, height);
     swatch.target.drawImage(canvas, 0, 0);
   }
+  return true;
 }
 
 function loop(now: number) {
   if (now - lastDraw >= FRAME_MS) {
     lastDraw = now;
+    // stills draw a few per frame (each copy waits on the GPU), then leave the loop
+    let stills = STILLS_PER_FRAME;
+    for (const swatch of swatches) {
+      if (!swatch.still || !swatch.visible || stills <= 0) continue;
+      stills -= 1;
+      if (draw(start + 4000, swatch)) swatches.delete(swatch);
+    }
     draw(now);
   }
   frame = swatches.size > 0 ? requestAnimationFrame(loop) : 0;
@@ -157,8 +188,17 @@ export function FoilPreview({ foil, className, still = false }: { foil: Supporte
     canvas.height = Math.round(canvas.clientHeight * ratio);
     const swatch: Swatch = { canvas, target: null, visible: true, style: supporterFoilIndex(foil), phase: supporterFoilIndex(foil) * 1.7, pointer: null };
     if (still || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      draw(start + 4000, swatch);
-      return;
+      swatch.still = true;
+      swatches.add(swatch);
+      const watcher = new IntersectionObserver(([entry]) => {
+        swatch.visible = entry.isIntersecting;
+      });
+      watcher.observe(canvas);
+      if (!frame) frame = requestAnimationFrame(loop);
+      return () => {
+        watcher.disconnect();
+        swatches.delete(swatch);
+      };
     }
     swatchRef.current = swatch;
     swatches.add(swatch);

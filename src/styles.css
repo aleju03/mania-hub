@@ -1135,15 +1135,16 @@ html[data-custom-cursor="true"] * {
   animation: name-tag-slide 12s linear infinite;
 }
 .name-tag--galaxy {
-  /* bright enough to read at list size: lavender sky, pink and blue nebula,
-     a couple of stars */
+  /* the shader's resting look: deep violet with a lavender edge, a faint pink
+     and blue nebula, a couple of stars */
   background-image:
     radial-gradient(circle at 22% 38%, #fff 0 0.035em, transparent 0.06em),
     radial-gradient(circle at 68% 66%, #fff 0 0.03em, transparent 0.055em),
-    radial-gradient(ellipse 40% 90% at 28% 55%, #ff8ad6 0, transparent 70%),
-    radial-gradient(ellipse 40% 90% at 74% 45%, #7fb6ff 0, transparent 70%),
-    linear-gradient(180deg, #c3b0ff, #8a6dff);
-  filter: drop-shadow(0 0 0.06em rgba(190, 170, 255, 0.6)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.6));
+    radial-gradient(ellipse 34% 70% at 30% 55%, rgba(226, 104, 200, 0.55) 0, transparent 70%),
+    radial-gradient(ellipse 30% 70% at 74% 45%, rgba(110, 150, 245, 0.45) 0, transparent 70%),
+    linear-gradient(180deg, #c4a6f6 calc(50% - 0.42em), #9a5ee8 calc(50% - 0.22em), #6a3ac4 calc(50% + 0.02em),
+      #50349e calc(50% + 0.26em), #8a5ce0 calc(50% + 0.48em));
+  filter: drop-shadow(0 0 0.05em rgba(170, 130, 255, 0.5)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.6));
 }
 .name-tag--heatmap {
   background-image: linear-gradient(180deg, #2f63e7 calc(50% - 0.3em), #4fb4ff calc(50% - 0.1em), #9fe8ff calc(50% + 0.04em),

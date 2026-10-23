@@ -19,7 +19,9 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
    demand. The model stands on the floor of its box, scaled to fill its
    height, and faces the viewer; dragging sideways turns it left or right, and
    only that way: it never tips forward or back. Let go and it spins on a
-   little, then eases back to face front. Draws only while on screen. */
+   little, then eases back to face front. Draws only while on screen. The
+   canvas can swap models (the /supporter preview, as the pointer moves down
+   the list), keeping its context and compiled shaders. */
 
 const FOV = 28;
 const DRAG_TURN = 0.012;
@@ -104,10 +106,12 @@ function dispose(root: Object3D) {
 }
 
 export interface CompanionScene {
+  /* Shows another model once it has loaded; the current one stays until then. */
+  setModel(url: string, options?: { facing?: number; matte?: boolean }): void;
   dispose(): void;
 }
 
-export function mountCompanionScene(host: HTMLElement, url: string, { facing = 0, matte = false, onReady }: { facing?: number; matte?: boolean; onReady?: () => void } = {}): CompanionScene {
+export function mountCompanionScene(host: HTMLElement, url: string, { facing: initialFacing = 0, matte = false, onReady }: { facing?: number; matte?: boolean; onReady?: () => void } = {}): CompanionScene {
   const renderer = new WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = SRGBColorSpace;
@@ -124,11 +128,13 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing = 0
   const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   let model: Object3D | null = null;
+  let facing = initialFacing;
+  let loading = 0;
   let spread = 0.8;
   let disposed = false;
   let visible = true;
   let raf = 0;
-  let yaw = facing;
+  let yaw = initialFacing;
   let velocity = 0;
   let dragging: { id: number; x: number; at: number } | null = null;
   let releasedAt = -1e9;
@@ -201,23 +207,37 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing = 0
   });
   watcher.observe(host);
 
-  void loadModel(url).then((loaded) => {
-    if (disposed) {
-      dispose(loaded);
-      return;
-    }
-    model = loaded;
-    if (matte) makeMatte(loaded);
-    spread = fit(loaded);
-    turntable.add(loaded);
-    resize();
-    renderer.render(scene, camera);
-    canvas.style.opacity = "1";
-    onReady?.();
-    wake();
-  }).catch(() => {});
+  const show = (next: string, nextFacing: number, nextMatte: boolean) => {
+    const ticket = ++loading;
+    void loadModel(next).then((loaded) => {
+      if (disposed || ticket !== loading) {
+        dispose(loaded);
+        return;
+      }
+      if (model) {
+        turntable.remove(model);
+        dispose(model);
+      }
+      model = loaded;
+      if (nextMatte) makeMatte(loaded);
+      spread = fit(loaded);
+      turntable.add(loaded);
+      facing = nextFacing;
+      yaw = nextFacing;
+      velocity = 0;
+      resize();
+      renderer.render(scene, camera);
+      canvas.style.opacity = "1";
+      onReady?.();
+      wake();
+    }).catch(() => {});
+  };
+  show(url, initialFacing, matte);
 
   return {
+    setModel(next, options = {}) {
+      show(next, options.facing ?? 0, options.matte ?? false);
+    },
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);

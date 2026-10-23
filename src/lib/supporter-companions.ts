@@ -33,6 +33,9 @@ export interface BuiltInCompanion {
   facing?: number;
   /* Fabric: drawn fully matte, whatever shine the scan's maps carry. */
   matte?: boolean;
+  /* A still of the model, rendered ahead of time (companionThumbnail) so a
+     list of them downloads no models. */
+  thumb?: string;
   credit?: { author: string; url: string; license: string };
 }
 
@@ -44,6 +47,7 @@ const fumo = (id: BuiltInCompanionId, name: MessageDescriptor, uid: string, faci
   name,
   kind: "model",
   url: `/models/companions/${id}.glb`,
+  thumb: `/models/companions/thumbs/${id}.webp`,
   facing,
   matte: true,
   credit: FUMO_CREDIT(uid),
@@ -51,7 +55,7 @@ const fumo = (id: BuiltInCompanionId, name: MessageDescriptor, uid: string, faci
 
 export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   { id: "sahur-keycap", name: msg`Tung tung sahur keycap`, kind: "keycap" },
-  { id: "blob-pink", name: msg`Pink blob`, kind: "model", url: "/models/companions/blob-pink.glb" },
+  { id: "blob-pink", name: msg`Pink blob`, kind: "model", url: "/models/companions/blob-pink.glb", thumb: "/models/companions/thumbs/blob-pink.webp" },
   fumo("fumo-reimu-v2", msg`Reimu fumo`, "ff926e77d0564c028bde86fd32a487c1", -1.47),
   fumo("fumo-cirno", msg`Cirno fumo`, "efd2a7f4dbf048c1a18438db7f86c4b9", 2.06),
   fumo("fumo-flandre", msg`Flandre fumo`, "bef0ada62b64410ba523923cf6ac56ce", -0.9),

@@ -8,6 +8,7 @@ import {
 } from "@paper-design/shaders";
 
 import type { ShaderNameStyle } from "./supporter-name-styles";
+import { queueGpuWork } from "./gpu-queue";
 
 /* Live WebGL looks for a name tag, drawn over a supporter's name where it is
    big (the profile hero, the /supporter preview). Chrome and molten gold run
@@ -451,6 +452,7 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
   let mount: ShaderMount | null = null;
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let unqueue: (() => void) | undefined;
   const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const build = async () => {
@@ -462,9 +464,18 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
     const built = await buildStyle(style, mask);
     if (disposed) return;
     const uniforms = { ...built.uniforms, ...SIZING } as ConstructorParameters<typeof ShaderMount>[2];
-    if (mount) mount.setUniforms(uniforms);
-    else mount = new ShaderMount(host, built.shader, uniforms, { premultipliedAlpha: true }, still ? 0 : 1, 3, 2, undefined, built.mipmaps);
-    onReady();
+    if (mount) {
+      mount.setUniforms(uniforms);
+      onReady();
+      return;
+    }
+    // a context and a compile each, so a list of names starts one at a time
+    unqueue?.();
+    unqueue = queueGpuWork(() => {
+      if (disposed || mount) return;
+      mount = new ShaderMount(host, built.shader, uniforms, { premultipliedAlpha: true }, still ? 0 : 1, 3, 2, undefined, built.mipmaps);
+      onReady();
+    });
   };
 
   build().catch(() => {});
@@ -482,7 +493,12 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
   return () => {
     disposed = true;
     clearTimeout(timer);
+    unqueue?.();
     observer.disconnect();
+    // dispose() leaves the context to the garbage collector, and a page that
+    // swaps names fast runs into the browser's cap of live contexts first
+    const gl = mount?.canvasElement.getContext("webgl2");
     mount?.dispose();
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
   };
 }
