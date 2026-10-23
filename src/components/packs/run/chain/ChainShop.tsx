@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
+  CHAIN_REEL,
   CHAIN_RULES,
   CHAIN_SCENE_COPY,
   CHAIN_SCENE_INK,
@@ -9,7 +10,9 @@ import {
   chainOfferName,
   chainRefusalMessage,
   type ChainAction,
+  type ChainActionResult,
   type ChainOffer,
+  type ChainReelPrize,
   type ChainRunView,
   type ChainSceneId,
 } from "#/lib/chain-run";
@@ -20,6 +23,7 @@ import { SHOP_FEEL } from "../shopFeel";
 import { useShardFloats, useShudder } from "../shopMotion";
 import { Shards } from "../Shards";
 import { ChainCardFace } from "./ChainCardFace";
+import { ChainReel, ReelOffer } from "./ChainReel";
 import { SCENE_ART_ID } from "./ChainHud";
 import type { BoardLayout } from "./chainLayout";
 import { chainPackType } from "./ChainPackStage";
@@ -29,6 +33,7 @@ import { useChainPackArt } from "./chainPackArt";
 export interface ShopActResult {
   ok: boolean;
   error?: string;
+  result?: ChainActionResult;
 }
 
 function PriceButton({
@@ -101,6 +106,9 @@ export interface ChainShopProps {
   reducedMotion: boolean;
   act: (action: ChainAction) => Promise<ShopActResult>;
   shake: (amount: number) => void;
+  /* Holds the HUD's shard count (null lets go), so a spin's prize lands
+     when the reel stops rather than when the server answers. */
+  holdShards: (value: number | null) => void;
 }
 
 /* The shop between rounds, shaped around buying: the three packs and the
@@ -108,13 +116,15 @@ export interface ChainShopProps {
    removing a card and a reroll beside them; Play round N to leave. A buy that
    goes through thumps the table and the price rises off the shard count; a
    refused one shakes the button and says why. */
-export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, shake, enterDelayMs = 0 }: ChainShopProps) {
+export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, shake, holdShards, enterDelayMs = 0 }: ChainShopProps) {
   const lead = enterDelayMs / 1000;
   const { i18n, t } = useLingui();
   const [floats, pushFloat] = useShardFloats();
   const [message, setMessage] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const [rerolls, setRerolls] = useState(0);
+  /* The reel playing over the shop after a bought spin. */
+  const [spinning, setSpinning] = useState<{ prize: ChainReelPrize; shards: number } | null>(null);
   /* A bought scene card flies from the shop to its place among the held
      ones. */
   const sceneArtRef = useRef<HTMLDivElement>(null);
@@ -146,8 +156,10 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
       runSound.refuse();
       return false;
     }
+    if (action.kind === "spin") holdShards(view.shards - price);
     const outcome = await act(action);
     if (!outcome.ok) {
+      if (action.kind === "spin") holdShards(null);
       shudder();
       runSound.refuse();
       if (outcome.error !== "stale") {
@@ -157,6 +169,11 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
       return false;
     }
     if (price) floatAtShards(-price);
+    if (action.kind === "spin") {
+      if (outcome.result?.kind === "spin") setSpinning({ prize: outcome.result.prize, shards: view.shards - price });
+      else holdShards(null);
+      return true;
+    }
     if (action.kind === "reroll") {
       runSound.reroll();
       shake(SHOP_FEEL.shake.reroll);
@@ -176,6 +193,27 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
   const deck = view.deck;
   return (
     <div data-chain-shop="" className="absolute inset-0">
+      <AnimatePresence>
+        {spinning && (
+          <ChainReel
+            prizes={[spinning.prize]}
+            narrow={narrow}
+            reducedMotion={reducedMotion}
+            onShake={shake}
+            onPrize={(prize) => {
+              // The count lets go at the stop; shards won rise off it.
+              // Run shards only; Wallet pays the pack wallet, off this count.
+              const run = prize.id === "shards" ? prize.amount ?? 0 : 0;
+              holdShards(spinning.shards + run);
+              if (run) floatAtShards(run);
+            }}
+            onDone={() => {
+              holdShards(null);
+              setSpinning(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
       <motion.div
         className="absolute inset-x-0 flex flex-col items-center"
         style={{ top: narrow ? 8 : Math.max(20, layout.height * 0.08) }}
@@ -261,6 +299,32 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* A spin of the reel, once a visit. */}
+          <motion.div
+            className={`flex flex-col items-center gap-2 ${narrow ? "w-[150px]" : "w-[200px]"}`}
+            initial={reducedMotion ? false : { y: SHOP_FEEL.deal.fromY, scale: SHOP_FEEL.deal.fromScale, opacity: 0 }}
+            animate={{ y: 0, scale: 1, opacity: shop.spun ? 0.45 : 1 }}
+            transition={{ ...SHOP_FEEL.deal.spring, delay: lead + (4 * SHOP_FEEL.deal.staggerMs) / 1000 }}
+          >
+            <ReelOffer height={narrow ? 84 : Math.round(packHeight * 0.68)} width={narrow ? 140 : 190} still={reducedMotion || Boolean(shop.spun)} />
+            <div className="text-center">
+              <div className={`font-black text-[#ff8fd0] ${narrow ? "text-[13px]" : "text-[16px]"}`}>
+                <Trans>Bonus spin</Trans>
+              </div>
+              <div className="mt-0.5 text-[12px] leading-snug text-osu-f1">
+                {shop.spun ? <Trans>Spun this visit.</Trans> : <Trans>One spin of the reel: a prize for the next round.</Trans>}
+              </div>
+            </div>
+            <PriceButton
+              affordable={!shop.spun && CHAIN_REEL.price <= view.shards}
+              price={CHAIN_REEL.price}
+              label={<Trans>Spin</Trans>}
+              disabled={busy || Boolean(shop.spun) || Boolean(spinning)}
+              reducedMotion={reducedMotion}
+              onBuy={(shudder) => void run({ kind: "spin" }, CHAIN_REEL.price, shudder)}
+            />
+          </motion.div>
         </div>
 
         <div className={`mt-6 flex items-center justify-center gap-3 border-t border-white/[0.07] pt-5 ${narrow ? "w-full px-3" : "w-[620px]"}`}>

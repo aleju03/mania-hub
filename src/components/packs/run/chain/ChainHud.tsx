@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { LogOut } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
+  CHAIN_RUN_NAME,
+  chainSkip727,
   CHAIN_RULES,
   CHAIN_SCENE_COPY,
   CHAIN_SCENE_INK,
@@ -107,21 +109,37 @@ function ScoreBox({
   const ref = useRef<HTMLDivElement>(null);
   const last = useRef(score);
   const level = flameLevel(heat, target);
+  /* A rise counts up from the old score over ~220ms (one number change per
+     row); a drop (a new round) shows at once. */
+  const [shown, setShown] = useState(score);
   useEffect(() => {
     const before = last.current;
     last.current = score;
-    if (!reducedMotion && score > before) punch(ref.current, digits(score) + 2);
+    if (reducedMotion || score <= before) {
+      setShown(score);
+      return;
+    }
+    punch(ref.current, digits(score) + 2);
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - start) / 220);
+      setShown(chainSkip727(before + (score - before) * (1 - (1 - k) ** 2), score));
+      if (k < 1) frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
   }, [reducedMotion, score]);
   const idle = score === 0 && level === 0;
   return (
-    <div className="relative transition-opacity duration-300" style={{ opacity: banked ? 0.45 : 1 }}>
+    <div className="relative">
       <div
         ref={ref}
         data-chain-score=""
-        className={`relative z-[1] rounded-lg font-black leading-none tabular-nums transition-colors ${idle ? "bg-black/25 text-white/40" : "bg-[#0c0a10] text-white"} ${big ? "min-w-[150px] px-3 py-2 text-[40px]" : "min-w-[84px] px-2 py-1 text-[24px]"}`}
+        className={`relative z-[1] rounded-lg bg-[#0c0a10] font-black leading-none tabular-nums transition-colors duration-300 ${idle ? "text-white/40" : banked ? "text-white/45" : "text-white"} ${big ? "min-w-[150px] px-3 py-2 text-[40px]" : "min-w-[84px] px-2 py-1 text-[24px]"}`}
       >
         <span data-chain-score-digits="">
-          <WysiDigits text={formatChainScore(score)} />
+          <WysiDigits text={formatChainScore(shown)} />
         </span>
       </div>
     </div>
@@ -140,7 +158,7 @@ function Meter({ score, ghost, fuzzy, target, star, width, flash }: { score: num
   const passed = score >= target && target > 0;
   const ghostPassed = ghost >= target && target > 0;
   return (
-    <div className="relative h-[8px] rounded-full bg-white/10" style={{ width }}>
+    <div data-chain-meter="" className="relative h-[8px] rounded-full bg-[#2a2531]" style={{ width }}>
       <motion.div
         className="absolute inset-y-0 left-0 rounded-full"
         initial={false}
@@ -217,7 +235,7 @@ export interface ChainTopBarProps {
    here), rows and redraws left, and run shards. */
 export function ChainTopBar(props: ChainTopBarProps) {
   const { deck, narrow, round, target, roundScore, meterScore, heatScore, ghostScore, ghostFuzzy, crossFlash, star, rowsLeft, redrawsLeft, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false } = props;
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const shownShards = useTicker(shards, reducedMotion);
   const stamp = (on: ChainWysiField) => (wysi?.on.includes(on) ? <WysiStamp key={`wysi-${wysi.id}-${on}`} reducedMotion={reducedMotion} /> : null);
   const exit = (
@@ -276,7 +294,7 @@ export function ChainTopBar(props: ChainTopBarProps) {
             </>
           ) : (
             <div className="text-[20px] font-black italic uppercase leading-none">
-              <Trans>Chain run</Trans>
+              {i18n._(CHAIN_RUN_NAME)}
             </div>
           )}
           <span className="ml-auto" />
@@ -322,7 +340,7 @@ export function ChainTopBar(props: ChainTopBarProps) {
           </div>
         ) : (
           <div className="text-[30px] font-black italic uppercase leading-none">
-            <Trans>Chain run</Trans>
+            {i18n._(CHAIN_RUN_NAME)}
           </div>
         )}
       </div>
@@ -334,7 +352,7 @@ export function ChainTopBar(props: ChainTopBarProps) {
                 <ScoreBox score={roundScore} heat={heatScore} target={target} big reducedMotion={reducedMotion} banked={scoreBanked} />
                 {stamp("roundScore")}
               </div>
-              <div className="relative pb-1 leading-tight">
+              <div className="relative z-[1] rounded-lg bg-[#0c0a10] px-2.5 py-1.5 leading-tight">
                 <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-osu-f1">
                   <Trans>Target</Trans>
                 </div>

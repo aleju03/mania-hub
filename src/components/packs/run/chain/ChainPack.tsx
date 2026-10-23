@@ -85,8 +85,8 @@ export function ChainPack({
       // The shake's reach rises in a straight line across the charge.
       const reach = Math.min(1, (now - start) / Math.max(1, chargeMs));
       const time = (now - start) / 1000;
-      shakeX.set(Math.sin(time * 2 * Math.PI * 23) * (1.5 + reach * 12));
-      shakeRotate.set(Math.sin(time * 2 * Math.PI * 17 + 1.1) * (0.8 + reach * 8));
+      shakeX.set(Math.sin(time * 2 * Math.PI * 23) * (3 + reach * 12));
+      shakeRotate.set(Math.sin(time * 2 * Math.PI * 17 + 1.1) * (1.6 + reach * 8));
       shakeScale.set(1 + reach * 0.1);
       frame = window.requestAnimationFrame(tick);
     };

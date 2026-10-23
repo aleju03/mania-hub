@@ -1202,7 +1202,7 @@ function PacksPage() {
   /* The run's pack, for a viewer the backend has released the run to (it is
      admin-only while it is played in), with their best round if they have
      one. */
-  const marathonPack = chainApi.available === true ? { best: chainApi.best?.round ?? null } : null;
+  const chainEntry = chainApi.available === true ? { best: chainApi.best?.round ?? null } : null;
 
   if (import.meta.env.DEV && RunFixtureHost && runFixtureMoment) {
     return (
@@ -1393,20 +1393,30 @@ function PacksPage() {
                             ) : undefined
                           }
                         />
-                        {/* The games, as packs standing either side of the one
+                        {/* The games, as doodles in a column right of the pack
                             being opened, where the page is wide enough for
                             them; they step aside while a pack is torn. */}
                         {!cutCommitted && (
                           <GamePacks
                             layout="side"
-                            className="hidden lg:block"
-                            wallet={wallet}
-                            marathon={marathonPack}
+                            className="hidden xl:block"
+                            chain={chainEntry}
                             onStreak={() => showStreakView(true)}
-                            onMarathon={() => showRunView(true)}
+                            onChain={() => showRunView(true)}
                           />
                         )}
                       </div>
+                    )}
+                    {/* Narrow pages (and no pack on the stage) put the games
+                        right under the stage, above the pack picker. */}
+                    {wallet && (
+                      <GamePacks
+                        layout="row"
+                        className={`mt-6 ${shouldKeepPackStageMounted(canOpen, cutCommitted) ? "xl:hidden" : ""}`}
+                        chain={chainEntry}
+                        onStreak={() => showStreakView(true)}
+                        onChain={() => showRunView(true)}
+                      />
                     )}
                     {wallet && (
                       <div className="mt-8">
@@ -1420,18 +1430,6 @@ function PacksPage() {
                           onSelect={selectPackType}
                         />
                       </div>
-                    )}
-                    {/* Narrow pages (and no pack on the stage) put the games
-                        under the picker instead. */}
-                    {wallet && (
-                      <GamePacks
-                        layout="row"
-                        className={`mt-10 ${shouldKeepPackStageMounted(canOpen, cutCommitted) ? "lg:hidden" : ""}`}
-                        wallet={wallet}
-                        marathon={marathonPack}
-                        onStreak={() => showStreakView(true)}
-                        onMarathon={() => showRunView(true)}
-                      />
                     )}
                   </motion.div>
                 )}

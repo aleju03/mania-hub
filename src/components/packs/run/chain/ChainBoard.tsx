@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, animate, motion, useMotionValue, useSpring, useTransform, type MotionValue } from "framer-motion";
+import { AnimatePresence, animate, motion, useIsPresent, useMotionValue, useSpring, useTransform, type MotionValue } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   CHAIN_SCENE_INK,
@@ -136,6 +136,17 @@ const BoardCard = memo(function BoardCard({
   const zeroX = useMotionValue(0);
   const zeroY = useMotionValue(0);
 
+  /* The card back exists only while the card is face down or turning: a
+     face-up card has no back to show through when a parent's opacity
+     flattens its 3D (a dimmed, dragged or leaving card). */
+  const [hasBack, setHasBack] = useState(!faceUp);
+  useEffect(() => {
+    if (!faceUp || !hasBack) return;
+    const timer = window.setTimeout(() => setHasBack(false), (reducedMotion ? 0 : RUN_FEEL.flip.durationMs) + 60);
+    return () => window.clearTimeout(timer);
+  }, [faceUp, hasBack, reducedMotion]);
+  /* An exiting card is a picture of where it was: never hit-testable. */
+  const present = useIsPresent();
   useEffect(() => {
     if (faceUp || !enter?.flipAtMs) return;
     const timer = window.setTimeout(() => {
@@ -148,7 +159,9 @@ const BoardCard = memo(function BoardCard({
   }, []);
 
   const selected = selectedOrder > 0;
-  const lifted = (hovered && interactive && !inRow) || dragging || selected;
+  // On a phone a pick shows by its ring and badge only, never lifting into
+  // the buttons above the hand.
+  const lifted = (hovered && interactive && !inRow) || dragging || (selected && !layout.narrow);
   /* Sized as shown (not scaled), so the face's type has real px floors. */
   const box = (at: CardPlace) => {
     const w = layout.cardW * at.scale;
@@ -166,9 +179,9 @@ const BoardCard = memo(function BoardCard({
   });
   return (
     <motion.div
-      data-chain-card={entry.uid}
+      data-chain-card={present ? entry.uid : undefined}
       className="absolute left-0 top-0"
-      style={{ zIndex: z, transformOrigin: "50% 50%" }}
+      style={{ zIndex: z, transformOrigin: "50% 50%", pointerEvents: present && !leaveTo ? undefined : "none" }}
       initial={enter && !reducedMotion ? { ...toward(enter), opacity: 1 } : { ...target, scale: 1, opacity: 1 }}
       animate={leaveTo ? { ...toward(leaveTo), opacity: 0 } : { ...target, scale: 1, opacity: leaveDelayMs !== null ? 0 : 1 }}
       exit={
@@ -193,8 +206,7 @@ const BoardCard = memo(function BoardCard({
         <div className="run-card-sway relative h-full w-full" style={swayStyle(index + (inRow ? 3 : 0), target.height, reducedMotion)}>
           <div
             data-run-juice=""
-            className="relative h-full w-full transition-[opacity,filter] duration-200"
-            style={{ opacity: dim ? 0.5 : dragging ? 0.88 : 1, filter: grey ? "grayscale(1) brightness(0.55)" : undefined }}
+            className="relative h-full w-full"
           >
             <div
               className={`absolute inset-0 rounded-[10px] bg-black/45 transition-transform duration-150 ${dragging ? "translate-x-[8px] translate-y-[18px]" : "translate-x-[3px] translate-y-[7px]"}`}
@@ -248,21 +260,29 @@ const BoardCard = memo(function BoardCard({
                 animate={{ rotateY: faceUp ? 0 : 180 }}
                 transition={{ duration: reducedMotion ? 0 : RUN_FEEL.flip.durationMs / 1000, ease: [...RUN_FEEL.flip.ease] as [number, number, number, number] }}
               >
-                <div className="absolute inset-0" style={{ backfaceVisibility: "hidden" }}>
+                {/* Dimming and greying sit on the face itself, never on a 3D
+                    ancestor (opacity there flattens the flip and shows the
+                    back through the face). */}
+                <div
+                  className="absolute inset-0 transition-[opacity,filter] duration-200"
+                  style={{ backfaceVisibility: "hidden", opacity: dim ? 0.5 : dragging ? 0.9 : 1, filter: grey ? "grayscale(1) brightness(0.55)" : undefined }}
+                >
                   <ChainCardFace card={entry.card} width={target.width} lit={lit} />
                 </div>
-                <div
-                  className="absolute inset-0 overflow-hidden rounded-[10px] bg-osu-b4"
-                  style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
-                >
-                  {backUrl && <img src={backUrl} alt="" draggable={false} className="h-full w-full object-cover" />}
-                </div>
+                {hasBack && (
+                  <div
+                    className="absolute inset-0 overflow-hidden rounded-[10px] bg-osu-b4"
+                    style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+                  >
+                    {backUrl && <img src={backUrl} alt="" draggable={false} className="h-full w-full object-cover" />}
+                  </div>
+                )}
               </motion.div>
               {selected && (
                 <>
                   <div className="pointer-events-none absolute -inset-[3px] rounded-[12px] border-[3px] border-osu-pink" />
                   <motion.div
-                    className="pointer-events-none absolute -left-2 -top-2 z-[2] grid h-7 w-7 place-items-center rounded-full bg-osu-pink text-[14px] font-black tabular-nums text-[#120f1a]"
+                    className={`pointer-events-none absolute z-[2] grid h-7 w-7 place-items-center rounded-full bg-osu-pink text-[14px] font-black tabular-nums text-[#120f1a] ${layout.narrow ? "-right-1.5 -top-2.5 !h-6 !w-6 !text-[12px]" : "-left-2 -top-2"}`}
                     initial={reducedMotion ? false : { scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", stiffness: 700, damping: 20 }}
@@ -327,6 +347,8 @@ interface ChainBoardProps {
   leaving?: boolean;
   /* Selected cards in selection order (all in the row or all in the hand). */
   selected: number[];
+  /* How many times each card was dealt anew (part of its key). */
+  dealGen?: Record<number, number>;
   /* Taps select instead of moving (the hand's select toggle). */
   selectMode: boolean;
   /* Toggle a card in the selection; `range` adds every card between the
@@ -368,6 +390,7 @@ export function ChainBoard(props: ChainBoardProps) {
     leaving = false,
     failed = false,
     selected,
+    dealGen = {},
     selectMode,
     onSelect,
     onSendGroup,
@@ -376,7 +399,9 @@ export function ChainBoard(props: ChainBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   /* `group`: every card moving, in selection order (the held one among
      them); the others stack behind the pointer. */
-  const [drag, setDrag] = useState<{ uid: number; base: CardPlace; group: number[] } | null>(null);
+  /* `handFrom`: where in the hand a hand card was lifted from, held open
+     until it lands so the hand never closes up and reopens under it. */
+  const [drag, setDrag] = useState<{ uid: number; base: CardPlace; group: number[]; touch: boolean; handFrom: number | null } | null>(null);
   const [settling, setSettling] = useState<number[]>([]);
   const offsetX = useMotionValue(0);
   const offsetY = useMotionValue(0);
@@ -394,6 +419,7 @@ export function ChainBoard(props: ChainBoardProps) {
     handDrop: number | null;
     group: number[];
     modifier: "none" | "toggle" | "range";
+    touch: boolean;
   } | null>(null);
   const rowRef = useRef(rowUids);
   rowRef.current = rowUids;
@@ -416,14 +442,22 @@ export function ChainBoard(props: ChainBoardProps) {
   const handBaseRef = useRef<number[]>([]);
 
   const arranging = mode === "arrange";
-  const rowEntries = rowUids.map((uid) => hand.find((entry) => entry.uid === uid)).filter(Boolean) as ChainCardInstance[];
-  const handEntries = hand.filter((entry) => !rowUids.includes(entry.uid) && !hiddenUids.has(entry.uid));
+  /* Every card is drawn once: a uid already placed (row first) is never
+     drawn again, whatever the inputs say. */
+  const drawnUids = new Set<number>();
+  const rowEntries = rowUids
+    .map((uid) => hand.find((entry) => entry.uid === uid))
+    .filter((entry): entry is ChainCardInstance => Boolean(entry) && !drawnUids.has(entry!.uid) && Boolean(drawnUids.add(entry!.uid)));
+  const handEntries = hand.filter(
+    (entry) => !rowUids.includes(entry.uid) && !hiddenUids.has(entry.uid) && !drawnUids.has(entry.uid) && Boolean(drawnUids.add(entry.uid)),
+  );
   /* A row card dragged off the row holds no place in the hand until it is
      dropped, so the hand does not shift under the drop point. */
   /* The held card leaves the hand's layout while it is dragged; over the
      hand, the others slide apart to open a gap where it would land. */
   const handLaid = drag ? handEntries.filter((entry) => !drag.group.includes(entry.uid)) : handEntries;
-  const gapAt = drag && handDrop !== null ? Math.min(handDrop, handLaid.length) : null;
+  const gapFrom = handDrop ?? drag?.handFrom ?? null;
+  const gapAt = drag && gapFrom !== null ? Math.min(gapFrom, handLaid.length) : null;
   const gapSize = drag ? drag.group.length : 0;
   const handPlaceList = handPlaces(handLaid.length + (gapAt !== null ? gapSize : 0), layout);
   const handPlaceOf = new Map(
@@ -444,7 +478,8 @@ export function ChainBoard(props: ChainBoardProps) {
   const stackPlace = (uid: number): CardPlace | null => {
     if (!drag || uid === drag.uid || !drag.group.includes(uid)) return null;
     const step = drag.group.filter((value) => value !== drag.uid).indexOf(uid) + 1;
-    return { x: drag.base.x + step * 14, y: drag.base.y + step * 9, scale: drag.base.scale, rotate: drag.base.rotate + step * 5 };
+    const fan = drag.touch ? 4 : 14;
+    return { x: drag.base.x + step * fan, y: drag.base.y + step * (drag.touch ? 3 : 9), scale: drag.base.scale, rotate: drag.base.rotate + step * (drag.touch ? 2 : 5) };
   };
   /* Marks a link matches, lit on both its cards (the scoring chain flashes
      them; at rest they stay lit so the reason for a link is on the cards). */
@@ -480,6 +515,7 @@ export function ChainBoard(props: ChainBoardProps) {
         handDrop: null,
         group: [uid],
         modifier: event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle" : "none",
+        touch: event.pointerType === "touch",
       };
       offsetX.set(0);
       offsetY.set(0);
@@ -506,7 +542,14 @@ export function ChainBoard(props: ChainBoardProps) {
         // Dragging a selected card moves the whole selection.
         const chosen = selectedRef.current;
         press.group = chosen.length > 1 && chosen.includes(press.uid) ? chosen.slice() : [press.uid];
-        setDrag({ uid: press.uid, base: press.base, group: press.group });
+        // Under a finger, a group rides above the touch point, smaller, so
+        // the slots it would land in stay in view.
+        if (press.touch && press.group.length > 1) {
+          const lay = layoutRef.current;
+          press.base = { ...press.base, y: press.base.y - lay.cardH * press.base.scale * 0.7, scale: press.base.scale * 0.75 };
+        }
+        const from = handOrderRef.current.findIndex((uid) => press.group.includes(uid));
+        setDrag({ uid: press.uid, base: press.base, group: press.group, touch: press.touch, handFrom: press.inRow || from < 0 ? null : from });
       }
       offsetX.set(dx);
       offsetY.set(dy);
@@ -575,8 +618,11 @@ export function ChainBoard(props: ChainBoardProps) {
         setDrag(null);
         setSettling(press.group);
         const spring = { type: "spring" as const, stiffness: CHAIN_FEEL.move.spring.stiffness, damping: CHAIN_FEEL.move.spring.damping, mass: CHAIN_FEEL.move.spring.mass };
-        void animate(offsetX, 0, spring);
-        void animate(offsetY, 0, spring).then(() => setSettling((current) => (current === press.group ? [] : current)));
+        // Settled once both axes are home: a level drag's y spring ends at
+        // once, and dropping the offset then would snap the card back.
+        void Promise.all([animate(offsetX, 0, spring), animate(offsetY, 0, spring)]).then(() =>
+          setSettling((current) => (current === press.group ? [] : current)),
+        );
         return;
       }
       if (press.longPressed() || press.moved) return;
@@ -633,7 +679,7 @@ export function ChainBoard(props: ChainBoardProps) {
     <div ref={boardRef} className="absolute inset-0" data-chain-board="">
       {/* Empty slots; the next one, where a tapped card goes, stands out. */}
       {layout.slots.map((slot, index) =>
-        index >= filled ? (
+        index >= filled && !leaving ? (
           <div
             key={`slot-${index}`}
             className={`absolute grid place-items-center rounded-[10px] border-2 border-dashed font-black tabular-nums ${
@@ -660,8 +706,13 @@ export function ChainBoard(props: ChainBoardProps) {
         </div>
       ))}
 
+      {/* Row and hand as one list in a fixed order (by uid; z sets the
+          stacking): a card dragged between them must not reorder the
+          others, which React remounted, replaying their entrance from
+          where they were first dealt. */}
       <AnimatePresence>
-        {rowEntries.map((entry, index) => {
+        {[
+          ...rowEntries.map((entry, index) => {
           const dragging = drag?.uid === entry.uid;
           const stacked = stackPlace(entry.uid);
           const moving = dragging || Boolean(stacked) || settling.includes(entry.uid);
@@ -670,7 +721,7 @@ export function ChainBoard(props: ChainBoardProps) {
           if (!dragging && !stacked) placesRef.current.set(entry.uid, own);
           return (
             <BoardCard
-              key={entry.uid}
+              key={`${entry.uid}:${dealGen[entry.uid] ?? 0}`}
               entry={entry}
               layout={layout}
               place={drag && dragging ? drag.base : stacked ?? own}
@@ -698,8 +749,8 @@ export function ChainBoard(props: ChainBoardProps) {
               hoverable={!drag}
             />
           );
-        })}
-        {handEntries.map((entry, index) => {
+        }),
+          ...handEntries.map((entry, index) => {
           const dragging = drag?.uid === entry.uid;
           const stacked = stackPlace(entry.uid);
           const moving = dragging || Boolean(stacked) || settling.includes(entry.uid);
@@ -707,7 +758,7 @@ export function ChainBoard(props: ChainBoardProps) {
           if (!dragging && !stacked && handPlaceOf.has(entry.uid)) placesRef.current.set(entry.uid, own);
           return (
           <BoardCard
-            key={entry.uid}
+            key={`${entry.uid}:${dealGen[entry.uid] ?? 0}`}
             entry={entry}
             layout={layout}
             place={drag && dragging ? drag.base : stacked ?? own}
@@ -734,7 +785,8 @@ export function ChainBoard(props: ChainBoardProps) {
             hoverable={!drag}
           />
           );
-        })}
+        }),
+        ].sort((a, b) => Number.parseInt(String(a.key), 10) - Number.parseInt(String(b.key), 10))}
       </AnimatePresence>
 
       <ChainLinks layout={layout} preview={filled >= 2 && !leaving ? preview : null} fx={linkFx} handsLit={handsLit} raised={Boolean(drag)} />
@@ -751,9 +803,10 @@ export function ChainBoard(props: ChainBoardProps) {
             className="pointer-events-none absolute z-[40] text-center font-black italic tabular-nums"
             style={{
               left: slot.x,
-              top: layout.narrow ? slot.y + layout.cardH - 19 : slot.y + layout.cardH + 6,
+              top: layout.narrow ? slot.y + layout.cardH + 1 : slot.y + layout.cardH + 6,
               width: layout.cardW,
-              fontSize: layout.narrow ? 14 : 18,
+              fontSize: layout.narrow ? 13 : 18,
+              lineHeight: 1,
               color: PINK,
               WebkitTextStroke: "4px #120f1a",
               paintOrder: "stroke fill",

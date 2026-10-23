@@ -48,9 +48,10 @@ const EMBERS = [
 /* `width` in px; the flame stands `width * 0.6 * scale` tall on its base
    line, where the caller puts it (the chain's headline number). Its height
    comes from `level`, which already grows with log(score / target). */
-export function InkFlame({ level, width, reducedMotion }: { level: number; width: number; reducedMotion: boolean }) {
+export function InkFlame({ level, width, reducedMotion, height }: { level: number; width: number; reducedMotion: boolean; height?: number }) {
   if (level <= 0) return null;
-  const scale = Math.min(1.35, 0.62 + level * 0.42);
+  // `height` overrides the level's own scale (the desktop table's tall fire).
+  const scale = height ?? Math.min(1.35, 0.62 + level * 0.42);
   const sway = (name: string) => (reducedMotion ? undefined : name);
   return (
     <div aria-hidden="true" className="pointer-events-none" style={{ width }}>

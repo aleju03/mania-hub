@@ -31,6 +31,9 @@ const SKILL_ACCENT: Record<ChainSkill, Rgb> = {
   Chordjack: { r: 255, g: 128, b: 200 },
   Tech: { r: 255, g: 212, b: 90 },
   Speed: { r: 120, g: 224, b: 230 },
+  Chordstream: { r: 120, g: 150, b: 255 },
+  Bracket: { r: 243, g: 194, b: 74 },
+  Delay: { r: 95, g: 184, b: 201 },
 };
 
 const CARDS = CHAIN_RULES.packSize;

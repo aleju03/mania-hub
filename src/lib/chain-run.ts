@@ -11,6 +11,12 @@ import {
   type ChainSceneId,
   type ChainSkill,
   type ChainTier,
+  type ChainVariant,
+  CHAIN_VARIANT,
+  CHAIN_REEL,
+  type ChainReelId,
+  type ChainReelPrize,
+  type ChainTrait,
 } from "../../backend/src/shared/chain-run";
 import { honoraryPlayerById } from "./honorary-players";
 import { liveBridgeToken } from "./live-backend-tokens";
@@ -145,6 +151,10 @@ export const actOnOwnChainRun = createServerFn({ method: "POST" })
 
 /* ------------------------------------------------------------------ copy */
 
+/* The game's name, shown on the /packs game pack and the table. The owner
+   has not settled it: renaming the run is this one line. */
+export const CHAIN_RUN_NAME = msg`Overjoy`;
+
 export const CHAIN_TIER_LABEL: Record<ChainTier, MessageDescriptor> = {
   common: msg`Common`,
   rare: msg`Rare`,
@@ -195,7 +205,91 @@ export function chainCardFace<T extends Pick<ChainCard, "id" | "name" | "avatarU
   return { ...card, name: honoree.cardName ?? honoree.username, avatarUrl: honoree.avatarUrl, cc: honoree.countryCode || card.cc };
 }
 
-const SKILL_SHORT: Partial<Record<ChainSkill, string>> = { Jumpstream: "JS", Handstream: "HS", Chordjack: "CJ" };
+const SKILL_SHORT: Partial<Record<ChainSkill, string>> = { Jumpstream: "JS", Handstream: "HS", Chordjack: "CJ", Chordstream: "CS" };
+
+/* Card variants: the name (an osu!mania result, never translated), the badge
+   the face wears, its colours and the rule. */
+export const CHAIN_VARIANT_COPY: Record<ChainVariant, { name: string; badge: string; fill: string; ink: string; text: MessageDescriptor }> = {
+  silver: {
+    name: "Silver SS",
+    badge: "SS",
+    fill: "linear-gradient(135deg, #f8fafc 0%, #94a3b8 48%, #e2e8f0 100%)",
+    ink: "#dfe6ee",
+    text: msg`Base x${CHAIN_VARIANT.silverCleanBase} while the row has no break before it, else x${CHAIN_VARIANT.silverBase}.`,
+  },
+  mirror: {
+    name: "Mirror",
+    badge: "MR",
+    fill: "linear-gradient(135deg, #f0f9ff 0%, #7dd3fc 45%, #e0f2fe 70%, #38bdf8 100%)",
+    ink: "#bfe6ff",
+    text: msg`Links to each side with the traits of the card on its other side too.`,
+  },
+  pfc: {
+    name: "PFC",
+    badge: "PFC",
+    fill: "linear-gradient(135deg, #fff3c4 0%, #f6c343 45%, #b7791f 100%)",
+    ink: "#ffd36b",
+    text: msg`The links on both its sides never break.`,
+  },
+  max: {
+    name: "MAX",
+    badge: "MAX",
+    fill: "linear-gradient(110deg, #ff8fd0, #ffd36b, #a5f3c4, #7fd3ff, #c4b2ff)",
+    ink: "#ffffff",
+    text: msg`Doubles the combo before it scores.`,
+  },
+};
+
+/* The reel's prizes: the tile's big mark and small word, its rarity colour
+   (by how often it lands), and the line saying what it does. Mod names
+   (EZ, DT, NF) and 727 stay as they are in every language. */
+const CHAIN_TRAIT_WORD: Record<ChainTrait, MessageDescriptor> = {
+  cc: msg`Country`,
+  tier: msg`Rarity`,
+  key: msg`Keymode`,
+  skill: msg`Skillset`,
+};
+
+export const CHAIN_REEL_INK: Record<ChainReelId, string> = {
+  shards: "#9fb3cf",
+  retry: "#9fb3cf",
+  redraws: "#9fb3cf",
+  warmup: "#6fb6ff",
+  ez: "#6fb6ff",
+  dt: "#b28cff",
+  surge: "#b28cff",
+  nf: "#ff7ac3",
+  wysi: "#ffd36b",
+  wallet: "#7cf5c8",
+};
+
+export function chainReelTile(prize: ChainReelPrize, i18n: I18n): { mark: string; word: string; text: string } {
+  const trait = prize.trait ? i18n._(CHAIN_TRAIT_WORD[prize.trait]) : "";
+  switch (prize.id) {
+    case "shards":
+      return { mark: `+${prize.amount ?? 0}`, word: i18n._(msg`Shards`), text: i18n._(msg`+${prize.amount ?? 0} shards now.`) };
+    case "retry":
+      return { mark: `+${CHAIN_REEL.retryRows}`, word: i18n._(msg`Row`), text: i18n._(msg`Next round has ${CHAIN_REEL.retryRows} more row.`) };
+    case "redraws":
+      return { mark: `+${CHAIN_REEL.redraws}`, word: i18n._(msg`Redraws`), text: i18n._(msg`Next round has ${CHAIN_REEL.redraws} more redraws.`) };
+    case "warmup":
+      return { mark: `+${CHAIN_REEL.warmupCombo}`, word: i18n._(msg`Warm-up`), text: i18n._(msg`Next round's first row starts at +${CHAIN_REEL.warmupCombo} combo.`) };
+    case "ez":
+      return { mark: "EZ", word: `-${Math.round((1 - CHAIN_REEL.ezTarget) * 100)}%`, text: i18n._(msg`Next round's target is ${Math.round((1 - CHAIN_REEL.ezTarget) * 100)}% lower.`) };
+    case "dt":
+      return { mark: "DT", word: `x${CHAIN_REEL.dt}`, text: i18n._(msg`Next round's first row scores x${CHAIN_REEL.dt}.`) };
+    case "surge":
+      return { mark: `x${CHAIN_REEL.surge}`, word: trait, text: i18n._(msg`Next round's first row: ${trait} links add double.`) };
+    case "nf":
+      return { mark: "NF", word: i18n._(msg`No break`), text: i18n._(msg`Next round's first row can't break.`) };
+    case "wysi":
+      return { mark: "727", word: i18n._(msg`Combo`), text: i18n._(msg`Next round's first row starts on 727 combo.`) };
+    case "wallet": {
+      const amount = (prize.amount ?? CHAIN_REEL.wallet).toLocaleString("en-US");
+      return { mark: `+${amount}`, word: i18n._(msg`Wallet`), text: i18n._(msg`+${amount} shards to your pack wallet.`) };
+    }
+  }
+}
 
 export function chainSkillShort(skill: ChainSkill): string {
   return SKILL_SHORT[skill] ?? skill;
@@ -282,6 +376,7 @@ export const CHAIN_SCENE_INK: Record<ChainSceneId, string> = {
 
 const REFUSALS: Record<string, MessageDescriptor> = {
   no_shards: msg`Not enough shards.`,
+  spun: msg`Already spun this visit.`,
   sold: msg`Already bought.`,
   slots_full: msg`Every scene card slot is full. Sell one first.`,
   deck_too_small: msg`Your deck can't go below 4 cards.`,

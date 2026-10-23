@@ -20,6 +20,9 @@
      goat     a row with a GOAT in it: both its links at full strength and
               the combo doubling as the chain reaches it; the row clears,
               then the shop's pack turns a GOAT with its ceremony
+     reel     the shop's bonus spin bought: the reel spins and lands
+     variants a row holding one card of each variant (Silver SS, Mirror,
+              PFC, MAX) playing out, with more in the hand
      wysi     a row whose running total reads 3,727 mid-chain (the 727
               freeze and combo jump), landing the round score on a 727 too
               (the table stamp), then the clear
@@ -35,12 +38,14 @@ import {
   makeFixturePool,
   chainRandom,
   CHAIN_GOAT,
+  CHAIN_REEL,
   makeFixtureRun,
   scoreChainRowFor,
   type ChainAction,
   type ChainBoardEntry,
   type ChainPool,
   type ChainRunState,
+  type ChainVariant,
   type ChainRunView,
 } from "#/lib/chain-run";
 import { PACK_TYPES, type PackTypeId } from "#/lib/packs";
@@ -48,7 +53,7 @@ import { getCachedPackFrontCanvas, PACK_ASPECT, packArtStyleFor } from "../../pa
 import { ChainTable, type ChainTableScript } from "../chain/ChainTable";
 import type { ChainActOutcome } from "../chain/useChainRun";
 
-export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat"] as const;
+export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "variants", "reel"] as const;
 export type ChainFixtureMoment = (typeof CHAIN_FIXTURE_MOMENTS)[number];
 
 /* Real osu! ids, used only for avatars on the synthetic players. */
@@ -120,6 +125,19 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
     state.rowsLeft = 2;
     return { state, pool, script: { row: f.row, dealt: true, autoPlay: true, skipReplay: true, autoPack: true }, best: null };
   }
+  if (moment === "reel") {
+    const pool = fixturePool(6);
+    const f = makeFixtureRun(6, { round: 1, phase: "shop", pool, scenes: ["echoes"], shards: 14 });
+    // The reel's stream set to land on its rarest prize, the Wallet.
+    const total = Object.values(CHAIN_REEL.weights).reduce((sum, weight) => sum + weight, 0);
+    for (let rng = 0; rng < 5_000_000; rng += 1) {
+      if (chainRandom({ rng }) * total >= total - CHAIN_REEL.weights.wallet) {
+        f.state.reelRng = rng;
+        break;
+      }
+    }
+    return { state: f.state, pool, script: {}, best: null };
+  }
   if (moment === "shop") {
     const pool = fixturePool(6);
     const f = makeFixtureRun(6, { round: 1, phase: "shop", pool, scenes: ["echoes"], shards: 14 });
@@ -155,6 +173,19 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
       }
     }
     return { state, pool, script: { row, dealt: true, autoPlay: true, autoPack: true }, best: null };
+  }
+  if (moment === "variants") {
+    const pool = fixturePool(3);
+    const f = makeFixtureRun(3, { round: 2, phase: "arranged", pool });
+    const state = f.state;
+    const row = f.row ?? [];
+    const order: ChainVariant[] = ["silver", "mirror", "pfc", "max"];
+    row.slice(0, 4).forEach((uid, index) => {
+      for (const entry of [...state.hand, ...state.deck]) if (entry.uid === uid) entry.card = { ...entry.card, variant: order[index] };
+    });
+    // The hand shows them at rest too.
+    state.hand.filter((entry) => !row.includes(entry.uid)).slice(0, 4).forEach((entry, index) => (entry.card = { ...entry.card, variant: order[index] }));
+    return { state, pool, script: { row, dealt: true, autoPlay: true }, best: null };
   }
   if (moment === "wysi") {
     // Seed 7's round 3 row (Echoes, Future Dominators) reads 3,727 after its
@@ -261,7 +292,7 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
       } else if (moment === "fail") {
         if (name === "play:start") ready();
         if (name === "over:shown") done(1800);
-      } else if (moment === "play" || moment === "chain" || moment === "clear" || moment === "wysi") {
+      } else if (moment === "play" || moment === "chain" || moment === "clear" || moment === "wysi" || moment === "variants") {
         if (name === "play:start") ready();
         if (moment === "clear") {
           if (name === "shop") done(900);
@@ -285,6 +316,15 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
       const frame = window.requestAnimationFrame(ready);
       done(moment === "over" ? 2600 : 1600);
       return () => window.cancelAnimationFrame(frame);
+    }
+    if (moment === "reel") {
+      const frame = window.requestAnimationFrame(ready);
+      const timer = window.setTimeout(() => clickButton("Spin"), 1400);
+      done(9600);
+      return () => {
+        window.cancelAnimationFrame(frame);
+        window.clearTimeout(timer);
+      };
     }
     if (moment === "shop") {
       const frame = window.requestAnimationFrame(ready);

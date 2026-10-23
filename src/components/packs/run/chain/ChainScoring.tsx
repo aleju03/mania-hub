@@ -1,9 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import {
   CHAIN_GOAT_COLOR,
+  CHAIN_REEL_INK,
+  CHAIN_VARIANT,
+  CHAIN_VARIANT_COPY,
   CHAIN_GOAT_LABEL,
   CHAIN_SCENE_INK,
   CHAIN_SCENE_NAMES,
@@ -44,6 +48,8 @@ import { WYSI_INK, WysiDigits, WysiMoment } from "./Wysi";
 const POINTS = "#fff3d6";
 const COMBO = "#ff66aa";
 const GOLD = "#ffd36b";
+// MAX's word: the rainbow 300's colours.
+const MAX_INK = "linear-gradient(100deg, #ff9fd8 0%, #ffe07a 30%, #a5f3c4 55%, #8fd8ff 78%, #d2c2ff 100%)";
 const ECHO = "#8fe3ff";
 const RED = "#ff5a5a";
 const OUTLINE = "#120f1a";
@@ -52,6 +58,7 @@ const TRAIT_INK: Record<string, string> = { cc: "#7fd3ff", key: "#ffd36b", skill
 const msgBreak = msg`BREAK`;
 const msgHand = msg`HAND`;
 const msgHalf = msg`HALF`;
+const msgWarmup = msg`Warm-up`;
 
 type FloatSize = "trait" | "points" | "word" | "big";
 
@@ -78,17 +85,61 @@ const FLOAT_STROKE: Record<FloatSize, number> = { trait: 4, points: 6, word: 6, 
 function Float({ item, reducedMotion }: { item: FloatItem; reducedMotion: boolean }) {
   const translate = item.place === "above" ? "-50%, -100%" : item.place === "below" ? "-50%, 0" : "-50%, -50%";
   const rise = item.place === "below" ? 14 : item.size === "big" ? -10 : -26;
+  const gradient = item.fill.startsWith("linear-gradient");
+  /* Kept inside the table: a word placed near an edge (MAX x2, GOAT x2
+     beside a wide total) slides back in, with room for its 1.22 pop. */
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [shift, setShift] = useState(0);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    // The visible span: the page, narrowed by every clipping ancestor.
+    let left = 0;
+    let right = document.documentElement.clientWidth;
+    for (let node = box.parentElement; node; node = node.parentElement) {
+      const overflow = getComputedStyle(node).overflowX;
+      if (overflow === "visible") continue;
+      const bounds = node.getBoundingClientRect();
+      left = Math.max(left, bounds.left);
+      right = Math.min(right, bounds.right);
+    }
+    const margin = 10 + rect.width * 0.11;
+    left += margin;
+    right -= margin;
+    if (rect.right > right) setShift(right - rect.right);
+    else if (rect.left < left) setShift(left - rect.left);
+  }, []);
   return (
-    <div data-float={item.anchor} className={`pointer-events-none absolute ${item.size === "big" ? "z-[8]" : "z-[6]"}`} style={{ left: item.x, top: item.y, transform: `translate(${translate})` }}>
+    <div
+      ref={boxRef}
+      data-float={item.anchor}
+      className={`pointer-events-none absolute ${item.size === "big" ? "z-[8]" : "z-[6]"}`}
+      style={{ left: item.x + shift, top: item.y, transform: `translate(${translate})` }}
+    >
       <motion.div
         initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.35, y: 0 }}
         animate={reducedMotion ? { opacity: [0, 1, 1, 0] } : { opacity: [0, 1, 1, 0], scale: [0.35, 1.22, 1, 1], y: [0, rise * 0.25, rise * 0.7, rise] }}
         exit={{ opacity: 0, transition: { duration: 0.08 } }}
         transition={{ duration: item.lifeMs / 1000, times: [0, 0.14, 0.62, 1], ease: "easeOut" }}
         className={`whitespace-nowrap font-black italic leading-none tabular-nums ${FLOAT_SIZE[item.size]}`}
-        style={{ color: item.fill, WebkitTextStroke: `${FLOAT_STROKE[item.size]}px ${OUTLINE}`, paintOrder: "stroke fill" }}
+        style={gradient ? { position: "relative" } : { color: item.fill, WebkitTextStroke: `${FLOAT_STROKE[item.size]}px ${OUTLINE}`, paintOrder: "stroke fill" }}
       >
-        <WysiDigits text={item.text} />
+        {gradient ? (
+          // A gradient word (MAX): the outline drawn under, the fill clipped
+          // to the glyphs on top.
+          <>
+            {/* Padded, so the fill reaches the italic slant past the box. */}
+            <span className="px-[0.14em]" style={{ color: OUTLINE, WebkitTextStroke: `${FLOAT_STROKE[item.size]}px ${OUTLINE}` }}>
+              {item.text}
+            </span>
+            <span className="absolute inset-0 px-[0.14em]" style={{ backgroundImage: item.fill, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
+              {item.text}
+            </span>
+          </>
+        ) : (
+          <WysiDigits text={item.text} />
+        )}
       </motion.div>
     </div>
   );
@@ -158,7 +209,9 @@ export function ChainScoring(props: ChainScoringProps) {
   const { row, roundBefore, target, reducedMotion, skip = false } = props;
   const { i18n } = useLingui();
   const [stage, setStage] = useState<Stage>("steps");
-  const [running, setRunning] = useState({ total: 0, combo: row.start, broke: 0 });
+  // Warm-up is in the row's start; the combo shows it landing.
+  const warmup = row.events.find((event) => event.kind === "boost" && event.id === "warmup");
+  const [running, setRunning] = useState({ total: 0, combo: row.start - (warmup && warmup.kind === "boost" && warmup.id === "warmup" ? warmup.add : 0), broke: 0 });
   const [floats, setFloats] = useState<FloatItem[]>([]);
   const [totalW, setTotalW] = useState(0);
   const [reason, setReason] = useState<{ id: number; text: string; fill: string } | null>(null);
@@ -274,11 +327,19 @@ export function ChainScoring(props: ChainScoringProps) {
         cardW: rects[0].width,
       };
     };
-    const popCentre = (text: string, fill: string, holdMs: number) => {
+    const popCentre = (text: string, fill: string, holdMs: number, beside = false) => {
       const base = origin();
       const box = rowBox();
       if (!base || !box) return;
       const readout = p().readoutAt();
+      if (beside && readout && !readout.narrow) {
+        // Beside the total and its combo, in the band above the row, so the
+        // cards stay in view.
+        const width = totalRef.current?.offsetWidth ?? readout.size * 3;
+        const comboWidth = comboRef.current?.offsetWidth ?? readout.size;
+        pop({ anchor: "centre", x: Math.min(base.width - 180, readout.x - base.left + width / 2 + comboWidth + 30 + 205), y: readout.y - base.top, text, fill, size: "big", lifeMs: Math.max(900, holdMs * 1.8), place: "center" }, false);
+        return;
+      }
       if (readout?.narrow) {
         // On a phone the big multiplier lands beside the total, off the cards.
         pop({ anchor: "centre", x: base.width - 46, y: readout.y - base.top, text, fill, size: "word", lifeMs: Math.max(720, holdMs * 1.6), place: "center" }, false);
@@ -352,7 +413,7 @@ export function ChainScoring(props: ChainScoringProps) {
         case "hand":
           return { key: `future-${event.pass}`, scene: "future", at: { kind: "card", index: event.cards[1] } };
         case "multiplier":
-          return { key: `mult-${event.id}`, scene: event.id, at: { kind: "row" } };
+          return event.id === "dt" ? null : { key: `mult-${event.id}`, scene: event.id, at: { kind: "row" } };
         case "scene":
           return { key: `scene-${event.id}-${"pass" in event ? event.pass : 0}`, scene: event.id, at: event.id === "forgotten" ? { kind: "card", index: 0 } : { kind: "row" } };
         case "break":
@@ -403,6 +464,21 @@ export function ChainScoring(props: ChainScoringProps) {
       later(680, () => setStamps((current) => current.filter((entry) => entry.id !== id)));
     };
 
+    /* The combo counting up to a doubling (a GOAT, a MAX card). */
+    const riseCombo = (from: number, to: number, holdMs: number) => {
+      if (reducedMotion) return;
+      const start = performance.now();
+      const span = Math.min(320, holdMs * 0.6);
+      const tick = (now: number) => {
+        if (cancelled) return;
+        const k = Math.min(1, (now - start) / span);
+        setRunning((current) => ({ ...current, combo: Math.round(from + (to - from) * (1 - (1 - k) ** 2)) }));
+        if (k < 1) window.requestAnimationFrame(tick);
+        else punch(comboRef.current, String(to).length + 3);
+      };
+      window.requestAnimationFrame(tick);
+    };
+
     const show = (event: ChainRowEvent, chain: number, holdMs: number) => {
       const fx = p();
       switch (event.kind) {
@@ -416,7 +492,7 @@ export function ChainScoring(props: ChainScoringProps) {
             return { ...current, [key]: { state: "lit", value: from + event.add, pulse: entry.pulse + 1 } };
           });
           const badge = rectOf(`[data-chain-link="${key}"]`);
-          popAt(badge, `link-${key}`, traitText(event.trait, event.value, event.scene), traitFill(event.trait, event.value, event.scene), "trait", holdMs, event.skip ? "below" : "above");
+          popAt(badge, `link-${key}`, traitText(event.trait, event.value, event.scene), traitFill(event.trait, event.value, event.scene), "trait", holdMs, event.skip ? "below" : "center");
           say(traitText(event.trait, event.value, event.scene), traitFill(event.trait, event.value, event.scene));
           if (event.trait !== "scene") {
             flashTrait(event.from, event.trait);
@@ -454,6 +530,7 @@ export function ChainScoring(props: ChainScoringProps) {
           popAt(card, `card-${event.index}`, `+${formatChainScore(event.points)}`, POINTS, "points", holdMs);
           say(p().names[event.index] ?? "", POINTS);
           if (event.halved) popAt(card, `half-${event.index}`, i18n._(msgHalf), CHAIN_SCENE_INK.makiba, "trait", holdMs, "below");
+          else if (event.silver) popAt(card, `silver-${event.index}`, `SS x${formatChainX(event.silver)}`, CHAIN_VARIANT_COPY.silver.ink, "trait", holdMs, "below");
           if (card && !reducedMotion) juice(card.element, RUN_FEEL.juice.scoringCard);
           if (event.pass > 0) runSound.stepAgain(chain);
           else runSound.stepNotes(chain);
@@ -515,25 +592,54 @@ export function ChainScoring(props: ChainScoringProps) {
           // The rarest beat in the game: the big centre word, the GOAT card
           // shaken hard, and the combo counting up to its double.
           const card = cardEl(event.index);
-          popCentre(`${i18n._(CHAIN_GOAT_LABEL)} x2`, CHAIN_GOAT_COLOR.ink, holdMs);
+          popCentre(`${i18n._(CHAIN_GOAT_LABEL)} x2`, CHAIN_GOAT_COLOR.ink, holdMs, true);
           say(i18n._(CHAIN_GOAT_LABEL), CHAIN_GOAT_COLOR.ink);
           if (card && !reducedMotion) juice(card.element, { amount: 0.28, rotateRad: 0.16 });
           runSound.stepMultiplier(chain);
           runSound.charmFire(chain);
           playGoatFanfare();
           fx.onShake(feel.multiplierShake * 1.3);
-          if (!reducedMotion) {
-            const from = Math.max(1, Math.round(event.combo / 2));
-            const start = performance.now();
-            const span = Math.min(320, holdMs * 0.6);
-            const tick = (now: number) => {
-              if (cancelled) return;
-              const k = Math.min(1, (now - start) / span);
-              setRunning((current) => ({ ...current, combo: Math.round(from + (event.combo - from) * (1 - (1 - k) ** 2)) }));
-              if (k < 1) window.requestAnimationFrame(tick);
-              else punch(comboRef.current, String(event.combo).length + 3);
-            };
-            window.requestAnimationFrame(tick);
+          riseCombo(event.from, event.combo, holdMs);
+          break;
+        }
+        case "boost": {
+          // The reel's first-row boost firing: Warm-up's start, 727's start
+          // (the 727 moment follows on its own), NF holding a link.
+          const look = CHAIN_REEL_INK[event.id];
+          if (event.id === "nf") {
+            const badge = rectOf(`[data-chain-link="l${event.link}"]`);
+            popAt(badge, `link-l${event.link}`, "NF", look, "word", holdMs);
+            say("NF", look);
+          } else if (event.id === "warmup") {
+            popCentre(`+${event.add}`, look, holdMs, true);
+            say(i18n._(msgWarmup), look);
+          } else {
+            say("727", look);
+          }
+          runSound.charmFire(chain);
+          fx.onShake(stepShake(event.combo));
+          break;
+        }
+        case "variant": {
+          const look = CHAIN_VARIANT_COPY[event.variant];
+          const card = cardEl(event.index);
+          if (event.variant === "max") {
+            // MAX doubles the combo: the GOAT's beat in rainbow, every time.
+            popCentre(`${look.name} x${CHAIN_VARIANT.maxCombo}`, MAX_INK, holdMs, true);
+            say(look.name, "#e6dcff");
+            if (card && !reducedMotion) juice(card.element, { amount: 0.26, rotateRad: 0.14 });
+            runSound.stepMultiplier(chain);
+            runSound.charmFire(chain);
+            fx.onShake(feel.multiplierShake * 1.15);
+            riseCombo(event.from, event.combo, holdMs);
+          } else {
+            // A PFC card holds the link that would have broken.
+            const badge = rectOf(`[data-chain-link="l${event.link}"]`);
+            popAt(badge, `link-l${event.link}`, look.name, look.ink, "word", holdMs);
+            say(look.name, look.ink);
+            if (card && !reducedMotion) juice(card.element, { amount: 0.16, rotateRad: 0.08 });
+            runSound.charmFire(chain);
+            fx.onShake(stepShake(event.combo));
           }
           break;
         }
@@ -547,6 +653,15 @@ export function ChainScoring(props: ChainScoringProps) {
           break;
         }
         case "multiplier": {
+          if (event.id === "dt") {
+            // The reel's DT: the mod's name over the doubling.
+            popCentre(`DT x${formatChainX(event.x)}`, CHAIN_REEL_INK.dt, holdMs, true);
+            say("DT", CHAIN_REEL_INK.dt);
+            runSound.stepMultiplier(chain);
+            countTo(event.total, Math.min(holdMs, 420));
+            fx.onShake(feel.multiplierShake);
+            break;
+          }
           fireScene(event.id);
           popCentre(`x${formatChainX(event.x)}`, GOLD, holdMs);
           say(CHAIN_SCENE_NAMES[event.id], GOLD);
@@ -556,7 +671,7 @@ export function ChainScoring(props: ChainScoringProps) {
           break;
         }
       }
-      const deferCombo = ((event.kind === "wysi" && event.add > 0) || event.kind === "goat") && !reducedMotion;
+      const deferCombo = ((event.kind === "wysi" && event.add > 0) || event.kind === "goat" || (event.kind === "variant" && event.variant === "max")) && !reducedMotion;
       setRunning((current) => ({ ...current, combo: deferCombo ? current.combo : event.combo, broke: event.kind === "break" ? current.broke + 1 : current.broke }));
       if (target > 0 && roundBefore + event.total >= target) fx.onHeat("fire");
       else if (event.combo >= 40) fx.onHeat("mod");
@@ -637,22 +752,32 @@ export function ChainScoring(props: ChainScoringProps) {
       if (!reducedMotion) punch(totalRef.current, String(row.total).length + 3);
       await hold(reducedMotion ? 200 : feel.holdMs, false);
       if (cancelled) return;
+      let flown = false;
       const digits = [...document.querySelectorAll<HTMLElement>("[data-chain-score-digits]")].find((element) => element.offsetParent !== null) ?? null;
       const to = digits?.getBoundingClientRect();
       const totalEl = totalRef.current;
       if (!reducedMotion && digits && to && totalEl && at && to.height > 0) {
-        const scale = Math.max(0.12, Math.min(1, to.height / Math.max(1, totalEl.offsetHeight)));
-        setFly({ x: to.left + (totalEl.offsetWidth * scale) / 2 - at.x, y: to.top + to.height / 2 - at.y, scale });
+        // The row's total flies as "+N" to just under the round score and
+        // fades there while the box counts up to the new round total: one
+        // landing, one number change.
+        const boxEl = digits.closest<HTMLElement>("[data-chain-score]") ?? digits;
+        const boxRect = boxEl.getBoundingClientRect();
+        const want = Math.max(18, boxRect.height * 0.62);
+        const scale = Math.max(0.08, Math.min(1, want / Math.max(1, totalEl.offsetHeight), (boxRect.width * 1.3) / Math.max(1, totalEl.offsetWidth)));
+        setFly({ x: boxRect.left + boxRect.width / 2 - at.x, y: boxRect.bottom + 6 + (totalEl.offsetHeight * scale) / 2 - at.y, scale });
         enter("fly");
-        await hold(feel.flyMs, false);
+        await hold(feel.flyMs * 0.7, false);
         if (cancelled) return;
+        flown = true;
       }
-      enter("landed");
       const after = roundBefore + row.total;
       const share = Math.min(1, row.total / Math.max(1, target));
       runSound.slam(share);
       p().onSlam(after);
       p().onShake(reducedMotion ? 0 : feel.slamShake + feel.slamShakePerShare * share);
+      if (flown) await hold(feel.flyMs * 0.3, false);
+      if (cancelled) return;
+      enter("landed");
       await hold(after >= target ? feel.afterFireMs : feel.afterSlamMs, false);
       if (cancelled) return;
       p().onDone();
@@ -676,16 +801,26 @@ export function ChainScoring(props: ChainScoringProps) {
   const showTotal = stage !== "landed" && readout && base;
   const comboText = `x${formatChainScore(running.combo)}`;
   const size = readout ? Math.round(readout.size * (1 + Math.min(0.45, running.combo / 260))) : 0;
-  const totalAnimate = fly ? { x: fly.x, y: fly.y, scale: fly.scale } : { x: 0, y: 0, scale: 1 };
+  const totalAnimate = fly ? { x: fly.x, y: fly.y, scale: fly.scale, opacity: [1, 1, 0] } : { x: 0, y: 0, scale: 1, opacity: 1 };
   const burn = target > 0 ? flameLevel(roundBefore + running.total, target) : 0;
   const flameW = Math.max(size * 2.4, totalW * 1.25);
+  const ratio = target > 0 ? (roundBefore + running.total) / target : 0;
+  const flameLayer = typeof document !== "undefined" ? document.querySelector<HTMLElement>("[data-chain-flame-layer]") : null;
+  /* The desktop fire's reach is a share of the room up to the table's top
+     edge, growing with log(score / target): a bare crossing climbs about
+     to the HUD, 2x licks around it, 10x fills the room. Its tips stay
+     under the top edge so they never get cut flat. */
+  const flameBase = readout && flameLayer ? readout.y - flameLayer.getBoundingClientRect().top + Math.round(size * 0.46) : 0;
+  const flameReach = Math.min(1, 0.4 + 0.6 * Math.log10(Math.max(1, ratio)));
+  const tallFlame = flameW > 0 ? Math.max(0.5, ((flameBase - 16) * flameReach) / (flameW * 0.6)) : 0.75;
   /* Room above the number for the flame: up to the board's top on a wide
-     table; on a phone up to the HUD's score row, so it stands behind the
-     meter line but never over the score. */
+     table, up to the progress bar's top on a phone. */
   let flameRoom: number | null = null;
   if (readout && readout.top !== undefined && typeof document !== "undefined") {
-    const scoreBox = [...document.querySelectorAll<HTMLElement>("[data-chain-score]")].find((element) => element.offsetParent !== null);
-    const ceiling = readout.narrow && scoreBox ? scoreBox.getBoundingClientRect().bottom + 4 : readout.top;
+    // On a phone it may rise up to the progress bar's top, never over the
+    // HUD lines above it.
+    const meter = [...document.querySelectorAll<HTMLElement>("[data-chain-meter]")].find((element) => element.offsetParent !== null);
+    const ceiling = meter ? (readout.narrow ? meter.getBoundingClientRect().top : meter.getBoundingClientRect().bottom + 6) : readout.top;
     flameRoom = Math.max(0, readout.y + size * 0.46 - ceiling);
   }
   return (
@@ -708,20 +843,32 @@ export function ChainScoring(props: ChainScoringProps) {
               score stays clear), its sides free, fading out as the total
               flies. */}
           <AnimatePresence>
-            {burn > 0 && stage !== "fly" && (
+            {burn > 0 && stage !== "fly" && readout.narrow && (
               <motion.div
                 key="flame"
                 className="absolute left-0 -translate-x-1/2 -translate-y-full"
                 style={{
                   top: Math.round(size * 0.46),
                   transformOrigin: "50% 100%",
-                  clipPath: flameRoom !== null ? `inset(${Math.round(flameW * 0.6 - flameRoom)}px -40% 0 -40%)` : undefined,
                   opacity: readout.narrow ? 0.9 : 1,
+                  // A box twice the flame's width and as tall as the room it
+                  // has, its top fading out: the tongues dissolve under the
+                  // HUD instead of being cut, and the sides stay free.
+                  ...(flameRoom !== null
+                    ? {
+                        width: flameW * 2,
+                        height: flameRoom,
+                        WebkitMaskImage: "linear-gradient(to top, black 55%, transparent)",
+                        maskImage: "linear-gradient(to top, black 55%, transparent)",
+                      }
+                    : {}),
                 }}
                 initial={false}
                 exit={{ scaleY: 0, opacity: 0, transition: { duration: 0.15 } }}
               >
-                <InkFlame level={burn} width={flameW} reducedMotion={reducedMotion} />
+                <div className={flameRoom !== null ? "absolute bottom-0 left-1/2 -translate-x-1/2" : undefined}>
+                  <InkFlame level={burn} width={flameW} reducedMotion={reducedMotion} />
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -730,7 +877,7 @@ export function ChainScoring(props: ChainScoringProps) {
             animate={totalAnimate}
             transition={
               fly
-                ? { duration: CHAIN_FEEL.chain.flyMs / 1000, ease: [0.5, 0, 0.9, 0.5] }
+                ? { duration: CHAIN_FEEL.chain.flyMs / 1000, ease: [0.5, 0, 0.9, 0.5], opacity: { duration: CHAIN_FEEL.chain.flyMs / 1000, times: [0, 0.7, 1] } }
                 : stage === "total"
                   ? { type: "spring", stiffness: 420, damping: 22 }
                   : { duration: 0 }
@@ -741,7 +888,7 @@ export function ChainScoring(props: ChainScoringProps) {
               className="absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-black leading-none text-white tabular-nums"
               style={{ fontSize: size, WebkitTextStroke: `${Math.max(6, Math.round(size * 0.12))}px #120f1a`, paintOrder: "stroke fill" }}
             >
-              <WysiDigits text={formatChainScore(running.total)} />
+              <WysiDigits text={stage === "fly" ? `+${formatChainScore(running.total)}` : formatChainScore(running.total)} />
             </div>
           </motion.div>
           {reason && stage === "steps" && (
@@ -809,6 +956,28 @@ export function ChainScoring(props: ChainScoringProps) {
           <SceneArt id={SCENE_ART_ID[stamp.scene]} size={stamp.size} />
         </motion.div>
       ))}
+      {/* Desktop: the fire stands in the layer under the HUD, tall, its
+          height growing with log(score / target): a 2x crossing modest, a
+          10x one huge. The HUD's numbers sit on opaque plates over it. */}
+      {flameLayer &&
+        readout &&
+        !readout.narrow &&
+        createPortal(
+          <AnimatePresence>
+            {burn > 0 && stage !== "fly" && stage !== "landed" && (
+              <motion.div
+                key="flame-desk"
+                className="absolute -translate-x-1/2 -translate-y-full"
+                style={{ left: readout.x - flameLayer.getBoundingClientRect().left, top: flameBase, transformOrigin: "50% 100%" }}
+                initial={false}
+                exit={{ scaleY: 0, opacity: 0, transition: { duration: 0.15 } }}
+              >
+                <InkFlame level={burn} width={flameW} height={tallFlame} reducedMotion={reducedMotion} />
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          flameLayer,
+        )}
       <AnimatePresence>
         {floats.map((item) => (
           <Float key={item.id} item={item} reducedMotion={reducedMotion} />

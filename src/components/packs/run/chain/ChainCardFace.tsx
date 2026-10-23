@@ -1,8 +1,8 @@
 import { memo, useId, type CSSProperties, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
 import { CountryFlag } from "#/components/ui/CountryFlag";
-import { chainCardColor, chainCardFace, chainCardRarityLabel, chainSkillShort, type ChainCard } from "#/lib/chain-run";
-import { MANIA_GLYPH_D, MANIA_TIER_STYLES, maniaTriangleOverlaySvg } from "#/lib/maniacard";
+import { CHAIN_VARIANT_COPY, chainCardColor, chainCardFace, chainCardRarityLabel, chainSkillShort, type ChainCard } from "#/lib/chain-run";
+import { MANIA_TIER_STYLES, maniaTriangleOverlaySvg } from "#/lib/maniacard";
 import { getCosmicTierPalette, type CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
 /* The avatar as the card draws it: osu!'s own URL, or a.ppy.sh by id when the
@@ -21,11 +21,13 @@ const TEXT_SHADOW = "0 1px 3px rgba(0,0,0,0.55)";
    chip set a narrow card can hold without wrapping or clipping. */
 const SKILL_TEXT_W: Record<ChainCard["skill"], number> = {
   Stream: 34, Jumpstream: 11.6, Handstream: 14.7, Stamina: 39.1, Jack: 22, Chordjack: 13.4, Tech: 22.2, Speed: 28.1,
+  Chordstream: 13.4, Bracket: 40.5, Delay: 28.4,
 };
 /* The short skill codes a phone hand card falls back to. */
 const SKILL_CODE: Record<ChainCard["skill"], [string, number]> = {
   Stream: ["Str", 14.7], Jumpstream: ["JS", 11.6], Handstream: ["HS", 14.7], Stamina: ["Sta", 15.3],
   Jack: ["Jk", 11.6], Chordjack: ["CJ", 13.4], Tech: ["Tec", 16.1], Speed: ["Spd", 18.4],
+  Chordstream: ["CS", 13.4], Bracket: ["Brk", 18.4], Delay: ["Dly", 17.2],
 };
 
 /* Rough width of a rarity word at 11px, to squeeze (never clip) the longest
@@ -51,9 +53,6 @@ const FINISH: Record<ChainCard["tier"], number> = {
   ascendant: 7,
   worldClass: 8,
 };
-
-/* The pale tiers, whose light corners white text cannot sit on. */
-const PALE_INK: Partial<Record<ChainCard["tier"], string>> = { legendary: "#78350f", ascendant: "#581c87" };
 
 const HOLO = "#ff8fd0, #ffd36b, #a5f3c4, #7fd3ff, #c4b2ff, #ff8fd0";
 const svgUrl = (svg: string) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
@@ -101,16 +100,6 @@ function withAlpha(rgba: string, alpha: number): string {
   return match ? `rgba(${match[1].trim()}, ${match[2].trim()}, ${match[3].trim()}, ${alpha})` : rgba;
 }
 
-function ManiaGlyph({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="-40 -40 1080 1080" aria-hidden className="block">
-      <g transform="matrix(1,0,0,-1,0,860)">
-        <path d={MANIA_GLYPH_D} fill="#ffffff" />
-      </g>
-    </svg>
-  );
-}
-
 /* The four-point glints the cosmic front scatters, at the 3D card's spots. */
 const GLINTS: Array<[number, number, number, number]> = [
   [15.2, 9.3, 0.084, 0],
@@ -119,17 +108,19 @@ const GLINTS: Array<[number, number, number, number]> = [
   [21.4, 81.4, 0.044, 0.6],
 ];
 
-/* A player as a chain card, drawn as a pocket maniacard: the tier's own
-   gradient, osu! triangles, the mode badge, the name plate and the italic
-   tier name, with the three trait marks (what links are made of) on one dark
-   strip. Each rarity up adds one finish (see FINISH). Drawn at the size it is
-   shown, so every text keeps an 11px floor: under 116px wide it switches to a
-   compact face (number and avatar on top, name, then the marks on two lines),
-   and under 56px (the deck preview) to just the avatar and number. `lit`
-   marks are the ones a link matches, filled in their ink; a rarity link edges
-   the card in the rarity's ink. Each mark carries data-trait so the scoring
-   chain can flash it. Animated finishes are transform/opacity only, pause
-   under reduced motion and are left out while `dim`. */
+/* A player as a chain card: the portrait edge to edge across the top under
+   the name, and a panel in the tier's deep tone holding the three trait marks
+   (what links are made of), the number and the rarity pill, all inside a
+   rim in the tier's ink. The tier's maniacard surface (gradient, osu!
+   triangles) shows through the panel, and each rarity up adds one finish
+   (see FINISH); the moving ones run over the portrait too. Drawn at the size
+   it is shown, so every text keeps an 11px floor: under 116px wide it
+   switches to a compact face, and under 56px (the deck preview) to just the
+   portrait and number. `lit` marks are the ones a link matches, filled in
+   their ink; a rarity link thickens the rim in the rarity's ink. Each mark
+   carries data-trait so the scoring chain can flash it. Animated finishes
+   are transform/opacity only, pause under reduced motion and are left out
+   while `dim`. */
 export const ChainCardFace = memo(function ChainCardFace({
   card: dealt,
   width,
@@ -155,13 +146,10 @@ export const ChainCardFace = memo(function ChainCardFace({
   const h = w * 1.4;
   const layout = w >= 116 ? "full" : w >= 56 ? "compact" : "micro";
   const radius = Math.max(6, Math.round(w * 0.08));
-  const pale = card.goat ? undefined : PALE_INK[card.tier];
+  const color = chainCardColor(card);
   const tierLit = on("tier");
   const tierWord = chainCardRarityLabel(card, i18n);
-  /* The rarity word lights like a trait chip when a rarity link matches. */
-  const tierWordStyle: CSSProperties = tierLit
-    ? { background: chainCardColor(card).ink, color: "#120f1a", padding: "1px 4px", borderRadius: 3 }
-    : { color: "#ffffff", textShadow: "0 1px 0 rgba(0,0,0,0.35)" };
+  const variant = card.variant ? CHAIN_VARIANT_COPY[card.variant] : null;
 
   // ---- the surface ---------------------------------------------------------
   const layers: ReactNode[] = [];
@@ -205,15 +193,17 @@ export const ChainCardFace = memo(function ChainCardFace({
       />,
     );
   }
+  // The moving finishes run over the portrait too.
+  const over: ReactNode[] = [];
   if (finish === 7 && animate) {
-    layers.push(
+    over.push(
       <div key="holo" className="chain-face-holo">
         <i />
       </div>,
     );
   }
   if (finish >= 6 && animate) {
-    layers.push(<div key="sweep" className={`chain-face-sweep${cosmic ? " chain-face-sweep-cosmic" : ""}`} style={{ animationDelay: `${-finish * 0.7}s` }} />);
+    over.push(<div key="sweep" className={`chain-face-sweep${cosmic ? " chain-face-sweep-cosmic" : ""}`} style={{ animationDelay: `${-finish * 0.7}s` }} />);
   }
 
   // The notched frame from the card back, in its own stroke recipe (white
@@ -269,109 +259,169 @@ export const ChainCardFace = memo(function ChainCardFace({
   // ---- the marks -----------------------------------------------------------
   const markStyle = (trait: "cc" | "key" | "skill"): CSSProperties | undefined =>
     on(trait) ? { background: LIT_INK[trait], color: "#120f1a" } : undefined;
-  const flag = <CountryFlag code={card.cc} size="xs" decorative className="!h-[1.05em] !w-[1.55em]" />;
   const skill = chainSkillShort(card.skill);
-  const avatar = (size: number, extra: CSSProperties) => (
-    <img
-      src={chainAvatarSrc(card)}
-      alt=""
-      draggable={false}
-      loading="lazy"
-      className="absolute block bg-black/25 object-cover"
-      style={{ width: size, height: size, border: `${size > 48 ? 1.5 : 1}px solid rgba(255,255,255,0.6)`, ...extra }}
-      onError={(event) => {
-        const img = event.currentTarget;
-        if (!img.src.endsWith("/avatar-guest.png")) img.src = "https://osu.ppy.sh/images/layout/avatar-guest.png";
+  /* The portrait, edge to edge across the top, fading into the panel. */
+  const art = (artH: number) => (
+    <>
+      <img
+        src={chainAvatarSrc(card)}
+        alt=""
+        draggable={false}
+        loading="lazy"
+        className="absolute left-0 top-0 block object-cover"
+        style={{ width: w, height: artH, objectPosition: "50% 30%", background: color.deep, transform: card.variant === "mirror" ? "scaleX(-1)" : undefined }}
+        onError={(event) => {
+          const img = event.currentTarget;
+          if (!img.src.endsWith("/avatar-guest.png")) img.src = "https://osu.ppy.sh/images/layout/avatar-guest.png";
+        }}
+      />
+      {card.variant === "mirror" && (
+        // A chrome pane over the flipped portrait: two cold streaks.
+        <div
+          className="absolute inset-x-0 top-0"
+          style={{
+            height: artH,
+            background: "linear-gradient(118deg, transparent 18%, rgba(224,242,254,0.55) 24%, transparent 31%, transparent 52%, rgba(186,230,253,0.35) 57%, transparent 61%)",
+            mixBlendMode: "screen",
+          }}
+        />
+      )}
+      <div className="absolute inset-x-0" style={{ top: artH * 0.5, height: artH * 0.5 + 1, background: `linear-gradient(180deg, transparent, ${color.deep}d9)` }} />
+    </>
+  );
+  /* The info panel under the portrait: the tier's deep tone over its surface,
+     so the triangles and finishes still show through toward the bottom. */
+  const panel = (top: number) => (
+    <div
+      className="absolute inset-x-0 bottom-0 overflow-hidden"
+      style={{
+        top,
+        background:
+          card.variant === "silver"
+            ? // Brushed silver: fine horizontal grain over a cold steel wash.
+              `repeating-linear-gradient(180deg, rgba(255,255,255,0.07) 0 1px, transparent 1px 3px), linear-gradient(115deg, #3b4350e6 0%, #8a94a3d9 38%, #4b5563e6 62%, #9aa4b2cc 100%)`
+            : `linear-gradient(180deg, ${color.deep}e0 0%, ${color.deep}a6 55%, ${color.deep}73 100%)`,
+        borderTop: `1px solid ${variant && card.variant === "silver" ? "#e2e8f0aa" : `${color.ink}40`}`,
       }}
-    />
+    >
+      {card.variant === "max" && animate && (
+        // MAX's rainbow shimmer runs under the panel's text, off the face.
+        <div className="chain-face-holo" style={{ opacity: 0.6 }}>
+          <i />
+        </div>
+      )}
+    </div>
+  );
+  /* The variant's badge, top right over the portrait. */
+  const badgeFont = Math.max(11, Math.round(10 * (w / 130)));
+  const badgeW = variant ? Math.ceil(wordWidth11(variant.badge) * 1.25 * (badgeFont / 11)) + 8 : 0;
+  const badge = (pad: number) =>
+    variant ? (
+      <div
+        className="absolute whitespace-nowrap font-black italic leading-none tracking-[0.04em]"
+        style={{
+          right: pad,
+          top: pad - 1,
+          fontSize: badgeFont,
+          padding: "2px 4px",
+          borderRadius: 4,
+          background: variant.fill,
+          color: card.variant === "max" ? "#1a1020" : card.variant === "pfc" ? "#3b2500" : card.variant === "mirror" ? "#0c4a6e" : "#1e293b",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.7)",
+        }}
+      >
+        {variant.badge}
+      </div>
+    ) : null;
+  const nameplate = (fontSize: number, pad: number) => (
+    <>
+      <div className="absolute inset-x-0 top-0" style={{ height: fontSize * 2.6, background: "linear-gradient(180deg, rgba(6,8,18,0.72), rgba(6,8,18,0))" }} />
+      <div
+        className="absolute truncate font-bold leading-none text-white"
+        style={{ left: pad, right: pad + (badgeW ? badgeW + 3 : 0), top: pad, fontSize, lineHeight: `${Math.round(fontSize * 1.2)}px`, textShadow: TEXT_SHADOW }}
+      >
+        {card.name}
+      </div>
+    </>
   );
 
   let content: ReactNode;
   if (layout === "full") {
     const s = w / 130;
-    const pad = 7 * s;
-    const badge = 22 * s;
-    const plateH = Math.max(18, 21 * s);
+    const pad = 8 * s;
+    const panelH = Math.round(h * 0.34);
+    const panelTop = h - panelH;
     const baseSize = Math.round(28 * s);
-    const avatarTop = pad + badge + 6 * s;
-    const av = Math.round(Math.min(w * 0.66, h - (avatarTop + 6 * s + plateH + 4 * s + baseSize * 0.9 + pad)));
-    const cell = { padding: `0 ${Math.max(4, 6 * s)}px` };
+    const traitH = Math.max(16, 17 * s);
+    const traitSize = Math.max(11, Math.round(12 * s));
+    const cell = { padding: `0 ${Math.max(3, 4 * s)}px` };
+    const pillSize = Math.max(11, Math.round(10 * s));
+    const pillPad = Math.round(6 * s);
+    // The rarity pill squeezes (never clips) beside a wide number.
+    const pillRoom = w - pad * 2 - baseSize * 0.62 * String(card.base).length - 6 * s;
+    const pillW = wordWidth11(tierWord.toUpperCase()) * 1.28 * (pillSize / 11) + pillPad * 2;
+    const pillScale = Math.min(1, pillRoom / pillW);
     content = (
       <>
-        <div className="absolute flex items-stretch" style={{ left: pad, right: pad, top: pad, height: badge, gap: 4 * s }}>
-          <div
-            className="flex shrink-0 items-center justify-center"
-            style={{ width: badge, borderRadius: 6 * s, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.35)" }}
-          >
-            <ManiaGlyph size={badge * 0.72} />
-          </div>
-          <div
-            className="min-w-0 flex-1 truncate px-[5px] text-center font-black text-white"
-            style={{ borderRadius: 6 * s, background: "rgba(0,0,0,0.34)", fontSize: Math.max(11, Math.round(12.5 * s)), lineHeight: `${badge}px`, textShadow: TEXT_SHADOW }}
-          >
-            {card.name}
-          </div>
-        </div>
-        {avatar(av, { top: avatarTop, left: (w - av) / 2, borderRadius: 9 * s })}
+        {art(panelTop)}
+        {panel(panelTop)}
+        {nameplate(Math.max(11, Math.round(13 * s)), pad)}
+        {badge(pad)}
         <div
-          className="absolute left-1/2 flex -translate-x-1/2 items-stretch whitespace-nowrap font-black leading-none text-white"
-          style={{ top: avatarTop + av + 6 * s, height: plateH, borderRadius: 6 * s, background: "rgba(10,6,24,0.36)", fontSize: Math.max(11, Math.round(12 * s)) }}
+          className="absolute flex items-stretch whitespace-nowrap font-bold leading-none text-white"
+          style={{ left: pad - 4 * s, top: panelTop + 6 * s, height: traitH, fontSize: traitSize, textShadow: TEXT_SHADOW }}
         >
-          <span data-trait="cc" className="flex items-center rounded-[5px]" style={{ ...cell, ...markStyle("cc") }}>
-            {flag}
+          <span data-trait="cc" className="flex items-center rounded-[4px]" style={{ ...cell, ...markStyle("cc") }}>
+            <CountryFlag code={card.cc} size="xs" decorative className="!h-[1.05em] !w-[1.55em]" />
           </span>
-          <span className="h-1/2 w-px self-center bg-white/15" />
-          <span data-trait="key" className="flex items-center rounded-[5px]" style={{ ...cell, ...markStyle("key") }}>
+          <span className="h-3/5 w-px self-center bg-white/25" />
+          <span data-trait="key" className="flex items-center rounded-[4px]" style={{ ...cell, ...markStyle("key") }}>
             {card.key}K
           </span>
-          <span className="h-1/2 w-px self-center bg-white/15" />
-          <span data-trait="skill" className="flex items-center rounded-[5px]" style={{ ...cell, ...markStyle("skill") }}>
+          <span className="h-3/5 w-px self-center bg-white/25" />
+          <span data-trait="skill" className="flex items-center rounded-[4px]" style={{ ...cell, ...markStyle("skill") }}>
             {skill}
           </span>
         </div>
         <div
           data-chain-base=""
-          className="absolute font-black italic leading-[0.9] tabular-nums tracking-[-0.02em]"
-          style={{
-            left: pad + 1,
-            bottom: pad - 1,
-            fontSize: baseSize,
-            color: card.tier === "ascendant" ? pale : "#ffffff",
-            textShadow: card.tier === "ascendant" ? "0 1.5px 0 rgba(255,255,255,0.6)" : "0 2px 0 rgba(0,0,0,0.28)",
-          }}
+          className="absolute font-black leading-[0.82] tabular-nums tracking-[-0.03em] text-white"
+          style={{ left: pad, bottom: pad, fontSize: baseSize, textShadow: "0 2px 4px rgba(0,0,0,0.45)" }}
         >
           {card.base}
         </div>
         <div
-          className="absolute whitespace-nowrap font-black italic leading-none"
-          style={{ right: pad + 1 - (tierLit ? 4 : 0), bottom: pad + 3 * s - (tierLit ? 2 : 0), fontSize: Math.max(11, Math.round(11 * s)), ...tierWordStyle }}
+          className="absolute whitespace-nowrap font-black uppercase leading-none tracking-[0.08em]"
+          style={{
+            right: pad,
+            bottom: pad + 1 * s,
+            fontSize: pillSize,
+            padding: `${Math.round(3 * s)}px ${pillPad}px`,
+            borderRadius: 5 * s,
+            transform: pillScale < 1 ? `scaleX(${pillScale.toFixed(3)})` : undefined,
+            transformOrigin: "100% 50%",
+            ...(tierLit
+              ? { background: color.ink, color: "#120f1a" }
+              : { background: `${color.fill}8c`, color: color.ink, boxShadow: `inset 0 0 0 1px ${color.ink}66`, textShadow: "0 1px 0 rgba(0,0,0,0.35)" }),
+          }}
         >
           {tierWord}
         </div>
       </>
     );
   } else if (layout === "compact") {
-    /* A small maniacard: the number in the badge spot beside the name plate,
-       the rarity word under the plate where the real card prints it, the
-       portrait central and framed, the trait strip along the bottom. When the
-       strip runs out of room it gives up text first: full chips, then flag +
-       keymode + a skill code, then flag + keymode + a bare skill mark. */
-    const pad = Math.max(3, Math.round(w * 0.05));
+    /* The same card in small: name over the portrait, then the trait strip,
+       then the number and the rarity word. When the strip runs out of room
+       it gives up text first: full chips, then flag + keymode + a skill code,
+       then flag + keymode + a bare skill mark. */
+    const pad = Math.max(3, Math.round(w * 0.06));
     const inner = w - pad * 2;
-    const plateH = Math.max(15, Math.round(w * 0.16));
-    const baseSize = Math.max(12, Math.round(w * 0.15));
-    const baseTileW = Math.ceil(baseSize * 0.6 * String(card.base).length) + 6;
-    /* Under 80px the number leaves the plate (the name needs it) and stands
-       at the portrait's bottom-left, as on the full face. */
-    const tight = w < 80;
-    const wordTop = pad + plateH + 1;
     const stripH = 15;
-    const stripTop = h - pad - stripH;
-    const room = stripTop - 3 - (wordTop + 12 + 2);
-    const av = Math.floor(Math.min(room, tight ? inner - baseTileW - 2 : inner * 0.8));
-    const avTop = wordTop + 12 + 2 + Math.max(0, (room - av) / 2);
-    const avLeft = tight ? Math.max((w - av) / 2, pad + baseTileW - 3) : (w - av) / 2;
-    const wordScale = Math.min(1, (inner + 1) / (wordWidth11(tierWord) + (tierLit ? 8 : 0)));
+    const baseSize = Math.max(13, Math.round(w * 0.17));
+    const panelH = 3 + stripH + 2 + Math.round(baseSize * 0.85) + pad;
+    const panelTop = Math.round(h - panelH);
+    const baseW = baseSize * 0.62 * String(card.base).length;
+    const wordScale = Math.min(1, (inner - baseW - 3) / (wordWidth11(tierWord.toUpperCase()) * 1.2 + (tierLit ? 8 : 0)));
     // "4K"/"7K" stays text in every layout; the flag's padding and then the
     // skill code give way first.
     const keyW = 14.1;
@@ -382,75 +432,56 @@ export const ChainCardFace = memo(function ChainCardFace({
     const chip = mode === "full" ? "px-[2.5px]" : "px-[1.5px]";
     content = (
       <>
-        <div className="absolute flex items-stretch gap-[2px]" style={{ left: pad, right: pad, top: pad, height: plateH }}>
-          {!tight && (
-            <div
-              data-chain-base=""
-              className="flex shrink-0 items-center justify-center font-black italic leading-none tabular-nums tracking-[-0.02em]"
-              style={{ width: baseTileW, fontSize: baseSize, borderRadius: 4, background: "rgba(0,0,0,0.24)", border: "1px solid rgba(255,255,255,0.35)", textShadow: TEXT_SHADOW }}
-            >
-              {card.base}
-            </div>
-          )}
-          <div
-            className="min-w-0 flex-1 truncate px-[3px] text-center text-[11px] font-black text-white"
-            style={{ borderRadius: 4, background: "rgba(0,0,0,0.34)", lineHeight: `${plateH}px`, textShadow: TEXT_SHADOW }}
-          >
-            {card.name}
-          </div>
-        </div>
+        {art(panelTop)}
+        {panel(panelTop)}
+        {nameplate(11, pad)}
+        {badge(pad)}
         <div
-          className="absolute whitespace-nowrap text-[11px] font-black italic leading-[12px]"
-          style={{
-            right: pad,
-            top: wordTop,
-            transform: wordScale < 1 ? `scaleX(${wordScale.toFixed(3)})` : undefined,
-            transformOrigin: "100% 50%",
-            ...tierWordStyle,
-            // The pale tiers are light up here, so their word prints dark.
-            ...(pale && !tierLit ? { color: pale, textShadow: "none" } : null),
-          }}
-        >
-          {tierWord}
-        </div>
-        {avatar(av, { top: avTop, left: avLeft, borderRadius: Math.max(5, av * 0.12) })}
-        {tight && (
-          <div
-            data-chain-base=""
-            className="absolute font-black italic leading-none tabular-nums tracking-[-0.02em]"
-            style={{ left: pad, top: avTop + av - baseSize, fontSize: baseSize, color: pale ?? "#ffffff", textShadow: pale ? "0 1px 0 rgba(255,255,255,0.5)" : TEXT_SHADOW }}
-          >
-            {card.base}
-          </div>
-        )}
-        <div
-          className="absolute flex items-stretch justify-center whitespace-nowrap rounded-[4px] text-[11px] font-black leading-none text-white"
-          style={{ left: pad, right: pad, top: stripTop, height: stripH, background: "rgba(10,6,24,0.36)" }}
+          className="absolute flex items-stretch whitespace-nowrap text-[11px] font-bold leading-none text-white"
+          style={{ left: pad - (mode === "full" ? 2.5 : 1.5), top: panelTop + 3, height: stripH, textShadow: TEXT_SHADOW }}
         >
           <span data-trait="cc" className={`flex items-center rounded-[3px] ${mode === "full" ? chip : "px-[0.5px]"}`} style={markStyle("cc")}>
             <CountryFlag code={card.cc} size="xs" decorative className={mode === "full" ? "!h-[11px] !w-[16px]" : "!h-[8.5px] !w-[12px]"} />
           </span>
-          <span className="h-1/2 w-px self-center bg-white/15" />
+          <span className="h-1/2 w-px self-center bg-white/25" />
           <span data-trait="key" className={`flex items-center rounded-[3px] ${chip}`} style={markStyle("key")}>
             {card.key}K
           </span>
-          <span className="h-1/2 w-px self-center bg-white/15" />
+          <span className="h-1/2 w-px self-center bg-white/25" />
           <span data-trait="skill" className={`flex items-center rounded-[3px] ${chip}`} style={markStyle("skill")} title={card.skill}>
             {mode === "full" ? skill : mode === "code" ? code : <span className="block h-[5px] w-[5px] rotate-45 bg-current" />}
           </span>
         </div>
+        <div
+          data-chain-base=""
+          className="absolute font-black leading-[0.82] tabular-nums tracking-[-0.03em] text-white"
+          style={{ left: pad, bottom: pad, fontSize: baseSize, textShadow: TEXT_SHADOW }}
+        >
+          {card.base}
+        </div>
+        <div
+          className="absolute whitespace-nowrap text-[11px] font-black uppercase leading-[12px] tracking-[0.04em]"
+          style={{
+            right: pad - (tierLit ? 3 : 0),
+            bottom: pad,
+            transform: wordScale < 1 ? `scaleX(${Math.max(0.5, wordScale).toFixed(3)})` : undefined,
+            transformOrigin: "100% 50%",
+            ...(tierLit ? { background: color.ink, color: "#120f1a", padding: "0 3px", borderRadius: 3 } : { color: color.ink, textShadow: TEXT_SHADOW }),
+          }}
+        >
+          {tierWord}
+        </div>
       </>
     );
   } else {
-    const pad = 3;
-    const av = Math.round(w - pad * 2);
+    const numberH = 15;
     content = (
       <>
-        {avatar(av, { top: pad, left: pad, borderRadius: 5 })}
+        {art(h)}
         <div
           data-chain-base=""
-          className="absolute inset-x-0 text-center text-[12px] font-black italic leading-none tabular-nums"
-          style={{ bottom: Math.max(2, (h - pad - av - 12) / 2), color: pale ?? "#ffffff", textShadow: pale ? "none" : "0 1px 0 rgba(0,0,0,0.3)" }}
+          className="absolute inset-x-0 text-center text-[12px] font-black leading-none tabular-nums text-white"
+          style={{ bottom: Math.max(2, (numberH - 12) / 2 + 1), textShadow: TEXT_SHADOW }}
         >
           {card.base}
         </div>
@@ -458,6 +489,9 @@ export const ChainCardFace = memo(function ChainCardFace({
     );
   }
 
+  const rimW = layout === "full" ? Math.max(1.5, 2 * (w / 130)) : 1.25;
+  /* A variant inks the rim in its own colour; MAX's is a rainbow ring. */
+  const rimInk = variant && card.variant !== "max" ? variant.ink : color.ink;
   return (
     <div
       className="relative h-full w-full select-none overflow-hidden text-white"
@@ -469,22 +503,41 @@ export const ChainCardFace = memo(function ChainCardFace({
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ borderRadius: radius }}>
         {layers}
-        {frame}
         {glints}
       </div>
       {content}
-      {/* The tier edge, which a rarity link inks: what the chain flashes for it. */}
+      {card.variant === "max" && !tierLit && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            borderRadius: radius,
+            padding: rimW + 0.5,
+            background: `linear-gradient(135deg, ${HOLO})`,
+            WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+            WebkitMaskComposite: "xor",
+            maskComposite: "exclude",
+          }}
+        />
+      )}
+      {(frame || over.length > 0) && (
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ borderRadius: radius }}>
+          {over}
+          {frame}
+        </div>
+      )}
+      {/* The tier rim, which a rarity link inks: what the chain flashes for it. */}
       <div
         data-trait="tier"
-        className={`pointer-events-none absolute inset-0 ${on("tier") ? "" : `border ${style.border}`}`}
+        className="pointer-events-none absolute inset-0"
         style={{
           borderRadius: radius,
-          borderWidth: on("tier") ? 0 : layout === "full" ? 1.5 : 1,
           // The ink ring with a dark hairline inside, so it reads even on the
           // tier's own colour.
-          boxShadow: on("tier")
-            ? `inset 0 0 0 ${Math.max(3, Math.round(w * 0.028))}px ${chainCardColor(card).ink}, inset 0 0 0 ${Math.max(3, Math.round(w * 0.028)) + 1.5}px rgba(10,6,24,0.55)`
-            : undefined,
+          boxShadow: tierLit
+            ? `inset 0 0 0 ${Math.max(3, Math.round(w * 0.028))}px ${color.ink}, inset 0 0 0 ${Math.max(3, Math.round(w * 0.028)) + 1.5}px rgba(10,6,24,0.55)`
+            : card.variant === "max"
+              ? `inset 0 0 ${Math.round(w * 0.08)}px rgba(255,255,255,0.35)`
+              : `inset 0 0 0 ${rimW + (variant ? 0.5 : 0)}px ${rimInk}d9, inset 0 0 ${Math.round(w * (variant ? 0.09 : 0.06))}px ${rimInk}${variant ? "73" : "4d"}`,
         }}
       />
     </div>

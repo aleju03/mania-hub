@@ -1,291 +1,114 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { msg } from "@lingui/core/macro";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
-import { pathRoundRect } from "#/lib/canvas";
-import { CHAIN_RULES } from "#/lib/chain-run";
-import { MANIA_TIER_STYLES, maniaTriangleOverlaySvg, type ManiaCardTier } from "#/lib/maniacard";
-import { getCosmicTierPalette } from "#/lib/maniacard-cosmic";
-import type { PackWallet } from "#/lib/pack-collection";
+import { CHAIN_RUN_NAME } from "#/lib/chain-run";
 import { readBestStreak } from "#/lib/streak-game";
-import { getCachedPackFrontCanvas, type PackArtStyle } from "./packArt";
 
-/* The pack page's two games, drawn as packs standing beside the one you
-   open: Higher or lower, and the chain run. Each is the site's own pack
-   wrapper (packArt.ts) in the game's colour with the game's mark in the seal,
-   the game's cards standing up behind it, and its name and the player's best
-   underneath. The whole pack is the button. */
+/* The pack page's two games, Higher or lower and the chain run, as hand-drawn
+   doodles in a column beside the pack being opened (or in a row under it on
+   narrow pages), each with its name and the player's best under it. The
+   sketch style is the /bbcode margins' (BBCodeDoodles.tsx): hand-placed paths
+   with small wobbles, a faint offset second stroke and a roughen filter; the
+   game's colour picks out what the game is about. The whole doodle is the
+   button. */
 
-/* The chain run's working name. The owner has not settled it, so it lives in
-   this one message: renaming the run is this line. */
-export const MARATHON_NAME = msg`Marathon`;
+/* The run's name is one shared message, CHAIN_RUN_NAME in src/lib/chain-run.ts. */
+const CHAIN_NAME = CHAIN_RUN_NAME;
 
-export type GameKind = "streak" | "marathon";
+export type GameKind = "streak" | "chain";
 
-type Rgb = { r: number; g: number; b: number };
+const INK = "var(--color-osu-l2)";
+const ACCENT: Record<GameKind, string> = { streak: "#66ccff", chain: "#ff66aa" };
+const ROUGH = "game-doodle-rough";
 
-const ACCENT: Record<GameKind, Rgb> = {
-  streak: { r: 102, g: 204, b: 255 },
-  marathon: { r: 255, g: 102, b: 170 },
-};
-
-const mix = (color: Rgb, target: Rgb, amount: number, alpha: number) =>
-  `rgba(${Math.round(color.r + (target.r - color.r) * amount)}, ${Math.round(color.g + (target.g - color.g) * amount)}, ${Math.round(color.b + (target.b - color.b) * amount)}, ${alpha})`;
-const WHITE = { r: 255, g: 255, b: 255 };
-const BLACK = { r: 0, g: 0, b: 0 };
-
-/* The seal's disc with the game's mark, drawn on a 24-unit grid: two arrows
-   passing for Higher or lower, three linked cards for the run. packArt
-   cover-fits it into the coin in place of the mania glyph. */
-function gameEmblem(kind: GameKind): HTMLCanvasElement {
-  const size = 192;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext("2d");
-  if (!context) return canvas;
-  const accent = ACCENT[kind];
-  const disc = context.createLinearGradient(0, 0, size, size);
-  disc.addColorStop(0, mix(accent, WHITE, 0.3, 1));
-  disc.addColorStop(0.5, mix(accent, BLACK, 0.3, 1));
-  disc.addColorStop(1, mix(accent, BLACK, 0.8, 1));
-  context.fillStyle = disc;
-  context.fillRect(0, 0, size, size);
-  const glyph = 108;
-  context.save();
-  context.translate((size - glyph) / 2, (size - glyph) / 2);
-  context.scale(glyph / 24, glyph / 24);
-  context.shadowColor = "rgba(0,0,0,0.4)";
-  context.shadowBlur = 2;
-  context.fillStyle = "rgba(255,255,255,0.96)";
-  context.strokeStyle = "rgba(255,255,255,0.96)";
-  if (kind === "streak") {
-    context.lineWidth = 2.6;
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.stroke(new Path2D("M8 19V5M3.5 9.5 8 5l4.5 4.5M16 5v14M11.5 14.5 16 19l4.5-4.5"));
-  } else {
-    // A fanned hand of three cards.
-    for (const angle of [-22, 0, 22]) {
-      context.save();
-      context.translate(12, 21);
-      context.rotate((angle * Math.PI) / 180);
-      context.beginPath();
-      pathRoundRect(context, -3.6, -16, 7.2, 10.5, 1.4);
-      context.fill();
-      context.restore();
-    }
-  }
-  context.restore();
-  return canvas;
-}
-
-const packUrlCache = new Map<string, string>();
-
-/* The game's wrapper at full drawn size (600 x 1000), crisp at 2x. */
-function gamePackUrl(kind: GameKind, bandName: string): string | null {
-  if (typeof document === "undefined") return null;
-  const key = `${kind}:${bandName}`;
-  const known = packUrlCache.get(key);
-  if (known) return known;
-  const style: PackArtStyle =
-    kind === "streak"
-      ? { accent: ACCENT.streak, name: bandName, cardCount: 2, poolLabel: "TOP 500", rank: 2, motif: "scatter" }
-      : { accent: ACCENT.marathon, name: bandName, cardCount: CHAIN_RULES.packSize, poolLabel: "ENDLESS", rank: 3, motif: "lanes7" };
-  try {
-    const url = getCachedPackFrontCanvas({ ...style, emblem: gameEmblem(kind), emblemKey: `game:${kind}` }).toDataURL("image/png");
-    packUrlCache.set(key, url);
-    return url;
-  } catch {
-    return null;
-  }
-}
-
-/* A card standing behind a game pack. */
-export interface GamePackCard {
-  avatarUrl: string;
-  tier: ManiaCardTier;
-  /* Shown on the name plate; a showcase card has none. */
-  name: string | null;
-}
-
-/* For a player with no cards yet: portraits only, no names, so the art
-   claims nothing about anyone. */
-const SHOWCASE: GamePackCard[] = [
-  { avatarUrl: "https://a.ppy.sh/2558286", tier: "legendary", name: null },
-  { avatarUrl: "https://a.ppy.sh/6447454", tier: "superRare", name: null },
-  { avatarUrl: "https://a.ppy.sh/1653229", tier: "mythic", name: null },
-  { avatarUrl: "https://a.ppy.sh/5052899", tier: "ultraRare", name: null },
-  { avatarUrl: "https://a.ppy.sh/7095193", tier: "elite", name: null },
-];
-
-const TIER_RANK: ManiaCardTier[] = [
-  "common",
-  "rare",
-  "elite",
-  "superRare",
-  "ultraRare",
-  "legendary",
-  "mythic",
-  "ascendant",
-  "worldClass",
-  "eternal",
-  "goat",
-];
-
-/* The player's own best cards (highest tier, then pp), five of them, topped up
-   from the showcase while the collection is small. */
-export function gamePackCards(wallet: PackWallet | null): GamePackCard[] {
-  const own = wallet
-    ? Object.values(wallet.cards)
-        .filter((card) => card.copies > 0 && card.avatarUrl)
-        .map((card) => {
-          const tier = card.tier ?? "common";
-          return { card, tier, rank: TIER_RANK.indexOf(tier) };
-        })
-        .sort((a, b) => b.rank - a.rank || b.card.pp - a.card.pp)
-        .slice(0, 5)
-        .map(({ card, tier }) => ({ avatarUrl: card.avatarUrl, tier, name: card.username }))
-    : [];
-  return [...own, ...SHOWCASE].slice(0, 5);
-}
-
-const TRIANGLES = `url("data:image/svg+xml,${encodeURIComponent(maniaTriangleOverlaySvg(100, 140))}")`;
-
-/* A small maniacard face, from the card's own pieces: the tier's fill (or
-   its cosmic wash), the triangles, the name plate and the framed portrait.
-   Only its top shows above the pack. */
-function StandingCard({ card, width, style }: { card: GamePackCard; width: number; style: CSSProperties }) {
-  const tierStyle = MANIA_TIER_STYLES[card.tier];
-  const cosmic = getCosmicTierPalette(card.tier);
-  const radius = Math.max(5, width * 0.08);
-  const plate = card.name !== null && width >= 64;
-  const plateH = 15;
-  const portrait = Math.round(width * 0.68);
+function Sketch({ children }: { children: ReactNode }) {
   return (
-    <div
-      className="absolute overflow-hidden shadow-[0_6px_14px_rgba(0,0,0,0.35)]"
-      style={{
-        width,
-        height: width * 1.4,
-        borderRadius: radius,
-        background: cosmic ? `linear-gradient(145deg, ${cosmic.base.map(([offset, color]) => `${color} ${Math.round(offset * 100)}%`).join(", ")})` : tierStyle.badgeGradient,
-        transformOrigin: "50% 100%",
-        ...style,
-      }}
-    >
-      {!cosmic && <div className="absolute inset-0" style={{ backgroundImage: TRIANGLES, backgroundSize: "100% 100%" }} />}
-      {plate && (
-        <div
-          className="absolute truncate rounded-[4px] px-[3px] text-center text-[11px] font-black text-white"
-          style={{ left: width * 0.07, right: width * 0.07, top: width * 0.06, height: plateH, lineHeight: `${plateH}px`, background: "rgba(0,0,0,0.34)", textShadow: "0 1px 3px rgba(0,0,0,0.55)" }}
-        >
-          {card.name}
-        </div>
-      )}
-      <img
-        src={card.avatarUrl}
-        alt=""
-        draggable={false}
-        loading="lazy"
-        className="absolute block bg-black/25 object-cover"
-        style={{
-          left: (width - portrait) / 2,
-          top: plate ? width * 0.06 + plateH + width * 0.05 : width * 0.12,
-          width: portrait,
-          height: portrait,
-          borderRadius: Math.max(4, portrait * 0.12),
-          border: "1px solid rgba(255,255,255,0.6)",
-        }}
-      />
-      <div className={`absolute inset-0 border ${tierStyle.border}`} style={{ borderRadius: radius }} />
-    </div>
+    <>
+      <g>{children}</g>
+      <g transform="translate(0.9 -0.7)" opacity={0.4}>
+        {children}
+      </g>
+    </>
   );
 }
 
-/* Where the cards stand behind the pack: [card index, rotation, left as a
-   fraction of the pack's width]. */
-const FAN: Record<GameKind, Array<[number, number, number]>> = {
-  streak: [
-    [0, -14, -0.18],
-    [1, 12, 0.68],
-  ],
-  marathon: [
-    [2, -18, -0.28],
-    [3, 0, 0.25],
-    [4, 18, 0.78],
-  ],
-};
+function sparkle(cx: number, cy: number, s: number) {
+  return `M ${cx} ${cy - s} Q ${cx} ${cy} ${cx + s} ${cy} Q ${cx} ${cy} ${cx} ${cy + s} Q ${cx} ${cy} ${cx - s} ${cy} Q ${cx} ${cy} ${cx} ${cy - s} Z`;
+}
 
-/* How far the standing cards rise above the pack, as a fraction of its
-   width: what a caller leaves free above it. */
-export const GAME_PACK_RISE = 0.36;
-
-export function GamePack({
-  kind,
-  width,
-  cards,
-  best,
-  tilt = 0,
-  spread = 1,
-  onOpen,
-}: {
-  kind: GameKind;
-  width: number;
-  cards: GamePackCard[];
-  /* The player's best, or null to show the name alone. */
-  best: number | null;
-  tilt?: number;
-  /* How wide the standing cards fan, 1 = full; a row of packs on a phone
-     narrows it so neighbours do not collide. */
-  spread?: number;
-  onOpen: () => void;
-}) {
-  const { t, i18n } = useLingui();
-  const name = kind === "streak" ? t`Higher or lower` : i18n._(MARATHON_NAME);
-  // Printed on the foil in the pack's own capitals.
-  const bandName = name.toLocaleUpperCase("en-US");
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => setUrl(gamePackUrl(kind, bandName)), [kind, bandName]);
-  const cardWidth = Math.round(width * 0.5);
-  const height = width / 0.6;
-  const bestLabel = kind === "streak" ? t`best streak` : t`best round`;
+/* A sketched card: wobbly outline, a hatched portrait and a name line. */
+function card(x: number, y: number, w: number, h: number, wobble: [number, number]) {
+  const [a, b] = wobble;
+  const portrait = h * 0.48;
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={name}
-      className="group flex cursor-pointer flex-col items-center gap-3.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-osu-pink"
-    >
-      <div style={{ transform: tilt ? `rotate(${tilt}deg)` : undefined, transformOrigin: "50% 100%" }}>
-        <div
-          className="relative transition-transform duration-200 ease-out group-hover:-translate-y-1.5"
-          style={{ width, height, filter: "drop-shadow(0 18px 22px rgba(0,0,0,0.45))" }}
-        >
-          {FAN[kind].map(([index, rotate, left]) => (
-            <StandingCard
-              key={index}
-              card={cards[index % cards.length]}
-              width={cardWidth}
-              style={{ left: (0.25 + (left - 0.25) * spread) * width, top: -cardWidth * 0.62, transform: `rotate(${rotate * spread}deg)` }}
-            />
-          ))}
-          {url ? (
-            <img src={url} alt="" draggable={false} className="relative z-[1] block h-full w-full rounded-[3px]" />
-          ) : (
-            <div className="relative z-[1] h-full w-full rounded-[3px] bg-osu-b4" />
-          )}
-        </div>
-      </div>
-      <div className="flex flex-col items-center gap-1.5 text-center">
-        <div className="text-[16px] font-black leading-tight text-white">{name}</div>
-        {best !== null && (
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-[26px] font-black leading-none text-white tabular-nums">{best.toLocaleString("en-US")}</span>
-            <span className="text-[11px] font-bold text-osu-f1">{bestLabel}</span>
-          </div>
-        )}
-      </div>
-    </button>
+    <>
+      <path
+        d={`M ${x + 5} ${y + a} C ${x + 1} ${y} ${x} ${y + 2} ${x} ${y + 6} L ${x + 1 + b} ${y + h - 6} C ${x + 1} ${y + h - 2} ${x + 3} ${y + h} ${x + 7} ${y + h} L ${x + w - 5} ${y + h - 0.5 + a} C ${x + w - 1} ${y + h - 0.5} ${x + w} ${y + h - 3} ${x + w} ${y + h - 7} L ${x + w - 0.5 + a} ${y + 5} C ${x + w - 0.5} ${y + 1} ${x + w - 3} ${y} ${x + w - 6} ${y} Z`}
+      />
+      <path d={`M ${x + 7} ${y + 8} L ${x + w - 7} ${y + 7.5 + b} L ${x + w - 6.5} ${y + 8 + portrait} L ${x + 7.5} ${y + 8.5 + portrait} Z`} />
+      <path
+        d={`M ${x + 10} ${y + 4 + portrait} L ${x + w * 0.38} ${y + 12} M ${x + w * 0.3} ${y + 6 + portrait} L ${x + w * 0.66} ${y + 12} M ${x + w * 0.55} ${y + 6 + portrait} L ${x + w - 10} ${y + 15}`}
+        strokeWidth={1.1}
+        opacity={0.7}
+      />
+      <path d={`M ${x + 8} ${y + portrait + 20} L ${x + w * 0.68} ${y + portrait + 19.5 + a}`} />
+      <path d={`M ${x + 8} ${y + portrait + 29} L ${x + w * 0.42} ${y + portrait + 29}`} strokeWidth={1.2} opacity={0.7} />
+    </>
+  );
+}
+
+/* Higher or lower: two cards face to face, the next one a question mark,
+   an arrow up and an arrow down between them. */
+function StreakDoodle({ accent }: { accent: string }) {
+  return (
+    <Sketch>
+      <g transform="rotate(-7 70 75)">{card(36, 22, 68, 106, [0, 1])}</g>
+      <g transform="rotate(6 170 75)">
+        <path d="M 142 22 C 138 22 136 24 136 28 L 137 122 C 137 126 139 128 143 128 L 198 127.5 C 202 127.5 204 125 204 121 L 203.5 28 C 203.5 24 201 22 197 22 Z" />
+        <path d="M 158 52 C 157 39 182 37 182 51 C 182 60 170 61 170 70 M 170 81 L 170.6 81.6" stroke={accent} strokeWidth={3.2} />
+        <path d="M 148 104 L 190 103.5 M 148 113 L 172 113" strokeWidth={1.2} opacity={0.7} />
+      </g>
+      <path d="M 120 70 L 120.5 36 M 110.5 46 L 120.5 35 L 130 45.5" stroke={accent} strokeWidth={2.6} />
+      <path d="M 120.5 82 L 120 116 M 110.5 106 L 120 117 L 130.5 106.5" strokeWidth={2.6} />
+      <path d={sparkle(216, 16, 6)} stroke={accent} />
+      <path d={sparkle(24, 136, 4)} />
+    </Sketch>
+  );
+}
+
+/* The chain run: a row of cards linked over their tops by arcs, each arc
+   with its +6, and the fire the combo lights at the end. */
+function ChainDoodle({ accent }: { accent: string }) {
+  const xs = [10, 70, 130, 190];
+  const tilt = [-4, 2, -2, 5];
+  return (
+    <Sketch>
+      {xs.map((x, i) => (
+        <g key={x} transform={`rotate(${tilt[i]} ${x + 24} 100)`}>
+          {card(x, 66, 48, 68, [i % 2 ? 1 : -1, i % 2 ? -1 : 1])}
+        </g>
+      ))}
+      {xs.slice(0, 3).map((x, i) => {
+        const from = x + 26;
+        const to = xs[i + 1] + 22;
+        const mid = (from + to) / 2;
+        return (
+          <g key={x} stroke={accent}>
+            <path d={`M ${from} 62 C ${from + 8} ${42 - i} ${to - 8} ${42 + i} ${to} 62`} strokeWidth={2} />
+            <path d={`M ${mid - 11} 35 C ${mid - 14} 35 ${mid - 14} 46 ${mid - 11} 46 L ${mid + 11} 46.5 C ${mid + 14} 46.5 ${mid + 14} 35 ${mid + 11} 35 Z`} fill={accent} fillOpacity={0.14} />
+            <path d={`M ${mid - 7.5} 40.5 L ${mid - 1.5} 40.5 M ${mid - 4.5} 37.5 L ${mid - 4.5} 43.5`} strokeWidth={1.4} />
+            <path d={`M ${mid + 6} 37 C ${mid + 2.5} 37 ${mid + 1.5} 40.5 ${mid + 1.5} 41.5 C ${mid + 1.5} 44.5 ${mid + 6.5} 44.5 ${mid + 6.5} 42 C ${mid + 6.5} 39.5 ${mid + 2} 39.5 ${mid + 1.5} 42`} strokeWidth={1.4} />
+          </g>
+        );
+      })}
+      <path
+        d="M 236 50 C 225 46 225 33 231 25 C 232 31 235 32 236.5 29 C 236.5 21 241 16 246 11 C 244 21 252.5 26 251.5 36.5 C 250.5 45 244 50 236 50 Z"
+        stroke={accent}
+        fill={accent}
+        fillOpacity={0.12}
+      />
+      <path d="M 238 45.5 C 234 42.5 235 37.5 238 33.5 C 239 36.5 241 36.5 242 34.5 C 244.5 38.5 243.5 43.5 238 45.5 Z" stroke={accent} />
+      <path d={sparkle(16, 30, 5)} />
+    </Sketch>
   );
 }
 
@@ -301,52 +124,88 @@ export function useBestStreak(): number | null {
   return best;
 }
 
-/* The two game packs for one layout. `side` stands them either side of the
-   pack stage (the caller positions the box around the 270px pack); `row`
-   puts them side by side under the pack picker. Marathon only appears for a
-   viewer the backend has released the run to. */
+export function GameDoodle({ kind, best, width, onOpen }: { kind: GameKind; best: number | null; width: number; onOpen: () => void }) {
+  const { t, i18n } = useLingui();
+  const name = kind === "streak" ? t`Higher or lower` : i18n._(CHAIN_NAME);
+  const bestLabel = kind === "streak" ? t`best streak` : t`best round`;
+  const accent = ACCENT[kind];
+  const viewW = kind === "streak" ? 240 : 260;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={name}
+      className="group flex cursor-pointer flex-col items-center gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-osu-pink"
+    >
+      <svg
+        viewBox={`0 0 ${viewW} 150`}
+        width={width}
+        height={(width * 150) / viewW}
+        fill="none"
+        stroke={INK}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+        className="overflow-visible opacity-75 transition-[opacity,transform] duration-300 ease-out group-hover:-translate-y-1 group-hover:-rotate-2 group-hover:opacity-100 group-focus-visible:opacity-100"
+      >
+        <g filter={`url(#${ROUGH})`}>{kind === "streak" ? <StreakDoodle accent={accent} /> : <ChainDoodle accent={accent} />}</g>
+      </svg>
+      <div className="flex flex-col items-center gap-1 text-center">
+        <div className="text-[17px] font-black leading-tight text-white transition-colors group-hover:text-[var(--game-accent)]" style={{ ["--game-accent" as string]: accent }}>
+          {name}
+        </div>
+        {best !== null && (
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[22px] font-black leading-none text-white tabular-nums">{best.toLocaleString("en-US")}</span>
+            <span className="text-[11px] font-bold text-osu-f1">{bestLabel}</span>
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+/* The two game doodles for one layout. `side` stacks them in a column right
+   of the pack stage (the caller positions the box around the 270 x 450
+   pack); `row` puts them side by side under it. The run's only appears for
+   a viewer the backend has released it to. */
 export function GamePacks({
   layout,
-  wallet,
-  marathon,
+  chain,
   onStreak,
-  onMarathon,
+  onChain,
   className = "",
 }: {
   layout: "side" | "row";
-  wallet: PackWallet | null;
-  /* Null hides the run's pack; otherwise its best round, or null for none. */
-  marathon: { best: number | null } | null;
+  /* Null hides the run's doodle; otherwise its best round, or null for none. */
+  chain: { best: number | null } | null;
   onStreak: () => void;
-  onMarathon: () => void;
+  onChain: () => void;
   className?: string;
 }) {
-  const cards = useMemo(() => gamePackCards(wallet), [wallet]);
   const bestStreak = useBestStreak();
-  if (layout === "row") {
-    const width = 112;
-    return (
-      <div className={`flex justify-center gap-16 ${className}`} style={{ paddingTop: Math.round(width * GAME_PACK_RISE) + 18 }}>
-        <GamePack kind="streak" width={width} cards={cards} best={bestStreak} spread={0.55} onOpen={onStreak} />
-        {marathon && <GamePack kind="marathon" width={width} cards={cards} best={marathon.best} spread={0.55} onOpen={onMarathon} />}
-      </div>
-    );
-  }
-  /* Side by side with the 270 x 450 pack: each game pack is 168 wide, its
-     foot level with the pack's, 100px clear of it. */
-  const width = 168;
-  const gap = 100;
-  const top = 450 - width / 0.6;
+  const width = layout === "side" ? 230 : 190;
+  const doodles = (
+    <>
+      <svg width="0" height="0" className="absolute" aria-hidden>
+        <filter id={ROUGH}>
+          <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves={2} seed={7} />
+          <feDisplacementMap in="SourceGraphic" scale={2.4} />
+        </filter>
+      </svg>
+      <GameDoodle kind="streak" best={bestStreak} width={width} onOpen={onStreak} />
+      {chain && <GameDoodle kind="chain" best={chain.best} width={width} onOpen={onChain} />}
+    </>
+  );
+  if (layout === "row") return <div className={`flex flex-wrap items-start justify-center gap-x-14 gap-y-8 ${className}`}>{doodles}</div>;
+  /* Right of the pack, out toward the page edge on wide screens, the column
+     centred on the pack's height. */
   return (
     <div className={`pointer-events-none absolute inset-x-0 top-0 ${className}`}>
-      <div className="pointer-events-auto absolute" style={{ top, left: `calc(50% - ${135 + gap + width}px)` }}>
-        <GamePack kind="streak" width={width} cards={cards} best={bestStreak} tilt={-3} onOpen={onStreak} />
+      <div className="pointer-events-auto absolute flex h-[450px] flex-col justify-center gap-7" style={{ left: "calc(50% + max(220px, 23vw))" }}>
+        {doodles}
       </div>
-      {marathon && (
-        <div className="pointer-events-auto absolute" style={{ top, left: `calc(50% + ${135 + gap}px)` }}>
-          <GamePack kind="marathon" width={width} cards={cards} best={marathon.best} tilt={3} onOpen={onMarathon} />
-        </div>
-      )}
     </div>
   );
 }

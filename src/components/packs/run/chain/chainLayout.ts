@@ -30,11 +30,16 @@ export interface BoardLayout {
   deck: { x: number; y: number; w: number; h: number };
   /* Phones: hand cards sit in rows of three at this width. */
   handCardW?: number;
+  /* Phones: the hand is laid out in three rows (more than six cards). */
+  handRows3?: boolean;
 }
 
 export const ROW_SLOTS = 6;
 
-export function boardLayout(width: number, height: number): BoardLayout {
+/* `bigHand`: a phone's hand holds more than six cards (and so the row two
+   at most): the row's empty second line shrinks to a strip and the hand
+   takes three rows of three. */
+export function boardLayout(width: number, height: number, bigHand = false): BoardLayout {
   const narrow = width < 700;
   if (narrow) {
     /* Two lines of three for the row, both left to right, always sized for
@@ -62,8 +67,15 @@ export function boardLayout(width: number, height: number): BoardLayout {
     cardW = Math.max(56, cardW);
     const cardH = cardW * 1.4;
     const gx = cardW * gapX;
-    const rowBlock = cardH * 2 + gapY;
-    const handHeight = 2 * handCardW * 1.4 + handGap;
+    const strip = 44;
+    const line2 = bigHand ? strip : cardH;
+    const gapLines = bigHand ? 22 : gapY;
+    const rowBlock = cardH + gapLines + line2;
+    if (bigHand) {
+      const room = height - readoutSize - arcRoom - rowBlock - below - actions - 12;
+      handCardW = Math.max(60, Math.min(108, (width - side * 2 - handGap * 2) / 3, (room - handGap * 2) / 3 / 1.4));
+    }
+    const handHeight = (bigHand ? 3 : 2) * handCardW * 1.4 + (bigHand ? 2 : 1) * handGap;
     const used = readoutSize + arcRoom + rowBlock + below + actions + handHeight;
     const top = Math.max(0, Math.min(30, (height - used - 10) / 2));
     const rowTop = top + readoutSize + arcRoom;
@@ -72,7 +84,7 @@ export function boardLayout(width: number, height: number): BoardLayout {
     for (let index = 0; index < ROW_SLOTS; index += 1) {
       const line = index < 3 ? 0 : 1;
       const col = index % 3;
-      slots.push({ x: left + col * (cardW + gx), y: rowTop + line * (cardH + gapY) });
+      slots.push({ x: left + col * (cardW + gx), y: rowTop + line * (cardH + gapLines), ...(line === 1 && bigHand ? { h: strip } : {}) });
     }
     const rowBottom = rowTop + rowBlock;
     const actionsY = rowBottom + below;
@@ -94,6 +106,7 @@ export function boardLayout(width: number, height: number): BoardLayout {
       handHeight,
       handWidth: width,
       handCardW,
+      handRows3: bigHand,
       deck: { x: width - deckW - 12, y: actionsY + (actions - deckW * 1.4) / 2 - 2, w: deckW, h: deckW * 1.4 },
     };
   }
@@ -124,7 +137,8 @@ export function boardLayout(width: number, height: number): BoardLayout {
     cardW,
     cardH,
     slots,
-    readoutY: top + readoutSize / 2,
+    // Raised into the empty band under the HUD, clear of the two-back arcs.
+    readoutY: Math.max(readoutSize / 2 + 6, top + readoutSize / 2 - 60),
     readoutSize,
     rowTop,
     rowBottom,
@@ -147,7 +161,7 @@ export function handPlaces(count: number, layout: BoardLayout): Array<{ x: numbe
     const w = layout.handCardW ?? layout.cardW;
     const h = w * 1.4;
     const scale = w / layout.cardW;
-    const perRow = count <= 3 ? 3 : count <= 6 ? 3 : Math.ceil(count / 2);
+    const perRow = count <= 6 || layout.handRows3 ? 3 : Math.ceil(count / 2);
     return Array.from({ length: count }, (_, index) => {
       const line = Math.floor(index / perRow);
       const inLine = Math.min(perRow, count - line * perRow);
@@ -198,7 +212,7 @@ export function connector(layout: BoardLayout, from: number, to: number, skip: b
     // and down into the lower one.
     const lane = !skip ? 0 : from === 1 ? 1 : 2;
     const gapTop = a.y + cardH;
-    const laneY = gapTop + (layout.narrow ? 12 : 24) + lane * (layout.narrow ? 8 : 9);
+    const laneY = gapTop + (layout.narrow ? 20 : 24) + lane * (layout.narrow ? 6 : 9);
     // Clear of the combo number under each card's middle.
     const ax = a.x + cardW * (!skip ? 0.86 : from === 1 ? 0.25 : 0.72);
     const bx = b.x + cardW * (!skip ? 0.14 : from === 1 ? 0.75 : 0.28);

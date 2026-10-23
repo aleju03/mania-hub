@@ -9,6 +9,7 @@ import {
   chainSharedTraits,
   chainCardFace,
   chainWouldLink,
+  formatChainScore,
   scoreChainRow,
   type ChainAction,
   type ChainBoardEntry,
@@ -39,6 +40,7 @@ import { setWysiRunKey } from "./wysiSeen";
 import { boardLayout, type BoardLayout } from "./chainLayout";
 import { ChainPackStage, chainPackType, DeckPile, type PackKeepOutcome, type StageName } from "./ChainPackStage";
 import { ChainScoring } from "./ChainScoring";
+import { ChainBoostChips } from "./ChainReel";
 import { ChainShop, type ShopActResult } from "./ChainShop";
 import type { ChainActOutcome } from "./useChainRun";
 
@@ -153,8 +155,14 @@ export function ChainTable(props: ChainTableProps) {
   /* Several cards picked to move at once, in the order they were picked. */
   const [selected, setSelected] = useState<number[]>([]);
   const [selectMode, setSelectMode] = useState(false);
+  /* Bumped for a card each time it is dealt anew, so it remounts (comes in
+     from the deck) rather than springing from where it last was. */
+  const [dealGen, setDealGen] = useState<Record<number, number>>({});
   const [linkFx, setLinkFx] = useState<Record<string, LinkFx> | null>(null);
-  const baseLayout: BoardLayout | null = box.width > 0 && box.height > 0 ? boardLayout(box.width, box.height) : null;
+  /* On a phone a hand of more than six (committed, so a drag never
+     resizes it) takes three rows. */
+  const bigHand = (shown?.hand.length ?? 0) - rowUids.length > 6;
+  const baseLayout: BoardLayout | null = box.width > 0 && box.height > 0 ? boardLayout(box.width, box.height, bigHand) : null;
   /* On a phone the deck pile lives in the bar; draws and kept cards fly
      from and to where it sits there, in board px. */
   const [hudDeck, setHudDeck] = useState<BoardLayout["deck"] | null>(null);
@@ -185,6 +193,9 @@ export function ChainTable(props: ChainTableProps) {
      row a run failed on greying out. */
   const [leaving, setLeaving] = useState(false);
   const [failedRow, setFailedRow] = useState(false);
+  /* The next surface (keep pick, or the run's end) comes in while the
+     cards are still on their way to the deck. */
+  const [overlapNext, setOverlapNext] = useState(false);
   /* The chain's running total while a row plays, and the target crossing. */
   const [live, setLive] = useState(0);
   const [crossFlash, setCrossFlash] = useState(0);
@@ -613,6 +624,7 @@ export function ChainTable(props: ChainTableProps) {
     setHeat(null);
     setLeaving(false);
     setFailedRow(false);
+    setOverlapNext(false);
     setLive(0);
     setLinkFx(null);
     setCardCombo({});
@@ -641,13 +653,25 @@ export function ChainTable(props: ChainTableProps) {
       runSound.charmFire(4);
     }
     if (outcome === "continue") {
-      const drawn = view?.hand.filter((entry) => !before.hand.some((old) => old.uid === entry.uid)).map((entry) => entry.uid) ?? [];
+      // New to the hand: anything not in the old hand, and the played cards
+      // the deck dealt straight back (they leave with the row and come back
+      // face down from the deck as fresh cards).
+      const kept = before.hand.filter((entry) => !row.uids.includes(entry.uid)).map((entry) => entry.uid);
+      const drawn = view?.hand.filter((entry) => !kept.includes(entry.uid)).map((entry) => entry.uid) ?? [];
+      setDealGen((current) => {
+        const next = { ...current };
+        for (const uid of drawn) next[uid] = (next[uid] ?? 0) + 1;
+        return next;
+      });
       finishPlay();
       enterFromDeck(drawn, 320);
       signal("play:done");
       return;
     }
     if (outcome === "cleared") {
+      // A 727 stamp on the HUD gets its burst before the clear strip comes
+      // in over it.
+      if (wysi && wysi.hits.some((hit) => hit.on !== "shards")) await wait(650);
       runSound.songCleared("song");
       shake(1);
       // One shard total for the round, no itemised lines.
@@ -661,7 +685,10 @@ export function ChainTable(props: ChainTableProps) {
       setAftermath(null);
       // The row and hand leave for the deck before the keep pick deals in.
       setLeaving(true);
-      await wait(reducedMotion ? 0 : 40 * Math.min(12, before.hand.length) + 320);
+      const travel = reducedMotion ? 0 : 40 * Math.min(12, before.hand.length) + 320;
+      await wait(travel * 0.55);
+      setOverlapNext(true);
+      await wait(travel * 0.45);
       finishPlay();
       signal("clear:done");
       return;
@@ -677,13 +704,23 @@ export function ChainTable(props: ChainTableProps) {
     }
     // failed: the row greys out and the table holds on it a beat before
     // the board comes in.
-    void row;
     runSound.fireLoopStop();
     setFailedRow(true);
     runSound.stepMiss();
     shake(0.6);
-    await wait(800);
+    // How short the round fell, where the other row outcomes speak.
+    const reached = formatChainScore(before.roundScore + row.total);
+    const goal = formatChainScore(before.target);
+    setAftermath({ kind: "banner", text: t`${reached} of ${goal}`, tone: "red" });
+    await wait(1000);
+    setAftermath(null);
+    // The row and hand leave for the deck before the board comes in.
+    setLeaving(true);
+    const travel = reducedMotion ? 0 : 40 * Math.min(12, before.hand.length) + 340;
+    await wait(travel * 0.55);
     setOverFresh(true);
+    setOverlapNext(true);
+    await wait(travel * 0.45);
     finishPlay();
     signal("over");
   }, [enterFromDeck, finishPlay, play, reducedMotion, shake, signal, stampWysi, t, view]);
@@ -698,8 +735,11 @@ export function ChainTable(props: ChainTableProps) {
   /* ------------------------------------------------------------ packs */
 
   const packKeyRef = useRef("");
-  const pack = shown?.phase === "pack" ? shown.pack : null;
-  const packKey = pack && shown ? `${shown.runNo}|${shown.round}|${pack.reason}|${pack.startIndex ?? ""}|${pack.offer?.kind ?? ""}|${shown.totalRows}` : "";
+  /* What the surfaces read: the live run once the next one may come in
+     over the leaving cards. */
+  const stageView = overlapNext && view ? view : shown;
+  const pack = stageView?.phase === "pack" ? stageView.pack : null;
+  const packKey = pack && stageView ? `${stageView.runNo}|${stageView.round}|${pack.reason}|${pack.startIndex ?? ""}|${pack.offer?.kind ?? ""}|${stageView.totalRows}` : "";
   if (packKey) packKeyRef.current = packKey;
 
   const openPack = useCallback(async (): Promise<ChainCard[] | null> => {
@@ -767,7 +807,7 @@ export function ChainTable(props: ChainTableProps) {
   const shopAct = useCallback(
     async (action: ChainAction): Promise<ShopActResult> => {
       const outcome = await act(action);
-      return outcome.ok ? { ok: true } : { ok: false, error: outcome.error };
+      return outcome.ok ? { ok: true, result: outcome.result } : { ok: false, error: outcome.error };
     },
     [act],
   );
@@ -809,7 +849,7 @@ export function ChainTable(props: ChainTableProps) {
     if (shown.phase === "over" && !play) signal("over:shown");
   }, [play, shown, signal]);
 
-  const stagePack = shown?.phase === "pack" && pack ? pack : null;
+  const stagePack = stageView?.phase === "pack" && pack ? pack : null;
   const surfaceTitle =
     stagePack && shown
       ? stagePack.reason === "round"
@@ -824,7 +864,7 @@ export function ChainTable(props: ChainTableProps) {
   const actionsVisible = Boolean(showBoard && !play && !needsRoundPack && !aftermath && !leaving && !failedRow && layout);
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-[60px] z-40 overflow-hidden bg-osu-b6 text-white" translate="no">
+    <div className="fixed inset-x-0 bottom-0 top-[60px] z-40 select-none overflow-hidden bg-osu-b6 text-white" translate="no">
       <TriangleBackdrop heat={roomHeat} dim={overNow} reducedMotion={reducedMotion} />
       <motion.div
         className="relative h-full"
@@ -840,6 +880,9 @@ export function ChainTable(props: ChainTableProps) {
         }}
       >
         <motion.div style={{ x: shakeX, y: shakeY, rotate: shakeRotate }} className="relative flex h-full flex-col">
+          {/* The chain's fire burns here, under the HUD (whose score, target
+              and meter sit on opaque plates over it) and over the board. */}
+          <div data-chain-flame-layer="" className="pointer-events-none absolute inset-0 z-[2]" />
           <ChainTopBar
             narrow={narrow}
             round={shown?.round ?? 0}
@@ -895,6 +938,7 @@ export function ChainTable(props: ChainTableProps) {
                   leaving={leaving}
                   failed={failedRow}
                   selected={selected}
+                  dealGen={dealGen}
                   selectMode={selectMode}
                   onSelect={onSelect}
                   onSendGroup={onSendGroup}
@@ -974,6 +1018,7 @@ export function ChainTable(props: ChainTableProps) {
                 reducedMotion={reducedMotion}
                 act={shopAct}
                 shake={shake}
+                holdShards={setShardOverride}
                 enterDelayMs={stagePack ? 300 : 0}
               />
             )}
@@ -1038,9 +1083,9 @@ export function ChainTable(props: ChainTableProps) {
             )}
 
 
-            {shown && overNow && (
+            {view && (overNow || (overlapNext && view.phase === "over")) && (
               <ChainOver
-                view={shown}
+                view={view}
                 best={best}
                 fresh={overFresh}
                 busy={busy}
@@ -1065,6 +1110,13 @@ export function ChainTable(props: ChainTableProps) {
                 loadBoard={loadBoard}
                 onNewRun={() => void doAct({ kind: "start" })}
               />
+            )}
+
+            {/* What the reel left for this round's first row, until it plays. */}
+            {arranging && shown?.rowBoost && (
+              <div className="pointer-events-auto absolute left-4 top-2 z-[5]">
+                <ChainBoostChips boost={shown.rowBoost} />
+              </div>
             )}
 
             {/* A cleared round's pay, or a banner, over the board. */}

@@ -39,7 +39,7 @@ export const CHAIN_FEEL = {
     centreMs: 200,
     centreShake: 1.4,
     holdMs: 260,
-    flyMs: 280,
+    flyMs: 380,
     afterSlamMs: 100,
     afterFireMs: 140,
     igniteDelayMs: 170,

@@ -8,6 +8,7 @@ import {
   CHAIN_SCENE_NAMES,
   CHAIN_TIER_COLOR,
   CHAIN_TIER_LABEL,
+  CHAIN_VARIANT_COPY,
   chainCardColor,
   chainCardFace,
   chainCardRarityLabel,
@@ -20,6 +21,7 @@ import {
   type ChainSceneHeld,
 } from "#/lib/chain-run";
 import { CHAIN_FEEL } from "./chainFeel";
+import { ChainCardFace } from "./ChainCardFace";
 import { runSound } from "../runSound";
 import { hasWysiText, WysiDigits } from "./Wysi";
 import { firstWysiSight } from "./wysiSeen";
@@ -36,6 +38,8 @@ interface DetailsState {
   content: ChainDetailsContent;
   x: number;
   y: number;
+  /* The element it is about, for placing a card's panel beside it. */
+  rect: { left: number; right: number; top: number; bottom: number };
   key: number;
 }
 
@@ -49,7 +53,7 @@ function emit(next: DetailsState | null) {
 }
 
 export function showChainDetails(content: ChainDetailsContent, rect: DOMRect) {
-  emit({ content, x: rect.left + rect.width / 2, y: rect.top, key: ++nextKey });
+  emit({ content, x: rect.left + rect.width / 2, y: rect.top, rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }, key: ++nextKey });
 }
 
 export function hideChainDetails() {
@@ -160,8 +164,15 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
   useEffect(() => {
     if (wysi && firstWysiSight(card.id)) runSound.wysi(false);
   }, [card.id, wysi]);
+  /* The card itself, bigger, in a frame of its rarity's colours, with its
+     numbers beside it. */
   return (
-    <div className="w-[230px]">
+    <div className="rounded-[14px] p-[3px]" style={{ background: `linear-gradient(150deg, ${color.ink}, ${color.fill} 45%, ${color.deep})` }}>
+    <div className="flex gap-3 rounded-[11px] bg-[#0c0a10]/95 p-2.5">
+    <div className="shrink-0" style={{ width: 132, height: 132 * 1.4 }}>
+      <ChainCardFace card={entry.card} width={132} />
+    </div>
+    <div className="w-[200px] py-0.5">
       <div className="truncate text-[16px] font-black">{card.name}</div>
       <div className="text-[12px] font-bold" style={{ color: color.ink }}>
         {chainCardRarityLabel(card, i18n)}
@@ -169,6 +180,17 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
       {card.goat && (
         <div className="mt-1 text-[12px] text-osu-f1">
           <Trans>Links to the cards next to it on every trait. The first GOAT in a row doubles the combo.</Trans>
+        </div>
+      )}
+      {card.variant && (
+        <div className="mt-1.5 text-[12px] text-osu-f1">
+          <span
+            className="mr-1.5 inline-block rounded px-1 font-black italic"
+            style={{ background: CHAIN_VARIANT_COPY[card.variant].fill, color: "#1a1020" }}
+          >
+            {CHAIN_VARIANT_COPY[card.variant].name}
+          </span>
+          {i18n._(CHAIN_VARIANT_COPY[card.variant].text)}
         </div>
       )}
       <div className="mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[12px]">
@@ -203,6 +225,8 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
           <Trans>From this round's pack. Used up once played.</Trans>
         </div>
       )}
+    </div>
+    </div>
     </div>
   );
 }
@@ -278,9 +302,31 @@ export function ChainDetailsLayer() {
   useEffect(() => {
     const box = boxRef.current;
     if (!box || !state) return;
-    const rect = box.getBoundingClientRect();
-    const left = Math.max(8, Math.min(window.innerWidth - rect.width - 8, state.x - rect.width / 2));
-    const top = state.y - rect.height - 10 < 68 ? state.y + 12 : state.y - rect.height - 10;
+    // The layout size, not the drawn one: the panel is still scaled down as
+    // it pops in, and a tall one placed by that measure ran off the page.
+    const rect = { width: box.offsetWidth, height: box.offsetHeight };
+    let left: number;
+    let top: number;
+    if (state.content.kind === "card") {
+      // Beside the card, on the side with more room, its top level with the
+      // card's: never over the row's buttons above a hand card.
+      const roomRight = window.innerWidth - state.rect.right;
+      const roomLeft = state.rect.left;
+      const fitsSide = Math.max(roomRight, roomLeft) >= rect.width + 16;
+      if (fitsSide) {
+        left = roomRight >= roomLeft ? state.rect.right + 12 : state.rect.left - rect.width - 12;
+        top = Math.min(window.innerHeight - rect.height - 8, state.rect.top);
+      } else {
+        left = state.x - rect.width / 2;
+        top = state.y - rect.height - 10 < 68 ? state.rect.bottom + 10 : state.y - rect.height - 10;
+      }
+    } else {
+      left = state.x - rect.width / 2;
+      top = state.y - rect.height - 10 < 68 ? state.y + 12 : state.y - rect.height - 10;
+    }
+    left = Math.max(8, Math.min(window.innerWidth - rect.width - 8, left));
+    // Never past the bottom of the page, whichever way it was placed.
+    top = Math.min(window.innerHeight - rect.height - 10, top);
     box.style.left = `${left}px`;
     box.style.top = `${Math.max(68, top)}px`;
     box.style.visibility = "visible";
@@ -292,7 +338,7 @@ export function ChainDetailsLayer() {
           key={state.key}
           ref={boxRef}
           role="tooltip"
-          className="pointer-events-none fixed z-[80] rounded-lg bg-[#0c0a10]/95 px-3 py-2.5 text-white"
+          className={`pointer-events-none fixed z-[80] text-white ${state.content.kind === "card" ? "" : "rounded-lg bg-[#0c0a10]/95 px-3 py-2.5"}`}
           style={{ left: 0, top: 0, visibility: "hidden" }}
           initial={{ opacity: 0, scale: 0.94 }}
           animate={{ opacity: 1, scale: 1 }}
