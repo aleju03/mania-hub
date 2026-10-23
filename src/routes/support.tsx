@@ -25,6 +25,8 @@ import { SUPPORTER_PROFILE_THEMES } from "../lib/supporter-profile-themes";
 import { SUPPORTER_AVATAR_FRAMES } from "../lib/supporter-avatar-frames";
 import { SUPPORTER_NAME_STYLES } from "../lib/supporter-name-styles";
 import { SUPPORTER_NAME_FONTS } from "../lib/supporter-name-fonts";
+import { SUPPORTER_RANKS } from "../lib/supporter-ranks";
+import { SupporterRankShowcase } from "../components/supporter/SupporterRankBadge";
 import { SUPPORTER_FOILS } from "../lib/supporter-foils";
 
 /* What supporting is and what it brings, for anyone: every perk with the
@@ -54,6 +56,7 @@ const SECTIONS: { id: string; label: MessageDescriptor }[] = [
   { id: "stats", label: msg`Profile stats` },
   { id: "sharing", label: msg`Video share links` },
   { id: "gift", label: msg`A week for a friend` },
+  { id: "ranks", label: msg`Supporter ranks` },
   { id: "how", label: msg`How it works` },
   { id: "checkout", label: msg`Support` },
 ];
@@ -284,6 +287,15 @@ function SupportPage() {
               body={t`Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter.`}
             >
               <GiftShowcase />
+            </Perk>
+
+            <Perk
+              id="ranks"
+              title={t`Supporter ranks`}
+              count={<Trans><CountUp value={SUPPORTER_RANKS.length} /> ranks</Trans>}
+              body={t`A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo.`}
+            >
+              <SupporterRankShowcase />
             </Perk>
 
             <section id="how" className="scroll-mt-[76px] border-t border-white/[0.07] pt-8">

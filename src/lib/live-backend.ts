@@ -4649,6 +4649,8 @@ export async function fetchLivePackSharedCard(
 const SUPPORTER_LOOK_TTL_MS = 5 * 60_000;
 export interface SupporterProfileLook {
   look: SupporterLook | null;
+  /* When their current unbroken run began, which sets their rank; null unless active. */
+  runStartedAt: number | null;
   frame: SupporterAvatarFrameId | null;
   nameStyle: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
@@ -4664,7 +4666,7 @@ export interface SupporterProfileLook {
   /* The figure beside their profile's numbers, null for none. */
   companion: SupporterCompanion | null;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4708,6 +4710,7 @@ export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
   const body = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   return {
     look: parseSupporterLook(body.look ?? null),
+    runStartedAt: typeof body.runStartedAt === "number" && Number.isFinite(body.runStartedAt) ? body.runStartedAt : null,
     frame: isSupporterAvatarFrame(body.frame) ? body.frame : null,
     nameStyle: isSupporterNameStyle(body.nameStyle) ? body.nameStyle : null,
     nameFont: isSupporterNameFont(body.nameFont) ? body.nameFont : null,
@@ -4784,6 +4787,10 @@ export function peekLiveSupporterProfileTheme(userId: number): SupporterProfileT
 
 export function peekLiveSupporterProfileThemeOptions(userId: number): ProfileThemeOptions | undefined {
   return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.profileThemeOptions;
+}
+
+export function peekLiveSupporterRunStartedAt(userId: number): number | null | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.runStartedAt;
 }
 
 export function peekLiveSupporterCompanion(userId: number): SupporterCompanion | null | undefined {

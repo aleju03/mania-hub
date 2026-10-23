@@ -10,6 +10,7 @@ import { LoadoutDrawer, LoadoutSlots, type CustomMotif } from "../components/sup
 import { CustomArtDialog, type CustomArtDraft } from "#/components/supporter/CustomArtDialog";
 import { DiceIcon } from "../components/supporter/LoadoutIcons";
 import { GiftCodePanel, RedeemGiftCode } from "../components/supporter/GiftCodePanel";
+import { SupporterRankLadder } from "../components/supporter/SupporterRankBadge";
 import { useSettled } from "../components/supporter/use-settled";
 import { useHighwayNotes } from "../components/supporter/use-highway-notes";
 import { mainKeymode, useHighwayChart } from "../components/supporter/use-highway-chart";
@@ -447,6 +448,7 @@ function SupporterPage() {
                   <p className="mt-1 text-[13px] text-osu-l2">
                     {t`Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks.`}
                   </p>
+                  {state.runStartedAt != null ? <SupporterRankLadder runStartedAt={state.runStartedAt} /> : null}
                   <GiftCodePanel viewerId={viewer.id} />
                 </div>
               ) : state ? (

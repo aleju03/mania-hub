@@ -23,6 +23,8 @@ export interface SupporterLookState {
   supporter: boolean;
   /** When the bought time runs out (ms); past for a lapsed supporter, null if they never supported. */
   expiresAt: number | null;
+  /** When the current unbroken run began, which sets their rank; null unless active. */
+  runStartedAt: number | null;
   look: SupporterLook | null;
   /** The last uploaded image, kept while a preset is picked so it can be picked again. */
   custom: { url: string; scale: number; opacity: number } | null;
@@ -40,7 +42,7 @@ export interface SupporterLookState {
   giftFrom?: string | null;
 }
 
-const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
+const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
 
 async function requireViewer(): Promise<{ userId: number; username: string; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
@@ -52,12 +54,13 @@ async function requireViewer(): Promise<{ userId: number; username: string; base
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
     supporter: raw.supporter === true,
     expiresAt: typeof raw.expiresAt === "number" && Number.isFinite(raw.expiresAt) ? raw.expiresAt : null,
+    runStartedAt: raw.supporter === true && typeof raw.runStartedAt === "number" && Number.isFinite(raw.runStartedAt) ? raw.runStartedAt : null,
     look: parseSupporterLook(raw.look),
     custom: custom?.motif === "custom" && custom.url ? { url: custom.url, scale: custom.scale ?? 1, opacity: custom.opacity ?? 0.85 } : null,
     frame: isSupporterAvatarFrame(raw.frame) ? raw.frame : null,

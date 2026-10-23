@@ -21823,3 +21823,87 @@ msgstr "Fumo de Yuyuko"
 #: src/lib/supporter-pack-style.ts
 msgid "Zip binder"
 msgstr "Carpeta con cierre"
+
+#. placeholder {0}: rank.months
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{0, plural, one {# month} other {# months}} in a row"
+msgstr "{0, plural, one {# mes seguido} other {# meses seguidos}}"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{months, plural, one {# month} other {# months}} in a row"
+msgstr "{months, plural, one {# mes seguido} other {# meses seguidos}}"
+
+#. placeholder {0}: rank.months
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{name}, {0, plural, one {# month} other {# months}} in a row"
+msgstr "{name}, {0, plural, one {# mes seguido} other {# meses seguidos}}"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{nextName} in {days, plural, one {# day} other {# days}}"
+msgstr "{nextName} en {days, plural, one {# día} other {# días}}"
+
+#: src/routes/support.tsx
+msgid "<0/> ranks"
+msgstr "<0/> rangos"
+
+#: src/routes/support.tsx
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
+msgstr "Una insignia junto a tu nombre que sube un rango por cada mes seguido que eres supporter, desde Cobre hasta Holo."
+
+#: src/lib/supporter-ranks.ts
+msgid "Amethyst"
+msgstr "Amatista"
+
+#: src/lib/supporter-ranks.ts
+msgid "Bronze"
+msgstr "Bronce"
+
+#: src/lib/supporter-ranks.ts
+msgid "Copper"
+msgstr "Cobre"
+
+#: src/lib/supporter-ranks.ts
+msgid "Diamond"
+msgstr "Diamante"
+
+#: src/lib/supporter-ranks.ts
+msgid "Emerald"
+msgstr "Esmeralda"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Month {month}"
+msgstr "Mes {month}"
+
+#: src/lib/supporter-ranks.ts
+msgid "Obsidian"
+msgstr "Obsidiana"
+
+#: src/lib/supporter-ranks.ts
+msgid "Ruby"
+msgstr "Rubí"
+
+#: src/lib/supporter-ranks.ts
+msgid "Sapphire"
+msgstr "Zafiro"
+
+#: src/lib/supporter-ranks.ts
+msgid "Silver"
+msgstr "Plata"
+
+#: src/lib/supporter-ranks.ts
+msgid "Steel"
+msgstr "Acero"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+#: src/routes/support.tsx
+msgid "Supporter ranks"
+msgstr "Rangos de supporter"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "The top rank"
+msgstr "El rango más alto"
+
+#: src/lib/supporter-ranks.ts
+msgctxt "supporter rank"
+msgid "Gold"
+msgstr "Oro"

@@ -21823,3 +21823,87 @@ msgstr "Yuyuko fumo"
 #: src/lib/supporter-pack-style.ts
 msgid "Zip binder"
 msgstr "Zip binder"
+
+#. placeholder {0}: rank.months
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{0, plural, one {# month} other {# months}} in a row"
+msgstr "{0, plural, one {# month} other {# months}} in a row"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{months, plural, one {# month} other {# months}} in a row"
+msgstr "{months, plural, one {# month} other {# months}} in a row"
+
+#. placeholder {0}: rank.months
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{name}, {0, plural, one {# month} other {# months}} in a row"
+msgstr "{name}, {0, plural, one {# month} other {# months}} in a row"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "{nextName} in {days, plural, one {# day} other {# days}}"
+msgstr "{nextName} in {days, plural, one {# day} other {# days}}"
+
+#: src/routes/support.tsx
+msgid "<0/> ranks"
+msgstr "<0/> ranks"
+
+#: src/routes/support.tsx
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
+msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
+
+#: src/lib/supporter-ranks.ts
+msgid "Amethyst"
+msgstr "Amethyst"
+
+#: src/lib/supporter-ranks.ts
+msgid "Bronze"
+msgstr "Bronze"
+
+#: src/lib/supporter-ranks.ts
+msgid "Copper"
+msgstr "Copper"
+
+#: src/lib/supporter-ranks.ts
+msgid "Diamond"
+msgstr "Diamond"
+
+#: src/lib/supporter-ranks.ts
+msgid "Emerald"
+msgstr "Emerald"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Month {month}"
+msgstr "Month {month}"
+
+#: src/lib/supporter-ranks.ts
+msgid "Obsidian"
+msgstr "Obsidian"
+
+#: src/lib/supporter-ranks.ts
+msgid "Ruby"
+msgstr "Ruby"
+
+#: src/lib/supporter-ranks.ts
+msgid "Sapphire"
+msgstr "Sapphire"
+
+#: src/lib/supporter-ranks.ts
+msgid "Silver"
+msgstr "Silver"
+
+#: src/lib/supporter-ranks.ts
+msgid "Steel"
+msgstr "Steel"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+#: src/routes/support.tsx
+msgid "Supporter ranks"
+msgstr "Supporter ranks"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "The top rank"
+msgstr "The top rank"
+
+#: src/lib/supporter-ranks.ts
+msgctxt "supporter rank"
+msgid "Gold"
+msgstr "Gold"

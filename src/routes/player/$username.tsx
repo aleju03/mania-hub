@@ -23,6 +23,7 @@ import {
   fetchServerSupporterLook,
   seedLiveSupporterLook,
   peekLiveSupporterCompanion,
+  peekLiveSupporterRunStartedAt,
   fetchRestrictedPpPlayerDirect,
   isLiveBackendConfigured,
   peekLiveSupporterFrame,
@@ -83,6 +84,7 @@ import { framedAvatarStyle, type SupporterAvatarFrameId } from "../../lib/suppor
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "../../components/supporter/SupporterNameStyle";
+import { SupporterRankBadge } from "../../components/supporter/SupporterRankBadge";
 import { ProfileThemeBackdrop } from "../../components/supporter/ProfileThemeBackdrop";
 import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "../../lib/profile-stats";
@@ -1143,6 +1145,8 @@ export function PlayerProfilePage({
     profileStatsData: ProfileStatsData;
     profilePlays: ProfilePlays | null;
     companion: SupporterCompanion | null;
+    /* When their unbroken run began, for the rank beside the name. */
+    runStartedAt: number | null;
     /* Only an active supporter has a card look. */
     supporter: boolean;
   } | null>(() => {
@@ -1150,7 +1154,7 @@ export function PlayerProfilePage({
     const raw = loaderData?.cachedSupporterLook;
     if (!raw || !profileUserId) return null;
     const value = seedLiveSupporterLook(profileUserId, raw);
-    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, supporter: value.look !== null };
+    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, supporter: value.look !== null };
   });
   useEffect(() => {
     if (!profileUserId) return;
@@ -1168,11 +1172,12 @@ export function PlayerProfilePage({
         profileStatsData: peekLiveSupporterProfileStats(profileUserId)?.data ?? {},
         profilePlays: peekLiveSupporterProfileStats(profileUserId)?.plays ?? null,
         companion: peekLiveSupporterCompanion(profileUserId) ?? null,
+        runStartedAt: peekLiveSupporterRunStartedAt(profileUserId) ?? null,
         supporter: peekLiveSupporterLook(profileUserId) != null,
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, supporter: value.look !== null });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, supporter: value.look !== null });
     });
     return () => {
       alive = false;
@@ -1181,6 +1186,7 @@ export function PlayerProfilePage({
   const heroFrame = supporterFrame?.userId === profileUserId ? supporterFrame.frame : null;
   const heroNameStyle = supporterFrame?.userId === profileUserId ? supporterFrame.nameStyle : null;
   const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
+  const heroRunStartedAt = supporterFrame?.userId === profileUserId ? supporterFrame.runStartedAt : null;
   const profileTheme = supporterFrame?.userId === profileUserId ? supporterFrame.profileTheme : null;
   /* The four insight cards: a supporter's own pick, or the usual four. The
      owner's swaps show at once and save in the background. */
@@ -2510,6 +2516,7 @@ export function PlayerProfilePage({
                 ) : (
                   <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
                 )}
+                <SupporterRankBadge runStartedAt={heroRunStartedAt} className="h-6 w-6 sm:h-8 sm:w-8" />
                 {showProfileCountryFlag ? (
                   <Link
                     to="/"
