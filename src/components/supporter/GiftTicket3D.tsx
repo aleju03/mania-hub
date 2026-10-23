@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
 
 import { mountFoilSource } from "./FoilPreview";
-import { isScrolling, queueGpuWork } from "../../lib/gpu-queue";
+import { queueGpuWork } from "../../lib/gpu-queue";
 
 /* The gift ticket on /support as a real object: a thick ticket in 3D with its
    two notches and a gap where it tears, floating and swaying, tipping toward
@@ -452,12 +452,6 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
       const tick = (now: number) => {
         frame = 0;
         if (disposed || !visible) return;
-        // it holds still while the page scrolls
-        if (isScrolling()) {
-          last = now;
-          frame = requestAnimationFrame(tick);
-          return;
-        }
         const time = (now - start) / 1000;
         const dt = Math.min(0.05, (now - last) / 1000);
         last = now;

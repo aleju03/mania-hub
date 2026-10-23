@@ -864,16 +864,17 @@ html[data-custom-cursor="true"] * {
    reflection band low through the letters, and faint red/blue edges. Stops sit
    from the line's centre, so the band lands on the letters at any size. */
 .name-tag--chrome {
+  /* liquid metal as its shader draws it: bright silver at the start of the
+     name running to dark gunmetal at its end, a sheen across the top, and a
+     glint crossing now and then */
   background-image:
     linear-gradient(105deg, transparent 0 44%, rgba(255, 255, 255, 0.85) 50%, transparent 56% 100%),
-    linear-gradient(180deg,
-      #ffffff calc(50% - 0.3em), #e6e8f0 calc(50% - 0.04em), #a2a6b4 calc(50% + 0.14em), #2c2e37 calc(50% + 0.22em),
-      #16171c calc(50% + 0.3em), #c6c9d6 calc(50% + 0.4em), #ffffff calc(50% + 0.5em), #b9bdca calc(50% + 0.7em));
-  background-size: 250% 100%, 100% 100%;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4) calc(50% - 0.34em), transparent calc(50% - 0.06em), rgba(10, 12, 20, 0.22) calc(50% + 0.5em)),
+    linear-gradient(100deg, #f5f7fc 0%, #dfe3ec 30%, #a9afc0 55%, #6c7284 78%, #4c5264 100%);
+  background-size: 250% 100%, 100% 100%, 100% 100%;
   background-repeat: no-repeat;
-  background-position: 150% 50%, 0 0;
-  filter: drop-shadow(-0.02em 0 0 rgba(255, 70, 110, 0.45)) drop-shadow(0.02em 0 0 rgba(70, 150, 255, 0.45))
-    drop-shadow(0 0.06em 0.1em rgba(0, 0, 0, 0.7));
+  background-position: 150% 50%, 0 0, 0 0;
+  filter: drop-shadow(0 0.06em 0.1em rgba(0, 0, 0, 0.7));
   animation: name-tag-glint 6s ease-in-out infinite;
 }
 
@@ -945,8 +946,12 @@ html[data-custom-cursor="true"] * {
 }
 
 .name-tag--aurora {
-  background-image: linear-gradient(100deg, #6bffbe 0%, #3fe0ff 22%, #7a6bff 45%, #d46bff 62%, #3fe0ff 82%, #6bffbe 100%);
-  background-size: 200% 100%;
+  /* curtains of light drifting over a teal sky, violet-blue above and green
+     below, as the shader draws it */
+  background-image:
+    linear-gradient(100deg, transparent 0%, rgba(140, 255, 200, 0.4) 18%, transparent 36%, rgba(170, 140, 255, 0.35) 60%, transparent 80%),
+    linear-gradient(180deg, #7896d8 calc(50% - 0.34em), #4aa0b0 calc(50% - 0.08em), #38bd8e calc(50% + 0.22em), #2c9a88 calc(50% + 0.5em));
+  background-size: 200% 100%, 100% 100%;
   filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6)) drop-shadow(0 0 0.32em rgba(80, 230, 200, 0.45));
   animation: name-tag-slide 12s linear infinite;
 }
@@ -1124,12 +1129,16 @@ html[data-custom-cursor="true"] * {
 /* The shader styles' CSS stand-ins, for small names and until the shader
    draws (name-tag-shaders.ts runs the real thing over big names). */
 .name-tag--molten-gold {
-  background-image: linear-gradient(180deg, #fff3c4 calc(50% - 0.3em), #ffd36b calc(50% - 0.04em), #c98a22 calc(50% + 0.16em),
-    #6a3d0c calc(50% + 0.24em), #e9a93a calc(50% + 0.4em), #fff0b8 calc(50% + 0.55em));
+  /* poured gold as its shader draws it: pale gold at the start of the name
+     running to dark bronze at its end, with a sheen across the top */
+  background-image:
+    linear-gradient(180deg, rgba(255, 250, 220, 0.4) calc(50% - 0.34em), transparent calc(50% - 0.06em), rgba(40, 20, 0, 0.25) calc(50% + 0.5em)),
+    linear-gradient(100deg, #fbf0c4 0%, #ecd27a 26%, #c79a2c 52%, #8a5a10 78%, #5e3606 100%);
   filter: drop-shadow(0 0.05em 0.07em rgba(0, 0, 0, 0.6));
 }
 .name-tag--pearl {
-  background-image: linear-gradient(100deg, #f6f2ff 0%, #ffd6ec 18%, #d8f5ff 36%, #e6ffe9 52%, #fff1d6 68%, #e9dcff 84%, #f6f2ff 100%);
+  /* an oily film over pearl: lavender, cream and aqua sliding past */
+  background-image: linear-gradient(100deg, #c9a8f4 0%, #f1cfe8 14%, #e2dcae 30%, #a6e8d6 48%, #8fd8ea 64%, #c9a8f4 82%, #f1cfe8 100%);
   background-size: 200% 100%;
   filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.55));
   animation: name-tag-slide 12s linear infinite;
@@ -1147,30 +1156,46 @@ html[data-custom-cursor="true"] * {
   filter: drop-shadow(0 0 0.05em rgba(170, 130, 255, 0.5)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.6));
 }
 .name-tag--heatmap {
-  background-image: linear-gradient(180deg, #2f63e7 calc(50% - 0.3em), #4fb4ff calc(50% - 0.1em), #9fe8ff calc(50% + 0.04em),
-    #ffe679 calc(50% + 0.2em), #ff991e calc(50% + 0.36em), #ff5a10 calc(50% + 0.5em));
+  /* hot through the middle of the strokes, cooling to cyan and blue at the edges */
+  background-image: linear-gradient(180deg, #3f7fe0 calc(50% - 0.36em), #86dcf2 calc(50% - 0.2em), #ffe27c calc(50% - 0.04em),
+    #ffa035 calc(50% + 0.12em), #ffd66e calc(50% + 0.3em), #7ad2ea calc(50% + 0.46em), #3f7fe0 calc(50% + 0.6em));
   filter: drop-shadow(0 0 0.06em rgba(120, 190, 255, 0.45)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.5));
 }
 .name-tag--note-rain {
-  background-image: linear-gradient(180deg, #f2f0ff calc(50% - 0.3em), #c8b8ff calc(50% + 0.05em), #ff86c8 calc(50% + 0.45em));
+  /* the shader's violet lanes and pale rim (its falling notes need the shader) */
+  background-image: linear-gradient(180deg, #a596ee calc(50% - 0.36em), #6249ad calc(50% - 0.16em), #6a4fb8 calc(50% + 0.2em), #8064d2 calc(50% + 0.5em));
   filter: drop-shadow(0 0 0.05em rgba(210, 200, 255, 0.6)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.55));
 }
 .name-tag--plasma {
-  background-image: linear-gradient(180deg, #bfe6ff calc(50% - 0.3em), #4fa8ff calc(50% + 0.05em), #1a3fa8 calc(50% + 0.45em));
+  /* deep blue run through with electric veins, a pale blue rim */
+  background-image:
+    radial-gradient(ellipse 40% 9% at 30% 45%, rgba(190, 230, 255, 0.9) 0, transparent 100%),
+    radial-gradient(ellipse 35% 8% at 72% 60%, rgba(120, 200, 255, 0.85) 0, transparent 100%),
+    linear-gradient(180deg, #7fb2ff calc(50% - 0.36em), #2a4ca8 calc(50% - 0.18em), #142a72 calc(50% + 0.12em), #2b56b8 calc(50% + 0.5em));
   filter: drop-shadow(0 0 0.08em rgba(90, 170, 255, 0.85)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.5));
 }
 .name-tag--ink {
-  background-image: linear-gradient(115deg, #f4f0e6 0%, #1d1b2e 22%, #f4f0e6 40%, #3a3f9a 60%, #f4f0e6 78%, #1d1b2e 100%);
+  /* cream paper with navy ink folded through it and a gold thread */
+  background-image: linear-gradient(115deg, #f4efe2 0%, #f4efe2 16%, #2a2c66 22%, #f4efe2 29%, #f4efe2 46%, #c99a3e 49%, #f4efe2 52%,
+    #f4efe2 64%, #1d1d38 70%, #3a3f9a 74%, #f4efe2 80%, #f4efe2 100%);
   background-size: 200% 100%;
   filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.6));
   animation: name-tag-slide 14s linear infinite;
 }
 .name-tag--caustics {
-  background-image: linear-gradient(180deg, #b8fff6 calc(50% - 0.3em), #29b8c8 calc(50% + 0.1em), #066a80 calc(50% + 0.45em));
+  /* deep pool teal with pale light on its surface */
+  background-image:
+    radial-gradient(ellipse 30% 12% at 28% 40%, rgba(200, 255, 250, 0.75) 0, transparent 100%),
+    radial-gradient(ellipse 26% 10% at 68% 62%, rgba(200, 255, 250, 0.6) 0, transparent 100%),
+    linear-gradient(180deg, #8ef0ea calc(50% - 0.36em), #1f93ad calc(50% - 0.16em), #0f7690 calc(50% + 0.2em), #1d8ea6 calc(50% + 0.5em));
   filter: drop-shadow(0 0 0.06em rgba(120, 255, 240, 0.5)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.5));
 }
 .name-tag--lava {
-  background-image: linear-gradient(180deg, #ffd56a calc(50% - 0.3em), #ff6a1f calc(50% + 0.05em), #a3123a calc(50% + 0.45em));
+  /* magenta-red wax with hot orange blobs rising through it */
+  background-image:
+    radial-gradient(ellipse 22% 40% at 22% 55%, #ffb050 0, #ff7a28 45%, transparent 75%),
+    radial-gradient(ellipse 18% 34% at 58% 35%, #ffd27a 0, #ff8a2e 45%, transparent 75%),
+    linear-gradient(180deg, #b0226a calc(50% - 0.3em), #d42b48 calc(50% + 0.1em), #e8443a calc(50% + 0.45em));
   filter: drop-shadow(0 0 0.06em rgba(255, 90, 40, 0.55)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.5));
 }
 .name-tag--dither {
@@ -1195,20 +1220,16 @@ html[data-custom-cursor="true"] * {
 /* A big name waiting for its liquid-metal shader: plain metal without the CSS
    look's hard reflection band, so the real shader takes over without a flash. */
 .name-tag--chrome.name-tag--pending {
-  background-image: linear-gradient(180deg, #ffffff 15%, #d4d7e0 55%, #9a9fad 100%);
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4) calc(50% - 0.34em), transparent calc(50% - 0.06em), rgba(10, 12, 20, 0.22) calc(50% + 0.5em)),
+    linear-gradient(100deg, #f5f7fc 0%, #dfe3ec 30%, #a9afc0 55%, #6c7284 78%, #4c5264 100%);
+  background-size: 100% 100%;
   animation: none;
 }
 .name-tag--molten-gold.name-tag--pending {
-  background-image: linear-gradient(180deg, #fff3c4 15%, #f2c35e 55%, #b47a1e 100%);
-}
-
-/* Most name tag animations move a background under text-clipped, filtered
-   type, which repaints the name every frame; while the page scrolls
-   (gpu-queue.ts sets the class) they hold still, so a list of names never
-   competes with the scroll for frames. */
-.is-scrolling .name-tag,
-.is-scrolling .name-tag * {
-  animation-play-state: paused !important;
+  background-image:
+    linear-gradient(180deg, rgba(255, 250, 220, 0.4) calc(50% - 0.34em), transparent calc(50% - 0.06em), rgba(40, 20, 0, 0.25) calc(50% + 0.5em)),
+    linear-gradient(100deg, #fbf0c4 0%, #ecd27a 26%, #c79a2c 52%, #8a5a10 78%, #5e3606 100%);
 }
 
 /* A live shader over the name: the canvas fills the padding box and the text

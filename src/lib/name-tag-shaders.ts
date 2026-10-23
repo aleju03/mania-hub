@@ -8,7 +8,7 @@ import {
 } from "@paper-design/shaders";
 
 import type { ShaderNameStyle } from "./supporter-name-styles";
-import { isScrolling, onScrollingChange, queueGpuWork } from "./gpu-queue";
+import { queueGpuWork } from "./gpu-queue";
 
 /* Live WebGL looks for a name tag, drawn over a supporter's name where it is
    big (the profile hero, the /supporter preview). Chrome and molten gold run
@@ -473,7 +473,7 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
     unqueue?.();
     unqueue = queueGpuWork(() => {
       if (disposed || mount) return;
-      mount = new ShaderMount(host, built.shader, uniforms, { premultipliedAlpha: true }, still || isScrolling() ? 0 : 1, 3, 2, undefined, built.mipmaps);
+      mount = new ShaderMount(host, built.shader, uniforms, { premultipliedAlpha: true }, still ? 0 : 1, 3, 2, undefined, built.mipmaps);
       onReady();
     });
   };
@@ -484,8 +484,6 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
     unbuild = undefined;
     build().catch(() => {});
   });
-  // it holds still while the page scrolls
-  const unwatch = still ? undefined : onScrollingChange((scrolling) => mount?.setSpeed(scrolling ? 0 : 1));
   // Rebuild the mask when the name's box changes (resizes, truncation).
   let lastSize = `${span.clientWidth}x${span.clientHeight}`;
   const observer = new ResizeObserver(() => {
@@ -502,7 +500,6 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
     clearTimeout(timer);
     unbuild?.();
     unqueue?.();
-    unwatch?.();
     observer.disconnect();
     // dispose() leaves the context to the garbage collector, and a page that
     // swaps names fast runs into the browser's cap of live contexts first

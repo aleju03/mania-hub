@@ -4,7 +4,7 @@ import type { SupporterBladeId } from "#/lib/supporter-pack-style";
 import { BladeFx, preloadSprites } from "./bladeFx";
 import { createBladeRenderer } from "./bladeGl";
 import { bladeLook, bladeTrailLife, drawBladeTrail, type TrailPoint } from "./packBlades";
-import { isScrolling, queueGpuWork } from "../../lib/gpu-queue";
+import { queueGpuWork } from "../../lib/gpu-queue";
 
 /* A blade in a small box, for the /supporter loadout and /support: the same
    streak, sparks and burst the pack stage draws (packBlades.ts, bladeFx.ts),
@@ -116,8 +116,7 @@ export function BladeSwatch({ blade, live = false, className = "" }: { blade: Su
           renderer.impact(box.left + box.width / 2, box.top + box.height * 0.3, 0.6);
         }
         while (points.length && now - points[0].t > life) points.shift();
-        // it holds still while the page scrolls
-        if (!isScrolling()) renderer.draw({ look, points, now, tip: sweeping ? points[points.length - 1] ?? null : null, fx, width: w, height: h, pixelRatio: ratio, scale });
+        renderer.draw({ look, points, now, tip: sweeping ? points[points.length - 1] ?? null : null, fx, width: w, height: h, pixelRatio: ratio, scale });
         if (visible) frame = requestAnimationFrame(step);
       };
       const observer = new IntersectionObserver(([entry]) => {

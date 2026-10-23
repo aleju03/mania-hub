@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { cardOverlayFragmentShader } from "../player/maniacard3d/cardShaders";
 import { supporterFoilIndex, type SupporterFoilId } from "../../lib/supporter-foils";
-import { isScrolling, takeGpuSlot } from "../../lib/gpu-queue";
+import { takeGpuSlot } from "../../lib/gpu-queue";
 
 /* A live swatch of a supporter foil: the card's own overlay shader on a blank
    card, without the tier's sparkle, its light circling, or following the pointer while it is over the
@@ -165,8 +165,7 @@ function draw(now: number, only?: Swatch): boolean {
 }
 
 function loop(now: number) {
-  // they hold still while the page scrolls
-  if (now - lastDraw >= FRAME_MS && !isScrolling()) {
+  if (now - lastDraw >= FRAME_MS) {
     lastDraw = now;
     // stills draw a few per frame (each copy waits on the GPU), then leave the loop
     let stills = STILLS_PER_FRAME;

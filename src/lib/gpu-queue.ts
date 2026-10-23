@@ -22,33 +22,27 @@ let watchingScroll = false;
 let scrollingNow = false;
 let quietTimer: ReturnType<typeof setTimeout> | undefined;
 const scrollListeners = new Set<(scrolling: boolean) => void>();
-/* Starts tracking the page's scrolling (and the is-scrolling class); every
-   helper here does it on first use, and a page with styled names calls it so
-   their CSS animations pause too. */
-export function watchScroll() {
+function watchScroll() {
   if (watchingScroll || typeof window === "undefined") return;
   watchingScroll = true;
   const mark = () => {
     lastScroll = performance.now();
     if (!scrollingNow) {
       scrollingNow = true;
-      // styles.css pauses repainting CSS animations (the name tags) meanwhile
-      document.documentElement.classList.add("is-scrolling");
       for (const listener of scrollListeners) listener(true);
     }
     clearTimeout(quietTimer);
     quietTimer = setTimeout(() => {
       scrollingNow = false;
-      document.documentElement.classList.remove("is-scrolling");
       for (const listener of scrollListeners) listener(false);
     }, SCROLL_QUIET_MS);
   };
   for (const type of ["scroll", "wheel", "touchmove"]) window.addEventListener(type, mark, { passive: true, capture: true });
 }
 
-/* Told when the page starts and stops being scrolled, for animations that
-   pause meanwhile (a page's decorations hold still for the moment it moves,
-   so the GPU has nothing to do but scroll it). Returns the unsubscribe. */
+/* Told when the page starts and stops being scrolled, for work that waits
+   for a pause (a section switching to its live previews). Returns the
+   unsubscribe. */
 export function onScrollingChange(listener: (scrolling: boolean) => void): () => void {
   watchScroll();
   scrollListeners.add(listener);

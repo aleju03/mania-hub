@@ -29,7 +29,6 @@ import { supporterFoilIndex, type SupporterFoilId } from "#/lib/supporter-foils"
 import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
 import { buildCardSleeve, sleeveFit, sleeveReach, type CardSleeveMeshes } from "./cardSleeve";
 import { CARD_WORLD_HEIGHT } from "./cardGeometry";
-import { isScrolling } from "../../../lib/gpu-queue";
 
 // The canvas extends past the host on every side by this factor so the card can
 // rotate past the host's bounds without getting clipped. The renderer pushes
@@ -588,16 +587,12 @@ export class ManiaCardRenderer {
       this.sleeveMeshes.update(time, this.interaction.light);
     }
 
-    // once shown it holds still while the page scrolls (unless it is being
-    // dragged), so the GPU has only the scroll to draw
-    // (and keeps ticking meanwhile, so its last frame is drawn once it stops)
-    const held = this.readyEmitted && !this.dragStart && isScrolling();
-    if (!held) this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera);
     if (this.textures && !this.readyEmitted && this.readyTextureRequestId === this.dataRequestId) {
       this.readyEmitted = true;
       this.onReady?.();
     }
-    return held || fitting || this.shouldKeepAnimating();
+    return fitting || this.shouldKeepAnimating();
   }
 
   private setRotation(rotation: Rotation2D) {
