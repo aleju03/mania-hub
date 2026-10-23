@@ -1593,19 +1593,24 @@ vec3 theme(vec2 uv, vec2 p, float t) {
 }`),
 
   // Singularity: after the Parallel Universe Shifter jacket. A ray-marched
-  // orb of glossy liquid, its surface carved into ribbons that spiral down a
-  // funnel to a white-hot core; the ribbons mirror the rushing light, their
-  // edges glow magenta and blue, and the core lights the funnel red. Glossy
-  // black ink bursts off its top-left side in strands and drops, and a drip
-  // stretches from its underside and lets go. Behind it a tunnel of light
-  // rushes out past the orb, with arcs of light swirling in a pool below. It
-  // fades to deep blue toward the rest of the page and scrolls with the hero.
+  // ball of cobalt glass, lit from the glare off to its right, whose front
+  // falls in as a whirlpool: its skin is cut into three thick strips that
+  // spiral down a funnel to a molten core, with the dark hollow inside showing
+  // between them. The strips' cut edges are painted pink and blue, and the
+  // core's red light reaches only the walls near it. Black paint bursts off
+  // its dark side up and left; a drip hangs from its underside, swells and
+  // lets go, with red drops falling past. Behind it a tunnel of light rushes
+  // out, with arcs of light swirling in a pool below. It fades to deep blue
+  // toward the rest of the page and scrolls away with the hero.
   singularity: shader(`
 const float SG_PI = 3.14159265, SG_TAU = 6.2831853;
 const float SG_R = .22; // the orb's radius, canvas heights
-// The swirl's axis, tipped toward us and down-left; the core sits down it.
-const vec3 SG_AX = vec3(-.3, -.14, .944);
-const vec3 SG_CORE = SG_AX * .3;
+// The whirlpool's axis, tipped toward us and a little left; the core sits at
+// the bottom of the funnel, just short of the ball's centre.
+const vec3 SG_AX = vec3(-.46, .14, .877);
+const vec3 SG_CORE = SG_AX * .2;
+// The key light: the glare off to the right.
+const vec3 SG_KEY = vec3(.72, .3, .62);
 
 // Light rushing out past the orb, in direction ca at log-distance lr.
 float sgStreaks(vec2 ca, float lr, float t) {
@@ -1623,6 +1628,8 @@ vec3 sgTunnel(vec2 d, float t) {
   float sect = smoothstep(.35, .9, dot(ca, vec2(.8, .6)));
   col += vec3(1., .1, .3) * pow(noise(ca * 30. + vec2(log(max(r, 1e-3)) * 1.9 - t * 1.3, 11.)), 4.) * 4. * sect * near;
   col += vec3(.8, .93, 1.) * exp(-length((d - vec2(.7, -.08)) * vec2(.7, 1.5)) * 2.6);
+  // bright light right behind the ball, so it stands out dark against it
+  col += vec3(.45, .75, 1.) * exp(-max(length(d) - SG_R, 0.) * 5.) * .45;
   return col;
 }
 
@@ -1642,8 +1649,8 @@ vec3 sgPool(vec2 d, float t) {
   return mix(vec3(.6, .9, 1.), vec3(1., .3, .62), pink) * arc * smoothstep(-.1, -.35, d.y);
 }
 
-// Where a point of the orb sits in the swirl: x = along the spiral (its
-// fraction is across a ribbon), y = angle from the axis.
+// Where a point sits in the whirlpool: x = along the spiral (its fraction is
+// across a strip), y = angle from the axis.
 vec2 sgSwirl(vec3 p, float t) {
   vec3 pn = normalize(p);
   vec3 b1 = normalize(cross(SG_AX, vec3(0., 1., 0.)));
@@ -1651,7 +1658,13 @@ vec2 sgSwirl(vec3 p, float t) {
   float th = acos(clamp(dot(pn, SG_AX), -1., 1.));
   float ph = atan(dot(pn, b2), dot(pn, b1));
   // (clamped short of the far pole, where tan blows up and the march would NaN)
-  return vec2(ph * 3. / SG_TAU + log(clamp(tan(min(th, 2.9) * .5), 1e-3, 1e3)) * .6 - t * .06, th);
+  return vec2(ph * 2. / SG_TAU + log(clamp(tan(min(th, 2.9) * .5), 1e-3, 1e3)) * .55 - t * .05, th);
+}
+
+// The skin's radius at angle th from the axis: the ball's, falling in toward
+// the core near the front.
+float sgFunnel(float th) {
+  return mix(.28, 1., smoothstep(.05, 1.15, th));
 }
 
 float sgRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2) {
@@ -1665,120 +1678,228 @@ float sgSmin(float a, float b, float k) {
   return mix(b, a, h) - k * h * (1. - h);
 }
 
-// The scene in orb radii: x = distance, y = 0 on the orb, 1 on the ink.
+// The ink: the ball's own liquid pulled out of its silhouette, up and left,
+// and torn into chunks smeared outward along the throw, thick at the root and
+// breaking up further out. A slab of the same liquid facing us, tapering
+// toward its tips, unioned smoothly into the skin so the two are one surface
+// under the same light. Returns a distance estimate (the outline is a noise
+// field, bounded only loosely, so the march steps through it gently).
+float sgInk(vec3 p, float t) {
+  float rxy = length(p.xy);
+  float a = atan(p.y, p.x);
+  a += a < -1.5 ? SG_TAU : 0.; // keep counting past straight left, no seam
+  float ad = max(1.6 - a, a - 3.9);
+  float bound = max(max(rxy - 2.6, .85 - rxy), max(ad > 0. ? rxy * sin(min(ad, 1.5)) : 0., abs(p.z + .05) - .3));
+  if (bound > .06) return bound;
+  float sect = smoothstep(1.75, 2.3, a) * smoothstep(3.75, 3.15, a);
+  float al = rxy - 1.;
+  float across = a * 1.3; // (by angle, so a chunk keeps its width as it flies)
+  float field = noise(vec2(across * 8., al * 1.2 - t * .06)) * .6 + noise(vec2(across * 19., al * 2.6 - t * .1) + 7.) * .3 + noise(vec2(across * 40., al * 5.) + 3.) * .1;
+  float v = field - .34 - .4 * smoothstep(.04, 1.2, al) - .6 * (1. - sect);
+  float th = .03 + .22 * (1. - smoothstep(0., 1.1, al));
+  return max(max(-v * rxy / 16., abs(p.z + .05) - th), bound);
+}
+
+// The scene in ball radii: x = distance, y = what was hit (0 skin, 1 a
+// strip's cut edge, 2 the core, 3 the drip, 4 the ink).
 vec2 sgMap(vec3 p, float t) {
   float r = length(p);
   vec2 sw = sgSwirl(p, t);
-  // ribbons overlapping like a shell's: each rises across its width to a
-  // rounded lip and drops onto the next
-  float f = fract(sw.x);
-  float rise = smoothstep(0., .25, f) * (.45 + .55 * f) * smoothstep(1., .92, f);
-  float orb = r - 1. + .13 * (1. - rise) * smoothstep(.1, .45, sw.y);
-  // the funnel the ribbons spiral down, narrowing toward the core, its lip rounded
-  orb = -sgSmin(-orb, -r * sin(.12 + .45 * r - sw.y), .08);
-  orb *= .7;
-  float ink = 1e3;
-  // the drip: a thin string of goo stretching from the underside, the end
-  // pinching off now and then
-  float ph = fract(t / 7.);
-  float len = .35 + .45 * smoothstep(0., .85, ph);
-  vec3 da = vec3(.12, -.86, .25);
-  vec3 db = da + vec3(.03, -len, 0.);
-  float drip = sgRoundCone(p, da, db, .1, .012);
+  float th = sw.y;
+  // the skin, a shell sinking into the funnel at the front
+  float shell = (abs(r - sgFunnel(th)) - .09) * .5;
+  // cut into three strips spiralling down the funnel; the gaps close up over
+  // the back so the hollow inside stays dark
+  // (the gaps taper out to a sliver: closing them short leaves a blunt end)
+  float w = mix(.6, 1.05, smoothstep(.75, 1.75, th));
+  float q = fract(sw.x);
+  float gd = q > w ? min(q - w, 1. - q) : -min(q, w - q);
+  float cut = gd * r * max(sin(th), .05) / .64 * .6;
+  // the strips' edges rounded like liquid, not cut like blocks; open at the
+  // throat onto the core
+  float strips = -sgSmin(-shell, -cut, .035);
+  strips = max(strips, (.52 - th) * r);
+  float core = length(p - SG_CORE) - .23;
+  // the drip: a neck from the underside thinning to a strand, a drop swelling
+  // at its end until it lets go and falls; then the strand springs back up
+  // and a new drop beads, ending the cycle where it began
+  float ph = fract(t / 6.);
+  float swell = smoothstep(0., .8, ph) * (1. - smoothstep(.85, 1., ph));
+  float bead = ph < .85 ? .04 + .035 * smoothstep(0., .8, ph) : .04 * smoothstep(.85, 1., ph);
+  vec3 a = vec3(.06, -.93, .2);
+  vec3 b = a + vec3(.02, -.26 - .22 * swell, 0.);
+  float drip = sgSmin(sgRoundCone(p, a, b, .14, .03), length(p - b - vec3(0., -.03, 0.)) - bead, .05);
+  // the drop that let go, falling clear of the picture before the next
   float fall = max(ph - .85, 0.) / .15;
-  drip = min(drip, fall > 0. ? length((p - vec3(.15, -1.25 - len - fall * fall * 1.5, .25)) * vec3(1., .6, 1.)) - .025 : 1e3);
-  ink = min(ink, drip);
-  float m = step(ink, orb);
-  return vec2(sgSmin(orb, ink, .1), m);
+  if (fall > 0.) drip = min(drip, length(p - vec3(.08, -1.44 - fall * fall * 3.2, .2)) - .075);
+  float ink = sgInk(p, t);
+  float body = sgSmin(sgSmin(strips, drip, .06), ink, .12);
+  float m = core < body ? 2. : ink < min(strips, drip) ? 4. : drip < strips ? 3. : cut > shell - .02 ? 1. : 0.;
+  return vec2(min(body, core), m);
 }
 
 vec3 sgNormal(vec3 p, float t) {
-  const vec2 e = vec2(.004, -.004);
+  const vec2 e = vec2(.003, -.003);
   return normalize(e.xyy * sgMap(p + e.xyy, t).x + e.yyx * sgMap(p + e.yyx, t).x + e.yxy * sgMap(p + e.yxy, t).x + e.xxx * sgMap(p + e.xxx, t).x);
 }
 
-// What the glossy surfaces mirror: the blue tunnel, its streaks and the glare.
+// What the glass mirrors: near black below and left, deep cobalt toward the
+// glare on the right, the glare itself, a cold light above, magenta below.
 vec3 sgEnv(vec3 R, float t) {
-  vec3 env = mix(vec3(.01, .05, .4), vec3(.25, .6, 1.2), smoothstep(-.6, .8, R.x * .55 + R.y * .5));
-  vec2 rc = normalize(R.xy + 1e-4);
-  env += vec3(.5, .8, 1.) * pow(noise(rc * 4. + vec2(R.z * 1.5 - t * .4, 0.)), 2.) * 1.2;
-  env += vec3(.95, .98, 1.) * pow(max(dot(R, normalize(vec3(.6, .4, .7))), 0.), 50.) * 3.5;
-  env += vec3(.7, .88, 1.) * pow(max(dot(R, normalize(vec3(.75, -.1, .65))), 0.), 12.) * .9;
-  env += vec3(.55, .78, 1.) * pow(max(dot(R, normalize(vec3(-.6, -.55, .55))), 0.), 30.) * .8;
+  vec3 env = mix(vec3(0., .002, .025), vec3(.015, .1, 1.5), smoothstep(.15, 1.2, R.x * .8 + R.y * .1 - R.z * .25));
+  // the tunnel's light smeared across the glass: soft patches, and long
+  // bright streaks lying across it like studio light strips
+  env += vec3(.3, .65, 1.) * pow(noise(R.xy * 2.5 + vec2(R.z * 1.5 - t * .4, 0.)), 3.) * 1.2 * smoothstep(-.5, .5, R.x + R.y * .2);
+  env += vec3(.55, .82, 1.) * pow(noise(vec2(R.x * 2. - t * .3, R.y * 11. + R.z * 3.)), 5.) * 5. * smoothstep(-.3, .6, R.x + R.y * .3);
+  float key = max(dot(R, SG_KEY), 0.);
+  env += vec3(.85, .95, 1.) * (pow(key, 7.) * 1.2 + pow(key, 90.) * 6.);
+  env += vec3(.55, .78, 1.) * pow(max(dot(R, normalize(vec3(-.15, .9, .4))), 0.), 30.) * 1.6;
+  env += vec3(1., .12, .5) * pow(max(dot(R, normalize(vec3(-.45, -.8, .4))), 0.), 8.) * 1.2;
   return env;
 }
 
-// The orb and the ink, ray marched: colour and coverage.
+// The torn ink's colour: near black navy, the glass's reflections dimmed,
+// gloss streaked along the throw.
+vec3 sgInkColor(vec3 p, vec3 n, vec3 R, float fres, float t) {
+  float ia = atan(p.y, p.x);
+  float il = length(p.xy);
+  vec3 col = vec3(.003, .008, .05) + sgEnv(R, t) * fres * .85;
+  return col + vec3(.3, .58, 1.2) * pow(noise(vec2(ia * 30., il * 2. - t * .2)), 6.) * 2.5 * fres * smoothstep(-.3, .6, dot(n, SG_KEY));
+}
+
+// The ball, ray marched: colour and coverage; past the edge, the glow a lens
+// would bloom round it.
 vec4 sgOrb(vec2 d, float t) {
   vec2 s = d / SG_R;
-  if (length(s) > 2.4) return vec4(0.);
+  if (length(s) > 2.7 && (s.y > -1. || abs(s.x) > .6)) return vec4(0.);
   vec3 ro = vec3(s, 3.), rd = vec3(0., 0., -1.);
-  float z = 0., near = 1e3, edge = PX * 1.5 / SG_R;
-  vec2 h = vec2(1e3, 0.);
-  for (int i = 0; i < 72; i++) {
+  float z = 0., near = 1e3, zNear = 0., edge = PX * 1.5 / SG_R;
+  vec2 h = vec2(1e3, 0.), hNear = h;
+  for (int i = 0; i < 130; i++) {
     h = sgMap(ro + rd * z, t);
-    near = min(near, h.x);
-    if (h.x < .001 || z > 6.) break;
+    if (h.x < near) { near = h.x; zNear = z; hNear = h; }
+    if (h.x < .0008 || z > 6.) break;
     z += h.x;
   }
+  // a ray that only grazed an edge is shaded where it came closest, not
+  // where it gave up: that point lies on the surface's edge
+  z = zNear;
+  h = hNear;
   float cover = smoothstep(edge, 0., near);
-  // light from the tunnel wrapping the silhouette, as a lens would bloom it
-  vec3 halo = vec3(.45, .7, 1.) * exp(-near * 9.) * .35;
+  // (only round the ball itself: the ink's loose bounds would spread it)
+  vec3 halo = vec3(.5, .75, 1.) * exp(-near * 6.) * .55 * smoothstep(1.4, 1., length(s));
   if (cover <= 0.) return vec4(halo, 0.);
   vec3 p = ro + rd * z;
   vec3 n = sgNormal(p, t);
-  vec3 R = reflect(rd, n);
-  float fres = .1 + .9 * pow(1. - max(n.z, 0.), 3.);
-  // how buried the point is: darker down the grooves and the funnel
-  float ao = clamp(.35 + 4. * sgMap(p + n * .12, t).x + 2. * sgMap(p + n * .3, t).x, 0., 1.);
-  vec3 col = (h.y > .5 ? vec3(.002, .004, .014) : vec3(.005, .012, .07)) + sgEnv(R, t) * fres * (h.y > .5 ? .8 : 1.1) * ao;
-  // the core's red light, falling off from inside the funnel
   vec3 L = SG_CORE - p;
-  float ld = dot(L, L);
-  col += vec3(1., .38, .1) * max(dot(n, L * inversesqrt(ld)), 0.) * .5 / (ld + .03);
-  if (h.y < .5) {
-    vec2 sw = sgSwirl(p, t);
-    float f = fract(sw.x);
-    // the ribbons' edges glow, magenta on some and blue on the rest, and
-    // hot trails wind up out of the core
-    // each ribbon's lip catches one bright rim, magenta on one, blue on the
-    // others, and the core's red runs a little way up the ribbons
-    vec3 tint = mod(floor(sw.x), 3.) < 1. ? vec3(1., .2, .6) : vec3(.35, .65, 1.);
-    col *= .65 + .55 * f; // each ribbon brightens toward its lip
-    col += tint * exp(-abs(f - .94) * 24.) * (.6 + 1.4 * fres) * smoothstep(.2, .5, sw.y) * 2.;
-    col += vec3(1., .22, .2) * exp(-abs(f - .6) * 10.) * exp(-sw.y * 6.) * 1.2;
+  float ld = length(L);
+  L /= ld;
+  if (h.y > 1.5 && h.y < 2.5) {
+    // the core: a white-hot ball (its glow is added over everything later)
+    return vec4(vec3(6.), cover);
   }
+  float ao = clamp(.3 + 4. * sgMap(p + n * .1, t).x + 2. * sgMap(p + n * .25, t).x, 0., 1.);
+  // how close the skin is to where the ink leaves it: there the strips take
+  // on the ink's colour, turn to face us as its sheet does (so the ball's
+  // edge catches no glancing light), and lose their rim light and the shadow
+  // of the crease, so the two meet with no line between them
+  // (on the ink itself, only its root right by the ball)
+  float join = h.y > 3.5 ? smoothstep(.25, 0., length(p.xy) - 1.) : h.y > 2.5 ? 0. : smoothstep(.22, 0., sgInk(p, t));
+  n = normalize(mix(n, vec3(0., 0., 1.), join * .85));
+  // the liquid isn't perfectly smooth: slow ripples break up its reflections
+  n = normalize(n + .14 * (vec3(noise(p.xy * 5. + t * .1), noise(p.yz * 5. - t * .1), noise(p.zx * 5.)) - .5));
+  vec3 R = reflect(rd, n);
+  float fres = .4 + .6 * pow(1. - max(n.z, 0.), 2.);
+  float key = max(dot(n, SG_KEY), 0.);
+  vec3 col;
+  if (h.y > .5 && h.y < 1.5) {
+    // a strip's cut edge, painted: pink where a strip begins, blue where it ends
+    vec2 sw = sgSwirl(p, t);
+    vec3 paint = fract(sw.x) < .3 ? vec3(1., .1, .7) : vec3(.12, .3, 1.);
+    col = paint * (.15 + .6 * key) + sgEnv(R, t) * fres * .25;
+    col = mix(col, sgInkColor(p, n, R, fres, t), join);
+  } else {
+    vec2 sw = sgSwirl(p, t);
+    bool outside = length(p) > sgFunnel(sw.y) || h.y > 2.5;
+    // the outer skin is cobalt glass; the inside of the hollow is near black
+    col = outside ? vec3(.006, .02, .42) * (.03 + .97 * key * key) + sgEnv(R, t) * fres : vec3(.002, .003, .012);
+    if (!outside) {
+      // inside the hollow: the core's red catches the strips' edges in thin lines
+      float q = fract(sw.x);
+      float w = mix(.6, 1.05, smoothstep(.75, 1.75, sw.y));
+      float rim = exp(-q * 60.) + exp(-abs(w - q) * 60.);
+      col += vec3(1., .1, .06) * rim * exp(-(ld - .23) * 2.5) * 1.4;
+    }
+    if (outside && h.y < 2.5) {
+      // wet gloss in strokes running along the strips, brightest where the
+      // glass faces the glare
+      // (in sw.x around a circle: sw.x jumps by 2 where the angle wraps, so
+      // anything not periodic in it would show a seam there)
+      vec2 around = vec2(cos(SG_PI * sw.x), sin(SG_PI * sw.x));
+      float stroke = pow(noise(around * 8. + vec2(sw.y * 2.5 - t * .15, 0.)), 6.) * 4. + pow(noise(around * 20. + vec2(0., sw.y * 6.) + 4.), 9.) * 5.;
+      col += vec3(.3, .58, 1.2) * stroke * fres * smoothstep(-.2, .7, dot(n, SG_KEY)) * smoothstep(1.7, 1.1, sw.y);
+      // broad bands of paint along each strip's edges: pink where it begins,
+      // blue where it ends, fading out over the back
+      float q = fract(sw.x);
+      float w = mix(.6, 1.05, smoothstep(.75, 1.75, sw.y));
+      float front = smoothstep(1.6, 1.1, sw.y);
+      float pink = smoothstep(.0, .01, q) * smoothstep(.065, .045, q) * front;
+      float blue = smoothstep(w, w - .015, q) * smoothstep(w - .11, w - .07, q) * front;
+      // neon: hot at its middle
+      float hot = exp(-abs(q - .028) * 90.);
+      col = mix(col, vec3(1., .1, .7) * (.9 + .9 * key) + vec3(.9, .45, 1.) * hot * 1.8 + sgEnv(R, t) * fres * .3, pink);
+      col = mix(col, vec3(.06, .22, 1.) * (.3 + .8 * key) + sgEnv(R, t) * fres * .3, blue);
+    }
+    if (h.y > 3.5) {
+      // the torn ink: the same liquid, darker where it thins out, with gloss
+      // streaked along the throw and embers of the core's red caught in it
+      float ia = atan(p.y, p.x);
+      float il = length(p.xy);
+      col = sgInkColor(p, n, R, fres, t);
+      col += vec3(1., .2, .05) * smoothstep(.74, .82, noise(vec2(ia * 40., il * 5. - t * .3))) * smoothstep(.3, -.4, p.y) * smoothstep(1.8, 1.05, il) * 1.4;
+    } else if (outside && h.y < 2.5) {
+      // where a strip runs into the ink it darkens into it, so the two read
+      // as one pour of liquid rather than glass meeting a separate sheet
+      col = mix(col, sgInkColor(p, n, R, fres, t), join);
+    }
+  }
+  col *= mix(ao, 1., join);
+  // the core's light: red, on the walls close to it only
+  col += vec3(1., .3, .08) * (.15 + .85 * max(dot(n, L), 0.)) * exp(-(ld - .23) * 22.) * .5;
+  // backlight: the tunnel behind wraps a thin rim of light round the edge
+  col += vec3(.4, .65, 1.) * pow(1. - abs(n.z), 6.) * 1.3 * (1. - join);
   return vec4(col, cover);
 }
 
-// The ink splash off the orb's top-left side, painted flat like the jacket's:
-// jagged spikes of uneven reach, broken toward their tips, and spray past
-// them. x = coverage, y = how near its edge (for the sheen).
-vec2 sgSplash(vec2 d, float t) {
+// Drops of ink thrown past the sheets, streaked along the throw.
+float sgSpray(vec2 d, float t) {
   vec2 s = d / SG_R;
   float r = length(s);
-  float a = atan(s.y, s.x);
-  a += a < -1.5 ? SG_TAU : 0.; // keep counting past straight left, no seam
-  float sect = smoothstep(1.75, 2.25, a) * smoothstep(3.75, 3.2, a);
-  if (sect <= 0. || r < .8) return vec2(0.);
+  if (r < 1.15 || r > 3.2 || s.x > .3 || s.y < -1.) return 0.;
   float aa = PX * 2. / SG_R;
-  vec2 ca = vec2(a * 1.3, t * .04);
-  float reach = .12 + 1.3 * pow(noise(ca * 7.), 3.5) + .8 * pow(noise(ca * 19. + 4.), 6.) + .35 * pow(noise(ca * 41. + 9.), 8.);
-  reach = 1. + reach * sect;
-  // ragged edges, and strands breaking up toward the tips
-  float rr = r + .06 * (fbm(s * 9. + t * .05) - .5);
-  float cover = smoothstep(reach, reach - aa * 2., rr) * smoothstep(.72, 1., r);
-  float tip = smoothstep(.55, 1., (rr - 1.) / max(reach - 1., .01));
-  cover *= 1. - tip * smoothstep(.45, .6, noise(vec2(a * 60., r * 5.)));
-  // spray: streaked drops past the spikes
+  float a = atan(s.y, s.x);
+  a += a < -1.5 ? SG_TAU : 0.;
+  float sect = smoothstep(1.75, 2.3, a) * smoothstep(3.75, 3.15, a);
   vec2 cell = vec2(a * 24., r * 6. - t * .3);
   vec2 id = floor(cell);
   vec2 g = fract(cell) - .5 - (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .6;
   float size = .06 + .16 * hash(id + 3.);
-  float drop = step(hash(id), .2) * smoothstep(size, size - aa * 6., length(g * vec2(2.4, .6))) * step(1.15, r) * smoothstep(3.4, 1.8, r) * sect;
-  // glossy streaks running out along the spikes
-  float gloss = pow(noise(vec2(a * 70., r * 1.5 + t * .1)), 6.) * smoothstep(1., 1.3, r) + exp(-max(reach - rr, 0.) * 14.) * .6;
-  return vec2(max(cover, drop), gloss);
+  return step(hash(id), .2) * smoothstep(size, size - aa * 6., length(g * vec2(2.4, .6))) * smoothstep(3.2, 1.6, r) * sect;
+}
+
+// Red drops falling past the drip.
+vec3 sgDrops(vec2 d, float t) {
+  vec2 s = d / SG_R;
+  vec3 col = vec3(0.);
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float ph = fract(t * (.12 + .04 * fi) + hash(vec2(fi, 31.)));
+    vec2 c = vec2(-.35 + .3 * fi + .15 * hash(vec2(fi, 32.)), -1.05 - ph * 1.4);
+    float rad = .02 + .02 * hash(vec2(fi, 33.));
+    float dd = length((s - c) * vec2(1., .75));
+    col += vec3(1., .12, .3) * smoothstep(rad, rad * .6, dd) * smoothstep(0., .1, ph) * smoothstep(1., .8, ph) * 1.4;
+  }
+  return col;
 }
 
 vec3 theme(vec2 uv, vec2 p, float t) {
@@ -1791,21 +1912,20 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   col += sgPool(d, t);
   vec4 orb = sgOrb(d, t);
   col = orb.a > 0. ? mix(col, orb.rgb, orb.a) : col + orb.rgb;
-  // the splash: the orb's surface tearing off. Over the orb it darkens the
-  // ribbons into it rather than covering them; out past the rim it is the
-  // same deep navy, glossy along its spikes
-  vec2 sp = sgSplash(d, t);
-  vec3 inkCol = vec3(.018, .035, .13) + vec3(.3, .55, 1.) * sp.y * 1.3;
-  col = mix(col, mix(orb.rgb * .45 + inkCol * .5, inkCol, 1. - orb.a), sp.x);
-  // the core, white-hot in a red flare, seen down the funnel
+  // the spray: the ink's navy, with a glint of the glare
+  float spray = sgSpray(d, t);
+  col = mix(col, vec3(.01, .025, .11) + vec3(.3, .55, 1.) * .25, spray);
+  col += sgDrops(d, t);
+  // the core's glow, fitted to the jacket's (measured from its centre, in
+  // ball radii): white to .25, peach, orange, red by .31, gone by .41. Each
+  // channel falls off at its own rate, set through the tone curve below
   vec2 k = d - SG_CORE.xy * SG_R;
-  float kr = length(k);
-  // a molten ball: a white-hot disc, a gold-orange rim, a red glow round it
-  col += vec3(1., .98, .9) * exp(-pow(kr / .034, 2.)) * 6.;
-  col += vec3(1., .55, .15) * exp(-pow(kr / .05, 2.)) * 2.5;
-  col += vec3(1., .2, .06) * exp(-kr / .055) * 1.6 + vec3(1., .3, .12) * exp(-kr / .13) * .4;
+  float e = max(length(k) / SG_R, .2);
+  col += vec3(2.2 * exp(-(e - .285) / .032), 2.2 * exp(-(e - .215) / .03), .9 * exp(-(e - .235) / .017));
   // fade to deep blue away from the orb, so the page below stays readable
   col = mix(col, vec3(.01, .02, .07), smoothstep(.25, 1.2, length(d * vec2(.75, 1.))) * .85);
-  return 1. - exp(-col * 1.1);
+  col = 1. - exp(-col * 1.1);
+  // the jacket's colours are saturated: give back what the tone curve took
+  return clamp(mix(vec3(dot(col, vec3(.299, .587, .114))), col, 1.3), 0., 1.);
 }`),
 };
