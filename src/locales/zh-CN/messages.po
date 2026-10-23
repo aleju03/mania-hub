@@ -17104,6 +17104,10 @@ msgid "Size"
 msgstr "大小"
 
 #: src/components/supporter/loadout.ts
+msgid "Sketch crown"
+msgstr "手绘王冠"
+
+#: src/components/supporter/loadout.ts
 msgid "Sketchbook"
 msgstr "素描本"
 

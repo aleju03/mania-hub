@@ -17095,6 +17095,10 @@ msgid "Size"
 msgstr "Tamaño"
 
 #: src/components/supporter/loadout.ts
+msgid "Sketch crown"
+msgstr "Corona de boceto"
+
+#: src/components/supporter/loadout.ts
 msgid "Sketchbook"
 msgstr "Cuaderno de bocetos"
 

@@ -17099,6 +17099,10 @@ msgid "Size"
 msgstr "Size"
 
 #: src/components/supporter/loadout.ts
+msgid "Sketch crown"
+msgstr "Sketch crown"
+
+#: src/components/supporter/loadout.ts
 msgid "Sketchbook"
 msgstr "Sketchbook"
 

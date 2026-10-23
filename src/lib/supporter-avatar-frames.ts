@@ -29,7 +29,8 @@ const FRAME_GEOMETRY = {
   "cat-parade": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1573, 0.1694, 0.1532, 0.1694] },
   "classic-window": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0726, 0.2056, 0.0726, 0.0847] },
   "crayon-border": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2056, 0.2016, 0.2097, 0.2056] },
-  crown: { box: [-0.2419, -0.6452, 1.5323, 1.0484], overhang: [0.1895, 0.4355, 0, 0] },
+  crown: { box: [-0.2419, -0.6452, 1.5323, 1.0484], overhang: [0.1935, 0.4516, 0, 0] },
+  "crown-sketch": { box: [-0.2419, -0.6452, 1.5323, 1.129], overhang: [0.1411, 0.4435, 0, 0] },
   "crt-monitor": { box: [-0.2419, -0.2419, 1.4839, 1.7419], overhang: [0.1895, 0.0968, 0.1895, 0.4556] },
   "dan-skip-1-eta": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1048, 0.129, 0.1048, 0.1653] },
   "dan-skip-10-alpha": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1573, 0.0968, 0.121, 0.129] },
@@ -143,7 +144,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 39;
+const FRAME_ART_VERSION = 40;
 
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still"): string {
   return `/images/supporter-frames/${id}.${kind === "video" ? "webm" : "png"}?v=${FRAME_ART_VERSION}`;
