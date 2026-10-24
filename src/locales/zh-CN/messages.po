@@ -4234,8 +4234,12 @@ msgid "Bracket"
 msgstr "衩"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Bracket dropped by more than 2 on 1,957 6K-8K charts and went up on none. No chart's Overall moved by more than 0.1."
-msgstr "在 1,957 张 6K-8K 谱面上，衩评分下降超过 2，没有谱面上升。没有谱面的总体评分变动超过 0.1。"
+msgid "Bracket dropped by more than 2 on 1,858 6K-8K charts and went up by more than 1 on 20. No chart's Overall moved by more than 0.1."
+msgstr "在 1,858 张 6K-8K 谱面上，衩评分下降超过 2，有 20 张上升超过 1。没有谱面的总体评分变动超过 0.1。"
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Bracket dropped by more than 2 on 1,957 6K-8K charts and went up on none. No chart's Overall moved by more than 0.1."
+#~ msgstr "在 1,957 张 6K-8K 谱面上，衩评分下降超过 2，没有谱面上升。没有谱面的总体评分变动超过 0.1。"
 
 #: src/components/prism/PrismUpdates.tsx
 msgid "Brackets have to come back"
@@ -4631,9 +4635,17 @@ msgstr "谱面预览音量"
 #~ msgid "Chart sharing is off for this installation, so plays on maps the site does not have will be skipped."
 #~ msgstr ""
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
+msgstr "略低于 LN 线、靠长条段落获得 LN 评分的谱面，现在按整张谱面评分，而不是只看这些段落。"
+
 #: src/routes/news_.prism.tsx
 msgid "Charts that only repeat the same full chord rate closer to a jack now."
 msgstr "只重复同一个全押的谱面，现在的评分更接近叠键。"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Charts where only some of the notes are long notes, and slow charts of long holds, were getting LN ratings well above what players score on them. Letting go of a long note now counts for less next to pressing one, so these charts go down. Full LN charts keep their ratings."
+msgstr "只有部分音符是长条的谱面，以及由长条组成的慢速谱面，LN 评分明显高于玩家在上面打出的成绩。现在长条放手相对按下的难度降低，所以这些谱面的评分下降。全长条谱面的评分不变。"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Charts you can mash rate lower"
@@ -9931,6 +9943,10 @@ msgstr "LN 反键"
 msgid "LN notes"
 msgstr "长条数"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "LN on hybrids"
+msgstr "混合谱面的 LN"
+
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 msgid "LN Release"
@@ -14140,8 +14156,12 @@ msgid "Prism also reads the chart's OD. Wider hit windows make a chart easier to
 msgstr "Prism 也会读取谱面的 OD。判定区间越宽，谱面越容易打出分数，所以同样的音符在低 OD 下评分更低，LN 谱面更明显。"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that don't are Chordstream."
-msgstr "以前只要连续三行多押互不与前一行共用按键，Prism 就把它们算作衩，所以三个分开的形状组成的楼梯也会被算进去。现在第三行必须回到第一行的某个键上，和真正的衩一样，不满足的行算作胶囊。"
+#~ msgid "Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that don't are Chordstream."
+#~ msgstr "以前只要连续三行多押互不与前一行共用按键，Prism 就把它们算作衩，所以三个分开的形状组成的楼梯也会被算进去。现在第三行必须回到第一行的某个键上，和真正的衩一样，不满足的行算作胶囊。"
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that don't are Chordstream. A hand hitting the same chord again within 250ms, with the other hand playing in between, is a jack."
+msgstr "以前只要连续三行多押互不与前一行共用按键，Prism 就把它们算作衩，所以三个分开的形状组成的楼梯也会被算进去。现在第三行必须回到第一行的某个键上，和真正的衩一样，不满足的行算作胶囊。一只手在 250ms 内再次按下同一个多押、中间由另一只手演奏的，算作叠键。"
 
 #: src/routes/news_.prism.tsx
 msgid "Prism is a difficulty calculator made for 6K, 7K and 8K. It now rates every chart and play on those keymodes instead of MinaCalc, which still rates 4K, 5K and 9K and up."
@@ -20678,7 +20698,7 @@ msgstr "用户名…"
 
 #: src/components/prism/PrismUpdates.tsx
 msgid "v26 mostly changes LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
-msgstr ""
+msgstr "v26 主要改动 LN 和衩的评分。48,129 张 6K-8K 谱面中有 331 张的总体评分变动，几乎都是低 OD 的未上架谱面。"
 
 #: src/components/communities/field-options.tsx
 msgid "Verified"

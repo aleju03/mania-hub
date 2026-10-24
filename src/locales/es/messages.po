@@ -4222,8 +4222,12 @@ msgid "Bracket"
 msgstr "Bracket"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Bracket dropped by more than 2 on 1,957 6K-8K charts and went up on none. No chart's Overall moved by more than 0.1."
-msgstr "Bracket bajó más de 2 en 1,957 charts de 6K-8K y no subió en ninguno. El General de ningún chart se movió más de 0.1."
+msgid "Bracket dropped by more than 2 on 1,858 6K-8K charts and went up by more than 1 on 20. No chart's Overall moved by more than 0.1."
+msgstr "Bracket bajó más de 2 en 1,858 charts de 6K-8K y subió más de 1 en 20. El General de ningún chart se movió más de 0.1."
+
+#: src/components/prism/PrismUpdates.tsx
+#~ msgid "Bracket dropped by more than 2 on 1,957 6K-8K charts and went up on none. No chart's Overall moved by more than 0.1."
+#~ msgstr "Bracket bajó más de 2 en 1,957 charts de 6K-8K y no subió en ninguno. El General de ningún chart se movió más de 0.1."
 
 #: src/components/prism/PrismUpdates.tsx
 msgid "Brackets have to come back"
@@ -4619,9 +4623,17 @@ msgstr "Volumen de la vista previa del mapa"
 #~ msgid "Chart sharing is off for this installation, so plays on maps the site does not have will be skipped."
 #~ msgstr ""
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
+msgstr "Los charts justo debajo de la línea de LN que reciben calificación de LN por sus partes de LN ahora se califican con el chart completo en vez de solo esas partes."
+
 #: src/routes/news_.prism.tsx
 msgid "Charts that only repeat the same full chord rate closer to a jack now."
 msgstr "Los charts que solo repiten el mismo acorde completo ahora se califican más cerca de un jack."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Charts where only some of the notes are long notes, and slow charts of long holds, were getting LN ratings well above what players score on them. Letting go of a long note now counts for less next to pressing one, so these charts go down. Full LN charts keep their ratings."
+msgstr "Los charts donde solo una parte de las notas son notas largas, y los charts lentos de holds largos, tenían calificaciones de LN muy por encima de lo que los jugadores sacan en ellos. Ahora soltar una nota larga cuenta menos frente a presionarla, así que estos charts bajan. Los charts full LN mantienen sus calificaciones."
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Charts you can mash rate lower"
@@ -9919,6 +9931,10 @@ msgstr "LN Inverse"
 msgid "LN notes"
 msgstr "Notas LN"
 
+#: src/components/prism/PrismUpdates.tsx
+msgid "LN on hybrids"
+msgstr "LN en charts híbridos"
+
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 msgid "LN Release"
@@ -14128,8 +14144,12 @@ msgid "Prism also reads the chart's OD. Wider hit windows make a chart easier to
 msgstr "Prism también lee el OD del chart. Las ventanas de acierto más amplias hacen que un chart sea más fácil de puntuar, así que las mismas notas se califican más bajo con un OD bajo, y más aún en charts LN."
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that don't are Chordstream."
-msgstr "Prism contaba tres filas de acordes seguidas como bracket siempre que ninguna compartiera tecla con la anterior, así que una escalera de tres formas separadas también contaba. Ahora la tercera fila tiene que volver a una tecla de la primera, como en un bracket real, y las filas que no lo hacen son Chordstream."
+#~ msgid "Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that don't are Chordstream."
+#~ msgstr "Prism contaba tres filas de acordes seguidas como bracket siempre que ninguna compartiera tecla con la anterior, así que una escalera de tres formas separadas también contaba. Ahora la tercera fila tiene que volver a una tecla de la primera, como en un bracket real, y las filas que no lo hacen son Chordstream."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that don't are Chordstream. A hand hitting the same chord again within 250ms, with the other hand playing in between, is a jack."
+msgstr "Prism contaba tres filas de acordes seguidas como bracket siempre que ninguna compartiera tecla con la anterior, así que una escalera de tres formas separadas también contaba. Ahora la tercera fila tiene que volver a una tecla de la primera, como en un bracket real, y las filas que no lo hacen son Chordstream. Una mano que vuelve a tocar el mismo acorde en menos de 250ms, con la otra mano tocando en medio, es un jack."
 
 #: src/routes/news_.prism.tsx
 msgid "Prism is a difficulty calculator made for 6K, 7K and 8K. It now rates every chart and play on those keymodes instead of MinaCalc, which still rates 4K, 5K and 9K and up."
@@ -20666,7 +20686,7 @@ msgstr "usuario..."
 
 #: src/components/prism/PrismUpdates.tsx
 msgid "v26 mostly changes LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
-msgstr ""
+msgstr "v26 cambia sobre todo las calificaciones de LN y de Bracket. El General se movió en 331 de los 48,129 charts de 6K-8K, casi todos unranked de OD bajo."
 
 #: src/components/communities/field-options.tsx
 msgid "Verified"

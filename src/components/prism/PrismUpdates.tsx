@@ -61,9 +61,14 @@ function Figure({ children, caption }: { children: ReactNode; caption?: ReactNod
 }
 
 const RELEASE_CHARTS: UpdateChart[] = [
-  { beatmapId: 737488, beatmapsetId: 333217, title: "Gotou Mai - Funwari Fuwari", version: "[7K] yoshilove's Uryu~", before: 24.6, after: 17.4 },
-  { beatmapId: 776949, beatmapsetId: 299333, title: "Yiruma - River Flows in You (LR Mix)", version: "6K Insane", before: 24.3, after: 17.4 },
-  { beatmapId: 1113454, beatmapsetId: 524596, title: "Gareth Coker - Restoring the Light, Facing the Dark", version: "[6K] Darkness", before: 24.2, after: 17.7 },
+  { beatmapId: 737488, beatmapsetId: 333217, title: "Gotou Mai - Funwari Fuwari", version: "[7K] yoshilove's Uryu~", before: 24.6, after: 20.8 },
+  { beatmapId: 776949, beatmapsetId: 299333, title: "Yiruma - River Flows in You (LR Mix)", version: "6K Insane", before: 24.3, after: 13.9 },
+  { beatmapId: 1113454, beatmapsetId: 524596, title: "Gareth Coker - Restoring the Light, Facing the Dark", version: "[6K] Darkness", before: 24.2, after: 20.3 },
+];
+
+const HYBRID_CHARTS: UpdateChart[] = [
+  { beatmapId: 4287709, beatmapsetId: 2052811, title: "Aethoro - Woodfairies", version: "7K Dance of the Fae", before: 24.7, after: 19.2 },
+  { beatmapId: 4943513, beatmapsetId: 2310817, title: "katagiri - c0pyf0x", version: "[7K] tw1n1sm", before: 29.2, after: 26.6 },
 ];
 
 const MASH_CHARTS: UpdateChart[] = [
@@ -73,8 +78,8 @@ const MASH_CHARTS: UpdateChart[] = [
 ];
 
 const BRACKET_CHARTS: UpdateChart[] = [
-  { beatmapId: 1350621, beatmapsetId: 636543, title: "you - Hold Angel", version: "[7K] Seraph", before: 37.3, after: 31.4 },
-  { beatmapId: 646681, beatmapsetId: 272871, title: "D(ABE3) - MANIERA", version: "[7K] Masterpiece", before: 28.6, after: 23.8 },
+  { beatmapId: 1350621, beatmapsetId: 636543, title: "you - Hold Angel", version: "[7K] Seraph", before: 37.3, after: 31.5 },
+  { beatmapId: 646681, beatmapsetId: 272871, title: "D(ABE3) - MANIERA", version: "[7K] Masterpiece", before: 28.6, after: 24.6 },
   { beatmapId: 4105372, beatmapsetId: 1265691, title: "TamaDo - Triumphal Return", version: "Blocko's 7K Victory", before: 49.5, after: 49.5 },
   { beatmapId: 2318148, beatmapsetId: 1080892, title: "Fractal Dreamers - Gardens Under A Spring Sky", version: "[7K] Blocko's Daylight", before: 29.7, after: 29.7 },
 ];
@@ -109,6 +114,23 @@ function V26() {
         <ChartChanges charts={RELEASE_CHARTS} label="LN" />
       </Change>
 
+      <Change title={<Trans>LN on hybrids</Trans>}>
+        <p>
+          <Trans>
+            Charts where only some of the notes are long notes, and slow charts of long holds, were getting LN ratings well above what
+            players score on them. Letting go of a long note now counts for less next to pressing one, so these charts go down. Full LN
+            charts keep their ratings.
+          </Trans>
+        </p>
+        <p>
+          <Trans>
+            Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only
+            those parts.
+          </Trans>
+        </p>
+        <ChartChanges charts={HYBRID_CHARTS} label="LN" />
+      </Change>
+
       <Change title={<Trans>Mash nerf</Trans>}>
         <p>
           <Trans>
@@ -139,13 +161,13 @@ function V26() {
           <Trans>
             Prism filed three chord rows in a row as a bracket whenever none shared a key with the one before it, so a roll of three
             split shapes counted too. The third row now has to come back to a key of the first, as in a real bracket, and the rows that
-            don't are Chordstream.
+            don't are Chordstream. A hand hitting the same chord again within 250ms, with the other hand playing in between, is a jack.
           </Trans>
         </p>
         <p>
           <Trans>
-            Bracket dropped by more than 2 on 1,957 6K-8K charts and went up on none. No chart's Overall moved by more
-            than 0.1.
+            Bracket dropped by more than 2 on 1,858 6K-8K charts and went up by more than 1 on 20. No chart's Overall moved by
+            more than 0.1.
           </Trans>
         </p>
         <Figure caption={<Trans>MANIERA [7K] Masterpiece at 1:29. Purple rows are Bracket, orange rows are Chordstream.</Trans>}>
