@@ -3971,6 +3971,10 @@ msgstr "azul"
 msgid "Blue"
 msgstr "Azul"
 
+#: src/lib/supporter-companions.ts
+msgid "Blue fairy"
+msgstr ""
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
 msgstr "Desenfoque"
@@ -4710,6 +4714,10 @@ msgstr "Cromo"
 #: src/lib/pack-run.ts
 msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 msgstr "Los acabados Chrome, Neón y Arcoíris se aplican {0} veces al puntuar."
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Ciela"
+#~ msgstr ""
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -9787,6 +9795,10 @@ msgstr "Líder"
 msgid "Leaderboard"
 msgstr "Leaderboard"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Leaf"
+#~ msgstr ""
+
 #: src/lib/supporter-pack-style.ts
 msgid "Leather"
 msgstr "Cuero"
@@ -11443,6 +11455,10 @@ msgstr "Orejas de neón"
 #: src/lib/supporter-name-fonts.ts
 msgid "Neon lines"
 msgstr "Líneas de neón"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Neri"
+#~ msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "never loaded here"
@@ -15178,6 +15194,10 @@ msgstr "rojo"
 #: src/lib/signature-style.ts
 msgid "Red"
 msgstr "Rojo"
+
+#: src/lib/supporter-companions.ts
+msgid "Red fairy"
+msgstr ""
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Redeem"
@@ -21375,6 +21395,10 @@ msgstr "mientras estuviste en el tracker"
 #: src/routes/hashi.tsx
 msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
 msgstr "Mientras eliges una canción, Hashi muestra la leaderboard del mapa con los mods que tienes puestos, incluidas las que osu! no guarda, como DT o HT a cualquier rate, Invert o No Release. Cada mapa de mania que terminas en osu!stable o lazer va a tu perfil con su replay, y la app muestra en qué puesto quedó en la leaderboard del mapa. Con <0>{shareSetting}</0> activado, tu perfil y el ranking de pp también muestran lo que estás haciendo en osu!, como jugar, elegir o editar un mapa, o ver una replay."
+
+#: src/lib/supporter-companions.ts
+msgid "White fairy"
+msgstr ""
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/communities/CommunityEditModal.tsx

@@ -19,6 +19,9 @@ export const SUPPORTER_COMPANION_IDS = [
   "fumo-yuyuko",
   "fumo-sakuya-inu",
   "leek",
+  "fairy-white",
+  "fairy-red",
+  "fairy-blue",
 ] as const;
 
 export type BuiltInCompanionId = (typeof SUPPORTER_COMPANION_IDS)[number];
@@ -65,6 +68,9 @@ export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   fumo("fumo-yuyuko", msg`Yuyuko fumo`, "6d5d0483009942fb916eedc60ea383a4", 3.04),
   fumo("fumo-sakuya-inu", msg`Inu Sakuya`, "7a573802931f485db8118a9d64f26362", 0.15),
   { id: "leek", name: msg`Leek`, kind: "model", url: "/models/companions/leek.glb", thumb: "/models/companions/thumbs/leek.webp" },
+  { id: "fairy-white", name: msg`White fairy`, kind: "model", url: "/models/companions/fairy-white.glb", thumb: "/models/companions/thumbs/fairy-white.webp" },
+  { id: "fairy-red", name: msg`Red fairy`, kind: "model", url: "/models/companions/fairy-red.glb", thumb: "/models/companions/thumbs/fairy-red.webp" },
+  { id: "fairy-blue", name: msg`Blue fairy`, kind: "model", url: "/models/companions/fairy-blue.glb", thumb: "/models/companions/thumbs/fairy-blue.webp" },
 ];
 
 export interface SubmittedCompanion {

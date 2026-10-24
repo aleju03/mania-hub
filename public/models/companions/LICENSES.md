@@ -16,3 +16,4 @@ Changed here: textures re-encoded as WebP; nothing else.
 
 blob-pink.glb is the site's own model, built by local-notes/companions/blob/make_blob.py.
 leek.glb is the site's own model, made in Blender (~/Projects/3d-modelling/leek); its cel shading is drawn by src/lib/companion-toon.ts from the materials' toon extras.
+fairy-white.glb, fairy-red.glb and fairy-blue.glb are the site's own models, made in Blender (~/Projects/3d-modelling/fairies); toon extras as for the leek, and their halos (extras.glow) are drawn first by src/lib/companion-toon.ts.

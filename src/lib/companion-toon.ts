@@ -1,4 +1,16 @@
-import { Color, LinearSRGBColorSpace, ShaderMaterial, Vector3, type Material, type Mesh, type Object3D } from "three";
+import {
+  Color,
+  CustomBlending,
+  LinearSRGBColorSpace,
+  OneFactor,
+  OneMinusSrcAlphaFactor,
+  ShaderMaterial,
+  SrcAlphaFactor,
+  Vector3,
+  type Material,
+  type Mesh,
+  type Object3D,
+} from "three";
 
 /* Cel shading for companion models exported from Blender with toon settings
    in their material extras (material.userData.toon in three.js): two bands
@@ -6,8 +18,10 @@ import { Color, LinearSRGBColorSpace, ShaderMaterial, Vector3, type Material, ty
    narrow highlight band. It uses the model's own baked light direction, not
    the scene's lights, so the look matches the Blender render. Outline shells
    (extras.outline) are unlit already; they only skip tone mapping so their
-   line colours come out exact. Ported from the 3d-modelling repo's
-   tools/web/toon.js. */
+   line colours come out exact. Glow shells (extras.glow, a fairy's halo) draw
+   first, behind the rest, without depth writes: in the transparent pass they
+   would depth-test against the wings passing through them and band across
+   them. Ported from the 3d-modelling repo's tools/web/toon.js. */
 
 interface ToonParams {
   shadow_tint: [number, number, number];
@@ -107,5 +121,22 @@ export function applyCompanionToon(root: Object3D): void {
     const mesh = node as Mesh;
     if (!mesh.isMesh || !mesh.material) return;
     mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => swap(m as Material)) : swap(mesh.material as Material);
+    const materials = ([] as Material[]).concat(mesh.material as Material | Material[]);
+    if (materials.some((material) => material.userData?.glow)) {
+      for (const material of materials) glow(material);
+      mesh.renderOrder = -1;
+    }
   });
+}
+
+/* Opaque pass with alpha blending, so it draws in renderOrder; the separate
+   alpha factors keep the transparent canvas's alpha right. */
+function glow(material: Material) {
+  material.transparent = false;
+  material.blending = CustomBlending;
+  material.blendSrc = SrcAlphaFactor;
+  material.blendDst = OneMinusSrcAlphaFactor;
+  material.blendSrcAlpha = OneFactor;
+  material.blendDstAlpha = OneMinusSrcAlphaFactor;
+  material.depthWrite = false;
 }

@@ -19,6 +19,13 @@ declare module "three" {
   export interface Material {
     userData?: Record<string, any>;
     toneMapped?: boolean;
+    transparent?: boolean;
+    depthWrite?: boolean;
+    blending?: unknown;
+    blendSrc?: unknown;
+    blendDst?: unknown;
+    blendSrcAlpha?: unknown;
+    blendDstAlpha?: unknown;
     dispose(): void;
   }
 
@@ -226,6 +233,10 @@ declare module "three" {
   export const DoubleSide: unknown;
   export const FrontSide: unknown;
   export const NormalBlending: unknown;
+  export const CustomBlending: unknown;
+  export const SrcAlphaFactor: unknown;
+  export const OneMinusSrcAlphaFactor: unknown;
+  export const OneFactor: unknown;
 }
 
 declare module "three/*";

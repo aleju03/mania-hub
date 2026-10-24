@@ -3975,6 +3975,10 @@ msgstr "blue"
 msgid "Blue"
 msgstr "Blue"
 
+#: src/lib/supporter-companions.ts
+msgid "Blue fairy"
+msgstr "Blue fairy"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
 msgstr "Blur"
@@ -4714,6 +4718,10 @@ msgstr "Chrome"
 #: src/lib/pack-run.ts
 msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 msgstr "Chrome, Neon and Rainbow finishes apply {0} times when scored."
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Ciela"
+#~ msgstr "Ciela"
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -9791,6 +9799,10 @@ msgstr "Leader"
 msgid "Leaderboard"
 msgstr "Leaderboard"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Leaf"
+#~ msgstr "Leaf"
+
 #: src/lib/supporter-pack-style.ts
 msgid "Leather"
 msgstr "Leather"
@@ -11447,6 +11459,10 @@ msgstr "Neon ears"
 #: src/lib/supporter-name-fonts.ts
 msgid "Neon lines"
 msgstr "Neon lines"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Neri"
+#~ msgstr "Neri"
 
 #: src/routes/recommendations.tsx
 msgid "never loaded here"
@@ -15182,6 +15198,10 @@ msgstr "red"
 #: src/lib/signature-style.ts
 msgid "Red"
 msgstr "Red"
+
+#: src/lib/supporter-companions.ts
+msgid "Red fairy"
+msgstr "Red fairy"
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Redeem"
@@ -21379,6 +21399,10 @@ msgstr "while tracked"
 #: src/routes/hashi.tsx
 msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
 msgstr "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
+
+#: src/lib/supporter-companions.ts
+msgid "White fairy"
+msgstr "White fairy"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/communities/CommunityEditModal.tsx

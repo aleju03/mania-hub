@@ -3980,6 +3980,10 @@ msgstr "蓝"
 msgid "Blue"
 msgstr "蓝色"
 
+#: src/lib/supporter-companions.ts
+msgid "Blue fairy"
+msgstr ""
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
 msgstr "模糊"
@@ -4719,6 +4723,10 @@ msgstr "铬面"
 #: src/lib/pack-run.ts
 msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 msgstr "铬面、霓虹和彩虹卡面在计分时生效 {0} 次。"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Ciela"
+#~ msgstr ""
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -9796,6 +9804,10 @@ msgstr "队长"
 msgid "Leaderboard"
 msgstr "排行榜"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Leaf"
+#~ msgstr ""
+
 #: src/lib/supporter-pack-style.ts
 msgid "Leather"
 msgstr "皮革"
@@ -11452,6 +11464,10 @@ msgstr "霓虹耳朵"
 #: src/lib/supporter-name-fonts.ts
 msgid "Neon lines"
 msgstr "霓虹线条"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Neri"
+#~ msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "never loaded here"
@@ -15187,6 +15203,10 @@ msgstr "红"
 #: src/lib/signature-style.ts
 msgid "Red"
 msgstr "红色"
+
+#: src/lib/supporter-companions.ts
+msgid "Red fairy"
+msgstr ""
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Redeem"
@@ -21384,6 +21404,10 @@ msgstr "追踪期间"
 #: src/routes/hashi.tsx
 msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
 msgstr "选歌时，Hashi 会显示该谱面在你当前 mod 下的排行榜，包括 osu! 不保存的榜，比如任意倍速的 DT 或 HT、Invert 或 No Release。你在 osu!stable 或 lazer 上完成的每张 mania 谱面都会连同回放发送到你的个人资料，应用会显示它在该谱面排行榜上的名次。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你在 osu! 里做什么，比如游玩、选择或编辑谱面，或观看回放。"
+
+#: src/lib/supporter-companions.ts
+msgid "White fairy"
+msgstr ""
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/communities/CommunityEditModal.tsx
