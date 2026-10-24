@@ -4624,8 +4624,8 @@ msgstr "Volumen de la vista previa del mapa"
 #~ msgstr ""
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
-msgstr "Los charts justo debajo de la línea de LN que reciben calificación de LN por sus partes de LN ahora se califican con el chart completo en vez de solo esas partes."
+#~ msgid "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
+#~ msgstr "Los charts justo debajo de la línea de LN que reciben calificación de LN por sus partes de LN ahora se califican con el chart completo en vez de solo esas partes."
 
 #: src/routes/news_.prism.tsx
 msgid "Charts that only repeat the same full chord rate closer to a jack now."

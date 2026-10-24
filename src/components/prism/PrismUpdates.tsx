@@ -122,12 +122,6 @@ function V26() {
             charts keep their ratings.
           </Trans>
         </p>
-        <p>
-          <Trans>
-            Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only
-            those parts.
-          </Trans>
-        </p>
         <ChartChanges charts={HYBRID_CHARTS} label="LN" />
       </Change>
 

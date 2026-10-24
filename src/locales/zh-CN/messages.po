@@ -4636,8 +4636,8 @@ msgstr "谱面预览音量"
 #~ msgstr ""
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
-msgstr "略低于 LN 线、靠长条段落获得 LN 评分的谱面，现在按整张谱面评分，而不是只看这些段落。"
+#~ msgid "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
+#~ msgstr "略低于 LN 线、靠长条段落获得 LN 评分的谱面，现在按整张谱面评分，而不是只看这些段落。"
 
 #: src/routes/news_.prism.tsx
 msgid "Charts that only repeat the same full chord rate closer to a jack now."

@@ -4651,8 +4651,8 @@ msgstr "Chart preview volume"
 #~ msgstr "Chart sharing is off for this installation, so plays on maps the site does not have will be skipped."
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
-msgstr "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
+#~ msgid "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
+#~ msgstr "Charts just under the LN line that get an LN rating from their LN parts are now rated on the whole chart instead of only those parts."
 
 #: src/routes/news_.prism.tsx
 msgid "Charts that only repeat the same full chord rate closer to a jack now."
