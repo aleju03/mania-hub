@@ -26,12 +26,14 @@ import {
   type ChainRowResult,
   type ChainRunView,
   type ChainSceneId,
+  chainModLook,
 } from "#/lib/chain-run";
 import type { PackTypeId } from "#/lib/packs";
 import { getCachedCardBackDataUrl } from "../../packArt";
 import { PaintBackdrop } from "./PaintBackdrop";
 import { takeChainEntryOrigin } from "./chainEntry";
-import { ChainButtons, IconFan, IconSwap, MARKER } from "./chainKit";
+import { ChainButtons, IconFan, IconSwap, KIT, MARKER } from "./chainKit";
+import { HeldMods } from "./ChainMods";
 import { RUN_FEEL } from "../runFeel";
 import { juice } from "../runJuice";
 import { runSound } from "../runSound";
@@ -157,6 +159,8 @@ export function ChainTable(props: ChainTableProps) {
   useEffect(() => setWysiRunKey(wysiRunKey), [wysiRunKey]);
   const [rowUids, setRowUids] = useState<number[]>(() => (script?.row ? script.row.slice(0, script.place ?? script.row.length) : []));
   const [play, setPlay] = useState<PlayState | null>(null);
+  /* The played row's server request, awaited once the chain lands. */
+  const playRequestRef = useRef<Promise<ChainActOutcome> | null>(null);
   /* A drag's row as it would land if dropped now; previews read it. */
   const [dragRow, setDragRow] = useState<number[] | null>(null);
   const arrangedUids = dragRow ?? rowUids;
@@ -166,14 +170,15 @@ export function ChainTable(props: ChainTableProps) {
   /* Several cards picked to move at once, in the order they were picked. */
   const [selected, setSelected] = useState<number[]>([]);
   const [selectMode, setSelectMode] = useState(false);
+  /* A held mod picked to use: the next hand card tapped takes it. */
+  const [modPick, setModPick] = useState<number | null>(null);
   /* Bumped for a card each time it is dealt anew, so it remounts (comes in
      from the deck) rather than springing from where it last was. */
   const [dealGen, setDealGen] = useState<Record<number, number>>({});
   const [linkFx, setLinkFx] = useState<Record<string, LinkFx> | null>(null);
   /* On a phone a hand of more than six (committed, so a drag never
      resizes it) takes three rows. */
-  const bigHand = (shown?.hand.length ?? 0) - rowUids.length > 6;
-  const baseLayout: BoardLayout | null = box.width > 0 && box.height > 0 ? boardLayout(box.width, box.height, bigHand) : null;
+  const baseLayout: BoardLayout | null = box.width > 0 && box.height > 0 ? boardLayout(box.width, box.height) : null;
   /* On a phone the deck pile lives in the bar; draws and kept cards fly
      from and to where it sits there, in board px. */
   const [hudDeck, setHudDeck] = useState<BoardLayout["deck"] | null>(null);
@@ -524,6 +529,24 @@ export function ChainTable(props: ChainTableProps) {
   );
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+
+  /* A picked mod goes on the hand card tapped next. */
+  const applyModTo = useCallback(
+    async (uid: number) => {
+      if (modPick === null) return;
+      if (rowUidsRef.current.includes(uid)) return;
+      hideChainDetails();
+      const outcome = await doAct({ kind: "useMod", index: modPick, uid });
+      setModPick(null);
+      if (!outcome.ok || outcome.result.kind !== "useMod") {
+        runSound.refuse();
+        return;
+      }
+      runSound.charmFire(3);
+      shake(0.5);
+    },
+    [doAct, modPick, shake],
+  );
   /* Send the picks: hand cards into the next free slots in pick order (the
      ones that do not fit stay picked), row cards back to the hand. */
   const onSendGroup = useCallback(() => {
@@ -587,8 +610,23 @@ export function ChainTable(props: ChainTableProps) {
     hideChainDetails();
     const before = shown;
     setHold(before);
-    const outcome = await doAct({ kind: "playRow", uids: rowUids });
+    /* The engine is the server's, so the row scores here exactly as it will
+       there: the chain starts on the tap while the server applies the row,
+       and its answer (the outcome, pay, draws) is only needed once the row
+       lands (onReplayDone). */
+    const local = scoreChainRow(before, rowEntries);
+    const request = doAct({ kind: "playRow", uids: rowUids });
+    playRequestRef.current = request;
+    setLinkFx({});
+    setCardCombo({});
+    setHandsLit([]);
+    setScoreOverride(before.roundScore);
+    setPlay({ row: local, outcome: "continue", pay: [], forgotten: null, ascended: false, before, wysi: null, contract: null, won: false });
+    signal("play:start");
+    const outcome = await request;
     if (!outcome.ok || outcome.result.kind !== "playRow") {
+      setPlay(null);
+      setScoreOverride(null);
       setHold(null);
       if (!outcome.ok && outcome.error === "stale") setRowUids([]);
       else {
@@ -597,14 +635,10 @@ export function ChainTable(props: ChainTableProps) {
       }
       return;
     }
-    const result = outcome.result;
-    setLinkFx({});
-    setCardCombo({});
-    setHandsLit([]);
-    setScoreOverride(before.roundScore);
-    setPlay({ row: result.row, outcome: result.outcome, pay: result.pay, forgotten: result.forgotten, ascended: result.ascended, before, wysi: result.wysi ?? null, contract: result.contract ?? null, won: Boolean(result.won) });
-    signal("play:start");
-  }, [arranging, doAct, playShudder, rowUids, shown, signal]);
+    // Should the two ever disagree, the server's row is the one that counts.
+    const served = outcome.result.row;
+    if (served.total !== local.total) setPlay((current) => (current && current.before === before ? { ...current, row: served } : current));
+  }, [arranging, doAct, playShudder, rowEntries, rowUids, shown, signal]);
 
   const redraw = useCallback(async () => {
     if (!shown || !arranging || !rowUids.length || shown.redrawsLeft <= 0) return;
@@ -651,7 +685,15 @@ export function ChainTable(props: ChainTableProps) {
 
   const onReplayDone = useCallback(async () => {
     if (!play) return;
-    const { outcome, pay, forgotten, before, row, wysi, contract, won } = play;
+    // The chain ran on the local score; what the row did comes from the server.
+    const settled = await playRequestRef.current;
+    if (!settled || !settled.ok || settled.result.kind !== "playRow") return;
+    const served = settled.result;
+    const { before } = play;
+    const { outcome, pay, forgotten, row } = served;
+    const wysi = served.wysi ?? null;
+    const contract = served.contract ?? null;
+    const won = Boolean(served.won);
     signal("play:slam");
     // The round score (or round and target) lands now; shards with the pay.
     if (wysi) stampWysi(wysi, (on) => on !== "shards" || outcome !== "cleared");
@@ -923,6 +965,18 @@ export function ChainTable(props: ChainTableProps) {
     />
   ) : null;
 
+  const modsNode =
+    shown && shown.phase === "play" && shown.mods.length ? (
+      <HeldMods mods={shown.mods} picked={modPick} compact={narrow} disabled={!arranging} onPick={(index) => {
+        runSound.uiTap();
+        setModPick(index);
+      }} />
+    ) : null;
+  // A picked mod is put back when the table stops taking input.
+  useEffect(() => {
+    if (!arranging) setModPick(null);
+  }, [arranging]);
+
   useEffect(() => {
     if (!shown) return;
     if (shown.phase === "shop") signal("shop");
@@ -998,7 +1052,14 @@ export function ChainTable(props: ChainTableProps) {
             scoreBanked={Boolean(play) && scoreOverride === play?.before.roundScore}
             reducedMotion={reducedMotion}
             onExit={onExit}
-            scenes={narrow && !overNow ? scenesNode : null}
+            scenes={
+              narrow && !overNow ? (
+                <>
+                  {modsNode}
+                  {scenesNode}
+                </>
+              ) : null
+            }
             wysi={hudWysi}
             deck={
               narrow && shown && !overNow ? (
@@ -1035,12 +1096,20 @@ export function ChainTable(props: ChainTableProps) {
                   failed={failedRow}
                   selected={selected}
                   dealGen={dealGen}
-                  selectMode={selectMode}
-                  onSelect={onSelect}
+                  selectMode={selectMode || modPick !== null}
+                  onSelect={modPick !== null ? (uid) => void applyModTo(uid) : onSelect}
                   onSendGroup={onSendGroup}
                   onClearSelection={onClearSelection}
                 />
                 {!needsRoundPack && !layout.narrow && <DeckPile layout={layout} count={shown.drawPileCount} backUrl={backUrl} bump={0} reducedMotion={reducedMotion} />}
+                {actionsVisible && modPick !== null && shown.mods[modPick] && (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 z-[5] text-center font-black leading-none"
+                    style={{ top: layout.actionsY - (layout.narrow ? 22 : 30), fontFamily: MARKER, fontSize: layout.narrow ? 15 : 20, color: KIT.pink }}
+                  >
+                    <Trans>Tap a card in your hand for {chainModLook(shown.mods[modPick], i18n).name}</Trans>
+                  </div>
+                )}
                 {actionsVisible && (
                   <div className="absolute inset-x-0 flex items-center justify-center" style={{ top: layout.actionsY, height: layout.narrow ? 48 : 52 }}>
                     {/* Pick several (tap cards to pick them, tap a picked one
@@ -1216,6 +1285,15 @@ export function ChainTable(props: ChainTableProps) {
                   setOverFresh(false);
                   void doAct({ kind: "start" });
                 }}
+                onRevive={async () => {
+                  const outcome = await doAct({ kind: "revive" });
+                  if (!outcome.ok) return false;
+                  setOverFresh(false);
+                  runSound.fireIgnite();
+                  shake(1);
+                  flash(t`Revived: ${CHAIN_RULES.reviveRows} more rows.`);
+                  return true;
+                }}
                 onExit={onExit}
                 onShake={shake}
               />
@@ -1304,7 +1382,10 @@ export function ChainTable(props: ChainTableProps) {
           </div>
 
           {!narrow && shown && !overNow && shown.scenes.length > 0 && (
-            <div className="absolute bottom-6 left-6 z-[4]">{scenesNode}</div>
+            <div className="absolute bottom-6 left-6 z-[4] flex flex-col gap-4">
+              {modsNode}
+              {scenesNode}
+            </div>
           )}
           {/* The game's board beside the table on wide screens, this run's
               best lit in it. */}

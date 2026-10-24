@@ -113,6 +113,8 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
     const f = makeFixtureRun(5, { round: 3, phase: "arranged", pool, scenes: ["tree", "makiba"] });
     // A signed contract on the table.
     f.state.contract = { id: "quick", prize: { id: "dt" } };
+    // Two mod cards held.
+    f.state.mods = ["chameleon", "keyChange"];
     return { state: f.state, pool, script: { row: f.row, place: 3, dealt: true }, best: null };
   }
   if (moment === "play") {

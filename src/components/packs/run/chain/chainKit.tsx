@@ -340,13 +340,30 @@ export interface ChainButtonItem {
    border-image so its caps keep their shape at any width: 96px caps and a
    144px middle that repeats whole links. */
 const PRIMARY_FACE = "/images/packs/run/button-pink-full-v1.webp";
+const CHAIN_LINK = { front: "/images/packs/run/link-front-v1.webp", side: "/images/packs/run/link-side-v1.webp" };
 
 export function ChainButtons({ items, compact = false, big = false }: { items: ChainButtonItem[]; compact?: boolean; big?: boolean }) {
-  const link = (key: string) => (
-    <svg key={key} width={compact ? 22 : 30} height={compact ? 16 : 22} viewBox="0 0 30 22" className="-mx-1.5 shrink-0" aria-hidden="true">
-      <ellipse cx={15} cy={11} rx={12} ry={7.5} fill="none" stroke={KIT.cream} strokeWidth={3.2} />
-    </svg>
-  );
+  /* The rendered chain between buttons: an open link lying flat, one turned
+     edge-on through it, and another flat one, tucked behind the buttons. */
+  const link = (key: string) => {
+    const size = compact ? 26 : 34;
+    const ring = (src: string, index: number) => (
+      <img
+        key={index}
+        src={src}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        className="pointer-events-none select-none"
+        style={{ width: size, height: size, transform: "rotate(90deg)", margin: `0 ${-size * 0.3}px` }}
+      />
+    );
+    return (
+      <span key={key} aria-hidden="true" className="relative z-0 -mx-1.5 flex shrink-0 items-center">
+        {[CHAIN_LINK.front, CHAIN_LINK.side, CHAIN_LINK.front].map(ring)}
+      </span>
+    );
+  };
   const out: ReactNode[] = [];
   items.forEach((item, index) => {
     if (index > 0) out.push(link(`l${item.key}`));
@@ -360,7 +377,7 @@ export function ChainButtons({ items, compact = false, big = false }: { items: C
         disabled={item.disabled}
         onClick={item.onClick}
         whileTap={item.disabled ? undefined : { scale: 0.95, y: 2 }}
-        className="relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full border-[3px] leading-none transition-[filter,opacity] hover:brightness-110 disabled:cursor-default disabled:opacity-45 disabled:hover:brightness-100"
+        className="relative z-[1] inline-flex shrink-0 items-center justify-center gap-2 rounded-full border-[3px] leading-none transition-[filter] hover:brightness-110 disabled:cursor-default disabled:brightness-50 disabled:saturate-50 disabled:hover:brightness-50"
         style={{
           ...item.style,
           height,

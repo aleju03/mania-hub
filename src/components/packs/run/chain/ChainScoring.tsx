@@ -529,6 +529,11 @@ export function ChainScoring(props: ChainScoringProps) {
           const badge = rectOf(`[data-chain-link="l${event.link}"]`);
           popAt(badge, `link-l${event.link}`, i18n._(msgBreak), RED, "word", holdMs);
           say(i18n._(msgBreak), RED);
+          if (event.anchor !== undefined) {
+            // An Anchor card holds the combo it scored at.
+            const anchor = cardEl(event.anchor);
+            popAt(anchor, `anchor-${event.anchor}`, `${CHAIN_VARIANT_COPY.anchor.name} x${formatChainScore(event.combo)}`, CHAIN_VARIANT_COPY.anchor.ink, "trait", holdMs, "below");
+          }
           runSound.stepMiss();
           fx.onShake(feel.breakShake);
           if (!reducedMotion) {

@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { CHAIN_SCENE_NAMES, chainIsEndless, formatChainScore, type ChainBoardEntry, type ChainRunView } from "#/lib/chain-run";
+import { CHAIN_RULES, CHAIN_SCENE_NAMES, chainIsEndless, formatChainScore, type ChainBoardEntry, type ChainRunView } from "#/lib/chain-run";
 import { PACK_ASPECT } from "../../packArt";
 import { runSound } from "../runSound";
 import { SceneArt } from "../sceneArt";
 import { SCENE_ART_ID } from "./ChainHud";
 import { ChainButtons, KIT, MARKER, SceneMedallion } from "./chainKit";
 import { shareChainRun } from "./chainShare";
+import { prepareRewardedAd, type RewardedAd } from "#/lib/rewarded-ad";
 
 /* A card lifting out of the table with an arrow: the share button's mark. */
 function IconShareCard() {
@@ -16,6 +17,77 @@ function IconShareCard() {
       <rect x={4} y={9} width={11} height={14} rx={2} transform="rotate(-8 9.5 16)" />
       <path d="M14 12 C17 9 19 7 22 5 M17 4.5 H22.5 V10" />
     </svg>
+  );
+}
+
+/* A screen with a play mark and a heart-beat line: the revive button's mark. */
+function IconWatchRevive() {
+  return (
+    <svg width={26} height={26} viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke={KIT.gold} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+      <rect x={3} y={5} width={20} height={14} rx={2.5} />
+      <path d="M11 9.2 L16 12 L11 14.8 Z" fill={KIT.gold} strokeWidth={1.6} />
+      <path d="M8 23 H18" />
+    </svg>
+  );
+}
+
+/* The run's one revive: asks for an ad when the end comes in, and offers it
+   only when one is ready. */
+function ReviveOffer({ round, narrow, onRevive }: { round: number; narrow: boolean; onRevive: () => Promise<boolean> }) {
+  const { t } = useLingui();
+  const [ad, setAd] = useState<RewardedAd | null>(null);
+  const [state, setState] = useState<"idle" | "watching" | "reviving">("idle");
+  const [asked, setAsked] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void prepareRewardedAd("revive").then((ready) => {
+      if (live) setAd(ready);
+    });
+    return () => {
+      live = false;
+    };
+  }, [asked]);
+  if (!ad) return null;
+  return (
+    <motion.div
+      className={`flex flex-col items-center ${narrow ? "mt-3" : "mt-4"}`}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 380, damping: 22 }}
+    >
+      {/* Not compact on phones: a compact side button hides its label. */}
+      <ChainButtons
+        items={[
+          {
+            key: "revive",
+            title: t`Watch an ad to revive`,
+            label: <Trans>Watch an ad to revive</Trans>,
+            icon: <IconWatchRevive />,
+            tone: KIT.gold,
+            disabled: state !== "idle",
+            onClick: async () => {
+              runSound.uiTap();
+              setState("watching");
+              const viewed = await ad.show();
+              if (!viewed) {
+                // That ad is spent; ask for another.
+                setAd(null);
+                setState("idle");
+                setAsked((count) => count + 1);
+                return;
+              }
+              setState("reviving");
+              if (!(await onRevive())) setState("idle");
+            },
+          },
+        ]}
+      />
+      <span className="mt-2 text-center text-[12px] font-bold text-[#f3e9d8]/55">
+        <Trans>
+          Round {round} goes on with {CHAIN_RULES.reviveRows} more rows. Once per run.
+        </Trans>
+      </span>
+    </motion.div>
   );
 }
 
@@ -154,6 +226,7 @@ export function ChainOver({
   reducedMotion,
   loadBoard,
   onNewRun,
+  onRevive,
   onExit,
   onShake,
 }: {
@@ -165,6 +238,8 @@ export function ChainOver({
   reducedMotion: boolean;
   loadBoard: () => Promise<ChainBoardEntry[]>;
   onNewRun: () => void;
+  /* Revives the failed round; false when the server refused. */
+  onRevive: () => Promise<boolean>;
   onExit: () => void;
   onShake: (amount: number) => void;
 }) {
@@ -220,6 +295,7 @@ export function ChainOver({
             </Trans>
           </motion.div>
         )}
+        {over?.reason === "failed" && over.round === view.round && !view.revived && <ReviveOffer round={round} narrow={narrow} onRevive={onRevive} />}
         <div className={`flex items-end justify-center ${narrow ? "mt-4 gap-7" : "mt-5 gap-12"}`}>
           {stat(<Trans>Round</Trans>, String(round), KIT.cream, 0.15)}
           {stat(<Trans>Best row</Trans>, formatChainScore(view.bestRow), KIT.gold, 0.22)}

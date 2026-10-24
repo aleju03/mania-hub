@@ -8,6 +8,8 @@ import {
   CHAIN_SCENE_NAMES,
   CHAIN_TRAIT_WORD,
   CHAIN_TRAITS,
+  CHAIN_MODS,
+  chainModLook,
   chainOfferName,
   chainPracticeText,
   chainRefusalMessage,
@@ -25,6 +27,7 @@ import { useShardFloats, useShudder } from "../shopMotion";
 import { Shards } from "../Shards";
 import { ChainCardFace } from "./ChainCardFace";
 import { ShopContracts } from "./ChainContracts";
+import { ModChip } from "./ModPin";
 import { SCENE_ART_ID } from "./ChainHud";
 import type { BoardLayout } from "./chainLayout";
 import { chainPackType } from "./ChainPackStage";
@@ -37,6 +40,8 @@ export interface ShopActResult {
   error?: string;
   result?: ChainActionResult;
 }
+
+const TAG_CLIP = "polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%)";
 
 function PriceButton({
   price,
@@ -63,20 +68,20 @@ function PriceButton({
       onClick={(event) => onBuy(shudder, event.currentTarget)}
       aria-disabled={!affordable}
       className={`relative inline-flex items-center gap-1.5 leading-none transition hover:brightness-105 disabled:opacity-40 ${big ? "py-2 pl-7 pr-4 text-[22px]" : "py-1.5 pl-6 pr-3 text-[19px]"}`}
-      style={{
-        x,
-        fontFamily: MARKER,
-        background: affordable ? KIT.cream : "#8f887f",
-        color: KIT.dark,
-        clipPath: "polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%)",
-        filter: "drop-shadow(0 3px 0 rgba(0,0,0,0.4))",
-      }}
+      style={{ x, fontFamily: MARKER, color: KIT.dark }}
     >
+      {/* The tag and its shadow as two clipped shapes: a drop-shadow filter on
+         a clipped element made phone browsers drop it for a frame while the
+         shop animated in. */}
+      <span aria-hidden="true" className="absolute inset-0 translate-y-[3px] bg-black/40" style={{ clipPath: TAG_CLIP }} />
+      <span aria-hidden="true" className="absolute inset-0" style={{ clipPath: TAG_CLIP, background: affordable ? KIT.cream : "#8f887f" }} />
       {/* The tag's punched hole. */}
       <span aria-hidden="true" className="absolute left-[11px] top-1/2 h-[8px] w-[8px] -translate-y-1/2 rounded-full" style={{ background: KIT.dark }} />
-      <span>{label}</span>
-      <KitGem size={big ? 22 : 18} />
-      <span className="tabular-nums">{price}</span>
+      <span className="relative">{label}</span>
+      <span className="relative inline-flex">
+        <KitGem size={big ? 22 : 18} />
+      </span>
+      <span className="relative tabular-nums">{price}</span>
     </motion.button>
   );
 }
@@ -94,7 +99,11 @@ function PracticeTag({ trait, level, height }: { trait: (typeof CHAIN_TRAITS)[nu
         {i18n._(CHAIN_TRAIT_WORD[trait])}
       </div>
       <div className="mt-1 leading-none tabular-nums" style={{ fontFamily: MARKER, fontSize: Math.round(height * 0.2) }}>
-        +{level} <span className="opacity-50">→</span> +{level + 1}
+        +{level}{" "}
+        <svg width="0.9em" height="0.6em" viewBox="0 0 18 12" aria-hidden="true" className="inline-block align-middle opacity-50">
+          <path d="M1 6 H15 M10 1.5 L15.5 6 L10 10.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>{" "}
+        +{level + 1}
       </div>
     </div>
   );
@@ -419,7 +428,48 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                 </motion.div>
               )}
             </AnimatePresence>
+            {(shop.mods ?? []).map((offer, index) => (
+              <AnimatePresence key={`mod-${index}-${rerolls}`} mode="popLayout">
+                {!offer.sold && (
+                  <motion.div
+                    key={`mod-${offer.id}-${index}-${rerolls}`}
+                    className={`flex flex-col items-center gap-2 ${narrow ? "w-[150px]" : "w-[170px]"}`}
+                    initial={reducedMotion ? false : { y: SHOP_FEEL.deal.fromY, scale: SHOP_FEEL.deal.fromScale, opacity: 0 }}
+                    animate={{ y: 0, scale: 1, opacity: 1 }}
+                    exit={{ y: -80, scale: 0.5, opacity: 0, transition: { duration: 0.25 } }}
+                    transition={{ ...SHOP_FEEL.deal.spring, delay: lead + ((4 + index * 0.5) * SHOP_FEEL.deal.staggerMs) / 1000 }}
+                  >
+                    {!narrow && <Hanger />}
+                    <ModChip id={offer.id} size={narrow ? 76 : Math.round(packHeight * 0.58)} />
+                    <div className="text-center">
+                      <div className={`font-black ${narrow ? "text-[13px]" : "text-[16px]"}`} style={{ color: chainModLook(offer.id, i18n).ink }}>
+                        {chainModLook(offer.id, i18n).name}
+                      </div>
+                      <div className="mt-0.5 text-[12px] leading-snug text-osu-f1">{chainModLook(offer.id, i18n).text}</div>
+                    </div>
+                    <PriceButton
+                      affordable={CHAIN_MODS.price[offer.id] <= view.shards && view.mods.length < CHAIN_MODS.slots}
+                      price={CHAIN_MODS.price[offer.id]}
+                      label={<Trans>Buy</Trans>}
+                      disabled={busy}
+                      reducedMotion={reducedMotion}
+                      onBuy={(shudder) => void run({ kind: "buy", item: "mod", index }, CHAIN_MODS.price[offer.id], shudder)}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            ))}
           </div>
+
+          {/* Mods held, waiting for a round. */}
+          {view.mods.length > 0 && (
+            <div className="mt-4 flex items-center gap-3 text-[13px] font-bold text-[#f3e9d8]/80">
+              <Trans>Your mods</Trans>
+              {view.mods.map((id, index) => (
+                <ModChip key={`${id}-${index}`} id={id} size={28} />
+              ))}
+            </div>
+          )}
 
           {/* The run's practice levels so far. */}
           {CHAIN_TRAITS.some((trait) => (view.levels[trait] ?? 0) > 0) && (

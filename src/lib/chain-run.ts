@@ -25,6 +25,8 @@ import {
   type ChainReelId,
   type ChainReelPrize,
   type ChainTrait,
+  type ChainModId,
+  CHAIN_MODS,
   CHAIN_SCENE_NUMBERS,
   chainScoreText,
 } from "../../backend/src/shared/chain-run";
@@ -101,6 +103,7 @@ function cleanAction(input: ChainActionInput): ChainActionInput {
     case "openPack":
     case "reroll":
     case "nextRound":
+    case "revive":
     case "abandon":
       return { kind: input.kind, rev };
     case "keep": {
@@ -118,6 +121,10 @@ function cleanAction(input: ChainActionInput): ChainActionInput {
       if (input.item === "scene") return { kind: "buy", item: "scene", rev };
       if (input.item === "practice") return { kind: "buy", item: "practice", rev };
       if (input.item === "pack" && Number.isSafeInteger(int(input.index))) return { kind: "buy", item: "pack", index: int(input.index), rev };
+      if (input.item === "mod" && Number.isSafeInteger(int(input.index))) return { kind: "buy", item: "mod", index: int(input.index), rev };
+      break;
+    case "useMod":
+      if (Number.isSafeInteger(int(input.index)) && Number.isSafeInteger(int(input.uid))) return { kind: "useMod", index: int(input.index), uid: int(input.uid), rev };
       break;
     case "sell":
       if ((CHAIN_SCENE_IDS as readonly string[]).includes(String(input.scene))) return { kind: "sell", scene: input.scene, rev };
@@ -252,6 +259,27 @@ export const CHAIN_VARIANT_COPY: Record<ChainVariant, { name: string; badge: str
     ink: "#8ff5dc",
     text: msg`After it scores, the link into it fires again and it scores again.`,
   },
+  random: {
+    name: "Random",
+    badge: "RD",
+    fill: "linear-gradient(135deg, #fde68a 0%, #f472b6 45%, #60a5fa 100%)",
+    ink: "#f9a8d4",
+    text: msg`Its country, keymode and skillset change every round.`,
+  },
+  anchor: {
+    name: "Anchor",
+    badge: "AN",
+    fill: "linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #475569 100%)",
+    ink: "#cbd5e1",
+    text: msg`A break later in the row only drops the combo back to what this card scored at.`,
+  },
+  chameleon: {
+    name: "Chameleon",
+    badge: "CH",
+    fill: "linear-gradient(135deg, #ecfccb 0%, #4ade80 50%, #0e7490 100%)",
+    ink: "#86efac",
+    text: msg`Matches every trait of the cards next to it.`,
+  },
   max: {
     name: "MAX",
     badge: "MAX",
@@ -260,6 +288,35 @@ export const CHAIN_VARIANT_COPY: Record<ChainVariant, { name: string; badge: str
     text: msg`Doubles the combo before it scores.`,
   },
 };
+
+/* Mod cards: the chip's mark and colours, its name and what it does. The
+   variant mods wear their variant's badge. */
+const MOD_EXTRA: Record<"keyChange" | "rateUp", { name: MessageDescriptor; badge: string; fill: string; ink: string; text: MessageDescriptor }> = {
+  keyChange: {
+    name: msg`Key Change`,
+    badge: "KC",
+    fill: "linear-gradient(135deg, #e0f2fe 0%, #7fc4ff 50%, #1d4ed8 100%)",
+    ink: "#7fc4ff",
+    text: msg`Turns a 4K card into 7K, or 7K into 4K.`,
+  },
+  rateUp: {
+    name: msg`Rate Up`,
+    badge: `x${CHAIN_MODS.rateUp}`,
+    fill: "linear-gradient(135deg, #fff7d6 0%, #ffd36b 50%, #c2410c 100%)",
+    ink: "#ffd36b",
+    text: msg`A card's base goes up by half.`,
+  },
+};
+
+export function chainModLook(id: ChainModId, i18n: I18n): { name: string; badge: string; fill: string; ink: string; text: string } {
+  if (id === "keyChange" || id === "rateUp") {
+    const extra = MOD_EXTRA[id];
+    return { name: i18n._(extra.name), badge: extra.badge, fill: extra.fill, ink: extra.ink, text: i18n._(extra.text) };
+  }
+  const variant = CHAIN_VARIANT_COPY[id];
+  const name = variant.name;
+  return { name, badge: variant.badge, fill: variant.fill, ink: variant.ink, text: i18n._(msg`Makes a card ${name}. ${i18n._(variant.text)}`) };
+}
 
 /* The reel's prizes: the tile's big mark and small word, its rarity colour
    (by how often it lands), and the line saying what it does. Mod names
@@ -473,11 +530,13 @@ const REFUSALS: Record<string, MessageDescriptor> = {
   no_shards: msg`Not enough shards.`,
   spun: msg`Already spun this visit.`,
   sold: msg`Already bought.`,
-  slots_full: msg`Every scene card slot is full. Sell one first.`,
+  slots_full: msg`No free slot for that.`,
   deck_too_small: msg`Your deck can't go below 4 cards.`,
   no_redraws: msg`No redraws left this round.`,
   no_rows: msg`No rows left this round.`,
   pool_unavailable: msg`Cards can't be dealt right now. Try again in a moment.`,
+  no_target: msg`GOATs can't take mods.`,
+  no_revive: msg`This run already used its revive.`,
 };
 
 /* The shop's contracts: a name and the rule, short. */

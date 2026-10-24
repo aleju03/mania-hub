@@ -31,7 +31,6 @@ export interface BoardLayout {
   /* Phones: hand cards sit in rows of three at this width. */
   handCardW?: number;
   /* Phones: the hand is laid out in three rows (more than six cards). */
-  handRows3?: boolean;
   /* Phones: cards per hand row, picked so the hand fits above the screen's
      bottom edge. */
   handCols?: number;
@@ -39,10 +38,7 @@ export interface BoardLayout {
 
 export const ROW_SLOTS = 6;
 
-/* `bigHand`: a phone's hand holds more than six cards (and so the row two
-   at most): the row's empty second line shrinks to a strip and the hand
-   takes three rows of three. */
-export function boardLayout(width: number, height: number, bigHand = false): BoardLayout {
+export function boardLayout(width: number, height: number): BoardLayout {
   const narrow = width < 700;
   if (narrow) {
     /* Two lines of three for the row, both left to right, always sized for
@@ -57,43 +53,31 @@ export function boardLayout(width: number, height: number, bigHand = false): Boa
     const arcRoom = 14;
     const below = 22;
     const actions = 48;
+    // Air between the buttons and the hand, so the cards don't crowd them.
+    const afterActions = 16;
     const handGap = 6;
-    let handCardW = Math.min(108, (width - side * 2 - handGap * 2) / 3);
+    /* The hand is sized once for its fullest state (9 cards, two rows of up
+       to five) and the row always for 6, so neither shrinks or jumps while
+       cards move between them. The row's cards get the room the hand
+       leaves, and the hand gives some back if the row would get too small. */
+    const handCols = 5;
+    const handRows = 2;
+    let handCardW = Math.min(108, (width - side * 2 - handGap * (handCols - 1)) / handCols);
     let cardW = 0;
     for (;;) {
-      const handHeight = 2 * handCardW * 1.4 + handGap;
-      const rowRoom = height - readoutSize - arcRoom - below - actions - handHeight - 10;
+      const handHeight = handRows * handCardW * 1.4 + (handRows - 1) * handGap;
+      const rowRoom = height - readoutSize - arcRoom - below - actions - afterActions - handHeight - 10;
       cardW = Math.min(112, (width - side * 2) / (3 + 2 * gapX), (rowRoom - gapY) / 2 / 1.4);
-      if (cardW >= 74 || handCardW <= 84) break;
-      handCardW -= 4;
+      if (cardW >= 74 || handCardW <= 56) break;
+      handCardW -= 2;
     }
     cardW = Math.max(56, cardW);
     const cardH = cardW * 1.4;
     const gx = cardW * gapX;
-    const strip = 44;
-    const line2 = bigHand ? strip : cardH;
-    const gapLines = bigHand ? 22 : gapY;
-    const rowBlock = cardH + gapLines + line2;
-    /* The hand takes what is left under the row. On a short screen more
-       cards to a row (and so fewer rows) keeps them bigger than three to a
-       row squeezed, and nothing runs off the bottom. */
-    const room = height - readoutSize - arcRoom - rowBlock - below - actions - 8;
-    const handCards = bigHand ? 9 : 6;
-    let handCols = 3;
-    let handRows = Math.ceil(handCards / 3);
-    handCardW = 0;
-    for (let cols = 3; cols <= 5; cols += 1) {
-      const rows = Math.ceil(handCards / cols);
-      const w = Math.min(108, (width - side * 2 - handGap * (cols - 1)) / cols, (room - handGap * (rows - 1)) / rows / 1.4);
-      if (w > handCardW + 0.5) {
-        handCardW = w;
-        handCols = cols;
-        handRows = rows;
-      }
-    }
-    handCardW = Math.max(40, handCardW);
+    const gapLines = gapY;
+    const rowBlock = cardH + gapLines + cardH;
     const handHeight = handRows * handCardW * 1.4 + (handRows - 1) * handGap;
-    const used = readoutSize + arcRoom + rowBlock + below + actions + handHeight;
+    const used = readoutSize + arcRoom + rowBlock + below + actions + afterActions + handHeight;
     const top = Math.max(0, Math.min(30, (height - used - 10) / 2));
     const rowTop = top + readoutSize + arcRoom;
     const left = (width - (cardW * 3 + gx * 2)) / 2;
@@ -101,11 +85,11 @@ export function boardLayout(width: number, height: number, bigHand = false): Boa
     for (let index = 0; index < ROW_SLOTS; index += 1) {
       const line = index < 3 ? 0 : 1;
       const col = index % 3;
-      slots.push({ x: left + col * (cardW + gx), y: rowTop + line * (cardH + gapLines), ...(line === 1 && bigHand ? { h: strip } : {}) });
+      slots.push({ x: left + col * (cardW + gx), y: rowTop + line * (cardH + gapLines) });
     }
     const rowBottom = rowTop + rowBlock;
     const actionsY = rowBottom + below;
-    const handTop = actionsY + actions;
+    const handTop = actionsY + actions + afterActions;
     const deckW = 30;
     return {
       width,
@@ -123,7 +107,6 @@ export function boardLayout(width: number, height: number, bigHand = false): Boa
       handHeight,
       handWidth: width,
       handCardW,
-      handRows3: bigHand,
       handCols,
       deck: { x: width - deckW - 12, y: actionsY + (actions - deckW * 1.4) / 2 - 2, w: deckW, h: deckW * 1.4 },
     };
@@ -173,14 +156,13 @@ export function boardLayout(width: number, height: number, bigHand = false): Boa
 export function handPlaces(count: number, layout: BoardLayout): Array<{ x: number; y: number; scale: number; rotate: number }> {
   if (count === 0) return [];
   if (layout.narrow) {
-    /* A phone holds the hand in two rows across the full width; past six
-       cards the rows overlap a little rather than shrink. */
+    /* A phone holds the hand in two even rows across the full width. */
     const gap = 6;
     const w = layout.handCardW ?? layout.cardW;
     const h = w * 1.4;
     const scale = w / layout.cardW;
     const cols = layout.handCols ?? 3;
-    const perRow = count <= 6 || layout.handRows3 ? cols : Math.ceil(count / 2);
+    const perRow = Math.min(cols, Math.ceil(count / 2));
     return Array.from({ length: count }, (_, index) => {
       const line = Math.floor(index / perRow);
       const inLine = Math.min(perRow, count - line * perRow);
