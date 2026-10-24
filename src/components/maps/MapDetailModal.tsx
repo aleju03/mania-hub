@@ -28,6 +28,7 @@ import { msdHeadline } from "#dan/msd-headline";
 import { hasLnAxis } from "#dan/ln-axis-keymodes";
 import { usesPrism } from "#dan/prism/switch";
 import { useNoDans } from "../../store";
+import { msdSkillsetMeta } from "../../lib/skill-axes";
 import {
   FamilyPatternChip,
   PATTERN_COLOR,
@@ -238,14 +239,22 @@ function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyC
     .sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...skills.map(({ value }) => value));
   const floored = prismFlooredSkillsets(keyCount, skills);
+  // Opened from one skillset's list, the play is still headed by its own
+  // strongest skillset: every play sits in every list, so a stream play
+  // opened from Jack would otherwise read as a jack play.
+  const fromSkillset = skills.some(({ name }) => skillsetLabel(i18n, name, keyCount) === play.ratingLabel);
+  const top = fromSkillset ? skills[0] : null;
+  const headline = top
+    ? { label: skillsetLabel(i18n, top.name, keyCount), value: top.value, color: msdSkillsetMeta(keyCount).find(({ key }) => key === top.name)?.color ?? play.ratingColor }
+    : { label: play.ratingLabel, value: play.rating ?? 0, color: play.ratingColor };
   return (
     <div className="flex flex-col gap-4 border-t border-white/[0.07] pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-wide text-osu-f1/60"><Trans>MSD skill rating</Trans></div>
-          <div className="mt-1 text-xs text-osu-l2">{play.ratingLabel}</div>
+          <div className="mt-1 text-xs text-osu-l2">{headline.label}</div>
         </div>
-        {!play.ratingExcluded && <span className="text-[30px] font-black tabular-nums leading-none" style={{ color: play.ratingColor }}>{(play.rating ?? 0).toFixed(2)}</span>}
+        {!play.ratingExcluded && <span className="text-[30px] font-black tabular-nums leading-none" style={{ color: headline.color }}>{headline.value.toFixed(2)}</span>}
       </div>
       {play.ratingExcluded ? (
         <p className="text-xs text-osu-red-light">{play.ratingExclusionReason === "pending_calibration" ? t`Skill rating recalculation pending`
