@@ -4946,6 +4946,10 @@ msgstr "点击跳转到指定页"
 msgid "Click to open the numbered levels"
 msgstr "点击展开数字段位"
 
+#: src/components/player/BestScoresControls.tsx
+msgid "Click to require {grade}"
+msgstr ""
+
 #: src/components/ui/ModFilterChip.tsx
 msgid "Click to require {label}"
 msgstr "点击以必须包含 {label}"
@@ -8183,6 +8187,8 @@ msgstr "金色"
 #~ msgstr "知道了"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/components/player/BestScoresControls.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
 msgid "Grade"
@@ -8452,6 +8458,10 @@ msgstr "隐藏没有技能评分的成绩"
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "收起 ScoreV2 说明"
+
+#: src/components/player/BestScoresControls.tsx
+msgid "Hiding {grade}"
+msgstr ""
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Hiding {label}"
@@ -16528,6 +16538,10 @@ msgstr "显示 {0} 个已撤销"
 msgid "Show {0}K plays"
 msgstr "查看 {0}K 成绩"
 
+#: src/components/player/BestScoresControls.tsx
+#~ msgid "Show {grade} plays"
+#~ msgstr "显示 {grade} 评级的成绩"
+
 #: src/routes/report.tsx
 msgid "Show {hiddenCount} earlier"
 msgstr "查看更早的 {hiddenCount} 条"
@@ -16686,6 +16700,10 @@ msgstr "显示 {1} 张图片中的 {0} 张。缩小搜索范围可以看到其�
 msgid "Showing {0} of {1}, {2} hidden by filters"
 msgstr "显示 {1} 条中的 {0} 条，{2} 条被筛选隐藏"
 
+#: src/components/player/BestScoresControls.tsx
+#~ msgid "Showing {grade} plays"
+#~ msgstr "正在显示 {grade} 评级的成绩"
+
 #: src/routes/tracker.tsx
 msgid "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
 msgstr "正在显示 FC 断连（1 miss）- 左键清除，右键切换为 FC"
@@ -16693,6 +16711,10 @@ msgstr "正在显示 FC 断连（1 miss）- 左键清除，右键切换为 FC"
 #: src/routes/tracker.tsx
 msgid "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
 msgstr "正在显示 FC（0 miss）- 左键切换为 FC 断连，右键清除"
+
+#: src/components/player/BestScoresControls.tsx
+msgid "Showing only {grade}"
+msgstr ""
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Showing only {label}"

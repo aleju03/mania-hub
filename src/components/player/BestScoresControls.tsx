@@ -3,14 +3,18 @@
 
 import { useMemo, useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { getBeatmapKeyCount, getModAcronyms, getScoreTimeMs } from "../../lib/score";
+import { getBeatmapKeyCount, getDisplayedRank, getModAcronyms, getScoreTimeMs } from "../../lib/score";
 import {
   NO_MOD_KEY,
+  cycleModFilterMode,
   getModFilterGroup,
   relevantModFilterKeys,
+  reverseCycleModFilterMode,
+  type ModFilterMode,
   type ModFilterState,
 } from "../../lib/mod-filter";
 import type { OsuScore } from "../../lib/types";
+import { GradeImg } from "../ui/GradeImg";
 import { ModFilterChip } from "../ui/ModFilterChip";
 import { SortArrow } from "../ui/SortArrow";
 
@@ -18,6 +22,8 @@ export type KeyFilter = "all" | string;
 export type BestPpSort = "pp-desc" | "pp-asc";
 export type BestAgeSort = "newest" | "oldest";
 export type BestSort = BestPpSort | BestAgeSort;
+/** Grades a list is narrowed to or hides, set like the mod chips. */
+export type GradeFilter = Record<string, ModFilterMode>;
 
 export function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
   if (keyFilter === "all") return true;
@@ -65,6 +71,47 @@ export function matchesModFilter(score: OsuScore, modFilter: ModFilterState): bo
   return true;
 }
 
+/* Silver grades share a chip with their gold one: the silver only says HD or
+   FL was on, which the mod chips already filter. */
+const GRADE_FILTER_ORDER = ["SS", "S", "A", "B", "C", "D"];
+
+export function getGradeFilterKey(rank: string): string {
+  if (rank === "X" || rank === "XH" || rank === "SSH") return "SS";
+  if (rank === "SH") return "S";
+  return rank;
+}
+
+/* A play has one grade, so required grades are alternatives: requiring S and
+   A shows both. A hidden grade is hidden either way. */
+export function matchesGradeKeyFilter(grade: string | null, gradeFilter: GradeFilter): boolean {
+  const modes = Object.entries(gradeFilter);
+  if (modes.length === 0) return true;
+  if (grade == null) return !modes.some(([, mode]) => mode === "include");
+  if (gradeFilter[grade] === "exclude") return false;
+  return !modes.some(([, mode]) => mode === "include") || gradeFilter[grade] === "include";
+}
+
+export function matchesGradeFilter(rank: string, gradeFilter: GradeFilter): boolean {
+  return matchesGradeKeyFilter(getGradeFilterKey(rank), gradeFilter);
+}
+
+export function matchesScoreGradeFilter(score: OsuScore, gradeFilter: GradeFilter): boolean {
+  return matchesGradeFilter(getDisplayedRank(score), gradeFilter);
+}
+
+/** The grades on a list, plus any already picked, so a picked grade the list
+    no longer holds keeps a chip to turn it off with. */
+export function getAvailableGrades(ranks: string[], gradeFilter: GradeFilter): string[] {
+  const keys = new Set(Object.keys(gradeFilter));
+  for (const rank of ranks) keys.add(getGradeFilterKey(rank));
+  return GRADE_FILTER_ORDER.filter((key) => keys.has(key));
+}
+
+export function cycleGradeFilter(gradeFilter: GradeFilter, grade: string, reverse = false): GradeFilter {
+  const next = reverse ? reverseCycleModFilterMode(gradeFilter[grade]) : cycleModFilterMode(gradeFilter[grade]);
+  const { [grade]: _dropped, ...rest } = gradeFilter;
+  return next ? { ...rest, [grade]: next } : rest;
+}
 
 export function getSortablePp(score: OsuScore): number | null {
   return typeof score.pp === "number" && Number.isFinite(score.pp) ? score.pp : null;
@@ -109,6 +156,9 @@ export function BestScoresControlBar({
   onCycleMod,
   onReverseCycleMod,
   onClearMods,
+  grades,
+  gradeFilter,
+  onCycleGrade,
   sort,
   ppSort,
   ageSort,
@@ -125,6 +175,9 @@ export function BestScoresControlBar({
   onCycleMod: (mod: string) => void;
   onReverseCycleMod: (mod: string) => void;
   onClearMods: () => void;
+  grades: string[];
+  gradeFilter: GradeFilter;
+  onCycleGrade: (grade: string, reverse: boolean) => void;
   sort: BestSort;
   ppSort: BestPpSort;
   ageSort: BestAgeSort;
@@ -135,33 +188,50 @@ export function BestScoresControlBar({
 
   return (
     <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-      <div className="order-2 flex items-center gap-2 flex-wrap min-w-0 lg:order-1">
-        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{t`Mods`}</span>
-        {mods.length === 0 ? (
-          <span className="text-[11px] text-osu-f1">{t`No mods in top plays`}</span>
-        ) : (
-          <>
+      <div className="order-2 flex items-center gap-x-4 gap-y-2 flex-wrap min-w-0 lg:order-1">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{t`Mods`}</span>
+          {mods.length === 0 ? (
+            <span className="text-[11px] text-osu-f1">{t`No mods in top plays`}</span>
+          ) : (
+            <>
+              <div className="flex items-center gap-1 flex-wrap">
+                {mods.map((mod) => (
+                  <ModFilterChip
+                    key={mod}
+                    mod={mod}
+                    mode={modFilter[mod]}
+                    onClick={() => onCycleMod(mod)}
+                    onContextMenu={() => onReverseCycleMod(mod)}
+                  />
+                ))}
+              </div>
+              {hasActiveFilter && (
+                <button
+                  type="button"
+                  onClick={onClearMods}
+                  className="text-[10px] font-semibold text-osu-f1 hover:text-osu-l2 underline underline-offset-2 cursor-pointer"
+                >
+                  {t`Clear`}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+        {(grades.length > 1 || Object.keys(gradeFilter).length > 0) && (
+          <div className="flex items-center gap-2 border-l border-white/[0.07] pl-4 min-w-0">
+            <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{t`Grade`}</span>
             <div className="flex items-center gap-1 flex-wrap">
-              {mods.map((mod) => (
-                <ModFilterChip
-                  key={mod}
-                  mod={mod}
-                  mode={modFilter[mod]}
-                  onClick={() => onCycleMod(mod)}
-                  onContextMenu={() => onReverseCycleMod(mod)}
+              {grades.map((grade) => (
+                <GradeFilterChip
+                  key={grade}
+                  grade={grade}
+                  mode={gradeFilter[grade]}
+                  onCycle={(reverse) => onCycleGrade(grade, reverse)}
                 />
               ))}
             </div>
-            {hasActiveFilter && (
-              <button
-                type="button"
-                onClick={onClearMods}
-                className="text-[10px] font-semibold text-osu-f1 hover:text-osu-l2 underline underline-offset-2 cursor-pointer"
-              >
-                {t`Clear`}
-              </button>
-            )}
-          </>
+          </div>
         )}
       </div>
       <div className="order-1 flex w-full min-w-0 flex-nowrap items-center justify-between gap-2 lg:order-2 lg:w-auto lg:flex-col lg:items-end lg:justify-start">
@@ -182,6 +252,54 @@ export function BestScoresControlBar({
         <BestSortControl sort={sort} ppSort={ppSort} ageSort={ageSort} onChangeSort={onChangeSort} />
       </div>
     </div>
+  );
+}
+
+/** A grade's chip, cycled like a mod chip: left click forward, right click back. */
+export function GradeFilterChip({
+  grade,
+  mode,
+  onCycle,
+}: {
+  grade: string;
+  mode: ModFilterMode | undefined;
+  onCycle: (reverse: boolean) => void;
+}) {
+  const { t } = useLingui();
+  const title = mode === "include"
+    ? t`Showing only ${grade}`
+    : mode === "exclude"
+      ? t`Hiding ${grade}`
+      : t`Click to require ${grade}`;
+  return (
+    <button
+      type="button"
+      onClick={() => onCycle(false)}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onCycle(true);
+      }}
+      title={title}
+      aria-label={title}
+      className={`relative flex items-center rounded-md border px-1.5 py-1 transition-colors cursor-pointer ${mode === "include"
+          ? "border-osu-green-light bg-osu-green/15"
+          : mode === "exclude"
+            ? "border-osu-red-light bg-osu-red/15"
+            : "border-osu-b3/30 bg-osu-b4/50 hover:bg-osu-b3/40"
+        }`}
+    >
+      <GradeImg
+        grade={grade === "SS" ? "X" : grade}
+        size={22}
+        className={mode === "exclude" ? "opacity-40 saturate-50" : undefined}
+      />
+      {mode === "exclude" && (
+        <span
+          className="pointer-events-none absolute left-1 right-1 top-1/2 h-[2px] -translate-y-1/2 rotate-[-10deg] rounded-full bg-osu-red-light shadow-[0_0_0_1px_rgba(0,0,0,0.5)]"
+          aria-hidden="true"
+        />
+      )}
+    </button>
   );
 }
 

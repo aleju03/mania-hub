@@ -4961,6 +4961,10 @@ msgstr "Click to jump to page"
 msgid "Click to open the numbered levels"
 msgstr "Click to open the numbered levels"
 
+#: src/components/player/BestScoresControls.tsx
+msgid "Click to require {grade}"
+msgstr "Click to require {grade}"
+
 #: src/components/ui/ModFilterChip.tsx
 msgid "Click to require {label}"
 msgstr "Click to require {label}"
@@ -8202,6 +8206,8 @@ msgstr "Gold"
 #~ msgstr "Got it"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/components/player/BestScoresControls.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
 msgid "Grade"
@@ -8471,6 +8477,10 @@ msgstr "Hide the plays with no skill rating"
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "hide the ScoreV2 note"
+
+#: src/components/player/BestScoresControls.tsx
+msgid "Hiding {grade}"
+msgstr "Hiding {grade}"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Hiding {label}"
@@ -16555,6 +16565,10 @@ msgstr "Show {0} revoked"
 msgid "Show {0}K plays"
 msgstr "Show {0}K plays"
 
+#: src/components/player/BestScoresControls.tsx
+#~ msgid "Show {grade} plays"
+#~ msgstr "Show {grade} plays"
+
 #: src/routes/report.tsx
 msgid "Show {hiddenCount} earlier"
 msgstr "Show {hiddenCount} earlier"
@@ -16713,6 +16727,10 @@ msgstr "Showing {0} of {1} images. Refine your search to see the rest."
 msgid "Showing {0} of {1}, {2} hidden by filters"
 msgstr "Showing {0} of {1}, {2} hidden by filters"
 
+#: src/components/player/BestScoresControls.tsx
+#~ msgid "Showing {grade} plays"
+#~ msgstr "Showing {grade} plays"
+
 #: src/routes/tracker.tsx
 msgid "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
 msgstr "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
@@ -16720,6 +16738,10 @@ msgstr "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
 #: src/routes/tracker.tsx
 msgid "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
 msgstr "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
+
+#: src/components/player/BestScoresControls.tsx
+msgid "Showing only {grade}"
+msgstr "Showing only {grade}"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Showing only {label}"

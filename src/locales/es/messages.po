@@ -4934,6 +4934,10 @@ msgstr "Haz clic para ir a la página"
 msgid "Click to open the numbered levels"
 msgstr "Clic para abrir los niveles numerados"
 
+#: src/components/player/BestScoresControls.tsx
+msgid "Click to require {grade}"
+msgstr ""
+
 #: src/components/ui/ModFilterChip.tsx
 msgid "Click to require {label}"
 msgstr "Haz clic para requerir {label}"
@@ -8171,6 +8175,8 @@ msgstr "Dorado"
 #~ msgstr "¡Listo!"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/components/player/BestScoresControls.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
 msgid "Grade"
@@ -8440,6 +8446,10 @@ msgstr "Ocultar las jugadas sin rating de habilidad"
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "ocultar la nota sobre ScoreV2"
+
+#: src/components/player/BestScoresControls.tsx
+msgid "Hiding {grade}"
+msgstr ""
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Hiding {label}"
@@ -16516,6 +16526,10 @@ msgstr "Mostrar {0} revocadas"
 msgid "Show {0}K plays"
 msgstr "Ver jugadas de {0}K"
 
+#: src/components/player/BestScoresControls.tsx
+#~ msgid "Show {grade} plays"
+#~ msgstr "Mostrar plays con {grade}"
+
 #: src/routes/report.tsx
 msgid "Show {hiddenCount} earlier"
 msgstr "Ver {hiddenCount} anteriores"
@@ -16674,6 +16688,10 @@ msgstr "Mostrando {0} de {1} imágenes. Refina tu búsqueda para ver el resto."
 msgid "Showing {0} of {1}, {2} hidden by filters"
 msgstr "Mostrando {0} de {1}, {2} ocultas por los filtros"
 
+#: src/components/player/BestScoresControls.tsx
+#~ msgid "Showing {grade} plays"
+#~ msgstr "Mostrando plays con {grade}"
+
 #: src/routes/tracker.tsx
 msgid "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
 msgstr "Mostrando chokes de FC (1 miss) - clic izquierdo para quitar, clic derecho para ver los FC"
@@ -16681,6 +16699,10 @@ msgstr "Mostrando chokes de FC (1 miss) - clic izquierdo para quitar, clic derec
 #: src/routes/tracker.tsx
 msgid "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
 msgstr "Mostrando full combos (0 misses) - clic izquierdo para ver los chokes de FC, clic derecho para quitar"
+
+#: src/components/player/BestScoresControls.tsx
+msgid "Showing only {grade}"
+msgstr ""
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Showing only {label}"
