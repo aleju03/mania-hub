@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -55,18 +55,26 @@ export function RunFlag({ cc, height = 14 }: { cc?: string; height?: number }) {
 /* The board for a period, reloaded when `key` changes; the viewer's own
    entry rides along when `user` is known. */
 export function useBoard(loadBoard: LoadBoard, period: ChainBoardPeriod, user: number | null, key: unknown) {
-  const [page, setPage] = useState<ChainBoardPage | null>(null);
+  /* Each period's last page, so switching tabs shows it at once; until a
+     period's first page lands, the one on screen stays (no empty frame for
+     the buttons under the board to jump into). */
+  const [pages, setPages] = useState<Partial<Record<ChainBoardPeriod, ChainBoardPage>>>({});
+  const [last, setLast] = useState<ChainBoardPage | null>(null);
   useEffect(() => {
     let cancelled = false;
-    setPage(null);
+    const land = (next: ChainBoardPage) => {
+      if (cancelled) return;
+      setPages((current) => ({ ...current, [period]: next }));
+      setLast(next);
+    };
     loadBoard(period, user)
-      .then((next) => !cancelled && setPage(next))
-      .catch(() => !cancelled && setPage({ entries: [], mine: null }));
+      .then(land)
+      .catch(() => land({ entries: [], mine: null }));
     return () => {
       cancelled = true;
     };
   }, [loadBoard, period, user, key]);
-  return page;
+  return pages[period] ?? last;
 }
 
 /* The board's rows in the run's style: rank, flag and name, round reached and
@@ -207,20 +215,36 @@ export function BoardPanel({
   const page = useBoard(loadBoard, period, user, refreshKey);
   const [open, setOpen] = useState<ChainBoardEntry | null>(null);
   const shownMine = period === "all" ? mine : page?.mine ?? null;
+  /* The rows hold the tallest height either tab has shown, so the buttons
+     under the board stay put when a shorter list comes in. */
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const [tallest, setTallest] = useState(0);
+  useEffect(() => {
+    const element = rowsRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      const height = element.scrollHeight;
+      setTallest((current) => (height > current ? height : current));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   return (
     <div className="w-full">
       <PeriodTabs period={period} onChange={setPeriod} compact={compact} />
-      {page ? (
-        page.entries.length || shownMine ? (
-          <BoardRows entries={page.entries} mine={shownMine} compact={compact} animate={animate && period === "all"} mineName={mineName} onPick={setOpen} />
+      <div ref={rowsRef} style={{ minHeight: tallest || undefined }}>
+        {page ? (
+          page.entries.length || shownMine ? (
+            <BoardRows entries={page.entries} mine={shownMine} compact={compact} animate={animate && period === "all"} mineName={mineName} onPick={setOpen} />
+          ) : (
+            <div className="py-6 text-center text-[13px] font-bold text-[#f3e9d8]/45">
+              <Trans>No runs this month yet.</Trans>
+            </div>
+          )
         ) : (
-          <div className="py-6 text-center text-[13px] font-bold text-[#f3e9d8]/45">
-            <Trans>No runs this month yet.</Trans>
-          </div>
-        )
-      ) : (
-        <div style={{ height: minHeight ?? (compact ? 120 : 160) }} />
-      )}
+          <div style={{ height: minHeight ?? (compact ? 120 : 160) }} />
+        )}
+      </div>
       <RunSheet entry={open} period={period} loadSheet={loadSheet} onClose={() => setOpen(null)} />
     </div>
   );
