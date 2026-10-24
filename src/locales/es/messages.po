@@ -2470,16 +2470,16 @@ msgstr "7K LN"
 #~ msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación se queda a un nivel como mucho de tu dan de General, apunten hacia donde apunten Tech, Inverse y Release. Esos dos dan se quedan bastante por debajo de General en casi todo el mundo, ya sea porque existen pocos mapas difíciles de ese tipo o porque el sitio no reconoce todos, así que ya no deciden el número por su cuenta. Las filas de skills no se tocan."
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN rating in v25"
-msgstr "Calificación 7K LN en v25"
+#~ msgid "7K LN rating in v25"
+#~ msgstr "Calificación 7K LN en v25"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN ratings"
-msgstr "Calificaciones 7K LN"
+#~ msgid "7K LN ratings"
+#~ msgstr "Calificaciones 7K LN"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
-msgstr "Las calificaciones 7K LN entre poco más de 20 y unos 35 quedaban alrededor de 1.5 por encima de las de rice del mismo nivel, según los jugadores con scores en ambos. En v26 esas bajan hasta 1.9, y las de más de 40 suben hasta 0.5."
+#~ msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
+#~ msgstr "Las calificaciones 7K LN entre poco más de 20 y unos 35 quedaban alrededor de 1.5 por encima de las de rice del mismo nivel, según los jugadores con scores en ambos. En v26 esas bajan hasta 1.9, y las de más de 40 suben hasta 0.5."
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
@@ -2689,7 +2689,7 @@ msgstr "Acaba de llegar una nueva actualización. Recargando..."
 
 #: src/routes/dan-estimates.tsx
 msgid "A pass has to be on one of these difficulties, or on another upload of one with the same notes, OD and HP; a cut or edited reupload does not count. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
-msgstr"El pase tiene que ser en una de estas dificultades, o en otra subida de una de ellas con las mismas notas, OD y HP; una versión recortada o editada no cuenta. Los tres cursos INTRO de REFORM y del 0 al 2 del LN Phase I de Jinjin quedan fuera, porque están por debajo del primer nivel que mide su escala."
+msgstr "El pase tiene que ser en una de estas dificultades, o en otra subida de una de ellas con las mismas notas, OD y HP; una versión recortada o editada no cuenta. Los tres cursos INTRO de REFORM y del 0 al 2 del LN Phase I de Jinjin quedan fuera, porque están por debajo del primer nivel que mide su escala."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
@@ -4474,12 +4474,12 @@ msgid "Change {0}"
 msgstr "Cambiar {0}"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Change in 7K LN rating by v25 LN rating"
-msgstr "Cambio en la calificación 7K LN según la calificación LN de v25"
+#~ msgid "Change in 7K LN rating by v25 LN rating"
+#~ msgstr "Cambio en la calificación 7K LN según la calificación LN de v25"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Change in v26"
-msgstr "Cambio en v26"
+#~ msgid "Change in v26"
+#~ msgstr "Cambio en v26"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
@@ -17006,8 +17006,12 @@ msgid "Skillset clears"
 msgstr "Clears por skillset"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
-msgstr "Los charts de práctica de skillset hacen lo mismo para un solo skill. Pasar <0>Volcanic ~ Delta ~</0> con el mínimo pone tu dan de speed en 4K en <1>delta</1>, y hasta un punto por debajo en <2>delta-</2>, sin los cuatro pases que normalmente necesita un skill. Por debajo de eso cuenta como cualquier otra play. Todas las escalas los tienen menos 6K."
+msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it (95%) to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+msgstr "Los charts de práctica de skillset hacen lo mismo para un solo skill. Pasar <0>Volcanic ~ Delta ~</0> con el mínimo pone tu dan de speed en 4K en <1>delta</1>, y hasta un punto por debajo (95%) en <2>delta-</2>, sin los cuatro pases que normalmente necesita un skill. Por debajo de eso cuenta como cualquier otra play. Todas las escalas los tienen menos 6K."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+#~ msgstr "Los charts de práctica de skillset hacen lo mismo para un solo skill. Pasar <0>Volcanic ~ Delta ~</0> con el mínimo pone tu dan de speed en 4K en <1>delta</1>, y hasta un punto por debajo en <2>delta-</2>, sin los cuatro pases que normalmente necesita un skill. Por debajo de eso cuenta como cualquier otra play. Todas las escalas los tienen menos 6K."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
@@ -20653,12 +20657,16 @@ msgstr "usuario..."
 #~ msgstr "v26 cambia sobre todo las calificaciones 7K LN y de Bracket. El General se movió en 331 de los 48,129 charts de 6K-8K, casi todos unranked con OD menor a 5."
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
-msgstr "v26 cambia sobre todo las calificaciones 7K LN y de Bracket. El General se movió en 331 de los 48,129 charts de 6K-8K, casi todos unranked de OD bajo."
+#~ msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
+#~ msgstr "v26 cambia sobre todo las calificaciones 7K LN y de Bracket. El General se movió en 331 de los 48,129 charts de 6K-8K, casi todos unranked de OD bajo."
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "v26 mostly changes 7K LN ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
 #~ msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "v26 mostly changes LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Verified"

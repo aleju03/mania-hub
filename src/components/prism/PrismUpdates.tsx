@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useLocale } from "../../lib/locale-context";
@@ -16,7 +16,6 @@ import { MashOdExplorer } from "./MashOdExplorer";
  */
 
 const LINK = "text-white underline decoration-white/30 underline-offset-2 transition-colors hover:decoration-white";
-const LN = "#4fd1c5";
 
 interface UpdateChart {
   beatmapId: number;
@@ -61,74 +60,6 @@ function Figure({ children, caption }: { children: ReactNode; caption?: ReactNod
   );
 }
 
-// How far each v25 7K LN rating moved in v26: the scale's knots from 21 up.
-const LN_SCALE_CHANGE: Array<[number, number]> = [
-  [21.12, 21.06], [24.54, 23.18], [26.71, 24.83], [28.21, 26.42], [29.45, 27.63], [30.59, 29.02],
-  [32.27, 30.67], [33.45, 31.98], [35.17, 33.91], [36.72, 35.93], [39.58, 39.43], [43.01, 43.51],
-];
-
-function LnScaleChart() {
-  const { t } = useLingui();
-  const locale = useLocale();
-  const [hover, setHover] = useState<number | null>(null);
-  const width = 520, height = 220, left = 64, right = 16, top = 16, bottom = 36;
-  const xMin = 20, xMax = 45, yMin = -2.5, yMax = 1;
-  const x = (v: number) => left + ((v - xMin) / (xMax - xMin)) * (width - left - right);
-  const y = (v: number) => top + ((yMax - v) / (yMax - yMin)) * (height - top - bottom);
-  const points = LN_SCALE_CHANGE.map(([before, after]) => ({ before, after, change: after - before }));
-  const path = points.map((p, i) => `${i ? "L" : "M"}${x(p.before).toFixed(1)},${y(p.change).toFixed(1)}`).join(" ");
-  const fmt = (v: number) => v.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const active = hover != null ? points[hover] : null;
-  return (
-    <div className="relative">
-      <svg viewBox={`0 0 ${width} ${height}`} className="block w-full" role="img" aria-label={t`Change in 7K LN rating by v25 LN rating`} onPointerLeave={() => setHover(null)}>
-        {[-2, -1, 0, 1].map((v) => (
-          <g key={v}>
-            <line x1={left} x2={width - right} y1={y(v)} y2={y(v)} stroke={v === 0 ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.07)"} strokeWidth={1} />
-            <text x={left - 8} y={y(v) + 4} textAnchor="end" fontSize={11} fill="#8f879c">{v > 0 ? `+${v}` : v}</text>
-          </g>
-        ))}
-        <text
-          x={14}
-          y={(top + height - bottom) / 2}
-          transform={`rotate(-90 14 ${(top + height - bottom) / 2})`}
-          textAnchor="middle"
-          fontSize={11}
-          fill="#8f879c"
-        >
-          {t`Change in v26`}
-        </text>
-        {[20, 25, 30, 35, 40, 45].map((v) => (
-          <text key={v} x={x(v)} y={height - 14} textAnchor="middle" fontSize={11} fill="#8f879c">{v}</text>
-        ))}
-        <path d={path} fill="none" stroke={LN} strokeWidth={2} strokeLinejoin="round" />
-        {points.map((p, i) => (
-          <g key={p.before}>
-            <circle cx={x(p.before)} cy={y(p.change)} r={hover === i ? 5 : 4} fill={LN} stroke="#2a2433" strokeWidth={2} />
-            <rect
-              x={x(p.before) - 14}
-              y={top}
-              width={28}
-              height={height - top - bottom}
-              fill="transparent"
-              onPointerEnter={() => setHover(i)}
-            />
-          </g>
-        ))}
-      </svg>
-      {active ? (
-        <div
-          className="pointer-events-none absolute top-1 rounded-md bg-osu-b5/95 px-2.5 py-1.5 text-[12px] text-osu-l2 shadow"
-          style={{ left: `${(x(active.before) / width) * 100}%`, transform: "translateX(-50%)" }}
-        >
-          <span className="tabular-nums text-white">{fmt(active.before)}</span> → <span className="tabular-nums text-white">{fmt(active.after)}</span>
-        </div>
-      ) : null}
-      <div className="mt-1 text-center text-[11px] text-osu-f1"><Trans>7K LN rating in v25</Trans></div>
-    </div>
-  );
-}
-
 const RELEASE_CHARTS: UpdateChart[] = [
   { beatmapId: 737488, beatmapsetId: 333217, title: "Gotou Mai - Funwari Fuwari", version: "[7K] yoshilove's Uryu~", before: 24.6, after: 17.4 },
   { beatmapId: 776949, beatmapsetId: 299333, title: "Yiruma - River Flows in You (LR Mix)", version: "6K Insane", before: 24.3, after: 17.4 },
@@ -148,11 +79,6 @@ const BRACKET_CHARTS: UpdateChart[] = [
   { beatmapId: 2318148, beatmapsetId: 1080892, title: "Fractal Dreamers - Gardens Under A Spring Sky", version: "[7K] Blocko's Daylight", before: 29.7, after: 29.7 },
 ];
 
-const LN_SCALE_CHARTS: UpdateChart[] = [
-  { beatmapId: 2672368, beatmapsetId: 1287168, title: "Kim_GodSSI's LN Practice Pack 1", version: "[7K] M2U & NICODE - Stellar", before: 29.9, after: 28.2 },
-  { beatmapId: 2617975, beatmapsetId: 765642, title: "Mizuki Nana - Exterminate", version: "7k Noodles", before: 36.9, after: 36.1 },
-  { beatmapId: 5074941, beatmapsetId: 2356548, title: "Kyutatsuki - Sea of Stars", version: "[7K] Interstellar Expedition", before: 47.8, after: 49.3 },
-];
 
 function V26() {
   const { t } = useLingui();
@@ -165,7 +91,7 @@ function V26() {
       </div>
       <p className="mt-4 text-[15px] leading-relaxed text-osu-l2">
         <Trans>
-          v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts.
+          v26 mostly changes LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts.
         </Trans>
       </p>
 
@@ -228,18 +154,6 @@ function V26() {
         <ChartChanges charts={BRACKET_CHARTS} label={t`Bracket`} />
       </Change>
 
-      <Change title={<Trans>7K LN ratings</Trans>}>
-        <p>
-          <Trans>
-            7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with
-            scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5.
-          </Trans>
-        </p>
-        <Figure>
-          <LnScaleChart />
-        </Figure>
-        <ChartChanges charts={LN_SCALE_CHARTS} label="LN" />
-      </Change>
 
     </article>
   );

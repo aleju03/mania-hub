@@ -2482,16 +2482,16 @@ msgstr "7K LN"
 #~ msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以无论 Tech、Inverse 和 Release 偏向哪边，估计值都不会偏离你的 General 段位超过一个段位。几乎所有人的这两项段位都远低于 General，可能是因为这类高难度谱面很少，也可能是因为站点没有识别出全部，所以它们不再单独决定这个数字。各技能行本身不变。"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN rating in v25"
-msgstr "v25 中的 7K LN 评分"
+#~ msgid "7K LN rating in v25"
+#~ msgstr "v25 中的 7K LN 评分"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN ratings"
-msgstr "7K LN 评分"
+#~ msgid "7K LN ratings"
+#~ msgstr "7K LN 评分"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
-msgstr "根据同时有 LN 和单点成绩的玩家，7K LN 评分在 20 出头到 35 左右这一段，比同水平的单点评分高约 1.5。v26 中这一段最多降低 1.9，40 以上的评分最多提高 0.5。"
+#~ msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
+#~ msgstr "根据同时有 LN 和单点成绩的玩家，7K LN 评分在 20 出头到 35 左右这一段，比同水平的单点评分高约 1.5。v26 中这一段最多降低 1.9，40 以上的评分最多提高 0.5。"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
@@ -2701,7 +2701,7 @@ msgstr "刚刚有新更新。正在刷新..."
 
 #: src/routes/dan-estimates.tsx
 msgid "A pass has to be on one of these difficulties, or on another upload of one with the same notes, OD and HP; a cut or edited reupload does not count. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
-msgstr"通过必须是在这些难度之一上，或是在音符、OD 和 HP 完全相同的其他上传版本上；删减或修改过的重新上传不算。REFORM 的三个 INTRO 段位和 Jinjin LN Phase I 的 0 到 2 段不计入，因为它们低于各自段位体系能衡量的最低等级。"
+msgstr "通过必须是在这些难度之一上，或是在音符、OD 和 HP 完全相同的其他上传版本上；删减或修改过的重新上传不算。REFORM 的三个 INTRO 段位和 Jinjin LN Phase I 的 0 到 2 段不计入，因为它们低于各自段位体系能衡量的最低等级。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first level their ladder measures."
@@ -4486,12 +4486,12 @@ msgid "Change {0}"
 msgstr "更换{0}"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Change in 7K LN rating by v25 LN rating"
-msgstr "按 v25 LN 评分划分的 7K LN 评分变化"
+#~ msgid "Change in 7K LN rating by v25 LN rating"
+#~ msgstr "按 v25 LN 评分划分的 7K LN 评分变化"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Change in v26"
-msgstr "v26 中的变化"
+#~ msgid "Change in v26"
+#~ msgstr "v26 中的变化"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
@@ -17018,8 +17018,12 @@ msgid "Skillset clears"
 msgstr "技能组通过记录"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
-msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Volcanic ~ Delta ~</0>，就会把你的 4K 速度段位设为 <1>delta</1>，低于通过线一个百分点以内则设为 <2>delta-</2>，无需一个技能通常要求的四次通过。再低就和其他成绩一样计算。除 6K 外每个段位表都有练习谱面。"
+msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it (95%) to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Volcanic ~ Delta ~</0>，就会把你的 4K 速度段位设为 <1>delta</1>，低于通过线一个百分点以内（95%）则设为 <2>delta-</2>，无需一个技能通常要求的四次通过。再低就和其他成绩一样计算。除 6K 外每个段位表都有练习谱面。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+#~ msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Volcanic ~ Delta ~</0>，就会把你的 4K 速度段位设为 <1>delta</1>，低于通过线一个百分点以内则设为 <2>delta-</2>，无需一个技能通常要求的四次通过。再低就和其他成绩一样计算。除 6K 外每个段位表都有练习谱面。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
@@ -20665,12 +20669,16 @@ msgstr "用户名…"
 #~ msgstr "v26 主要改动 7K LN 和衩的评分。48,129 张 6K-8K 谱面中有 331 张的总体评分变动，几乎都是 OD 低于 5 的未上架谱面。"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
-msgstr "v26 主要改动 7K LN 和衩的评分。48,129 张 6K-8K 谱面中有 331 张的总体评分变动，几乎都是低 OD 的未上架谱面。"
+#~ msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
+#~ msgstr "v26 主要改动 7K LN 和衩的评分。48,129 张 6K-8K 谱面中有 331 张的总体评分变动，几乎都是低 OD 的未上架谱面。"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "v26 mostly changes 7K LN ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
 #~ msgstr ""
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "v26 mostly changes LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Verified"

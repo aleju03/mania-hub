@@ -2493,16 +2493,16 @@ msgstr "7K LN"
 #~ msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. The skill rows themselves are untouched."
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN rating in v25"
-msgstr "7K LN rating in v25"
+#~ msgid "7K LN rating in v25"
+#~ msgstr "7K LN rating in v25"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN ratings"
-msgstr "7K LN ratings"
+#~ msgid "7K LN ratings"
+#~ msgstr "7K LN ratings"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
-msgstr "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
+#~ msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
+#~ msgstr "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. In v26 those go down by up to 1.9, and ratings past 40 go up by up to 0.5."
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "7K LN ratings from the low 20s to the mid 30s read about 1.5 above rice ratings at the same level, going by players with scores on both. They are lower now, and the top of the range is a little higher."
@@ -4501,12 +4501,12 @@ msgid "Change {0}"
 msgstr "Change {0}"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Change in 7K LN rating by v25 LN rating"
-msgstr "Change in 7K LN rating by v25 LN rating"
+#~ msgid "Change in 7K LN rating by v25 LN rating"
+#~ msgstr "Change in 7K LN rating by v25 LN rating"
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "Change in v26"
-msgstr "Change in v26"
+#~ msgid "Change in v26"
+#~ msgstr "Change in v26"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
@@ -17053,8 +17053,12 @@ msgid "Skillset clears"
 msgstr "Skillset clears"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
-msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it (95%) to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it (95%) to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
+#~ msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, without the four passes a skill normally needs. Every ladder has them except 6K."
@@ -20708,12 +20712,16 @@ msgstr "username..."
 #~ msgstr "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
 
 #: src/components/prism/PrismUpdates.tsx
-msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
-msgstr "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
+#~ msgid "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
+#~ msgstr "v26 mostly changes 7K LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "v26 mostly changes 7K LN ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
 #~ msgstr "v26 mostly changes 7K LN ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked charts under OD 5."
+
+#: src/components/prism/PrismUpdates.tsx
+msgid "v26 mostly changes LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
+msgstr "v26 mostly changes LN and Bracket ratings. Overall moved on 331 of the 48,129 6K-8K charts, almost all of them unranked low OD charts."
 
 #: src/components/communities/field-options.tsx
 msgid "Verified"
