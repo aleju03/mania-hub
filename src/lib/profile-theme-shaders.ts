@@ -1612,10 +1612,32 @@ const vec3 SG_CORE = SG_AX * .2;
 // The key light: the glare off to the right.
 const vec3 SG_KEY = vec3(.72, .3, .62);
 
+// Value noise on an integer hash. The shared float hash is chaotic in the
+// last bit of its input, and some phone GPUs (Adreno) round the corner two
+// cells share differently from each side, so the noise tears along its grid:
+// the ink came out in boxes cut along rings that grew outward. Integer maths
+// gives every GPU the same bits, once ints are full precision: a fragment
+// shader's default is mediump, 16 bits on phones, where the multiplies
+// overflow and every value comes out the same. Shifted positive before the
+// uint conversion, which is undefined for negatives.
+precision highp int;
+
+float sgHash(ivec2 c) {
+  uvec2 q = uvec2(c + 0x40000000) * uvec2(1597334673u, 3812015801u);
+  return float(((q.x ^ q.y) * 1597334673u) >> 8) * (1. / 16777216.);
+}
+
+float sgNoise(vec2 p) {
+  ivec2 i = ivec2(floor(p));
+  vec2 f = fract(p);
+  f = f * f * (3. - 2. * f);
+  return mix(mix(sgHash(i), sgHash(i + ivec2(1, 0)), f.x), mix(sgHash(i + ivec2(0, 1)), sgHash(i + ivec2(1, 1)), f.x), f.y);
+}
+
 // Light rushing out past the orb, in direction ca at log-distance lr.
 float sgStreaks(vec2 ca, float lr, float t) {
   vec2 flow = vec2(lr * 1.6 - t * 1.1, 0.);
-  return pow(noise(ca * 22. + flow), 3.) * .9 + pow(noise(ca * 64. + flow * 1.4 + 3.), 6.) * 2.2 + pow(noise(ca * 150. + flow * 1.8 + 7.), 9.) * 2.;
+  return pow(sgNoise(ca * 22. + flow), 3.) * .9 + pow(sgNoise(ca * 64. + flow * 1.4 + 3.), 6.) * 2.2 + pow(sgNoise(ca * 150. + flow * 1.8 + 7.), 9.) * 2.;
 }
 
 vec3 sgTunnel(vec2 d, float t) {
@@ -1626,7 +1648,7 @@ vec3 sgTunnel(vec2 d, float t) {
   float near = smoothstep(.12, .45, r) * (.2 + .8 * exp(-r * 1.3));
   col += vec3(.4, .75, 1.) * sgStreaks(ca, log(max(r, 1e-3)), t) * near;
   float sect = smoothstep(.35, .9, dot(ca, vec2(.8, .6)));
-  col += vec3(1., .1, .3) * pow(noise(ca * 30. + vec2(log(max(r, 1e-3)) * 1.9 - t * 1.3, 11.)), 4.) * 4. * sect * near;
+  col += vec3(1., .1, .3) * pow(sgNoise(ca * 30. + vec2(log(max(r, 1e-3)) * 1.9 - t * 1.3, 11.)), 4.) * 4. * sect * near;
   col += vec3(.8, .93, 1.) * exp(-length((d - vec2(.7, -.08)) * vec2(.7, 1.5)) * 2.6);
   // bright light right behind the ball, so it stands out dark against it
   col += vec3(.45, .75, 1.) * exp(-max(length(d) - SG_R, 0.) * 5.) * .45;
@@ -1643,9 +1665,9 @@ vec3 sgPool(vec2 d, float t) {
   float arc = exp(-abs(fract(u) - .5) * 18.) * smoothstep(1.4, .3, fr) * smoothstep(.05, .25, fr);
   // each arc brightens and fades along its length, never cut off, and fades
   // before the tight turns at the pool's ends, which read as corners
-  arc *= smoothstep(.3, .8, noise(vec2(cos(fa), sin(fa)) * 2. + vec2(fr * 1.5 - t * .3, 0.)));
+  arc *= smoothstep(.3, .8, sgNoise(vec2(cos(fa), sin(fa)) * 2. + vec2(fr * 1.5 - t * .3, 0.)));
   arc *= smoothstep(.97, .55, abs(cos(fa)));
-  float pink = smoothstep(.55, .75, noise(vec2(cos(fa), sin(fa)) * 1.5 + vec2(fr * 2. + 9., 0.)));
+  float pink = smoothstep(.55, .75, sgNoise(vec2(cos(fa), sin(fa)) * 1.5 + vec2(fr * 2. + 9., 0.)));
   return mix(vec3(.6, .9, 1.), vec3(1., .3, .62), pink) * arc * smoothstep(-.1, -.35, d.y);
 }
 
@@ -1689,15 +1711,17 @@ float sgAngle(vec2 p) {
 // column of the grid slid outward by its own fraction of a cell. Value noise
 // peaks on its grid, so unslid, the brightest stretch of every streak sits on
 // the same ring, and the rings sweep outward as y scrolls.
-float sgThrowColumn(float i, float y) {
-  y += hash(vec2(i, 17.));
-  float j = floor(y), g = fract(y);
-  return mix(hash(vec2(i, j)), hash(vec2(i, j + 1.)), g * g * (3. - 2. * g));
+float sgThrowColumn(int i, float y) {
+  y += sgHash(ivec2(i, 17));
+  int j = int(floor(y));
+  float g = fract(y);
+  return mix(sgHash(ivec2(i, j)), sgHash(ivec2(i, j + 1)), g * g * (3. - 2. * g));
 }
 
 float sgThrowNoise(float x, float y) {
-  float i = floor(x), f = fract(x);
-  return mix(sgThrowColumn(i, y), sgThrowColumn(i + 1., y), f * f * (3. - 2. * f));
+  int i = int(floor(x));
+  float f = fract(x);
+  return mix(sgThrowColumn(i, y), sgThrowColumn(i + 1, y), f * f * (3. - 2. * f));
 }
 
 // The ink: the ball's own liquid pulled out of its silhouette, up and left,
@@ -1715,7 +1739,7 @@ float sgInk(vec3 p, float t) {
   float sect = smoothstep(1.75, 2.3, a) * smoothstep(3.75, 3.15, a);
   float al = rxy - 1.;
   float across = a * 1.3; // (by angle, so a chunk keeps its width as it flies)
-  float field = noise(vec2(across * 8., al * 1.2 - t * .06)) * .6 + noise(vec2(across * 19., al * 2.6 - t * .1) + 7.) * .3 + noise(vec2(across * 40., al * 5.) + 3.) * .1;
+  float field = sgNoise(vec2(across * 8., al * 1.2 - t * .06)) * .6 + sgNoise(vec2(across * 19., al * 2.6 - t * .1) + 7.) * .3 + sgNoise(vec2(across * 40., al * 5.) + 3.) * .1;
   float v = field - .34 - .4 * smoothstep(.04, 1.2, al) - .6 * (1. - sect);
   float th = .03 + .22 * (1. - smoothstep(0., 1.1, al));
   return max(max(-v * rxy / 16., abs(p.z + .05) - th), bound);
@@ -1770,8 +1794,8 @@ vec3 sgEnv(vec3 R, float t) {
   vec3 env = mix(vec3(0., .002, .025), vec3(.015, .1, 1.5), smoothstep(.15, 1.2, R.x * .8 + R.y * .1 - R.z * .25));
   // the tunnel's light smeared across the glass: soft patches, and long
   // bright streaks lying across it like studio light strips
-  env += vec3(.3, .65, 1.) * pow(noise(R.xy * 2.5 + vec2(R.z * 1.5 - t * .4, 0.)), 3.) * 1.2 * smoothstep(-.5, .5, R.x + R.y * .2);
-  env += vec3(.55, .82, 1.) * pow(noise(vec2(R.x * 2. - t * .3, R.y * 11. + R.z * 3.)), 5.) * 5. * smoothstep(-.3, .6, R.x + R.y * .3);
+  env += vec3(.3, .65, 1.) * pow(sgNoise(R.xy * 2.5 + vec2(R.z * 1.5 - t * .4, 0.)), 3.) * 1.2 * smoothstep(-.5, .5, R.x + R.y * .2);
+  env += vec3(.55, .82, 1.) * pow(sgNoise(vec2(R.x * 2. - t * .3, R.y * 11. + R.z * 3.)), 5.) * 5. * smoothstep(-.3, .6, R.x + R.y * .3);
   float key = max(dot(R, SG_KEY), 0.);
   env += vec3(.85, .95, 1.) * (pow(key, 7.) * 1.2 + pow(key, 90.) * 6.);
   env += vec3(.55, .78, 1.) * pow(max(dot(R, normalize(vec3(-.15, .9, .4))), 0.), 30.) * 1.6;
@@ -1828,7 +1852,7 @@ vec4 sgOrb(vec2 d, float t) {
   float join = h.y > 3.5 ? smoothstep(.25, 0., length(p.xy) - 1.) : h.y > 2.5 ? 0. : smoothstep(.22, 0., sgInk(p, t));
   n = normalize(mix(n, vec3(0., 0., 1.), join * .85));
   // the liquid isn't perfectly smooth: slow ripples break up its reflections
-  n = normalize(n + .14 * (vec3(noise(p.xy * 5. + t * .1), noise(p.yz * 5. - t * .1), noise(p.zx * 5.)) - .5));
+  n = normalize(n + .14 * (vec3(sgNoise(p.xy * 5. + t * .1), sgNoise(p.yz * 5. - t * .1), sgNoise(p.zx * 5.)) - .5));
   vec3 R = reflect(rd, n);
   float fres = .4 + .6 * pow(1. - max(n.z, 0.), 2.);
   float key = max(dot(n, SG_KEY), 0.);
@@ -1857,7 +1881,7 @@ vec4 sgOrb(vec2 d, float t) {
       // (in sw.x around a circle: sw.x jumps by 2 where the angle wraps, so
       // anything not periodic in it would show a seam there)
       vec2 around = vec2(cos(SG_PI * sw.x), sin(SG_PI * sw.x));
-      float stroke = pow(noise(around * 8. + vec2(sw.y * 2.5 - t * .15, 0.)), 6.) * 4. + pow(noise(around * 20. + vec2(0., sw.y * 6.) + 4.), 9.) * 5.;
+      float stroke = pow(sgNoise(around * 8. + vec2(sw.y * 2.5 - t * .15, 0.)), 6.) * 4. + pow(sgNoise(around * 20. + vec2(0., sw.y * 6.) + 4.), 9.) * 5.;
       col += vec3(.3, .58, 1.2) * stroke * fres * smoothstep(-.2, .7, dot(n, SG_KEY)) * smoothstep(1.7, 1.1, sw.y);
       // broad bands of paint along each strip's edges: pink where it begins,
       // blue where it ends, fading out over the back
