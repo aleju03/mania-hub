@@ -1678,6 +1678,28 @@ float sgSmin(float a, float b, float k) {
   return mix(b, a, h) - k * h * (1. - h);
 }
 
+// The angle round the ball, counted on past straight left: the ink spans it,
+// so a seam there would cut through it.
+float sgAngle(vec2 p) {
+  float a = atan(p.y, p.x);
+  return a < -1.5 ? a + SG_TAU : a;
+}
+
+// Value noise along the throw, x round the ball and y out from it, with each
+// column of the grid slid outward by its own fraction of a cell. Value noise
+// peaks on its grid, so unslid, the brightest stretch of every streak sits on
+// the same ring, and the rings sweep outward as y scrolls.
+float sgThrowColumn(float i, float y) {
+  y += hash(vec2(i, 17.));
+  float j = floor(y), g = fract(y);
+  return mix(hash(vec2(i, j)), hash(vec2(i, j + 1.)), g * g * (3. - 2. * g));
+}
+
+float sgThrowNoise(float x, float y) {
+  float i = floor(x), f = fract(x);
+  return mix(sgThrowColumn(i, y), sgThrowColumn(i + 1., y), f * f * (3. - 2. * f));
+}
+
 // The ink: the ball's own liquid pulled out of its silhouette, up and left,
 // and torn into chunks smeared outward along the throw, thick at the root and
 // breaking up further out. A slab of the same liquid facing us, tapering
@@ -1686,8 +1708,7 @@ float sgSmin(float a, float b, float k) {
 // field, bounded only loosely, so the march steps through it gently).
 float sgInk(vec3 p, float t) {
   float rxy = length(p.xy);
-  float a = atan(p.y, p.x);
-  a += a < -1.5 ? SG_TAU : 0.; // keep counting past straight left, no seam
+  float a = sgAngle(p.xy);
   float ad = max(1.6 - a, a - 3.9);
   float bound = max(max(rxy - 2.6, .85 - rxy), max(ad > 0. ? rxy * sin(min(ad, 1.5)) : 0., abs(p.z + .05) - .3));
   if (bound > .06) return bound;
@@ -1761,10 +1782,10 @@ vec3 sgEnv(vec3 R, float t) {
 // The torn ink's colour: near black navy, the glass's reflections dimmed,
 // gloss streaked along the throw.
 vec3 sgInkColor(vec3 p, vec3 n, vec3 R, float fres, float t) {
-  float ia = atan(p.y, p.x);
+  float ia = sgAngle(p.xy);
   float il = length(p.xy);
   vec3 col = vec3(.003, .008, .05) + sgEnv(R, t) * fres * .85;
-  return col + vec3(.3, .58, 1.2) * pow(noise(vec2(ia * 30., il * 2. - t * .2)), 6.) * 2.5 * fres * smoothstep(-.3, .6, dot(n, SG_KEY));
+  return col + vec3(.3, .58, 1.2) * pow(sgThrowNoise(ia * 30., il * 2. - t * .2), 6.) * 2.5 * fres * smoothstep(-.3, .6, dot(n, SG_KEY));
 }
 
 // The ball, ray marched: colour and coverage; past the edge, the glow a lens
@@ -1853,10 +1874,10 @@ vec4 sgOrb(vec2 d, float t) {
     if (h.y > 3.5) {
       // the torn ink: the same liquid, darker where it thins out, with gloss
       // streaked along the throw and embers of the core's red caught in it
-      float ia = atan(p.y, p.x);
+      float ia = sgAngle(p.xy);
       float il = length(p.xy);
       col = sgInkColor(p, n, R, fres, t);
-      col += vec3(1., .2, .05) * smoothstep(.74, .82, noise(vec2(ia * 40., il * 5. - t * .3))) * smoothstep(.3, -.4, p.y) * smoothstep(1.8, 1.05, il) * 1.4;
+      col += vec3(1., .2, .05) * smoothstep(.74, .82, sgThrowNoise(ia * 40., il * 5. - t * .3)) * smoothstep(.3, -.4, p.y) * smoothstep(1.8, 1.05, il) * 1.4;
     } else if (outside && h.y < 2.5) {
       // where a strip runs into the ink it darkens into it, so the two read
       // as one pour of liquid rather than glass meeting a separate sheet
@@ -1877,8 +1898,7 @@ float sgSpray(vec2 d, float t) {
   float r = length(s);
   if (r < 1.15 || r > 3.2 || s.x > .3 || s.y < -1.) return 0.;
   float aa = PX * 2. / SG_R;
-  float a = atan(s.y, s.x);
-  a += a < -1.5 ? SG_TAU : 0.;
+  float a = sgAngle(s);
   float sect = smoothstep(1.75, 2.3, a) * smoothstep(3.75, 3.15, a);
   vec2 cell = vec2(a * 24., r * 6. - t * .3);
   vec2 id = floor(cell);
@@ -1927,5 +1947,130 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   col = 1. - exp(-col * 1.1);
   // the jacket's colours are saturated: give back what the tone curve took
   return clamp(mix(vec3(dot(col, vec3(.299, .587, .114))), col, 1.3), 0., 1.);
+}`),
+  // Sketchbook: the Sketch crown's world, white dry brush on near-black paper.
+  // Loose swooshes over the hero, a crown doodled inside a scribbled ring, a
+  // patch of hatching in a corner, and little brush crosses and dots round the
+  // page, one jumping now and then. Every line boils at 8 drawings a second,
+  // as hand-drawn animation does.
+  sketch: shader(`
+const vec3 SK_INK = vec3(.965, .957, .94);
+
+/* The paper moves under the lines 8 times a second: the same seed for a
+   whole drawing, a new one for the next. */
+vec2 skBoil(vec2 p, float t, float amt) {
+  float s = floor(t * 8.);
+  vec2 n = vec2(noise(p * 9. + s * 7.1), noise(p * 9. + s * 3.7 + 11.)) - .5;
+  n += .5 * (vec2(noise(p * 60. + s * 5.3), noise(p * 60. + s * 2.9 + 4.)) - .5);
+  return p + amt * n;
+}
+
+/* Dry brush: the stroke's body, eaten by bristle streaks running along it,
+   more so as the brush runs dry toward the end (u = 0..1 along). */
+float skBrush(float d, float w, float u, float seed) {
+  if (w <= 0. || d > w * 1.5) return 0.;
+  float x = d / w;
+  float rag = .9 + .2 * noise(vec2(u * 14., seed));
+  float body = smoothstep(rag, rag * .8, x);
+  float streak = fbm(vec2(u * 5. + seed, x * 7. + seed * 1.7));
+  float dryness = .2 + .4 * smoothstep(.5, 1., u) + .25 * x;
+  return body * smoothstep(dryness, dryness + .1, streak + .2);
+}
+
+float skSeg(vec2 p, vec2 a, vec2 b, out float h) {
+  vec2 pa = p - a, ba = b - a;
+  h = clamp(dot(pa, ba) / dot(ba, ba), 0., 1.);
+  return length(pa - ba * h);
+}
+
+/* A swoosh along y = c.y + a sin(k x + ph) between x0 and x1, pressing
+   harder early and lifting off dry at the end. */
+float skSwoosh(vec2 p, float x0, float x1, float cy, float a, float k, float ph, float w, float seed) {
+  float u = (p.x - x0) / (x1 - x0);
+  if (u < 0. || u > 1.) return 0.;
+  float y = cy + a * sin(k * p.x + ph);
+  float dy = a * k * cos(k * p.x + ph);
+  float d = abs(p.y - y) / sqrt(1. + dy * dy);
+  float press = smoothstep(0., .08, u) * mix(1., .35, smoothstep(.55, 1., u));
+  return skBrush(d, w * press, u, seed);
+}
+
+/* A scribbled ring: three loose passes round an ellipse, none quite closing. */
+float skRing(vec2 p, vec2 c, vec2 r, float w, float seed) {
+  float v = 0.;
+  vec2 q = (p - c) / r;
+  float ang = atan(q.y, q.x);
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float wob = 1. + .07 * sin(ang * 2. + fi * 2.1 + seed) + .03 * sin(ang * 5. + fi);
+    float d = abs(length(q) - wob) * min(r.x, r.y);
+    float u = fract((ang + 3.14159) / 6.28318 + fi * .31 + seed * .1);
+    float lift = smoothstep(0., .05, u) * smoothstep(1., .85, u);
+    v = max(v, skBrush(d, w * lift * (1. - fi * .25), u, seed + fi * 3.));
+  }
+  return v;
+}
+
+/* The crown, doodled: a band and five points in one zigzag. */
+float skCrown(vec2 p, vec2 c, float s, float w, float seed) {
+  vec2 P[7] = vec2[7](vec2(-.95, -.45), vec2(-1.1, .75), vec2(-.48, .05), vec2(0., 1.), vec2(.48, .05), vec2(1.1, .75), vec2(.95, -.45));
+  float v = 0., h;
+  for (int i = 0; i < 6; i++) {
+    float d = skSeg((p - c) / s, P[i], P[i + 1], h) * s;
+    v = max(v, skBrush(d, w, (float(i) + h) / 6., seed + float(i)));
+  }
+  float d = skSeg((p - c) / s, vec2(-1.02, -.45), vec2(1.06, -.47), h) * s;
+  return max(v, skBrush(d, w * 1.15, h, seed + 9.));
+}
+
+/* A little brush cross: two quick strokes, the second a touch shorter. */
+float skCross(vec2 p, vec2 c, float r, float w, float seed) {
+  float h, v;
+  vec2 a = vec2(r, r * (.85 + .3 * hash(vec2(seed, 1.))));
+  float d = skSeg(p, c - a, c + a, h);
+  v = skBrush(d, w, h, seed);
+  vec2 b2 = vec2(r * .85, -r * (.9 + .2 * hash(vec2(seed, 2.))));
+  d = skSeg(p, c - b2, c + b2, h);
+  return max(v, skBrush(d, w * .9, h, seed + 1.));
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float aspect = u_res.x / u_res.y;
+  // paper: near black, a fibre grain, a little lighter where the light falls
+  vec3 col = vec3(.047, .043, .059);
+  col += vec3(.014) * (fbm(p * vec2(260., 45.)) - .5);
+  col += vec3(.016, .015, .018) * exp(-length(p - vec2(-.2 * aspect, .45)) * 1.6);
+  vec2 h = vec2(p.x, p.y - u_scroll);
+  vec2 b = skBoil(h, t, .007);
+  float ink = 0.;
+  // two swooshes over the hero and an underline below it
+  ink = max(ink, skSwoosh(b, aspect * .04, aspect * .48, .37, .03, 4.2, .6, .022, 1.));
+  ink = max(ink, skSwoosh(b, aspect * .14, aspect * .45, .3, .018, 6.1, 2.2, .012, 4.));
+  ink = max(ink, skSwoosh(b, -aspect * .47, -aspect * .1, -.1, .012, 7.3, 1.1, .011, 7.) * .8);
+  // a crown doodled inside a scribbled ring on the right
+  vec2 rc = vec2(aspect * .34, .1);
+  ink = max(ink, skRing(b, rc, vec2(.15, .1), .009, 2.));
+  ink = max(ink, skCrown(b, rc - vec2(0., .006), .062, .0072, 5.));
+  // hatching in the lower right: short parallel strokes, each its own length
+  vec2 hq = rot(.75) * (b - vec2(aspect * .5, -.5)) * vec2(85., 9.);
+  float line = floor(hq.x);
+  float seg = fract(hq.y + hash(vec2(line, 1.)) * 3.);
+  float hatch = skBrush(abs(fract(hq.x) - .5) / 85., .0016, seg, line) * step(.25, seg) * step(seg, .9);
+  float corner = smoothstep(.0, .3, b.x - aspect * .18) * smoothstep(-.05, -.4, b.y);
+  corner *= step(.42, noise(vec2(line * .3, 2.)) + corner * .3);
+  ink = max(ink, hatch * corner * .7);
+  // crosses and dots round the page; each jumps once a cycle
+  for (int i = 0; i < 9; i++) {
+    float fi = float(i);
+    vec2 c = vec2((hash(vec2(fi, 1.)) - .5) * aspect * .95, mix(-.4, .46, hash(vec2(fi, 2.))));
+    float k = fract(t / 7. + hash(vec2(fi, 3.)));
+    float jump = smoothstep(0., .03, k) * smoothstep(.12, .04, k);
+    c.y += .012 * jump;
+    if (hash(vec2(fi, 5.)) < .6) ink = max(ink, skCross(b, c, .011 + .006 * hash(vec2(fi, 4.)), .0045, fi + 9.));
+    else ink = max(ink, smoothstep(.0075, .0055, length(b - c)) * .9);
+  }
+  // the pointer carries a small cross
+  ink = max(ink, skCross(skBoil(p, t, .004), pointerP(), .01, .0035, 21.) * .6);
+  return mix(col, SK_INK, clamp(ink, 0., 1.) * .93);
 }`),
 };

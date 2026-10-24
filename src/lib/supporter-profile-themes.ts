@@ -15,7 +15,7 @@ export const SUPPORTER_PROFILE_THEMES = [
   "aurora", "sakura", "synthwave", "abyss", "cosmos", "terminal",
   "inferno", "frost", "highway", "storm", "noir", "sunset",
   "judgements", "koi", "hanabi", "vaporwave", "blackhole", "singularity",
-  "knight", "knightfight",
+  "knight", "knightfight", "sketch",
 ] as const;
 
 export type SupporterProfileThemeId = (typeof SUPPORTER_PROFILE_THEMES)[number];
@@ -56,6 +56,7 @@ export const PROFILE_THEME_LOOKS: Record<SupporterProfileThemeId, ProfileThemeLo
   singularity: { hue: 192, sat: 0.8, base: "#020309", swatch: "radial-gradient(45% 55% at 62% 35%,#000 0%,#000 14%,#f2fbff 17%,#3fc8ff 30%,#0b1a3a 55%,#020309 100%)", cover: 0.15 },
   knight: { hue: 318, sat: 0.4, base: "#030103", swatch: "linear-gradient(160deg,#030103 0%,#030103 46%,#ffffff 47%,#030103 49%,#2a0a2a 100%)", cover: 0.15 },
   knightfight: { hue: 272, sat: 0.6, base: "#06020c", swatch: "radial-gradient(60% 55% at 62% 35%,#5a1f8a 0%,#22093a 45%,#06020c 100%)", cover: 0.15 },
+  sketch: { hue: 40, sat: 0.06, base: "#0c0b0f", swatch: "linear-gradient(160deg,#16151a 0%,#0c0b0f 60%,#08070a 100%)", cover: 0.2 },
   sunset: { hue: 22, sat: 0.85, base: "#120610", swatch: "linear-gradient(180deg,#2a0f3a 0%,#8a2f4a 45%,#f08a3c 70%,#3a1222 100%)", cover: 0.22 },
 };
 
@@ -80,6 +81,7 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
   singularity: msg`Universe Shifter`,
   knight: msg`Shattered stars`,
   knightfight: msg`Bullet hell`,
+  sketch: msg`Sketchbook`,
 };
 
 /* A theme's own switches, saved with the pick (the backend keeps the same

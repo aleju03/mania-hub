@@ -72,8 +72,12 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
    backdrop a few seconds in), so a still tile shows at once and shows the
    theme as it really looks, not a first frame its shader has barely begun. */
 export function profileThemeThumb(theme: SupporterProfileThemeId): string {
-  return `/images/profile-themes/thumbs/${theme}.webp`;
+  return `/images/profile-themes/thumbs/${theme}.webp?v=${THEME_THUMB_VERSION}`;
 }
+
+/* Bump after re-rendering a thumb: /images/ is served cache-first by the
+   service worker, so a changed file needs a new URL. */
+const THEME_THUMB_VERSION = 6;
 
 /* A thumbnail of a theme's backdrop, for the drawer and the slot: the
    rendered still, or live while `still` is off, over that same still until
