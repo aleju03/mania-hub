@@ -671,8 +671,10 @@ it matched, so a baked 1.2× file played at NoMod collapses onto the original
 played at 1.2×, while two genuinely adjacent rates stay distinct. An import is
 `already_counted_officially` when an official play that counts (not
 rating-excluded, Overall above 0) sits on one of the members it matched, at the
-rate the import amounts to on that member. Dan-only evidence does not stand in
-for an import.
+rate the import amounts to on that member, with a goal at least the import's.
+A better import counts instead and the official play leaves the preview's
+pool, as in the merged rating (`skill-overlay.ts` keeps one play per slot, the
+highest goal). Dan-only evidence does not stand in for an import.
 
 Only charts the index recognises count, rate copies and padded copies included,
 the way official ratings only take ranked and loved maps: a chart built to be
