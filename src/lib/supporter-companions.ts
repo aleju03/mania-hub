@@ -111,6 +111,8 @@ export interface SubmittedCompanion {
   url: string;
   submittedBy: { id: number; username: string };
   createdAt: number;
+  /* In everyone's picker; false while only its submitter can wear it. */
+  listed: boolean;
 }
 
 /* What a profile wears: one of the site's own, or a submission. */
@@ -141,6 +143,7 @@ export function parseSubmittedCompanion(value: unknown): SubmittedCompanion | nu
     url: raw.url,
     submittedBy: { id: Number(by.id) || 0, username: String(by.username ?? "") },
     createdAt: Number(raw.createdAt) || 0,
+    listed: raw.listed !== false,
   };
 }
 

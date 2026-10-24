@@ -6,8 +6,8 @@ import type { MessageDescriptor } from "@lingui/core";
 import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, StatPreviewCell, StreakCard, useExtraStatPreviews } from "#/components/player/ProfileStatCards";
 import { fetchLiveSubmittedCompanions, fetchLiveSupporterProfileLook, forgetLiveSupporterLook } from "#/lib/live-backend";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "#/lib/profile-stats";
-import { saveSupporterCompanionSetting, saveSupporterProfileStatsSetting, submitSupporterCompanion } from "#/lib/supporter-look-settings";
-import { deleteAdminCompanion } from "#/lib/admin-supporters";
+import { fetchOwnSupporterCompanions, saveSupporterCompanionSetting, saveSupporterProfileStatsSetting, submitSupporterCompanion } from "#/lib/supporter-look-settings";
+import { deleteAdminCompanion, loadAdminCompanions, setAdminCompanionListed } from "#/lib/admin-supporters";
 import { BUILT_IN_COMPANIONS, builtInCompanion, COMPANION_NAME_MAX, companionId, type SubmittedCompanion, type SupporterCompanion } from "#/lib/supporter-companions";
 import { useAuth } from "#/lib/auth-context";
 import { Loader2 } from "lucide-react";
@@ -96,10 +96,12 @@ export function ProfileStatsSection({ viewerId, supporter }: { viewerId: number;
 
 const NONE = "none";
 
-/* The companion beside the viewer's profile numbers: the site's own and every
-   submission in one list. Pointing at one shows it in the preview; clicking
-   puts it on the profile. A supporter can submit their own (a .glb model or
-   an image), live at once with their name on it; an admin can delete any. */
+/* The companion beside the viewer's profile numbers: the site's own, the listed
+   submissions and the viewer's own unlisted ones in one list. Pointing at one
+   shows it in the preview; clicking puts it on the profile. A supporter can
+   submit their own (a .glb model or an image), theirs alone until an admin
+   lists it with their name on it. An admin sees every submission and can
+   list, unlist or delete any. */
 export function CompanionSection({ viewerId, supporter }: { viewerId: number; supporter: boolean }) {
   const { t, i18n } = useLingui();
   const auth = useAuth();
@@ -117,13 +119,16 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
     void fetchLiveSupporterProfileLook(viewerId).then((value) => {
       if (alive && value.companion) setSaved(companionId(value.companion));
     });
-    void fetchLiveSubmittedCompanions().then((list) => {
-      if (alive) setSubmitted(list);
+    const lists = auth.isAdmin
+      ? [loadAdminCompanions()]
+      : [fetchOwnSupporterCompanions().catch(() => []), fetchLiveSubmittedCompanions().catch(() => [])];
+    void Promise.all(lists).then((found) => {
+      if (alive) setSubmitted(found.flat());
     }).catch(() => {});
     return () => {
       alive = false;
     };
-  }, [viewerId]);
+  }, [viewerId, auth.isAdmin]);
 
   const choices: Array<{ id: string; companion: SupporterCompanion }> = [
     ...BUILT_IN_COMPANIONS.map((builtIn) => ({ id: builtIn.id, companion: { builtIn } })),
@@ -154,6 +159,12 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
   };
 
+  const setListed = (id: string, listed: boolean) => {
+    void setAdminCompanionListed({ data: { id, listed } }).then(() => {
+      setSubmitted((list) => list.map((entry) => (entry.id === id ? { ...entry, listed } : entry)));
+    }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
+  };
+
   const submit = async () => {
     if (!draftFile || !draftName.trim()) return;
     setSubmitting(true);
@@ -177,6 +188,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
 
   const credit = shown && "builtIn" in shown ? shown.builtIn.credit : null;
   const by = shown && "submitted" in shown ? shown.submitted.submittedBy : null;
+  const unlisted = shown && "submitted" in shown && !shown.submitted.listed;
   const shownName = !shown ? t`No companion` : "builtIn" in shown ? i18n._(shown.builtIn.name) : shown.submitted.name;
   const tile = (active: boolean) =>
     `relative grid h-[58px] place-items-center overflow-hidden rounded-[10px] bg-osu-b6 transition-[box-shadow,background-color] ${active ? "ring-2 ring-osu-pink" : "ring-1 ring-inset ring-white/[0.06] hover:bg-osu-b4"} ${supporter ? "cursor-pointer" : "cursor-default"}`;
@@ -207,10 +219,20 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
               {t`by ${by.username || by.id}`}
             </a>
           )}
+          {unlisted && (
+            <p className="mt-1 text-center text-[10.5px] leading-tight text-osu-f1">
+              {by?.id === viewerId ? t`Only on your profile until it's reviewed` : t`Waiting for review`}
+            </p>
+          )}
           {by && auth.isAdmin && shown && "submitted" in shown && (
-            <button type="button" onClick={() => remove(shown.submitted.id)} className="mt-2 cursor-pointer rounded-md px-2 py-1 text-[11px] font-semibold text-osu-red-light hover:bg-osu-red/15">
-              {t`Delete for everyone`}
-            </button>
+            <div className="mt-2 flex flex-col items-center">
+              <button type="button" onClick={() => setListed(shown.submitted.id, !shown.submitted.listed)} className="cursor-pointer rounded-md px-2 py-1 text-[11px] font-semibold text-osu-l2 hover:bg-white/[0.06]">
+                {shown.submitted.listed ? t`Take off the list` : t`Add to the list`}
+              </button>
+              <button type="button" onClick={() => remove(shown.submitted.id)} className="cursor-pointer rounded-md px-2 py-1 text-[11px] font-semibold text-osu-red-light hover:bg-osu-red/15">
+                {t`Delete for everyone`}
+              </button>
+            </div>
           )}
         </div>
         <div className="min-w-0">
@@ -254,7 +276,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
           {formOpen && supporter && (
             <div className="mt-3 rounded-xl bg-osu-b6/60 p-3 ring-1 ring-inset ring-white/[0.05]">
               <p className="text-[12px] leading-snug text-osu-f1">
-                {t`A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it.`}
+                {t`A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it.`}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <label className="cursor-pointer rounded-lg bg-osu-b4 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-osu-b3">

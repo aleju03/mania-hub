@@ -459,7 +459,21 @@ export const saveSupporterCompanionSetting = createServerFn({ method: "POST" })
     return { companion: saved ? companionId(saved) : null };
   });
 
-/* Puts an uploaded companion (/api/supporter-companion) on the list. */
+/* The viewer's own submissions that an admin has not put on the shared list yet. */
+export const fetchOwnSupporterCompanions = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SubmittedCompanion[]> => {
+    const viewer = await requireViewer();
+    if (!viewer) return [];
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const response = await fetch(`${viewer.base}/api/supporters/self/companions?userId=${viewer.userId}`, { headers: bridgeAuthHeaders() });
+    if (!response.ok) throw new Error(`Server ${response.status}`);
+    const body = await response.json().catch(() => null) as { companions?: unknown } | null;
+    return Array.isArray(body?.companions) ? body.companions.map(parseSubmittedCompanion).filter((entry): entry is SubmittedCompanion => entry !== null) : [];
+  },
+);
+
+/* Adds an uploaded companion (/api/supporter-companion), the submitter's alone until an admin lists it. */
 export const submitSupporterCompanion = createServerFn({ method: "POST" })
   .validator((data: { name?: unknown; kind?: unknown; url?: unknown }) => {
     const name = typeof data?.name === "string" ? data.name.trim().slice(0, COMPANION_NAME_MAX) : "";

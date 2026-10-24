@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 
 import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
+import { parseSubmittedCompanion, type SubmittedCompanion } from "./supporter-companions";
 
 /* /admin/players?tab=supporters, backed by backend features/supporters.ts:
    every donation with who gave and how it was linked to an osu! account, the
@@ -128,6 +129,23 @@ export const setAdminSupporterRank = createServerFn({ method: "POST" })
     return { userId, rank };
   })
   .handler(({ data }) => adminRequest<{ ok: true }>("/api/admin/supporters/rank-pin", data));
+
+/* Every submitted companion, listed or waiting for review. */
+export const loadAdminCompanions = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { companions } = await adminRequest<{ companions: unknown[] }>("/api/admin/supporters/companions", {});
+    return companions.map(parseSubmittedCompanion).filter((entry): entry is SubmittedCompanion => entry !== null);
+  });
+
+/* Puts a submitted companion on everyone's list, or takes it off (and off
+   everyone wearing it but its submitter). */
+export const setAdminCompanionListed = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; listed?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a companion.");
+    return { id, listed: data?.listed === true };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; updated: boolean }>("/api/admin/supporters/list-companion", data));
 
 /* Takes a submitted companion off the list and off everyone wearing it. */
 export const deleteAdminCompanion = createServerFn({ method: "POST" })
