@@ -18,6 +18,7 @@ import { RUN_FEEL } from "../runFeel";
 import { runSound } from "../runSound";
 import { ChainCardFace } from "./ChainCardFace";
 import { hideChainDetails, useChainDetailsTrigger } from "./ChainDetails";
+import { KIT, MARKER, RowSocket } from "./chainKit";
 import { CHAIN_FEEL } from "./chainFeel";
 import { connector, handPlaces, type BoardLayout, type Connector } from "./chainLayout";
 import { WysiDigits } from "./Wysi";
@@ -684,14 +685,8 @@ export function ChainBoard(props: ChainBoardProps) {
       {/* Empty slots; the next one, where a tapped card goes, stands out. */}
       {layout.slots.map((slot, index) =>
         index >= filled && !leaving ? (
-          <div
-            key={`slot-${index}`}
-            className={`absolute grid place-items-center rounded-[10px] border-2 border-dashed font-black tabular-nums ${
-              index === filled && arranging ? "border-osu-pink/60 text-osu-pink/70" : "border-white/[0.08] text-white/15"
-            }`}
-            style={{ left: slot.x, top: slot.y, width: layout.cardW, height: slot.h ?? layout.cardH, fontSize: slot.h ? 16 : layout.narrow ? 22 : 30 }}
-          >
-            {index + 1}
+          <div key={`slot-${index}`} className="absolute" style={{ left: slot.x, top: slot.y }}>
+            <RowSocket width={layout.cardW} height={slot.h ?? layout.cardH} next={index === filled && arranging} label={index + 1} />
           </div>
         ) : null,
       )}
@@ -1081,11 +1076,14 @@ function LinkBadge({
     >
       <motion.div
         key={pulse}
-        className={`rounded-full px-1.5 py-0.5 font-black leading-none tabular-nums ${narrow ? "text-[11px]" : "text-[14px]"}`}
+        className={`rounded-full border-2 leading-none tabular-nums ${narrow ? "px-1.5 py-[3px] text-[11px]" : "px-2 py-1 text-[15px]"}`}
         style={{
-          background: pending ? "rgba(255,255,255,0.1)" : fill,
-          color: pending ? "rgba(255,255,255,0.55)" : "#120f1a",
+          fontFamily: MARKER,
+          background: KIT.dark,
+          borderColor: pending ? "rgba(243,233,216,0.25)" : fill,
+          color: pending ? "rgba(243,233,216,0.5)" : fill,
           opacity: half ? 0.5 : 1,
+          boxShadow: pending ? undefined : `0 0 10px ${fill}66`,
         }}
         initial={pulse ? { scale: 1.55 } : false}
         animate={{ scale: 1 }}

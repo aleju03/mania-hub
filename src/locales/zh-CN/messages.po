@@ -545,6 +545,11 @@ msgstr "{0} 已上线"
 msgid "{0} is yours"
 msgstr "{0} 归你所有"
 
+#. placeholder {0}: shown.rowsLeft
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "{0} left"
+msgstr "剩 {0}"
+
 #. placeholder {0}: likeCount.toLocaleString("en-US")
 #: src/routes/skins_.$id.tsx
 msgid "{0} likes"
@@ -1651,6 +1656,10 @@ msgstr "{selectedKeymode}K 预览"
 #: src/components/player/ActivityPanel.tsx
 msgid "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 msgstr "{sessionPlays, plural, other {{1} 次游玩}}"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "{shards} shards"
+msgstr "{shards} 碎片"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
@@ -3593,6 +3602,7 @@ msgid "Back to my {slotLabel}"
 msgstr "换回我的{slotLabel}"
 
 #: src/components/packs/PackSummary.tsx
+#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/RunEnd.tsx
 #: src/components/packs/run/RunHud.tsx
@@ -3994,7 +4004,6 @@ msgid "Bonus pp for playcount is not counted here, so these read a little under 
 msgstr "这里不计入游玩次数带来的奖励 pp，所以数值会比 osu! 个人主页上的 4K 和 7K 总量略低。"
 
 #: src/components/packs/run/chain/ChainReel.tsx
-#: src/components/packs/run/chain/ChainShop.tsx
 msgid "Bonus spin"
 msgstr "奖励转盘"
 
@@ -4746,6 +4755,10 @@ msgstr "经典"
 msgid "Classic window"
 msgstr "经典窗口"
 
+#: src/lib/chain-run.ts
+msgid "Clean"
+msgstr "干净"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -4794,6 +4807,11 @@ msgstr "清除筛选"
 msgid "Clear formatting"
 msgstr "清除格式"
 
+#. placeholder {0}: CHAIN_CONTRACTS.quickRows
+#: src/lib/chain-run.ts
+msgid "Clear in {0} rows or fewer."
+msgstr "在 {0} 行以内通关。"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Clear map search"
 msgstr "清除谱面搜索"
@@ -4833,6 +4851,14 @@ msgstr "清除筛选，或者自己上传这个皮肤。"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the search"
 msgstr "清除搜索"
+
+#: src/lib/chain-run.ts
+msgid "Clear with your first row."
+msgstr "用第一行就通关。"
+
+#: src/lib/chain-run.ts
+msgid "Clear without redrawing."
+msgstr "不重抽通关。"
 
 #: src/routes/recommendations.tsx
 msgid "cleared"
@@ -5363,6 +5389,19 @@ msgstr "继续"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Continue with Discord"
 msgstr "用 Discord 继续"
+
+#. placeholder {0}: prize.text
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Contract met: {name}. {0}"
+msgstr "合约达成：{name}。{0}"
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Contract missed: {name}"
+msgstr "合约未达成：{name}"
+
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Contracts"
+msgstr "合约"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Control"
@@ -6026,6 +6065,10 @@ msgstr "王冠"
 #: src/components/supporter/loadout.ts
 msgid "Crowns"
 msgstr "王冠"
+
+#: src/lib/supporter-profile-themes.ts
+#~ msgid "Crows"
+#~ msgstr "乌鸦"
 
 #: src/components/supporter/loadout.ts
 msgid "CRT monitor"
@@ -7185,6 +7228,10 @@ msgid "Every rate of a chart"
 msgstr "谱面的所有倍速"
 
 #: src/lib/chain-run.ts
+msgid "Every row you play has 6 cards."
+msgstr "你打出的每一行都有 6 张卡。"
+
+#: src/lib/chain-run.ts
 msgid "Every scene card slot is full. Sell one first."
 msgstr "场景卡栏位已满，请先出售一张。"
 
@@ -7658,6 +7705,11 @@ msgstr "正在查找更多回放..."
 msgid "Finish"
 msgstr "卡面"
 
+#. placeholder {0}: CHAIN_CONTRACTS.overkill
+#: src/lib/chain-run.ts
+msgid "Finish at {0}x the target or more."
+msgstr "以目标的 {0} 倍或更高结束。"
+
 #: src/lib/pack-run.ts
 msgid "Finishes are three times as likely."
 msgstr "卡面出现几率为三倍。"
@@ -7958,6 +8010,10 @@ msgstr "FC"
 #: src/routes/tracker.tsx
 msgid "Full combos only (0 misses)"
 msgstr "仅全连（0 miss）"
+
+#: src/lib/chain-run.ts
+msgid "Full house"
+msgstr "满员"
 
 #: src/lib/signature-shared.ts
 msgid "Full list"
@@ -9734,11 +9790,8 @@ msgstr "Lazer 排行榜：播放时仅保留名次和头像，暂停或将鼠标
 msgid "Leader"
 msgstr "队长"
 
+#: src/components/packs/run/chain/ChainTable.tsx
 #: src/lib/replay-overlays.ts
-#: src/lib/supporter-companions.ts
-msgid "Leek"
-msgstr "大葱"
-
 #: src/routes/snipes.tsx
 msgid "Leaderboard"
 msgstr "排行榜"
@@ -9758,6 +9811,10 @@ msgstr "留空则保留当前链接"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Leaves a short fading trail behind the cursor."
 msgstr "在光标后留下短暂渐隐的拖尾。"
+
+#: src/lib/supporter-companions.ts
+msgid "Leek"
+msgstr "大葱"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -11705,6 +11762,10 @@ msgstr "此栏目还没有榜单数据。"
 msgid "No break"
 msgstr "不断链"
 
+#: src/lib/chain-run.ts
+msgid "No breaks in any row."
+msgstr "任何一行都没有断链。"
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "No card on the wall wears this yet."
 msgstr "墙上还没有卡片带有这个标记。"
@@ -12014,6 +12075,10 @@ msgstr "还没有最近成绩。"
 #: src/routes/index.tsx
 msgid "No recent top plays"
 msgstr "暂无最近最佳成绩"
+
+#: src/lib/chain-run.ts
+msgid "No redraws"
+msgstr "不重抽"
 
 #: src/lib/chain-run.ts
 msgid "No redraws left this round."
@@ -12664,6 +12729,10 @@ msgstr "2026年10月9日"
 msgid "OD"
 msgstr "OD"
 
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "of"
+msgstr "/"
+
 #. placeholder {0}: queue.waiting
 #: src/components/player/SkillBreakdown.tsx
 msgid "of {0}"
@@ -12849,13 +12918,17 @@ msgstr "其中一张图片因来源限制无法录入视频。"
 msgid "One pack to clear it."
 msgstr "只有一包的机会。"
 
+#: src/lib/chain-run.ts
+msgid "One shot"
+msgstr "一击"
+
 #: src/routes/dan-estimates.tsx
 msgid "one skill, no split"
 msgstr "单一技能，不细分"
 
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "One spin of the reel: a prize for the next round."
-msgstr "转动一次转盘：为下一回合赢取奖励。"
+#~ msgid "One spin of the reel: a prize for the next round."
+#~ msgstr "转动一次转盘：为下一回合赢取奖励。"
 
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
@@ -13358,6 +13431,10 @@ msgstr "溢出"
 msgid "Overjoy"
 msgstr "Overjoy"
 
+#: src/lib/chain-run.ts
+msgid "Overkill"
+msgstr "碾压"
+
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Overlay scroll speed"
 msgstr "叠加层滚动速度"
@@ -13586,6 +13663,10 @@ msgstr "暂停界面、失败与段落画面、倒计时"
 msgid "Pause preview"
 msgstr "暂停试听"
 
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Pays"
+msgstr "奖励"
+
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Peak"
@@ -13659,6 +13740,10 @@ msgstr "百分位是在已追踪玩家中的排名"
 msgid "Perfect"
 msgstr "Perfect"
 
+#: src/lib/chain-run.ts
+msgid "Perfect chain"
+msgstr "完美连锁"
+
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
@@ -13730,6 +13815,10 @@ msgstr "从两个普通护符中选一个。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Pick one to load it into the editor."
 msgstr "选一个载入编辑器。"
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Pick several"
+msgstr "多选"
 
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Pick several cards"
@@ -13815,6 +13904,10 @@ msgstr "等离子"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "play"
 msgstr "播放"
+
+#: src/lib/chain-run.ts
+msgid "Play a 6-card row with no breaks."
+msgstr "打出一行 6 张且没有断链。"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/StreakGame.tsx
@@ -14592,6 +14685,10 @@ msgstr "排队中"
 msgid "Queued: {0} gold, {1} rainbow"
 msgstr "排队中：{0} 金包，{1} 彩虹包"
 
+#: src/lib/chain-run.ts
+msgid "Quick clear"
+msgstr "快速通关"
+
 #: src/lib/pack-run.ts
 msgid "Quick Retry"
 msgstr "快速重试"
@@ -14813,6 +14910,10 @@ msgstr "比值"
 #: src/routes/recommendations.tsx
 msgid "raw difficulty"
 msgstr "原始难度"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Rd"
+msgstr "轮"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Re-render every keymode"
@@ -15099,7 +15200,11 @@ msgstr "重做（Ctrl+Shift+Z）"
 msgid "Redraw"
 msgstr "重抽"
 
-#: src/components/packs/run/chain/ChainHud.tsx
+#. placeholder {0}: shown.redrawsLeft
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Redraw ({0} left)"
+msgstr "重抽（剩 {0}）"
+
 #: src/lib/chain-run.ts
 msgid "Redraws"
 msgstr "重抽次数"
@@ -15248,6 +15353,11 @@ msgstr "移除 {tag}"
 #: src/components/packs/run/chain/ChainShop.tsx
 msgid "Remove a card"
 msgstr "移除一张卡片"
+
+#. placeholder {0}: CHAIN_RULES.removePrice
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Remove a card ({0} shards)"
+msgstr "移除一张卡（{0} 碎片）"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Remove all"
@@ -15485,6 +15595,11 @@ msgstr "举报这个服务器"
 msgid "Reroll"
 msgstr "重抽"
 
+#. placeholder {0}: CHAIN_RULES.rerollPrice
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Reroll ({0} shards)"
+msgstr "刷新（{0} 碎片）"
+
 #: src/routes/maps.tsx
 msgid "Reroll settings"
 msgstr "重抽设置"
@@ -15715,7 +15830,6 @@ msgid "rough estimate, may be off"
 msgstr "粗略估算，可能有偏差"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-#: src/components/packs/run/chain/ChainHud.tsx
 msgid "Round"
 msgstr "回合"
 
@@ -15729,6 +15843,16 @@ msgstr "第 {0} 回合"
 msgid "Round {0} cleared"
 msgstr "第 {0} 回合通过"
 
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Round {round}"
+msgstr "第 {round} 轮"
+
+#. placeholder {0}: formatChainScore(over.roundScore)
+#. placeholder {1}: formatChainScore(over.target)
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Round {round} fell short: <0>{0}</0> of <1>{1}</1>"
+msgstr "第 {round} 轮未达标：<0>{0}</0> / <1>{1}</1>"
+
 #: src/lib/chain-run.ts
 msgid "Round {round} pack"
 msgstr "第 {round} 回合卡包"
@@ -15737,7 +15861,7 @@ msgstr "第 {round} 回合卡包"
 msgid "Row"
 msgstr "排"
 
-#: src/components/packs/run/chain/ChainHud.tsx
+#: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Rows"
 msgstr "排数"
 
@@ -15784,6 +15908,10 @@ msgstr "挑战失败"
 #: src/components/packs/run/RunInfo.tsx
 msgid "Run info"
 msgstr "挑战信息"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Run over"
+msgstr "本局结束"
 
 #: src/components/communities/field-options.tsx
 msgid "Russian"
@@ -16596,7 +16724,6 @@ msgstr "七键"
 msgid "shards"
 msgstr "碎片"
 
-#: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/RunHud.tsx
 #: src/lib/chain-run.ts
 msgid "Shards"
@@ -16956,6 +17083,10 @@ msgstr "并排对比"
 msgid "Sightread"
 msgstr "视奏"
 
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Sign for the next round"
+msgstr "为下一轮签约"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Sign in again to send a gift."
 msgstr "请重新登录以发送礼物。"
@@ -17030,6 +17161,14 @@ msgstr "用 osu! 登录后即可看到谁抽到了你的卡片。"
 msgid "Sign in with osu! to see your uploads."
 msgstr "用 osu! 登录后即可看到你的上传。"
 
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Sign one for round {nextRound}. Meet it and it pays on the clear."
+msgstr "为第 {nextRound} 轮签一份。达成后通关即可领奖。"
+
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Signed"
+msgstr "已签"
+
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/layout/Nav.tsx
 msgid "Signed in as"
@@ -17049,6 +17188,10 @@ msgstr "当前登录为 {0}，已连接 {activeInstallations} 个。"
 #: src/routes/companella.tsx
 msgid "Signed in as {0}. Nothing is connected yet."
 msgstr "当前登录为 {0}，尚未连接任何设备。"
+
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Signed: tap to unsign"
+msgstr "已签：点击取消"
 
 #: src/lib/supporter-ranks.ts
 msgid "Silver"
@@ -17115,6 +17258,7 @@ msgid "Sketch crown"
 msgstr "手绘王冠"
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Sketchbook"
 msgstr "素描本"
 
@@ -17602,8 +17746,8 @@ msgid "Spell card"
 msgstr "符卡"
 
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "Spin"
-msgstr "转动"
+#~ msgid "Spin"
+#~ msgstr "转动"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -17615,8 +17759,8 @@ msgid "Spotlight"
 msgstr "聚光灯"
 
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "Spun this visit."
-msgstr "本次已转过。"
+#~ msgid "Spun this visit."
+#~ msgstr "本次已转过。"
 
 #: src/components/supporter/loadout.ts
 msgid "SSR card"
@@ -18176,7 +18320,6 @@ msgstr "胶带纸页"
 msgid "target"
 msgstr "目标"
 
-#: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/RunHud.tsx
 msgid "Target"
 msgstr "目标"

@@ -641,7 +641,7 @@ export function RunTable(props: RunTableProps) {
   }, [error, t]);
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-[60px] z-40 overflow-hidden bg-osu-b6 text-white" translate="no">
+    <div className="fixed inset-x-0 top-[60px] z-40 h-[calc(100dvh-60px)] pb-[env(safe-area-inset-bottom)] overflow-hidden bg-osu-b6 text-white" translate="no">
       <RunBackdrop mood={mood} reducedMotion={reducedMotion} />
       <motion.div
         className="relative h-full"

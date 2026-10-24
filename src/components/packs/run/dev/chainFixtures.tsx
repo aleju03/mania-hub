@@ -22,7 +22,7 @@
               then the shop's pack turns a GOAT with its ceremony
      skills   an arranged row showing the skillset hints: a Delay landing
               late, a Bracket pair's span, Tech, Jack and Chordstream
-     reel     the shop's bonus spin bought: the reel spins and lands
+     contract the shop's contracts, the second one signed
      variants a row holding one card of each variant (Silver SS, Mirror,
               PFC, MAX) playing out, with more in the hand
      wysi     a row whose running total reads 3,727 mid-chain (the 727
@@ -40,7 +40,6 @@ import {
   makeFixturePool,
   chainRandom,
   CHAIN_GOAT,
-  CHAIN_REEL,
   makeFixtureRun,
   scoreChainRowFor,
   type ChainAction,
@@ -56,7 +55,7 @@ import { getCachedPackFrontCanvas, PACK_ASPECT, packArtStyleFor } from "../../pa
 import { ChainTable, type ChainTableScript } from "../chain/ChainTable";
 import type { ChainActOutcome } from "../chain/useChainRun";
 
-export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "variants", "reel", "skills"] as const;
+export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "variants", "contract", "skills"] as const;
 export type ChainFixtureMoment = (typeof CHAIN_FIXTURE_MOMENTS)[number];
 
 /* Real osu! ids, used only for avatars on the synthetic players. */
@@ -106,6 +105,8 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
   if (moment === "arrange") {
     const pool = fixturePool(5);
     const f = makeFixtureRun(5, { round: 3, phase: "arranged", pool, scenes: ["tree", "makiba"] });
+    // A signed contract on the table.
+    f.state.contract = { id: "quick", prize: { id: "dt" } };
     return { state: f.state, pool, script: { row: f.row, place: 3, dealt: true }, best: null };
   }
   if (moment === "play") {
@@ -140,17 +141,9 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
     });
     return { state, pool, script: { row, dealt: true }, best: null };
   }
-  if (moment === "reel") {
+  if (moment === "contract") {
     const pool = fixturePool(6);
     const f = makeFixtureRun(6, { round: 1, phase: "shop", pool, scenes: ["echoes"], shards: 14 });
-    // The reel's stream set to land on its rarest prize, the Wallet.
-    const total = Object.values(CHAIN_REEL.weights).reduce((sum, weight) => sum + weight, 0);
-    for (let rng = 0; rng < 5_000_000; rng += 1) {
-      if (chainRandom({ rng }) * total >= total - CHAIN_REEL.weights.wallet) {
-        f.state.reelRng = rng;
-        break;
-      }
-    }
     return { state: f.state, pool, script: {}, best: null };
   }
   if (moment === "shop") {
@@ -332,10 +325,13 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
       done(moment === "over" ? 2600 : 1600);
       return () => window.cancelAnimationFrame(frame);
     }
-    if (moment === "reel") {
+    if (moment === "contract") {
       const frame = window.requestAnimationFrame(ready);
-      const timer = window.setTimeout(() => clickButton("Spin"), 1400);
-      done(9600);
+      const timer = window.setTimeout(() => {
+        const cards = Array.from(document.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")).filter((button) => (button.textContent ?? "").includes("Pays"));
+        cards[1]?.click();
+      }, 1400);
+      done(2600);
       return () => {
         window.cancelAnimationFrame(frame);
         window.clearTimeout(timer);

@@ -16,7 +16,6 @@ import {
   type ChainSceneId,
   type ChainWysiField,
 } from "#/lib/chain-run";
-import { flameLevel } from "../RunFlame";
 import { punch } from "../runJuice";
 import { runSound } from "../runSound";
 import { SceneArt, type SceneId } from "../sceneArt";
@@ -24,6 +23,7 @@ import { Shards } from "../Shards";
 import { useTicker } from "../shopMotion";
 import { showChainDetails, useChainDetailsTrigger } from "./ChainDetails";
 import { WysiDigits, WysiStamp } from "./Wysi";
+import { KIT, KitGem, MARKER, ObjectiveLine } from "./chainKit";
 
 export const SCENE_ART_ID: Record<ChainSceneId, SceneId> = {
   makiba: "makiba",
@@ -41,26 +41,6 @@ export const SCENE_ART_ID: Record<ChainSceneId, SceneId> = {
   lostRequiem: "lostRequiem",
   purplePalace: "purplePalace",
 };
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-osu-f1">{children}</div>;
-}
-
-function Pips({ left, total, fill }: { left: number; total: number; fill: string }) {
-  return (
-    <span className="flex items-center gap-1">
-      {Array.from({ length: total }, (_, index) => (
-        <motion.span
-          key={index}
-          className="block h-2.5 w-2.5 rounded-full"
-          initial={false}
-          animate={{ backgroundColor: index < left ? fill : "rgba(255,255,255,0.14)", scale: index < left ? 1 : 0.8 }}
-          transition={{ type: "spring", stiffness: 500, damping: 22 }}
-        />
-      ))}
-    </span>
-  );
-}
 
 /* HUD pieces that come and go with the round fade out instead of
    vanishing in one frame. */
@@ -86,29 +66,30 @@ function digits(value: number): number {
   return String(Math.round(Math.abs(value))).length;
 }
 
-/* The round's score in its box. Quiet while it is 0; punches when a row
-   lands on it. Past the target (`heat`, the score as the chain has it) the
-   ink flame burns on its top edge. */
+/* Marker digits sized to fit a ring `room` px across. */
+function fitSize(text: string, room: number, max: number): number {
+  return Math.min(max, (room * 0.86) / Math.max(1, text.length * 0.6));
+}
+
+/* The round's score inside the bridge's left ring. Quiet while it is 0;
+   punches when a row lands on it, counting up from the old score. */
 function ScoreBox({
   score,
-  heat,
-  target,
-  big,
+  room,
+  max,
   reducedMotion,
   banked = false,
 }: {
   score: number;
-  heat: number;
-  target: number;
-  big: boolean;
+  room: number;
+  max: number;
   reducedMotion: boolean;
-  /* A row is playing: the box holds the banked score, dimmed, until the
+  /* A row is playing: the ring holds the banked score, dimmed, until the
      row's total lands on it. */
   banked?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const last = useRef(score);
-  const level = flameLevel(heat, target);
   /* A rise counts up from the old score over ~220ms (one number change per
      row); a drop (a new round) shows at once. */
   const [shown, setShown] = useState(score);
@@ -130,69 +111,89 @@ function ScoreBox({
     frame = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frame);
   }, [reducedMotion, score]);
-  const idle = score === 0 && level === 0;
+  const text = formatChainScore(shown);
   return (
-    <div className="relative">
-      <div
-        ref={ref}
-        data-chain-score=""
-        className={`relative z-[1] rounded-lg bg-[#0c0a10] font-black leading-none tabular-nums transition-colors duration-300 ${idle ? "text-white/40" : banked ? "text-white/45" : "text-white"} ${big ? "min-w-[150px] px-3 py-2 text-[40px]" : "min-w-[84px] px-2 py-1 text-[24px]"}`}
-      >
-        <span data-chain-score-digits="">
-          <WysiDigits text={formatChainScore(shown)} />
-        </span>
-      </div>
+    <div
+      ref={ref}
+      data-chain-score=""
+      className={`relative z-[1] leading-none tabular-nums transition-colors duration-300 ${score === 0 ? "text-[#f3e9d8]/40" : banked ? "text-[#f3e9d8]/45" : "text-[#f3e9d8]"}`}
+      style={{ fontFamily: MARKER, fontSize: fitSize(text, room, max) }}
+    >
+      <span data-chain-score-digits="">
+        <WysiDigits text={text} />
+      </span>
     </div>
   );
 }
 
-/* The round's progress: score against target, a faint fill to what the
-   arranged row (or the playing chain) would bring it to, and Once
-   Forgotten's star at 3x when she is held (the bar then runs to the star).
-   `flash` bumps when the chain carries the round past its target. */
-function Meter({ score, ghost, fuzzy, target, star, width, flash }: { score: number; ghost: number; fuzzy: boolean; target: number; star: number | null; width: number; flash: number }) {
+/* The round's objective: "score of target", numbers first, with the
+   progress hairline under it (what the arranged row would add marked on
+   it). */
+function Objective({
+  narrow,
+  round,
+  score,
+  meterScore,
+  ghost,
+  fuzzy,
+  target,
+  star,
+  flash,
+  banked,
+  reducedMotion,
+  stamp,
+  lineWidth,
+}: {
+  narrow: boolean;
+  round: number;
+  score: number;
+  meterScore: number;
+  ghost: number;
+  fuzzy: boolean;
+  target: number;
+  star: number | null;
+  flash: number;
+  banked: boolean;
+  reducedMotion: boolean;
+  stamp: (on: ChainWysiField) => React.ReactNode;
+  lineWidth: number;
+}) {
   const end = star ?? target;
-  const share = end > 0 ? Math.min(1, score / end) : 0;
-  const ghostShare = end > 0 ? Math.min(1, Math.max(score, ghost) / end) : 0;
-  const targetAt = end > 0 ? target / end : 1;
-  const passed = score >= target && target > 0;
-  const ghostPassed = ghost >= target && target > 0;
+  const share = end > 0 ? Math.min(1, meterScore / end) : 0;
+  const ghostShare = end > 0 ? Math.min(1, Math.max(meterScore, ghost) / end) * (fuzzy ? 1.1 : 1) : 0;
+  const adds = Math.max(0, ghost - meterScore);
   return (
-    <div data-chain-meter="" className="relative h-[8px] rounded-full bg-[#2a2531]" style={{ width }}>
-      <motion.div
-        className="absolute inset-y-0 left-0 rounded-full"
-        initial={false}
-        style={{
-          background: fuzzy
-            ? `linear-gradient(90deg, ${ghostPassed ? "rgba(255,179,71,0.42)" : "rgba(255,102,170,0.32)"} 0%, ${ghostPassed ? "rgba(255,179,71,0.42)" : "rgba(255,102,170,0.32)"} 62%, transparent 100%)`
-            : ghostPassed
-              ? "rgba(255,179,71,0.45)"
-              : "rgba(255,102,170,0.3)",
-        }}
-        animate={{ width: `${Math.min(1, ghostShare * (fuzzy ? 1.25 : 1)) * 100}%` }}
-        transition={{ type: "spring", stiffness: 260, damping: 30 }}
-      />
-      <motion.div
-        className="absolute inset-y-0 left-0 rounded-full"
-        initial={false}
-        animate={{ width: `${share * 100}%`, backgroundColor: passed ? "#ffb347" : "#ff66aa" }}
-        transition={{ type: "spring", stiffness: 160, damping: 24 }}
-      />
-      {flash > 0 && (
-        <motion.div
-          key={flash}
-          className="absolute -inset-y-[5px] inset-x-0 rounded-full bg-[#ffd36b]"
-          initial={{ opacity: 0.95, scaleY: 1.6 }}
-          animate={{ opacity: 0, scaleY: 1 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
+    <div className="flex flex-col items-center">
+      <div className="relative font-black uppercase leading-none text-[#f3e9d8]/60" style={{ fontSize: narrow ? 10 : 12, letterSpacing: "0.3em" }}>
+        <Trans>Round {round}</Trans>
+        {stamp("round")}
+      </div>
+      <div className={`flex items-baseline justify-center ${narrow ? "mt-1 gap-2" : "mt-1 gap-3"}`}>
+        <div className="relative">
+          <ScoreBox score={score} room={narrow ? 150 : 320} max={narrow ? 34 : 72} reducedMotion={reducedMotion} banked={banked} />
+          {stamp("roundScore")}
+        </div>
+        <span className="leading-none text-[#f3e9d8]/45" style={{ fontFamily: MARKER, fontSize: narrow ? 16 : 32 }}>
+          <Trans>of</Trans>
+        </span>
+        <div className="relative leading-none tabular-nums" style={{ fontFamily: MARKER, color: KIT.gold, fontSize: narrow ? 22 : 42 }}>
+          <WysiDigits text={formatChainScore(target)} />
+          {stamp("target")}
+        </div>
+      </div>
+      <div className={narrow ? "mt-2" : "mt-3"}>
+        <ObjectiveLine
+          width={lineWidth}
+          share={share}
+          ghostShare={ghostShare}
+          passed={meterScore >= target && target > 0}
+          ghostLabel={adds > 0 && !fuzzy ? `+${formatChainScore(adds)}` : null}
+          targetAt={end > 0 ? target / end : 1}
+          star={star !== null ? { ink: CHAIN_SCENE_INK.forgotten, lit: meterScore <= star } : null}
+          flash={flash}
+          meterProps={{ "data-chain-meter": "" }}
         />
-      )}
-      {star !== null && <div className="absolute -top-[3px] h-[14px] w-[2px] rounded bg-white/50" style={{ left: `${targetAt * 100}%` }} />}
-      {star !== null && (
-        <svg viewBox="0 0 20 20" className="absolute -right-[7px] -top-[10px] h-[16px] w-[16px]" aria-hidden="true">
-          <path d="M10 1 L12.6 7 L19 7.6 L14.1 11.8 L15.6 18.2 L10 14.8 L4.4 18.2 L5.9 11.8 L1 7.6 L7.4 7Z" fill={score > star ? "#6d6878" : CHAIN_SCENE_INK.forgotten} />
-        </svg>
-      )}
+      </div>
     </div>
   );
 }
@@ -202,10 +203,10 @@ export interface ChainTopBarProps {
   round: number;
   target: number;
   roundScore: number;
-  /* The bar's fill: the chain's running score while a row plays, so the box
-     keeps the old number until the row's total lands on it once. */
+  /* The bridge's fill: the chain's running score while a row plays, so the
+     ring keeps the old number until the row's total lands on it once. */
   meterScore: number;
-  /* The score the flame and bar read: the round's, or the chain's as it plays. */
+  /* The score the flame and bridge read: the round's, or the chain's as it plays. */
   heatScore: number;
   /* The faint fill: what the arranged row or the playing chain reaches. */
   ghostScore: number;
@@ -213,13 +214,11 @@ export interface ChainTopBarProps {
   ghostFuzzy: boolean;
   crossFlash: number;
   star: number | null;
-  rowsLeft: number;
-  redrawsLeft: number;
   shards: number;
   showRound: boolean;
   /* The score against the target, while a round is being played. */
   showMeter: boolean;
-  /* The score box reads the banked score while a row plays. */
+  /* The score ring reads the banked score while a row plays. */
   scoreBanked?: boolean;
   reducedMotion: boolean;
   onExit: () => void;
@@ -231,10 +230,11 @@ export interface ChainTopBarProps {
   wysi?: { id: number; on: ChainWysiField[] } | null;
 }
 
-/* Across the top: the round, its score against the target (the flame lives
-   here), rows and redraws left, and run shards. */
+/* Across the top: the round in its medallion (rows and redraws left as its
+   rings), the score bridge to the target (the flame lives under it), and
+   the run's shards. */
 export function ChainTopBar(props: ChainTopBarProps) {
-  const { deck, narrow, round, target, roundScore, meterScore, heatScore, ghostScore, ghostFuzzy, crossFlash, star, rowsLeft, redrawsLeft, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false } = props;
+  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, ghostFuzzy, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false } = props;
   const { t, i18n } = useLingui();
   const shownShards = useTicker(shards, reducedMotion);
   const stamp = (on: ChainWysiField) => (wysi?.on.includes(on) ? <WysiStamp key={`wysi-${wysi.id}-${on}`} reducedMotion={reducedMotion} /> : null);
@@ -244,149 +244,74 @@ export function ChainTopBar(props: ChainTopBarProps) {
       onClick={onExit}
       title={t`Back to packs`}
       aria-label={t`Back to packs`}
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-osu-f1 transition hover:bg-white/5 hover:text-white"
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#f3e9d8]/70 transition hover:bg-white/5 hover:text-white"
     >
       <LogOut className="h-4 w-4 -scale-x-100" />
     </button>
   );
   const shardsBox = (
-    <div data-chain-shards="" className="relative text-right">
-      <Label>
-        <Trans>Shards</Trans>
-      </Label>
-      <Shards value={shownShards} lit727 className={`font-black leading-none ${narrow ? "text-[18px]" : "text-[24px]"}`} />
+    <div data-chain-shards="" className="relative flex items-center gap-1.5" title={t`${shards} shards`}>
+      <KitGem size={narrow ? 28 : 44} turn={shards} />
+      <span className="leading-none tabular-nums text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: narrow ? 24 : 36 }}>
+        <WysiDigits text={shownShards.toLocaleString("en-US")} />
+      </span>
       {stamp("shards")}
+    </div>
+  );
+  const objective = (lineWidth: number) => (
+    <Objective
+      narrow={narrow}
+      round={round}
+      score={roundScore}
+      meterScore={meterScore}
+      ghost={ghostScore}
+      fuzzy={ghostFuzzy}
+      target={target}
+      star={star}
+      flash={crossFlash}
+      banked={scoreBanked}
+      reducedMotion={reducedMotion}
+      stamp={stamp}
+      lineWidth={lineWidth}
+    />
+  );
+  /* Between rounds (packs, the shop) the corner says where the run is. */
+  const where = showRound ? (
+    <div className="relative leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: narrow ? 20 : 30 }}>
+      <Trans>Round {round}</Trans>
+      {stamp("round")}
+    </div>
+  ) : (
+    <div className="leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: narrow ? 22 : 34 }}>
+      {i18n._(CHAIN_RUN_NAME)}
     </div>
   );
 
   if (narrow) {
     return (
-      <div className="relative z-[3] flex flex-col gap-2 px-3 pb-1 pt-5">
-        <div className="flex items-center gap-3">
-          {showRound ? (
-            <>
-              <div className="relative shrink-0">
-                <Label>
-                  <Trans>Round</Trans>
-                </Label>
-                <div className="text-[24px] font-black italic leading-none tabular-nums">
-                  <WysiDigits text={String(round)} />
-                </div>
-                {stamp("round")}
-              </div>
-              <Fade show={showMeter} className="flex min-w-0 items-center gap-3">
-                <>
-                  <div className="relative z-[1] min-w-0">
-                    <ScoreBox score={roundScore} heat={heatScore} target={target} big={false} reducedMotion={reducedMotion} banked={scoreBanked} />
-                    {stamp("roundScore")}
-                  </div>
-                  <div className="relative min-w-0 leading-tight">
-                    <Label>
-                      <Trans>Target</Trans>
-                    </Label>
-                    <div className="text-[15px] font-black tabular-nums">
-                      <WysiDigits text={formatChainScore(target)} />
-                    </div>
-                    {stamp("target")}
-                  </div>
-                </>
-              </Fade>
-            </>
-          ) : (
-            <div className="text-[20px] font-black italic uppercase leading-none">
-              {i18n._(CHAIN_RUN_NAME)}
-            </div>
-          )}
+      <div className="relative z-[3] flex flex-col gap-1 px-3 pb-1 pt-3">
+        <div className="flex items-start gap-2">
+          {showMeter ? <div className="min-w-0 flex-1">{objective(Math.max(160, window.innerWidth - 24 - 120))}</div> : where}
           <span className="ml-auto" />
           {shardsBox}
           {exit}
         </div>
         <div className="flex items-center gap-3">
-          <Fade show={showMeter} className="flex items-center gap-3">
-            <>
-              <div className="flex items-center gap-1.5 text-[11px] font-bold text-osu-f1">
-                <Trans>Rows</Trans>
-                <Pips left={rowsLeft} total={CHAIN_RULES.rows} fill="#ff66aa" />
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] font-bold text-osu-f1">
-                <Trans>Redraws</Trans>
-                <Pips left={redrawsLeft} total={CHAIN_RULES.redraws} fill="#8fc1ff" />
-              </div>
-            </>
-          </Fade>
           <span className="ml-auto" />
           {scenes}
           {deck}
         </div>
-        <Fade show={showMeter}>
-          <Meter score={meterScore} ghost={ghostScore} fuzzy={ghostFuzzy} target={target} star={star} width={window.innerWidth - 24} flash={crossFlash} />
-        </Fade>
       </div>
     );
   }
 
   return (
-    <div className="relative z-[3] grid grid-cols-[1fr_auto_1fr] items-center gap-6 px-6 pb-2 pt-10">
-      <div className="flex items-center gap-4">
-        {showRound ? (
-          <div className="relative">
-            <Label>
-              <Trans>Round</Trans>
-            </Label>
-            <div className="text-[40px] font-black italic leading-none tabular-nums">
-              <WysiDigits text={String(round)} />
-            </div>
-            {stamp("round")}
-          </div>
-        ) : (
-          <div className="text-[30px] font-black italic uppercase leading-none">
-            {i18n._(CHAIN_RUN_NAME)}
-          </div>
-        )}
+    <div className="relative z-[3] grid grid-cols-[1fr_auto_1fr] items-start gap-6 px-6 pb-2 pt-6">
+      <div className="flex items-center gap-4">{showMeter ? null : where}</div>
+      <div className="flex flex-col items-center">
+        <Fade show={showMeter}>{objective(560)}</Fade>
       </div>
-      <div className="flex flex-col items-center gap-2.5">
-        <Fade show={showMeter} className="flex flex-col items-center gap-2.5">
-          <>
-            <div className="flex items-end gap-3">
-              <div className="relative z-[1]">
-                <ScoreBox score={roundScore} heat={heatScore} target={target} big reducedMotion={reducedMotion} banked={scoreBanked} />
-                {stamp("roundScore")}
-              </div>
-              <div className="relative z-[1] rounded-lg bg-[#0c0a10] px-2.5 py-1.5 leading-tight">
-                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-osu-f1">
-                  <Trans>Target</Trans>
-                </div>
-                <div className="text-[24px] font-black tabular-nums">
-                  <WysiDigits text={formatChainScore(target)} />
-                </div>
-                {stamp("target")}
-              </div>
-            </div>
-            <Meter score={meterScore} ghost={ghostScore} fuzzy={ghostFuzzy} target={target} star={star} width={360} flash={crossFlash} />
-          </>
-        </Fade>
-      </div>
-      <div className="flex items-center justify-end gap-6">
-        <Fade show={showMeter} className="flex items-center gap-6">
-          <>
-            <div>
-              <Label>
-                <Trans>Rows</Trans>
-              </Label>
-              <div className="mt-1.5">
-                <Pips left={rowsLeft} total={CHAIN_RULES.rows} fill="#ff66aa" />
-              </div>
-            </div>
-            <div>
-              <Label>
-                <Trans>Redraws</Trans>
-              </Label>
-              <div className="mt-1.5">
-                <Pips left={redrawsLeft} total={CHAIN_RULES.redraws} fill="#8fc1ff" />
-              </div>
-            </div>
-          </>
-        </Fade>
+      <div className="flex items-center justify-end gap-4">
         {shardsBox}
         {exit}
       </div>

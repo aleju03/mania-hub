@@ -38,6 +38,103 @@ const SKILL_ACCENT: Record<ChainSkill, Rgb> = {
 
 const CARDS = CHAIN_RULES.packSize;
 
+/* Each skillset pack's own wrapper: its colour, its own stock pattern, and
+   in the seal the skillset itself as a strip of notes on a little playfield
+   (a stream's staircase, a jack's stacked column, a delay's off-grid rows),
+   so two pattern packs side by side never look alike. */
+const SKILL_MOTIF: Record<ChainSkill, PackArtStyle["motif"]> = {
+  Stream: "lanes4",
+  Jumpstream: "scatter",
+  Handstream: "ribbons",
+  Stamina: "rays",
+  Jack: "triangles",
+  Chordjack: "burst",
+  Tech: "ribbons",
+  Speed: "rays",
+  Chordstream: "lanes7",
+  Bracket: "ribbons",
+  Delay: "scatter",
+};
+
+/* Rows of notes, top to bottom, each a lane mask and an optional row
+   position (in rows) where the pattern is off the grid. */
+type NoteRow = [mask: string, at?: number];
+const SKILL_NOTES: Record<ChainSkill, NoteRow[]> = {
+  Stream: [["1000"], ["0100"], ["0010"], ["0001"], ["0010"], ["0100"], ["1000"]],
+  Jumpstream: [["1010"], ["0100"], ["0101"], ["1000"], ["0110"], ["0001"], ["1001"]],
+  Handstream: [["1101"], ["0010"], ["1011"], ["0100"], ["0111"], ["1000"], ["1110"]],
+  Stamina: [["1000"], ["0010"], ["0100"], ["0001"], ["1000"], ["0010"], ["0100"], ["0001"], ["1000"], ["0010"]],
+  Jack: [["0100"], ["0100"], ["0100"], ["0010"], ["0010"], ["0010"], ["0100"]],
+  Chordjack: [["1101"], ["1101"], ["0110"], ["1011"], ["1011"], ["0110"], ["1101"]],
+  Tech: [["1000", 0], ["0100", 0.6], ["0001", 1.8], ["0110", 2.3], ["1000", 3.5], ["0010", 4.1], ["0101", 5.6]],
+  Speed: [["1000"], ["0100"], ["1000"], ["0100"], ["1000"], ["0100"], ["1000"], ["0100"], ["1000"]],
+  Chordstream: [["1010100"], ["0101010"], ["1001001"], ["0110110"], ["1010101"], ["0101010"]],
+  /* Prism's bracket: chords back to back across both hands, each sharing no
+     column with the one before and never rolling. */
+  Bracket: [["1010010"], ["0101001"], ["1010100"], ["0100011"], ["1001100"], ["0110001"]],
+  Delay: [["1000000", 0], ["0010000", 0.7], ["0000100", 1.3], ["0100000", 2.6], ["0001000", 3.2], ["0000010", 4.5]],
+};
+
+const skillEmblems = new Map<ChainSkill, HTMLCanvasElement>();
+
+/* The seal's picture for a skillset pack: its notes on a dark playfield. */
+function skillEmblem(skill: ChainSkill, accent: Rgb): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  const cached = skillEmblems.get(skill);
+  if (cached) return cached;
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  const rows = SKILL_NOTES[skill];
+  const lanes = rows[0][0].length;
+  const ground = context.createLinearGradient(0, 0, 0, size);
+  ground.addColorStop(0, "#0b0912");
+  ground.addColorStop(1, `rgb(${Math.round(accent.r * 0.22)},${Math.round(accent.g * 0.22)},${Math.round(accent.b * 0.22)})`);
+  context.fillStyle = ground;
+  context.fillRect(0, 0, size, size);
+  // The playfield: a column of lanes in the disc's middle.
+  const fieldW = lanes === 4 ? 172 : 206;
+  const left = (size - fieldW) / 2;
+  const lane = fieldW / lanes;
+  context.fillStyle = "rgba(255,255,255,0.05)";
+  context.fillRect(left, 0, fieldW, size);
+  context.strokeStyle = "rgba(255,255,255,0.12)";
+  context.lineWidth = 1.5;
+  for (let index = 0; index <= lanes; index += 1) {
+    context.beginPath();
+    context.moveTo(left + index * lane, 0);
+    context.lineTo(left + index * lane, size);
+    context.stroke();
+  }
+  // Notes fall toward the judgement line near the bottom.
+  const judge = size * 0.82;
+  const step = Math.min(34, (judge - 30) / Math.max(1, rows.length - 1 + 0.5));
+  const noteH = Math.max(10, Math.min(20, step * 0.62));
+  rows.forEach(([mask, at], index) => {
+    const y = judge - 10 - (at ?? index) * step;
+    for (let column = 0; column < lanes; column += 1) {
+      if (mask[column] !== "1") continue;
+      const x = left + column * lane + lane * 0.1;
+      const w = lane * 0.8;
+      context.fillStyle = `rgb(${accent.r},${accent.g},${accent.b})`;
+      context.beginPath();
+      context.roundRect(x, y - noteH, w, noteH, Math.min(4, noteH / 2));
+      context.fill();
+      context.fillStyle = "rgba(255,255,255,0.55)";
+      context.fillRect(x + 2, y - noteH + 2, w - 4, Math.max(2, noteH * 0.22));
+    }
+  });
+  context.fillStyle = "rgba(255,255,255,0.85)";
+  context.fillRect(left - 6, judge, fieldW + 12, 3);
+  skillEmblems.set(skill, canvas);
+  return canvas;
+}
+
+const shade = (c: Rgb, k: number): Rgb => ({ r: Math.round(c.r * k), g: Math.round(c.g * k), b: Math.round(c.b * k) });
+
 function baseStyle(name: string, accent: Rgb, poolLabel: string, rank: number, motif: PackArtStyle["motif"]): PackArtStyle {
   return { accent, name, cardCount: CARDS, poolLabel, rank, motif };
 }
@@ -50,7 +147,13 @@ function plainStyle(art: ChainPackArt): PackArtStyle {
   if (!offer || offer.kind === "pack") return baseStyle("PACK", accentOf("standard"), "KEEP 1", 1, "triangles");
   if (offer.kind === "skill" && offer.skill) {
     const skill = offer.skill.toUpperCase();
-    return baseStyle(skill, SKILL_ACCENT[offer.skill], `${skill} PLAYERS ONLY`, 2, "rays");
+    const accent = SKILL_ACCENT[offer.skill];
+    const emblem = skillEmblem(offer.skill, accent);
+    return {
+      ...baseStyle(skill, accent, `${skill} PLAYERS ONLY`, 2, SKILL_MOTIF[offer.skill]),
+      ribbons: [accent, shade(accent, 0.45), shade(accent, 0.75)],
+      ...(emblem ? { emblem, emblemKey: `skill:${offer.skill}` } : {}),
+    };
   }
   if (offer.kind === "key") {
     const key = `${offer.key ?? 7}K`;
@@ -169,9 +272,69 @@ export function chainPackArtKey(art: ChainPackArt): string {
   return `shop:${offer.kind}:${offer.cc ?? ""}:${offer.skill ?? ""}:${offer.key ?? ""}:${offer.keep ?? ""}`;
 }
 
+/* The rendered foil pouch the printed art is wrapped in: a base with the
+   outline, a mask for where print goes, a multiply pass for the puff and
+   crinkles, and a highlight pass. Loaded once; until it is in, wrappers
+   wait for it rather than showing flat and then swapping. */
+interface PouchLayers {
+  base: HTMLImageElement;
+  mask: HTMLImageElement;
+  shade: HTMLImageElement;
+  spec: HTMLImageElement;
+}
+let pouch: PouchLayers | null = null;
+let pouchFailed = false;
+let pouchJob: Promise<PouchLayers | null> | null = null;
+
+function loadPouch(): Promise<PouchLayers | null> {
+  if (pouch || pouchFailed) return Promise.resolve(pouch);
+  if (!pouchJob) {
+    const one = (layer: string) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = `/images/packs/run/pouch-${layer}-v1.webp`;
+      });
+    pouchJob = Promise.all([one("base"), one("mask"), one("shade"), one("spec")])
+      .then(([base, mask, shade, spec]) => (pouch = { base, mask, shade, spec }))
+      .catch(() => {
+        pouchFailed = true;
+        return null;
+      });
+  }
+  return pouchJob;
+}
+
 function draw(style: PackArtStyle): string | null {
   try {
-    return getCachedPackFrontCanvas(style).toDataURL("image/png");
+    const art = getCachedPackFrontCanvas(style);
+    if (!pouch) return art.toDataURL("image/png");
+    const { width, height } = art;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return art.toDataURL("image/png");
+    // The print, cut to the pouch's printable face.
+    const print = document.createElement("canvas");
+    print.width = width;
+    print.height = height;
+    const printContext = print.getContext("2d");
+    if (!printContext) return art.toDataURL("image/png");
+    printContext.drawImage(art, 0, 0, width, height);
+    printContext.globalCompositeOperation = "destination-in";
+    printContext.drawImage(pouch.mask, 0, 0, width, height);
+    context.drawImage(pouch.base, 0, 0, width, height);
+    context.drawImage(print, 0, 0);
+    // Puff, folds and crinkle, kept to the pouch.
+    context.globalCompositeOperation = "multiply";
+    context.drawImage(pouch.shade, 0, 0, width, height);
+    context.globalCompositeOperation = "destination-in";
+    context.drawImage(pouch.base, 0, 0, width, height);
+    context.globalCompositeOperation = "source-over";
+    context.drawImage(pouch.spec, 0, 0, width, height);
+    return canvas.toDataURL("image/png");
   } catch {
     return null;
   }
@@ -181,6 +344,10 @@ function draw(style: PackArtStyle): string | null {
    first), else null. */
 export function chainPackArtUrl(art: ChainPackArt): string | null {
   if (typeof document === "undefined") return null;
+  if (!pouch && !pouchFailed) {
+    void loadPouch();
+    return null;
+  }
   const key = chainPackArtKey(art);
   const known = urls.get(key);
   if (known) return known;
@@ -197,6 +364,7 @@ export function loadChainPackArt(art: ChainPackArt): Promise<string | null> {
   const key = chainPackArtKey(art);
   const known = urls.get(key);
   if (known) return Promise.resolve(known);
+  if (!pouch && !pouchFailed) return loadPouch().then(() => loadChainPackArt(art));
   const ready = chainPackArtUrl(art);
   if (ready) return Promise.resolve(ready);
   const cc = art.offer?.cc?.toUpperCase() ?? "";

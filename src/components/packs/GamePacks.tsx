@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
 import { CHAIN_RUN_NAME } from "#/lib/chain-run";
 import { readBestStreak } from "#/lib/streak-game";
+import { setChainEntryOrigin } from "./run/chain/chainEntry";
 
 /* The pack page's two games, Higher or lower and the chain run, as hand-drawn
    doodles in a column beside the pack being opened (or in a row under it on
@@ -29,10 +30,6 @@ function Sketch({ children }: { children: ReactNode }) {
       </g>
     </>
   );
-}
-
-function sparkle(cx: number, cy: number, s: number) {
-  return `M ${cx} ${cy - s} Q ${cx} ${cy} ${cx + s} ${cy} Q ${cx} ${cy} ${cx} ${cy + s} Q ${cx} ${cy} ${cx - s} ${cy} Q ${cx} ${cy} ${cx} ${cy - s} Z`;
 }
 
 /* A sketched card: wobbly outline, a hatched portrait and a name line. */
@@ -69,8 +66,6 @@ function StreakDoodle({ accent }: { accent: string }) {
       </g>
       <path d="M 120 70 L 120.5 36 M 110.5 46 L 120.5 35 L 130 45.5" stroke={accent} strokeWidth={2.6} />
       <path d="M 120.5 82 L 120 116 M 110.5 106 L 120 117 L 130.5 106.5" strokeWidth={2.6} />
-      <path d={sparkle(216, 16, 6)} stroke={accent} />
-      <path d={sparkle(24, 136, 4)} />
     </Sketch>
   );
 }
@@ -107,7 +102,6 @@ function ChainDoodle({ accent }: { accent: string }) {
         fillOpacity={0.12}
       />
       <path d="M 238 45.5 C 234 42.5 235 37.5 238 33.5 C 239 36.5 241 36.5 242 34.5 C 244.5 38.5 243.5 43.5 238 45.5 Z" stroke={accent} />
-      <path d={sparkle(16, 30, 5)} />
     </Sketch>
   );
 }
@@ -124,7 +118,9 @@ export function useBestStreak(): number | null {
   return best;
 }
 
-export function GameDoodle({ kind, best, width, onOpen }: { kind: GameKind; best: number | null; width: number; onOpen: () => void }) {
+/* `width` "fluid" fills the button's box, for the compact row on phones. */
+export function GameDoodle({ kind, best, width, onOpen }: { kind: GameKind; best: number | null; width: number | "fluid"; onOpen: () => void }) {
+  const fluid = width === "fluid";
   const { t, i18n } = useLingui();
   const name = kind === "streak" ? t`Higher or lower` : i18n._(CHAIN_NAME);
   const bestLabel = kind === "streak" ? t`best streak` : t`best round`;
@@ -133,31 +129,37 @@ export function GameDoodle({ kind, best, width, onOpen }: { kind: GameKind; best
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={(event) => {
+        if (kind === "chain") {
+          const art = event.currentTarget.querySelector("svg")?.getBoundingClientRect();
+          if (art) setChainEntryOrigin(art.left + art.width / 2, art.top + art.height / 2);
+        }
+        onOpen();
+      }}
       aria-label={name}
-      className="group flex cursor-pointer flex-col items-center gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-osu-pink"
+      className={`group flex cursor-pointer flex-col items-center rounded-lg ${fluid ? "min-w-0 gap-1.5" : "gap-2"} focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-osu-pink`}
     >
       <svg
         viewBox={`0 0 ${viewW} 150`}
-        width={width}
-        height={(width * 150) / viewW}
+        width={fluid ? undefined : width}
+        height={fluid ? undefined : (width * 150) / viewW}
         fill="none"
         stroke={INK}
         strokeWidth={1.8}
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden
-        className="overflow-visible opacity-75 transition-[opacity,transform] duration-300 ease-out group-hover:-translate-y-1 group-hover:-rotate-2 group-hover:opacity-100 group-focus-visible:opacity-100"
+        className={`overflow-visible opacity-75 transition-[opacity,transform] duration-300 ease-out group-hover:-translate-y-1 group-hover:-rotate-2 group-hover:opacity-100 group-focus-visible:opacity-100 ${fluid ? "h-auto w-full" : ""}`}
       >
         <g filter={`url(#${ROUGH})`}>{kind === "streak" ? <StreakDoodle accent={accent} /> : <ChainDoodle accent={accent} />}</g>
       </svg>
       <div className="flex flex-col items-center gap-1 text-center">
-        <div className="text-[17px] font-black leading-tight text-white transition-colors group-hover:text-[var(--game-accent)]" style={{ ["--game-accent" as string]: accent }}>
+        <div className={`${fluid ? "text-[15px]" : "text-[17px]"} font-black leading-tight text-white transition-colors group-hover:text-[var(--game-accent)]`} style={{ ["--game-accent" as string]: accent }}>
           {name}
         </div>
         {best !== null && (
           <div className="flex items-baseline gap-1.5">
-            <span className="text-[22px] font-black leading-none text-white tabular-nums">{best.toLocaleString("en-US")}</span>
+            <span className={`${fluid ? "text-[18px]" : "text-[22px]"} font-black leading-none text-white tabular-nums`}>{best.toLocaleString("en-US")}</span>
             <span className="text-[11px] font-bold text-osu-f1">{bestLabel}</span>
           </div>
         )}
@@ -185,7 +187,7 @@ export function GamePacks({
   className?: string;
 }) {
   const bestStreak = useBestStreak();
-  const width = layout === "side" ? 230 : 190;
+  const width = layout === "side" ? 230 : "fluid";
   const doodles = (
     <>
       <svg width="0" height="0" className="absolute" aria-hidden>
@@ -198,7 +200,9 @@ export function GamePacks({
       {chain && <GameDoodle kind="chain" best={chain.best} width={width} onOpen={onChain} />}
     </>
   );
-  if (layout === "row") return <div className={`flex flex-wrap items-start justify-center gap-x-14 gap-y-8 ${className}`}>{doodles}</div>;
+  /* Side by side even on a phone, each half the width, so the pair costs one
+     short row of scrolling. */
+  if (layout === "row") return <div className={`mx-auto grid items-start gap-x-6 px-4 ${chain ? "max-w-[420px] grid-cols-2" : "max-w-[210px] grid-cols-1"} ${className}`}>{doodles}</div>;
   /* Right of the pack, out toward the page edge on wide screens, the column
      centred on the pack's height. */
   return (

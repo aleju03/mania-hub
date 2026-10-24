@@ -536,6 +536,11 @@ msgstr "{0} is live"
 msgid "{0} is yours"
 msgstr "{0} is yours"
 
+#. placeholder {0}: shown.rowsLeft
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "{0} left"
+msgstr "{0} left"
+
 #. placeholder {0}: likeCount.toLocaleString("en-US")
 #: src/routes/skins_.$id.tsx
 msgid "{0} likes"
@@ -1642,6 +1647,10 @@ msgstr "{selectedKeymode}K preview"
 #: src/components/player/ActivityPanel.tsx
 msgid "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 msgstr "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "{shards} shards"
+msgstr "{shards} shards"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
@@ -3588,6 +3597,7 @@ msgid "Back to my {slotLabel}"
 msgstr "Back to my {slotLabel}"
 
 #: src/components/packs/PackSummary.tsx
+#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/RunEnd.tsx
 #: src/components/packs/run/RunHud.tsx
@@ -3989,7 +3999,6 @@ msgid "Bonus pp for playcount is not counted here, so these read a little under 
 msgstr "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
 
 #: src/components/packs/run/chain/ChainReel.tsx
-#: src/components/packs/run/chain/ChainShop.tsx
 msgid "Bonus spin"
 msgstr "Bonus spin"
 
@@ -4741,6 +4750,10 @@ msgstr "Classic"
 msgid "Classic window"
 msgstr "Classic window"
 
+#: src/lib/chain-run.ts
+msgid "Clean"
+msgstr "Clean"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -4789,6 +4802,11 @@ msgstr "Clear filters"
 msgid "Clear formatting"
 msgstr "Clear formatting"
 
+#. placeholder {0}: CHAIN_CONTRACTS.quickRows
+#: src/lib/chain-run.ts
+msgid "Clear in {0} rows or fewer."
+msgstr "Clear in {0} rows or fewer."
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Clear map search"
 msgstr "Clear map search"
@@ -4828,6 +4846,14 @@ msgstr "Clear the filters, or upload the skin yourself."
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the search"
 msgstr "Clear the search"
+
+#: src/lib/chain-run.ts
+msgid "Clear with your first row."
+msgstr "Clear with your first row."
+
+#: src/lib/chain-run.ts
+msgid "Clear without redrawing."
+msgstr "Clear without redrawing."
 
 #: src/routes/recommendations.tsx
 msgid "cleared"
@@ -5358,6 +5384,19 @@ msgstr "Continue"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Continue with Discord"
 msgstr "Continue with Discord"
+
+#. placeholder {0}: prize.text
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Contract met: {name}. {0}"
+msgstr "Contract met: {name}. {0}"
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Contract missed: {name}"
+msgstr "Contract missed: {name}"
+
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Contracts"
+msgstr "Contracts"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Control"
@@ -6021,6 +6060,10 @@ msgstr "Crown"
 #: src/components/supporter/loadout.ts
 msgid "Crowns"
 msgstr "Crowns"
+
+#: src/lib/supporter-profile-themes.ts
+#~ msgid "Crows"
+#~ msgstr "Crows"
 
 #: src/components/supporter/loadout.ts
 msgid "CRT monitor"
@@ -7180,6 +7223,10 @@ msgid "Every rate of a chart"
 msgstr "Every rate of a chart"
 
 #: src/lib/chain-run.ts
+msgid "Every row you play has 6 cards."
+msgstr "Every row you play has 6 cards."
+
+#: src/lib/chain-run.ts
 msgid "Every scene card slot is full. Sell one first."
 msgstr "Every scene card slot is full. Sell one first."
 
@@ -7653,6 +7700,11 @@ msgstr "Finding more replays..."
 msgid "Finish"
 msgstr "Finish"
 
+#. placeholder {0}: CHAIN_CONTRACTS.overkill
+#: src/lib/chain-run.ts
+msgid "Finish at {0}x the target or more."
+msgstr "Finish at {0}x the target or more."
+
 #: src/lib/pack-run.ts
 msgid "Finishes are three times as likely."
 msgstr "Finishes are three times as likely."
@@ -7953,6 +8005,10 @@ msgstr "Full Combo"
 #: src/routes/tracker.tsx
 msgid "Full combos only (0 misses)"
 msgstr "Full combos only (0 misses)"
+
+#: src/lib/chain-run.ts
+msgid "Full house"
+msgstr "Full house"
 
 #: src/lib/signature-shared.ts
 msgid "Full list"
@@ -9729,11 +9785,8 @@ msgstr "Lazer: keep ranks and avatars visible. Pause or hover to show score deta
 msgid "Leader"
 msgstr "Leader"
 
+#: src/components/packs/run/chain/ChainTable.tsx
 #: src/lib/replay-overlays.ts
-#: src/lib/supporter-companions.ts
-msgid "Leek"
-msgstr "Leek"
-
 #: src/routes/snipes.tsx
 msgid "Leaderboard"
 msgstr "Leaderboard"
@@ -9753,6 +9806,10 @@ msgstr "leave empty to keep the current one"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Leaves a short fading trail behind the cursor."
 msgstr "Leaves a short fading trail behind the cursor."
+
+#: src/lib/supporter-companions.ts
+msgid "Leek"
+msgstr "Leek"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -11700,6 +11757,10 @@ msgstr "No board stored for this lane yet."
 msgid "No break"
 msgstr "No break"
 
+#: src/lib/chain-run.ts
+msgid "No breaks in any row."
+msgstr "No breaks in any row."
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "No card on the wall wears this yet."
 msgstr "No card on the wall wears this yet."
@@ -12009,6 +12070,10 @@ msgstr "No recent scores yet."
 #: src/routes/index.tsx
 msgid "No recent top plays"
 msgstr "No recent top plays"
+
+#: src/lib/chain-run.ts
+msgid "No redraws"
+msgstr "No redraws"
 
 #: src/lib/chain-run.ts
 msgid "No redraws left this round."
@@ -12659,6 +12724,10 @@ msgstr "October 9, 2026"
 msgid "OD"
 msgstr "OD"
 
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "of"
+msgstr "of"
+
 #. placeholder {0}: queue.waiting
 #: src/components/player/SkillBreakdown.tsx
 msgid "of {0}"
@@ -12844,13 +12913,17 @@ msgstr "One of the images can't be recorded into a video because of its origin."
 msgid "One pack to clear it."
 msgstr "One pack to clear it."
 
+#: src/lib/chain-run.ts
+msgid "One shot"
+msgstr "One shot"
+
 #: src/routes/dan-estimates.tsx
 msgid "one skill, no split"
 msgstr "one skill, no split"
 
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "One spin of the reel: a prize for the next round."
-msgstr "One spin of the reel: a prize for the next round."
+#~ msgid "One spin of the reel: a prize for the next round."
+#~ msgstr "One spin of the reel: a prize for the next round."
 
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
@@ -13353,6 +13426,10 @@ msgstr "Overflow"
 msgid "Overjoy"
 msgstr "Overjoy"
 
+#: src/lib/chain-run.ts
+msgid "Overkill"
+msgstr "Overkill"
+
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Overlay scroll speed"
 msgstr "Overlay scroll speed"
@@ -13581,6 +13658,10 @@ msgstr "pause overlay, fail and section screens, countdown"
 msgid "Pause preview"
 msgstr "Pause preview"
 
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Pays"
+msgstr "Pays"
+
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Peak"
@@ -13654,6 +13735,10 @@ msgstr "percentiles are among tracked players"
 msgid "Perfect"
 msgstr "Perfect"
 
+#: src/lib/chain-run.ts
+msgid "Perfect chain"
+msgstr "Perfect chain"
+
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
@@ -13725,6 +13810,10 @@ msgstr "Pick one of two common charms."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Pick one to load it into the editor."
 msgstr "Pick one to load it into the editor."
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Pick several"
+msgstr "Pick several"
 
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Pick several cards"
@@ -13810,6 +13899,10 @@ msgstr "Plasma"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "play"
 msgstr "play"
+
+#: src/lib/chain-run.ts
+msgid "Play a 6-card row with no breaks."
+msgstr "Play a 6-card row with no breaks."
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/StreakGame.tsx
@@ -14587,6 +14680,10 @@ msgstr "queued"
 msgid "Queued: {0} gold, {1} rainbow"
 msgstr "Queued: {0} gold, {1} rainbow"
 
+#: src/lib/chain-run.ts
+msgid "Quick clear"
+msgstr "Quick clear"
+
 #: src/lib/pack-run.ts
 msgid "Quick Retry"
 msgstr "Quick Retry"
@@ -14808,6 +14905,10 @@ msgstr "Ratio"
 #: src/routes/recommendations.tsx
 msgid "raw difficulty"
 msgstr "raw difficulty"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Rd"
+msgstr "Rd"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Re-render every keymode"
@@ -15094,7 +15195,11 @@ msgstr "Redo (Ctrl+Shift+Z)"
 msgid "Redraw"
 msgstr "Redraw"
 
-#: src/components/packs/run/chain/ChainHud.tsx
+#. placeholder {0}: shown.redrawsLeft
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Redraw ({0} left)"
+msgstr "Redraw ({0} left)"
+
 #: src/lib/chain-run.ts
 msgid "Redraws"
 msgstr "Redraws"
@@ -15243,6 +15348,11 @@ msgstr "Remove {tag}"
 #: src/components/packs/run/chain/ChainShop.tsx
 msgid "Remove a card"
 msgstr "Remove a card"
+
+#. placeholder {0}: CHAIN_RULES.removePrice
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Remove a card ({0} shards)"
+msgstr "Remove a card ({0} shards)"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Remove all"
@@ -15480,6 +15590,11 @@ msgstr "report this server"
 msgid "Reroll"
 msgstr "Reroll"
 
+#. placeholder {0}: CHAIN_RULES.rerollPrice
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Reroll ({0} shards)"
+msgstr "Reroll ({0} shards)"
+
 #: src/routes/maps.tsx
 msgid "Reroll settings"
 msgstr "Reroll settings"
@@ -15710,7 +15825,6 @@ msgid "rough estimate, may be off"
 msgstr "rough estimate, may be off"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-#: src/components/packs/run/chain/ChainHud.tsx
 msgid "Round"
 msgstr "Round"
 
@@ -15724,6 +15838,16 @@ msgstr "Round {0}"
 msgid "Round {0} cleared"
 msgstr "Round {0} cleared"
 
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Round {round}"
+msgstr "Round {round}"
+
+#. placeholder {0}: formatChainScore(over.roundScore)
+#. placeholder {1}: formatChainScore(over.target)
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Round {round} fell short: <0>{0}</0> of <1>{1}</1>"
+msgstr "Round {round} fell short: <0>{0}</0> of <1>{1}</1>"
+
 #: src/lib/chain-run.ts
 msgid "Round {round} pack"
 msgstr "Round {round} pack"
@@ -15732,7 +15856,7 @@ msgstr "Round {round} pack"
 msgid "Row"
 msgstr "Row"
 
-#: src/components/packs/run/chain/ChainHud.tsx
+#: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Rows"
 msgstr "Rows"
 
@@ -15779,6 +15903,10 @@ msgstr "Run failed"
 #: src/components/packs/run/RunInfo.tsx
 msgid "Run info"
 msgstr "Run info"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Run over"
+msgstr "Run over"
 
 #: src/components/communities/field-options.tsx
 msgid "Russian"
@@ -16591,7 +16719,6 @@ msgstr "Seven Keys"
 msgid "shards"
 msgstr "shards"
 
-#: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/RunHud.tsx
 #: src/lib/chain-run.ts
 msgid "Shards"
@@ -16951,6 +17078,10 @@ msgstr "Side by Side"
 msgid "Sightread"
 msgstr "Sightread"
 
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Sign for the next round"
+msgstr "Sign for the next round"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Sign in again to send a gift."
 msgstr "Sign in again to send a gift."
@@ -17025,6 +17156,14 @@ msgstr "Sign in with osu! to see who has pulled your card."
 msgid "Sign in with osu! to see your uploads."
 msgstr "Sign in with osu! to see your uploads."
 
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Sign one for round {nextRound}. Meet it and it pays on the clear."
+msgstr "Sign one for round {nextRound}. Meet it and it pays on the clear."
+
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Signed"
+msgstr "Signed"
+
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/layout/Nav.tsx
 msgid "Signed in as"
@@ -17044,6 +17183,10 @@ msgstr "Signed in as {0}. {activeInstallations} connected."
 #: src/routes/companella.tsx
 msgid "Signed in as {0}. Nothing is connected yet."
 msgstr "Signed in as {0}. Nothing is connected yet."
+
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Signed: tap to unsign"
+msgstr "Signed: tap to unsign"
 
 #: src/lib/supporter-ranks.ts
 msgid "Silver"
@@ -17110,6 +17253,7 @@ msgid "Sketch crown"
 msgstr "Sketch crown"
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Sketchbook"
 msgstr "Sketchbook"
 
@@ -17597,8 +17741,8 @@ msgid "Spell card"
 msgstr "Spell card"
 
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "Spin"
-msgstr "Spin"
+#~ msgid "Spin"
+#~ msgstr "Spin"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -17610,8 +17754,8 @@ msgid "Spotlight"
 msgstr "Spotlight"
 
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "Spun this visit."
-msgstr "Spun this visit."
+#~ msgid "Spun this visit."
+#~ msgstr "Spun this visit."
 
 #: src/components/supporter/loadout.ts
 msgid "SSR card"
@@ -18171,7 +18315,6 @@ msgstr "Taped page"
 msgid "target"
 msgstr "target"
 
-#: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/RunHud.tsx
 msgid "Target"
 msgstr "Target"

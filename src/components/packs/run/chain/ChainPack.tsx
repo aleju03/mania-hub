@@ -116,9 +116,11 @@ export function ChainPack({
           className="relative block cursor-pointer disabled:cursor-default"
           style={{ width, height }}
         >
-          <span className="absolute inset-0 translate-x-[4px] translate-y-[9px] rounded-[6px] bg-black/45" style={{ clipPath: torn ? bodyClip : undefined }} />
-          {/* The body, its top edge the tear line once torn. */}
-          <span className="absolute inset-0 rounded-[6px]" style={{ ...art, clipPath: torn ? bodyClip : undefined }} />
+          {/* The body, its top edge the tear line once torn. The pouch art is
+              cut to its own shape, so its shadow is a drop shadow. */}
+          <span className="absolute inset-0" style={{ filter: thumb ? "drop-shadow(4px 9px 6px rgba(0,0,0,0.5))" : undefined }}>
+            <span className="absolute inset-0 rounded-[6px]" style={{ ...art, clipPath: torn ? bodyClip : undefined }} />
+          </span>
           {/* The top: part of the pack until it tears, then its own piece. */}
           <motion.span
             className="absolute inset-0 rounded-[6px]"

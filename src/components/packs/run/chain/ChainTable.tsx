@@ -16,6 +16,9 @@ import {
   type ChainCard,
   type ChainCardInstance,
   type ChainPayLine,
+  type ChainContract,
+  CHAIN_CONTRACT_COPY,
+  chainReelTile,
   type ChainPlayOutcome,
   type ChainWysiField,
   type ChainWysiStamp,
@@ -25,7 +28,9 @@ import {
 } from "#/lib/chain-run";
 import type { PackTypeId } from "#/lib/packs";
 import { getCachedCardBackDataUrl } from "../../packArt";
-import { TriangleBackdrop } from "./TriangleBackdrop";
+import { PaintBackdrop } from "./PaintBackdrop";
+import { takeChainEntryOrigin } from "./chainEntry";
+import { ChainButtons, IconFan, IconSwap, MARKER } from "./chainKit";
 import { RUN_FEEL } from "../runFeel";
 import { juice } from "../runJuice";
 import { runSound } from "../runSound";
@@ -33,7 +38,7 @@ import { useShudder } from "../shopMotion";
 import { Shards } from "../Shards";
 import { ChainBoard, type CardEnter, type LinkFx } from "./ChainBoard";
 import { ChainDetailsLayer, hideChainDetails } from "./ChainDetails";
-import { ChainOver, ChainStart } from "./ChainEnd";
+import { BoardRows, ChainOver, ChainStart, useBoard } from "./ChainEnd";
 import { CHAIN_FEEL } from "./chainFeel";
 import { ChainScenes, ChainTopBar, HudDeck } from "./ChainHud";
 import { setWysiRunKey } from "./wysiSeen";
@@ -41,6 +46,7 @@ import { boardLayout, type BoardLayout } from "./chainLayout";
 import { ChainPackStage, chainPackType, DeckPile, type PackKeepOutcome, type StageName } from "./ChainPackStage";
 import { ChainScoring } from "./ChainScoring";
 import { ChainBoostChips } from "./ChainReel";
+import { ContractTracker } from "./ChainContracts";
 import { ChainShop, type ShopActResult } from "./ChainShop";
 import type { ChainActOutcome } from "./useChainRun";
 
@@ -83,6 +89,8 @@ interface PlayState {
   before: ChainRunView;
   /* A 727 the row left on the table, stamped once the row lands. */
   wysi: ChainWysiStamp | null;
+  /* The signed contract, settled by this row (a clear or a failed round). */
+  contract: { contract: ChainContract; met: boolean } | null;
 }
 
 type Aftermath =
@@ -589,7 +597,7 @@ export function ChainTable(props: ChainTableProps) {
     setCardCombo({});
     setHandsLit([]);
     setScoreOverride(before.roundScore);
-    setPlay({ row: result.row, outcome: result.outcome, pay: result.pay, forgotten: result.forgotten, ascended: result.ascended, before, wysi: result.wysi ?? null });
+    setPlay({ row: result.row, outcome: result.outcome, pay: result.pay, forgotten: result.forgotten, ascended: result.ascended, before, wysi: result.wysi ?? null, contract: result.contract ?? null });
     signal("play:start");
   }, [arranging, doAct, playShudder, rowUids, shown, signal]);
 
@@ -638,7 +646,7 @@ export function ChainTable(props: ChainTableProps) {
 
   const onReplayDone = useCallback(async () => {
     if (!play) return;
-    const { outcome, pay, forgotten, before, row, wysi } = play;
+    const { outcome, pay, forgotten, before, row, wysi, contract } = play;
     signal("play:slam");
     // The round score (or round and target) lands now; shards with the pay.
     if (wysi) stampWysi(wysi, (on) => on !== "shards" || outcome !== "cleared");
@@ -692,6 +700,20 @@ export function ChainTable(props: ChainTableProps) {
       await wait(CHAIN_FEEL.pay.bannerMs + CHAIN_FEEL.pay.afterMs);
       runSound.fireLoopStop();
       setAftermath(null);
+      // The signed contract settles after the pay.
+      if (contract) {
+        const name = i18n._(CHAIN_CONTRACT_COPY[contract.contract.id].name);
+        if (contract.met) {
+          const prize = chainReelTile(contract.contract.prize, i18n);
+          setAftermath({ kind: "banner", text: t`Contract met: ${name}. ${prize.text}`, tone: "gold" });
+          runSound.charmFire(4);
+        } else {
+          setAftermath({ kind: "banner", text: t`Contract missed: ${name}`, tone: "red" });
+          runSound.refuse();
+        }
+        await wait(1500);
+        setAftermath(null);
+      }
       // The row and hand leave for the deck before the keep pick deals in.
       setLeaving(true);
       const travel = reducedMotion ? 0 : 40 * Math.min(12, before.hand.length) + 320;
@@ -837,8 +859,42 @@ export function ChainTable(props: ChainTableProps) {
   const target = shown?.target ?? 0;
   const fire = Boolean(shown && target > 0 && roundScore >= target && (play || aftermath?.kind === "clear"));
   const overNow = Boolean(shown?.phase === "over" && !play);
+  /* Opened from the Overjoy doodle: the paint pours out of it and swallows
+     the page, a circle growing from the doodle, the swirl racing while it
+     spreads and the table fading in behind it. */
+  const [entry, setEntry] = useState<{ x: number; y: number; r: number } | null>(() => {
+    if (typeof window === "undefined" || reducedMotion) return null;
+    const at = takeChainEntryOrigin();
+    if (!at) return null;
+    const y = at.y - 60;
+    const r = Math.hypot(Math.max(at.x, window.innerWidth - at.x), Math.max(y, window.innerHeight - y)) + 40;
+    return { x: at.x, y, r };
+  });
+  const [entering, setEntering] = useState(Boolean(entry));
+  /* Starts closed, opens on the next frames so the transition runs. */
+  const [poured, setPoured] = useState(false);
+  useEffect(() => {
+    if (!entry || poured) return;
+    let inner = 0;
+    const outer = window.requestAnimationFrame(() => {
+      inner = window.requestAnimationFrame(() => setPoured(true));
+    });
+    return () => {
+      window.cancelAnimationFrame(outer);
+      window.cancelAnimationFrame(inner);
+    };
+  }, [entry, poured]);
+  useEffect(() => {
+    if (!entering) return;
+    const timer = window.setTimeout(() => setEntering(false), CHAIN_ENTRY_MS + 500);
+    return () => window.clearTimeout(timer);
+  }, [entering]);
+  /* Room beside the row for the board: wide tables, not at the run's end
+     (which has its own). */
+  const showSideBoard = Boolean(!narrow && box.width >= 1380 && view && !overNow && view.phase !== "over");
+  const sideBoard = useBoard(showSideBoard ? loadBoard : noBoard, `${view?.runNo ?? 0}:${shown?.round ?? 0}`);
   /* The room only brightens with heat: more, faster, lighter triangles. */
-  const roomHeat = overNow ? 0 : fire ? 1 : play && heat === "fire" ? 0.85 : play && heat === "mod" ? 0.45 : 0;
+  const roomHeat = entering ? 1 : overNow ? 0 : fire ? 1 : play && heat === "fire" ? 0.85 : play && heat === "mod" ? 0.45 : 0;
   const shards = shardOverride ?? shown?.shards ?? 0;
   const showRound = Boolean(shown && shown.round > 0 && shown.phase !== "over");
   const scenesNode = shown ? (
@@ -873,8 +929,27 @@ export function ChainTable(props: ChainTableProps) {
   const actionsVisible = Boolean(showBoard && !play && !needsRoundPack && !aftermath && !leaving && !failedRow && layout);
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-[60px] z-40 select-none overflow-hidden bg-osu-b6 text-white" translate="no">
-      <TriangleBackdrop heat={roomHeat} dim={overNow} reducedMotion={reducedMotion} />
+    <div
+      className="fixed inset-x-0 top-[60px] z-40 h-[calc(100dvh-60px)] pb-[env(safe-area-inset-bottom)] select-none overflow-hidden bg-osu-b6 text-white"
+      translate="no"
+      style={
+        entry
+          ? {
+              clipPath: `circle(${poured ? entry.r : 0}px at ${entry.x}px ${entry.y}px)`,
+              transition: `clip-path ${CHAIN_ENTRY_MS}ms cubic-bezier(0.75, 0, 0.25, 1)`,
+            }
+          : undefined
+      }
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && event.propertyName === "clip-path") setEntry(null);
+      }}
+    >
+      <PaintBackdrop
+        stage={overNow ? "over" : view?.phase === "shop" && !play ? "shop" : stagePack || needsRoundPack ? "pack" : "round"}
+        heat={roomHeat}
+        dim={overNow}
+        reducedMotion={reducedMotion}
+      />
       <motion.div
         className="relative h-full"
         style={{ x: leanSpringX, y: leanSpringY }}
@@ -903,8 +978,6 @@ export function ChainTable(props: ChainTableProps) {
             ghostScore={play ? play.before.roundScore + live : arranging ? roundScore + plainTotal : roundScore}
             crossFlash={crossFlash}
             star={shown?.star ?? null}
-            rowsLeft={shown?.rowsLeft ?? 0}
-            redrawsLeft={shown?.redrawsLeft ?? 0}
             shards={shards}
             showRound={showRound}
             showMeter={Boolean(showRound && (shown?.phase === "play" || play))}
@@ -955,43 +1028,66 @@ export function ChainTable(props: ChainTableProps) {
                 />
                 {!needsRoundPack && !layout.narrow && <DeckPile layout={layout} count={shown.drawPileCount} backUrl={backUrl} bump={0} reducedMotion={reducedMotion} />}
                 {actionsVisible && (
-                  <div className="absolute inset-x-0 flex items-center justify-center gap-3" style={{ top: layout.actionsY, height: layout.narrow ? 48 : 52 }}>
-                    {/* Pick several: tap cards to pick them, tap a picked one
-                        to send them all. */}
-                    <button
-                      type="button"
-                      aria-pressed={selectMode}
-                      aria-label={t`Pick several cards`}
-                      title={t`Pick several cards`}
-                      onClick={() => {
-                        runSound.uiTap();
-                        setSelectMode((current) => {
-                          if (current) setSelected([]);
-                          return !current;
-                        });
-                      }}
-                      className={`grid shrink-0 place-items-center rounded-full transition hover:brightness-125 ${layout.narrow ? "h-10 w-10" : "h-11 w-11"} ${selectMode ? "bg-osu-pink text-[#120f1a]" : "bg-white/10 text-white"}`}
-                    >
-                      <PickSeveralGlyph />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!rowUids.length || shown.redrawsLeft <= 0 || busy}
-                      onClick={() => void redraw()}
-                      className={`inline-flex items-center gap-2 rounded-full bg-white/10 font-black text-white transition hover:brightness-125 disabled:opacity-35 ${layout.narrow ? "px-4 py-2 text-[14px]" : "px-6 py-2.5 text-[16px]"}`}
-                    >
-                      <Trans>Redraw</Trans>
-                      <span className="tabular-nums text-[#8fc1ff]">{shown.redrawsLeft}</span>
-                    </button>
-                    <motion.button
-                      type="button"
-                      style={{ x: playShudderX }}
-                      disabled={busy}
-                      onClick={() => void playRow()}
-                      className={`rounded-full font-black transition hover:brightness-110 ${rowUids.length ? "bg-osu-pink text-[#120f1a]" : "bg-white/10 text-white/45"} ${layout.narrow ? "px-6 py-2 text-[15px]" : "px-9 py-2.5 text-[17px]"}`}
-                    >
-                      <Trans>Play row</Trans>
-                    </motion.button>
+                  <div className="absolute inset-x-0 flex items-center justify-center" style={{ top: layout.actionsY, height: layout.narrow ? 48 : 52 }}>
+                    {/* Pick several (tap cards to pick them, tap a picked one
+                        to send them all), the row, and a redraw, chained.
+                        Rows and redraws left sit on the buttons that spend
+                        them. */}
+                    <ChainButtons
+                      compact={layout.narrow}
+                      items={[
+                        {
+                          key: "pick",
+                          title: t`Pick several cards`,
+                          label: <Trans>Pick several</Trans>,
+                          icon: <IconFan size={layout.narrow ? 26 : 30} />,
+                          active: selectMode,
+                          onClick: () => {
+                            runSound.uiTap();
+                            setSelectMode((current) => {
+                              if (current) setSelected([]);
+                              return !current;
+                            });
+                          },
+                        },
+                        {
+                          key: "play",
+                          primary: true,
+                          title: t`Play row`,
+                          label: <Trans>Play row</Trans>,
+                          sub: layout.narrow ? undefined : (
+                            <>
+                              {Array.from({ length: CHAIN_RULES.rows }, (_, index) => (
+                                <span key={index} className={`inline-block h-[8px] w-[8px] rounded-full bg-current ${index < shown.rowsLeft ? "" : "opacity-25"}`} />
+                              ))}
+                              <span className="ml-0.5">
+                                <Trans>{shown.rowsLeft} left</Trans>
+                              </span>
+                            </>
+                          ),
+                          badge: shown.rowsLeft,
+                          tone: "#f3e9d8",
+                          muted: !rowUids.length,
+                          disabled: busy,
+                          style: { x: playShudderX },
+                          onClick: () => void playRow(),
+                        },
+                        {
+                          key: "redraw",
+                          title: t`Redraw (${shown.redrawsLeft} left)`,
+                          label: (
+                            <>
+                              <Trans>Redraw</Trans> <span style={{ color: "#7fc4ff" }}>x{shown.redrawsLeft}</span>
+                            </>
+                          ),
+                          icon: <IconSwap size={layout.narrow ? 26 : 30} />,
+                          tone: "#7fc4ff",
+                          badge: shown.redrawsLeft,
+                          disabled: !rowUids.length || shown.redrawsLeft <= 0 || busy,
+                          onClick: () => void redraw(),
+                        },
+                      ]}
+                    />
                   </div>
                 )}
               </>
@@ -1010,7 +1106,9 @@ export function ChainTable(props: ChainTableProps) {
                   exit={{ opacity: 0, y: 8, transition: { duration: 0.14 } }}
                   transition={{ duration: 0.18 }}
                 >
-                  <div className={`font-black italic uppercase leading-none ${layout.narrow ? "text-[22px]" : "text-[32px]"}`}>{surfaceTitle}</div>
+                  <div className="leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: layout.narrow ? 24 : 38 }}>
+                    {surfaceTitle}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1027,7 +1125,6 @@ export function ChainTable(props: ChainTableProps) {
                 reducedMotion={reducedMotion}
                 act={shopAct}
                 shake={shake}
-                holdShards={setShardOverride}
                 enterDelayMs={stagePack ? 300 : 0}
               />
             )}
@@ -1105,6 +1202,7 @@ export function ChainTable(props: ChainTableProps) {
                   setOverFresh(false);
                   void doAct({ kind: "start" });
                 }}
+                onExit={onExit}
                 onShake={shake}
               />
             )}
@@ -1121,10 +1219,20 @@ export function ChainTable(props: ChainTableProps) {
               />
             )}
 
-            {/* What the reel left for this round's first row, until it plays. */}
-            {arranging && shown?.rowBoost && (
-              <div className="pointer-events-auto absolute left-4 top-2 z-[5]">
-                <ChainBoostChips boost={shown.rowBoost} />
+            {/* The signed contract's round, and what a met one left for its
+                first row (until that row plays). */}
+            {shown?.phase === "play" && (shown.contract || (arranging && shown.rowBoost)) && (
+              <div className="pointer-events-auto absolute left-1/2 top-2 z-[5] flex -translate-x-1/2 flex-col items-center gap-2">
+                {shown.contract && (
+                  <ContractTracker
+                    contract={shown.contract}
+                    track={shown.contractTrack}
+                    roundScore={shown.roundScore}
+                    target={shown.target}
+                    narrow={layout?.narrow ?? false}
+                  />
+                )}
+                {arranging && shown.rowBoost && <ChainBoostChips boost={shown.rowBoost} />}
               </div>
             )}
 
@@ -1184,6 +1292,16 @@ export function ChainTable(props: ChainTableProps) {
           {!narrow && shown && !overNow && shown.scenes.length > 0 && (
             <div className="absolute bottom-6 left-6 z-[4]">{scenesNode}</div>
           )}
+          {/* The game's board beside the table on wide screens, this run's
+              best lit in it. */}
+          {showSideBoard && (
+            <div className="pointer-events-auto absolute left-5 top-[18%] z-[4] w-[230px]">
+              <div className="mb-2 px-2.5 leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: 22 }}>
+                <Trans>Leaderboard</Trans>
+              </div>
+              {sideBoard && <BoardRows compact entries={sideBoard} mine={best} mineName={best?.username} />}
+            </div>
+          )}
 
           {play && (
             <ChainScoring
@@ -1217,15 +1335,8 @@ export function ChainTable(props: ChainTableProps) {
 }
 
 const EMPTY = new Set<number>();
+/* The opening pour from the Overjoy doodle. */
+const CHAIN_ENTRY_MS = 850;
+const noBoard = () => Promise.resolve([] as ChainBoardEntry[]);
 
-/* Two cards fanned, the front one ticked: picking several at once. */
-function PickSeveralGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinejoin="round" aria-hidden="true">
-      <rect x="3.5" y="5" width="9" height="13" rx="1.6" transform="rotate(-10 8 11.5)" opacity={0.6} />
-      <rect x="10" y="4" width="10" height="14.5" rx="1.8" fill="currentColor" fillOpacity={0.18} />
-      <path d="M12.6 11.4 L14.6 13.4 L17.8 9.6" strokeLinecap="round" />
-    </svg>
-  );
-}
 const HAND_ORDER_PREFIX = "chain-hand-order:";

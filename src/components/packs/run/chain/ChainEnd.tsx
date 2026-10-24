@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { CHAIN_SCENE_NAMES, formatChainScore, type ChainBoardEntry, type ChainRunView } from "#/lib/chain-run";
 import { PACK_ASPECT } from "../../packArt";
 import { runSound } from "../runSound";
 import { SceneArt } from "../sceneArt";
 import { SCENE_ART_ID } from "./ChainHud";
+import { ChainButtons, KIT, MARKER, SceneMedallion } from "./chainKit";
 
 function Board({
   entries,
@@ -51,7 +52,7 @@ function Board({
   );
 }
 
-function useBoard(loadBoard: () => Promise<ChainBoardEntry[]>, key: unknown) {
+export function useBoard(loadBoard: () => Promise<ChainBoardEntry[]>, key: unknown) {
   const [entries, setEntries] = useState<ChainBoardEntry[] | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -65,8 +66,74 @@ function useBoard(loadBoard: () => Promise<ChainBoardEntry[]>, key: unknown) {
   return entries;
 }
 
-/* The run's end is the board: everyone's best runs with this run's row
-   sliding into its place, bigger than the rest, and Play again under it. */
+/* The board's rows in the run's style: rank, name, round reached and best
+   row, marker numbers. `mine` is drawn lit, wherever it sits. */
+export function BoardRows({
+  entries,
+  mine,
+  compact = false,
+  animate = false,
+  mineName,
+}: {
+  entries: ChainBoardEntry[];
+  mine: ChainBoardEntry | null;
+  compact?: boolean;
+  animate?: boolean;
+  mineName?: React.ReactNode;
+}) {
+  const others = entries.filter((entry) => entry.userId !== mine?.userId);
+  const rank = mine?.rank ?? 0;
+  const limit = compact ? 5 : 6;
+  const above = others.filter((entry) => rank === 0 || entry.rank < rank).slice(0, rank > limit + 1 ? limit - 1 : limit);
+  const below = rank > 0 ? others.filter((entry) => entry.rank > rank).slice(0, compact ? 1 : 2) : [];
+  const gap = rank > limit + 1;
+  const cols = compact ? "grid-cols-[30px_1fr_26px_64px]" : "grid-cols-[44px_1fr_56px_96px]";
+  const row = (entry: ChainBoardEntry, index: number, own: boolean) => (
+    <motion.div
+      key={own ? "mine" : entry.userId}
+      className={`grid ${cols} items-center gap-2 border-b border-[#f3e9d8]/[0.08] ${compact ? "px-2.5 py-1.5 text-[13px]" : "px-4 py-2 text-[16px]"}`}
+      style={own ? { background: "rgba(255,122,184,0.1)" } : undefined}
+      initial={animate ? (own ? { opacity: 0, y: 50, scale: 1.08 } : { opacity: 0, x: -10 }) : false}
+      animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
+      transition={own ? { type: "spring", stiffness: 280, damping: 20, delay: 0.5 } : { duration: 0.2, delay: index * 0.05 }}
+    >
+      <span className="tabular-nums" style={{ fontFamily: MARKER, color: own ? KIT.pink : "rgba(243,233,216,0.55)" }}>
+        {entry.rank > 0 ? `#${entry.rank}` : "-"}
+      </span>
+      <span className="truncate font-black" style={{ color: own ? KIT.pink : "rgba(243,233,216,0.85)" }}>
+        {own && mineName ? mineName : entry.username || "?"}
+      </span>
+      <span className="text-center tabular-nums text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: compact ? 15 : 20 }}>
+        {entry.round}
+      </span>
+      <span className="text-right tabular-nums" style={{ fontFamily: MARKER, color: KIT.gold, fontSize: compact ? 13 : 17 }}>
+        {formatChainScore(entry.bestRow)}
+      </span>
+    </motion.div>
+  );
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className={`grid ${cols} gap-2 ${compact ? "px-2.5" : "px-4"} pb-1 text-[10px] font-black uppercase tracking-[0.14em] whitespace-nowrap text-[#f3e9d8]/45`}>
+        <span />
+        <span />
+        <span className="text-center">
+          <Trans>Rd</Trans>
+        </span>
+        <span className="text-right">
+          <Trans>Best row</Trans>
+        </span>
+      </div>
+      {above.map((entry, index) => row(entry, index, false))}
+      {gap && <div className="py-0.5 text-center text-[11px] text-[#f3e9d8]/40">...</div>}
+      {mine && row(mine, above.length, true)}
+      {below.map((entry, index) => row(entry, above.length + 1 + index, false))}
+    </div>
+  );
+}
+
+/* The run's end: what ended it, the run in three numbers and its scenes in
+   their medallions, then the board with this run sliding into its place,
+   and the way back in. */
 export function ChainOver({
   view,
   best,
@@ -76,6 +143,7 @@ export function ChainOver({
   reducedMotion,
   loadBoard,
   onNewRun,
+  onExit,
   onShake,
 }: {
   view: ChainRunView;
@@ -86,8 +154,10 @@ export function ChainOver({
   reducedMotion: boolean;
   loadBoard: () => Promise<ChainBoardEntry[]>;
   onNewRun: () => void;
+  onExit: () => void;
   onShake: (amount: number) => void;
 }) {
+  const { t } = useLingui();
   const entries = useBoard(loadBoard, view.runNo);
   const animate = fresh && !reducedMotion;
   useEffect(() => {
@@ -97,76 +167,97 @@ export function ChainOver({
     // Once per end.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const round = view.over?.round ?? view.round;
+  const over = view.over;
+  const round = over?.round ?? view.round;
   const mine: ChainBoardEntry = best ?? { rank: 0, userId: -1, username: "", round, bestRow: view.bestRow, rows: view.totalRows, finished: true, updatedAt: 0 };
-  const list = entries ?? [];
-  const others = list.filter((entry) => entry.userId !== mine.userId);
-  const above = others.filter((entry) => mine.rank === 0 || entry.rank < mine.rank).slice(0, mine.rank > 6 ? 4 : 5);
-  const below = mine.rank > 0 ? others.filter((entry) => entry.rank > mine.rank).slice(0, 2) : [];
-  const gap = mine.rank > 6;
-  const plain = (entry: ChainBoardEntry, index: number) => (
+  const stat = (label: React.ReactNode, value: string, ink: string, delay: number) => (
     <motion.div
-      key={entry.userId}
-      className="grid grid-cols-[44px_1fr_auto_96px] items-baseline gap-3 px-3 py-1.5 text-[15px]"
-      initial={animate ? { opacity: 0, x: -10 } : false}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.2, delay: index * 0.05 }}
+      className="flex flex-col items-center"
+      initial={animate ? { opacity: 0, y: 14 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 380, damping: 22, delay }}
     >
-      <span className="font-black tabular-nums text-osu-f1">#{entry.rank}</span>
-      <span className="truncate font-bold">{entry.username || "?"}</span>
-      <span className="font-black tabular-nums">{entry.round}</span>
-      <span className="text-right tabular-nums text-osu-f1">{formatChainScore(entry.bestRow)}</span>
+      <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f3e9d8]/50">{label}</span>
+      <span className="leading-none tabular-nums" style={{ fontFamily: MARKER, color: ink, fontSize: narrow ? 30 : 44 }}>
+        {value}
+      </span>
     </motion.div>
   );
   return (
     <div className="absolute inset-0 z-[40] overflow-y-auto">
-      <div className={`relative mx-auto flex min-h-full w-full max-w-[520px] flex-col justify-start px-4 ${narrow ? "pb-6 pt-6" : "pb-10 pt-[9vh]"}`}>
-        <div className="grid grid-cols-[44px_1fr_auto_96px] gap-3 px-3 pb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-osu-f1">
-          <span />
-          <span />
-          <span>
-            <Trans>Round</Trans>
-          </span>
-          <span className="text-right">
-            <Trans>Best row</Trans>
-          </span>
-        </div>
-        {above.map(plain)}
-        {gap && <div className="py-0.5 text-center text-[11px] text-osu-f1">...</div>}
-        {/* This run's row, sliding up into its place. */}
+      <div className={`relative mx-auto flex min-h-full w-full max-w-[560px] flex-col items-center px-4 ${narrow ? "pb-6 pt-4" : "pb-8 pt-[3vh]"}`}>
         <motion.div
-          className="my-1 grid grid-cols-[44px_1fr_auto_96px] items-center gap-3 rounded-lg bg-osu-pink px-3 py-3 text-[#120f1a]"
-          initial={animate ? { opacity: 0, y: 70, scale: 1.12 } : false}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ type: "spring", stiffness: 260, damping: 20, delay: animate ? 0.35 : 0 }}
+          className="leading-none text-[#f3e9d8]"
+          style={{ fontFamily: MARKER, fontSize: narrow ? 46 : 72 }}
+          initial={animate ? { opacity: 0, scale: 1.4, rotate: -6 } : false}
+          animate={{ opacity: 1, scale: 1, rotate: -2 }}
+          transition={{ type: "spring", stiffness: 300, damping: 16 }}
         >
-          <span className={`font-black tabular-nums ${narrow ? "text-[20px]" : "text-[24px]"}`}>{mine.rank > 0 ? `#${mine.rank}` : "-"}</span>
-          <span className="flex min-w-0 items-center gap-2">
-            <span className={`truncate font-black ${narrow ? "text-[17px]" : "text-[20px]"}`}>{mine.username || <Trans>This run</Trans>}</span>
-            {view.scenes.map((scene) => (
-              <span key={scene.id} className="shrink-0 overflow-hidden rounded-[5px]" title={CHAIN_SCENE_NAMES[scene.id]}>
-                <SceneArt id={SCENE_ART_ID[scene.id]} size={narrow ? 20 : 24} />
-              </span>
-            ))}
-          </span>
-          <span className={`font-black italic tabular-nums ${narrow ? "text-[26px]" : "text-[34px]"}`}>{round}</span>
-          <span className={`text-right font-black tabular-nums ${narrow ? "text-[15px]" : "text-[18px]"}`}>{formatChainScore(view.bestRow)}</span>
+          <Trans>Run over</Trans>
         </motion.div>
-        {below.map((entry, index) => plain(entry, above.length + index))}
-        <motion.button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            runSound.uiTap();
-            onNewRun();
-          }}
-          className="mx-auto mt-6 rounded-full bg-white px-10 py-3.5 text-[20px] font-black text-[#120f1a] transition hover:brightness-110 disabled:opacity-50"
-          initial={animate ? { scale: 0.7, opacity: 0 } : false}
+        {over && over.reason === "failed" && (
+          <motion.div
+            className="mt-2 text-center text-[14px] font-bold text-[#f3e9d8]/70"
+            initial={animate ? { opacity: 0 } : false}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Trans>
+              Round {round} fell short: <span style={{ fontFamily: MARKER, color: KIT.cream }}>{formatChainScore(over.roundScore)}</span> of{" "}
+              <span style={{ fontFamily: MARKER, color: KIT.gold }}>{formatChainScore(over.target)}</span>
+            </Trans>
+          </motion.div>
+        )}
+        <div className={`flex items-end justify-center ${narrow ? "mt-4 gap-7" : "mt-5 gap-12"}`}>
+          {stat(<Trans>Round</Trans>, String(round), KIT.cream, 0.15)}
+          {stat(<Trans>Best row</Trans>, formatChainScore(view.bestRow), KIT.gold, 0.22)}
+          {stat(<Trans>Rows</Trans>, String(view.totalRows), KIT.pink, 0.29)}
+        </div>
+        {view.scenes.length > 0 && (
+          <div className={`flex justify-center ${narrow ? "mt-3 gap-2" : "mt-4 gap-4"}`}>
+            {view.scenes.map((scene, index) => (
+              <motion.div
+                key={scene.id}
+                title={CHAIN_SCENE_NAMES[scene.id]}
+                initial={animate ? { opacity: 0, y: -24, rotate: -12 } : false}
+                animate={{ opacity: 1, y: 0, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 260, damping: 12, delay: 0.35 + index * 0.08 }}
+              >
+                <SceneMedallion size={narrow ? 62 : 84}>
+                  <SceneArt id={SCENE_ART_ID[scene.id]} size={narrow ? 32 : 44} />
+                </SceneMedallion>
+              </motion.div>
+            ))}
+          </div>
+        )}
+        <div className={`w-full ${narrow ? "mt-4" : "mt-5"}`}>
+          {entries ? <BoardRows entries={entries} mine={mine} animate={animate} mineName={mine.username || <Trans>This run</Trans>} /> : <div className="h-[160px]" />}
+        </div>
+        <motion.div
+          className="mt-6"
+          initial={animate ? { scale: 0.8, opacity: 0 } : false}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 420, damping: 18, delay: animate ? 0.8 : 0 }}
         >
-          <Trans>Play again</Trans>
-        </motion.button>
+          <ChainButtons
+            big={!narrow}
+            compact={narrow}
+            items={[
+              { key: "exit", title: t`Back to packs`, label: <Trans>Back to packs</Trans>, onClick: onExit },
+              {
+                key: "again",
+                primary: true,
+                title: t`Play again`,
+                label: <Trans>Play again</Trans>,
+                disabled: busy,
+                onClick: () => {
+                  runSound.uiTap();
+                  onNewRun();
+                },
+              },
+            ]}
+          />
+        </motion.div>
       </div>
     </div>
   );

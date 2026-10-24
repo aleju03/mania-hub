@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
-  CHAIN_REEL,
   CHAIN_RULES,
   CHAIN_SCENE_COPY,
   CHAIN_SCENE_INK,
@@ -12,7 +11,6 @@ import {
   type ChainAction,
   type ChainActionResult,
   type ChainOffer,
-  type ChainReelPrize,
   type ChainRunView,
   type ChainSceneId,
 } from "#/lib/chain-run";
@@ -23,12 +21,13 @@ import { SHOP_FEEL } from "../shopFeel";
 import { useShardFloats, useShudder } from "../shopMotion";
 import { Shards } from "../Shards";
 import { ChainCardFace } from "./ChainCardFace";
-import { ChainReel, ReelOffer } from "./ChainReel";
+import { ShopContracts } from "./ChainContracts";
 import { SCENE_ART_ID } from "./ChainHud";
 import type { BoardLayout } from "./chainLayout";
 import { chainPackType } from "./ChainPackStage";
 import { crispPackUrl } from "./packArtCrisp";
 import { useChainPackArt } from "./chainPackArt";
+import { ChainButtons, IconCut, IconSwap, KIT, KitGem, MARKER } from "./chainKit";
 
 export interface ShopActResult {
   ok: boolean;
@@ -57,15 +56,94 @@ function PriceButton({
   return (
     <motion.button
       type="button"
-      style={{ x }}
       disabled={disabled}
       onClick={(event) => onBuy(shudder, event.currentTarget)}
       aria-disabled={!affordable}
-      className={`inline-flex items-center gap-2 rounded-full font-black transition disabled:opacity-40 ${affordable ? "bg-osu-pink text-[#120f1a] hover:brightness-110" : "bg-white/[0.07] text-white/40"} ${big ? "px-5 py-2.5 text-[15px]" : "px-4 py-2 text-[14px]"}`}
+      className={`relative inline-flex items-center gap-1.5 leading-none transition hover:brightness-105 disabled:opacity-40 ${big ? "py-2 pl-7 pr-4 text-[22px]" : "py-1.5 pl-6 pr-3 text-[19px]"}`}
+      style={{
+        x,
+        fontFamily: MARKER,
+        background: affordable ? KIT.cream : "#8f887f",
+        color: KIT.dark,
+        clipPath: "polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%)",
+        filter: "drop-shadow(0 3px 0 rgba(0,0,0,0.4))",
+      }}
     >
-      {label}
-      <Shards value={price} />
+      {/* The tag's punched hole. */}
+      <span aria-hidden="true" className="absolute left-[11px] top-1/2 h-[8px] w-[8px] -translate-y-1/2 rounded-full" style={{ background: KIT.dark }} />
+      <span>{label}</span>
+      <KitGem size={big ? 22 : 18} />
+      <span className="tabular-nums">{price}</span>
     </motion.button>
+  );
+}
+
+/* Where an offer hangs from the shop's chain: a short cord and the ring the
+   garland passes through. */
+function Hanger() {
+  return (
+    <svg width={20} height={30} viewBox="0 0 20 30" className="-mb-1 shrink-0 overflow-visible" aria-hidden="true">
+      <line x1={10} y1={6} x2={10} y2={30} stroke="rgba(243,233,216,0.45)" strokeWidth={2} />
+      <circle data-hanger="" cx={10} cy={6} r={5.5} fill={KIT.dark} stroke={KIT.cream} strokeWidth={2.2} />
+    </svg>
+  );
+}
+
+/* The chain the offers hang from: sagging arcs between their rings, out to
+   both edges, measured from the rings so it follows the stock as it deals,
+   sells and rerolls. */
+function Garland({ deps }: { deps: unknown[] }) {
+  const [path, setPath] = useState<{ d: string; w: number; h: number; top: number } | null>(null);
+  /* Measured from its own row (the parent): a parent's ref is not set yet
+     when a child's layout effect first runs. */
+  const anchorRef = useRef<SVGSVGElement>(null);
+  useLayoutEffect(() => {
+    const row = anchorRef.current?.parentElement;
+    if (!row) return;
+    let frame = 0;
+    const measure = () => {
+      const box = row.getBoundingClientRect();
+      const points = [...row.querySelectorAll<SVGCircleElement>("[data-hanger]")]
+        .map((ring) => ring.getBoundingClientRect())
+        .filter((rect) => rect.width > 0)
+        .map((rect) => [rect.left + rect.width / 2 - box.left, rect.top + rect.height / 2 - box.top] as const)
+        .sort((a, b) => a[0] - b[0]);
+      if (points.length < 2) {
+        setPath(null);
+        return;
+      }
+      const top = Math.min(...points.map((point) => point[1]));
+      const ends = [[points[0][0] - 120, top - 18] as const, ...points, [points[points.length - 1][0] + 120, top - 18] as const];
+      let d = `M${ends[0][0]} ${ends[0][1]}`;
+      for (let index = 1; index < ends.length; index += 1) {
+        const [x0, y0] = ends[index - 1];
+        const [x1, y1] = ends[index];
+        d += ` Q ${(x0 + x1) / 2} ${Math.max(y0, y1) + 26} ${x1} ${y1}`;
+      }
+      setPath({ d, w: box.width, h: box.height, top });
+    };
+    const schedule = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(measure);
+    };
+    schedule();
+    // The stock deals in with springs; follow it until it settles.
+    const settle = window.setInterval(measure, 120);
+    const stop = window.setTimeout(() => window.clearInterval(settle), 1600);
+    const observer = new ResizeObserver(schedule);
+    observer.observe(row);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(settle);
+      window.clearTimeout(stop);
+      observer.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return (
+    <svg ref={anchorRef} className="pointer-events-none absolute left-0 top-0 overflow-visible" width={path?.w ?? 0} height={path?.h ?? 0} aria-hidden="true">
+      {path && <path d={path.d} fill="none" stroke="rgba(243,233,216,0.4)" strokeWidth={3} strokeLinecap="round" />}
+    </svg>
   );
 }
 
@@ -82,9 +160,9 @@ function PackOffer({ offer, thumb: fallback, height, reducedMotion }: { offer: C
       whileHover={reducedMotion ? undefined : { rotate: -3, scale: 1.05, y: -4 }}
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
     >
-      <div className="absolute inset-0 translate-x-[3px] translate-y-[7px] rounded-[6px] bg-black/45" />
-      <div className="run-pack-bob absolute inset-0 overflow-hidden rounded-[6px] bg-osu-b3">
-        {thumb && <img src={thumb} alt="" draggable={false} className="h-full w-full object-cover" />}
+      {/* The pouch is cut to its own shape, so its shadow follows it. */}
+      <div className="run-pack-bob absolute inset-0" style={{ filter: "drop-shadow(3px 8px 6px rgba(0,0,0,0.55))" }}>
+        {thumb && <img src={thumb} alt="" draggable={false} className="h-full w-full object-contain" />}
       </div>
       {offer.keep > 1 && (
         <span className="absolute -right-2 -top-2 rounded-full bg-[#ffd36b] px-2 py-0.5 text-[11px] font-black text-[#120f1a]">
@@ -106,9 +184,6 @@ export interface ChainShopProps {
   reducedMotion: boolean;
   act: (action: ChainAction) => Promise<ShopActResult>;
   shake: (amount: number) => void;
-  /* Holds the HUD's shard count (null lets go), so a spin's prize lands
-     when the reel stops rather than when the server answers. */
-  holdShards: (value: number | null) => void;
 }
 
 /* The shop between rounds, shaped around buying: the three packs and the
@@ -116,7 +191,7 @@ export interface ChainShopProps {
    removing a card and a reroll beside them; Play round N to leave. A buy that
    goes through thumps the table and the price rises off the shard count; a
    refused one shakes the button and says why. */
-export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, shake, holdShards, enterDelayMs = 0 }: ChainShopProps) {
+export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, shake, enterDelayMs = 0 }: ChainShopProps) {
   const lead = enterDelayMs / 1000;
   const { i18n, t } = useLingui();
   const [floats, pushFloat] = useShardFloats();
@@ -124,7 +199,6 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
   const [removing, setRemoving] = useState(false);
   const [rerolls, setRerolls] = useState(0);
   /* The reel playing over the shop after a bought spin. */
-  const [spinning, setSpinning] = useState<{ prize: ChainReelPrize; shards: number } | null>(null);
   /* A bought scene card flies from the shop to its place among the held
      ones. */
   const sceneArtRef = useRef<HTMLDivElement>(null);
@@ -140,7 +214,9 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
   }, [flight]);
   const shop = view.shop;
   const narrow = layout.narrow;
-  const packHeight = narrow ? 112 : Math.min(220, layout.height * 0.27);
+  const [removeX, shudderRemove] = useShudder(reducedMotion);
+  const [rerollX, shudderReroll] = useShudder(reducedMotion);
+  const packHeight = narrow ? 112 : Math.min(200, layout.height * 0.22);
 
   const floatAtShards = (value: number) => {
     const counter = [...document.querySelectorAll<HTMLElement>("[data-chain-shards]")].find((element) => element.offsetParent !== null);
@@ -156,10 +232,8 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
       runSound.refuse();
       return false;
     }
-    if (action.kind === "spin") holdShards(view.shards - price);
     const outcome = await act(action);
     if (!outcome.ok) {
-      if (action.kind === "spin") holdShards(null);
       shudder();
       runSound.refuse();
       if (outcome.error !== "stale") {
@@ -169,9 +243,9 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
       return false;
     }
     if (price) floatAtShards(-price);
-    if (action.kind === "spin") {
-      if (outcome.result?.kind === "spin") setSpinning({ prize: outcome.result.prize, shards: view.shards - price });
-      else holdShards(null);
+    if (action.kind === "sign") {
+      runSound.uiTap();
+      shake(0.3);
       return true;
     }
     if (action.kind === "reroll") {
@@ -193,195 +267,200 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
   const deck = view.deck;
   return (
     <div data-chain-shop="" className="absolute inset-0">
-      <AnimatePresence>
-        {spinning && (
-          <ChainReel
-            prizes={[spinning.prize]}
-            narrow={narrow}
-            reducedMotion={reducedMotion}
-            onShake={shake}
-            onPrize={(prize) => {
-              // The count lets go at the stop; shards won rise off it.
-              // Run shards only; Wallet pays the pack wallet, off this count.
-              const run = prize.id === "shards" ? prize.amount ?? 0 : 0;
-              holdShards(spinning.shards + run);
-              if (run) floatAtShards(run);
-            }}
-            onDone={() => {
-              holdShards(null);
-              setSpinning(null);
-            }}
-          />
-        )}
-      </AnimatePresence>
-      <motion.div
-        className="absolute inset-x-0 flex flex-col items-center"
-        style={{ top: narrow ? 8 : Math.max(20, layout.height * 0.08) }}
-        initial={reducedMotion ? false : { y: 40, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ ...SHOP_FEEL.panel.spring, delay: lead }}
-      >
-        {/* The title is the table's (one title at a time); this keeps its room. */}
-        <div aria-hidden="true" className={`leading-none ${narrow ? "h-[22px]" : "h-[32px]"}`} />
 
-        {/* Packs and the scene card on offer. */}
-        {/* A fixed height on a phone, so the buttons under the stock do not
-            jump while it rerolls. */}
-        <div
-          className={`mt-5 flex flex-wrap items-end justify-center ${narrow ? "content-start gap-x-4 gap-y-5" : "gap-12"}`}
-          style={narrow ? { minHeight: 372 } : undefined}
+      {/* Scrolls when the stock runs taller than a short phone screen. */}
+      {/* On a phone it starts under the table's title, so the stock
+          scrolls beneath it instead of over it. */}
+      <div
+        className={`absolute inset-x-0 bottom-0 overflow-y-auto overscroll-contain ${narrow ? "[mask-image:linear-gradient(to_bottom,transparent,black_14px)]" : ""}`}
+        style={{ top: narrow ? 40 : 0 }}
+      >
+        <motion.div
+          className="absolute inset-x-0 flex flex-col items-center pb-6"
+          style={{ top: narrow ? 0 : Math.max(20, layout.height * 0.08) }}
+          initial={reducedMotion ? false : { y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ ...SHOP_FEEL.panel.spring, delay: lead }}
         >
-          {shop.offers.map((offer, index) => (
-            <AnimatePresence key={`${rerolls}-${index}`} mode="popLayout">
-              {!offer.sold && (
+          {/* The title is the table's (one title at a time); this keeps its
+              room (a phone's scroll box already starts under it). */}
+          {!narrow && <div aria-hidden="true" className="h-[32px] leading-none" />}
+
+          {/* Packs and the scene card on offer. */}
+          {/* A fixed height on a phone, so the buttons under the stock do not
+              jump while it rerolls. */}
+          <div
+            className={`relative mt-5 flex flex-wrap items-end justify-center ${narrow ? "content-start gap-x-4 gap-y-5" : "gap-12"}`}
+            style={narrow ? { minHeight: 372 } : undefined}
+          >
+            {!narrow && <Garland deps={[rerolls, shop.offers.map((offer) => offer.sold).join(), shop.scene, layout.width]} />}
+            {shop.offers.map((offer, index) => (
+              <AnimatePresence key={`${rerolls}-${index}`} mode="popLayout">
+                {!offer.sold && (
+                  <motion.div
+                    key={`${rerolls}-${index}`}
+                    className="flex flex-col items-center gap-2"
+                    initial={reducedMotion ? false : { y: SHOP_FEEL.deal.fromY, rotateY: SHOP_FEEL.deal.fromRotateY, scale: SHOP_FEEL.deal.fromScale, opacity: 0 }}
+                    animate={{ y: 0, rotateY: 0, scale: 1, opacity: 1 }}
+                    exit={{ y: -60, scale: 0.6, opacity: 0, transition: { duration: 0.22 } }}
+                    transition={{ ...SHOP_FEEL.deal.spring, delay: lead + (index * SHOP_FEEL.deal.staggerMs) / 1000 }}
+                    onAnimationStart={() => runSound.shopIn(index)}
+                  >
+                    {!narrow && <Hanger />}
+                    <PackOffer offer={offer} thumb={crispPackUrl(chainPackType("shop", offer)) ?? packThumbs[chainPackType("shop", offer)] ?? null} height={packHeight} reducedMotion={reducedMotion} />
+                    <div className="leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: narrow ? 14 : 19 }}>
+                      {chainOfferName(offer, i18n)}
+                    </div>
+                    <PriceButton
+                      affordable={offer.price <= view.shards}
+                      price={offer.price}
+                      label={<Trans>Buy</Trans>}
+                      disabled={busy}
+                      reducedMotion={reducedMotion}
+                      onBuy={(shudder) => void run({ kind: "buy", item: "pack", index }, offer.price, shudder)}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            ))}
+
+            <AnimatePresence mode="popLayout">
+              {shop.scene && (
                 <motion.div
-                  key={`${rerolls}-${index}`}
-                  className="flex flex-col items-center gap-2"
-                  initial={reducedMotion ? false : { y: SHOP_FEEL.deal.fromY, rotateY: SHOP_FEEL.deal.fromRotateY, scale: SHOP_FEEL.deal.fromScale, opacity: 0 }}
-                  animate={{ y: 0, rotateY: 0, scale: 1, opacity: 1 }}
-                  exit={{ y: -60, scale: 0.6, opacity: 0, transition: { duration: 0.22 } }}
-                  transition={{ ...SHOP_FEEL.deal.spring, delay: lead + (index * SHOP_FEEL.deal.staggerMs) / 1000 }}
-                  onAnimationStart={() => runSound.shopIn(index)}
+                  key={`scene-${shop.scene}-${rerolls}`}
+                  className={`flex flex-col items-center gap-2 ${narrow ? "w-[150px]" : "w-[210px]"}`}
+                  initial={reducedMotion ? false : { y: SHOP_FEEL.deal.fromY, scale: SHOP_FEEL.deal.fromScale, opacity: 0 }}
+                  animate={{ y: 0, scale: 1, opacity: 1 }}
+                  exit={{ y: -80, scale: 0.5, opacity: 0, transition: { duration: 0.25 } }}
+                  transition={{ ...SHOP_FEEL.deal.spring, delay: lead + (3 * SHOP_FEEL.deal.staggerMs) / 1000 }}
                 >
-                  <PackOffer offer={offer} thumb={crispPackUrl(chainPackType("shop", offer)) ?? packThumbs[chainPackType("shop", offer)] ?? null} height={packHeight} reducedMotion={reducedMotion} />
-                  <div className={`font-black ${narrow ? "text-[12px]" : "text-[15px]"}`}>{chainOfferName(offer, i18n)}</div>
+                  {!narrow && <Hanger />}
+                  <motion.div
+                    ref={sceneArtRef}
+                    className="overflow-hidden rounded-[10px]"
+                    whileHover={reducedMotion ? undefined : { rotate: 3, scale: 1.05 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                  >
+                    <SceneArt id={SCENE_ART_ID[shop.scene]} size={narrow ? 84 : Math.round(packHeight * 0.68)} />
+                  </motion.div>
+                  <div className="text-center">
+                    <div className={`font-black ${narrow ? "text-[13px]" : "text-[16px]"}`} style={{ color: CHAIN_SCENE_INK[shop.scene] }}>
+                      {CHAIN_SCENE_NAMES[shop.scene]}
+                    </div>
+                    <div className="mt-0.5 text-[12px] leading-snug text-osu-f1">{i18n._(narrow ? CHAIN_SCENE_COPY[shop.scene].short : CHAIN_SCENE_COPY[shop.scene].text)}</div>
+                  </div>
                   <PriceButton
-                    affordable={offer.price <= view.shards}
-                    price={offer.price}
+                    affordable={CHAIN_RULES.scenePrice <= view.shards && view.scenes.length < CHAIN_RULES.sceneSlots}
+                    price={CHAIN_RULES.scenePrice}
                     label={<Trans>Buy</Trans>}
                     disabled={busy}
                     reducedMotion={reducedMotion}
-                    onBuy={(shudder) => void run({ kind: "buy", item: "pack", index }, offer.price, shudder)}
+                    onBuy={(shudder) => {
+                      const from = sceneArtRef.current?.getBoundingClientRect() ?? null;
+                      const scene = shop.scene;
+                      void run({ kind: "buy", item: "scene" }, CHAIN_RULES.scenePrice, shudder).then((ok) => {
+                        if (ok && from && scene && !reducedMotion) setFlight({ key: Date.now(), scene, from, to: null });
+                      });
+                    }}
                   />
                 </motion.div>
               )}
             </AnimatePresence>
-          ))}
 
-          <AnimatePresence mode="popLayout">
-            {shop.scene && (
+          </div>
+
+          {/* Next round's contracts. */}
+          <div className={narrow ? "mt-6 w-full" : "mt-5"}>
+            <ShopContracts
+              contracts={shop.contracts ?? []}
+              signed={view.contract}
+              nextRound={view.round + 1}
+              narrow={narrow}
+              busy={busy}
+              delay={lead + (4 * SHOP_FEEL.deal.staggerMs) / 1000}
+              reducedMotion={reducedMotion}
+              onSign={(index) => void run({ kind: "sign", index }, 0, () => {})}
+            />
+          </div>
+
+          {/* Removing a card, the next round and a reroll, chained. */}
+          <motion.div
+            className="mt-6"
+            initial={reducedMotion ? false : { scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 20, delay: lead + 0.4 }}
+          >
+            <ChainButtons
+              compact={narrow}
+              items={[
+                {
+                  key: "remove",
+                  title: t`Remove a card (${CHAIN_RULES.removePrice} shards)`,
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Trans>Remove a card</Trans> <KitGem size={18} /> {CHAIN_RULES.removePrice}
+                    </span>
+                  ),
+                  icon: <IconCut size={narrow ? 26 : 30} />,
+                  badge: CHAIN_RULES.removePrice,
+                  muted: CHAIN_RULES.removePrice > view.shards,
+                  disabled: busy || deck.length <= CHAIN_RULES.minDeck,
+                  style: { x: removeX },
+                  onClick: () => {
+                    if (CHAIN_RULES.removePrice > view.shards) {
+                      shudderRemove();
+                      runSound.refuse();
+                      return;
+                    }
+                    runSound.uiTap();
+                    setRemoving(true);
+                  },
+                },
+                {
+                  key: "next",
+                  primary: true,
+                  title: t`Play round ${view.round + 1}`,
+                  label: <Trans>Play round {view.round + 1}</Trans>,
+                  disabled: busy,
+                  onClick: () => {
+                    runSound.uiTap();
+                    void act({ kind: "nextRound" });
+                  },
+                },
+                {
+                  key: "reroll",
+                  title: t`Reroll (${CHAIN_RULES.rerollPrice} shards)`,
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Trans>Reroll</Trans> <KitGem size={18} /> {CHAIN_RULES.rerollPrice}
+                    </span>
+                  ),
+                  icon: <IconSwap ink={KIT.mint} size={narrow ? 26 : 30} />,
+                  tone: KIT.mint,
+                  badge: CHAIN_RULES.rerollPrice,
+                  muted: CHAIN_RULES.rerollPrice > view.shards,
+                  disabled: busy,
+                  style: { x: rerollX },
+                  onClick: () => void run({ kind: "reroll" }, CHAIN_RULES.rerollPrice, shudderReroll),
+                },
+              ]}
+            />
+          </motion.div>
+
+          <AnimatePresence>
+            {message && (
               <motion.div
-                key={`scene-${shop.scene}-${rerolls}`}
-                className={`flex flex-col items-center gap-2 ${narrow ? "w-[150px]" : "w-[210px]"}`}
-                initial={reducedMotion ? false : { y: SHOP_FEEL.deal.fromY, scale: SHOP_FEEL.deal.fromScale, opacity: 0 }}
-                animate={{ y: 0, scale: 1, opacity: 1 }}
-                exit={{ y: -80, scale: 0.5, opacity: 0, transition: { duration: 0.25 } }}
-                transition={{ ...SHOP_FEEL.deal.spring, delay: lead + (3 * SHOP_FEEL.deal.staggerMs) / 1000 }}
+                className="mt-3 text-[13px] font-bold text-[#ff8a8a]"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
               >
-                <motion.div
-                  ref={sceneArtRef}
-                  className="overflow-hidden rounded-[10px]"
-                  whileHover={reducedMotion ? undefined : { rotate: 3, scale: 1.05 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 22 }}
-                >
-                  <SceneArt id={SCENE_ART_ID[shop.scene]} size={narrow ? 84 : Math.round(packHeight * 0.68)} />
-                </motion.div>
-                <div className="text-center">
-                  <div className={`font-black ${narrow ? "text-[13px]" : "text-[16px]"}`} style={{ color: CHAIN_SCENE_INK[shop.scene] }}>
-                    {CHAIN_SCENE_NAMES[shop.scene]}
-                  </div>
-                  <div className="mt-0.5 text-[12px] leading-snug text-osu-f1">{i18n._(narrow ? CHAIN_SCENE_COPY[shop.scene].short : CHAIN_SCENE_COPY[shop.scene].text)}</div>
-                </div>
-                <PriceButton
-                  affordable={CHAIN_RULES.scenePrice <= view.shards && view.scenes.length < CHAIN_RULES.sceneSlots}
-                  price={CHAIN_RULES.scenePrice}
-                  label={<Trans>Buy</Trans>}
-                  disabled={busy}
-                  reducedMotion={reducedMotion}
-                  onBuy={(shudder) => {
-                    const from = sceneArtRef.current?.getBoundingClientRect() ?? null;
-                    const scene = shop.scene;
-                    void run({ kind: "buy", item: "scene" }, CHAIN_RULES.scenePrice, shudder).then((ok) => {
-                      if (ok && from && scene && !reducedMotion) setFlight({ key: Date.now(), scene, from, to: null });
-                    });
-                  }}
-                />
+                {message}
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* A spin of the reel, once a visit. */}
-          <motion.div
-            className={`flex flex-col items-center gap-2 ${narrow ? "w-[150px]" : "w-[200px]"}`}
-            initial={reducedMotion ? false : { y: SHOP_FEEL.deal.fromY, scale: SHOP_FEEL.deal.fromScale, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: shop.spun ? 0.45 : 1 }}
-            transition={{ ...SHOP_FEEL.deal.spring, delay: lead + (4 * SHOP_FEEL.deal.staggerMs) / 1000 }}
-          >
-            <ReelOffer height={narrow ? 84 : Math.round(packHeight * 0.68)} width={narrow ? 140 : 190} still={reducedMotion || Boolean(shop.spun)} />
-            <div className="text-center">
-              <div className={`font-black text-[#ff8fd0] ${narrow ? "text-[13px]" : "text-[16px]"}`}>
-                <Trans>Bonus spin</Trans>
-              </div>
-              <div className="mt-0.5 text-[12px] leading-snug text-osu-f1">
-                {shop.spun ? <Trans>Spun this visit.</Trans> : <Trans>One spin of the reel: a prize for the next round.</Trans>}
-              </div>
-            </div>
-            <PriceButton
-              affordable={!shop.spun && CHAIN_REEL.price <= view.shards}
-              price={CHAIN_REEL.price}
-              label={<Trans>Spin</Trans>}
-              disabled={busy || Boolean(shop.spun) || Boolean(spinning)}
-              reducedMotion={reducedMotion}
-              onBuy={(shudder) => void run({ kind: "spin" }, CHAIN_REEL.price, shudder)}
-            />
-          </motion.div>
-        </div>
-
-        <div className={`mt-6 flex items-center justify-center gap-3 border-t border-white/[0.07] pt-5 ${narrow ? "w-full px-3" : "w-[620px]"}`}>
-          <UtilityButton
-            affordable={CHAIN_RULES.removePrice <= view.shards}
-            label={<Trans>Remove a card</Trans>}
-            price={CHAIN_RULES.removePrice}
-            disabled={busy || deck.length <= CHAIN_RULES.minDeck}
-            reducedMotion={reducedMotion}
-            onClick={(shudder) => {
-              if (CHAIN_RULES.removePrice > view.shards) {
-                shudder();
-                runSound.refuse();
-                return;
-              }
-              runSound.uiTap();
-              setRemoving(true);
-            }}
-          />
-          <UtilityButton
-            affordable={CHAIN_RULES.rerollPrice <= view.shards}
-            label={<Trans>Reroll</Trans>}
-            price={CHAIN_RULES.rerollPrice}
-            disabled={busy}
-            reducedMotion={reducedMotion}
-            onClick={(shudder) => void run({ kind: "reroll" }, CHAIN_RULES.rerollPrice, shudder)}
-          />
-        </div>
-
-        <motion.button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            runSound.uiTap();
-            void act({ kind: "nextRound" });
-          }}
-          className={`mt-6 rounded-full bg-white font-black text-[#120f1a] transition hover:brightness-110 disabled:opacity-50 ${narrow ? "px-8 py-3 text-[16px]" : "px-12 py-4 text-[20px]"}`}
-          initial={reducedMotion ? false : { scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 400, damping: 20, delay: 0.4 }}
-        >
-          <Trans>Play round {view.round + 1}</Trans>
-        </motion.button>
-
-        <AnimatePresence>
-          {message && (
-            <motion.div
-              className="mt-3 text-[13px] font-bold text-[#ff8a8a]"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-            >
-              {message}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+        </motion.div>
+      </div>
 
       {/* Removing a card: the deck laid out, tap one to take it out. */}
       <AnimatePresence>
@@ -458,37 +537,6 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
         </motion.div>
       ))}
     </div>
-  );
-}
-
-function UtilityButton({
-  label,
-  price,
-  disabled,
-  reducedMotion,
-  onClick,
-  affordable = true,
-}: {
-  affordable?: boolean;
-  label: React.ReactNode;
-  price: number;
-  disabled: boolean;
-  reducedMotion: boolean;
-  onClick: (shudder: () => void) => void;
-}) {
-  const [x, shudder] = useShudder(reducedMotion);
-  return (
-    <motion.button
-      type="button"
-      style={{ x }}
-      disabled={disabled}
-      onClick={() => onClick(shudder)}
-      aria-disabled={!affordable}
-      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[14px] font-bold transition disabled:opacity-40 ${affordable ? "bg-white/10 text-white hover:brightness-125" : "bg-white/[0.05] text-white/35"}`}
-    >
-      {label}
-      <Shards value={price} className={affordable ? "text-osu-pink-light" : ""} />
-    </motion.button>
   );
 }
 

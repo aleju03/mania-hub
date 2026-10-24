@@ -39,6 +39,7 @@ import {
 import { ShuffleStage } from "../components/packs/ShuffleStage";
 import { usePackWallet } from "../components/packs/usePackWallet";
 import { useAuth } from "../lib/auth-context";
+import { canUseAdminFeatures } from "../lib/auth-shared";
 import {
   MAX_PACK_CHARGES,
   msUntilNextCharge,
@@ -1200,9 +1201,14 @@ function PacksPage() {
   const runTableActive = runOpen && !streakOpen && chainApi.available === true && phase === "pack";
   const runFixtureMoment = useRunFixtureMoment(view);
   /* The run's pack, for a viewer the backend has released the run to (it is
-     admin-only while it is played in), with their best round if they have
-     one. */
-  const chainEntry = chainApi.available === true ? { best: chainApi.best?.round ?? null } : null;
+     admin-only while it is played in, CHAIN_RUNS in the backend's
+     chain-run.ts), with their best round if they have one. An admin sees it
+     while the run is still loading, so it lands with Higher or lower instead
+     of a beat later; the best round fills in when it arrives. */
+  const chainEntry =
+    chainApi.available === true || (chainApi.available === null && canUseAdminFeatures(auth))
+      ? { best: chainApi.best?.round ?? null }
+      : null;
 
   if (import.meta.env.DEV && RunFixtureHost && runFixtureMoment) {
     return (

@@ -2,6 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { msg } from "@lingui/core/macro";
 import type { I18n, MessageDescriptor } from "@lingui/core";
 import {
+  CHAIN_CONTRACTS,
+  type ChainContractId,
+  type ChainContractTrack,
+  chainContractBroken,
+  chainContractMet,
   CHAIN_SCENE_IDS,
   type ChainAction,
   type ChainActionResult,
@@ -116,6 +121,9 @@ function cleanAction(input: ChainActionInput): ChainActionInput {
       break;
     case "removeCard":
       if (Number.isSafeInteger(int(input.uid))) return { kind: "removeCard", uid: int(input.uid), rev };
+      break;
+    case "sign":
+      if (Number.isSafeInteger(int(input.index))) return { kind: "sign", index: int(input.index), rev };
       break;
     default:
       break;
@@ -436,6 +444,37 @@ const REFUSALS: Record<string, MessageDescriptor> = {
   no_rows: msg`No rows left this round.`,
   pool_unavailable: msg`Cards can't be dealt right now. Try again in a moment.`,
 };
+
+/* The shop's contracts: a name and the rule, short. */
+export const CHAIN_CONTRACT_COPY: Record<ChainContractId, { name: MessageDescriptor; rule: MessageDescriptor }> = {
+  quick: { name: msg`Quick clear`, rule: msg`Clear in ${CHAIN_CONTRACTS.quickRows} rows or fewer.` },
+  oneShot: { name: msg`One shot`, rule: msg`Clear with your first row.` },
+  clean: { name: msg`Clean`, rule: msg`No breaks in any row.` },
+  overkill: { name: msg`Overkill`, rule: msg`Finish at ${CHAIN_CONTRACTS.overkill}x the target or more.` },
+  noRedraw: { name: msg`No redraws`, rule: msg`Clear without redrawing.` },
+  fullHouse: { name: msg`Full house`, rule: msg`Every row you play has 6 cards.` },
+  perfect: { name: msg`Perfect chain`, rule: msg`Play a 6-card row with no breaks.` },
+};
+
+/* The signed contract mid-round: how it reads now. "met" when it would pay
+   if the round cleared this moment, "lost" once it cannot. */
+export function chainContractState(
+  id: ChainContractId,
+  track: ChainContractTrack,
+  roundScore: number,
+  target: number,
+): { state: "on" | "met" | "lost"; progress: string | null } {
+  const lost = chainContractBroken(id, track);
+  const progress =
+    id === "quick"
+      ? `${track.rows}/${CHAIN_CONTRACTS.quickRows}`
+      : id === "overkill"
+        ? `${Math.floor((roundScore / Math.max(1, target)) * 10) / 10}x/${CHAIN_CONTRACTS.overkill}x`
+        : null;
+  if (lost && !(id === "quick" && track.rows === CHAIN_CONTRACTS.quickRows)) return { state: "lost", progress };
+  if (id === "perfect" || id === "overkill") return { state: chainContractMet(id, track, roundScore, target) ? "met" : "on", progress };
+  return { state: "on", progress };
+}
 
 export function chainRefusalMessage(error: string, i18n: I18n): string {
   const copy = REFUSALS[error];

@@ -32,6 +32,9 @@ export interface BoardLayout {
   handCardW?: number;
   /* Phones: the hand is laid out in three rows (more than six cards). */
   handRows3?: boolean;
+  /* Phones: cards per hand row, picked so the hand fits above the screen's
+     bottom edge. */
+  handCols?: number;
 }
 
 export const ROW_SLOTS = 6;
@@ -52,7 +55,7 @@ export function boardLayout(width: number, height: number, bigHand = false): Boa
     const gapY = 38;
     const readoutSize = 44;
     const arcRoom = 14;
-    const below = 14;
+    const below = 22;
     const actions = 48;
     const handGap = 6;
     let handCardW = Math.min(108, (width - side * 2 - handGap * 2) / 3);
@@ -71,11 +74,25 @@ export function boardLayout(width: number, height: number, bigHand = false): Boa
     const line2 = bigHand ? strip : cardH;
     const gapLines = bigHand ? 22 : gapY;
     const rowBlock = cardH + gapLines + line2;
-    if (bigHand) {
-      const room = height - readoutSize - arcRoom - rowBlock - below - actions - 12;
-      handCardW = Math.max(60, Math.min(108, (width - side * 2 - handGap * 2) / 3, (room - handGap * 2) / 3 / 1.4));
+    /* The hand takes what is left under the row. On a short screen more
+       cards to a row (and so fewer rows) keeps them bigger than three to a
+       row squeezed, and nothing runs off the bottom. */
+    const room = height - readoutSize - arcRoom - rowBlock - below - actions - 8;
+    const handCards = bigHand ? 9 : 6;
+    let handCols = 3;
+    let handRows = Math.ceil(handCards / 3);
+    handCardW = 0;
+    for (let cols = 3; cols <= 5; cols += 1) {
+      const rows = Math.ceil(handCards / cols);
+      const w = Math.min(108, (width - side * 2 - handGap * (cols - 1)) / cols, (room - handGap * (rows - 1)) / rows / 1.4);
+      if (w > handCardW + 0.5) {
+        handCardW = w;
+        handCols = cols;
+        handRows = rows;
+      }
     }
-    const handHeight = (bigHand ? 3 : 2) * handCardW * 1.4 + (bigHand ? 2 : 1) * handGap;
+    handCardW = Math.max(40, handCardW);
+    const handHeight = handRows * handCardW * 1.4 + (handRows - 1) * handGap;
     const used = readoutSize + arcRoom + rowBlock + below + actions + handHeight;
     const top = Math.max(0, Math.min(30, (height - used - 10) / 2));
     const rowTop = top + readoutSize + arcRoom;
@@ -107,6 +124,7 @@ export function boardLayout(width: number, height: number, bigHand = false): Boa
       handWidth: width,
       handCardW,
       handRows3: bigHand,
+      handCols,
       deck: { x: width - deckW - 12, y: actionsY + (actions - deckW * 1.4) / 2 - 2, w: deckW, h: deckW * 1.4 },
     };
   }
@@ -114,7 +132,7 @@ export function boardLayout(width: number, height: number, bigHand = false): Boa
   const gap = 0.36;
   const readoutSize = 92;
   const arcRoom = 44;
-  const labels = 30;
+  const labels = 42;
   const actions = 56;
   const cardW = Math.max(80, Math.min(158, (width - side * 2) / (6 + 5 * gap), (height - readoutSize - arcRoom - labels - actions - 150) / 1.4 / 1.85));
   const cardH = cardW * 1.4;
@@ -161,7 +179,8 @@ export function handPlaces(count: number, layout: BoardLayout): Array<{ x: numbe
     const w = layout.handCardW ?? layout.cardW;
     const h = w * 1.4;
     const scale = w / layout.cardW;
-    const perRow = count <= 6 || layout.handRows3 ? 3 : Math.ceil(count / 2);
+    const cols = layout.handCols ?? 3;
+    const perRow = count <= 6 || layout.handRows3 ? cols : Math.ceil(count / 2);
     return Array.from({ length: count }, (_, index) => {
       const line = Math.floor(index / perRow);
       const inLine = Math.min(perRow, count - line * perRow);

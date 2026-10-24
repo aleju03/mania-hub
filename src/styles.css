@@ -2473,3 +2473,7 @@ html[data-custom-cursor="true"] * {
     animation: none;
   }
 }
+
+/* Overjoy's shard gem: one turn of its 36-frame sprite sheet. */
+.kit-gem-turn { animation: kit-gem-turn 1s steps(36) 1 forwards; }
+@keyframes kit-gem-turn { from { background-position: 0 0; } to { background-position: var(--gem-end) 0; } }

@@ -522,7 +522,7 @@ export default function RunFixtureHost({ moment: rawMoment, reducedMotion }: { m
 
   const loadBoard = useCallback(async () => BOARD, []);
 
-  if (!view || !script) return <div className="fixed inset-x-0 bottom-0 top-[60px] z-40 bg-osu-b6" />;
+  if (!view || !script) return <div className="fixed inset-x-0 top-[60px] z-40 h-[calc(100dvh-60px)] pb-[env(safe-area-inset-bottom)] bg-osu-b6" />;
   const standard = PACK_TYPES[0];
   return (
     <RunTable
