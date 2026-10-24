@@ -36,6 +36,8 @@ export interface AdminSupporterRow {
   active: boolean;
   /** Their own card motif image, when they uploaded one. */
   customMotifUrl: string | null;
+  /** A rank pinned for them (0 Amber .. 11 Holo, supporter-ranks.ts), or null for the real monthly count. */
+  rankPin: number | null;
 }
 
 export interface AdminSupportersView {
@@ -114,6 +116,18 @@ export const clearAdminSupporterMotif = createServerFn({ method: "POST" })
     return { userId };
   })
   .handler(({ data }) => adminRequest<{ ok: true; cleared: boolean }>("/api/admin/supporters/clear-motif", data));
+
+/* Pins the rank a supporter shows whatever their run's length, or (null)
+   goes back to counting the months. */
+export const setAdminSupporterRank = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown; rank?: unknown }) => {
+    const userId = Number(data?.userId);
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Pick a supporter.");
+    const rank = data?.rank === null ? null : Number(data?.rank);
+    if (rank !== null && !(Number.isInteger(rank) && rank >= 0 && rank < 12)) throw new Error("Pick a rank.");
+    return { userId, rank };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true }>("/api/admin/supporters/rank-pin", data));
 
 /* Takes a submitted companion off the list and off everyone wearing it. */
 export const deleteAdminCompanion = createServerFn({ method: "POST" })

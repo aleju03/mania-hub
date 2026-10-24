@@ -5,6 +5,7 @@ import { useLingui } from "@lingui/react/macro";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../player/maniacard3d/LazyManiaCard3DPanel";
 import type { ManiaCardPanelProps } from "../player/maniacard3d/types";
 import { SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
+import { avatarUrlUserId } from "../ui/Avatar";
 import { framedAvatarStyle, SUPPORTER_AVATAR_FRAMES, supporterFrameGeometry } from "../../lib/supporter-avatar-frames";
 import type { SupporterLook } from "../../lib/supporter-card-looks";
 import { SupporterStyledName } from "./SupporterNameStyle";
@@ -88,7 +89,7 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
           <div className="shrink-0" style={{ padding: ROOM_PADDING }}>
             <motion.div key={`avatar-${pop}`} {...landing} className="relative">
               <img src={avatar} alt="" className="h-[64px] w-[64px] max-w-none rounded-2xl object-cover sm:h-[124px] sm:w-[124px]" style={framedAvatarStyle(frame)} />
-              {frame && <SupporterAvatarFrame frame={frame} still={!frameSettled} />}
+              {frame && <SupporterAvatarFrame frame={frame} still={!frameSettled} userId={avatarUrlUserId(avatar)} />}
             </motion.div>
           </div>
           {/* Shrinks to its text as in the hero's h1, so a style's gradient

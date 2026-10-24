@@ -50,6 +50,7 @@ import { fetchLiveGlobalRankings, fetchLiveRankDeltas, fetchLiveRankingsSnapshot
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import { mergeRestrictedPpRanking, useRestrictedPpRankings } from "../lib/restricted-pp-rankings";
+import { supporterRowBackground, useSupporterRowThemes } from "../components/supporter/SupporterRowBanner";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "combined" | "ss" | "s" | "a";
 const GLOBAL_RANKINGS_PAGE_SIZE = 50;
@@ -341,6 +342,7 @@ function RankingsPage() {
 
 function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => ReactNode }) {
   const { t, i18n } = useLingui();
+  const rowTheme = useSupporterRowThemes();
   const { page = 1, country } = Route.useSearch();
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
@@ -829,6 +831,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                       to="/player/$username"
                       params={{ username: entry.user.username }}
                       className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
+                      style={supporterRowBackground(rowTheme(entry.user.id))}
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-bold text-osu-f1 w-8">
@@ -912,7 +915,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                       <tr
                         key={entry.user.id}
                         className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
-                        style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
+                        style={{ backgroundColor: i % 2 ? "rgba(255,255,255,0.015)" : "transparent", ...supporterRowBackground(rowTheme(entry.user.id), "strip") }}
                         onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
                         onAuxClick={(event) => handlePlayerAuxClick(event, entry.user.username)}
                       >
@@ -1149,6 +1152,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                     params={{ username: entry.user.username }}
                     onClick={() => seedRowShell(entry, originalRank)}
                     className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
+                    style={supporterRowBackground(rowTheme(entry.user.id))}
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-osu-f1 w-8">#{originalRank}</span>
@@ -1240,7 +1244,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                       <tr
                         key={entry.user.id}
                         className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
-                        style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
+                        style={{ backgroundColor: i % 2 ? "rgba(255,255,255,0.015)" : "transparent", ...supporterRowBackground(rowTheme(entry.user.id), "strip") }}
                         onClick={() => {
                           seedRowShell(entry, originalRank);
                           navigate({ to: "/player/$username", params: { username: entry.user.username } });

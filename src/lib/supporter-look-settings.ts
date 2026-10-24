@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 
 import { bridgeAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
-import { isSupporterAvatarFrame, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
+import { isSupporterAvatarFrame, parseFrameDan, type FrameDan, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
 import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
 import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
 import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
@@ -123,6 +123,46 @@ export const saveSupporterFrameSetting = createServerFn({ method: "POST" })
     if (response.status === 403) throw new Error("Your supporter time has run out.");
     if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
     return readState(body);
+  });
+
+/* Every dan the viewer holds and the one their Dan license shows. */
+export interface FrameDanChoices {
+  options: FrameDan[];
+  shown: string | null;
+}
+
+function readFrameDanChoices(raw: unknown): FrameDanChoices {
+  const body = (raw && typeof raw === "object" ? raw : {}) as { options?: unknown; shown?: unknown };
+  const options = Array.isArray(body.options) ? body.options.map(parseFrameDan).filter((dan): dan is FrameDan => dan !== null) : [];
+  return { options, shown: typeof body.shown === "string" ? body.shown : null };
+}
+
+export const fetchFrameDanChoices = createServerFn({ method: "GET" }).handler(async (): Promise<FrameDanChoices> => {
+  const viewer = await requireViewer();
+  if (!viewer) return { options: [], shown: null };
+  const response = await fetch(`${viewer.base}/api/supporters/self/frame-dan?userId=${viewer.userId}`, { headers: bridgeAuthHeaders() });
+  if (!response.ok) throw new Error(`Server ${response.status}`);
+  return readFrameDanChoices(await response.json().catch(() => null));
+});
+
+export const saveFrameDanChoice = createServerFn({ method: "POST" })
+  .validator((data: { dan?: unknown }) => {
+    const dan = data?.dan ?? null;
+    if (dan !== null && (typeof dan !== "string" || !/^\d{1,2}:(rc|ln):[a-z]{1,16}$/.test(dan))) throw new Error("Pick a dan.");
+    return { dan: dan as string | null };
+  })
+  .handler(async ({ data }): Promise<FrameDanChoices> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/frame-dan`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, dan: data.dan }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return readFrameDanChoices(body);
   });
 
 export const saveSupporterNameStyleSetting = createServerFn({ method: "POST" })

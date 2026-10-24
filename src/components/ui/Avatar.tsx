@@ -2,8 +2,9 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { useLingui } from "@lingui/react/macro";
 
 import { ensureSupporterNameStyles, getSupporterListFrame, subscribeSupporterNameStyles } from "../../lib/live-backend";
-import { framedAvatarStyle, supporterFrameGeometry, supporterFrameSrc } from "../../lib/supporter-avatar-frames";
+import { framedAvatarStyle, supporterFrameGeometry } from "../../lib/supporter-avatar-frames";
 import { useHydrated } from "../../lib/use-hydrated";
+import { SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 
 type ParsedAvatarUrl = {
   userId: number;
@@ -58,9 +59,12 @@ export function avatarImageSrc(
 }
 
 /* How far a list avatar's frame may reach past its slot, in slot widths: the
-   whole frame is shrunk to fit, so wide wings make a smaller avatar rather
-   than spilling over the row's rank and name. */
-const LIST_FRAME_REACH = { x: 1.6, y: 1.35 };
+   whole frame is shrunk to fit. Past LIST_FRAME_CLIP wide its sides fade out,
+   so wide wings keep the picture near full size and melt into the gaps
+   beside the slot instead of covering the row's rank and name. */
+const LIST_FRAME_REACH = { x: 2.2, y: 1.5 };
+const LIST_FRAME_CLIP = 1.8;
+const LIST_FRAME_FADE = "linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%)";
 
 export function Avatar({
   url,
@@ -108,26 +112,26 @@ export function Avatar({
     // centre the framed whole on the slot, so the row's layout never moves
     const x = (size - inner * (1 + left + right)) / 2 + inner * left;
     const y = (size - inner * (1 + top + bottom)) / 2 + inner * top;
-    const [bx, by, bw, bh] = supporterFrameGeometry(frame).box;
+    // wider than the clip: draw it in a box that wide (and tall enough for anything), faded at the sides
+    const fade = inner * (1 + left + right) > size * LIST_FRAME_CLIP;
+    const pad = { x: fade ? (size * (LIST_FRAME_CLIP - 1)) / 2 : 0, y: fade ? size : 0 };
     return (
       <span className="relative block flex-shrink-0" style={{ width: size, height: size }}>
-        <span className="absolute" style={{ left: x, top: y, width: inner, height: inner }}>
-          <img
-            src={imageUrl}
-            alt={t`avatar`}
-            className="h-full w-full object-cover"
-            style={framedAvatarStyle(frame)}
-            loading="lazy"
-            onError={() => setImageFailed(true)}
-          />
-          <img
-            src={supporterFrameSrc(frame, "still")}
-            alt=""
-            aria-hidden
-            loading="lazy"
-            className="pointer-events-none absolute max-w-none"
-            style={{ left: `${bx * 100}%`, top: `${by * 100}%`, width: `${bw * 100}%`, height: `${bh * 100}%` }}
-          />
+        <span
+          className="pointer-events-none absolute"
+          style={{ left: -pad.x, top: -pad.y, width: size + 2 * pad.x, height: size + 2 * pad.y, ...(fade ? { maskImage: LIST_FRAME_FADE, WebkitMaskImage: LIST_FRAME_FADE } : {}) }}
+        >
+          <span className="absolute" style={{ left: pad.x + x, top: pad.y + y, width: inner, height: inner }}>
+            <img
+              src={imageUrl}
+              alt={t`avatar`}
+              className="h-full w-full object-cover"
+              style={framedAvatarStyle(frame, { round: shape === "circle" })}
+              loading="lazy"
+              onError={() => setImageFailed(true)}
+            />
+            <SupporterAvatarFrame frame={frame} still round={shape === "circle"} userId={frameUserId} />
+          </span>
         </span>
       </span>
     );

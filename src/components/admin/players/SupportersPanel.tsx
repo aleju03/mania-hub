@@ -1,12 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Undo2, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { avatarImageSrc } from "../../ui/Avatar";
 import { SearchInput } from "../../ui/SearchInput";
 import {
   clearAdminSupporterMotif,
+  setAdminSupporterRank,
   grantAdminSupporterDays,
   importAdminGoogleExport,
   importAdminKofiCsv,
@@ -19,6 +20,7 @@ import {
   type DonationLinkMethod,
 } from "../../../lib/admin-supporters";
 import { searchPlayers, searchPlayersOnOsu } from "../../../lib/player-search";
+import { SUPPORTER_RANKS } from "../../../lib/supporter-ranks";
 
 /* The Supporters tab of /admin/players (backend features/supporters.ts). The wall is every
  * supporter, the ring around each avatar the time they have left ($3 buys 30
@@ -113,6 +115,12 @@ export function SupportersPanel() {
   const grant = (query: string, days: number, label: string) => run(async () => {
     const result = await grantAdminSupporterDays({ data: { query, days, note: "" } });
     return `${days > 0 ? "Added" : "Took"} ${Math.abs(days)} days ${days > 0 ? "to" : "from"} ${result.username ?? label}.`;
+  });
+
+  const pinRank = (row: AdminSupporterRow, rank: number | null) => run(async () => {
+    await setAdminSupporterRank({ data: { userId: row.userId, rank } });
+    const name = row.username ?? `#${row.userId}`;
+    return rank === null ? `${name} counts months again.` : `${name} shows ${SUPPORTER_RANKS[rank].id[0].toUpperCase() + SUPPORTER_RANKS[rank].id.slice(1)} now.`;
   });
 
   const clearMotif = (row: AdminSupporterRow) => run(async () => {
@@ -216,6 +224,7 @@ export function SupportersPanel() {
                     onToggle={() => setOpenUser(openUser === row.userId ? null : row.userId)}
                     onGrant={(days) => grant(`#${row.userId}`, days, row.username ?? `#${row.userId}`)}
                     onClearMotif={() => clearMotif(row)}
+                    onPinRank={(rank) => pinRank(row, rank)}
                   />
                 ))}
               </AnimatePresence>
@@ -317,6 +326,7 @@ function SupporterTile({
   onToggle,
   onGrant,
   onClearMotif,
+  onPinRank,
 }: {
   row: AdminSupporterRow;
   now: number;
@@ -325,12 +335,27 @@ function SupporterTile({
   onToggle: () => void;
   onGrant: (days: number) => void;
   onClearMotif: () => void;
+  onPinRank: (rank: number | null) => void;
 }) {
   const daysLeft = row.active ? (row.expiresAt - now) / DAY_MS : 0;
   const fill = Math.min(1, daysLeft / FULL_RING_DAYS);
   const radius = 36;
   const circumference = 2 * Math.PI * radius;
   const name = row.username ?? `#${row.userId}`;
+  // the menu centres under the avatar, then slides back inside the screen when that runs off an edge
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuShift, setMenuShift] = useState(0);
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!open || !menu) {
+      setMenuShift(0);
+      return;
+    }
+    const rect = menu.getBoundingClientRect();
+    const left = rect.left - menuShift;
+    const margin = 8;
+    setMenuShift(Math.max(margin - left, Math.min(0, window.innerWidth - margin - (left + rect.width))));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <motion.div
@@ -370,11 +395,13 @@ function SupporterTile({
       <AnimatePresence>
         {open ? (
           <motion.div
+            ref={menuRef}
             initial={{ opacity: 0, y: -4, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.96 }}
             transition={{ duration: 0.14 }}
             className="absolute top-full z-20 mt-2 w-[200px] rounded-xl bg-osu-b3 p-3 shadow-xl"
+            style={{ left: "50%", marginLeft: -100 + menuShift }}
           >
             <div className="flex flex-wrap gap-1.5">
               <button type="button" disabled={busy} onClick={() => onGrant(30)} className={CHIP_CLASS}>+30 days</button>
@@ -383,6 +410,22 @@ function SupporterTile({
                 <button type="button" disabled={busy} onClick={() => onGrant(-30)} className={CHIP_CLASS}>-30 days</button>
               ) : null}
             </div>
+            {row.active ? (
+              <label className="mt-2.5 flex items-center gap-2 text-[12px] text-osu-l2">
+                Rank
+                <select
+                  value={row.rankPin ?? ""}
+                  disabled={busy}
+                  onChange={(event) => onPinRank(event.target.value === "" ? null : Number(event.target.value))}
+                  className="min-w-0 flex-1 cursor-pointer rounded-md bg-white/[0.07] px-2 py-1 text-[12px] text-white outline-none disabled:opacity-50"
+                >
+                  <option value="">By months</option>
+                  {SUPPORTER_RANKS.map((rank, index) => (
+                    <option key={rank.id} value={index}>{rank.id[0].toUpperCase() + rank.id.slice(1)}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             {row.customMotifUrl ? (
               <div className="mt-2.5 flex items-center gap-2">
                 <img src={row.customMotifUrl} alt="" className="h-10 w-10 rounded-md bg-osu-b5 object-contain" />

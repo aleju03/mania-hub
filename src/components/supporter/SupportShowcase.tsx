@@ -4,6 +4,7 @@ import { useLingui } from "@lingui/react/macro";
 
 import { ManiaCard3DPanel } from "../player/maniacard3d/LazyManiaCard3DPanel";
 import { SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
+import { avatarUrlUserId } from "../ui/Avatar";
 import { LnSplitCard, PercentileCard, RatioCard, SessionCard, StreakCard } from "../player/ProfileStatCards";
 import { ProfileThemeBackdrop, ProfileThemeSwatch } from "./ProfileThemeBackdrop";
 import { SupporterStyledName } from "./SupporterNameStyle";
@@ -199,7 +200,7 @@ export function HeroStage() {
           <AnimatePresence mode="wait">
             <motion.div key={look.frame} {...fade} className="relative" style={{ width: size, height: size }}>
               <img src={you.avatar} alt="" className="h-full w-full max-w-none rounded-2xl bg-osu-b3 object-cover" style={framedAvatarStyle(look.frame)} />
-              <SupporterAvatarFrame frame={look.frame} still={!near} />
+              <SupporterAvatarFrame frame={look.frame} still={!near} userId={avatarUrlUserId(you.avatar)} />
             </motion.div>
           </AnimatePresence>
         </div>
@@ -431,7 +432,7 @@ export function CompanionsShowcase() {
           <div className="truncate text-[14px] font-semibold text-white">{label(shown)}</div>
           {credit ? (
             <a href={credit.url} target="_blank" rel="noreferrer" className="text-[11px] text-osu-f1 hover:text-white">
-              {t`Scan by ${credit.author}`} ({credit.license})
+              {t`Model by ${credit.author}`}
             </a>
           ) : "submitted" in shown ? (
             <div className="truncate text-[11px] text-osu-f1">{t`Sent in by ${shown.submitted.submittedBy.username}`}</div>
@@ -571,11 +572,37 @@ function CardHand({ foil, motif }: { foil: SupporterFoilId; motif: SupporterMoti
 
 /* --- Packs ----------------------------------------------------------------------- */
 
+/* An opening's slash on loop: the live swatch (BladeSwatch) recorded on black
+   at 100x84, one 1.7 s cycle (foundry's grab-blades), and played with screen
+   blending so its light adds onto the tile the way the WebGL does. A short
+   video starts at once; four live WebGL swatches each waited their turn for a
+   context. Reduced motion keeps the drawn still. Kept under /videos/, which
+   the service worker leaves alone (Safari plays video only with ranges). */
+function BladeLoop({ blade, className }: { blade: SupporterBladeId; className: string }) {
+  const [moving, setMoving] = useState<boolean | null>(null);
+  useEffect(() => setMoving(!window.matchMedia("(prefers-reduced-motion: reduce)").matches), []);
+  if (moving === false) return <BladeSwatch blade={blade} className={className} />;
+  return (
+    <span className={`relative isolate block overflow-hidden ${className}`}>
+      {moving && (
+        <video
+          src={`/videos/blades/${blade}.mp4`}
+          autoPlay
+          loop
+          muted
+          playsInline
+          disablePictureInPicture
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover mix-blend-screen"
+        />
+      )}
+    </span>
+  );
+}
+
 export function PacksShowcase() {
   const { t, i18n } = useLingui();
   const [ref, near] = useNearView<HTMLDivElement>();
-  const lowEnd = useLowEndDevice();
-  const [hovered, setHovered] = useState<SupporterBladeId | null>(null);
   const [wrappers, setWrappers] = useState<Partial<Record<string, string>>>({});
   // Each is a whole pack drawn on a canvas, so they wait until the section is
   // near and then come in one per quiet moment.
@@ -634,16 +661,12 @@ export function PacksShowcase() {
               {/* a tap plays how the pack gives */}
               <button
                 type="button"
-                onPointerEnter={() => {
-                  setHovered(id);
-                  warmBladeSounds(bladeLook(id).sound);
-                }}
-                onPointerLeave={() => setHovered(null)}
+                onPointerEnter={() => warmBladeSounds(bladeLook(id).sound)}
                 onClick={() => playBladeRip(id, bladeLook(id).sound)}
                 className="block w-full cursor-pointer"
                 aria-label={i18n._(SUPPORTER_BLADE_LABELS[id])}
               >
-                <BladeSwatch blade={id} live={near && (!lowEnd || hovered === id)} className="h-[84px] w-full rounded-md bg-osu-b6" />
+                <BladeLoop blade={id} className="h-[84px] w-full rounded-md bg-osu-b6" />
               </button>
               <div className={label}>{i18n._(SUPPORTER_BLADE_LABELS[id])}</div>
             </StaggerItem>

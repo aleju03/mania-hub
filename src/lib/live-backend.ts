@@ -5,7 +5,7 @@ import { parseProfilePlays, type ProfilePlays } from "./profile-plays";
 import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
-import { isSupporterAvatarFrame, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
+import { isSupporterAvatarFrame, parseFrameDan, type FrameDan, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
 import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
 import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
@@ -4663,10 +4663,12 @@ export interface SupporterProfileLook {
   profilePlays: ProfilePlays | null;
   /* Their sleeve, binder and reveal confetti in packs. */
   packStyle: SupporterPackStyle;
+  /* Their own dan, which the Dan license frame shows; null without a verdict. */
+  dan: FrameDan | null;
   /* The figure beside their profile's numbers, null for none. */
   companion: SupporterCompanion | null;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4721,6 +4723,7 @@ export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
     profilePlays: parseProfilePlays(body.profilePlays),
     packStyle: parsePackStyle(body.packStyle),
     companion: parseSupporterCompanion(body.companion),
+    dan: parseFrameDan(body.dan),
   };
 }
 
@@ -4822,6 +4825,7 @@ let nameStyleMap: {
   fonts: Map<number, SupporterNameFontId>;
   frames: Map<number, SupporterAvatarFrameId>;
   sleeves: Map<number, SupporterCardSleeveId>;
+  themes: Map<number, SupporterProfileThemeId>;
 } | null = null;
 let nameStyleMapInflight = false;
 // set after a local save, so the next fetch skips the HTTP cache (max-age 60)
@@ -4851,12 +4855,18 @@ export function getSupporterSleeve(userId: number): SupporterCardSleeveId | null
   return nameStyleMap?.sleeves.get(userId) ?? null;
 }
 
+/* Every supporter's profile theme, for the banners behind list rows (the
+   same map; a new Map whenever it changes, so it works as a store snapshot). */
+export function getSupporterListThemes(): ReadonlyMap<number, SupporterProfileThemeId> | null {
+  return nameStyleMap?.themes ?? null;
+}
+
 /* After the supporter page saves a sleeve, so the viewer's own tiles update at once. */
 export function setSupporterSleeveLocally(userId: number, sleeve: SupporterCardSleeveId | null): void {
   const sleeves = new Map(nameStyleMap?.sleeves ?? []);
   if (sleeve) sleeves.set(userId, sleeve);
   else sleeves.delete(userId);
-  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames: nameStyleMap?.frames ?? new Map(), sleeves };
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames: nameStyleMap?.frames ?? new Map(), sleeves, themes: nameStyleMap?.themes ?? new Map() };
   nameStyleMapReload = true;
   for (const listener of nameStyleListeners) listener();
 }
@@ -4867,7 +4877,7 @@ export function ensureSupporterNameStyles(): void {
   nameStyleMapInflight = true;
   const reload = nameStyleMapReload;
   nameStyleMapReload = false;
-  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown> }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
+  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown> }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
     .then((body) => {
       const styles = new Map<number, SupporterNameStyleId>();
       for (const [id, style] of Object.entries(body?.styles ?? {})) if (isSupporterNameStyle(style)) styles.set(Number(id), style);
@@ -4877,7 +4887,9 @@ export function ensureSupporterNameStyles(): void {
       for (const [id, frame] of Object.entries(body?.frames ?? {})) if (isSupporterAvatarFrame(frame)) frames.set(Number(id), frame);
       const sleeves = new Map<number, SupporterCardSleeveId>();
       for (const [id, sleeve] of Object.entries(body?.sleeves ?? {})) if (isSupporterCardSleeve(sleeve)) sleeves.set(Number(id), sleeve);
-      nameStyleMap = { at: Date.now(), styles, fonts, frames, sleeves };
+      const themes = new Map<number, SupporterProfileThemeId>();
+      for (const [id, theme] of Object.entries(body?.themes ?? {})) if (isSupporterProfileTheme(theme)) themes.set(Number(id), theme);
+      nameStyleMap = { at: Date.now(), styles, fonts, frames, sleeves, themes };
       for (const listener of nameStyleListeners) listener();
     })
     .catch(() => {})
@@ -4892,7 +4904,17 @@ export function setSupporterFrameLocally(userId: number, frame: SupporterAvatarF
   const frames = new Map(nameStyleMap?.frames ?? []);
   if (frame) frames.set(userId, frame);
   else frames.delete(userId);
-  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames, sleeves: nameStyleMap?.sleeves ?? new Map() };
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames, sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
+  nameStyleMapReload = true;
+  for (const listener of nameStyleListeners) listener();
+}
+
+/* After the supporter page saves a theme, so the viewer's own rows update. */
+export function setSupporterThemeLocally(userId: number, theme: SupporterProfileThemeId | null): void {
+  const themes = new Map(nameStyleMap?.themes ?? []);
+  if (theme) themes.set(userId, theme);
+  else themes.delete(userId);
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes };
   nameStyleMapReload = true;
   for (const listener of nameStyleListeners) listener();
 }
@@ -4908,7 +4930,7 @@ export function setSupporterNameStyleLocally(userId: number, style: SupporterNam
     if (font) fonts.set(userId, font);
     else fonts.delete(userId);
   }
-  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles, fonts, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map() };
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles, fonts, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
   nameStyleMapReload = true;
   for (const listener of nameStyleListeners) listener();
 }

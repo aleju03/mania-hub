@@ -34,6 +34,7 @@ import {
   fetchLivePackCardSnapshotDirect,
   forgetLiveSupporterLook,
   setSupporterFrameLocally,
+  setSupporterThemeLocally,
   setSupporterNameStyleLocally,
   setSupporterSleeveLocally,
   type LivePackCardSnapshot,
@@ -163,7 +164,7 @@ function SupporterPage() {
       let latest: SupporterLookState | null = null;
       setBusy(true);
       try {
-        if (next.theme !== before.theme || !!next.themeOptions.charts !== !!before.themeOptions.charts) {
+        if (next.theme !== before.theme || !!next.themeOptions.charts !== !!before.themeOptions.charts || !!next.themeOptions.rows !== !!before.themeOptions.rows) {
           latest = await saveSupporterProfileThemeSetting({ data: { profileTheme: next.theme, profileThemeOptions: next.themeOptions } });
         }
         if (next.frame !== before.frame) latest = await saveSupporterFrameSetting({ data: { frame: next.frame } });
@@ -179,6 +180,7 @@ function SupporterPage() {
           saved.current = loadoutOf(latest);
           forgetLiveSupporterLook(viewer.id);
           setSupporterFrameLocally(viewer.id, latest.frame);
+          setSupporterThemeLocally(viewer.id, latest.profileThemeOptions.rows ? latest.profileTheme : null);
           setSupporterNameStyleLocally(viewer.id, latest.nameStyle, latest.nameFont);
         }
       } catch (cause) {
@@ -488,7 +490,7 @@ function SupporterPage() {
                 {shown && held && (
                   <div className="min-w-0">
                     <p className="mb-2 text-right text-[12px] text-osu-f1">
-                      <span className="font-semibold tabular-nums text-osu-l2">{formatNumber(LOADOUT_COMBINATIONS)}</span> {t`possible looks`}
+                      <span className="font-semibold tabular-nums text-osu-l2">{formatNumber(LOADOUT_COMBINATIONS)}</span> {t`possible combinations`}
                     </p>
                     <LoadoutSlots
                       shown={shown}

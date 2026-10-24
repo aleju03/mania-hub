@@ -1,6 +1,7 @@
 // A supporter's rank: one step for every month in a row they have been a
-// supporter, from Copper on their first day to Holo after eleven months, where
-// it stays. A lapse ends the run, and the next one starts again at Copper.
+// supporter, from Amber on their first day to Holo after eleven months, where
+// it stays. Every rank is a gem, so even the first reads as a reward. A lapse
+// ends the run, and the next one starts again at Amber.
 //
 // The backend sends only when the current run began (`runStartedAt`); the rank
 // is worked out here, so a cached look keeps counting.
@@ -24,10 +25,10 @@ export interface SupporterRankDef {
 }
 
 export const SUPPORTER_RANKS: readonly SupporterRankDef[] = [
-  { id: "copper", name: msg`Copper`, stops: ["#f3a98a", "#b5532f", "#e88f6a", "#6e2a12"], ink: "#4a1a08", accent: "#f0a07e" },
-  { id: "bronze", name: msg`Bronze`, stops: ["#f0c48a", "#a8702c", "#e3b070", "#6a4010"], ink: "#4a2a06", accent: "#e8b878" },
-  { id: "steel", name: msg`Steel`, stops: ["#e6edf2", "#6f7d8a", "#c9d3dc", "#3b444d"], ink: "#22292f", accent: "#b8c4cf" },
-  { id: "silver", name: msg`Silver`, stops: ["#ffffff", "#a3afbd", "#eef3f8", "#66717f"], ink: "#38414c", accent: "#e2e8ef" },
+  { id: "amber", name: msg`Amber`, stops: ["#ffc48a", "#c8641e", "#f59a52", "#6e2e08"], ink: "#4a1c04", accent: "#f7a868" },
+  { id: "topaz", name: msg`Topaz`, stops: ["#f0c48a", "#a8702c", "#e3b070", "#6a4010"], ink: "#4a2a06", accent: "#e8b878" },
+  { id: "moonstone", name: msg`Moonstone`, stops: ["#e6edf2", "#6f7d8a", "#c9d3dc", "#3b444d"], ink: "#22292f", accent: "#b8c4cf" },
+  { id: "pearl", name: msg`Pearl`, stops: ["#ffffff", "#a3afbd", "#eef3f8", "#66717f"], ink: "#38414c", accent: "#e2e8ef" },
   { id: "obsidian", name: msg`Obsidian`, stops: ["#6b5a8a", "#15121c", "#3a3150", "#050408"], ink: "#b9a8e0", accent: "#b9a8e0" },
   { id: "gold", name: msg({ message: "Gold", context: "supporter rank" }), stops: ["#fff2b0", "#e0a21e", "#ffe07a", "#9a5d00"], ink: "#6b3c00", accent: "#ffd56b" },
   { id: "sapphire", name: msg`Sapphire`, stops: ["#b8d4ff", "#2b56d6", "#7fa8ff", "#0f2580"], ink: "#0a1850", accent: "#8fb2ff" },

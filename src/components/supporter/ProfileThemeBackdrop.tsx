@@ -75,9 +75,15 @@ export function profileThemeThumb(theme: SupporterProfileThemeId): string {
   return `/images/profile-themes/thumbs/${theme}.webp?v=${THEME_THUMB_VERSION}`;
 }
 
-/* Bump after re-rendering a thumb: /images/ is served cache-first by the
+/* The thumb fading in from clear on the left, for the banner behind a list
+   row (made from the thumbs by foundry/designs/row-banner/make_strips.py). */
+export function profileThemeStrip(theme: SupporterProfileThemeId): string {
+  return `/images/profile-themes/strips/${theme}.webp?v=${THEME_THUMB_VERSION}`;
+}
+
+/* Bump after re-rendering a thumb (and its strip): /images/ is served cache-first by the
    service worker, so a changed file needs a new URL. */
-const THEME_THUMB_VERSION = 6;
+const THEME_THUMB_VERSION = 8;
 
 /* A thumbnail of a theme's backdrop, for the drawer and the slot: the
    rendered still, or live while `still` is off, over that same still until

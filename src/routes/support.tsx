@@ -153,7 +153,7 @@ function SupportButton({ className = "" }: { className?: string }) {
       transition={{ type: "spring", stiffness: 500, damping: 17 }}
       className={`inline-flex h-10 items-center rounded-full bg-osu-pink px-5 text-[14px] font-semibold text-white hover:brightness-110 ${className}`}
     >
-      {t`Support on Ko-fi`}
+      {t`Become a supporter`}
     </motion.a>
   );
 }
@@ -305,7 +305,7 @@ function SupportPage() {
               id="ranks"
               title={t`Supporter ranks`}
               count={<Trans><CountUp value={SUPPORTER_RANKS.length} /> ranks</Trans>}
-              body={t`A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo.`}
+              body={t`A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo.`}
             >
               <SupporterRankShowcase />
             </Perk>

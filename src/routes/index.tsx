@@ -16,6 +16,7 @@ import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { Avatar } from "../components/ui/Avatar";
+import { supporterRowBackground, useSupporterRowThemes } from "../components/supporter/SupporterRowBanner";
 import { ScoreVideoMark, VideoMark } from "../components/ui/CompanellaMark";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -159,6 +160,7 @@ const HOME_GLOBAL_POPOFFS_WINDOW_MS = 24 * 60 * 60 * 1000;
 // fade-in animation every time another fetch resolves.
 function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankingEntry; index: number; delayStep: number }) {
   const presence = usePlayerPresence(entry.user.id);
+  const theme = useSupporterRowThemes()(entry.user.id);
   const navigate = useNavigate();
   const seedPlayerShell = () => {
     if (
@@ -189,13 +191,14 @@ function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankin
       animate={{ opacity: 1 }}
       transition={{ delay: index * delayStep }}
       className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
+      style={supporterRowBackground(theme)}
       onClick={() => {
         seedPlayerShell();
         navigate({ to: "/player/$username", params: { username: entry.user.username } });
       }}
     >
       <span className="w-6 shrink-0 text-center text-sm font-bold text-osu-f1 tabular-nums">#{entry.rank}</span>
-      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
+      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} framed />
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} accent={entry.user.avatar_accent} className="min-w-0 truncate text-sm font-medium" />
         {presence ? <PresenceDot presence={presence} /> : null}

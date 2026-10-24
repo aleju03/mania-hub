@@ -80,7 +80,7 @@ import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import { SkillsUntrackedNotice } from "../../components/player/SkillsUntrackedNotice";
 import { frameOverhangMargins, SupporterAvatarFrame } from "../../components/player/SupporterAvatarFrame";
-import { framedAvatarStyle, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
+import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "../../components/supporter/SupporterNameStyle";
@@ -1184,6 +1184,9 @@ export function PlayerProfilePage({
     };
   }, [profileUserId]);
   const heroFrame = supporterFrame?.userId === profileUserId ? supporterFrame.frame : null;
+  /* Wings and other wide frames take most of a phone's width beside the
+     avatar: the name keeps that spot and the links go full width under both. */
+  const heroFrameWide = heroFrame != null && supporterFrameGeometry(heroFrame).overhang[0] + supporterFrameGeometry(heroFrame).overhang[2] >= 0.5;
   const heroNameStyle = supporterFrame?.userId === profileUserId ? supporterFrame.nameStyle : null;
   const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
   const heroRunStartedAt = supporterFrame?.userId === profileUserId ? supporterFrame.runStartedAt : null;
@@ -2483,7 +2486,9 @@ export function PlayerProfilePage({
 
         <div className="relative mx-auto max-w-[1200px] px-4 pt-8 pb-7 sm:px-5 sm:pt-12 sm:pb-9">
           {/* The name drops under the avatar when a wide frame leaves it less
-              than its basis, instead of truncating to a few letters. */}
+              than its basis, instead of truncating to a few letters. On phones
+              a wide frame splits the column: the name stays beside the avatar
+              unless it can't fit whole, and the links take the next line. */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:gap-x-5">
             <div
               className="relative flex-shrink-0 [--hero-avatar:84px] sm:[--hero-avatar:124px]"
@@ -2502,10 +2507,10 @@ export function PlayerProfilePage({
                   loading="lazy"
                 />
               </button>
-              {heroFrame && <SupporterAvatarFrame frame={heroFrame} />}
+              {heroFrame && <SupporterAvatarFrame frame={heroFrame} userId={profileUserId} />}
             </div>
-            <div className="min-w-0 flex-1 basis-[11rem]">
-              <h1 className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+            <div className={`min-w-0 flex-1 basis-[11rem] ${heroFrameWide ? "max-sm:contents" : ""}`}>
+              <h1 className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 ${heroFrameWide ? "max-sm:min-w-auto max-sm:max-w-full max-sm:flex-1 max-sm:basis-0" : ""}`}>
                 {/* `truncate` clips at the padding box, and with leading-none the
                     box is tighter than the ink: a capital J overhangs it on the
                     left and below. The padding/-margin pair buys room on every
@@ -2535,6 +2540,7 @@ export function PlayerProfilePage({
                   />
                 ) : null}
               </h1>
+              <div className={heroFrameWide ? "max-sm:basis-full max-sm:[&>:first-child]:mt-0" : undefined}>
               <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-white/50">
                 {heroMeta.map((item, index) => (
                   <span key={index} className="inline-flex items-center gap-2">
@@ -2564,6 +2570,7 @@ export function PlayerProfilePage({
                   }}
                 />
               ) : null}
+              </div>
             </div>
           </div>
 

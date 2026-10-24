@@ -5,6 +5,7 @@ import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import { UsernameText } from "../ui/UsernameText";
 import { Skeleton } from "../ui/LoadingSkeleton";
+import { supporterRowBackground, useSupporterRowThemes } from "../supporter/SupporterRowBanner";
 import type { LeaderboardUser } from "../../lib/skill-leaderboards";
 
 // The row shape both leaderboard boards share. The value column is a render
@@ -49,6 +50,7 @@ export function LeaderboardTable({
 }) {
   const { t } = useLingui();
   const navigate = useNavigate();
+  const rowTheme = useSupporterRowThemes();
 
   const openPlayer = (username: string) => {
     navigate({ to: "/player/$username", params: { username } });
@@ -120,6 +122,7 @@ export function LeaderboardTable({
               </>
             );
             const cardClass = "block w-full rounded-lg bg-osu-b4/50 p-3 text-left cursor-pointer hover:bg-osu-b4 transition-colors";
+            const cardStyle = supporterRowBackground(rowTheme(row.user.id));
             if (row.onOpen) {
               return (
                 <div
@@ -133,6 +136,7 @@ export function LeaderboardTable({
                     row.onOpen?.();
                   }}
                   className={cardClass}
+                  style={cardStyle}
                 >
                   <div className="flex items-center gap-3">
                     <span className="w-8 text-sm font-bold text-osu-f1">#{row.rank}</span>
@@ -148,6 +152,7 @@ export function LeaderboardTable({
                 to="/player/$username"
                 params={{ username: row.user.username }}
                 className={cardClass}
+                style={cardStyle}
               >
                 <div className="flex items-center gap-3">
                   <span className="w-8 text-sm font-bold text-osu-f1">#{row.rank}</span>
@@ -208,7 +213,7 @@ export function LeaderboardTable({
                 <tr
                   key={row.key}
                   className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
-                  style={{ background: index % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
+                  style={{ backgroundColor: index % 2 ? "rgba(255,255,255,0.015)" : "transparent", ...supporterRowBackground(rowTheme(row.user.id), "strip") }}
                   onClick={() => (row.onOpen ? row.onOpen() : openPlayer(row.user.username))}
                   onAuxClick={(event) => {
                     if (event.button !== 1 || row.onOpen) return;
@@ -226,7 +231,7 @@ export function LeaderboardTable({
                       // swallowed clicks meant for a row that opens something else.
                       className="inline-flex max-w-full items-center gap-3 min-w-0 align-middle"
                     >
-                      <Avatar url={row.user.avatar_url} userId={row.user.id} size={30} />
+                      <Avatar url={row.user.avatar_url} userId={row.user.id} size={30} framed />
                       <CountryFlag code={row.user.country_code} size="sm" className="flex-shrink-0" />
                       <UsernameText
                         username={row.user.username}

@@ -11,14 +11,18 @@ import {
   FRAMED_AVATAR_RADIUS,
   framedAvatarStyle,
   supporterFrameGeometry,
-  supporterFrameSrc,
   type SupporterAvatarFrameId,
 } from "../../lib/supporter-avatar-frames";
 import { supporterMotifPath } from "../../lib/supporter-motif-art";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { SUPPORTER_NAME_STYLE_LABELS, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "./SupporterNameStyle";
-import { SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
+import { announceFrameDanPicked, frameDanName, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
+import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
+import { DAN_SKILLSET_META } from "../../lib/skill-axes";
+import { fetchFrameDanChoices, saveFrameDanChoice, type FrameDanChoices } from "../../lib/supporter-look-settings";
+import { forgetLiveSupporterLook } from "../../lib/live-backend";
+import { avatarUrlUserId } from "../ui/Avatar";
 import { CheckBadge, LockIcon, UploadIcon } from "./LoadoutIcons";
 import { FoilPreview } from "./FoilPreview";
 import { DEFAULT_PACK_ART_STYLE, getCachedPackFrontCanvas } from "../packs/packArt";
@@ -81,16 +85,7 @@ export function FrameThumb({ frame, avatar, size, live = false }: { frame: Suppo
     <span className="relative block" style={{ width: size, height: size }}>
       <span className="absolute" style={{ left: avatarLeft, top: avatarTop, width: scale, height: scale }}>
         <img src={avatar} alt="" className="h-full w-full bg-osu-b3 object-cover" style={framedAvatarStyle(frame) ?? { borderRadius: FRAMED_AVATAR_RADIUS }} />
-        {frame && live && <SupporterAvatarFrame frame={frame} />}
-        {frame && !live && (
-          <img
-            src={supporterFrameSrc(frame, "still")}
-            alt=""
-            loading="lazy"
-            className="pointer-events-none absolute max-w-none"
-            style={{ left: `${left * 100}%`, top: `${top * 100}%`, width: `${width * 100}%`, height: `${height * 100}%` }}
-          />
-        )}
+        {frame && <SupporterAvatarFrame frame={frame} still={!live} userId={avatarUrlUserId(avatar)} />}
       </span>
     </span>
   );
@@ -169,65 +164,22 @@ function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; 
   return <FoilCard foil={loadout.look.foil} still className="h-[40px] w-[29px]" />;
 }
 
-/* A drawing of each case for the slot and drawer; the stage shows the real
-   one, in 3D, around the viewer's card. */
+/* Each case, empty: a still of the stage's real 3D case, rendered ahead of
+   time (150x210, 5:7) so a row of them costs no GPU work. Re-render them with
+   foundry's grab-cases (EMPTY=1) if a case's look changes. */
 export function SleeveCard({ sleeve, className }: { sleeve: SupporterCardSleeveId; className: string }) {
-  const card = "url(#sleeve-card)";
   return (
-    <svg viewBox="0 0 60 84" aria-hidden className={className}>
-      <defs>
-        <linearGradient id="sleeve-card" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#4a4e5e" />
-          <stop offset="1" stopColor="#262833" />
-        </linearGradient>
-        <linearGradient id="sleeve-glint" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0.35" stopColor="#fff" stopOpacity="0" />
-          <stop offset="0.5" stopColor="#fff" stopOpacity="0.35" />
-          <stop offset="0.62" stopColor="#fff" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {sleeve === "penny" && (
-        <>
-          <rect x="11" y="14" width="38" height="56" rx="3" fill={card} />
-          <path d="M9 10 V70 Q9 72 11 72 H49 Q51 72 51 70 V10" fill="#fff" fillOpacity="0.06" stroke="#fff" strokeOpacity="0.55" strokeWidth="0.8" />
-          <rect x="9" y="10" width="42" height="62" fill="url(#sleeve-glint)" />
-        </>
-      )}
-      {sleeve === "toploader" && (
-        <>
-          <rect x="11" y="14" width="38" height="56" rx="3" fill={card} />
-          <rect x="7" y="8" width="46" height="66" rx="3.5" fill="#fff" fillOpacity="0.07" stroke="#fff" strokeOpacity="0.75" strokeWidth="1.4" />
-          <rect x="7" y="8" width="46" height="4" rx="2" fill="#fff" fillOpacity="0.28" />
-          <rect x="7" y="8" width="46" height="66" rx="3.5" fill="url(#sleeve-glint)" />
-        </>
-      )}
-      {sleeve === "onetouch" && (
-        <>
-          <rect x="5" y="1.5" width="50" height="81" rx="1.5" fill="#fff" fillOpacity="0.06" stroke="#b9c3ff" strokeOpacity="0.9" strokeWidth="1" />
-          <path fillRule="evenodd" d="M6.5 3h47v78h-47zM9 16h3v-3h36v3h3v3.5h-3v49h3v3.5h-3v3H12v-3H9v-3.5h3v-49H9zM26 5.5h8a2.8 2.8 0 0 1 0 5.6h-8a2.8 2.8 0 0 1 0-5.6z" fill="#eef1f8" fillOpacity="0.82" />
-          <rect x="12" y="13" width="36" height="62" rx="1.5" fill={card} />
-          <circle cx="30" cy="8.3" r="2.2" fill="#e8b64a" stroke="#7a5512" strokeWidth="0.5" />
-          <rect x="5" y="1.5" width="50" height="81" rx="1.5" fill="url(#sleeve-glint)" />
-        </>
-      )}
-      {sleeve === "slab" && (
-        <>
-          <rect x="2" y="1" width="56" height="82" rx="4" fill="#fff" fillOpacity="0.05" stroke="#fff" strokeOpacity="0.55" strokeWidth="1.2" />
-          <rect x="8" y="5" width="44" height="74" rx="2.5" fill="#fff" fillOpacity="0.06" stroke="#fff" strokeOpacity="0.8" strokeWidth="1.2" />
-          <rect x="11" y="8" width="38" height="12" fill="#ff6aa8" />
-          <rect x="12.2" y="9.2" width="35.6" height="9.6" fill="#f6f3ee" />
-          <rect x="14" y="11" width="16" height="1.6" rx="0.8" fill="#16141a" opacity="0.75" />
-          <rect x="14" y="14" width="11" height="1.4" rx="0.7" fill="#16141a" opacity="0.5" />
-          <text x="46.5" y="17.2" textAnchor="end" fontSize="6" fontWeight="700" fill="#16141a" fontFamily="Arial, sans-serif">10</text>
-          <rect x="12" y="24" width="36" height="51" rx="1.5" fill="#dfe6ee" fillOpacity="0.25" />
-          <rect x="14" y="26" width="32" height="47" rx="2" fill={card} />
-          {[[5.5, 4.5], [54.5, 4.5], [5.5, 79.5], [54.5, 79.5]].map(([cx, cy]) => (
-            <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2" fill="#c9ccd2" stroke="#6d7077" strokeWidth="0.6" />
-          ))}
-          <rect x="2" y="1" width="56" height="82" rx="4" fill="url(#sleeve-glint)" />
-        </>
-      )}
-    </svg>
+    <img
+      src={`/images/supporter-perks/case-${sleeve}.webp`}
+      alt=""
+      aria-hidden
+      draggable={false}
+      width={150}
+      height={210}
+      loading="lazy"
+      decoding="async"
+      className={`block object-contain ${className}`}
+    />
   );
 }
 
@@ -553,6 +505,7 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
           <PageTurn direction={1} label={t`Next page`} disabled={shownPage === pages - 1} onClick={() => setPage(shownPage + 1)} />
         </div>
       )}
+      {frame && supporterFrameGeometry(frame).danWindow && <FrameDanPicker avatar={avatar} disabled={disabled} />}
       {activeSet && "set" in activeSet && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] text-osu-f1">
           <span className="mr-1">{i18n._(activeSet.chips)}</span>
@@ -572,6 +525,87 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* Which of the viewer's dans the Dan license shows, picked in three steps:
+   the keymode, rice or LN, then the overall dan or one skillset's, each tile
+   showing its badge. A pick saves at once. */
+function FrameDanPicker({ avatar, disabled }: { avatar: string | undefined; disabled: boolean }) {
+  const { t, i18n } = useLingui();
+  const [choices, setChoices] = useState<FrameDanChoices | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [keyCount, setKeyCount] = useState<number | null>(null);
+  const [family, setFamily] = useState<"rc" | "ln" | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchFrameDanChoices().then((value) => alive && setChoices(value)).catch(() => alive && setChoices({ options: [], shown: null }));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!choices) return null;
+  if (choices.options.length === 0) {
+    return <p className="mt-3 text-[11px] text-osu-f1">{t`The card shows your dan once you have one.`}</p>;
+  }
+  const shown = choices.options.find((dan) => dan.key === choices.shown) ?? choices.options[0];
+  const keyCounts = [...new Set(choices.options.map((dan) => dan.keyCount))];
+  const kc = keyCount ?? shown.keyCount;
+  const families = (["rc", "ln"] as const).filter((side) => choices.options.some((dan) => dan.keyCount === kc && dan.family === side));
+  const fam = family && families.includes(family) ? family : families.includes(shown.family) && kc === shown.keyCount ? shown.family : families[0];
+  const tiles = choices.options.filter((dan) => dan.keyCount === kc && dan.family === fam);
+
+  const pickDan = (key: string) => {
+    if (saving || key === choices.shown) return;
+    setSaving(true);
+    setChoices({ ...choices, shown: key });
+    void saveFrameDanChoice({ data: { dan: key } })
+      .then((value) => {
+        setChoices(value);
+        const userId = avatarUrlUserId(avatar);
+        if (userId) forgetLiveSupporterLook(userId);
+        announceFrameDanPicked();
+      })
+      .catch(() => {})
+      .finally(() => setSaving(false));
+  };
+  return (
+    <div className="mt-4 border-t border-white/5 pt-3">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-[11px] text-osu-f1">{t`Dan`}</span>
+        {keyCounts.map((count) => (
+          <button key={count} type="button" onClick={() => { setKeyCount(count); setFamily(null); }} aria-pressed={kc === count} className={chip(kc === count)}>
+            {count}K
+          </button>
+        ))}
+        {families.length > 1 && <span className="mx-1 h-4 w-px bg-white/10" aria-hidden />}
+        {families.length > 1 && families.map((side) => (
+          <button key={side} type="button" onClick={() => setFamily(side)} aria-pressed={fam === side} className={chip(fam === side)}>
+            {side === "rc" ? t`Rice` : "LN"}
+          </button>
+        ))}
+      </div>
+      <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))" }}>
+        {tiles.map((dan) => {
+          const badge = getDanImageSrc(danBareLabel(dan.label), dan.family, dan.keyCount);
+          const skill = dan.skillset ? DAN_SKILLSET_META[dan.skillset] : undefined;
+          return (
+            <button
+              key={dan.key}
+              type="button"
+              disabled={disabled || saving}
+              onClick={() => pickDan(dan.key)}
+              aria-pressed={choices.shown === dan.key}
+              className={tile(choices.shown === dan.key)}
+            >
+              {badge ? <img src={badge} alt="" className="h-8 w-8 object-contain" /> : <span className="h-8 w-8" />}
+              <span className="w-full truncate text-center">{dan.skillset ? (skill ? i18n._(skill.labelMsg) : dan.skillset) : t`Overall`}</span>
+              <span className="-mt-1 text-[10px] font-medium text-osu-f1">{frameDanName(dan.label)}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -879,7 +913,7 @@ function ThemeDrawer({ current, disabled, onTry, onPick, onThemeOptions }: Drawe
           role="switch"
           aria-checked={!!current.themeOptions.charts}
           disabled={disabled}
-          onClick={() => onThemeOptions(current.themeOptions.charts ? {} : { charts: true })}
+          onClick={() => onThemeOptions({ ...current.themeOptions, charts: current.themeOptions.charts ? undefined : true })}
           className="mt-3 flex w-full cursor-pointer items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5 text-left transition-colors hover:bg-osu-b3 disabled:cursor-default"
         >
           <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${current.themeOptions.charts ? "bg-osu-pink" : "bg-osu-b2"}`}>
@@ -888,6 +922,24 @@ function ThemeDrawer({ current, disabled, onTry, onPick, onThemeOptions }: Drawe
           <span className="min-w-0">
             <span className="block text-[13px] font-semibold text-white">{t`Play my top plays`}</span>
             <span className="block text-[11px] text-osu-f1">{t`The highway streams a section of your best play in your main keymode, instead of random notes.`}</span>
+          </span>
+        </button>
+      )}
+      {current.theme !== null && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!!current.themeOptions.rows}
+          disabled={disabled}
+          onClick={() => onThemeOptions({ ...current.themeOptions, rows: current.themeOptions.rows ? undefined : true })}
+          className="mt-3 flex w-full cursor-pointer items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5 text-left transition-colors hover:bg-osu-b3 disabled:cursor-default"
+        >
+          <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${current.themeOptions.rows ? "bg-osu-pink" : "bg-osu-b2"}`}>
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${current.themeOptions.rows ? "left-[18px]" : "left-0.5"}`} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[13px] font-semibold text-white">{t`Banner in lists`}</span>
+            <span className="block text-[11px] text-osu-f1">{t`A strip of the theme behind your row on rankings and leaderboards.`}</span>
           </span>
         </button>
       )}

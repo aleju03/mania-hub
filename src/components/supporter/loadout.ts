@@ -125,9 +125,22 @@ const wings = (set: string, label: MessageDescriptor): FrameEntry => ({
 
 export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: FrameEntry[] }[] = [
   {
-    key: "dans",
-    title: msg`Dans`,
+    key: "mania",
+    title: msg`osu!mania`,
     entries: [
+      { id: "judgement-pop", label: msg`Judgements` },
+      { id: "dfjk-keys", label: msg`DFJK` },
+      { id: "note-highway", label: msg`Note highway` },
+      { id: "chordjack-pile", label: msg`Chordjack` },
+      { id: "stair-roll", label: msg`Stair roll` },
+      { id: "sv-gimmick", label: msg`SV gimmick` },
+      { id: "percy-check", label: msg`Percy check` },
+      { id: "hit-error", label: msg`Hit error meter` },
+      { id: "combo-break", label: msg`Combo break` },
+      { id: "results-grade", label: msg`Results grade` },
+      { id: "clutch-hp", label: msg`Clutch HP` },
+      { id: "skill-radar", label: msg`Skillset radar` },
+      { id: "seven-key", label: msg`7K board` },
       { id: "kappa-signal", label: msg`Kappa signal` },
       { id: "delta-crest", label: msg`Delta crest` },
       {
@@ -162,14 +175,13 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
         shown: 4,
       },
       { id: "hanging-stellium", label: msg`Stellium charm` },
-    ],
-  },
-  {
-    key: "mania",
-    title: msg`osu!mania`,
-    entries: [
-      { id: "judgement-pop", label: msg`Judgements` },
-      { id: "dfjk-keys", label: msg`DFJK` },
+      { id: "course-run", label: msg`Course run` },
+      { id: "stage-four-fail", label: msg`Stage 4 fail` },
+      { id: "pass-stamp", label: msg`Pass stamp` },
+      { id: "black-belt", label: msg`Black belt` },
+      { id: "greek-circle", label: msg`Greek circle` },
+      { id: "trophy-shelf", label: msg`Trophy shelf` },
+      { id: "dan-license", label: msg`Dan license` },
     ],
   },
   {
@@ -182,7 +194,16 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
       { id: "error-cascade", label: msg`Error cascade` },
       { id: "loading-bar", label: msg`Loading bar` },
       { id: "crt-monitor", label: msg`CRT monitor` },
-      { id: "disc-bounce", label: msg`Screensaver` },
+      {
+        set: "disc-bounce",
+        label: msg`Screensaver`,
+        chips: msg`Keys`,
+        variants: [
+          { id: "disc-bounce", label: "4K" },
+          { id: "disc-bounce-7k", label: "7K" },
+        ],
+        shown: 0,
+      },
       { id: "pixel-hearts", label: msg`Pixel hearts` },
       { id: "old-photo", label: msg`Old photo` },
     ],

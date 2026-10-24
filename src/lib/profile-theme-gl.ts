@@ -44,6 +44,7 @@ interface Compiled {
 const THEME_SPRITES: Partial<Record<SupporterProfileThemeId, string>> = {
   koi: "/images/profile-themes/koi-pads.png",
   vaporwave: "/images/profile-themes/palm.png",
+  redtree: "/images/profile-themes/red-tree.webp",
 };
 
 /* Geometry a theme draws over its shader, in the same canvas. */

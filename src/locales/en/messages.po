@@ -2415,8 +2415,8 @@ msgid "7K"
 msgstr "7K"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "7K board"
-#~ msgstr "7K board"
+msgid "7K board"
+msgstr "7K board"
 
 #. placeholder {0}: N.sevenKeys.mult
 #: src/lib/pack-run.ts
@@ -2479,12 +2479,12 @@ msgid "A 4K chart is LN when holds make up at least 45% of its notes and those h
 msgstr "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 
 #: src/routes/support.tsx
-#~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
-#~ msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
+msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
 
 #: src/routes/support.tsx
-msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
-msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
+#~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
+#~ msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
 
 #: src/routes/support.tsx
 #~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter. If your time runs out, it starts again from Copper."
@@ -2500,6 +2500,10 @@ msgid "A break halves your combo instead of resetting it, and every break gives 
 msgstr "A break halves your combo instead of resetting it, and every break gives the row x{0}."
 
 #: src/lib/chain-run.ts
+msgid "A break later in the row only drops the combo back to what this card scored at."
+msgstr "A break later in the row only drops the combo back to what this card scored at."
+
+#: src/lib/chain-run.ts
 #~ msgid "A break only halves the combo."
 #~ msgstr "A break only halves the combo."
 
@@ -2507,6 +2511,10 @@ msgstr "A break halves your combo instead of resetting it, and every break gives
 #: src/lib/chain-run.ts
 #~ msgid "A card whose link in shares {0} or more traits plays again: the link fires again and the card scores again."
 #~ msgstr "A card whose link in shares {0} or more traits plays again: the link fires again and the card scores again."
+
+#: src/lib/chain-run.ts
+msgid "A card's base goes up by half."
+msgstr "A card's base goes up by half."
 
 #: src/routes/news_.prism.tsx
 msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
@@ -2711,6 +2719,10 @@ msgstr "A snipe is when your new best on a map passes a player who was above you
 #: src/lib/chain-run.ts
 #~ msgid "A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it."
 #~ msgstr "A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "A strip of the theme behind your row on rankings and leaderboards."
+msgstr "A strip of the theme behind your row on rankings and leaderboards."
 
 #: src/components/supporter/TestPack.tsx
 msgid "A test pack: nothing is spent, open as many as you like."
@@ -3254,8 +3266,8 @@ msgid "amber"
 msgstr "amber"
 
 #: src/lib/supporter-ranks.ts
-#~ msgid "Amber"
-#~ msgstr "Amber"
+msgid "Amber"
+msgstr "Amber"
 
 #: src/lib/supporter-ranks.ts
 msgid "Amethyst"
@@ -3764,6 +3776,10 @@ msgstr "banned · proof"
 msgid "Banner"
 msgstr "Banner"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Banner in lists"
+msgstr "Banner in lists"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bar colors"
 msgstr "Bar colors"
@@ -4026,12 +4042,12 @@ msgid "Bitmap"
 msgstr "Bitmap"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Black belt"
-#~ msgstr "Black belt"
+msgid "Black belt"
+msgstr "Black belt"
 
 #: src/lib/supporter-companions.ts
-#~ msgid "Black cat plush"
-#~ msgstr "Black cat plush"
+msgid "Black cat plush"
+msgstr "Black cat plush"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Black hole"
@@ -4184,8 +4200,8 @@ msgid "BROKE"
 msgstr "BROKE"
 
 #: src/lib/supporter-ranks.ts
-msgid "Bronze"
-msgstr "Bronze"
+#~ msgid "Bronze"
+#~ msgstr "Bronze"
 
 #: src/components/supporter/loadout.ts
 msgid "Bronze laurel"
@@ -4780,6 +4796,7 @@ msgstr "Chord"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/components/supporter/loadout.ts
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/maps.tsx
@@ -4814,8 +4831,8 @@ msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 msgstr "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 
 #: src/lib/supporter-companions.ts
-#~ msgid "Chubby Teto"
-#~ msgstr "Chubby Teto"
+msgid "Chubby Teto"
+msgstr "Chubby Teto"
 
 #: src/lib/supporter-companions.ts
 #~ msgid "Ciela"
@@ -5157,8 +5174,8 @@ msgid "Clutch"
 msgstr "Clutch"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Clutch HP"
-#~ msgstr "Clutch HP"
+msgid "Clutch HP"
+msgstr "Clutch HP"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -5299,8 +5316,8 @@ msgid "Combo +{0}"
 msgstr "Combo +{0}"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Combo break"
-#~ msgstr "Combo break"
+msgid "Combo break"
+msgstr "Combo break"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Combo break sound"
@@ -5548,8 +5565,8 @@ msgid "copies in circulation"
 msgstr "copies in circulation"
 
 #: src/lib/supporter-ranks.ts
-msgid "Copper"
-msgstr "Copper"
+#~ msgid "Copper"
+#~ msgstr "Copper"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
@@ -6107,8 +6124,8 @@ msgid "Course packs and allowed mods"
 msgstr "Course packs and allowed mods"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Course run"
-#~ msgstr "Course run"
+msgid "Course run"
+msgstr "Course run"
 
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 msgid "Courses"
@@ -6304,6 +6321,7 @@ msgstr "dan"
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/rankings.tsx
 msgid "Dan"
@@ -6353,8 +6371,8 @@ msgid "Dan estimate: {0} ({1})"
 msgstr "Dan estimate: {0} ({1})"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Dan license"
-#~ msgstr "Dan license"
+msgid "Dan license"
+msgstr "Dan license"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Dan plays"
@@ -6385,8 +6403,8 @@ msgid "Danish"
 msgstr "Danish"
 
 #: src/components/supporter/loadout.ts
-msgid "Dans"
-msgstr "Dans"
+#~ msgid "Dans"
+#~ msgstr "Dans"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "dark"
@@ -6702,8 +6720,8 @@ msgid "does not count"
 msgstr "does not count"
 
 #: src/lib/supporter-companions.ts
-#~ msgid "Don-chan"
-#~ msgstr "Don-chan"
+msgid "Don-chan"
+msgstr "Don-chan"
 
 #: src/routes/recommendations.tsx
 msgid "done"
@@ -7418,8 +7436,8 @@ msgstr "Every row you play makes the rows after it score x{0} more. It stacks fo
 #~ msgstr "Every row you play multiplies the rows after it by {0} more, compounding, for the rest of the run."
 
 #: src/lib/chain-run.ts
-msgid "Every scene card slot is full. Sell one first."
-msgstr "Every scene card slot is full. Sell one first."
+#~ msgid "Every scene card slot is full. Sell one first."
+#~ msgstr "Every scene card slot is full. Sell one first."
 
 #. placeholder {0}: N.quickRetry.packs
 #: src/lib/pack-run.ts
@@ -8496,6 +8514,10 @@ msgstr "GOAT roster, {goatRoster} to find"
 msgid "GOATs"
 msgstr "GOATs"
 
+#: src/lib/chain-run.ts
+msgid "GOATs can't take mods."
+msgstr "GOATs can't take mods."
+
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "GOATs discovered"
 msgstr "GOATs discovered"
@@ -8580,8 +8602,8 @@ msgid "Greek"
 msgstr "Greek"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Greek circle"
-#~ msgstr "Greek circle"
+msgid "Greek circle"
+msgstr "Greek circle"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "green"
@@ -8905,8 +8927,8 @@ msgid "Hit error bar"
 msgstr "Hit error bar"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Hit error meter"
-#~ msgstr "Hit error meter"
+msgid "Hit error meter"
+msgstr "Hit error meter"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Hit light"
@@ -9525,6 +9547,10 @@ msgstr "Italian"
 msgid "Italic"
 msgstr "Italic"
 
+#: src/lib/chain-run.ts
+msgid "Its country, keymode and skillset change every round."
+msgstr "Its country, keymode and skillset change every round."
+
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Its name"
 msgstr "Its name"
@@ -9667,8 +9693,8 @@ msgid "just now"
 msgstr "just now"
 
 #: src/lib/supporter-companions.ts
-#~ msgid "Ka-chan"
-#~ msgstr "Ka-chan"
+msgid "Ka-chan"
+msgstr "Ka-chan"
 
 #: src/components/supporter/loadout.ts
 msgid "Kappa signal"
@@ -9725,6 +9751,10 @@ msgstr "Keeps the layout you're watching."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Key"
 msgstr "Key"
+
+#: src/lib/chain-run.ts
+msgid "Key Change"
+msgstr "Key Change"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Key history"
@@ -9795,6 +9825,7 @@ msgstr "keys"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/supporter/loadout.ts
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/snipes.tsx
@@ -9823,8 +9854,8 @@ msgid "Koi pond"
 msgstr "Koi pond"
 
 #: src/lib/supporter-companions.ts
-#~ msgid "Koishi fumo"
-#~ msgstr "Koishi fumo"
+msgid "Koishi fumo"
+msgstr "Koishi fumo"
 
 #: src/components/communities/field-options.tsx
 msgid "Korean"
@@ -10795,6 +10826,11 @@ msgstr "Make it {OSU_PROFILE_COLUMN_WIDTH}px wide - the full width of the osu! p
 msgid "Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one."
 msgstr "Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one."
 
+#. placeholder {0}: i18n._(variant.text)
+#: src/lib/chain-run.ts
+msgid "Makes a card {name}. {0}"
+msgstr "Makes a card {name}. {0}"
+
 #: src/components/supporter/loadout.ts
 msgid "Makiba"
 msgstr "Makiba"
@@ -10820,8 +10856,8 @@ msgid "manager"
 msgstr "manager"
 
 #: src/lib/supporter-companions.ts
-#~ msgid "Maneki-neko"
-#~ msgstr "Maneki-neko"
+msgid "Maneki-neko"
+msgstr "Maneki-neko"
 
 #: src/routes/maps.tsx
 msgid "Mania maps"
@@ -11049,8 +11085,8 @@ msgid "Margin doodles"
 msgstr "Margin doodles"
 
 #: src/lib/supporter-companions.ts
-#~ msgid "Marisa fumo"
-#~ msgstr "Marisa fumo"
+msgid "Marisa fumo"
+msgstr "Marisa fumo"
 
 #: src/routes/recommendations.tsx
 msgid "marked done"
@@ -11087,6 +11123,10 @@ msgstr "Mastery {level}: {copies} copies held, next at {next}. Spares recycle fo
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
 msgstr "Match sizes to first selected image"
+
+#: src/lib/chain-run.ts
+msgid "Matches every trait of the cards next to it."
+msgstr "Matches every trait of the cards next to it."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
@@ -11132,6 +11172,10 @@ msgstr "MAX:300 ratio"
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Maximum"
 msgstr "Maximum"
+
+#: src/lib/supporter-companions.ts
+msgid "Maxwell the cat"
+msgstr "Maxwell the cat"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
@@ -11203,8 +11247,8 @@ msgid "Middle lane thumb"
 msgstr "Middle lane thumb"
 
 #: src/lib/supporter-companions.ts
-#~ msgid "Miku plush"
-#~ msgstr "Miku plush"
+msgid "Miku plush"
+msgstr "Miku plush"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "min"
@@ -11306,8 +11350,8 @@ msgstr "modded plays"
 #. placeholder {0}: credit.author
 #: src/components/supporter/SupporterExtras.tsx
 #: src/components/supporter/SupportShowcase.tsx
-#~ msgid "Model by {0}"
-#~ msgstr "Model by {0}"
+msgid "Model by {0}"
+msgstr "Model by {0}"
 
 #: src/routes/skins_.$id.tsx
 msgid "Moderate skin"
@@ -11358,8 +11402,8 @@ msgid "Month {month}"
 msgstr "Month {month}"
 
 #: src/lib/supporter-ranks.ts
-#~ msgid "Moonstone"
-#~ msgstr "Moonstone"
+msgid "Moonstone"
+msgstr "Moonstone"
 
 #: src/components/layout/Nav.tsx
 msgid "more"
@@ -12105,6 +12149,10 @@ msgstr "No foil"
 msgid "No frame"
 msgstr "No frame"
 
+#: src/lib/chain-run.ts
+msgid "No free slot for that."
+msgstr "No free slot for that."
+
 #: src/routes/recommendations.tsx
 msgid "no gains here"
 msgstr "no gains here"
@@ -12809,6 +12857,7 @@ msgstr "Note color"
 msgid "Note height"
 msgstr "Note height"
 
+#: src/components/supporter/loadout.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Note highway"
 msgstr "Note highway"
@@ -13661,6 +13710,8 @@ msgid "overall"
 msgstr "overall"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SupporterAvatarFrame.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/lib/skill-axes.ts
 #: src/routes/news_.prism.tsx
 msgid "Overall"
@@ -13829,8 +13880,8 @@ msgid "Pass bar"
 msgstr "Pass bar"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Pass stamp"
-#~ msgstr "Pass stamp"
+msgid "Pass stamp"
+msgstr "Pass stamp"
 
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
@@ -13936,6 +13987,7 @@ msgid "Peak Performance"
 msgstr "Peak Performance"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-ranks.ts
 msgid "Pearl"
 msgstr "Pearl"
 
@@ -13996,8 +14048,8 @@ msgid "percentiles are among tracked players"
 msgstr "percentiles are among tracked players"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Percy check"
-#~ msgstr "Percy check"
+msgid "Percy check"
+msgstr "Percy check"
 
 #: src/lib/pack-run.ts
 msgid "Perfect"
@@ -14469,8 +14521,12 @@ msgid "Portuguese"
 msgstr "Portuguese"
 
 #: src/routes/supporter.tsx
-msgid "possible looks"
-msgstr "possible looks"
+msgid "possible combinations"
+msgstr "possible combinations"
+
+#: src/routes/supporter.tsx
+#~ msgid "possible looks"
+#~ msgstr "possible looks"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Post a Discord server"
@@ -15101,6 +15157,10 @@ msgstr "Rarity"
 msgid "Rate"
 msgstr "Rate"
 
+#: src/lib/chain-run.ts
+msgid "Rate Up"
+msgstr "Rate Up"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
 msgstr "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
@@ -15461,8 +15521,8 @@ msgid "Red fairy"
 msgstr "Red fairy"
 
 #: src/lib/supporter-profile-themes.ts
-#~ msgid "Red tree"
-#~ msgstr "Red tree"
+msgid "Red tree"
+msgstr "Red tree"
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Redeem"
@@ -15952,8 +16012,8 @@ msgid "Restricted on osu!"
 msgstr "Restricted on osu!"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Results grade"
-#~ msgstr "Results grade"
+msgid "Results grade"
+msgstr "Results grade"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Resume chart preview"
@@ -15997,6 +16057,11 @@ msgstr "Revealing the rest..."
 msgid "Revealing your cards..."
 msgstr "Revealing your cards..."
 
+#. placeholder {0}: CHAIN_RULES.reviveRows
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Revived: {0} more rows."
+msgstr "Revived: {0} more rows."
+
 #: src/components/companella/InstallationList.tsx
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Revoke"
@@ -16023,8 +16088,8 @@ msgid "rice"
 msgstr "rice"
 
 #: src/components/supporter/LoadoutSlots.tsx
-#~ msgid "Rice"
-#~ msgstr "Rice"
+msgid "Rice"
+msgstr "Rice"
 
 #: src/components/player/ProfileStatCards.tsx
 #: src/lib/profile-stats.ts
@@ -16142,6 +16207,11 @@ msgstr "Round {round}"
 msgid "Round {round} fell short: <0>{0}</0> of <1>{1}</1>"
 msgstr "Round {round} fell short: <0>{0}</0> of <1>{1}</1>"
 
+#. placeholder {0}: CHAIN_RULES.reviveRows
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Round {round} goes on with {0} more rows. Once per run."
+msgstr "Round {round} goes on with {0} more rows. Once per run."
+
 #: src/lib/chain-run.ts
 msgid "Round {round} pack"
 msgstr "Round {round} pack"
@@ -16238,8 +16308,8 @@ msgid "Sat"
 msgstr "Sat"
 
 #: src/lib/supporter-companions.ts
-#~ msgid "Satori fumo"
-#~ msgstr "Satori fumo"
+msgid "Satori fumo"
+msgstr "Satori fumo"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Saturdays"
@@ -16382,8 +16452,8 @@ msgstr "Scales the skin's hitburst art."
 #. placeholder {0}: credit.author
 #: src/components/supporter/SupporterExtras.tsx
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Scan by {0}"
-msgstr "Scan by {0}"
+#~ msgid "Scan by {0}"
+#~ msgstr "Scan by {0}"
 
 #: src/lib/supporter-foils.ts
 msgid "Scanline"
@@ -17513,8 +17583,8 @@ msgid "Signed: tap to unsign"
 msgstr "Signed: tap to unsign"
 
 #: src/lib/supporter-ranks.ts
-msgid "Silver"
-msgstr "Silver"
+#~ msgid "Silver"
+#~ msgstr "Silver"
 
 #: src/lib/pack-run.ts
 msgid "Silver pack"
@@ -17673,8 +17743,8 @@ msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic 
 msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Skillset radar"
-#~ msgstr "Skillset radar"
+msgid "Skillset radar"
+msgstr "Skillset radar"
 
 #: src/routes/news_.prism.tsx
 msgid "Skillsets"
@@ -17757,6 +17827,10 @@ msgstr "Skipping songs is not available yet."
 #: src/routes/maps.tsx
 msgid "Skips the last few players and maps you were shown."
 msgstr "Skips the last few players and maps you were shown."
+
+#: src/lib/supporter-companions.ts
+msgid "Sleeping cat"
+msgstr "Sleeping cat"
 
 #: src/components/packs/PackSummary.tsx
 msgid "sliced"
@@ -18130,8 +18204,8 @@ msgid "Stage {0} cleared"
 msgstr "Stage {0} cleared"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Stage 4 fail"
-#~ msgstr "Stage 4 fail"
+msgid "Stage 4 fail"
+msgstr "Stage 4 fail"
 
 #: src/lib/replay-overlays.ts
 msgid "Stage art (bottom)"
@@ -18158,8 +18232,8 @@ msgid "Stage's left edge, skin.ini ColumnStart."
 msgstr "Stage's left edge, skin.ini ColumnStart."
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Stair roll"
-#~ msgstr "Stair roll"
+msgid "Stair roll"
+msgstr "Stair roll"
 
 #: src/lib/pack-run.ts
 msgid "Stairs"
@@ -18299,8 +18373,8 @@ msgstr "Stay under {0}x the target for more combo."
 #~ msgstr "Stay under the star for +2 combo."
 
 #: src/lib/supporter-ranks.ts
-msgid "Steel"
-msgstr "Steel"
+#~ msgid "Steel"
+#~ msgstr "Steel"
 
 #: src/components/supporter/loadout.ts
 msgid "Stellium"
@@ -18527,7 +18601,6 @@ msgstr "Support"
 #~ msgstr "Support mania-tracker"
 
 #: src/components/supporter/SupportCheckout.tsx
-#: src/routes/support.tsx
 msgid "Support on Ko-fi"
 msgstr "Support on Ko-fi"
 
@@ -18585,8 +18658,8 @@ msgid "SV"
 msgstr "SV"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "SV gimmick"
-#~ msgstr "SV gimmick"
+msgid "SV gimmick"
+msgstr "SV gimmick"
 
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -18651,6 +18724,11 @@ msgstr "Take it down for good?"
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
 msgstr "Taken down by a moderator."
+
+#. placeholder {0}: chainModLook(shown.mods[modPick], i18n).name
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Tap a card in your hand for {0}"
+msgstr "Tap a card in your hand for {0}"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
@@ -19152,8 +19230,8 @@ msgid "The card cover could not be changed. Try again."
 msgstr "The card cover could not be changed. Try again."
 
 #: src/components/supporter/LoadoutSlots.tsx
-#~ msgid "The card shows your dan once you have one."
-#~ msgstr "The card shows your dan once you have one."
+msgid "The card shows your dan once you have one."
+msgstr "The card shows your dan once you have one."
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "The card stays yours until they accept it."
@@ -20205,6 +20283,10 @@ msgstr "This request was already answered. Start the connection again from the a
 msgid "This run"
 msgstr "This run"
 
+#: src/lib/chain-run.ts
+msgid "This run already used its revive."
+msgstr "This run already used its revive."
+
 #: src/lib/replay-score-availability.ts
 msgid "This score doesn't have a downloadable replay."
 msgstr "This score doesn't have a downloadable replay."
@@ -20574,8 +20656,8 @@ msgid "Top-play feed"
 msgstr "Top-play feed"
 
 #: src/lib/supporter-ranks.ts
-#~ msgid "Topaz"
-#~ msgstr "Topaz"
+msgid "Topaz"
+msgstr "Topaz"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Toploader"
@@ -20675,8 +20757,8 @@ msgid "Trio"
 msgstr "Trio"
 
 #: src/components/supporter/loadout.ts
-#~ msgid "Trophy shelf"
-#~ msgstr "Trophy shelf"
+msgid "Trophy shelf"
+msgstr "Trophy shelf"
 
 #: src/routes/recommendations.tsx
 msgid "Try a different title, artist, or difficulty name."
@@ -20759,6 +20841,10 @@ msgstr "Turn your phone sideways to watch."
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Turned down{said} Editing it sends it back for approval."
 msgstr "Turned down{said} Editing it sends it back for approval."
+
+#: src/lib/chain-run.ts
+msgid "Turns a 4K card into 7K, or 7K into 4K."
+msgstr "Turns a 4K card into 7K, or 7K into 4K."
 
 #: src/routes/snipes.tsx
 msgid "Turns every hold note into a normal note."
@@ -21153,6 +21239,11 @@ msgstr "UR"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "URL"
 msgstr "URL"
+
+#. placeholder {0}: look.name
+#: src/components/packs/run/chain/ChainMods.tsx
+msgid "Use {0}"
+msgstr "Use {0}"
 
 #. placeholder {0}: candidate.label
 #: src/components/skins/SkinBackdropPicker.tsx
@@ -21582,6 +21673,10 @@ msgstr "Warming this player up... first draws can take a moment"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Watch"
 msgstr "Watch"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Watch an ad to revive"
+msgstr "Watch an ad to revive"
 
 #: src/routes/replay.tsx
 msgid "Watch osu!mania replays in your browser."
@@ -22419,6 +22514,10 @@ msgstr "Your Mamestagram profile link doesn't lead to a player."
 #: src/routes/recommendations.tsx
 msgid "your marks"
 msgstr "your marks"
+
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Your mods"
+msgstr "Your mods"
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx

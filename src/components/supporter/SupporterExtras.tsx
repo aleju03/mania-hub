@@ -13,10 +13,9 @@ import { useAuth } from "#/lib/auth-context";
 import { Loader2 } from "lucide-react";
 import { CompanionFigure, CompanionThumb } from "./Companion";
 import { UploadIcon } from "./LoadoutIcons";
-import { BinderBook, FoilCard, FrameThumb, wrapperThumb } from "./LoadoutSlots";
+import { BinderBook, FrameThumb } from "./LoadoutSlots";
 import { ProfileThemeSwatch } from "./ProfileThemeBackdrop";
 import { SupporterStyledName } from "./SupporterNameStyle";
-import { queueGpuWork } from "../../lib/gpu-queue";
 
 /* The /supporter page's two sections under the loadout: the four stat cards
    under the viewer's profile (the same picker as the profile's own corner
@@ -200,7 +199,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
           <p className="mt-2 max-w-full truncate text-center text-[12px] font-semibold text-osu-l2">{shownName}</p>
           {credit && (
             <a href={credit.url} target="_blank" rel="noreferrer" className="mt-0.5 text-center text-[10.5px] leading-tight text-osu-f1 hover:text-white">
-              {t`Scan by ${credit.author}`} ({credit.license})
+              {t`Model by ${credit.author}`}
             </a>
           )}
           {by && (
@@ -308,12 +307,11 @@ const PERKS: { id: PerkId; title: MessageDescriptor; body: MessageDescriptor }[]
   { id: "gift", title: msg`A week for a friend`, body: msg`A one-time code that gives someone else a week of supporter.` },
 ];
 
-/* A pack printed on the holo wrapper, drawn once on the client (the art is a
-   canvas), in a quiet moment after the page has loaded. */
+/* A pack printed on the holo wrapper: a still of the canvas the packs draw
+   (wrapperThumb), saved as a file so the tile shows it with the page instead
+   of drawing it in after load. */
 function PackThumb() {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => queueGpuWork(() => setSrc(wrapperThumb("holo"))), []);
-  return src ? <img src={src} alt="" className="h-[46px] w-[28px] rounded-[2px] object-cover shadow-[0_2px_6px_rgba(0,0,0,0.5)]" /> : null;
+  return <img src="/images/supporter-perks/pack-holo.webp" alt="" width={28} height={46} className="h-[46px] w-[28px] rounded-[2px] object-cover shadow-[0_2px_6px_rgba(0,0,0,0.5)]" />;
 }
 
 /* Each perk's tile: a small piece of the real thing where there is one. */
@@ -326,7 +324,8 @@ function PerkArt({ id, avatar }: { id: PerkId; avatar: string | undefined }) {
     case "name":
       return <SupporterStyledName nameStyle="sunset" nameFont={null} name="Aa" className="text-[22px] font-bold leading-none" />;
     case "card":
-      return <FoilCard foil="holo" className="h-[44px] w-[32px] -rotate-6 shadow-[0_2px_6px_rgba(0,0,0,0.5)]" />;
+      // a still of the holo foil, not the live shader: the tile only needs to show what it is
+      return <img src="/images/supporter-perks/foil-holo.webp" alt="" width={32} height={44} className="h-[44px] w-[32px] -rotate-6 rounded-[6px] object-cover shadow-[0_2px_6px_rgba(0,0,0,0.5)]" />;
     case "packs":
       return (
         <span className="flex items-end gap-1">

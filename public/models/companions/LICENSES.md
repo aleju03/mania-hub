@@ -14,6 +14,24 @@ Changed here: textures re-encoded as WebP; nothing else.
 | fumo-yuyuko.glb | https://sketchfab.com/3d-models/6d5d0483009942fb916eedc60ea383a4 |
 | fumo-sakuya-inu.glb | https://sketchfab.com/3d-models/7a573802931f485db8118a9d64f26362 |
 
+These are by other Sketchfab artists, also under Creative Commons Attribution 4.0.
+Changed here: extra vertex attributes dropped, geometry simplified (fumo-satori
+decimated in Blender, the others with meshoptimizer), quantized, and textures
+re-encoded as WebP at most 1024 px.
+
+| File | Author | Source |
+| --- | --- | --- |
+| fumo-satori.glb | DAsh9986 | https://sketchfab.com/3d-models/19bb1a2fad344a639f18f57449cae11d |
+| fumo-koishi.glb | 203Null | https://sketchfab.com/3d-models/37a56b489b5c4440bbabb7b7777036f6 |
+| fumo-marisa.glb | 203Null | https://sketchfab.com/3d-models/7dea820bf4884ecc8f2c31a085b07428 |
+| plush-miku.glb | revsworks | https://sketchfab.com/3d-models/22e25b5fbd444102a175c088e14eb541 |
+| plush-teto.glb | revsworks | https://sketchfab.com/3d-models/bd8157eb42a04161b2628e58dfd2a852 |
+| plush-black-cat.glb | dro | https://sketchfab.com/3d-models/0a81d050ac2c4f2c9adce8b640af1eeb |
+| maneki-neko.glb | Rice & Soy Sauce | https://sketchfab.com/3d-models/50b5d360717c442c971b3db0576606c4 |
+| cat-maxwell.glb | Zhuier | https://sketchfab.com/3d-models/4175776146ba4550a8dd643363b7b0aa |
+| cat-sleeping.glb | Psu | https://sketchfab.com/3d-models/3f7608e2b6b248bf83db09fb21125c2b |
+
 blob-pink.glb is the site's own model, built by local-notes/companions/blob/make_blob.py.
 leek.glb is the site's own model, made in Blender (~/Projects/3d-modelling/leek); its cel shading is drawn by src/lib/companion-toon.ts from the materials' toon extras.
-fairy-white.glb, fairy-red.glb and fairy-blue.glb are the site's own models, made in Blender (~/Projects/3d-modelling/fairies); toon extras as for the leek, and their halos (extras.glow) are drawn first by src/lib/companion-toon.ts.
+fairy-white.glb, fairy-red.glb and fairy-blue.glb are the site's own models, made in Blender (~/Projects/3d-modelling/fairies/build_navi.py); src/lib/companion-toon.ts draws their light and wings from the materials' extras (extras.light, extras.wing) and beats the wings and hovers the fairy from the nodes' extras (extras.flap, extras.hover).
+taiko-don.glb and taiko-ka.glb are the site's own models, made in Blender (~/Projects/3d-modelling/donchan/build_donchan.py); the characters, Don-chan and Ka-chan, are Bandai Namco's (Taiko no Tatsujin). src/lib/companion-toon.ts draws their flat cel colour from the materials' toon extras; they sit still (no motion extras).

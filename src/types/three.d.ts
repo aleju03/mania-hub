@@ -1,5 +1,10 @@
 declare module "three" {
-  export class Quaternion {}
+  export class Quaternion {
+    constructor(...args: any[]);
+    copy(quaternion: Quaternion): this;
+    setFromAxisAngle(axis: Vector3, angle: number): this;
+    multiplyQuaternions(a: Quaternion, b: Quaternion): this;
+  }
 
   export class Object3D {
     children: Object3D[];
@@ -8,6 +13,7 @@ declare module "three" {
     scale: { x: number; y: number; z: number; setScalar: (value: number) => void };
     quaternion: Quaternion;
     renderOrder: number;
+    userData: Record<string, any>;
     add(...objects: Object3D[]): void;
     remove(...objects: Object3D[]): void;
     traverse(callback: (object: Object3D) => void): void;
@@ -111,6 +117,9 @@ declare module "three" {
     z: number;
     constructor(...args: any[]);
     set(x: number, y: number, z: number): this;
+    copy(vector: Vector3): this;
+    add(vector: Vector3): this;
+    sub(vector: Vector3): this;
     applyQuaternion(quaternion: Quaternion): this;
     normalize(): this;
   }
@@ -152,6 +161,7 @@ declare module "three" {
 
   export class ShaderMaterial {
     uniforms: any;
+    userData: Record<string, any>;
     constructor(...args: any[]);
     dispose(): void;
   }
