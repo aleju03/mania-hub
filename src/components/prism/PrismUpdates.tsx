@@ -67,8 +67,8 @@ const RELEASE_CHARTS: UpdateChart[] = [
 ];
 
 const HYBRID_CHARTS: UpdateChart[] = [
-  { beatmapId: 4287709, beatmapsetId: 2052811, title: "Aethoro - Woodfairies", version: "7K Dance of the Fae", before: 24.7, after: 19.2 },
-  { beatmapId: 4943513, beatmapsetId: 2310817, title: "katagiri - c0pyf0x", version: "[7K] tw1n1sm", before: 29.2, after: 26.6 },
+  { beatmapId: 568463, beatmapsetId: 246853, title: "bbn - Identic Conflict", version: "[7K] Birdcage", before: 27.7, after: 20.4 },
+  { beatmapId: 1742328, beatmapsetId: 831653, title: "kamome sano - starlights feat. TEA", version: "Celestial Radiance // 7K", before: 27.7, after: 24.9 },
 ];
 
 const MASH_CHARTS: UpdateChart[] = [

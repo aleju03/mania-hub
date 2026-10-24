@@ -57,7 +57,7 @@ export const UPDATES: ChangelogUpdate[] = [
     ],
   },
   { date: "2026-10-24", text: "Added Updates and Visualizer tabs to the Prism page. The Visualizer shows how Prism reads each part of a chart.", to: "/news/prism", search: { tab: "visualizer" }, image: { src: "/images/changelog/2026-10-22-prism-visualizer.webp", alt: "The Prism visualizer on a 7K chart", width: 770, height: 590 } },
-  { date: "2026-10-24", text: "Updated Prism to v26, which nerfs inflated low star and inverse LN charts, rates charts you can mash lower and makes Bracket stricter.", to: "/news/prism", search: { tab: "updates" } },
+  { date: "2026-10-24", text: "Updated Prism to v26, which lowers LN ratings on charts that are only partly LN, rates charts you can mash lower and makes Bracket stricter.", to: "/news/prism", search: { tab: "updates" } },
   { date: "2026-10-24", text: "Added Best play and 200th play views to All time top plays.", to: "/top-plays", search: { range: "all", view: "best" } },
   { date: "2026-10-24", text: "Added custom HT and DT rates to the map card.", to: "/maps", image: { src: "/images/changelog/2026-10-22-map-card-custom-rates.webp", alt: "A custom DT rate on the map card", width: 527, height: 374 } },
   { date: "2026-10-24", text: "Added the 6K, 7K and LN ladders to the Dan filter in map search, and MSD ranges for every keymode.", to: "/maps", image: { src: "/images/changelog/2026-10-22-map-search-dan-ladders.webp", alt: "The Dan filter on the 4K LN ladder", width: 474, height: 217 } },
