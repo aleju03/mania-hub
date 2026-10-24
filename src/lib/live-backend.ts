@@ -4182,6 +4182,7 @@ export interface LiveChainRunBoardEntry {
   rank: number;
   userId: number;
   username: string;
+  cc?: string;
   round: number;
   bestRow: number;
   rows: number;
@@ -4189,10 +4190,33 @@ export interface LiveChainRunBoardEntry {
   updatedAt: number;
 }
 
-/* The chain run's board: each player's best run, by round reached then best row. */
-export async function fetchLiveChainRunBoard(limit = 20): Promise<LiveChainRunBoardEntry[]> {
-  const body = await fetchLiveJson<{ entries?: LiveChainRunBoardEntry[] }>(`/api/chain-run/board?limit=${Math.max(1, Math.min(50, Math.floor(limit)))}`);
-  return Array.isArray(body.entries) ? body.entries : [];
+export type LiveChainBoardPeriod = "all" | "month";
+
+/* The chain run's board for a period (all time, or this UTC month): each
+   player's best run, by round reached then best row, plus `user`'s own entry
+   when asked for. */
+export async function fetchLiveChainRunBoard(
+  period: LiveChainBoardPeriod = "all",
+  user?: number | null,
+  limit = 20,
+): Promise<{ entries: LiveChainRunBoardEntry[]; mine: LiveChainRunBoardEntry | null }> {
+  const params = new URLSearchParams({ limit: String(Math.max(1, Math.min(50, Math.floor(limit)))), period });
+  if (user) params.set("user", String(user));
+  const body = await fetchLiveJson<{ entries?: LiveChainRunBoardEntry[]; mine?: LiveChainRunBoardEntry | null }>(`/api/chain-run/board?${params}`);
+  return { entries: Array.isArray(body.entries) ? body.entries : [], mine: body.mine ?? null };
+}
+
+/* One board entry and what its run was built from (snapshot null on entries
+   older than snapshots); null when the player has no entry for the period. */
+export async function fetchLiveChainRunSheet<Snapshot>(
+  userId: number,
+  period: LiveChainBoardPeriod,
+): Promise<{ entry: LiveChainRunBoardEntry; snapshot: Snapshot | null } | null> {
+  try {
+    return await fetchLiveJson(`/api/chain-run/board/${userId}?period=${period}`);
+  } catch {
+    return null;
+  }
 }
 
 /* How the community holds one player's own card ("your card got pulled"). */

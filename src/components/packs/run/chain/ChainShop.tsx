@@ -15,6 +15,7 @@ import {
   chainRefusalMessage,
   type ChainAction,
   type ChainActionResult,
+  type ChainContract,
   type ChainOffer,
   type ChainRunView,
   type ChainSceneId,
@@ -229,6 +230,10 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
   const [message, setMessage] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const [rerolls, setRerolls] = useState(0);
+  /* A contract tap shows signed (or unsigned) at once; the server's answer
+     takes over once every tap has landed. */
+  const [signedNow, setSignedNow] = useState<{ contract: ChainContract | null } | null>(null);
+  const signsInFlight = useRef(0);
   /* The reel playing over the shop after a bought spin. */
   /* A bought scene card flies from the shop to its place among the held
      ones. */
@@ -292,6 +297,26 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
       shake(SHOP_FEEL.shake.buy + 0.2);
     }
     return true;
+  };
+
+  const sign = async (index: number) => {
+    const picked = shop?.contracts?.[index];
+    if (!picked) return;
+    // The engine's toggle: the same contract again unsigns it.
+    const current = signedNow ? signedNow.contract : view.contract;
+    const same = current && current.id === picked.id && JSON.stringify(current.prize) === JSON.stringify(picked.prize);
+    setSignedNow({ contract: same ? null : { id: picked.id, prize: { ...picked.prize } } });
+    runSound.uiTap();
+    shake(0.3);
+    signsInFlight.current += 1;
+    const outcome = await act({ kind: "sign", index });
+    signsInFlight.current -= 1;
+    if (signsInFlight.current === 0) setSignedNow(null);
+    if (!outcome.ok && outcome.error !== "stale") {
+      runSound.refuse();
+      setMessage(chainRefusalMessage(outcome.error ?? "failed", i18n));
+      window.setTimeout(() => setMessage(null), SHOP_FEEL.messageMs);
+    }
   };
 
   if (!shop) return null;
@@ -489,13 +514,13 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
           <div className={narrow ? "mt-6 w-full" : "mt-5"}>
             <ShopContracts
               contracts={shop.contracts ?? []}
-              signed={view.contract}
+              signed={signedNow ? signedNow.contract : view.contract}
               nextRound={view.round + 1}
               narrow={narrow}
-              busy={busy}
+              busy={false}
               delay={lead + (4 * SHOP_FEEL.deal.staggerMs) / 1000}
               reducedMotion={reducedMotion}
-              onSign={(index) => void run({ kind: "sign", index }, 0, () => {})}
+              onSign={(index) => void sign(index)}
             />
           </div>
 

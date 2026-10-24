@@ -41,7 +41,8 @@ import { useShudder } from "../shopMotion";
 import { Shards } from "../Shards";
 import { ChainBoard, type CardEnter, type LinkFx } from "./ChainBoard";
 import { ChainDetailsLayer, hideChainDetails } from "./ChainDetails";
-import { BoardRows, ChainOver, ChainStart, useBoard } from "./ChainEnd";
+import { ChainOver, ChainStart } from "./ChainEnd";
+import { BoardPanel, type LoadBoard, type LoadSheet } from "./ChainBoardPanel";
 import { CHAIN_FEEL } from "./chainFeel";
 import { ChainScenes, ChainTopBar, HudDeck } from "./ChainHud";
 import { setWysiRunKey } from "./wysiSeen";
@@ -78,7 +79,8 @@ export interface ChainTableProps {
   act: (action: ChainAction) => Promise<ChainActOutcome>;
   reducedMotion: boolean;
   packThumbs: Partial<Record<PackTypeId, string>>;
-  loadBoard: () => Promise<ChainBoardEntry[]>;
+  loadBoard: LoadBoard;
+  loadSheet: LoadSheet;
   onExit: () => void;
   script?: ChainTableScript;
 }
@@ -147,7 +149,7 @@ function useBoardBox() {
    owns the run; this replays what it answers and keeps only the row being
    arranged. */
 export function ChainTable(props: ChainTableProps) {
-  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, onExit, script } = props;
+  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, loadSheet, onExit, script } = props;
   const { i18n, t } = useLingui();
   const [boxRef, box] = useBoardBox();
   const narrow = box.width > 0 ? box.width < 700 : typeof window !== "undefined" && window.innerWidth < 700;
@@ -949,7 +951,6 @@ export function ChainTable(props: ChainTableProps) {
   /* Room beside the row for the board: wide tables, not at the run's end
      (which has its own). */
   const showSideBoard = Boolean(!narrow && box.width >= 1380 && view && !overNow && view.phase !== "over");
-  const sideBoard = useBoard(showSideBoard ? loadBoard : noBoard, `${view?.runNo ?? 0}:${shown?.round ?? 0}`);
   /* The room only brightens with heat: more, faster, lighter triangles. */
   const roomHeat = entering ? 1 : overNow ? 0 : fire ? 1 : play && heat === "fire" ? 0.85 : play && heat === "mod" ? 0.45 : 0;
   const shards = shardOverride ?? shown?.shards ?? 0;
@@ -1281,6 +1282,7 @@ export function ChainTable(props: ChainTableProps) {
                 narrow={narrow}
                 reducedMotion={reducedMotion}
                 loadBoard={loadBoard}
+                loadSheet={loadSheet}
                 onNewRun={() => {
                   setOverFresh(false);
                   void doAct({ kind: "start" });
@@ -1307,6 +1309,7 @@ export function ChainTable(props: ChainTableProps) {
                 packThumb={packThumbs.standard ?? null}
                 reducedMotion={reducedMotion}
                 loadBoard={loadBoard}
+                loadSheet={loadSheet}
                 onNewRun={() => void doAct({ kind: "start" })}
               />
             )}
@@ -1394,7 +1397,7 @@ export function ChainTable(props: ChainTableProps) {
               <div className="mb-2 px-2.5 leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: 22 }}>
                 <Trans>Leaderboard</Trans>
               </div>
-              {sideBoard && <BoardRows compact entries={sideBoard} mine={best} mineName={best?.username} />}
+              <BoardPanel compact loadBoard={loadBoard} loadSheet={loadSheet} mine={best} mineName={best?.username} refreshKey={`${view?.runNo ?? 0}:${shown?.round ?? 0}`} />
             </div>
           )}
 
@@ -1432,6 +1435,5 @@ export function ChainTable(props: ChainTableProps) {
 const EMPTY = new Set<number>();
 /* The opening pour from the Overjoy doodle. */
 const CHAIN_ENTRY_MS = 850;
-const noBoard = () => Promise.resolve([] as ChainBoardEntry[]);
 
 const HAND_ORDER_PREFIX = "chain-hand-order:";

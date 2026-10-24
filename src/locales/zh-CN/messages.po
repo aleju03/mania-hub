@@ -1829,6 +1829,11 @@ msgstr "{years} 年"
 msgid "{years}y ago"
 msgstr "{years} 年前"
 
+#. placeholder {0}: head.rank
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "#{0} all time"
+msgstr "总榜第 {0}"
+
 #. placeholder {0}: formatNumber(variant.country_rank)
 #: src/routes/player/$username.tsx
 msgid "#{0} country"
@@ -1850,6 +1855,11 @@ msgstr "全球第 {0} 名"
 #: src/components/player/ProfileStatCards.tsx
 msgid "#{0} of {1} tracked players"
 msgstr "已追踪的 {1} 名玩家中第 #{0}"
+
+#. placeholder {0}: head.rank
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "#{0} this month"
+msgstr "本月第 {0}"
 
 #: src/lib/format.ts
 msgid "#{grouped}"
@@ -2461,8 +2471,12 @@ msgid "97%, on ScoreV2 accuracy"
 msgstr "97%，按 ScoreV2 准确率"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
-msgstr "一个 .glb 模型（最多 100,000 个三角面，贴图需内嵌）或一张图片，最大 10 MB。提交后会立即对所有人显示，并署上你的名字。"
+msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
+msgstr "一个 .glb 模型（最多 100,000 个三角面，贴图需内嵌）或一张图片，最大 10 MB。提交后会立即显示在你的个人资料上。审核通过后，可能会加入这个列表供所有人使用，并署上你的名字。"
+
+#: src/components/supporter/SupporterExtras.tsx
+#~ msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
+#~ msgstr "一个 .glb 模型（最多 100,000 个三角面，贴图需内嵌）或一张图片，最大 10 MB。提交后会立即对所有人显示，并署上你的名字。"
 
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
@@ -3021,6 +3035,10 @@ msgstr "添加到卡组"
 msgid "Add to set..."
 msgstr "添加到卡组…"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Add to the list"
+msgstr "加入列表"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "Add your Mamestagram profile next to your name first."
 msgstr "请先在你的名字旁添加 Mamestagram 个人资料链接。"
@@ -3180,6 +3198,7 @@ msgstr "全部记录"
 msgid "all skins"
 msgstr "全部皮肤"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/routes/top-plays.tsx
 msgid "All time"
@@ -3984,6 +4003,7 @@ msgstr "最佳成绩"
 msgid "best round"
 msgstr "最佳回合"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Best row"
 msgstr "最佳排"
@@ -5102,6 +5122,7 @@ msgstr "找不到片段"
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
 #: src/components/packs/PackDialog.tsx
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/RunInfo.tsx
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
@@ -6461,6 +6482,11 @@ msgstr "卡包准备中，请稍候"
 msgid "Deals every card out at once instead of one at a time"
 msgstr "一次性发出所有卡片，而不是一张一张揭开"
 
+#. placeholder {0}: deck.length
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "Deck ({0})"
+msgstr "牌组（{0}）"
+
 #: src/components/packs/GiftInbox.tsx
 msgid "Decline"
 msgstr "拒绝"
@@ -7193,6 +7219,10 @@ msgstr "在此结束"
 #: src/components/packs/StreakGame.tsx
 msgid "End the run"
 msgstr "结束本局"
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "Endless round"
+msgstr "无尽轮"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
@@ -12418,6 +12448,10 @@ msgstr "本次商店没有剩余刷新次数。"
 msgid "No rows left this round."
 msgstr "本回合没有剩余排数。"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "No runs this month yet."
+msgstr "本月还没有对局。"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "No score found at that link."
 msgstr "该链接下没有找到成绩。"
@@ -13254,6 +13288,10 @@ msgstr "只批准你自己发起的请求。如果这个链接是别人发给你
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "仅自己"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Only on your profile until it's reviewed"
+msgstr "审核前仅显示在你的个人资料上"
 
 #: src/components/packs/collections/CardMarks.tsx
 #: src/components/packs/collections/MarkFilters.tsx
@@ -14631,6 +14669,10 @@ msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 msgid "Practice"
 msgstr "练习"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "Practice and mods"
+msgstr "练习与 Mod"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Practice charts are matched by their notes and OD, so any upload of the same file counts. <0/>, <1/>, <2/>, <3/> and slowing the chart down void them."
 #~ msgstr "练习谱面按物件和 OD 匹配，所以同一文件的任何上传版本都算。<0/>、<1/>、<2/>、<3/> 以及降速都会使其无效。"
@@ -15240,7 +15282,7 @@ msgstr "比值"
 msgid "raw difficulty"
 msgstr "原始难度"
 
-#: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "Rd"
 msgstr "轮"
 
@@ -16187,14 +16229,15 @@ msgstr "轮换谱包"
 msgid "rough estimate, may be off"
 msgstr "粗略估算，可能有偏差"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Round"
 msgstr "回合"
 
 #. placeholder {0}: entry.round
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Round {0}"
-msgstr "第 {0} 回合"
+#~ msgid "Round {0}"
+#~ msgstr "第 {0} 回合"
 
 #. placeholder {0}: aftermath.round
 #: src/components/packs/run/chain/ChainTable.tsx
@@ -16225,6 +16268,7 @@ msgstr "第 {round} 回合卡包"
 msgid "Row"
 msgstr "排"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Rows"
 msgstr "排数"
@@ -16287,6 +16331,7 @@ msgstr "挑战信息"
 msgid "Run over"
 msgstr "本局结束"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Run won"
 msgstr "本局胜利"
@@ -16467,6 +16512,10 @@ msgstr "扫描线"
 #: src/components/supporter/loadout.ts
 msgid "Scarlet moon"
 msgstr "绯红之月"
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "Scenes"
+msgstr "场景"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Scopes"
@@ -16811,6 +16860,10 @@ msgstr "查看这次成绩"
 #: src/components/replay/ReplayInfo.tsx
 msgid "See this play judged with {otherLabel} windows and LN rules"
 msgstr "看看这个成绩按 {otherLabel} 的判定窗口和长条规则会是什么样"
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "See this run"
+msgstr "查看这局"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See which plays are waiting"
@@ -18726,6 +18779,10 @@ msgstr "标签"
 msgid "Take it down for good?"
 msgstr "确定要永久下架吗？"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Take off the list"
+msgstr "移出列表"
+
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
 msgstr "已被管理员下架。"
@@ -20190,6 +20247,10 @@ msgstr "这张图低于你的水平：它的目标分会定得更高"
 msgid "this map is beyond your level: hides it from your recs until you set a score on it"
 msgstr "这张图超出你的水平：会从你的推荐中隐藏，直到你在上面打出成绩"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "This month"
+msgstr "本月"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
 msgstr "这个较早的 {selectedKeymode}K 预览是在保存渲染选项之前生成的。第一次重新渲染需要重新选择背景和谱型，之后的编辑会保留这两项。"
@@ -20291,6 +20352,10 @@ msgstr "这次成绩"
 #: src/lib/chain-run.ts
 msgid "This run already used its revive."
 msgstr "本局已用过复活。"
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "This run was played before runs kept their builds."
+msgstr "这局打的时候还没有保存构筑。"
 
 #: src/lib/replay-score-availability.ts
 msgid "This score doesn't have a downloadable replay."
@@ -21648,6 +21713,10 @@ msgstr "等待音频加载…"
 #: src/components/LiveDataEmptyState.tsx
 msgid "Waiting for new scores"
 msgstr "等待新成绩"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Waiting for review"
+msgstr "等待审核"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for the next rating pass"

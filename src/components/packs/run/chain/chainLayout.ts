@@ -28,15 +28,18 @@ export interface BoardLayout {
   handHeight: number;
   handWidth: number;
   deck: { x: number; y: number; w: number; h: number };
-  /* Phones: hand cards sit in rows of three at this width. */
+  /* Phones: hand cards at this width, up to handCols a row. */
   handCardW?: number;
-  /* Phones: the hand is laid out in three rows (more than six cards). */
-  /* Phones: cards per hand row, picked so the hand fits above the screen's
-     bottom edge. */
   handCols?: number;
+  /* Phones too short for the hand at its smallest: the first row lies over
+     the top of the second by this much, leaving the second row's flags,
+     keymodes and numbers in view. */
+  handOverlap?: number;
 }
 
 export const ROW_SLOTS = 6;
+
+const HAND_MIN = 56;
 
 export function boardLayout(width: number, height: number): BoardLayout {
   const narrow = width < 700;
@@ -48,14 +51,17 @@ export function boardLayout(width: number, height: number): BoardLayout {
        the gap, each on its own lane, so none cross. */
     const side = 8;
     const gapX = 0.3;
-    const gapY = 38;
-    const readoutSize = 44;
+    // Short screens (a phone browser's toolbars take ~150px) close the gaps
+    // before any card shrinks.
+    const tight = height < 600;
+    const gapY = tight ? 30 : 38;
+    const readoutSize = tight ? 38 : 44;
     const arcRoom = 14;
-    const below = 22;
+    const below = tight ? 14 : 22;
     const actions = 48;
     // Air between the buttons and the hand, so the cards don't crowd them.
-    const afterActions = 16;
-    const handGap = 6;
+    const afterActions = tight ? 10 : 16;
+    const handGap = tight ? 4 : 6;
     /* The hand is sized once for its fullest state (9 cards, two rows of up
        to five) and the row always for 6, so neither shrinks or jumps while
        cards move between them. The row's cards get the room the hand
@@ -68,7 +74,9 @@ export function boardLayout(width: number, height: number): BoardLayout {
       const handHeight = handRows * handCardW * 1.4 + (handRows - 1) * handGap;
       const rowRoom = height - readoutSize - arcRoom - below - actions - afterActions - handHeight - 10;
       cardW = Math.min(112, (width - side * 2) / (3 + 2 * gapX), (rowRoom - gapY) / 2 / 1.4);
-      if (cardW >= 74 || handCardW <= 56) break;
+      // The hand stops at 56px, the smallest face that still shows the
+      // flag, keymode and skillset.
+      if (cardW >= 74 || handCardW - 2 < HAND_MIN) break;
       handCardW -= 2;
     }
     cardW = Math.max(56, cardW);
@@ -76,7 +84,11 @@ export function boardLayout(width: number, height: number): BoardLayout {
     const gx = cardW * gapX;
     const gapLines = gapY;
     const rowBlock = cardH + gapLines + cardH;
-    const handHeight = handRows * handCardW * 1.4 + (handRows - 1) * handGap;
+    const fullHand = handRows * handCardW * 1.4 + (handRows - 1) * handGap;
+    const over = readoutSize + arcRoom + rowBlock + below + actions + afterActions + fullHand + 4 - height;
+    // At most half a card, so the second row's info panel always shows.
+    const handOverlap = over > 0 ? Math.min(handCardW * 1.4 * 0.5, over + handGap) : 0;
+    const handHeight = fullHand - handOverlap;
     const used = readoutSize + arcRoom + rowBlock + below + actions + afterActions + handHeight;
     const top = Math.max(0, Math.min(30, (height - used - 10) / 2));
     const rowTop = top + readoutSize + arcRoom;
@@ -108,6 +120,7 @@ export function boardLayout(width: number, height: number): BoardLayout {
       handWidth: width,
       handCardW,
       handCols,
+      handOverlap,
       deck: { x: width - deckW - 12, y: actionsY + (actions - deckW * 1.4) / 2 - 2, w: deckW, h: deckW * 1.4 },
     };
   }
@@ -153,7 +166,7 @@ export function boardLayout(width: number, height: number): BoardLayout {
 
 /* A hand card's place: the fan RunHand uses, mapped onto the board as the
    top-left of a row-sized card scaled down to the hand's size. */
-export function handPlaces(count: number, layout: BoardLayout): Array<{ x: number; y: number; scale: number; rotate: number }> {
+export function handPlaces(count: number, layout: BoardLayout): Array<{ x: number; y: number; scale: number; rotate: number; layer?: number }> {
   if (count === 0) return [];
   if (layout.narrow) {
     /* A phone holds the hand in two even rows across the full width. */
@@ -171,8 +184,9 @@ export function handPlaces(count: number, layout: BoardLayout): Array<{ x: numbe
       const step = inLine <= 1 ? 0 : Math.min(w + gap, (room - w) / (inLine - 1));
       const lineW = w + (inLine - 1) * step;
       const cx = (layout.width - lineW) / 2 + col * step + w / 2;
-      const cy = layout.handTop + line * (h + gap) + h / 2;
-      return { x: cx - layout.cardW / 2, y: cy - layout.cardH / 2, scale, rotate: (index % 2 ? 1 : -1) * 0.8 };
+      const cy = layout.handTop + line * (h + gap - (layout.handOverlap ?? 0)) + h / 2;
+      // The first row lies over the second.
+      return { x: cx - layout.cardW / 2, y: cy - layout.cardH / 2, scale, rotate: (index % 2 ? 1 : -1) * 0.8, layer: line === 0 ? 1 : 0 };
     });
   }
   const fan = handLayout(count, layout.handWidth, layout.handHeight);

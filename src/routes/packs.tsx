@@ -48,7 +48,8 @@ import {
   packCardKey,
   type PackWallet,
 } from "../lib/pack-collection";
-import { fetchLiveChainRunBoard, isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
+import { fetchLiveChainRunBoard, fetchLiveChainRunSheet, isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
+import type { ChainBoardPeriod, ChainRunSnapshot } from "../lib/chain-run";
 import type { PackDamage } from "../lib/pack-damage";
 import {
   clearPendingPack,
@@ -81,6 +82,10 @@ import { usePacksRevealAll, usePacksSkipAnimations } from "../store";
 import type { PulledCard } from "../lib/pack-collection";
 import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
+
+/* The chain run's boards and run sheets, stable for the table's effects. */
+const loadChainBoard = (period: ChainBoardPeriod, user: number | null) => fetchLiveChainRunBoard(period, user);
+const loadChainSheet = (userId: number, period: ChainBoardPeriod) => fetchLiveChainRunSheet<ChainRunSnapshot>(userId, period);
 
 export const Route = createFileRoute("/packs")({
   validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak" | "sets" | "run"; album?: string } => {
@@ -1231,7 +1236,8 @@ function PacksPage() {
           act={chainApi.act}
           reducedMotion={reducedMotion}
           packThumbs={packThumbs}
-          loadBoard={fetchLiveChainRunBoard}
+          loadBoard={loadChainBoard}
+          loadSheet={loadChainSheet}
           onExit={() => showRunView(false)}
         />
       )}

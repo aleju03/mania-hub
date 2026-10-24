@@ -28,6 +28,8 @@ export interface CardPlace {
   y: number;
   scale: number;
   rotate: number;
+  /* Hand rows that overlap: the higher layer draws on top. */
+  layer?: number;
 }
 
 /* Where a card enters from (a pack's spread, the deck pile), in board px. */
@@ -767,7 +769,7 @@ export function ChainBoard(props: ChainBoardProps) {
             instant={dragging}
             offsetX={moving ? offsetX : null}
             offsetY={moving ? offsetY : null}
-            z={dragging ? 60 : stacked ? 59 - drag!.group.indexOf(entry.uid) : 10 + index}
+            z={dragging ? 60 : stacked ? 59 - drag!.group.indexOf(entry.uid) : 10 + index + (own.layer ?? 0) * 10}
             selectedOrder={selected.indexOf(entry.uid) + 1}
             index={index}
             inRow={false}

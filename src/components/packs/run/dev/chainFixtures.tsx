@@ -50,6 +50,8 @@ import {
   CHAIN_RULES,
   type ChainAction,
   type ChainBoardEntry,
+  type ChainBoardPeriod,
+  type ChainRunSheet,
   type ChainPool,
   type ChainCard,
   type ChainRunState,
@@ -88,11 +90,11 @@ function packThumbFor(id: PackTypeId): string | null {
 }
 
 const BOARD: ChainBoardEntry[] = [
-  { rank: 1, userId: 1, username: "Hanabira", round: 17, bestRow: 214_880, rows: 51, finished: true, updatedAt: 0 },
-  { rank: 2, userId: 2, username: "stairwell", round: 13, bestRow: 61_240, rows: 38, finished: true, updatedAt: 0 },
-  { rank: 3, userId: 3, username: "tapwave", round: 11, bestRow: 40_310, rows: 33, finished: true, updatedAt: 0 },
-  { rank: 4, userId: 4, username: "Lunarkeys", round: 8, bestRow: 18_020, rows: 24, finished: true, updatedAt: 0 },
-  { rank: 5, userId: 5, username: "rollfinger", round: 6, bestRow: 9_120, rows: 17, finished: true, updatedAt: 0 },
+  { rank: 1, userId: 1, username: "Hanabira", cc: "JP", round: 17, bestRow: 214_880, rows: 51, finished: true, updatedAt: 0 },
+  { rank: 2, userId: 2, username: "stairwell", cc: "US", round: 13, bestRow: 61_240, rows: 38, finished: true, updatedAt: 0 },
+  { rank: 3, userId: 3, username: "tapwave", cc: "KR", round: 11, bestRow: 40_310, rows: 33, finished: true, updatedAt: 0 },
+  { rank: 4, userId: 4, username: "Lunarkeys", cc: "CR", round: 8, bestRow: 18_020, rows: 24, finished: true, updatedAt: 0 },
+  { rank: 5, userId: 5, username: "rollfinger", cc: "AR", round: 6, bestRow: 9_120, rows: 17, finished: true, updatedAt: 0 },
 ];
 
 interface Scenario {
@@ -313,9 +315,11 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
   );
 
   const act = useCallback(async (action: ChainAction): Promise<ChainActOutcome> => {
-    setBusy(true);
+    // Like useChainRun: signing a contract never marks the table busy.
+    const quiet = action.kind === "sign";
+    if (!quiet) setBusy(true);
     await new Promise((resolve) => window.setTimeout(resolve, 140));
-    setBusy(false);
+    if (!quiet) setBusy(false);
     const out = applyChainAction(stateRef.current, action, { pool: scenario.pool, seed: 1234 + Math.floor(Math.random() * 1000), now: Date.now() });
     if (!out.ok) return { ok: false, error: out.error, view: chainRunView(stateRef.current) };
     stateRef.current = out.state;
@@ -396,7 +400,35 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
   }, [done, moment, ready]);
 
   const script = useMemo<ChainTableScript>(() => ({ ...scenario.script, onSignal }), [onSignal, scenario.script]);
-  const loadBoard = useCallback(async () => BOARD, []);
+  // The fixture boards: this month holds the top three, and every row opens a
+  // sheet built from the fixture run's own deck.
+  const loadBoard = useCallback(
+    async (period: ChainBoardPeriod) => ({
+      entries: period === "all" ? BOARD : BOARD.slice(1, 4).map((entry, index) => ({ ...entry, rank: index + 1 })),
+      mine: null,
+    }),
+    [],
+  );
+  const loadSheet = useCallback(
+    async (userId: number): Promise<ChainRunSheet | null> => {
+      const entry = BOARD.find((row) => row.userId === userId) ?? scenario.best;
+      if (!entry) return null;
+      const state = scenario.state;
+      return {
+        entry,
+        snapshot: {
+          deck: state.deck.map((card) => card.card),
+          scenes: state.scenes,
+          levels: { skill: 2, key: 1 },
+          mods: ["chameleon", "replay"],
+          bestRow: state.deck.slice(0, 6).map((card) => card.card),
+          won: entry.round >= 12,
+          revived: false,
+        },
+      };
+    },
+    [scenario],
+  );
 
   return (
     <ChainTable
@@ -407,6 +439,7 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
       reducedMotion={reducedMotion}
       packThumbs={packThumbs}
       loadBoard={loadBoard}
+      loadSheet={loadSheet}
       onExit={() => {
         window.location.href = "/packs";
       }}

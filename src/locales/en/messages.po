@@ -1820,6 +1820,11 @@ msgstr "{years}y"
 msgid "{years}y ago"
 msgstr "{years}y ago"
 
+#. placeholder {0}: head.rank
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "#{0} all time"
+msgstr "#{0} all time"
+
 #. placeholder {0}: formatNumber(variant.country_rank)
 #: src/routes/player/$username.tsx
 msgid "#{0} country"
@@ -1841,6 +1846,11 @@ msgstr "#{0} global"
 #: src/components/player/ProfileStatCards.tsx
 msgid "#{0} of {1} tracked players"
 msgstr "#{0} of {1} tracked players"
+
+#. placeholder {0}: head.rank
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "#{0} this month"
+msgstr "#{0} this month"
 
 #: src/lib/format.ts
 msgid "#{grouped}"
@@ -2452,8 +2462,12 @@ msgid "97%, on ScoreV2 accuracy"
 msgstr "97%, on ScoreV2 accuracy"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
-msgstr "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
+msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
+msgstr "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
+
+#: src/components/supporter/SupporterExtras.tsx
+#~ msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
+#~ msgstr "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It shows up for everyone right away, with your name on it."
 
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
@@ -3016,6 +3030,10 @@ msgstr "Add to set"
 msgid "Add to set..."
 msgstr "Add to set..."
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Add to the list"
+msgstr "Add to the list"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "Add your Mamestagram profile next to your name first."
 msgstr "Add your Mamestagram profile next to your name first."
@@ -3175,6 +3193,7 @@ msgstr "All rows"
 msgid "all skins"
 msgstr "all skins"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/routes/top-plays.tsx
 msgid "All time"
@@ -3979,6 +3998,7 @@ msgstr "Best play"
 msgid "best round"
 msgstr "best round"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Best row"
 msgstr "Best row"
@@ -5097,6 +5117,7 @@ msgstr "Clip not found"
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
 #: src/components/packs/PackDialog.tsx
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/RunInfo.tsx
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
@@ -6456,6 +6477,11 @@ msgstr "Dealing your pack is taking a moment"
 msgid "Deals every card out at once instead of one at a time"
 msgstr "Deals every card out at once instead of one at a time"
 
+#. placeholder {0}: deck.length
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "Deck ({0})"
+msgstr "Deck ({0})"
+
 #: src/components/packs/GiftInbox.tsx
 msgid "Decline"
 msgstr "Decline"
@@ -7188,6 +7214,10 @@ msgstr "End here"
 #: src/components/packs/StreakGame.tsx
 msgid "End the run"
 msgstr "End the run"
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "Endless round"
+msgstr "Endless round"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
@@ -12413,6 +12443,10 @@ msgstr "No rerolls left in this shop."
 msgid "No rows left this round."
 msgstr "No rows left this round."
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "No runs this month yet."
+msgstr "No runs this month yet."
+
 #: src/components/player/AddScoreModal.tsx
 msgid "No score found at that link."
 msgstr "No score found at that link."
@@ -13249,6 +13283,10 @@ msgstr "Only approve a request you started yourself. If someone sent you this li
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "Only me"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Only on your profile until it's reviewed"
+msgstr "Only on your profile until it's reviewed"
 
 #: src/components/packs/collections/CardMarks.tsx
 #: src/components/packs/collections/MarkFilters.tsx
@@ -14626,6 +14664,10 @@ msgstr "PP-gain map recommendations tuned to a player."
 msgid "Practice"
 msgstr "Practice"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "Practice and mods"
+msgstr "Practice and mods"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Practice charts are matched by their notes and OD, so any upload of the same file counts. <0/>, <1/>, <2/>, <3/> and slowing the chart down void them."
 #~ msgstr "Practice charts are matched by their notes and OD, so any upload of the same file counts. <0/>, <1/>, <2/>, <3/> and slowing the chart down void them."
@@ -15235,7 +15277,7 @@ msgstr "Ratio"
 msgid "raw difficulty"
 msgstr "raw difficulty"
 
-#: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "Rd"
 msgstr "Rd"
 
@@ -16182,14 +16224,15 @@ msgstr "Rotating packs"
 msgid "rough estimate, may be off"
 msgstr "rough estimate, may be off"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Round"
 msgstr "Round"
 
 #. placeholder {0}: entry.round
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Round {0}"
-msgstr "Round {0}"
+#~ msgid "Round {0}"
+#~ msgstr "Round {0}"
 
 #. placeholder {0}: aftermath.round
 #: src/components/packs/run/chain/ChainTable.tsx
@@ -16220,6 +16263,7 @@ msgstr "Round {round} pack"
 msgid "Row"
 msgstr "Row"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Rows"
 msgstr "Rows"
@@ -16282,6 +16326,7 @@ msgstr "Run info"
 msgid "Run over"
 msgstr "Run over"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Run won"
 msgstr "Run won"
@@ -16462,6 +16507,10 @@ msgstr "Scanline"
 #: src/components/supporter/loadout.ts
 msgid "Scarlet moon"
 msgstr "Scarlet moon"
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "Scenes"
+msgstr "Scenes"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Scopes"
@@ -16806,6 +16855,10 @@ msgstr "See the score"
 #: src/components/replay/ReplayInfo.tsx
 msgid "See this play judged with {otherLabel} windows and LN rules"
 msgstr "See this play judged with {otherLabel} windows and LN rules"
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "See this run"
+msgstr "See this run"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See which plays are waiting"
@@ -18721,6 +18774,10 @@ msgstr "Tags"
 msgid "Take it down for good?"
 msgstr "Take it down for good?"
 
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Take off the list"
+msgstr "Take off the list"
+
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
 msgstr "Taken down by a moderator."
@@ -20185,6 +20242,10 @@ msgstr "this map is below your level: targets on it will aim higher"
 msgid "this map is beyond your level: hides it from your recs until you set a score on it"
 msgstr "this map is beyond your level: hides it from your recs until you set a score on it"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "This month"
+msgstr "This month"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
 msgstr "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
@@ -20286,6 +20347,10 @@ msgstr "This run"
 #: src/lib/chain-run.ts
 msgid "This run already used its revive."
 msgstr "This run already used its revive."
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "This run was played before runs kept their builds."
+msgstr "This run was played before runs kept their builds."
 
 #: src/lib/replay-score-availability.ts
 msgid "This score doesn't have a downloadable replay."
@@ -21643,6 +21708,10 @@ msgstr "Waiting for audio to load..."
 #: src/components/LiveDataEmptyState.tsx
 msgid "Waiting for new scores"
 msgstr "Waiting for new scores"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Waiting for review"
+msgstr "Waiting for review"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for the next rating pass"

@@ -8,6 +8,7 @@ import { SceneArt } from "../sceneArt";
 import { SCENE_ART_ID } from "./ChainHud";
 import { ChainButtons, KIT, MARKER, SceneMedallion } from "./chainKit";
 import { shareChainRun } from "./chainShare";
+import { BoardPanel, type LoadBoard, type LoadSheet } from "./ChainBoardPanel";
 import { prepareRewardedAd, type RewardedAd } from "#/lib/rewarded-ad";
 
 /* A card lifting out of the table with an arrow: the share button's mark. */
@@ -16,6 +17,18 @@ function IconShareCard() {
     <svg width={26} height={26} viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke={KIT.cream} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
       <rect x={4} y={9} width={11} height={14} rx={2} transform="rotate(-8 9.5 16)" />
       <path d="M14 12 C17 9 19 7 22 5 M17 4.5 H22.5 V10" />
+    </svg>
+  );
+}
+
+/* A sealed pack with an arrow turning back to it: the exit's mark on phones,
+   where the side buttons are icons. */
+function IconBackToPacks() {
+  return (
+    <svg width={26} height={26} viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke={KIT.cream} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+      <rect x={11} y={3} width={11} height={20} rx={2} />
+      <path d="M11 8 H22" strokeWidth={1.6} />
+      <path d="M8 13 H2.5 M5.5 9.8 L2.3 13 L5.5 16.2" />
     </svg>
   );
 }
@@ -91,129 +104,6 @@ function ReviveOffer({ round, narrow, onRevive }: { round: number; narrow: boole
   );
 }
 
-function Board({
-  entries,
-  mine,
-  highlight,
-  animate = false,
-}: {
-  entries: ChainBoardEntry[] | null;
-  mine: ChainBoardEntry | null;
-  highlight: boolean;
-  animate?: boolean;
-}) {
-  if (!entries) return <div className="h-[120px]" />;
-  if (!entries.length && !mine) return null;
-  const top = entries.slice(0, 5);
-  const showMine = mine && !top.some((entry) => entry.userId === mine.userId);
-  const row = (entry: ChainBoardEntry, own: boolean, index: number) => (
-    <motion.div
-      key={entry.userId}
-      className={`grid grid-cols-[36px_1fr_auto_auto] items-baseline gap-3 rounded-md px-2 py-1.5 text-[15px] ${own && highlight ? "bg-osu-pink/15 text-osu-pink-light" : ""}`}
-      initial={animate ? (own ? { opacity: 0, y: 46, scale: 1.08 } : { opacity: 0, x: -10 }) : false}
-      animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
-      transition={own ? { type: "spring", stiffness: 300, damping: 20, delay: 0.55 } : { duration: 0.2, delay: index * 0.05 }}
-    >
-      <span className="font-black tabular-nums text-osu-f1">#{entry.rank}</span>
-      <span className="truncate font-bold">{entry.username || "?"}</span>
-      <span className="font-black tabular-nums">
-        <Trans>Round {entry.round}</Trans>
-      </span>
-      <span className="w-[84px] text-right tabular-nums text-osu-f1">{formatChainScore(entry.bestRow)}</span>
-    </motion.div>
-  );
-  return (
-    <div className="w-full max-w-[460px]">
-      {top.map((entry, index) => row(entry, entry.userId === mine?.userId, index))}
-      {showMine && mine && (
-        <>
-          <div className="py-0.5 text-center text-[11px] text-osu-f1">...</div>
-          {row(mine, true, top.length)}
-        </>
-      )}
-    </div>
-  );
-}
-
-export function useBoard(loadBoard: () => Promise<ChainBoardEntry[]>, key: unknown) {
-  const [entries, setEntries] = useState<ChainBoardEntry[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    loadBoard()
-      .then((list) => !cancelled && setEntries(list))
-      .catch(() => !cancelled && setEntries([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [loadBoard, key]);
-  return entries;
-}
-
-/* The board's rows in the run's style: rank, name, round reached and best
-   row, marker numbers. `mine` is drawn lit, wherever it sits. */
-export function BoardRows({
-  entries,
-  mine,
-  compact = false,
-  animate = false,
-  mineName,
-}: {
-  entries: ChainBoardEntry[];
-  mine: ChainBoardEntry | null;
-  compact?: boolean;
-  animate?: boolean;
-  mineName?: React.ReactNode;
-}) {
-  const others = entries.filter((entry) => entry.userId !== mine?.userId);
-  const rank = mine?.rank ?? 0;
-  const limit = compact ? 5 : 6;
-  const above = others.filter((entry) => rank === 0 || entry.rank < rank).slice(0, rank > limit + 1 ? limit - 1 : limit);
-  const below = rank > 0 ? others.filter((entry) => entry.rank > rank).slice(0, compact ? 1 : 2) : [];
-  const gap = rank > limit + 1;
-  const cols = compact ? "grid-cols-[30px_1fr_26px_64px]" : "grid-cols-[44px_1fr_56px_96px]";
-  const row = (entry: ChainBoardEntry, index: number, own: boolean) => (
-    <motion.div
-      key={own ? "mine" : entry.userId}
-      className={`grid ${cols} items-center gap-2 border-b border-[#f3e9d8]/[0.08] ${compact ? "px-2.5 py-1.5 text-[13px]" : "px-4 py-2 text-[16px]"}`}
-      style={own ? { background: "rgba(255,122,184,0.1)" } : undefined}
-      initial={animate ? (own ? { opacity: 0, y: 50, scale: 1.08 } : { opacity: 0, x: -10 }) : false}
-      animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
-      transition={own ? { type: "spring", stiffness: 280, damping: 20, delay: 0.5 } : { duration: 0.2, delay: index * 0.05 }}
-    >
-      <span className="tabular-nums" style={{ fontFamily: MARKER, color: own ? KIT.pink : "rgba(243,233,216,0.55)" }}>
-        {entry.rank > 0 ? `#${entry.rank}` : "-"}
-      </span>
-      <span className="truncate font-black" style={{ color: own ? KIT.pink : "rgba(243,233,216,0.85)" }}>
-        {own && mineName ? mineName : entry.username || "?"}
-      </span>
-      <span className="text-center tabular-nums text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: compact ? 15 : 20 }}>
-        {entry.round}
-      </span>
-      <span className="text-right tabular-nums" style={{ fontFamily: MARKER, color: KIT.gold, fontSize: compact ? 13 : 17 }}>
-        {formatChainScore(entry.bestRow)}
-      </span>
-    </motion.div>
-  );
-  return (
-    <div className="flex flex-col gap-0.5">
-      <div className={`grid ${cols} gap-2 ${compact ? "px-2.5" : "px-4"} pb-1 text-[10px] font-black uppercase tracking-[0.14em] whitespace-nowrap text-[#f3e9d8]/45`}>
-        <span />
-        <span />
-        <span className="text-center">
-          <Trans>Rd</Trans>
-        </span>
-        <span className="text-right">
-          <Trans>Best row</Trans>
-        </span>
-      </div>
-      {above.map((entry, index) => row(entry, index, false))}
-      {gap && <div className="py-0.5 text-center text-[11px] text-[#f3e9d8]/40">...</div>}
-      {mine && row(mine, above.length, true)}
-      {below.map((entry, index) => row(entry, above.length + 1 + index, false))}
-    </div>
-  );
-}
-
 /* The run's end: what ended it, the run in three numbers and its scenes in
    their medallions, then the board with this run sliding into its place,
    and the way back in. */
@@ -225,6 +115,7 @@ export function ChainOver({
   narrow,
   reducedMotion,
   loadBoard,
+  loadSheet,
   onNewRun,
   onRevive,
   onExit,
@@ -236,7 +127,8 @@ export function ChainOver({
   busy: boolean;
   narrow: boolean;
   reducedMotion: boolean;
-  loadBoard: () => Promise<ChainBoardEntry[]>;
+  loadBoard: LoadBoard;
+  loadSheet: LoadSheet;
   onNewRun: () => void;
   /* Revives the failed round; false when the server refused. */
   onRevive: () => Promise<boolean>;
@@ -244,7 +136,6 @@ export function ChainOver({
   onShake: (amount: number) => void;
 }) {
   const { t } = useLingui();
-  const entries = useBoard(loadBoard, view.runNo);
   const animate = fresh && !reducedMotion;
   useEffect(() => {
     if (!fresh) return;
@@ -271,7 +162,7 @@ export function ChainOver({
     </motion.div>
   );
   return (
-    <div className="absolute inset-0 z-[40] overflow-y-auto">
+    <div className="absolute inset-0 z-[40] overflow-y-auto overflow-x-hidden">
       <div className={`relative mx-auto flex min-h-full w-full max-w-[560px] flex-col items-center px-4 ${narrow ? "pb-6 pt-4" : "pb-8 pt-[3vh]"}`}>
         <motion.div
           className="leading-none text-[#f3e9d8]"
@@ -319,7 +210,7 @@ export function ChainOver({
           </div>
         )}
         <div className={`w-full ${narrow ? "mt-4" : "mt-5"}`}>
-          {entries ? <BoardRows entries={entries} mine={mine} animate={animate} mineName={mine.username || <Trans>This run</Trans>} /> : <div className="h-[160px]" />}
+          <BoardPanel loadBoard={loadBoard} loadSheet={loadSheet} mine={mine} mineName={mine.username || <Trans>This run</Trans>} refreshKey={view.runNo} animate={animate} />
         </div>
         <motion.div
           className="mt-6"
@@ -331,7 +222,7 @@ export function ChainOver({
             big={!narrow}
             compact={narrow}
             items={[
-              { key: "exit", title: t`Back to packs`, label: <Trans>Back to packs</Trans>, onClick: onExit },
+              { key: "exit", title: t`Back to packs`, label: <Trans>Back to packs</Trans>, icon: narrow ? <IconBackToPacks /> : undefined, onClick: onExit },
               {
                 key: "share",
                 title: t`Share this run`,
@@ -395,6 +286,7 @@ export function ChainStart({
   packThumb,
   reducedMotion,
   loadBoard,
+  loadSheet,
   onNewRun,
 }: {
   best: ChainBoardEntry | null;
@@ -402,14 +294,14 @@ export function ChainStart({
   narrow: boolean;
   packThumb: string | null;
   reducedMotion: boolean;
-  loadBoard: () => Promise<ChainBoardEntry[]>;
+  loadBoard: LoadBoard;
+  loadSheet: LoadSheet;
   onNewRun: () => void;
 }) {
-  const entries = useBoard(loadBoard, 0);
   const height = narrow ? 150 : 230;
   const width = Math.round(height * PACK_ASPECT);
   return (
-    <div className="absolute inset-0 overflow-y-auto">
+    <div className="absolute inset-0 overflow-y-auto overflow-x-hidden">
       <div className="flex min-h-full flex-col items-center justify-center gap-8 px-4 py-8">
         <div className="relative" style={{ width: width * 2.1, height: height + 20 }}>
           {[-1, 0, 1].map((offset, index) => (
@@ -439,7 +331,9 @@ export function ChainStart({
         >
           <Trans>Start a run</Trans>
         </motion.button>
-        <Board entries={entries} mine={best} highlight />
+        <div className="w-full max-w-[460px]">
+          <BoardPanel loadBoard={loadBoard} loadSheet={loadSheet} mine={best} refreshKey={0} />
+        </div>
       </div>
     </div>
   );

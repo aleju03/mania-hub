@@ -12,6 +12,7 @@ import {
   type ChainActionResult,
   type ChainCard,
   type ChainPackView,
+  type ChainRunSnapshot,
   type ChainRunView,
   type ChainSceneId,
   type ChainSkill,
@@ -45,11 +46,29 @@ export interface ChainBoardEntry {
   rank: number;
   userId: number;
   username: string;
+  /* Country code for the flag, "" when unknown (older entries). */
+  cc?: string;
   round: number;
   bestRow: number;
   rows: number;
   finished: boolean;
   updatedAt: number;
+}
+
+/* The board's periods: every run, and runs played this UTC month. */
+export type ChainBoardPeriod = "all" | "month";
+
+/* A board page, and the viewer's own entry when it was asked for. */
+export interface ChainBoardPage {
+  entries: ChainBoardEntry[];
+  mine: ChainBoardEntry | null;
+}
+
+/* A board entry's run sheet: what the run was built from (null for entries
+   saved before builds were kept). */
+export interface ChainRunSheet {
+  entry: ChainBoardEntry;
+  snapshot: ChainRunSnapshot | null;
 }
 
 export interface ChainRunResponse {
@@ -64,7 +83,7 @@ export type ChainActionResponse =
   | { status: "ok"; result: ChainActionResult; run: ChainRunView | null; rev: number; best: ChainBoardEntry | null }
   | { status: "refused"; error: string; run: ChainRunView | null; rev: number; best: ChainBoardEntry | null };
 
-async function chainTarget(): Promise<{ url: string; headers: HeadersInit; isAdmin: boolean } | null> {
+async function chainTarget(): Promise<{ url: string; headers: HeadersInit; isAdmin: boolean; country: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
   const { canUseAdminFeatures } = await import("./auth-shared");
   const auth = await readCurrentAuth();
@@ -74,7 +93,7 @@ async function chainTarget(): Promise<{ url: string; headers: HeadersInit; isAdm
   const headers: HeadersInit = { "content-type": "application/json" };
   const bridgeToken = liveBridgeToken();
   if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
-  return { url: `${base}/api/chain-run/${auth.viewer.id}`, headers, isAdmin: canUseAdminFeatures(auth) };
+  return { url: `${base}/api/chain-run/${auth.viewer.id}`, headers, isAdmin: canUseAdminFeatures(auth), country: auth.viewer.countryCode ?? "" };
 }
 
 /* Null when the viewer cannot play: logged out, no backend, or chain runs
@@ -152,7 +171,8 @@ export const actOnOwnChainRun = createServerFn({ method: "POST" })
     const response = await fetch(target.url, {
       method: "POST",
       headers: target.headers,
-      body: JSON.stringify({ action: kind, ...rest, viewerIsAdmin: target.isAdmin }),
+      // The country only puts a flag beside the player's name on the boards.
+      body: JSON.stringify({ action: kind, ...rest, viewerIsAdmin: target.isAdmin, viewerCountry: target.country }),
     });
     if (response.status === 404) return null;
     if (response.status === 409 || response.status === 503) {

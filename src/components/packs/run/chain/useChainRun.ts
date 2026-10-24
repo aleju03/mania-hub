@@ -39,6 +39,10 @@ export function useChainRun(enabled: boolean): ChainRunApi {
   const revRef = useRef(0);
   /* A fetch and an action can cross; the one that started last wins. */
   const sequenceRef = useRef(0);
+  /* Actions go out one at a time, each with the rev the one before it got
+     back, so two quick taps never race each other into a stale refusal. */
+  const queueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const busyCountRef = useRef(0);
 
   useEffect(() => {
     if (!enabled) {
@@ -69,8 +73,27 @@ export function useChainRun(enabled: boolean): ChainRunApi {
     };
   }, [enabled, refreshKey]);
 
-  const act = useCallback(async (action: ChainAction): Promise<ChainActOutcome> => {
-    setBusy(true);
+  const act = useCallback((action: ChainAction): Promise<ChainActOutcome> => {
+    // Signing a contract is shown at once by the shop and holds nothing else
+    // up; everything else marks the table busy until it lands.
+    const quiet = action.kind === "sign";
+    if (!quiet) {
+      busyCountRef.current += 1;
+      setBusy(true);
+    }
+    const send = () => sendAction(action);
+    const outcome = queueRef.current.then(send, send).finally(() => {
+      if (quiet) return;
+      busyCountRef.current -= 1;
+      if (busyCountRef.current === 0) setBusy(false);
+    });
+    queueRef.current = outcome;
+    return outcome;
+    // sendAction only reads refs and setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const sendAction = async (action: ChainAction): Promise<ChainActOutcome> => {
     const sequence = ++sequenceRef.current;
     try {
       const response = await actOnOwnChainRun({ data: { ...action, rev: revRef.current } });
@@ -84,10 +107,8 @@ export function useChainRun(enabled: boolean): ChainRunApi {
       return { ok: true, result: response.result, view: response.run };
     } catch {
       return { ok: false, error: "failed", view: null };
-    } finally {
-      setBusy(false);
     }
-  }, []);
+  };
 
   const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
 
