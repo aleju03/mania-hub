@@ -6,7 +6,10 @@ import {
   CHAIN_SCENE_COPY,
   CHAIN_SCENE_INK,
   CHAIN_SCENE_NAMES,
+  CHAIN_TRAIT_WORD,
+  CHAIN_TRAITS,
   chainOfferName,
+  chainPracticeText,
   chainRefusalMessage,
   type ChainAction,
   type ChainActionResult,
@@ -27,7 +30,7 @@ import type { BoardLayout } from "./chainLayout";
 import { chainPackType } from "./ChainPackStage";
 import { crispPackUrl } from "./packArtCrisp";
 import { useChainPackArt } from "./chainPackArt";
-import { ChainButtons, IconCut, IconSwap, KIT, KitGem, MARKER } from "./chainKit";
+import { ChainButtons, IconCut, IconSwap, KIT, KitGem, MARKER, SceneMedallion } from "./chainKit";
 
 export interface ShopActResult {
   ok: boolean;
@@ -75,6 +78,25 @@ function PriceButton({
       <KitGem size={big ? 22 : 18} />
       <span className="tabular-nums">{price}</span>
     </motion.button>
+  );
+}
+
+/* The practice on offer: a paper tag with the trait and the level it takes
+   that trait to. */
+function PracticeTag({ trait, level, height }: { trait: (typeof CHAIN_TRAITS)[number]; level: number; height: number }) {
+  const { i18n } = useLingui();
+  return (
+    <div
+      className="flex flex-col items-center justify-center rounded-[10px] px-3 text-center"
+      style={{ height, minWidth: height * 1.15, background: KIT.cream, color: KIT.dark, boxShadow: "0 4px 0 rgba(0,0,0,0.35)" }}
+    >
+      <div className="leading-none" style={{ fontFamily: MARKER, fontSize: Math.round(height * 0.24) }}>
+        {i18n._(CHAIN_TRAIT_WORD[trait])}
+      </div>
+      <div className="mt-1 leading-none tabular-nums" style={{ fontFamily: MARKER, fontSize: Math.round(height * 0.2) }}>
+        +{level} <span className="opacity-50">→</span> +{level + 1}
+      </div>
+    </div>
   );
 }
 
@@ -337,11 +359,12 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                   {!narrow && <Hanger />}
                   <motion.div
                     ref={sceneArtRef}
-                    className="overflow-hidden rounded-[10px]"
                     whileHover={reducedMotion ? undefined : { rotate: 3, scale: 1.05 }}
                     transition={{ type: "spring", stiffness: 400, damping: 22 }}
                   >
-                    <SceneArt id={SCENE_ART_ID[shop.scene]} size={narrow ? 84 : Math.round(packHeight * 0.68)} />
+                    <SceneMedallion size={narrow ? 104 : Math.round(packHeight * 0.92)}>
+                      <SceneArt id={SCENE_ART_ID[shop.scene]} size={Math.round((narrow ? 104 : packHeight * 0.92) * 0.48)} />
+                    </SceneMedallion>
                   </motion.div>
                   <div className="text-center">
                     <div className={`font-black ${narrow ? "text-[13px]" : "text-[16px]"}`} style={{ color: CHAIN_SCENE_INK[shop.scene] }}>
@@ -367,7 +390,50 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
               )}
             </AnimatePresence>
 
+            <AnimatePresence mode="popLayout">
+              {shop.practice && !shop.practice.sold && (
+                <motion.div
+                  key={`practice-${shop.practice.trait}-${rerolls}`}
+                  className={`flex flex-col items-center gap-2 ${narrow ? "w-[150px]" : "w-[190px]"}`}
+                  initial={reducedMotion ? false : { y: SHOP_FEEL.deal.fromY, scale: SHOP_FEEL.deal.fromScale, opacity: 0 }}
+                  animate={{ y: 0, scale: 1, opacity: 1 }}
+                  exit={{ y: -80, scale: 0.5, opacity: 0, transition: { duration: 0.25 } }}
+                  transition={{ ...SHOP_FEEL.deal.spring, delay: lead + (3.5 * SHOP_FEEL.deal.staggerMs) / 1000 }}
+                >
+                  {!narrow && <Hanger />}
+                  <PracticeTag trait={shop.practice.trait} level={view.levels[shop.practice.trait] ?? 0} height={narrow ? 84 : Math.round(packHeight * 0.68)} />
+                  <div className="text-center">
+                    <div className={`font-black ${narrow ? "text-[13px]" : "text-[16px]"}`} style={{ color: KIT.gold }}>
+                      <Trans>Practice</Trans>
+                    </div>
+                    <div className="mt-0.5 text-[12px] leading-snug text-osu-f1">{chainPracticeText(shop.practice.trait, i18n)}</div>
+                  </div>
+                  <PriceButton
+                    affordable={CHAIN_RULES.practicePrice <= view.shards}
+                    price={CHAIN_RULES.practicePrice}
+                    label={<Trans>Buy</Trans>}
+                    disabled={busy}
+                    reducedMotion={reducedMotion}
+                    onBuy={(shudder) => void run({ kind: "buy", item: "practice" }, CHAIN_RULES.practicePrice, shudder)}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
+
+          {/* The run's practice levels so far. */}
+          {CHAIN_TRAITS.some((trait) => (view.levels[trait] ?? 0) > 0) && (
+            <div className="mt-4 flex items-center gap-3 text-[13px] font-bold text-[#f3e9d8]/80">
+              {CHAIN_TRAITS.filter((trait) => (view.levels[trait] ?? 0) > 0).map((trait, index) => (
+                <span key={trait} className="flex items-center gap-3">
+                  {index > 0 && <span aria-hidden="true" className="h-3 w-px bg-[#f3e9d8]/30" />}
+                  <span>
+                    {i18n._(CHAIN_TRAIT_WORD[trait])} <span style={{ color: KIT.gold }}>+{view.levels[trait]}</span>
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Next round's contracts. */}
           <div className={narrow ? "mt-6 w-full" : "mt-5"}>
@@ -549,7 +615,7 @@ function FlightGhost({ flight, onDone }: { flight: { scene: ChainSceneId; from: 
   const size = from.width;
   return (
     <motion.div
-      className="pointer-events-none absolute left-0 top-0 z-[40] overflow-hidden rounded-[10px]"
+      className="pointer-events-none absolute left-0 top-0 z-[40]"
       style={{ width: size, height: size }}
       initial={{ x: from.left - box.left, y: from.top - box.top, scale: 1, rotate: 0 }}
       animate={{
@@ -561,7 +627,9 @@ function FlightGhost({ flight, onDone }: { flight: { scene: ChainSceneId; from: 
       transition={{ type: "spring", stiffness: 220, damping: 22, rotate: { duration: 0.5 } }}
       onAnimationComplete={onDone}
     >
-      <SceneArt id={SCENE_ART_ID[flight.scene]} size={size} />
+      <SceneMedallion size={size}>
+        <SceneArt id={SCENE_ART_ID[flight.scene]} size={Math.round(size * 0.48)} />
+      </SceneMedallion>
     </motion.div>
   );
 }

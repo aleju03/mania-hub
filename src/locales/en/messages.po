@@ -1799,6 +1799,10 @@ msgstr "{viewCountLabel} views"
 msgid "{weeks} weeks ago"
 msgstr "{weeks} weeks ago"
 
+#: src/lib/chain-run.ts
+msgid "{word} links add +1 more each time they fire."
+msgstr "{word} links add +1 more each time they fire."
+
 #: src/routes/snipes.tsx
 msgid "{years, plural, one {# year} other {# years}}"
 msgstr "{years, plural, one {# year} other {# years}}"
@@ -2255,6 +2259,15 @@ msgstr "24 hours"
 msgid "24h"
 msgstr "24h"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.handRowMultiplier
+#: src/lib/chain-run.ts
+msgid "3 cards in a row that share a trait make a hand, and its links fire 3 times. Every hand after the first gives the row x{0}."
+msgstr "3 cards in a row that share a trait make a hand, and its links fire 3 times. Every hand after the first gives the row x{0}."
+
+#: src/lib/chain-run.ts
+msgid "3 cards sharing a trait make a hand."
+msgstr "3 cards sharing a trait make a hand."
+
 #: src/routes/top-plays.tsx
 msgid "3 days"
 msgstr "3 days"
@@ -2285,6 +2298,10 @@ msgstr "3D card preview is unavailable on this device."
 #: src/routes/support.tsx
 msgid "4 more stats"
 msgstr "4 more stats"
+
+#: src/lib/chain-run.ts
+msgid "4-trait links double your combo."
+msgstr "4-trait links double your combo."
 
 #: src/routes/dan-estimates.tsx
 msgid "4. Your dan is the average of your skills"
@@ -2397,6 +2414,10 @@ msgstr "7d Global"
 msgid "7K"
 msgstr "7K"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "7K board"
+#~ msgstr "7K board"
+
 #. placeholder {0}: N.sevenKeys.mult
 #: src/lib/pack-run.ts
 msgid "7K cards give +{0} combo."
@@ -2458,6 +2479,10 @@ msgid "A 4K chart is LN when holds make up at least 45% of its notes and those h
 msgstr "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 
 #: src/routes/support.tsx
+#~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
+#~ msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
+
+#: src/routes/support.tsx
 msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
 msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
 
@@ -2466,12 +2491,22 @@ msgstr "A badge beside your name that moves up a rank for every month in a row y
 #~ msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter. If your time runs out, it starts again from Copper."
 
 #: src/lib/chain-run.ts
-msgid "A break halves the combo instead of ending it, and each break multiplies the row by 1.4."
-msgstr "A break halves the combo instead of ending it, and each break multiplies the row by 1.4."
+#~ msgid "A break halves the combo instead of ending it, and each break multiplies the row by 1.4."
+#~ msgstr "A break halves the combo instead of ending it, and each break multiplies the row by 1.4."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.scatteredBreakMultiplier
+#: src/lib/chain-run.ts
+msgid "A break halves your combo instead of resetting it, and every break gives the row x{0}."
+msgstr "A break halves your combo instead of resetting it, and every break gives the row x{0}."
 
 #: src/lib/chain-run.ts
-msgid "A break only halves the combo."
-msgstr "A break only halves the combo."
+#~ msgid "A break only halves the combo."
+#~ msgstr "A break only halves the combo."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.freedomTraits
+#: src/lib/chain-run.ts
+#~ msgid "A card whose link in shares {0} or more traits plays again: the link fires again and the card scores again."
+#~ msgstr "A card whose link in shares {0} or more traits plays again: the link fires again and the card scores again."
 
 #: src/routes/news_.prism.tsx
 msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
@@ -2514,9 +2549,15 @@ msgstr "A frame around your avatar on your profile."
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
 msgstr "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.aiaeCards
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.aiaeMultiplier
 #: src/lib/chain-run.ts
-msgid "A full row with no break scores x3."
-msgstr "A full row with no break scores x3."
+msgid "A full row of {0} cards with no breaks scores x{1}."
+msgstr "A full row of {0} cards with no breaks scores x{1}."
+
+#: src/lib/chain-run.ts
+#~ msgid "A full row with no break scores x3."
+#~ msgstr "A full row with no break scores x3."
 
 #: src/components/packs/GiftInbox.tsx
 msgid "A gift from"
@@ -2526,6 +2567,14 @@ msgstr "A gift from"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A line about the skin"
 msgstr "A line about the skin"
+
+#: src/lib/chain-run.ts
+#~ msgid "A link sharing all 4 traits doubles the combo after it adds, every time it fires."
+#~ msgstr "A link sharing all 4 traits doubles the combo after it adds, every time it fires."
+
+#: src/lib/chain-run.ts
+msgid "A link that shares all 4 traits doubles your combo every time it fires."
+msgstr "A link that shares all 4 traits doubles your combo every time it fires."
 
 #: src/components/packs/GiftInbox.tsx
 msgid "A little something for you"
@@ -2590,20 +2639,41 @@ msgid "A rating is not supported for this chart or mod combination."
 msgstr "A rating is not supported for this chart or mod combination."
 
 #: src/lib/chain-run.ts
-msgid "A row of 4 cards or fewer scores x3."
-msgstr "A row of 4 cards or fewer scores x3."
+#~ msgid "A row of 4 cards or fewer scores x3."
+#~ msgstr "A row of 4 cards or fewer scores x3."
 
 #: src/lib/chain-run.ts
-msgid "A row of 6 cards with no break is an SS and scores x3."
-msgstr "A row of 6 cards with no break is an SS and scores x3."
+#~ msgid "A row of 6 cards with no break is an SS and scores x3."
+#~ msgstr "A row of 6 cards with no break is an SS and scores x3."
 
 #: src/lib/chain-run.ts
-msgid "A row of only 7K cards is multiplied by her multiplier, which starts at 1.5 and rises by 0.25 each time. If you would fail a round, she burns and the round starts over."
-msgstr "A row of only 7K cards is multiplied by her multiplier, which starts at 1.5 and rises by 0.25 each time. If you would fail a round, she burns and the round starts over."
+msgid "A row of 6 with no breaks scores x3."
+msgstr "A row of 6 with no breaks scores x3."
 
 #: src/lib/chain-run.ts
-msgid "A row where every card is a different rarity scores x3.5."
-msgstr "A row where every card is a different rarity scores x3.5."
+#~ msgid "A row of only 7K cards is multiplied by her multiplier, which starts at 1.5 and rises by 0.25 each time. If you would fail a round, she burns and the round starts over."
+#~ msgstr "A row of only 7K cards is multiplied by her multiplier, which starts at 1.5 and rises by 0.25 each time. If you would fail a round, she burns and the round starts over."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.ascendStart
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.ascendGrowth
+#: src/lib/chain-run.ts
+#~ msgid "A row of only 7K cards is multiplied by her multiplier, which starts at x{0} and grows x{1} each time. If you would fail a round, she burns and the round starts over."
+#~ msgstr "A row of only 7K cards is multiplied by her multiplier, which starts at x{0} and grows x{1} each time. If you would fail a round, she burns and the round starts over."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.ascendStart
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.ascendGrowth
+#: src/lib/chain-run.ts
+msgid "A row of only 7K cards scores x{0}, and that goes up x{1} every time it triggers. If you'd fail a round, she burns instead and you replay the round."
+msgstr "A row of only 7K cards scores x{0}, and that goes up x{1} every time it triggers. If you'd fail a round, she burns instead and you replay the round."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.palaceMultiplier
+#: src/lib/chain-run.ts
+msgid "A row where every card is a different rarity scores x{0}."
+msgstr "A row where every card is a different rarity scores x{0}."
+
+#: src/lib/chain-run.ts
+#~ msgid "A row where every card is a different rarity scores x3.5."
+#~ msgstr "A row where every card is a different rarity scores x3.5."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -2639,8 +2709,8 @@ msgid "A snipe is when your new best on a map passes a player who was above you.
 msgstr "A snipe is when your new best on a map passes a player who was above you."
 
 #: src/lib/chain-run.ts
-msgid "A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it."
-msgstr "A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it."
+#~ msgid "A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it."
+#~ msgstr "A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it."
 
 #: src/components/supporter/TestPack.tsx
 msgid "A test pack: nothing is spent, open as many as you like."
@@ -2969,14 +3039,22 @@ msgstr "Advanced"
 msgid "Aero window"
 msgstr "Aero window"
 
+#: src/lib/chain-run.ts
+msgid "After a row scores, it plays again from the first card and keeps its combo."
+msgstr "After a row scores, it plays again from the first card and keeps its combo."
+
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
 msgid "After exporting a replay video, get a link that plays it right in Discord chat."
 msgstr "After exporting a replay video, get a link that plays it right in Discord chat."
 
 #: src/lib/chain-run.ts
-msgid "After the row scores, every link and card fires again, and the combo carries on from where it ended."
-msgstr "After the row scores, every link and card fires again, and the combo carries on from where it ended."
+msgid "After it scores, the link into it fires again and it scores again."
+msgstr "After it scores, the link into it fires again and it scores again."
+
+#: src/lib/chain-run.ts
+#~ msgid "After the row scores, every link and card fires again, and the combo carries on from where it ended."
+#~ msgstr "After the row scores, every link and card fires again, and the combo carries on from where it ended."
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
@@ -3095,8 +3173,8 @@ msgid "All uploads"
 msgstr "All uploads"
 
 #: src/lib/chain-run.ts
-msgid "All-7K rows multiply."
-msgstr "All-7K rows multiply."
+#~ msgid "All-7K rows multiply."
+#~ msgstr "All-7K rows multiply."
 
 #: src/lib/skill-axes.ts
 msgid "All-round"
@@ -3174,6 +3252,10 @@ msgstr "Always reveal all"
 #: src/components/layout/ThemePicker.tsx
 msgid "amber"
 msgstr "amber"
+
+#: src/lib/supporter-ranks.ts
+#~ msgid "Amber"
+#~ msgstr "Amber"
 
 #: src/lib/supporter-ranks.ts
 msgid "Amethyst"
@@ -3943,6 +4025,14 @@ msgstr "Binders"
 msgid "Bitmap"
 msgstr "Bitmap"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Black belt"
+#~ msgstr "Black belt"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Black cat plush"
+#~ msgstr "Black cat plush"
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Black hole"
 msgstr "Black hole"
@@ -4067,6 +4157,10 @@ msgstr "break"
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "BREAK"
 msgstr "BREAK"
+
+#: src/lib/chain-run.ts
+msgid "Breaks only halve your combo."
+msgstr "Breaks only halve your combo."
 
 #: src/components/replay/ReplaySkinColorPanel.tsx
 msgid "Bright"
@@ -4720,6 +4814,10 @@ msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 msgstr "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 
 #: src/lib/supporter-companions.ts
+#~ msgid "Chubby Teto"
+#~ msgstr "Chubby Teto"
+
+#: src/lib/supporter-companions.ts
 #~ msgid "Ciela"
 #~ msgstr "Ciela"
 
@@ -4854,6 +4952,10 @@ msgstr "Clear the filters, or upload the skin yourself."
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the search"
 msgstr "Clear the search"
+
+#: src/lib/chain-run.ts
+#~ msgid "Clear under the star: rows start +2 combo."
+#~ msgstr "Clear under the star: rows start +2 combo."
 
 #: src/lib/chain-run.ts
 msgid "Clear with your first row."
@@ -5054,6 +5156,10 @@ msgstr "Closed"
 msgid "Clutch"
 msgstr "Clutch"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Clutch HP"
+#~ msgstr "Clutch HP"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Code block"
@@ -5191,6 +5297,10 @@ msgstr "Combo"
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Combo +{0}"
 msgstr "Combo +{0}"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Combo break"
+#~ msgstr "Combo break"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Combo break sound"
@@ -5996,6 +6106,10 @@ msgstr "Course"
 msgid "Course packs and allowed mods"
 msgstr "Course packs and allowed mods"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Course run"
+#~ msgstr "Course run"
+
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 msgid "Courses"
 msgstr "Courses"
@@ -6237,6 +6351,10 @@ msgstr "Dan estimate: {0} ({1}, low confidence)"
 #: src/components/ui/DanBadge.tsx
 msgid "Dan estimate: {0} ({1})"
 msgstr "Dan estimate: {0} ({1})"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Dan license"
+#~ msgstr "Dan license"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Dan plays"
@@ -6583,6 +6701,10 @@ msgstr "Does {hidden} have more or less playtime than {shown}?"
 msgid "does not count"
 msgstr "does not count"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Don-chan"
+#~ msgstr "Don-chan"
+
 #: src/routes/recommendations.tsx
 msgid "done"
 msgstr "done"
@@ -6814,8 +6936,12 @@ msgid "e.g. 4K jumpstream warmup"
 msgstr "e.g. 4K jumpstream warmup"
 
 #: src/lib/chain-run.ts
-msgid "Each card also links to the card two slots back. A card breaks only if it links to neither."
-msgstr "Each card also links to the card two slots back. A card breaks only if it links to neither."
+#~ msgid "Each card also links to the card two slots back. A card breaks only if it links to neither."
+#~ msgstr "Each card also links to the card two slots back. A card breaks only if it links to neither."
+
+#: src/lib/chain-run.ts
+msgid "Each card can also link to the card two spots back. It only breaks if neither link works."
+msgstr "Each card can also link to the card two spots back. It only breaks if neither link works."
 
 #. placeholder {0}: N.chainLink.chance * 100
 #: src/lib/pack-run.ts
@@ -6835,8 +6961,8 @@ msgid "Each card has a 1 in {0} chance to give x{1} combo."
 msgstr "Each card has a 1 in {0} chance to give x{1} combo."
 
 #: src/lib/chain-run.ts
-msgid "Each card you recycle or remove while you hold it adds 1 to every card's base for the rest of the run."
-msgstr "Each card you recycle or remove while you hold it adds 1 to every card's base for the rest of the run."
+#~ msgid "Each card you recycle or remove while you hold it adds 1 to every card's base for the rest of the run."
+#~ msgstr "Each card you recycle or remove while you hold it adds 1 to every card's base for the rest of the run."
 
 #: src/routes/player/$username.tsx
 msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
@@ -6870,6 +6996,14 @@ msgstr "Each pattern scores only once."
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
 msgstr "Each player is equally likely, no matter how many favourites they have."
+
+#: src/lib/chain-run.ts
+#~ msgid "Each row starts on the combo the round's last row ended on. A break still drops it to the start."
+#~ msgstr "Each row starts on the combo the round's last row ended on. A break still drops it to the start."
+
+#: src/lib/chain-run.ts
+msgid "Each row starts with the combo the last row ended on. A break still resets it."
+msgstr "Each row starts with the combo the last row ended on. A break still resets it."
 
 #: src/routes/dan-estimates.tsx
 msgid "Each skill's dan is the average of your best 20 passes in it, by the level each one credited. A skill needs at least four passes. Your dan is the average of your skill dans, so skills at 10, 9, 7 and 6 give 8."
@@ -7037,6 +7171,11 @@ msgstr "End here"
 msgid "End the run"
 msgstr "End the run"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Endless round {round}"
+msgstr "Endless round {round}"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Ends {endsLabel}"
 msgstr "Ends {endsLabel}"
@@ -7168,6 +7307,11 @@ msgstr "Every card scores twice for the next {0} packs."
 msgid "Every card scores twice."
 msgstr "Every card scores twice."
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.requiemBase
+#: src/lib/chain-run.ts
+msgid "Every card you recycle or remove while you hold her gives all your cards +{0} base for the rest of the run."
+msgstr "Every card you recycle or remove while you hold her gives all your cards +{0} base for the rest of the run."
+
 #: src/components/packs/run/RunView.tsx
 msgid "Every charm slot is full. Sell one first."
 msgstr "Every charm slot is full. Sell one first."
@@ -7230,9 +7374,48 @@ msgstr "Every pattern starts with the notes and combo of a Single."
 msgid "Every rate of a chart"
 msgstr "Every rate of a chart"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.forgottenCombo
+#. placeholder {2}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#: src/lib/chain-run.ts
+msgid "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x and she leaves, and you lose all of it."
+msgstr "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x and she leaves, and you lose all of it."
+
+#: src/lib/chain-run.ts
+#~ msgid "Every row compounds."
+#~ msgstr "Every row compounds."
+
+#: src/lib/chain-run.ts
+msgid "Every row makes the next ones stronger."
+msgstr "Every row makes the next ones stronger."
+
+#: src/lib/chain-run.ts
+msgid "Every row plays twice."
+msgstr "Every row plays twice."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.galaxyStep
+#: src/lib/chain-run.ts
+#~ msgid "Every row with no break adds x{0} to her multiplier for the rest of the run, and every row scores it."
+#~ msgstr "Every row with no break adds x{0} to her multiplier for the rest of the run, and every row scores it."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.galaxyStep
+#: src/lib/chain-run.ts
+msgid "Every row with no breaks adds x{0} to her for the rest of the run, and she multiplies every row."
+msgstr "Every row with no breaks adds x{0} to her for the rest of the run, and she multiplies every row."
+
 #: src/lib/chain-run.ts
 msgid "Every row you play has 6 cards."
 msgstr "Every row you play has 6 cards."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.sidetrackedGrowth
+#: src/lib/chain-run.ts
+msgid "Every row you play makes the rows after it score x{0} more. It stacks for the rest of the run."
+msgstr "Every row you play makes the rows after it score x{0} more. It stacks for the rest of the run."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.sidetrackedGrowth
+#: src/lib/chain-run.ts
+#~ msgid "Every row you play multiplies the rows after it by {0} more, compounding, for the rest of the run."
+#~ msgstr "Every row you play multiplies the rows after it by {0} more, compounding, for the rest of the run."
 
 #: src/lib/chain-run.ts
 msgid "Every scene card slot is full. Sell one first."
@@ -8018,6 +8201,10 @@ msgstr "Full combos only (0 misses)"
 msgid "Full house"
 msgstr "Full house"
 
+#: src/lib/chain-run.ts
+#~ msgid "Full links double the combo."
+#~ msgstr "Full links double the combo."
+
 #: src/lib/signature-shared.ts
 msgid "Full list"
 msgstr "Full list"
@@ -8392,6 +8579,10 @@ msgstr "Graveyard"
 msgid "Greek"
 msgstr "Greek"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Greek circle"
+#~ msgstr "Greek circle"
+
 #: src/components/layout/ThemePicker.tsx
 msgid "green"
 msgstr "green"
@@ -8411,6 +8602,10 @@ msgstr "Grind"
 #: src/lib/supporter-name-fonts.ts
 msgid "Groovy"
 msgstr "Groovy"
+
+#: src/lib/chain-run.ts
+msgid "Grows with every clean row."
+msgstr "Grows with every clean row."
 
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
@@ -8709,6 +8904,10 @@ msgstr "Hit counts and unstable rate."
 msgid "Hit error bar"
 msgstr "Hit error bar"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Hit error meter"
+#~ msgstr "Hit error meter"
+
 #: src/lib/supporter-name-styles.ts
 msgid "Hit light"
 msgstr "Hit light"
@@ -8978,6 +9177,11 @@ msgstr "Ice fairy"
 msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
 msgstr "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.freedomTraits
+#: src/lib/chain-run.ts
+msgid "If the link into a card shares {0} or more traits, the card plays twice."
+msgstr "If the link into a card shares {0} or more traits, the card plays twice."
+
 #: src/lib/pack-run.ts
 msgid "If the pack has a GOAT or Eternal card, every card scores twice."
 msgstr "If the pack has a GOAT or Eternal card, every card scores twice."
@@ -9019,6 +9223,10 @@ msgstr "Image"
 #: src/lib/replay-overlays.ts
 msgid "Image or GIF"
 msgstr "Image or GIF"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Image saved"
+msgstr "Image saved"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Image upload failed."
@@ -9458,6 +9666,10 @@ msgstr "June 16, 2026"
 msgid "just now"
 msgstr "just now"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Ka-chan"
+#~ msgstr "Ka-chan"
+
 #: src/components/supporter/loadout.ts
 msgid "Kappa signal"
 msgstr "Kappa signal"
@@ -9609,6 +9821,10 @@ msgstr "Knob lasers"
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
 msgstr "Koi pond"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Koishi fumo"
+#~ msgstr "Koishi fumo"
 
 #: src/components/communities/field-options.tsx
 msgid "Korean"
@@ -10603,6 +10819,10 @@ msgstr "Manage"
 msgid "manager"
 msgstr "manager"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Maneki-neko"
+#~ msgstr "Maneki-neko"
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania maps"
@@ -10828,6 +11048,10 @@ msgstr "Margin <0>+{0}</0>"
 msgid "Margin doodles"
 msgstr "Margin doodles"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Marisa fumo"
+#~ msgstr "Marisa fumo"
+
 #: src/routes/recommendations.tsx
 msgid "marked done"
 msgstr "marked done"
@@ -10978,6 +11202,10 @@ msgstr "Metronome"
 msgid "Middle lane thumb"
 msgstr "Middle lane thumb"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Miku plush"
+#~ msgstr "Miku plush"
+
 #: src/components/player/ProfileStatCards.tsx
 msgid "min"
 msgstr "min"
@@ -11075,6 +11303,12 @@ msgstr "Modded"
 msgid "modded plays"
 msgstr "modded plays"
 
+#. placeholder {0}: credit.author
+#: src/components/supporter/SupporterExtras.tsx
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "Model by {0}"
+#~ msgstr "Model by {0}"
+
 #: src/routes/skins_.$id.tsx
 msgid "Moderate skin"
 msgstr "Moderate skin"
@@ -11122,6 +11356,10 @@ msgstr "Mondays"
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Month {month}"
 msgstr "Month {month}"
+
+#: src/lib/supporter-ranks.ts
+#~ msgid "Moonstone"
+#~ msgstr "Moonstone"
 
 #: src/components/layout/Nav.tsx
 msgid "more"
@@ -12701,6 +12939,7 @@ msgid "now #{nowRank}"
 msgstr "now #{nowRank}"
 
 #. placeholder {0}: formatChainX(ascension)
+#. placeholder {0}: formatChainX(chainSceneMultiplier({ scenes: [scene] }, scene.id))
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Now x{0}"
 msgstr "Now x{0}"
@@ -13411,6 +13650,11 @@ msgstr "outside average"
 msgid "Outside this average's best-clear window"
 msgstr "Outside this average's best-clear window"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Over {0}x the target. Once Forgotten left."
+msgstr "Over {0}x the target. Once Forgotten left."
+
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillHistoryGraph.tsx
 msgid "overall"
@@ -13584,13 +13828,17 @@ msgstr "Pass <0/> on {mapSlot}"
 msgid "Pass bar"
 msgstr "Pass bar"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Pass stamp"
+#~ msgstr "Pass stamp"
+
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
 msgstr "Passing several players with one score counts as one snipe, against the highest of them."
 
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "Past the star. Once Forgotten left."
-msgstr "Past the star. Once Forgotten left."
+#~ msgid "Past the star. Once Forgotten left."
+#~ msgstr "Past the star. Once Forgotten left."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"
@@ -13746,6 +13994,10 @@ msgstr "Percentile"
 #: src/components/player/SkillBreakdown.tsx
 msgid "percentiles are among tracked players"
 msgstr "percentiles are among tracked players"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Percy check"
+#~ msgstr "Percy check"
 
 #: src/lib/pack-run.ts
 msgid "Perfect"
@@ -14313,6 +14565,7 @@ msgstr "pp rank"
 msgid "PP-gain map recommendations tuned to a player."
 msgstr "PP-gain map recommendations tuned to a player."
 
+#: src/components/packs/run/chain/ChainShop.tsx
 #: src/lib/pack-run.ts
 msgid "Practice"
 msgstr "Practice"
@@ -14974,6 +15227,10 @@ msgstr "Reach pp"
 msgid "Reach stage {0}."
 msgstr "Reach stage {0}."
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Reached round {round} in Overjoy, best row {best}. {link}"
+msgstr "Reached round {round} in Overjoy, best row {best}. {link}"
+
 #: src/routes/dan-estimates.tsx
 msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
 msgstr "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
@@ -15202,6 +15459,10 @@ msgstr "Red"
 #: src/lib/supporter-companions.ts
 msgid "Red fairy"
 msgstr "Red fairy"
+
+#: src/lib/supporter-profile-themes.ts
+#~ msgid "Red tree"
+#~ msgstr "Red tree"
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Redeem"
@@ -15514,6 +15775,10 @@ msgstr "Replaces the mouse cursor with an osu!-style cursor across the site. Des
 msgid "Replay"
 msgstr "Replay"
 
+#: src/components/packs/run/chain/ChainScoring.tsx
+msgid "REPLAY"
+msgstr "REPLAY"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Replay (.osr)"
 msgstr "Replay (.osr)"
@@ -15686,6 +15951,10 @@ msgstr "Restored an unsaved draft from this browser."
 msgid "Restricted on osu!"
 msgstr "Restricted on osu!"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Results grade"
+#~ msgstr "Results grade"
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Resume chart preview"
 msgstr "Resume chart preview"
@@ -15752,6 +16021,10 @@ msgstr "Revoke this connection? It stops submitting right away."
 #: src/components/player/ProfileStatCards.tsx
 msgid "rice"
 msgstr "rice"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Rice"
+#~ msgstr "Rice"
 
 #: src/components/player/ProfileStatCards.tsx
 #: src/lib/profile-stats.ts
@@ -15858,6 +16131,7 @@ msgstr "Round {0}"
 msgid "Round {0} cleared"
 msgstr "Round {0} cleared"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
 msgid "Round {round}"
 msgstr "Round {round}"
@@ -15880,9 +16154,19 @@ msgstr "Row"
 msgid "Rows"
 msgstr "Rows"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.moonGateCards
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.moonGateMultiplier
+#: src/lib/chain-run.ts
+msgid "Rows of {0} cards or less score x{1}."
+msgstr "Rows of {0} cards or less score x{1}."
+
 #: src/lib/chain-run.ts
 msgid "Rows of all different rarities score x3.5."
 msgstr "Rows of all different rarities score x3.5."
+
+#: src/lib/chain-run.ts
+msgid "Rows of only 7K cards get a multiplier."
+msgstr "Rows of only 7K cards get a multiplier."
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Rows start at combo {startCombo}"
@@ -15928,6 +16212,14 @@ msgstr "Run info"
 msgid "Run over"
 msgstr "Run over"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Run won"
+msgstr "Run won"
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Run won! Endless from here"
+msgstr "Run won! Endless from here"
+
 #: src/components/communities/field-options.tsx
 msgid "Russian"
 msgstr "Russian"
@@ -15944,6 +16236,10 @@ msgstr "Sapphire"
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
 msgstr "Sat"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Satori fumo"
+#~ msgstr "Satori fumo"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Saturdays"
@@ -16785,6 +17081,10 @@ msgstr "Share map"
 msgid "Share of players at each dan level"
 msgstr "Share of players at each dan level"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Share run"
+msgstr "Share run"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "Share score"
 msgstr "Share score"
@@ -16792,6 +17092,10 @@ msgstr "Share score"
 #: src/components/replay/ReplayControls.tsx
 msgid "Share this replay"
 msgstr "Share this replay"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Share this run"
+msgstr "Share this run"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Share…"
@@ -17368,6 +17672,10 @@ msgstr "Skillset clears"
 msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
 msgstr "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Skillset radar"
+#~ msgstr "Skillset radar"
+
 #: src/routes/news_.prism.tsx
 msgid "Skillsets"
 msgstr "Skillsets"
@@ -17821,6 +18129,10 @@ msgstr "Stage {0}"
 msgid "Stage {0} cleared"
 msgstr "Stage {0} cleared"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Stage 4 fail"
+#~ msgstr "Stage 4 fail"
+
 #: src/lib/replay-overlays.ts
 msgid "Stage art (bottom)"
 msgstr "Stage art (bottom)"
@@ -17844,6 +18156,10 @@ msgstr "Stage reached"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage's left edge, skin.ini ColumnStart."
 msgstr "Stage's left edge, skin.ini ColumnStart."
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Stair roll"
+#~ msgstr "Stair roll"
 
 #: src/lib/pack-run.ts
 msgid "Stairs"
@@ -17972,6 +18288,15 @@ msgstr "Stats and top play"
 #: src/routes/maps.tsx
 msgid "Status"
 msgstr "Status"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#: src/lib/chain-run.ts
+msgid "Stay under {0}x the target for more combo."
+msgstr "Stay under {0}x the target for more combo."
+
+#: src/lib/chain-run.ts
+#~ msgid "Stay under the star for +2 combo."
+#~ msgstr "Stay under the star for +2 combo."
 
 #: src/lib/supporter-ranks.ts
 msgid "Steel"
@@ -18106,6 +18431,14 @@ msgstr "Strikethrough"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stroke color for circle and arrow notes."
 msgstr "Stroke color for circle and arrow notes."
+
+#: src/lib/chain-run.ts
+msgid "Strong links make cards play twice."
+msgstr "Strong links make cards play twice."
+
+#: src/lib/chain-run.ts
+#~ msgid "Strong links play cards twice."
+#~ msgstr "Strong links play cards twice."
 
 #. placeholder {0}: i18n._(entries[0].labelMsg)
 #: src/components/player/SkillBreakdown.tsx
@@ -18250,6 +18583,10 @@ msgstr "Sure? The card leaves the collection"
 #: src/routes/maps.tsx
 msgid "SV"
 msgstr "SV"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "SV gimmick"
+#~ msgstr "SV gimmick"
 
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -18814,6 +19151,10 @@ msgstr "The callback did not match this browser's transaction; connect again."
 msgid "The card cover could not be changed. Try again."
 msgstr "The card cover could not be changed. Try again."
 
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "The card shows your dan once you have one."
+#~ msgstr "The card shows your dan once you have one."
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "The card stays yours until they accept it."
 msgstr "The card stays yours until they accept it."
@@ -18823,8 +19164,12 @@ msgid "The card was recycled, never synced, or the link is wrong."
 msgstr "The card was recycled, never synced, or the link is wrong."
 
 #: src/lib/chain-run.ts
-msgid "The card with the lowest base in each row matches every trait of the cards next to it."
-msgstr "The card with the lowest base in each row matches every trait of the cards next to it."
+msgid "The card with the lowest base in a row matches every trait of the cards next to it."
+msgstr "The card with the lowest base in a row matches every trait of the cards next to it."
+
+#: src/lib/chain-run.ts
+#~ msgid "The card with the lowest base in each row matches every trait of the cards next to it."
+#~ msgstr "The card with the lowest base in each row matches every trait of the cards next to it."
 
 #. placeholder {0}: N.spotlight.xMult
 #: src/lib/pack-run.ts
@@ -19000,6 +19345,10 @@ msgstr "The code exchange was refused."
 msgid "The code isn't on that userpage yet."
 msgstr "The code isn't on that userpage yet."
 
+#: src/lib/chain-run.ts
+#~ msgid "The combo carries over."
+#~ msgstr "The combo carries over."
+
 #: src/routes/companella.tsx
 msgid "The Companella beta is not switched on for this site yet."
 msgstr "The Companella beta is not switched on for this site yet."
@@ -19047,12 +19396,16 @@ msgid "The export was interrupted before it finished."
 msgstr "The export was interrupted before it finished."
 
 #: src/lib/chain-run.ts
-msgid "The first break becomes a link."
-msgstr "The first break becomes a link."
+#~ msgid "The first break becomes a link."
+#~ msgstr "The first break becomes a link."
 
 #: src/lib/chain-run.ts
-msgid "The first break in each row becomes a 3-trait link."
-msgstr "The first break in each row becomes a 3-trait link."
+#~ msgid "The first break in each row becomes a 3-trait link."
+#~ msgstr "The first break in each row becomes a 3-trait link."
+
+#: src/lib/chain-run.ts
+msgid "The first break in each row counts as a 3-trait link instead."
+msgstr "The first break in each row counts as a 3-trait link instead."
 
 #. placeholder {0}: N.firstNote.chips
 #: src/lib/pack-run.ts
@@ -19109,8 +19462,12 @@ msgid "The last 3 cards always link."
 msgstr "The last 3 cards always link."
 
 #: src/lib/chain-run.ts
-msgid "The last 3 cards of a row always link as if they shared 3 traits. Any of them that would not have linked to a neighbour on its own scores half its base."
-msgstr "The last 3 cards of a row always link as if they shared 3 traits. Any of them that would not have linked to a neighbour on its own scores half its base."
+msgid "The last 3 cards in a row link like they share 3 traits. A card there with no real link of its own scores half its base."
+msgstr "The last 3 cards in a row link like they share 3 traits. A card there with no real link of its own scores half its base."
+
+#: src/lib/chain-run.ts
+#~ msgid "The last 3 cards of a row always link as if they shared 3 traits. Any of them that would not have linked to a neighbour on its own scores half its base."
+#~ msgstr "The last 3 cards of a row always link as if they shared 3 traits. Any of them that would not have linked to a neighbour on its own scores half its base."
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "The light and the art on every copy of your card in packs, or an image of your own."
@@ -19141,8 +19498,8 @@ msgid "The live score feed for a country, newest first."
 msgstr "The live score feed for a country, newest first."
 
 #: src/lib/chain-run.ts
-msgid "The lowest base fits anywhere."
-msgstr "The lowest base fits anywhere."
+#~ msgid "The lowest base fits anywhere."
+#~ msgstr "The lowest base fits anywhere."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The map's own samples and keysounds, when it has them."
@@ -19286,8 +19643,8 @@ msgid "The report was sent, but at least one image did not upload."
 msgstr "The report was sent, but at least one image did not upload."
 
 #: src/lib/chain-run.ts
-msgid "The row plays twice."
-msgstr "The row plays twice."
+#~ msgid "The row plays twice."
+#~ msgstr "The row plays twice."
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "The saved video couldn't be read back. Export it again to share it."
@@ -19298,8 +19655,12 @@ msgid "The screenshot names could not be saved. Try again."
 msgstr "The screenshot names could not be saved. Try again."
 
 #: src/lib/chain-run.ts
-msgid "The second card in each row also has every trait of the first."
-msgstr "The second card in each row also has every trait of the first."
+msgid "The second card in a row also gets every trait of the first card."
+msgstr "The second card in a row also gets every trait of the first card."
+
+#: src/lib/chain-run.ts
+#~ msgid "The second card in each row also has every trait of the first."
+#~ msgstr "The second card in each row also has every trait of the first."
 
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The second copy ever pulled"
@@ -19413,8 +19774,8 @@ msgid "The standard run."
 msgstr "The standard run."
 
 #: src/lib/chain-run.ts
-msgid "The star was not meant for you."
-msgstr "The star was not meant for you."
+#~ msgid "The star was not meant for you."
+#~ msgstr "The star was not meant for you."
 
 #: src/lib/pack-run.ts
 msgid "The strongest card in the pack scores twice."
@@ -19512,6 +19873,12 @@ msgstr "Theme saturation"
 #: src/lib/pack-run.ts
 msgid "There is no reward to pick."
 msgstr "There is no reward to pick."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.forgottenCombo
+#: src/lib/chain-run.ts
+#~ msgid "There's a star at {0}x the target. Clear a round without passing it and every row starts {1} combo higher. Pass it and she leaves, and the bonus goes with her."
+#~ msgstr "There's a star at {0}x the target. Clear a round without passing it and every row starts {1} combo higher. Pass it and she leaves, and the bonus goes with her."
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -19920,16 +20287,16 @@ msgid "Those images are no longer available."
 msgstr "Those images are no longer available."
 
 #: src/lib/chain-run.ts
-msgid "Three alike form a hand."
-msgstr "Three alike form a hand."
+#~ msgid "Three alike form a hand."
+#~ msgstr "Three alike form a hand."
 
 #: src/lib/pack-run.ts
 msgid "Three cards from the same country."
 msgstr "Three cards from the same country."
 
 #: src/lib/chain-run.ts
-msgid "Three cards in a row that share one trait form a hand, and its two links fire three times. Each hand after the first multiplies the row by 1.3."
-msgstr "Three cards in a row that share one trait form a hand, and its two links fire three times. Each hand after the first multiplies the row by 1.3."
+#~ msgid "Three cards in a row that share one trait form a hand, and its two links fire three times. Each hand after the first multiplies the row by 1.3."
+#~ msgstr "Three cards in a row that share one trait form a hand, and its two links fire three times. Each hand after the first multiplies the row by 1.3."
 
 #: src/lib/pack-run.ts
 msgid "Three from one country and two from another."
@@ -20206,6 +20573,10 @@ msgstr "Top Thousand"
 msgid "Top-play feed"
 msgstr "Top-play feed"
 
+#: src/lib/supporter-ranks.ts
+#~ msgid "Topaz"
+#~ msgstr "Topaz"
+
 #: src/lib/supporter-pack-style.ts
 msgid "Toploader"
 msgstr "Toploader"
@@ -20302,6 +20673,10 @@ msgstr "Trill"
 #: src/lib/pack-run.ts
 msgid "Trio"
 msgstr "Trio"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Trophy shelf"
+#~ msgstr "Trophy shelf"
 
 #: src/routes/recommendations.tsx
 msgid "Try a different title, artist, or difficulty name."
@@ -21531,6 +21906,10 @@ msgstr "within a minute"
 msgid "Without a binder, your collection shows as the usual grid."
 msgstr "Without a binder, your collection shows as the usual grid."
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Won an Overjoy run and reached round {round}, best row {best}. {link}"
+msgstr "Won an Overjoy run and reached round {round}, best row {best}. {link}"
+
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
 msgstr "Won on score, not pp"
@@ -21968,6 +22347,10 @@ msgstr "Your collection as binder pages, three by three in plastic pockets, for 
 msgid "Your collection changed. Nothing was sent. Refresh and try again."
 msgstr "Your collection changed. Nothing was sent. Refresh and try again."
 
+#: src/lib/chain-run.ts
+msgid "Your combo carries between rows."
+msgstr "Your combo carries between rows."
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
@@ -22003,6 +22386,10 @@ msgstr "Your description shows up here."
 msgid "Your dynamic renders were turned off."
 msgstr "Your dynamic renders were turned off."
 
+#: src/lib/chain-run.ts
+msgid "Your first break becomes a link."
+msgstr "Your first break becomes a link."
+
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Your gift week was claimed. Every $3 you give brings a new code."
 msgstr "Your gift week was claimed. Every $3 you give brings a new code."
@@ -22015,6 +22402,10 @@ msgstr "Your gift week was claimed. Every $3 you give brings a new code."
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your image"
 msgstr "Your image"
+
+#: src/lib/chain-run.ts
+msgid "Your lowest card fits anywhere."
+msgstr "Your lowest card fits anywhere."
 
 #. placeholder {0}: i18n._(weakest.labelMsg)
 #: src/components/me/MyStatsInsights.tsx

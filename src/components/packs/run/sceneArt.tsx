@@ -7,9 +7,9 @@ import { useId, useState } from "react";
    card id, so every render of a card is the same print. Each card's markup
    is built once per module and reused; clip ids get the instance's useId.
 
-   The character cards print from their real artwork instead: the source
-   illustration run through scripts/art/linocut.py into a 512px WebP with the
-   same chip, ink and paper. The SVG print stays as the fallback. */
+   Every card now shows its map's background in full colour instead (a 512px
+   square crop, round inside the gold medallion; SCENE_IMAGE). The SVG print
+   stays as the fallback. */
 
 export type SceneId =
   | "makiba"
@@ -25,7 +25,12 @@ export type SceneId =
   | "foolMoon"
   | "moonGate"
   | "lostRequiem"
-  | "purplePalace";
+  | "purplePalace"
+  | "galaxyCollapse"
+  | "sidetrackedDay"
+  | "freedomDive"
+  | "blueZenith"
+  | "halcyon";
 
 export const SCENE_IDS: readonly SceneId[] = [
   "makiba",
@@ -42,6 +47,11 @@ export const SCENE_IDS: readonly SceneId[] = [
   "moonGate",
   "lostRequiem",
   "purplePalace",
+  "galaxyCollapse",
+  "sidetrackedDay",
+  "freedomDive",
+  "blueZenith",
+  "halcyon",
 ];
 
 const PALETTE: Record<SceneId, { ink: string; paper: string }> = {
@@ -59,6 +69,11 @@ const PALETTE: Record<SceneId, { ink: string; paper: string }> = {
   moonGate: { ink: "#6b6512", paper: "#f0eed3" },
   lostRequiem: { ink: "#8e1616", paper: "#f4dcd6" },
   purplePalace: { ink: "#8c1a7e", paper: "#f5e0f1" },
+  galaxyCollapse: { ink: "#3f2a8c", paper: "#e6e1f6" },
+  sidetrackedDay: { ink: "#a5480f", paper: "#f7e6d6" },
+  freedomDive: { ink: "#0d5f82", paper: "#dbeff6" },
+  blueZenith: { ink: "#1d3f9a", paper: "#dfe6f6" },
+  halcyon: { ink: "#8a6a0c", paper: "#f6efd2" },
 };
 
 // ---------- geometry ----------
@@ -983,18 +998,28 @@ function echoes(pl: Plate) {
 // ---------- printed from artwork ----------
 
 /** Cards with a print made from the real artwork (scripts/art/linocut.py). */
+/* Full colour: a square crop of each map's background, shown round inside
+   the gold medallion (local-notes/scene-bgs/color.py). */
 const SCENE_IMAGE: Partial<Record<SceneId, string>> = {
-  onceForgotten: "/images/packs/scene/onceForgotten.webp",
-  futureDominators: "/images/packs/scene/futureDominators.webp",
-  duplicity: "/images/packs/scene/duplicity.webp",
-  echoes: "/images/packs/scene/echoes.webp",
-  makiba: "/images/packs/scene/makiba.webp",
-  aiae: "/images/packs/scene/aiae.webp",
-  scatteredFaith: "/images/packs/scene/scatteredFaith.webp",
-  foolMoon: "/images/packs/scene/foolMoon.webp",
-  moonGate: "/images/packs/scene/moonGate.webp",
-  lostRequiem: "/images/packs/scene/lostRequiem.webp",
-  purplePalace: "/images/packs/scene/purplePalace.webp",
+  makiba: "/images/packs/scene/makiba-color-v1.webp",
+  tree: "/images/packs/scene/tree-color-v1.webp",
+  onceForgotten: "/images/packs/scene/onceForgotten-color-v1.webp",
+  futureDominators: "/images/packs/scene/futureDominators-color-v1.webp",
+  marioPaint: "/images/packs/scene/marioPaint-color-v1.webp",
+  duplicity: "/images/packs/scene/duplicity-color-v1.webp",
+  echoes: "/images/packs/scene/echoes-color-v1.webp",
+  aiae: "/images/packs/scene/aiae-color-v1.webp",
+  scatteredFaith: "/images/packs/scene/scatteredFaith-color-v1.webp",
+  foolMoon: "/images/packs/scene/foolMoon-color-v1.webp",
+  moonGate: "/images/packs/scene/moonGate-color-v1.webp",
+  lostRequiem: "/images/packs/scene/lostRequiem-color-v1.webp",
+  purplePalace: "/images/packs/scene/purplePalace-color-v1.webp",
+  galaxyCollapse: "/images/packs/scene/galaxyCollapse-color-v1.webp",
+  sidetrackedDay: "/images/packs/scene/sidetrackedDay-color-v2.webp",
+  freedomDive: "/images/packs/scene/freedomDive-color-v1.webp",
+  blueZenith: "/images/packs/scene/blueZenith-color-v1.webp",
+  halcyon: "/images/packs/scene/halcyon-color-v1.webp",
+  ascension: "/images/packs/scene/ascension-color-v1.webp",
 };
 
 /** Who drew the artwork a card is printed from, as plain names for a small
@@ -1015,6 +1040,11 @@ export const SCENE_CREDITS: Record<SceneId, string | null> = {
   moonGate: null,
   lostRequiem: null,
   purplePalace: null,
+  galaxyCollapse: null,
+  sidetrackedDay: null,
+  freedomDive: null,
+  blueZenith: null,
+  halcyon: null,
 };
 
 // ---------- component ----------
@@ -1044,6 +1074,15 @@ function sceneMarkup(id: SceneId): string {
     built.set(id, m);
   }
   return m;
+}
+
+/* A scene card's art as an image URL for a canvas: its printed WebP, or the
+   SVG print as a data URL. */
+export function sceneArtUrl(id: SceneId): string {
+  const src = SCENE_IMAGE[id];
+  if (src) return src;
+  const html = sceneMarkup(id).replaceAll("§", "share-");
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="256" height="256">${html}</svg>`)}`;
 }
 
 export function SceneArt({ id, size = 220, className }: { id: SceneId; size?: number; className?: string }) {

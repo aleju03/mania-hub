@@ -1808,6 +1808,10 @@ msgstr "{viewCountLabel} 次浏览"
 msgid "{weeks} weeks ago"
 msgstr "{weeks} 周前"
 
+#: src/lib/chain-run.ts
+msgid "{word} links add +1 more each time they fire."
+msgstr "{word} 连线每次触发多加 +1。"
+
 #: src/routes/snipes.tsx
 msgid "{years, plural, one {# year} other {# years}}"
 msgstr "{years, plural, other {# 年}}"
@@ -2264,6 +2268,15 @@ msgstr "24 小时"
 msgid "24h"
 msgstr "24 小时"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.handRowMultiplier
+#: src/lib/chain-run.ts
+msgid "3 cards in a row that share a trait make a hand, and its links fire 3 times. Every hand after the first gives the row x{0}."
+msgstr "连续 3 张共享一个特征的卡组成一手，它的连线触发 3 次。第一手之后的每一手让这一排 x{0}。"
+
+#: src/lib/chain-run.ts
+msgid "3 cards sharing a trait make a hand."
+msgstr "3 张共享特征的卡组成一手。"
+
 #: src/routes/top-plays.tsx
 msgid "3 days"
 msgstr "3 天"
@@ -2294,6 +2307,10 @@ msgstr "此设备无法显示 3D 卡片预览。"
 #: src/routes/support.tsx
 msgid "4 more stats"
 msgstr "多 4 项数据"
+
+#: src/lib/chain-run.ts
+msgid "4-trait links double your combo."
+msgstr "4 特征连线让连击翻倍。"
 
 #: src/routes/dan-estimates.tsx
 msgid "4. Your dan is the average of your skills"
@@ -2406,6 +2423,10 @@ msgstr "7 天全球"
 msgid "7K"
 msgstr "7K"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "7K board"
+#~ msgstr "7K 键盘"
+
 #. placeholder {0}: N.sevenKeys.mult
 #: src/lib/pack-run.ts
 msgid "7K cards give +{0} combo."
@@ -2467,16 +2488,30 @@ msgid "A 4K chart is LN when holds make up at least 45% of its notes and those h
 msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速下这些长条仍需要真正的放手时，这张谱面算作 LN。短到可以当普通键点掉的长条会让它算作单点谱面。7K 的界线是 37.5%。"
 
 #: src/routes/support.tsx
+#~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
+#~ msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从琥珀一路升到镭射。"
+
+#: src/routes/support.tsx
 msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Copper all the way to Holo."
 msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从铜一路升到镭射。"
 
 #: src/lib/chain-run.ts
-msgid "A break halves the combo instead of ending it, and each break multiplies the row by 1.4."
-msgstr "断连只会让连击减半而不会中断，且每次断连使该排得分 x1.4。"
+#~ msgid "A break halves the combo instead of ending it, and each break multiplies the row by 1.4."
+#~ msgstr "断连只会让连击减半而不会中断，且每次断连使该排得分 x1.4。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.scatteredBreakMultiplier
+#: src/lib/chain-run.ts
+msgid "A break halves your combo instead of resetting it, and every break gives the row x{0}."
+msgstr "断连只让连击减半而不是清零，每次断连让这一排 x{0}。"
 
 #: src/lib/chain-run.ts
-msgid "A break only halves the combo."
-msgstr "断连只会让连击减半。"
+#~ msgid "A break only halves the combo."
+#~ msgstr "断连只会让连击减半。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.freedomTraits
+#: src/lib/chain-run.ts
+#~ msgid "A card whose link in shares {0} or more traits plays again: the link fires again and the card scores again."
+#~ msgstr "连入它的连线共享 {0} 个或更多特征的卡片会再打一次：该连线再次触发，卡片再次计分。"
 
 #: src/routes/news_.prism.tsx
 msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
@@ -2519,9 +2554,15 @@ msgstr "个人资料页头像周围的边框。"
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
 msgstr "正在根据最新成绩重新计算评分，这些数字稍后可能会变动"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.aiaeCards
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.aiaeMultiplier
 #: src/lib/chain-run.ts
-msgid "A full row with no break scores x3."
-msgstr "没有断连的满排 x3。"
+msgid "A full row of {0} cards with no breaks scores x{1}."
+msgstr "满 {0} 张且没有断连的一排得分 x{1}。"
+
+#: src/lib/chain-run.ts
+#~ msgid "A full row with no break scores x3."
+#~ msgstr "没有断连的满排 x3。"
 
 #: src/components/packs/GiftInbox.tsx
 msgid "A gift from"
@@ -2531,6 +2572,14 @@ msgstr "礼物来自"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A line about the skin"
 msgstr "一句关于皮肤的介绍"
+
+#: src/lib/chain-run.ts
+#~ msgid "A link sharing all 4 traits doubles the combo after it adds, every time it fires."
+#~ msgstr "共享全部 4 个特征的连线在加完连击后将连击翻倍，每次触发都会如此。"
+
+#: src/lib/chain-run.ts
+msgid "A link that shares all 4 traits doubles your combo every time it fires."
+msgstr "共享全部 4 个特征的连线每次触发都让连击翻倍。"
 
 #: src/components/packs/GiftInbox.tsx
 msgid "A little something for you"
@@ -2595,20 +2644,41 @@ msgid "A rating is not supported for this chart or mod combination."
 msgstr "此谱面或模组组合暂不支持评级。"
 
 #: src/lib/chain-run.ts
-msgid "A row of 4 cards or fewer scores x3."
-msgstr "不超过 4 张卡片的一排 x3。"
+#~ msgid "A row of 4 cards or fewer scores x3."
+#~ msgstr "不超过 4 张卡片的一排 x3。"
 
 #: src/lib/chain-run.ts
-msgid "A row of 6 cards with no break is an SS and scores x3."
-msgstr "没有断连的 6 张卡片一排算作 SS，x3。"
+#~ msgid "A row of 6 cards with no break is an SS and scores x3."
+#~ msgstr "没有断连的 6 张卡片一排算作 SS，x3。"
 
 #: src/lib/chain-run.ts
-msgid "A row of only 7K cards is multiplied by her multiplier, which starts at 1.5 and rises by 0.25 each time. If you would fail a round, she burns and the round starts over."
-msgstr "只有 7K 卡片的一排会乘上她的倍率，倍率从 1.5 起，每次增加 0.25。如果你本会输掉一个回合，她会燃尽，该回合重新开始。"
+msgid "A row of 6 with no breaks scores x3."
+msgstr "6 张没有断连的一排得分 x3。"
 
 #: src/lib/chain-run.ts
-msgid "A row where every card is a different rarity scores x3.5."
-msgstr "每张卡片稀有度都不同的一排 x3.5。"
+#~ msgid "A row of only 7K cards is multiplied by her multiplier, which starts at 1.5 and rises by 0.25 each time. If you would fail a round, she burns and the round starts over."
+#~ msgstr "只有 7K 卡片的一排会乘上她的倍率，倍率从 1.5 起，每次增加 0.25。如果你本会输掉一个回合，她会燃尽，该回合重新开始。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.ascendStart
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.ascendGrowth
+#: src/lib/chain-run.ts
+#~ msgid "A row of only 7K cards is multiplied by her multiplier, which starts at x{0} and grows x{1} each time. If you would fail a round, she burns and the round starts over."
+#~ msgstr "只有 7K 卡片的一排会乘上她的倍率，倍率从 x{0} 起，每次再乘 x{1}。如果你本会输掉一个回合，她会燃尽，该回合重新开始。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.ascendStart
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.ascendGrowth
+#: src/lib/chain-run.ts
+msgid "A row of only 7K cards scores x{0}, and that goes up x{1} every time it triggers. If you'd fail a round, she burns instead and you replay the round."
+msgstr "只有 7K 卡的一排得分 x{0}，每次触发再乘 x{1}。如果你本会输掉一轮，她会燃尽，你重打这一轮。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.palaceMultiplier
+#: src/lib/chain-run.ts
+msgid "A row where every card is a different rarity scores x{0}."
+msgstr "每张卡稀有度都不同的一排得分 x{0}。"
+
+#: src/lib/chain-run.ts
+#~ msgid "A row where every card is a different rarity scores x3.5."
+#~ msgstr "每张卡片稀有度都不同的一排 x3.5。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -2644,8 +2714,8 @@ msgid "A snipe is when your new best on a map passes a player who was above you.
 msgstr "狙击是指你在某张图上的新最佳成绩超过了原本排在你前面的玩家。"
 
 #: src/lib/chain-run.ts
-msgid "A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it."
-msgstr "星星位于目标的 3 倍处。通过一个回合且回合得分没有超过它，之后每一排的起始连击 +2。超过它，她就会带着全部离开。"
+#~ msgid "A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it."
+#~ msgstr "星星位于目标的 3 倍处。通过一个回合且回合得分没有超过它，之后每一排的起始连击 +2。超过它，她就会带着全部离开。"
 
 #: src/components/supporter/TestPack.tsx
 msgid "A test pack: nothing is spent, open as many as you like."
@@ -2974,14 +3044,22 @@ msgstr "高级"
 msgid "Aero window"
 msgstr "Aero 窗口"
 
+#: src/lib/chain-run.ts
+msgid "After a row scores, it plays again from the first card and keeps its combo."
+msgstr "一排计分后会从第一张卡再打一遍，连击保留。"
+
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
 msgid "After exporting a replay video, get a link that plays it right in Discord chat."
 msgstr "导出回放视频后，获取可在 Discord 聊天中直接播放的链接。"
 
 #: src/lib/chain-run.ts
-msgid "After the row scores, every link and card fires again, and the combo carries on from where it ended."
-msgstr "该排计分后，所有连线和卡片再触发一次，连击从结束处继续累计。"
+msgid "After it scores, the link into it fires again and it scores again."
+msgstr "计分后，连入它的连线再次触发，它再次计分。"
+
+#: src/lib/chain-run.ts
+#~ msgid "After the row scores, every link and card fires again, and the combo carries on from where it ended."
+#~ msgstr "该排计分后，所有连线和卡片再触发一次，连击从结束处继续累计。"
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
@@ -3100,8 +3178,8 @@ msgid "All uploads"
 msgstr "全部上传"
 
 #: src/lib/chain-run.ts
-msgid "All-7K rows multiply."
-msgstr "全 7K 的排会倍增。"
+#~ msgid "All-7K rows multiply."
+#~ msgstr "全 7K 的排会倍增。"
 
 #: src/lib/skill-axes.ts
 msgid "All-round"
@@ -3179,6 +3257,10 @@ msgstr "始终全部揭晓"
 #: src/components/layout/ThemePicker.tsx
 msgid "amber"
 msgstr "琥珀"
+
+#: src/lib/supporter-ranks.ts
+#~ msgid "Amber"
+#~ msgstr "琥珀"
 
 #: src/lib/supporter-ranks.ts
 msgid "Amethyst"
@@ -3948,6 +4030,14 @@ msgstr "卡夹"
 msgid "Bitmap"
 msgstr "点阵"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Black belt"
+#~ msgstr "黑带"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Black cat plush"
+#~ msgstr "黑猫玩偶"
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Black hole"
 msgstr "黑洞"
@@ -3982,7 +4072,7 @@ msgstr "蓝色"
 
 #: src/lib/supporter-companions.ts
 msgid "Blue fairy"
-msgstr ""
+msgstr "蓝色妖精"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
@@ -4072,6 +4162,10 @@ msgstr "断连"
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "BREAK"
 msgstr "断连"
+
+#: src/lib/chain-run.ts
+msgid "Breaks only halve your combo."
+msgstr "断连只让连击减半。"
 
 #: src/components/replay/ReplaySkinColorPanel.tsx
 msgid "Bright"
@@ -4725,6 +4819,10 @@ msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 msgstr "铬面、霓虹和彩虹卡面在计分时生效 {0} 次。"
 
 #: src/lib/supporter-companions.ts
+#~ msgid "Chubby Teto"
+#~ msgstr "胖胖重音Teto"
+
+#: src/lib/supporter-companions.ts
 #~ msgid "Ciela"
 #~ msgstr ""
 
@@ -4859,6 +4957,10 @@ msgstr "清除筛选，或者自己上传这个皮肤。"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the search"
 msgstr "清除搜索"
+
+#: src/lib/chain-run.ts
+#~ msgid "Clear under the star: rows start +2 combo."
+#~ msgstr "不超过星标过关：每排连击起点 +2。"
 
 #: src/lib/chain-run.ts
 msgid "Clear with your first row."
@@ -5059,6 +5161,10 @@ msgstr "不开放"
 msgid "Clutch"
 msgstr "绝境"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Clutch HP"
+#~ msgstr "残血翻盘"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Code block"
@@ -5196,6 +5302,10 @@ msgstr "连击"
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Combo +{0}"
 msgstr "连击 +{0}"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Combo break"
+#~ msgstr "断连"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Combo break sound"
@@ -6001,6 +6111,10 @@ msgstr "课题"
 msgid "Course packs and allowed mods"
 msgstr "课程图包和允许的 Mod"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Course run"
+#~ msgstr "段位通关"
+
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 msgid "Courses"
 msgstr "课题"
@@ -6242,6 +6356,10 @@ msgstr "段位估计：{0}（{1}，置信度低）"
 #: src/components/ui/DanBadge.tsx
 msgid "Dan estimate: {0} ({1})"
 msgstr "段位估计：{0}（{1}）"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Dan license"
+#~ msgstr "段位证"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Dan plays"
@@ -6588,6 +6706,10 @@ msgstr "{hidden} 的游戏时长比 {shown} 多还是少？"
 msgid "does not count"
 msgstr "不计入"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Don-chan"
+#~ msgstr "小咚"
+
 #: src/routes/recommendations.tsx
 msgid "done"
 msgstr "刷够"
@@ -6819,8 +6941,12 @@ msgid "e.g. 4K jumpstream warmup"
 msgstr "例如：4K 跳叠热身"
 
 #: src/lib/chain-run.ts
-msgid "Each card also links to the card two slots back. A card breaks only if it links to neither."
-msgstr "每张卡片还会与往前第 2 个位置的卡片连线。只有两边都连不上时，卡片才会断连。"
+#~ msgid "Each card also links to the card two slots back. A card breaks only if it links to neither."
+#~ msgstr "每张卡片还会与往前第 2 个位置的卡片连线。只有两边都连不上时，卡片才会断连。"
+
+#: src/lib/chain-run.ts
+msgid "Each card can also link to the card two spots back. It only breaks if neither link works."
+msgstr "每张卡还能和往前第 2 张连线。两条都连不上才会断连。"
 
 #. placeholder {0}: N.chainLink.chance * 100
 #: src/lib/pack-run.ts
@@ -6840,8 +6966,8 @@ msgid "Each card has a 1 in {0} chance to give x{1} combo."
 msgstr "每张卡片有 1/{0} 的概率提供 x{1} 连击。"
 
 #: src/lib/chain-run.ts
-msgid "Each card you recycle or remove while you hold it adds 1 to every card's base for the rest of the run."
-msgstr "持有它期间，每回收或移除一张卡片，本局剩余时间内所有卡片的基础分 +1。"
+#~ msgid "Each card you recycle or remove while you hold it adds 1 to every card's base for the rest of the run."
+#~ msgstr "持有它期间，每回收或移除一张卡片，本局剩余时间内所有卡片的基础分 +1。"
 
 #: src/routes/player/$username.tsx
 msgid "each keymode weighted against its own plays, the way osu! totals 4K and 7K"
@@ -6875,6 +7001,14 @@ msgstr "每种谱型只计分一次。"
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
 msgstr "每位玩家被抽中的概率相同，与其收藏数量无关。"
+
+#: src/lib/chain-run.ts
+#~ msgid "Each row starts on the combo the round's last row ended on. A break still drops it to the start."
+#~ msgstr "每排从本回合上一排结束时的连击开始。断连仍会让连击回到起点。"
+
+#: src/lib/chain-run.ts
+msgid "Each row starts with the combo the last row ended on. A break still resets it."
+msgstr "每排从上一排结束时的连击开始。断连仍会清零。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Each skill's dan is the average of your best 20 passes in it, by the level each one credited. A skill needs at least four passes. Your dan is the average of your skill dans, so skills at 10, 9, 7 and 6 give 8."
@@ -7042,6 +7176,11 @@ msgstr "在此结束"
 msgid "End the run"
 msgstr "结束本局"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Endless round {round}"
+msgstr "无尽第 {round} 轮"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "Ends {endsLabel}"
 msgstr "{endsLabel} 结束"
@@ -7173,6 +7312,11 @@ msgstr "接下来 {0} 包中每张卡片计分两次。"
 msgid "Every card scores twice."
 msgstr "每张卡片计分两次。"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.requiemBase
+#: src/lib/chain-run.ts
+msgid "Every card you recycle or remove while you hold her gives all your cards +{0} base for the rest of the run."
+msgstr "持有她时，你每回收或移除一张卡，所有卡本局基础分 +{0}。"
+
 #: src/components/packs/run/RunView.tsx
 msgid "Every charm slot is full. Sell one first."
 msgstr "护符栏位已满，请先出售一个。"
@@ -7235,9 +7379,48 @@ msgstr "每种键型都以单项的音符和连击起步。"
 msgid "Every rate of a chart"
 msgstr "谱面的所有倍速"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.forgottenCombo
+#. placeholder {2}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#: src/lib/chain-run.ts
+msgid "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x and she leaves, and you lose all of it."
+msgstr "每轮过关时没超过目标的 {0} 倍，所有排的起始连击 +{1}。超过 {2} 倍她就会离开，加成全部失去。"
+
+#: src/lib/chain-run.ts
+#~ msgid "Every row compounds."
+#~ msgstr "每排都会复利叠加。"
+
+#: src/lib/chain-run.ts
+msgid "Every row makes the next ones stronger."
+msgstr "每一排都让之后的排更强。"
+
+#: src/lib/chain-run.ts
+msgid "Every row plays twice."
+msgstr "每一排打两遍。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.galaxyStep
+#: src/lib/chain-run.ts
+#~ msgid "Every row with no break adds x{0} to her multiplier for the rest of the run, and every row scores it."
+#~ msgstr "每排没有断连都会让她的倍率增加 x{0}，持续到本局结束，每排都会乘上它。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.galaxyStep
+#: src/lib/chain-run.ts
+msgid "Every row with no breaks adds x{0} to her for the rest of the run, and she multiplies every row."
+msgstr "每排没有断连都让她 +x{0}，持续到本局结束，她会乘到每一排上。"
+
 #: src/lib/chain-run.ts
 msgid "Every row you play has 6 cards."
 msgstr "你打出的每一行都有 6 张卡。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.sidetrackedGrowth
+#: src/lib/chain-run.ts
+msgid "Every row you play makes the rows after it score x{0} more. It stacks for the rest of the run."
+msgstr "你每打一排，之后的排得分再 x{0}。本局一直叠加。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.sidetrackedGrowth
+#: src/lib/chain-run.ts
+#~ msgid "Every row you play multiplies the rows after it by {0} more, compounding, for the rest of the run."
+#~ msgstr "你每打一排，之后的排都会再乘 {0}，复利叠加，持续到本局结束。"
 
 #: src/lib/chain-run.ts
 msgid "Every scene card slot is full. Sell one first."
@@ -8023,6 +8206,10 @@ msgstr "仅全连（0 miss）"
 msgid "Full house"
 msgstr "满员"
 
+#: src/lib/chain-run.ts
+#~ msgid "Full links double the combo."
+#~ msgstr "满特征连线让连击翻倍。"
+
 #: src/lib/signature-shared.ts
 msgid "Full list"
 msgstr "完整列表"
@@ -8397,6 +8584,10 @@ msgstr "坟场"
 msgid "Greek"
 msgstr "希腊语"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Greek circle"
+#~ msgstr "希腊字母盘"
+
 #: src/components/layout/ThemePicker.tsx
 msgid "green"
 msgstr "绿"
@@ -8416,6 +8607,10 @@ msgstr "苦练"
 #: src/lib/supporter-name-fonts.ts
 msgid "Groovy"
 msgstr "律动"
+
+#: src/lib/chain-run.ts
+msgid "Grows with every clean row."
+msgstr "每排无断连都会成长。"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
@@ -8714,6 +8909,10 @@ msgstr "打击数与 UR。"
 msgid "Hit error bar"
 msgstr "打击误差条"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Hit error meter"
+#~ msgstr "打击误差条"
+
 #: src/lib/supporter-name-styles.ts
 msgid "Hit light"
 msgstr "击打光"
@@ -8983,6 +9182,11 @@ msgstr "冰之妖精"
 msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
 msgstr "如果你觉得某张谱面的评分不对，可以通过<0>问题反馈</0>告诉我们。"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.freedomTraits
+#: src/lib/chain-run.ts
+msgid "If the link into a card shares {0} or more traits, the card plays twice."
+msgstr "连入一张卡的连线共享 {0} 个或更多特征时，这张卡打两次。"
+
 #: src/lib/pack-run.ts
 msgid "If the pack has a GOAT or Eternal card, every card scores twice."
 msgstr "卡包中有 GOAT 或 Eternal 卡片时，每张卡片计分两次。"
@@ -9024,6 +9228,10 @@ msgstr "图片"
 #: src/lib/replay-overlays.ts
 msgid "Image or GIF"
 msgstr "图片或 GIF"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Image saved"
+msgstr "图片已保存"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Image upload failed."
@@ -9463,6 +9671,10 @@ msgstr "2026年6月16日"
 msgid "just now"
 msgstr "刚刚"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Ka-chan"
+#~ msgstr "小咔"
+
 #: src/components/supporter/loadout.ts
 msgid "Kappa signal"
 msgstr "Kappa 信号"
@@ -9614,6 +9826,10 @@ msgstr "旋钮激光"
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
 msgstr "锦鲤池"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Koishi fumo"
+#~ msgstr "恋恋 fumo"
 
 #: src/components/communities/field-options.tsx
 msgid "Korean"
@@ -10608,6 +10824,10 @@ msgstr "管理"
 msgid "manager"
 msgstr "管理员"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Maneki-neko"
+#~ msgstr "招财猫"
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania 谱面"
@@ -10833,6 +11053,10 @@ msgstr "领先 <0>+{0}</0>"
 msgid "Margin doodles"
 msgstr "页边涂鸦"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Marisa fumo"
+#~ msgstr "魔理沙 fumo"
+
 #: src/routes/recommendations.tsx
 msgid "marked done"
 msgstr "已标记刷够"
@@ -10983,6 +11207,10 @@ msgstr "节拍器"
 msgid "Middle lane thumb"
 msgstr "中间轨道拇指"
 
+#: src/lib/supporter-companions.ts
+#~ msgid "Miku plush"
+#~ msgstr "初音未来玩偶"
+
 #: src/components/player/ProfileStatCards.tsx
 msgid "min"
 msgstr "分钟"
@@ -11080,6 +11308,12 @@ msgstr "带 Mod"
 msgid "modded plays"
 msgstr "带 Mod 的成绩"
 
+#. placeholder {0}: credit.author
+#: src/components/supporter/SupporterExtras.tsx
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "Model by {0}"
+#~ msgstr "模型作者：{0}"
+
 #: src/routes/skins_.$id.tsx
 msgid "Moderate skin"
 msgstr "审核皮肤"
@@ -11127,6 +11361,10 @@ msgstr "周一"
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Month {month}"
 msgstr "第 {month} 个月"
+
+#: src/lib/supporter-ranks.ts
+#~ msgid "Moonstone"
+#~ msgstr "月长石"
 
 #: src/components/layout/Nav.tsx
 msgid "more"
@@ -12706,6 +12944,7 @@ msgid "now #{nowRank}"
 msgstr "当前第 {nowRank} 名"
 
 #. placeholder {0}: formatChainX(ascension)
+#. placeholder {0}: formatChainX(chainSceneMultiplier({ scenes: [scene] }, scene.id))
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Now x{0}"
 msgstr "现为 x{0}"
@@ -13416,6 +13655,11 @@ msgstr "不计入平均"
 msgid "Outside this average's best-clear window"
 msgstr "不在这个平均值的最佳通过范围内"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Over {0}x the target. Once Forgotten left."
+msgstr "超过目标的 {0} 倍，Once Forgotten 离开了。"
+
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillHistoryGraph.tsx
 msgid "overall"
@@ -13589,13 +13833,17 @@ msgstr "在 {mapSlot} 上通关 <0/>"
 msgid "Pass bar"
 msgstr "通过线"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Pass stamp"
+#~ msgstr "合格印章"
+
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
 msgstr "一个成绩超过多名玩家只算一次狙击，对象是其中排名最高的玩家。"
 
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "Past the star. Once Forgotten left."
-msgstr "越过了星星，Forgotten 已经离开。"
+#~ msgid "Past the star. Once Forgotten left."
+#~ msgstr "越过了星星，Forgotten 已经离开。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"
@@ -13751,6 +13999,10 @@ msgstr "百分位"
 #: src/components/player/SkillBreakdown.tsx
 msgid "percentiles are among tracked players"
 msgstr "百分位是在已追踪玩家中的排名"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Percy check"
+#~ msgstr "Percy 检定"
 
 #: src/lib/pack-run.ts
 msgid "Perfect"
@@ -14318,6 +14570,7 @@ msgstr "pp 排名"
 msgid "PP-gain map recommendations tuned to a player."
 msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 
+#: src/components/packs/run/chain/ChainShop.tsx
 #: src/lib/pack-run.ts
 msgid "Practice"
 msgstr "练习"
@@ -14979,6 +15232,10 @@ msgstr "总 pp"
 msgid "Reach stage {0}."
 msgstr "到达第 {0} 关。"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Reached round {round} in Overjoy, best row {best}. {link}"
+msgstr "在 Overjoy 打到第 {round} 轮，最佳一排 {best}。{link}"
+
 #: src/routes/dan-estimates.tsx
 msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
 msgstr "达到通过线即计入谱面的完整段位。更高的准确率会带来加分，99% 之前加得很少；低于通过线的成绩仍按较低段位计入，最多到通过线以下约五个百分点。准确率根据你的判定重新计算，所以 stable 和 lazer 的成绩按同样方式计入。"
@@ -15206,7 +15463,11 @@ msgstr "红色"
 
 #: src/lib/supporter-companions.ts
 msgid "Red fairy"
-msgstr ""
+msgstr "红色妖精"
+
+#: src/lib/supporter-profile-themes.ts
+#~ msgid "Red tree"
+#~ msgstr "红叶树"
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Redeem"
@@ -15519,6 +15780,10 @@ msgstr "在全站将鼠标光标替换为 osu! 风格光标。仅桌面端。"
 msgid "Replay"
 msgstr "回放"
 
+#: src/components/packs/run/chain/ChainScoring.tsx
+msgid "REPLAY"
+msgstr "重放"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Replay (.osr)"
 msgstr "回放 (.osr)"
@@ -15691,6 +15956,10 @@ msgstr "已从此浏览器恢复未保存的草稿。"
 msgid "Restricted on osu!"
 msgstr "已在 osu! 被限制"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Results grade"
+#~ msgstr "结算评级"
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Resume chart preview"
 msgstr "继续谱面预览"
@@ -15757,6 +16026,10 @@ msgstr "撤销这个连接？它会立即停止上传。"
 #: src/components/player/ProfileStatCards.tsx
 msgid "rice"
 msgstr "rice"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Rice"
+#~ msgstr "Rice"
 
 #: src/components/player/ProfileStatCards.tsx
 #: src/lib/profile-stats.ts
@@ -15863,6 +16136,7 @@ msgstr "第 {0} 回合"
 msgid "Round {0} cleared"
 msgstr "第 {0} 回合通过"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
 msgid "Round {round}"
 msgstr "第 {round} 轮"
@@ -15885,9 +16159,19 @@ msgstr "排"
 msgid "Rows"
 msgstr "排数"
 
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.moonGateCards
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.moonGateMultiplier
+#: src/lib/chain-run.ts
+msgid "Rows of {0} cards or less score x{1}."
+msgstr "{0} 张或更少的一排得分 x{1}。"
+
 #: src/lib/chain-run.ts
 msgid "Rows of all different rarities score x3.5."
 msgstr "稀有度各不相同的一排计分 x3.5。"
+
+#: src/lib/chain-run.ts
+msgid "Rows of only 7K cards get a multiplier."
+msgstr "只有 7K 卡的一排有倍率。"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Rows start at combo {startCombo}"
@@ -15933,6 +16217,14 @@ msgstr "挑战信息"
 msgid "Run over"
 msgstr "本局结束"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Run won"
+msgstr "本局胜利"
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Run won! Endless from here"
+msgstr "本局胜利！之后进入无尽模式"
+
 #: src/components/communities/field-options.tsx
 msgid "Russian"
 msgstr "俄语"
@@ -15949,6 +16241,10 @@ msgstr "蓝宝石"
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
 msgstr "六"
+
+#: src/lib/supporter-companions.ts
+#~ msgid "Satori fumo"
+#~ msgstr "觉 fumo"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Saturdays"
@@ -16790,6 +17086,10 @@ msgstr "分享谱面"
 msgid "Share of players at each dan level"
 msgstr "各段位玩家占比"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Share run"
+msgstr "分享"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "Share score"
 msgstr "分享成绩"
@@ -16797,6 +17097,10 @@ msgstr "分享成绩"
 #: src/components/replay/ReplayControls.tsx
 msgid "Share this replay"
 msgstr "分享这份回放"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Share this run"
+msgstr "分享这一局"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Share…"
@@ -17373,6 +17677,10 @@ msgstr "技能组通过记录"
 msgid "Skillset practice charts do the same for one skill. Clearing <0>Volcanic ~ Delta ~</0> at the bar sets your 4K speed dan to <1>delta</1>, and up to one point under it to <2>delta-</2>, without the four passes a skill normally needs. Below that it counts like any other play. Every ladder has them except 6K."
 msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Volcanic ~ Delta ~</0>，就会把你的 4K 速度段位设为 <1>delta</1>，低于通过线一个百分点以内则设为 <2>delta-</2>，无需一个技能通常要求的四次通过。再低就和其他成绩一样计算。除 6K 外每个段位表都有练习谱面。"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Skillset radar"
+#~ msgstr "技能雷达"
+
 #: src/routes/news_.prism.tsx
 msgid "Skillsets"
 msgstr "技能组"
@@ -17826,6 +18134,10 @@ msgstr "关卡 {0}"
 msgid "Stage {0} cleared"
 msgstr "第 {0} 关通过"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Stage 4 fail"
+#~ msgstr "第四首倒下"
+
 #: src/lib/replay-overlays.ts
 msgid "Stage art (bottom)"
 msgstr "面板图片（下）"
@@ -17849,6 +18161,10 @@ msgstr "到达关卡"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage's left edge, skin.ini ColumnStart."
 msgstr "面板左边缘，对应 skin.ini 的 ColumnStart。"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Stair roll"
+#~ msgstr "楼梯滚键"
 
 #: src/lib/pack-run.ts
 msgid "Stairs"
@@ -17977,6 +18293,15 @@ msgstr "数据与最佳成绩"
 #: src/routes/maps.tsx
 msgid "Status"
 msgstr "状态"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#: src/lib/chain-run.ts
+msgid "Stay under {0}x the target for more combo."
+msgstr "不超过目标的 {0} 倍就有更多连击。"
+
+#: src/lib/chain-run.ts
+#~ msgid "Stay under the star for +2 combo."
+#~ msgstr "不超过星标，连击 +2。"
 
 #: src/lib/supporter-ranks.ts
 msgid "Steel"
@@ -18111,6 +18436,14 @@ msgstr "删除线"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stroke color for circle and arrow notes."
 msgstr "圆形和箭头音符的描边颜色。"
+
+#: src/lib/chain-run.ts
+msgid "Strong links make cards play twice."
+msgstr "强连线让卡打两次。"
+
+#: src/lib/chain-run.ts
+#~ msgid "Strong links play cards twice."
+#~ msgstr "强连线让卡片打两次。"
 
 #. placeholder {0}: i18n._(entries[0].labelMsg)
 #: src/components/player/SkillBreakdown.tsx
@@ -18255,6 +18588,10 @@ msgstr "确定？这张卡片将离开收藏册"
 #: src/routes/maps.tsx
 msgid "SV"
 msgstr "SV"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "SV gimmick"
+#~ msgstr "SV 变速"
 
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -18819,6 +19156,10 @@ msgstr "回调与此浏览器的事务不匹配，请重新连接。"
 msgid "The card cover could not be changed. Try again."
 msgstr "无法更换卡片封面。请重试。"
 
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "The card shows your dan once you have one."
+#~ msgstr "获得段位后，卡片会显示你的段位。"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "The card stays yours until they accept it."
 msgstr "在对方接受之前，这张卡片仍然属于你。"
@@ -18828,8 +19169,12 @@ msgid "The card was recycled, never synced, or the link is wrong."
 msgstr "这张卡片已被回收、从未同步，或者链接有误。"
 
 #: src/lib/chain-run.ts
-msgid "The card with the lowest base in each row matches every trait of the cards next to it."
-msgstr "每排中基础分最低的卡片与相邻卡片的所有特征都匹配。"
+msgid "The card with the lowest base in a row matches every trait of the cards next to it."
+msgstr "一排里基础分最低的卡和两边的卡所有特征都相同。"
+
+#: src/lib/chain-run.ts
+#~ msgid "The card with the lowest base in each row matches every trait of the cards next to it."
+#~ msgstr "每排中基础分最低的卡片与相邻卡片的所有特征都匹配。"
 
 #. placeholder {0}: N.spotlight.xMult
 #: src/lib/pack-run.ts
@@ -19005,6 +19350,10 @@ msgstr "授权码兑换被拒绝。"
 msgid "The code isn't on that userpage yet."
 msgstr "该个人页面上还没有这段代码。"
 
+#: src/lib/chain-run.ts
+#~ msgid "The combo carries over."
+#~ msgstr "连击会延续。"
+
 #: src/routes/companella.tsx
 msgid "The Companella beta is not switched on for this site yet."
 msgstr "本站尚未开启 Companella 测试。"
@@ -19052,12 +19401,16 @@ msgid "The export was interrupted before it finished."
 msgstr "导出在完成前被中断。"
 
 #: src/lib/chain-run.ts
-msgid "The first break becomes a link."
-msgstr "第一次断链会变成连锁。"
+#~ msgid "The first break becomes a link."
+#~ msgstr "第一次断链会变成连锁。"
 
 #: src/lib/chain-run.ts
-msgid "The first break in each row becomes a 3-trait link."
-msgstr "每排的第一次断链会变成 3 特征连锁。"
+#~ msgid "The first break in each row becomes a 3-trait link."
+#~ msgstr "每排的第一次断链会变成 3 特征连锁。"
+
+#: src/lib/chain-run.ts
+msgid "The first break in each row counts as a 3-trait link instead."
+msgstr "每排第一次断连改算 3 特征连线。"
 
 #. placeholder {0}: N.firstNote.chips
 #: src/lib/pack-run.ts
@@ -19114,8 +19467,12 @@ msgid "The last 3 cards always link."
 msgstr "最后 3 张卡片必定连锁。"
 
 #: src/lib/chain-run.ts
-msgid "The last 3 cards of a row always link as if they shared 3 traits. Any of them that would not have linked to a neighbour on its own scores half its base."
-msgstr "每排最后 3 张卡片总是按共享 3 个特征来连锁。其中本来无法与相邻卡片连锁的，只计一半基础分。"
+msgid "The last 3 cards in a row link like they share 3 traits. A card there with no real link of its own scores half its base."
+msgstr "一排最后 3 张卡按共享 3 个特征来连线。其中本来连不上的卡只得一半基础分。"
+
+#: src/lib/chain-run.ts
+#~ msgid "The last 3 cards of a row always link as if they shared 3 traits. Any of them that would not have linked to a neighbour on its own scores half its base."
+#~ msgstr "每排最后 3 张卡片总是按共享 3 个特征来连锁。其中本来无法与相邻卡片连锁的，只计一半基础分。"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "The light and the art on every copy of your card in packs, or an image of your own."
@@ -19146,8 +19503,8 @@ msgid "The live score feed for a country, newest first."
 msgstr "某个国家/地区的实时成绩 feed，最新的在前。"
 
 #: src/lib/chain-run.ts
-msgid "The lowest base fits anywhere."
-msgstr "基础分最低的卡片可连到任何位置。"
+#~ msgid "The lowest base fits anywhere."
+#~ msgstr "基础分最低的卡片可连到任何位置。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The map's own samples and keysounds, when it has them."
@@ -19291,8 +19648,8 @@ msgid "The report was sent, but at least one image did not upload."
 msgstr "反馈已提交，但至少有一张图片没能上传。"
 
 #: src/lib/chain-run.ts
-msgid "The row plays twice."
-msgstr "这一排打两遍。"
+#~ msgid "The row plays twice."
+#~ msgstr "这一排打两遍。"
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "The saved video couldn't be read back. Export it again to share it."
@@ -19303,8 +19660,12 @@ msgid "The screenshot names could not be saved. Try again."
 msgstr "截图名称保存失败。请重试。"
 
 #: src/lib/chain-run.ts
-msgid "The second card in each row also has every trait of the first."
-msgstr "每排第二张卡片同时拥有第一张的所有特征。"
+msgid "The second card in a row also gets every trait of the first card."
+msgstr "一排的第二张卡也拥有第一张卡的所有特征。"
+
+#: src/lib/chain-run.ts
+#~ msgid "The second card in each row also has every trait of the first."
+#~ msgstr "每排第二张卡片同时拥有第一张的所有特征。"
 
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The second copy ever pulled"
@@ -19418,8 +19779,8 @@ msgid "The standard run."
 msgstr "标准挑战。"
 
 #: src/lib/chain-run.ts
-msgid "The star was not meant for you."
-msgstr "星星不属于你。"
+#~ msgid "The star was not meant for you."
+#~ msgstr "星星不属于你。"
 
 #: src/lib/pack-run.ts
 msgid "The strongest card in the pack scores twice."
@@ -19517,6 +19878,12 @@ msgstr "主题饱和度"
 #: src/lib/pack-run.ts
 msgid "There is no reward to pick."
 msgstr "没有可选的奖励。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.forgottenCombo
+#: src/lib/chain-run.ts
+#~ msgid "There's a star at {0}x the target. Clear a round without passing it and every row starts {1} combo higher. Pass it and she leaves, and the bonus goes with her."
+#~ msgstr "目标的 {0} 倍处有一颗星。过关时没超过它，每排起始连击 +{1}。超过了她就会离开，加成也跟着没了。"
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -19925,16 +20292,16 @@ msgid "Those images are no longer available."
 msgstr "这些图片已无法查看。"
 
 #: src/lib/chain-run.ts
-msgid "Three alike form a hand."
-msgstr "三张同类构成牌型。"
+#~ msgid "Three alike form a hand."
+#~ msgstr "三张同类构成牌型。"
 
 #: src/lib/pack-run.ts
 msgid "Three cards from the same country."
 msgstr "三张卡片来自同一国家/地区。"
 
 #: src/lib/chain-run.ts
-msgid "Three cards in a row that share one trait form a hand, and its two links fire three times. Each hand after the first multiplies the row by 1.3."
-msgstr "一排中连续三张共享同一特征的卡片构成牌型，其两条连锁各触发三次。第一个之后的每个牌型都会让这一排 x1.3。"
+#~ msgid "Three cards in a row that share one trait form a hand, and its two links fire three times. Each hand after the first multiplies the row by 1.3."
+#~ msgstr "一排中连续三张共享同一特征的卡片构成牌型，其两条连锁各触发三次。第一个之后的每个牌型都会让这一排 x1.3。"
 
 #: src/lib/pack-run.ts
 msgid "Three from one country and two from another."
@@ -20211,6 +20578,10 @@ msgstr "千强"
 msgid "Top-play feed"
 msgstr "最佳成绩 feed"
 
+#: src/lib/supporter-ranks.ts
+#~ msgid "Topaz"
+#~ msgstr "黄玉"
+
 #: src/lib/supporter-pack-style.ts
 msgid "Toploader"
 msgstr "硬卡套"
@@ -20307,6 +20678,10 @@ msgstr "交互"
 #: src/lib/pack-run.ts
 msgid "Trio"
 msgstr "三重奏"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Trophy shelf"
+#~ msgstr "奖杯架"
 
 #: src/routes/recommendations.tsx
 msgid "Try a different title, artist, or difficulty name."
@@ -21407,7 +21782,7 @@ msgstr "选歌时，Hashi 会显示该谱面在你当前 mod 下的排行榜，�
 
 #: src/lib/supporter-companions.ts
 msgid "White fairy"
-msgstr ""
+msgstr "白色妖精"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/communities/CommunityEditModal.tsx
@@ -21535,6 +21910,10 @@ msgstr "一分钟内"
 #: src/components/supporter/TestBinder.tsx
 msgid "Without a binder, your collection shows as the usual grid."
 msgstr "不用卡册时，你的收藏按平常的网格显示。"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Won an Overjoy run and reached round {round}, best row {best}. {link}"
+msgstr "赢下一局 Overjoy，打到第 {round} 轮，最佳一排 {best}。{link}"
 
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
@@ -21973,6 +22352,10 @@ msgstr "你的收藏变成卡册内页，每页三乘三的塑料卡袋，你和
 msgid "Your collection changed. Nothing was sent. Refresh and try again."
 msgstr "你的收藏已发生变化，没有送出任何卡片。请刷新后重试。"
 
+#: src/lib/chain-run.ts
+msgid "Your combo carries between rows."
+msgstr "连击在排与排之间延续。"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
@@ -22008,6 +22391,10 @@ msgstr "你的描述会显示在这里。"
 msgid "Your dynamic renders were turned off."
 msgstr "你的动态渲染图已被关闭。"
 
+#: src/lib/chain-run.ts
+msgid "Your first break becomes a link."
+msgstr "第一次断连变成连线。"
+
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Your gift week was claimed. Every $3 you give brings a new code."
 msgstr "你赠送的一周已被领取。你每支持 $3 就会获得一个新兑换码。"
@@ -22020,6 +22407,10 @@ msgstr "你赠送的一周已被领取。你每支持 $3 就会获得一个新�
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your image"
 msgstr "你的图片"
+
+#: src/lib/chain-run.ts
+msgid "Your lowest card fits anywhere."
+msgstr "最低的卡放哪都能连。"
 
 #. placeholder {0}: i18n._(weakest.labelMsg)
 #: src/components/me/MyStatsInsights.tsx

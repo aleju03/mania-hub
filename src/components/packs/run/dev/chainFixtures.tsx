@@ -28,6 +28,9 @@
      wysi     a row whose running total reads 3,727 mid-chain (the 727
               freeze and combo jump), landing the round score on a 727 too
               (the table stamp), then the clear
+     endless  an endless round's broken row: Blue Zenith, FREEDOM DiVE and
+              Halcyon held, practice levels, a Replay and a MAX card in it
+     won      the win round's clearing row, then the run-won banner
 
    <html data-run-moment> reads "<moment>:ready" once the moment starts and
    "<moment>:done" once it has settled; the screenshot script
@@ -42,6 +45,9 @@ import {
   CHAIN_GOAT,
   makeFixtureRun,
   scoreChainRowFor,
+  chainBestRow,
+  chainTargetFor,
+  CHAIN_RULES,
   type ChainAction,
   type ChainBoardEntry,
   type ChainPool,
@@ -55,7 +61,7 @@ import { getCachedPackFrontCanvas, PACK_ASPECT, packArtStyleFor } from "../../pa
 import { ChainTable, type ChainTableScript } from "../chain/ChainTable";
 import type { ChainActOutcome } from "../chain/useChainRun";
 
-export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "variants", "contract", "skills"] as const;
+export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "variants", "contract", "skills", "endless", "won"] as const;
 export type ChainFixtureMoment = (typeof CHAIN_FIXTURE_MOMENTS)[number];
 
 /* Real osu! ids, used only for avatars on the synthetic players. */
@@ -195,6 +201,34 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
     state.hand.filter((entry) => !row.includes(entry.uid)).slice(0, 4).forEach((entry, index) => (entry.card = { ...entry.card, variant: order[index] }));
     return { state, pool, script: { row, dealt: true, autoPlay: true }, best: null };
   }
+  if (moment === "endless" || moment === "won") {
+    const pool = fixturePool(4);
+    const endless = moment === "endless";
+    const f = makeFixtureRun(4, { round: 6, phase: "arranged", pool, scenes: endless ? ["blueZenith", "freedomDive", "halcyon"] : ["echoes", "galaxy"] });
+    const state = f.state;
+    const row = f.row ?? [];
+    state.round = endless ? CHAIN_RULES.winRound + 3 : CHAIN_RULES.winRound;
+    state.target = chainTargetFor(state.round);
+    state.levels = { cc: 3, key: 4, skill: 2, tier: 1 };
+    if (endless) {
+      // Won at the win round, three rounds back.
+      state.won = true;
+      state.carry = 40;
+      state.scenes = state.scenes.map((scene) => ({ ...scene }));
+      const looks: ChainVariant[] = ["replay", "max"];
+      row.slice(2, 4).forEach((uid, index) => {
+        for (const entry of [...state.hand, ...state.deck]) if (entry.uid === uid) entry.card = { ...entry.card, variant: looks[index] };
+      });
+    } else {
+      state.scenes = state.scenes.map((scene) => (scene.id === "galaxy" ? { ...scene, stacks: 9 } : scene));
+    }
+    const best = chainBestRowFor(state, row);
+    const total = scoreChainRowFor(state, best)?.total ?? 0;
+    // The row lands a little past the target.
+    if (total > 0) state.roundScore = Math.max(0, state.target - Math.floor(total * 0.6));
+    state.rowsLeft = 2;
+    return { state, pool, script: { row: best, dealt: true, autoPlay: true }, best: null };
+  }
   if (moment === "wysi") {
     // Seed 7's round 3 row (Echoes, Future Dominators) reads 3,727 after its
     // eighth card, with seven cards still to score.
@@ -219,6 +253,12 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
   const pool = fixturePool(7);
   const f = makeFixtureRun(7, { round: 5, phase: "over", pool, scenes: ["tree", "future"] });
   return { state: f.state, pool, script: { fresh: true }, best: { rank: 7, userId: 99, username: "you", round: 5, bestRow: 8_048, rows: 13, finished: true, updatedAt: 0 } };
+}
+
+/* The best order of the arranged row's cards under the scenario's scenes. */
+function chainBestRowFor(state: ChainRunState, row: number[]): number[] {
+  const cards = state.hand.filter((entry) => row.includes(entry.uid));
+  return chainBestRow(state, cards, 24, null, { blind: true })?.uids ?? row;
 }
 
 function markMoment(moment: string, state: "ready" | "done") {
@@ -300,7 +340,7 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
       } else if (moment === "fail") {
         if (name === "play:start") ready();
         if (name === "over:shown") done(1800);
-      } else if (moment === "play" || moment === "chain" || moment === "clear" || moment === "wysi" || moment === "variants") {
+      } else if (moment === "play" || moment === "chain" || moment === "clear" || moment === "wysi" || moment === "variants" || moment === "endless" || moment === "won") {
         if (name === "play:start") ready();
         if (moment === "clear") {
           if (name === "shop") done(900);

@@ -326,7 +326,7 @@ export const ChainCardFace = memo(function ChainCardFace({
           padding: "2px 4px",
           borderRadius: 4,
           background: variant.fill,
-          color: card.variant === "max" ? "#1a1020" : card.variant === "pfc" ? "#3b2500" : card.variant === "mirror" ? "#0c4a6e" : "#1e293b",
+          color: card.variant === "max" ? "#1a1020" : card.variant === "pfc" ? "#3b2500" : card.variant === "mirror" ? "#0c4a6e" : card.variant === "replay" ? "#053d36" : "#1e293b",
           boxShadow: "0 1px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.7)",
         }}
       >

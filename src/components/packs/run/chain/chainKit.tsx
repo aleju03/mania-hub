@@ -335,6 +335,12 @@ export interface ChainButtonItem {
 /* Capsules joined by chain links: the main action in the middle as the big
    pink one, the others dark with an icon. `compact` (phones) shows the side
    buttons as icons only. */
+/* The primary button's face: the rendered pink enamel pill with its cream rim
+   and embossed chain (3d-modelling/overjoy/build_button.py), drawn as a
+   border-image so its caps keep their shape at any width: 96px caps and a
+   144px middle that repeats whole links. */
+const PRIMARY_FACE = "/images/packs/run/button-pink-full-v1.webp";
+
 export function ChainButtons({ items, compact = false, big = false }: { items: ChainButtonItem[]; compact?: boolean; big?: boolean }) {
   const link = (key: string) => (
     <svg key={key} width={compact ? 22 : 30} height={compact ? 16 : 22} viewBox="0 0 30 22" className="-mx-1.5 shrink-0" aria-hidden="true">
@@ -359,12 +365,22 @@ export function ChainButtons({ items, compact = false, big = false }: { items: C
           ...item.style,
           height,
           padding: item.primary ? `0 ${compact ? 22 : big ? 40 : 32}px` : compact ? "0 10px" : "0 18px 0 12px",
-          background: item.primary && !item.muted ? KIT.pink : item.active ? KIT.pink : KIT.dark,
-          borderColor: item.primary ? (item.muted ? "rgba(243,233,216,0.4)" : KIT.cream) : item.active ? KIT.cream : item.tone ?? KIT.cream,
+          background: item.primary && !item.muted ? "transparent" : item.active ? KIT.pink : KIT.dark,
+          borderColor: item.primary ? (item.muted ? "rgba(243,233,216,0.4)" : "transparent") : item.active ? KIT.cream : item.tone ?? KIT.cream,
+          ...(item.primary && !item.muted
+            ? {
+                borderImageSource: `url(${PRIMARY_FACE})`,
+                borderImageSlice: "0 96 fill",
+                borderImageWidth: `0 ${height / 2}px`,
+                borderImageRepeat: "stretch round",
+                // The face's centre sits a little above the middle; the side wall is below it.
+                paddingBottom: Math.round(height * 0.06),
+              }
+            : {}),
           color: (item.primary && !item.muted) || item.active ? KIT.dark : item.muted ? "rgba(243,233,216,0.5)" : KIT.cream,
           fontFamily: MARKER,
           fontSize: item.primary ? (compact ? 20 : big ? 28 : 25) : compact ? 15 : 19,
-          boxShadow: `0 5px 0 rgba(0,0,0,0.45)${item.primary && !item.muted ? ", 0 0 16px rgba(255,122,184,0.45)" : ""}`,
+          boxShadow: item.primary && !item.muted ? undefined : "0 5px 0 rgba(0,0,0,0.45)",
         }}
       >
         {item.icon}
@@ -493,7 +509,7 @@ export function ObjectiveLine({
         />
       )}
       {ghost > lit + 0.01 && (
-        <div className="absolute top-[12px] -translate-x-1/2 whitespace-nowrap leading-none" style={{ left: `${ghost * 100}%`, fontFamily: MARKER, fontSize: 16, color: "rgba(255,122,184,0.85)" }}>
+        <div className="absolute top-[12px] -translate-x-1/2 whitespace-nowrap leading-none" style={{ left: `${Math.min(92, Math.max(8, ghost * 100))}%`, fontFamily: MARKER, fontSize: 16, color: "rgba(255,122,184,0.85)" }}>
           {ghostLabel}
         </div>
       )}

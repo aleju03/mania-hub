@@ -4,6 +4,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import {
   CHAIN_RULES,
   CHAIN_SCENE_INK,
+  CHAIN_SCENE_NUMBERS,
   chainPackName,
   chainRefusalMessage,
   chainSharedTraits,
@@ -91,6 +92,8 @@ interface PlayState {
   wysi: ChainWysiStamp | null;
   /* The signed contract, settled by this row (a clear or a failed round). */
   contract: { contract: ChainContract; met: boolean } | null;
+  /* This clear won the run. */
+  won: boolean;
 }
 
 type Aftermath =
@@ -381,10 +384,12 @@ export function ChainTable(props: ChainTableProps) {
   /* The arranged row with the scene cards held: what its links draw. */
   // Previews are blind to 727s: one lands as a surprise, never something to search for.
   const preview = useMemo(() => (shown && rowEntries.length ? scoreChainRow(shown, rowEntries, { blind: true }) : null), [rowEntries, shown]);
-  /* The number the row shows before it plays: its plain links and combos
-     only. Second passes, scene card effects and row multipliers are left
-     out, so a strong build can beat it. */
-  const plainTotal = useMemo(() => (rowEntries.length ? scoreChainRow({ scenes: [] }, rowEntries, { blind: true }).total : 0), [rowEntries]);
+  /* The number the row shows before it plays: its plain links and combos,
+     with practice levels (Balatro's hand value with its planets). Second
+     passes, scene card effects and row multipliers are left out, so a strong
+     build can beat it. */
+  const levels = shown?.levels;
+  const plainTotal = useMemo(() => (rowEntries.length ? scoreChainRow({ scenes: [], levels }, rowEntries, { blind: true }).total : 0), [rowEntries, levels]);
   /* Hand cards against the row's last card: the marks a linking card shares
      with it (lit on the card), and the ones that would break (dimmed). */
   const { wouldLink, breakers } = useMemo(() => {
@@ -597,7 +602,7 @@ export function ChainTable(props: ChainTableProps) {
     setCardCombo({});
     setHandsLit([]);
     setScoreOverride(before.roundScore);
-    setPlay({ row: result.row, outcome: result.outcome, pay: result.pay, forgotten: result.forgotten, ascended: result.ascended, before, wysi: result.wysi ?? null, contract: result.contract ?? null });
+    setPlay({ row: result.row, outcome: result.outcome, pay: result.pay, forgotten: result.forgotten, ascended: result.ascended, before, wysi: result.wysi ?? null, contract: result.contract ?? null, won: Boolean(result.won) });
     signal("play:start");
   }, [arranging, doAct, playShudder, rowUids, shown, signal]);
 
@@ -646,7 +651,7 @@ export function ChainTable(props: ChainTableProps) {
 
   const onReplayDone = useCallback(async () => {
     if (!play) return;
-    const { outcome, pay, forgotten, before, row, wysi, contract } = play;
+    const { outcome, pay, forgotten, before, row, wysi, contract, won } = play;
     signal("play:slam");
     // The round score (or round and target) lands now; shards with the pay.
     if (wysi) stampWysi(wysi, (on) => on !== "shards" || outcome !== "cleared");
@@ -661,7 +666,7 @@ export function ChainTable(props: ChainTableProps) {
       setAftermath(null);
     }
     if (forgotten === "gone") {
-      setAftermath({ kind: "banner", text: t`Past the star. Once Forgotten left.`, tone: "red" });
+      setAftermath({ kind: "banner", text: t`Over ${CHAIN_SCENE_NUMBERS.starTimesTarget}x the target. Once Forgotten left.`, tone: "red" });
       runSound.refuse();
       await wait(1300);
     } else if (forgotten === "grew") {
@@ -700,6 +705,14 @@ export function ChainTable(props: ChainTableProps) {
       await wait(CHAIN_FEEL.pay.bannerMs + CHAIN_FEEL.pay.afterMs);
       runSound.fireLoopStop();
       setAftermath(null);
+      // The win round: the run is won, and goes on as endless.
+      if (won) {
+        setAftermath({ kind: "banner", text: t`Run won! Endless from here`, tone: "gold" });
+        runSound.songCleared("song");
+        shake(1.4);
+        await wait(2400);
+        setAftermath(null);
+      }
       // The signed contract settles after the pay.
       if (contract) {
         const name = i18n._(CHAIN_CONTRACT_COPY[contract.contract.id].name);
@@ -823,7 +836,9 @@ export function ChainTable(props: ChainTableProps) {
       const key = roundKey(shown);
       setDealt(key);
       writeDealt(key);
-      roundPackCards.forEach((_, index) => window.setTimeout(() => runSound.deal(index), reducedMotion ? 0 : index * CHAIN_FEEL.pack.joinStaggerMs));
+      // The pack's cards already dealt with their sound out of the pack; the
+      // flight into the hand is one soft move, not a second deal.
+      runSound.charmMove();
       const deckCards = shown.hand.filter((entry) => !entry.pack).map((entry) => entry.uid);
       window.setTimeout(() => enterFromDeck(deckCards, 0), reducedMotion ? 0 : roundPackCards.length * CHAIN_FEEL.pack.joinStaggerMs + 120);
       window.setTimeout(() => signal("round:dealt"), reducedMotion ? 0 : 1400);
@@ -973,7 +988,6 @@ export function ChainTable(props: ChainTableProps) {
             target={target}
             roundScore={roundScore}
             meterScore={play ? play.before.roundScore + live : roundScore}
-            ghostFuzzy={!play}
             heatScore={play ? play.before.roundScore + live : aftermath?.kind === "clear" ? roundScore : 0}
             ghostScore={play ? play.before.roundScore + live : arranging ? roundScore + plainTotal : roundScore}
             crossFlash={crossFlash}

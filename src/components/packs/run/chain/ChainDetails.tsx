@@ -14,6 +14,7 @@ import {
   chainCardRarityLabel,
   chainSkillEffectText,
   formatChainScore,
+  chainSceneMultiplier,
   formatChainX,
   isChainTier,
   type ChainCardInstance,
@@ -276,6 +277,11 @@ function SceneDetails({ scene, ascension, startCombo, sell }: { scene: ChainScen
       {scene.id === "ascension" && ascension > 0 && (
         <div className="mt-2 text-[12px] font-bold tabular-nums">
           <Trans>Now x{formatChainX(ascension)}</Trans>
+        </div>
+      )}
+      {(scene.id === "galaxy" || scene.id === "sidetracked") && (
+        <div className="mt-2 text-[12px] font-bold tabular-nums">
+          <Trans>Now x{formatChainX(chainSceneMultiplier({ scenes: [scene] }, scene.id))}</Trans>
         </div>
       )}
       {scene.id === "forgotten" && startCombo > 1 && (

@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { CHAIN_SCENE_NAMES, formatChainScore, type ChainBoardEntry, type ChainRunView } from "#/lib/chain-run";
+import { CHAIN_SCENE_NAMES, chainIsEndless, formatChainScore, type ChainBoardEntry, type ChainRunView } from "#/lib/chain-run";
 import { PACK_ASPECT } from "../../packArt";
 import { runSound } from "../runSound";
 import { SceneArt } from "../sceneArt";
 import { SCENE_ART_ID } from "./ChainHud";
 import { ChainButtons, KIT, MARKER, SceneMedallion } from "./chainKit";
+import { shareChainRun } from "./chainShare";
+
+/* A card lifting out of the table with an arrow: the share button's mark. */
+function IconShareCard() {
+  return (
+    <svg width={26} height={26} viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke={KIT.cream} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+      <rect x={4} y={9} width={11} height={14} rx={2} transform="rotate(-8 9.5 16)" />
+      <path d="M14 12 C17 9 19 7 22 5 M17 4.5 H22.5 V10" />
+    </svg>
+  );
+}
 
 function Board({
   entries,
@@ -169,6 +180,7 @@ export function ChainOver({
   }, []);
   const over = view.over;
   const round = over?.round ?? view.round;
+  const [shareState, setShareState] = useState<"idle" | "busy" | "saved">("idle");
   const mine: ChainBoardEntry = best ?? { rank: 0, userId: -1, username: "", round, bestRow: view.bestRow, rows: view.totalRows, finished: true, updatedAt: 0 };
   const stat = (label: React.ReactNode, value: string, ink: string, delay: number) => (
     <motion.div
@@ -193,7 +205,7 @@ export function ChainOver({
           animate={{ opacity: 1, scale: 1, rotate: -2 }}
           transition={{ type: "spring", stiffness: 300, damping: 16 }}
         >
-          <Trans>Run over</Trans>
+          {view.won ? <Trans>Run won</Trans> : <Trans>Run over</Trans>}
         </motion.div>
         {over && over.reason === "failed" && (
           <motion.div
@@ -244,6 +256,42 @@ export function ChainOver({
             compact={narrow}
             items={[
               { key: "exit", title: t`Back to packs`, label: <Trans>Back to packs</Trans>, onClick: onExit },
+              {
+                key: "share",
+                title: t`Share this run`,
+                label: shareState === "saved" ? <Trans>Image saved</Trans> : <Trans>Share run</Trans>,
+                disabled: shareState === "busy",
+                icon: narrow ? <IconShareCard /> : undefined,
+                onClick: async () => {
+                  runSound.uiTap();
+                  setShareState("busy");
+                  const best = formatChainScore(view.bestRow);
+                  const link = `${window.location.origin}/packs`;
+                  const caption = view.won
+                    ? t`Won an Overjoy run and reached round ${round}, best row ${best}. ${link}`
+                    : t`Reached round ${round} in Overjoy, best row ${best}. ${link}`;
+                  const outcome = await shareChainRun(
+                    {
+                      won: view.won,
+                      round,
+                      bestRow: view.bestRow,
+                      rows: view.totalRows,
+                      scenes: view.scenes.map((scene) => scene.id),
+                      username: mine.username,
+                      labels: {
+                        title: view.won ? t`Run won` : t`Run over`,
+                        round: chainIsEndless(round) ? t`Endless round ${round}` : t`Round ${round}`,
+                        bestRow: t`Best row`,
+                        rows: t`Rows`,
+                        footer: link.replace(/^https?:\/\//, ""),
+                      },
+                    },
+                    caption,
+                  );
+                  setShareState(outcome === "saved" ? "saved" : "idle");
+                  if (outcome === "saved") window.setTimeout(() => setShareState("idle"), 2400);
+                },
+              },
               {
                 key: "again",
                 primary: true,

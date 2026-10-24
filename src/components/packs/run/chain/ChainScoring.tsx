@@ -27,6 +27,7 @@ import {
 import { SceneArt } from "../sceneArt";
 import { flameLevel } from "../RunFlame";
 import { InkFlame } from "./InkFlame";
+import { SceneMedallion } from "./chainKit";
 import { SCENE_ART_ID } from "./ChainHud";
 import { RUN_FEEL } from "../runFeel";
 import { juice, punch } from "../runJuice";
@@ -60,6 +61,7 @@ const msgBreak = msg`BREAK`;
 const msgHand = msg`HAND`;
 const msgHalf = msg`HALF`;
 const msgWarmup = msg`Warm-up`;
+const msgReplay = msg`REPLAY`;
 const SKILL_INK = "#8ff2b7";
 
 type FloatSize = "trait" | "points" | "word" | "big";
@@ -417,7 +419,18 @@ export function ChainScoring(props: ChainScoringProps) {
         case "multiplier":
           return event.id === "dt" ? null : { key: `mult-${event.id}`, scene: event.id, at: { kind: "row" } };
         case "scene":
-          return { key: `scene-${event.id}-${"pass" in event ? event.pass : 0}`, scene: event.id, at: event.id === "forgotten" ? { kind: "card", index: 0 } : { kind: "row" } };
+          return {
+            key: `scene-${event.id}-${"pass" in event ? event.pass : 0}`,
+            scene: event.id,
+            at:
+              event.id === "forgotten" || event.id === "halcyon"
+                ? { kind: "card", index: 0 }
+                : event.effect === "double"
+                  ? { kind: "link", key: `l${event.link}` }
+                  : { kind: "row" },
+          };
+        case "replay":
+          return event.by === "freedomDive" ? { key: `freedomDive-${event.pass}`, scene: "freedomDive", at: { kind: "card", index: event.index } } : null;
         case "break":
           return event.scene ? { key: `${event.scene}-${event.pass}`, scene: event.scene, at: { kind: "link", key: `l${event.link}` } } : null;
         case "wysi":
@@ -476,7 +489,7 @@ export function ChainScoring(props: ChainScoringProps) {
         const k = Math.min(1, (now - start) / span);
         setRunning((current) => ({ ...current, combo: Math.round(from + (to - from) * (1 - (1 - k) ** 2)) }));
         if (k < 1) window.requestAnimationFrame(tick);
-        else punch(comboRef.current, String(to).length + 3);
+        else punch(comboRef.current, formatChainScore(to).length + 3);
       };
       window.requestAnimationFrame(tick);
     };
@@ -569,7 +582,25 @@ export function ChainScoring(props: ChainScoringProps) {
           break;
         }
         case "scene": {
-          if (event.id === "forgotten") {
+          if (event.effect === "carry") {
+            // Halcyon: the row picks up where the last one ended.
+            const scene = fireScene("halcyon");
+            popAt(scene, "scene-halcyon", `+${formatChainScore(event.add)}`, CHAIN_SCENE_INK.halcyon, "word", holdMs, "below");
+            popCentre(`x${formatChainScore(event.combo)}`, CHAIN_SCENE_INK.halcyon, holdMs, true);
+            say(CHAIN_SCENE_NAMES.halcyon, CHAIN_SCENE_INK.halcyon);
+            runSound.charmFire(chain);
+            fx.onShake(feel.multiplierShake * 0.8);
+            riseCombo(event.combo - event.add, event.combo, holdMs);
+          } else if (event.effect === "double") {
+            // Blue Zenith: a full link doubles the combo.
+            const badge = rectOf(`[data-chain-link="l${event.link}"]`);
+            popAt(badge, `zenith-${event.link}`, "x2", CHAIN_SCENE_INK.blueZenith, "word", holdMs, "below");
+            fireScene("blueZenith");
+            say(`${CHAIN_SCENE_NAMES.blueZenith} x2`, CHAIN_SCENE_INK.blueZenith);
+            runSound.stepMultiplier(chain);
+            fx.onShake(feel.multiplierShake * 0.9);
+            riseCombo(event.from, event.combo, holdMs);
+          } else if (event.id === "forgotten") {
             const scene = fireScene("forgotten");
             popAt(scene, "scene-forgotten", `+${event.combo - 1}`, CHAIN_SCENE_INK.forgotten, "word", holdMs, "below");
             say(CHAIN_SCENE_NAMES.forgotten, CHAIN_SCENE_INK.forgotten);
@@ -600,6 +631,18 @@ export function ChainScoring(props: ChainScoringProps) {
               });
             }
           }
+          break;
+        }
+        case "replay": {
+          // A card plays again: a Replay card, or FREEDOM DiVE.
+          const card = cardEl(event.index);
+          const ink = event.by === "replay" ? CHAIN_VARIANT_COPY.replay.ink : CHAIN_SCENE_INK.freedomDive;
+          popAt(card, `replay-${event.index}-${event.n}`, i18n._(msgReplay), ink, "word", holdMs, "below");
+          say(event.by === "replay" ? CHAIN_VARIANT_COPY.replay.name : CHAIN_SCENE_NAMES.freedomDive, ink);
+          if (event.by === "freedomDive") fireScene("freedomDive");
+          if (card && !reducedMotion) juice(card.element, { amount: 0.2, rotateRad: 0.1 });
+          runSound.stepAgain(chain);
+          fx.onShake(stepShake(event.combo) + 0.1);
           break;
         }
         case "goat": {
@@ -695,7 +738,12 @@ export function ChainScoring(props: ChainScoringProps) {
           break;
         }
       }
-      const deferCombo = ((event.kind === "wysi" && event.add > 0) || event.kind === "goat" || (event.kind === "variant" && event.variant === "max")) && !reducedMotion;
+      const deferCombo =
+        ((event.kind === "wysi" && event.add > 0) ||
+          event.kind === "goat" ||
+          (event.kind === "variant" && event.variant === "max") ||
+          (event.kind === "scene" && (event.effect === "double" || event.effect === "carry"))) &&
+        !reducedMotion;
       setRunning((current) => ({ ...current, combo: deferCombo ? current.combo : event.combo, broke: event.kind === "break" ? current.broke + 1 : current.broke }));
       if (target > 0 && roundBefore + event.total >= target) fx.onHeat("fire");
       else if (event.combo >= 40) fx.onHeat("mod");
@@ -773,7 +821,7 @@ export function ChainScoring(props: ChainScoringProps) {
       // the round score, the one time that box changes for this row.
       enter("total");
       runSound.finish();
-      if (!reducedMotion) punch(totalRef.current, String(row.total).length + 3);
+      if (!reducedMotion) punch(totalRef.current, formatChainScore(row.total).length + 3);
       await hold(reducedMotion ? 200 : feel.holdMs, false);
       if (cancelled) return;
       let flown = false;
@@ -891,7 +939,7 @@ export function ChainScoring(props: ChainScoringProps) {
                 exit={{ scaleY: 0, opacity: 0, transition: { duration: 0.15 } }}
               >
                 <div className={flameRoom !== null ? "absolute bottom-0 left-1/2 -translate-x-1/2" : undefined}>
-                  <InkFlame level={burn} width={flameW} reducedMotion={reducedMotion} />
+                  <InkFlame level={burn} ratio={ratio} width={flameW} reducedMotion={reducedMotion} />
                 </div>
               </motion.div>
             )}
@@ -971,13 +1019,15 @@ export function ChainScoring(props: ChainScoringProps) {
       {stamps.map((stamp) => (
         <motion.div
           key={`stamp-${stamp.id}`}
-          className="absolute z-[8] overflow-hidden rounded-[10px]"
+          className="absolute z-[8]"
           style={{ left: stamp.x, top: stamp.y, width: stamp.size, height: stamp.size, marginLeft: -stamp.size / 2, marginTop: -stamp.size / 2 }}
           initial={{ scale: 2.3, rotate: -14, opacity: 0 }}
           animate={{ scale: [2.3, 0.9, 1, 1.04], rotate: [-14, 3, 0, 0], opacity: [0, 1, 1, 0] }}
           transition={{ duration: 0.62, times: [0, 0.3, 0.55, 1], ease: "easeOut" }}
         >
-          <SceneArt id={SCENE_ART_ID[stamp.scene]} size={stamp.size} />
+          <SceneMedallion size={stamp.size}>
+            <SceneArt id={SCENE_ART_ID[stamp.scene]} size={Math.round(stamp.size * 0.48)} />
+          </SceneMedallion>
         </motion.div>
       ))}
       {/* Desktop: the fire stands in the layer under the HUD, tall, its
@@ -996,7 +1046,7 @@ export function ChainScoring(props: ChainScoringProps) {
                 initial={false}
                 exit={{ scaleY: 0, opacity: 0, transition: { duration: 0.15 } }}
               >
-                <InkFlame level={burn} width={flameW} height={tallFlame} reducedMotion={reducedMotion} />
+                <InkFlame level={burn} ratio={ratio} width={flameW} height={tallFlame} reducedMotion={reducedMotion} />
               </motion.div>
             )}
           </AnimatePresence>,

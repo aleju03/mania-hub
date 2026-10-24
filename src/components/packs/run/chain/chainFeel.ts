@@ -10,7 +10,7 @@ export const CHAIN_FEEL = {
     decay: 0.94,
     floorMs: 55,
     /* Heavier beats hold a little longer wherever they fall. */
-    extraMs: { break: 160, hand: 180, scene: 280, multiplier: 360, goat: 520, secondPass: 0 } as Record<string, number>,
+    extraMs: { break: 160, hand: 180, scene: 280, multiplier: 360, goat: 520, secondPass: 0, replay: 120 } as Record<string, number>,
     /* A scene card stamping onto the row is a full beat of its own. */
     stampMs: 300,
     /* A 727: the chain freezes this long on the first one in a row, shorter

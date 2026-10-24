@@ -10,6 +10,8 @@ import {
   CHAIN_SCENE_INK,
   CHAIN_SCENE_NAMES,
   CHAIN_SCENE_NUMBERS,
+  chainIsEndless,
+  chainSceneMultiplier,
   formatChainScore,
   formatChainX,
   type ChainSceneHeld,
@@ -23,7 +25,7 @@ import { Shards } from "../Shards";
 import { useTicker } from "../shopMotion";
 import { showChainDetails, useChainDetailsTrigger } from "./ChainDetails";
 import { WysiDigits, WysiStamp } from "./Wysi";
-import { KIT, KitGem, MARKER, ObjectiveLine } from "./chainKit";
+import { KIT, KitGem, MARKER, ObjectiveLine, SceneMedallion } from "./chainKit";
 
 export const SCENE_ART_ID: Record<ChainSceneId, SceneId> = {
   makiba: "makiba",
@@ -40,6 +42,11 @@ export const SCENE_ART_ID: Record<ChainSceneId, SceneId> = {
   moonGate: "moonGate",
   lostRequiem: "lostRequiem",
   purplePalace: "purplePalace",
+  galaxy: "galaxyCollapse",
+  sidetracked: "sidetrackedDay",
+  freedomDive: "freedomDive",
+  blueZenith: "blueZenith",
+  halcyon: "halcyon",
 };
 
 /* HUD pieces that come and go with the round fade out instead of
@@ -63,7 +70,7 @@ function Fade({ show, className, children }: { show: boolean; className?: string
 }
 
 function digits(value: number): number {
-  return String(Math.round(Math.abs(value))).length;
+  return formatChainScore(Math.abs(value)).length;
 }
 
 /* Marker digits sized to fit a ring `room` px across. */
@@ -135,7 +142,6 @@ function Objective({
   score,
   meterScore,
   ghost,
-  fuzzy,
   target,
   star,
   flash,
@@ -149,7 +155,6 @@ function Objective({
   score: number;
   meterScore: number;
   ghost: number;
-  fuzzy: boolean;
   target: number;
   star: number | null;
   flash: number;
@@ -160,12 +165,12 @@ function Objective({
 }) {
   const end = star ?? target;
   const share = end > 0 ? Math.min(1, meterScore / end) : 0;
-  const ghostShare = end > 0 ? Math.min(1, Math.max(meterScore, ghost) / end) * (fuzzy ? 1.1 : 1) : 0;
+  const ghostShare = end > 0 ? Math.min(1, Math.max(meterScore, ghost) / end) : 0;
   const adds = Math.max(0, ghost - meterScore);
   return (
     <div className="flex flex-col items-center">
       <div className="relative font-black uppercase leading-none text-[#f3e9d8]/60" style={{ fontSize: narrow ? 10 : 12, letterSpacing: "0.3em" }}>
-        <Trans>Round {round}</Trans>
+        {chainIsEndless(round) ? <Trans>Endless round {round}</Trans> : <Trans>Round {round}</Trans>}
         {stamp("round")}
       </div>
       <div className={`flex items-baseline justify-center ${narrow ? "mt-1 gap-2" : "mt-1 gap-3"}`}>
@@ -187,7 +192,7 @@ function Objective({
           share={share}
           ghostShare={ghostShare}
           passed={meterScore >= target && target > 0}
-          ghostLabel={adds > 0 && !fuzzy ? `+${formatChainScore(adds)}` : null}
+          ghostLabel={adds > 0 ? `+${formatChainScore(adds)}` : null}
           targetAt={end > 0 ? target / end : 1}
           star={star !== null ? { ink: CHAIN_SCENE_INK.forgotten, lit: meterScore <= star } : null}
           flash={flash}
@@ -208,10 +213,10 @@ export interface ChainTopBarProps {
   meterScore: number;
   /* The score the flame and bridge read: the round's, or the chain's as it plays. */
   heatScore: number;
-  /* The faint fill: what the arranged row or the playing chain reaches. */
+  /* The faint fill: what the arranged row or the playing chain reaches.
+     The arranged row's counts its plain links and combos only (Balatro's
+     hand value before jokers), so scene cards can still beat it. */
   ghostScore: number;
-  /* The arranged row's ghost is a rough band, never an exact mark. */
-  ghostFuzzy: boolean;
   crossFlash: number;
   star: number | null;
   shards: number;
@@ -234,7 +239,7 @@ export interface ChainTopBarProps {
    rings), the score bridge to the target (the flame lives under it), and
    the run's shards. */
 export function ChainTopBar(props: ChainTopBarProps) {
-  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, ghostFuzzy, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false } = props;
+  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false } = props;
   const { t, i18n } = useLingui();
   const shownShards = useTicker(shards, reducedMotion);
   const stamp = (on: ChainWysiField) => (wysi?.on.includes(on) ? <WysiStamp key={`wysi-${wysi.id}-${on}`} reducedMotion={reducedMotion} /> : null);
@@ -265,7 +270,6 @@ export function ChainTopBar(props: ChainTopBarProps) {
       score={roundScore}
       meterScore={meterScore}
       ghost={ghostScore}
-      fuzzy={ghostFuzzy}
       target={target}
       star={star}
       flash={crossFlash}
@@ -278,7 +282,7 @@ export function ChainTopBar(props: ChainTopBarProps) {
   /* Between rounds (packs, the shop) the corner says where the run is. */
   const where = showRound ? (
     <div className="relative leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: narrow ? 20 : 30 }}>
-      <Trans>Round {round}</Trans>
+      {chainIsEndless(round) ? <Trans>Endless round {round}</Trans> : <Trans>Round {round}</Trans>}
       {stamp("round")}
     </div>
   ) : (
@@ -322,6 +326,10 @@ export function ChainTopBar(props: ChainTopBarProps) {
 function sceneBadge(scene: ChainSceneHeld, ascension: number, startCombo: number): string | null {
   if (scene.id === "forgotten" && startCombo > 1) return `+${startCombo - 1}`;
   if (scene.id === "ascension" && ascension > 0) return `x${formatChainX(ascension)}`;
+  if (scene.id === "galaxy" || scene.id === "sidetracked") {
+    const x = chainSceneMultiplier({ scenes: [scene] }, scene.id);
+    return x > 1 ? `x${formatChainX(x)}` : null;
+  }
   if (scene.id === "lostRequiem" && scene.stacks > 0) return `+${scene.stacks * CHAIN_SCENE_NUMBERS.requiemBase}`;
   return null;
 }
@@ -345,7 +353,7 @@ function SceneItem({
   const content = () => ({ kind: "scene" as const, scene, ascension, startCombo, ...(onSell ? { sell: CHAIN_RULES.sceneSell } : {}) });
   const details = useChainDetailsTrigger(content);
   const badge = sceneBadge(scene, ascension, startCombo);
-  const art = compact ? 36 : 54;
+  const art = compact ? 50 : 72;
   return (
     <motion.div
       layout
@@ -371,8 +379,10 @@ function SceneItem({
           }
         }}
       >
-        <div data-run-juice="" className="overflow-hidden rounded-[8px]" style={{ width: art, height: art }}>
-          <SceneArt id={SCENE_ART_ID[scene.id]} size={art} />
+        <div data-run-juice="">
+          <SceneMedallion size={art}>
+            <SceneArt id={SCENE_ART_ID[scene.id]} size={Math.round(art * 0.48)} />
+          </SceneMedallion>
         </div>
         {badge && (
           <span

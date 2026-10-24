@@ -25,6 +25,8 @@ import {
   type ChainReelId,
   type ChainReelPrize,
   type ChainTrait,
+  CHAIN_SCENE_NUMBERS,
+  chainScoreText,
 } from "../../backend/src/shared/chain-run";
 import { honoraryPlayerById } from "./honorary-players";
 import { liveBridgeToken } from "./live-backend-tokens";
@@ -114,6 +116,7 @@ function cleanAction(input: ChainActionInput): ChainActionInput {
     }
     case "buy":
       if (input.item === "scene") return { kind: "buy", item: "scene", rev };
+      if (input.item === "practice") return { kind: "buy", item: "practice", rev };
       if (input.item === "pack" && Number.isSafeInteger(int(input.index))) return { kind: "buy", item: "pack", index: int(input.index), rev };
       break;
     case "sell":
@@ -242,6 +245,13 @@ export const CHAIN_VARIANT_COPY: Record<ChainVariant, { name: string; badge: str
     ink: "#ffd36b",
     text: msg`The links on both its sides never break.`,
   },
+  replay: {
+    name: "Replay",
+    badge: "RP",
+    fill: "linear-gradient(135deg, #e7fff6 0%, #5eead4 45%, #0f766e 100%)",
+    ink: "#8ff5dc",
+    text: msg`After it scores, the link into it fires again and it scores again.`,
+  },
   max: {
     name: "MAX",
     badge: "MAX",
@@ -254,7 +264,7 @@ export const CHAIN_VARIANT_COPY: Record<ChainVariant, { name: string; badge: str
 /* The reel's prizes: the tile's big mark and small word, its rarity colour
    (by how often it lands), and the line saying what it does. Mod names
    (EZ, DT, NF) and 727 stay as they are in every language. */
-const CHAIN_TRAIT_WORD: Record<ChainTrait, MessageDescriptor> = {
+export const CHAIN_TRAIT_WORD: Record<ChainTrait, MessageDescriptor> = {
   cc: msg`Country`,
   tier: msg`Rarity`,
   key: msg`Keymode`,
@@ -360,59 +370,79 @@ export function chainSkillShort(skill: ChainSkill): string {
 export const CHAIN_SCENE_COPY: Record<ChainSceneId, { short: MessageDescriptor; text: MessageDescriptor }> = {
   makiba: {
     short: msg`The last 3 cards always link.`,
-    text: msg`The last 3 cards of a row always link as if they shared 3 traits. Any of them that would not have linked to a neighbour on its own scores half its base.`,
+    text: msg`The last 3 cards in a row link like they share 3 traits. A card there with no real link of its own scores half its base.`,
   },
   mario: {
-    short: msg`The first break becomes a link.`,
-    text: msg`The first break in each row becomes a 3-trait link.`,
+    short: msg`Your first break becomes a link.`,
+    text: msg`The first break in each row counts as a 3-trait link instead.`,
   },
   duplicity: {
     short: msg`Card 2 copies card 1.`,
-    text: msg`The second card in each row also has every trait of the first.`,
+    text: msg`The second card in a row also gets every trait of the first card.`,
   },
   echoes: {
-    short: msg`The row plays twice.`,
-    text: msg`After the row scores, every link and card fires again, and the combo carries on from where it ended.`,
+    short: msg`Every row plays twice.`,
+    text: msg`After a row scores, it plays again from the first card and keeps its combo.`,
   },
   tree: {
     short: msg`Cards also link two back.`,
-    text: msg`Each card also links to the card two slots back. A card breaks only if it links to neither.`,
+    text: msg`Each card can also link to the card two spots back. It only breaks if neither link works.`,
   },
   forgotten: {
-    short: msg`The star was not meant for you.`,
-    text: msg`A star sits at 3x the target. Clear a round without the round score passing it and every row starts 2 combo higher. Pass it and she leaves with all of it.`,
+    short: msg`Stay under ${CHAIN_SCENE_NUMBERS.starTimesTarget}x the target for more combo.`,
+    text: msg`Every round you clear without going past ${CHAIN_SCENE_NUMBERS.starTimesTarget}x the target gives every row +${CHAIN_SCENE_NUMBERS.forgottenCombo} starting combo. Go past ${CHAIN_SCENE_NUMBERS.starTimesTarget}x and she leaves, and you lose all of it.`,
   },
   future: {
-    short: msg`Three alike form a hand.`,
-    text: msg`Three cards in a row that share one trait form a hand, and its two links fire three times. Each hand after the first multiplies the row by 1.3.`,
+    short: msg`3 cards sharing a trait make a hand.`,
+    text: msg`3 cards in a row that share a trait make a hand, and its links fire 3 times. Every hand after the first gives the row x${CHAIN_SCENE_NUMBERS.handRowMultiplier}.`,
   },
   ascension: {
-    short: msg`All-7K rows multiply.`,
-    text: msg`A row of only 7K cards is multiplied by her multiplier, which starts at 1.5 and rises by 0.25 each time. If you would fail a round, she burns and the round starts over.`,
+    short: msg`Rows of only 7K cards get a multiplier.`,
+    text: msg`A row of only 7K cards scores x${CHAIN_SCENE_NUMBERS.ascendStart}, and that goes up x${CHAIN_SCENE_NUMBERS.ascendGrowth} every time it triggers. If you'd fail a round, she burns instead and you replay the round.`,
   },
   aiae: {
-    short: msg`A full row with no break scores x3.`,
-    text: msg`A row of 6 cards with no break is an SS and scores x3.`,
+    short: msg`A row of 6 with no breaks scores x3.`,
+    text: msg`A full row of ${CHAIN_SCENE_NUMBERS.aiaeCards} cards with no breaks scores x${CHAIN_SCENE_NUMBERS.aiaeMultiplier}.`,
   },
   scatteredFaith: {
-    short: msg`A break only halves the combo.`,
-    text: msg`A break halves the combo instead of ending it, and each break multiplies the row by 1.4.`,
+    short: msg`Breaks only halve your combo.`,
+    text: msg`A break halves your combo instead of resetting it, and every break gives the row x${CHAIN_SCENE_NUMBERS.scatteredBreakMultiplier}.`,
   },
   foolMoon: {
-    short: msg`The lowest base fits anywhere.`,
-    text: msg`The card with the lowest base in each row matches every trait of the cards next to it.`,
+    short: msg`Your lowest card fits anywhere.`,
+    text: msg`The card with the lowest base in a row matches every trait of the cards next to it.`,
   },
   moonGate: {
     short: msg`Short rows score x3.`,
-    text: msg`A row of 4 cards or fewer scores x3.`,
+    text: msg`Rows of ${CHAIN_SCENE_NUMBERS.moonGateCards} cards or less score x${CHAIN_SCENE_NUMBERS.moonGateMultiplier}.`,
   },
   lostRequiem: {
     short: msg`Recycling raises every base.`,
-    text: msg`Each card you recycle or remove while you hold it adds 1 to every card's base for the rest of the run.`,
+    text: msg`Every card you recycle or remove while you hold her gives all your cards +${CHAIN_SCENE_NUMBERS.requiemBase} base for the rest of the run.`,
   },
   purplePalace: {
     short: msg`Rows of all different rarities score x3.5.`,
-    text: msg`A row where every card is a different rarity scores x3.5.`,
+    text: msg`A row where every card is a different rarity scores x${CHAIN_SCENE_NUMBERS.palaceMultiplier}.`,
+  },
+  galaxy: {
+    short: msg`Grows with every clean row.`,
+    text: msg`Every row with no breaks adds x${CHAIN_SCENE_NUMBERS.galaxyStep} to her for the rest of the run, and she multiplies every row.`,
+  },
+  sidetracked: {
+    short: msg`Every row makes the next ones stronger.`,
+    text: msg`Every row you play makes the rows after it score x${CHAIN_SCENE_NUMBERS.sidetrackedGrowth} more. It stacks for the rest of the run.`,
+  },
+  freedomDive: {
+    short: msg`Strong links make cards play twice.`,
+    text: msg`If the link into a card shares ${CHAIN_SCENE_NUMBERS.freedomTraits} or more traits, the card plays twice.`,
+  },
+  blueZenith: {
+    short: msg`4-trait links double your combo.`,
+    text: msg`A link that shares all 4 traits doubles your combo every time it fires.`,
+  },
+  halcyon: {
+    short: msg`Your combo carries between rows.`,
+    text: msg`Each row starts with the combo the last row ended on. A break still resets it.`,
   },
 };
 
@@ -432,6 +462,11 @@ export const CHAIN_SCENE_INK: Record<ChainSceneId, string> = {
   moonGate: "#d6e06a",
   lostRequiem: "#e8524c",
   purplePalace: "#f07ee0",
+  galaxy: "#a98bff",
+  sidetracked: "#ff9f5a",
+  freedomDive: "#5fd4ff",
+  blueZenith: "#7aa8ff",
+  halcyon: "#f5d76e",
 };
 
 const REFUSALS: Record<string, MessageDescriptor> = {
@@ -512,8 +547,16 @@ export function chainOfferName(offer: { kind: string; cc?: string; skill?: strin
   }
 }
 
+/* A score as the table shows it: digits, or e-notation once huge (the
+   engine's text, so a 727 shows exactly where the engine flags one). */
 export function formatChainScore(value: number): string {
-  return Math.round(value).toLocaleString("en-US");
+  return chainScoreText(value);
+}
+
+/* The shop's practice, as its tile says it. */
+export function chainPracticeText(trait: ChainTrait, i18n: I18n): string {
+  const word = i18n._(CHAIN_TRAIT_WORD[trait]);
+  return i18n._(msg`${word} links add +1 more each time they fire.`);
 }
 
 export function formatChainX(value: number): string {
