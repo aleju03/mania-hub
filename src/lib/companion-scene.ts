@@ -277,6 +277,10 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
 let thumbRenderer: WebGLRenderer | null = null;
 const thumbs = new Map<string, Promise<string>>();
 const THUMB_SIZE = 192;
+/* Drawn this many times larger and scaled down: at tile size a scan's UV
+   seams pick the texture's tiniest mip and show as lines, which the larger
+   draw keeps a fraction of a pixel wide. */
+const THUMB_SUPERSAMPLE = 3;
 
 export function companionThumbnail(url: string, facing = 0, matte = false): Promise<string> {
   const key = `${url}#${facing}#${matte}`;
@@ -285,7 +289,7 @@ export function companionThumbnail(url: string, facing = 0, matte = false): Prom
   pending = loadModel(url).then((model) => {
     thumbRenderer ??= new WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     thumbRenderer.setPixelRatio(1);
-    thumbRenderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
+    thumbRenderer.setSize(THUMB_SIZE * THUMB_SUPERSAMPLE, THUMB_SIZE * THUMB_SUPERSAMPLE, false);
     thumbRenderer.outputColorSpace = SRGBColorSpace;
     thumbRenderer.toneMapping = NeutralToneMapping;
     const scene = new Scene();
@@ -298,7 +302,13 @@ export function companionThumbnail(url: string, facing = 0, matte = false): Prom
     const camera = new PerspectiveCamera(FOV, 1, 0.05, 20);
     frame(camera, 1, fit(model));
     thumbRenderer.render(scene, camera);
-    const data = thumbRenderer.domElement.toDataURL("image/png");
+    const still = document.createElement("canvas");
+    still.width = THUMB_SIZE;
+    still.height = THUMB_SIZE;
+    const g = still.getContext("2d")!;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(thumbRenderer.domElement, 0, 0, THUMB_SIZE, THUMB_SIZE);
+    const data = still.toDataURL("image/png");
     dispose(model);
     return data;
   });
