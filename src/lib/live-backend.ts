@@ -49,7 +49,7 @@ export interface LivePlayerSkillPlay {
   overallRating: number;
   /** No skill rating exists; Dan credit is evaluated independently. */
   ratingExcluded?: boolean;
-  ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision";
+  ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision" | "chart_disabled";
   /** Why a pending_calibration play waits; absent on older payloads. */
   pendingReason?: LivePlayerDanPendingPlay["reason"];
   pp: number | null;
@@ -102,6 +102,7 @@ export type LiveDanRejectReason =
   | "no_chart_dan"
   | "chart_repeat_limit"
   | "unverifiable_revision"
+  | "chart_disabled"
   | "below_bar";
 
 /** One rated play that credits no dan, with the rule that stopped it. */
@@ -2338,7 +2339,7 @@ export interface LiveRecentPlayRating {
   jobs?: Array<{ id: number; runAfter: string }>;
 }
 
-export type LiveRecentRatingMissingReason = "pending" | "not_retained" | "below_floor" | "below_bar" | "low_od" | "excluded" | "not_analyzed" | "unsupported" | "failed_play" | "chart_changed";
+export type LiveRecentRatingMissingReason = "pending" | "not_retained" | "below_floor" | "below_bar" | "low_od" | "excluded" | "not_analyzed" | "unsupported" | "failed_play" | "chart_changed" | "chart_disabled";
 
 export interface LiveRecentPlayRatingRequest {
   scoreId: number;

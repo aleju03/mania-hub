@@ -12309,6 +12309,10 @@ msgstr "Not connected. Connect from inside {appName}."
 msgid "not counted"
 msgstr "not counted"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Not counted for now"
+msgstr "Not counted for now"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
 msgstr "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
@@ -19556,6 +19560,11 @@ msgstr "This card is not ready to gift. Open it to finish loading its stats."
 #: src/components/player/AddScoreModal.tsx
 msgid "This chart"
 msgstr "This chart"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart does not count toward skill or dan ratings for now."
+msgstr "This chart does not count toward skill or dan ratings for now."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart has no dan level at the rate it was played at."

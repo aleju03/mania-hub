@@ -12282,6 +12282,10 @@ msgstr "未连接。请在 {appName} 内连接。"
 msgid "not counted"
 msgstr "不计入"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Not counted for now"
+msgstr "暂不计入"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
 msgstr "不计入：这次通过比本列表中最好的通过低五个以上段位，因此不参与平均"
@@ -19513,6 +19517,11 @@ msgstr "这张卡片还不能赠送。请打开它以完成属性加载。"
 #: src/components/player/AddScoreModal.tsx
 msgid "This chart"
 msgstr "这张谱面"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart does not count toward skill or dan ratings for now."
+msgstr "这张谱面暂时不计入技能或段位评分。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart has no dan level at the rate it was played at."

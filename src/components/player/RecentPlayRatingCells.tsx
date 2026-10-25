@@ -55,6 +55,7 @@ function RatingStatus({ axis, dan = false, reason, rating, compact }: {
     : reason === "excluded" ? t`This play is excluded from skill ratings.`
     : reason === "failed_play" ? t`Failed plays do not receive an MSD rating.`
     : reason === "chart_changed" ? t`The chart changed after this play, so its rating cannot be verified.`
+    : reason === "chart_disabled" ? t`This chart does not count toward skill or dan ratings for now.`
     : reason === "unsupported" ? t`A rating is not supported for this chart or mod combination.`
     : t`No rating is available, and no analysis is currently scheduled.`;
   if (loading) return <span className="text-[10px] leading-tight text-osu-f1" aria-label={`${axis}: ${label}`}>

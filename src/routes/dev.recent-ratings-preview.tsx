@@ -24,6 +24,7 @@ const REASONS: Array<{ value: LiveRecentRatingMissingReason; label: string }> = 
   { value: "excluded", label: "Excluded from skill ratings" },
   { value: "failed_play", label: "Failed play" },
   { value: "chart_changed", label: "Chart changed after the play" },
+  { value: "chart_disabled", label: "Chart disabled for now" },
   { value: "unsupported", label: "Unsupported chart or mods" },
   { value: "not_analyzed", label: "No analysis scheduled" },
 ];

@@ -12270,6 +12270,10 @@ msgstr "Sin conectar. Conéctala desde {appName}."
 msgid "not counted"
 msgstr "no cuenta"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Not counted for now"
+msgstr "No cuenta por ahora"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
 msgstr "No cuenta: este clear está más de cinco niveles por debajo de los mejores clears de esta lista, así que queda fuera del promedio"
@@ -19501,6 +19505,11 @@ msgstr "Esta carta aún no está lista para regalar. Ábrela para terminar de ca
 #: src/components/player/AddScoreModal.tsx
 msgid "This chart"
 msgstr "Este chart"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart does not count toward skill or dan ratings for now."
+msgstr "Este chart no cuenta para el rating de skillsets ni de dan por ahora."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart has no dan level at the rate it was played at."
