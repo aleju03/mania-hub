@@ -10,12 +10,37 @@ function normalizeThumbnailKey(input: unknown): string {
   return key;
 }
 
-function decodeWebpDataUrl(dataUrl: string): Buffer {
+/* The canvas size of a WebP, read from its first chunk; null for anything
+   that is not one. */
+export function readWebpSize(buffer: Buffer): { width: number; height: number } | null {
+  if (buffer.length < 30 || buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WEBP") return null;
+  const chunk = buffer.toString("ascii", 12, 16);
+  if (chunk === "VP8X") return { width: 1 + buffer.readUIntLE(24, 3), height: 1 + buffer.readUIntLE(27, 3) };
+  if (chunk === "VP8 ") {
+    if (buffer[23] !== 0x9d || buffer[24] !== 0x01 || buffer[25] !== 0x2a) return null;
+    return { width: buffer.readUInt16LE(26) & 0x3fff, height: buffer.readUInt16LE(28) & 0x3fff };
+  }
+  if (chunk === "VP8L") {
+    if (buffer[20] !== 0x2f) return null;
+    const bits = buffer.readUInt32LE(21);
+    return { width: 1 + (bits & 0x3fff), height: 1 + ((bits >> 14) & 0x3fff) };
+  }
+  return null;
+}
+
+/* A thumbnail is a WebP at the width its key names and the card's shape, so
+   the pool cannot be handed some other picture or file. */
+function decodeWebpDataUrl(dataUrl: string, key: string): Buffer {
   const match = /^data:image\/webp;base64,([a-zA-Z0-9+/=]+)$/.exec(dataUrl);
   if (!match) throw new Error("Invalid card thumbnail image.");
   const buffer = Buffer.from(match[1]!, "base64");
   if (buffer.length <= 0 || buffer.length > MAX_THUMBNAIL_BYTES) {
     throw new Error("Invalid card thumbnail size.");
+  }
+  const size = readWebpSize(buffer);
+  const width = Number(/-w(\d+)-/.exec(key)?.[1]);
+  if (!size || size.width !== width || Math.abs(size.height - Math.round(width * 1.4)) > 2) {
+    throw new Error("Invalid card thumbnail image.");
   }
   return buffer;
 }
@@ -75,10 +100,15 @@ export const uploadR2PackCardThumbnail = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ url: string | null }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
+    // signed-in viewers fill the shared pool; everyone else renders locally
+    const { readCurrentAuth } = await import("./auth-server");
+    const viewer = (await readCurrentAuth()).viewer;
+    if (!viewer) return { url: null };
     const { putPackCardThumbnail } = await import("./pack-thumbnail-store");
     return {
-      url: await putPackCardThumbnail(data.key, decodeWebpDataUrl(data.dataUrl), {
+      url: await putPackCardThumbnail(data.key, decodeWebpDataUrl(data.dataUrl, data.key), {
         probedMissing: data.probedMissing,
+        uploaderId: viewer.id,
       }),
     };
   });

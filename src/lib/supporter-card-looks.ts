@@ -39,7 +39,7 @@ export interface SupporterLook {
 /* A supporter's own image is converted on upload and stored content-addressed
    under supporter-motifs/ in the public image bucket; the backend refuses any
    other URL, and so does this, so a stray value never reaches a canvas. */
-const CUSTOM_MOTIF_URL = /^https:\/\/[a-z0-9.-]+\/supporter-motifs\/[a-f0-9]{64}\.webp$/;
+const CUSTOM_MOTIF_URL = /^https:\/\/cdn\.mania-tracker\.com\/supporter-motifs\/[a-f0-9]{64}\.webp$/;
 export const CUSTOM_MOTIF_SCALE_RANGE = [0.4, 3] as const;
 export const CUSTOM_MOTIF_OPACITY_RANGE = [0.2, 1] as const;
 

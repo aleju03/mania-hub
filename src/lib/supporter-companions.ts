@@ -125,8 +125,8 @@ export function builtInCompanion(id: unknown): BuiltInCompanion | null {
 }
 
 const COMPANION_URL: Record<CompanionKind, RegExp> = {
-  model: /^https:\/\/[a-z0-9.-]+\/companions\/[a-f0-9]{64}\.glb$/,
-  image: /^https:\/\/[a-z0-9.-]+\/companions\/[a-f0-9]{64}\.webp$/,
+  model: /^https:\/\/cdn\.mania-tracker\.com\/companions\/[a-f0-9]{64}\.glb$/,
+  image: /^https:\/\/cdn\.mania-tracker\.com\/companions\/[a-f0-9]{64}\.webp$/,
 };
 
 export function parseSubmittedCompanion(value: unknown): SubmittedCompanion | null {

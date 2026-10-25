@@ -344,8 +344,8 @@ async function uploadThumbnailToR2(key: string, blob: Blob): Promise<void> {
     }
     activeRemoteUploads += 1;
     holdsUploadSlot = true;
-    await uploadR2PackCardThumbnail({ data: { key, dataUrl: await blobToDataUrl(blob), probedMissing } });
-    markThumbnailPresent(key);
+    const { url } = await uploadR2PackCardThumbnail({ data: { key, dataUrl: await blobToDataUrl(blob), probedMissing } });
+    if (url) markThumbnailPresent(key);
   } catch {
     // Best-effort: local caches still cover this browser.
   } finally {

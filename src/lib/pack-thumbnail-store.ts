@@ -64,7 +64,7 @@ export function getPackCardThumbnailUrl(cacheKey: string): string | null {
 export async function putPackCardThumbnail(
   cacheKey: string,
   buffer: Buffer,
-  options: { probedMissing?: boolean } = {},
+  options: { probedMissing?: boolean; uploaderId?: number } = {},
 ): Promise<string | null> {
   const s3 = getPublicBucketClient();
   const bucket = getPublicBucketName();
@@ -80,13 +80,20 @@ export async function putPackCardThumbnail(
     })).then(() => true, () => false);
 
   if (!exists) {
+    // Written once, never replaced: a client's "missing" is only a hint, and
+    // the first copy of a card is the one every collector sees for a year.
     await s3.send(new PutObjectCommand({
       Bucket: bucket,
       Key: storageKey,
       Body: buffer,
       ContentType: THUMBNAIL_CONTENT_TYPE,
       CacheControl: "public, max-age=31536000, immutable",
-    }));
+      IfNoneMatch: "*",
+      Metadata: options.uploaderId ? { uploader: String(options.uploaderId) } : undefined,
+    })).catch((error: unknown) => {
+      const status = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+      if (status !== 412) throw error;
+    });
   }
   return `${baseUrl}/${storageKey}`;
 }
