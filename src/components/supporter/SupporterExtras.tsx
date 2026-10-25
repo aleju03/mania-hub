@@ -11,6 +11,7 @@ import { deleteAdminCompanion, loadAdminCompanions, setAdminCompanionListed } fr
 import { BUILT_IN_COMPANIONS, builtInCompanion, COMPANION_NAME_MAX, companionId, type SubmittedCompanion, type SupporterCompanion } from "#/lib/supporter-companions";
 import { useAuth } from "#/lib/auth-context";
 import { Loader2 } from "lucide-react";
+import { GradeImg } from "#/components/ui/GradeImg";
 import { CompanionFigure, CompanionThumb } from "./Companion";
 import { UploadIcon } from "./LoadoutIcons";
 import { BinderBook, FrameThumb } from "./LoadoutSlots";
@@ -366,23 +367,19 @@ function PerkArt({ id, avatar }: { id: PerkId; avatar: string | undefined }) {
         </span>
       );
     case "plays":
-      // a featured play pinned up: the title and song as lines, its pp big, as on the profile
+      // a featured play card in miniature: the map's cover dimmed as on the
+      // profile, the grade and the pp it shows
       return (
-        <span className="relative block -rotate-6">
-          <span className="block h-[34px] w-[46px] overflow-hidden rounded-[5px] bg-gradient-to-br from-[#45305e] via-[#2a1d3a] to-[#140f1b] shadow-[0_3px_8px_rgba(0,0,0,0.55)] ring-1 ring-inset ring-white/[0.1]">
-            <span className="flex h-full flex-col justify-between p-[5px]">
-              <span className="block">
-                <span className="block h-[2px] w-[12px] rounded-full bg-osu-pink-light/80" />
-                <span className="mt-[3px] block h-[3px] w-[24px] rounded-full bg-white/85" />
-              </span>
-              <span className="self-end text-[15px] font-black leading-none tabular-nums text-osu-pink-light">512</span>
+        <span className="relative block h-[36px] w-[50px] overflow-hidden rounded-[5px] bg-osu-b4 shadow-[0_3px_8px_rgba(0,0,0,0.55)] ring-1 ring-inset ring-white/[0.1]">
+          <img src="/images/supporter-perks/play-cover.webp" alt="" width={50} height={36} className="absolute inset-0 h-full w-full object-cover brightness-[0.6]" />
+          <span className="absolute inset-0 bg-gradient-to-r from-black/45 via-black/10 to-black/60" />
+          <span className="relative flex h-full items-end justify-between px-[4px] pb-[4px]">
+            <GradeImg grade="S" size={14} className="h-[9px] w-auto" />
+            <span className="flex flex-col items-end">
+              <span className="text-[13px] font-black leading-none tabular-nums text-osu-pink-light">512</span>
+              <span className="mt-[1px] text-[5px] font-semibold uppercase leading-none tracking-wider text-white/55">pp</span>
             </span>
           </span>
-          <svg viewBox="0 0 12 16" aria-hidden className="absolute -top-[7px] left-[17px] h-[14px] w-[11px] rotate-12 drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
-            <path d="M6 8.5 V15" stroke="#d6d3dc" strokeWidth="1.3" strokeLinecap="round" />
-            <circle cx="6" cy="5" r="4" fill="var(--color-osu-pink)" />
-            <circle cx="4.6" cy="3.6" r="1.2" fill="#fff" fillOpacity="0.55" />
-          </svg>
         </span>
       );
     case "companion":

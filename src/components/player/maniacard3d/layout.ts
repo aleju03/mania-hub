@@ -12,6 +12,9 @@ export interface QualityInput {
   reducedMotion: boolean;
   devicePixelRatio: number;
   continuousIdle?: boolean;
+  /* One card alone on screen: phones get antialiasing and up to 2x, since the
+     cheap profile's jaggies show on a case's long straight edges. */
+  sharp?: boolean;
 }
 
 export interface QualityProfile {
@@ -65,9 +68,9 @@ export function resolveQualityProfile(input: QualityInput): QualityProfile {
 
   if (input.mobile) {
     return {
-      pixelRatio: clamp(input.devicePixelRatio, 1, 1.25),
-      textureScale: 0.75,
-      antialias: false,
+      pixelRatio: clamp(input.devicePixelRatio, 1, input.sharp ? 2 : 1.25),
+      textureScale: input.sharp ? 1 : 0.75,
+      antialias: !!input.sharp,
       adaptiveIdle: !input.continuousIdle,
       shaderQuality: "medium",
       idleMotion: input.continuousIdle ? "continuous" : "wake-on-input",

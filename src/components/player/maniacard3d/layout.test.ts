@@ -80,6 +80,21 @@ describe("resolveQualityProfile", () => {
     });
   });
 
+  test("gives a lone mobile card antialiasing and up to 2x", () => {
+    expect(resolveQualityProfile({
+      mobile: true,
+      reducedMotion: false,
+      devicePixelRatio: 3,
+      continuousIdle: true,
+      sharp: true,
+    })).toMatchObject({
+      pixelRatio: 2,
+      textureScale: 1,
+      antialias: true,
+      shaderQuality: "medium",
+    });
+  });
+
   test("lets reduced motion override a continuous idle request", () => {
     expect(resolveQualityProfile({
       mobile: true,

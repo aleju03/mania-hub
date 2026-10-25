@@ -50,6 +50,8 @@ export interface ManiaCardRendererOptions {
   // Keeps the idle foil shimmer running for a single foreground card while
   // retaining the cheaper mobile quality profile. Reduced Motion still wins.
   continuousIdle?: boolean;
+  // Antialiasing and up to 2x on phones, for a card shown alone.
+  sharp?: boolean;
   // Start with the card back facing the camera; playRevealFlip() spins it
   // front-side-out. Used by the pack opening reveal.
   startFaceDown?: boolean;
@@ -173,6 +175,7 @@ export class ManiaCardRenderer {
       reducedMotion: options.reducedMotion,
       devicePixelRatio: options.devicePixelRatio,
       continuousIdle: options.continuousIdle,
+      sharp: options.sharp,
     });
     this.renderer = new WebGLRenderer({
       antialias: this.quality.antialias,

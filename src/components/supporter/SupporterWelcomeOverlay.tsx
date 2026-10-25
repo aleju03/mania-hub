@@ -4,9 +4,9 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 
 /* The supporter thank-you itself (SupporterWelcome decides when). Drawn as
-   if by hand: a pen trace runs in like a heart monitor and its last stretch
-   draws a heart, which gets coloured in with marker off the line and beats;
-   the thank-you comes up under it. It closes on its own, or on a click, Esc
+   if by hand: a pen flourish loops in from the side and its last stretch
+   draws a heart, which gets coloured in with marker off the line, presses
+   down like a sticker and then floats; the thank-you comes up under it. It closes on its own, or on a click, Esc
    or Enter, and the heart flies off to the viewer's avatar in the nav.
    Every line is a filled ribbon whose width and path drift with noise and
    re-roll a few times a second, so it boils like redrawn frames. */
@@ -74,21 +74,20 @@ const SCRIBBLE: [number, number][] = (() => {
 })();
 const SCRIBBLE_LEN = SCRIBBLE.reduce((acc, p, i) => (i ? acc + Math.hypot(p[0] - SCRIBBLE[i - 1][0], p[1] - SCRIBBLE[i - 1][1]) : 0), 0);
 
-/* Comic beat marks, a different handful on each beat, in heart units. */
-const MARKS: [number, [number, number, number, number][]][] = [
-  [1840, [[1.22, -0.78, 1.52, -1.06], [1.36, -0.24, 1.74, -0.3], [-1.18, -0.9, -1.38, -1.18]]],
-  [2040, [[-1.3, -0.36, -1.66, -0.46], [1.2, 0.3, 1.46, 0.48]]],
-];
+/* Comic marks where the heart presses down, in heart units. */
+const PRESS_AT = DRAW_AT + DRAW_MS + 380;
+const MARKS: [number, number, number, number][] = [[1.22, -0.78, 1.52, -1.06], [1.36, -0.24, 1.74, -0.3], [-1.18, -0.9, -1.38, -1.18], [-1.3, -0.36, -1.66, -0.46]];
 
-/* Lub-dub on arrival, then a slow resting beat. */
-function beatAt(t: number) {
-  const pulse = (c: number, w: number, a: number) => a * Math.exp(-Math.pow((t - c) / w, 2));
-  let k = pulse(1860, 50, 0.12) + pulse(2060, 55, 0.065);
-  if (t > 3300) {
-    const ph = (t - 3300) % 1500;
-    k += pulse(ph, 60, 0.04) + pulse(ph - 190, 60, 0.022) + pulse(ph - 1500, 60, 0.04);
-  }
-  return 1 + k;
+/* How the heart sits: one press as the colour finishes (a squash and a
+   rocking tilt that settles), then a slow float with a little sway. */
+function poseAt(t: number) {
+  const p = t - PRESS_AT;
+  const press = p > 0 ? Math.exp(-p / 260) : 0;
+  const scale = 1 - 0.07 * Math.exp(-Math.pow((p - 40) / 70, 2)) + 0.03 * Math.exp(-Math.pow((p - 200) / 110, 2));
+  const settle = p > 0 ? -0.1 * press * Math.sin(p / 95) : 0;
+  const idle = clamp((t - PRESS_AT - 500) / 900);
+  const ph = ((t - PRESS_AT) / 2600) * Math.PI * 2;
+  return { scale, rotate: settle + idle * 0.035 * Math.sin(ph), dy: idle * -3.5 * Math.sin(ph + 0.9) };
 }
 
 interface Layout {
@@ -108,11 +107,12 @@ function layoutFor(w: number, h: number): Layout {
   const cx = w / 2;
   const cy = Math.max(s + 24, Math.min(h * 0.34, h - 230 - s));
   const tip = cy + s;
-  // one pulse of a monitor trace, slightly uneven, laid out back from the tip
+  // a pen flourish laid out back from the tip: a small loop, a larger one,
+  // then a sweep up into the heart, a little uneven like handwriting
   const k = Math.min(1, (cx - 12) / 330);
   const x = (back: number) => (cx - back * k).toFixed(1);
   const y = (dy: number) => (tip + dy).toFixed(1);
-  const ecg = `M-30 ${y(1)} C${x(520)} ${y(-1)} ${x(420)} ${y(2)} ${x(322)} ${y(0)} C${x(309)} ${y(0)} ${x(305)} ${y(-14)} ${x(292)} ${y(-13)} C${x(280)} ${y(-12)} ${x(274)} ${y(1)} ${x(262)} ${y(0)} L${x(236)} ${y(1)} L${x(229)} ${y(10)} L${x(215)} ${y(-102)} L${x(203)} ${y(27)} L${x(194)} ${y(0)} L${x(166)} ${y(-1)} C${x(151)} ${y(0)} ${x(146)} ${y(-21)} ${x(128)} ${y(-21)} C${x(110)} ${y(-20)} ${x(103)} ${y(1)} ${x(87)} ${y(0)} C${x(50)} ${y(-1)} ${x(25)} ${y(1)} ${cx} ${tip}`;
+  const ecg = `M-30 ${y(4)} C${x(560)} ${y(-6)} ${x(470)} ${y(8)} ${x(392)} ${y(2)} C${x(318)} ${y(-62)} ${x(452)} ${y(-70)} ${x(360)} ${y(-2)} C${x(318)} ${y(18)} ${x(266)} ${y(10)} ${x(232)} ${y(-4)} C${x(118)} ${y(-112)} ${x(318)} ${y(-120)} ${x(196)} ${y(-6)} C${x(150)} ${y(26)} ${x(62)} ${y(22)} ${cx} ${tip}`;
   const ecgPts = sample(ecg, 2);
   const ecgLen = ecgPts[ecgPts.length - 1][2];
   const heart = sample(HEART_D + OVERSHOOT, 0.01);
@@ -238,11 +238,16 @@ export function SupporterWelcomeOverlay({ username, expiresAt, giftFrom, onDone 
         const small = 8;
         const qx = target ? (1 - fly) ** 2 * cx + 2 * fly * (1 - fly) * lerp(cx, target.x, 0.3) + fly ** 2 * target.x : cx;
         const qy = target ? (1 - fly) ** 2 * cy + 2 * fly * (1 - fly) * Math.min(cy, target.y + 80) + fly ** 2 * target.y : cy;
-        const s = S * (ex < 0 && !reduced ? beatAt(t) : 1) * (1 - fly * (1 - small / S));
+        const pose = ex < 0 && !reduced ? poseAt(t) : { scale: 1, rotate: 0, dy: 0 };
+        const s = S * pose.scale * (1 - fly * (1 - small / S));
         const k = s / S;
         // without an avatar to land on, the heart just goes with the dim
         const alpha = target && !reduced ? (ex > 1500 ? 1 - clamp((ex - 1500) / 400) : 1) : 1 - outA;
         g.globalAlpha = alpha;
+        g.save();
+        g.translate(qx, qy + pose.dy);
+        g.rotate(pose.rotate);
+        g.translate(-qx, -qy);
         // colour first, off register, then the ink line on top
         const fe = reduced ? 1 : clamp((t - DRAW_AT - DRAW_MS - 40) / 420);
         if (fe > 0) {
@@ -272,12 +277,12 @@ export function SupporterWelcomeOverlay({ username, expiresAt, giftFrom, onDone 
         ribbon(layout.heart.map(([x, y, l]): Pt => [qx + x * s, qy + y * s, l * s]), { width: Math.max(1.7, 4.2 * Math.sqrt(k)), wob: 1.1 * k, taperIn: 6 * k + 2, taperOut: 10 * k + 2, salt: 2 });
 
         if (ex < 0 && !reduced) {
-          for (const [at, marks] of MARKS) {
-            const e = (t - at) / 330;
-            if (e <= 0 || e >= 1) continue;
-            for (const [x0, y0, x1, y1] of marks) dash(qx + x0 * s, qy + y0 * s, qx + x1 * s, qy + y1 * s, easeOut((e - 0.45) / 0.55), easeOut(e / 0.45), 3.4);
+          const e = (t - PRESS_AT) / 330;
+          if (e > 0 && e < 1) {
+            for (const [x0, y0, x1, y1] of MARKS) dash(qx + x0 * s, qy + y0 * s, qx + x1 * s, qy + y1 * s, easeOut((e - 0.45) / 0.55), easeOut(e / 0.45), 3.4);
           }
         }
+        g.restore();
         if (target && !reduced && ex > 840 && ex < 1140) {
           const e = (ex - 840) / 300;
           for (const [x0, y0, x1, y1] of [[1.5, -1.2, 2.3, -1.9], [1.9, -0.2, 2.8, -0.3]]) {

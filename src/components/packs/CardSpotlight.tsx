@@ -256,6 +256,8 @@ export function CardSpotlight({
           // Keep the inspected card's foil alive between touches without
           // opting mobile into the more expensive desktop quality profile.
           continuousIdle: true,
+          // Alone on screen, so it can afford antialiasing on phones.
+          sharp: true,
           // Touch drag still tilts it, but the modal does not follow the gyro.
           gyro: false,
           sleeveGrows: true,
