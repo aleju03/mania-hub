@@ -12,6 +12,7 @@ Per-player MSD/SSR ratings, pattern axes and the Skills tab (`backend/src/featur
 - **Verified inputs**: native mode, key count, hold count and OD come from the `.osu` before a goal is picked; facts are invalidated when the cached file's `fetched_at` changes. Stable/lazer provenance is kept in `player_activity_maps.best_is_lazer`. A missing file leaves the play pending (`calibrationPending`, empty SSRs) rather than publishing a raw-accuracy fallback.
 - **Chart revisions**: editable charts are checked before a play is selected or its SSR reused. A score's observed checksum is recorded only when the score began after the metadata's update time; latest map metadata is not proof of an older score's revision. A mismatch leaves the play pending and queues the repair. A play that no verify can settle (`isUnverifiableRevision`: the chart was edited after the play, or the play names a checksum the chart no longer has) is filed `unverifiable_revision` everywhere instead of "in queue".
 - Converts and charts outside 4K-18K are skipped.
+- **Admin-disabled charts**: plays on a chart family an admin turned off are rated as usual, then parked in `plays_json.ratingDisabled` and left out of every rating, pattern axis and dan until it is turned back on ([admin.md](../admin.md#disabled-charts)).
 
 ## Axes per keymode
 

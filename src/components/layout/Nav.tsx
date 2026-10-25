@@ -151,6 +151,7 @@ const ADMIN_TOOLS = [
   { to: "/admin/discord", label: "Discord", accent: "#a5b4fc", adminOnly: true, group: "Site" },
   { to: "/admin/mascot", label: "Ralsei", accent: "#c4b5fd", adminOnly: true, group: "Site" },
   { to: "/admin/dan-classifier", label: "Chart Patterns", accent: "#bef264", adminOnly: false, group: "Content" },
+  { to: "/admin/disabled-charts", label: "Disabled charts", accent: "#fca5a5", adminOnly: true, group: "Content" },
   { to: "/admin/bbcode-images", label: "BBCode images", accent: "#fdba74", adminOnly: true, group: "Content" },
   { to: "/admin/og-preview", label: "OG preview", accent: "#fda4af", adminOnly: false, group: "Content" },
   { to: "/admin/dynamic-renders", label: "Dynamic renders", accent: "#e879f9", adminOnly: true, group: "Content" },

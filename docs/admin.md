@@ -42,6 +42,10 @@ The Remove plays tab (`?tab=remove`) removes chosen plays of one player, such as
 
 Hashi plays for the same player are listed on that page too and go through the Companella Exclude and Remove routes below.
 
+## Disabled charts
+
+`/admin/disabled-charts` turns a chart off for skill ratings while a fix is worked on (`backend/src/features/rating-disabled-charts.ts`, `rating_disabled_charts`). Disabling a beatmap covers its whole chart family (reuploads and rate edits with the same notes), resolved through the named beatmap on every read so a later family merge is covered too; a chart with no fingerprint yet covers only its own id. Plays on it are not deleted: the compute and `foldPlayerSkillPlays` move them, SSRs kept, into `plays_json.ratingDisabled`, which no rating, pattern axis, dan or play list reads, and move them back when the chart is enabled. Each toggle starts `rating_disabled_charts_walk` on the chart-analysis lane, which refolds every current-version row holding one of those plays without running MinaCalc, then queues a merge for players with Hashi imports. The page shows the walk's progress. Routes: `GET /api/admin/rating-disabled-charts`, `POST .../lookup`, `.../disable`, `.../enable`.
+
 ## Banned users
 
 Nothing deletes a player by itself. When osu! 404s a user id, the worker's missing-user path (`markUserMissing`) only deactivates them, and the Banned users tab of `/admin/players` lists every inactive, not-purged account so a purge is always a person's call. The admin menu badge counts the ones nobody has marked seen yet (`inactive_user_reviews.reviewed_at`); a later deactivation of an account that was reactivated in between counts as new again, a repeat 404 on an already inactive one does not. A row marked "site user" has signed in on this site at some point (`analytics_viewers` in the analytics DB, matched by osu! id), with its latest sign-in beside it.
