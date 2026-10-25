@@ -55,6 +55,8 @@ const DEFAULT_STATE: MapSearchUiState = {
   danMax: null,
   danMinStep: null,
   danMaxStep: null,
+  danKeys: null,
+  danLn: null,
   sort: "playcount",
   dir: "desc",
   page: 0,
@@ -189,8 +191,24 @@ describe("MapSearchSection cold-load fetch", () => {
     act(() => useAppStore.getState().setNoDans(true));
 
     expect(view.queryByText("Dan (est.)")).toBeNull();
-    expect(onChange).toHaveBeenLastCalledWith({ danMin: null, danMax: null, danMinStep: null, danMaxStep: null, page: 0 });
+    expect(onChange).toHaveBeenLastCalledWith({ danMin: null, danMax: null, danMinStep: null, danMaxStep: null, danKeys: null, page: 0 });
     expect(fetchMock.mock.calls.at(-1)?.[0]).toMatchObject({ danMin: null, danMax: null, danMinStep: null });
+  });
+
+  it("reads a dan picked under the tabs on its own keymode without touching Keys", () => {
+    const onChange = vi.fn();
+    const view = render(withI18n(<MapSearchSection state={DEFAULT_STATE} onChange={onChange} liveBackendEnabled={true} />));
+    // The desktop chip's group; the mobile sheet renders the wall inline too.
+    const desktop = within(view.container).getAllByText("Dan (est.)").map((label) => label.parentElement!).find((group) => group.querySelector("[aria-haspopup='dialog']"));
+    const danGroup = within(desktop!);
+    fireEvent.click(danGroup.getByRole("button", { name: "Any" }));
+    fireEvent.click(danGroup.getByRole("tab", { name: "6K" }));
+    // detail 0 is the keyboard path; pointer picks commit on pointerup.
+    fireEvent.click(danGroup.getByTitle("6K 4th dan"), { detail: 0 });
+    expect(onChange).toHaveBeenLastCalledWith({ danMin: 4, danMax: 4, danMinStep: null, danMaxStep: null, danKeys: 6, danLn: false, page: 0 });
+    fireEvent.click(danGroup.getByRole("tab", { name: "6K LN" }));
+    fireEvent.click(danGroup.getByTitle("6K LN 4th dan"), { detail: 0 });
+    expect(onChange).toHaveBeenLastCalledWith({ danMin: 4, danMax: 4, danMinStep: null, danMaxStep: null, danKeys: 6, danLn: true, page: 0 });
   });
 
   it("narrows a picked dan to one step and back to the whole dan", async () => {

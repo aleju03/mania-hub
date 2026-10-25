@@ -31,17 +31,22 @@ import { cycleModFilterMode, reverseCycleModFilterMode, type ModFilterState } fr
 import {
   BestScoresControlBar,
   KeyModeControl,
+  getAvailableGrades,
   getAvailableKeyModes,
   getRelevantMods,
   matchesBestKeyFilter,
   matchesKeyFilter,
   matchesModFilter,
+  matchesScoreGradeFilter,
   sortBestScores,
+  cycleGradeFilter,
   type BestAgeSort,
   type BestPpSort,
   type BestSort,
+  type GradeFilter,
   type KeyFilter,
 } from "../player/BestScoresControls";
+import { getDisplayedRank } from "../../lib/score";
 import type { OsuScore } from "../../lib/types";
 import { OsuLogo } from "../ui/OsuLogo";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -126,6 +131,7 @@ export function TeamProfilePage({
   // shared by Best and Recent, the mods and sort are Best's.
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [modFilter, setModFilter] = useState<ModFilterState>({});
+  const [gradeFilter, setGradeFilter] = useState<GradeFilter>({});
   const [sort, setSort] = useState<BestSort>("pp-desc");
   const [ppSort, setPpSort] = useState<BestPpSort>("pp-desc");
   const [ageSort, setAgeSort] = useState<BestAgeSort>("newest");
@@ -252,8 +258,18 @@ export function TeamProfilePage({
   }, [availableKeyModes, listIsBest, listScores]);
   const relevantMods = useMemo(() => getRelevantMods(bestScores), [bestScores]);
   const shownBest = useMemo(
-    () => sortBestScores(bestScores.filter((score) => matchesBestKeyFilter(score, keyFilter) && matchesModFilter(score, modFilter)), sort),
-    [bestScores, keyFilter, modFilter, sort],
+    () => sortBestScores(bestScores.filter((score) =>
+      matchesBestKeyFilter(score, keyFilter)
+      && matchesModFilter(score, modFilter)
+      && matchesScoreGradeFilter(score, gradeFilter)), sort),
+    [bestScores, gradeFilter, keyFilter, modFilter, sort],
+  );
+  const bestGrades = useMemo(
+    () => getAvailableGrades(
+      bestScores.filter((score) => matchesBestKeyFilter(score, keyFilter)).map(getDisplayedRank),
+      gradeFilter,
+    ),
+    [bestScores, gradeFilter, keyFilter],
   );
   const shownRecent = useMemo(
     () => (recentScores ?? []).filter((score) => matchesKeyFilter(score, keyFilter)),
@@ -653,6 +669,9 @@ export function TeamProfilePage({
               onCycleMod={(mod) => cycleMod(mod, cycleModFilterMode)}
               onReverseCycleMod={(mod) => cycleMod(mod, reverseCycleModFilterMode)}
               onClearMods={() => setModFilter({})}
+              grades={bestGrades}
+              gradeFilter={gradeFilter}
+              onCycleGrade={(grade, reverse) => setGradeFilter((prev) => cycleGradeFilter(prev, grade, reverse))}
               sort={sort}
               ppSort={ppSort}
               ageSort={ageSort}
@@ -686,7 +705,7 @@ export function TeamProfilePage({
           {tab === "best" ? (
             fullLoaded ? (
               <TeamScoreList
-                key={`${keyFilter}|${JSON.stringify(modFilter)}|${sort}`}
+                key={`${keyFilter}|${JSON.stringify(modFilter)}|${JSON.stringify(gradeFilter)}|${sort}`}
                 scores={shownBest}
                 empty={bestScores.length === 0 ? t`No top plays from this team's members yet.` : t`No scores found`}
                 onOpenDetails={setDetailScore}

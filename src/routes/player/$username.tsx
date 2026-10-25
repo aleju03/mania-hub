@@ -2,6 +2,7 @@ import { ProfileCompanion } from "../../components/supporter/Companion";
 import { builtInCompanion, type SupporterCompanion } from "../../lib/supporter-companions";
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -52,7 +53,7 @@ import { PresenceLine } from "../../components/player/LivePresence";
 import { usePlayerPresence } from "../../lib/companella-presence";
 import {
   getBeatmapKeyCount,
-  
+  getDisplayedRank,
   getScoreIdentity,
   getScoreTimeMs,
   getScoreUrl,
@@ -124,6 +125,7 @@ import {
 // the mod-filter tests import them from here.
 export { cycleModFilterMode, matchesModAcronymFilter, reverseCycleModFilterMode, type ModFilterMode };
 import { preservePlayerCountryFlagState } from "../../lib/player-profile-navigation";
+import { getTrackedPlayRank } from "../../lib/tracked-play-score";
 import { ScoreDetailModal, ScoreRow, TrackedScoreRow, getScoreRowLayout, type BestListRow } from "../../components/player/ScoreRows";
 import { ScorePlayDetailModal } from "../../components/player/ScorePlayDetailModal";
 import { PlayerActivityPanel } from "../../components/player/ActivityPanel";
@@ -132,17 +134,22 @@ import {
   BestScoresControlBar,
   KeyModeControl,
   getAvailableKeyModes,
+  getAvailableGrades,
   getRelevantMods,
   getSortablePp,
   matchesBestKeyFilter,
   matchesKeyFilter,
+  matchesGradeFilter,
   matchesModFilter,
+  matchesScoreGradeFilter,
   selectVisibleKeyModes,
   sortBestScores,
   type BestAgeSort,
   type BestPpSort,
   type BestSort,
+  type GradeFilter,
   type KeyFilter,
+  cycleGradeFilter,
 } from "../../components/player/BestScoresControls";
 // The keymode helpers keep their old home in the route's public surface: the
 // best-list tests import them from here.
@@ -325,11 +332,14 @@ export type PlayerLoaderData = {
 type PlayerBestFilterMetadata = {
   keyModes: string[];
   mods: string[];
+  /** Grade chip keys over the whole window, so the chips do not wait on it. */
+  grades: string[];
 };
 
 const EMPTY_PLAYER_BEST_FILTERS: PlayerBestFilterMetadata = {
   keyModes: [],
   mods: [],
+  grades: [],
 };
 const NO_SCORES: OsuScore[] = [];
 
@@ -581,6 +591,10 @@ export function bestListRowMatchesModFilter(row: BestListRow, modFilter: ModFilt
     : matchesModAcronymFilter(row.play.mods, modFilter);
 }
 
+function bestListRowRank(row: BestListRow): string {
+  return row.kind === "score" ? getDisplayedRank(row.score) : getTrackedPlayRank(row.play);
+}
+
 
 function hasProjectedOnlyProfileStats(user: OsuUser): boolean {
   const stats = user.statistics;
@@ -612,6 +626,7 @@ function buildPlayerBestFilterMetadata(scores: OsuScore[]): PlayerBestFilterMeta
   return {
     keyModes: getAvailableKeyModes(scores),
     mods: getRelevantMods(scores),
+    grades: getAvailableGrades(scores.map(getDisplayedRank), {}),
   };
 }
 
@@ -1068,6 +1083,7 @@ export function PlayerProfilePage({
   const playerTabs = PLAYER_TABS;
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [bestModFilter, setBestModFilter] = useState<ModFilterState>({});
+  const [bestGradeFilter, setBestGradeFilter] = useState<GradeFilter>({});
   const [bestSort, setBestSort] = useState<BestSort>("pp-desc");
   const [bestPpSort, setBestPpSort] = useState<BestPpSort>("pp-desc");
   const [bestAgeSort, setBestAgeSort] = useState<BestAgeSort>("newest");
@@ -1784,7 +1800,7 @@ export function PlayerProfilePage({
 
   useEffect(() => {
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
-  }, [bestModFilter, bestSort]);
+  }, [bestGradeFilter, bestModFilter, bestSort]);
 
   const handleShowMore = useCallback(() => {
     if (tab === "best") {
@@ -1987,7 +2003,8 @@ export function PlayerProfilePage({
     tab === "best" ? matchesBestKeyFilter(score, keyFilter) : matchesKeyFilter(score, keyFilter));
   const filteredScores = tab === "best"
     ? sortBestScores(
-      keyFilteredScores.filter((score) => matchesModFilter(score, bestModFilter)),
+      keyFilteredScores.filter((score) =>
+        matchesModFilter(score, bestModFilter) && matchesScoreGradeFilter(score, bestGradeFilter)),
       bestSort,
     )
     : keyFilteredScores;
@@ -2013,8 +2030,23 @@ export function PlayerProfilePage({
     ).slice(0, KEY_PP_LIST_LIMIT)
     : null;
   const bestListRows: BestListRow[] = keymodeListRows
-    ? sortBestListRows(keymodeListRows.filter((row) => bestListRowMatchesModFilter(row, bestModFilter)), bestSort)
+    ? sortBestListRows(
+      keymodeListRows.filter((row) =>
+        bestListRowMatchesModFilter(row, bestModFilter) && matchesGradeFilter(bestListRowRank(row), bestGradeFilter)),
+      bestSort,
+    )
     : filteredScores.map((score) => ({ kind: "score" as const, score }));
+  /* "All" reads its chips off the whole window the loader saw, since the list
+     first paints from a trimmed slice of it and a chip would pop in seconds
+     later. A keymode list reads its own rows, tracked plays included. */
+  const bestGrades = tab === "best"
+    ? getAvailableGrades(
+      keymodeListRows
+        ? keymodeListRows.map(bestListRowRank)
+        : [...(shownBestFilters.grades ?? []), ...keyFilteredScores.map(getDisplayedRank)],
+      bestGradeFilter,
+    )
+    : [];
   const visibleRows = bestListRows.slice(0, currentVisibleCount);
   const scoreRowLayout = getScoreRowLayout(visibleRows);
   // Navigation first renders without a user. Keep both rating hooks above
@@ -2932,6 +2964,9 @@ export function PlayerProfilePage({
               onCycleMod={cycleBestMod}
               onReverseCycleMod={reverseCycleBestMod}
               onClearMods={() => setBestModFilter({})}
+              grades={bestGrades}
+              gradeFilter={bestGradeFilter}
+              onCycleGrade={(grade, reverse) => setBestGradeFilter((prev) => cycleGradeFilter(prev, grade, reverse))}
               sort={bestSort}
               ppSort={bestPpSort}
               ageSort={bestAgeSort}
@@ -3606,8 +3641,11 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           }))}
         />
       ) : null}
-      {courseScore ? (
-        <ScoreDetailModal score={courseScore} onClose={() => setCourseScore(null)} />
+      {/* Opened from the dan modal, which renders into <body>, so this has to
+          follow it there to stack on top. */}
+      {courseScore && typeof document !== "undefined" ? createPortal(
+        <ScoreDetailModal score={courseScore} onClose={() => setCourseScore(null)} />,
+        document.body,
       ) : null}
     </div>
   );

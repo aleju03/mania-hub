@@ -1,8 +1,9 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { motion } from "framer-motion";
 
 import { getI18n } from "../lib/i18n";
 import { useLocale } from "../lib/locale-context";
@@ -10,8 +11,12 @@ import { useHasHydrated } from "../store";
 import { track } from "../lib/analytics";
 import { PageHeader } from "../components/layout/PageHeader";
 import { MapDetailModal } from "../components/maps/MapDetailModal";
-import { loadLiveMapSearchEntry, prefetchLiveMapSearchEntry, type LiveMapSearchEntry } from "../lib/live-backend";
+import { loadLiveMapSearchEntry, type LiveMapSearchEntry } from "../lib/live-backend";
 import { pageSeo } from "../lib/seo";
+import { ChartTitle, OpenChartContext, Rating } from "../components/prism/chart-rows";
+import { PrismUpdates } from "../components/prism/PrismUpdates";
+
+const PrismVisualizer = lazy(() => import("../components/prism/PrismVisualizer"));
 
 /*
  * /news/prism: the Prism announcement. The numbers are each chart's Overall
@@ -20,7 +25,23 @@ import { pageSeo } from "../lib/seo";
  * stay what the article says after later versions move them.
  */
 
+interface PrismNewsSearch {
+  tab?: "visualizer" | "updates";
+  map?: number;
+  rate?: number;
+}
+
+const VISUALIZER_RATES = [0.75, 1, 1.5];
+
 export const Route = createFileRoute("/news_/prism")({
+  validateSearch: (search: Record<string, unknown>): PrismNewsSearch => {
+    const map = Number(search.map), rate = Number(search.rate);
+    return {
+      tab: search.tab === "visualizer" || search.tab === "updates" ? search.tab : undefined,
+      map: Number.isInteger(map) && map > 0 && map < 100_000_000 ? map : undefined,
+      rate: VISUALIZER_RATES.includes(rate) && rate !== 1 ? rate : undefined,
+    };
+  },
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return pageSeo({
@@ -81,64 +102,6 @@ const PRISM_SKILLSETS: Array<[MessageDescriptor, number]> = [
   [msg`Overall`, 49.4], [msg`Chordstream`, 49.4], [msg`Bracket`, 43.1], [msg`Jack`, 36.0], [msg`Technical`, 48.2], [msg`Delay`, 47.3], [msg`LN`, 47.8],
 ];
 
-// Sets with no list cover on osu!.
-const FALLBACK_COVER = "/images/headers/generic.jpg";
-
-function coverUrl(beatmapsetId: number): string {
-  return `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/list.jpg`;
-}
-
-function Cover({ beatmapsetId }: { beatmapsetId: number }) {
-  const ref = useRef<HTMLImageElement>(null);
-  const [failed, setFailed] = useState(false);
-  // A cover that 404s during the server render fails before onError is attached.
-  useEffect(() => {
-    const img = ref.current;
-    if (img?.complete && img.naturalWidth === 0) setFailed(true);
-  }, []);
-  return (
-    <img
-      ref={ref}
-      src={failed ? FALLBACK_COVER : coverUrl(beatmapsetId)}
-      alt=""
-      width={48}
-      height={48}
-      onError={() => setFailed(true)}
-      className="h-12 w-12 shrink-0 rounded object-cover"
-    />
-  );
-}
-
-/** Opens a chart's map info over the article. */
-const OpenChartContext = createContext<(beatmapId: number) => void>(() => {});
-
-function ChartTitle({ chart }: { chart: { beatmapId: number; beatmapsetId: number; title: string; version: string } }) {
-  const openChart = useContext(OpenChartContext);
-  return (
-    <button
-      type="button"
-      onClick={() => openChart(chart.beatmapId)}
-      onPointerEnter={() => prefetchLiveMapSearchEntry(chart.beatmapId)}
-      className="flex w-full min-w-0 cursor-pointer items-center gap-3 text-left transition hover:brightness-110"
-    >
-      <Cover beatmapsetId={chart.beatmapsetId} />
-      <div className="min-w-0">
-        <div className="truncate text-[14px] font-semibold text-white">{chart.title}</div>
-        <div className="truncate text-[12px] text-osu-f1">{chart.version}</div>
-      </div>
-    </button>
-  );
-}
-
-function Rating({ engine, value, strong }: { engine: string; value: string; strong?: boolean }) {
-  return (
-    <div className="w-[68px] shrink-0 text-right">
-      <div className="text-[11px] text-osu-f1">{engine}</div>
-      <div className={strong ? "text-[20px] font-semibold tabular-nums text-white" : "text-[20px] tabular-nums text-osu-f1"}>{value}</div>
-    </div>
-  );
-}
-
 function ChartComparison({ charts }: { charts: ExampleChart[] }) {
   return (
     <div className="my-6 divide-y divide-white/[0.07] rounded-lg bg-osu-b4/40">
@@ -192,7 +155,39 @@ function Section({ title, children }: { title: ReactNode; children: ReactNode })
   );
 }
 
+function PrismTabs({ tab }: { tab: PrismNewsSearch["tab"] }) {
+  const tabs: Array<{ value: PrismNewsSearch["tab"]; label: ReactNode }> = [
+    { value: undefined, label: <Trans>Article</Trans> },
+    { value: "updates", label: <Trans>Updates</Trans> },
+    { value: "visualizer", label: <Trans>Visualizer</Trans> },
+  ];
+  return (
+    <div className="flex justify-center border-b border-osu-b3/25 px-4 sm:px-5">
+      {tabs.map((item) => (
+        <Link
+          key={item.value ?? "article"}
+          to="/news/prism"
+          search={{ tab: item.value }}
+          className={`relative shrink-0 whitespace-nowrap px-4 py-3 text-[12px] font-semibold transition-colors duration-[120ms] ${tab === item.value ? "text-white" : "text-osu-f1 hover:text-osu-l2"}`}
+        >
+          {item.label}
+          {tab === item.value ? (
+            <motion.span
+              layoutId="prism-news-tab-indicator"
+              className="absolute inset-x-2.5 bottom-0 h-[2px] rounded-full bg-osu-h1"
+              transition={{ type: "spring", stiffness: 420, damping: 34 }}
+            />
+          ) : null}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 function PrismAnnouncement() {
+  const search = Route.useSearch();
+  const tab = search.tab;
+  const navigate = useNavigate({ from: "/news/prism" });
   const locale = useLocale();
   const [detail, setDetail] = useState<LiveMapSearchEntry | null>(null);
   const hydrated = useHasHydrated();
@@ -223,6 +218,27 @@ function PrismAnnouncement() {
       <div className="flex-1">
         <PageHeader iconSrc="/images/icons/prism.svg" title="Prism" />
         <div className="bg-osu-b5 min-h-[80vh]">
+          <PrismTabs tab={tab} />
+          {tab === "visualizer" ? (
+            <div className="mx-auto max-w-5xl px-4 pt-5 pb-8 sm:px-5 sm:pb-12">
+              {hydrated ? (
+                <Suspense fallback={null}>
+                  <PrismVisualizer
+                    beatmapId={search.map ?? null}
+                    rate={search.rate ?? 1}
+                    onChange={({ beatmapId, rate }) => void navigate({
+                      search: { tab: "visualizer", map: beatmapId ?? undefined, rate: rate === 1 ? undefined : rate },
+                      replace: true,
+                    })}
+                  />
+                </Suspense>
+              ) : null}
+            </div>
+          ) : tab === "updates" ? (
+            <div className="mx-auto max-w-2xl px-4 pt-4 pb-8 sm:px-5 sm:pb-12">
+              <PrismUpdates />
+            </div>
+          ) : (
           <article className="mx-auto max-w-2xl px-4 pt-4 pb-8 sm:px-5 sm:pb-12">
             <div className="text-[12px] text-osu-f1">{published}</div>
             <h1 className="mt-2 flex items-center gap-3 text-2xl font-semibold leading-tight text-white sm:text-3xl">
@@ -333,6 +349,7 @@ function PrismAnnouncement() {
             </Section>
             <div ref={endRef} />
           </article>
+          )}
         </div>
         {detail ? <MapDetailModal entry={detail} onClose={() => setDetail(null)} /> : null}
       </div>

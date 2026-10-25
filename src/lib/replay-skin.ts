@@ -67,6 +67,10 @@ export interface ReplaySkinImageAsset {
   path?: string;
   width?: number;
   height?: number;
+  // The art's height before the importer cropped a tall strip to fit the GPU
+  // (width/height describe the cropped texture). Only set on cropped strips;
+  // lazer sizes a body by its full height, so the cropped one alone is wrong.
+  sourceHeight?: number;
   scale?: number;
   // The rest of an animated element ("name-1", "name-2", ...); the asset
   // itself is frame 0. Only note art carries these: stable animates taps,
@@ -231,6 +235,11 @@ export interface ReplaySkinKeymodeProfile {
   // cascades from the head end. Empty means nothing was declared anywhere,
   // which every renderer reads as all-1.
   noteBodyStyles: number[];
+  // The skin carries lazer's own files, so its LN bodies are drawn lazer's
+  // way: any NoteBodyStyle but 0 stretches one copy of the art to 32800 units
+  // from the tail end instead of cascading it at natural aspect, and the body
+  // runs half a tail cap past the end line. Same value in every keymode.
+  lazerBodies: boolean;
   // Multiplier on the combo counter's drawn size, from the lazer skin's
   // MainHUDComponents.json (LegacyManiaComboCounter Scale). 1 means the skin
   // never resized it.
@@ -454,6 +463,7 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   comboHidden: false,
   keysUnderNotes: false,
   noteBodyStyles: [],
+  lazerBodies: false,
   comboScale: 1,
   noteHeightScale: REPLAY_SKIN_DEFAULT_COLUMN_WIDTH,
   assets: EMPTY_REPLAY_SKIN_ASSETS,
@@ -654,6 +664,7 @@ function normalizeImageAsset(value: unknown, allowFrames = false): ReplaySkinIma
   if (!src || !name) return undefined;
   const width = Math.round(Number(raw.width));
   const height = Math.round(Number(raw.height));
+  const sourceHeight = Math.round(Number(raw.sourceHeight));
   const scale = Number(raw.scale);
   const asset: ReplaySkinImageAsset = {
     name,
@@ -661,6 +672,7 @@ function normalizeImageAsset(value: unknown, allowFrames = false): ReplaySkinIma
     path: typeof raw.path === "string" && raw.path.trim() ? raw.path.trim().slice(0, 320) : undefined,
     width: Number.isFinite(width) && width > 0 ? Math.min(4096, width) : undefined,
     height: Number.isFinite(height) && height > 0 ? Math.min(4096, height) : undefined,
+    sourceHeight: Number.isFinite(sourceHeight) && sourceHeight > 0 ? Math.min(65536, sourceHeight) : undefined,
     scale: Number.isFinite(scale) && scale > 0 ? Math.min(4, scale) : undefined,
   };
   // Frames nest one level: a frame of a frame is nothing stable has.
@@ -785,6 +797,7 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     comboHidden: raw.comboHidden === true,
     keysUnderNotes: raw.keysUnderNotes === true,
     noteBodyStyles: normalizeNumberList(raw.noteBodyStyles, 0, 2),
+    lazerBodies: raw.lazerBodies === true,
     comboScale: normalizeComboScale(raw.comboScale),
     noteHeightScale: normalizeNoteHeightScale(raw.noteHeightScale ?? fallback?.noteHeightScale, smallestColumnWidth),
     assets: normalizeKeymodeAssets(raw.assets),
@@ -1206,6 +1219,7 @@ function compactKeymodeProfileV3(profile: ReplaySkinKeymodeProfile): Record<stri
   if (profile.comboPosition != null) out.s = profile.comboPosition;
   if (profile.comboHidden) out.t = 1;
   if (profile.noteBodyStyles.length > 0) out.w = profile.noteBodyStyles;
+  if (profile.lazerBodies) out.v = 1;
   if (profile.noteHeightScale !== DEFAULT_REPLAY_SKIN_PROFILE.noteHeightScale) out.l = profile.noteHeightScale;
   const hasAssets = profile.assets.columns.length > 0
     || profile.assets.combo !== null
@@ -1235,6 +1249,7 @@ function expandKeymodeProfileV3(value: unknown): Record<string, unknown> {
     comboPosition: raw.s,
     comboHidden: raw.t === 1,
     noteBodyStyles: raw.w,
+    lazerBodies: raw.v === 1,
     noteHeightScale: raw.l,
     assets: raw.m,
   };

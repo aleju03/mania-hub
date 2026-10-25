@@ -24,7 +24,7 @@ vi.mock("../lib/og-render", async (original) => ({
 const resolved = {
   userId: 101, username: "tester", enabledTypes: ["insights"] as const,
   styles: null, skillsKeyCount: null, timeZone: null,
-  versions: { insights: "one", maniacard: "one", skills: "one", dan: "one", goals: "one" },
+  versions: { insights: "one", maniacard: "one", skills: "one", dan: "one", goals: "one", activity: "one" },
 };
 const get = (Route.options as unknown as { server: { handlers: { GET: (input: {
   request: Request; params: { token: string; variant: string };

@@ -35,6 +35,38 @@ function changeColor(value: number): string {
   return value > 0 ? "text-osu-green-light" : value < 0 ? "text-osu-red-light" : "text-osu-f1";
 }
 
+/** SVG path of a monotone cubic (Fritsch-Carlson) through points sorted by x. */
+export function monotonePath(input: Array<[number, number]>): string {
+  // Readings on the same pixel column would divide by zero; the later one stands.
+  const pts: Array<[number, number]> = [];
+  for (const point of input) {
+    if (pts.length && point[0] - pts.at(-1)![0] < 0.01) pts[pts.length - 1] = point;
+    else pts.push(point);
+  }
+  if (pts.length === 0) return "";
+  let path = `M${pts[0][0]},${pts[0][1]}`;
+  if (pts.length === 1) return path;
+  const secants = pts.slice(1).map((point, i) => (point[1] - pts[i][1]) / (point[0] - pts[i][0]));
+  const tangents = pts.map((_, i) => {
+    if (i === 0) return secants[0];
+    if (i === pts.length - 1) return secants[i - 1];
+    const before = secants[i - 1];
+    const after = secants[i];
+    if (before * after <= 0) return 0;
+    const h0 = pts[i][0] - pts[i - 1][0];
+    const h1 = pts[i + 1][0] - pts[i][0];
+    const blend = (before * h1 + after * h0) / (h0 + h1);
+    return Math.sign(before) * Math.min(Math.abs(before), Math.abs(after), Math.abs(blend) / 2) * 2;
+  });
+  for (let i = 1; i < pts.length; i += 1) {
+    const [x0, y0] = pts[i - 1];
+    const [x1, y1] = pts[i];
+    const third = (x1 - x0) / 3;
+    path += `C${x0 + third},${y0 + tangents[i - 1] * third} ${x1 - third},${y1 - tangents[i] * third} ${x1},${y1}`;
+  }
+  return path;
+}
+
 /** The keymode's Overall since the last rating-scale change, with the rice
  * dan recorded at each reading. The skill history modal's Graph tab; its
  * Changes tab carries the full text of the notes marked along the axis. */
@@ -150,10 +182,9 @@ export function SkillHistoryGraph({ userId, keyCount, height = 200 }: { userId: 
   const x = (at: number) => PAD.left + ((at - start) / (end - start || 1)) * plotW;
   const y = (value: number) => PAD.top + (1 - (value - min) / (max - min)) * plotH;
 
-  // Ratings move in steps: each one holds until the next recompute changes it.
-  let path = `M${x(points[0].at)},${y(points[0].value)}`;
-  for (const point of points.slice(1)) path += `H${x(point.at)}V${y(point.value)}`;
-  path += `H${x(end)}`;
+  // A monotone curve through the readings: it never overshoots a reading, so
+  // the line only reaches values the player actually held.
+  const path = `${monotonePath(points.map((point) => [x(point.at), y(point.value)]))}H${x(end)}`;
 
   const ticks = overallTicks(min, max);
   const visibleNotes = notes.filter((note) => noteTime(note.date) > start && noteTime(note.date) <= end);

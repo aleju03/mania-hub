@@ -50,14 +50,15 @@ export function isPrismOnlyMsdKey(key: string): boolean {
 }
 
 // The keys the panel offers: Prism's skillsets when the key facet is exactly
-// 7K, MinaCalc's and then Prism's when no keymode is picked (each matching
+// one Prism keymode (6K, 7K or 8K), MinaCalc's and then Prism's when no keymode is picked (each matching
 // only its own keymodes), MinaCalc's otherwise.
 const PRISM_FILTER_KEYS = ["overall", "chordstream", "bracket", "jack", "technical", "speed", "ln"];
 const MINACALC_FILTER_KEYS = MSD_FILTER_KEYS.filter((key) => !PRISM_ONLY_KEYS.has(key));
 const ALL_FILTER_KEYS = [...MINACALC_FILTER_KEYS, "chordstream", "bracket", "jack", "speed"];
 
 export function isPrismKeyFacet(keys: readonly string[]): boolean {
-  return keys.length === 1 && keys[0] === "7k";
+  const match = keys.length === 1 ? /^(\d+)k$/.exec(keys[0]) : null;
+  return match != null && usesPrism(Number(match[1]));
 }
 
 export function msdFilterKeysFor(keys: readonly string[]): readonly string[] {

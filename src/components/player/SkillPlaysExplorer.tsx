@@ -1,4 +1,4 @@
-import { skillPlaySharePath } from "../../lib/skill-play-share";
+import { skillPlayShareLink } from "../../lib/skill-play-share";
 // The Skills tab's plays explorer: the rated plays behind a profile, listed
 // rather than summarized.
 //
@@ -27,6 +27,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerDanEvidenceDirect,
   fetchLivePlayerSkillPlaysDirect,
+  isLocalChartId,
   loadLiveMapSearchEntry,
   peekLiveMapSearchEntry,
   prefetchLiveMapSearchEntry,
@@ -44,6 +45,15 @@ import { DAN_SKILLSET_META, OVERALL_AXIS_META, skillModeEntries, type SkillAxisM
 import { beatmapStatusPill } from "#/lib/beatmap-status";
 import { Skeleton } from "#/components/ui/LoadingSkeleton";
 import { ModFilterChip } from "#/components/ui/ModFilterChip";
+import {
+  GradeFilterChip,
+  getAvailableGrades,
+  cycleGradeFilter,
+  getGradeFilterKey,
+  matchesGradeKeyFilter,
+  type GradeFilter,
+} from "./BestScoresControls";
+import { getManiaGradeFromAccuracy } from "#/lib/score";
 import { MapDetailModal, accuracyCurrencyLabel, type MapDetailPlayContext } from "#/components/maps/MapDetailModal";
 import { DanMark } from "./DanMark";
 import {
@@ -314,6 +324,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   const [hideRanked, setHideRanked] = useState(storedPrefs.hideRanked);
   const [hideGraveyard, setHideGraveyard] = useState(storedPrefs.hideGraveyard);
   const [hideLoved, setHideLoved] = useState(storedPrefs.hideLoved);
+  const [hideLocal, setHideLocal] = useState(storedPrefs.hideLocal);
   const [maxPerChart, setMaxPerChart] = useState<number>(storedPrefs.maxPerChart);
   const [showRejected, setShowRejected] = useState(storedPrefs.showRejected);
   const [unratedSort, setUnratedSort] = useState<UnratedSortKey>(storedPrefs.unratedSort);
@@ -321,6 +332,9 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   // list ("only my rate-up plays"), not a way the reader likes this panel set
   // up, and a chip left on from last visit would silently thin a new one.
   const [modFilter, setModFilter] = useState<ModFilterState>({});
+  // Not stored either, for the same reason.
+  const [gradeFilter, setGradeFilter] = useState<GradeFilter>({});
+  const [cohortGrades, setCohortGrades] = useState<string[]>([]);
   // Reported by whichever list is mounted, from the cohort it actually holds,
   // so no chip is offered for a mod nothing in view was played with.
   const [availableMods, setAvailableMods] = useState<string[]>([]);
@@ -384,6 +398,11 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
     if (mods.length === 0) return;
     setAvailableMods((current) => (current.length === mods.length && current.every((mod, index) => mod === mods[index]) ? current : mods));
   }, []);
+  const handleAvailableGrades = useCallback((grades: string[]) => {
+    if (grades.length === 0) return;
+    setCohortGrades((current) => (current.length === grades.length && current.every((grade, index) => grade === grades[index]) ? current : grades));
+  }, []);
+  const availableGrades = getAvailableGrades(cohortGrades, gradeFilter);
   // A chip that stopped being on offer (another keymode, the other view) must
   // not keep filtering from off screen, where nothing could switch it back.
   useEffect(() => {
@@ -397,9 +416,11 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   // closed: how many of them are currently thinning the list.
   const activeFilterCount = (maxPerChart !== 0 ? 1 : 0)
     + Object.keys(modFilter).length
+    + Object.keys(gradeFilter).length
     + (hideRanked ? 1 : 0)
     + (hideGraveyard ? 1 : 0)
     + (hideLoved ? 1 : 0)
+    + (hideLocal ? 1 : 0)
     + (view !== "unrated" && sort === "recent" && !showRejected ? 1 : 0);
 
   const cycleMod = useCallback((mod: string, reverse: boolean) => {
@@ -414,8 +435,8 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   // effects above make: what is stored is the state the reader was last left
   // looking at, which is the only thing worth restoring.
   useEffect(() => {
-    writeSkillPlaysPrefs({ keyCount, axis, side, sort, hideRanked, hideGraveyard, hideLoved, maxPerChart, showRejected, unratedSort });
-  }, [axis, hideGraveyard, hideLoved, hideRanked, keyCount, maxPerChart, showRejected, side, sort, unratedSort]);
+    writeSkillPlaysPrefs({ keyCount, axis, side, sort, hideRanked, hideGraveyard, hideLoved, hideLocal, maxPerChart, showRejected, unratedSort });
+  }, [axis, hideGraveyard, hideLocal, hideLoved, hideRanked, keyCount, maxPerChart, showRejected, side, sort, unratedSort]);
 
   // Which axes this keymode actually rates, so the picker never offers a list
   // that would come back empty. Overall leads: it is the one axis every
@@ -609,6 +630,18 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
               <ModsControl mods={availableMods} modFilter={modFilter} onCycle={cycleMod} />
             </FilterRow>
           ) : null}
+          {availableGrades.length > 1 || Object.keys(gradeFilter).length > 0 ? (
+            <FilterRow label={t`Grade`}>
+              {availableGrades.map((grade) => (
+                <GradeFilterChip
+                  key={grade}
+                  grade={grade}
+                  mode={gradeFilter[grade]}
+                  onCycle={(reverse) => setGradeFilter((current) => cycleGradeFilter(current, grade, reverse))}
+                />
+              ))}
+            </FilterRow>
+          ) : null}
           {/* The MSD and dan lists have plays they turned away, and only their
               Recent order lists them, so only there is the second on offer. */}
           <FilterRow label={t`Hide`}>
@@ -624,7 +657,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
                 {
                   key: "graveyard",
                   label: t`graveyard`,
-                  title: t`Hide plays on graveyarded charts`,
+                  title: t`Hide plays on graveyarded, WIP and pending charts`,
                   pressed: hideGraveyard,
                   onChange: () => setHideGraveyard((current) => !current),
                 },
@@ -634,6 +667,13 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
                   title: t`Hide plays on loved charts`,
                   pressed: hideLoved,
                   onChange: () => setHideLoved((current) => !current),
+                },
+                {
+                  key: "local",
+                  label: t`unsubmitted`,
+                  title: t`Hide plays on charts that are not on osu!`,
+                  pressed: hideLocal,
+                  onChange: () => setHideLocal((current) => !current),
                 },
                 ...(view !== "unrated" && sort === "recent"
                   ? [{
@@ -677,11 +717,14 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
           hideRanked={hideRanked}
           hideGraveyard={hideGraveyard}
           hideLoved={hideLoved}
+          hideLocal={hideLocal}
           maxPerChart={maxPerChart}
           showRejected={showRejected}
           modFilter={modFilter}
+          gradeFilter={gradeFilter}
           refreshNonce={refreshNonce}
           onAvailableMods={handleAvailableMods}
+          onAvailableGrades={handleAvailableGrades}
           onSettled={onListSettled}
           onOpen={openDetail}
         />
@@ -694,10 +737,13 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
           hideRanked={hideRanked}
           hideGraveyard={hideGraveyard}
           hideLoved={hideLoved}
+          hideLocal={hideLocal}
           maxPerChart={maxPerChart}
           modFilter={modFilter}
+          gradeFilter={gradeFilter}
           refreshNonce={refreshNonce}
           onAvailableMods={handleAvailableMods}
+          onAvailableGrades={handleAvailableGrades}
           onSettled={onListSettled}
           onOpen={openDetail}
         />
@@ -710,11 +756,14 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
           hideRanked={hideRanked}
           hideGraveyard={hideGraveyard}
           hideLoved={hideLoved}
+          hideLocal={hideLocal}
           maxPerChart={maxPerChart}
           showRejected={showRejected}
           modFilter={modFilter}
+          gradeFilter={gradeFilter}
           refreshNonce={refreshNonce}
           onAvailableMods={handleAvailableMods}
+          onAvailableGrades={handleAvailableGrades}
           onSettled={onListSettled}
           onOpen={openDetail}
         />
@@ -735,7 +784,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
             mods: playModAcronyms(detail.play),
             daOd: detail.play.daOd ?? null,
             scoreId: detail.play.scoreId,
-            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, view === "unrated" ? "Overall" : detail.dan ? `dan:${detail.dan.family ?? side}` : axis),
+            sharePath: skillPlayShareLink(username, detail.play, view === "unrated" ? "Overall" : detail.dan ? `dan:${detail.dan.family ?? side}` : axis),
             score: detail.play.score,
             skillRatings: detail.play.skillRatings,
             dan: detail.dan,
@@ -765,11 +814,14 @@ function MsdPlaysList({
   hideRanked,
   hideGraveyard,
   hideLoved,
+  hideLocal,
   maxPerChart,
   showRejected,
   modFilter,
+  gradeFilter,
   refreshNonce,
   onAvailableMods,
+  onAvailableGrades,
   onSettled,
   onOpen,
 }: {
@@ -782,12 +834,15 @@ function MsdPlaysList({
   hideRanked: boolean;
   hideGraveyard: boolean;
   hideLoved: boolean;
+  hideLocal: boolean;
   maxPerChart: number;
   showRejected: boolean;
   modFilter: ModFilterState;
+  gradeFilter: GradeFilter;
   /** Bumped by the toolbar's refresh; a change fetches past every cache. */
   refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
+  onAvailableGrades: (grades: string[]) => void;
   onSettled?: (() => void) | undefined;
   onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string; dan?: MapDetailPlayContext["dan"] }) => void;
 }) {
@@ -847,7 +902,7 @@ function MsdPlaysList({
   }, [axis, cacheKey, keyCount, listIdentity, onSettled, refreshNonce, sort, userId]);
 
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLoved, hideRanked, maxPerChart, showRejected, modKey]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, showRejected, modKey, gradeFilter]);
 
   // The chips on offer come from the whole cohort, not from what the other
   // filters left, so narrowing by mod never removes the chip that would undo it.
@@ -859,6 +914,8 @@ function MsdPlaysList({
     [cohort],
   );
   useEffect(() => { onAvailableMods(cohortMods); }, [cohortMods, onAvailableMods]);
+  const grades = useMemo(() => cohortGradeKeys(cohort), [cohort]);
+  useEffect(() => { onAvailableGrades(grades); }, [grades, onAvailableGrades]);
 
   const filtered = useMemo(() => {
     const seenPerChart = new Map<number, number>();
@@ -866,10 +923,9 @@ function MsdPlaysList({
       // A play still analyzing is waiting, not turned away: the toggle that
       // hides refusals leaves it in place.
       if (!showRejected && play.ratingExcluded && play.ratingExclusionReason !== "pending_calibration") return false;
-      if (hideRanked && isRankedStatus(play.beatmapStatus ?? null)) return false;
-      if (hideGraveyard && play.beatmapStatus === "graveyard") return false;
-      if (hideLoved && play.beatmapStatus === "loved") return false;
+      if (hiddenByChart(play, { hideRanked, hideGraveyard, hideLoved, hideLocal })) return false;
       if (!matchesPlayModFilter(play, modFilter)) return false;
+      if (!matchesPlayGradeFilter(play, gradeFilter)) return false;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(play.beatmapId) ?? 0;
         if (seen >= maxPerChart) return false;
@@ -877,7 +933,7 @@ function MsdPlaysList({
       }
       return true;
     });
-  }, [cohort, hideGraveyard, hideLoved, hideRanked, maxPerChart, modFilter, showRejected]);
+  }, [cohort, gradeFilter, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, modFilter, showRejected]);
   const items = filtered.slice(0, visibleLimit);
 
   const axisLabel = i18n._(axisMeta.labelMsg);
@@ -1012,11 +1068,14 @@ function DanPlaysList({
   hideRanked,
   hideGraveyard,
   hideLoved,
+  hideLocal,
   maxPerChart,
   showRejected,
   modFilter,
+  gradeFilter,
   refreshNonce,
   onAvailableMods,
+  onAvailableGrades,
   onSettled,
   onOpen,
 }: {
@@ -1027,12 +1086,15 @@ function DanPlaysList({
   hideRanked: boolean;
   hideGraveyard: boolean;
   hideLoved: boolean;
+  hideLocal: boolean;
   maxPerChart: number;
   showRejected: boolean;
   modFilter: ModFilterState;
+  gradeFilter: GradeFilter;
   /** Bumped by the toolbar's refresh; a change fetches past every cache. */
   refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
+  onAvailableGrades: (grades: string[]) => void;
   onSettled?: (() => void) | undefined;
   onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string; dan?: MapDetailPlayContext["dan"] }) => void;
 }) {
@@ -1085,7 +1147,7 @@ function DanPlaysList({
   }, [cacheKey, keyCount, listIdentity, onSettled, refreshNonce, side, sort, userId]);
 
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLoved, hideRanked, maxPerChart, showRejected, modKey]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, showRejected, modKey, gradeFilter]);
 
   const cohortMods = useMemo(
     () => relevantModFilterKeys(cohort.flatMap((row) => {
@@ -1095,16 +1157,17 @@ function DanPlaysList({
     [cohort],
   );
   useEffect(() => { onAvailableMods(cohortMods); }, [cohortMods, onAvailableMods]);
+  const grades = useMemo(() => cohortGradeKeys(cohort.map((row) => row.play)), [cohort]);
+  useEffect(() => { onAvailableGrades(grades); }, [grades, onAvailableGrades]);
 
   const { rows, hidden } = useMemo(() => {
     const seenPerChart = new Map<number, number>();
     const kept: DanRow[] = [];
     for (const row of cohort) {
       if (!showRejected && row.kind === "rejected") continue;
-      if (hideRanked && isRankedStatus(row.play.beatmapStatus ?? null)) continue;
-      if (hideGraveyard && row.play.beatmapStatus === "graveyard") continue;
-      if (hideLoved && row.play.beatmapStatus === "loved") continue;
+      if (hiddenByChart(row.play, { hideRanked, hideGraveyard, hideLoved, hideLocal })) continue;
       if (!matchesPlayModFilter(row.play, modFilter)) continue;
+      if (!matchesPlayGradeFilter(row.play, gradeFilter)) continue;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(row.play.beatmapId) ?? 0;
         if (seen >= maxPerChart) continue;
@@ -1113,7 +1176,7 @@ function DanPlaysList({
       kept.push(row);
     }
     return { rows: kept, hidden: cohort.length - kept.length };
-  }, [cohort, hideGraveyard, hideLoved, hideRanked, maxPerChart, showRejected, modFilter]);
+  }, [cohort, gradeFilter, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, showRejected, modFilter]);
   const visibleRows = rows.slice(0, visibleLimit);
 
   return (
@@ -1476,10 +1539,13 @@ function UnratedPlaysList({
   hideRanked,
   hideGraveyard,
   hideLoved,
+  hideLocal,
   maxPerChart,
   modFilter,
+  gradeFilter,
   refreshNonce,
   onAvailableMods,
+  onAvailableGrades,
   onSettled,
   onOpen,
 }: {
@@ -1490,11 +1556,14 @@ function UnratedPlaysList({
   hideRanked: boolean;
   hideGraveyard: boolean;
   hideLoved: boolean;
+  hideLocal: boolean;
   maxPerChart: number;
   modFilter: ModFilterState;
+  gradeFilter: GradeFilter;
   /** Bumped by the toolbar's refresh; a change fetches past every cache. */
   refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
+  onAvailableGrades: (grades: string[]) => void;
   onSettled?: (() => void) | undefined;
   onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string; dan?: MapDetailPlayContext["dan"] }) => void;
 }) {
@@ -1543,7 +1612,7 @@ function UnratedPlaysList({
   }, [cacheKey, keyCount, listIdentity, onSettled, refreshNonce, sort, unratedSort, userId]);
 
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLoved, hideRanked, maxPerChart, modKey]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, modKey, gradeFilter]);
 
   const cohortMods = useMemo(
     () => relevantModFilterKeys(cohort.flatMap((item) => {
@@ -1553,14 +1622,15 @@ function UnratedPlaysList({
     [cohort],
   );
   useEffect(() => { onAvailableMods(cohortMods); }, [cohortMods, onAvailableMods]);
+  const grades = useMemo(() => cohortGradeKeys(cohort.map((item) => item.play)), [cohort]);
+  useEffect(() => { onAvailableGrades(grades); }, [grades, onAvailableGrades]);
 
   const filtered = useMemo(() => {
     const seenPerChart = new Map<number, number>();
     return cohort.filter((item) => {
-      if (hideRanked && isRankedStatus(item.play.beatmapStatus ?? null)) return false;
-      if (hideGraveyard && item.play.beatmapStatus === "graveyard") return false;
-      if (hideLoved && item.play.beatmapStatus === "loved") return false;
+      if (hiddenByChart(item.play, { hideRanked, hideGraveyard, hideLoved, hideLocal })) return false;
       if (!matchesPlayModFilter(item.play, modFilter)) return false;
+      if (!matchesPlayGradeFilter(item.play, gradeFilter)) return false;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(item.play.beatmapId) ?? 0;
         if (seen >= maxPerChart) return false;
@@ -1568,7 +1638,7 @@ function UnratedPlaysList({
       }
       return true;
     });
-  }, [cohort, hideGraveyard, hideLoved, hideRanked, maxPerChart, modFilter]);
+  }, [cohort, gradeFilter, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, modFilter]);
   const items = filtered.slice(0, visibleLimit);
 
   return (
@@ -2175,6 +2245,25 @@ function matchesPlayModFilter(play: LivePlayerSkillPlay, modFilter: ModFilterSta
   return !Object.values(modFilter).includes("include");
 }
 
+/** The grade the row's accuracy earns, null when the play kept no accuracy. */
+function playGradeKey(play: LivePlayerSkillPlay): string | null {
+  const grade = play.accuracy != null ? getManiaGradeFromAccuracy(play.accuracy) : null;
+  return grade ? getGradeFilterKey(grade) : null;
+}
+
+function matchesPlayGradeFilter(play: LivePlayerSkillPlay, gradeFilter: GradeFilter): boolean {
+  return matchesGradeKeyFilter(playGradeKey(play), gradeFilter);
+}
+
+function cohortGradeKeys(plays: LivePlayerSkillPlay[]): string[] {
+  const keys = new Set<string>();
+  for (const play of plays) {
+    const grade = playGradeKey(play);
+    if (grade) keys.add(grade);
+  }
+  return getAvailableGrades([...keys], {});
+}
+
 /** The filter state as a value the reset effects can depend on. */
 function modFilterKey(modFilter: ModFilterState): string {
   return Object.entries(modFilter).sort(([left], [right]) => left.localeCompare(right)).map(([mod, mode]) => `${mod}:${mode}`).join(",");
@@ -2190,6 +2279,21 @@ const RANKED_STATUSES = new Set(["ranked", "approved", "qualified"]);
 
 function isRankedStatus(status: string | null): boolean {
   return status != null && RANKED_STATUSES.has(status);
+}
+
+// osu! keeps WIP and pending charts off its leaderboards like graveyarded ones.
+const GRAVEYARD_STATUSES = new Set(["graveyard", "wip", "pending"]);
+
+/** Whether the Hide toggles take this play's chart out of the list. */
+function hiddenByChart(
+  play: Pick<LivePlayerSkillPlay, "beatmapId" | "beatmapStatus">,
+  hide: { hideRanked: boolean; hideGraveyard: boolean; hideLoved: boolean; hideLocal: boolean },
+): boolean {
+  const status = play.beatmapStatus ?? null;
+  if (hide.hideRanked && isRankedStatus(status)) return true;
+  if (hide.hideGraveyard && status != null && GRAVEYARD_STATUSES.has(status)) return true;
+  if (hide.hideLoved && status === "loved") return true;
+  return hide.hideLocal && isLocalChartId(play.beatmapId);
 }
 
 /** Rate is part of the identity: one chart can appear once per rate played. */

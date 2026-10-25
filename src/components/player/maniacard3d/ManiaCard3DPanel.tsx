@@ -155,6 +155,7 @@ export function ManiaCard3DPanel({
   const [renderError, setRenderError] = useState<string | null>(null);
   const [readySignature, setReadySignature] = useState<string | null>(null);
   const [ratingModalOpen, setRatingModalOpen] = useState(false);
+  const ratingModalOpenRef = useRef(false);
   const reducedMotion = useReducedMotion();
   const supporterLook = useSupporterLook(team ? 0 : user.id, supporterLookOverride);
   const data = useMemo(
@@ -246,7 +247,7 @@ export function ManiaCard3DPanel({
         });
         rendererRef.current = renderer;
         renderer.setSleeve(sleeveRef.current);
-        renderer.setWindowActive(isWindowActive());
+        renderer.setWindowActive(isWindowActive() && !ratingModalOpenRef.current);
 
         const resize = () => renderer?.resize();
         if (typeof ResizeObserver === "function") {
@@ -274,10 +275,14 @@ export function ManiaCard3DPanel({
   }, [sleeve]);
 
   useEffect(() => {
-    const apply = () => rendererRef.current?.setWindowActive(isWindowActive());
+    // The rating modal blurs the page over the card, and the browser redoes
+    // that blur for every frame the card draws underneath, so the card holds
+    // still while the modal is open.
+    ratingModalOpenRef.current = ratingModalOpen;
+    const apply = () => rendererRef.current?.setWindowActive(isWindowActive() && !ratingModalOpenRef.current);
     apply();
     return subscribeWindowActivity(apply);
-  }, []);
+  }, [ratingModalOpen]);
 
   useEffect(() => {
     if (loading || data.status !== "ready") {

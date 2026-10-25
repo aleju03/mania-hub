@@ -94,6 +94,7 @@ describe("player loader insights", () => {
     expect(loaderData.cachedBestFilters).toEqual({
       keyModes: ["4k", "6k"],
       mods: ["DT|NC", "HT|DC", "HD"],
+      grades: expect.any(Array),
     });
     expect(loaderData.cachedManiaCardSkills).toEqual(computeManiaSkills(bestScores, { globalPp: 13_952 }));
     expect(loaderData.cachedManiaCardSkills).not.toEqual(trimmedSkills);

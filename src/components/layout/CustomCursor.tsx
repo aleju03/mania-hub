@@ -12,6 +12,10 @@ const TRAIL_LIFETIME_MS = 240;
 const TRAIL_MIN_DISTANCE = 4;
 const SMOKE_MIN_DISTANCE = 3;
 const SMOKE_MAX_POINTS = 4000;
+/* Chromium and Firefox drop a cursor image larger than this whose box crosses
+   the edge of the page (it could pass for browser UI) and show the fallback
+   arrow instead. */
+const NATIVE_CURSOR_EDGE_LIMIT = 32;
 
 interface TrailPoint {
   x: number;
@@ -47,36 +51,39 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']") != null;
 }
 
+interface NativeCursor {
+  css: string;
+  image: HTMLCanvasElement | null;
+  size: number;
+}
+
+/* Firefox scales a cursor image by the CSS zoom of the element under it, which
+   shrinks the orb over the BBCode editor's fitted column. */
+function hasCssZoom(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const zoom = (target as Element & { currentCSSZoom?: number }).currentCSSZoom;
+  return zoom != null && Math.abs(zoom - 1) > 0.001;
+}
+
 function cursorRadius(settings: CursorSettings): number {
   return 15 * (settings.size / 100);
 }
 
 /* Let the browser move the orb as a native cursor, independently of page
-   rendering. Only the decorative trail/smoke should wait for animation frames.
-   Keep PNGs within Chromium/Firefox's 128px limit, including the pressed orb;
-   constrain the outer glow at extreme settings without shrinking the core. */
-function buildNativeCursor(settings: CursorSettings, pressScale = 1): string {
+   rendering. Only the decorative glow, trail and smoke, and the orb where the
+   native image would be dropped or rescaled, wait for animation frames.
+   The glow stays off the native image: Firefox on Windows paints its faint
+   pixels nearly black, and it would push the image past the edge limit. */
+function buildNativeCursor(settings: CursorSettings, pressScale = 1): NativeCursor {
   const radius = cursorRadius(settings) * pressScale;
-  const glowRadius = Math.min(62, radius * (1 + 1.8 * (settings.glow / 100)));
-  const size = Math.ceil((glowRadius * 2 + 4) / 2) * 2;
+  const size = Math.ceil((radius * 1.6 + 2) / 2) * 2;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const context = canvas.getContext("2d");
-  if (!context) return "auto";
+  if (!context) return { css: "auto", image: null, size: 0 };
   const c = size / 2;
   const color = settings.color;
-
-  if (settings.glow > 0) {
-    const glow = context.createRadialGradient(c, c, 0, c, c, glowRadius);
-    glow.addColorStop(0, withAlpha(color, 0.5));
-    glow.addColorStop(0.45, withAlpha(color, 0.16));
-    glow.addColorStop(1, withAlpha(color, 0));
-    context.fillStyle = glow;
-    context.beginPath();
-    context.arc(c, c, glowRadius, 0, Math.PI * 2);
-    context.fill();
-  }
 
   const bloom = context.createRadialGradient(c, c, 0, c, c, radius * 0.8);
   bloom.addColorStop(0, withAlpha(color, 0.95));
@@ -96,7 +103,29 @@ function buildNativeCursor(settings: CursorSettings, pressScale = 1): string {
   context.arc(c, c, radius * 0.34, 0, Math.PI * 2);
   context.fill();
 
-  return `url("${canvas.toDataURL("image/png")}") ${c} ${c}, auto`;
+  return { css: `url("${canvas.toDataURL("image/png")}") ${c} ${c}, auto`, image: canvas, size };
+}
+
+function buildGlowSprite(settings: CursorSettings, scale: number): { canvas: HTMLCanvasElement; size: number } | null {
+  if (settings.glow <= 0) return null;
+  const glowRadius = cursorRadius(settings) * (1 + 1.8 * (settings.glow / 100));
+  const size = Math.ceil(glowRadius * 2);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(size * scale);
+  canvas.height = Math.ceil(size * scale);
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.scale(scale, scale);
+  const c = size / 2;
+  const glow = context.createRadialGradient(c, c, 0, c, c, glowRadius);
+  glow.addColorStop(0, withAlpha(settings.color, 0.5));
+  glow.addColorStop(0.45, withAlpha(settings.color, 0.16));
+  glow.addColorStop(1, withAlpha(settings.color, 0));
+  context.fillStyle = glow;
+  context.beginPath();
+  context.arc(c, c, glowRadius, 0, Math.PI * 2);
+  context.fill();
+  return { canvas, size };
 }
 
 function buildTrailSprite(settings: CursorSettings, scale: number): { canvas: HTMLCanvasElement; size: number } {
@@ -147,7 +176,7 @@ function CursorOverlay() {
     if (!canvas) return;
 
     let settings: CursorSettings = readCursorSettings();
-    const pointer = { x: -100, y: -100, pressed: false };
+    const pointer = { x: -100, y: -100, pressed: false, inside: false };
     let pressScale = 1;
     let smoking = false;
     let smokeStartsStroke = true;
@@ -166,18 +195,46 @@ function CursorOverlay() {
     const root = document.documentElement;
     let normalCursor = buildNativeCursor(settings);
     let pressedCursor = buildNativeCursor(settings, 1.25);
+    // Where the browser would drop or rescale the native image, hide it and
+    // draw the orb on the canvas instead.
+    let drawnOrb = false;
+    let appliedCursor = "";
+    let zoomTarget: EventTarget | null = null;
+    let zoomed = false;
     const updateNativeCursor = () => {
-      root.style.setProperty("--custom-cursor", pointer.pressed ? pressedCursor : normalCursor);
+      const next = drawnOrb ? "none" : (pointer.pressed ? pressedCursor : normalCursor).css;
+      if (next === appliedCursor) return;
+      appliedCursor = next;
+      root.style.setProperty("--custom-cursor", next);
+    };
+    const needsDrawnOrb = (target: EventTarget | null) => {
+      if (target !== zoomTarget) {
+        zoomTarget = target;
+        zoomed = hasCssZoom(target);
+      }
+      if (zoomed) return true;
+      const size = Math.max(normalCursor.size, pressedCursor.size);
+      if (size <= NATIVE_CURSOR_EDGE_LIMIT) return false;
+      const half = size / 2 + 1;
+      const width = root.clientWidth || window.innerWidth;
+      const height = root.clientHeight || window.innerHeight;
+      return pointer.x < half || pointer.y < half || pointer.x > width - half || pointer.y > height - half;
     };
     updateNativeCursor();
     root.dataset.customCursor = "true";
     let trailSprite = buildTrailSprite(settings, dpr);
+    let glowSprite = buildGlowSprite(settings, dpr);
 
+    /* Size the buffer from the canvas box, not the window: a fixed canvas stops
+       at the scrollbar, and a buffer wider than its box squeezes every drawing
+       toward the left. */
     const resize = () => {
-      canvas.width = Math.round(window.innerWidth * dpr);
-      canvas.height = Math.round(window.innerHeight * dpr);
+      const box = canvas.getBoundingClientRect();
+      canvas.width = Math.round((box.width || window.innerWidth) * dpr);
+      canvas.height = Math.round((box.height || window.innerHeight) * dpr);
+      ensureRunning();
     };
-    resize();
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
 
     /* Effects still animate when hovering an unfocused window, but pause in
        hidden tabs. The native cursor doesn't depend on this render loop. */
@@ -189,6 +246,9 @@ function CursorOverlay() {
       const dt = lastFrameAt == null ? 0.016 : Math.min(0.05, (time - lastFrameAt) / 1000);
       lastFrameAt = time;
 
+      // Switch between the native and drawn orb in the frame that paints the
+      // canvas, so neither shows a frame without the other.
+      updateNativeCursor();
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
@@ -228,6 +288,16 @@ function CursorOverlay() {
         context.globalAlpha = 1;
       }
 
+      if (glowSprite && pointer.inside) {
+        const size = glowSprite.size * pressScale;
+        context.drawImage(glowSprite.canvas, pointer.x - size / 2, pointer.y - size / 2, size, size);
+      }
+
+      if (drawnOrb && pointer.inside && normalCursor.image) {
+        const size = normalCursor.size * pressScale;
+        context.drawImage(normalCursor.image, pointer.x - size / 2, pointer.y - size / 2, size, size);
+      }
+
       const targetScale = pointer.pressed ? 1.25 : 1;
       pressScale += (targetScale - pressScale) * Math.min(1, dt * 18);
 
@@ -253,6 +323,8 @@ function CursorOverlay() {
       const now = performance.now();
       pointer.x = event.clientX;
       pointer.y = event.clientY;
+      pointer.inside = true;
+      drawnOrb = needsDrawnOrb(event.target);
 
       if (settings.trail) {
         const last = trail[trail.length - 1];
@@ -314,6 +386,16 @@ function CursorOverlay() {
 
     const handleMouseLeave = () => {
       smokeStartsStroke = true;
+      pointer.inside = false;
+      ensureRunning();
+    };
+
+    // Moves inside an iframe never reach this page, so a drawn orb would
+    // freeze at its edge.
+    const handlePointerOver = (event: PointerEvent) => {
+      if (!(event.target instanceof HTMLIFrameElement)) return;
+      pointer.inside = false;
+      ensureRunning();
     };
 
     const handleVisibilityChange = () => {
@@ -335,12 +417,16 @@ function CursorOverlay() {
       pressedCursor = buildNativeCursor(next, 1.25);
       updateNativeCursor();
       trailSprite = buildTrailSprite(next, dpr);
+      glowSprite = buildGlowSprite(next, dpr);
       if (!next.trail) trail.length = 0;
       ensureRunning();
     });
 
+    resize();
+    resizeObserver?.observe(canvas);
     window.addEventListener("resize", resize, { passive: true });
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointerover", handlePointerOver, { passive: true });
     window.addEventListener("pointerdown", handlePointerDown, { passive: true });
     window.addEventListener("pointerup", handlePointerUp, { passive: true });
     window.addEventListener("pointercancel", handlePointerUp, { passive: true });
@@ -356,8 +442,10 @@ function CursorOverlay() {
       root.style.removeProperty("--custom-cursor");
       if (rafId != null) cancelAnimationFrame(rafId);
       unsubscribeSettings();
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerover", handlePointerOver);
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);

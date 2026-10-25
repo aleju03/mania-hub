@@ -382,6 +382,12 @@ default. A lazer play is stored with `game_client = 'lazer'` and is shown on
 lazer's accuracy and grade; the public feed gives its row no legacy total,
 which is how the site tells a lazer row from a stable one.
 
+`mods_json` keeps the acronyms; `lazer_mods_json` keeps lazer's mods with
+their settings as the replay carries them. The feed puts Difficulty Adjust's
+settings back on its mod, which is how a practice-chart credential reads the
+OD a DA play was set to. Lazer rows stored before the column get it back from
+their replay in the maintenance pass (`fillLazerModSettings`, DA rows only).
+
 Only 4K to 10K is judged and rated (`isImportRatedKeyCount`). 11K and wider are
 stored unrated as `keymode_unsupported`, without judging, a timing row or a
 header review.
@@ -665,8 +671,10 @@ it matched, so a baked 1.2× file played at NoMod collapses onto the original
 played at 1.2×, while two genuinely adjacent rates stay distinct. An import is
 `already_counted_officially` when an official play that counts (not
 rating-excluded, Overall above 0) sits on one of the members it matched, at the
-rate the import amounts to on that member. Dan-only evidence does not stand in
-for an import.
+rate the import amounts to on that member, with a goal at least the import's.
+A better import counts instead and the official play leaves the preview's
+pool, as in the merged rating (`skill-overlay.ts` keeps one play per slot, the
+highest goal). Dan-only evidence does not stand in for an import.
 
 Only charts the index recognises count, rate copies and padded copies included,
 the way official ratings only take ranked and loved maps: a chart built to be
@@ -1057,8 +1065,10 @@ import with no official beatmap and no `reference`.
 `GET /api/companella/local-charts/<id>` (public rate bucket) answers
 `{ entry }` in the map search entry shape, built with the index's own
 derivations: status `local`, set id 0, no play count, ranked date, other
-difficulties or rate sweeps; 404 without a stored analysis. It never serves
-the file. `/api/chart-analysis` and `/api/chart-analysis/rate` take the
+difficulties or rate sweeps; 404 without a stored analysis.
+`GET /api/companella/local-charts/<id>/file` (public costly bucket) answers
+`{ content }`, the chart's `.osu` text, for the map card's chart preview,
+which plays it without audio; same 404. `/api/chart-analysis` and `/api/chart-analysis/rate` take the
 negative id too and read the chart from the integration's storage; a rate
 answer is kept in a small in-memory cache, since no official table may hold
 it.
@@ -1096,6 +1106,15 @@ import on a registered course's exact file (its pinned checksum, else the
 site's copy of the map) is read as a course pass beside the osu! ones
 (`DanClearSources` in `features/dan-courses.ts`), by the overlay, by a
 restricted profile (imports alone) and by the `/rankings` Clears board.
+A DA import on a practice chart's OD variant counts by the official rule
+(DA set to the reference's OD, HP at or above the upload's), though the play
+itself stays unrated. A practice chart also counts on any imported file with its notes, as osu!'s
+plays do, including an upload the site never cached: each stored chart gets
+its practice-chart fingerprint (`companella_local_charts.dan_skillset_fingerprint`,
+checked against the registry `dan_skillset_stamp` names) when stored, and the
+maintenance sweep checks older charts. A full course counts the same way on an
+exact copy (same notes, OD and HP; see "Course clears" in `docs/features/dan-estimates.md`),
+credited under the listed upload; a cut or edited re-upload does not.
 `player_skill_ratings` reads osu! plays only; the merged rating takes the
 app-passed courses in. A clear opens as its import on the score card.
 
@@ -1212,8 +1231,10 @@ reservation first looks for the exact bytes in the pool, then in the site's own
 `beatmap_osu_files` copy by declared md5 (re-hashed against the manifest before
 it counts, `seedChartFromSiteCopy`), and only then asks the client for the
 file. Contributed charts go into one shared pool: reuse is keyed by sha256, so
-another account benefits only if it already holds the identical file, and the
-bytes are served solely through the owner-scoped score routes. The consent
+another account benefits only if it already holds the identical file. The
+bytes are served through the owner-scoped score routes, and a local chart's
+(one osu! does not have, with a stored analysis) through its public `/file`
+route for the chart preview. The consent
 screen says the file may be sent; there is no separate opt-in.
 
 Deletion is owner-scoped and idempotent: access and eligibility go first, then

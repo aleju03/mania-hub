@@ -186,6 +186,9 @@ export interface SignatureStyle {
      ordinary thing to want to show. One keymode for the card forced a choice
      between two true things. null means "same as keyCount". */
   lnKeyCount: number | null;
+  /* Which ladder the dan skillsets layout draws. Its keymode is keyCount for
+     regular and lnKeyCount for LN, the same fields the other dan layouts use. */
+  skillsetSide: "rc" | "ln";
 }
 
 export const SIGNATURE_OPACITY_RANGE = { min: 10, max: 100 } as const;
@@ -198,7 +201,7 @@ export const SIGNATURE_BLUR_RANGE = { min: 0, max: 24 } as const;
    control jump at the default and run backwards below it. */
 export const SIGNATURE_BRIGHTNESS_RANGE = { min: 20, max: 140 } as const;
 /** Must stay in step with ALLOWED_KEY_COUNTS in the backend's signature route. */
-export const SIGNATURE_KEY_COUNTS = [4, 6, 7] as const;
+export const SIGNATURE_KEY_COUNTS: readonly number[] = Array.from({ length: 18 }, (_, i) => i + 1);
 /** Long enough for a real CDN url with a cache-busting query, short enough that
     four of them cannot crowd out the stored style. */
 export const SIGNATURE_IMAGE_URL_MAX = 400;
@@ -214,6 +217,7 @@ export const DEFAULT_SIGNATURE_STYLE: SignatureStyle = {
   keyCount: null,
   lnKeyCount: null,
   watermark: true,
+  skillsetSide: "rc",
 };
 
 /* https only, and no embedded credentials. The transport in
@@ -263,12 +267,29 @@ export function normalizeSignatureStyle(raw: unknown, type?: SignatureType): Sig
     lnKeyCount: normalizeSignatureKeyCount(input.lnKeyCount),
     // Absent means a style stored before the toggle existed, which is on.
     watermark: input.watermark !== false,
+    skillsetSide: input.skillsetSide === "ln" ? "ln" : "rc",
   };
+}
+
+/* The ladder and keymode the dan skillsets layout draws, given the keymodes
+   that have a skillset breakdown on each side. A stale pick (a keymode or a
+   ladder without one) lands on the first that has one, so the render and the
+   picker on the page always agree. */
+export function resolveSkillsetDanPick(
+  style: SignatureStyle,
+  modes: { rc: number[]; ln: number[] },
+): { side: "rc" | "ln"; keyCount: number } | null {
+  const sides: Array<"rc" | "ln"> = style.skillsetSide === "ln" ? ["ln", "rc"] : ["rc", "ln"];
+  const side = sides.find((entry) => modes[entry].length > 0);
+  if (!side) return null;
+  const preferred = side === "ln" ? style.lnKeyCount ?? style.keyCount : style.keyCount;
+  const keyCount = preferred != null && modes[side].includes(preferred) ? preferred : modes[side][0]!;
+  return { side, keyCount };
 }
 
 function normalizeSignatureKeyCount(raw: unknown): number | null {
   const value = Number(raw);
-  return (SIGNATURE_KEY_COUNTS as readonly number[]).includes(value) ? value : null;
+  return SIGNATURE_KEY_COUNTS.includes(value) ? value : null;
 }
 
 export type SignatureStyleMap = Record<SignatureType, SignatureStyle>;
@@ -310,6 +331,7 @@ export function serializeSignatureStyleMap(map: SignatureStyleMap): string {
       keyCount: style.keyCount,
       lnKeyCount: style.lnKeyCount,
       watermark: style.watermark,
+      skillsetSide: style.skillsetSide,
     };
   }
   return JSON.stringify(ordered);

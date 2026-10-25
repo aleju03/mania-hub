@@ -43,6 +43,7 @@ export function useDynamicRenders() {
   // Which keymodes this player actually has ratings for, so a picker cannot
   // offer one that would silently fall back to another.
   const [keyModes, setKeyModes] = useState<number[]>([]);
+  const [skillsetKeyModes, setSkillsetKeyModes] = useState<{ rc: number[]; ln: number[] }>({ rc: [], ln: [] });
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* The style a debounced save is holding. Kept in a ref so Copy can force it
@@ -85,7 +86,12 @@ export function useDynamicRenders() {
       return;
     }
     void load();
-    void fetchSignatureKeyModes().then((result) => setKeyModes(result.keyCounts)).catch(() => setKeyModes([]));
+    void fetchSignatureKeyModes()
+      .then((result) => {
+        setKeyModes(result.keyCounts);
+        setSkillsetKeyModes(result.skillsetKeyCounts);
+      })
+      .catch(() => setKeyModes([]));
   }, [viewer, load]);
 
   useEffect(() => () => {
@@ -220,6 +226,7 @@ export function useDynamicRenders() {
     isLive,
     styles,
     keyModes,
+    skillsetKeyModes,
     enabledTypes,
     visibleTypes,
     skillsKeyCount,

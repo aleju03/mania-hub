@@ -143,7 +143,7 @@ export async function rehydrateOwnerReplaySkinSettings(
   targetKeyCount?: number,
 ): Promise<ReplaySkinSettings | null> {
   if (!isRecord(payload) || payload.v !== 1 || !isRecord(payload.settings)) return null;
-  const { hasAnyImportedAssets, loadOskImageAssetByPath } = await import("./replay-skin-import");
+  const { hasAnyImportedAssets, isLazerSkinArchive, loadOskImageAssetByPath } = await import("./replay-skin-import");
   const settings = structuredClone(payload.settings);
   // A replay draws one keymode. Published skins can carry profiles for every
   // mode from 1K through 10K, including multi-megabyte Percy textures; decoding
@@ -209,6 +209,14 @@ export async function rehydrateOwnerReplaySkinSettings(
   }
 
   await Promise.all(loads);
+  // Payloads saved before the flag existed never carry it, so the archive's
+  // own lazer files decide. A private skin's bundle ships only the drawn art;
+  // loadOwnerReplaySkin covers that case from the catalog's lazer trait.
+  if (isLazerSkinArchive(archive.lookup)) {
+    for (const profile of Object.values(profiles)) {
+      if (isRecord(profile)) profile.lazerBodies = true;
+    }
+  }
   await fillGlobalStageAssets(settings, archive);
   await fillKeymodeStagePositions(settings, archive);
   const rehydrated = normalizeReplaySkinSettings(settings);
@@ -220,6 +228,13 @@ export async function rehydrateOwnerReplaySkinSettings(
   return hasArt && rehydrated.style !== "bars"
     ? normalizeReplaySkinSettings({ ...rehydrated, style: "bars" })
     : rehydrated;
+}
+
+function withLazerBodies(settings: ReplaySkinSettings): ReplaySkinSettings {
+  const keymodeProfiles = Object.fromEntries(
+    Object.entries(settings.keymodeProfiles).map(([key, profile]) => [key, { ...profile, lazerBodies: true }]),
+  );
+  return { ...settings, keymodeProfiles };
 }
 
 // Skin elements that live under fixed filenames rather than a skin.ini key.
@@ -616,8 +631,9 @@ export async function loadOwnerReplaySkin(
   try {
     const archive = await fetchRecordArchive(record, access, init);
     if (!archive) return null;
-    const settings = await rehydrateOwnerReplaySkinSettings(record.settings, archive, targetKeyCount);
-    if (!settings) return null;
+    const rehydrated = await rehydrateOwnerReplaySkinSettings(record.settings, archive, targetKeyCount);
+    if (!rehydrated) return null;
+    const settings = record.skin.lazer ? withLazerBodies(rehydrated) : rehydrated;
     const { extractSkinSoundsFromArchive } = await import("./replay-skin-import");
     const sounds = await extractSkinSoundsFromArchive(archive);
     return { record, settings, sounds, archive };

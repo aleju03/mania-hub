@@ -190,6 +190,17 @@ export function qualifyingSkillModes(skills: MyDataSkillBreakdown | null): MyDat
     || mode.dan?.rc != null || mode.dan?.ln != null);
 }
 
+/* The keymodes whose dan on one side has a skillset breakdown, the ones the
+   dan render's skillset layouts can draw. 4K LN's skillsets carry no dan of
+   their own (its headline averages clears), and some ladders have none. */
+export function danSkillsetModes(skills: MyDataSkillBreakdown | null, side: "rc" | "ln"): MyDataSkillMode[] {
+  return qualifyingSkillModes(skills).filter((mode) => {
+    const dan = mode.dan?.[side];
+    if (!dan || dan.skillsetsOnly || (side === "ln" && mode.keyCount === 4)) return false;
+    return Object.keys(dan.skillsets ?? {}).length > 0;
+  });
+}
+
 export interface SkillAxisEntry extends SkillAxisMeta {
   value: number;
   // The percentile lookup key: skillset name for MSD axes, `pattern:{id}` for

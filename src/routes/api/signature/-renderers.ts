@@ -36,12 +36,23 @@ import {
   skillModeEntries,
   type SkillAxisEntry,
   modeOverall,
+  DAN_SKILLSET_META,
+  danSkillsetModes,
 } from "../../../lib/skill-axes";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../../lib/my-data";
-import { getDanTierImageSrc } from "../../../lib/dan-images";
+import { danBareLabel, danTierName, danTierSuffix, getDanTierImageSrc } from "../../../lib/dan-images";
+import type { LivePlayerActivitySnapshot, LivePlayerDanEvidence } from "../../../lib/live-backend";
+import {
+  activityTodayKey,
+  activityWindowStart,
+  buildSignatureActivityWindow,
+  type SignatureActivityCell,
+  type SignatureActivityWindow,
+} from "../../../lib/signature-activity";
 import { signatureDesign, type SignatureType } from "../../../lib/signature-shared";
 import {
   accentHex,
+  resolveSkillsetDanPick,
   stylePaintedBackground,
   styleNeedsProfileImage,
   styleUsesImage,
@@ -977,6 +988,17 @@ function pickMode(
   return modes.find((mode) => mode.keyCount === preferred) ?? modes[0]!;
 }
 
+/* "7K", or "7K | provisional" with a thin vertical rule between the two. */
+function keyModeLabel(mode: MyDataSkillMode, rule: string) {
+  const keys = `${mode.keyCount}K`;
+  if (!mode.provisional) return keys;
+  return [
+    h("span", { key: "keys" }, keys),
+    h("div", { key: "rule", style: { width: "1px", height: "0.9em", margin: "0 7px", background: rule } }),
+    h("span", { key: "provisional" }, "provisional"),
+  ];
+}
+
 function skillsUnavailable(skills: MyDataSkillBreakdown | null): string | null {
   if (!skills) return "Skill ratings are unavailable right now.";
   if (skills.status === "pending") return "The chart analyzer is rating these plays.";
@@ -1185,7 +1207,7 @@ function skillsScoreline(ctx: SignatureRenderContext, scene: SkillsScene): React
     h("div", { key: "body", style: { display: "flex", flexDirection: "column", width: "100%", padding: "14px 24px", gap: "10px" } }, [
       h("div", { key: "head", style: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" } }, [
         h("div", { key: "n", style: { fontWeight: 900 } }, clamp(ctx.resolved.username, 24)),
-        h("div", { key: "k", style: { color: dim } }, `${mode.keyCount}K${mode.provisional ? " · provisional" : ""}`),
+        h("div", { key: "k", style: { display: "flex", alignItems: "center", color: dim } }, keyModeLabel(mode, "rgba(255,255,255,0.18)")),
       ]),
       h("div", { key: "cells", style: { display: "flex", alignItems: "flex-end" } }, [
         cell("overall", scene.overall.toFixed(2), "Overall", accent, 36, 0, overallWidth),
@@ -1369,9 +1391,9 @@ async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
     key: "keys",
     style: {
       display: "flex", padding: "3px 10px", borderRadius: "999px", background: "rgba(255,255,255,0.10)",
-      fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.78)",
+      alignItems: "center", fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.78)",
     },
-  }, `${mode.keyCount}K${mode.provisional ? " · provisional" : ""}`);
+  }, keyModeLabel(mode, "rgba(255,255,255,0.22)"));
 
   const scene: SkillsScene = {
     width: spec.width, height: spec.height, mode, entries, accent, dim, overall, keyChip, layers: background.layers,
@@ -1548,6 +1570,14 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
   ].filter((entry) => entry.side != null && !entry.side.skillsetsOnly && entry.keyCount != null) as Array<{
     id: string; label: string; keyCount: number; side: { rawDan: number; label: string; clears: number };
   }>;
+  if (ctx.design === 4) {
+    const pick = resolveSkillsetDanPick(ctx.style, {
+      rc: danSkillsetModes(skills, "rc").map((mode) => mode.keyCount),
+      ln: danSkillsetModes(skills, "ln").map((mode) => mode.keyCount),
+    });
+    if (!pick) return renderPlate(ctx, "Not enough dan-level clears yet.");
+    return renderDanSkillsets(ctx, pick.keyCount, pick.side);
+  }
   if (sides.length === 0) return renderPlate(ctx, "Not enough dan-level clears yet.");
 
   const chosen = ctx.design === 1
@@ -1635,6 +1665,103 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
       style: { position: "absolute", left: "16px", bottom: "12px", fontSize: "12px", color: dim },
     }, clamp(ctx.resolved.username, 22)),
     wordmark(ctx.style),
+  ]));
+}
+
+async function fetchDanEvidence(userId: number, keyCount: number, side: "rc" | "ln"): Promise<LivePlayerDanEvidence | null> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return null;
+  // limit=1: the render reads the per-skillset dans, not the clear lists.
+  const query = new URLSearchParams({ keys: String(keyCount), side, limit: "1" });
+  const response = await fetch(`${base}/api/profiles/${userId}/dan-evidence?${query}`, { signal: AbortSignal.timeout(5_000) });
+  if (!response.ok) return null;
+  return (await response.json()) as LivePlayerDanEvidence;
+}
+
+/* Same colours as the dan popup's headline. */
+const DAN_SIDE_COLOR: Record<"rc" | "ln", string> = { rc: "#e0b04c", ln: "#f07474" };
+
+/* Design 4: the dan popup's header and skillset columns, from the
+   same evidence read, so the image says what the popup says. */
+async function renderDanSkillsets(ctx: SignatureRenderContext, keyCount: number, side: "rc" | "ln"): Promise<Buffer> {
+  const spec = signatureDesign(ctx.type, ctx.design)!;
+  const evidence = await fetchDanEvidence(ctx.resolved.userId, keyCount, side);
+  if (!evidence) return renderPlate(ctx, "Dan estimates are unavailable right now.");
+  const dan = evidence.dan;
+  const skillsets = evidence.skillsets;
+  if (!dan || skillsets.length === 0) return renderPlate(ctx, "Not enough dan-level clears yet.");
+
+  const beyond = dan.beyondTable === true;
+  const danLabel = beyond ? danBareLabel(dan.label) : dan.label;
+  const courseClear = evidence.courseClear;
+  const atClearedLevel = !beyond && courseClear != null && courseClear.accuracy >= courseClear.bar
+    && !danTierSuffix(danLabel).startsWith("+")
+    && danBareLabel(danLabel) === danBareLabel(courseClear.level);
+  const level = beyond || atClearedLevel ? formatDanChip(danBareLabel(danLabel)) : danTierName(danLabel, formatDanChip);
+  const lead = beyond ? "is beyond" : atClearedLevel ? "is" : "is around";
+
+  const family = side === "ln" ? "ln" : "rc";
+  const columns = await Promise.all(skillsets.map(async (skillset) => {
+    const clear = skillset.skillsetClear;
+    const verified = clear != null && clear.accuracy + 1e-9 >= clear.bar;
+    const near = clear != null && !verified;
+    const emblem = skillset.dan ? await danEmblemDataUrl(ctx.request, skillset.dan.label, family, keyCount) : null;
+    return { skillset, verified, near, emblem };
+  }));
+  const headEmblem = await danEmblemDataUrl(ctx.request, danLabel, family, keyCount);
+
+  const background = await styleLayers(ctx, spec, await fetchBackgroundSources(ctx));
+  const dim = background.custom ? TEXT_DIM_ON_ART : TEXT_DIM;
+  const accent = accentHex(ctx.style, DAN_SIDE_COLOR[side]);
+  const hairline = "rgba(255,255,255,0.07)";
+
+  const emblemImg = (emblem: { url: string; aspect: number } | null, height: number, maxWidth: number, key: string) => {
+    if (!emblem) return h("div", { key, style: { fontSize: `${Math.round(height / 2)}px`, fontWeight: 900, color: "rgba(255,255,255,0.18)" } }, "-");
+    const fitted = Math.min(height, Math.round(maxWidth / emblem.aspect));
+    const width = Math.round(fitted * emblem.aspect);
+    return h("img", { key, src: emblem.url, width, height: fitted, style: { width: `${width}px`, height: `${fitted}px`, objectFit: "contain" } });
+  };
+
+  const header = h("div", { key: "head", style: { display: "flex", alignItems: "center", gap: "20px", padding: "18px 26px 14px" } }, [
+    h("div", { key: "e", style: { display: "flex", width: "100px", justifyContent: "center", flexShrink: 0 } }, [emblemImg(headEmblem, 72, 100, "img")]),
+    h("div", { key: "t", style: { display: "flex", flexDirection: "column", gap: "6px", minWidth: "0" } }, [
+      h("div", { key: "k", style: { fontSize: "13px", color: dim } }, `${keyCount}K ${side === "ln" ? "LN" : "Regular"} dan`),
+      h("div", { key: "h", style: { display: "flex", gap: "8px", fontSize: "28px", fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap" } }, [
+        h("span", { key: "n" }, `${clamp(ctx.resolved.username, 18)} ${lead}`),
+        h("span", { key: "l", style: { color: accent } }, level),
+      ]),
+    ]),
+  ]);
+
+  const columnNodes = columns.map(({ skillset, verified, near, emblem }, index) => {
+    const meta = DAN_SKILLSET_META[skillset.id];
+    const label = skillset.dan
+      ? `${skillset.dan.beyondTable ? ">" : verified ? "" : "~"}${formatDanChip(skillset.dan.beyondTable ? danBareLabel(skillset.dan.label) : skillset.dan.label)}`
+      : null;
+    return h("div", {
+      key: skillset.id,
+      style: {
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "7px", flex: 1, minWidth: "0", padding: "12px 6px 0",
+        borderLeft: index === 0 ? "none" : `1px solid ${hairline}`,
+      },
+    }, [
+      h("div", { key: "s", style: { fontSize: "13px", fontWeight: 700, color: dim } }, meta?.label ?? skillset.id),
+      h("div", { key: "e", style: { display: "flex", height: "48px", alignItems: "center", justifyContent: "center" } }, [emblemImg(emblem, 48, 96, "img")]),
+      label
+        ? h("div", { key: "v", style: { fontSize: "17px", fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap" } }, label)
+        : h("div", { key: "v", style: { fontSize: "12px", lineHeight: "17px", color: dim, whiteSpace: "nowrap" } }, `needs ${evidence.quorum}`),
+      h("div", { key: "c", style: { fontSize: "11px", color: dim, whiteSpace: "nowrap" } },
+        verified ? "Verified clear" : near ? "Near clear" : `${skillset.clears} plays`),
+    ]);
+  });
+
+  return renderPng(ctx, frame(spec.width, spec.height, [
+    ...background.layers,
+    h("div", { key: "body", style: { display: "flex", flexDirection: "column", width: "100%" } }, [
+      header,
+      h("div", { key: "cols", style: { display: "flex", margin: "0 18px", borderTop: `1px solid ${hairline}` } }, columnNodes),
+    ]),
+    headerWordmark(ctx.style),
   ]));
 }
 
@@ -2475,6 +2602,183 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
   ]));
 }
 
+// --- activity ----------------------------------------------------------
+
+/* The same public read the Activity tab makes, GLOBAL scope included, so the
+   render counts what the tab counts: tracked plays plus app imports, and the
+   imports alone for an account osu! turned away. */
+async function fetchActivityYear(userId: number, year: number): Promise<LivePlayerActivitySnapshot | null> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return null;
+  const response = await fetch(
+    `${base}/api/profiles/${userId}/activity?country=GLOBAL&year=${year}`,
+    { signal: AbortSignal.timeout(5_000) },
+  );
+  if (!response.ok) return null;
+  return (await response.json()) as LivePlayerActivitySnapshot;
+}
+
+/* Today is read in the zone the backend bucketed the days in, which the first
+   answer names. The window crosses New Year for most of the year, so the year
+   before is read too whenever the window starts in it. */
+async function fetchActivityWindow(ctx: SignatureRenderContext, weekCount: number): Promise<SignatureActivityWindow | null> {
+  return measure(ctx, "activity", async () => {
+    const userId = ctx.resolved.userId;
+    const nowYear = new Date().getUTCFullYear();
+    const current = await fetchActivityYear(userId, nowYear);
+    if (!current?.available) return null;
+    const todayKey = activityTodayKey(current.timezone ?? "UTC");
+    let snapshots = [current];
+    const todayYear = Number(todayKey.slice(0, 4));
+    if (todayYear !== nowYear) {
+      const local = await fetchActivityYear(userId, todayYear);
+      if (local) snapshots = [local, current];
+    }
+    const startYear = Number(activityWindowStart(todayKey, weekCount).slice(0, 4));
+    for (let year = todayYear - 1; year >= startYear; year--) {
+      if (snapshots.some((snapshot) => snapshot.year === year)) continue;
+      if (!current.availableYears.includes(year)) continue;
+      const earlier = await fetchActivityYear(userId, year);
+      if (earlier) snapshots.push(earlier);
+    }
+    return buildSignatureActivityWindow(snapshots.flatMap((snapshot) => snapshot.days), todayKey, weekCount);
+  });
+}
+
+function activityCellColor(cell: SignatureActivityCell, fullAt: number, accent: string): string {
+  if (cell.plays <= 0) return "rgba(255,255,255,0.07)";
+  const eased = Math.sqrt(Math.min(1, cell.plays / fullAt));
+  return hexAlpha(accent, 0.22 + eased * 0.78);
+}
+
+/* The calendar itself: one column per week, Sunday on top, with the month
+   names over the weeks they start in. */
+function activityGrid(
+  window: SignatureActivityWindow,
+  width: number,
+  gap: number,
+  accent: string,
+  dim: string,
+): ReactNode {
+  // Fractional on purpose: rounding the pitch down left up to a cell's width
+  // of empty space at the right end.
+  const pitch = (width + gap) / window.weeks.length;
+  const cell = pitch - gap;
+  const radius = Math.max(2, Math.round(cell * 0.22));
+  return h("div", { key: "grid", style: { display: "flex", flexDirection: "column", gap: "5px" } }, [
+    h("div", { key: "months", style: { display: "flex", position: "relative", height: "12px", width: `${width}px` } },
+      window.months.map((month) => h("div", {
+        key: `${month.week}`,
+        style: { position: "absolute", left: `${month.week * pitch}px`, top: "0", fontSize: "11px", color: dim },
+      }, month.label))),
+    h("div", { key: "weeks", style: { display: "flex", gap: `${gap}px` } },
+      window.weeks.map((week, index) => h("div", {
+        key: `${index}`,
+        style: { display: "flex", flexDirection: "column", gap: `${gap}px` },
+      }, week.map((day, weekday) => h("div", {
+        key: `${weekday}`,
+        style: {
+          width: `${cell}px`, height: `${cell}px`, borderRadius: `${radius}px`,
+          background: day ? activityCellColor(day, window.fullAt, accent) : "transparent",
+        },
+      }))))),
+  ]);
+}
+
+/* Plays per week as bars, for a profile where a strip reads better than a
+   grid. The month names sit under the weeks they start in. */
+function activityBars(
+  window: SignatureActivityWindow,
+  width: number,
+  height: number,
+  accent: string,
+  dim: string,
+): ReactNode {
+  const gap = 3;
+  const pitch = (width + gap) / window.weeklyPlays.length;
+  const bar = pitch - gap;
+  const peak = Math.max(1, ...window.weeklyPlays);
+  return h("div", { key: "bars", style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
+    h("div", { key: "cols", style: { display: "flex", alignItems: "flex-end", gap: `${gap}px`, height: `${height}px` } },
+      window.weeklyPlays.map((plays, index) => h("div", {
+        key: `${index}`,
+        style: {
+          width: `${bar}px`,
+          height: `${plays > 0 ? Math.max(3, Math.round((plays / peak) * height)) : 2}px`,
+          borderRadius: "2px",
+          background: plays > 0 ? accent : "rgba(255,255,255,0.10)",
+        },
+      }))),
+    h("div", { key: "months", style: { display: "flex", position: "relative", height: "12px", width: `${width}px` } },
+      window.months.map((month) => h("div", {
+        key: `${month.week}`,
+        style: { position: "absolute", left: `${month.week * pitch}px`, top: "0", fontSize: "11px", color: dim },
+      }, month.label))),
+  ]);
+}
+
+function activityStat(key: string, value: string, label: string, dim: string): ReactNode {
+  return h("div", { key, style: { display: "flex", alignItems: "baseline", gap: "6px" } }, [
+    h("div", { key: "v", style: { fontSize: "15px", fontWeight: 900, color: "#ffffff" } }, value),
+    h("div", { key: "l", style: { fontSize: "11px", color: dim } }, label),
+  ]);
+}
+
+async function renderActivity(ctx: SignatureRenderContext): Promise<Buffer> {
+  const spec = signatureDesign(ctx.type, ctx.design)!;
+  const weekCount = ctx.design === 2 ? 26 : 53;
+  const window = await fetchActivityWindow(ctx, weekCount).catch(() => null);
+  if (!window) return renderPlate(ctx, "No tracked plays yet.");
+
+  const avatarSize = 34;
+  const [background, avatarSrc] = await Promise.all([
+    measure(ctx, "background", async () => styleLayers(ctx, spec, await fetchBackgroundSources(ctx))),
+    // osu! serves the current avatar under the id; the version carries the
+    // stored avatar url so a new one re-renders.
+    measure(ctx, "avatar", () => avatarSquareDataUrl(`https://a.ppy.sh/${ctx.resolved.userId}`, avatarSize)),
+  ]);
+  const accent = accentHex(ctx.style, ACCENT);
+  const dim = background.custom ? TEXT_DIM_ON_ART : TEXT_DIM;
+  const padX = 28;
+  const inner = spec.width - padX * 2;
+
+  // Centred rather than on a shared baseline: beside the avatar, a small
+  // uppercase label on the name's baseline reads as sitting low.
+  const header = h("div", { key: "head", style: { display: "flex", alignItems: "center", gap: "12px" } }, [
+    ...(avatarSrc ? [avatarBox(avatarSrc, avatarSize)] : []),
+    h("div", { key: "n", style: { display: "flex", fontSize: "18px", fontWeight: 900, lineHeight: 1 } }, clamp(ctx.resolved.username, 22)),
+    h("div", {
+      key: "l",
+      style: { display: "flex", fontSize: "11px", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: dim, lineHeight: 1 },
+    }, "Activity"),
+  ]);
+  const span = ctx.design === 2 ? "in 6 months" : "in the past year";
+  const divider = (key: string) => h("div", { key, style: { width: "1px", height: "12px", background: "rgba(255,255,255,0.14)" } });
+  const stats = h("div", { key: "stats", style: { display: "flex", alignItems: "center", gap: "14px" } }, [
+    activityStat("plays", nf(window.plays), window.plays === 1 ? `play ${span}` : `plays ${span}`, dim),
+    divider("d1"),
+    activityStat("days", nf(window.activeDays), window.activeDays === 1 ? "active day" : "active days", dim),
+    ...(window.streak > 1
+      ? [divider("d2"), activityStat("streak", `${window.streak}d`, "streak", dim)]
+      : []),
+  ]);
+  const chart = ctx.design === 3
+    ? activityBars(window, inner, 80, accent, dim)
+    : activityGrid(window, inner, 3, accent, dim);
+
+  return renderPng(ctx, frame(spec.width, spec.height, [
+    ...background.layers,
+    h("div", {
+      key: "body",
+      style: {
+        display: "flex", flexDirection: "column", justifyContent: "space-between",
+        padding: `18px ${padX}px 14px`, width: "100%",
+      },
+    }, [header, chart, stats]),
+    wordmark(ctx.style),
+  ]));
+}
+
 // --- dispatch ----------------------------------------------------------
 
 function measure<T>(ctx: SignatureRenderContext, name: string, task: () => Promise<T>): Promise<T> {
@@ -2505,6 +2809,7 @@ async function renderLayout(ctx: SignatureRenderContext): Promise<Buffer> {
     case "skills": return renderSkills(ctx);
     case "dan": return renderDan(ctx);
     case "insights": return renderInsights(ctx);
+    case "activity": return renderActivity(ctx);
   }
 }
 

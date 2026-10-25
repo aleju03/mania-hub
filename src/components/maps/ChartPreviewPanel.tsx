@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerE
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Gauge, Loader2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { getBeatmapFile } from "../../lib/osu";
+import { fetchLiveLocalChartFile, isLocalChartId } from "../../lib/live-backend";
 import { loadReplayRenderer } from "../../lib/replay-renderer-loader";
 import { getBeatmapAudioUrl } from "../../lib/audio-url";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
@@ -176,7 +177,10 @@ export function ChartPreviewPanel({
     () => shouldUseSetPreviewForReplayAudio(beatmapset.title, maniaBeatmaps),
     [beatmapset.title, maniaBeatmaps],
   );
-  const fullAudioUrl = previewBeatmap?.audioFilename
+  // A local chart (negative id) plays silently: the set its file names may
+  // not hold its song.
+  const silentChart = isLocalChartId(selectedBeatmap?.id);
+  const fullAudioUrl = previewBeatmap?.audioFilename && audioBeatmapsetId > 0 && !silentChart
     ? getBeatmapAudioUrl(audioBeatmapsetId, previewBeatmap.audioFilename)
     : null;
   const audioUrl = audioMode === "set-preview" ? previewUrl : fullAudioUrl;
@@ -423,7 +427,7 @@ export function ChartPreviewPanel({
         audioClockSampleRef.current = null;
         audioClockAnchorRef.current = null;
         setAudioLoadStage(null);
-        setAudioError(t`Couldn't find chart preview audio`);
+        setAudioError(silentChart ? null : t`Couldn't find chart preview audio`);
       }
       return;
     }
@@ -517,7 +521,7 @@ export function ChartPreviewPanel({
         setAudioError(t`Couldn't play chart preview audio`);
       }
     }
-  }, [applyAudioPlaybackSettings, audioMode, audioPlaybackRate, audioStartSeconds, audioUrl, previewWindowMs, t]);
+  }, [applyAudioPlaybackSettings, audioMode, audioPlaybackRate, audioStartSeconds, audioUrl, previewWindowMs, silentChart, t]);
 
   // The song stopped for data mid-play. Put the chart back on the silent
   // clock from where the song was and let the song join again.
@@ -1586,7 +1590,9 @@ async function getBeatmapFileWithRetry(beatmapId: number, beatmapsetId?: number)
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const result = await getBeatmapFile({ data: { beatmapId, beatmapsetId } });
+      const result = isLocalChartId(beatmapId)
+        ? { content: (await fetchLiveLocalChartFile(beatmapId)) ?? "" }
+        : await getBeatmapFile({ data: { beatmapId, beatmapsetId } });
       if (!result.content.trim()) throw new Error("Empty beatmap file");
       return result;
     } catch (error) {

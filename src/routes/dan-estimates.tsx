@@ -487,7 +487,7 @@ function DanEstimatesPage() {
                 search={{ map: 4969890 } as never}
                 className="text-osu-pink-light transition-colors hover:text-white"
               >Volcanic ~ Delta ~</Link>{' '}
-              at the bar sets your 4K speed dan to <B>delta</B>, and up to one point under it to{' '}
+              at the bar sets your 4K speed dan to <B>delta</B>, and up to one point under it (95%) to{' '}
               <B>delta-</B>, without the four passes a skill normally needs. Below that it counts like
               any other play. Every ladder has them except 6K.
             </Trans>
@@ -499,7 +499,8 @@ function DanEstimatesPage() {
             <CourseList />
             <p>
               <Trans>
-                A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and
+                A pass has to be on one of these difficulties, or on another upload of one with the same
+                notes, OD and HP; a cut or edited reupload does not count. REFORM's three INTRO courses and
                 the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first
                 level their ladder measures.
               </Trans>

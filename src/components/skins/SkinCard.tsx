@@ -287,7 +287,7 @@ export const SkinCard = memo(function SkinCard({ skin, previewKeys, preferScreen
             </span>
           ) : (
             <span className="inline-flex shrink-0 items-center gap-2 text-[11px] text-osu-f1">
-              <span aria-label={t`${downloadCountLabel} downloads, ${viewCountLabel} views`}>
+              <span className="inline-flex items-center" aria-label={t`${downloadCountLabel} downloads, ${viewCountLabel} views`}>
                 <span className="inline-flex items-center gap-2" aria-hidden="true">
                   <span className="inline-flex items-center gap-1" title={t`${downloadCountLabel} downloads`}>
                     <Download className="h-3 w-3" />

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Suspense, lazy, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
   ALargeSmall,
   AlignCenter,
@@ -36,6 +36,10 @@ import { useAuth } from "../lib/auth-context";
 import { pageSeo } from "../lib/seo";
 
 const BBCodeEditorLazy = lazy(() => import("../components/player/bbcode/BBCodeEditor"));
+
+// Dragging either side of the editor widens it into the margins, per device.
+const EDITOR_WIDTH_KEY = "mania-hub-bbcode-width-v1";
+const EDITOR_MIN_WIDTH = 760;
 
 const TOOLBAR_GROUPS: Array<Array<{ label: ReturnType<typeof msg>; icon: ReactNode }>> = [
   [
@@ -178,9 +182,73 @@ export const Route = createFileRoute("/bbcode")({
   component: BBCodePage,
 });
 
+function readEditorWidth(): number | null {
+  try {
+    const stored = Number.parseInt(window.localStorage.getItem(EDITOR_WIDTH_KEY) ?? "", 10);
+    return Number.isFinite(stored) && stored >= EDITOR_MIN_WIDTH ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeEditorWidth(width: number | null) {
+  try {
+    if (width == null) window.localStorage.removeItem(EDITOR_WIDTH_KEY);
+    else window.localStorage.setItem(EDITOR_WIDTH_KEY, String(width));
+  } catch {
+    // Quota or privacy mode; the width just resets next visit.
+  }
+}
+
 function BBCodePage() {
   const { t } = useLingui();
   const { viewer } = useAuth();
+  const columnRef = useRef<HTMLDivElement>(null);
+
+  // Kept out of React state: a drag writes the column's width straight to the
+  // DOM so it never re-renders the editor.
+  const applyEditorWidth = useCallback((width: number | null) => {
+    const column = columnRef.current;
+    if (!column) return;
+    if (width == null) column.style.removeProperty("--bbcode-editor-width");
+    else column.style.setProperty("--bbcode-editor-width", `${width}px`);
+  }, []);
+
+  useLayoutEffect(() => {
+    applyEditorWidth(readEditorWidth());
+  }, [applyEditorWidth]);
+
+  const startEditorResize = useCallback((event: ReactPointerEvent<HTMLDivElement>, side: -1 | 1) => {
+    const column = columnRef.current;
+    const row = column?.parentElement;
+    if (!column || !row || event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+    const startWidth = column.getBoundingClientRect().width;
+    let latest = Math.round(startWidth);
+    // The column stays centered, so each side moves by half the change.
+    const move = (moveEvent: PointerEvent) => {
+      const next = startWidth + 2 * side * (moveEvent.clientX - startX);
+      latest = Math.round(Math.min(row.clientWidth, Math.max(EDITOR_MIN_WIDTH, next)));
+      applyEditorWidth(latest);
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      writeEditorWidth(latest);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }, [applyEditorWidth]);
+
+  const resetEditorWidth = useCallback(() => {
+    applyEditorWidth(null);
+    writeEditorWidth(null);
+  }, [applyEditorWidth]);
 
   return (
     // The editor is the page: it takes the viewport under the fixed nav and
@@ -192,7 +260,24 @@ function BBCodePage() {
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/profile.svg" title={t`osu! profile BBCode editor`} />
           {/* Same column as the page header so the toolbar lines up with the title. */}
-          <div className="mx-auto flex w-full max-w-[1200px] min-h-0 flex-1 flex-col px-4 pt-4 sm:px-5">
+          <div
+            ref={columnRef}
+            className="relative mx-auto flex w-full max-w-[var(--bbcode-editor-width,1200px)] min-h-0 flex-1 flex-col px-4 pt-4 sm:px-5"
+          >
+            {([-1, 1] as const).map((side) => (
+              <div
+                key={side}
+                aria-hidden
+                title={t`Drag to resize, double-click to reset`}
+                onPointerDown={(event) => startEditorResize(event, side)}
+                onDoubleClick={resetEditorWidth}
+                className={`group absolute inset-y-0 z-10 hidden w-4 cursor-col-resize touch-none sm:w-5 lg:block ${
+                  side < 0 ? "left-0" : "right-0"
+                }`}
+              >
+                <div className={`h-full w-0.5 transition-colors group-hover:bg-osu-h1/70 ${side < 0 ? "ml-auto" : ""}`} />
+              </div>
+            ))}
             <Suspense fallback={<BBCodeEditorSkeleton signedIn={!!viewer} />}>
               <BBCodeEditorLazy
                 userId={viewer?.id ?? null}

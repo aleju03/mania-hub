@@ -527,6 +527,35 @@ describe("importReplaySkinFromOsk NoteBodyStyle", () => {
   });
 });
 
+describe("importReplaySkinFromOsk lazer LN bodies", () => {
+  const ini = ["[General]", "Name: Percy", "[Mania]", "Keys: 4", "NoteBodyStyle: 2"].join("\n");
+
+  it("flags every keymode when the archive carries lazer's editor files", async () => {
+    const file = await buildOsk(ini, ["mania-note1.png", "mania-key1.png"], { "skininfo.json": "{}" });
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(Object.values(result.settings.keymodeProfiles).every((profile) => profile.lazerBodies)).toBe(true);
+  });
+
+  it("flags a skin.ini lazer rewrote", async () => {
+    const file = await buildOsk(`// This configuration file was automatically added by osu!lazer\n${ini}`, ["mania-note1.png", "mania-key1.png"]);
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.settings.keymodeProfiles["4"].lazerBodies).toBe(true);
+  });
+
+  it("leaves a stable skin unflagged, even over a lazer skin's base settings", async () => {
+    const lazer = await importReplaySkinFromOsk(
+      await buildOsk(ini, ["mania-note1.png", "mania-key1.png"], { "skininfo.json": "{}" }),
+      { targetKeyCount: 4 },
+    );
+    const file = await buildOsk(ini, ["mania-note1.png", "mania-key1.png"]);
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4, baseSettings: lazer.settings });
+
+    expect(result.settings.keymodeProfiles["4"].lazerBodies).toBe(false);
+  });
+});
+
 describe("readOskRankingArt", () => {
   it("reads the ranking screen by stable's filenames and lookup order", async () => {
     const file = await buildOsk(

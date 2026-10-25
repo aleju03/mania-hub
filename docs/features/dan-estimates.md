@@ -21,7 +21,7 @@ Chart dan verdicts, and how player clears turn them into a player dan. Classific
 - **6K/7K LN**: same bonus, a 3-point decay with a knee at a third of the window.
 - **4K LN**: its bar is in ScoreV2, where 100% is out of reach on most LN charts, so its bonus is keyed in absolute points over the bar and tops out at +0.7 at 99.7%. Its decay follows the rice line one point further (six points under).
 - **4K rice jack tile**: half the above-bar bonus (`DAN_CREDIT_JACK_BONUS_SCALE`), because 99%+ is what an ordinary jack pass looks like.
-- The minimum played OD for 4K LN credit is 7; DA uses the play's override. EZ, the OD floors and the other credit exclusions apply as usual.
+- The minimum played OD for 4K LN credit is 7; DA uses the play's override. A ranked or approved chart is never held above its own OD (a ranked OD 6 4K LN chart credits at OD 6), but a DA play that lowers it still is. EZ, the OD floors and the other credit exclusions apply as usual.
 - Credits clamp to the ladder's floor/ceiling (`danTableFloorFor`/`danTableCeilingFor`). Reduced credit may keep the chart's display tier but never counts as a full clear.
 
 ## From clears to a player dan
@@ -66,6 +66,8 @@ Fresh analyses register families; `recompute_chart_family_sweep` backfills from 
 
 `backend/src/features/dan-courses.ts` registers the real dan courses (canonical uploads only): Thaumiel's 4K Dan ~ REFORM ~, _underjoy's 4K LN v2 with its extra levels, Jinjin's 7K regular and LN, Arkman's 6K regular and [Crz]sunnyxxy's 6K LN.
 
+- Other uploads count when they are the same exam: `dan-course-fingerprints.ts` holds each listed upload's note fingerprint (the practice-chart fingerprint: every note and hold end, timing offset aside, plus OD), and a copy with the same fingerprint and HP is indexed in `dan_skillset_chart_matches` (on cache, by the registry seed for already-cached files) and credits as that course under its own beatmap id, with `referenceBeatmapId` naming the listed upload. Cuts, edits and rate shifts fingerprint differently and stay ordinary charts. There are no OD variants: Difficulty Adjust still disqualifies a course run. A course added to the registry needs its fingerprint line (the registry test fails without one).
+
 - A verified pass **floors** that keymode and side: `danSideFromClears` takes `max(average, best course credit)`, and on a side without quorum the course is the whole verdict. It never lowers a headline or touches skillset dans. `courseClear` records when it set the number.
 - Each course names its level by community label, resolved through the ladder `danLabelFor` prints (a registry test asserts the round trip).
 - Accuracy sets the offset within the level, on the dan suffix bands every dan uses (`danVariantForOffset`). Course credit is capped under half a level, so an overclear never reads as the next course: it is a single-run floor with no quorum behind it. Under the bar it stops short of a bare level. 4K LN credits from the bar up only. 7K LN has a deeper sub-bar curve, down to 93%.
@@ -75,7 +77,7 @@ Fresh analyses register families; `recompute_chart_family_sweep` backfills from 
 
 `features/dan-skillset-registry.ts` holds the practice-pack charts from `dan_skillset_list.txt` (4K regular, 7K regular and LN, 4K LN stage packs; none for 6K). One qualifying clear grants a baseline on that skillset, independent of the quorum.
 
-- Identity is a note fingerprint (`dan-skillset-identity.ts`: key count, exact OD, every note's column/head/tail). Metadata and global offset are ignored; any upload with the same fingerprint qualifies.
+- Identity is a note fingerprint (`dan-skillset-identity.ts`: key count, exact OD, every note's column/head/tail). Metadata and global offset are ignored; any upload with the same fingerprint qualifies. App imports are matched on the fingerprint of the file they were played on, so an upload the site never cached counts too (`docs/companella-integration.md`).
 - An upload with identical notes but a different OD is an **OD variant**: it counts only on a Difficulty Adjust run that sets the reference OD and changes nothing else that matters (HP not below the file's).
 - At the full bar the baseline is exactly the named tier, with no overclear bonus. Within one point under the bar it takes the "-" credit, and only lifts a tile the player's clears already opened. Below that, or on 4K LN, nothing.
 - The credit applies only inside the registered skillset (a Release/General chart credits Release; General keeps the ordinary credit). Sides with only practice credit carry `skillsetsOnly` and show no overall dan until ordinary evidence or a course supports one.
