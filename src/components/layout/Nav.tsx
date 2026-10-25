@@ -870,7 +870,7 @@ export function Nav() {
                 className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 text-osu-pink-light transition hover:ring-osu-pink/60 cursor-pointer"
                 title={
                   replyAlert.count
-                    ? t`${plural(replyAlert.count, { one: "# new reply", other: "# new replies" })} on your bug reports`
+                    ? t`${plural(replyAlert.count, { one: "# new reply", other: "# new replies" })} on your reports`
                     : auth.viewer ? t`Signed in as ${auth.viewer.username}` : t`Account`
                 }
                 aria-haspopup="menu"
@@ -980,7 +980,7 @@ export function Nav() {
                   )}
                   {/* Outside the signed-in branch on purpose: most people hit
                       a bug before they ever log in, and the form takes a report
-                      either way. */}
+                      or feedback either way. */}
                   <Link
                     to="/report"
                     search={{ from: location.pathname === "/report" ? undefined : location.pathname }}
@@ -989,7 +989,7 @@ export function Nav() {
                     role="menuitem"
                   >
                     <Bug className="h-3.5 w-3.5" />
-                    <Trans>Report a bug</Trans>
+                    <Trans>Bugs and feedback</Trans>
                     {replyAlert.count ? (
                       <span className="relative ml-auto inline-flex">
                         <UnreadBadge count={replyAlert.count} className="static" />
@@ -1294,7 +1294,7 @@ export function Nav() {
                   className="flex w-full items-center gap-3 rounded-lg bg-osu-b4/60 px-3 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-b4 hover:text-white"
                 >
                   <Bug className="h-5 w-5" strokeWidth={2.1} />
-                  {t`Report a bug`}
+                  {t`Bugs and feedback`}
                   {replyAlert.count ? (
                     <span className="relative ml-auto inline-flex">
                       <UnreadBadge count={replyAlert.count} className="static" />

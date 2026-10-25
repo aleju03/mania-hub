@@ -139,12 +139,12 @@ function PrivacyPage() {
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
-            To report a bug, use the{' '}
+            To report a bug or send feedback, use the{' '}
             <a
               href="/report"
               className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
             >
-              Report a bug
+              Bugs and feedback
             </a>{' '}
             form on the site. For privacy, deletion, attribution, takedown, or any other concern,
             email{' '}

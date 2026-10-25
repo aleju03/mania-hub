@@ -67,12 +67,12 @@ function TermsPage() {
         <LegalParagraph>
           <Trans>
             Mania Tracker displays public metadata, cached projections, and derived community views
-            for reference. To report a bug, use the{' '}
+            for reference. To report a bug or send feedback, use the{' '}
             <a
               href="/report"
               className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
             >
-              Report a bug
+              Bugs and feedback
             </a>{' '}
             form on the site. If you own content shown on the site and have an attribution,
             takedown, or data concern, email{' '}

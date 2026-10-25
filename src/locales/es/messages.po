@@ -200,7 +200,12 @@ msgstr "{0, plural, one {# mapa más está oculto porque te daría menos de 1pp}
 
 #. placeholder {0}: replyAlert.count
 #: src/components/layout/Nav.tsx
-msgid "{0, plural, one {# new reply} other {# new replies}} on your bug reports"
+#~ msgid "{0, plural, one {# new reply} other {# new replies}} on your bug reports"
+#~ msgstr "{0, plural, one {# nueva respuesta} other {# nuevas respuestas}} en tus reportes"
+
+#. placeholder {0}: replyAlert.count
+#: src/components/layout/Nav.tsx
+msgid "{0, plural, one {# new reply} other {# new replies}} on your reports"
 msgstr "{0, plural, one {# nueva respuesta} other {# nuevas respuestas}} en tus reportes"
 
 #. placeholder {0}: playerScores.length - replayableScores.length
@@ -3343,6 +3348,10 @@ msgstr "ya reportado"
 msgid "Already set"
 msgstr "Ya está configurada"
 
+#: src/routes/report.tsx
+msgid "already suggested"
+msgstr "ya sugerido"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "already tracked"
 msgstr "ya registrado"
@@ -4293,6 +4302,19 @@ msgstr "Cargando el búfer de audio…"
 #: src/components/replay/ReplayControls.tsx
 msgid "Buffering..."
 msgstr "Cargando..."
+
+#: src/routes/report.tsx
+msgid "Bug"
+msgstr "Error"
+
+#: src/routes/__root.tsx
+msgid "bugs and feedback"
+msgstr "errores y sugerencias"
+
+#: src/components/layout/Nav.tsx
+#: src/routes/report.tsx
+msgid "Bugs and feedback"
+msgstr "Errores y sugerencias"
 
 #: src/routes/maps.tsx
 msgid "Building maps for the first time..."
@@ -6580,6 +6602,7 @@ msgstr "no cuenta"
 #~ msgstr "No cuenta para dan."
 
 #: src/routes/recommendations.tsx
+#: src/routes/report.tsx
 msgid "done"
 msgstr "suficiente"
 
@@ -7416,6 +7439,14 @@ msgstr "FC <0/> en {mapSlot}"
 #: src/routes/tracker.tsx
 msgid "FC chokes only (1 miss)"
 msgstr "Solo chokes de FC (1 miss)"
+
+#: src/routes/report.tsx
+msgid "Feedback"
+msgstr "Sugerencia"
+
+#: src/routes/report.tsx
+msgid "Feedback sent"
+msgstr "Sugerencia enviada"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Feeds"
@@ -8763,8 +8794,12 @@ msgid "Hybrid chart: {0}, {1}"
 msgstr "Mapa híbrido: {0}, {1}"
 
 #: src/routes/news_.prism.tsx
-msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
-msgstr "Si el rating de un chart te parece mal, envíalo por <0>Reportar un error</0>."
+msgid "If a chart's rating looks wrong to you, send it through <0>Bugs and feedback</0>."
+msgstr "Si el rating de un chart te parece mal, envíalo por <0>Errores y sugerencias</0>."
+
+#: src/routes/news_.prism.tsx
+#~ msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
+#~ msgstr "Si el rating de un chart te parece mal, envíalo por <0>Reportar un error</0>."
 
 #: src/routes/news_.companella.tsx
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
@@ -9412,6 +9447,10 @@ msgstr "Modo"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Keys pressed per second."
 msgstr "Teclas presionadas por segundo."
+
+#: src/routes/report.tsx
+msgid "Kind"
+msgstr "Tipo"
 
 #: src/routes/__root.tsx
 msgid "Ko-fi page"
@@ -10453,8 +10492,12 @@ msgid "Mania Tracker counts page views and feature usage with its own first-part
 msgstr "Mania Tracker cuenta las vistas de página y el uso de funciones con su propia analítica de origen, almacenada en el propio servidor del sitio. Los eventos se envían a través del propio endpoint del sitio y pueden incluir la ruta visitada, el país seleccionado, el referente, el idioma del navegador, el tamaño de pantalla y el contexto de la ruta, como un jugador, una puntuación, un conjunto de mapas o una pestaña de mapas que se ha visto. Los eventos se conservan durante 90 días y luego se eliminan."
 
 #: src/routes/terms.tsx
-msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug, use the <0>Report a bug</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
-msgstr "Mania Tracker muestra metadatos públicos, proyecciones en caché y vistas derivadas de la comunidad como referencia. Para informar de un error, usa el formulario <0>Reportar un error</0> del sitio. Si eres propietario de contenido mostrado en el sitio y tienes algún asunto de atribución, retirada o datos, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
+msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+msgstr "Mania Tracker muestra metadatos públicos, proyecciones en caché y vistas derivadas de la comunidad como referencia. Para informar de un error o enviar una sugerencia, usa el formulario <0>Errores y sugerencias</0> del sitio. Si eres propietario de contenido mostrado en el sitio y tienes algún asunto de atribución, retirada o datos, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
+
+#: src/routes/terms.tsx
+#~ msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug, use the <0>Report a bug</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+#~ msgstr "Mania Tracker muestra metadatos públicos, proyecciones en caché y vistas derivadas de la comunidad como referencia. Para informar de un error, usa el formulario <0>Reportar un error</0> del sitio. Si eres propietario de contenido mostrado en el sitio y tienes algún asunto de atribución, retirada o datos, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
 
 #: src/routes/privacy.tsx
 msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
@@ -12268,6 +12311,10 @@ msgstr "Ya no está en osu!"
 #: src/components/me/GoalsPanel.tsx
 msgid "not passed yet"
 msgstr "aún sin pasar"
+
+#: src/routes/report.tsx
+msgid "not planned"
+msgstr "no planeado"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "not played yet"
@@ -15285,13 +15332,13 @@ msgid "Report {0}"
 msgstr "Reportar {0}"
 
 #: src/routes/__root.tsx
-msgid "report a bug"
-msgstr "reportar un error"
+#~ msgid "report a bug"
+#~ msgstr "reportar un error"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/report.tsx
-msgid "Report a bug"
-msgstr "Reportar un error"
+#~ msgid "Report a bug"
+#~ msgstr "Reportar un error"
 
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Report a translation"
@@ -15716,6 +15763,10 @@ msgstr "Guardando…"
 #: src/routes/report.tsx
 msgid "Say a little more about what went wrong."
 msgstr "Cuenta un poco más sobre qué salió mal."
+
+#: src/routes/report.tsx
+msgid "Say a little more."
+msgstr "Cuenta un poco más."
 
 #: src/components/mascot/MascotSprite.tsx
 msgid "say something back"
@@ -16164,11 +16215,19 @@ msgstr "Enviar"
 msgid "Send a tip"
 msgstr "Enviar una propina"
 
+#: src/routes/report.tsx
+msgid "Send feedback"
+msgstr "Enviar sugerencia"
+
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
 msgid "Send report"
 msgstr "Enviar reporte"
+
+#: src/routes/report.tsx
+msgid "Send something else"
+msgstr "Enviar otra cosa"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Send the chart file when the site does not already have it"
@@ -17776,6 +17835,10 @@ msgstr "Envía plays a tu cuenta aunque estés offline, en un servidor privado o
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
 msgstr "Subregiones"
+
+#: src/routes/report.tsx
+msgid "Suggestions, ideas or anything else about the site."
+msgstr "Sugerencias, ideas o cualquier otra cosa sobre el sitio."
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sun"
@@ -19844,8 +19907,12 @@ msgid "To prevent abuse, the server counts requests per IP address for rate limi
 msgstr "Para prevenir el abuso, el servidor cuenta las peticiones por dirección IP con fines de limitación de tasa y limita las conexiones en vivo simultáneas por IP. Estos contadores existen solo en memoria: el backend no escribe direcciones IP ni user agents en su base de datos ni en sus registros. Los proveedores de alojamiento conservan registros de peticiones estándar, y el servidor registra detalles operativos como la actividad de los trabajos, las llamadas a la API de osu! de origen y los errores para monitorizar el estado del servicio."
 
 #: src/routes/privacy.tsx
-msgid "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
-msgstr "Para informar de un error, usa el formulario <0>Reportar un error</0> del sitio. Para asuntos de privacidad, eliminación, atribución, retirada de contenido o cualquier otra cuestión, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
+msgid "To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+msgstr "Para informar de un error o enviar una sugerencia, usa el formulario <0>Errores y sugerencias</0> del sitio. Para asuntos de privacidad, eliminación, atribución, retirada de contenido o cualquier otra cuestión, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
+
+#: src/routes/privacy.tsx
+#~ msgid "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+#~ msgstr "Para informar de un error, usa el formulario <0>Reportar un error</0> del sitio. Para asuntos de privacidad, eliminación, atribución, retirada de contenido o cualquier otra cuestión, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
 
 #: src/lib/changelog.ts
 msgid "today"
@@ -21200,6 +21267,10 @@ msgstr "¿Qué parece estar mal?"
 #~ msgid "What the number is not"
 #~ msgstr "Lo que el número no es"
 
+#: src/routes/report.tsx
+msgid "What would you add or change?"
+msgstr "¿Qué agregarías o cambiarías?"
+
 #: src/routes/hashi.tsx
 msgid "What you need"
 msgstr "Qué necesitas"
@@ -21207,6 +21278,10 @@ msgstr "Qué necesitas"
 #: src/components/me/MyStatsInsights.tsx
 msgid "What you play"
 msgstr "Lo que juegas"
+
+#: src/routes/report.tsx
+msgid "What you sent"
+msgstr "Lo que enviaste"
 
 #: src/routes/recommendations.tsx
 msgid "what you're browsing"
@@ -21809,6 +21884,10 @@ msgstr "Se desactivaron tus renders dinámicos."
 #~ msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
 #~ msgstr "Tu estimación es alpha++, la cuarta. El pase de gamma no te hace gamma: un chart puede ser una racha con suerte, un chart que te viene bien, o el intento entre cincuenta que se quedó por encima del mínimo de precisión. Pedir cuatro es lo que evita que un solo buen día fije tu nivel."
 
+#: src/routes/report.tsx
+msgid "Your feedback was sent, but at least one image did not upload."
+msgstr "Tu sugerencia se envió, pero al menos una imagen no se subió."
+
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Your first {rarity}"
 #~ msgstr "Tu primera {rarity}"
@@ -21940,8 +22019,8 @@ msgid "Your reply was sent, but at least one image did not upload."
 msgstr "Tu respuesta se envió, pero al menos una imagen no se subió."
 
 #: src/routes/report.tsx
-msgid "Your reports"
-msgstr "Tus reportes"
+#~ msgid "Your reports"
+#~ msgstr "Tus reportes"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "your score"

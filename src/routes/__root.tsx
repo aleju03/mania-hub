@@ -781,7 +781,7 @@ function RootLayout() {
                 search={{ from: currentPath === "/report" ? undefined : currentPath }}
                 className="hover:text-osu-pink-light/60 transition-colors"
               >
-                <Trans>report a bug</Trans>
+                <Trans>bugs and feedback</Trans>
               </Link>
               <span aria-hidden="true" className="h-2.5 w-px bg-current opacity-60" />
               <ChangelogFooterLink />

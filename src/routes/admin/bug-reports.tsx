@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Ban,
   Bell,
+  Bug,
   BellOff,
   Check,
   ChevronLeft,
@@ -55,6 +56,7 @@ import {
   updateBugReport,
   type BugReport,
   type BugReportCounts,
+  type BugReportKind,
   type BugReportMessage,
   type BugReportStatus,
 } from "../../lib/bug-reports";
@@ -103,6 +105,13 @@ const ADMIN_THREAD_PREVIEW_COUNT = 6;
 const ADMIN_REPLY_USER_ID = 7095193;
 
 type StatusFilter = BugReportStatus | "all";
+type KindFilter = BugReportKind | "all";
+
+const KIND_FILTERS: { value: KindFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "bug", label: "Bugs" },
+  { value: "feedback", label: "Feedback" },
+];
 
 interface StatusMeta {
   label: string;
@@ -642,6 +651,7 @@ function ReportCard({
   unreadFading,
   busy,
   onStatus,
+  onKind,
   onNote,
   onReply,
   onEditMessage,
@@ -653,6 +663,7 @@ function ReportCard({
   unreadFading: boolean;
   busy: boolean;
   onStatus: (status: BugReportStatus) => void;
+  onKind: (kind: BugReportKind) => void;
   onNote: (note: string) => void;
   onReply: (reply: string, files: File[], notify: boolean) => void;
   onEditMessage: (messageId: string, body: string) => void;
@@ -711,6 +722,12 @@ function ReportCard({
               <span className="rounded bg-osu-b4/60 px-1.5 py-0.5 text-[10.5px] text-osu-l2">{report.pagePath}</span>
             ) : null}
             <span className={`rounded-md border px-1.5 py-0.5 text-[10.5px] ${meta.pill}`}>{meta.label}</span>
+            {report.kind === "feedback" ? (
+              <span className="inline-flex items-center gap-1 text-[11px] text-sky-200">
+                <Lightbulb className="h-3 w-3" />
+                Feedback
+              </span>
+            ) : null}
             {unread ? (
               <span
                 className={`rounded-full bg-osu-red px-1.5 py-[1.5px] text-[9.5px] font-bold uppercase tracking-wide leading-none text-white transition-opacity duration-500 ${
@@ -783,6 +800,17 @@ function ReportCard({
         })}
 
         <div className="ml-auto flex items-center gap-1">
+          <button
+            disabled={busy}
+            onClick={() => onKind(report.kind === "feedback" ? "bug" : "feedback")}
+            title={report.kind === "feedback" ? "Move to bugs" : "Move to feedback"}
+            className={ACTION_CLASS}
+          >
+            {report.kind === "feedback"
+              ? <Bug className="h-3.5 w-3.5" />
+              : <Lightbulb className="h-3.5 w-3.5 text-sky-300" />}
+            {report.kind === "feedback" ? "Bug" : "Feedback"}
+          </button>
           {report.userId ? (
             <button
               disabled={busy}
@@ -824,6 +852,7 @@ function ReportCard({
 
 function BugReportsAdminPage() {
   const [status, setStatus] = useState<StatusFilter>("new");
+  const [kind, setKind] = useState<KindFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -868,6 +897,7 @@ function BugReportsAdminPage() {
       const page = await listBugReports({
         data: {
           status: status === "all" ? undefined : status,
+          kind: kind === "all" ? undefined : kind,
           search: search || undefined,
           limit: PAGE_SIZE,
           offset,
@@ -898,7 +928,7 @@ function BugReportsAdminPage() {
       setReports([]);
       setError("Could not load reports.");
     }
-  }, [status, search, offset]);
+  }, [status, kind, search, offset]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -918,7 +948,7 @@ function BugReportsAdminPage() {
 
   // Any filter change starts at the top; keeping an old offset lands on an
   // empty page whenever the new filter has fewer rows than the old one.
-  useEffect(() => { setOffset(0); }, [status, search]);
+  useEffect(() => { setOffset(0); }, [status, kind, search]);
 
   const act = useCallback(async (id: string, run: () => Promise<unknown>) => {
     setBusyId(id);
@@ -966,16 +996,30 @@ function BugReportsAdminPage() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="h-4 w-1 rounded-full bg-osu-pink" />
-              <h1 className="text-sm font-bold uppercase tracking-[0.14em] text-osu-l1">Bug reports</h1>
+              <h1 className="text-sm font-bold uppercase tracking-[0.14em] text-osu-l1">Bugs and feedback</h1>
             </div>
             <p className="mt-1 text-[11px] text-osu-f1">
               {counts.new} waiting{counts.total ? ` · ${counts.total} filed` : ""}
-              <span className="hidden sm:inline"> · what players say is broken</span>
+              <span className="hidden sm:inline"> · what players send from /report</span>
             </p>
 
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="flex flex-shrink-0 rounded-md border border-osu-b3/50 bg-osu-b6/70 p-0.5">
+              {KIND_FILTERS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setKind(option.value)}
+                  className={`h-[24px] cursor-pointer rounded px-2 text-[11px] font-semibold transition-colors duration-[120ms] ${
+                    kind === option.value ? "bg-osu-b4 text-white" : "text-osu-f1 hover:text-osu-l1"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <div className="relative min-w-0 flex-1 sm:w-[260px] sm:flex-none">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
               <input
@@ -1069,6 +1113,7 @@ function BugReportsAdminPage() {
                 unread={unreadIds.has(report.id)}
                 unreadFading={chipsFading}
                 onStatus={(next) => void act(report.id, () => updateBugReport({ data: { id: report.id, status: next } }))}
+                onKind={(next) => void act(report.id, () => updateBugReport({ data: { id: report.id, kind: next } }))}
                 onNote={(note) => void act(report.id, () => updateBugReport({ data: { id: report.id, adminNote: note } }))}
                 onReply={(body, files, notify) => void sendReply(report.id, body, files, notify)}
                 onEditMessage={(messageId, body) => void act(report.id, () => (
@@ -1103,14 +1148,18 @@ function BugReportsAdminPage() {
               </button>
             </>
           ) : null}
-          <button
-            onClick={() => setClearAsk(true)}
-            disabled={closedCount(counts) === 0}
-            className={`${ACTION_CLASS} ml-auto`}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Clear closed
-          </button>
+          {/* The sweep takes both kinds, so it is offered where the count it
+              quotes covers both. */}
+          {kind === "all" ? (
+            <button
+              onClick={() => setClearAsk(true)}
+              disabled={closedCount(counts) === 0}
+              className={`${ACTION_CLASS} ml-auto`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Clear closed
+            </button>
+          ) : null}
         </div>
       </div>
 

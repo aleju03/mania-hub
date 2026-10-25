@@ -29,6 +29,10 @@ export type BugReportStatus =
   | "duplicate"
   | "notabug";
 
+/** Something broken, or anything else said about the site. One table and one
+ *  thread either way; the kind only changes the wording and what is collected. */
+export type BugReportKind = "bug" | "feedback";
+
 export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
   "new",
   "investigating",
@@ -73,6 +77,7 @@ export interface MyBugReportMessage extends BugReportMessageBase {
 
 export interface BugReport {
   id: string;
+  kind: BugReportKind;
   status: BugReportStatus;
   body: string;
   pagePath: string | null;
@@ -100,6 +105,7 @@ export interface BugReport {
 /** What a reporter may read back about their own report. */
 export interface MyBugReport {
   id: string;
+  kind: BugReportKind;
   status: BugReportStatus;
   body: string;
   pagePath: string | null;
@@ -180,6 +186,7 @@ export function bugReportHasUnreadReporterActivity(report: BugReport): boolean {
 
 export const submitBugReport = createServerFn({ method: "POST" })
   .validator((data: {
+    kind?: BugReportKind;
     body: string;
     pagePath?: string;
     context?: BugReportContext;
@@ -205,6 +212,7 @@ export const submitBugReport = createServerFn({ method: "POST" })
         method: "POST",
         headers,
         body: JSON.stringify({
+          kind: data.kind === "feedback" ? "feedback" : "bug",
           body: data.body,
           pagePath: data.pagePath ?? null,
           context: data.context ?? null,
@@ -332,12 +340,13 @@ export interface BugReportPage {
 }
 
 export const listBugReports = createServerFn({ method: "GET" })
-  .validator((data: { status?: string; search?: string; limit?: number; offset?: number } | undefined) => data ?? {})
+  .validator((data: { status?: string; kind?: BugReportKind; search?: string; limit?: number; offset?: number } | undefined) => data ?? {})
   .handler(async ({ data }): Promise<BugReportPage> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("Bug reports list");
     const query = new URLSearchParams();
     if (data.status) query.set("status", data.status);
+    if (data.kind) query.set("kind", data.kind);
     if (data.search) query.set("search", data.search);
     if (data.limit != null) query.set("limit", String(data.limit));
     if (data.offset != null) query.set("offset", String(data.offset));
@@ -348,7 +357,13 @@ export const listBugReports = createServerFn({ method: "GET" })
   });
 
 export const updateBugReport = createServerFn({ method: "POST" })
-  .validator((data: { id: string; status?: BugReportStatus; adminNote?: string | null; reply?: string | null }) => data)
+  .validator((data: {
+    id: string;
+    status?: BugReportStatus;
+    kind?: BugReportKind;
+    adminNote?: string | null;
+    reply?: string | null;
+  }) => data)
   .handler(async ({ data }): Promise<{ report: BugReport }> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("Bug report update");

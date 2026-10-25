@@ -212,8 +212,13 @@ msgstr "{0, plural, other {还有 # 张图被隐藏，因为它们对你来说�
 
 #. placeholder {0}: replyAlert.count
 #: src/components/layout/Nav.tsx
-msgid "{0, plural, one {# new reply} other {# new replies}} on your bug reports"
-msgstr "{0, plural, other {你的问题反馈有 # 条新回复}}"
+#~ msgid "{0, plural, one {# new reply} other {# new replies}} on your bug reports"
+#~ msgstr "{0, plural, other {你的问题反馈有 # 条新回复}}"
+
+#. placeholder {0}: replyAlert.count
+#: src/components/layout/Nav.tsx
+msgid "{0, plural, one {# new reply} other {# new replies}} on your reports"
+msgstr "{0, plural, other {你的反馈有 # 条新回复}}"
 
 #. placeholder {0}: playerScores.length - replayableScores.length
 #: src/components/replay/ReplayBrowseView.tsx
@@ -3355,6 +3360,10 @@ msgstr "已有人反馈"
 msgid "Already set"
 msgstr "已设置"
 
+#: src/routes/report.tsx
+msgid "already suggested"
+msgstr "已有人建议"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "already tracked"
 msgstr "已记录"
@@ -4305,6 +4314,19 @@ msgstr "正在缓冲音频…"
 #: src/components/replay/ReplayControls.tsx
 msgid "Buffering..."
 msgstr "缓冲中…"
+
+#: src/routes/report.tsx
+msgid "Bug"
+msgstr "问题"
+
+#: src/routes/__root.tsx
+msgid "bugs and feedback"
+msgstr "问题与建议"
+
+#: src/components/layout/Nav.tsx
+#: src/routes/report.tsx
+msgid "Bugs and feedback"
+msgstr "问题与建议"
 
 #: src/routes/maps.tsx
 msgid "Building maps for the first time..."
@@ -6592,6 +6614,7 @@ msgstr "不计入"
 #~ msgstr "不计入段位。"
 
 #: src/routes/recommendations.tsx
+#: src/routes/report.tsx
 msgid "done"
 msgstr "刷够"
 
@@ -7428,6 +7451,14 @@ msgstr "在 {mapSlot} 上 FC（<0/>）"
 #: src/routes/tracker.tsx
 msgid "FC chokes only (1 miss)"
 msgstr "仅 FC 断连（1 miss）"
+
+#: src/routes/report.tsx
+msgid "Feedback"
+msgstr "建议"
+
+#: src/routes/report.tsx
+msgid "Feedback sent"
+msgstr "建议已发送"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Feeds"
@@ -8775,8 +8806,12 @@ msgid "Hybrid chart: {0}, {1}"
 msgstr "混合谱面：{0}，{1}"
 
 #: src/routes/news_.prism.tsx
-msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
-msgstr "如果你觉得某张谱面的评分不对，可以通过<0>问题反馈</0>告诉我们。"
+msgid "If a chart's rating looks wrong to you, send it through <0>Bugs and feedback</0>."
+msgstr "如果你觉得某张谱面的评分不对，可以通过<0>问题与建议</0>发送。"
+
+#: src/routes/news_.prism.tsx
+#~ msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
+#~ msgstr "如果你觉得某张谱面的评分不对，可以通过<0>问题反馈</0>告诉我们。"
 
 #: src/routes/news_.companella.tsx
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
@@ -9424,6 +9459,10 @@ msgstr "键数"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Keys pressed per second."
 msgstr "每秒按键次数。"
+
+#: src/routes/report.tsx
+msgid "Kind"
+msgstr "类型"
 
 #: src/routes/__root.tsx
 msgid "Ko-fi page"
@@ -10465,8 +10504,12 @@ msgid "Mania Tracker counts page views and feature usage with its own first-part
 msgstr "Mania Tracker 用自己的第一方分析来统计页面访问和功能使用情况，数据存在本站自己的服务器上。事件通过本站自己的接口发送，可能包含访问的路由、所选国家/地区、来源页、浏览器语言、屏幕尺寸，以及路由上下文，例如所查看的玩家、成绩、谱面集或谱面标签页。事件保留 90 天后删除。"
 
 #: src/routes/terms.tsx
-msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug, use the <0>Report a bug</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
-msgstr "Mania Tracker 展示公开的元数据、缓存的投影数据和衍生的社区视图，供参考之用。要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如果本站展示的内容归你所有，且你有署名、下架或数据方面的问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
+msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+msgstr "Mania Tracker 展示公开的元数据、缓存的投影数据和衍生的社区视图，供参考之用。要反馈 bug 或提出建议，请使用站内的 <0>问题与建议</0> 表单。如果本站展示的内容归你所有，且你有署名、下架或数据方面的问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
+
+#: src/routes/terms.tsx
+#~ msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug, use the <0>Report a bug</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+#~ msgstr "Mania Tracker 展示公开的元数据、缓存的投影数据和衍生的社区视图，供参考之用。要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如果本站展示的内容归你所有，且你有署名、下架或数据方面的问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
 
 #: src/routes/privacy.tsx
 msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
@@ -12280,6 +12323,10 @@ msgstr "已不在 osu! 上"
 #: src/components/me/GoalsPanel.tsx
 msgid "not passed yet"
 msgstr "还没通过"
+
+#: src/routes/report.tsx
+msgid "not planned"
+msgstr "暂无计划"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "not played yet"
@@ -15297,13 +15344,13 @@ msgid "Report {0}"
 msgstr "举报 {0}"
 
 #: src/routes/__root.tsx
-msgid "report a bug"
-msgstr "问题反馈"
+#~ msgid "report a bug"
+#~ msgstr "问题反馈"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/report.tsx
-msgid "Report a bug"
-msgstr "问题反馈"
+#~ msgid "Report a bug"
+#~ msgstr "问题反馈"
 
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Report a translation"
@@ -15728,6 +15775,10 @@ msgstr "保存中…"
 #: src/routes/report.tsx
 msgid "Say a little more about what went wrong."
 msgstr "请再多写一点出了什么问题。"
+
+#: src/routes/report.tsx
+msgid "Say a little more."
+msgstr "请再多写一点。"
 
 #: src/components/mascot/MascotSprite.tsx
 msgid "say something back"
@@ -16176,11 +16227,19 @@ msgstr "发送"
 msgid "Send a tip"
 msgstr "打赏"
 
+#: src/routes/report.tsx
+msgid "Send feedback"
+msgstr "发送建议"
+
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
 msgid "Send report"
 msgstr "提交反馈"
+
+#: src/routes/report.tsx
+msgid "Send something else"
+msgstr "再发一条"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Send the chart file when the site does not already have it"
@@ -17788,6 +17847,10 @@ msgstr "无论你是离线、在私服上游玩，还是被 osu! 限制，都可
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
 msgstr "子区域"
+
+#: src/routes/report.tsx
+msgid "Suggestions, ideas or anything else about the site."
+msgstr "建议、想法，或关于本站的任何其它内容。"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sun"
@@ -19856,8 +19919,12 @@ msgid "To prevent abuse, the server counts requests per IP address for rate limi
 msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"
 
 #: src/routes/privacy.tsx
-msgid "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
-msgstr "要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如有隐私、删除、署名、下架或其它任何问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
+msgid "To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+msgstr "要反馈 bug 或提出建议，请使用站内的 <0>问题与建议</0> 表单。如有隐私、删除、署名、下架或其它任何问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
+
+#: src/routes/privacy.tsx
+#~ msgid "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
+#~ msgstr "要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如有隐私、删除、署名、下架或其它任何问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
 
 #: src/lib/changelog.ts
 msgid "today"
@@ -21212,6 +21279,10 @@ msgstr "哪里看起来不对？"
 #~ msgid "What the number is not"
 #~ msgstr "这个数字不是什么"
 
+#: src/routes/report.tsx
+msgid "What would you add or change?"
+msgstr "你想增加或修改什么？"
+
 #: src/routes/hashi.tsx
 msgid "What you need"
 msgstr "需要什么"
@@ -21219,6 +21290,10 @@ msgstr "需要什么"
 #: src/components/me/MyStatsInsights.tsx
 msgid "What you play"
 msgstr "你在玩什么"
+
+#: src/routes/report.tsx
+msgid "What you sent"
+msgstr "我发送的内容"
 
 #: src/routes/recommendations.tsx
 msgid "what you're browsing"
@@ -21821,6 +21896,10 @@ msgstr "你的动态渲染图已被关闭。"
 #~ msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
 #~ msgstr "你的估算是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
 
+#: src/routes/report.tsx
+msgid "Your feedback was sent, but at least one image did not upload."
+msgstr "建议已发送，但至少有一张图片没能上传。"
+
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Your first {rarity}"
 #~ msgstr "你的第一张{rarity}"
@@ -21952,8 +22031,8 @@ msgid "Your reply was sent, but at least one image did not upload."
 msgstr "回复已发送，但至少有一张图片没能上传。"
 
 #: src/routes/report.tsx
-msgid "Your reports"
-msgstr "我的反馈"
+#~ msgid "Your reports"
+#~ msgstr "我的反馈"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "your score"
