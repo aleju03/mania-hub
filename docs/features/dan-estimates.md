@@ -21,7 +21,7 @@ Chart dan verdicts, and how player clears turn them into a player dan. Classific
 - **6K/7K LN**: same bonus, a 3-point decay with a knee at a third of the window.
 - **4K LN**: its bar is in ScoreV2, where 100% is out of reach on most LN charts, so its bonus is keyed in absolute points over the bar and tops out at +0.7 at 99.7%. Its decay follows the rice line one point further (six points under).
 - **4K rice jack tile**: half the above-bar bonus (`DAN_CREDIT_JACK_BONUS_SCALE`), because 99%+ is what an ordinary jack pass looks like.
-- The minimum played OD for 4K LN credit is 7; DA uses the play's override. EZ, the OD floors and the other credit exclusions apply as usual.
+- The minimum played OD for 4K LN credit is 7; DA uses the play's override. A ranked or approved chart is never held above its own OD (a ranked OD 6 4K LN chart credits at OD 6), but a DA play that lowers it still is. EZ, the OD floors and the other credit exclusions apply as usual.
 - Credits clamp to the ladder's floor/ceiling (`danTableFloorFor`/`danTableCeilingFor`). Reduced credit may keep the chart's display tier but never counts as a full clear.
 
 ## From clears to a player dan
