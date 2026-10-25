@@ -12,7 +12,6 @@ import { SettingsDrawer } from "./SettingsDrawer";
 import { preloadSettingsPanel } from "../settings/LazySettingsPanel";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
-import { useBannedUsersAlert } from "../../lib/banned-users-alert";
 import { useBugReportAlert } from "../../lib/bug-report-alert";
 import { useReplyAlert } from "../../lib/reply-alert";
 import { searchPlayers, searchPlayersOnOsu } from "../../lib/player-search";
@@ -234,13 +233,8 @@ export function Nav() {
   // Reporters answering a thread are the one admin surface that goes stale
   // silently, so the button says so before it is opened.
   const bugReportAlert = useBugReportAlert(adminMode);
-  // Accounts osu! stopped serving, deactivated and waiting for a look.
-  const bannedUsersCount = useBannedUsersAlert(adminMode);
-  const adminAlertCount = bugReportAlert.count + bannedUsersCount;
-  const adminAlertTitle = [
-    bugReportAlert.count ? `${bugReportAlert.count} unread bug report${bugReportAlert.count === 1 ? "" : "s"}` : null,
-    bannedUsersCount ? `${bannedUsersCount} new banned user${bannedUsersCount === 1 ? "" : "s"}` : null,
-  ].filter(Boolean).join(", ");
+  const adminAlertCount = bugReportAlert.count;
+  const adminAlertTitle = bugReportAlert.count ? `${bugReportAlert.count} unread bug report${bugReportAlert.count === 1 ? "" : "s"}` : "";
   // The other direction: an answer the owner chose to notify the viewer about.
   // It rides their own avatar, and /report is what clears it.
   const replyAlert = useReplyAlert(Boolean(auth.viewer));
@@ -859,9 +853,6 @@ export function Nav() {
                             {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
                               <UnreadBadge count={bugReportAlert.count} className="right-2 top-1/2 -translate-y-1/2" />
                             ) : null}
-                            {tool.to === "/admin/players" && bannedUsersCount ? (
-                              <UnreadBadge count={bannedUsersCount} className="right-2 top-1/2 -translate-y-1/2" />
-                            ) : null}
                           </Link>
                         ))}
                       </div>
@@ -1335,9 +1326,6 @@ export function Nav() {
                             {tool.label}
                             {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
                               <UnreadBadge count={bugReportAlert.count} className="right-1.5 top-1.5" />
-                            ) : null}
-                            {tool.to === "/admin/players" && bannedUsersCount ? (
-                              <UnreadBadge count={bannedUsersCount} className="right-1.5 top-1.5" />
                             ) : null}
                           </Link>
                         ))}
