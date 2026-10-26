@@ -21,6 +21,7 @@ import type { ReplaySpectatorTicket } from "./replay-spectator";
 import { LEADERBOARD_PAGE_SIZE, type ClearLeaderboardSnapshot, type DanLeaderboardSnapshot, type DanSide, type SkillLeaderboardSnapshot } from "./skill-leaderboards";
 import type { UnratedPlaysSnapshot } from "./unrated-plays";
 import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-event-source";
+import { parseCustomTheme, type CustomTheme } from "./custom-themes";
 import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource } from "./shared-event-source";
 
 export type LivePlayerSkills = MyDataSkillBreakdown;
@@ -4702,6 +4703,8 @@ export interface SupporterProfileLook {
   nameFont: SupporterNameFontId | null;
   profileTheme: SupporterProfileThemeId | null;
   profileThemeOptions: ProfileThemeOptions;
+  /* Their own theme, when they wear one instead of a built-in (profileTheme is then null). */
+  customTheme: CustomTheme | null;
   /* The supporter's four insight cards, null for the usual four. */
   profileStats: ProfileStatId[] | null;
   profileStatsData: ProfileStatsData;
@@ -4714,7 +4717,7 @@ export interface SupporterProfileLook {
   /* The figure beside their profile's numbers, null for none. */
   companion: SupporterCompanion | null;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4764,6 +4767,7 @@ export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
     nameFont: isSupporterNameFont(body.nameFont) ? body.nameFont : null,
     profileTheme: isSupporterProfileTheme(body.profileTheme) ? body.profileTheme : null,
     profileThemeOptions: parseProfileThemeOptions(body.profileThemeOptions),
+    customTheme: parseCustomTheme(body.customTheme),
     profileStats: parseProfileStats(body.profileStats),
     profileStatsData: parseProfileStatsData(body.profileStatsData),
     profilePlays: parseProfilePlays(body.profilePlays),
@@ -4834,6 +4838,10 @@ export function peekLiveSupporterProfileTheme(userId: number): SupporterProfileT
   return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.profileTheme;
 }
 
+export function peekLiveSupporterCustomTheme(userId: number): CustomTheme | null | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.customTheme;
+}
+
 export function peekLiveSupporterProfileThemeOptions(userId: number): ProfileThemeOptions | undefined {
   return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.profileThemeOptions;
 }
@@ -4871,7 +4879,7 @@ let nameStyleMap: {
   fonts: Map<number, SupporterNameFontId>;
   frames: Map<number, SupporterAvatarFrameId>;
   sleeves: Map<number, SupporterCardSleeveId>;
-  themes: Map<number, SupporterProfileThemeId>;
+  themes: Map<number, SupporterRowTheme>;
 } | null = null;
 let nameStyleMapInflight = false;
 // set after a local save, so the next fetch skips the HTTP cache (max-age 60)
@@ -4903,7 +4911,11 @@ export function getSupporterSleeve(userId: number): SupporterCardSleeveId | null
 
 /* Every supporter's profile theme, for the banners behind list rows (the
    same map; a new Map whenever it changes, so it works as a store snapshot). */
-export function getSupporterListThemes(): ReadonlyMap<number, SupporterProfileThemeId> | null {
+/* What a list row shows behind a supporter: a built-in theme's strip, or a custom theme's banner row image. */
+export type SupporterRowTheme = SupporterProfileThemeId | { image: string };
+const CUSTOM_ROW_URL = /^https:\/\/cdn\.mania-tracker\.com\/theme-assets\/[a-f0-9]{64}\.webp$/;
+
+export function getSupporterListThemes(): ReadonlyMap<number, SupporterRowTheme> | null {
   return nameStyleMap?.themes ?? null;
 }
 
@@ -4923,7 +4935,7 @@ export function ensureSupporterNameStyles(): void {
   nameStyleMapInflight = true;
   const reload = nameStyleMapReload;
   nameStyleMapReload = false;
-  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown> }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
+  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown>; customRows?: Record<string, unknown> }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
     .then((body) => {
       const styles = new Map<number, SupporterNameStyleId>();
       for (const [id, style] of Object.entries(body?.styles ?? {})) if (isSupporterNameStyle(style)) styles.set(Number(id), style);
@@ -4933,8 +4945,9 @@ export function ensureSupporterNameStyles(): void {
       for (const [id, frame] of Object.entries(body?.frames ?? {})) if (isSupporterAvatarFrame(frame)) frames.set(Number(id), frame);
       const sleeves = new Map<number, SupporterCardSleeveId>();
       for (const [id, sleeve] of Object.entries(body?.sleeves ?? {})) if (isSupporterCardSleeve(sleeve)) sleeves.set(Number(id), sleeve);
-      const themes = new Map<number, SupporterProfileThemeId>();
+      const themes = new Map<number, SupporterRowTheme>();
       for (const [id, theme] of Object.entries(body?.themes ?? {})) if (isSupporterProfileTheme(theme)) themes.set(Number(id), theme);
+      for (const [id, url] of Object.entries(body?.customRows ?? {})) if (typeof url === "string" && CUSTOM_ROW_URL.test(url)) themes.set(Number(id), { image: url });
       nameStyleMap = { at: Date.now(), styles, fonts, frames, sleeves, themes };
       for (const listener of nameStyleListeners) listener();
     })
@@ -4956,7 +4969,7 @@ export function setSupporterFrameLocally(userId: number, frame: SupporterAvatarF
 }
 
 /* After the supporter page saves a theme, so the viewer's own rows update. */
-export function setSupporterThemeLocally(userId: number, theme: SupporterProfileThemeId | null): void {
+export function setSupporterThemeLocally(userId: number, theme: SupporterRowTheme | null): void {
   const themes = new Map(nameStyleMap?.themes ?? []);
   if (theme) themes.set(userId, theme);
   else themes.delete(userId);

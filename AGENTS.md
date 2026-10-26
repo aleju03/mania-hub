@@ -43,7 +43,7 @@ Client state: one Zustand store persisted to localStorage as `mania-hub-cache-v5
 
 ## Shared code under backend/
 
-The dan estimator (`backend/src/dan/`, including the chart classifier), the vendored LeoBlack engine (`backend/vendor/leoblack`) and the replay judge (`backend/src/replay-judge/`) exist once, under `backend/` (it compiles with `rootDir: "src"` to the flat `dist/` prod runs). The frontend imports them as `#dan/*`, `#leoblack/*` and `#replay-judge/*`.
+The dan estimator (`backend/src/dan/`, including the chart classifier), the vendored LeoBlack engine (`backend/vendor/leoblack`), the replay judge (`backend/src/replay-judge/`) and the custom theme checker (`backend/src/custom-themes/`) exist once, under `backend/` (it compiles with `rootDir: "src"` to the flat `dist/` prod runs). The frontend imports them as `#dan/*`, `#leoblack/*`, `#replay-judge/*` and `#custom-themes/*`.
 
 - Each alias lives in `tsconfig.json` `paths`, `package.json` `imports` and `vitest.config.ts` (which deliberately skips `vite.config.ts`); change all three together.
 - Their tests are in `backend/tests/` (`dan-*`, `replay-judge`): run the backend suite and the root `npx tsc --noEmit`.

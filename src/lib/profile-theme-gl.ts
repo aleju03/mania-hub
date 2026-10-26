@@ -1,5 +1,7 @@
+import { CUSTOM_THEME_INPUTS, CUSTOM_THEME_TEXTURES } from "#custom-themes/inputs";
+import { customThemeKey, reportCustomThemeCrash, type CustomTheme } from "./custom-themes";
 import { createSakuraPetals, type ThemeOverlay } from "./profile-theme-petals";
-import { PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
+import { PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
 import { HIGHWAY_MAX_LANES, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { takeGpuSlot } from "./gpu-queue";
 
@@ -15,7 +17,28 @@ import { takeGpuSlot } from "./gpu-queue";
    - Under reduced motion every one draws a single still.
    - The Note highway can be handed a player's replay skin notes
      (use-highway-notes.ts): the lane count, an atlas of each lane's note and
-     their colours, as uniforms the other themes simply do not declare. */
+     their colours, as uniforms the other themes simply do not declare.
+   - A supporter's own theme (custom-themes.ts) runs the code the backend
+     checked and guarded, with its images on units 5 to 8. A stranger wrote
+     it, so it has to prove itself: its first frames are drawn tiny and timed
+     before it goes full size, it gives up to its still (onFallback) if it is
+     too slow even at the governor's floor, and a lost context while it runs
+     is reported as its crash. */
+
+/* A built-in theme by id, or a supporter's own. */
+export type BackdropTheme = SupporterProfileThemeId | CustomTheme;
+
+function themeKey(theme: BackdropTheme): string {
+  return typeof theme === "string" ? theme : customThemeKey(theme);
+}
+
+function themeSource(theme: BackdropTheme): string | null {
+  if (typeof theme === "string") return PROFILE_THEME_SHADERS[theme];
+  return theme.compiled ? `${PROFILE_THEME_PRELUDE}\n${CUSTOM_THEME_INPUTS}\n${theme.compiled}\n${PROFILE_THEME_MAIN}` : null;
+}
+
+/* The unit a custom theme's first image sits on; the rest follow. */
+const CUSTOM_TEXTURE_UNIT = 5;
 
 interface Compiled {
   program: WebGLProgram;
@@ -38,6 +61,8 @@ interface Compiled {
   chartLaneEnd: WebGLUniformLocation | null;
   judgements: WebGLUniformLocation | null;
   sprite: WebGLUniformLocation | null;
+  textures: (WebGLUniformLocation | null)[];
+  textureSizes: (WebGLUniformLocation | null)[];
 }
 
 /* Licensed art a theme's shader draws (sources in public/images/profile-themes/SOURCES.md). */
@@ -59,10 +84,10 @@ function reducedMotion(): boolean {
 }
 
 class ThemeContext {
-  private programs = new Map<SupporterProfileThemeId, Compiled | null>();
+  private programs = new Map<string, Compiled | null>();
   /* Linked but not yet checked: with KHR_parallel_shader_compile the driver
      compiles in the background and the check waits until it says it is done. */
-  private pending = new Map<SupporterProfileThemeId, { program: WebGLProgram; fragment: WebGLShader }>();
+  private pending = new Map<string, { program: WebGLProgram; fragment: WebGLShader }>();
   private parallel: { COMPLETION_STATUS_KHR: number } | null;
   private overlays = new Map<SupporterProfileThemeId, ThemeOverlay | null>();
   private quad: WebGLBuffer | null;
@@ -79,6 +104,8 @@ class ThemeContext {
   private blank: WebGLTexture | null = null;
   /* The site's default judgements, built once the first time a shader asks. */
   private defaultJudgements: HTMLCanvasElement | null | undefined;
+  /* Custom themes' images by URL once loaded, with their size; null while loading or if it failed. */
+  private images = new Map<string, { texture: WebGLTexture; width: number; height: number } | null>();
 
   constructor(readonly gl: WebGL2RenderingContext) {
     this.parallel = gl.getExtension("KHR_parallel_shader_compile");
@@ -109,12 +136,7 @@ class ThemeContext {
   /* Binds the theme's sprite on unit 4, loading it the first time. */
   private bindSprite(theme: SupporterProfileThemeId) {
     const { gl } = this;
-    if (!this.blank) {
-      this.blank = gl.createTexture();
-      gl.activeTexture(gl.TEXTURE4);
-      gl.bindTexture(gl.TEXTURE_2D, this.blank);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
-    }
+    this.ensureBlank();
     const url = THEME_SPRITES[theme];
     if (url && !this.sprites.has(theme)) {
       this.sprites.set(theme, null);
@@ -138,6 +160,54 @@ class ThemeContext {
     }
     gl.activeTexture(gl.TEXTURE4);
     gl.bindTexture(gl.TEXTURE_2D, this.sprites.get(theme) ?? this.blank);
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
+  /* Binds a custom theme's images on units 5 to 8, loading each the first
+     time; a blank stands in while one loads, or for none. */
+  private bindImages(theme: CustomTheme, compiled: Compiled) {
+    const { gl } = this;
+    this.ensureBlank();
+    for (let index = 0; index < CUSTOM_THEME_TEXTURES; index++) {
+      const url = theme.assets[index];
+      if (url && !this.images.has(url)) {
+        this.images.set(url, null);
+        const image = new Image();
+        image.crossOrigin = "anonymous";
+        image.decoding = "async";
+        image.onload = () => {
+          const texture = gl.createTexture();
+          if (!texture) return;
+          gl.activeTexture(gl.TEXTURE0 + CUSTOM_TEXTURE_UNIT + index);
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+          gl.generateMipmap(gl.TEXTURE_2D);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+          gl.activeTexture(gl.TEXTURE0);
+          this.images.set(url, { texture, width: image.naturalWidth, height: image.naturalHeight });
+        };
+        image.src = url;
+      }
+      const loaded = url ? this.images.get(url) : null;
+      gl.activeTexture(gl.TEXTURE0 + CUSTOM_TEXTURE_UNIT + index);
+      gl.bindTexture(gl.TEXTURE_2D, loaded?.texture ?? this.blank);
+      gl.uniform1i(compiled.textures[index], CUSTOM_TEXTURE_UNIT + index);
+      gl.uniform2f(compiled.textureSizes[index], loaded?.width ?? 1, loaded?.height ?? 1);
+    }
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
+  private ensureBlank() {
+    if (this.blank) return;
+    const { gl } = this;
+    this.blank = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, this.blank);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
     gl.activeTexture(gl.TEXTURE0);
   }
 
@@ -228,29 +298,35 @@ class ThemeContext {
      thread until it finishes, so without the parallel extension they take
      turns (gpu-queue.ts) and a page of swatches fills in over a few frames
      instead of freezing while every one compiles. */
-  private compiled(theme: SupporterProfileThemeId): Compiled | null | undefined {
-    if (this.programs.has(theme)) return this.programs.get(theme)!;
+  private compiled(theme: BackdropTheme): Compiled | null | undefined {
+    const key = themeKey(theme);
+    if (this.programs.has(key)) return this.programs.get(key)!;
     const { gl } = this;
-    let pending = this.pending.get(theme);
+    let pending = this.pending.get(key);
     if (!pending) {
+      const source = themeSource(theme);
+      if (!source) {
+        this.programs.set(key, null);
+        return null;
+      }
       if (!this.parallel && !takeGpuSlot()) return undefined;
       const fragment = gl.createShader(gl.FRAGMENT_SHADER);
       const program = gl.createProgram();
       if (!this.vertex || !fragment || !program) {
-        this.programs.set(theme, null);
+        this.programs.set(key, null);
         return null;
       }
-      gl.shaderSource(fragment, PROFILE_THEME_SHADERS[theme]);
+      gl.shaderSource(fragment, source);
       gl.compileShader(fragment);
       gl.attachShader(program, this.vertex);
       gl.attachShader(program, fragment);
       gl.bindAttribLocation(program, 0, "a_position");
       gl.linkProgram(program);
       pending = { program, fragment };
-      this.pending.set(theme, pending);
+      this.pending.set(key, pending);
     }
     if (this.parallel && !gl.getProgramParameter(pending.program, this.parallel.COMPLETION_STATUS_KHR)) return undefined;
-    this.pending.delete(theme);
+    this.pending.delete(key);
     const { program, fragment } = pending;
     let compiled: Compiled | null = null;
     if (gl.getProgramParameter(program, gl.LINK_STATUS)) {
@@ -275,18 +351,26 @@ class ThemeContext {
         chartLaneEnd: gl.getUniformLocation(program, "u_chartLaneEnd"),
         judgements: gl.getUniformLocation(program, "u_judgements"),
         sprite: gl.getUniformLocation(program, "u_sprite"),
+        textures: Array.from({ length: CUSTOM_THEME_TEXTURES }, (_, index) => gl.getUniformLocation(program, `u_tex${index}`)),
+        textureSizes: Array.from({ length: CUSTOM_THEME_TEXTURES }, (_, index) => gl.getUniformLocation(program, `u_texSize${index}`)),
       };
     } else if (import.meta.env.DEV) {
       console.warn("profile theme shader", gl.getShaderInfoLog(fragment) || gl.getProgramInfoLog(program));
     }
     gl.deleteShader(fragment);
-    this.programs.set(theme, compiled);
+    this.programs.set(key, compiled);
     return compiled;
   }
 
   /* Whether the theme's program is still on its way (draw() skips it until then). */
-  compiling(theme: SupporterProfileThemeId): boolean {
-    return !this.programs.has(theme);
+  compiling(theme: BackdropTheme): boolean {
+    return !this.programs.has(themeKey(theme));
+  }
+
+  /* Whether the theme can't be drawn at all: it failed to compile, or only shows its still. */
+  failed(theme: BackdropTheme): boolean {
+    const key = themeKey(theme);
+    return this.programs.has(key) && this.programs.get(key) === null;
   }
 
   private overlay(theme: SupporterProfileThemeId): ThemeOverlay | null {
@@ -300,7 +384,7 @@ class ThemeContext {
     return this.overlays.get(theme) ?? null;
   }
 
-  draw(theme: SupporterProfileThemeId, width: number, height: number, time: number, pointer: [number, number], scroll: number, notes: HighwayNotes | null = null, chart: HighwayChart | null = null): boolean {
+  draw(theme: BackdropTheme, width: number, height: number, time: number, pointer: [number, number], scroll: number, notes: HighwayNotes | null = null, chart: HighwayChart | null = null): boolean {
     const compiled = this.compiled(theme);
     if (!compiled) return false;
     const { gl } = this;
@@ -339,16 +423,17 @@ class ThemeContext {
       const accent = notes?.accent ?? [0.3, 0.5, 1];
       gl.uniform3f(compiled.accent, accent[0], accent[1], accent[2]);
     }
-    if (compiled.sprite) {
+    if (compiled.sprite && typeof theme === "string") {
       this.bindSprite(theme);
       gl.uniform1i(compiled.sprite, 4);
     }
+    if (typeof theme !== "string") this.bindImages(theme, compiled);
     if (compiled.judgements) {
       this.uploadJudgements(notes?.judgements ?? null);
       gl.uniform1i(compiled.judgements, 3);
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    this.overlay(theme)?.draw(width, height, time, pointer, scroll);
+    if (typeof theme === "string") this.overlay(theme)?.draw(width, height, time, pointer, scroll);
     return true;
   }
 }
@@ -374,6 +459,8 @@ const MIN_PIXEL_SCALE = 0.12;
 export class ResolutionGovernor {
   /* The share of the pixel budget to draw at. */
   scale = 1;
+  /* Frames ran slow with the scale already at its floor: nothing left to give. */
+  starved = false;
   private ceiling = 1;
   private gaps: number[] = [];
   private fastWindows = 0;
@@ -391,7 +478,10 @@ export class ResolutionGovernor {
     this.gaps.length = 0;
     if (median > SLOW_FRAME_MS) {
       this.fastWindows = 0;
-      if (this.scale <= MIN_PIXEL_SCALE) return false;
+      if (this.scale <= MIN_PIXEL_SCALE) {
+        this.starved = true;
+        return false;
+      }
       this.ceiling = this.scale * 0.8;
       this.scale = Math.max(MIN_PIXEL_SCALE, this.scale * 0.55);
       return true;
@@ -403,10 +493,25 @@ export class ResolutionGovernor {
     }
     return false;
   }
+
+  /* Starts lower than full, for a theme whose first frames showed it is heavy. */
+  start(scale: number) {
+    this.scale = Math.max(MIN_PIXEL_SCALE, Math.min(1, scale));
+    this.ceiling = 1;
+  }
 }
 
+/* A custom theme's first frames are drawn this small and timed. */
+const PROBE_WIDTH = 96;
+const PROBE_HEIGHT = 54;
+const PROBE_FRAMES = 2;
+/* Slower than this even that small (a fraction of a phone's worth of pixels): it shows its still. */
+const PROBE_GIVE_UP_MS = 40;
+/* The frame time it should start at once full size, ms. */
+const PROBE_TARGET_MS = 12;
+
 export interface ProfileBackdrop {
-  setTheme(theme: SupporterProfileThemeId): void;
+  setTheme(theme: BackdropTheme): void;
   setNotes(notes: HighwayNotes | null): void;
   setChart(chart: HighwayChart | null): void;
   dispose(): void;
@@ -417,8 +522,13 @@ export interface ProfileBackdrop {
    WebGL2, where the host's flat colour stays. */
 export function mountProfileBackdrop(
   host: HTMLElement,
-  initial: SupporterProfileThemeId,
-  { scroll = false, maxPixels = 1_000_000 }: { scroll?: boolean; maxPixels?: number } = {},
+  initial: BackdropTheme,
+  { scroll = false, maxPixels = 1_000_000, onFallback }: {
+    scroll?: boolean;
+    maxPixels?: number;
+    /** A custom theme that can't run here (too slow, failed, crashed): show its still instead. */
+    onFallback?: (theme: CustomTheme) => void;
+  } = {},
 ): ProfileBackdrop | null {
   const canvas = document.createElement("canvas");
   canvas.setAttribute("aria-hidden", "true");
@@ -440,7 +550,50 @@ export function mountProfileBackdrop(
   const pointer: [number, number] = [0.5, 0.65];
   let target: [number, number] = [0.5, 0.65];
   let client: [number, number] | null = null;
-  const governor = new ResolutionGovernor();
+  let governor = new ResolutionGovernor();
+  /* A custom theme's timed first frames: how many drawn so far, and the slowest. */
+  let probe: { frames: number; worst: number } | null = typeof initial === "string" ? null : { frames: 0, worst: 0 };
+  let gaveUp = false;
+
+  const giveUp = (custom: CustomTheme) => {
+    if (gaveUp) return;
+    gaveUp = true;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    canvas.style.opacity = "0";
+    onFallback?.(custom);
+  };
+
+  /* Draws a custom theme's first frames tiny and waits for the GPU each time:
+     too slow even so and it gives up; otherwise the governor starts at the
+     share of the pixel budget its timing says it can carry. */
+  const runProbe = (custom: CustomTheme, time: number): boolean => {
+    if (!probe) return true;
+    if (canvas.width !== PROBE_WIDTH || canvas.height !== PROBE_HEIGHT) {
+      canvas.width = PROBE_WIDTH;
+      canvas.height = PROBE_HEIGHT;
+    }
+    const startedAt = performance.now();
+    if (!context.draw(custom, PROBE_WIDTH, PROBE_HEIGHT, time, pointer, 0)) {
+      if (context.failed(custom)) giveUp(custom);
+      return false;
+    }
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+    const took = performance.now() - startedAt;
+    probe.frames += 1;
+    // the first one also pays for the driver's warm-up
+    if (probe.frames > 1) probe.worst = Math.max(probe.worst, took);
+    if (probe.frames <= PROBE_FRAMES) return false;
+    if (probe.worst > PROBE_GIVE_UP_MS) {
+      giveUp(custom);
+      return false;
+    }
+    const full = Math.min(maxPixels, host.clientWidth * host.clientHeight * (window.devicePixelRatio || 1) ** 2);
+    const estimate = probe.worst * (full / (PROBE_WIDTH * PROBE_HEIGHT));
+    if (estimate > PROBE_TARGET_MS) governor.start(PROBE_TARGET_MS / estimate);
+    probe = null;
+    return true;
+  };
 
   const size = () => {
     const width = host.clientWidth, height = host.clientHeight;
@@ -463,7 +616,12 @@ export function mountProfileBackdrop(
     pointer[0] += (target[0] - pointer[0]) * 0.06;
     pointer[1] += (target[1] - pointer[1]) * 0.06;
     const time = still ? STILL_TIME : (now - start) / 1000;
+    if (typeof theme !== "string" && (gaveUp || !runProbe(theme, time) || !size())) return;
     const scrolled = scroll ? window.scrollY / Math.max(window.innerHeight, 1) : 0;
+    if (typeof theme !== "string" && context.failed(theme)) {
+      giveUp(theme);
+      return;
+    }
     if (context.draw(theme, canvas.width, canvas.height, time, pointer, scrolled, notes, chart) && !shown) {
       shown = true;
       canvas.style.opacity = "1";
@@ -475,7 +633,7 @@ export function mountProfileBackdrop(
     stillFrame = 0;
     if (disposed) return;
     render(performance.now());
-    if (context.compiling(theme)) stillFrame = requestAnimationFrame(renderStill);
+    if (context.compiling(theme) || (probe && !gaveUp)) stillFrame = requestAnimationFrame(renderStill);
   };
 
   let drawnScroll = -1;
@@ -485,6 +643,11 @@ export function mountProfileBackdrop(
     if (disposed) return;
     if (drewAt) governor.frame(now - drewAt);
     drewAt = 0;
+    // a stranger's theme that can't hold its frames even at the floor stops
+    if (governor.starved && typeof theme !== "string") {
+      giveUp(theme);
+      return;
+    }
     // ~60fps at most: a 120Hz or 144Hz screen draws every other frame. While
     // the page scrolls it draws every frame, or whatever the shader ties to
     // the page (the hero's sun, the black hole) trails the content and steps,
@@ -514,6 +677,11 @@ export function mountProfileBackdrop(
     event.preventDefault();
     cancelAnimationFrame(frame);
     disposed = true;
+    // lost while a custom theme ran: most likely its doing
+    if (typeof theme !== "string") {
+      reportCustomThemeCrash(theme);
+      giveUp(theme);
+    }
   };
   canvas.addEventListener("webglcontextlost", onLost);
 
@@ -525,9 +693,19 @@ export function mountProfileBackdrop(
 
   return {
     setTheme(next) {
-      if (next === theme) return;
+      if (themeKey(next) === themeKey(theme)) return;
       theme = next;
+      // a custom theme proves itself from the start, out of sight while its
+      // tiny first frames draw; built-ins swap programs under the old frame
+      if (typeof next !== "string" || gaveUp) {
+        probe = typeof next === "string" ? null : { frames: 0, worst: 0 };
+        governor = new ResolutionGovernor();
+        gaveUp = false;
+        shown = false;
+        canvas.style.opacity = "0";
+      }
       if (still && !stillFrame) renderStill();
+      else if (!still && !frame && !disposed) frame = requestAnimationFrame(loop);
     },
     setNotes(next) {
       if (next === notes) return;

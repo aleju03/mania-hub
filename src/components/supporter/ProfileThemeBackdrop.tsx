@@ -1,15 +1,18 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PROFILE_THEME_LOOKS, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
-import type { ProfileBackdrop } from "../../lib/profile-theme-gl";
+import { customThemeKey, isCustomThemeBadHere } from "../../lib/custom-themes";
+import type { BackdropTheme, ProfileBackdrop } from "../../lib/profile-theme-gl";
 import { queueGpuWork } from "../../lib/gpu-queue";
 import { useWebGlSlot } from "../../lib/gl-budget";
 
 /* A profile theme's living backdrop, filling the box it is given. Shows the
    theme's flat colour until the shader (loaded on demand) draws, and fades
-   from one theme to the next by keeping the canvas and swapping its program. */
+   from one theme to the next by keeping the canvas and swapping its program.
+   A supporter's own theme shows its still instead when it may only show that,
+   has crashed on this device, or proves too slow here. */
 export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll = false, maxPixels, className }: {
-  theme: SupporterProfileThemeId;
+  theme: BackdropTheme;
   /** A player's replay skin notes, for the Note highway. */
   notes?: HighwayNotes | null;
   /** A real chart for the Note highway to play. */
@@ -29,10 +32,20 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
   chartRef.current = chart;
   // a context only while it holds a slot (gl-budget.ts); the flat colour shows otherwise
   const glSlot = useWebGlSlot(hostRef);
+  /* The custom theme revision that fell back to its still here, if any. */
+  const [fellBack, setFellBack] = useState<string | null>(null);
+  const custom = typeof theme === "string" ? null : theme;
+  const customKey = custom ? customThemeKey(custom) : null;
+  // read after hydration: the server can't know what crashed on this device
+  const [badHere, setBadHere] = useState(false);
+  useEffect(() => {
+    setBadHere(custom ? isCustomThemeBadHere(custom) : false);
+  }, [customKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stillOnly = custom !== null && (custom.compiled === null || fellBack === customKey || badHere);
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || !glSlot) return;
+    if (!host || !glSlot || stillOnly) return;
     let cancelled = false;
     let unqueue: (() => void) | undefined;
     // a new WebGL context is heavy, so it waits for a quiet moment (gpu-queue.ts)
@@ -40,7 +53,7 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
       if (cancelled) return;
       unqueue = queueGpuWork(() => {
         if (cancelled) return;
-        backdropRef.current = mountProfileBackdrop(host, themeRef.current, { scroll, maxPixels });
+        backdropRef.current = mountProfileBackdrop(host, themeRef.current, { scroll, maxPixels, onFallback: (fallen) => setFellBack(customThemeKey(fallen)) });
         backdropRef.current?.setNotes(notesRef.current);
         backdropRef.current?.setChart(chartRef.current);
       });
@@ -51,7 +64,7 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
       backdropRef.current?.dispose();
       backdropRef.current = null;
     };
-  }, [scroll, maxPixels, glSlot]);
+  }, [scroll, maxPixels, glSlot, stillOnly]);
 
   useEffect(() => {
     backdropRef.current?.setTheme(theme);
@@ -65,7 +78,12 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
     backdropRef.current?.setChart(chart);
   }, [chart]);
 
-  return <div ref={hostRef} aria-hidden className={className} style={{ backgroundColor: PROFILE_THEME_LOOKS[theme].base }} />;
+  const base = custom ? custom.look.base : PROFILE_THEME_LOOKS[theme as SupporterProfileThemeId].base;
+  return (
+    <div ref={hostRef} aria-hidden className={className} style={{ backgroundColor: base }}>
+      {stillOnly && <img src={custom.stillUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
+    </div>
+  );
 }
 
 /* A frame of each theme rendered ahead of time (320x200, from the real

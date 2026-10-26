@@ -10,6 +10,7 @@
       "#/*": ["./src/*"],
       "@/*": ["./src/*"],
       "#dan/*": ["./backend/src/dan/*"],
+      "#custom-themes/*": ["./backend/src/custom-themes/*"],
       "#leoblack/*": ["./backend/vendor/leoblack/*"],
       "#replay-judge/*": ["./backend/src/replay-judge/*"]
     },

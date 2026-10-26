@@ -32,6 +32,7 @@ import {
   peekLiveSupporterNameStyle,
   peekLiveSupporterProfileTheme,
   peekLiveSupporterProfileThemeOptions,
+  peekLiveSupporterCustomTheme,
   peekLiveSupporterProfileStats,
   peekLiveSupporterLook,
   forgetLiveSupporterLook,
@@ -96,6 +97,8 @@ import { useViewerIsSupporter } from "../../lib/viewer-supporter";
 import { useHighwayNotes } from "../../components/supporter/use-highway-notes";
 import { useHighwayChart } from "../../components/supporter/use-highway-chart";
 import { PROFILE_THEME_LOOKS, profileThemeStyle, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
+import { CUSTOM_THEME_COVER, customThemeStyle, type CustomTheme } from "../../lib/custom-themes";
+import type { BackdropTheme } from "../../lib/profile-theme-gl";
 import { buildRestrictedBestList, profileRailTotals } from "../../components/player/restricted-best-scores";
 import { companellaImportsToScores, dropCompanellaOsuTwins } from "../../lib/companella-scores";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
@@ -1157,6 +1160,7 @@ export function PlayerProfilePage({
     nameFont: SupporterNameFontId | null;
     profileTheme: SupporterProfileThemeId | null;
     profileThemeOptions: ProfileThemeOptions;
+    customTheme: CustomTheme | null;
     profileStats: ProfileStatId[] | null;
     profileStatsData: ProfileStatsData;
     profilePlays: ProfilePlays | null;
@@ -1170,7 +1174,7 @@ export function PlayerProfilePage({
     const raw = loaderData?.cachedSupporterLook;
     if (!raw || !profileUserId) return null;
     const value = seedLiveSupporterLook(profileUserId, raw);
-    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, supporter: value.look !== null };
+    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, supporter: value.look !== null };
   });
   useEffect(() => {
     if (!profileUserId) return;
@@ -1184,6 +1188,7 @@ export function PlayerProfilePage({
         nameFont: peekLiveSupporterNameFont(profileUserId) ?? null,
         profileTheme: peekLiveSupporterProfileTheme(profileUserId) ?? null,
         profileThemeOptions: peekLiveSupporterProfileThemeOptions(profileUserId) ?? {},
+        customTheme: peekLiveSupporterCustomTheme(profileUserId) ?? null,
         profileStats: peekLiveSupporterProfileStats(profileUserId)?.stats ?? null,
         profileStatsData: peekLiveSupporterProfileStats(profileUserId)?.data ?? {},
         profilePlays: peekLiveSupporterProfileStats(profileUserId)?.plays ?? null,
@@ -1193,7 +1198,7 @@ export function PlayerProfilePage({
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, supporter: value.look !== null });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, supporter: value.look !== null });
     });
     return () => {
       alive = false;
@@ -1207,6 +1212,9 @@ export function PlayerProfilePage({
   const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
   const heroRunStartedAt = supporterFrame?.userId === profileUserId ? supporterFrame.runStartedAt : null;
   const profileTheme = supporterFrame?.userId === profileUserId ? supporterFrame.profileTheme : null;
+  const customTheme = supporterFrame?.userId === profileUserId ? supporterFrame.customTheme : null;
+  /* What the backdrop draws: a built-in theme, or their own. */
+  const themed: BackdropTheme | null = profileTheme ?? customTheme;
   /* The four insight cards: a supporter's own pick, or the usual four. The
      owner's swaps show at once and save in the background. */
   const [statsOverride, setStatsOverride] = useState<{ userId: number; stats: ProfileStatId[] } | null>(null);
@@ -2274,12 +2282,12 @@ export function PlayerProfilePage({
      footer). Nothing here makes a stacking context, so the modals still sit
      over the nav: the backdrop comes first and the bands after it are
      positioned, which is enough to paint them over it. */
-  const band = profileTheme ? "relative bg-osu-b5/[0.78]" : "bg-osu-b5";
+  const band = themed ? "relative bg-osu-b5/[0.78]" : "bg-osu-b5";
   return (
-    <div className={profileTheme ? "relative flex-1 overflow-clip" : "flex-1"} style={profileThemeStyle(profileTheme, highwayNotes)}>
-      {profileTheme && (
+    <div className={themed ? "relative flex-1 overflow-clip" : "flex-1"} style={customTheme && !profileTheme ? customThemeStyle(customTheme) : profileThemeStyle(profileTheme, highwayNotes)}>
+      {themed && (
         <div aria-hidden className="pointer-events-none sticky top-0 h-0">
-          <ProfileThemeBackdrop theme={profileTheme} notes={highwayNotes} chart={highwayChart} scroll className="absolute inset-x-0 top-0 h-screen" />
+          <ProfileThemeBackdrop theme={themed} notes={highwayNotes} chart={highwayChart} scroll className="absolute inset-x-0 top-0 h-screen" />
         </div>
       )}
       {/* Avatar modal */}
@@ -2501,19 +2509,19 @@ export function PlayerProfilePage({
           the 90-day rank trend drawn edge to edge underneath them. */}
       {/* Under a theme the hero is see-through, so it does not isolate: the
           cover blends into the backdrop behind it as a soft grey texture. */}
-      <header className={`relative overflow-hidden ${profileTheme ? "" : "isolate bg-osu-b4"}`}>
+      <header className={`relative overflow-hidden ${themed ? "" : "isolate bg-osu-b4"}`}>
         {coverImage && (
           <img
             src={coverImage}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
-            style={profileTheme
-              ? { filter: "grayscale(1) contrast(1.15)", opacity: PROFILE_THEME_LOOKS[profileTheme].cover, mixBlendMode: "soft-light" }
+            style={themed
+              ? { filter: "grayscale(1) contrast(1.15)", opacity: profileTheme ? PROFILE_THEME_LOOKS[profileTheme].cover : CUSTOM_THEME_COVER, mixBlendMode: "soft-light" }
               : { filter: "brightness(0.34) saturate(1.15)" }}
           />
         )}
-        <div className={`absolute inset-0 ${profileTheme ? "bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.05),rgba(0,0,0,0.5))]" : "bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.25),rgba(0,0,0,0.82))]"}`} />
-        <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent ${profileTheme ? "to-osu-b5/[0.78]" : "to-osu-b5"}`} />
+        <div className={`absolute inset-0 ${themed ? "bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.05),rgba(0,0,0,0.5))]" : "bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.25),rgba(0,0,0,0.82))]"}`} />
+        <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent ${themed ? "to-osu-b5/[0.78]" : "to-osu-b5"}`} />
         <RankTrendline history={rankHistoryPoints} />
 
         <div className="relative mx-auto max-w-[1200px] px-4 pt-8 pb-7 sm:px-5 sm:pt-12 sm:pb-9">
