@@ -1856,6 +1856,11 @@ msgstr "{speedLabel} speed"
 msgid "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 msgstr "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 
+#. placeholder {0}: shared.creator
+#: src/routes/maps.tsx
+msgid "{stars}★ · mapped by {0}"
+msgstr "{stars}★ · mapped by {0}"
+
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "{target} packs opened"
 #~ msgstr "{target} packs opened"

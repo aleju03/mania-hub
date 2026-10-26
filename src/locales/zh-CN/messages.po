@@ -1845,6 +1845,11 @@ msgstr "{speedLabel} 速度"
 msgid "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 msgstr "有 {stacks} 次额外的模组使用来自叠加模组的成绩（例如 DT+MR）。扇形大小按模组使用次数计算，百分比按成绩数计算。"
 
+#. placeholder {0}: shared.creator
+#: src/routes/maps.tsx
+msgid "{stars}★ · mapped by {0}"
+msgstr "{stars}★ · 谱师 {0}"
+
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "{target} packs opened"
 #~ msgstr "已开启 {target} 个卡包"

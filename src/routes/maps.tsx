@@ -57,6 +57,7 @@ import type {
 import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../lib/beatmap-parser";
 import { useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
+import { fetchMapSharePreview, mapCoverUrl, MAP_COVER_HEIGHT, MAP_COVER_WIDTH, type MapSharePreview } from "../lib/map-share-preview";
 import { getI18n } from "../lib/i18n";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getBeatmapAudioUrl, getPreviewAudioProxyUrl } from "../lib/audio-url";
@@ -643,8 +644,31 @@ async function seekAudioElement(
 // ── Route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/maps")({
+  loaderDeps: ({ search }) => ({ map: search.map }),
+  // Only the server render needs this: it names the map and puts its cover in
+  // the embed of a shared ?map= link. In the browser the modal fetches the
+  // entry itself, so a client navigation never waits on it.
+  loader: async ({ deps }): Promise<MapSharePreview | null> => {
+    if (typeof window !== "undefined" || deps.map <= 0) return null;
+    return fetchMapSharePreview({ data: { beatmapId: deps.map } });
+  },
+  staleTime: Infinity,
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
+    const shared = match.loaderData as MapSharePreview | null | undefined;
+    if (shared && match.search.map > 0) {
+      const stars = shared.stars.toFixed(2);
+      return pageSeo({
+        title: `${shared.artist} - ${shared.title} [${shared.version}]`,
+        description: i18n._(msg`${stars}★ · mapped by ${shared.creator}`),
+        path: withSearchParams("/maps", { map: match.search.map }),
+        origin: match.context.origin,
+        image: shared.hasCover ? mapCoverUrl(shared.beatmapsetId) : undefined,
+        imageWidth: MAP_COVER_WIDTH,
+        imageHeight: MAP_COVER_HEIGHT,
+        imageKind: "maps-search",
+      });
+    }
     // Search + collections are global catalog views with their own OG
     // cards; the country-scoped lenses share the country mosaic below.
     const tab = match.search.tab;
