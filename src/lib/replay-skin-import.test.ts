@@ -229,6 +229,21 @@ describe("importReplaySkinFromOsk keymode synthesis", () => {
     expect(await loadOskImageAssetByPath(archive, `${root}4K/1.png`)).toBeDefined();
   });
 
+  it("reads the skin.ini nearest the top when an old copy sits in a subfolder", async () => {
+    const zip = new JSZip();
+    const root = "Skin/";
+    const bytes = Uint8Array.from(atob(PNG_BASE64), (char) => char.charCodeAt(0));
+    // Zip order lists the stale copy first.
+    zip.file(`${root}mania/old/Skin.ini`, ["[General]", "Name: Old", "[Mania]", "Keys: 4", "NoteImage0: stale"].join("\n"));
+    zip.file(`${root}skin.ini`, ["[General]", "Name: Current", "[Mania]", "Keys: 4", "NoteImage0: mania/note"].join("\n"));
+    zip.file(`${root}mania/note.png`, bytes);
+    zip.file(`${root}mania/old/stale.png`, bytes);
+    const file = new File([await zip.generateAsync({ type: "arraybuffer" })], "nested.osk");
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.settings.keymodeProfiles["4"].assets.columns[0].tap?.path).toBe(`${root}mania/note.png`);
+  });
+
   it("synthesizes undeclared keymodes from stable's default filenames", async () => {
     const file = await buildOsk(
       ["[General]", "Name: FourOnly", "[Mania]", "Keys: 4", "NoteImage0: mania/custom1"].join("\n"),

@@ -1022,7 +1022,11 @@ function drawLongNote(
     ?? (assets.tap && images.get(previewAnimationFrame(assets.tap, ln.timeMs).src))
     ?? undefined;
   const bodyImage = assets.lnBody ? images.get(assets.lnBody.src) : undefined;
-  const tailImage = assets.lnTail ? images.get(previewAnimationFrame(assets.lnTail, ln.timeMs).src) : undefined;
+  // A skin with no tail image gets the head art there, flipped like a tail
+  // (lazer's LegacyHoldNoteTailPiece: tail, else head, else note; stable
+  // draws the same).
+  const tailAsset = assets.lnTail ?? assets.lnHead ?? assets.tap;
+  const tailImage = tailAsset ? images.get(previewAnimationFrame(tailAsset, ln.timeMs).src) : undefined;
   const headEndY = mapY(ln.headY);
   const tailEndY = mapY(ln.tailY);
   const headHeight = headImage ? noteAssetHeight(headImage) : Math.max(10, laneWidth * 0.3);
@@ -1032,8 +1036,8 @@ function drawLongNote(
   // its own rounded cap. Sizing a box off that placeholder's aspect invents a
   // lane-width-tall cap out of one transparent pixel, and since the body's
   // cascade starts at the box's far edge, the hold grows by that much and eats
-  // the gap to the next note. Zero here, and likewise with no tail image at
-  // all: the body then runs to the end line exactly, as in game.
+  // the gap to the next note. Zero here: the body then runs to the end line
+  // exactly, as in game.
   const tailBounds = tailImage ? imageAlphaBounds(tailImage) : null;
   const tailHeight = tailImage && tailBounds ? noteAssetHeight(tailImage) : 0;
 

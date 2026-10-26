@@ -494,14 +494,23 @@ async function readSkinIni(zip: JSZip): Promise<string | null> {
   return file ? file.async("string") : null;
 }
 
+// The skin.ini the game reads: the one nearest the archive's top. Skins carry
+// older builds' skin.ini in subfolders, and zip order lists those first as
+// often as not.
 function findSkinIniEntry(zip: JSZip): JSZip.JSZipObject | undefined {
-  return Object.values(zip.files).find((entry) => {
+  let best: JSZip.JSZipObject | undefined;
+  let bestDepth = Infinity;
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
     const name = normalizeZipPath(entry.name).toLowerCase();
-    return !entry.dir && name === "skin.ini";
-  }) ?? Object.values(zip.files).find((entry) => {
-    const name = normalizeZipPath(entry.name).toLowerCase();
-    return !entry.dir && name.endsWith("/skin.ini");
-  });
+    if (name !== "skin.ini" && !name.endsWith("/skin.ini")) continue;
+    const depth = name.split("/").length;
+    if (depth < bestDepth) {
+      best = entry;
+      bestDepth = depth;
+    }
+  }
+  return best;
 }
 
 interface LazerComboLayout {

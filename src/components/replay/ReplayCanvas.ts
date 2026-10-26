@@ -7549,7 +7549,10 @@ export class ManiaReplayRenderer {
 
     const bodyAsset = assets.lnBody;
     const headAsset = this.noteAnimationFrame(assets.lnHead ?? assets.tap, noteTime);
-    const tailAsset = this.noteAnimationFrame(assets.lnTail, noteTime);
+    // A skin with no tail image gets the head art there, flipped like a tail
+    // (lazer's LegacyHoldNoteTailPiece: tail, else head, else note; stable
+    // draws the same).
+    const tailAsset = this.noteAnimationFrame(assets.lnTail ?? assets.lnHead ?? assets.tap, noteTime);
     const headHeight = headAsset ? this.getNoteAssetHeight(headAsset, colWidth, layout, layout.noteHeight) : layout.noteHeight;
     // A cap that draws nothing occupies no box. Skins routinely point the tail
     // at a blank placeholder (a 1x1 or 5x4 transparent png, or the default
@@ -7557,8 +7560,8 @@ export class ManiaReplayRenderer {
     // its own rounded cap. Sizing a box off that placeholder's aspect invents a
     // lane-width-tall cap out of one transparent pixel, and since the body's
     // cascade starts at the box's far edge, the hold grows by that much and
-    // eats the gap to the next note. Zero here, and likewise with no tail asset
-    // at all: the body then runs to the end line exactly, as in game.
+    // eats the gap to the next note. Zero here: the body then runs to the end
+    // line exactly, as in game.
     const tailArtTop = tailAsset ? this.lnTailArtTop(tailAsset) : null;
     const tailHeight = tailAsset && tailArtTop !== null
       ? this.getNoteAssetHeight(tailAsset, colWidth, layout, layout.noteHeight)
