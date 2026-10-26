@@ -1453,13 +1453,19 @@ vec3 theme(vec2 uv, vec2 p, float t) {
     float fl = float(l);
     float cell = .36 - fl * .1;
     vec2 q = p * vec2(1., 1.) + vec2(t * (.03 + fl * .02), -t * .015 - sc * (.15 + fl * .1));
-    vec2 id = floor(q / cell);
-    if (hash(id + fl * 7.) < .72) continue;
-    vec2 c = (id + .5 + (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .5) * cell;
-    vec2 s = rot(t * (.2 + .3 * hash(id + 3.)) * (hash(id + 4.) > .5 ? 1. : -1.)) * (q - c);
-    float r = cell * (.15 + .08 * hash(id + 5.));
+    vec2 home = floor(q / cell);
     float smear = 0.;
-    for (int k = 0; k < 4; k++) smear = max(smear, starBullet(s + vec2(float(k) * r * .22, 0.), r) * (1. - float(k) * .25));
+    // a star reaches past its own cell (tips at 2r, jitter, smear), so the
+    // neighbours are checked too, or it gets clipped square at the cell edge
+    for (int j = 0; j < 9; j++) {
+      vec2 id = home + vec2(float(j - j / 3 * 3) - 1., float(j / 3) - 1.);
+      if (hash(id + fl * 7.) < .72) continue;
+      vec2 c = (id + .5 + (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .5) * cell;
+      float r = cell * (.15 + .08 * hash(id + 5.));
+      if (length(q - c) > r * 2.8) continue;
+      vec2 s = rot(t * (.2 + .3 * hash(id + 3.)) * (hash(id + 4.) > .5 ? 1. : -1.)) * (q - c);
+      for (int k = 0; k < 4; k++) smear = max(smear, starBullet(s + vec2(float(k) * r * .22, 0.), r) * (1. - float(k) * .25));
+    }
     float scan = step(.5, fract(gl_FragCoord.y / 3.));
     col = mix(col, pale * .8, smear * scan * (.22 + fl * .1));
   }
