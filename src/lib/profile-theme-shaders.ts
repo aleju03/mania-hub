@@ -18,7 +18,7 @@ void main() { gl_Position = vec4(a_position, 0., 1.); }
 `;
 
 // language=GLSL
-const PRELUDE = `#version 300 es
+export const PROFILE_THEME_PRELUDE = `#version 300 es
 precision highp float;
 uniform float u_time;
 uniform vec2 u_res;
@@ -125,7 +125,7 @@ float voronoiEdge(vec2 x) {
 }
 `;
 
-const MAIN = `
+export const PROFILE_THEME_MAIN = `
 void main() {
   PX = 1. / u_res.y;
   vec2 uv = gl_FragCoord.xy / u_res;
@@ -137,7 +137,7 @@ void main() {
 }
 `;
 
-const shader = (body: string) => `${PRELUDE}\n${body}\n${MAIN}`;
+const shader = (body: string) => `${PROFILE_THEME_PRELUDE}\n${body}\n${PROFILE_THEME_MAIN}`;
 
 // language=GLSL
 export const PROFILE_THEME_SHADERS: Record<SupporterProfileThemeId, string> = {

@@ -47,6 +47,7 @@
     "@lingui/react": "^6.6.0",
     "@mediabunny/aac-encoder": "1.50.6",
     "@paper-design/shaders": "0.0.81",
+    "@shaderfrog/glsl-parser": "^7.0.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-router": "latest",
