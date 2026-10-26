@@ -37,6 +37,11 @@ export interface SkillHistoryNote {
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
+    date: "2026-10-26",
+    text: "Fixed some 4K plays counting toward the wrong Dan skillset.",
+    keyCounts: [4],
+  },
+  {
     date: "2026-10-16",
     text: "Only your best rate play on the same chart now counts toward Dan, instead of your best two. MSD still counts two.",
     keyCounts: [4, 6, 7],
