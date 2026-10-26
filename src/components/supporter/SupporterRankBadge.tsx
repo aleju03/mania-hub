@@ -30,11 +30,11 @@ export function SupporterRankIcon({ rank, className }: { rank: SupporterRankDef;
    and when the next one comes on hover or tap. Nothing for a run that
    isn't active (`runStartedAt` null). */
 export function SupporterRankBadge({ runStartedAt, className = "h-7 w-7" }: { runStartedAt: number | null; className?: string }) {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   if (runStartedAt == null) return null;
   const rank = supporterRank(runStartedAt);
-  const name = i18n._(rank.def.name);
+  const name = rank.def.name;
   const label = t`${name}, ${plural(rank.months, { one: "# month", other: "# months" })} in a row`;
   return (
     <button
@@ -55,11 +55,11 @@ export function SupporterRankBadge({ runStartedAt, className = "h-7 w-7" }: { ru
 }
 
 function RankTip({ rank, name }: { rank: ReturnType<typeof supporterRank>; name: string }) {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const months = rank.months;
   const next = rank.nextAt == null ? null : SUPPORTER_RANKS[rank.index + 1];
   const days = rank.nextAt == null ? 0 : Math.max(1, Math.ceil((rank.nextAt - Date.now()) / DAY_MS));
-  const nextName = next ? i18n._(next.name) : "";
+  const nextName = next ? next.name : "";
   return (
     <span
       role="tooltip"
@@ -81,11 +81,11 @@ function RankTip({ rank, name }: { rank: ReturnType<typeof supporterRank>; name:
    current one larger, the rest still to come faded. Client-only (the page
    loads the viewer's state after mount), so the day count is safe here. */
 export function SupporterRankLadder({ runStartedAt }: { runStartedAt: number }) {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const rank = supporterRank(runStartedAt);
-  const name = i18n._(rank.def.name);
+  const name = rank.def.name;
   const next = rank.nextAt == null ? null : SUPPORTER_RANKS[rank.index + 1];
-  const nextName = next ? i18n._(next.name) : "";
+  const nextName = next ? next.name : "";
   const days = rank.nextAt == null ? 0 : Math.max(1, Math.ceil((rank.nextAt - Date.now()) / DAY_MS));
   return (
     <div className="mt-4">
@@ -98,7 +98,7 @@ export function SupporterRankLadder({ runStartedAt }: { runStartedAt: number }) 
       </p>
       <ol className="mt-2 flex items-center gap-1 sm:gap-1.5" aria-label={t`Supporter ranks`}>
         {SUPPORTER_RANKS.map((def, i) => (
-          <li key={def.id} title={i18n._(def.name)} className={i > rank.index ? "opacity-25 grayscale transition-[opacity,filter] duration-200 hover:opacity-100 hover:grayscale-0" : undefined}>
+          <li key={def.id} title={def.name} className={i > rank.index ? "opacity-25 grayscale transition-[opacity,filter] duration-200 hover:opacity-100 hover:grayscale-0" : undefined}>
             <SupporterRankIcon rank={def} className={i === rank.index ? "h-8 w-8 sm:h-9 sm:w-9" : "h-5 w-5 sm:h-6 sm:w-6"} />
           </li>
         ))}
@@ -109,7 +109,7 @@ export function SupporterRankLadder({ runStartedAt }: { runStartedAt: number }) 
 
 /* The twelve ranks for /support, each with the month it is reached in. */
 export function SupporterRankShowcase() {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   return (
     <Stagger className="grid grid-cols-4 gap-3 sm:grid-cols-6">
       {SUPPORTER_RANKS.map((def, i) => {
@@ -117,7 +117,7 @@ export function SupporterRankShowcase() {
         return (
           <StaggerItem key={def.id} className="flex flex-col items-center gap-2 rounded-xl bg-osu-b4/60 px-2 py-4">
             <SupporterRankIcon rank={def} className="h-12 w-12 sm:h-14 sm:w-14" />
-            <span className="text-[13px] font-semibold text-white">{i18n._(def.name)}</span>
+            <span className="text-[13px] font-semibold text-white">{def.name}</span>
             <span className="-mt-1.5 text-[11px] text-osu-l2">{t`Month ${month}`}</span>
           </StaggerItem>
         );

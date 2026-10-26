@@ -3396,12 +3396,12 @@ msgid "amber"
 msgstr "amber"
 
 #: src/lib/supporter-ranks.ts
-msgid "Amber"
-msgstr "Amber"
+#~ msgid "Amber"
+#~ msgstr "Amber"
 
 #: src/lib/supporter-ranks.ts
-msgid "Amethyst"
-msgstr "Amethyst"
+#~ msgid "Amethyst"
+#~ msgstr "Amethyst"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "an external application"
@@ -6854,8 +6854,8 @@ msgid "Dialogue box"
 msgstr "Dialogue box"
 
 #: src/lib/supporter-ranks.ts
-msgid "Diamond"
-msgstr "Diamond"
+#~ msgid "Diamond"
+#~ msgstr "Diamond"
 
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
@@ -7447,8 +7447,8 @@ msgid "Ember"
 msgstr "Ember"
 
 #: src/lib/supporter-ranks.ts
-msgid "Emerald"
-msgstr "Emerald"
+#~ msgid "Emerald"
+#~ msgstr "Emerald"
 
 #: src/lib/pack-run.ts
 msgid "Encore"
@@ -8835,9 +8835,9 @@ msgid "Gold"
 msgstr "Gold"
 
 #: src/lib/supporter-ranks.ts
-msgctxt "supporter rank"
-msgid "Gold"
-msgstr "Gold"
+#~ msgctxt "supporter rank"
+#~ msgid "Gold"
+#~ msgstr "Gold"
 
 #: src/lib/pack-run.ts
 msgid "Gold pack"
@@ -9364,7 +9364,6 @@ msgstr "Holds: {0}% of notes"
 
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
-#: src/lib/supporter-ranks.ts
 msgid "Holo"
 msgstr "Holo"
 
@@ -11792,8 +11791,8 @@ msgid "Month {month}"
 msgstr "Month {month}"
 
 #: src/lib/supporter-ranks.ts
-msgid "Moonstone"
-msgstr "Moonstone"
+#~ msgid "Moonstone"
+#~ msgstr "Moonstone"
 
 #: src/components/layout/Nav.tsx
 msgid "more"
@@ -13433,8 +13432,8 @@ msgid "objects"
 msgstr "objects"
 
 #: src/lib/supporter-ranks.ts
-msgid "Obsidian"
-msgstr "Obsidian"
+#~ msgid "Obsidian"
+#~ msgstr "Obsidian"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Obtained"
@@ -14455,7 +14454,6 @@ msgid "Peak Performance"
 msgstr "Peak Performance"
 
 #: src/lib/supporter-name-styles.ts
-#: src/lib/supporter-ranks.ts
 msgid "Pearl"
 msgstr "Pearl"
 
@@ -16775,8 +16773,8 @@ msgid "Rows start at combo {startCombo}"
 msgstr "Rows start at combo {startCombo}"
 
 #: src/lib/supporter-ranks.ts
-msgid "Ruby"
-msgstr "Ruby"
+#~ msgid "Ruby"
+#~ msgstr "Ruby"
 
 #: src/routes/snipes.tsx
 msgid "Rules"
@@ -16833,8 +16831,8 @@ msgid "Sakura"
 msgstr "Sakura"
 
 #: src/lib/supporter-ranks.ts
-msgid "Sapphire"
-msgstr "Sapphire"
+#~ msgid "Sapphire"
+#~ msgstr "Sapphire"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
@@ -21274,8 +21272,8 @@ msgid "Top-play feed"
 msgstr "Top-play feed"
 
 #: src/lib/supporter-ranks.ts
-msgid "Topaz"
-msgstr "Topaz"
+#~ msgid "Topaz"
+#~ msgstr "Topaz"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Toploader"

@@ -3429,12 +3429,12 @@ msgid "amber"
 msgstr "琥珀"
 
 #: src/lib/supporter-ranks.ts
-msgid "Amber"
-msgstr "琥珀"
+#~ msgid "Amber"
+#~ msgstr "琥珀"
 
 #: src/lib/supporter-ranks.ts
-msgid "Amethyst"
-msgstr "紫水晶"
+#~ msgid "Amethyst"
+#~ msgstr "紫水晶"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "an external application"
@@ -6887,8 +6887,8 @@ msgid "Dialogue box"
 msgstr "对话框"
 
 #: src/lib/supporter-ranks.ts
-msgid "Diamond"
-msgstr "钻石"
+#~ msgid "Diamond"
+#~ msgstr "钻石"
 
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
@@ -7468,8 +7468,8 @@ msgid "Ember"
 msgstr "余烬"
 
 #: src/lib/supporter-ranks.ts
-msgid "Emerald"
-msgstr "祖母绿"
+#~ msgid "Emerald"
+#~ msgstr "祖母绿"
 
 #: src/lib/pack-run.ts
 msgid "Encore"
@@ -8856,9 +8856,9 @@ msgid "Gold"
 msgstr "金色"
 
 #: src/lib/supporter-ranks.ts
-msgctxt "supporter rank"
-msgid "Gold"
-msgstr "金"
+#~ msgctxt "supporter rank"
+#~ msgid "Gold"
+#~ msgstr "金"
 
 #: src/lib/pack-run.ts
 msgid "Gold pack"
@@ -9381,7 +9381,6 @@ msgstr "长条：占音符的 {0}%"
 
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
-#: src/lib/supporter-ranks.ts
 msgid "Holo"
 msgstr "镭射"
 
@@ -11809,8 +11808,8 @@ msgid "Month {month}"
 msgstr "第 {month} 个月"
 
 #: src/lib/supporter-ranks.ts
-msgid "Moonstone"
-msgstr "月长石"
+#~ msgid "Moonstone"
+#~ msgstr "月长石"
 
 #: src/components/layout/Nav.tsx
 msgid "more"
@@ -13450,8 +13449,8 @@ msgid "objects"
 msgstr "物件数"
 
 #: src/lib/supporter-ranks.ts
-msgid "Obsidian"
-msgstr "黑曜石"
+#~ msgid "Obsidian"
+#~ msgstr "黑曜石"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Obtained"
@@ -14472,7 +14471,6 @@ msgid "Peak Performance"
 msgstr "巅峰状态"
 
 #: src/lib/supporter-name-styles.ts
-#: src/lib/supporter-ranks.ts
 msgid "Pearl"
 msgstr "珍珠"
 
@@ -16792,8 +16790,8 @@ msgid "Rows start at combo {startCombo}"
 msgstr "每排以 {startCombo} 连击 开始"
 
 #: src/lib/supporter-ranks.ts
-msgid "Ruby"
-msgstr "红宝石"
+#~ msgid "Ruby"
+#~ msgstr "红宝石"
 
 #: src/routes/snipes.tsx
 msgid "Rules"
@@ -16850,8 +16848,8 @@ msgid "Sakura"
 msgstr "樱花"
 
 #: src/lib/supporter-ranks.ts
-msgid "Sapphire"
-msgstr "蓝宝石"
+#~ msgid "Sapphire"
+#~ msgstr "蓝宝石"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
@@ -21291,8 +21289,8 @@ msgid "Top-play feed"
 msgstr "最佳成绩 feed"
 
 #: src/lib/supporter-ranks.ts
-msgid "Topaz"
-msgstr "黄玉"
+#~ msgid "Topaz"
+#~ msgstr "黄玉"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Toploader"

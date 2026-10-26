@@ -124,7 +124,11 @@ export interface CompanionScene {
 
 export function mountCompanionScene(host: HTMLElement, url: string, { facing: initialFacing = 0, matte = false, onReady }: { facing?: number; matte?: boolean; onReady?: () => void } = {}): CompanionScene {
   const renderer = new WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  // Drawn at twice the screen's density (up to 3) and scaled down by the
+  // browser, like the list stills: at a companion's size a scan's packed UV
+  // islands bleed into each other in the texture's smaller mips, and the
+  // larger draw reads a sharper one.
+  renderer.setPixelRatio(Math.min((window.devicePixelRatio || 1) * 2, 3));
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = NeutralToneMapping;
   const canvas = renderer.domElement;

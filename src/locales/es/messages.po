@@ -3392,12 +3392,12 @@ msgid "amber"
 msgstr "ámbar"
 
 #: src/lib/supporter-ranks.ts
-msgid "Amber"
-msgstr "Ámbar"
+#~ msgid "Amber"
+#~ msgstr "Ámbar"
 
 #: src/lib/supporter-ranks.ts
-msgid "Amethyst"
-msgstr "Amatista"
+#~ msgid "Amethyst"
+#~ msgstr "Amatista"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "an external application"
@@ -6850,8 +6850,8 @@ msgid "Dialogue box"
 msgstr "Cuadro de diálogo"
 
 #: src/lib/supporter-ranks.ts
-msgid "Diamond"
-msgstr "Diamante"
+#~ msgid "Diamond"
+#~ msgstr "Diamante"
 
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
@@ -7443,8 +7443,8 @@ msgid "Ember"
 msgstr "Brasa"
 
 #: src/lib/supporter-ranks.ts
-msgid "Emerald"
-msgstr "Esmeralda"
+#~ msgid "Emerald"
+#~ msgstr "Esmeralda"
 
 #: src/lib/pack-run.ts
 msgid "Encore"
@@ -8831,9 +8831,9 @@ msgid "Gold"
 msgstr "Dorado"
 
 #: src/lib/supporter-ranks.ts
-msgctxt "supporter rank"
-msgid "Gold"
-msgstr "Oro"
+#~ msgctxt "supporter rank"
+#~ msgid "Gold"
+#~ msgstr "Oro"
 
 #: src/lib/pack-run.ts
 msgid "Gold pack"
@@ -9360,7 +9360,6 @@ msgstr "Holds: {0}% de las notas"
 
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
-#: src/lib/supporter-ranks.ts
 msgid "Holo"
 msgstr "Holo"
 
@@ -11788,8 +11787,8 @@ msgid "Month {month}"
 msgstr "Mes {month}"
 
 #: src/lib/supporter-ranks.ts
-msgid "Moonstone"
-msgstr "Piedra luna"
+#~ msgid "Moonstone"
+#~ msgstr "Piedra luna"
 
 #: src/components/layout/Nav.tsx
 msgid "more"
@@ -13429,8 +13428,8 @@ msgid "objects"
 msgstr "objetos"
 
 #: src/lib/supporter-ranks.ts
-msgid "Obsidian"
-msgstr "Obsidiana"
+#~ msgid "Obsidian"
+#~ msgstr "Obsidiana"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Obtained"
@@ -14451,7 +14450,6 @@ msgid "Peak Performance"
 msgstr "Máximo rendimiento"
 
 #: src/lib/supporter-name-styles.ts
-#: src/lib/supporter-ranks.ts
 msgid "Pearl"
 msgstr "Perla"
 
@@ -16654,7 +16652,7 @@ msgstr "Anillos"
 
 #: src/routes/supporter.tsx
 msgid "Roll"
-msgstr "Tirar"
+msgstr "Random"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
@@ -16771,8 +16769,8 @@ msgid "Rows start at combo {startCombo}"
 msgstr "Las filas empiezan con {startCombo} de combo"
 
 #: src/lib/supporter-ranks.ts
-msgid "Ruby"
-msgstr "Rubí"
+#~ msgid "Ruby"
+#~ msgstr "Rubí"
 
 #: src/routes/snipes.tsx
 msgid "Rules"
@@ -16829,8 +16827,8 @@ msgid "Sakura"
 msgstr "Sakura"
 
 #: src/lib/supporter-ranks.ts
-msgid "Sapphire"
-msgstr "Zafiro"
+#~ msgid "Sapphire"
+#~ msgstr "Zafiro"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
@@ -21270,8 +21268,8 @@ msgid "Top-play feed"
 msgstr "Feed de top plays"
 
 #: src/lib/supporter-ranks.ts
-msgid "Topaz"
-msgstr "Topacio"
+#~ msgid "Topaz"
+#~ msgstr "Topacio"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Toploader"
@@ -23355,7 +23353,7 @@ msgstr "Tu apoyo mantiene los servidores andando y me da el tiempo para seguir c
 
 #: src/routes/supporter.tsx
 msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks."
-msgstr "Tu apoyo paga los servidores y me da tiempo para seguir trabajando en el sitio. Significa mucho, y estos extras son mi forma de agradecerte."
+msgstr "Tu apoyo ayuda a mantener los servidores. Estos extras son para ti."
 
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "Your teams could not be loaded just now. Try again in a moment."
