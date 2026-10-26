@@ -20485,21 +20485,21 @@ msgid "unrateable"
 msgstr "无法评分"
 
 #: src/components/maps/SearchCard.tsx
-msgid "Unrateable"
-msgstr "无法评分"
+#~ msgid "Unrateable"
+#~ msgstr "无法评分"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
-msgid "unrateable chart"
-msgstr "无法评分的谱面"
+#~ msgid "unrateable chart"
+#~ msgstr "无法评分的谱面"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Unrateable chart"
 msgstr "无法评分的谱面"
 
 #: src/components/maps/SearchCard.tsx
-msgid "Unrateable chart: plays on it do not count toward skill or dan ratings"
-msgstr "无法评分的谱面：其成绩不计入技能或段位评分"
+#~ msgid "Unrateable chart: plays on it do not count toward skill or dan ratings"
+#~ msgstr "无法评分的谱面：其成绩不计入技能或段位评分"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Unrateable chart. This play does not count toward skill or dan ratings."

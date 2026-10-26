@@ -20473,21 +20473,21 @@ msgid "unrateable"
 msgstr "no calificable"
 
 #: src/components/maps/SearchCard.tsx
-msgid "Unrateable"
-msgstr "No calificable"
+#~ msgid "Unrateable"
+#~ msgstr "No calificable"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
-msgid "unrateable chart"
-msgstr "mapa no calificable"
+#~ msgid "unrateable chart"
+#~ msgstr "mapa no calificable"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Unrateable chart"
 msgstr "Mapa no calificable"
 
 #: src/components/maps/SearchCard.tsx
-msgid "Unrateable chart: plays on it do not count toward skill or dan ratings"
-msgstr "Mapa no calificable: sus plays no cuentan para el rating de skillsets ni de dan"
+#~ msgid "Unrateable chart: plays on it do not count toward skill or dan ratings"
+#~ msgstr "Mapa no calificable: sus plays no cuentan para el rating de skillsets ni de dan"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Unrateable chart. This play does not count toward skill or dan ratings."

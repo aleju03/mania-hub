@@ -733,7 +733,9 @@ export function MsdBlock({
     ? rate === 1 ? t`MSD with Inverse` : t`MSD at ${formatRate(rate)} with Inverse`
     : rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
   const sectionRate = rateAdjusted ? rate : 1;
-  const displaySections = groupDetectedSections(vibroAnalysis?.sections ?? [], sectionRate);
+  // An unrateable chart only leaves skill ratings; map info shows it as a plain chart.
+  const shownVibro = vibroAnalysis && vibroAnalysis.status !== "clean" && !isUnrateableExclusion(vibroAnalysis) ? vibroAnalysis : null;
+  const displaySections = groupDetectedSections(shownVibro?.sections ?? [], sectionRate);
   const other = rateAdjusted ? (secondaryDan ? rateSecondaryDan : null) : secondaryDan;
   const otherDan = dan && other && other.family !== dan.family ? other : null;
 
@@ -744,7 +746,7 @@ export function MsdBlock({
       <div className="flex items-baseline justify-between gap-3">
         <span className="flex items-baseline gap-3">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{heading}</span>
-          {vibroAnalysis && vibroAnalysis.status !== "clean" && (
+          {shownVibro && (
             <button
               type="button"
               aria-expanded={sectionsOpen}
@@ -755,14 +757,13 @@ export function MsdBlock({
             </button>
           )}
         </span>
-        {(vibroAnalysis ? vibroAnalysis.status !== "clean" : entry.vibro) && (
+        {(vibroAnalysis ? shownVibro : entry.vibro) && (
           <span className="text-[9.5px] font-semibold text-[#ffcf70]">
-            {vibroAnalysis?.status === "adjusted" ? t`localized vibro detected`
-              : (vibroAnalysis ? isUnrateableExclusion(vibroAnalysis) : entry.unrateable) ? t`unrateable chart` : t`vibro chart, estimates unreliable`}
+            {shownVibro?.status === "adjusted" ? t`localized vibro detected` : t`vibro chart, estimates unreliable`}
           </span>
         )}
       </div>
-      {vibroAnalysis && vibroAnalysis.status !== "clean" && (
+      {shownVibro && (
         <div hidden={!sectionsOpen} className="text-[11px] text-osu-f1/75">
           <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
             {displaySections.map((section) => (

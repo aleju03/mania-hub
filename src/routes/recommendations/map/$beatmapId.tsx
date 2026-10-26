@@ -379,7 +379,7 @@ function FarmMapDetailPage() {
                           icon={<Gauge className="h-3.5 w-3.5" />}
                           label={t`msd`}
                           value={metrics.msdOverall.toFixed(2)}
-                          detail={metrics.unrateable ? t`unrateable chart` : metrics.vibro ? t`vibro chart, estimate unreliable` : metrics.msdTopSkillset}
+                          detail={metrics.vibro ? t`vibro chart, estimate unreliable` : metrics.msdTopSkillset}
                         />
                       ) : null}
                       {metrics.dan && !noDans ? (
@@ -572,7 +572,6 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
     msdOverall: Number.isFinite(msdOverall) && msdOverall > 0 ? msdOverall : null,
     msdTopSkillset,
     vibro: entry?.vibro === true,
-    unrateable: entry?.unrateable === true,
     dan,
     danImage: dan
       ? getDanTierImageSrc(dan.label, dan.family === "ln" ? "ln" : undefined, entry?.keyCount ?? 4)

@@ -3161,8 +3161,6 @@ export interface LiveMapSearchEntry {
   // Vibro-like chart per the classifier; informational while browsing.
   // Player eligibility never hides its ordinary estimate from search.
   vibro?: boolean;
-  // Excluded by the unrateable rules alone: shown as unrateable, not vibro.
-  unrateable?: boolean;
   // Search results are one entry per beatmapset: the top-level fields describe
   // the representative diff and `diffs` lists every filter-matching diff of the
   // set (easiest first). Absent on collection items, which are already deduped.
