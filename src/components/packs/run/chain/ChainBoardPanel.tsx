@@ -238,7 +238,7 @@ export function BoardPanel({
             <BoardRows entries={page.entries} mine={shownMine} compact={compact} animate={animate && period === "all"} mineName={mineName} onPick={setOpen} />
           ) : (
             <div className="py-6 text-center text-[13px] font-bold text-[#f3e9d8]/45">
-              <Trans>No runs this month yet.</Trans>
+              {period === "month" ? <Trans>No runs this month yet.</Trans> : <Trans>No runs yet.</Trans>}
             </div>
           )
         ) : (

@@ -8618,6 +8618,10 @@ msgstr "Galería"
 msgid "Game and tech"
 msgstr "Juegos y tecnología"
 
+#: src/components/packs/GamePacks.tsx
+msgid "Games"
+msgstr "Juegos"
+
 #: src/lib/skill-axes.ts
 msgid "General"
 msgstr "General"
@@ -12821,6 +12825,10 @@ msgstr "No quedan filas esta ronda."
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "No runs this month yet."
 msgstr "Todavía no hay partidas este mes."
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "No runs yet."
+msgstr "Todavía no hay partidas."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No score found at that link."

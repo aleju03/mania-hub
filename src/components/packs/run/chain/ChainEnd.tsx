@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { CHAIN_RULES, CHAIN_SCENE_NAMES, chainIsEndless, formatChainScore, type ChainBoardEntry, type ChainRunView } from "#/lib/chain-run";
+import { CHAIN_RULES, CHAIN_RUN_NAME, CHAIN_SCENE_NAMES, chainIsEndless, formatChainScore, type ChainBoardEntry, type ChainRunView } from "#/lib/chain-run";
 import { PACK_ASPECT } from "../../packArt";
 import { runSound } from "../runSound";
 import { SceneArt } from "../sceneArt";
@@ -298,11 +298,21 @@ export function ChainStart({
   loadSheet: LoadSheet;
   onNewRun: () => void;
 }) {
+  const { t, i18n } = useLingui();
   const height = narrow ? 150 : 230;
   const width = Math.round(height * PACK_ASPECT);
   return (
     <div className="absolute inset-0 overflow-y-auto overflow-x-hidden">
       <div className="flex min-h-full flex-col items-center justify-center gap-8 px-4 py-8">
+        <motion.h2
+          className="-rotate-2 text-center leading-none text-[#f3e9d8]"
+          style={{ fontFamily: MARKER, fontSize: narrow ? 44 : 72 }}
+          initial={reducedMotion ? false : { y: -24, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 380, damping: 22 }}
+        >
+          {i18n._(CHAIN_RUN_NAME)}
+        </motion.h2>
         <div className="relative" style={{ width: width * 2.1, height: height + 20 }}>
           {[-1, 0, 1].map((offset, index) => (
             <motion.div
@@ -317,20 +327,28 @@ export function ChainStart({
             </motion.div>
           ))}
         </div>
-        <motion.button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            runSound.uiTap();
-            onNewRun();
-          }}
-          className="rounded-full bg-osu-pink px-12 py-4 text-[22px] font-black text-[#120f1a] transition hover:brightness-110 disabled:opacity-50"
+        <motion.div
           initial={reducedMotion ? false : { scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 420, damping: 18, delay: 0.3 }}
         >
-          <Trans>Start a run</Trans>
-        </motion.button>
+          <ChainButtons
+            big={!narrow}
+            items={[
+              {
+                key: "start",
+                label: <Trans>Start a run</Trans>,
+                title: t`Start a run`,
+                primary: true,
+                disabled: busy,
+                onClick: () => {
+                  runSound.uiTap();
+                  onNewRun();
+                },
+              },
+            ]}
+          />
+        </motion.div>
         <div className="w-full max-w-[460px]">
           <BoardPanel loadBoard={loadBoard} loadSheet={loadSheet} mine={best} refreshKey={0} />
         </div>

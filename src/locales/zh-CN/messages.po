@@ -8643,6 +8643,10 @@ msgstr "画廊"
 msgid "Game and tech"
 msgstr "游戏与科技"
 
+#: src/components/packs/GamePacks.tsx
+msgid "Games"
+msgstr "游戏"
+
 #: src/lib/skill-axes.ts
 msgid "General"
 msgstr "综合"
@@ -12842,6 +12846,10 @@ msgstr "本回合没有剩余排数。"
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "No runs this month yet."
 msgstr "本月还没有对局。"
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "No runs yet."
+msgstr "还没有对局。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No score found at that link."

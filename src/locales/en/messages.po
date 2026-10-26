@@ -8622,6 +8622,10 @@ msgstr "Gallery"
 msgid "Game and tech"
 msgstr "Game and tech"
 
+#: src/components/packs/GamePacks.tsx
+msgid "Games"
+msgstr "Games"
+
 #: src/lib/skill-axes.ts
 msgid "General"
 msgstr "General"
@@ -12825,6 +12829,10 @@ msgstr "No rows left this round."
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "No runs this month yet."
 msgstr "No runs this month yet."
+
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "No runs yet."
+msgstr "No runs yet."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No score found at that link."

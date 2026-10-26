@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { LogOut } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
-  CHAIN_RUN_NAME,
   chainSkip727,
   CHAIN_RULES,
   CHAIN_SCENE_COPY,
@@ -240,7 +239,7 @@ export interface ChainTopBarProps {
    the run's shards. */
 export function ChainTopBar(props: ChainTopBarProps) {
   const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false } = props;
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const shownShards = useTicker(shards, reducedMotion);
   const stamp = (on: ChainWysiField) => (wysi?.on.includes(on) ? <WysiStamp key={`wysi-${wysi.id}-${on}`} reducedMotion={reducedMotion} /> : null);
   const exit = (
@@ -279,17 +278,15 @@ export function ChainTopBar(props: ChainTopBarProps) {
       lineWidth={lineWidth}
     />
   );
-  /* Between rounds (packs, the shop) the corner says where the run is. */
+  /* Between rounds (packs, the shop) the corner says where the run is; before
+     the first round and after the last it stays empty (the start screen
+     carries the game's name). */
   const where = showRound ? (
     <div className="relative leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: narrow ? 20 : 30 }}>
       {chainIsEndless(round) ? <Trans>Endless round {round}</Trans> : <Trans>Round {round}</Trans>}
       {stamp("round")}
     </div>
-  ) : (
-    <div className="leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: narrow ? 22 : 34 }}>
-      {i18n._(CHAIN_RUN_NAME)}
-    </div>
-  );
+  ) : null;
 
   if (narrow) {
     return (

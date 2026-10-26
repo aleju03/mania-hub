@@ -336,10 +336,36 @@ export interface ChainButtonItem {
    pink one, the others dark with an icon. `compact` (phones) shows the side
    buttons as icons only. */
 /* The primary button's face: the rendered pink enamel pill with its cream rim
-   and embossed chain (3d-modelling/overjoy/build_button.py), drawn as a
-   border-image so its caps keep their shape at any width: 96px caps and a
-   144px middle that repeats whole links. */
+   and embossed chain (3d-modelling/overjoy/build_button.py), in three pieces
+   so its caps keep their shape at any width: the full render's 96px ends as
+   caps, and its 144px middle (cropped to its own file) repeating whole links
+   between them. The pieces overlap a pixel; a border-image's slices left
+   hairline seams at the caps. */
 const PRIMARY_FACE = "/images/packs/run/button-pink-full-v1.webp";
+const PRIMARY_MIDDLE = "/images/packs/run/button-pink-mid-v1.webp";
+
+function PrimaryFace({ height }: { height: number }) {
+  const cap = (side: "left" | "right") => (
+    <span
+      className="shrink-0"
+      style={{
+        width: height / 2 + 1,
+        backgroundImage: `url(${PRIMARY_FACE})`,
+        backgroundSize: `auto ${height}px`,
+        backgroundPosition: `${side} top`,
+        backgroundRepeat: "no-repeat",
+        [side === "left" ? "marginRight" : "marginLeft"]: -1,
+      }}
+    />
+  );
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute -inset-[3px] -z-10 flex">
+      {cap("left")}
+      <span className="min-w-0 flex-1" style={{ backgroundImage: `url(${PRIMARY_MIDDLE})`, backgroundSize: `auto ${height}px`, backgroundRepeat: "round no-repeat" }} />
+      {cap("right")}
+    </span>
+  );
+}
 const CHAIN_LINK = { front: "/images/packs/run/link-front-v1.webp", side: "/images/packs/run/link-side-v1.webp" };
 
 export function ChainButtons({ items, compact = false, big = false }: { items: ChainButtonItem[]; compact?: boolean; big?: boolean }) {
@@ -384,22 +410,15 @@ export function ChainButtons({ items, compact = false, big = false }: { items: C
           padding: item.primary ? `0 ${compact ? 22 : big ? 40 : 32}px` : compact ? "0 10px" : "0 18px 0 12px",
           background: item.primary && !item.muted ? "transparent" : item.active ? KIT.pink : KIT.dark,
           borderColor: item.primary ? (item.muted ? "rgba(243,233,216,0.4)" : "transparent") : item.active ? KIT.cream : item.tone ?? KIT.cream,
-          ...(item.primary && !item.muted
-            ? {
-                borderImageSource: `url(${PRIMARY_FACE})`,
-                borderImageSlice: "0 96 fill",
-                borderImageWidth: `0 ${height / 2}px`,
-                borderImageRepeat: "stretch round",
-                // The face's centre sits a little above the middle; the side wall is below it.
-                paddingBottom: Math.round(height * 0.06),
-              }
-            : {}),
+          // The face's centre sits a little above the middle; the side wall is below it.
+          ...(item.primary && !item.muted ? { paddingBottom: Math.round(height * 0.06) } : {}),
           color: (item.primary && !item.muted) || item.active ? KIT.dark : item.muted ? "rgba(243,233,216,0.5)" : KIT.cream,
           fontFamily: MARKER,
           fontSize: item.primary ? (compact ? 20 : big ? 28 : 25) : compact ? 15 : 19,
           boxShadow: item.primary && !item.muted ? undefined : "0 5px 0 rgba(0,0,0,0.45)",
         }}
       >
+        {item.primary && !item.muted && <PrimaryFace height={height} />}
         {item.icon}
         {compact && item.badge !== undefined && (
           <span
