@@ -726,7 +726,7 @@ function SkinsPage() {
                 takes the middle column at the header's width and the rail
                 hangs in the left margin, so the skins stay centered under
                 the page header the way they were before the rail. */}
-            <div className="lg:grid lg:grid-cols-[176px_minmax(0,1fr)] lg:gap-x-8 lg:gap-y-5 min-[102.5rem]:grid-cols-[minmax(176px,1fr)_minmax(0,1160px)_minmax(176px,1fr)]">
+            <div className="lg:grid lg:grid-cols-[176px_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:gap-x-8 lg:gap-y-5 min-[102.5rem]:grid-cols-[minmax(176px,1fr)_minmax(0,1160px)_minmax(176px,1fr)]">
             {/* Search and sort share one bar over the grid, level with the
                 top of the rail. No surface of its own, so the falling notes
                 show through. */}
