@@ -402,7 +402,7 @@ describe("ManiaReplayRenderer skin customization", () => {
     // One copy stretched to 32800 of lazer's 768-space units, from the tail
     // whatever the NoteBodyStyle, sized by the strip's pre-crop height.
     expect(source).toContain("const LAZER_LN_BODY_SPAN = 32800 * (480 / 768);");
-    expect(source).toContain("? LAZER_LN_BODY_SPAN * lazerScale * (sourceHeight / fullSourceHeight)");
+    expect(source).toContain("? LAZER_LN_BODY_SPAN * unitScale * (sourceHeight / fullSourceHeight)");
     expect(source).toContain("const anchorAtTop = lazer ? !upscroll : (bodyStyle === 2) === upscroll;");
     // The body runs half a tail note past the end line, unclipped by the cap.
     expect(source).toContain("bodyTailY = this.skinSettings.upscroll ? tailEndY + lazerTailHeight / 2 : tailEndY - lazerTailHeight / 2;");
@@ -416,7 +416,8 @@ describe("ManiaReplayRenderer skin customization", () => {
     // rounded cap hides behind a transparent lead-in) came out with a flat
     // tail while one copy was squashed over the whole hold.
     expect(source).toContain("private lnBodyTiles(");
-    expect(source).toContain(": sourceHeight * (colWidth / sourceWidth);");
+    expect(source).toContain(": (sourceHeight / assetScale) * STABLE_LN_BODY_ROW_UNITS * unitScale;");
+    expect(source).toContain("const STABLE_LN_BODY_ROW_UNITS = 480 / 768;");
     expect(source).toContain("if (span > tileHeight * MAX_LN_BODY_TILES) return stretched;");
     expect(source).toContain("const MAX_LN_BODY_TILES = 8;");
     // The old whole-span stretch is gone from the skin body path.

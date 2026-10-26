@@ -267,6 +267,11 @@ const LN_BODY_FILLER_ROWS = 8;
 // 32800 of its units, which are 768ths of the stage height: 20500 in the
 // 480-space the layout scale is measured in.
 const LAZER_LN_BODY_SPAN = 32800 * (480 / 768);
+// stable stretches a cascaded body to the lane's width but gives each texel
+// row a fixed 480/768 of a 480-space unit (half that at @2x), whatever the
+// art's width: the texture is native at 768 tall. Fitted on Percy caps in
+// stable screenshots across 64- to 200-wide strips.
+const STABLE_LN_BODY_ROW_UNITS = 480 / 768;
 // What the inline mobile canvas used to be (~390-430px tall). Inline portrait
 // layouts anchor skin scale and scroll speed to this instead of the real
 // height, so the taller redesigned stage adds lookahead rather than speed.
@@ -7571,7 +7576,8 @@ export class ManiaReplayRenderer {
     let bodyTailY = this.skinSettings.upscroll ? tailBoxTop + tailHeight : tailBoxTop;
     // lazer runs the body half a tail note past the end line, blank cap or
     // not (lazer falls back to the head art when there is no tail), and draws
-    // the cap over it with no clip.
+    // the cap over it. Both sit in DrawableHoldNote's masking container, which
+    // ends at the head's centre, so the cap is cut there below.
     const lazerBodies = this.skinProfile.lazerBodies;
     if (lazerBodies) {
       const lazerTailHeight = tailAsset ? this.getNoteAssetHeight(tailAsset, colWidth, layout, layout.noteHeight) : headHeight;
@@ -7610,8 +7616,7 @@ export class ManiaReplayRenderer {
     if (bodyAsset && clipBottom > clipTop) {
       const baseAlpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55);
       const bodyStyle = this.skinProfile.noteBodyStyles[col] ?? 1;
-      const lazerScale = lazerBodies ? layout.layoutScale : undefined;
-      for (const full of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom, bodyStyle, lazerScale)) {
+      for (const full of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom, bodyStyle, layout.layoutScale, lazerBodies)) {
         const tile = clipLnBodyTile(full, clipTop, clipBottom);
         if (!tile) continue;
         const tileHeight = tile.bottom - tile.top;
@@ -7646,10 +7651,34 @@ export class ManiaReplayRenderer {
       const alpha = bodyAlpha
         * this.topFadeAlpha(Math.max(0, Math.min(tailTop + tailHeight, fadeHeight)), fadeHeight, 0.55)
         * this.getHiddenAlphaForVerticalSpan(tailTop, tailTop + tailHeight, visibilityLayout);
-      // Stable flips the tail texture vertically on downscroll (lazer's
-      // LegacyHoldNoteTailPiece inverts the scroll direction), so tail art is
-      // authored upside down; mirror it back.
-      this.drawSkinImage(tailAsset, colX + colWidth / 2, tailTop, colWidth, tailHeight, 0.5, 0, alpha, 0xffffff, !this.skinSettings.upscroll);
+      // lazer's mask: on a hold shorter than half a head, or one held down to
+      // its last half-head, the cap would otherwise show below the head.
+      let visibleTop = tailTop;
+      let visibleBottom = tailTop + tailHeight;
+      if (lazerBodies) {
+        if (this.skinSettings.upscroll) visibleTop = Math.max(visibleTop, bodyHeadY);
+        else visibleBottom = Math.min(visibleBottom, bodyHeadY);
+      }
+      if (visibleBottom > visibleTop) {
+        // Stable flips the tail texture vertically on downscroll (lazer's
+        // LegacyHoldNoteTailPiece inverts the scroll direction), so tail art
+        // is authored upside down; mirror it back. Mirrored, the screen band's
+        // fractions run from the texture's bottom.
+        const flipY = !this.skinSettings.upscroll;
+        const near = (visibleTop - tailTop) / tailHeight;
+        const far = (visibleBottom - tailTop) / tailHeight;
+        this.drawSkinImageVerticalStrip(
+          tailAsset,
+          colX + colWidth / 2,
+          visibleTop,
+          colWidth,
+          visibleBottom - visibleTop,
+          flipY ? 1 - far : near,
+          flipY ? 1 - near : far,
+          alpha,
+          flipY,
+        );
+      }
     }
 
     if (headAsset) {
@@ -7676,7 +7705,7 @@ export class ManiaReplayRenderer {
   }
 
   // Stable's default NoteBodyStyle cascades the LN body instead of stretching
-  // it: the art runs at its natural aspect from the tail end toward the head
+  // it: the art runs at the lane's width from the tail end toward the head
   // and repeats when the hold outruns it. Percy bodies live or die by this -
   // one 4000px tall strip whose rounded cap sits behind a transparent
   // lead-in, so the hold shows a cap and reads shorter than it is. Stretched,
@@ -7691,9 +7720,10 @@ export class ManiaReplayRenderer {
     bodyTop: number,
     bodyBottom: number,
     bodyStyle: number,
-    // Set for a lazer skin: px per 480-space unit, which sizes lazer's one
+    // px per 480-space unit, which sizes stable's rows and lazer's one
     // stretched copy.
-    lazerLayoutScale?: number,
+    layoutScale: number,
+    lazer: boolean,
   ): LnBodyTile[] {
     // The upscroll flip on the stretched copy keeps the art's cap end facing
     // the tail, the same orientation every cascade path below draws with.
@@ -7709,12 +7739,12 @@ export class ManiaReplayRenderer {
     // A Percy strip comes out about four times taller than at natural aspect,
     // so its transparent lead-in reads as a gap and the step into the body is
     // magnified into a soft fade. A cropped strip keeps its share of the span.
-    const lazerScale = lazerLayoutScale && lazerLayoutScale > 0 ? lazerLayoutScale : 0;
-    const lazer = lazerScale > 0;
+    const unitScale = layoutScale > 0 ? layoutScale : 1;
+    const assetScale = asset.scale && asset.scale > 0 ? asset.scale : 1;
     const fullSourceHeight = asset.sourceHeight && asset.sourceHeight > sourceHeight ? asset.sourceHeight : sourceHeight;
     const tileHeight = lazer
-      ? LAZER_LN_BODY_SPAN * lazerScale * (sourceHeight / fullSourceHeight)
-      : sourceHeight * (colWidth / sourceWidth);
+      ? LAZER_LN_BODY_SPAN * unitScale * (sourceHeight / fullSourceHeight)
+      : (sourceHeight / assetScale) * STABLE_LN_BODY_ROW_UNITS * unitScale;
     if (!(tileHeight > 0)) return stretched;
 
     const upscroll = this.skinSettings.upscroll;

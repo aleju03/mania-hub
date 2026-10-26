@@ -14,7 +14,7 @@ import {
 // flat-colour fallbacks where the skin has none. Sprite sizing and anchoring
 // follow osu!stable, not naive image-fitting: the stage sits at ColumnStart
 // like in game (not centred), note heights come from noteHeightScale, LN
-// bodies follow the skin's NoteBodyStyle - cascade at natural aspect from the
+// bodies follow the skin's NoteBodyStyle - cascade at a fixed row height from the
 // tail end by default (what makes Percy-style 40000px body images show their
 // baked-in rounded cap instead of squashing it flat), stretch one copy when
 // the skin declares style 0, cascade from the head end for 2 - the body runs
@@ -39,7 +39,7 @@ const BACKDROP_TONE_FLOOR = 0.085;
 const BACKDROP_EQUILATERAL = 0.866;
 // The playfield a mania skin is authored against: opaque, not a dim over the
 // map art. skin.ini Colour{n} overrides it per column when the skin sets one.
-const PLAYFIELD_BACKGROUND = "#040308";
+const PLAYFIELD_BACKGROUND = "#000000";
 // Safety cap only: the true stage width comes from the game's 480-unit
 // vertical space (a 65-wide column is 65/480 of the screen height), which on
 // a 16:9 canvas reproduces the in-game proportions exactly. Ultra-wide skins
@@ -837,6 +837,11 @@ function drawTapNote(
 // 32800 of its units, which are 768ths of the stage height: 20500 in the
 // 480-space the preview layout scale is measured in.
 const LAZER_LN_BODY_SPAN = 32800 * (480 / 768);
+// stable stretches a cascaded body to the lane's width but gives each texel
+// row a fixed 480/768 of a 480-space unit (half that at @2x), whatever the
+// art's width: the texture is native at 768 tall. Fitted on Percy caps in
+// stable screenshots across 64- to 200-wide strips.
+const STABLE_LN_BODY_ROW_UNITS = 480 / 768;
 
 export interface SkinPreviewBodyTile {
   top: number;
@@ -1043,7 +1048,8 @@ function drawLongNote(
   let { bodyTop, bodyBottom } = geometry;
   // lazer runs the body half a tail note past the end line, blank cap or not
   // (lazer falls back to the head art when there is no tail), and draws the
-  // cap over it with no clip.
+  // cap over it. Both sit in DrawableHoldNote's masking container, which ends
+  // at the head's centre, so the cap is cut there below.
   const lazerBodies = profile.lazerBodies;
   if (lazerBodies) {
     const lazerTailHeight = tailImage ? noteAssetHeight(tailImage) : headHeight;
@@ -1072,7 +1078,7 @@ function drawLongNote(
 
   if (bodyImage && visibleBottom > visibleTop) {
     // The skin's NoteBodyStyle decides how the art fills the span: stretch one
-    // copy (0), or cascade it at natural aspect - tiling when the art is
+    // copy (0), or cascade it at a fixed row height - tiling when the art is
     // shorter than the hold - anchored at the tail (1, stable's default) or
     // the head (2). Percy bodies are one huge cascade tile whose rounded cap
     // (and "appears shorter" transparent lead-in) lands at the tail. Cascades
@@ -1104,7 +1110,10 @@ function drawLongNote(
       // times taller than at natural aspect, its lead-in a visible gap and
       // its edge a soft fade. A cropped strip keeps its share of the span.
       const fullHeight = Math.max(sourceHeight, assets.lnBody?.sourceHeight ?? 0);
-      const rowScale = lazerBodies ? (LAZER_LN_BODY_SPAN * layout.scale) / fullHeight : laneWidth / sourceWidth;
+      const bodyScale = assets.lnBody?.scale && assets.lnBody.scale > 0 ? assets.lnBody.scale : 1;
+      const rowScale = lazerBodies
+        ? (LAZER_LN_BODY_SPAN * layout.scale) / fullHeight
+        : (STABLE_LN_BODY_ROW_UNITS * layout.scale) / bodyScale;
       for (const tile of bodyTileRects(bodyTop, bodyBottom, sourceHeight, rowScale)) {
         ctx.drawImage(bodyImage, 0, 0, sourceWidth, tile.sourceRows, laneX, tile.top, laneWidth, tile.height);
       }
@@ -1123,8 +1132,19 @@ function drawLongNote(
   // this). Drawn over the body, which runs the full depth of the box beneath
   // it, so no cap can leave a seam.
   if (tailImage && tailHeight > 0) {
+    ctx.save();
+    if (lazerBodies) {
+      // lazer's mask: a hold shorter than half a head would otherwise show
+      // the cap below the head.
+      const headCentreY = upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
+      ctx.beginPath();
+      if (upscroll) ctx.rect(laneX, headCentreY, laneWidth, SKIN_PREVIEW_HEIGHT - headCentreY);
+      else ctx.rect(laneX, 0, laneWidth, headCentreY);
+      ctx.clip();
+    }
     if (upscroll) ctx.drawImage(tailImage, laneX, tailBoxTop, laneWidth, tailHeight);
     else drawImageFlippedY(ctx, tailImage, laneX, tailBoxTop, laneWidth, tailHeight);
+    ctx.restore();
   }
 
   if (headImage) {
