@@ -188,13 +188,14 @@ export function BestScoresControlBar({
 
   return (
     <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-      <div className="order-2 flex items-center gap-x-4 gap-y-2 flex-wrap min-w-0 lg:order-1">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
+      {/* Below lg the label/chip pairs share a two-column grid so Grade lines up under Mods. */}
+      <div className="order-2 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-2 min-w-0 lg:order-1 lg:flex lg:flex-wrap lg:gap-x-4">
+        <div className="contents lg:flex lg:items-center lg:gap-2 lg:flex-wrap lg:min-w-0">
           <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{t`Mods`}</span>
           {mods.length === 0 ? (
             <span className="text-[11px] text-osu-f1">{t`No mods in top plays`}</span>
           ) : (
-            <>
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               <div className="flex items-center gap-1 flex-wrap">
                 {mods.map((mod) => (
                   <ModFilterChip
@@ -215,11 +216,11 @@ export function BestScoresControlBar({
                   {t`Clear`}
                 </button>
               )}
-            </>
+            </div>
           )}
         </div>
         {(grades.length > 1 || Object.keys(gradeFilter).length > 0) && (
-          <div className="flex items-center gap-2 border-l border-white/[0.07] pl-4 min-w-0">
+          <div className="contents lg:flex lg:items-center lg:gap-2 lg:border-l lg:border-white/[0.07] lg:pl-4 lg:min-w-0">
             <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{t`Grade`}</span>
             <div className="flex items-center gap-1 flex-wrap">
               {grades.map((grade) => (
