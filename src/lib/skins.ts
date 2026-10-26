@@ -71,6 +71,8 @@ export interface SkinSummary {
   laneCover?: boolean | null;
   maniaStage?: boolean | null;
   lazer?: boolean | null;
+  // The holds are Percy LNs: a tall body strip with its end drawn in.
+  percy?: boolean | null;
   // Every distinct tap-note shape across the skin's keymodes, with the
   // primary/majority shape first. Missing on summaries from older backends.
   noteShapes?: SkinNoteShape[];
@@ -226,6 +228,8 @@ export interface SkinsListParams {
   stage?: boolean;
   shots?: boolean;
   client?: SkinsClient;
+  // true keeps Percy LN skins, false the rest; unset is any.
+  percy?: boolean;
   shape?: SkinNoteShape;
   // Exact match on the normalized recommended resolution ("1920x1080").
   res?: string;
@@ -261,7 +265,8 @@ const skinsListMemory = new Map<string, { at: number; result: SkinsListResult }>
 export function skinsListCacheKey(params: SkinsListParams): string {
   return [
     params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0, params.variant ?? "", params.owner ?? "", params.liked ? 1 : "",
-    params.cover ? 1 : "", params.stage ? 1 : "", params.shots ? 1 : "", params.client ?? "", params.shape ?? "", params.res ?? "",
+    params.cover ? 1 : "", params.stage ? 1 : "", params.shots ? 1 : "", params.client ?? "", params.percy == null ? "" : params.percy ? 1 : 0,
+    params.shape ?? "", params.res ?? "",
   ].join("|");
 }
 
@@ -351,6 +356,7 @@ function skinsListQuery(params: SkinsListParams): URLSearchParams {
   if (params.stage) query.set("stage", "1");
   if (params.shots) query.set("shots", "1");
   if (params.client) query.set("client", params.client);
+  if (params.percy != null) query.set("percy", params.percy ? "1" : "0");
   if (params.shape) query.set("shape", params.shape);
   if (params.res) query.set("res", params.res);
   if (params.liked && params.guest) {
@@ -933,6 +939,7 @@ export const fetchLikedSkinsList = createServerFn({ method: "GET" })
     stage: data?.stage === true,
     shots: data?.shots === true,
     client: data?.client === "lazer" || data?.client === "stable" ? data.client : undefined,
+    percy: typeof data?.percy === "boolean" ? data.percy : undefined,
     shape: isSkinNoteShape(data?.shape) ? data.shape : undefined,
     res: typeof data?.res === "string" ? normalizeSkinResolution(data.res) ?? undefined : undefined,
   }))

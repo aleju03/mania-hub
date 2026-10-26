@@ -512,10 +512,11 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                         <span className="tabular-nums text-osu-l1">{skin.resolution}</span>
                       </FactRow>
                     )}
-                    {(skin.laneCover || skin.maniaStage || skin.lazer) && (
+                    {(skin.laneCover || skin.maniaStage || skin.lazer || skin.percy) && (
                       <FactRow label={t`Includes`}>
                         <span className="text-osu-l1">
                           {[
+                            skin.percy ? t`Percy LNs` : null,
                             skin.laneCover ? t`lane cover` : null,
                             skin.maniaStage ? t`mania stage` : null,
                             skin.lazer ? t`lazer edits` : null,

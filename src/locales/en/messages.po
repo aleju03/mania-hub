@@ -9929,6 +9929,7 @@ msgstr "Live updates on"
 #: src/routes/maps.tsx
 #: src/routes/news_.prism.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
+#: src/routes/skins.tsx
 msgid "LN"
 msgstr "LN"
 
@@ -11828,6 +11829,10 @@ msgstr "No osu! player named \"{trimmedQuery}\""
 msgid "No pattern signal for this keymode yet."
 msgstr "No pattern signal for this keymode yet."
 
+#: src/routes/skins.tsx
+msgid "no Percy"
+msgstr "no Percy"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "No players"
 msgstr "No players"
@@ -13573,6 +13578,14 @@ msgstr "Per-hand accuracy"
 #: src/components/player/SkillBreakdown.tsx
 msgid "percentiles are among tracked players"
 msgstr "percentiles are among tracked players"
+
+#: src/routes/skins.tsx
+msgid "Percy"
+msgstr "Percy"
+
+#: src/routes/skins_.$id.tsx
+msgid "Percy LNs"
+msgstr "Percy LNs"
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
