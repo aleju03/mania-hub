@@ -67,6 +67,7 @@ interface Compiled {
 
 /* Licensed art a theme's shader draws (sources in public/images/profile-themes/SOURCES.md). */
 const THEME_SPRITES: Partial<Record<SupporterProfileThemeId, string>> = {
+  hanabi: "/images/profile-themes/lantern.png",
   koi: "/images/profile-themes/koi-pads.png",
   vaporwave: "/images/profile-themes/palm.png",
   redtree: "/images/profile-themes/red-tree.webp",

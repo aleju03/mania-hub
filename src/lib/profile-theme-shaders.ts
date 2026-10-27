@@ -1205,6 +1205,8 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   // Hanabi: a summer festival night, lanterns strung across the top of the
   // hero and fireworks bursting over it.
   hanabi: shader(`
+uniform sampler2D u_sprite;
+
 vec3 burstColour(float h) {
   vec3 palette[6] = vec3[6](vec3(1., .3, .35), vec3(1., .78, .3), vec3(.35, .85, 1.), vec3(1., .45, .85), vec3(.45, 1., .55), vec3(1., .95, .9));
   return palette[int(h * 5.99)];
@@ -1250,20 +1252,25 @@ vec3 theme(vec2 uv, vec2 p, float t) {
       col += c * (exp(-d / w) * 1.6 + exp(-d / (w * 5.)) * .35) * fade * (.25 + .75 * hseg) * flicker;
     }
   }
-  // lanterns strung across the top of the hero, swaying
-  float ropeY = .46 - .03 * (1. - pow(q.x / (aspect * .5), 2.));
+  // paper lanterns (the sprite, 256x400, cord loop at the top middle) hung
+  // from a sagging rope across the top of the hero, each swaying from its
+  // hook, tinted red or orange, its candle flickering
+  float halfW = aspect * .5;
+  float ropeY = .46 - .03 * (1. - pow(q.x / halfW, 2.));
   col += vec3(.25, .12, .08) * smoothstep(PX * 2., 0., abs(q.y - ropeY)) * .5;
-  float spacing = .13;
+  float spacing = .17;
   float li = floor(q.x / spacing + .5);
   float lx = li * spacing;
-  float ly = .46 - .03 * (1. - pow(lx / (aspect * .5), 2.)) - .045;
-  vec2 ld = rot(sin(t * 1.3 + li) * .08) * (q - vec2(lx, ly));
-  float body = length(vec2(ld.x / .022, ld.y / .03)) - 1.;
-  float lantern = smoothstep(.08, -.08, body);
-  float ribs = .85 + .15 * sin(ld.y * 160.);
-  vec3 warm = hash(vec2(li, 5.)) > .5 ? vec3(1., .32, .14) : vec3(1., .6, .2);
-  col = mix(col, warm * ribs * (.7 + .3 * sin(t * 2. + li)), lantern);
-  col += warm * exp(-length(q - vec2(lx, ly)) * 22.) * .25;
+  vec2 hook = vec2(lx, .46 - .03 * (1. - pow(lx / halfW, 2.)) + .004);
+  float H = .12, W = H * .64;
+  vec2 ld = rot(sin(t * 1.3 + li) * .08) * (q - hook);
+  vec2 cell = vec2(.5 + ld.x / W, -ld.y / H);
+  float inside = step(0., cell.x) * step(cell.x, 1.) * step(0., cell.y) * step(cell.y, 1.);
+  vec4 lantern = texture(u_sprite, clamp(cell, 0., 1.)) * inside;
+  vec3 warm = hash(vec2(li, 5.)) > .5 ? vec3(1., .34, .16) : vec3(1., .62, .24);
+  float flicker = .88 + .08 * sin(t * 2. + li) + .04 * sin(t * 9.3 + li * 3.);
+  col = col * (1. - lantern.a) + lantern.rgb * warm * flicker * 1.15;
+  col += warm * exp(-length(q - (hook + rot(-sin(t * 1.3 + li) * .08) * vec2(0., -H * .42))) * 18.) * .22 * flicker;
   return col;
 }`),
 
