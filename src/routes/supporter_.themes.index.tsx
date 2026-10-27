@@ -8,6 +8,7 @@ import { Popover } from "../components/supporter/themes/EditorControls";
 import { LayerIcon } from "../components/supporter/themes/LayerIcons";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { useAuth } from "../lib/auth-context";
+import { hideBrokenImage } from "../lib/custom-themes";
 import { getI18n } from "../lib/i18n";
 import {
   deleteOwnCustomTheme,
@@ -111,7 +112,7 @@ function OwnThemesPage() {
               return (
                 <article key={theme.id} className="overflow-hidden rounded-xl bg-osu-b4">
                   <div className="relative aspect-[1200/630] bg-osu-b6" style={theme.look ? { backgroundColor: theme.look.base } : undefined}>
-                    {theme.stillUrl ? <img src={theme.stillUrl} alt="" className="h-full w-full object-cover" loading="lazy" /> : null}
+                    {theme.stillUrl ? <img src={theme.stillUrl} alt="" className="h-full w-full object-cover" loading="lazy" onError={hideBrokenImage} /> : null}
                     {wearing ? <span className="absolute left-2 top-2 rounded-md bg-osu-pink px-1.5 py-0.5 text-[11px] font-semibold text-white">{t`Wearing`}</span> : null}
                   </div>
                   <div className="p-3">

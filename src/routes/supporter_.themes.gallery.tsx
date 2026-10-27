@@ -9,7 +9,7 @@ import { ReportModal } from "../components/supporter/CustomThemeCredit";
 import { ProfileThemeBackdrop } from "../components/supporter/ProfileThemeBackdrop";
 import { useAuth } from "../lib/auth-context";
 import { reportCustomTheme } from "../lib/custom-theme-reports";
-import { parseCustomTheme, type CustomTheme } from "../lib/custom-themes";
+import { hideBrokenImage, parseCustomTheme, type CustomTheme } from "../lib/custom-themes";
 import { getI18n } from "../lib/i18n";
 import {
   fetchCustomThemeGallery,
@@ -80,7 +80,7 @@ function ThemeGalleryPage() {
             {themes.map((theme) => (
               <button key={theme.id} type="button" onClick={() => setOpen(theme)} className="group cursor-pointer overflow-hidden rounded-xl bg-osu-b4 text-left">
                 <div className="aspect-[1200/630] overflow-hidden" style={theme.look ? { backgroundColor: theme.look.base } : undefined}>
-                  {theme.stillUrl ? <img src={theme.stillUrl} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" /> : null}
+                  {theme.stillUrl ? <img src={theme.stillUrl} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" onError={hideBrokenImage} /> : null}
                 </div>
                 <div className="p-3">
                   <h3 className="truncate text-[14px] font-semibold text-white">{theme.name}</h3>
@@ -155,7 +155,7 @@ function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; 
           {backdrop ? (
             <ProfileThemeBackdrop theme={backdrop} className="absolute inset-0" />
           ) : summary.stillUrl ? (
-            <img src={summary.stillUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={summary.stillUrl} alt="" className="absolute inset-0 h-full w-full object-cover" onError={hideBrokenImage} />
           ) : null}
         </div>
         <div className="flex flex-wrap items-start gap-4 p-4">

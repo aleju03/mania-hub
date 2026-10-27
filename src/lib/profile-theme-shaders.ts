@@ -618,41 +618,71 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Thunderstorm as a flat layered illustration: four banks of cloud hang
-  // from the top, each one flat tone with a lighter lip along its scalloped
-  // underside, the far ones lighter and lower (toward the horizon), the near
-  // ones darker and overhead; a jagged flat bolt drops from behind the near
-  // banks and strobes, stepping every bank up a tone while it lasts; slanted
-  // rain dashes. No soft glow anywhere.
+  // Thunderstorm: a heavy storm deck over a dark ridge at night. The clouds
+  // billow (warped noise eroding a ragged underside) and a strike lights them
+  // from inside, brightest around it, so their structure shows only in the
+  // flash; between strikes, sheet lightning glows somewhere in the deck. The
+  // bolt drops out of the cloud base to the ridge in kinked segments with a
+  // few dying branches, pulsing two or three times like a real return stroke.
+  // Rain hangs in curtains far off and streaks past up close. The clouds rise
+  // as the page scrolls.
   storm: shader(`
-/* How far a row of round lobes hangs below its line at x. */
-float lobeRow(float x, float cells, float seed) {
-  float u = x * cells, i = floor(u), reach = 0.;
-  for (int k = -1; k <= 1; k++) {
-    float c = i + float(k);
-    float cx = c + .5 + (hash(vec2(c, seed)) - .5) * .6;
-    float r = .62 + .38 * hash(vec2(c, seed + 1.));
-    float dx = u - cx;
-    if (abs(dx) < r) reach = max(reach, sqrt(r * r - dx * dx) * (.75 + .35 * hash(vec2(c, seed + 2.))));
+/* Piecewise-linear noise in -1..1: straight runs with sharp kinks, a bolt's shape. */
+float jag(float y, float s) {
+  float i = floor(y);
+  int si = int(s);
+  return mix(ihash(ivec2(int(i), si)), ihash(ivec2(int(i) + 1, si)), fract(y)) * 2. - 1.;
+}
+
+float boltX(float y, float s) {
+  return .085 * jag(y * 7., s) + .03 * jag(y * 23., s + 1.) + .008 * jag(y * 61., s + 2.);
+}
+
+/* Four octaves of the integer noise, enough for cloud at this size. */
+float cloudFbm(vec2 p) {
+  float v = 0., a = .5;
+  for (int i = 0; i < 4; i++) {
+    v += a * inoise(p);
+    p = p * 2.07 + 5.3;
+    a *= .5;
   }
-  return reach / cells;
+  return v;
 }
 
-/* A bank's underside: a slow swell, scalloped with round bumps. */
-float bankEdge(float x, float base, float cells, float seed) {
-  return base - .13 * noise(vec2(x * 1.3, seed)) - lobeRow(x, cells, seed) - lobeRow(x + .17, cells * 2.2, seed + 5.) * .5;
+/* A strike's brightness \`age\` seconds after it began: two or three return strokes, each fading fast. */
+float strokes(float age, float s) {
+  if (age < 0. || age > 1.2) return 0.;
+  float f = exp(-age * 30.);
+  float t2 = .07 + .06 * ihash(ivec2(int(s), 41));
+  f += step(t2, age) * .8 * exp(-(age - t2) * 26.);
+  float t3 = t2 + .12 + .1 * ihash(ivec2(int(s), 42));
+  f += step(.4, ihash(ivec2(int(s), 43))) * step(t3, age) * .6 * exp(-(age - t3) * 14.);
+  return f;
 }
 
-/* Distance from p to a jagged bolt: nine legs from \`top\` downward, each kicked sideways at random. */
-float boltDist(vec2 p, vec2 top, float drop, float seed, float lean) {
-  float d = 1e9;
-  vec2 a = top;
-  for (int i = 0; i < 9; i++) {
-    float fi = float(i);
-    vec2 b = a + vec2((hash(vec2(seed, fi)) - .5) * .11 + lean * .02, -drop / 9. * (.7 + .6 * hash(vec2(seed, fi + 20.))));
-    vec2 pa = p - a, ba = b - a;
-    d = min(d, length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0., 1.)));
-    a = b;
+/* Distance to the bolt: a trunk from the cloud base to the ridge, and three branches that thin to nothing. */
+float boltDist(vec2 p, float bx, float top, float ground, float lean, float s, out float fade) {
+  fade = 1.;
+  float y = clamp(p.y, ground, top);
+  float x = bx + lean * (top - y) + boltX(y, s);
+  float slope = (boltX(y + .002, s) - boltX(y - .002, s)) / .004 - lean;
+  float d = length(vec2((p.x - x) / sqrt(1. + slope * slope), p.y - y));
+  for (int k = 0; k < 3; k++) {
+    float fk = float(k);
+    float h1 = ihash(ivec2(int(s), 50 + k)), h2 = ihash(ivec2(int(s), 60 + k)), h3 = ihash(ivec2(int(s), 70 + k));
+    float yk = top - (.12 + .5 * h1) * (top - ground);
+    float len = .06 + .12 * h2;
+    float dir = h3 < .5 ? -1. : 1.;
+    float spread = dir * (.7 + .9 * fract(h3 * 7.));
+    float by = clamp(p.y, yk - len, yk);
+    float xk = bx + lean * (top - yk) + boltX(yk, s);
+    float bs = s + 10. + fk;
+    float bxp = xk + spread * (yk - by) + .8 * (boltX(by * 1.7, bs) - boltX(yk * 1.7, bs));
+    float bslope = -spread + .8 * 1.7 * (boltX(by * 1.7 + .003, bs) - boltX(by * 1.7 - .003, bs)) / .006;
+    float bd = length(vec2((p.x - bxp) / sqrt(1. + bslope * bslope), p.y - by));
+    float along = (yk - by) / len;
+    bd += along * .004;
+    if (bd < d) { d = bd; fade = 1. - along * .8; }
   }
   return d;
 }
@@ -660,62 +690,106 @@ float boltDist(vec2 p, vec2 top, float drop, float seed, float lean) {
 vec3 theme(vec2 uv, vec2 p, float t) {
   float sc = u_scroll;
   float aspect = u_res.x / u_res.y;
-  // a strike every few seconds: on, off, on again, a flicker, then dark
-  float period = 5.5;
-  float seed = floor(t / period);
-  float age = t - seed * period - (.4 + 3.2 * hash(vec2(seed, 1.)));
-  float flash = age < 0. ? 0. : age < .07 ? 1. : age < .12 ? .15 : age < .3 ? .75 : age < .55 ? .3 * step(.5, fract(age * 9.)) : 0.;
-  float bolt = age >= 0. && age < .3 && !(age > .07 && age < .12) ? 1. : 0.;
-  vec3 col = mix(vec3(.016, .019, .03), vec3(.03, .035, .054), smoothstep(-.5, .4, p.y));
-  col += vec3(.035, .04, .065) * flash;
-  float bx = (hash(vec2(seed, 2.)) - .5) * aspect * .85;
-  float lean = hash(vec2(seed, 5.)) - .5;
-  for (int k = 0; k < 4; k++) {
-    float fk = float(k);
-    // the bolt drops from behind the nearer banks
-    if (k == 1) {
-      vec2 top = vec2(bx, .14 + sc * .3);
-      float drop = .55 + .25 * hash(vec2(seed, 3.));
-      float d = boltDist(p, top, drop, seed, lean);
-      vec2 fork = top;
-      for (int i = 0; i < 3; i++) fork += vec2((hash(vec2(seed, float(i))) - .5) * .11 + lean * .02, -drop / 9. * (.7 + .6 * hash(vec2(seed, float(i) + 20.))));
-      d = min(d, boltDist(p, fork, drop * .45, seed + 7., -lean * 3. + .6 * sign(lean + .01)) + .0015);
-      float w = max(PX * 1.3, .002);
-      col = mix(col, vec3(.6, .7, 1.), smoothstep(w * 3. + PX, w * 3., d) * bolt);
-      col = mix(col, vec3(1.), smoothstep(w + PX, w, d) * bolt);
-    }
-    float base = .04 + fk * .12 + sc * (.22 + fk * .07);
-    float cells = 9. - fk * 1.4;
-    float x = p.x + t * (.003 + .004 * fk) + fk * 2.37;
-    float edge = bankEdge(x, base, cells, fk * 11.);
-    float aa = PX * 1.2;
-    float inside = smoothstep(edge - aa, edge + aa, p.y);
-    if (inside <= 0.) continue;
-    // far banks lighter, near banks darker; each steps up in the flash, the nearest most
-    vec3 tone = mix(vec3(.1, .11, .155), vec3(.036, .041, .062), fk / 3.);
-    tone += vec3(.07, .08, .13) * flash * (.5 + fk * .25);
-    // the lit lip along the underside: the same scallops, a little higher
-    float lip = bankEdge(x + .01, base + .022, cells, fk * 11.);
-    vec3 lipTone = tone * 1.35 + vec3(.012, .014, .024) + vec3(.2, .23, .34) * flash * (.4 + fk * .2);
-    tone = mix(lipTone, tone, smoothstep(lip - aa, lip + aa, p.y));
-    col = mix(col, tone, inside);
+  vec2 cp = p - vec2(0., sc * .32);
+  vec2 gp = p - vec2(0., sc * .55);
+
+  // a strike every six to nine seconds, somewhere across the width; one is
+  // mid-flash at the swatches' still moment (6.5 s)
+  float period = 7.3;
+  float ts = t + .83;
+  float si = floor(ts / period);
+  float age = ts - si * period - 1.5 * ihash(ivec2(int(si), 1));
+  float strike = strokes(age, si);
+  float bx = (ihash(ivec2(int(si), 2)) - .5) * aspect * .8;
+  float lean = (ihash(ivec2(int(si), 3)) - .5) * .25;
+  // sheet lightning in between, inside the deck, no bolt
+  float sp = 2.9;
+  float ss = floor(t / sp) + 100.;
+  float sheetOn = step(.45, ihash(ivec2(int(ss), 4)));
+  float sheet = strokes(t - (ss - 100.) * sp - 1.4 * ihash(ivec2(int(ss), 5)), ss) * sheetOn * .55;
+  vec2 sheetPos = vec2((ihash(ivec2(int(ss), 6)) - .5) * aspect, .1 + .25 * ihash(ivec2(int(ss), 7)));
+
+  // the ridge, and the deck's ragged base above it
+  float ridge = -.43 + .11 * inoise(vec2(gp.x * 1.3, 3.)) + .045 * inoise(vec2(gp.x * 4.1, 8.)) + .016 * inoise(vec2(gp.x * 13., 2.)) + .006 * inoise(vec2(gp.x * 41., 6.)) + .002 * inoise(vec2(gp.x * 130., 9.));
+  float base = -.08 + .07 * inoise(vec2(cp.x * 1.1 + 3., 1.)) - .04 * inoise(vec2(cp.x * 2.9, 4.));
+
+  // the sky between: near black, a low glow at the horizon
+  vec3 col = mix(vec3(.085, .09, .13), vec3(.016, .018, .028), smoothstep(ridge - .02, base + .1, gp.y));
+
+  // the clouds: warped billows, a ragged underside, relief from the noise's slope
+  vec2 q = vec2(cp.x * 1.25 + t * .01, cp.y * 1.9);
+  vec2 w = vec2(cloudFbm(q * 1.3 + vec2(t * .012, 0.)), cloudFbm(q * 1.3 + vec2(5.2, 1.3 - t * .01)));
+  vec2 cq = q * 2.2 + w * 1.05;
+  float n = cloudFbm(cq);
+  // the light: the strike while it lasts, else the sheet, else the faint sky above
+  vec2 fpos = vec2(bx, base + .06);
+  vec2 lightPos = strike > sheet ? fpos : sheetPos;
+  vec2 toLight = normalize(lightPos - cp + vec2(0., .001));
+  float nL = cloudFbm(cq + toLight * vec2(1.25, 1.9) * .05);
+  float nUp = cloudFbm(cq + vec2(0., .1));
+  float m = smoothstep(-.05, .22, cp.y - base + (n - .5) * .4);
+  float lit = strike * (exp(-length((cp - fpos) * vec2(.9, 1.4)) * 2.6) * 1.3 + .14);
+  lit += sheet * exp(-length((cp - sheetPos) * vec2(.7, 1.1)) * 3.);
+  // puffs facing the light catch it, the rest stays in shade
+  float facing = clamp(.35 + (n - nL) * 9., 0., 1.);
+  float top = clamp(.4 + (n - nUp) * 5., 0., 1.);
+  vec3 cloud = vec3(.05, .055, .08) * (.35 + 1.1 * top) * (.45 + 1.1 * n);
+  cloud += vec3(.035, .037, .055) * smoothstep(base + .3, base, cp.y) * (.5 + facing);
+  cloud += vec3(.45, .5, .78) * lit * (.12 + 1.2 * facing * n) * (1.3 - .6 * m);
+  col = mix(col, cloud, m);
+  // the underside glows where light leaks out of it
+  col += vec3(.3, .33, .55) * lit * smoothstep(.0, .15, m) * smoothstep(.75, .15, m) * .3;
+
+  // rain curtains hanging from the base, far off
+  float shaft = smoothstep(.42, .75, inoise(vec2(cp.x * 1.4 + t * .02, 7.)));
+  float rx = p.x + p.y * .2;
+  float streak = .45 + .55 * inoise(vec2(rx * 60., p.y * 1.2 + t * 4.)) * inoise(vec2(rx * 17. + 7., p.y * .7 + t * 2.));
+  float curtain = shaft * streak * smoothstep(base + .04, base - .12, cp.y) * smoothstep(ridge - .01, ridge + .12, gp.y);
+  col += vec3(.04, .045, .068) * curtain * (.6 + 3.5 * (strike + sheet * .5));
+
+  // the bolt: a white core, a violet-blue bloom, hidden inside the cloud
+  float fade;
+  float d = boltDist(cp, bx, base + .03, ridge + sc * .23, lean, si * 7. + 3., fade);
+  float bolt = clamp(strike * 1.4, 0., 1.) * step(age, .5);
+  float core = smoothstep(max(PX * 1.1, .0012) * (.6 + .4 * fade), 0., d) * (.5 + .5 * fade);
+  vec3 boltCol = vec3(1.) * core + vec3(.55, .6, 1.) * (exp(-d / .008) * .55 + exp(-d / .05) * .16) * fade;
+  col += boltCol * bolt * (1. - .9 * smoothstep(.15, .6, m));
+
+  // the ridge: a black silhouette with a rim where the flash catches it
+  float land = smoothstep(ridge + PX, ridge - PX, gp.y);
+  vec3 ground = vec3(.008, .009, .014) + vec3(.03, .033, .05) * strike * smoothstep(-.6, ridge, gp.y);
+  ground += vec3(.35, .38, .6) * exp(-max(ridge - gp.y, 0.) / .004) * strike * .4 * (.15 + exp(-abs(gp.x - bx) * 2.5));
+  col = mix(col, ground, land);
+
+  // rain: long thin streaks falling at a slant, four depths. Each column has
+  // its own speed and spacing so no rows line up; a streak is brightest at
+  // its head and fades up its tail; the near ones are sparse, longer, softer
+  // and quicker, the far ones fine and dense. They catch the flash.
+  vec2 rp = vec2(p.x + p.y * .2, p.y);
+  // a thumbnail's streaks are a few of its pixels wide, so they go lighter there
+  float rainLit = (1. + (strike + sheet * .4) * 3.) * clamp(u_res.y / 700., .4, 1.);
+  for (int l = 0; l < 4; l++) {
+    float fl = float(l) / 3.;
+    float s = mix(7., 55., fl * fl);
+    float cx = rp.x * s;
+    int ic = int(floor(cx)) + l * 4099;
+    float speed = mix(2.8, 1.3, fl) * (.85 + .3 * ihash(ivec2(ic, 12)));
+    float seg = mix(1.1, .45, fl) * (.8 + .4 * ihash(ivec2(ic, 13)));
+    float v = (p.y + t * speed - sc * mix(.5, .2, fl)) / seg + 10. * ihash(ivec2(ic, 14));
+    int vi = int(floor(v));
+    float fv = fract(v);
+    if (ihash(ivec2(ic, vi * 7 + l)) > mix(.5, .75, fl)) continue;
+    float ox = .25 + .5 * ihash(ivec2(ic, vi * 7 + 3));
+    float len = mix(.32, .14, fl) / seg * (.6 + .7 * ihash(ivec2(ic, vi * 7 + 5)));
+    float tail = clamp(1. - fv / len, 0., 1.);
+    float head = smoothstep(0., .02 / seg, fv);
+    float width = PX * mix(1.7, .75, fl);
+    float across = smoothstep(width, 0., abs(fract(cx) - ox) / s);
+    col += vec3(.36, .4, .55) * across * tail * sqrt(tail) * head * mix(.38, .24, fl) * rainLit;
   }
-  // rain: slanted dashes in two layers, a little brighter in the flash
-  vec2 rp = p;
-  rp.x += rp.y * .2;
-  for (int l = 0; l < 2; l++) {
-    float fl = float(l);
-    float s = 34. + fl * 26.;
-    vec2 q = vec2(rp.x * s, rp.y * s * .1 + t * (2.4 + fl * .9) - sc * s * .05);
-    vec2 id = floor(q);
-    vec2 f = fract(q);
-    if (hash(id + fl * 9.) < .85) continue;
-    float o = .2 + .6 * hash(id + 3.);
-    float len = .3 + .3 * hash(id + 5.);
-    float dash = smoothstep(PX * s * .9 + .02, PX * s * .9, abs(f.x - o)) * step(1. - len, f.y);
-    col = mix(col, vec3(.42, .48, .62) + flash * .3, dash * (.16 + fl * .08 + flash * .3));
-  }
-  col *= 1. - .25 * dot(p * vec2(.6, 1.), p * vec2(.6, 1.));
+
+  col *= 1. - .3 * dot(p * vec2(.55, .9), p * vec2(.55, .9));
+  col += (ihash(ivec2(gl_FragCoord.xy) + ivec2(int(t * 24.) * 7, 0)) - .5) * .008;
   return col;
 }`),
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProfileThemeBackdrop } from "../../supporter/ProfileThemeBackdrop";
 import { ConfirmModal } from "../../ui/ConfirmModal";
 import { Skeleton } from "../../ui/LoadingSkeleton";
+import { hideBrokenImage } from "../../../lib/custom-themes";
 import { formatTimeAgo } from "../../../lib/format";
 import {
   blockAdminCustomThemeAuthor,
@@ -261,7 +262,7 @@ function ThemeCard({
           {playing && theme.revision ? (
             <ProfileThemeBackdrop theme={theme.revision} maxPixels={240_000} className="absolute inset-0" />
           ) : theme.stillUrl ? (
-            <img src={theme.stillUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={theme.stillUrl} alt="" className="absolute inset-0 h-full w-full object-cover" onError={hideBrokenImage} />
           ) : null}
         </div>
 

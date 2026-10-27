@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, SyntheticEvent } from "react";
 import { getLiveBackendUrl } from "./live-backend";
 
 /* A supporter's own profile theme as a profile draws it (backend
@@ -100,4 +100,9 @@ export function reportCustomThemeCrash(theme: CustomTheme): void {
   const body = JSON.stringify({ rev: theme.rev });
   if (typeof navigator.sendBeacon === "function" && navigator.sendBeacon(url, body)) return;
   void fetch(url, { method: "POST", body, keepalive: true, mode: "no-cors" }).catch(() => {});
+}
+
+/* A theme's still that failed to load leaves the tile's base colour showing, not a broken image. */
+export function hideBrokenImage(event: SyntheticEvent<HTMLImageElement>) {
+  event.currentTarget.style.visibility = "hidden";
 }

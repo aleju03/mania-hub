@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { PROFILE_THEME_LOOKS, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
-import { customThemeKey, isCustomThemeBadHere } from "../../lib/custom-themes";
+import { customThemeKey, hideBrokenImage, isCustomThemeBadHere } from "../../lib/custom-themes";
 import type { BackdropTheme, ProfileBackdrop } from "../../lib/profile-theme-gl";
 import { queueGpuWork } from "../../lib/gpu-queue";
 import { useWebGlSlot } from "../../lib/gl-budget";
@@ -81,7 +81,7 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
   const base = custom ? custom.look.base : PROFILE_THEME_LOOKS[theme as SupporterProfileThemeId].base;
   return (
     <div ref={hostRef} aria-hidden className={className} style={{ backgroundColor: base }}>
-      {stillOnly && <img src={custom.stillUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
+      {stillOnly && <img src={custom.stillUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" onError={hideBrokenImage} />}
     </div>
   );
 }
@@ -101,7 +101,7 @@ export function profileThemeStrip(theme: SupporterProfileThemeId): string {
 
 /* Bump after re-rendering a thumb (and its strip): /images/ is served cache-first by the
    service worker, so a changed file needs a new URL. */
-const THEME_THUMB_VERSION = 8;
+const THEME_THUMB_VERSION = 9;
 
 /* A thumbnail of a theme's backdrop, for the drawer and the slot: the
    rendered still, or live while `still` is off, over that same still until
