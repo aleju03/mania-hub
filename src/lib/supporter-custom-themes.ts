@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import type { CustomThemeSourceError } from "#custom-themes/source";
+import type { LayerDoc } from "./custom-theme-layers";
 import { getLiveBackendUrl } from "./live-backend";
 import { bridgeAuthHeaders } from "./live-backend-tokens";
 import { requireViewer } from "./supporter-look-settings";
@@ -41,6 +42,9 @@ export interface CustomThemeSummary {
 export interface CustomThemeDraft extends CustomThemeSummary {
   kind: "code" | "layers";
   source: string;
+  /** As saved: read it through parseLayerDoc before trusting it. */
+  layers: LayerDoc | null;
+  generatorVersion: number | null;
   assets: string[];
   costRatio: number | null;
 }
@@ -64,6 +68,10 @@ export interface CustomThemeSaveInput {
   rowUrl: string;
   costRatio: number;
   rightsConfirmed: boolean;
+  kind: "code" | "layers";
+  /** A layer theme's document (custom-theme-layers.ts); `source` is the code it makes. */
+  layers?: LayerDoc;
+  generatorVersion?: number;
 }
 
 /* A save the backend turned down: its reason, and the code's errors when the checker found some. */
@@ -121,7 +129,7 @@ export const saveOwnCustomTheme = createServerFn({ method: "POST" })
     const response = await fetch(`${viewer.base}/api/supporters/self/themes`, {
       method: "POST",
       headers: bridgeAuthHeaders(true),
-      body: JSON.stringify({ ...data, kind: "code", userId: viewer.userId }),
+      body: JSON.stringify({ ...data, userId: viewer.userId }),
     });
     if (!response.ok) {
       const failure = await readError(response);
@@ -191,6 +199,8 @@ export interface GalleryCustomTheme {
   stillUrl: string;
   rowUrl: string | null;
   source: string;
+  kind: "code" | "layers";
+  layers: LayerDoc | null;
   credits: string | null;
   remixedFrom: number | null;
 }

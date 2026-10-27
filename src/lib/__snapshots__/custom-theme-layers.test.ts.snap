@@ -1,0 +1,75 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`layersToGlsl > writes the starter the same way every time 1`] = `
+"// Made in the layer editor (generator 1).
+vec3 _lyr_blend(vec3 base, vec3 c, float a, int mode) {
+  a = clamp(a, 0., 1.);
+  if (mode == 1) return base + c * a;
+  if (mode == 2) return 1. - (1. - base) * (1. - c * a);
+  if (mode == 3) return mix(base, base * c, a);
+  return mix(base, c, a);
+}
+
+vec4 _lyr_image(sampler2D tex, vec2 q) {
+  vec2 inside = step(vec2(0.), q) * step(q, vec2(1.));
+  vec4 s = texture(tex, vec2(q.x, 1. - q.y));
+  return vec4(s.rgb / max(s.a, .001), s.a * inside.x * inside.y);
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  vec2 ptr = pointerP();
+  vec3 col = vec3(0.);
+  { // background: Background
+    vec2 lp = p - vec2(0., u_scroll * 0.0) - ptr * 0.0;
+    vec3 c = vec3(0.);
+    float a = 0.;
+    float ang = 1.5708;
+    c = mix(vec3(0.04314, 0.03922, 0.12157), vec3(0.16471, 0.07059, 0.25098), clamp(dot(lp, vec2(cos(ang), sin(ang))) + .5, 0., 1.));
+    a = 1.;
+    col = _lyr_blend(col, c, a * 1.0, 0);
+  }
+  { // stars: Stars
+    vec2 lp = p - vec2(0., u_scroll * 0.025) - ptr * 0.0;
+    vec3 c = vec3(0.);
+    float a = 0.;
+    a = stars(lp, 70.0, 0.12, t) * 0.8;
+    c = vec3(0.87451, 0.9098, 1.0);
+    col = _lyr_blend(col, c, a * 1.0, 1);
+  }
+  { // fog: Fog
+    vec2 lp = p - vec2(0., u_scroll * 0.0) - ptr * 0.0;
+    vec3 c = vec3(0.);
+    float a = 0.;
+    float ang = 0.0;
+    vec2 q = lp * 1.6 + vec2(cos(ang), sin(ang)) * t * 0.04;
+    float n = ifbm(q + ifbm(q * .6 + t * 0.02));
+    float edge = 1. - 0.45;
+    a = smoothstep(edge - 0.25, edge + 0.25, n);
+    a *= mix(1., smoothstep(.45, -.5, lp.y), 0.4);
+    c = vec3(0.35686, 0.22745, 0.54902);
+    col = _lyr_blend(col, c, a * 0.7, 0);
+  }
+  { // glow: Glow
+    vec2 lp = p - vec2(0., u_scroll * 0.0) - ptr * 0.0;
+    vec3 c = vec3(0.);
+    float a = 0.;
+    vec2 d = lp - vec2(0.35, 0.2);
+    float r = length(d);
+    float radius = 0.12;
+    float glow = exp(-r / radius) * (1. + 0.15 * sin(t * 3.76991));
+    float spokes = pow(.5 + .5 * cos((atan(d.y, d.x) + t * 0.12566) * floor(12.0)), 6.);
+    a = glow + spokes * 0.25 * exp(-r / (radius * 5.));
+    c = vec3(1.0, 0.47843, 0.72157);
+    col = _lyr_blend(col, c, a * 1.0, 1);
+  }
+  // finish
+  col *= 1.0;
+  col = mix(vec3(dot(col, vec3(.299, .587, .114))), col, 1.0);
+  col = mix(col, col * vec3(1.0, 1.0, 1.0) * 1.4, 0.0);
+  col *= 1. - 0.0 * (.5 + .5 * sin(gl_FragCoord.y * 3.14159));
+  col *= 1. - 0.35 * smoothstep(.35, 1.15, length(p * vec2(.75, 1.)));
+  col += (hash(gl_FragCoord.xy + fract(t) * 31.7) - .5) * 0.02;
+  return col;
+}
+"
+`;

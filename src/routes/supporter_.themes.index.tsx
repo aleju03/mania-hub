@@ -4,6 +4,8 @@ import { useLingui } from "@lingui/react/macro";
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "../components/layout/PageHeader";
+import { Popover } from "../components/supporter/themes/EditorControls";
+import { LayerIcon } from "../components/supporter/themes/LayerIcons";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { useAuth } from "../lib/auth-context";
 import { getI18n } from "../lib/i18n";
@@ -60,13 +62,7 @@ function OwnThemesPage() {
         <span className="flex items-center gap-3">
           <Link to="/supporter/themes/gallery" className="text-[12px] font-semibold text-osu-f1 hover:text-white">{t`Gallery`}</Link>
           <Link to="/supporter/themes/spec" className="text-[12px] font-semibold text-osu-f1 hover:text-white">{t`Spec`}</Link>
-          <Link
-            to="/supporter/themes/$themeId"
-            params={{ themeId: "new" }}
-            className="inline-flex h-8 items-center rounded-full bg-osu-pink px-4 text-[12px] font-semibold text-white transition hover:brightness-110"
-          >
-            {t`New theme`}
-          </Link>
+          <NewThemeButton />
         </span>
       }
     />
@@ -90,7 +86,7 @@ function OwnThemesPage() {
       {header}
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-5">
         <p className="mb-5 max-w-[720px] text-[12.5px] text-osu-l2">
-          {t`Write a theme's shader, start from a built-in one, or paste a Shadertoy shader. It goes live as soon as you save it.`}
+          {t`Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it.`}
         </p>
         {own?.disabled ? (
           <p className="mb-4 rounded-lg bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-200">{t`Custom themes are switched off for now: profiles show their stills, and saving waits.`}</p>
@@ -102,7 +98,7 @@ function OwnThemesPage() {
           <div className="py-12 text-center">
             <p className="text-[13px] text-osu-l2">{t`No themes yet.`}</p>
             <p className="mt-1 text-[12px] text-osu-f1">
-              <Link to="/supporter/themes/$themeId" params={{ themeId: "new" }} className="font-semibold text-osu-pink-light hover:underline">{t`Start one`}</Link>
+              <Link to="/supporter/themes/$themeId" params={{ themeId: "new" }} search={{ mode: "layers" }} className="font-semibold text-osu-pink-light hover:underline">{t`Start one`}</Link>
               {" "}{t`or`}{" "}
               <Link to="/supporter/themes/gallery" className="font-semibold text-osu-pink-light hover:underline">{t`remix one from the gallery`}</Link>
             </p>
@@ -180,6 +176,52 @@ function OwnThemesPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+/* New theme: built from layers (no code) or written as code. */
+function NewThemeButton() {
+  const { t } = useLingui();
+  const [open, setOpen] = useState(false);
+  const choices = [
+    { mode: "layers" as const, title: t`With layers`, blurb: t`Stack a background, your pictures, particles, fog and light. No code.`, icon: <LayerIcon kind="image" className="h-6 w-6" /> },
+    { mode: "code" as const, title: t`With code`, blurb: t`Write the shader yourself, start from a built-in theme, or paste a Shadertoy one.`, icon: <span className="font-mono text-[15px] font-bold">{"{ }"}</span> },
+  ];
+  return (
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      align="right"
+      className="w-[min(320px,calc(100vw-2rem))]"
+      trigger={
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="inline-flex h-8 cursor-pointer items-center rounded-full bg-osu-pink px-4 text-[12px] font-semibold text-white transition hover:brightness-110"
+        >
+          {t`New theme`}
+        </button>
+      }
+    >
+      <div className="grid gap-1">
+        {choices.map((choice) => (
+          <Link
+            key={choice.mode}
+            to="/supporter/themes/$themeId"
+            params={{ themeId: "new" }}
+            search={{ mode: choice.mode }}
+            onClick={() => setOpen(false)}
+            className="flex items-start gap-3 rounded-lg p-2.5 transition-colors hover:bg-osu-b3"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-osu-b6 text-osu-pink-light">{choice.icon}</span>
+            <span>
+              <span className="block text-[13px] font-semibold text-white">{choice.title}</span>
+              <span className="block text-[11.5px] text-osu-f1">{choice.blurb}</span>
+            </span>
+          </Link>
+        ))}
+      </div>
+    </Popover>
   );
 }
 

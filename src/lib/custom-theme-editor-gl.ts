@@ -34,6 +34,8 @@ interface Program {
   scroll: WebGLUniformLocation | null;
   textures: (WebGLUniformLocation | null)[];
   textureSizes: (WebGLUniformLocation | null)[];
+  /** A layer theme's live numbers (custom-theme-layers.ts), when it reads them. */
+  params: WebGLUniformLocation | null;
 }
 
 export interface FrameInputs {
@@ -65,6 +67,8 @@ export class ThemeEditorGl {
   private readonly images = new Map<string, { texture: WebGLTexture; width: number; height: number } | null>();
   private assets: string[] = [];
   private blank: WebGLTexture | null = null;
+  private liveSource: string | null = null;
+  private params: Float32Array | null = null;
   private target: { framebuffer: WebGLFramebuffer; texture: WebGLTexture; width: number; height: number } | null = null;
 
   static create(canvas: HTMLCanvasElement): ThemeEditorGl | null {
@@ -121,6 +125,7 @@ export class ThemeEditorGl {
         scroll: gl.getUniformLocation(program, "u_scroll"),
         textures: Array.from({ length: CUSTOM_THEME_TEXTURES }, (_, index) => gl.getUniformLocation(program, `u_tex${index}`)),
         textureSizes: Array.from({ length: CUSTOM_THEME_TEXTURES }, (_, index) => gl.getUniformLocation(program, `u_texSize${index}`)),
+        params: gl.getUniformLocation(program, "u_lp"),
       },
       log: "",
     };
@@ -144,7 +149,21 @@ export class ThemeEditorGl {
     if (!linked.program) return parseDriverLog(linked.log).map((error) => ({ ...error, line: null }));
     if (this.current) this.gl.deleteProgram(this.current.program);
     this.current = linked.program;
+    this.liveSource = null;
     return [];
+  }
+
+  /* A layer theme's live code: generated here, never sent anywhere, its
+     numbers read from u_lp so a slider never recompiles it. */
+  useLive(glsl: string): DriverError[] {
+    if (glsl === this.liveSource && this.current) return [];
+    const failed = this.use(glsl);
+    if (!failed.length) this.liveSource = glsl;
+    return failed;
+  }
+
+  setParams(params: Float32Array) {
+    this.params = params;
   }
 
   get ready(): boolean {
@@ -204,6 +223,7 @@ export class ThemeEditorGl {
     gl.uniform2f(program.res, width, height);
     gl.uniform2f(program.pointer, inputs.pointer[0], inputs.pointer[1]);
     gl.uniform1f(program.scroll, inputs.scroll);
+    if (program.params && this.params) gl.uniform4fv(program.params, this.params);
     this.bindImages(program);
     gl.bindVertexArray(this.quad);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

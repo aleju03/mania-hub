@@ -98,6 +98,10 @@ msgstr "· {0}/{averageWindow} counted"
 msgid "(optional, up to {SKIN_MAX_SCREENSHOTS})"
 msgstr "(optional, up to {SKIN_MAX_SCREENSHOTS})"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "(optional)"
+msgstr "(optional)"
+
 #. placeholder {0}: duplicate.ownerUsername
 #: src/components/skins/SkinUploadModal.tsx
 msgid "(uploaded by {0})"
@@ -478,8 +482,13 @@ msgstr "{0} each"
 
 #. placeholder {0}: problems.length
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "{0} errors"
-msgstr "{0} errors"
+#~ msgid "{0} errors"
+#~ msgstr "{0} errors"
+
+#. placeholder {0}: problems.length
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "{0} errors in the code"
+msgstr "{0} errors in the code"
 
 #. placeholder {0}: eternalFinale.username
 #: src/components/packs/RevealStage.tsx
@@ -783,6 +792,11 @@ msgstr "{0} possible picks · {1} unique sets · updated {2}"
 msgid "{0} preview"
 msgstr "{0} preview"
 
+#. placeholder {0}: problems.length
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "{0} problems"
+#~ msgstr "{0} problems"
+
 #. placeholder {0}: card.username
 #: src/components/packs/collections/CardMarks.tsx
 msgid "{0} pulled their own card"
@@ -1020,8 +1034,8 @@ msgstr "{0}pp spread"
 
 #. placeholder {0}: cost.toFixed(2)
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "{0}x the heaviest built-in"
-msgstr "{0}x the heaviest built-in"
+#~ msgid "{0}x the heaviest built-in"
+#~ msgstr "{0}x the heaviest built-in"
 
 #: src/lib/goal-format.ts
 msgid "{acc}% {speed} on {map}"
@@ -2225,8 +2239,12 @@ msgid "0h"
 msgstr "0h"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "1 error"
-msgstr "1 error"
+#~ msgid "1 error"
+#~ msgstr "1 error"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "1 error in the code"
+msgstr "1 error in the code"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "1 other"
@@ -2243,6 +2261,10 @@ msgstr "1 person has your card"
 #: src/components/player/ProfileStatCards.tsx
 msgid "1 play in one sitting"
 msgstr "1 play in one sitting"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "1 problem"
+#~ msgstr "1 problem"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "1 rate per chart"
@@ -2661,6 +2683,10 @@ msgstr "A collection needs at least {USER_COLLECTION_MIN_ITEMS} maps"
 msgid "a collector"
 msgstr "a collector"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "A colour, a gradient or a picture behind everything"
+msgstr "A colour, a gradient or a picture behind everything"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "A customizable picture for your osu! profile that keeps itself updated."
 msgstr "A customizable picture for your osu! profile that keeps itself updated."
@@ -2703,6 +2729,10 @@ msgstr "A full row of {0} cards with no breaks scores x{1}."
 #: src/components/packs/GiftInbox.tsx
 msgid "A gift from"
 msgstr "A gift from"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "A light with rays, that can pulse and turn"
+msgstr "A light with rays, that can pulse and turn"
 
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -2778,6 +2808,10 @@ msgstr "A passage's rows as v25 and v26 file them"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "A pasted image is no longer available. Paste it again before copying."
 msgstr "A pasted image is no longer available. Paste it again before copying."
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "A picture you place, size and turn, that can sway or spin"
+msgstr "A picture you place, size and turn, that can sway or spin"
 
 #: src/routes/dan-estimates.tsx
 msgid "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
@@ -2880,6 +2914,15 @@ msgstr "A strip of the theme behind your row on rankings and leaderboards."
 #: src/components/supporter/TestPack.tsx
 msgid "A test pack: nothing is spent, open as many as you like."
 msgstr "A test pack: nothing is spent, open as many as you like."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "A theme holds up to {LAYERS_MAX} layers."
+msgstr "A theme holds up to {LAYERS_MAX} layers."
+
+#: src/components/supporter/themes/LayerPanel.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "A theme holds up to four pictures."
+msgstr "A theme holds up to four pictures."
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
@@ -3099,6 +3142,10 @@ msgstr "Add a message (optional)"
 msgid "Add a missing score"
 msgstr "Add a missing score"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Add a picture"
+msgstr "Add a picture"
+
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Add a screenshot"
 msgstr "Add a screenshot"
@@ -3139,6 +3186,10 @@ msgstr "Add failed or otherwise missed plays from osu!'s latest recent history."
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Add image"
 msgstr "Add image"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Add layer"
+msgstr "Add layer"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add link…"
@@ -3244,6 +3295,10 @@ msgstr "After it scores, the link into it fires again and it scores again."
 #: src/components/packs/run/RunScoring.tsx
 msgid "AGAIN"
 msgstr "AGAIN"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Against the heaviest built-in theme: saving needs 1.00x or less."
+msgstr "Against the heaviest built-in theme: saving needs 1.00x or less."
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Age"
@@ -3450,6 +3505,10 @@ msgstr "amber"
 #~ msgid "Amethyst"
 #~ msgstr "Amethyst"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Amount"
+msgstr "Amount"
+
 #: src/lib/chain-run.ts
 msgid "An Eternal never leaves."
 msgstr "An Eternal never leaves."
@@ -3516,6 +3575,10 @@ msgstr "and {0} more below these"
 #: src/components/supporter/loadout.ts
 msgid "Angel wings"
 msgstr "Angel wings"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Angle"
+msgstr "Angle"
 
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Another player already goes by that name."
@@ -3613,6 +3676,10 @@ msgstr "API docs"
 msgid "appearance"
 msgstr "appearance"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Applies on top of every layer"
+msgstr "Applies on top of every layer"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Apply"
@@ -3692,6 +3759,10 @@ msgstr "Arrows"
 #: src/routes/news_.prism.tsx
 msgid "Article"
 msgstr "Article"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Artists, shaders it builds on"
+msgstr "Artists, shaders it builds on"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "As shown"
@@ -3957,6 +4028,7 @@ msgid "backdrop"
 msgstr "backdrop"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Background"
 msgstr "Background"
 
@@ -4161,6 +4233,10 @@ msgstr "Beginner"
 msgid "Beginning of recorded history"
 msgstr "Beginning of recorded history"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Behind your row in rankings and lists, when you turn rows on. A still of the paused frame."
+msgstr "Behind your row in rankings and lists, when you turn rows on. A still of the paused frame."
+
 #: src/routes/dan-estimates.tsx
 msgid "below 91%"
 msgstr "below 91%"
@@ -4313,6 +4389,10 @@ msgstr "Blackletter"
 msgid "Blacklight"
 msgstr "Blacklight"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Blend"
+msgstr "Blend"
+
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
 msgstr "Blitz"
@@ -4449,12 +4529,18 @@ msgid "Bright idea"
 msgstr "Bright idea"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "brightness"
-msgstr "brightness"
+#~ msgid "brightness"
+#~ msgstr "brightness"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Brightness"
 msgstr "Brightness"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Bring forward"
+msgstr "Bring forward"
 
 #: src/routes/replay.tsx
 msgid "Bring to front"
@@ -4514,6 +4600,10 @@ msgstr "Buffering audio…"
 msgid "Buffering..."
 msgstr "Buffering..."
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it."
+msgstr "Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it."
+
 #: src/routes/maps.tsx
 msgid "Building maps for the first time..."
 msgstr "Building maps for the first time..."
@@ -4525,6 +4615,10 @@ msgstr "Building maps..."
 #: src/components/skins/SkinPatternPicker.tsx
 msgid "Built-in layout"
 msgstr "Built-in layout"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Built-in themes sit around 0.05 to 0.15. Above 0.30, white text gets hard to read."
+msgstr "Built-in themes sit around 0.05 to 0.15. Above 0.30, white text gets hard to read."
 
 #: src/components/communities/field-options.tsx
 msgid "Bulgarian"
@@ -4793,6 +4887,14 @@ msgstr "Caustics"
 msgid "Center"
 msgstr "Center"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Centre across"
+msgstr "Centre across"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Centre up"
+msgstr "Centre up"
+
 #: src/routes/tracker.tsx
 msgid "Ch"
 msgstr "Ch"
@@ -5034,6 +5136,10 @@ msgstr "chasing your first {chaseTarget}pp play"
 msgid "checker"
 msgstr "checker"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Checking"
+#~ msgstr "Checking"
+
 #: src/routes/rankings.tsx
 msgid "Checking 7d changes..."
 msgstr "Checking 7d changes..."
@@ -5046,6 +5152,10 @@ msgstr "Checking players · {replaysFound} replays found"
 msgid "Checking scores..."
 msgstr "Checking scores..."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Checking the code"
+msgstr "Checking the code"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Checking the difficulties"
 msgstr "Checking the difficulties"
@@ -5055,8 +5165,8 @@ msgid "Checking with Discord"
 msgstr "Checking with Discord"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Checking..."
-msgstr "Checking..."
+#~ msgid "Checking..."
+#~ msgstr "Checking..."
 
 #: src/components/communities/field-options.tsx
 msgid "Chinese"
@@ -5492,6 +5602,10 @@ msgstr "Clutch"
 msgid "Clutch HP"
 msgstr "Clutch HP"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Code"
+msgstr "Code"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Code block"
@@ -5589,6 +5703,10 @@ msgstr "Color of the LN body. Always global (no per-column override)."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Colors"
 msgstr "Colors"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Colour"
+msgstr "Colour"
 
 #. placeholder {0}: column + 1
 #. placeholder {0}: primarySelected + 1
@@ -5914,6 +6032,10 @@ msgstr "copy #{0} of {1}"
 msgid "Copy #{0} of {1}"
 msgstr "Copy #{0} of {1}"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Copy all"
+msgstr "Copy all"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Copy BBCode"
@@ -5924,8 +6046,8 @@ msgid "Copy code"
 msgstr "Copy code"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Copy errors"
-msgstr "Copy errors"
+#~ msgid "Copy errors"
+#~ msgstr "Copy errors"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copy formatting"
@@ -5966,8 +6088,12 @@ msgid "Copying BBCode..."
 msgstr "Copying BBCode..."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "cost"
-msgstr "cost"
+#~ msgid "cost"
+#~ msgstr "cost"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Cost"
+msgstr "Cost"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not check that invite. Try again."
@@ -6419,6 +6545,10 @@ msgstr "Couldn't stop tracking right now. Try again in a moment."
 msgid "Couldn't turn on tracking right now. Try again in a moment."
 msgstr "Couldn't turn on tracking right now. Try again in a moment."
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Count"
+msgstr "Count"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Count for the brightest color"
 msgstr "Count for the brightest color"
@@ -6524,8 +6654,16 @@ msgid "credited by accuracy against a 96% bar"
 msgstr "credited by accuracy against a 96% bar"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Credits (optional): artists, shaders it builds on"
-msgstr "Credits (optional): artists, shaders it builds on"
+msgid "Credits"
+msgstr "Credits"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Credits (optional)"
+msgstr "Credits (optional)"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Credits (optional): artists, shaders it builds on"
+#~ msgstr "Credits (optional): artists, shaders it builds on"
 
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
@@ -6768,6 +6906,10 @@ msgstr "Danish"
 msgid "dark"
 msgstr "dark"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Darken"
+msgstr "Darken"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "Darkens the beatmap background so notes stay readable."
@@ -6863,6 +7005,7 @@ msgstr "Delay"
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/supporter_.themes.index.tsx
 msgid "Delete"
 msgstr "Delete"
@@ -6949,6 +7092,14 @@ msgstr "demand, harder than {0}% of the chart"
 msgid "Denim"
 msgstr "Denim"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Density"
+msgstr "Density"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Depth"
+msgstr "Depth"
+
 #: src/routes/skins.tsx
 msgid "descending"
 msgstr "descending"
@@ -7023,6 +7174,8 @@ msgid "Difficulty radar chart"
 msgstr "Difficulty radar chart"
 
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/themes/LayerHandles.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Direction"
 msgstr "Direction"
 
@@ -7122,6 +7275,10 @@ msgstr "Done"
 #: src/routes/recommendations.tsx
 msgid "done with it"
 msgstr "done with it"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Dot"
+msgstr "Dot"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Dots"
@@ -7230,16 +7387,16 @@ msgid "Drag a page or swipe to flip"
 msgstr "Drag a page or swipe to flip"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Drag along it to see each moment in the preview."
-msgstr "Drag along it to see each moment in the preview."
+#~ msgid "Drag along it to see each moment in the preview."
+#~ msgstr "Drag along it to see each moment in the preview."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag an .osr here, or click to browse"
 msgstr "Drag an .osr here, or click to browse"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Drag the box to move it, scroll over it to zoom."
-msgstr "Drag the box to move it, scroll over it to zoom."
+#~ msgid "Drag the box to move it, scroll over it to zoom."
+#~ msgstr "Drag the box to move it, scroll over it to zoom."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag the map's .osz here, or click to browse"
@@ -7254,6 +7411,7 @@ msgid "Drag to resize"
 msgstr "Drag to resize"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Drag to resize, double-click to reset"
 msgstr "Drag to resize, double-click to reset"
@@ -7298,9 +7456,17 @@ msgstr "Drawing..."
 msgid "Drop an .osk here, or click to browse"
 msgstr "Drop an .osk here, or click to browse"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Drop pictures here"
+msgstr "Drop pictures here"
+
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Drop the new .osk here, or click to browse"
 msgstr "Drop the new .osk here, or click to browse"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Drop to add it as a picture layer"
+msgstr "Drop to add it as a picture layer"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drop to check it"
@@ -7334,6 +7500,10 @@ msgstr "Duet"
 #: src/lib/pattern-labels.ts
 msgid "Dumpstream"
 msgstr "Dumpstream"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Duplicate"
+msgstr "Duplicate"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Duplicates"
@@ -7587,6 +7757,7 @@ msgid "Edits stay in this browser. Copy the result and paste it into the me! edi
 msgstr "Edits stay in this browser. Copy the result and paste it into the me! editor on your osu! page."
 
 #: src/components/supporter/loadout.ts
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Effects"
 msgstr "Effects"
 
@@ -8062,8 +8233,12 @@ msgid "Falling notes"
 msgstr "Falling notes"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "far over the limit"
-msgstr "far over the limit"
+msgid "far over"
+msgstr "far over"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "far over the limit"
+#~ msgstr "far over the limit"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Far over the limit. Cut loop turns and fbm octaves a lot."
@@ -8235,6 +8410,10 @@ msgstr "File updated"
 msgid "Filipino"
 msgstr "Filipino"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Fill"
+msgstr "Fill"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Fill the {label} run"
 msgstr "Fill the {label} run"
@@ -8369,6 +8548,7 @@ msgstr "Finding more replays..."
 msgid "Finger held under {0}% of presses"
 msgstr "Finger held under {0}% of presses"
 
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/pack-run.ts
 msgid "Finish"
 msgstr "Finish"
@@ -8554,6 +8734,14 @@ msgstr "Flip vertical"
 msgid "Flipped"
 msgstr "Flipped"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Fog"
+msgstr "Fog"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Follow pointer"
+msgstr "Follow pointer"
+
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Follow SV changes"
 msgstr "Follow SV changes"
@@ -8607,8 +8795,12 @@ msgid "Four Keys"
 msgstr "Four Keys"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "fps here"
-msgstr "fps here"
+msgid "fps"
+msgstr "fps"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "fps here"
+#~ msgstr "fps here"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "frames"
@@ -8643,6 +8835,10 @@ msgstr "Fri"
 msgid "Fridays"
 msgstr "Fridays"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "From"
+msgstr "From"
+
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
 #: src/components/me/GoalsPanel.tsx
@@ -8652,6 +8848,10 @@ msgstr "from {0} now, that's +{1} to climb"
 #: src/components/replay/ReplayInfo.tsx
 msgid "From the real play (not simulated)"
 msgstr "From the real play (not simulated)"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "From the theme"
+msgstr "From the theme"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "From this round's pack. Used up once played."
@@ -8796,6 +8996,7 @@ msgstr "Gains x{0} combo for every song cleared with a pack to spare and goes ba
 msgid "Galaxy"
 msgstr "Galaxy"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/lib/pack-run.ts
 #: src/routes/supporter_.themes.index.tsx
 msgid "Gallery"
@@ -8928,12 +9129,21 @@ msgid "Global tracker is ready"
 msgstr "Global tracker is ready"
 
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Glow"
 msgstr "Glow"
 
 #: src/components/supporter/loadout.ts
 msgid "Glow and retro"
 msgstr "Glow and retro"
+
+#: src/components/supporter/themes/LayerHandles.tsx
+msgid "Glow position"
+msgstr "Glow position"
+
+#: src/components/supporter/themes/LayerHandles.tsx
+msgid "Glow size"
+msgstr "Glow size"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "go again"
@@ -9071,6 +9281,10 @@ msgstr "Gradient text"
 msgid "Gradients"
 msgstr "Gradients"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Grain"
+msgstr "Grain"
+
 #: src/components/player/SkillHistoryModal.tsx
 msgctxt "skill history view"
 msgid "Graph"
@@ -9108,6 +9322,7 @@ msgstr "green"
 msgid "Green"
 msgstr "Green"
 
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/packs.tsx
 msgid "Grid"
 msgstr "Grid"
@@ -9312,6 +9527,7 @@ msgstr "Hidden list ({0})"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Hide"
 msgstr "Hide"
 
@@ -9781,6 +9997,7 @@ msgstr "If your plays show a dan course pass, your dan for that side <0>cannot r
 
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/bbcode.tsx
 msgid "Image"
 msgstr "Image"
@@ -9818,12 +10035,12 @@ msgid "Imagemap area {0}/{1}"
 msgstr "Imagemap area {0}/{1}"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "images"
-msgstr "images"
+#~ msgid "images"
+#~ msgstr "images"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Images"
-msgstr "Images"
+#~ msgid "Images"
+#~ msgstr "Images"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Images from {sourceName}"
@@ -9924,7 +10141,6 @@ msgstr "In slot {0}"
 msgid "In song select"
 msgstr "In song select"
 
-#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter_.themes.index.tsx
 msgid "In the gallery"
 msgstr "In the gallery"
@@ -10073,6 +10289,10 @@ msgstr "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 #: src/routes/supporter_.themes.index.tsx
 msgid "It crashed on several visitors' devices, so it shows its still until it's looked at."
 msgstr "It crashed on several visitors' devices, so it shows its still until it's looked at."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It goes live as soon as it's saved."
+msgstr "It goes live as soon as it's saved."
 
 #: src/routes/supporter_.themes.index.tsx
 msgid "It leaves your list and your profile."
@@ -10307,6 +10527,10 @@ msgstr "keep it"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Keep it"
 msgstr "Keep it"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Keep low"
+msgstr "Keep low"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Keep my plays"
@@ -10597,7 +10821,18 @@ msgstr "Latvian"
 msgid "Lava lamp"
 msgstr "Lava lamp"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Layer"
+msgstr "Layer"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "layers"
+msgstr "layers"
+
 #: src/components/supporter/loadout.ts
+#: src/components/supporter/themes/LayerPanel.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Layers"
 msgstr "Layers"
 
@@ -10752,6 +10987,7 @@ msgid "light"
 msgstr "light"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Light"
 msgstr "Light"
 
@@ -10793,10 +11029,18 @@ msgstr "lime"
 msgid "Limitations"
 msgstr "Limitations"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "line"
+msgstr "line"
+
 #. placeholder {0}: problem.line
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "line {0}"
-msgstr "line {0}"
+#~ msgid "line {0}"
+#~ msgstr "line {0}"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Linear"
+msgstr "Linear"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayCustomMediaControls.tsx
@@ -11350,6 +11594,10 @@ msgstr "Longest session"
 msgid "Longest streak"
 msgstr "Longest streak"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Look"
+msgstr "Look"
+
 #: src/routes/report.tsx
 msgid "looking into it"
 msgstr "looking into it"
@@ -11365,6 +11613,10 @@ msgstr "Looking up the score{elapsedLabel}"
 #: src/components/packs/StreakGame.tsx
 msgid "Lost the run. The board could not be reached."
 msgstr "Lost the run. The board could not be reached."
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Lots of small things drifting: petals, embers, snow, rain"
+msgstr "Lots of small things drifting: petals, embers, snow, rain"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
@@ -11840,8 +12092,8 @@ msgid "Mean"
 msgstr "Mean"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "measuring"
-msgstr "measuring"
+#~ msgid "measuring"
+#~ msgstr "measuring"
 
 #: src/lib/pack-run.ts
 msgid "Medal Hunter"
@@ -12052,8 +12304,8 @@ msgid "Molten gold"
 msgstr "Molten gold"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Moment"
-msgstr "Moment"
+#~ msgid "Moment"
+#~ msgstr "Moment"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Mon"
@@ -12074,6 +12326,10 @@ msgstr "Month {month}"
 #: src/components/layout/Nav.tsx
 msgid "more"
 msgstr "more"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "More"
+msgstr "More"
 
 #: src/lib/streak-game.ts
 msgid "More 7K"
@@ -12199,6 +12455,10 @@ msgstr "Most Used Mod"
 #: src/routes/supporter_.themes.gallery.tsx
 msgid "Most worn"
 msgstr "Most worn"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Motion"
+msgstr "Motion"
 
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Move {name} left"
@@ -12822,8 +13082,12 @@ msgid "No data"
 msgstr "No data"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "No errors."
-msgstr "No errors."
+msgid "No errors in the code"
+msgstr "No errors in the code"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "No errors."
+#~ msgstr "No errors."
 
 #: src/routes/maps.tsx
 msgid "No favourites found for any player in the top 50."
@@ -12868,6 +13132,10 @@ msgstr "No images or sounds were found in the archive."
 #: src/components/player/ProfileParts.tsx
 msgid "No key data"
 msgstr "No key data"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "No layers yet. Add one with +, or drop a picture on the stage."
+msgstr "No layers yet. Add one with +, or drop a picture on the stage."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No Mamestagram plays on this chart."
@@ -13416,6 +13684,7 @@ msgid "None set. <0>Pick one from the skins page</0>."
 msgstr "None set. <0>Pick one from the skins page</0>."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/goal-format.ts
 #: src/lib/pack-run.ts
 msgid "Normal"
@@ -13540,6 +13809,10 @@ msgstr "Not rated."
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not reachable right now."
 msgstr "Not reachable right now."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Not saved yet"
+msgstr "Not saved yet"
 
 #: src/components/communities/field-options.tsx
 msgid "not set"
@@ -13928,6 +14201,10 @@ msgstr "on the to-do list"
 msgid "On this page"
 msgstr "On this page"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "on top of all"
+msgstr "on top of all"
+
 #: src/routes/hashi.tsx
 msgid "On Windows"
 msgstr "On Windows"
@@ -14006,6 +14283,10 @@ msgstr "Only approve a request you started yourself. If someone sent you this li
 msgid "Only me"
 msgstr "Only me"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Only on your profile"
+msgstr "Only on your profile"
+
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Only on your profile until it's reviewed"
 msgstr "Only on your profile until it's reviewed"
@@ -14083,6 +14364,7 @@ msgstr "Only your best rate play on the same chart counts toward Dan. This play 
 
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/replay/ReplayCustomMediaControls.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Opacity"
 msgstr "Opacity"
 
@@ -14138,6 +14420,10 @@ msgstr "Open {profileCountryName} home"
 #: src/components/packs/PackSummary.tsx
 msgid "Open another"
 msgstr "Open another"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Open as code"
+msgstr "Open as code"
 
 #: src/components/player/ScoreRows.tsx
 #: src/routes/snipes.tsx
@@ -14236,6 +14522,10 @@ msgstr "Open the supporter page"
 #: src/routes/recommendations.tsx
 msgid "open their profile"
 msgstr "open their profile"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Open this theme as code?"
+msgstr "Open this theme as code?"
 
 #: src/routes/communities_.$id.tsx
 msgid "open to"
@@ -14434,8 +14724,16 @@ msgid "Other rules"
 msgstr "Other rules"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Other supporters can wear it and remix its code."
-msgstr "Other supporters can wear it and remix its code."
+msgid "Other supporters can wear it and remix it."
+msgstr "Other supporters can wear it and remix it."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Other supporters can wear it and remix its code."
+#~ msgstr "Other supporters can wear it and remix its code."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Others can wear and remix it"
+msgstr "Others can wear and remix it"
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -14627,6 +14925,10 @@ msgstr "Page 1"
 msgid "Page number, 1 to {totalPages}"
 msgstr "Page number, 1 to {totalPages}"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Page scroll"
+msgstr "Page scroll"
+
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Paid with Google already?"
 msgstr "Paid with Google already?"
@@ -14636,9 +14938,21 @@ msgstr "Paid with Google already?"
 msgid "Pairs with the next Bracket: the cards between score +{0}% from each."
 msgstr "Pairs with the next Bracket: the cards between score +{0}% from each."
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Pan across"
+msgstr "Pan across"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Pan down"
+msgstr "Pan down"
+
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
 msgstr "Parsing the file and finding its beatmap."
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Particles"
+msgstr "Particles"
 
 #: src/lib/pack-run.ts
 msgid "Party"
@@ -14760,6 +15074,7 @@ msgid "pause"
 msgstr "pause"
 
 #: src/components/prism/PrismVisualizer.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Pause"
 msgstr "Pause"
 
@@ -14778,6 +15093,10 @@ msgstr "pause overlay, fail and section screens, countdown"
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Pause preview"
 msgstr "Pause preview"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Paused: still frame"
+msgstr "Paused: still frame"
 
 #: src/components/packs/run/chain/ChainContracts.tsx
 msgid "Pays"
@@ -14904,6 +15223,10 @@ msgstr "Pick a different file"
 msgid "pick a difficulty below"
 msgstr "pick a difficulty below"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Pick a layer to change it, or click a picture on the stage."
+msgstr "Pick a layer to change it, or click a picture on the stage."
+
 #: src/components/player/FeaturedPlays.tsx
 msgid "Pick a play"
 msgstr "Pick a play"
@@ -14933,8 +15256,8 @@ msgid "Pick both a .osr and the .osu it was played on."
 msgstr "Pick both a .osr and the .osu it was played on."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Pick from the theme"
-msgstr "Pick from the theme"
+#~ msgid "Pick from the theme"
+#~ msgstr "Pick from the theme"
 
 #: src/lib/pack-run.ts
 msgid "Pick one of two common charms."
@@ -14984,6 +15307,15 @@ msgstr "Picking a backdrop or a pattern re-renders that playfield from the uploa
 msgid "Picking a skin loads it into the editor and saves it as a preset under its name."
 msgstr "Picking a skin loads it into the editor and saves it as a preset under its name."
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Picture"
+msgstr "Picture"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Pictures"
+msgstr "Pictures"
+
 #: src/components/layout/ThemePicker.tsx
 msgid "pink"
 msgstr "pink"
@@ -15021,6 +15353,10 @@ msgstr "Pixel"
 msgid "Pixel hearts"
 msgstr "Pixel hearts"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Place again as a new layer"
+msgstr "Place again as a new layer"
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Plain"
 msgstr "Plain"
@@ -15034,6 +15370,7 @@ msgid "play"
 msgstr "play"
 
 #: src/components/prism/PrismVisualizer.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Play"
 msgstr "Play"
 
@@ -15221,6 +15558,7 @@ msgid "Playfield"
 msgstr "Playfield"
 
 #: src/components/player/LivePresence.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/tracker.tsx
 msgid "Playing"
 msgstr "Playing"
@@ -15663,6 +16001,10 @@ msgstr "private"
 msgid "private · updated {updatedAtLabel}"
 msgstr "private · updated {updatedAtLabel}"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Problems"
+msgstr "Problems"
+
 #: src/components/layout/Nav.tsx
 msgid "Profile"
 msgstr "Profile"
@@ -15803,6 +16145,10 @@ msgstr "Pulled by {pullerLink} on {pulledText}"
 msgid "Pulled on {dateText}"
 msgstr "Pulled on {dateText}"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Pulse"
+msgstr "Pulse"
+
 #: src/components/layout/ThemePicker.tsx
 msgid "purple"
 msgstr "purple"
@@ -15872,8 +16218,8 @@ msgid "Quick Retry"
 msgstr "Quick Retry"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Quite bright: white text on top will be hard to read. Built-in themes sit around 0.05 to 0.15."
-msgstr "Quite bright: white text on top will be hard to read. Built-in themes sit around 0.05 to 0.15."
+#~ msgid "Quite bright: white text on top will be hard to read. Built-in themes sit around 0.05 to 0.15."
+#~ msgstr "Quite bright: white text on top will be hard to read. Built-in themes sit around 0.05 to 0.15."
 
 #: src/routes/bbcode.tsx
 msgid "Quote"
@@ -16098,6 +16444,10 @@ msgstr "Ratio"
 msgid "raw difficulty"
 msgstr "raw difficulty"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Rays"
+msgstr "Rays"
+
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "Rd"
 msgstr "Rd"
@@ -16159,8 +16509,12 @@ msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bon
 msgstr "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Read it"
-msgstr "Read it"
+msgid "Read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
+msgstr "Read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Read it"
+#~ msgstr "Read it"
 
 #. placeholder {0}: reading.name
 #: src/components/skins/SkinUpdateModal.tsx
@@ -16189,13 +16543,17 @@ msgid "Reading your servers"
 msgstr "Reading your servers"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Reads as a Shadertoy shader. No errors."
-msgstr "Reads as a Shadertoy shader. No errors."
+#~ msgid "Reads as a Shadertoy shader. No errors."
+#~ msgstr "Reads as a Shadertoy shader. No errors."
 
 #: src/components/packs/run/RunTable.tsx
 #: src/routes/packs.tsx
 msgid "ready"
 msgstr "ready"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Ready"
+#~ msgstr "Ready"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Ready to download"
@@ -16398,6 +16756,10 @@ msgstr "Red tree"
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Redeem"
 msgstr "Redeem"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Redo"
+msgstr "Redo"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Redo (Ctrl+Shift+Z)"
@@ -17053,6 +17415,10 @@ msgstr "Rights in osu!, osu!mania, osu! game branding, ruleset names, ruleset ic
 msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
 msgstr "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Ring"
+msgstr "Ring"
+
 #: src/lib/replay-overlays.ts
 #: src/lib/signature-shared.ts
 msgid "Rings"
@@ -17110,12 +17476,17 @@ msgstr "Rotate your phone to watch both"
 msgid "Rotating packs"
 msgstr "Rotating packs"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Rotation"
+msgstr "Rotation"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "rough estimate, may be off"
 msgstr "rough estimate, may be off"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Round"
 msgstr "Round"
 
@@ -17246,6 +17617,10 @@ msgstr "Sat"
 msgid "Satori fumo"
 msgstr "Satori fumo"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Saturation"
+msgstr "Saturation"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Saturdays"
 msgstr "Saturdays"
@@ -17256,6 +17631,7 @@ msgstr "Saturdays"
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Save"
 msgstr "Save"
 
@@ -17265,7 +17641,6 @@ msgstr "Save and put it live"
 
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
-#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Save changes"
 msgstr "Save changes"
 
@@ -17289,6 +17664,10 @@ msgstr "Save set"
 msgid "Save showcase"
 msgstr "Save showcase"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Save theme"
+msgstr "Save theme"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save this editor version as the skin everyone sees on your replays"
 msgstr "Save this editor version as the skin everyone sees on your replays"
@@ -17306,6 +17685,7 @@ msgid "saved"
 msgstr "saved"
 
 #: src/components/replay/ReplayExportPanel.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Saved"
 msgstr "Saved"
 
@@ -17390,6 +17770,10 @@ msgstr "Say something to {0}"
 msgid "Say something to {name}"
 msgstr "Say something to {name}"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Scale"
+msgstr "Scale"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Scale the image to fit"
 msgstr "Scale the image to fit"
@@ -17407,6 +17791,10 @@ msgstr "Scales the skin's hitburst art."
 #: src/lib/supporter-foils.ts
 msgid "Scanline"
 msgstr "Scanline"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Scanlines"
+msgstr "Scanlines"
 
 #: src/components/supporter/loadout.ts
 msgid "Scarlet moon"
@@ -17486,6 +17874,10 @@ msgstr "ScoreV2 accuracy"
 msgid "Scrawl"
 msgstr "Scrawl"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Screen"
+msgstr "Screen"
+
 #: src/components/supporter/loadout.ts
 msgid "Screensaver"
 msgstr "Screensaver"
@@ -17519,6 +17911,10 @@ msgstr "Script"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Scroll"
 msgstr "Scroll"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Scroll depth"
+msgstr "Scroll depth"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Scroll direction"
@@ -17742,6 +18138,10 @@ msgstr "searching"
 msgid "Seasons and nature"
 msgstr "Seasons and nature"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Second colour"
+msgstr "Second colour"
+
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Second pull"
 msgstr "Second pull"
@@ -17853,6 +18253,10 @@ msgstr "Send"
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Send a tip"
 msgstr "Send a tip"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Send backward"
+msgstr "Send backward"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
@@ -18071,6 +18475,10 @@ msgstr "Seven Keys"
 #~ msgid "Shaded: the 300 window at OD 0 around each press"
 #~ msgstr "Shaded: the 300 window at OD 0 around each press"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Shape"
+msgstr "Shape"
+
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/StreakGame.tsx
@@ -18205,6 +18613,7 @@ msgid "Shot {0}"
 msgstr "Shot {0}"
 
 #: src/components/player/FeaturedPlays.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Show"
 msgstr "Show"
 
@@ -18650,8 +19059,14 @@ msgstr "size"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/themes/LayerHandles.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Size"
 msgstr "Size"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Size variety"
+msgstr "Size variety"
 
 #: src/components/supporter/loadout.ts
 msgid "Sketch crown"
@@ -18937,9 +19352,21 @@ msgstr "Snipes aren't tracked for {name}"
 msgid "Snowball"
 msgstr "Snowball"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Soft"
+msgstr "Soft"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Soft clouds that roll by"
+msgstr "Soft clouds that roll by"
+
 #: src/components/supporter/loadout.ts
 msgid "Soft wings"
 msgstr "Soft wings"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Softness"
+msgstr "Softness"
 
 #: src/lib/signature-style.ts
 msgid "Solid"
@@ -19131,6 +19558,7 @@ msgstr "Spectators"
 msgid "Spectrum"
 msgstr "Spectrum"
 
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/pack-run.ts
 #: src/lib/skill-axes.ts
 msgid "Speed"
@@ -19170,9 +19598,9 @@ msgstr "Speeds the song up to 1.5x."
 msgid "Spell card"
 msgstr "Spell card"
 
-#: src/components/packs/run/chain/ChainShop.tsx
-#~ msgid "Spin"
-#~ msgstr "Spin"
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Spin"
+msgstr "Spin"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -19210,6 +19638,10 @@ msgstr "Stable-formula acc (95%)"
 #: src/routes/dan-estimates.tsx
 msgid "Stable-formula acc (96%)"
 msgstr "Stable-formula acc (96%)"
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Stack a background, your pictures, particles, fog and light. No code."
+msgstr "Stack a background, your pictures, particles, fog and light. No code."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage"
@@ -19322,6 +19754,7 @@ msgstr "stars"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/supporter/loadout.ts
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -19384,6 +19817,10 @@ msgstr "Start with sound"
 msgid "Starter"
 msgstr "Starter"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Starting"
+#~ msgstr "Starting"
+
 #: src/lib/chain-run.ts
 msgid "Starting pack {index} of 3"
 msgstr "Starting pack {index} of 3"
@@ -19437,8 +19874,8 @@ msgid "Sticker"
 msgstr "Sticker"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Still"
-msgstr "Still"
+#~ msgid "Still"
+#~ msgstr "Still"
 
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
@@ -19514,6 +19951,7 @@ msgid "streak"
 msgstr "streak"
 
 #: src/components/player/ActivityPanel.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Streak"
 msgstr "Streak"
 
@@ -19546,6 +19984,7 @@ msgid "Streams thickened with three-note hand chords."
 msgstr "Streams thickened with three-note hand chords."
 
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Strength"
 msgstr "Strength"
@@ -19734,6 +20173,14 @@ msgstr "Swap any of the four cards under your profile for your ratio, rice / LN 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
 msgstr "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Sway"
+msgstr "Sway"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Sway speed"
+msgstr "Sway speed"
 
 #: src/components/communities/field-options.tsx
 msgid "Swedish"
@@ -20615,8 +21062,8 @@ msgid "The four cards under your profile's numbers. Swap any of them, here or fr
 msgstr "The four cards under your profile's numbers. Swap any of them, here or from the card itself on your profile."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "The frame used for the still (thumbnails, the gallery, slow devices) and the banner row."
-msgstr "The frame used for the still (thumbnails, the gallery, slow devices) and the banner row."
+#~ msgid "The frame used for the still (thumbnails, the gallery, slow devices) and the banner row."
+#~ msgstr "The frame used for the still (thumbnails, the gallery, slow devices) and the banner row."
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway streams a section of your best play in your main keymode, instead of random notes."
@@ -20996,8 +21443,12 @@ msgid "The third copy ever pulled"
 msgstr "The third copy ever pulled"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "The tint the rest of the profile takes while the theme is on. Picked from the theme until you change it."
-msgstr "The tint the rest of the profile takes while the theme is on. Picked from the theme until you change it."
+msgid "The tint the rest of the profile takes while the theme is on."
+msgstr "The tint the rest of the profile takes while the theme is on."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "The tint the rest of the profile takes while the theme is on. Picked from the theme until you change it."
+#~ msgstr "The tint the rest of the profile takes while the theme is on. Picked from the theme until you change it."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -21055,6 +21506,10 @@ msgstr "Their plays"
 msgid "Their runs on this map"
 msgstr "Their runs on this map"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Theme"
+msgstr "Theme"
+
 #: src/components/layout/ThemePicker.tsx
 msgid "theme color"
 msgstr "theme color"
@@ -21064,8 +21519,8 @@ msgid "Theme color"
 msgstr "Theme color"
 
 #: src/routes/supporter_.themes.$themeId.tsx
-msgid "theme editor"
-msgstr "theme editor"
+#~ msgid "theme editor"
+#~ msgstr "theme editor"
 
 #: src/routes/supporter_.themes.$themeId.tsx
 msgid "Theme editor"
@@ -21091,6 +21546,7 @@ msgstr "Theme saturation"
 msgid "theme spec"
 msgstr "theme spec"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter_.themes.spec.tsx
 msgid "Theme spec"
 msgstr "Theme spec"
@@ -21105,6 +21561,10 @@ msgstr "Theme: {0}"
 #: src/components/supporter/CustomThemeCredit.tsx
 msgid "Theme: {0} by {1}"
 msgstr "Theme: {0} by {1}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Themes"
+msgstr "Themes"
 
 #: src/lib/pack-run.ts
 msgid "There is no reward to pick."
@@ -21589,8 +22049,12 @@ msgid "Thursdays"
 msgstr "Thursdays"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Tick \"I understand\" under Sharing."
-msgstr "Tick \"I understand\" under Sharing."
+msgid "Tick \"I understand\" before saving."
+msgstr "Tick \"I understand\" before saving."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Tick \"I understand\" under Sharing."
+#~ msgstr "Tick \"I understand\" under Sharing."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #~ msgid "Tick that you have the right to share it."
@@ -21603,6 +22067,10 @@ msgstr "Tier"
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Tier changed to {tierLabel}"
 msgstr "Tier changed to {tierLabel}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Time"
+msgstr "Time"
 
 #: src/lib/replay-overlays.ts
 msgid "Time left"
@@ -21633,6 +22101,14 @@ msgstr "Timed out starting the replay renderers."
 msgid "Timing Distribution"
 msgstr "Timing Distribution"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Tint"
+msgstr "Tint"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Tint strength"
+msgstr "Tint strength"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Tiny"
 msgstr "Tiny"
@@ -21662,6 +22138,10 @@ msgstr "Title, artist, difficulty, mapper, star rating and dan."
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "to"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "To"
+msgstr "To"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "to {keyCount}K rating"
@@ -21948,6 +22428,10 @@ msgstr "Trail color"
 msgid "Trail thickness"
 msgstr "Trail thickness"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Transform"
+msgstr "Transform"
+
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Transparent background"
 msgstr "Transparent background"
@@ -22038,6 +22522,10 @@ msgstr "Tung tung sahur keycap"
 msgid "Turkish"
 msgstr "Turkish"
 
+#: src/components/supporter/themes/LayerHandles.tsx
+msgid "Turn"
+msgstr "Turn"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Turn a feed on for the current channel (needs Manage Server)."
 msgstr "Turn a feed on for the current channel (needs Manage Server)."
@@ -22074,6 +22562,14 @@ msgstr "Turntable"
 msgid "Twin"
 msgstr "Twin"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Twinkle"
+msgstr "Twinkle"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Twinkling points"
+msgstr "Twinkling points"
+
 #: src/lib/pack-run.ts
 msgid "Two cards from the same country."
 msgstr "Two cards from the same country."
@@ -22089,6 +22585,10 @@ msgstr "Two countries with two cards each."
 #: src/components/discord/CommandShowcase.tsx
 msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
 msgstr "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Type"
+msgstr "Type"
 
 #: src/routes/discord.tsx
 msgid "Type <0>/help</0> for a guided tour, or <1>/</1> to see every command."
@@ -22166,6 +22666,7 @@ msgid "Underline"
 msgstr "Underline"
 
 #: src/components/me/GoalToasts.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
 msgid "Undo"
 msgstr "Undo"
@@ -22300,6 +22801,10 @@ msgstr "Unrated"
 msgid "unreadable"
 msgstr "unreadable"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Unsaved changes"
+msgstr "Unsaved changes"
+
 #: src/lib/replay-overlays.ts
 msgid "Unstable rate"
 msgstr "Unstable rate"
@@ -22325,6 +22830,10 @@ msgstr "unsubmitted"
 #~ msgid "Untitled chart"
 #~ msgstr "Untitled chart"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Untitled theme"
+msgstr "Untitled theme"
+
 #: src/lib/bug-report-screenshots.ts
 msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 msgstr "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
@@ -22339,8 +22848,8 @@ msgid "Up to 50 MB."
 msgstr "Up to 50 MB."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Up to four, read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
-msgstr "Up to four, read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
+#~ msgid "Up to four, read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
+#~ msgstr "Up to four, read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
 
 #: src/routes/dan-estimates.tsx
 msgid "up to the chart's level +0.1"
@@ -22381,6 +22890,7 @@ msgid "updating"
 msgstr "updating"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Upload"
 msgstr "Upload"
@@ -22451,8 +22961,8 @@ msgid "Uploading image..."
 msgstr "Uploading image..."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Uploading images is for supporters."
-msgstr "Uploading images is for supporters."
+#~ msgid "Uploading images is for supporters."
+#~ msgstr "Uploading images is for supporters."
 
 #: src/lib/skins.ts
 msgid "Uploading previews."
@@ -22480,7 +22990,6 @@ msgid "Uploading the skin file, {sentSize} of {totalSize}."
 msgstr "Uploading the skin file, {sentSize} of {totalSize}."
 
 #: src/components/supporter/CustomArtDialog.tsx
-#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Uploading..."
 msgstr "Uploading..."
 
@@ -22848,6 +23357,10 @@ msgstr "views"
 msgid "Views"
 msgstr "Views"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Vignette"
+msgstr "Vignette"
+
 #: src/lib/signature-style.ts
 msgid "Violet"
 msgstr "Violet"
@@ -22960,6 +23473,10 @@ msgstr "Wallet"
 #: src/lib/skill-axes.ts
 msgid "Walls"
 msgstr "Walls"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Wander"
+msgstr "Wander"
 
 #: src/components/packs/run/chain/ChainScoring.tsx
 #: src/lib/chain-run.ts
@@ -23128,8 +23645,8 @@ msgid "What seems wrong?"
 msgstr "What seems wrong?"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "What shows behind your row in rankings and lists when you turn rows on: a still of the theme, at the moment above."
-msgstr "What shows behind your row in rankings and lists when you turn rows on: a still of the theme, at the moment above."
+#~ msgid "What shows behind your row in rankings and lists when you turn rows on: a still of the theme, at the moment above."
+#~ msgstr "What shows behind your row in rankings and lists when you turn rows on: a still of the theme, at the moment above."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #~ msgid "What shows behind your row in rankings and lists when you turn rows on. Always a still image."
@@ -23219,11 +23736,19 @@ msgstr "While you pick a song, Hashi shows the map's leaderboard for the mods yo
 msgid "White fairy"
 msgstr "White fairy"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Who"
+msgstr "Who"
+
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Who can join"
 msgstr "Who can join"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Who can wear it"
+msgstr "Who can wear it"
 
 #: src/routes/recommendations.tsx
 msgid "who farms this"
@@ -23330,9 +23855,17 @@ msgstr "Witch hat and broom"
 msgid "with {mods}"
 msgstr "with {mods}"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "With code"
+msgstr "With code"
+
 #: src/routes/dan-estimates.tsx
 msgid "With fewer than two rated skills, your dan is the average of your 20 best passes overall."
 msgstr "With fewer than two rated skills, your dan is the average of your 20 best passes overall."
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "With layers"
+msgstr "With layers"
 
 #: src/routes/recommendations.tsx
 msgid "with no mods"
@@ -23388,8 +23921,8 @@ msgstr "Write a short description of the server."
 #~ msgstr "Write a theme's shader yourself, ask an AI for one with the spec, or paste a Shadertoy shader. It goes live as soon as you save it."
 
 #: src/routes/supporter_.themes.index.tsx
-msgid "Write a theme's shader, start from a built-in one, or paste a Shadertoy shader. It goes live as soon as you save it."
-msgstr "Write a theme's shader, start from a built-in one, or paste a Shadertoy shader. It goes live as soon as you save it."
+#~ msgid "Write a theme's shader, start from a built-in one, or paste a Shadertoy shader. It goes live as soon as you save it."
+#~ msgstr "Write a theme's shader, start from a built-in one, or paste a Shadertoy shader. It goes live as soon as you save it."
 
 #: src/routes/bbcode.tsx
 msgid "Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy."
@@ -23407,6 +23940,10 @@ msgstr "Write one in the BBCode editor"
 msgid "Write something first."
 msgstr "Write something first."
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Write the shader yourself, start from a built-in theme, or paste a Shadertoy one."
+msgstr "Write the shader yourself, start from a built-in theme, or paste a Shadertoy one."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
 msgstr "Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
@@ -23418,6 +23955,10 @@ msgstr "Writing the video file failed."
 #: src/components/packs/StreakGame.tsx
 msgid "wrong"
 msgstr "wrong"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "X"
+msgstr "X"
 
 #. placeholder {0}: EDITION_EFFECTS.polychrome.xMult
 #: src/lib/pack-run.ts
@@ -23499,6 +24040,10 @@ msgstr "x2 HIT"
 #: src/components/supporter/loadout.ts
 msgid "XP window"
 msgstr "XP window"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Y"
+msgstr "Y"
 
 #: src/lib/signature-shared.ts
 msgid "Year"
@@ -23698,6 +24243,10 @@ msgstr "You start with Hold Note."
 #: src/components/packs/StreakGame.tsx
 msgid "You stopped at {streak} in a row."
 msgstr "You stopped at {streak} in a row."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "You'll edit the code its layers make. There's no going back to layers for this theme."
+msgstr "You'll edit the code its layers make. There's no going back to layers for this theme."
 
 #: src/routes/gift.$code.tsx
 msgid "You're a supporter until {until}."
@@ -24036,7 +24585,6 @@ msgstr "Your supporter time has run out."
 msgid "your themes"
 msgstr "your themes"
 
-#: src/routes/supporter_.themes.$themeId.tsx
 #: src/routes/supporter_.themes.gallery.tsx
 #: src/routes/supporter_.themes.index.tsx
 #: src/routes/supporter_.themes.spec.tsx
@@ -24105,6 +24653,7 @@ msgstr "Yuyuko fumo"
 msgid "Zip binder"
 msgstr "Zip binder"
 
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/RowFramer.tsx
 msgid "Zoom"
 msgstr "Zoom"
