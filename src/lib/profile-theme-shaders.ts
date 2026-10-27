@@ -1771,6 +1771,8 @@ const float SG_R = .22; // the orb's radius, canvas heights
 // the bottom of the funnel, just short of the ball's centre.
 const vec3 SG_AX = vec3(-.46, .14, .877);
 const vec3 SG_CORE = SG_AX * .2;
+// How far the whole ball is turned from facing us, radians.
+const float SG_YAW = .3;
 // The key light: the glare off to the right.
 const vec3 SG_KEY = vec3(.72, .3, .62);
 
@@ -1958,6 +1960,12 @@ vec4 sgOrb(vec2 d, float t) {
   vec2 s = d / SG_R;
   if (length(s) > 2.7 && (s.y > -1. || abs(s.x) > .6)) return vec4(0.);
   vec3 ro = vec3(s, 3.), rd = vec3(0., 0., -1.);
+  // the ball turned a little to its own right (our left), so it is seen
+  // slightly from the side rather than square on
+  mat2 yaw = rot(SG_YAW);
+  ro.xz = yaw * ro.xz;
+  rd.xz = yaw * rd.xz;
+  vec3 V = -rd;
   float z = 0., near = 1e3, zNear = 0., edge = PX * 1.5 / SG_R;
   vec2 h = vec2(1e3, 0.), hNear = h;
   for (int i = 0; i < 130; i++) {
@@ -1990,11 +1998,11 @@ vec4 sgOrb(vec2 d, float t) {
   // of the crease, so the two meet with no line between them
   // (on the ink itself, only its root right by the ball)
   float join = h.y > 3.5 ? smoothstep(.25, 0., length(p.xy) - 1.) : h.y > 2.5 ? 0. : smoothstep(.22, 0., sgInk(p, t));
-  n = normalize(mix(n, vec3(0., 0., 1.), join * .85));
+  n = normalize(mix(n, V, join * .85));
   // the liquid isn't perfectly smooth: slow ripples break up its reflections
   n = normalize(n + .14 * (vec3(inoise(p.xy * 5. + t * .1), inoise(p.yz * 5. - t * .1), inoise(p.zx * 5.)) - .5));
   vec3 R = reflect(rd, n);
-  float fres = .4 + .6 * pow(1. - max(n.z, 0.), 2.);
+  float fres = .4 + .6 * pow(1. - max(dot(n, V), 0.), 2.);
   float key = max(dot(n, SG_KEY), 0.);
   vec3 col;
   if (h.y > .5 && h.y < 1.5) {
@@ -2052,7 +2060,7 @@ vec4 sgOrb(vec2 d, float t) {
   // the core's light: red, on the walls close to it only
   col += vec3(1., .3, .08) * (.15 + .85 * max(dot(n, L), 0.)) * exp(-(ld - .23) * 22.) * .5;
   // backlight: the tunnel behind wraps a thin rim of light round the edge
-  col += vec3(.4, .65, 1.) * pow(1. - abs(n.z), 6.) * 1.3 * (1. - join);
+  col += vec3(.4, .65, 1.) * pow(1. - abs(dot(n, V)), 6.) * 1.3 * (1. - join);
   return vec4(col, cover);
 }
 
