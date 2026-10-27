@@ -1,24 +1,20 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { packFinishSvg } from "./card-finish-art";
-import { cardMotifImageSrc, parseCardMotif, siteAssetMotifPath } from "./card-motif";
 import {
-  DEFAULT_SUPPORTER_MOTIF,
-  SUPPORTER_MOTIFS,
-  SUPPORTER_MOTIF_IDS,
   SUPPORTER_FOILS,
   effectiveCardLook,
   parseSupporterLook,
   supporterLookMotif,
   supporterLookSignature,
 } from "./supporter-card-looks";
-import { supporterMotifPath, supporterMotifPathForUrl, supporterMotifUrl } from "./supporter-motif-art";
+import { cardMotifImageSrc } from "./card-motif";
+import { supporterMotifPathForUrl } from "./supporter-motif-art";
+
+const CUSTOM_URL = `https://cdn.mania-tracker.com/supporter-motifs/${"ab".repeat(32)}.webp`;
 
 describe("parseSupporterLook", () => {
   it("reads a look from an object or its JSON", () => {
-    expect(parseSupporterLook({ motif: "petals", foil: "sunburst" })).toEqual({ motif: "petals", foil: "sunburst" });
-    expect(parseSupporterLook('{"motif":"notes","foil":"glitter"}')).toEqual({ motif: "notes", foil: "glitter" });
+    expect(parseSupporterLook({ motif: "none", foil: "sunburst" })).toEqual({ motif: "none", foil: "sunburst" });
+    expect(parseSupporterLook('{"motif":"none","foil":"glitter"}')).toEqual({ motif: "none", foil: "glitter" });
   });
 
   it("is null when there is no look", () => {
@@ -26,30 +22,20 @@ describe("parseSupporterLook", () => {
   });
 
   it("still marks a supporter when the fields are unknown to this build", () => {
-    expect(parseSupporterLook({ motif: "comets", foil: "neon" })).toEqual({ motif: DEFAULT_SUPPORTER_MOTIF, foil: "holo" });
-    expect(parseSupporterLook({})).toEqual({ motif: "stars", foil: "holo" });
+    expect(parseSupporterLook({ motif: "comets", foil: "neon" })).toEqual({ motif: "none", foil: "holo" });
+    expect(parseSupporterLook({})).toEqual({ motif: "none", foil: "holo" });
   });
 
   it("drops a palette stored before foils, so a card keeps its tier's colours", () => {
-    expect(parseSupporterLook({ motif: "stars", palette: "gold" })).toEqual({ motif: "stars", foil: "holo" });
-    expect(supporterLookMotif({ motif: "stars", palette: "gold" } as never)?.palette).toBeUndefined();
+    expect(parseSupporterLook({ motif: "none", palette: "gold" })).toEqual({ motif: "none", foil: "holo" });
   });
 });
 
 describe("supporterLookMotif", () => {
-  it("maps every motif to a picture of our own that every renderer can draw", async () => {
-    expect(SUPPORTER_MOTIFS.map((motif) => motif.id)).toEqual([...SUPPORTER_MOTIF_IDS]);
-    for (const id of SUPPORTER_MOTIF_IDS) {
-      const motif = supporterLookMotif({ motif: id, foil: "holo" })!;
-      expect(motif.url).toBe(supporterMotifUrl(id));
-      expect(motif.palette).toBeUndefined();
-      // It survives the motif parser that every stored and dealt motif goes through.
-      expect(parseCardMotif(motif)).toEqual(motif);
-      expect(packFinishSvg(motif.url)).toBeNull();
-      // same-origin, never through the proxy, and read off this deployment for share images
-      expect(cardMotifImageSrc(motif)).toBe(supporterMotifPath(id));
-      expect(siteAssetMotifPath(motif.url)).toBe(supporterMotifPath(id));
-      expect(existsSync(join("public", supporterMotifPath(id)))).toBe(true);
+  it("reads a retired preset doodle as no art, keeping the foil", () => {
+    for (const motif of ["stars", "hearts", "notes", "petals", "headphones", "keys", "stellium"]) {
+      expect(parseSupporterLook({ motif, foil: "glitter" })).toEqual({ motif: "none", foil: "glitter" });
+      expect(supporterLookMotif({ motif, foil: "glitter" } as never)).toBeNull();
     }
   });
 
@@ -62,8 +48,9 @@ describe("supporterLookMotif", () => {
     expect(supporterLookMotif({ motif: "none", foil: "glitter" })).toBeNull();
     expect(effectiveCardLook(null, { motif: "none", foil: "glitter" })).toEqual({ motif: null, foil: "glitter" });
     // No foil keeps the art and lays no light over it.
-    expect(parseSupporterLook({ motif: "stars", foil: "none" })).toEqual({ motif: "stars", foil: "none" });
-    expect(effectiveCardLook(null, { motif: "stars", foil: "none" }).foil).toBeNull();
+    const custom = { motif: "custom" as const, url: CUSTOM_URL, foil: "none" as const };
+    expect(parseSupporterLook(custom)?.motif).toBe("custom");
+    expect(effectiveCardLook(null, custom).foil).toBeNull();
   });
 
   it("does not resolve a lookalike URL", () => {
@@ -72,13 +59,14 @@ describe("supporterLookMotif", () => {
 });
 
 describe("supporterLookSignature", () => {
-  it("is empty without a look and distinct per motif and foil", () => {
+  it("is empty without a look and distinct per image and foil", () => {
     expect(supporterLookSignature(null)).toBe("");
     const signatures = new Set<string>();
-    for (const motif of SUPPORTER_MOTIF_IDS) {
-      for (const foil of SUPPORTER_FOILS) signatures.add(supporterLookSignature({ motif, foil }));
+    for (const foil of SUPPORTER_FOILS) {
+      signatures.add(supporterLookSignature({ motif: "none", foil }));
+      signatures.add(supporterLookSignature({ motif: "custom", url: CUSTOM_URL, scale: 1, opacity: 0.85, foil }));
     }
-    expect(signatures.size).toBe(SUPPORTER_MOTIF_IDS.length * SUPPORTER_FOILS.length);
+    expect(signatures.size).toBe(2 * SUPPORTER_FOILS.length);
   });
 });
 
@@ -95,14 +83,14 @@ describe("effectiveCardLook", () => {
   });
 
   it("uses the supporter's motif and foil when the holding has none", () => {
-    expect(effectiveCardLook(null, { motif: "keys", foil: "scanline" })).toEqual({
-      motif: supporterLookMotif({ motif: "keys", foil: "scanline" }),
+    expect(effectiveCardLook(null, { motif: "custom", url: CUSTOM_URL, foil: "scanline" })).toEqual({
+      motif: supporterLookMotif({ motif: "custom", url: CUSTOM_URL, foil: "scanline" }),
       foil: "scanline",
     });
   });
 
   it("lets the holding's motif win and still foils it", () => {
-    expect(effectiveCardLook(granted, { motif: "hearts", foil: "note-rain" })).toEqual({ motif: granted, foil: "note-rain" });
+    expect(effectiveCardLook(granted, { motif: "none", foil: "note-rain" })).toEqual({ motif: granted, foil: "note-rain" });
   });
 });
 
@@ -115,9 +103,9 @@ describe("custom supporter images", () => {
     expect(cardMotifImageSrc({ url, scale: 1, opacity: 1 })).toBe(`/api/card-motif?src=${encodeURIComponent(url)}`);
   });
 
-  it("falls back to the default motif for any image that is not our own upload", () => {
+  it("reads any image that is not our own upload as no art", () => {
     for (const bad of ["https://evil.example/x.webp", `https://cdn.mania-tracker.com/bbcode/${"ab".repeat(32)}.webp`, `http://cdn.mania-tracker.com/supporter-motifs/${"ab".repeat(32)}.webp`, undefined]) {
-      expect(parseSupporterLook({ motif: "custom", foil: "holo", url: bad })).toEqual({ motif: "stars", foil: "holo" });
+      expect(parseSupporterLook({ motif: "custom", foil: "holo", url: bad })).toEqual({ motif: "none", foil: "holo" });
     }
   });
 

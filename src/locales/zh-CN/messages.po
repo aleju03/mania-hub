@@ -3554,6 +3554,14 @@ msgstr "一个外部应用"
 msgid "An external application"
 msgstr "一个外部应用"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "An image of your own floats on every copy of your card, in anyone's collection."
+msgstr ""
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "an imported skin"
 msgstr "导入的皮肤"
@@ -9520,16 +9528,16 @@ msgid "Headliner"
 msgstr "压轴"
 
 #: src/components/supporter/loadout.ts
-msgid "Headphones"
-msgstr "耳机"
+#~ msgid "Headphones"
+#~ msgstr "耳机"
 
 #: src/lib/replay-overlays.ts
 msgid "Health bar"
 msgstr "血条"
 
 #: src/components/supporter/loadout.ts
-msgid "Hearts"
-msgstr "爱心"
+#~ msgid "Hearts"
+#~ msgstr "爱心"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Heatmap"
@@ -10659,8 +10667,8 @@ msgid "Key Split"
 msgstr "键数分布"
 
 #: src/components/supporter/loadout.ts
-msgid "Keycaps"
-msgstr "键帽"
+#~ msgid "Keycaps"
+#~ msgstr "键帽"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -13946,7 +13954,6 @@ msgstr "音符"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
-#: src/components/supporter/loadout.ts
 #: src/routes/skins_.$id.tsx
 msgid "Notes"
 msgstr "音符"
@@ -15088,6 +15095,10 @@ msgstr "为 {username} 粘贴成绩或谱面链接"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste formatting"
 msgstr "粘贴格式"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Paste image"
+msgstr ""
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "Paste it in Discord to play the clip in chat. The link works for {SHARED_CLIP_TTL_HOURS} hours."
@@ -19835,7 +19846,6 @@ msgstr "星级"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
-#: src/components/supporter/loadout.ts
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
@@ -19940,8 +19950,8 @@ msgstr "不超过目标的 {0} 倍就有更多连击。"
 #~ msgstr "钢"
 
 #: src/components/supporter/loadout.ts
-msgid "Stellium"
-msgstr "Stellium"
+#~ msgid "Stellium"
+#~ msgstr "Stellium"
 
 #: src/components/supporter/loadout.ts
 msgid "Stellium charm"
@@ -21140,8 +21150,12 @@ msgid "The first uploaded skin lands here."
 msgstr "第一个上传的皮肤会出现在这里。"
 
 #: src/routes/support.tsx
-msgid "The foil and the art on every copy of your card, including the ones other players pull from packs. You can also put your own image on it."
-msgstr "你的每一张卡片都带有闪膜和插画，包括其他玩家从卡包中抽到的。你也可以放上自己的图片。"
+#~ msgid "The foil and the art on every copy of your card, including the ones other players pull from packs. You can also put your own image on it."
+#~ msgstr "你的每一张卡片都带有闪膜和插画，包括其他玩家从卡包中抽到的。你也可以放上自己的图片。"
+
+#: src/routes/support.tsx
+msgid "The foil on every copy of your card, including the ones other players pull from packs, and an image of your own on it if you like."
+msgstr ""
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "The four cards under your profile's numbers. Swap any of them, here or from the card itself on your profile."
@@ -21192,8 +21206,12 @@ msgstr "一排最后 3 张卡按共享 3 个特征来连线。其中本来连不
 #~ msgstr "每排最后 3 张卡片总是按共享 3 个特征来连锁。其中本来无法与相邻卡片连锁的，只计一半基础分。"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "The light and the art on every copy of your card in packs, or an image of your own."
-msgstr "卡包中你每张卡牌上的光效和图案，也可以用自己的图片。"
+#~ msgid "The light and the art on every copy of your card in packs, or an image of your own."
+#~ msgstr "卡包中你每张卡牌上的光效和图案，也可以用自己的图片。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "The light on every copy of your card in packs, and an image of your own on it."
+msgstr ""
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The link and the .osk filename stay as published."
@@ -21665,6 +21683,10 @@ msgstr "没有可选的奖励。"
 #: src/lib/chain-run.ts
 #~ msgid "There's a star at {0}x the target. Clear a round without passing it and every row starts {1} combo higher. Pass it and she leaves, and the bonus goes with her."
 #~ msgstr "目标的 {0} 倍处有一颗星。过关时没超过它，每排起始连击 +{1}。超过了她就会离开，加成也跟着没了。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "There's no image on your clipboard. Copy one, then try again."
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -24425,6 +24447,10 @@ msgstr "你的最佳成绩"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
+msgstr ""
 
 #: src/routes/support.tsx
 msgid "Your card"

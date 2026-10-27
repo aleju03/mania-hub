@@ -3521,6 +3521,14 @@ msgstr "an external application"
 msgid "An external application"
 msgstr "An external application"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "An image of your own floats on every copy of your card, in anyone's collection."
+msgstr "An image of your own floats on every copy of your card, in anyone's collection."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
+msgstr "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "an imported skin"
 msgstr "an imported skin"
@@ -9499,16 +9507,16 @@ msgid "Headliner"
 msgstr "Headliner"
 
 #: src/components/supporter/loadout.ts
-msgid "Headphones"
-msgstr "Headphones"
+#~ msgid "Headphones"
+#~ msgstr "Headphones"
 
 #: src/lib/replay-overlays.ts
 msgid "Health bar"
 msgstr "Health bar"
 
 #: src/components/supporter/loadout.ts
-msgid "Hearts"
-msgstr "Hearts"
+#~ msgid "Hearts"
+#~ msgstr "Hearts"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Heatmap"
@@ -10642,8 +10650,8 @@ msgid "Key Split"
 msgstr "Key Split"
 
 #: src/components/supporter/loadout.ts
-msgid "Keycaps"
-msgstr "Keycaps"
+#~ msgid "Keycaps"
+#~ msgstr "Keycaps"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -13929,7 +13937,6 @@ msgstr "notes"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
-#: src/components/supporter/loadout.ts
 #: src/routes/skins_.$id.tsx
 msgid "Notes"
 msgstr "Notes"
@@ -15071,6 +15078,10 @@ msgstr "paste a score or beatmap link for {username}"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste formatting"
 msgstr "Paste formatting"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Paste image"
+msgstr "Paste image"
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "Paste it in Discord to play the clip in chat. The link works for {SHARED_CLIP_TTL_HOURS} hours."
@@ -19818,7 +19829,6 @@ msgstr "stars"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
-#: src/components/supporter/loadout.ts
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
@@ -19923,8 +19933,8 @@ msgstr "Stay under {0}x the target for more combo."
 #~ msgstr "Steel"
 
 #: src/components/supporter/loadout.ts
-msgid "Stellium"
-msgstr "Stellium"
+#~ msgid "Stellium"
+#~ msgstr "Stellium"
 
 #: src/components/supporter/loadout.ts
 msgid "Stellium charm"
@@ -21123,8 +21133,12 @@ msgid "The first uploaded skin lands here."
 msgstr "The first uploaded skin lands here."
 
 #: src/routes/support.tsx
-msgid "The foil and the art on every copy of your card, including the ones other players pull from packs. You can also put your own image on it."
-msgstr "The foil and the art on every copy of your card, including the ones other players pull from packs. You can also put your own image on it."
+#~ msgid "The foil and the art on every copy of your card, including the ones other players pull from packs. You can also put your own image on it."
+#~ msgstr "The foil and the art on every copy of your card, including the ones other players pull from packs. You can also put your own image on it."
+
+#: src/routes/support.tsx
+msgid "The foil on every copy of your card, including the ones other players pull from packs, and an image of your own on it if you like."
+msgstr "The foil on every copy of your card, including the ones other players pull from packs, and an image of your own on it if you like."
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "The four cards under your profile's numbers. Swap any of them, here or from the card itself on your profile."
@@ -21175,8 +21189,12 @@ msgstr "The last 3 cards in a row link like they share 3 traits. A card there wi
 #~ msgstr "The last 3 cards of a row always link as if they shared 3 traits. Any of them that would not have linked to a neighbour on its own scores half its base."
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "The light and the art on every copy of your card in packs, or an image of your own."
-msgstr "The light and the art on every copy of your card in packs, or an image of your own."
+#~ msgid "The light and the art on every copy of your card in packs, or an image of your own."
+#~ msgstr "The light and the art on every copy of your card in packs, or an image of your own."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "The light on every copy of your card in packs, and an image of your own on it."
+msgstr "The light on every copy of your card in packs, and an image of your own on it."
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The link and the .osk filename stay as published."
@@ -21648,6 +21666,10 @@ msgstr "There is no reward to pick."
 #: src/lib/chain-run.ts
 #~ msgid "There's a star at {0}x the target. Clear a round without passing it and every row starts {1} combo higher. Pass it and she leaves, and the bonus goes with her."
 #~ msgstr "There's a star at {0}x the target. Clear a round without passing it and every row starts {1} combo higher. Pass it and she leaves, and the bonus goes with her."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "There's no image on your clipboard. Copy one, then try again."
+msgstr "There's no image on your clipboard. Copy one, then try again."
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -24408,6 +24430,10 @@ msgstr "your best plays"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
+msgstr "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
 
 #: src/routes/support.tsx
 msgid "Your card"

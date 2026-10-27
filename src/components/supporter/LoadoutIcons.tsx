@@ -39,6 +39,16 @@ export function CheckBadge({ className }: IconProps) {
   );
 }
 
+export function PasteIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M8.5 5.5h-2a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-11a2 2 0 0 0-2-2h-2" />
+      <rect x="8.5" y="3.5" width="7" height="4" rx="1.2" />
+      <path d="m9 15 2 2 4-4.5" />
+    </svg>
+  );
+}
+
 export function UploadIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>

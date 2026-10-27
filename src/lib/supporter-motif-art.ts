@@ -3,12 +3,13 @@
    scripts/dev/card-doodles.html, one 320x320 transparent PNG each.
 
    A leaf module on purpose: card-motif.ts resolves these for the canvas and
-   the overlay shader, maniacard-art.ts for the share image, and
-   supporter-card-looks.ts builds the look on top of them, so neither import
-   has to go through the other.
+   the overlay shader, and maniacard-art.ts for the share image.
 
    They drift in a layer of their own between the card's background and its
-   text, in their own colours (cardTexture.ts, ManiaCardRenderer.ts). */
+   text, in their own colours (cardTexture.ts, ManiaCardRenderer.ts).
+
+   Retired from the supporter picker (a supporter's card art is now only their
+   own upload); kept so a card or share image that still names one draws it. */
 
 export const SUPPORTER_MOTIF_IDS = ["stars", "hearts", "notes", "petals", "headphones", "keys", "stellium"] as const;
 export type SupporterMotifId = (typeof SUPPORTER_MOTIF_IDS)[number];

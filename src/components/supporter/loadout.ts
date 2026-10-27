@@ -2,7 +2,7 @@ import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 
 import { SUPPORTER_AVATAR_FRAMES, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
-import { DEFAULT_SUPPORTER_MOTIF, SUPPORTER_MOTIFS, type SupporterLook, type SupporterMotifId } from "../../lib/supporter-card-looks";
+import type { SupporterLook } from "../../lib/supporter-card-looks";
 import { DEFAULT_SUPPORTER_FOIL, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
 import { SUPPORTER_NAME_FONTS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { SUPPORTER_NAME_STYLES, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
@@ -47,7 +47,7 @@ export const SLOT_LABELS: Record<SlotId, MessageDescriptor> = {
 
 export type SlotValue = string | null;
 
-export const DEFAULT_LOOK: SupporterLook = { motif: DEFAULT_SUPPORTER_MOTIF, foil: DEFAULT_SUPPORTER_FOIL };
+export const DEFAULT_LOOK: SupporterLook = { motif: "none", foil: DEFAULT_SUPPORTER_FOIL };
 
 export function slotValue(loadout: Loadout, slot: SlotId): SlotValue {
   if (slot === "motif") return loadout.look.motif === "none" ? null : loadout.look.motif;
@@ -60,8 +60,7 @@ export function slotValue(loadout: Loadout, slot: SlotId): SlotValue {
 export function withSlot(loadout: Loadout, slot: SlotId, value: SlotValue, custom?: { url: string; scale: number; opacity: number } | null): Loadout {
   if (slot === "motif") {
     if (value === "custom") return custom ? { ...loadout, look: { motif: "custom", foil: loadout.look.foil, ...custom } } : loadout;
-    if (value === null) return { ...loadout, look: { motif: "none", foil: loadout.look.foil } };
-    return { ...loadout, look: { motif: value as SupporterMotifId, foil: loadout.look.foil } };
+    return { ...loadout, look: { motif: "none", foil: loadout.look.foil } };
   }
   if (slot === "foil") return { ...loadout, look: { ...loadout.look, foil: value === null ? "none" : value as SupporterFoilId } };
   if (slot === "sleeve" || slot === "binder" || slot === "wrapper" || slot === "blade") return { ...loadout, pack: { ...loadout.pack, [slot]: value } as SupporterPackStyle };
@@ -69,19 +68,25 @@ export function withSlot(loadout: Loadout, slot: SlotId, value: SlotValue, custo
 }
 
 /* What a roll can land on per slot. A roll always lands on something, so no
-   "none", and never on the viewer's own image. */
+   "none", and never on the viewer's own image; card art, which is only that
+   image now, is left out of rolls. */
 const ROLL_POOLS: Record<SlotId, readonly SlotValue[]> = {
   theme: SUPPORTER_PROFILE_THEMES,
   frame: SUPPORTER_AVATAR_FRAMES,
   nameStyle: SUPPORTER_NAME_STYLES,
   nameFont: SUPPORTER_NAME_FONTS,
-  motif: SUPPORTER_MOTIFS.map((motif) => motif.id),
+  motif: [],
   foil: SUPPORTER_FOILS,
   sleeve: SUPPORTER_CARD_SLEEVES,
   binder: SUPPORTER_BINDERS,
   wrapper: SUPPORTER_WRAPPERS,
   blade: SUPPORTER_BLADES,
 };
+
+/* Whether a roll spins the slot at all. */
+export function isRolledSlot(slot: SlotId): boolean {
+  return ROLL_POOLS[slot].length > 0;
+}
 
 export function randomSlotValue(slot: SlotId, not?: SlotValue): SlotValue {
   const pool = ROLL_POOLS[slot].filter((value) => value !== not);
@@ -91,14 +96,13 @@ export function randomSlotValue(slot: SlotId, not?: SlotValue): SlotValue {
 /* How many different looks the loadout can put together: every slot's
    choices multiplied (an empty slot counts as one, and the Note highway with
    its real charts or its own notes switched on counts as three more themes), leaving out the viewer's
-   own uploaded image. Grows by itself as the catalogs do. */
+   own uploaded image (the only card art). Grows by itself as the catalogs do. */
 export const LOADOUT_COMBINATIONS =
   (SUPPORTER_PROFILE_THEMES.length + 4)
   * (SUPPORTER_AVATAR_FRAMES.length + 1)
   * (SUPPORTER_NAME_STYLES.length + 1)
   * (SUPPORTER_NAME_FONTS.length + 1)
   * (SUPPORTER_FOILS.length + 1)
-  * (SUPPORTER_MOTIFS.length + 1)
   * (SUPPORTER_CARD_SLEEVES.length + 1)
   * (SUPPORTER_BINDERS.length + 1)
   * (SUPPORTER_WRAPPERS.length + 1)
@@ -359,12 +363,3 @@ export const NAME_FONT_GROUPS: { key: string; title: MessageDescriptor; fonts: S
   { key: "classic", title: msg`Classic`, fonts: ["cinzel", "playfair", "abril", "unifraktur", "bodoni", "limelight", "uncial"] },
 ];
 
-export const MOTIF_LABELS: Record<SupporterMotifId, MessageDescriptor> = {
-  stars: msg`Stars`,
-  hearts: msg`Hearts`,
-  notes: msg`Notes`,
-  petals: msg`Sakura`,
-  headphones: msg`Headphones`,
-  keys: msg`Keycaps`,
-  stellium: msg`Stellium`,
-};

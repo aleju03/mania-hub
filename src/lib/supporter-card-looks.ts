@@ -1,18 +1,12 @@
 import type { CardMotif } from "./card-motif";
 import { DEFAULT_SUPPORTER_FOIL, isSupporterFoil, type SupporterFoilId } from "./supporter-foils";
-import {
-  DEFAULT_SUPPORTER_MOTIF,
-  SUPPORTER_MOTIF_IDS,
-  supporterMotifUrl,
-  type SupporterMotifId,
-} from "./supporter-motif-art";
 
 /* How an active supporter's cards look, on every copy anyone holds.
 
    The backend attaches `supporterLook` to a card payload only while the
    player's supporter status is live, so its presence is the whole signal: a
-   card that has one draws the supporter's chosen foil and floats their chosen
-   motif, in the tier's own colours (a foil is light only, so rarity still
+   card that has one draws the supporter's chosen foil and floats their own
+   image if they uploaded one, in the tier's own colours (a foil is light only, so rarity still
    reads at a glance). Unlike a holding's
    own motif (a grant, the milestone card, a legacy finish), the look belongs
    to the player, so it reaches every collector's copy at once.
@@ -20,14 +14,13 @@ import {
    A holding's own motif still wins over the supporter's: that art was given to
    one collector's copy on purpose, and the foil rides on top of it either way. */
 
-export { SUPPORTER_MOTIF_IDS, DEFAULT_SUPPORTER_MOTIF, type SupporterMotifId } from "./supporter-motif-art";
-
 export { SUPPORTER_FOILS, DEFAULT_SUPPORTER_FOIL, type SupporterFoilId } from "./supporter-foils";
 
 export interface SupporterLook {
-  /** A preset picture, "custom" for the supporter's own image, or "none" for
-      the tier's own flecks with only the foil on top. */
-  motif: SupporterMotifId | "custom" | "none";
+  /** "custom" for the supporter's own image, or "none" for the tier's own
+      flecks with only the foil on top. The preset doodles are retired: a look
+      saved with one reads as "none". */
+  motif: "custom" | "none";
   /** The light over the card, never its colours; "none" lays no foil at all. */
   foil: SupporterFoilId | "none";
   /** Only on "custom": the converted upload, and how large and strong it floats. */
@@ -52,39 +45,11 @@ function clampTo(value: unknown, [min, max]: readonly [number, number], fallback
   return Number.isFinite(next) ? Math.min(max, Math.max(min, next)) : fallback;
 }
 
-interface SupporterMotifDefinition {
-  id: SupporterMotifId;
-  /** English label; the settings page wraps it for translation. */
-  label: string;
-  /** Multiplier on the fleck size, as CardMotif.scale. */
-  scale: number;
-  /** As CardMotif.opacity. */
-  opacity: number;
-}
-
-/* Scale per doodle: the busy ones (notes, keys) a little larger so their
-   detail survives a thumbnail. */
-export const SUPPORTER_MOTIFS: readonly SupporterMotifDefinition[] = [
-  { id: "stars", label: "Stars", scale: 1.3, opacity: 1 },
-  { id: "hearts", label: "Hearts", scale: 1.3, opacity: 1 },
-  { id: "notes", label: "Notes", scale: 1.4, opacity: 1 },
-  { id: "petals", label: "Sakura", scale: 1.3, opacity: 1 },
-  { id: "headphones", label: "Headphones", scale: 1.35, opacity: 1 },
-  { id: "keys", label: "Keycaps", scale: 1.4, opacity: 1 },
-  { id: "stellium", label: "Stellium", scale: 1.3, opacity: 1 },
-];
-
-const MOTIFS_BY_ID = new Map(SUPPORTER_MOTIFS.map((motif) => [motif.id, motif]));
-
-function isSupporterMotifId(value: unknown): value is SupporterMotifId {
-  return typeof value === "string" && (SUPPORTER_MOTIF_IDS as readonly string[]).includes(value);
-}
-
 /* A look from an API payload, a stored row or a form. Null when there is none.
 
-   An object is a supporter even if its fields are off: an unknown motif falls
-   back to the default and so does an unknown foil, so a
-   backend that grows a new motif before this build knows it still shows the
+   An object is a supporter even if its fields are off: any motif but a valid
+   custom image reads as no art and an unknown foil as the default, so a
+   backend that grows a new value before this build knows it still shows the
    card as a supporter's rather than as an ordinary one. */
 export function parseSupporterLook(value: unknown): SupporterLook | null {
   if (typeof value === "string") {
@@ -108,29 +73,17 @@ export function parseSupporterLook(value: unknown): SupporterLook | null {
       opacity: clampTo(raw.opacity, CUSTOM_MOTIF_OPACITY_RANGE, 0.85),
     };
   }
-  if (raw.motif === "none") return { motif: "none", foil };
-  return {
-    motif: isSupporterMotifId(raw.motif) ? raw.motif : DEFAULT_SUPPORTER_MOTIF,
-    foil,
-  };
+  return { motif: "none", foil };
 }
 
 /* The motif a look floats, in the shape every card surface already draws. */
 export function supporterLookMotif(look: SupporterLook | null | undefined): CardMotif | null {
   const parsed = parseSupporterLook(look);
-  if (!parsed || parsed.motif === "none") return null;
-  if (parsed.motif === "custom" && parsed.url) {
-    return {
-      url: parsed.url,
-      scale: parsed.scale ?? 1,
-      opacity: parsed.opacity ?? 0.85,
-    };
-  }
-  const definition = MOTIFS_BY_ID.get(parsed.motif as SupporterMotifId) ?? MOTIFS_BY_ID.get(DEFAULT_SUPPORTER_MOTIF)!;
+  if (!parsed || parsed.motif !== "custom" || !parsed.url) return null;
   return {
-    url: supporterMotifUrl(definition.id),
-    scale: definition.scale,
-    opacity: definition.opacity,
+    url: parsed.url,
+    scale: parsed.scale ?? 1,
+    opacity: parsed.opacity ?? 0.85,
   };
 }
 

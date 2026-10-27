@@ -15,7 +15,7 @@ import { BinderBook, FoilCard, FrameThumb, SleeveCard, wrapperThumb } from "./Lo
 import { BladeSwatch } from "../packs/BladeSwatch";
 import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
 import { bladeLook } from "../packs/packBlades";
-import { FRAME_NAMES, MOTIF_LABELS } from "./loadout";
+import { FRAME_NAMES } from "./loadout";
 import { formatGiftCode } from "./GiftCodePanel";
 import { Stagger, StaggerItem, useLowEndDevice, useNearView } from "./SupportMotion";
 import { useAuth } from "../../lib/auth-context";
@@ -24,7 +24,6 @@ import { fetchLivePackCardSnapshotDirect, fetchLiveSubmittedCompanions, fetchLiv
 import { BUILT_IN_COMPANIONS, type SupporterCompanion } from "../../lib/supporter-companions";
 import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_FOIL_LABELS, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
-import { SUPPORTER_MOTIF_IDS, supporterMotifPath, type SupporterMotifId } from "../../lib/supporter-motif-art";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { SUPPORTER_NAME_STYLE_LABELS, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import {
@@ -494,9 +493,7 @@ export function CardShowcase() {
   const [ref, near] = useNearView<HTMLDivElement>();
   const [index, pick] = useCycle(SUPPORTER_FOILS.length, 3200, near);
   const foil = SUPPORTER_FOILS[index];
-  // The art stays put: new art repaints every texture on the 3D card, a new foil only swaps two shader values.
-  const [motif, setMotif] = useState<SupporterMotifId>("stars");
-  const look = useMemo<SupporterLook>(() => ({ motif, foil }), [motif, foil]);
+  const look = useMemo<SupporterLook>(() => ({ motif: "none", foil }), [foil]);
 
   return (
     <div ref={ref} className="grid items-center gap-5 sm:grid-cols-[minmax(0,270px)_minmax(0,1fr)]">
@@ -506,7 +503,7 @@ export function CardShowcase() {
         ) : card === undefined ? (
           <div className="aspect-[5/7] animate-pulse rounded-xl bg-osu-b6" />
         ) : (
-          <CardHand foil={foil} motif={motif} />
+          <CardHand foil={foil} />
         )}
       </div>
       <div>
@@ -525,28 +522,12 @@ export function CardShowcase() {
             </StaggerItem>
           ))}
         </Stagger>
-        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/[0.07] pt-4">
-          {SUPPORTER_MOTIF_IDS.map((id) => (
-            <motion.button
-              key={id}
-              type="button"
-              onClick={() => setMotif(id)}
-              aria-pressed={id === motif}
-              title={i18n._(MOTIF_LABELS[id])}
-              whileHover={{ scale: 1.15, rotate: -6 }}
-              whileTap={{ scale: 0.9 }}
-              className="cursor-pointer"
-            >
-              <img src={supporterMotifPath(id)} alt={i18n._(MOTIF_LABELS[id])} className={`h-9 w-9 object-contain transition-opacity ${id === motif ? "opacity-100" : "opacity-45"}`} />
-            </motion.button>
-          ))}
-        </div>
       </div>
     </div>
   );
 }
 
-function CardHand({ foil, motif }: { foil: SupporterFoilId; motif: SupporterMotifId }) {
+function CardHand({ foil }: { foil: SupporterFoilId }) {
   const reduced = useReducedMotion();
   const sides: SupporterFoilId[] = [SUPPORTER_FOILS[(SUPPORTER_FOILS.indexOf(foil) + 3) % SUPPORTER_FOILS.length], SUPPORTER_FOILS[(SUPPORTER_FOILS.indexOf(foil) + 5) % SUPPORTER_FOILS.length]];
   return (
@@ -563,7 +544,6 @@ function CardHand({ foil, motif }: { foil: SupporterFoilId; motif: SupporterMoti
           transition={{ type: "spring", stiffness: 200, damping: 16, delay: i === 2 ? 0 : 0.25 }}
         >
           <FoilCard foil={id} still={i !== 2} className="h-full w-full shadow-[0_12px_30px_rgba(0,0,0,0.45)]" />
-          {i === 2 && <img src={supporterMotifPath(motif)} alt="" className="pointer-events-none absolute inset-0 m-auto h-[46%] w-[66%] object-contain opacity-80" />}
         </motion.div>
       ))}
     </div>

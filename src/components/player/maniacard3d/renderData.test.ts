@@ -222,15 +222,15 @@ describe("supporter look", () => {
     sampleSize: 40,
   } as const;
 
-  test("floats the supporter's motif and draws their foil in the tier's colours", () => {
+  test("floats the supporter's own image and draws their foil in the tier's colours", () => {
     const data = buildManiaCardRenderDataFromSkills({
       user,
       skills,
       tierOverride: "common",
-      supporterLook: { motif: "hearts", foil: "caustics" },
+      supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/abababababababababababababababababababababababababababababababab.webp", foil: "caustics" },
     });
     expect(data.supporterFoil).toBe("caustics");
-    expect(data.motif?.url).toBe("https://mania-tracker.com/images/supporter-motifs/hearts-2.png");
+    expect(data.motif?.url).toBe("https://cdn.mania-tracker.com/supporter-motifs/abababababababababababababababababababababababababababababababab.webp");
     // A foil is light only: the card keeps its tier's colours.
     expect(data.motif?.palette).toBeUndefined();
     expect(data.tierStyle.label).toBe("Common");
@@ -243,7 +243,7 @@ describe("supporter look", () => {
       skills,
       tierOverride: "rare",
       motifOverride: granted,
-      supporterLook: { motif: "hearts", foil: "glitter" },
+      supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/abababababababababababababababababababababababababababababababab.webp", foil: "glitter" },
     });
     expect(data.motif).toEqual(granted);
     expect(data.supporterFoil).toBe("glitter");
@@ -258,7 +258,7 @@ describe("supporter look", () => {
       skills,
       tierOverride: "rare",
       team: { flagUrl: null, coverUrl: null, tag: "TM" },
-      supporterLook: { motif: "stars", foil: "holo" },
+      supporterLook: { motif: "none", foil: "holo" },
     });
     expect(team.supporterFoil).toBeUndefined();
     expect(team.motif).toBeNull();
@@ -268,9 +268,9 @@ describe("supporter look", () => {
     const base = { user, skills, tierOverride: "rare" as const };
     const signatures = new Set([
       getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills(base)),
-      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "stars", foil: "holo" } })),
-      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "notes", foil: "holo" } })),
-      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "notes", foil: "aurora" } })),
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "none", foil: "holo" } })),
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd.webp", foil: "holo" } })),
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd.webp", foil: "aurora" } })),
     ]);
     expect(signatures.size).toBe(4);
   });

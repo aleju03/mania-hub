@@ -321,7 +321,7 @@ const PERKS: { id: PerkId; title: MessageDescriptor; body: MessageDescriptor }[]
   { id: "theme", title: msg`Profile theme`, body: msg`Your whole profile takes on a theme, with a living backdrop behind it.` },
   { id: "frame", title: msg`Avatar frame`, body: msg`A frame around your avatar on your profile.` },
   { id: "name", title: msg`Name style and font`, body: msg`Your name in its own style and font, on your profile and in every list it shows up in.` },
-  { id: "card", title: msg`Card foil and art`, body: msg`The light and the art on every copy of your card in packs, or an image of your own.` },
+  { id: "card", title: msg`Card foil and art`, body: msg`The light on every copy of your card in packs, and an image of your own on it.` },
   { id: "packs", title: msg`Packs cosmetics`, body: msg`Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, print your packs on your own wrapper, and open them with your own blade.` },
   { id: "stats", title: msg`Profile stats`, body: msg`Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile.` },
   { id: "plays", title: msg`Your own plays`, body: msg`Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan.` },

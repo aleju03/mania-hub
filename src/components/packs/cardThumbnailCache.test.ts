@@ -73,9 +73,9 @@ describe("cardThumbnailKeyForCollectionCard", () => {
 
   it("gives a supporter's card its own address, keyed on the look", () => {
     const plain = cardThumbnailKeyForCollectionCard(makeCard());
-    const stars = cardThumbnailKeyForCollectionCard(makeCard({ supporterLook: { motif: "stars", foil: "holo" } }));
-    const hearts = cardThumbnailKeyForCollectionCard(makeCard({ supporterLook: { motif: "hearts", foil: "holo" } }));
-    expect(new Set([plain, stars, hearts]).size).toBe(3);
+    const none = cardThumbnailKeyForCollectionCard(makeCard({ supporterLook: { motif: "none", foil: "holo" } }));
+    const custom = cardThumbnailKeyForCollectionCard(makeCard({ supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/abababababababababababababababababababababababababababababababab.webp", foil: "holo" } }));
+    expect(new Set([plain, none, custom]).size).toBe(3);
     // A lapsed supporter's card goes back to the address it always had.
     expect(cardThumbnailKeyForCollectionCard(makeCard({ supporterLook: null }))).toBe(plain);
   });
@@ -84,10 +84,10 @@ describe("cardThumbnailKeyForCollectionCard", () => {
     const motif = { url: "https://e.com/a.png", scale: 1, opacity: 1 };
     const granted = cardThumbnailKeyForCollectionCard(makeCard({ motif }));
     const grantedSupporter = cardThumbnailKeyForCollectionCard(
-      makeCard({ motif, supporterLook: { motif: "hearts", foil: "glitter" } }),
+      makeCard({ motif, supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/abababababababababababababababababababababababababababababababab.webp", foil: "glitter" } }),
     );
     const grantedSupporterOtherLook = cardThumbnailKeyForCollectionCard(
-      makeCard({ motif, supporterLook: { motif: "stars", foil: "holo" } }),
+      makeCard({ motif, supporterLook: { motif: "none", foil: "holo" } }),
     );
     expect(grantedSupporter).not.toBe(granted);
     // The look's motif loses to the grant, so only the foil differs.

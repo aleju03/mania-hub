@@ -17,6 +17,7 @@ import { mainKeymode, useHighwayChart } from "../components/supporter/use-highwa
 import {
   DEFAULT_LOOK,
   LOADOUT_COMBINATIONS,
+  isRolledSlot,
   randomSlotValue,
   sameLook,
   SLOT_IDS,
@@ -265,7 +266,7 @@ function SupporterPage() {
   };
 
   const spinning = reel !== null;
-  const rollable = SLOT_IDS.filter((slot) => !locks.has(slot));
+  const rollable = SLOT_IDS.filter((slot) => isRolledSlot(slot) && !locks.has(slot));
 
   /* Every unlocked slot spins and lands on something new, one after another,
      left to wait as a pending roll. */

@@ -4,8 +4,6 @@ import { useLingui } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
 
 import {
-  SUPPORTER_MOTIFS,
-  type SupporterMotifId,
 } from "../../lib/supporter-card-looks";
 import { SUPPORTER_FOIL_LABELS, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
 import {
@@ -14,7 +12,6 @@ import {
   supporterFrameGeometry,
   type SupporterAvatarFrameId,
 } from "../../lib/supporter-avatar-frames";
-import { supporterMotifPath } from "../../lib/supporter-motif-art";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { SUPPORTER_NAME_STYLE_LABELS, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "./SupporterNameStyle";
@@ -24,7 +21,7 @@ import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { fetchFrameDanChoices, saveFrameDanChoice, type FrameDanChoices } from "../../lib/supporter-look-settings";
 import { forgetLiveSupporterLook } from "../../lib/live-backend";
 import { avatarUrlUserId } from "../ui/Avatar";
-import { CheckBadge, LockIcon, UploadIcon } from "./LoadoutIcons";
+import { CheckBadge, LockIcon, PasteIcon, UploadIcon } from "./LoadoutIcons";
 import { FoilPreview } from "./FoilPreview";
 import { DEFAULT_PACK_ART_STYLE, getCachedPackFrontCanvas } from "../packs/packArt";
 import { BladeSwatch } from "../packs/BladeSwatch";
@@ -49,11 +46,11 @@ import { SUPPORTER_PROFILE_THEME_LABELS, SUPPORTER_PROFILE_THEMES, type Supporte
 import {
   FRAME_GROUPS,
   FRAME_NAMES,
-  MOTIF_LABELS,
   NAME_FONT_GROUPS,
   NAME_STYLE_GROUPS,
   SLOT_IDS,
   PACK_SLOT_IDS,
+  isRolledSlot,
   SLOT_LABELS,
   slotValue,
   type FrameEntry,
@@ -114,7 +111,7 @@ function useSlotName() {
     }
     if (slot === "nameStyle") return value ? i18n._(SUPPORTER_NAME_STYLE_LABELS[value as SupporterNameStyleId]) : t`Plain`;
     if (slot === "nameFont") return value ? i18n._(SUPPORTER_NAME_FONT_LABELS[value as SupporterNameFontId]) : t`Default`;
-    if (slot === "motif") return value === null ? t`No art` : value === "custom" ? t`Your image` : i18n._(MOTIF_LABELS[value as SupporterMotifId]);
+    if (slot === "motif") return value === "custom" ? t`Your image` : t`No art`;
     if (slot === "sleeve") return value ? i18n._(SUPPORTER_CARD_SLEEVE_LABELS[value as SupporterCardSleeveId]) : t`No sleeve`;
     if (slot === "binder") return value ? i18n._(SUPPORTER_BINDER_LABELS[value as SupporterBinderId]) : t`No binder`;
     if (slot === "wrapper") return value ? i18n._(SUPPORTER_WRAPPER_LABELS[value as SupporterWrapperId]) : t`Standard foil`;
@@ -147,9 +144,8 @@ function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; 
     return <span className={`text-[19px] font-bold leading-none text-white ${loadout.nameFont ? `name-font--${loadout.nameFont}` : ""}`}>Aa</span>;
   }
   if (slot === "motif") {
-    if (loadout.look.motif === "none") return <NoArt className="h-5 w-5" />;
-    const src = loadout.look.motif === "custom" ? loadout.look.url : supporterMotifPath(loadout.look.motif);
-    return <img src={src} alt="" className="h-8 w-8 rounded-sm object-contain" />;
+    if (loadout.look.motif !== "custom") return <NoArt className="h-5 w-5" />;
+    return <img src={loadout.look.url} alt="" className="h-8 w-8 rounded-sm object-contain" />;
   }
   if (slot === "sleeve") {
     return loadout.pack.sleeve ? <SleeveCard sleeve={loadout.pack.sleeve} className="h-[38px] w-[27px]" /> : <NoArt className="h-5 w-5" />;
@@ -276,16 +272,18 @@ export function LoadoutSlots({ shown, open, onOpen, locks, onToggleLock, spinnin
                 <path d="m6 3.5 4.5 4.5L6 12.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <button
-              type="button"
-              onClick={() => onToggleLock(slot)}
-              aria-pressed={locked}
-              aria-label={locked ? t`Unlock for rolls` : t`Lock for rolls`}
-              title={locked ? t`Unlock for rolls` : t`Lock for rolls`}
-              className={`grid w-10 shrink-0 cursor-pointer place-items-center rounded-r-xl transition-colors ${locked ? "text-osu-pink" : "text-osu-f1/60 hover:text-white"}`}
-            >
-              <LockIcon locked={locked} className="h-[18px] w-[18px]" />
-            </button>
+            {isRolledSlot(slot) ? (
+              <button
+                type="button"
+                onClick={() => onToggleLock(slot)}
+                aria-pressed={locked}
+                aria-label={locked ? t`Unlock for rolls` : t`Lock for rolls`}
+                title={locked ? t`Unlock for rolls` : t`Lock for rolls`}
+                className={`grid w-10 shrink-0 cursor-pointer place-items-center rounded-r-xl transition-colors ${locked ? "text-osu-pink" : "text-osu-f1/60 hover:text-white"}`}
+              >
+                <LockIcon locked={locked} className="h-[18px] w-[18px]" />
+              </button>
+            ) : <span aria-hidden className="w-10 shrink-0" />}
           </div>
           </Fragment>
         );
@@ -677,14 +675,81 @@ function FontDrawer({ current, disabled, username, onTry, onPick }: DrawerProps)
   );
 }
 
+/* The first image among clipboard or dropped items, as a file to upload. */
+function imageFileOf(items: DataTransferItemList | null | undefined): File | null {
+  for (const item of Array.from(items ?? [])) {
+    if (item.kind === "file" && item.type.startsWith("image/")) return item.getAsFile();
+  }
+  return null;
+}
+
 function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUpload, onEditCustom }: DrawerProps) {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [pasteNote, setPasteNote] = useState<string | null>(null);
   const look = current.look;
   const tryOn = (value: SlotValue) => (on: boolean) => onTry("motif", on ? value : undefined);
 
+  // While the drawer is open, an image pasted anywhere on the page (Ctrl+V) goes up as the card art.
+  const latestUpload = useRef(onUpload);
+  latestUpload.current = onUpload;
+  useEffect(() => {
+    if (!canUpload || disabled) return;
+    const onPaste = (event: ClipboardEvent) => {
+      if (event.target instanceof Element && event.target.closest("input, textarea, [contenteditable='true']")) return;
+      const file = imageFileOf(event.clipboardData?.items);
+      if (!file) return;
+      event.preventDefault();
+      setPasteNote(null);
+      latestUpload.current(file);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [canUpload, disabled]);
+
+  /* The Paste tile reads the clipboard itself, where the browser allows it;
+     otherwise it says to press Ctrl+V, which always works. */
+  const pasteFromClipboard = async () => {
+    setPasteNote(null);
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((kind) => kind.startsWith("image/"));
+        if (!type) continue;
+        const blob = await item.getType(type);
+        onUpload(new File([blob], `pasted.${type.slice(6)}`, { type }));
+        return;
+      }
+      setPasteNote(t`There's no image on your clipboard. Copy one, then try again.`);
+    } catch {
+      setPasteNote(t`Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead.`);
+    }
+  };
+
   return (
-    <div>
+    <div
+      className={`rounded-xl transition-shadow ${dragging ? "ring-2 ring-osu-pink/70" : ""}`}
+      onDragOver={(event) => {
+        if (!canUpload || disabled || !Array.from(event.dataTransfer.types).includes("Files")) return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(event) => {
+        setDragging(false);
+        const file = imageFileOf(event.dataTransfer.items);
+        if (!canUpload || disabled || !file) return;
+        event.preventDefault();
+        onUpload(file);
+      }}
+    >
+      <p className="mb-3 text-[12px] text-osu-f1">
+        {canUpload
+          ? t`An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it.`
+          : t`An image of your own floats on every copy of your card, in anyone's collection.`}
+      </p>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2">
         <Item active={look.motif === "none"} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("motif", null)}>
           <span className="grid h-[68px] w-full place-items-center rounded-md bg-osu-b6 text-osu-f1">
@@ -692,14 +757,6 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
           </span>
           {t`No art`}
         </Item>
-        {SUPPORTER_MOTIFS.map((motif) => (
-          <Item key={motif.id} active={look.motif === motif.id} disabled={disabled} onTry={tryOn(motif.id)} onPick={() => onPick("motif", motif.id)}>
-            <span className="grid h-[68px] w-full place-items-center rounded-md bg-osu-b6">
-              <img src={supporterMotifPath(motif.id)} alt="" className="h-14 w-14 object-contain" />
-            </span>
-            {i18n._(MOTIF_LABELS[motif.id])}
-          </Item>
-        ))}
         {custom && (
           <div className="relative">
             <Item active={look.motif === "custom"} disabled={disabled} onTry={tryOn("custom")} onPick={() => onPick("motif", "custom")} className="w-full">
@@ -724,6 +781,14 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
           </div>
         )}
         {canUpload && (
+          <button type="button" disabled={disabled} onClick={() => void pasteFromClipboard()} className={tile(false)}>
+            <span className="grid h-[68px] w-full place-items-center rounded-md border border-dashed border-white/15">
+              <PasteIcon className="h-6 w-6" />
+            </span>
+            {t`Paste image`}
+          </button>
+        )}
+        {canUpload && (
           <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className={tile(false)}>
             <span className="grid h-[68px] w-full place-items-center rounded-md border border-dashed border-white/15">
               <UploadIcon className="h-6 w-6" />
@@ -743,6 +808,7 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
           }}
         />
       </div>
+      {pasteNote && <p className="mt-2 text-[12px] text-osu-l2">{pasteNote}</p>}
     </div>
   );
 }

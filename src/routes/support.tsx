@@ -260,7 +260,7 @@ function SupportPage() {
               id="card"
               title={t`Your card`}
               count={<Trans><CountUp value={SUPPORTER_FOILS.length} /> foils</Trans>}
-              body={t`The foil and the art on every copy of your card, including the ones other players pull from packs. You can also put your own image on it.`}
+              body={t`The foil on every copy of your card, including the ones other players pull from packs, and an image of your own on it if you like.`}
             >
               <CardShowcase />
             </Perk>
