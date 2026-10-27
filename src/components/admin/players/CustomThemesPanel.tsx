@@ -49,6 +49,10 @@ export function CustomThemesPanel() {
   const [busy, setBusy] = useState(false);
   const [ask, setAsk] = useState<Ask | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
+  /* Themes taken down and deleted by their author are done with: nothing on
+     the site shows them and there's nothing left to decide. Kept (the
+     takedown's record, and Restore), but out of the list until asked for. */
+  const [showClosed, setShowClosed] = useState(false);
   /* The one theme playing live; the rest show their stills. */
   const [playing, setPlaying] = useState<number | null>(null);
   const [codeOpen, setCodeOpen] = useState<number | null>(null);
@@ -80,7 +84,9 @@ export function CustomThemesPanel() {
     }
   };
 
-  const themes = view?.themes ?? [];
+  const allThemes = view?.themes ?? [];
+  const closed = allThemes.filter((theme) => theme.deleted && theme.state === "taken_down").length;
+  const themes = showClosed ? allThemes : allThemes.filter((theme) => !(theme.deleted && theme.state === "taken_down"));
   const unseen = themes.filter((theme) => !theme.seen).length;
   const reported = themes.filter((theme) => theme.reports.some((report) => report.kind !== "crash") || theme.state === "auto_hidden").length;
   const shown = themes.filter((theme) => filter === "all" || (filter === "new" ? !theme.seen : theme.reports.some((report) => report.kind !== "crash") || theme.state === "auto_hidden"));
@@ -99,6 +105,17 @@ export function CustomThemesPanel() {
             {id === "reported" && reported > 0 ? <span className="tabular-nums text-osu-yellow">{reported}</span> : null}
           </button>
         ))}
+        {closed > 0 ? (
+          <button
+            onClick={() => setShowClosed((value) => !value)}
+            className={`${BUTTON_CLASS} ${showClosed ? "border-osu-pink/50 bg-osu-pink/15 text-white" : "border-osu-b3/30 bg-osu-b4/60 text-osu-l2 hover:text-white"}`}
+            title="Themes taken down that their author also deleted"
+            aria-pressed={showClosed}
+          >
+            Taken down and deleted
+            <span className="tabular-nums text-osu-f1">{closed}</span>
+          </button>
+        ) : null}
         <div className="ml-auto flex items-center gap-2">
           {view ? (
             <button
@@ -128,7 +145,7 @@ export function CustomThemesPanel() {
         <Skeleton className="h-[120px] w-full rounded-md" />
       ) : shown.length === 0 ? (
         <div className="py-8 text-center text-[12px] text-osu-f1">
-          {filter === "new" ? "Nothing new since you last looked." : filter === "reported" ? "No theme is reported." : "No supporter has made a theme yet."}
+          {filter === "new" ? "Nothing new since you last looked." : filter === "reported" ? "No theme is reported." : closed > 0 && !showClosed ? "Every theme left is taken down and deleted." : "No supporter has made a theme yet."}
         </div>
       ) : (
         <div className="space-y-3">
