@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import type { CustomThemeSourceError } from "#custom-themes/source";
 import { CUSTOM_THEME_TEXTURES } from "#custom-themes/inputs";
 import { checkCustomThemeSource } from "../../../lib/custom-theme-check";
+import { useMediaQuery } from "../../../lib/use-media-query";
 import {
   bakeRow,
   canvasBlob,
@@ -66,6 +67,23 @@ function builtinBody(id: SupporterProfileThemeId): string {
   return full.slice(PROFILE_THEME_PRELUDE.length + 1, full.length - PROFILE_THEME_MAIN.length - 1).replace(/^\n+/, "").trimEnd() + "\n";
 }
 
+/* A start's code without its comments: they are notes for this repo, and a
+   theme somebody starts from is theirs to annotate. A line that held only a
+   comment goes; blank lines between blocks stay, one at a time. GLSL has no
+   strings, so a // is always a comment. */
+export function stripGlslComments(source: string): string {
+  const lines = source.replace(/\/\*[\s\S]*?\*\//g, (block) => (block.includes("\n") ? "\n" : "")).split("\n");
+  const kept: string[] = [];
+  for (const line of lines) {
+    const code = line.replace(/\/\/.*$/, "").trimEnd();
+    if (code.trim() === "" && line.trim() !== "") continue;
+    if (code === "" && kept[kept.length - 1] === "") continue;
+    kept.push(code);
+  }
+  while (kept[0] === "") kept.shift();
+  return kept.join("\n").trimEnd() + "\n";
+}
+
 /* Built-ins a theme can start from: the ones with no inputs of their own (the Note highway's notes, sprites). */
 const STARTABLE_BUILTINS = SUPPORTER_PROFILE_THEMES.filter((id) => !/\buniform\b/.test(builtinBody(id)));
 
@@ -104,7 +122,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   const [selectedLayer, setSelectedLayer] = useState<string | null>(null);
   const [toCode, setToCode] = useState(false);
   const liveGlsl = useRef<string | null>(null);
-  const [code, setCode] = useState(() => (start.from && STARTABLE_BUILTINS.includes(start.from as SupporterProfileThemeId) ? builtinBody(start.from as SupporterProfileThemeId) : CUSTOM_THEME_STARTER));
+  const [code, setCode] = useState(() => (start.from && STARTABLE_BUILTINS.includes(start.from as SupporterProfileThemeId) ? stripGlslComments(builtinBody(start.from as SupporterProfileThemeId)) : stripGlslComments(CUSTOM_THEME_STARTER)));
   const [edited, setEdited] = useState(false);
   const [name, setName] = useState("");
   const [visibility, setVisibility] = useState<CustomThemeVisibility>("private");
@@ -120,6 +138,10 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   const [compiledOk, setCompiledOk] = useState(false);
   const [format, setFormat] = useState<"theme" | "shadertoy" | null>(null);
   const [tooHeavyLive, setTooHeavyLive] = useState(false);
+  /* Bumped when the preview's context is lost (a GPU reset, or the browser
+     reclaiming it): the canvas is remade under a new key and everything that
+     drew into the old one runs again. */
+  const [glEpoch, setGlEpoch] = useState(0);
   const [cost, setCost] = useState<number | null>(null);
   const [brightness, setBrightness] = useState<number | null>(null);
   const [fps, setFps] = useState<number | null>(null);
@@ -131,6 +153,10 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   const playheadRef = useRef<HTMLDivElement>(null);
   const clockRef = useRef<HTMLSpanElement>(null);
   const [inspectorTab, setInspectorTab] = useState<"layer" | "theme">("layer");
+  /* On a phone the panels take turns under the preview instead of sitting
+     beside it: the code (or the layers), or the inspector. */
+  const narrow = useMediaQuery("(max-width: 767px)") === true;
+  const [phonePanel, setPhonePanel] = useState<"edit" | "inspect">("edit");
   const [saveOpen, setSaveOpen] = useState(false);
   const [problemsOpen, setProblemsOpen] = useState(true);
   const savedSnapshot = useRef<string | null>(null);
@@ -221,6 +247,16 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
     if (!canvas) return;
     const gl = ThemeEditorGl.create(canvas);
     glRef.current = gl;
+    /* A lost context never draws again, and with no program to time the
+       check read it as too heavy. Remade a moment later on a fresh canvas,
+       once the GPU is back. */
+    let remake: ReturnType<typeof setTimeout> | undefined;
+    const onLost = (event: Event) => {
+      event.preventDefault();
+      clearTimeout(remake);
+      remake = setTimeout(() => setGlEpoch((epoch) => epoch + 1), 500);
+    };
+    canvas.addEventListener("webglcontextlost", onLost);
     if (!gl) {
       setProblems([{ line: null, snippet: null, message: t`This browser has no WebGL2, so the preview can't run here.` }]);
       return;
@@ -258,14 +294,24 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
     frame = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(frame);
+      clearTimeout(remake);
+      canvas.removeEventListener("webglcontextlost", onLost);
       gl.dispose();
       glRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [glEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* A remade context starts with nothing compiled: the checks below run again. */
+  useEffect(() => {
+    if (glEpoch === 0) return;
+    liveGlsl.current = null;
+    setTooHeavyLive(false);
+    setCompiledOk(false);
+  }, [glEpoch]);
 
   useEffect(() => {
     glRef.current?.setAssets(assets);
-  }, [assets]);
+  }, [assets, glEpoch]);
 
   /* A layer theme: its saved code follows every change, and the preview runs
      the live variant, recompiled only when the structure changes (a slider
@@ -289,7 +335,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
     const urls = layerAssets(doc);
     setAssets((current) => (current.join("|") === urls.join("|") ? current : urls));
     setCode(layersToGlsl(doc).glsl);
-  }, [doc, mode]);
+  }, [doc, mode, glEpoch]);
 
   /* --- Checking as the author types ------------------------------------ */
 
@@ -331,7 +377,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       });
     }, CHECK_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [code, loading, mode]);
+  }, [code, loading, mode, glEpoch]);
 
   /* The cost, the brightness and a suggested tint, once the code has settled. */
   useEffect(() => {
@@ -385,7 +431,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   /* --- Actions ---------------------------------------------------------- */
 
   const startFrom = (start: "starter" | SupporterProfileThemeId) => {
-    setCode(start === "starter" ? CUSTOM_THEME_STARTER : builtinBody(start));
+    setCode(stripGlslComments(start === "starter" ? CUSTOM_THEME_STARTER : builtinBody(start)));
     setEdited(false);
     lookTouched.current = false;
   };
@@ -757,20 +803,20 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       <header className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-white/[0.07] bg-[#17131b] px-3">
         <Link to="/supporter/themes" className="flex h-8 items-center gap-1 rounded-md px-2 text-[12px] font-semibold text-osu-f1 transition-colors hover:bg-white/[0.06] hover:text-white">
           <ChevronLeft size={16} />
-          {t`Themes`}
+          <span className="hidden md:inline">{t`Themes`}</span>
         </Link>
-        <ToolDivider />
+        {narrow ? null : <ToolDivider />}
         <input
           value={name}
           onChange={(event) => setName(event.target.value.slice(0, 40))}
           placeholder={t`Untitled theme`}
           aria-label={t`Name`}
-          className="h-9 w-56 min-w-0 rounded-lg bg-transparent px-2.5 text-[14px] font-semibold text-white placeholder:text-osu-f1 hover:bg-white/[0.04] focus:bg-black/30 focus:outline-none"
+          className="h-9 min-w-0 flex-1 rounded-lg bg-transparent px-2 md:w-56 md:flex-none md:px-2.5 text-[14px] font-semibold text-white placeholder:text-osu-f1 hover:bg-white/[0.04] focus:bg-black/30 focus:outline-none"
         />
-        <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1">{mode === "layers" ? t`Layers` : format === "shadertoy" ? "Shadertoy" : t`Code`}</span>
+        <span className="hidden rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1 md:inline">{mode === "layers" ? t`Layers` : format === "shadertoy" ? "Shadertoy" : t`Code`}</span>
         <span className="ml-2 hidden text-[11.5px] text-osu-f1 md:inline">{saving ? t`Saving...` : themeId === null ? t`Not saved yet` : dirty ? t`Unsaved changes` : t`Saved`}</span>
 
-        <div className="mx-auto flex items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5 md:mx-auto">
           {mode === "layers" ? (
             <>
               <ToolButton label={t`Undo`} shortcut="Ctrl Z" onClick={history.undo} disabled={!history.canUndo}><Undo2 size={16} /></ToolButton>
@@ -778,8 +824,12 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
               <ToolDivider />
             </>
           ) : null}
-          <ToolButton label={t`Desktop`} onClick={() => setPhone(false)} active={!phone}><Monitor size={16} /></ToolButton>
-          <ToolButton label={t`Phone`} onClick={() => setPhone(true)} active={phone}><Smartphone size={16} /></ToolButton>
+          {narrow ? null : (
+            <>
+              <ToolButton label={t`Desktop`} onClick={() => setPhone(false)} active={!phone}><Monitor size={16} /></ToolButton>
+              <ToolButton label={t`Phone`} onClick={() => setPhone(true)} active={phone}><Smartphone size={16} /></ToolButton>
+            </>
+          )}
           <ToolButton label={t`Profile on top`} onClick={() => setOverlay((value) => !value)} active={overlay}><PanelsTopLeft size={16} /></ToolButton>
         </div>
 
@@ -794,16 +844,19 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
           type="button"
           onClick={requestSave}
           disabled={saving}
-          className="ml-1.5 inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink px-5 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-60"
+          className="ml-1 inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink px-4 md:ml-1.5 md:px-5 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-60"
         >
           {saving ? t`Saving...` : t`Save`}
         </button>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className={`flex min-h-0 flex-1 ${narrow ? "flex-col" : ""}`}>
         {/* Left: layers, or the code */}
-        <aside className="relative flex min-h-0 shrink-0 flex-col border-r border-white/[0.07] bg-[#15111a]" style={{ width: mode === "layers" ? leftPanel.width : codePanel.width }}>
-          <ResizeHandle side="right" {...(mode === "layers" ? leftPanel.handle : codePanel.handle)} />
+        <aside
+          className={`relative min-h-0 flex-col bg-[#15111a] ${narrow ? (phonePanel === "edit" ? "flex flex-1" : "hidden") : "flex shrink-0 border-r border-white/[0.07]"}`}
+          style={narrow ? undefined : { width: mode === "layers" ? leftPanel.width : codePanel.width }}
+        >
+          {narrow ? null : <ResizeHandle side="right" {...(mode === "layers" ? leftPanel.handle : codePanel.handle)} />}
           {mode === "layers" && doc ? (
             <LayersList
               doc={doc}
@@ -863,7 +916,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
 
         {/* Stage */}
         <main
-          className="relative min-w-0 flex-1 overflow-hidden"
+          className={`relative min-w-0 overflow-hidden ${narrow ? "order-first h-[34dvh] min-h-[190px] shrink-0" : "flex-1"}`}
           style={{ backgroundColor: "#0c0a0f", backgroundImage: "radial-gradient(rgba(255,255,255,0.055) 1px, transparent 1px)", backgroundSize: "18px 18px" }}
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) setSelectedLayer(null);
@@ -887,6 +940,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
           <StageFrame phone={phone}>
             <div className="relative h-full w-full overflow-hidden" style={{ backgroundColor: look.base }}>
               <canvas
+                key={glEpoch}
                 ref={canvasRef}
                 className="absolute inset-0 h-full w-full"
                 onPointerMove={(event) => {
@@ -912,20 +966,53 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
               <span className="rounded-lg bg-black/70 px-3 py-2 text-[13px] font-semibold text-white">{t`Drop to add it as a picture layer`}</span>
             </div>
           ) : null}
-          <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-md bg-black/50 px-2 py-1 text-[10.5px] text-osu-f1 backdrop-blur">
+          <div className="absolute bottom-3 left-3 hidden items-center gap-2 rounded-md bg-black/50 px-2 py-1 text-[10.5px] text-osu-f1 backdrop-blur md:flex">
             {phone ? t`Phone` : t`Desktop`}
             {mode === "layers" ? <><span aria-hidden className="h-3 w-px bg-white/15" />{t`Drop pictures here`}</> : null}
           </div>
-          <div className="absolute bottom-3 right-3 flex w-48 items-center gap-2 rounded-md bg-black/50 px-2.5 py-1 text-[10.5px] text-osu-f1 backdrop-blur">
+          <div className="absolute bottom-2 right-2 flex w-40 items-center gap-2 md:bottom-3 md:right-3 md:w-48 rounded-md bg-black/50 px-2.5 py-1 text-[10.5px] text-osu-f1 backdrop-blur">
             {t`Scroll`}
             <Slider value={scroll} min={0} max={3} step={0.05} onChange={setScroll} label={t`Page scroll`} small />
           </div>
         </main>
 
+        {/* On a phone: which panel sits under the preview */}
+        {narrow ? (
+          <div className="order-first flex h-10 shrink-0 items-end gap-1 border-y border-white/[0.07] bg-[#17131b] px-2">
+            {([
+              { id: "edit", label: mode === "layers" ? t`Layers` : t`Code` },
+              ...(mode === "layers" ? [{ id: "layer", label: t`Layer` }] : []),
+              { id: "theme", label: t`Theme` },
+            ] as const).map((tab) => {
+              const active = tab.id === "edit" ? phonePanel === "edit" : phonePanel === "inspect" && (mode === "code" || inspectorTab === tab.id);
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    if (tab.id === "edit") {
+                      setPhonePanel("edit");
+                      return;
+                    }
+                    setPhonePanel("inspect");
+                    setInspectorTab(tab.id as "layer" | "theme");
+                  }}
+                  className={`-mb-px h-9 flex-1 cursor-pointer border-b-2 px-2 text-[13px] font-semibold transition-colors ${active ? "border-osu-pink text-white" : "border-transparent text-osu-f1"}`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
         {/* Inspector */}
-        <aside className="relative flex shrink-0 flex-col border-l border-white/[0.07] bg-[#15111a]" style={{ width: rightPanel.width }}>
-          <ResizeHandle side="left" {...rightPanel.handle} />
-          <div className="flex h-11 shrink-0 items-end gap-1 border-b border-white/[0.07] px-3">
+        <aside
+          className={`relative flex-col bg-[#15111a] ${narrow ? (phonePanel === "inspect" ? "flex min-h-0 flex-1" : "hidden") : "flex shrink-0 border-l border-white/[0.07]"}`}
+          style={narrow ? undefined : { width: rightPanel.width }}
+        >
+          {narrow ? null : <ResizeHandle side="left" {...rightPanel.handle} />}
+          <div className={`${narrow ? "hidden" : "flex"} h-11 shrink-0 items-end gap-1 border-b border-white/[0.07] px-3`}>
             {(mode === "layers" ? (["layer", "theme"] as const) : (["theme"] as const)).map((tab) => (
               <button
                 key={tab}
@@ -946,7 +1033,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       </div>
 
       {/* Timeline */}
-      <div className="flex h-[74px] shrink-0 items-center gap-3 border-t border-white/[0.07] bg-[#17131b] px-3">
+      <div className="flex h-16 shrink-0 items-center gap-2.5 border-t border-white/[0.07] bg-[#17131b] px-2.5 md:h-[74px] md:gap-3 md:px-3">
         <button
           type="button"
           onClick={togglePlay}
@@ -956,16 +1043,16 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         >
           {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="translate-x-px" />}
         </button>
-        <div className="w-[118px] shrink-0 whitespace-nowrap font-mono text-[12px] leading-tight">
+        <div className="shrink-0 whitespace-nowrap font-mono text-[12px] leading-tight md:w-[118px]">
           <span ref={clockRef} className="text-white">{clock(moment)}</span>
           <span className="text-osu-f1"> / {clock(MOMENT_MAX)}</span>
-          <div className="mt-0.5 font-sans text-[10px] text-osu-f1">{playing ? t`Playing` : t`Paused: still frame`}</div>
+          <div className="mt-0.5 hidden font-sans text-[10px] text-osu-f1 md:block">{playing ? t`Playing` : t`Paused: still frame`}</div>
         </div>
         <Timeline frames={filmstrip} moment={moment} playheadRef={playheadRef} onSeek={seek} />
       </div>
 
       {/* Status */}
-      <footer className="flex h-8 shrink-0 items-center gap-4 border-t border-white/[0.07] bg-[#120f15] px-4 text-[11.5px] text-osu-f1">
+      <footer className="flex h-8 shrink-0 items-center gap-4 overflow-x-auto whitespace-nowrap border-t border-white/[0.07] bg-[#120f15] px-3 text-[11.5px] text-osu-f1 [scrollbar-width:none] md:px-4">
         {mode === "code" ? (
           <>
             <button
