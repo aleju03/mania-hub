@@ -1270,7 +1270,17 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   vec3 warm = hash(vec2(li, 5.)) > .5 ? vec3(1., .34, .16) : vec3(1., .62, .24);
   float flicker = .88 + .08 * sin(t * 2. + li) + .04 * sin(t * 9.3 + li * 3.);
   col = col * (1. - lantern.a) + lantern.rgb * warm * flicker * 1.15;
-  col += warm * exp(-length(q - (hook + rot(-sin(t * 1.3 + li) * .08) * vec2(0., -H * .42))) * 18.) * .22 * flicker;
+  // each lantern's glow, from its own neighbours too, so it never ends at a cell's edge
+  for (int k = -1; k <= 1; k++) {
+    float lk = li + float(k);
+    float gx = lk * spacing;
+    vec2 gHook = vec2(gx, .46 - .03 * (1. - pow(gx / halfW, 2.)) + .004);
+    vec2 centre = gHook + rot(-sin(t * 1.3 + lk) * .08) * vec2(0., -H * .42);
+    float d = length(q - centre);
+    vec3 gWarm = hash(vec2(lk, 5.)) > .5 ? vec3(1., .34, .16) : vec3(1., .62, .24);
+    float gFlicker = .88 + .08 * sin(t * 2. + lk) + .04 * sin(t * 9.3 + lk * 3.);
+    col += gWarm * exp(-d * 18.) * smoothstep(.22, .04, d) * .22 * gFlicker;
+  }
   return col;
 }`),
 
