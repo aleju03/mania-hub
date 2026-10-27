@@ -70,6 +70,8 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const REEL_TICK_MS = 70;
 const REEL_FIRST_STOP_MS = 520;
 const REEL_STOP_GAP_MS = 190;
+/* How long a preview outlasts the pointer leaving its tile. */
+const HOVER_END_MS = 90;
 
 export const Route = createFileRoute("/supporter")({
   head: ({ match }) => {
@@ -365,7 +367,25 @@ function SupporterPage() {
      does not re-render every tile in it. */
   const latest = useRef({ pick, upload, editCustom, setThemeOptions });
   latest.current = { pick, upload, editCustom, setThemeOptions };
-  const onTry = useCallback((slot: SlotId, value: SlotValue | undefined) => setHover(value === undefined ? null : { slot, value }), []);
+  /* Leaving a tile waits a moment before the preview goes back, so crossing
+     the gap to the next tile swaps straight to it instead of flashing what's
+     equipped in between. */
+  const hoverEnd = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (hoverEnd.current) clearTimeout(hoverEnd.current);
+  }, []);
+  const onTry = useCallback((slot: SlotId, value: SlotValue | undefined) => {
+    if (hoverEnd.current) clearTimeout(hoverEnd.current);
+    hoverEnd.current = null;
+    if (value !== undefined) {
+      setHover({ slot, value });
+      return;
+    }
+    hoverEnd.current = setTimeout(() => {
+      hoverEnd.current = null;
+      setHover(null);
+    }, HOVER_END_MS);
+  }, []);
   const onPick = useCallback((slot: SlotId, value: SlotValue) => latest.current.pick(slot, value), []);
   const onUpload = useCallback((file: File) => void latest.current.upload(file), []);
   const onEditCustom = useCallback(() => latest.current.editCustom(), []);
