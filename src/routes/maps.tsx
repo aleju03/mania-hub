@@ -177,6 +177,8 @@ type MapsSearch = {
   sStarMax: number;
   sBpmMin: number;
   sBpmMax: number;
+  sOdMin: number;
+  sOdMax: number;
   sLenMin: number;
   sLenMax: number;
   sLnMin: number;
@@ -286,6 +288,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sStarMax: 0,
   sBpmMin: 0,
   sBpmMax: 0,
+  sOdMin: 0,
+  sOdMax: 0,
   sLenMin: 0,
   sLenMax: 0,
   sLnMin: 0,
@@ -756,6 +760,8 @@ export const Route = createFileRoute("/maps")({
     sStarMax: clampSearchNumber(search.sStarMax, 0, 20),
     sBpmMin: clampSearchNumber(search.sBpmMin, 0, 2000),
     sBpmMax: clampSearchNumber(search.sBpmMax, 0, 2000),
+    sOdMin: clampSearchNumber(search.sOdMin, 0, 10),
+    sOdMax: clampSearchNumber(search.sOdMax, 0, 10),
     sLenMin: clampSearchNumber(search.sLenMin, 0, 100000),
     sLenMax: clampSearchNumber(search.sLenMax, 0, 100000),
     sLnMin: clampSearchNumber(search.sLnMin, 0, 100),
@@ -1173,6 +1179,8 @@ function MapsPage() {
       starMax: mapsSearch.sStarMax,
       bpmMin: mapsSearch.sBpmMin,
       bpmMax: mapsSearch.sBpmMax,
+      odMin: mapsSearch.sOdMin,
+      odMax: mapsSearch.sOdMax,
       lenMin: mapsSearch.sLenMin,
       lenMax: mapsSearch.sLenMax,
       lnMin: mapsSearch.sLnMin,
@@ -1218,6 +1226,8 @@ function MapsPage() {
     if (patch.starMax !== undefined) next.sStarMax = patch.starMax;
     if (patch.bpmMin !== undefined) next.sBpmMin = patch.bpmMin;
     if (patch.bpmMax !== undefined) next.sBpmMax = patch.bpmMax;
+    if (patch.odMin !== undefined) next.sOdMin = patch.odMin;
+    if (patch.odMax !== undefined) next.sOdMax = patch.odMax;
     if (patch.lenMin !== undefined) next.sLenMin = patch.lenMin;
     if (patch.lenMax !== undefined) next.sLenMax = patch.lenMax;
     if (patch.lnMin !== undefined) next.sLnMin = patch.lnMin;

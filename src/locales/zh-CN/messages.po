@@ -12574,6 +12574,7 @@ msgid "October 9, 2026"
 msgstr "2026年10月9日"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "OD"
@@ -20331,6 +20332,10 @@ msgstr "输入区间：3.6-6.7、5+、<4"
 #: src/components/maps/LnSharePill.tsx
 msgid "Type a range: 40-60, 50+, <30"
 msgstr "输入区间：40-60、50+、<30"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Type a range: 8-9, 8.5+, <7"
+msgstr "输入区间：8-9、8.5+、<7"
 
 #. placeholder {0}: activity.typicalSession
 #: src/components/player/ActivityPanel.tsx

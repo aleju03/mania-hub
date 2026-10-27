@@ -46,6 +46,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-26", text: "Added an OD filter to map search.", to: "/maps" },
   { date: "2026-10-26", text: "Added a Percy filter to skins.", to: "/skins" },
   { date: "2026-10-26", text: "Fixed notes and LN ends in skin previews and replays not matching how they look in game for some skins." },
   { date: "2026-10-24", text: "Added a Grade filter to Best Performance and Skills plays." },

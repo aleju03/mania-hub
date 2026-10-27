@@ -87,6 +87,9 @@ export interface MapSearchUiState {
   starMax: number;
   bpmMin: number;
   bpmMax: number;
+  // Overall difficulty, 0-10; 0/0 means any.
+  odMin: number;
+  odMax: number;
   lenMin: number;
   lenMax: number;
   // Hold share of the chart's objects, in percent; 0/0 means any.
@@ -153,7 +156,7 @@ function stateKey(s: MapSearchUiState): string {
     [...s.skillsExclude].sort(),
     s.vibro,
     serializeMsdRanges(s.msd),
-    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax, s.danMinStep, s.danMaxStep, s.danKeys, s.danLn,
+    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.odMin, s.odMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax, s.danMinStep, s.danMaxStep, s.danKeys, s.danLn,
     s.sort, s.dir, s.page,
   ]);
 }
@@ -313,9 +316,9 @@ function FilterHeading({ children }: { children: ReactNode }) {
   return <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{children}</span>;
 }
 
-// BPM and length share one neutral skin: faint at the low end, full at the top.
-function plainSkin(hi: number, overrides: Pick<RangePillSkin, "format" | "valueText" | "bucket" | "decorations" | "placeholder" | "typeHint"> & Partial<RangePillSkin>): RangePillSkin {
-  const color = OVERALL_AXIS_META.color;
+// BPM, length and OD share one skin in their own hue: faint at the low end,
+// full at the top.
+function plainSkin(hi: number, color: string, overrides: Pick<RangePillSkin, "format" | "valueText" | "bucket" | "decorations" | "placeholder" | "typeHint"> & Partial<RangePillSkin>): RangePillSkin {
   const share = (value: number) => Math.round(25 + (Math.max(0, Math.min(hi, value)) / hi) * 60);
   return {
     gradient: (from, to) =>
@@ -327,6 +330,9 @@ function plainSkin(hi: number, overrides: Pick<RangePillSkin, "format" | "valueT
 }
 
 const BPM_MAX = 400;
+const BPM_COLOR = "#ff8f6b";
+const LENGTH_COLOR = "#6cc4ff";
+const OD_COLOR = "#c49bff";
 const LENGTH_MAX = 600;
 
 // "2:30" is minutes and seconds, a bare number is minutes.
@@ -338,7 +344,7 @@ function parseLength(text: string): number | null {
 
 function BpmSlider({ ui, apply, heading }: { ui: MapSearchUiState; apply: ApplyFn; heading?: ReactNode }) {
   const { t } = useLingui();
-  const skin = plainSkin(BPM_MAX, {
+  const skin = plainSkin(BPM_MAX, BPM_COLOR, {
     format: (v) => String(Math.round(v)),
     valueText: (v) => `${Math.round(v)} BPM`,
     bucket: 10,
@@ -351,9 +357,24 @@ function BpmSlider({ ui, apply, heading }: { ui: MapSearchUiState; apply: ApplyF
   );
 }
 
+function OdSlider({ ui, apply, heading }: { ui: MapSearchUiState; apply: ApplyFn; heading?: ReactNode }) {
+  const { t } = useLingui();
+  const skin = plainSkin(10, OD_COLOR, {
+    format: (v) => String(Math.round(v * 10) / 10),
+    valueText: (v) => `OD ${Math.round(v * 10) / 10}`,
+    bucket: 1,
+    decorations: /od/gi,
+    placeholder: "8-9",
+    typeHint: t`Type a range: 8-9, 8.5+, <7`,
+  });
+  return (
+    <RangePill lo={0} hi={10} min={ui.odMin} max={ui.odMax} step={0.1} ariaLabel={t`OD`} skin={skin} heading={heading} onChange={(min, max) => apply({ odMin: min, odMax: max, page: 0 })} />
+  );
+}
+
 function LengthSlider({ ui, apply, heading }: { ui: MapSearchUiState; apply: ApplyFn; heading?: ReactNode }) {
   const { t } = useLingui();
-  const skin = plainSkin(LENGTH_MAX, {
+  const skin = plainSkin(LENGTH_MAX, LENGTH_COLOR, {
     format: formatDuration,
     valueText: formatDuration,
     bucket: 60,
@@ -1501,9 +1522,7 @@ function MobileFilterSheet({
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
           <KeysChips ui={ui} apply={apply} inline />
           <StatusChips ui={ui} apply={apply} />
-          <ChipGroup label={t`Difficulty`}>
-            <StarSlider ui={ui} apply={apply} />
-          </ChipGroup>
+          <StarSlider ui={ui} apply={apply} heading={<FilterHeading>{t`Difficulty`}</FilterHeading>} />
           {showDan ? (
             <ChipGroup label={t`Dan (est.)`}>
               <DanPicker ui={ui} apply={apply} inline />
@@ -1512,12 +1531,9 @@ function MobileFilterSheet({
           <ChipGroup label={t`MSD`}>
             <MsdPanel ui={ui} apply={apply} />
           </ChipGroup>
-          <ChipGroup label={t`BPM`}>
-            <BpmSlider ui={ui} apply={apply} />
-          </ChipGroup>
-          <ChipGroup label={t`Length`}>
-            <LengthSlider ui={ui} apply={apply} />
-          </ChipGroup>
+          <BpmSlider ui={ui} apply={apply} heading={<FilterHeading>{t`BPM`}</FilterHeading>} />
+          <LengthSlider ui={ui} apply={apply} heading={<FilterHeading>{t`Length`}</FilterHeading>} />
+          <OdSlider ui={ui} apply={apply} heading={<FilterHeading>{t`OD`}</FilterHeading>} />
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-osu-b3/20 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <button
@@ -1718,6 +1734,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       starMax: ui.starMax > 0 ? ui.starMax : null,
       bpmMin: ui.bpmMin > 0 ? ui.bpmMin : null,
       bpmMax: ui.bpmMax > 0 ? ui.bpmMax : null,
+      odMin: ui.odMin > 0 ? ui.odMin : null,
+      odMax: ui.odMax > 0 ? ui.odMax : null,
       lenMin: ui.lenMin > 0 ? ui.lenMin : null,
       lenMax: ui.lenMax > 0 ? ui.lenMax : null,
       lnMin: ui.lnMin > 0 ? ui.lnMin : null,
@@ -1790,6 +1808,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     activeMsdKeys(ui.msd).length > 0 ||
     ui.starMin > 0 || ui.starMax > 0 ||
     ui.bpmMin > 0 || ui.bpmMax > 0 ||
+    ui.odMin > 0 || ui.odMax > 0 ||
     ui.lenMin > 0 || ui.lenMax > 0 ||
     ui.lnMin > 0 || ui.lnMax > 0 ||
     (!noDans && (ui.danMin != null || ui.danMax != null));
@@ -1801,6 +1820,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     ui.statuses.length + ui.statusesExclude.length +
     (ui.starMin > 0 || ui.starMax > 0 ? 1 : 0) +
     (ui.bpmMin > 0 || ui.bpmMax > 0 ? 1 : 0) +
+    (ui.odMin > 0 || ui.odMax > 0 ? 1 : 0) +
     (ui.lenMin > 0 || ui.lenMax > 0 ? 1 : 0) +
     (!noDans && (ui.danMin != null || ui.danMax != null) ? 1 : 0) +
     activeMsdKeys(ui.msd).length;
@@ -1816,7 +1836,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     apply({
       q: "", keys: [], keysExclude: [], statuses: [], statusesExclude: [], patterns: [], patternsExclude: [],
       skills: [], skillsExclude: [], msd: {},
-      starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, lenMin: 0, lenMax: 0, lnMin: 0, lnMax: 0,
+      starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, odMin: 0, odMax: 0, lenMin: 0, lenMax: 0, lnMin: 0, lnMax: 0,
       danMin: null, danMax: null, danMinStep: null, danMaxStep: null, danKeys: null, danLn: null,
       page: 0,
     });
@@ -1862,8 +1882,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
         </div>
 
         {/* One grid from 1140px: the first column fits the skillset and status
-            chips, the other three split the rest, so keymode sits over stars,
-            dan over BPM and MSD over length. Narrower, the cells wrap. */}
+            chips, the other three split the rest between keymode, dan and MSD,
+            with the four sliders below them. Narrower, the cells wrap. */}
         <div className="flex flex-wrap items-start gap-x-8 gap-y-4 min-[1140px]:grid min-[1140px]:grid-cols-[auto_repeat(3,minmax(0,1fr))]">
           {/* Skill: the headline filter, the dan tiles plus LN and the finer patterns */}
           <div className="flex flex-col gap-2">
@@ -1929,7 +1949,9 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           <div className="hidden sm:block">
             <StatusChips ui={ui} apply={apply} />
           </div>
-          <div className="hidden basis-full gap-x-8 sm:max-[1139px]:flex min-[1140px]:contents">
+          {/* On the grid the four sliders share the three columns right of
+              status, so they stay on one row. */}
+          <div className="hidden basis-full gap-x-8 sm:max-[1139px]:flex min-[1140px]:col-span-3 min-[1140px]:grid min-[1140px]:grid-cols-4">
             <div className="min-w-0 flex-1">
               <StarSlider ui={ui} apply={apply} heading={<FilterHeading>{t`Difficulty`}</FilterHeading>} />
             </div>
@@ -1938,6 +1960,9 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
             </div>
             <div className="min-w-0 flex-1">
               <LengthSlider ui={ui} apply={apply} heading={<FilterHeading>{t`Length`}</FilterHeading>} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <OdSlider ui={ui} apply={apply} heading={<FilterHeading>{t`OD`}</FilterHeading>} />
             </div>
           </div>
         </div>

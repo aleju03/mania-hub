@@ -3197,6 +3197,8 @@ export interface LiveMapSearchParams {
   starMax: number | null;
   bpmMin: number | null;
   bpmMax: number | null;
+  odMin?: number | null;
+  odMax?: number | null;
   lenMin: number | null;
   lenMax: number | null;
   danMin: number | null;
@@ -3275,6 +3277,8 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.starMax != null) query.set("starMax", String(params.starMax));
   if (params.bpmMin != null) query.set("bpmMin", String(params.bpmMin));
   if (params.bpmMax != null) query.set("bpmMax", String(params.bpmMax));
+  if (params.odMin != null) query.set("odMin", String(params.odMin));
+  if (params.odMax != null) query.set("odMax", String(params.odMax));
   if (params.lenMin != null) query.set("lenMin", String(params.lenMin));
   if (params.lenMax != null) query.set("lenMax", String(params.lenMax));
   if (params.danMin != null) query.set("danMin", String(params.danMin));

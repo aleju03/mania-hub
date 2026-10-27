@@ -47,6 +47,8 @@ const DEFAULT_STATE: MapSearchUiState = {
   starMax: 0,
   bpmMin: 0,
   bpmMax: 0,
+  odMin: 0,
+  odMax: 0,
   lenMin: 0,
   lenMax: 0,
   lnMin: 0,
