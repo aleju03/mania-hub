@@ -485,6 +485,11 @@ msgstr "{0} 张重复"
 msgid "{0} each"
 msgstr "每个 {0}"
 
+#. placeholder {0}: problems.length
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "{0} errors"
+msgstr ""
+
 #. placeholder {0}: eternalFinale.username
 #: src/components/packs/RevealStage.tsx
 msgid "{0} Eternal maniacard"
@@ -802,6 +807,11 @@ msgstr "{0} 名有评分的玩家"
 msgid "{0} re-rendered"
 msgstr "重新渲染 {0} 个"
 
+#. placeholder {0}: original.name
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "{0} remix"
+msgstr ""
+
 #. placeholder {0}: formatNumber(trackerWindowCount)
 #: src/routes/tracker.tsx
 msgid "{0} scores"
@@ -860,6 +870,12 @@ msgstr "{0} 名被追踪玩家"
 #: src/components/packs/GoatPollVoters.tsx
 msgid "{0} up · {1} down"
 msgstr "{0} 赞成 · {1} 反对"
+
+#. placeholder {0}: theme.wearers
+#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/supporter_.themes.index.tsx
+msgid "{0} wearing it"
+msgstr ""
 
 #. placeholder {0}: playerPeakMember.username
 #. placeholder {1}: formatDate(playerPeak.updated_at, "UTC", locale)
@@ -1010,6 +1026,11 @@ msgstr "{0}K 技能评分"
 #: src/routes/player/$username.tsx
 msgid "{0}pp spread"
 msgstr "相差 {0}pp"
+
+#. placeholder {0}: cost.toFixed(2)
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "{0}x the heaviest built-in"
+msgstr ""
 
 #: src/lib/goal-format.ts
 msgid "{acc}% {speed} on {map}"
@@ -2212,6 +2233,10 @@ msgstr "$3 即一个月"
 msgid "0h"
 msgstr "0 小时"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "1 error"
+msgstr ""
+
 #: src/components/packs/CardSpotlight.tsx
 msgid "1 other"
 msgstr "另一人"
@@ -2235,6 +2260,11 @@ msgstr "每张谱面 1 个倍速"
 #: src/routes/report.tsx
 msgid "1 screenshot"
 msgstr "1 张截图"
+
+#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/supporter_.themes.index.tsx
+msgid "1 wearing it"
+msgstr ""
 
 #: src/routes/news_.prism.tsx
 msgid "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
@@ -2798,6 +2828,10 @@ msgstr "显示玩家正在游玩谱面的个人资料"
 msgid "A rating is not supported for this chart or mod combination."
 msgstr "此谱面或模组组合暂不支持评级。"
 
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "a remix"
+msgstr ""
+
 #: src/lib/chain-run.ts
 #~ msgid "A row of 4 cards or fewer scores x3."
 #~ msgstr "不超过 4 张卡片的一排 x3。"
@@ -2905,6 +2939,11 @@ msgstr "A-Z"
 msgid "About"
 msgstr "关于"
 
+#. placeholder {0}: cost.toFixed(1)
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "About {0}x the limit: fewer fbm octaves or loop iterations would help."
+msgstr ""
+
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/rankings.tsx
@@ -3004,6 +3043,10 @@ msgstr "达成于 {0}"
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Achieved PP"
 msgstr "获得 PP"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Across"
+#~ msgstr ""
 
 #. placeholder {0}: profileInsights.sampleSize
 #: src/components/player/InsightModals.tsx
@@ -3125,6 +3168,10 @@ msgstr "添加这个谱面集的所有难度"
 #: src/routes/player/$username.tsx
 msgid "Add failed or otherwise missed plays from osu!'s latest recent history."
 msgstr "从 osu! 最近成绩里补上失败或漏掉的记录。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Add image"
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add link…"
@@ -3926,9 +3973,17 @@ msgstr "返回皮肤"
 msgid "Back to the picker"
 msgstr "返回选择界面"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Back to the theme"
+#~ msgstr ""
+
 #: src/components/player/ProfileStatCards.tsx
 msgid "Back to the usual four"
 msgstr "恢复默认四项"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Back to your themes"
+msgstr ""
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "backdrop"
@@ -3983,6 +4038,14 @@ msgstr "横幅"
 msgid "Banner in lists"
 msgstr "列表横幅"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Banner row"
+msgstr ""
+
+#: src/components/supporter/themes/RowFramer.tsx
+msgid "Banner row framing"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bar colors"
 msgstr "条形音符颜色"
@@ -4002,8 +4065,13 @@ msgid "Bars"
 msgstr "条形"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Base"
 msgstr "基础分"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Base colour"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Base LN head color used for any column without a per-column override."
@@ -4413,6 +4481,10 @@ msgstr "明亮"
 msgid "Bright idea"
 msgstr "好主意"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "brightness"
+msgstr ""
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Brightness"
 msgstr "亮度"
@@ -4510,7 +4582,10 @@ msgid "Buy"
 msgstr "购买"
 
 #. placeholder {0}: by.username || by.id
+#. placeholder {0}: summary.author.username
+#. placeholder {0}: theme.author.username
 #: src/components/supporter/SupporterExtras.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "by {0}"
 msgstr "来自 {0}"
 
@@ -4550,7 +4625,9 @@ msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/CustomThemeCredit.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/report.tsx
+#: src/routes/supporter_.themes.index.tsx
 msgid "Cancel"
 msgstr "取消"
 
@@ -5010,6 +5087,10 @@ msgstr "正在检查难度"
 msgid "Checking with Discord"
 msgstr "正在向 Discord 核对"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Checking..."
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Chinese"
 msgstr "中文"
@@ -5382,6 +5463,7 @@ msgstr "找不到片段"
 #: src/components/ui/ImageLightbox.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/skins.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "Close"
 msgstr "关闭"
 
@@ -5814,6 +5896,8 @@ msgstr "把打击转成音符"
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ShareClipButton.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter_.themes.spec.tsx
 msgid "Copied"
 msgstr "已复制"
 
@@ -5872,6 +5956,10 @@ msgstr "复制 BBCode"
 msgid "Copy code"
 msgstr "复制代码"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Copy errors"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copy formatting"
 msgstr "复制格式"
@@ -5894,6 +5982,14 @@ msgstr "复制链接地址"
 msgid "Copy share code"
 msgstr "复制分享码"
 
+#: src/routes/supporter_.themes.spec.tsx
+msgid "Copy the spec"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Copy the theme spec"
+msgstr ""
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Copy URL"
 msgstr "复制链接"
@@ -5901,6 +5997,10 @@ msgstr "复制链接"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copying BBCode..."
 msgstr "正在复制 BBCode…"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "cost"
+msgstr ""
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not check that invite. Try again."
@@ -6033,6 +6133,10 @@ msgstr "无法移除这条收录。"
 msgid "Could not rename that connection."
 msgstr "无法重命名该连接。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Could not render the theme."
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not resize the image."
 msgstr "无法调整图片尺寸。"
@@ -6053,6 +6157,10 @@ msgstr "无法保存。"
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "保存失败，请再试一次。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Could not save the theme."
+msgstr ""
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Could not search collectors. Try again."
@@ -6082,6 +6190,7 @@ msgstr "提交失败，请再试一次。"
 msgid "Could not upload that file."
 msgstr "无法上传该文件。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
 msgid "Could not upload that image."
 msgstr "无法上传这张图片。"
@@ -6447,6 +6556,10 @@ msgstr "计入"
 msgid "credited by accuracy against a 96% bar"
 msgstr "按准确率对照 96% 通过线计分"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Credits (optional): artists, shaders it builds on"
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
 msgstr "克罗地亚语"
@@ -6538,6 +6651,18 @@ msgstr "自定义媒体"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Custom skin"
 msgstr "自定义皮肤"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Custom themes are switched off for now, so saving is too."
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Custom themes are switched off for now: profiles show their stills, and saving waits."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Custom themes are switched off for now."
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Customize"
@@ -6771,8 +6896,14 @@ msgstr "延迟"
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/supporter_.themes.index.tsx
 msgid "Delete"
 msgstr "删除"
+
+#. placeholder {0}: deleting.name
+#: src/routes/supporter_.themes.index.tsx
+msgid "Delete {0}?"
+msgstr ""
 
 #: src/routes/replay_.uploads.tsx
 msgid "Delete {rowTitle} from your uploads"
@@ -6870,6 +7001,10 @@ msgstr "简介 <0>(可选)</0>"
 #: src/components/packs/PackSummary.tsx
 msgid "Deselect {0}"
 msgstr "取消选择 {0}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Desktop"
+msgstr ""
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Detected in the .osk"
@@ -7046,6 +7181,10 @@ msgstr "把轨道翻倍，分成两个舞台。"
 msgid "Doubles the combo before it scores."
 msgstr "计分前将连击翻倍。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Down"
+#~ msgstr ""
+
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Download"
@@ -7123,9 +7262,17 @@ msgstr "草稿会自动保存在本地"
 msgid "Drag a page or swipe to flip"
 msgstr "拖动书页或滑动来翻页"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Drag along it to see each moment in the preview."
+msgstr ""
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag an .osr here, or click to browse"
 msgstr "把 .osr 拖到这里，或点击选择文件"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Drag the box to move it, scroll over it to zoom."
+msgstr ""
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag the map's .osz here, or click to browse"
@@ -7394,6 +7541,7 @@ msgstr "回声"
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
+#: src/routes/supporter_.themes.index.tsx
 msgid "Edit"
 msgstr "编辑"
 
@@ -7793,6 +7941,10 @@ msgstr "看你回放的人都会看到这套皮肤。"
 msgid "everything"
 msgstr "全部"
 
+#: src/routes/supporter_.themes.spec.tsx
+msgid "Everything a theme's code gets and has to follow."
+msgstr ""
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "压缩包里的其他所有文件"
@@ -7929,6 +8081,14 @@ msgstr "彩灯串"
 #: src/lib/signature-style.ts
 msgid "Falling notes"
 msgstr "下落音符"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "far over the limit"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Far over the limit. Cut loop turns and fbm octaves a lot."
+msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Farm map alert"
@@ -8370,6 +8530,10 @@ msgstr "五个连续的稀有度。"
 msgid "Five-star pull"
 msgstr "五星抽卡"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Fix the code's errors first."
+msgstr ""
+
 #: src/routes/report.tsx
 msgid "fixed"
 msgstr "已修复"
@@ -8462,6 +8626,10 @@ msgstr "四张卡片来自同一国家/地区。"
 #: src/lib/pack-run.ts
 msgid "Four Keys"
 msgstr "四键"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "fps here"
+msgstr ""
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "frames"
@@ -8650,6 +8818,7 @@ msgid "Galaxy"
 msgstr "银河"
 
 #: src/lib/pack-run.ts
+#: src/routes/supporter_.themes.index.tsx
 msgid "Gallery"
 msgstr "画廊"
 
@@ -8722,6 +8891,10 @@ msgstr "于 {dateText} 由 {giverLink} 赠送"
 #: src/components/packs/GiftInbox.tsx
 msgid "Gifts ({0})"
 msgstr "礼物（{0}）"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Give it a name."
+msgstr ""
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Give the collection a title."
@@ -9500,6 +9673,10 @@ msgstr "推荐是如何生成的"
 msgid "How to pick"
 msgstr "抽取方式"
 
+#: src/routes/supporter_.themes.spec.tsx
+msgid "How to write the code for your own profile theme."
+msgstr ""
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "How your packs open: the slash you cut them with, its sparks and its sound, and what the pack does as it gives."
 msgstr "你的卡包怎么开：划开它的刀光、火花和声音，以及卡包裂开时的效果。"
@@ -9540,6 +9717,10 @@ msgstr "填入 https://... 会把图片包成链接"
 msgid "HUD"
 msgstr "HUD"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Hue"
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Hungarian"
 msgstr "匈牙利语"
@@ -9557,6 +9738,18 @@ msgstr "混合"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Hybrid chart: {0}, {1}"
 msgstr "混合谱面：{0}，{1}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "I have the right to share this code and these images."
+#~ msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "I understand"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "I understand I'm responsible for what I put in my themes, and that one breaking the <0>Terms</0> can be taken down."
+msgstr ""
 
 #: src/components/supporter/loadout.ts
 msgid "Ice fairy"
@@ -9640,6 +9833,14 @@ msgstr "Imagemap (带可点击区域的图片)"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Imagemap area {0}/{1}"
 msgstr "Imagemap 区域 {0}/{1}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "images"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Images"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Images from {sourceName}"
@@ -9739,6 +9940,11 @@ msgstr "在第 {0} 格"
 #: src/components/player/LivePresence.tsx
 msgid "In song select"
 msgstr "选歌中"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter_.themes.index.tsx
+msgid "In the gallery"
+msgstr ""
 
 #: src/components/player/LivePresence.tsx
 msgid "In the main menu"
@@ -9881,6 +10087,18 @@ msgstr "邀请链接"
 msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 msgstr "{hidden} 最早的最佳成绩比 {shown} 更早还是更晚？"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "It crashed on several visitors' devices, so it shows its still until it's looked at."
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "It leaves your list and your profile."
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "It leaves your list, your profile and the gallery. Anyone already wearing it keeps it."
+msgstr ""
+
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
 msgstr "可能已被上传者删除。"
@@ -9912,6 +10130,14 @@ msgstr "未经许可使用了我的作品"
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
 msgstr "已经在你的收藏里了。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It's heavier than the limit."
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "It's on your profile now."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Italian"
@@ -10063,6 +10289,11 @@ msgstr "对拍"
 #: src/routes/legal.tsx
 msgid "June 16, 2026"
 msgstr "2026年6月16日"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter_.themes.index.tsx
+msgid "Just me"
+msgstr ""
 
 #: src/lib/format.ts
 msgid "just now"
@@ -10579,6 +10810,11 @@ msgstr "柠檬绿"
 msgid "Limitations"
 msgstr "限制"
 
+#. placeholder {0}: problem.line
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "line {0}"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayCustomMediaControls.tsx
 #: src/routes/bbcode.tsx
@@ -10997,10 +11233,13 @@ msgstr "加载中…"
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/settings/LazySettingsPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 #: src/routes/snipes.tsx
+#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/supporter_.themes.index.tsx
 msgid "Loading..."
 msgstr "加载中..."
 
@@ -11222,6 +11461,10 @@ msgstr "设为 {OSU_PROFILE_COLUMN_WIDTH}px 宽，正好是 osu! 个人资料栏
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one."
 msgstr "尽量用永久邀请：临时邀请一到期，你的服务器就会被隐藏，直到你贴上新的链接。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Make your own"
+msgstr ""
 
 #. placeholder {0}: i18n._(variant.text)
 #: src/lib/chain-run.ts
@@ -11613,6 +11856,10 @@ msgstr "猫猫 Maxwell"
 msgid "Mean"
 msgstr "平均偏差"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "measuring"
+msgstr ""
+
 #: src/lib/pack-run.ts
 msgid "Medal Hunter"
 msgstr "奖章猎人"
@@ -11821,6 +12068,10 @@ msgstr "妹红 fumo"
 msgid "Molten gold"
 msgstr "熔金"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Moment"
+msgstr ""
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Mon"
 msgstr "一"
@@ -11962,6 +12213,10 @@ msgstr "最多不重复卡牌"
 msgid "Most Used Mod"
 msgstr "最常用 Mod"
 
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Most worn"
+msgstr ""
+
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Move {name} left"
 msgstr "将 {name} 向左移动"
@@ -12094,6 +12349,7 @@ msgid "name"
 msgstr "名称"
 
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Name"
 msgstr "名称"
 
@@ -12275,6 +12531,10 @@ msgstr "新成绩会通过此连接实时推送。"
 msgid "New set"
 msgstr "新建卡组"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "New theme"
+msgstr ""
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "New top plays will show up here as players set them."
 msgstr "玩家打出新的顶级成绩后会显示在这里。"
@@ -12303,6 +12563,7 @@ msgstr "最新"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/player/FeaturedPlays.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "Newest"
 msgstr "最新"
 
@@ -12576,6 +12837,10 @@ msgstr "无数据"
 #: src/components/player/ProfileParts.tsx
 msgid "No data"
 msgstr "无数据"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "No errors."
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "No favourites found for any player in the top 50."
@@ -12971,6 +13236,10 @@ msgstr "没有与“{query}”匹配的战队。"
 msgid "No teams yet."
 msgstr "还没有战队。"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "No themes yet."
+msgstr ""
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "No top plays found"
 msgstr "未找到最佳成绩"
@@ -13054,6 +13323,10 @@ msgstr "还没有人挑选卡片，你可以是第一个。"
 #: src/components/packs/CardCollectors.tsx
 msgid "Nobody has pulled your card yet."
 msgstr "还没有人抽到你的卡片。"
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Nobody has shared a theme yet."
+msgstr ""
 
 #: src/routes/replay_.community.tsx
 msgid "Nobody has uploaded a replay yet."
@@ -13783,6 +14056,10 @@ msgstr "榜上只有本站追踪到的成绩。"
 msgid "Only skillboost maps right now"
 msgstr "当前只有提升技能的谱面"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Only supporters can save themes. Everything here works as a preview."
+msgstr ""
+
 #. placeholder {0}: B.keyThree.cards
 #: src/lib/pack-run.ts
 msgid "Only the first {0} cards score."
@@ -13800,6 +14077,10 @@ msgstr "仅你可见"
 #: src/routes/skins.tsx
 msgid "only you can open these"
 msgstr "只有你能打开这些"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Only you can wear it."
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Only your best rate play on the same chart counts per ladder, rate reuploads included."
@@ -14007,6 +14288,14 @@ msgstr "开包特效"
 msgid "optional"
 msgstr "选填"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "or"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "or paste a Shadertoy shader as it is"
+msgstr ""
+
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Or pay with Google. Sign in first so it counts toward your account."
 msgstr "也可以用 Google 支付。请先登录，这样才会计入你的账号。"
@@ -14160,6 +14449,10 @@ msgstr "其他护符按原价出售。"
 #: src/routes/dan-estimates.tsx
 msgid "Other rules"
 msgstr "其他规则"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Other supporters can wear it and remix its code."
+msgstr ""
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -14433,6 +14726,10 @@ msgstr "粘贴格式"
 msgid "Paste it in Discord to play the clip in chat. The link works for {SHARED_CLIP_TTL_HOURS} hours."
 msgstr "粘贴到 Discord 即可在聊天中播放。链接有效期为 {SHARED_CLIP_TTL_HOURS} 小时。"
 
+#: src/routes/supporter_.themes.spec.tsx
+#~ msgid "Paste it into a chat with an AI, then ask for the theme you want."
+#~ msgstr ""
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Paste it once. It redraws when your stats change."
 msgstr "贴一次就好，数据一变它自己重画。"
@@ -14440,6 +14737,10 @@ msgstr "贴一次就好，数据一变它自己重画。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Paste share code"
 msgstr "粘贴分享码"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Paste them into the chat that wrote the code."
+#~ msgstr ""
 
 #: src/routes/report.tsx
 msgid "Paste, drop or pick a screenshot."
@@ -14599,6 +14900,10 @@ msgstr "表现分排名"
 msgid "Persian"
 msgstr "波斯语"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Phone"
+msgstr ""
+
 #. placeholder {0}: need - selected.length
 #: src/components/packs/run/chain/ChainPackStage.tsx
 msgid "Pick {0}"
@@ -14643,6 +14948,10 @@ msgstr "换一个文件"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Pick both a .osr and the .osu it was played on."
 msgstr "请同时选择 .osr 文件和对应游玩的 .osu 文件。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Pick from the theme"
+msgstr ""
 
 #: src/lib/pack-run.ts
 msgid "Pick one of two common charms."
@@ -15385,6 +15694,10 @@ msgstr "个人资料横幅"
 msgid "Profile link"
 msgstr "主页链接"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Profile on top"
+msgstr ""
+
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/supporter/SupporterExtras.tsx
 #: src/lib/signature-shared.ts
@@ -15400,6 +15713,10 @@ msgstr "个人资料主题"
 #: src/routes/support.tsx
 msgid "Profile themes"
 msgstr "个人资料主题"
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Profile themes made by supporters."
+msgstr ""
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Profile themes, avatar frames, name styles and card foils are all yours now."
@@ -15570,6 +15887,10 @@ msgstr "快速通关"
 #: src/lib/pack-run.ts
 msgid "Quick Retry"
 msgstr "快速重试"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Quite bright: white text on top will be hard to read. Built-in themes sit around 0.05 to 0.15."
+msgstr ""
 
 #: src/routes/bbcode.tsx
 msgid "Quote"
@@ -15854,6 +16175,10 @@ msgstr "在 Overjoy 打到第 {round} 轮，最佳一排 {best}。{link}"
 msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
 msgstr "达到通过线即计入谱面的完整段位。更高的准确率会带来加分，99% 之前加得很少；低于通过线的成绩仍按较低段位计入，最多到通过线以下约五个百分点。准确率根据你的判定重新计算，所以 stable 和 lazer 的成绩按同样方式计入。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Read it"
+msgstr ""
+
 #. placeholder {0}: reading.name
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -15879,6 +16204,10 @@ msgstr "正在读取皮肤"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Reading your servers"
 msgstr "正在读取你的服务器"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Reads as a Shadertoy shader. No errors."
+msgstr ""
 
 #: src/components/packs/run/RunTable.tsx
 #: src/routes/packs.tsx
@@ -16208,6 +16537,20 @@ msgstr "周围没有其他操作的放手难度降低"
 msgid "Reload page"
 msgstr "重新加载页面"
 
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Remix it"
+msgstr ""
+
+#. placeholder {0}: original.name
+#. placeholder {1}: original.author.username
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Remix of {0} by {1}"
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "remix one from the gallery"
+msgstr ""
+
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "Removal failed."
 msgstr "移除失败。"
@@ -16222,6 +16565,7 @@ msgstr "移除"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Remove"
 msgstr "移除"
 
@@ -16384,6 +16728,7 @@ msgid "Repeated notes hammered on the same columns."
 msgstr "在同一列上反复敲击的音符。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Replace"
 msgstr "替换"
 
@@ -16403,6 +16748,18 @@ msgstr "替换{label}的成绩"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Replace the draft with {0}"
 msgstr "用 {0} 替换当前草稿"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Replace your code with this starting point?"
+#~ msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Replace your code?"
+msgstr ""
+
+#: src/components/supporter/themes/StartPicker.tsx
+msgid "Replaces the code with a theme's own, to change as you like."
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only."
@@ -16478,6 +16835,7 @@ msgid "Replays play with their player's published skin. Turn off to always use y
 msgstr "回放默认使用玩家发布的皮肤。关闭后始终使用你自己的。"
 
 #: src/components/supporter/CustomThemeCredit.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "Report"
 msgstr "举报"
 
@@ -16918,8 +17276,13 @@ msgstr "周六"
 msgid "Save"
 msgstr "保存"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Save and put it live"
+msgstr ""
+
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Save changes"
 msgstr "保存更改"
 
@@ -16975,6 +17338,14 @@ msgstr "已对所有人保存"
 msgid "Saved in this browser only. <0><1/>Log in with osu!</0> to sync your collection across devices."
 msgstr "仅保存在这个浏览器里。<0><1/>用 osu! 登录</0>即可在多设备间同步收藏册。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Saved. It's live on your list."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Saved. It's live, and in the gallery."
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saves the current draft as-is; everyone watching your replays sees it"
 msgstr "原样保存当前草稿；看你回放的人都会看到"
@@ -17011,6 +17382,7 @@ msgstr "正在保存。"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/FeaturedPlays.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Saving..."
 msgstr "正在保存..."
 
@@ -17161,6 +17533,7 @@ msgstr "手写体"
 
 #: src/components/prism/PrismVisualizer.tsx
 #: src/components/replay/ReplayControls.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Scroll"
 msgstr "流速"
 
@@ -17752,6 +18125,10 @@ msgstr "分享码"
 msgid "Share code copied"
 msgstr "分享码已复制"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Share in the gallery"
+msgstr ""
+
 #: src/components/replay/ShareClipButton.tsx
 msgid "Share links are a supporter perk."
 msgstr "分享链接是支持者专属功能。"
@@ -17800,6 +18177,7 @@ msgstr "分享的片段保留 {SHARED_CLIP_TTL_HOURS} 小时。"
 msgid "Shared replay"
 msgstr "分享的回放"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/privacy.tsx
 msgid "Sharing"
 msgstr "数据共享"
@@ -17916,6 +18294,14 @@ msgstr "收起"
 #: src/routes/report.tsx
 msgid "Show fewer"
 msgstr "收起"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Show it"
+#~ msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Show its banner behind my rows in lists"
+msgstr ""
 
 #: src/components/packs/GoatPoll.tsx
 msgid "show more"
@@ -18105,6 +18491,10 @@ msgstr "视奏"
 msgid "Sign for the next round"
 msgstr "为下一轮签约"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Sign in"
+msgstr ""
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Sign in again to send a gift."
 msgstr "请重新登录以发送礼物。"
@@ -18133,6 +18523,10 @@ msgstr "登录后才能发布收藏册。"
 #: src/routes/report.tsx
 msgid "Sign in to read replies"
 msgstr "登录后可查看回复"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Sign in to save."
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -18262,6 +18656,7 @@ msgid "Single-note jacks"
 msgstr "单点叠"
 
 #: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Site colours"
 msgstr "站点配色"
 
@@ -18729,6 +19124,10 @@ msgstr "西班牙语"
 msgid "Spares recycle for +{bonus}%"
 msgstr "回收重复时多得 {bonus}%"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Spec"
+msgstr ""
+
 #: src/components/player/LivePresence.tsx
 msgid "Spectating"
 msgstr "观战中"
@@ -18964,14 +19363,26 @@ msgstr "开始挑战"
 msgid "Start at {0}"
 msgstr "从 {0} 开始"
 
+#: src/components/supporter/themes/StartPicker.tsx
+msgid "Start from"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Start from your live me! page"
 msgstr "从你当前的 me! 页面开始"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Start from..."
+#~ msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Start here"
 msgstr "在此开始"
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Start one"
+msgstr ""
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Start the connection again from the app."
@@ -18985,6 +19396,10 @@ msgstr "开始追踪你的成绩"
 #: src/routes/replay.tsx
 msgid "Start with sound"
 msgstr "带声音开始"
+
+#: src/components/supporter/themes/StartPicker.tsx
+msgid "Starter"
+msgstr ""
 
 #: src/lib/chain-run.ts
 msgid "Starting pack {index} of 3"
@@ -19038,6 +19453,10 @@ msgstr "模板体"
 msgid "Sticker"
 msgstr "贴纸"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Still"
+msgstr ""
+
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
 msgstr "仍在获取回放和谱面。"
@@ -19049,6 +19468,10 @@ msgstr "仍在加载{elapsedLabel}"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Still missing"
 msgstr "仍然缺失"
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Still only"
+msgstr ""
 
 #. placeholder {0}: formatNumber(undiscovered.length)
 #: src/components/packs/GoatHoldersButton.tsx
@@ -19140,6 +19563,7 @@ msgid "Streams thickened with three-note hand chords."
 msgstr "夹三押的切。"
 
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Strength"
 msgstr "夹双押的切。"
 
@@ -19375,9 +19799,21 @@ msgstr "标签"
 msgid "Take it down for good?"
 msgstr "确定要永久下架吗？"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Take off"
+msgstr ""
+
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Take off the list"
 msgstr "移出列表"
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Take out of the gallery"
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Taken down"
+msgstr ""
 
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
@@ -19600,6 +20036,7 @@ msgid "Thank you! Your supporter time is on."
 msgstr "谢谢！你的支持者时长已生效。"
 
 #: src/components/supporter/CustomThemeCredit.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "Thanks, the report was sent."
 msgstr "谢谢，举报已发送。"
 
@@ -19804,6 +20241,10 @@ msgstr "这个网站拦截了我们的请求。可以用 imgur 或 catbox 之类
 msgid "That skin has no downloadable file"
 msgstr "这套皮肤没有可下载的文件"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "That theme isn't in the gallery anymore."
+msgstr ""
+
 #: src/routes/replay_.uploads.tsx
 #: src/routes/replay.tsx
 msgid "That upload is already gone."
@@ -19816,6 +20257,10 @@ msgstr "这个用户名看起来不对。"
 #: src/components/replay/ShareClipButton.tsx
 msgid "That's 10 share links today. Try again tomorrow."
 msgstr "今天已生成 10 个分享链接，请明天再试。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "That's a lot of saves in a minute. Wait a moment and save again."
+msgstr ""
 
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
@@ -20086,6 +20531,10 @@ msgstr "谱面段位 +1.37"
 msgid "the chart's level +1.5"
 msgstr "谱面段位 +1.5"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The code didn't pass the check. The errors are listed under it."
+msgstr ""
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "The code exchange was refused."
 msgstr "授权码兑换被拒绝。"
@@ -20181,6 +20630,10 @@ msgstr "你的每一张卡片都带有闪膜和插画，包括其他玩家从卡
 #: src/components/supporter/SupporterExtras.tsx
 msgid "The four cards under your profile's numbers. Swap any of them, here or from the card itself on your profile."
 msgstr "个人资料数字下方的四项数据。可以在这里更换，也可以直接在个人资料的卡片上更换。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The frame used for the still (thumbnails, the gallery, slow devices) and the banner row."
+msgstr ""
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway streams a section of your best play in your main keymode, instead of random notes."
@@ -20534,6 +20987,10 @@ msgstr "标准挑战。"
 #~ msgid "The star was not meant for you."
 #~ msgstr "星星不属于你。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "The starter example"
+#~ msgstr ""
+
 #: src/lib/pack-run.ts
 msgid "The strongest card in the pack scores twice."
 msgstr "卡包中最强的卡片计分两次。"
@@ -20554,6 +21011,10 @@ msgstr "测试客户端把签名密钥保存在此浏览器中，令牌只存在
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The third copy ever pulled"
 msgstr "史上第三份被抽到的"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The tint the rest of the profile takes while the theme is on. Picked from the theme until you change it."
+msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -20619,6 +21080,22 @@ msgstr "主题色"
 msgid "Theme color"
 msgstr "主题色"
 
+#: src/routes/supporter_.themes.$themeId.tsx
+msgid "theme editor"
+msgstr ""
+
+#: src/routes/supporter_.themes.$themeId.tsx
+msgid "Theme editor"
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "theme gallery"
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Theme gallery"
+msgstr ""
+
 #: src/components/layout/ThemePicker.tsx
 msgid "Theme hue"
 msgstr "主题色相"
@@ -20626,6 +21103,14 @@ msgstr "主题色相"
 #: src/components/layout/ThemePicker.tsx
 msgid "Theme saturation"
 msgstr "主题饱和度"
+
+#: src/routes/supporter_.themes.spec.tsx
+msgid "theme spec"
+msgstr ""
+
+#: src/routes/supporter_.themes.spec.tsx
+msgid "Theme spec"
+msgstr ""
 
 #. placeholder {0}: theme.name
 #: src/components/supporter/CustomThemeCredit.tsx
@@ -20728,6 +21213,10 @@ msgstr "此浏览器无法直接写入文件，视频会先保存在内存中，
 #: src/lib/replay-export/errors.ts
 msgid "This browser can't save the video file."
 msgstr "此浏览器无法保存视频文件。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "This browser has no WebGL2, so the preview can't run here."
+msgstr ""
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "This card is not ready to gift. Open it to finish loading its stats."
@@ -21056,6 +21545,18 @@ msgstr "此标签页已切到后台，导出可能会被暂停。"
 msgid "This team has no description."
 msgstr "这个战队没有简介。"
 
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "This theme isn't in the gallery anymore."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "This theme isn't yours, or it was deleted."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "This theme, or code or an image in it, was taken down."
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "这个工具需要从服务器读取跨国家/地区的刷图数据，而当前环境没有配置服务器。"
@@ -21103,6 +21604,14 @@ msgstr "雷雨"
 #: src/components/me/MyDataPanel.tsx
 msgid "Thursdays"
 msgstr "周四"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Tick \"I understand\" under Sharing."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Tick that you have the right to share it."
+#~ msgstr ""
 
 #: src/components/supporter/loadout.ts
 msgid "Tier"
@@ -21175,6 +21684,10 @@ msgstr "至"
 msgid "to {keyCount}K rating"
 msgstr "{keyCount}K 评分"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "to make your own profile themes."
+msgstr ""
+
 #: src/routes/privacy.tsx
 msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
 msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"
@@ -21222,6 +21735,10 @@ msgstr "太难"
 #: src/routes/recommendations.tsx
 msgid "too hard hides the lane from your gain views, done with it does the same for 60 days; setting a real score also clears a mark"
 msgstr "「太难」会把该谱面从你的收益视图中隐藏，「刷够了」同样隐藏 60 天；打出真实成绩也会清除标记"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Too heavy to run live: even a tiny frame takes too long. Lighten the loops or the fbm calls."
+msgstr ""
 
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
@@ -21838,6 +22355,10 @@ msgstr "最大 200 MB"
 msgid "Up to 50 MB."
 msgstr "最大 50 MB。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Up to four, read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 msgid "up to the chart's level +0.1"
 msgstr "最多为谱面段位 +0.1"
@@ -21946,6 +22467,10 @@ msgstr "上传后会得到这个回放的分享链接。请用 osu! 登录后上
 msgid "Uploading image..."
 msgstr "正在上传图片…"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Uploading images is for supporters."
+msgstr ""
+
 #: src/lib/skins.ts
 msgid "Uploading previews."
 msgstr "正在上传预览图。"
@@ -21972,6 +22497,7 @@ msgid "Uploading the skin file, {sentSize} of {totalSize}."
 msgstr "正在上传皮肤文件，{sentSize} / {totalSize}。"
 
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Uploading..."
 msgstr "上传中..."
 
@@ -22008,6 +22534,10 @@ msgstr "把 {selectedKeymode}K 用作卡片封面"
 msgid "Use 3 to 15 letters, numbers, spaces, or - _ [ ]."
 msgstr "使用 3 到 15 个字母、数字、空格或 - _ [ ]。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Use another image"
+#~ msgstr ""
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Use as the {slotLabelLower} run"
 msgstr "用作{slotLabelLower}的成绩"
@@ -22028,6 +22558,10 @@ msgstr "把谱面封面 {0} 用作背景"
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Use my osu! name"
 msgstr "使用我的 osu! 名字"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Use my own image"
+#~ msgstr ""
 
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
@@ -22432,6 +22966,10 @@ msgstr "等待下一轮评分"
 msgid "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
 msgstr "等待下一轮评分。届时会评分，此列表会自动更新。"
 
+#: src/components/supporter/themes/RowFramer.tsx
+msgid "Waiting for the theme"
+msgstr ""
+
 #: src/lib/chain-run.ts
 msgid "Wallet"
 msgstr "钱包"
@@ -22537,6 +23075,22 @@ msgstr "我们还没有存到 {0} 可用于回放的成绩。"
 msgid "We have no run by {0} on this map. Paste a link to their score to use it."
 msgstr "我们没有 {0} 在这张谱面上的成绩。粘贴其成绩链接就能用。"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Wear"
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Wear it"
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Wearing"
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Wearing a theme from the gallery is for supporters. Anyone can remix one to try it in the editor."
+msgstr ""
+
 #: src/components/packs/GoatPoll.tsx
 msgid "web.archive.org link to their osu! profile"
 msgstr "指向其 osu! 主页的 web.archive.org 链接"
@@ -22574,6 +23128,10 @@ msgstr "功能"
 msgid "What it is for"
 msgstr "服务器简介"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "What it's called"
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "what nearby players actually farm"
 msgstr "附近玩家实际在刷的谱面"
@@ -22586,6 +23144,14 @@ msgstr "与你水平相近的玩家最近在打什么"
 msgid "What seems wrong?"
 msgstr "哪里看起来不对？"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "What shows behind your row in rankings and lists when you turn rows on: a still of the theme, at the moment above."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "What shows behind your row in rankings and lists when you turn rows on. Always a still image."
+#~ msgstr ""
+
 #: src/components/supporter/SupporterExtras.tsx
 msgid "What supporting gets you"
 msgstr "支持可获得的福利"
@@ -22597,6 +23163,10 @@ msgstr "需要什么"
 #: src/components/me/MyStatsInsights.tsx
 msgid "What you play"
 msgstr "你在玩什么"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "What you wrote here goes, unless it's saved."
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "what you're browsing"
@@ -22830,6 +23400,14 @@ msgstr "写回复"
 msgid "Write a short description of the server."
 msgstr "写一段简短的服务器介绍。"
 
+#: src/routes/supporter_.themes.index.tsx
+#~ msgid "Write a theme's shader yourself, ask an AI for one with the spec, or paste a Shadertoy shader. It goes live as soon as you save it."
+#~ msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Write a theme's shader, start from a built-in one, or paste a Shadertoy shader. It goes live as soon as you save it."
+msgstr ""
+
 #: src/routes/bbcode.tsx
 msgid "Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy."
 msgstr "为你的 me! 页面编写并预览 osu! 主页 BBCode，支持实时预览和一键复制。"
@@ -23042,6 +23620,10 @@ msgstr "现在，无论你是离线、在私服上游玩，还是被 osu! 限制
 #: src/routes/news_.companella.tsx
 msgid "You can revoke Companella's connection in <0>Settings</0>, under Preferences. It stops sending plays right away."
 msgstr "你可以在<0>设置</0>的偏好设置中撤销 Companella 的连接。撤销后它会立即停止上传成绩。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "You can't make themes anymore."
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "you could gain"
@@ -23315,6 +23897,10 @@ msgstr "你的标记"
 msgid "Your mods"
 msgstr "你的 mod"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Your name"
+msgstr ""
+
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
 msgid "Your name in its own style and font, on your profile and in every list it shows up in."
@@ -23459,9 +24045,24 @@ msgstr "你的支持让服务器继续运行，也让我有时间继续开发这
 msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks."
 msgstr "你的支持用来支付服务器费用，也让我有时间继续完善这个网站。这对我意义重大，这些附加内容就是我表达感谢的方式。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Your supporter time has run out."
+msgstr ""
+
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "Your teams could not be loaded just now. Try again in a moment."
 #~ msgstr "暂时无法加载你的战队，请稍后再试。"
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "your themes"
+msgstr ""
+
+#: src/routes/supporter_.themes.$themeId.tsx
+#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/supporter_.themes.index.tsx
+#: src/routes/supporter_.themes.spec.tsx
+msgid "Your themes"
+msgstr ""
 
 #: src/components/player/FeaturedPlays.tsx
 msgid "Your title"
@@ -23520,6 +24121,10 @@ msgstr "幽幽子 fumo"
 #: src/lib/supporter-pack-style.ts
 msgid "Zip binder"
 msgstr "拉链卡册"
+
+#: src/components/supporter/themes/RowFramer.tsx
+msgid "Zoom"
+msgstr ""
 
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Zoom {value}"

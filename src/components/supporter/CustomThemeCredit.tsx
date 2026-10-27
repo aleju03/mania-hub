@@ -77,7 +77,7 @@ export function CustomThemeCredit({ theme, ownerId }: { theme: CustomTheme; owne
   );
 }
 
-function ReportModal({ onClose, onSend }: { onClose: () => void; onSend: (kind: CustomThemeReportKind, note: string) => Promise<void> }) {
+export function ReportModal({ onClose, onSend }: { onClose: () => void; onSend: (kind: CustomThemeReportKind, note: string) => Promise<void> }) {
   const { t } = useLingui();
   const [kind, setKind] = useState<CustomThemeReportKind>("content");
   const [note, setNote] = useState("");

@@ -1,6 +1,7 @@
 import { Fragment, memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
+import { Link } from "@tanstack/react-router";
 
 import {
   SUPPORTER_MOTIFS,
@@ -880,6 +881,16 @@ function SiteColours({ className }: { className: string }) {
   return <span className={`rounded-full ${className}`} style={{ background: "conic-gradient(#ff66ab, #ffcc22, #88b300, #66ccff, #8866ee, #ff66ab)" }} />;
 }
 
+/* Angle brackets around a drop of paint: a theme written as code. */
+function OwnThemeIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 28 28" className={className} aria-hidden>
+      <path d="M8.5 8 3.5 14l5 6M19.5 8l5 6-5 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 9.2c-1.9 2.6-3 4.3-3 5.7a3 3 0 0 0 6 0c0-1.4-1.1-3.1-3-5.7Z" fill="currentColor" opacity=".85" />
+    </svg>
+  );
+}
+
 function ThemeDrawer({ current, disabled, onTry, onPick, onThemeOptions }: DrawerProps) {
   const { t, i18n } = useLingui();
   /* Only the theme under the pointer moves; the rest hold a still frame. Every
@@ -906,6 +917,12 @@ function ThemeDrawer({ current, disabled, onTry, onPick, onThemeOptions }: Drawe
             <span className="w-full truncate text-center">{i18n._(SUPPORTER_PROFILE_THEME_LABELS[id])}</span>
           </Item>
         ))}
+        <Link to="/supporter/themes" className={`${tile(false)} items-stretch`}>
+          <span className="grid aspect-[16/10] w-full place-items-center rounded-md border border-dashed border-white/15 bg-osu-b6">
+            <OwnThemeIcon className="h-7 w-7 text-osu-pink-light" />
+          </span>
+          <span className="w-full truncate text-center">{t`Make your own`}</span>
+        </Link>
       </div>
       {current.theme === "highway" && (
         <button

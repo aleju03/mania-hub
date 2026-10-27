@@ -476,6 +476,11 @@ msgstr "{0} duplicadas"
 msgid "{0} each"
 msgstr "{0} c/u"
 
+#. placeholder {0}: problems.length
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "{0} errors"
+msgstr ""
+
 #. placeholder {0}: eternalFinale.username
 #: src/components/packs/RevealStage.tsx
 msgid "{0} Eternal maniacard"
@@ -793,6 +798,11 @@ msgstr "{0} jugadores con rating"
 msgid "{0} re-rendered"
 msgstr "{0} re-renderizados"
 
+#. placeholder {0}: original.name
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "{0} remix"
+msgstr ""
+
 #. placeholder {0}: formatNumber(trackerWindowCount)
 #: src/routes/tracker.tsx
 msgid "{0} scores"
@@ -851,6 +861,12 @@ msgstr "{0} jugadores trackeados"
 #: src/components/packs/GoatPollVoters.tsx
 msgid "{0} up · {1} down"
 msgstr "{0} a favor · {1} en contra"
+
+#. placeholder {0}: theme.wearers
+#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/supporter_.themes.index.tsx
+msgid "{0} wearing it"
+msgstr ""
 
 #. placeholder {0}: playerPeakMember.username
 #. placeholder {1}: formatDate(playerPeak.updated_at, "UTC", locale)
@@ -1001,6 +1017,11 @@ msgstr "Rating de skill {0}K"
 #: src/routes/player/$username.tsx
 msgid "{0}pp spread"
 msgstr "{0}pp de diferencia"
+
+#. placeholder {0}: cost.toFixed(2)
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "{0}x the heaviest built-in"
+msgstr ""
 
 #: src/lib/goal-format.ts
 msgid "{acc}% {speed} on {map}"
@@ -2203,6 +2224,10 @@ msgstr "$3 son un mes"
 msgid "0h"
 msgstr "0h"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "1 error"
+msgstr ""
+
 #: src/components/packs/CardSpotlight.tsx
 msgid "1 other"
 msgstr "otro más"
@@ -2226,6 +2251,11 @@ msgstr "1 velocidad por mapa"
 #: src/routes/report.tsx
 msgid "1 screenshot"
 msgstr "1 captura"
+
+#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/supporter_.themes.index.tsx
+msgid "1 wearing it"
+msgstr ""
 
 #: src/routes/news_.prism.tsx
 msgid "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
@@ -2761,6 +2791,10 @@ msgstr "Un perfil mostrando el mapa que su jugador está jugando"
 msgid "A rating is not supported for this chart or mod combination."
 msgstr "No se admite una valoración para este mapa o combinación de mods."
 
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "a remix"
+msgstr ""
+
 #: src/lib/chain-run.ts
 #~ msgid "A row of 4 cards or fewer scores x3."
 #~ msgstr "Una fila de 4 cartas o menos puntúa x3."
@@ -2868,6 +2902,11 @@ msgstr "A-Z"
 msgid "About"
 msgstr "Acerca de"
 
+#. placeholder {0}: cost.toFixed(1)
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "About {0}x the limit: fewer fbm octaves or loop iterations would help."
+msgstr ""
+
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/rankings.tsx
@@ -2967,6 +3006,10 @@ msgstr "logrado el {0}"
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Achieved PP"
 msgstr "PP obtenidos"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Across"
+#~ msgstr ""
 
 #. placeholder {0}: profileInsights.sampleSize
 #: src/components/player/InsightModals.tsx
@@ -3088,6 +3131,10 @@ msgstr "Añadir todas las dificultades de este mapset"
 #: src/routes/player/$username.tsx
 msgid "Add failed or otherwise missed plays from osu!'s latest recent history."
 msgstr "Agrega las jugadas fallidas u otras que falten del historial reciente de osu!."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Add image"
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add link…"
@@ -3889,9 +3936,17 @@ msgstr "volver a las skins"
 msgid "Back to the picker"
 msgstr "Volver al selector"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Back to the theme"
+#~ msgstr ""
+
 #: src/components/player/ProfileStatCards.tsx
 msgid "Back to the usual four"
 msgstr "Volver a las cuatro de siempre"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Back to your themes"
+msgstr ""
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "backdrop"
@@ -3946,6 +4001,14 @@ msgstr "Banner"
 msgid "Banner in lists"
 msgstr "Banner en listas"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Banner row"
+msgstr ""
+
+#: src/components/supporter/themes/RowFramer.tsx
+msgid "Banner row framing"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bar colors"
 msgstr "Colores de las barras"
@@ -3965,8 +4028,13 @@ msgid "Bars"
 msgstr "Barras"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Base"
 msgstr "Base"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Base colour"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Base LN head color used for any column without a per-column override."
@@ -4376,6 +4444,10 @@ msgstr "Brillante"
 msgid "Bright idea"
 msgstr "Gran idea"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "brightness"
+msgstr ""
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Brightness"
 msgstr "Brillo"
@@ -4473,7 +4545,10 @@ msgid "Buy"
 msgstr "Comprar"
 
 #. placeholder {0}: by.username || by.id
+#. placeholder {0}: summary.author.username
+#. placeholder {0}: theme.author.username
 #: src/components/supporter/SupporterExtras.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "by {0}"
 msgstr "por {0}"
 
@@ -4513,7 +4588,9 @@ msgstr "¿No puedes pagar con Ko-fi? Puedes dejar una propina por lava.top."
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/CustomThemeCredit.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/report.tsx
+#: src/routes/supporter_.themes.index.tsx
 msgid "Cancel"
 msgstr "Cancelar"
 
@@ -4973,6 +5050,10 @@ msgstr "Verificando las dificultades"
 msgid "Checking with Discord"
 msgstr "Verificando con Discord"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Checking..."
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Chinese"
 msgstr "Chino"
@@ -5345,6 +5426,7 @@ msgstr "No se encontró el clip"
 #: src/components/ui/ImageLightbox.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/skins.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "Close"
 msgstr "Cerrar"
 
@@ -5777,6 +5859,8 @@ msgstr "Convertir hits en notas"
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ShareClipButton.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter_.themes.spec.tsx
 msgid "Copied"
 msgstr "Copiado"
 
@@ -5835,6 +5919,10 @@ msgstr "Copiar BBCode"
 msgid "Copy code"
 msgstr "Copiar código"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Copy errors"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copy formatting"
 msgstr "Copiar formato"
@@ -5857,6 +5945,14 @@ msgstr "Copiar URL del enlace"
 msgid "Copy share code"
 msgstr "Copiar código para compartir"
 
+#: src/routes/supporter_.themes.spec.tsx
+msgid "Copy the spec"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Copy the theme spec"
+msgstr ""
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Copy URL"
 msgstr "Copiar URL"
@@ -5864,6 +5960,10 @@ msgstr "Copiar URL"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copying BBCode..."
 msgstr "Copiando BBCode..."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "cost"
+msgstr ""
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not check that invite. Try again."
@@ -5996,6 +6096,10 @@ msgstr "No se pudo eliminar ese anuncio."
 msgid "Could not rename that connection."
 msgstr "No se pudo renombrar esa conexión."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Could not render the theme."
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not resize the image."
 msgstr "No se pudo cambiar el tamaño de la imagen."
@@ -6016,6 +6120,10 @@ msgstr "No se pudo guardar."
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "No se pudo guardar. Inténtalo de nuevo."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Could not save the theme."
+msgstr ""
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Could not search collectors. Try again."
@@ -6045,6 +6153,7 @@ msgstr "No se pudo enviar. Inténtalo de nuevo."
 msgid "Could not upload that file."
 msgstr "No se pudo subir ese archivo."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
 msgid "Could not upload that image."
 msgstr "No se pudo subir esa imagen."
@@ -6410,6 +6519,10 @@ msgstr "Acredita"
 msgid "credited by accuracy against a 96% bar"
 msgstr "se acredita según la acc contra un mínimo de 96%"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Credits (optional): artists, shaders it builds on"
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
 msgstr "Croata"
@@ -6501,6 +6614,18 @@ msgstr "Media personalizada"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Custom skin"
 msgstr "Skin personalizada"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Custom themes are switched off for now, so saving is too."
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Custom themes are switched off for now: profiles show their stills, and saving waits."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Custom themes are switched off for now."
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Customize"
@@ -6734,8 +6859,14 @@ msgstr "Delay"
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/supporter_.themes.index.tsx
 msgid "Delete"
 msgstr "Eliminar"
+
+#. placeholder {0}: deleting.name
+#: src/routes/supporter_.themes.index.tsx
+msgid "Delete {0}?"
+msgstr ""
 
 #: src/routes/replay_.uploads.tsx
 msgid "Delete {rowTitle} from your uploads"
@@ -6833,6 +6964,10 @@ msgstr "Descripción <0>(opcional)</0>"
 #: src/components/packs/PackSummary.tsx
 msgid "Deselect {0}"
 msgstr "Deseleccionar {0}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Desktop"
+msgstr ""
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Detected in the .osk"
@@ -7009,6 +7144,10 @@ msgstr "Duplica las columnas en dos stages."
 msgid "Doubles the combo before it scores."
 msgstr "Duplica el combo antes de puntuar."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Down"
+#~ msgstr ""
+
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Download"
@@ -7086,9 +7225,17 @@ msgstr "El borrador se guarda automáticamente en este navegador"
 msgid "Drag a page or swipe to flip"
 msgstr "Arrastra una página o desliza para pasarla"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Drag along it to see each moment in the preview."
+msgstr ""
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag an .osr here, or click to browse"
 msgstr "Arrastra un .osr aquí o haz clic para explorar"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Drag the box to move it, scroll over it to zoom."
+msgstr ""
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag the map's .osz here, or click to browse"
@@ -7369,6 +7516,7 @@ msgstr "Eco"
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
+#: src/routes/supporter_.themes.index.tsx
 msgid "Edit"
 msgstr "Editar"
 
@@ -7768,6 +7916,10 @@ msgstr "Todos los que vean tus replays verán esta skin."
 msgid "everything"
 msgstr "todo"
 
+#: src/routes/supporter_.themes.spec.tsx
+msgid "Everything a theme's code gets and has to follow."
+msgstr ""
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "todo lo demás que trae el archivo"
@@ -7904,6 +8056,14 @@ msgstr "Luces de hadas"
 #: src/lib/signature-style.ts
 msgid "Falling notes"
 msgstr "Notas que caen"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "far over the limit"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Far over the limit. Cut loop turns and fbm octaves a lot."
+msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Farm map alert"
@@ -8345,6 +8505,10 @@ msgstr "Cinco rarezas seguidas."
 msgid "Five-star pull"
 msgstr "Tirada de cinco estrellas"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Fix the code's errors first."
+msgstr ""
+
 #: src/routes/report.tsx
 msgid "fixed"
 msgstr "arreglado"
@@ -8437,6 +8601,10 @@ msgstr "Cuatro cartas del mismo país."
 #: src/lib/pack-run.ts
 msgid "Four Keys"
 msgstr "Cuatro teclas"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "fps here"
+msgstr ""
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "frames"
@@ -8625,6 +8793,7 @@ msgid "Galaxy"
 msgstr "Galaxia"
 
 #: src/lib/pack-run.ts
+#: src/routes/supporter_.themes.index.tsx
 msgid "Gallery"
 msgstr "Galería"
 
@@ -8697,6 +8866,10 @@ msgstr "Regalada el {dateText} por {giverLink}"
 #: src/components/packs/GiftInbox.tsx
 msgid "Gifts ({0})"
 msgstr "Regalos ({0})"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Give it a name."
+msgstr ""
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Give the collection a title."
@@ -9479,6 +9652,10 @@ msgstr "Cómo funcionan las recomendaciones"
 msgid "How to pick"
 msgstr "Cómo elegir"
 
+#: src/routes/supporter_.themes.spec.tsx
+msgid "How to write the code for your own profile theme."
+msgstr ""
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "How your packs open: the slash you cut them with, its sparks and its sound, and what the pack does as it gives."
 msgstr "Cómo se abren tus packs: el corte con el que los abres, sus chispas y su sonido, y lo que hace el pack al ceder."
@@ -9519,6 +9696,10 @@ msgstr "https://... envuelve la imagen en un enlace"
 msgid "HUD"
 msgstr "HUD"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Hue"
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Hungarian"
 msgstr "Húngaro"
@@ -9536,6 +9717,18 @@ msgstr "Híbrido"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Hybrid chart: {0}, {1}"
 msgstr "Mapa híbrido: {0}, {1}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "I have the right to share this code and these images."
+#~ msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "I understand"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "I understand I'm responsible for what I put in my themes, and that one breaking the <0>Terms</0> can be taken down."
+msgstr ""
 
 #: src/components/supporter/loadout.ts
 msgid "Ice fairy"
@@ -9619,6 +9812,14 @@ msgstr "Imagemap (imagen con áreas clicables)"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Imagemap area {0}/{1}"
 msgstr "Área de imagemap {0}/{1}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "images"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Images"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Images from {sourceName}"
@@ -9718,6 +9919,11 @@ msgstr "En el lugar {0}"
 #: src/components/player/LivePresence.tsx
 msgid "In song select"
 msgstr "En la selección de canciones"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter_.themes.index.tsx
+msgid "In the gallery"
+msgstr ""
 
 #: src/components/player/LivePresence.tsx
 msgid "In the main menu"
@@ -9860,6 +10066,18 @@ msgstr "Enlace de invitación"
 msgid "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 msgstr "¿El top play más antiguo de {hidden} es más antiguo o más reciente que el de {shown}?"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "It crashed on several visitors' devices, so it shows its still until it's looked at."
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "It leaves your list and your profile."
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "It leaves your list, your profile and the gallery. Anyone already wearing it keeps it."
+msgstr ""
+
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
 msgstr "Puede que quien lo subió lo haya eliminado."
@@ -9891,6 +10109,14 @@ msgstr "Usa mi trabajo sin permiso"
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
 msgstr "Ya está en tu colección."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It's heavier than the limit."
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "It's on your profile now."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Italian"
@@ -10042,6 +10268,11 @@ msgstr "Jumptrill"
 #: src/routes/legal.tsx
 msgid "June 16, 2026"
 msgstr "16 de junio de 2026"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter_.themes.index.tsx
+msgid "Just me"
+msgstr ""
 
 #: src/lib/format.ts
 msgid "just now"
@@ -10558,6 +10789,11 @@ msgstr "lima"
 msgid "Limitations"
 msgstr "Limitaciones"
 
+#. placeholder {0}: problem.line
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "line {0}"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayCustomMediaControls.tsx
 #: src/routes/bbcode.tsx
@@ -10976,10 +11212,13 @@ msgstr "cargando..."
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/settings/LazySettingsPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 #: src/routes/snipes.tsx
+#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/supporter_.themes.index.tsx
 msgid "Loading..."
 msgstr "Cargando..."
 
@@ -11201,6 +11440,10 @@ msgstr "Hazlo de {OSU_PROFILE_COLUMN_WIDTH}px de ancho: todo el ancho de la colu
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one."
 msgstr "Hazlo permanente si puedes: una invitación temporal oculta tu servidor el día que expira, hasta que pegues una nueva."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Make your own"
+msgstr ""
 
 #. placeholder {0}: i18n._(variant.text)
 #: src/lib/chain-run.ts
@@ -11592,6 +11835,10 @@ msgstr "Maxwell el gato"
 msgid "Mean"
 msgstr "Media"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "measuring"
+msgstr ""
+
 #: src/lib/pack-run.ts
 msgid "Medal Hunter"
 msgstr "Cazador de medallas"
@@ -11800,6 +12047,10 @@ msgstr "Fumo de Mokou"
 msgid "Molten gold"
 msgstr "Oro fundido"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Moment"
+msgstr ""
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Mon"
 msgstr "Lun"
@@ -11941,6 +12192,10 @@ msgstr "más cartas únicas"
 msgid "Most Used Mod"
 msgstr "Mod más usado"
 
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Most worn"
+msgstr ""
+
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Move {name} left"
 msgstr "Mover {name} a la izquierda"
@@ -12073,6 +12328,7 @@ msgid "name"
 msgstr "nombre"
 
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Name"
 msgstr "Nombre"
 
@@ -12254,6 +12510,10 @@ msgstr "Los scores nuevos llegan en vivo por esta conexión."
 msgid "New set"
 msgstr "Nuevo set"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "New theme"
+msgstr ""
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "New top plays will show up here as players set them."
 msgstr "Las nuevas top plays aparecerán aquí cuando los jugadores las consigan."
@@ -12282,6 +12542,7 @@ msgstr "más recientes"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/player/FeaturedPlays.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "Newest"
 msgstr "Más recientes"
 
@@ -12555,6 +12816,10 @@ msgstr "sin datos"
 #: src/components/player/ProfileParts.tsx
 msgid "No data"
 msgstr "Sin datos"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "No errors."
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "No favourites found for any player in the top 50."
@@ -12950,6 +13215,10 @@ msgstr "Ningún equipo coincide con \"{query}\"."
 msgid "No teams yet."
 msgstr "Todavía no hay equipos."
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "No themes yet."
+msgstr ""
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "No top plays found"
 msgstr "No se encontraron top plays"
@@ -13033,6 +13302,10 @@ msgstr "Nadie ha elegido cartas todavía. La tuya sería la primera."
 #: src/components/packs/CardCollectors.tsx
 msgid "Nobody has pulled your card yet."
 msgstr "Nadie ha sacado tu carta todavía."
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Nobody has shared a theme yet."
+msgstr ""
 
 #: src/routes/replay_.community.tsx
 msgid "Nobody has uploaded a replay yet."
@@ -13762,6 +14035,10 @@ msgstr "En los leaderboards solo están los scores registrados en este sitio."
 msgid "Only skillboost maps right now"
 msgstr "Por ahora solo hay mapas skillboost"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Only supporters can save themes. Everything here works as a preview."
+msgstr ""
+
 #. placeholder {0}: B.keyThree.cards
 #: src/lib/pack-run.ts
 msgid "Only the first {0} cards score."
@@ -13779,6 +14056,10 @@ msgstr "solo tú"
 #: src/routes/skins.tsx
 msgid "only you can open these"
 msgstr "solo tú puedes abrirlas"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Only you can wear it."
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Only your best rate play on the same chart counts per ladder, rate reuploads included."
@@ -13986,6 +14267,14 @@ msgstr "Aperturas"
 msgid "optional"
 msgstr "opcional"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "or"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "or paste a Shadertoy shader as it is"
+msgstr ""
+
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Or pay with Google. Sign in first so it counts toward your account."
 msgstr "O paga con Google. Inicia sesión primero para que cuente en tu cuenta."
@@ -14139,6 +14428,10 @@ msgstr "Los otros amuletos se venden por todo lo que pagaste."
 #: src/routes/dan-estimates.tsx
 msgid "Other rules"
 msgstr "Otras reglas"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Other supporters can wear it and remix its code."
+msgstr ""
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -14412,6 +14705,10 @@ msgstr "Pegar formato"
 msgid "Paste it in Discord to play the clip in chat. The link works for {SHARED_CLIP_TTL_HOURS} hours."
 msgstr "Pégalo en Discord y el clip se reproduce en el chat. El enlace dura {SHARED_CLIP_TTL_HOURS} horas."
 
+#: src/routes/supporter_.themes.spec.tsx
+#~ msgid "Paste it into a chat with an AI, then ask for the theme you want."
+#~ msgstr ""
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Paste it once. It redraws when your stats change."
 msgstr "Pégalo una vez. Se redibuja cuando cambian tus estadísticas."
@@ -14419,6 +14716,10 @@ msgstr "Pégalo una vez. Se redibuja cuando cambian tus estadísticas."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Paste share code"
 msgstr "Pegar código para compartir"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Paste them into the chat that wrote the code."
+#~ msgstr ""
 
 #: src/routes/report.tsx
 msgid "Paste, drop or pick a screenshot."
@@ -14578,6 +14879,10 @@ msgstr "Rank de rendimiento"
 msgid "Persian"
 msgstr "Persa"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Phone"
+msgstr ""
+
 #. placeholder {0}: need - selected.length
 #: src/components/packs/run/chain/ChainPackStage.tsx
 msgid "Pick {0}"
@@ -14622,6 +14927,10 @@ msgstr "Elige otro archivo"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Pick both a .osr and the .osu it was played on."
 msgstr "Elige un .osr y el .osu en el que se jugó."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Pick from the theme"
+msgstr ""
 
 #: src/lib/pack-run.ts
 msgid "Pick one of two common charms."
@@ -15364,6 +15673,10 @@ msgstr "Banner del perfil"
 msgid "Profile link"
 msgstr "Enlace de perfil"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Profile on top"
+msgstr ""
+
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/supporter/SupporterExtras.tsx
 #: src/lib/signature-shared.ts
@@ -15379,6 +15692,10 @@ msgstr "Tema del perfil"
 #: src/routes/support.tsx
 msgid "Profile themes"
 msgstr "Temas de perfil"
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Profile themes made by supporters."
+msgstr ""
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Profile themes, avatar frames, name styles and card foils are all yours now."
@@ -15549,6 +15866,10 @@ msgstr "Ronda rápida"
 #: src/lib/pack-run.ts
 msgid "Quick Retry"
 msgstr "Quick Retry"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Quite bright: white text on top will be hard to read. Built-in themes sit around 0.05 to 0.15."
+msgstr ""
 
 #: src/routes/bbcode.tsx
 msgid "Quote"
@@ -15833,6 +16154,10 @@ msgstr "Llegué a la ronda {round} en Overjoy, mejor fila {best}. {link}"
 msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
 msgstr "Llegar al mínimo da el nivel completo del chart. Más acc suma un bono que se mantiene pequeño hasta el 99%, y un score por debajo del mínimo sigue contando por menos, hasta unos cinco puntos por debajo. La acc se recalcula a partir de tus judgements, así que los scores de stable y de lazer cuentan igual."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Read it"
+msgstr ""
+
 #. placeholder {0}: reading.name
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -15858,6 +16183,10 @@ msgstr "Leyendo el skin"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Reading your servers"
 msgstr "Leyendo tus servidores"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Reads as a Shadertoy shader. No errors."
+msgstr ""
 
 #: src/components/packs/run/RunTable.tsx
 #: src/routes/packs.tsx
@@ -16187,6 +16516,20 @@ msgstr "Los releases sin nada alrededor cuentan menos"
 msgid "Reload page"
 msgstr "Recargar página"
 
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Remix it"
+msgstr ""
+
+#. placeholder {0}: original.name
+#. placeholder {1}: original.author.username
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Remix of {0} by {1}"
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "remix one from the gallery"
+msgstr ""
+
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "Removal failed."
 msgstr "No se pudo eliminar."
@@ -16201,6 +16544,7 @@ msgstr "eliminar"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Remove"
 msgstr "Eliminar"
 
@@ -16363,6 +16707,7 @@ msgid "Repeated notes hammered on the same columns."
 msgstr "Notas repetidas martilladas en las mismas columnas."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Replace"
 msgstr "Reemplazar"
 
@@ -16382,6 +16727,18 @@ msgstr "Reemplazar la replay de {label}"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Replace the draft with {0}"
 msgstr "Reemplazar el borrador con {0}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Replace your code with this starting point?"
+#~ msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Replace your code?"
+msgstr ""
+
+#: src/components/supporter/themes/StartPicker.tsx
+msgid "Replaces the code with a theme's own, to change as you like."
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only."
@@ -16457,6 +16814,7 @@ msgid "Replays play with their player's published skin. Turn off to always use y
 msgstr "Los replays se reproducen con el skin publicado de su jugador. Desactívalo para usar siempre el tuyo."
 
 #: src/components/supporter/CustomThemeCredit.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "Report"
 msgstr "Reportar"
 
@@ -16897,8 +17255,13 @@ msgstr "sábados"
 msgid "Save"
 msgstr "Guardar"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Save and put it live"
+msgstr ""
+
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Save changes"
 msgstr "Guardar cambios"
 
@@ -16954,6 +17317,14 @@ msgstr "Guardado para todos"
 msgid "Saved in this browser only. <0><1/>Log in with osu!</0> to sync your collection across devices."
 msgstr "Se guarda solo en este navegador. <0><1/>Inicia sesión con osu!</0> para sincronizar tu colección entre dispositivos."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Saved. It's live on your list."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Saved. It's live, and in the gallery."
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saves the current draft as-is; everyone watching your replays sees it"
 msgstr "Guarda el borrador actual tal como está; todos los que vean tus replays lo verán"
@@ -16990,6 +17361,7 @@ msgstr "Guardando."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/FeaturedPlays.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Saving..."
 msgstr "Guardando..."
 
@@ -17140,6 +17512,7 @@ msgstr "Cursiva"
 
 #: src/components/prism/PrismVisualizer.tsx
 #: src/components/replay/ReplayControls.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Scroll"
 msgstr "Scroll"
 
@@ -17731,6 +18104,10 @@ msgstr "Código para compartir"
 msgid "Share code copied"
 msgstr "Código copiado"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Share in the gallery"
+msgstr ""
+
 #: src/components/replay/ShareClipButton.tsx
 msgid "Share links are a supporter perk."
 msgstr "Los enlaces para compartir son un beneficio de supporter."
@@ -17779,6 +18156,7 @@ msgstr "Los clips compartidos duran {SHARED_CLIP_TTL_HOURS} horas."
 msgid "Shared replay"
 msgstr "Replay compartido"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/privacy.tsx
 msgid "Sharing"
 msgstr "Compartición de datos"
@@ -17895,6 +18273,14 @@ msgstr "mostrar menos"
 #: src/routes/report.tsx
 msgid "Show fewer"
 msgstr "Mostrar menos"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Show it"
+#~ msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Show its banner behind my rows in lists"
+msgstr ""
 
 #: src/components/packs/GoatPoll.tsx
 msgid "show more"
@@ -18084,6 +18470,10 @@ msgstr "Lectura a primera vista"
 msgid "Sign for the next round"
 msgstr "Firmar para la siguiente ronda"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Sign in"
+msgstr ""
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Sign in again to send a gift."
 msgstr "Inicia sesión de nuevo para enviar un regalo."
@@ -18112,6 +18502,10 @@ msgstr "Inicia sesión para publicar una colección."
 #: src/routes/report.tsx
 msgid "Sign in to read replies"
 msgstr "Inicia sesión para leer las respuestas"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Sign in to save."
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -18241,6 +18635,7 @@ msgid "Single-note jacks"
 msgstr "Jacks de una nota"
 
 #: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Site colours"
 msgstr "Colores del sitio"
 
@@ -18708,6 +19103,10 @@ msgstr "Español"
 msgid "Spares recycle for +{bonus}%"
 msgstr "Los duplicados se reciclan con +{bonus}%"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Spec"
+msgstr ""
+
 #: src/components/player/LivePresence.tsx
 msgid "Spectating"
 msgstr "Espectando"
@@ -18943,14 +19342,26 @@ msgstr "Empezar una partida"
 msgid "Start at {0}"
 msgstr "Empezar en {0}"
 
+#: src/components/supporter/themes/StartPicker.tsx
+msgid "Start from"
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Start from your live me! page"
 msgstr "Empieza desde tu página me! en vivo"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Start from..."
+#~ msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Start here"
 msgstr "Empezar aquí"
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Start one"
+msgstr ""
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Start the connection again from the app."
@@ -18964,6 +19375,10 @@ msgstr "Empieza a seguir tus plays"
 #: src/routes/replay.tsx
 msgid "Start with sound"
 msgstr "Empezar con sonido"
+
+#: src/components/supporter/themes/StartPicker.tsx
+msgid "Starter"
+msgstr ""
 
 #: src/lib/chain-run.ts
 msgid "Starting pack {index} of 3"
@@ -19017,6 +19432,10 @@ msgstr "Stencil"
 msgid "Sticker"
 msgstr "Sticker"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Still"
+msgstr ""
+
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
 msgstr "Todavía se está cargando el replay y el chart."
@@ -19028,6 +19447,10 @@ msgstr "Todavía cargando{elapsedLabel}"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Still missing"
 msgstr "Aún faltan"
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Still only"
+msgstr ""
 
 #. placeholder {0}: formatNumber(undiscovered.length)
 #: src/components/packs/GoatHoldersButton.tsx
@@ -19119,6 +19542,7 @@ msgid "Streams thickened with three-note hand chords."
 msgstr "Streams engrosados con acordes de tres notas."
 
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Strength"
 msgstr "Intensidad"
 
@@ -19354,9 +19778,21 @@ msgstr "Etiquetas"
 msgid "Take it down for good?"
 msgstr "¿Retirarlo definitivamente?"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Take off"
+msgstr ""
+
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Take off the list"
 msgstr "Quitar de la lista"
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Take out of the gallery"
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Taken down"
+msgstr ""
 
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
@@ -19579,6 +20015,7 @@ msgid "Thank you! Your supporter time is on."
 msgstr "¡Gracias! Ya tienes tu tiempo de supporter."
 
 #: src/components/supporter/CustomThemeCredit.tsx
+#: src/routes/supporter_.themes.gallery.tsx
 msgid "Thanks, the report was sent."
 msgstr "Gracias, el reporte fue enviado."
 
@@ -19783,6 +20220,10 @@ msgstr "Ese sitio bloquea nuestra solicitud. Funcionan hosts como imgur o catbox
 msgid "That skin has no downloadable file"
 msgstr "Esa skin no tiene archivo para descargar"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "That theme isn't in the gallery anymore."
+msgstr ""
+
 #: src/routes/replay_.uploads.tsx
 #: src/routes/replay.tsx
 msgid "That upload is already gone."
@@ -19795,6 +20236,10 @@ msgstr "Ese usuario no parece válido."
 #: src/components/replay/ShareClipButton.tsx
 msgid "That's 10 share links today. Try again tomorrow."
 msgstr "Ya van 10 enlaces hoy. Prueba de nuevo mañana."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "That's a lot of saves in a minute. Wait a moment and save again."
+msgstr ""
 
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
@@ -20065,6 +20510,10 @@ msgstr "el nivel del chart +1.37"
 msgid "the chart's level +1.5"
 msgstr "el nivel del chart +1.5"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The code didn't pass the check. The errors are listed under it."
+msgstr ""
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "The code exchange was refused."
 msgstr "Se rechazó el intercambio del código."
@@ -20160,6 +20609,10 @@ msgstr "El foil y el arte en cada copia de tu carta, incluidas las que otros jug
 #: src/components/supporter/SupporterExtras.tsx
 msgid "The four cards under your profile's numbers. Swap any of them, here or from the card itself on your profile."
 msgstr "Las cuatro tarjetas bajo los números de tu perfil. Cambia cualquiera, aquí o desde la tarjeta misma en tu perfil."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The frame used for the still (thumbnails, the gallery, slow devices) and the banner row."
+msgstr ""
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway streams a section of your best play in your main keymode, instead of random notes."
@@ -20513,6 +20966,10 @@ msgstr "La partida estándar."
 #~ msgid "The star was not meant for you."
 #~ msgstr "La estrella no era para ti."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "The starter example"
+#~ msgstr ""
+
 #: src/lib/pack-run.ts
 msgid "The strongest card in the pack scores twice."
 msgstr "La carta más fuerte del pack puntúa dos veces."
@@ -20533,6 +20990,10 @@ msgstr "El cliente de prueba guarda su clave de firma en este navegador y sus to
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The third copy ever pulled"
 msgstr "La tercera copia que se sacó"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The tint the rest of the profile takes while the theme is on. Picked from the theme until you change it."
+msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -20598,6 +21059,22 @@ msgstr "color del tema"
 msgid "Theme color"
 msgstr "Color del tema"
 
+#: src/routes/supporter_.themes.$themeId.tsx
+msgid "theme editor"
+msgstr ""
+
+#: src/routes/supporter_.themes.$themeId.tsx
+msgid "Theme editor"
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "theme gallery"
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Theme gallery"
+msgstr ""
+
 #: src/components/layout/ThemePicker.tsx
 msgid "Theme hue"
 msgstr "Tono del tema"
@@ -20605,6 +21082,14 @@ msgstr "Tono del tema"
 #: src/components/layout/ThemePicker.tsx
 msgid "Theme saturation"
 msgstr "Saturación del tema"
+
+#: src/routes/supporter_.themes.spec.tsx
+msgid "theme spec"
+msgstr ""
+
+#: src/routes/supporter_.themes.spec.tsx
+msgid "Theme spec"
+msgstr ""
 
 #. placeholder {0}: theme.name
 #: src/components/supporter/CustomThemeCredit.tsx
@@ -20707,6 +21192,10 @@ msgstr "Este navegador no puede guardar directamente en un archivo, así que el 
 #: src/lib/replay-export/errors.ts
 msgid "This browser can't save the video file."
 msgstr "Este navegador no puede guardar el archivo de video."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "This browser has no WebGL2, so the preview can't run here."
+msgstr ""
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "This card is not ready to gift. Open it to finish loading its stats."
@@ -21035,6 +21524,18 @@ msgstr "Esta pestaña pasó a segundo plano, lo que puede pausar la exportación
 msgid "This team has no description."
 msgstr "Este equipo no tiene descripción."
 
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "This theme isn't in the gallery anymore."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "This theme isn't yours, or it was deleted."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "This theme, or code or an image in it, was taken down."
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "Esta herramienta lee datos de farm entre países desde el servidor, algo que no está configurado en este entorno."
@@ -21082,6 +21583,14 @@ msgstr "Tormenta eléctrica"
 #: src/components/me/MyDataPanel.tsx
 msgid "Thursdays"
 msgstr "Jueves"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Tick \"I understand\" under Sharing."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Tick that you have the right to share it."
+#~ msgstr ""
 
 #: src/components/supporter/loadout.ts
 msgid "Tier"
@@ -21154,6 +21663,10 @@ msgstr "a"
 msgid "to {keyCount}K rating"
 msgstr "al nivel de {keyCount}K"
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "to make your own profile themes."
+msgstr ""
+
 #: src/routes/privacy.tsx
 msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
 msgstr "Para prevenir el abuso, el servidor cuenta las peticiones por dirección IP con fines de limitación de tasa y limita las conexiones en vivo simultáneas por IP. Estos contadores existen solo en memoria: el backend no escribe direcciones IP ni user agents en su base de datos ni en sus registros. Los proveedores de alojamiento conservan registros de peticiones estándar, y el servidor registra detalles operativos como la actividad de los trabajos, las llamadas a la API de osu! de origen y los errores para monitorizar el estado del servicio."
@@ -21201,6 +21714,10 @@ msgstr "muy difícil"
 #: src/routes/recommendations.tsx
 msgid "too hard hides the lane from your gain views, done with it does the same for 60 days; setting a real score also clears a mark"
 msgstr "muy difícil oculta el mapa de tus vistas de ganancia, suficiente hace lo mismo por 60 días; poner un puntaje real también borra la marca"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Too heavy to run live: even a tiny frame takes too long. Lighten the loops or the fbm calls."
+msgstr ""
 
 #: src/components/settings/TranslationReportForm.tsx
 #: src/routes/report.tsx
@@ -21817,6 +22334,10 @@ msgstr "Hasta 200 MB"
 msgid "Up to 50 MB."
 msgstr "Hasta 50 MB."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Up to four, read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 msgid "up to the chart's level +0.1"
 msgstr "hasta el nivel del chart +0.1"
@@ -21925,6 +22446,10 @@ msgstr "Al subirlo obtienes un enlace para compartir el replay. Inicia sesión c
 msgid "Uploading image..."
 msgstr "Subiendo imagen..."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Uploading images is for supporters."
+msgstr ""
+
 #: src/lib/skins.ts
 msgid "Uploading previews."
 msgstr "Subiendo vistas previas."
@@ -21951,6 +22476,7 @@ msgid "Uploading the skin file, {sentSize} of {totalSize}."
 msgstr "Subiendo el archivo de la skin, {sentSize} de {totalSize}."
 
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Uploading..."
 msgstr "Subiendo..."
 
@@ -21987,6 +22513,10 @@ msgstr "Usar {selectedKeymode}K como portada de la carta"
 msgid "Use 3 to 15 letters, numbers, spaces, or - _ [ ]."
 msgstr "Usa de 3 a 15 letras, números, espacios o - _ [ ]."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Use another image"
+#~ msgstr ""
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Use as the {slotLabelLower} run"
 msgstr "Usar como la run {slotLabelLower}"
@@ -22007,6 +22537,10 @@ msgstr "Usar la portada del mapa {0} como fondo"
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Use my osu! name"
 msgstr "Usar mi nombre de osu!"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Use my own image"
+#~ msgstr ""
 
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
@@ -22411,6 +22945,10 @@ msgstr "esperando el próximo cálculo"
 msgid "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
 msgstr "Esperando el próximo cálculo. El play se calcula entonces y esta lista se actualiza sola."
 
+#: src/components/supporter/themes/RowFramer.tsx
+msgid "Waiting for the theme"
+msgstr ""
+
 #: src/lib/chain-run.ts
 msgid "Wallet"
 msgstr "Cartera"
@@ -22516,6 +23054,22 @@ msgstr "Aún no tenemos plays con replay disponibles para {0}."
 msgid "We have no run by {0} on this map. Paste a link to their score to use it."
 msgstr "No tenemos ninguna run de {0} en este mapa. Pega el link de su score para usarla."
 
+#: src/routes/supporter_.themes.index.tsx
+msgid "Wear"
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Wear it"
+msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Wearing"
+msgstr ""
+
+#: src/routes/supporter_.themes.gallery.tsx
+msgid "Wearing a theme from the gallery is for supporters. Anyone can remix one to try it in the editor."
+msgstr ""
+
 #: src/components/packs/GoatPoll.tsx
 msgid "web.archive.org link to their osu! profile"
 msgstr "link de web.archive.org a su perfil de osu!"
@@ -22553,6 +23107,10 @@ msgstr "Qué hace"
 msgid "What it is for"
 msgstr "Descripción"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "What it's called"
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "what nearby players actually farm"
 msgstr "lo que los jugadores cercanos realmente farmean"
@@ -22565,6 +23123,14 @@ msgstr "lo último que jugaron los jugadores cerca de ti"
 msgid "What seems wrong?"
 msgstr "¿Qué parece estar mal?"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "What shows behind your row in rankings and lists when you turn rows on: a still of the theme, at the moment above."
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "What shows behind your row in rankings and lists when you turn rows on. Always a still image."
+#~ msgstr ""
+
 #: src/components/supporter/SupporterExtras.tsx
 msgid "What supporting gets you"
 msgstr "Lo que obtienes al apoyar"
@@ -22576,6 +23142,10 @@ msgstr "Qué necesitas"
 #: src/components/me/MyStatsInsights.tsx
 msgid "What you play"
 msgstr "Lo que juegas"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "What you wrote here goes, unless it's saved."
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "what you're browsing"
@@ -22809,6 +23379,14 @@ msgstr "Escribir una respuesta"
 msgid "Write a short description of the server."
 msgstr "Escribe una descripción corta del servidor."
 
+#: src/routes/supporter_.themes.index.tsx
+#~ msgid "Write a theme's shader yourself, ask an AI for one with the spec, or paste a Shadertoy shader. It goes live as soon as you save it."
+#~ msgstr ""
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "Write a theme's shader, start from a built-in one, or paste a Shadertoy shader. It goes live as soon as you save it."
+msgstr ""
+
 #: src/routes/bbcode.tsx
 msgid "Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy."
 msgstr "Escribe y previsualiza el BBCode de perfil de osu! para tu página me!, con vista previa en vivo y copia con un clic."
@@ -23021,6 +23599,10 @@ msgstr "Ya puedes enviar plays a tu cuenta de Mania Tracker aunque estés offlin
 #: src/routes/news_.companella.tsx
 msgid "You can revoke Companella's connection in <0>Settings</0>, under Preferences. It stops sending plays right away."
 msgstr "Puedes revocar la conexión de Companella en <0>Ajustes</0>, en Preferencias. Deja de enviar plays de inmediato."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "You can't make themes anymore."
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "you could gain"
@@ -23294,6 +23876,10 @@ msgstr "tus marcas"
 msgid "Your mods"
 msgstr "Tus mods"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Your name"
+msgstr ""
+
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
 msgid "Your name in its own style and font, on your profile and in every list it shows up in."
@@ -23438,9 +24024,24 @@ msgstr "Tu apoyo mantiene los servidores andando y me da el tiempo para seguir c
 msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks."
 msgstr "Tu apoyo ayuda a mantener los servidores. Estos extras son para ti."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Your supporter time has run out."
+msgstr ""
+
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "Your teams could not be loaded just now. Try again in a moment."
 #~ msgstr "No se pudieron cargar tus equipos. Inténtalo de nuevo en un momento."
+
+#: src/routes/supporter_.themes.index.tsx
+msgid "your themes"
+msgstr ""
+
+#: src/routes/supporter_.themes.$themeId.tsx
+#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/supporter_.themes.index.tsx
+#: src/routes/supporter_.themes.spec.tsx
+msgid "Your themes"
+msgstr ""
 
 #: src/components/player/FeaturedPlays.tsx
 msgid "Your title"
@@ -23499,6 +24100,10 @@ msgstr "Fumo de Yuyuko"
 #: src/lib/supporter-pack-style.ts
 msgid "Zip binder"
 msgstr "Carpeta con cierre"
+
+#: src/components/supporter/themes/RowFramer.tsx
+msgid "Zoom"
+msgstr ""
 
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Zoom {value}"

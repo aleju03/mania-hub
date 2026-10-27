@@ -79,6 +79,7 @@ import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
 import { Route as ApiSupporterCompanionRouteImport } from './routes/api/supporter-companion'
 import { Route as ApiSupporterMotifRouteImport } from './routes/api/supporter-motif'
+import { Route as ApiSupporterThemeAssetRouteImport } from './routes/api/supporter-theme-asset'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiTeamImageRouteImport } from './routes/api/team-image'
 import { Route as BridgeAuthorizeRouteImport } from './routes/bridge_.authorize'
@@ -121,6 +122,10 @@ import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$usern
 import { Route as PlayerUsernameSkillsRouteImport } from './routes/player/$username/skills'
 import { Route as PullOwnerIdCardIdRouteImport } from './routes/pull/$ownerId/$cardId'
 import { Route as RecommendationsMapBeatmapIdRouteImport } from './routes/recommendations/map/$beatmapId'
+import { Route as SupporterThemesIndexRouteImport } from './routes/supporter_.themes.index'
+import { Route as SupporterThemesThemeIdRouteImport } from './routes/supporter_.themes.$themeId'
+import { Route as SupporterThemesGalleryRouteImport } from './routes/supporter_.themes.gallery'
+import { Route as SupporterThemesSpecRouteImport } from './routes/supporter_.themes.spec'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
 import { Route as ApiAuthDiscordCallbackRouteImport } from './routes/api/auth/discord/callback'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
@@ -490,6 +495,11 @@ const ApiSupporterMotifRoute = ApiSupporterMotifRouteImport.update({
   path: '/api/supporter-motif',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSupporterThemeAssetRoute = ApiSupporterThemeAssetRouteImport.update({
+  id: '/api/supporter-theme-asset',
+  path: '/api/supporter-theme-asset',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSyncRoute = ApiSyncRouteImport.update({
   id: '/api/sync',
   path: '/api/sync',
@@ -703,6 +713,26 @@ const RecommendationsMapBeatmapIdRoute =
     path: '/map/$beatmapId',
     getParentRoute: () => RecommendationsRoute,
   } as any)
+const SupporterThemesIndexRoute = SupporterThemesIndexRouteImport.update({
+  id: '/supporter_/themes/',
+  path: '/supporter/themes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupporterThemesThemeIdRoute = SupporterThemesThemeIdRouteImport.update({
+  id: '/supporter_/themes/$themeId',
+  path: '/supporter/themes/$themeId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupporterThemesGalleryRoute = SupporterThemesGalleryRouteImport.update({
+  id: '/supporter_/themes/gallery',
+  path: '/supporter/themes/gallery',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupporterThemesSpecRoute = SupporterThemesSpecRouteImport.update({
+  id: '/supporter_/themes/spec',
+  path: '/supporter/themes/spec',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
   id: '/videos/$id/$filename',
   path: '/videos/$id/$filename',
@@ -874,6 +904,7 @@ export interface FileRoutesByFullPath {
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/supporter-companion': typeof ApiSupporterCompanionRoute
   '/api/supporter-motif': typeof ApiSupporterMotifRoute
+  '/api/supporter-theme-asset': typeof ApiSupporterThemeAssetRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
   '/bridge/authorize': typeof BridgeAuthorizeRoute
@@ -916,7 +947,11 @@ export interface FileRoutesByFullPath {
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
+  '/supporter/themes/$themeId': typeof SupporterThemesThemeIdRoute
+  '/supporter/themes/gallery': typeof SupporterThemesGalleryRoute
+  '/supporter/themes/spec': typeof SupporterThemesSpecRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
+  '/supporter/themes/': typeof SupporterThemesIndexRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
@@ -1005,6 +1040,7 @@ export interface FileRoutesByTo {
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/supporter-companion': typeof ApiSupporterCompanionRoute
   '/api/supporter-motif': typeof ApiSupporterMotifRoute
+  '/api/supporter-theme-asset': typeof ApiSupporterThemeAssetRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
   '/bridge/authorize': typeof BridgeAuthorizeRoute
@@ -1047,7 +1083,11 @@ export interface FileRoutesByTo {
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
+  '/supporter/themes/$themeId': typeof SupporterThemesThemeIdRoute
+  '/supporter/themes/gallery': typeof SupporterThemesGalleryRoute
+  '/supporter/themes/spec': typeof SupporterThemesSpecRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
+  '/supporter/themes': typeof SupporterThemesIndexRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
@@ -1137,6 +1177,7 @@ export interface FileRoutesById {
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/supporter-companion': typeof ApiSupporterCompanionRoute
   '/api/supporter-motif': typeof ApiSupporterMotifRoute
+  '/api/supporter-theme-asset': typeof ApiSupporterThemeAssetRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
   '/bridge_/authorize': typeof BridgeAuthorizeRoute
@@ -1179,7 +1220,11 @@ export interface FileRoutesById {
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
+  '/supporter_/themes/$themeId': typeof SupporterThemesThemeIdRoute
+  '/supporter_/themes/gallery': typeof SupporterThemesGalleryRoute
+  '/supporter_/themes/spec': typeof SupporterThemesSpecRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
+  '/supporter_/themes/': typeof SupporterThemesIndexRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
@@ -1270,6 +1315,7 @@ export interface FileRouteTypes {
     | '/api/signature-preview'
     | '/api/supporter-companion'
     | '/api/supporter-motif'
+    | '/api/supporter-theme-asset'
     | '/api/sync'
     | '/api/team-image'
     | '/bridge/authorize'
@@ -1312,7 +1358,11 @@ export interface FileRouteTypes {
     | '/player/$username/skills'
     | '/pull/$ownerId/$cardId'
     | '/recommendations/map/$beatmapId'
+    | '/supporter/themes/$themeId'
+    | '/supporter/themes/gallery'
+    | '/supporter/themes/spec'
     | '/videos/$id/$filename'
+    | '/supporter/themes/'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
     | '/api/signature/$token/$variant'
@@ -1401,6 +1451,7 @@ export interface FileRouteTypes {
     | '/api/signature-preview'
     | '/api/supporter-companion'
     | '/api/supporter-motif'
+    | '/api/supporter-theme-asset'
     | '/api/sync'
     | '/api/team-image'
     | '/bridge/authorize'
@@ -1443,7 +1494,11 @@ export interface FileRouteTypes {
     | '/player/$username/skills'
     | '/pull/$ownerId/$cardId'
     | '/recommendations/map/$beatmapId'
+    | '/supporter/themes/$themeId'
+    | '/supporter/themes/gallery'
+    | '/supporter/themes/spec'
     | '/videos/$id/$filename'
+    | '/supporter/themes'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
     | '/api/signature/$token/$variant'
@@ -1532,6 +1587,7 @@ export interface FileRouteTypes {
     | '/api/signature-preview'
     | '/api/supporter-companion'
     | '/api/supporter-motif'
+    | '/api/supporter-theme-asset'
     | '/api/sync'
     | '/api/team-image'
     | '/bridge_/authorize'
@@ -1574,7 +1630,11 @@ export interface FileRouteTypes {
     | '/player/$username/skills'
     | '/pull/$ownerId/$cardId'
     | '/recommendations/map/$beatmapId'
+    | '/supporter_/themes/$themeId'
+    | '/supporter_/themes/gallery'
+    | '/supporter_/themes/spec'
     | '/videos/$id/$filename'
+    | '/supporter_/themes/'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
     | '/api/signature/$token/$variant'
@@ -1664,6 +1724,7 @@ export interface RootRouteChildren {
   ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
   ApiSupporterCompanionRoute: typeof ApiSupporterCompanionRoute
   ApiSupporterMotifRoute: typeof ApiSupporterMotifRoute
+  ApiSupporterThemeAssetRoute: typeof ApiSupporterThemeAssetRoute
   ApiSyncRoute: typeof ApiSyncRoute
   ApiTeamImageRoute: typeof ApiTeamImageRoute
   BridgeAuthorizeRoute: typeof BridgeAuthorizeRoute
@@ -1699,7 +1760,11 @@ export interface RootRouteChildren {
   CompanellaDocsOpenapiDotyamlRoute: typeof CompanellaDocsOpenapiDotyamlRoute
   CompanellaDocsReferenceClientDotmjsRoute: typeof CompanellaDocsReferenceClientDotmjsRoute
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
+  SupporterThemesThemeIdRoute: typeof SupporterThemesThemeIdRoute
+  SupporterThemesGalleryRoute: typeof SupporterThemesGalleryRoute
+  SupporterThemesSpecRoute: typeof SupporterThemesSpecRoute
   VideosIdFilenameRoute: typeof VideosIdFilenameRoute
+  SupporterThemesIndexRoute: typeof SupporterThemesIndexRoute
   ApiSignatureTokenVariantRoute: typeof ApiSignatureTokenVariantRoute
   ApiIntegrationsCompanellaV1CapabilitiesRoute: typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
   ApiIntegrationsCompanellaV1MeRoute: typeof ApiIntegrationsCompanellaV1MeRoute
@@ -2202,6 +2267,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSupporterMotifRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/supporter-theme-asset': {
+      id: '/api/supporter-theme-asset'
+      path: '/api/supporter-theme-asset'
+      fullPath: '/api/supporter-theme-asset'
+      preLoaderRoute: typeof ApiSupporterThemeAssetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/sync': {
       id: '/api/sync'
       path: '/api/sync'
@@ -2495,6 +2567,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/recommendations/map/$beatmapId'
       preLoaderRoute: typeof RecommendationsMapBeatmapIdRouteImport
       parentRoute: typeof RecommendationsRoute
+    }
+    '/supporter_/themes/': {
+      id: '/supporter_/themes/'
+      path: '/supporter/themes'
+      fullPath: '/supporter/themes/'
+      preLoaderRoute: typeof SupporterThemesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/supporter_/themes/$themeId': {
+      id: '/supporter_/themes/$themeId'
+      path: '/supporter/themes/$themeId'
+      fullPath: '/supporter/themes/$themeId'
+      preLoaderRoute: typeof SupporterThemesThemeIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/supporter_/themes/gallery': {
+      id: '/supporter_/themes/gallery'
+      path: '/supporter/themes/gallery'
+      fullPath: '/supporter/themes/gallery'
+      preLoaderRoute: typeof SupporterThemesGalleryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/supporter_/themes/spec': {
+      id: '/supporter_/themes/spec'
+      path: '/supporter/themes/spec'
+      fullPath: '/supporter/themes/spec'
+      preLoaderRoute: typeof SupporterThemesSpecRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/videos/$id/$filename': {
       id: '/videos/$id/$filename'
@@ -2823,6 +2923,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
   ApiSupporterCompanionRoute: ApiSupporterCompanionRoute,
   ApiSupporterMotifRoute: ApiSupporterMotifRoute,
+  ApiSupporterThemeAssetRoute: ApiSupporterThemeAssetRoute,
   ApiSyncRoute: ApiSyncRoute,
   ApiTeamImageRoute: ApiTeamImageRoute,
   BridgeAuthorizeRoute: BridgeAuthorizeRoute,
@@ -2859,7 +2960,11 @@ const rootRouteChildren: RootRouteChildren = {
   CompanellaDocsReferenceClientDotmjsRoute:
     CompanellaDocsReferenceClientDotmjsRoute,
   PullOwnerIdCardIdRoute: PullOwnerIdCardIdRoute,
+  SupporterThemesThemeIdRoute: SupporterThemesThemeIdRoute,
+  SupporterThemesGalleryRoute: SupporterThemesGalleryRoute,
+  SupporterThemesSpecRoute: SupporterThemesSpecRoute,
   VideosIdFilenameRoute: VideosIdFilenameRoute,
+  SupporterThemesIndexRoute: SupporterThemesIndexRoute,
   ApiSignatureTokenVariantRoute: ApiSignatureTokenVariantRoute,
   ApiIntegrationsCompanellaV1CapabilitiesRoute:
     ApiIntegrationsCompanellaV1CapabilitiesRoute,
