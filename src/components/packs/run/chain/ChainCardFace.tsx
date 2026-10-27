@@ -1,7 +1,7 @@
 import { memo, useId, type CSSProperties, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
 import { CountryFlag } from "#/components/ui/CountryFlag";
-import { CHAIN_VARIANT_COPY, chainCardColor, chainCardFace, chainCardRarityLabel, chainSkillShort, type ChainCard } from "#/lib/chain-run";
+import { CHAIN_VARIANT_COPY, chainCardBaseText, chainCardColor, chainCardFace, chainCardRarityLabel, chainSkillShort, type ChainCard } from "#/lib/chain-run";
 import { MANIA_TIER_STYLES, maniaTriangleOverlaySvg } from "#/lib/maniacard";
 import { getCosmicTierPalette, type CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
@@ -136,10 +136,10 @@ export const ChainCardFace = memo(function ChainCardFace({
   const id = useId();
   // A GOAT wears the maniacard GOAT's own face and the roster's name and avatar.
   const card = chainCardFace(dealt);
-  const rarity = card.goat ? ("goat" as const) : card.tier;
+  const rarity = card.goat ? ("goat" as const) : card.eternal ? ("eternal" as const) : card.tier;
   const style = MANIA_TIER_STYLES[rarity];
   const cosmic = getCosmicTierPalette(rarity);
-  const finish = card.goat ? FINISH.worldClass : FINISH[card.tier];
+  const finish = card.goat || card.eternal ? FINISH.worldClass : FINISH[card.tier];
   const animate = !dim;
   const on = (trait: string) => Boolean(lit?.has(trait));
   const w = width;
@@ -239,7 +239,7 @@ export const ChainCardFace = memo(function ChainCardFace({
     );
   }
   const glints =
-    cosmic && animate && layout !== "micro"
+    cosmic && animate && layout !== "micro" && !card.eternal
       ? GLINTS.map(([x, y, size, delay]) => {
           const px = Math.max(5, w * size);
           return (
@@ -358,7 +358,7 @@ export const ChainCardFace = memo(function ChainCardFace({
     const pillSize = Math.max(11, Math.round(10 * s));
     const pillPad = Math.round(6 * s);
     // The rarity pill squeezes (never clips) beside a wide number.
-    const pillRoom = w - pad * 2 - baseSize * 0.62 * String(card.base + (card.grown ?? 0)).length - 6 * s;
+    const pillRoom = w - pad * 2 - baseSize * 0.62 * chainCardBaseText(card).length - 6 * s;
     const pillW = wordWidth11(tierWord.toUpperCase()) * 1.28 * (pillSize / 11) + pillPad * 2;
     const pillScale = Math.min(1, pillRoom / pillW);
     content = (
@@ -388,7 +388,7 @@ export const ChainCardFace = memo(function ChainCardFace({
           className="absolute font-black leading-[0.82] tabular-nums tracking-[-0.03em] text-white"
           style={{ left: pad, bottom: pad, fontSize: baseSize, textShadow: "0 2px 4px rgba(0,0,0,0.45)" }}
         >
-          {card.base + (card.grown ?? 0)}
+          {chainCardBaseText(card)}
         </div>
         <div
           className="absolute whitespace-nowrap font-black uppercase leading-none tracking-[0.08em]"
@@ -420,7 +420,7 @@ export const ChainCardFace = memo(function ChainCardFace({
     const baseSize = Math.max(13, Math.round(w * 0.17));
     const panelH = 3 + stripH + 2 + Math.round(baseSize * 0.85) + pad;
     const panelTop = Math.round(h - panelH);
-    const baseW = baseSize * 0.62 * String(card.base + (card.grown ?? 0)).length;
+    const baseW = baseSize * 0.62 * chainCardBaseText(card).length;
     const wordScale = Math.min(1, (inner - baseW - 3) / (wordWidth11(tierWord.toUpperCase()) * 1.2 + (tierLit ? 8 : 0)));
     // "4K"/"7K" stays text in every layout; the flag's padding and then the
     // skill code give way first.
@@ -457,7 +457,7 @@ export const ChainCardFace = memo(function ChainCardFace({
           className="absolute font-black leading-[0.82] tabular-nums tracking-[-0.03em] text-white"
           style={{ left: pad, bottom: pad, fontSize: baseSize, textShadow: TEXT_SHADOW }}
         >
-          {card.base + (card.grown ?? 0)}
+          {chainCardBaseText(card)}
         </div>
         <div
           className="absolute whitespace-nowrap text-[11px] font-black uppercase leading-[12px] tracking-[0.04em]"
@@ -483,7 +483,7 @@ export const ChainCardFace = memo(function ChainCardFace({
           className="absolute inset-x-0 text-center text-[12px] font-black leading-none tabular-nums text-white"
           style={{ bottom: Math.max(2, (numberH - 12) / 2 + 1), textShadow: TEXT_SHADOW }}
         >
-          {card.base + (card.grown ?? 0)}
+          {chainCardBaseText(card)}
         </div>
       </>
     );

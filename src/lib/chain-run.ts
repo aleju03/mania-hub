@@ -30,6 +30,7 @@ import {
   CHAIN_MODS,
   CHAIN_SCENE_NUMBERS,
   chainScoreText,
+  chainEternalBase,
 } from "../../backend/src/shared/chain-run";
 import { honoraryPlayerById } from "./honorary-players";
 import { liveBridgeToken } from "./live-backend-tokens";
@@ -225,14 +226,19 @@ export const CHAIN_TIER_COLOR: Record<ChainTier, { fill: string; deep: string; i
 /* A GOAT's colour, the maniacard GOAT's amber, and its rarity word. */
 export const CHAIN_GOAT_COLOR = { fill: "#d9960f", deep: "#4a2a04", ink: "#ffd978" };
 export const CHAIN_GOAT_LABEL = msg`GOAT`;
+/* An Eternal's, the maniacard Eternal's violet. */
+export const CHAIN_ETERNAL_COLOR = { fill: "#7e22ce", deep: "#2e1065", ink: "#e9d5ff" };
+export const CHAIN_ETERNAL_LABEL = msg`Eternal`;
 
-/* The colour and rarity word a card shows: its tier's, or the GOAT's. The
-   roster's own badge text for a GOAT (cardTierLabel) wins when it has one. */
-export function chainCardColor(card: Pick<ChainCard, "tier" | "goat">) {
-  return card.goat ? CHAIN_GOAT_COLOR : CHAIN_TIER_COLOR[card.tier];
+/* The colour and rarity word a card shows: its tier's, the GOAT's or the
+   Eternal's. The roster's own badge text for a GOAT (cardTierLabel) wins
+   when it has one. */
+export function chainCardColor(card: Pick<ChainCard, "tier" | "goat" | "eternal">) {
+  return card.goat ? CHAIN_GOAT_COLOR : card.eternal ? CHAIN_ETERNAL_COLOR : CHAIN_TIER_COLOR[card.tier];
 }
 
-export function chainCardRarityLabel(card: Pick<ChainCard, "id" | "tier" | "goat">, i18n: I18n): string {
+export function chainCardRarityLabel(card: Pick<ChainCard, "id" | "tier" | "goat" | "eternal">, i18n: I18n): string {
+  if (card.eternal && !card.goat) return i18n._(CHAIN_ETERNAL_LABEL);
   if (!card.goat) return i18n._(CHAIN_TIER_LABEL[card.tier]);
   return honoraryPlayerById(card.id)?.cardTierLabel ?? i18n._(CHAIN_GOAT_LABEL);
 }
@@ -557,6 +563,7 @@ const REFUSALS: Record<string, MessageDescriptor> = {
   pool_unavailable: msg`Cards can't be dealt right now. Try again in a moment.`,
   no_target: msg`GOATs can't take mods.`,
   no_revive: msg`This run already used its revive.`,
+  eternal: msg`An Eternal never leaves.`,
 };
 
 /* The shop's contracts: a name and the rule, short. */
@@ -630,6 +637,26 @@ export function chainOfferName(offer: { kind: string; cc?: string; skill?: strin
    engine's text, so a 727 shows exactly where the engine flags one). */
 export function formatChainScore(value: number): string {
   return chainScoreText(value);
+}
+
+/* The number a card face shows: its base (an Eternal's doubled) plus what it
+   grew, short enough for the face (48K, 3.1M, then e-notation). */
+export function chainCardBaseText(card: Pick<ChainCard, "base" | "grown" | "eternal" | "doubled">): string {
+  const value = chainEternalBase(card) + (card.grown ?? 0);
+  if (value < 10_000) return String(value);
+  if (value >= 1e15) {
+    const [mantissa, exponent] = value.toExponential(1).split("e");
+    return `${mantissa}e${Number(exponent)}`;
+  }
+  const units: Array<[number, string]> = [
+    [1e12, "T"],
+    [1e9, "B"],
+    [1e6, "M"],
+    [1e3, "K"],
+  ];
+  const [size, unit] = units.find(([size]) => value >= size)!;
+  const short = value / size;
+  return `${short >= 100 ? Math.floor(short) : Math.floor(short * 10) / 10}${unit}`;
 }
 
 /* The shop's practice, as its tile says it. */

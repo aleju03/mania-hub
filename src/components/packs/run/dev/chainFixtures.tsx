@@ -43,6 +43,7 @@ import {
   makeFixturePool,
   chainRandom,
   CHAIN_GOAT,
+  CHAIN_ETERNAL,
   makeFixtureRun,
   scoreChainRowFor,
   chainBestRow,
@@ -63,7 +64,7 @@ import { getCachedPackFrontCanvas, PACK_ASPECT, packArtStyleFor } from "../../pa
 import { ChainTable, type ChainTableScript } from "../chain/ChainTable";
 import type { ChainActOutcome } from "../chain/useChainRun";
 
-export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "variants", "contract", "skills", "endless", "won"] as const;
+export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "eternal", "variants", "contract", "skills", "endless", "won"] as const;
 export type ChainFixtureMoment = (typeof CHAIN_FIXTURE_MOMENTS)[number];
 
 /* Real osu! ids, used only for avatars on the synthetic players. */
@@ -187,6 +188,28 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
     for (let rng = 0; rng < 1_000_000; rng += 1) {
       if (chainRandom({ rng }) < CHAIN_GOAT.chance) {
         state.goatRng = rng;
+        break;
+      }
+    }
+    return { state, pool, script: { row, dealt: true, autoPlay: true, autoPack: true }, best: null };
+  }
+  if (moment === "eternal") {
+    const pool = fixturePool(5);
+    const f = makeFixtureRun(5, { round: 3, phase: "arranged", pool });
+    const state = f.state;
+    const row = f.row ?? [];
+    // A deck card in the row is an Eternal that has already doubled six times.
+    const slot = row.findIndex((uid) => state.hand.find((entry) => entry.uid === uid && !entry.pack));
+    const at = slot >= 0 ? slot : 0;
+    for (const entry of [...state.hand, ...state.deck]) if (entry.uid === row[at]) entry.card = { ...entry.card, eternal: true, doubled: 6 };
+    const total = scoreChainRowFor(state, row)?.total ?? 0;
+    if (total > 0) state.roundScore = Math.max(0, state.target - Math.floor(total * 0.6));
+    state.rowsLeft = 2;
+    state.shards = 30;
+    // The Eternal roll's stream set to hit on its next card: the shop pack's first.
+    for (let rng = 0; rng < 10_000_000; rng += 1) {
+      if (chainRandom({ rng }) < CHAIN_ETERNAL.chance) {
+        state.eternalRng = rng;
         break;
       }
     }
@@ -335,7 +358,7 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
       if (moment === "start") {
         if (name === "stage:sealed") ready();
         if (name === "round:dealt") done(900);
-      } else if (moment === "goat") {
+      } else if (moment === "goat" || moment === "eternal") {
         if (name === "play:start") ready();
         // Back in the shop after the keep: buy a pack, which turns a GOAT.
         if (name === "shop" && shopStep.current === 0) {

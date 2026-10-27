@@ -14,6 +14,7 @@ import {
   chainCardRarityLabel,
   chainSkillEffectText,
   formatChainScore,
+  chainCardBaseText,
   chainSceneMultiplier,
   formatChainX,
   isChainTier,
@@ -184,7 +185,7 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
     rank: card.rank !== null ? `#${card.rank.toLocaleString("en-US")}` : null,
     pp: Math.round(card.pp).toLocaleString("en-US"),
     plays: card.plays !== null ? card.plays.toLocaleString("en-US") : null,
-    base: String(card.base + (card.grown ?? 0)),
+    base: chainCardBaseText(card),
   };
   // What its skillset does, at its rarity's band.
   const skillEffect = chainSkillEffectText(card, i18n);
@@ -208,6 +209,16 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
       {card.goat && (
         <div className="mt-1 text-[12px] text-osu-f1">
           <Trans>Links to the cards next to it on every trait. The first GOAT in a row doubles the combo.</Trans>
+        </div>
+      )}
+      {card.eternal && !card.goat && (
+        <div className="mt-1 text-[12px] text-osu-f1">
+          <Trans>Never leaves your hand. Its base doubles every time it plays, for the rest of the run.</Trans>
+          {(entry.card.doubled ?? 0) > 0 && (
+            <span className="ml-1 font-black text-[#e9d5ff]">
+              <Trans>Doubled {entry.card.doubled} times.</Trans>
+            </span>
+          )}
         </div>
       )}
       {card.variant && (

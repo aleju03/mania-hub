@@ -621,8 +621,8 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                   <motion.button
                     key={entry.uid}
                     type="button"
-                    aria-label={t`Remove ${entry.card.name}`}
-                    disabled={busy}
+                    aria-label={entry.card.eternal ? entry.card.name : t`Remove ${entry.card.name}`}
+                    disabled={busy || entry.card.eternal}
                     className="relative block"
                     style={{ width: narrow ? 68 : 110, height: (narrow ? 68 : 110) * 1.4 }}
                     initial={reducedMotion ? false : { y: 30, opacity: 0 }}
@@ -632,7 +632,7 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                     whileHover={reducedMotion ? undefined : { y: -6, scale: 1.05 }}
                     onClick={async (event) => {
                       const button = event.currentTarget;
-                      if (deck.length <= CHAIN_RULES.minDeck) return;
+                      if (deck.length <= CHAIN_RULES.minDeck || entry.card.eternal) return;
                       await run({ kind: "removeCard", uid: entry.uid }, CHAIN_RULES.removePrice, () => {
                         button.animate([{ transform: "translateX(0)" }, { transform: "translateX(-8px)" }, { transform: "translateX(7px)" }, { transform: "translateX(0)" }], 300);
                       });

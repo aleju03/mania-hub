@@ -20,7 +20,8 @@ import { runSound } from "../runSound";
 import { useShudder } from "../shopMotion";
 import { ChainCardFace } from "./ChainCardFace";
 import { GoatBurst } from "../../GoatBurst";
-import { playGoatFanfare } from "../../packSfx";
+import { EternalBurst } from "../../EternalBurst";
+import { playEternalFanfare, playGoatFanfare, prefetchEternalFanfare } from "../../packSfx";
 import { useChainDetailsTrigger } from "./ChainDetails";
 import { CHAIN_FEEL } from "./chainFeel";
 import type { BoardLayout } from "./chainLayout";
@@ -29,6 +30,10 @@ import { chainPackArtAccent, useChainPackArt, type ChainPackArt } from "./chainP
 /* A GOAT's flip: the biggest ceremony on the stage, with the maniacard GOAT's glow. */
 const GOAT_CEREMONY = 8;
 const GOAT_GLOW = { r: 245, g: 158, b: 11, a: 0.46 };
+/* An Eternal turns after everything, a GOAT included, with the real packs'
+   Eternal burst and fanfare. */
+const ETERNAL_CEREMONY = 9;
+const ETERNAL_GLOW = { r: 168, g: 85, b: 247, a: 0.52 };
 
 /* Which wrapper a chain pack wears: the site's pack art, by kind. */
 export function chainPackType(reason: ChainPackReason, offer?: Pick<ChainOffer, "kind"> | null): PackTypeId {
@@ -128,6 +133,7 @@ function StageCard({
   from,
   faceUp,
   selected,
+  kept,
   selectable,
   leaving,
   reducedMotion,
@@ -147,6 +153,8 @@ function StageCard({
   from: { x: number; y: number; scale: number } | null;
   faceUp: boolean;
   selected: boolean;
+  /* Kept whatever is picked (an Eternal): ringed in its ink, not pickable. */
+  kept: boolean;
   selectable: boolean;
   leaving: "kept" | "recycled" | "join" | null;
   reducedMotion: boolean;
@@ -190,6 +198,16 @@ function StageCard({
           <div className="pointer-events-none absolute inset-0 z-[30]" style={{ transform: "scale(0.6)" }}>
             <GoatBurst key={flashTick} glowColor={GOAT_GLOW} />
           </div>
+        )}
+        {card.eternal && flashTick > 0 && !reducedMotion && (
+          <>
+            <div className="pointer-events-none absolute inset-0 -z-[1]" style={{ transform: "scale(0.7)" }}>
+              <EternalBurst key={`behind-${flashTick}`} glowColor={ETERNAL_GLOW} layer="behind" />
+            </div>
+            <div className="pointer-events-none absolute inset-0 z-[30]" style={{ transform: "scale(0.7)" }}>
+              <EternalBurst key={flashTick} glowColor={ETERNAL_GLOW} layer="front" />
+            </div>
+          </>
         )}
         <div className="absolute inset-0 translate-x-[3px] translate-y-[8px] rounded-[10px] bg-black/45" />
         <motion.div
@@ -235,6 +253,9 @@ function StageCard({
             {backUrl && <img src={backUrl} alt="" draggable={false} className="h-full w-full object-cover" />}
           </div>
         </motion.div>
+        {kept && (
+          <div className="pointer-events-none absolute -inset-[4px] rounded-[13px] border-[3px]" style={{ borderColor: chainCardColor(card).ink }} />
+        )}
         {selected && (
           <>
             <div className="pointer-events-none absolute -inset-[4px] rounded-[13px] border-[3px] border-osu-pink" />
@@ -383,7 +404,8 @@ export function ChainPackStage(props: ChainPackStageProps) {
       /* Rarer cards turn with more ceremony, the rarest last: a longer,
          tenser hold, then a flash in the rarity's ink and a bigger sound. */
       // A GOAT ranks above World Class (6) and turns last.
-      const rank = (card: ChainCard) => (card.goat ? GOAT_CEREMONY : Math.max(0, CHAIN_TIERS.indexOf(card.tier) - 2));
+      const rank = (card: ChainCard) => (card.eternal ? ETERNAL_CEREMONY : card.goat ? GOAT_CEREMONY : Math.max(0, CHAIN_TIERS.indexOf(card.tier) - 2));
+      if (dealt.some((card) => card.eternal)) prefetchEternalFanfare();
       const order = dealt.map((_, index) => index);
       const best = order.reduce((top, index) => (rank(dealt[index]) > rank(dealt[top]) ? index : top), 0);
       if (rank(dealt[best]) > 0) order.push(...order.splice(order.indexOf(best), 1));
@@ -404,12 +426,13 @@ export function ChainPackStage(props: ChainPackStageProps) {
           runSound.charmFire(ceremony * 3);
           if (ceremony >= 3) runSound.stepMultiplier(ceremony * 4);
           if (ceremony >= 5) runSound.fireIgnite();
-          if (ceremony >= GOAT_CEREMONY) playGoatFanfare();
+          if (ceremony >= ETERNAL_CEREMONY) playEternalFanfare();
+          else if (ceremony >= GOAT_CEREMONY) playGoatFanfare();
           shake(ceremony >= GOAT_CEREMONY ? 1.6 : Math.min(1.2, 0.15 + ceremony * 0.16));
         }
         const spent = performance.now() - started;
         // The GOAT burst runs about 2.5 s; the stage holds for most of it.
-        const after = ceremony >= GOAT_CEREMONY ? 1800 : CHAIN_FEEL.pack.flipStaggerMs + ceremony * 50;
+        const after = ceremony >= ETERNAL_CEREMONY ? 3600 : ceremony >= GOAT_CEREMONY ? 1800 : CHAIN_FEEL.pack.flipStaggerMs + ceremony * 50;
         await wait(Math.max(quick ? 20 : 40, (quick ? 40 : after) - spent));
       }
       await wait(RUN_FEEL.flip.durationMs + 60);
@@ -473,6 +496,11 @@ export function ChainPackStage(props: ChainPackStageProps) {
   selectedRef.current = selected;
   const toggle = (index: number) => {
     if (stageRef.current !== "open" || mode !== "keep") return;
+    // An Eternal is kept anyway; it is never one of the picks.
+    if (cards?.[index]?.eternal) {
+      setShudders((map) => ({ ...map, [index]: (map[index] ?? 0) + 1 }));
+      return;
+    }
     const current = selectedRef.current;
     let next: number[];
     if (current.includes(index)) next = current.filter((value) => value !== index);
@@ -489,7 +517,7 @@ export function ChainPackStage(props: ChainPackStageProps) {
 
   const confirm = useCallback(async () => {
     if (stageRef.current !== "open" || !cards) return;
-    if (selected.length !== Math.min(keep, cards.length)) {
+    if (selected.length !== Math.min(keep, cards.filter((card) => !card.eternal).length)) {
       buttonShudder();
       runSound.refuse();
       return;
@@ -510,11 +538,11 @@ export function ChainPackStage(props: ChainPackStageProps) {
     const shardsEl = [...document.querySelectorAll<HTMLElement>("[data-chain-shards]")].find((element) => element.offsetParent !== null);
     const shardsRect = shardsEl?.getBoundingClientRect();
     const next = new Map<number, "kept" | "recycled">();
-    cards.forEach((card, index) => next.set(index, ids.includes(card.id) ? "kept" : "recycled"));
+    cards.forEach((card, index) => next.set(index, ids.includes(card.id) || card.eternal ? "kept" : "recycled"));
     setLeaving(next);
     runSound.sell();
     shake(0.35);
-    const recycled = cards.map((card, index) => ({ card, index })).filter(({ card }) => !ids.includes(card.id));
+    const recycled = cards.map((card, index) => ({ card, index })).filter(({ card }) => !ids.includes(card.id) && !card.eternal);
     if (box && shardsRect) {
       const list: Token[] = [];
       let order = 0;
@@ -562,7 +590,10 @@ export function ChainPackStage(props: ChainPackStageProps) {
       return () => window.clearTimeout(timer);
     }
     if (stage === "open" && mode === "keep" && cards) {
-      const order = cards.map((card, index) => ({ card, index })).sort((a, b) => b.card.base - a.card.base);
+      const order = cards
+        .map((card, index) => ({ card, index }))
+        .filter(({ card }) => !card.eternal)
+        .sort((a, b) => b.card.base - a.card.base);
       const picks = order.slice(0, keep).map((entry) => entry.index);
       const timers = picks.map((index, position) => window.setTimeout(() => toggle(index), 300 + position * 220));
       return () => timers.forEach((timer) => window.clearTimeout(timer));
@@ -570,7 +601,7 @@ export function ChainPackStage(props: ChainPackStageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, autoTear, stage]);
   useEffect(() => {
-    if (!auto || stage !== "open" || mode !== "keep" || !cards || selected.length !== Math.min(keep, cards.length)) return;
+    if (!auto || stage !== "open" || mode !== "keep" || !cards || selected.length !== Math.min(keep, cards.filter((card) => !card.eternal).length)) return;
     const timer = window.setTimeout(() => void confirm(), 320);
     return () => window.clearTimeout(timer);
   }, [auto, cards, confirm, keep, mode, selected.length, stage]);
@@ -584,7 +615,7 @@ export function ChainPackStage(props: ChainPackStageProps) {
   const showPack = stage === "sealed" || stage === "charging" || ((stage === "dealing" || stage === "flipping") && look !== "gone" && sealedAtStart);
   const deckRect = layout.deck;
   const pickable = stage === "open" && mode === "keep";
-  const need = Math.min(keep, cards?.length ?? keep);
+  const need = Math.min(keep, cards ? cards.filter((card) => !card.eternal).length : keep);
 
   return (
     <div
@@ -660,7 +691,8 @@ export function ChainPackStage(props: ChainPackStageProps) {
               from={instant ? deckFrom : dealFrom}
               faceUp={faceUp[index] ?? false}
               selected={selected.includes(index)}
-              selectable={pickable}
+              kept={pickable && card.eternal === true}
+              selectable={pickable && !card.eternal}
               leaving={leave}
               reducedMotion={reducedMotion}
               backUrl={backUrl}

@@ -644,13 +644,20 @@ export function ChainTable(props: ChainTableProps) {
 
   const redraw = useCallback(async () => {
     if (!shown || !arranging || !rowUids.length || shown.redrawsLeft <= 0) return;
+    // An Eternal never goes back: it stays laid out while the rest redraw.
+    const eternal = new Set(shown.hand.filter((entry) => entry.card.eternal).map((entry) => entry.uid));
+    const uids = rowUids.filter((uid) => !eternal.has(uid));
+    if (!uids.length) {
+      runSound.refuse();
+      return;
+    }
     hideChainDetails();
-    const outcome = await doAct({ kind: "redraw", uids: rowUids });
+    const outcome = await doAct({ kind: "redraw", uids });
     if (!outcome.ok || outcome.result.kind !== "redraw") {
       runSound.refuse();
       return;
     }
-    setRowUids([]);
+    setRowUids((current) => current.filter((uid) => eternal.has(uid)));
     runSound.reroll();
     enterFromDeck(outcome.result.drawn, 200);
   }, [arranging, doAct, enterFromDeck, rowUids, shown]);
