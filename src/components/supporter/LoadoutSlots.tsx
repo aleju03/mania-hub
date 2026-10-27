@@ -687,7 +687,16 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
   const { t } = useLingui();
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [pasteNote, setPasteNote] = useState<string | null>(null);
+  // The Paste tile's own label: what to do, or why nothing came.
+  const [pasteHint, setPasteHint] = useState<"press" | "empty" | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const showHint = (hint: "press" | "empty") => {
+    setPasteHint(hint);
+    clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setPasteHint(null), 6000);
+  };
+  useEffect(() => () => clearTimeout(hintTimer.current), []);
+  const pasteKey = typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(navigator.platform) ? "⌘V" : "Ctrl+V";
   const look = current.look;
   const tryOn = (value: SlotValue) => (on: boolean) => onTry("motif", on ? value : undefined);
 
@@ -701,28 +710,30 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
       const file = imageFileOf(event.clipboardData?.items);
       if (!file) return;
       event.preventDefault();
-      setPasteNote(null);
+      setPasteHint(null);
       latestUpload.current(file);
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
   }, [canUpload, disabled]);
 
-  /* The Paste tile reads the clipboard itself, where the browser allows it;
-     otherwise it says to press Ctrl+V, which always works. */
+  /* The Paste tile reads the clipboard itself where the browser lets a page do
+     that; most don't on a click, so the tile then asks for the key, which
+     always works while the drawer is open. */
   const pasteFromClipboard = async () => {
-    setPasteNote(null);
+    showHint("press");
     try {
       for (const item of await navigator.clipboard.read()) {
         const type = item.types.find((kind) => kind.startsWith("image/"));
         if (!type) continue;
         const blob = await item.getType(type);
+        setPasteHint(null);
         onUpload(new File([blob], `pasted.${type.slice(6)}`, { type }));
         return;
       }
-      setPasteNote(t`There's no image on your clipboard. Copy one, then try again.`);
+      showHint("empty");
     } catch {
-      setPasteNote(t`Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead.`);
+      // not allowed here: the tile keeps asking for the key
     }
   };
 
@@ -747,7 +758,7 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
     >
       <p className="mb-3 text-[12px] text-osu-f1">
         {canUpload
-          ? t`An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it.`
+          ? t`An image of your own floats on every copy of your card, in anyone's collection. Paste one with ${pasteKey}, drop it here or upload it.`
           : t`An image of your own floats on every copy of your card, in anyone's collection.`}
       </p>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2">
@@ -782,10 +793,12 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
         )}
         {canUpload && (
           <button type="button" disabled={disabled} onClick={() => void pasteFromClipboard()} className={tile(false)}>
-            <span className="grid h-[68px] w-full place-items-center rounded-md border border-dashed border-white/15">
-              <PasteIcon className="h-6 w-6" />
+            <span className={`grid h-[68px] w-full place-items-center rounded-md border border-dashed transition-colors ${pasteHint === "press" ? "border-osu-pink/70 bg-osu-pink/10" : "border-white/15"}`}>
+              {pasteHint === "press"
+                ? <kbd className="animate-pulse rounded-md bg-white/10 px-2 py-1 font-sans text-[13px] font-semibold text-white">{pasteKey}</kbd>
+                : <PasteIcon className="h-6 w-6" />}
             </span>
-            {t`Paste image`}
+            <span className="w-full truncate text-center">{pasteHint === "press" ? t`Press ${pasteKey}` : pasteHint === "empty" ? t`No image copied` : t`Paste image`}</span>
           </button>
         )}
         {canUpload && (
@@ -808,7 +821,6 @@ function MotifDrawer({ current, disabled, custom, canUpload, onTry, onPick, onUp
           }}
         />
       </div>
-      {pasteNote && <p className="mt-2 text-[12px] text-osu-l2">{pasteNote}</p>}
     </div>
   );
 }

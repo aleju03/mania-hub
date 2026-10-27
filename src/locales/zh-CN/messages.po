@@ -3559,8 +3559,12 @@ msgid "An image of your own floats on every copy of your card, in anyone's colle
 msgstr ""
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
+msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with {pasteKey}, drop it here or upload it."
 msgstr ""
+
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "an imported skin"
@@ -6055,6 +6059,10 @@ msgstr "数量"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "copies in circulation"
 msgstr "流通中的卡片"
+
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "Copies of it drift across your card behind everything printed on it, on every copy of the card."
+msgstr ""
 
 #: src/lib/supporter-ranks.ts
 #~ msgid "Copper"
@@ -10376,8 +10384,8 @@ msgid "It shows something that shouldn't be here"
 msgstr "内容不应出现在这里"
 
 #: src/components/supporter/CustomArtDialog.tsx
-msgid "It sits behind everything printed on your card, on every copy of it."
-msgstr "它位于卡牌上所有印刷内容的后面，每一张副本都有。"
+#~ msgid "It sits behind everything printed on your card, on every copy of it."
+#~ msgstr "它位于卡牌上所有印刷内容的后面，每一张副本都有。"
 
 #: src/routes/hashi.tsx
 msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
@@ -13190,6 +13198,10 @@ msgstr "这里没有提升空间"
 msgid "No goals tracked yet"
 msgstr "还没有目标"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "No image copied"
+msgstr ""
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "No image to edit."
 msgstr "没有可编辑的图片。"
@@ -15914,6 +15926,10 @@ msgstr "正在准备上传。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Preset name"
 msgstr "预设名称"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Press {pasteKey}"
+msgstr ""
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Press Enter or comma to add a tag. Up to {USER_COLLECTION_MAX_TAGS} tags."
@@ -21685,8 +21701,8 @@ msgstr "没有可选的奖励。"
 #~ msgstr "目标的 {0} 倍处有一颗星。过关时没超过它，每排起始连击 +{1}。超过了她就会离开，加成也跟着没了。"
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "There's no image on your clipboard. Copy one, then try again."
-msgstr ""
+#~ msgid "There's no image on your clipboard. Copy one, then try again."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -24449,8 +24465,8 @@ msgid "Your best score on the last map someone showed in the channel (from /rece
 msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
-msgstr ""
+#~ msgid "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
+#~ msgstr ""
 
 #: src/routes/support.tsx
 msgid "Your card"

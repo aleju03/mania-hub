@@ -3522,8 +3522,12 @@ msgid "An image of your own floats on every copy of your card, in anyone's colle
 msgstr ""
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
+msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with {pasteKey}, drop it here or upload it."
 msgstr ""
+
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "an imported skin"
@@ -6018,6 +6022,10 @@ msgstr "Copias"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "copies in circulation"
 msgstr "copias en circulación"
+
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "Copies of it drift across your card behind everything printed on it, on every copy of the card."
+msgstr ""
 
 #: src/lib/supporter-ranks.ts
 #~ msgid "Copper"
@@ -10355,8 +10363,8 @@ msgid "It shows something that shouldn't be here"
 msgstr "Muestra algo que no debería estar aquí"
 
 #: src/components/supporter/CustomArtDialog.tsx
-msgid "It sits behind everything printed on your card, on every copy of it."
-msgstr "Va detrás de todo lo impreso en tu carta, en cada copia de ella."
+#~ msgid "It sits behind everything printed on your card, on every copy of it."
+#~ msgstr "Va detrás de todo lo impreso en tu carta, en cada copia de ella."
 
 #: src/routes/hashi.tsx
 msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
@@ -13169,6 +13177,10 @@ msgstr "sin ganancias aquí"
 msgid "No goals tracked yet"
 msgstr "Aún no hay metas"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "No image copied"
+msgstr ""
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "No image to edit."
 msgstr "No hay imagen para editar."
@@ -15893,6 +15905,10 @@ msgstr "Preparando la subida."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Preset name"
 msgstr "Nombre del preset"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Press {pasteKey}"
+msgstr ""
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Press Enter or comma to add a tag. Up to {USER_COLLECTION_MAX_TAGS} tags."
@@ -21664,8 +21680,8 @@ msgstr "No hay ninguna recompensa para elegir."
 #~ msgstr "Hay una estrella en {0}x el objetivo. Pasa una ronda sin superarla y cada fila empieza con {1} de combo más. Si la superas, se va y el bonus se va con ella."
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "There's no image on your clipboard. Copy one, then try again."
-msgstr ""
+#~ msgid "There's no image on your clipboard. Copy one, then try again."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -24428,8 +24444,8 @@ msgid "Your best score on the last map someone showed in the channel (from /rece
 msgstr "Tu mejor score en el último mapa que alguien mostró en el canal (de /recent, /map, ...). También /c y /compare. Pasa un nombre para buscar a otra persona."
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
-msgstr ""
+#~ msgid "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
+#~ msgstr ""
 
 #: src/routes/support.tsx
 msgid "Your card"

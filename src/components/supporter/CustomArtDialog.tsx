@@ -9,6 +9,7 @@ import { CUSTOM_MOTIF_OPACITY_RANGE, CUSTOM_MOTIF_SCALE_RANGE, type SupporterLoo
 import type { SupporterFoilId } from "../../lib/supporter-foils";
 import type { SupporterCardSleeveId } from "../../lib/supporter-pack-style";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../player/maniacard3d/LazyManiaCard3DPanel";
+import { NumberField } from "./themes/EditorControls";
 import type { ManiaCardPanelProps } from "../player/maniacard3d/types";
 
 /* The supporter's own picture, before it goes on the card: their real card
@@ -54,7 +55,6 @@ export function CustomArtDialog({ draft, uploading, error, foil, card, sleeve, o
   }, [onClose]);
 
   const look: SupporterLook | null = preview.url ? { motif: "custom", foil, url: preview.url, scale: preview.scale, opacity: preview.opacity } : null;
-  const slider = "w-full cursor-pointer accent-osu-pink disabled:cursor-default";
 
   return createPortal(
     <motion.div
@@ -83,32 +83,28 @@ export function CustomArtDialog({ draft, uploading, error, foil, card, sleeve, o
         <div className="flex min-w-0 flex-col">
           <h2 className="text-[15px] font-bold text-white">{t`Your image`}</h2>
           <p className="mt-1 text-[12px] leading-5 text-osu-f1">
-            {uploading ? t`Uploading...` : t`It sits behind everything printed on your card, on every copy of it.`}
+            {uploading ? t`Uploading...` : t`Copies of it drift across your card behind everything printed on it, on every copy of the card.`}
           </p>
-          <div className="mt-5 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-4 text-[12px] text-osu-l2">
-            <label htmlFor="custom-art-size">{t`Size`}</label>
-            <input
-              id="custom-art-size"
-              type="range"
+          <div className={`mt-5 grid gap-2 transition-opacity ${draft.url ? "" : "pointer-events-none opacity-50"}`}>
+            <NumberField
+              label={t`Size`}
+              value={draft.scale}
               min={CUSTOM_MOTIF_SCALE_RANGE[0]}
               max={CUSTOM_MOTIF_SCALE_RANGE[1]}
               step={0.05}
-              value={draft.scale}
-              disabled={!draft.url}
-              onChange={(event) => onChange({ ...draft, scale: Number(event.target.value) })}
-              className={slider}
+              decimals={2}
+              unit="×"
+              onChange={(scale) => onChange({ ...draft, scale })}
             />
-            <label htmlFor="custom-art-strength">{t`Strength`}</label>
-            <input
-              id="custom-art-strength"
-              type="range"
+            <NumberField
+              label={t`Strength`}
+              value={draft.opacity}
               min={CUSTOM_MOTIF_OPACITY_RANGE[0]}
               max={CUSTOM_MOTIF_OPACITY_RANGE[1]}
               step={0.05}
-              value={draft.opacity}
-              disabled={!draft.url}
-              onChange={(event) => onChange({ ...draft, opacity: Number(event.target.value) })}
-              className={slider}
+              scale={100}
+              unit="%"
+              onChange={(opacity) => onChange({ ...draft, opacity })}
             />
           </div>
           {error && <p className="mt-4 text-[12px] text-osu-red-light">{error}</p>}

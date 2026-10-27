@@ -1,4 +1,5 @@
 import { packFinishSvg } from "./card-finish-art";
+import { isCustomMotifUrl } from "./supporter-card-looks";
 import { supporterMotifPathForUrl } from "./supporter-motif-art";
 
 /* The floating shape a maniacard's background drifts with.
@@ -132,13 +133,22 @@ export function cardMotifImageSrc(motif: CardMotif): string {
   return supporterMotifPathForUrl(motif.url) ?? `/api/card-motif?src=${encodeURIComponent(motif.url)}`;
 }
 
+/* A supporter's picture (their own upload, or a retired preset doodle) is
+   painted in its own colours, in a layer between the card's background and
+   its text. Granted images and legacy finishes are laid on as light instead,
+   which is right for a pale line drawing and would wash a photo out to
+   nothing on a bright card. */
+export function isPaintedMotif(motif: CardMotif): boolean {
+  return supporterMotifPathForUrl(motif.url) !== null || isCustomMotifUrl(motif.url);
+}
+
 /* How strongly one still copy of a motif is painted, from a 0..1 draw.
    Shared by the card canvas and the share image so both print alike.
    Granted images and legacy finishes float faint, behind the card; a
    supporter's painted picture prints near full strength, since a faded
    painting reads as a stain rather than as art. */
 export function motifCopyOpacity(motif: CardMotif, random: number): number {
-  return supporterMotifPathForUrl(motif.url)
+  return isPaintedMotif(motif)
     ? motif.opacity * (0.84 + random * 0.16)
     : motif.opacity * (0.46 + random * 0.32);
 }

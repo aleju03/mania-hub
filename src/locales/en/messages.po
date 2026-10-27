@@ -3526,8 +3526,12 @@ msgid "An image of your own floats on every copy of your card, in anyone's colle
 msgstr "An image of your own floats on every copy of your card, in anyone's collection."
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
-msgstr "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
+msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with {pasteKey}, drop it here or upload it."
+msgstr "An image of your own floats on every copy of your card, in anyone's collection. Paste one with {pasteKey}, drop it here or upload it."
+
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
+#~ msgstr "An image of your own floats on every copy of your card, in anyone's collection. Paste one with Ctrl+V, drop it here or upload it."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "an imported skin"
@@ -6022,6 +6026,10 @@ msgstr "Copies"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "copies in circulation"
 msgstr "copies in circulation"
+
+#: src/components/supporter/CustomArtDialog.tsx
+msgid "Copies of it drift across your card behind everything printed on it, on every copy of the card."
+msgstr "Copies of it drift across your card behind everything printed on it, on every copy of the card."
 
 #: src/lib/supporter-ranks.ts
 #~ msgid "Copper"
@@ -10359,8 +10367,8 @@ msgid "It shows something that shouldn't be here"
 msgstr "It shows something that shouldn't be here"
 
 #: src/components/supporter/CustomArtDialog.tsx
-msgid "It sits behind everything printed on your card, on every copy of it."
-msgstr "It sits behind everything printed on your card, on every copy of it."
+#~ msgid "It sits behind everything printed on your card, on every copy of it."
+#~ msgstr "It sits behind everything printed on your card, on every copy of it."
 
 #: src/routes/hashi.tsx
 msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
@@ -13173,6 +13181,10 @@ msgstr "no gains here"
 msgid "No goals tracked yet"
 msgstr "No goals tracked yet"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "No image copied"
+msgstr "No image copied"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "No image to edit."
 msgstr "No image to edit."
@@ -15897,6 +15909,10 @@ msgstr "Preparing the upload."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Preset name"
 msgstr "Preset name"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Press {pasteKey}"
+msgstr "Press {pasteKey}"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Press Enter or comma to add a tag. Up to {USER_COLLECTION_MAX_TAGS} tags."
@@ -21668,8 +21684,8 @@ msgstr "There is no reward to pick."
 #~ msgstr "There's a star at {0}x the target. Clear a round without passing it and every row starts {1} combo higher. Pass it and she leaves, and the bonus goes with her."
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "There's no image on your clipboard. Copy one, then try again."
-msgstr "There's no image on your clipboard. Copy one, then try again."
+#~ msgid "There's no image on your clipboard. Copy one, then try again."
+#~ msgstr "There's no image on your clipboard. Copy one, then try again."
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -24432,8 +24448,8 @@ msgid "Your best score on the last map someone showed in the channel (from /rece
 msgstr "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
-msgstr "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
+#~ msgid "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
+#~ msgstr "Your browser didn't let the page read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead."
 
 #: src/routes/support.tsx
 msgid "Your card"

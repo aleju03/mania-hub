@@ -22,7 +22,6 @@ import { MANIA_GLYPH_D, MANIA_TIER_STYLES, maniaTriangleOverlaySvg, resolveMania
 import type { ManiaCardTier } from "./maniacard";
 import { packFinishSvg } from "./card-finish-art";
 import { motifCopyOpacity, siteAssetMotifPath, type CardMotif } from "./card-motif";
-import { isCustomMotifUrl } from "./supporter-card-looks";
 import { readImageSize, sniffImageMime } from "./image-sniff";
 import { getCosmicTierPalette } from "./maniacard-cosmic";
 import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilSvg } from "./supporter-foil-art";
@@ -120,26 +119,6 @@ export function cardMotifDataUrl(motif: CardMotif, request?: Request): Promise<I
    img straight to resvg, while a raster embedded inside an SVG that is itself
    an img is a rasterizer path this endpoint has no reason to depend on. */
 function motifSpriteElements(motif: CardMotif, dataUrl: string, aspect: number, w: number, height: number) {
-  // A supporter's own image is one picture behind the card, as drawSingleMotif paints it.
-  if (isCustomMotifUrl(motif.url)) {
-    const fit = Math.max(w / aspect, height) * motif.scale;
-    const spriteW = fit * aspect;
-    const spriteH = fit;
-    return [
-      h("img", {
-        key: "motif-single",
-        src: dataUrl,
-        style: {
-          position: "absolute",
-          left: `${((w - spriteW) / 2).toFixed(1)}px`,
-          top: `${((height - spriteH) / 2).toFixed(1)}px`,
-          width: `${spriteW.toFixed(1)}px`,
-          height: `${spriteH.toFixed(1)}px`,
-          opacity: Math.min(1, motif.opacity),
-        },
-      }),
-    ];
-  }
   const sx = w / CARD_TEXTURE_WIDTH;
   const sy = height / CARD_TEXTURE_HEIGHT;
   const rand = (value: number) => {
