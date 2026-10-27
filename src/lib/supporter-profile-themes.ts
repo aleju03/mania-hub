@@ -88,17 +88,24 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
 
 /* A theme's own switches, saved with the pick (the backend keeps the same
    keys): `charts` has the Note highway play the owner's top plays instead of
-   made-up notes; `rows` lays a strip of the theme behind the owner's rows in
-   lists (rankings, leaderboards), which is off unless they turn it on. */
+   made-up notes; `stockNotes` keeps the Note highway's own notes and blue
+   instead of the owner's replay skin notes; `rows` lays a strip of the theme
+   behind the owner's rows in lists (rankings, leaderboards), which is off
+   unless they turn it on. */
 export interface ProfileThemeOptions {
   charts?: true;
+  stockNotes?: true;
   rows?: true;
 }
 
 export function parseProfileThemeOptions(value: unknown): ProfileThemeOptions {
   if (!value || typeof value !== "object") return {};
   const raw = value as Record<string, unknown>;
-  return { ...(raw.charts === true ? { charts: true as const } : {}), ...(raw.rows === true ? { rows: true as const } : {}) };
+  return {
+    ...(raw.charts === true ? { charts: true as const } : {}),
+    ...(raw.stockNotes === true ? { stockNotes: true as const } : {}),
+    ...(raw.rows === true ? { rows: true as const } : {}),
+  };
 }
 
 /* The colour override for an element wearing the theme: everything under it

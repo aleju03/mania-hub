@@ -90,10 +90,10 @@ export function randomSlotValue(slot: SlotId, not?: SlotValue): SlotValue {
 
 /* How many different looks the loadout can put together: every slot's
    choices multiplied (an empty slot counts as one, and the Note highway with
-   its real charts switched on as one more theme), leaving out the viewer's
+   its real charts or its own notes switched on counts as three more themes), leaving out the viewer's
    own uploaded image. Grows by itself as the catalogs do. */
 export const LOADOUT_COMBINATIONS =
-  (SUPPORTER_PROFILE_THEMES.length + 2)
+  (SUPPORTER_PROFILE_THEMES.length + 4)
   * (SUPPORTER_AVATAR_FRAMES.length + 1)
   * (SUPPORTER_NAME_STYLES.length + 1)
   * (SUPPORTER_NAME_FONTS.length + 1)
@@ -352,11 +352,11 @@ export const NAME_STYLE_GROUPS: { key: string; title: MessageDescriptor; styles:
 ];
 
 export const NAME_FONT_GROUPS: { key: string; title: MessageDescriptor; fonts: SupporterNameFontId[] }[] = [
-  { key: "game", title: msg`Game and tech`, fonts: ["pixel", "silkscreen", "vt323", "majormono", "orbitron", "audiowide", "michroma", "zendots", "rubikglitch"] },
-  { key: "bold", title: msg`Bold`, fonts: ["unbounded", "bungee", "russo", "blackops", "bebas", "monoton"] },
-  { key: "fun", title: msg`Fun`, fonts: ["righteous", "bangers", "luckiest", "shrikhand", "creepster"] },
-  { key: "hand", title: msg`Handwritten`, fonts: ["marker", "rocksalt", "pacifico", "lobster"] },
-  { key: "classic", title: msg`Classic`, fonts: ["cinzel", "playfair", "abril", "unifraktur"] },
+  { key: "game", title: msg`Game and tech`, fonts: ["pixel", "silkscreen", "vt323", "majormono", "orbitron", "audiowide", "michroma", "zendots", "rubikglitch", "pixelify", "jersey", "doto", "tektur"] },
+  { key: "bold", title: msg`Bold`, fonts: ["unbounded", "bungee", "russo", "blackops", "bebas", "monoton", "delagothic", "rubikmono", "climatecrisis"] },
+  { key: "fun", title: msg`Fun`, fonts: ["righteous", "bangers", "luckiest", "shrikhand", "creepster", "fredoka", "bagel", "rampart"] },
+  { key: "hand", title: msg`Handwritten`, fonts: ["marker", "rocksalt", "pacifico", "lobster", "caveat", "sedgwick", "yellowtail", "greatvibes"] },
+  { key: "classic", title: msg`Classic`, fonts: ["cinzel", "playfair", "abril", "unifraktur", "bodoni", "limelight", "uncial"] },
 ];
 
 export const MOTIF_LABELS: Record<SupporterMotifId, MessageDescriptor> = {

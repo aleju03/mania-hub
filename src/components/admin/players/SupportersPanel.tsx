@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { avatarImageSrc } from "../../ui/Avatar";
 import { SearchInput } from "../../ui/SearchInput";
+import { SelectMenu, type SelectMenuOption } from "../../ui/SelectMenu";
 import {
   clearAdminSupporterMotif,
   setAdminSupporterRank,
@@ -70,6 +71,16 @@ function timeLeft(row: AdminSupporterRow, now: number): string {
   if (days < 60) return days === 1 ? "1 day left" : `${days} days left`;
   return `${Math.floor(days / 30)} months left`;
 }
+
+/* Pinning a rank: by months (no pin), or one of the gems, each with its swatch. */
+const RANK_PIN_OPTIONS: SelectMenuOption<string>[] = [
+  { value: "months", label: "By months" },
+  ...SUPPORTER_RANKS.map((rank, index) => ({
+    value: String(index),
+    label: rank.name,
+    leading: <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: `linear-gradient(135deg, ${rank.stops.join(", ")})` }} />,
+  })),
+];
 
 export function SupportersPanel() {
   const [view, setView] = useState<AdminSupportersView | null>(null);
@@ -411,20 +422,18 @@ function SupporterTile({
               ) : null}
             </div>
             {row.active ? (
-              <label className="mt-2.5 flex items-center gap-2 text-[12px] text-osu-l2">
+              <div className="mt-2.5 flex items-center gap-2 text-[12px] text-osu-l2">
                 Rank
-                <select
-                  value={row.rankPin ?? ""}
+                <SelectMenu
+                  value={row.rankPin == null ? "months" : String(row.rankPin)}
+                  options={RANK_PIN_OPTIONS}
                   disabled={busy}
-                  onChange={(event) => onPinRank(event.target.value === "" ? null : Number(event.target.value))}
-                  className="min-w-0 flex-1 cursor-pointer rounded-md bg-white/[0.07] px-2 py-1 text-[12px] text-white outline-none disabled:opacity-50"
-                >
-                  <option value="">By months</option>
-                  {SUPPORTER_RANKS.map((rank, index) => (
-                    <option key={rank.id} value={index}>{rank.id[0].toUpperCase() + rank.id.slice(1)}</option>
-                  ))}
-                </select>
-              </label>
+                  onChange={(value) => onPinRank(value === "months" ? null : Number(value))}
+                  ariaLabel="Rank"
+                  className="min-w-0 flex-1"
+                  block
+                />
+              </div>
             ) : null}
             {row.customMotifUrl ? (
               <div className="mt-2.5 flex items-center gap-2">

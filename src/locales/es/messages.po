@@ -3752,6 +3752,10 @@ msgstr "flechas"
 msgid "Arrows"
 msgstr "Flechas"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Art deco"
+msgstr ""
+
 #: src/routes/news_.prism.tsx
 msgid "Article"
 msgstr "Artículo"
@@ -4584,6 +4588,10 @@ msgstr "Explorar skins"
 msgid "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
 msgstr "Las preferencias del navegador y las cachés locales permanecen en tu dispositivo hasta que caducan, se reemplazan o borras localStorage. Las sesiones de inicio de sesión de osu! pueden durar hasta 30 días, salvo que cierres sesión antes."
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Bubble"
+msgstr ""
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"
 msgstr "Cargando audio"
@@ -4659,6 +4667,10 @@ msgstr "Por jugador"
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Calculating skills..."
 msgstr "Calculando habilidades..."
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Calligraphy"
+msgstr ""
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Can't pay with Ko-fi? You can tip through lava.top."
@@ -4877,6 +4889,10 @@ msgstr "Gatos"
 #: src/lib/supporter-name-styles.ts
 msgid "Caustics"
 msgstr "Cáusticas"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Celtic"
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -7277,6 +7293,10 @@ msgid "Dot"
 msgstr ""
 
 #: src/lib/supporter-name-fonts.ts
+msgid "Dot matrix"
+msgstr ""
+
+#: src/lib/supporter-name-fonts.ts
 msgid "Dots"
 msgstr "Puntos"
 
@@ -8259,6 +8279,10 @@ msgstr "Farmeados"
 #: src/routes/maps.tsx
 msgid "Farmed by"
 msgstr "Farmeado por"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Fashion"
+msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Fast export"
@@ -9252,6 +9276,10 @@ msgstr "Hora dorada"
 msgid "Gone in {hoursLeft}h"
 msgstr "Desaparece en {hoursLeft} h"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Gothic"
+msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -9276,6 +9304,10 @@ msgstr "Texto con degradado"
 #: src/components/supporter/loadout.ts
 msgid "Gradients"
 msgstr "Degradados"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Graffiti"
+msgstr ""
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Grain"
@@ -10388,6 +10420,10 @@ msgstr "Jackspeed"
 #: src/components/communities/field-options.tsx
 msgid "Japanese"
 msgstr "Japonés"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Jersey"
+msgstr ""
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Join"
@@ -12121,6 +12157,10 @@ msgstr "BPM promedio"
 msgid "Median by Keymode"
 msgstr "Mediana por modo de teclas"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Melting"
+msgstr ""
+
 #: src/routes/communities_.$id.tsx
 #: src/routes/communities.tsx
 msgid "members"
@@ -12310,6 +12350,10 @@ msgstr "Lun"
 #: src/components/me/MyDataPanel.tsx
 msgid "Mondays"
 msgstr "Lunes"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Mono caps"
+msgstr ""
 
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Month {month}"
@@ -12561,6 +12605,10 @@ msgstr "Mis plays"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "My replay skin"
 msgstr "Mi skin de replay"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "My skin's notes"
+msgstr ""
 
 #: src/components/me/MyDataPanel.tsx
 msgid "my stats"
@@ -13865,6 +13913,10 @@ msgstr "Lluvia de notas"
 msgid "Note shape"
 msgstr "Forma de las notas"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Notebook"
+msgstr ""
+
 #: src/components/packs/run/HandScore.tsx
 #: src/routes/skins.tsx
 msgid "notes"
@@ -14746,6 +14798,7 @@ msgid "Out of time."
 msgstr "Se acabó el tiempo."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/lib/supporter-name-fonts.ts
 msgid "Outline"
 msgstr "Contorno"
 
@@ -15348,6 +15401,10 @@ msgstr "Pixel"
 #: src/components/supporter/loadout.ts
 msgid "Pixel hearts"
 msgstr "Corazones de píxeles"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Pixel sans"
+msgstr ""
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Place again as a new layer"
@@ -17322,6 +17379,10 @@ msgstr "Retención y controles"
 msgid "Retro"
 msgstr "Retro"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Retro script"
+msgstr ""
+
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/run/RunTable.tsx
 #: src/components/packs/SetsView.tsx
@@ -17515,6 +17576,10 @@ msgstr "La ronda {round} sigue con {0} filas más. Una vez por partida."
 #: src/lib/chain-run.ts
 msgid "Round {round} pack"
 msgstr "Pack de la ronda {round}"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Rounded"
+msgstr ""
 
 #: src/lib/chain-run.ts
 msgid "Row"
@@ -20363,6 +20428,10 @@ msgstr "TECH"
 msgid "Technical"
 msgstr "Technical"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Tektur"
+msgstr ""
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
 msgstr "Dile al bot quién eres una sola vez con <0>/link</0>. Después, consultas como <1>/recent</1> usan tu cuenta automáticamente, sin necesidad de usuario."
@@ -21060,6 +21129,10 @@ msgstr "Las cuatro tarjetas bajo los números de tu perfil. Cambia cualquiera, a
 #: src/components/supporter/themes/ThemeEditor.tsx
 #~ msgid "The frame used for the still (thumbnails, the gallery, slow devices) and the banner row."
 #~ msgstr ""
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "The highway plays the notes of your replay skin and takes their colour. Off, it keeps its own notes and blue."
+msgstr ""
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway streams a section of your best play in your main keymode, instead of random notes."

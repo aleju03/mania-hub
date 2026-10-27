@@ -3789,6 +3789,10 @@ msgstr "箭头"
 msgid "Arrows"
 msgstr "箭头"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Art deco"
+msgstr ""
+
 #: src/routes/news_.prism.tsx
 msgid "Article"
 msgstr "文章"
@@ -4621,6 +4625,10 @@ msgstr "浏览皮肤"
 msgid "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
 msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它们过期、被替换，或你清除 localStorage。osu! 登录会话最长可保持 30 天，除非你提前登出。"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Bubble"
+msgstr ""
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"
 msgstr "音频缓冲中"
@@ -4696,6 +4704,10 @@ msgstr "按玩家"
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Calculating skills..."
 msgstr "正在计算技能…"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Calligraphy"
+msgstr ""
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Can't pay with Ko-fi? You can tip through lava.top."
@@ -4914,6 +4926,10 @@ msgstr "猫"
 #: src/lib/supporter-name-styles.ts
 msgid "Caustics"
 msgstr "焦散"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Celtic"
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -7314,6 +7330,10 @@ msgid "Dot"
 msgstr ""
 
 #: src/lib/supporter-name-fonts.ts
+msgid "Dot matrix"
+msgstr ""
+
+#: src/lib/supporter-name-fonts.ts
 msgid "Dots"
 msgstr "圆点"
 
@@ -8284,6 +8304,10 @@ msgstr "刷图热门"
 #: src/routes/maps.tsx
 msgid "Farmed by"
 msgstr "农过的玩家"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Fashion"
+msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Fast export"
@@ -9277,6 +9301,10 @@ msgstr "黄金时刻"
 msgid "Gone in {hoursLeft}h"
 msgstr "{hoursLeft} 小时后删除"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Gothic"
+msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -9301,6 +9329,10 @@ msgstr "渐变文字"
 #: src/components/supporter/loadout.ts
 msgid "Gradients"
 msgstr "渐变"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Graffiti"
+msgstr ""
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Grain"
@@ -10409,6 +10441,10 @@ msgstr "速叠"
 #: src/components/communities/field-options.tsx
 msgid "Japanese"
 msgstr "日语"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Jersey"
+msgstr ""
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Join"
@@ -12142,6 +12178,10 @@ msgstr "BPM 中位数"
 msgid "Median by Keymode"
 msgstr "各键数中位数"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Melting"
+msgstr ""
+
 #: src/routes/communities_.$id.tsx
 #: src/routes/communities.tsx
 msgid "members"
@@ -12331,6 +12371,10 @@ msgstr "一"
 #: src/components/me/MyDataPanel.tsx
 msgid "Mondays"
 msgstr "周一"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Mono caps"
+msgstr ""
 
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Month {month}"
@@ -12582,6 +12626,10 @@ msgstr "我的成绩"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "My replay skin"
 msgstr "我的回放皮肤"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "My skin's notes"
+msgstr ""
 
 #: src/components/me/MyDataPanel.tsx
 msgid "my stats"
@@ -13886,6 +13934,10 @@ msgstr "音符雨"
 msgid "Note shape"
 msgstr "音符形状"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Notebook"
+msgstr ""
+
 #: src/components/packs/run/HandScore.tsx
 #: src/routes/skins.tsx
 msgid "notes"
@@ -14767,6 +14819,7 @@ msgid "Out of time."
 msgstr "时间到。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/lib/supporter-name-fonts.ts
 msgid "Outline"
 msgstr "描边"
 
@@ -15369,6 +15422,10 @@ msgstr "像素"
 #: src/components/supporter/loadout.ts
 msgid "Pixel hearts"
 msgstr "像素爱心"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Pixel sans"
+msgstr ""
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Place again as a new layer"
@@ -17343,6 +17400,10 @@ msgstr "数据保留与控制"
 msgid "Retro"
 msgstr "复古"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Retro script"
+msgstr ""
+
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/run/RunTable.tsx
 #: src/components/packs/SetsView.tsx
@@ -17536,6 +17597,10 @@ msgstr "第 {round} 轮再加 {0} 行继续。每局一次。"
 #: src/lib/chain-run.ts
 msgid "Round {round} pack"
 msgstr "第 {round} 回合卡包"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Rounded"
+msgstr ""
 
 #: src/lib/chain-run.ts
 msgid "Row"
@@ -20384,6 +20449,10 @@ msgstr "技"
 msgid "Technical"
 msgstr "技"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Tektur"
+msgstr ""
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
 msgstr "用 <0>/link</0> 告诉机器人你是谁，只需一次。之后 <1>/recent</1> 这类查询会默认使用你的账号，不用再输用户名。"
@@ -21081,6 +21150,10 @@ msgstr "个人资料数字下方的四项数据。可以在这里更换，也可
 #: src/components/supporter/themes/ThemeEditor.tsx
 #~ msgid "The frame used for the still (thumbnails, the gallery, slow devices) and the banner row."
 #~ msgstr ""
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "The highway plays the notes of your replay skin and takes their colour. Off, it keeps its own notes and blue."
+msgstr ""
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway streams a section of your best play in your main keymode, instead of random notes."

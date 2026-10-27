@@ -1290,9 +1290,13 @@ export function PlayerProfilePage({
     [restrictedBest],
   );
   const profileInsights = restrictedInsights ?? storedProfileInsights;
-  /* The Note highway plays the owner's replay skin notes in their main keymode. */
+  /* The Note highway plays the owner's replay skin notes in their main keymode, unless they kept its own. */
   const mainKeys = profileInsights?.keySplit.reduce<{ keyCount: number; count: number } | null>((top, entry) => (!top || entry.count > top.count ? entry : top), null)?.keyCount ?? null;
-  const highwayNotes = useHighwayNotes(profileUserId, mainKeys, profileTheme === "highway" || profileTheme === "judgements");
+  const highwayNotes = useHighwayNotes(
+    profileUserId,
+    mainKeys,
+    (profileTheme === "highway" && !(supporterFrame?.userId === profileUserId && supporterFrame.profileThemeOptions.stockNotes)) || profileTheme === "judgements",
+  );
   // and, when they switched it on, their best play's chart in that keymode
   const highwayCharts = profileTheme === "highway" && supporterFrame?.userId === profileUserId && !!supporterFrame.profileThemeOptions.charts;
   const highwayChart = useHighwayChart(profileUserId, best, highwayNotes?.lanes ?? mainKeys ?? 4, highwayCharts);

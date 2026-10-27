@@ -925,41 +925,54 @@ function ThemeDrawer({ current, disabled, onTry, onPick, onThemeOptions }: Drawe
         </Link>
       </div>
       {current.theme === "highway" && (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!!current.themeOptions.charts}
-          disabled={disabled}
-          onClick={() => onThemeOptions({ ...current.themeOptions, charts: current.themeOptions.charts ? undefined : true })}
-          className="mt-3 flex w-full cursor-pointer items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5 text-left transition-colors hover:bg-osu-b3 disabled:cursor-default"
-        >
-          <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${current.themeOptions.charts ? "bg-osu-pink" : "bg-osu-b2"}`}>
-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${current.themeOptions.charts ? "left-[18px]" : "left-0.5"}`} />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[13px] font-semibold text-white">{t`Play my top plays`}</span>
-            <span className="block text-[11px] text-osu-f1">{t`The highway streams a section of your best play in your main keymode, instead of random notes.`}</span>
-          </span>
-        </button>
+        <>
+          <ThemeSwitch
+            on={!current.themeOptions.stockNotes}
+            disabled={disabled}
+            onToggle={() => onThemeOptions({ ...current.themeOptions, stockNotes: current.themeOptions.stockNotes ? undefined : true })}
+            title={t`My skin's notes`}
+            body={t`The highway plays the notes of your replay skin and takes their colour. Off, it keeps its own notes and blue.`}
+          />
+          <ThemeSwitch
+            on={!!current.themeOptions.charts}
+            disabled={disabled}
+            onToggle={() => onThemeOptions({ ...current.themeOptions, charts: current.themeOptions.charts ? undefined : true })}
+            title={t`Play my top plays`}
+            body={t`The highway streams a section of your best play in your main keymode, instead of random notes.`}
+          />
+        </>
       )}
       {current.theme !== null && (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!!current.themeOptions.rows}
+        <ThemeSwitch
+          on={!!current.themeOptions.rows}
           disabled={disabled}
-          onClick={() => onThemeOptions({ ...current.themeOptions, rows: current.themeOptions.rows ? undefined : true })}
-          className="mt-3 flex w-full cursor-pointer items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5 text-left transition-colors hover:bg-osu-b3 disabled:cursor-default"
-        >
-          <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${current.themeOptions.rows ? "bg-osu-pink" : "bg-osu-b2"}`}>
-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${current.themeOptions.rows ? "left-[18px]" : "left-0.5"}`} />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[13px] font-semibold text-white">{t`Banner in lists`}</span>
-            <span className="block text-[11px] text-osu-f1">{t`A strip of the theme behind your row on rankings and leaderboards.`}</span>
-          </span>
-        </button>
+          onToggle={() => onThemeOptions({ ...current.themeOptions, rows: current.themeOptions.rows ? undefined : true })}
+          title={t`Banner in lists`}
+          body={t`A strip of the theme behind your row on rankings and leaderboards.`}
+        />
       )}
     </div>
+  );
+}
+
+/* One of a theme's own switches under the theme grid. */
+function ThemeSwitch({ on, disabled, onToggle, title, body }: { on: boolean; disabled: boolean; onToggle: () => void; title: string; body: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onToggle}
+      className="mt-3 flex w-full cursor-pointer items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5 text-left transition-colors hover:bg-osu-b3 disabled:cursor-default"
+    >
+      <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-osu-pink" : "bg-osu-b2"}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13px] font-semibold text-white">{title}</span>
+        <span className="block text-[11px] text-osu-f1">{body}</span>
+      </span>
+    </button>
   );
 }

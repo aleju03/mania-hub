@@ -32,6 +32,7 @@ interface SelectMenuProps<T extends string> {
   // Fills its container and pushes the chevron to the right, for a select
   // sitting in a form beside full-width inputs rather than in a toolbar.
   block?: boolean;
+  disabled?: boolean;
 }
 
 // The popover scrolls past this rather than growing, and flips above the button
@@ -49,6 +50,7 @@ export function SelectMenu<T extends string>({
   searchable = false,
   searchPlaceholder,
   block = false,
+  disabled = false,
 }: SelectMenuProps<T>) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
@@ -123,11 +125,12 @@ export function SelectMenu<T extends string>({
       <button
         ref={triggerRef}
         type="button"
+        disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`inline-flex items-center gap-1.5 rounded-md border border-osu-b3/50 bg-osu-b4 px-2.5 py-1.5 text-xs font-semibold text-osu-l2 transition-colors hover:border-osu-b3 hover:bg-osu-b4/80 cursor-pointer ${
+        className={`inline-flex items-center gap-1.5 rounded-md border border-osu-b3/50 bg-osu-b4 px-2.5 py-1.5 text-xs font-semibold text-osu-l2 transition-colors hover:border-osu-b3 hover:bg-osu-b4/80 cursor-pointer disabled:cursor-default disabled:opacity-50 ${
           block ? "w-full justify-between" : ""
         }`}
       >

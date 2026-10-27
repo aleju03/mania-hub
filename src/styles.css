@@ -1484,6 +1484,125 @@ html[data-custom-cursor="true"] * {
   font-display: swap;
   src: url("/fonts/name/zendots.woff2") format("woff2");
 }
+@font-face {
+  font-family: "Name Pixelify Sans";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/pixelify.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Tektur";
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/tektur.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Jersey 10";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/jersey.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Doto";
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/doto.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Dela Gothic One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/delagothic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Rubik Mono One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/rubikmono.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Climate Crisis";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/climatecrisis.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Fredoka";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/fredoka.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Bagel Fat One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/bagel.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Rampart One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/rampart.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Caveat";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/caveat.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Great Vibes";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/greatvibes.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Sedgwick Ave Display";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/sedgwick.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Yellowtail";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/yellowtail.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Bodoni Moda";
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/bodoni.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Uncial Antiqua";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/uncial.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Limelight";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/limelight.woff2") format("woff2");
+}
 
 .name-font--pixel {
   font-family: "Name Press Start 2P", var(--font-sans, sans-serif);
@@ -1788,6 +1907,193 @@ html[data-custom-cursor="true"] * {
   font-weight: 400;
   font-style: normal;
   font-size-adjust: 0.46;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--pixelify {
+  font-family: "Name Pixelify Sans", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--tektur {
+  font-family: "Name Tektur", var(--font-sans, sans-serif);
+  font-weight: 800;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--jersey {
+  font-family: "Name Jersey 10", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--doto {
+  font-family: "Name Doto", var(--font-sans, sans-serif);
+  font-weight: 900;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--delagothic {
+  font-family: "Name Dela Gothic One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--rubikmono {
+  font-family: "Name Rubik Mono One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: none;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--climatecrisis {
+  font-family: "Name Climate Crisis", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--fredoka {
+  font-family: "Name Fredoka", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--bagel {
+  font-family: "Name Bagel Fat One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--rampart {
+  font-family: "Name Rampart One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--caveat {
+  font-family: "Name Caveat", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+.name-font--greatvibes {
+  font-family: "Name Great Vibes", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+.name-font--sedgwick {
+  font-family: "Name Sedgwick Ave Display", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.56;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+.name-font--yellowtail {
+  font-family: "Name Yellowtail", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.55;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+.name-font--bodoni {
+  font-family: "Name Bodoni Moda", var(--font-sans, sans-serif);
+  font-weight: 800;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--uncial {
+  font-family: "Name Uncial Antiqua", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--limelight {
+  font-family: "Name Limelight", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
   letter-spacing: normal;
   /* room for tall swashes and descenders (Script's j), cancelled by the
      margin so the layout does not move */

@@ -40,7 +40,7 @@ import {
   type LivePackCardSnapshot,
 } from "../lib/live-backend";
 import type { SupporterLook } from "../lib/supporter-card-looks";
-import { profileThemeStyle } from "../lib/supporter-profile-themes";
+import { parseProfileThemeOptions, profileThemeStyle } from "../lib/supporter-profile-themes";
 import { rememberViewerSupporter } from "../lib/viewer-supporter";
 import { CompanionSection, ProfileStatsSection, SupporterPerks } from "../components/supporter/SupporterExtras";
 import { NO_PACK_STYLE } from "../lib/supporter-pack-style";
@@ -166,7 +166,7 @@ function SupporterPage() {
       let latest: SupporterLookState | null = null;
       setBusy(true);
       try {
-        if (next.theme !== before.theme || !!next.themeOptions.charts !== !!before.themeOptions.charts || !!next.themeOptions.rows !== !!before.themeOptions.rows) {
+        if (next.theme !== before.theme || JSON.stringify(parseProfileThemeOptions(next.themeOptions)) !== JSON.stringify(parseProfileThemeOptions(before.themeOptions))) {
           latest = await saveSupporterProfileThemeSetting({ data: { profileTheme: next.theme, profileThemeOptions: next.themeOptions } });
         }
         if (next.frame !== before.frame) latest = await saveSupporterFrameSetting({ data: { frame: next.frame } });
@@ -348,7 +348,7 @@ function SupporterPage() {
   const held = pending ?? equipped;
   const shown = reel ?? (held && hover ? withSlot(held, hover.slot, hover.value, custom) : held);
   const viewerKeys = useMemo(() => mainKeymode(card?.bestScores), [card]);
-  const highwayNotes = useHighwayNotes(viewer?.id, viewerKeys, shown?.theme === "highway" || shown?.theme === "judgements");
+  const highwayNotes = useHighwayNotes(viewer?.id, viewerKeys, (shown?.theme === "highway" && !shown.themeOptions.stockNotes) || shown?.theme === "judgements");
   const highwayChart = useHighwayChart(viewer?.id, card?.bestScores, highwayNotes?.lanes ?? viewerKeys ?? 4, shown?.theme === "highway" && !!shown.themeOptions.charts);
   /* The card holds still while the reels spin, and its art waits for the
      pointer to rest: new art repaints every texture on the card, where a new
