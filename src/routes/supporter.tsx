@@ -67,6 +67,34 @@ import {
 
 const NO_SCORES: [] = [];
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+/* A card image is stored fitted inside 256px (supporter-motif-upload-server.ts),
+   so anything heavier than this is shrunk in the browser first, to twice that,
+   and a pasted 20 MB screenshot goes up as a few hundred KB. */
+const SHRINK_ABOVE_BYTES = 1024 * 1024;
+const SHRINK_TO_PX = 512;
+
+/* The image fitted inside SHRINK_TO_PX as a WebP (alpha kept), or the file as
+   it was when it is already light or the browser cannot decode it. */
+async function shrinkForUpload(file: File): Promise<Blob> {
+  if (file.size <= SHRINK_ABOVE_BYTES || typeof createImageBitmap !== "function") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const fit = Math.min(1, SHRINK_TO_PX / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * fit));
+    canvas.height = Math.max(1, Math.round(bitmap.height * fit));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.92));
+    // a browser without a WebP encoder hands back a PNG, still small at this size
+    return blob ?? file;
+  } catch {
+    return file;
+  }
+}
 /* Reels: how often a spinning slot changes, when the first stops, and the gap to the next. */
 const REEL_TICK_MS = 70;
 const REEL_FIRST_STOP_MS = 520;
@@ -231,17 +259,15 @@ function SupporterPage() {
   const upload = async (file: File) => {
     setError(null);
     setArtError(null);
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError(t`That image is over 5 MB.`);
-      return;
-    }
     setArtDraft({ url: null, scale: custom?.scale ?? 1, opacity: custom?.opacity ?? 0.85 });
     setArtUploading(true);
     try {
-      const response = await fetch("/api/supporter-motif", { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file });
-      const body = await response.json().catch(() => null) as { url?: unknown; error?: unknown } | null;
-      if (!response.ok || typeof body?.url !== "string") throw new Error(typeof body?.error === "string" ? body.error : t`Could not upload that image.`);
-      const url = body.url;
+      const body = await shrinkForUpload(file);
+      if (body.size > MAX_UPLOAD_BYTES) throw new Error(t`That image is over 5 MB.`);
+      const response = await fetch("/api/supporter-motif", { method: "POST", headers: { "content-type": body.type || file.type || "application/octet-stream" }, body });
+      const reply = await response.json().catch(() => null) as { url?: unknown; error?: unknown } | null;
+      if (!response.ok || typeof reply?.url !== "string") throw new Error(typeof reply?.error === "string" ? reply.error : t`Could not upload that image.`);
+      const url = reply.url;
       setArtDraft((draft) => (draft ? { ...draft, url } : draft));
     } catch (cause) {
       setArtError(cause instanceof Error ? cause.message : t`Could not upload that image.`);
