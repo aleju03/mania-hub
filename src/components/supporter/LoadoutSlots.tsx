@@ -42,6 +42,7 @@ import {
   type SupporterWrapperId,
 } from "../../lib/supporter-pack-style";
 import { ProfileThemeSwatch } from "./ProfileThemeBackdrop";
+import { supporterRowBackground } from "./SupporterRowBanner";
 import { SUPPORTER_PROFILE_THEME_LABELS, SUPPORTER_PROFILE_THEMES, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
 import {
   FRAME_GROUPS,
@@ -969,7 +970,7 @@ function OwnThemeIcon({ className }: { className: string }) {
   );
 }
 
-function ThemeDrawer({ current, disabled, onTry, onPick, onThemeOptions }: DrawerProps) {
+function ThemeDrawer({ current, disabled, avatar, username, onTry, onPick, onThemeOptions }: DrawerProps) {
   const { t, i18n } = useLingui();
   /* Only the theme under the pointer moves; the rest hold a still frame. Every
      live swatch is a full shader pass plus a copy off the GPU each frame, and
@@ -1027,14 +1028,36 @@ function ThemeDrawer({ current, disabled, onTry, onPick, onThemeOptions }: Drawe
           onToggle={() => onThemeOptions({ ...current.themeOptions, rows: current.themeOptions.rows ? undefined : true })}
           title={t`Banner in lists`}
           body={t`A strip of the theme behind your row on rankings and leaderboards.`}
+          preview={<RowBannerPreview theme={current.theme} on={!!current.themeOptions.rows} avatar={avatar} username={username} nameStyle={current.nameStyle} nameFont={current.nameFont} />}
         />
       )}
     </div>
   );
 }
 
-/* One of a theme's own switches under the theme grid. */
-function ThemeSwitch({ on, disabled, onToggle, title, body }: { on: boolean; disabled: boolean; onToggle: () => void; title: string; body: string }) {
+/* A ranking row as the viewer's own would show it, the theme's strip fading in
+   behind its right side when the banner is on. */
+function RowBannerPreview({ theme, on, avatar, username, nameStyle, nameFont }: {
+  theme: SupporterProfileThemeId;
+  on: boolean;
+  avatar: string | undefined;
+  username: string;
+  nameStyle: SupporterNameStyleId | null;
+  nameFont: SupporterNameFontId | null;
+}) {
+  return (
+    <span className="relative flex h-11 items-center gap-3 overflow-hidden rounded-lg bg-osu-b5 px-3 text-[12.5px]">
+      <span aria-hidden className={`absolute inset-0 transition-opacity duration-300 ${on ? "opacity-100" : "opacity-0"}`} style={supporterRowBackground(theme, "strip")} />
+      <span className="relative w-7 shrink-0 font-semibold text-osu-f1">#12</span>
+      {avatar ? <img src={avatar} alt="" className="relative h-7 w-7 shrink-0 rounded-full bg-osu-b3 object-cover" /> : <span className="relative h-7 w-7 shrink-0 rounded-full bg-osu-b3" />}
+      <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} name={username} className="relative min-w-0 truncate text-[13.5px] font-semibold text-white" />
+      <span className="relative ml-auto shrink-0 font-semibold text-osu-l2">12,345pp</span>
+    </span>
+  );
+}
+
+/* One of a theme's own switches under the theme grid, with a picture of what it does when it has one. */
+function ThemeSwitch({ on, disabled, onToggle, title, body, preview }: { on: boolean; disabled: boolean; onToggle: () => void; title: string; body: string; preview?: ReactNode }) {
   return (
     <button
       type="button"
@@ -1042,15 +1065,18 @@ function ThemeSwitch({ on, disabled, onToggle, title, body }: { on: boolean; dis
       aria-checked={on}
       disabled={disabled}
       onClick={onToggle}
-      className="mt-3 flex w-full cursor-pointer items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5 text-left transition-colors hover:bg-osu-b3 disabled:cursor-default"
+      className="mt-3 block w-full cursor-pointer rounded-lg bg-osu-b4 px-3 py-2.5 text-left transition-colors hover:bg-osu-b3 disabled:cursor-default"
     >
-      <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-osu-pink" : "bg-osu-b2"}`}>
-        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
+      <span className="flex items-center gap-3">
+        <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-osu-pink" : "bg-osu-b2"}`}>
+          <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[13px] font-semibold text-white">{title}</span>
+          <span className="block text-[11px] text-osu-f1">{body}</span>
+        </span>
       </span>
-      <span className="min-w-0">
-        <span className="block text-[13px] font-semibold text-white">{title}</span>
-        <span className="block text-[11px] text-osu-f1">{body}</span>
-      </span>
+      {preview ? <span className="mt-2.5 block">{preview}</span> : null}
     </button>
   );
 }
