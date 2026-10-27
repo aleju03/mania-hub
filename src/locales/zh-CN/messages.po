@@ -2313,6 +2313,14 @@ msgstr "0:00"
 msgid "12 PM"
 msgstr "12:00"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "120 to 320"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "142 up in 90d"
+msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "16:9 video"
 msgstr "16:9 视频"
@@ -2381,6 +2389,14 @@ msgstr "300 判定区间 ±{window300}ms"
 #: src/lib/supporter-name-styles.ts
 msgid "300g"
 msgstr "300g"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "314pp spread"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "38% 7K"
+msgstr ""
 
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "3D card preview is unavailable on this device."
@@ -2976,6 +2992,7 @@ msgid "A-Z"
 msgstr "A-Z"
 
 #: src/components/settings/CompanellaGroup.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/hashi.tsx
 #: src/routes/player/$username.tsx
@@ -3029,6 +3046,7 @@ msgstr "准确率"
 #: src/components/prism/MashOdExplorer.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
@@ -3082,6 +3100,10 @@ msgstr "准确率："
 #: src/routes/player/$username.tsx
 msgid "achieved {0}"
 msgstr "达成于 {0}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "achieved March 2, 2026"
+msgstr ""
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Achieved PP"
@@ -6641,6 +6663,7 @@ msgstr "国内"
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/lib/chain-run.ts
 #: src/routes/player/$username.tsx
 msgid "Country"
@@ -9165,6 +9188,7 @@ msgid "global"
 msgstr "全球"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/index.tsx
 #: src/routes/player/$username.tsx
@@ -10179,6 +10203,10 @@ msgstr "{minutes} 分钟后"
 msgid "in {minutes}m"
 msgstr "{minutes} 分钟后"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "in 41% of top plays"
+msgstr ""
+
 #: src/routes/player/$username.tsx
 msgid "in 90d"
 msgstr "90 天内"
@@ -10675,6 +10703,10 @@ msgstr "按下的按键"
 msgid "Key presses play the note's hitsound, like in game. Misses trigger the combo break sound."
 msgstr "按键会播放音符的打击音，和游戏里一样。Miss 会触发断连音效。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Key split"
+msgstr ""
+
 #: src/components/player/ProfileParts.tsx
 #: src/lib/profile-stats.ts
 msgid "Key Split"
@@ -10854,6 +10886,10 @@ msgstr "最后活动于 {0}"
 #: src/routes/player/$username.tsx
 msgid "Last seen {0}"
 msgstr "最后在线 {0}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Last seen 1d ago"
+msgstr ""
 
 #: src/components/legal/LegalDocument.tsx
 msgid "Last updated {updatedAt}"
@@ -12208,6 +12244,7 @@ msgstr "中位数 {target}pp"
 msgid "median BPM"
 msgstr "BPM 中位数"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/profile-stats.ts
 #: src/routes/player/$username.tsx
@@ -12550,6 +12587,10 @@ msgstr "最多 pp"
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most unique cards"
 msgstr "最多不重复卡牌"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Most used mod"
+msgstr ""
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/profile-stats.ts
@@ -15227,6 +15268,7 @@ msgstr ""
 msgid "Pays"
 msgstr "奖励"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Peak"
@@ -15308,6 +15350,7 @@ msgstr "Perfect"
 msgid "Perfect chain"
 msgstr "完美连锁"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
@@ -15520,6 +15563,10 @@ msgstr "再来一局"
 msgid "Play both replays"
 msgstr "播放两份回放"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Play count"
+msgstr ""
+
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
@@ -15560,6 +15607,10 @@ msgstr "在刷这张"
 #: src/routes/skins_.$id.tsx
 msgid "Play this skin in your own replays for everyone who watches them"
 msgstr "在你自己的回放里使用这个皮肤，所有观看的人都会看到"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Play time"
+msgstr ""
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
@@ -15899,6 +15950,10 @@ msgstr "获得的 pp"
 #: src/components/top-plays/PpGainsRail.tsx
 msgid "PP Gained"
 msgstr "获得 PP"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "PP range"
+msgstr ""
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/profile-stats.ts
@@ -19291,6 +19346,7 @@ msgstr "仅技能提升"
 msgid "skills"
 msgstr "技能"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx

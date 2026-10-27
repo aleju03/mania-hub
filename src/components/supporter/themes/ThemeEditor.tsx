@@ -8,6 +8,7 @@ import type { CustomThemeSourceError } from "#custom-themes/source";
 import { CUSTOM_THEME_TEXTURES } from "#custom-themes/inputs";
 import { checkCustomThemeSource } from "../../../lib/custom-theme-check";
 import { useMediaQuery } from "../../../lib/use-media-query";
+import { useAuth } from "../../../lib/auth-context";
 import {
   bakeRow,
   canvasBlob,
@@ -966,7 +967,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
                 }}
                 onPointerDown={() => setSelectedLayer(null)}
               />
-              {overlay ? <MockProfile phone={phone} /> : null}
+              {overlay ? <MockProfile phone={phone} look={look} /> : null}
               {mode === "layers" && doc && !overlay ? <LayerHandles doc={doc} selected={selectedLayer} onSelect={setSelectedLayer} onPatch={updateLayer} /> : null}
               {tooHeavyLive ? (
                 <div className="absolute inset-0 grid place-items-center bg-black/75 p-6 text-center text-[12.5px] text-osu-l2">
@@ -1456,20 +1457,116 @@ function SmallButton({ onClick, children }: { onClick: () => void; children: Rea
   );
 }
 
-/* Panels and text where a profile puts them, to check the theme reads under them. */
-function MockProfile({ phone }: { phone: boolean }) {
+/* A profile over the theme, to check it reads under real text: laid out at
+   the size a profile has (a desktop window, or a phone) and scaled down to the
+   stage, in the theme's tint, with the viewer's own name and avatar. */
+const MOCK_DESKTOP = { width: 1280, height: 720 } as const;
+const MOCK_PHONE = { width: 390, height: 845 } as const;
+
+function MockStat({ label, value, note, tone = "text-white", big = false }: { label: string; value: string; note?: string; tone?: string; big?: boolean }) {
   return (
-    <div className="pointer-events-none absolute inset-0 flex flex-col items-center px-[6%] pt-[8%]">
-      <span className="aspect-square w-[14%] min-w-8 rounded-xl bg-white/80" />
-      <span className="mt-[2%] h-[5%] w-[30%] rounded bg-white" />
-      <div className={`mt-auto grid w-full gap-[3%] pb-[5%] ${phone ? "grid-cols-1" : "grid-cols-3"}`}>
-        {Array.from({ length: phone ? 2 : 3 }, (_, index) => (
-          <div key={index} className="rounded-lg bg-osu-b5/85 p-[6%]">
-            <span className="block h-2 w-1/2 rounded bg-white/70" />
-            <span className="mt-2 block h-1.5 w-4/5 rounded bg-white/30" />
-            <span className="mt-1.5 block h-1.5 w-3/5 rounded bg-white/30" />
+    <div className="min-w-0">
+      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-osu-f1">{label}</div>
+      <div className={`mt-1.5 font-bold leading-none tabular-nums ${big ? "text-[38px]" : "text-[22px]"} ${tone}`}>{value}</div>
+      {note ? <div className="mt-1.5 text-[11.5px] text-osu-f1">{note}</div> : null}
+    </div>
+  );
+}
+
+function MockPanel({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div className="rounded-xl bg-osu-b5/80 px-5 py-4 backdrop-blur-sm">
+      <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-osu-f1">{label}</div>
+      <div className="mt-2 text-[28px] font-bold leading-none text-white tabular-nums">{value}</div>
+      <div className="mt-2 text-[12px] text-osu-f1">{note}</div>
+    </div>
+  );
+}
+
+function MockProfile({ phone, look }: { phone: boolean; look: CustomThemeLook }) {
+  const { t } = useLingui();
+  const { viewer } = useAuth();
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0);
+  const size = phone ? MOCK_PHONE : MOCK_DESKTOP;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setScale(el.clientWidth / size.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [size.width]);
+  const name = viewer?.username ?? t`Your name`;
+  const tabs = [t`Best Performance`, t`Recent Plays`, t`Skills`, t`About`];
+  const avatar = viewer?.avatarUrl ? (
+    <img src={viewer.avatarUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+  ) : null;
+  return (
+    <div ref={ref} className="pointer-events-none absolute inset-0 overflow-hidden" style={{ "--theme-hue": String(look.hue), "--theme-sat": String(look.sat), "--theme-surface": "3" } as React.CSSProperties}>
+      <div className="origin-top-left text-osu-l2" style={{ width: size.width, height: size.height, transform: `scale(${scale})` }}>
+        {phone ? (
+          <div className="flex h-full flex-col px-5 pt-8">
+            <div className="flex items-center gap-4">
+              <div className="h-[84px] w-[84px] shrink-0 overflow-hidden rounded-2xl bg-osu-b3 ring-2 ring-white/10">{avatar}</div>
+              <div className="min-w-0">
+                <div className="truncate text-[28px] font-bold leading-tight text-white">{name}</div>
+                <div className="mt-1 text-[12px] text-osu-f1">{t`Last seen 1d ago`}</div>
+              </div>
+            </div>
+            <div className="mt-7 grid grid-cols-2 gap-x-4 gap-y-5">
+              <MockStat label={t`Global`} value="#1,284" note={t`142 up in 90d`} />
+              <MockStat label={t`Country`} value="#12" />
+              <MockStat label={t`Performance`} value="12,840pp" tone="text-amber-300" />
+              <MockStat label={t`Accuracy`} value="97.31%" />
+            </div>
+            <div className="mt-7 grid gap-3">
+              <MockPanel label={t`Key split`} value="62% 4K" note={t`38% 7K`} />
+              <MockPanel label={t`Median BPM`} value="186" note={t`120 to 320`} />
+            </div>
+            <div className="mt-auto flex gap-5 border-b border-white/10 pb-0 text-[13px] font-semibold">
+              {tabs.slice(0, 3).map((tab, index) => (
+                <span key={tab} className={`border-b-2 pb-3 ${index === 0 ? "border-osu-pink text-white" : "border-transparent text-osu-f1"}`}>{tab}</span>
+              ))}
+            </div>
+            <div className="h-6" />
           </div>
-        ))}
+        ) : (
+          <div className="flex h-full flex-col px-12 pt-12">
+            <div className="flex items-center gap-7">
+              <div className="h-[150px] w-[150px] shrink-0 overflow-hidden rounded-[22px] bg-osu-b3 ring-2 ring-white/10">{avatar}</div>
+              <div className="min-w-0">
+                <div className="truncate text-[46px] font-bold leading-tight text-white">{name}</div>
+                <div className="mt-2 flex items-center gap-3 text-[13px]">
+                  <span className="rounded-full bg-osu-b4/80 px-3 py-1 font-semibold text-osu-l1">osu! profile</span>
+                  <span className="text-osu-f1">{t`Last seen 1d ago`}</span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-10 flex gap-14">
+              <MockStat label={t`Global`} value="#1,284" note={t`142 up in 90d`} big />
+              <MockStat label={t`Country`} value="#12" big />
+              <MockStat label={t`Peak`} value="#980" note={t`achieved March 2, 2026`} big />
+              <MockStat label={t`Performance`} value="12,840pp" tone="text-amber-300" big />
+            </div>
+            <div className="mt-8 flex gap-14">
+              <MockStat label={t`Accuracy`} value="97.31%" />
+              <MockStat label={t`Play count`} value="23,456" />
+              <MockStat label={t`Play time`} value="812h" />
+            </div>
+            <div className="mt-9 grid grid-cols-4 gap-4">
+              <MockPanel label={t`Key split`} value="62% 4K" note={t`38% 7K`} />
+              <MockPanel label={t`Most used mod`} value="DT" note={t`in 41% of top plays`} />
+              <MockPanel label={t`Median BPM`} value="186" note={t`120 to 320`} />
+              <MockPanel label={t`PP range`} value="702 to 388" note={t`314pp spread`} />
+            </div>
+            <div className="mt-auto flex gap-8 border-b border-white/10 text-[14px] font-semibold">
+              {tabs.map((tab, index) => (
+                <span key={tab} className={`border-b-2 pb-3.5 ${index === 0 ? "border-osu-pink text-white" : "border-transparent text-osu-f1"}`}>{tab}</span>
+              ))}
+            </div>
+            <div className="h-8" />
+          </div>
+        )}
       </div>
     </div>
   );

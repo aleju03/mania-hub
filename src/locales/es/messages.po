@@ -2304,6 +2304,14 @@ msgstr "12 a. m."
 msgid "12 PM"
 msgstr "12 p. m."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "120 to 320"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "142 up in 90d"
+msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "16:9 video"
 msgstr "Video 16:9"
@@ -2372,6 +2380,14 @@ msgstr "Ventana de 300 ±{window300}ms"
 #: src/lib/supporter-name-styles.ts
 msgid "300g"
 msgstr "300g"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "314pp spread"
+msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "38% 7K"
+msgstr ""
 
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "3D card preview is unavailable on this device."
@@ -2939,6 +2955,7 @@ msgid "A-Z"
 msgstr "A-Z"
 
 #: src/components/settings/CompanellaGroup.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/hashi.tsx
 #: src/routes/player/$username.tsx
@@ -2992,6 +3009,7 @@ msgstr "Acc"
 #: src/components/prism/MashOdExplorer.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
@@ -3045,6 +3063,10 @@ msgstr "Precisión:"
 #: src/routes/player/$username.tsx
 msgid "achieved {0}"
 msgstr "logrado el {0}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "achieved March 2, 2026"
+msgstr ""
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Achieved PP"
@@ -6604,6 +6626,7 @@ msgstr "país"
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/lib/chain-run.ts
 #: src/routes/player/$username.tsx
 msgid "Country"
@@ -9140,6 +9163,7 @@ msgid "global"
 msgstr "global"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/index.tsx
 #: src/routes/player/$username.tsx
@@ -10158,6 +10182,10 @@ msgstr "en {minutes} min"
 msgid "in {minutes}m"
 msgstr "en {minutes}m"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "in 41% of top plays"
+msgstr ""
+
 #: src/routes/player/$username.tsx
 msgid "in 90d"
 msgstr "en 90d"
@@ -10654,6 +10682,10 @@ msgstr "Tecla presionada"
 msgid "Key presses play the note's hitsound, like in game. Misses trigger the combo break sound."
 msgstr "Presionar una tecla reproduce el hitsound de la nota, como en el juego. Los misses activan el sonido de combo break."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Key split"
+msgstr ""
+
 #: src/components/player/ProfileParts.tsx
 #: src/lib/profile-stats.ts
 msgid "Key Split"
@@ -10833,6 +10865,10 @@ msgstr "vista por última vez {0}"
 #: src/routes/player/$username.tsx
 msgid "Last seen {0}"
 msgstr "Visto por última vez {0}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Last seen 1d ago"
+msgstr ""
 
 #: src/components/legal/LegalDocument.tsx
 msgid "Last updated {updatedAt}"
@@ -12187,6 +12223,7 @@ msgstr "mediana {target}pp"
 msgid "median BPM"
 msgstr "BPM promedio"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/profile-stats.ts
 #: src/routes/player/$username.tsx
@@ -12529,6 +12566,10 @@ msgstr "Más pp"
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most unique cards"
 msgstr "más cartas únicas"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Most used mod"
+msgstr ""
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/profile-stats.ts
@@ -15206,6 +15247,7 @@ msgstr ""
 msgid "Pays"
 msgstr "Paga"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Peak"
@@ -15287,6 +15329,7 @@ msgstr "Perfect"
 msgid "Perfect chain"
 msgstr "Cadena perfecta"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
@@ -15499,6 +15542,10 @@ msgstr "Jugar de nuevo"
 msgid "Play both replays"
 msgstr "Reproducir ambos replays"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Play count"
+msgstr ""
+
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
@@ -15539,6 +15586,10 @@ msgstr "juegan este"
 #: src/routes/skins_.$id.tsx
 msgid "Play this skin in your own replays for everyone who watches them"
 msgstr "Usa este skin en tus propios replays para todos los que los vean"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Play time"
+msgstr ""
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
@@ -15878,6 +15929,10 @@ msgstr "PP ganados"
 #: src/components/top-plays/PpGainsRail.tsx
 msgid "PP Gained"
 msgstr "PP ganados"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "PP range"
+msgstr ""
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/profile-stats.ts
@@ -19270,6 +19325,7 @@ msgstr "solo skillboost"
 msgid "skills"
 msgstr "skillsets"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
