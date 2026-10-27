@@ -35,17 +35,23 @@ function CollectorRow({
   index,
   value,
   note,
+  unit,
+  title,
 }: {
   collector: LivePackCollector;
   index: number;
   value: string;
   note?: string | null;
+  /* A word after the number, for a board whose number is not self-evident. */
+  unit?: string;
+  title?: string;
 }) {
   return (
     <Link
       to="/packs/collections"
       search={boardHref(collector)}
       preload="intent"
+      title={title}
       className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-osu-b3/40"
     >
       <span translate="no" className="w-4 shrink-0 text-right text-[11px] text-osu-f1 tabular-nums">
@@ -68,6 +74,7 @@ function CollectorRow({
       <span translate="no" className="shrink-0 text-[15px] font-bold text-white tabular-nums">
         {value}
       </span>
+      {unit ? <span className="-ml-1.5 shrink-0 text-[11px] text-osu-f1">{unit}</span> : null}
     </Link>
   );
 }
@@ -113,15 +120,15 @@ function Board({ title, children, centered = false }: { title: string; children:
   );
 }
 
-/* Seven boards, ten rows each. Completion and packs opened lead the grid. */
-const BOARD_COUNT = 7;
+/* Eight boards, ten rows each. Completion and mastery lead the grid. */
+const BOARD_COUNT = 8;
 const BOARD_ROWS = 10;
 
 export function RecordBoardsSkeleton() {
   return (
     <div className="grid gap-x-10 gap-y-10 md:grid-cols-2">
       {Array.from({ length: BOARD_COUNT }, (_, index) => (
-        <div key={index} className={index === BOARD_COUNT - 1 ? "md:col-span-2 md:mx-auto md:w-[calc((100%-2.5rem)/2)]" : undefined}>
+        <div key={index}>
           <BoardSkeleton rows={BOARD_ROWS} />
         </div>
       ))}
@@ -154,6 +161,21 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
               index={index}
               note={completionNote(collector.completion)}
               value={formatNumber(packCompletionCounts(collector.completion).owned)}
+            />
+          ))}
+        </Board>
+      )}
+
+      {(boards.mastery?.length ?? 0) > 0 && (
+        <Board title={t`most mastery`}>
+          {boards.mastery!.map((collector, index) => (
+            <CollectorRow
+              key={collector.userId}
+              collector={collector}
+              index={index}
+              value={formatNumber(collector.mastery)}
+              unit={collector.mastery === 1 ? t`level` : t`levels`}
+              title={t`Mastery levels added up over every card ${collector.username} has held. A card gains a level each time the copies held of it double, recycled copies included.`}
             />
           ))}
         </Board>
@@ -217,7 +239,8 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
         ))}
       </Board>
 
-      <Board title={t`most collected cards`} centered>
+      {/* Centered when an odd board count leaves it alone on its row. */}
+      <Board title={t`most collected cards`} centered={!boards.mastery?.length}>
         {boards.mostOwnedCards.map((card, index) => (
           <CardRow
             key={card.userId}

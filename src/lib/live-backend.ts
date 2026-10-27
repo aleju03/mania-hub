@@ -4327,6 +4327,9 @@ export interface LivePackCommunityStats {
     firstFinds: LivePackCollector[];
     longestStanding: LivePackCollector[];
     completion: LivePackCollector[];
+    /* Mastery levels summed over every card held; missing from an older
+       backend. */
+    mastery?: Array<LivePackCollector & { mastery: number }>;
     rarestCards: LivePackCommunityCard[];
     mostOwnedCards: LivePackCommunityCard[];
   };

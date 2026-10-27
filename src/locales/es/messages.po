@@ -9659,7 +9659,7 @@ msgstr "Los valores más altos mueven los receptores hacia abajo."
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Highest mastery first, counting recycled copies"
-msgstr ""
+msgstr "Mayor maestría primero, contando las copias recicladas"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
@@ -11034,6 +11034,14 @@ msgstr "Menos vistas"
 #~ msgid "Letting go of a hold on its own costs less"
 #~ msgstr "Soltar un hold por sí solo cuesta menos"
 
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "level"
+msgstr "nivel"
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "levels"
+msgstr "niveles"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "light"
 msgstr "claro"
@@ -12073,7 +12081,7 @@ msgstr "Colecciones maestras"
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Mastery"
-msgstr ""
+msgstr "Maestría"
 
 #: src/components/packs/run/MasteryBadge.tsx
 msgid "Mastery {level}"
@@ -12086,6 +12094,11 @@ msgstr "Maestría {level}"
 #: src/components/packs/run/MasteryBadge.tsx
 msgid "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
 msgstr "Maestría {level}: {copies} copias obtenidas, la siguiente a las {next}. Los duplicados se reciclan con +{bonus}%."
+
+#. placeholder {0}: collector.username
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+msgstr "Niveles de maestría sumados en todas las cartas que ha tenido {0}. Una carta sube un nivel cada vez que se duplican las copias que se han tenido de ella, contando las recicladas."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
@@ -12477,6 +12490,10 @@ msgstr "Los más farmeados en {countryName}"
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Most liked"
 msgstr "Más gustadas"
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most mastery"
+msgstr "más maestría"
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most packs opened"
@@ -14029,7 +14046,7 @@ msgstr "No falta nada. Todas las cartas de este pool están en tu colección."
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "Nothing of this kind is on the wall yet."
-msgstr ""
+msgstr "Todavía no hay nada de este tipo en el muro."
 
 #: src/routes/recommendations.tsx
 msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."

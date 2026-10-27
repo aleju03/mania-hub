@@ -9680,7 +9680,7 @@ msgstr "数值越大，判定线越靠下。"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Highest mastery first, counting recycled copies"
-msgstr ""
+msgstr "熟练度最高的在前，包括已回收的副本"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
@@ -11055,6 +11055,14 @@ msgstr "更少观看"
 #~ msgid "Letting go of a hold on its own costs less"
 #~ msgstr "单独放手的难度降低"
 
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "level"
+msgstr "级"
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "levels"
+msgstr "级"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "light"
 msgstr "浅色"
@@ -12094,7 +12102,7 @@ msgstr "大师套组"
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Mastery"
-msgstr ""
+msgstr "熟练度"
 
 #: src/components/packs/run/MasteryBadge.tsx
 msgid "Mastery {level}"
@@ -12107,6 +12115,11 @@ msgstr "熟练度 {level}"
 #: src/components/packs/run/MasteryBadge.tsx
 msgid "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
 msgstr "熟练度 {level}：已获得 {copies} 张，下一级需要 {next} 张。回收重复时多得 {bonus}%。"
+
+#. placeholder {0}: collector.username
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+msgstr "{0} 拥有过的所有卡牌的熟练度等级总和。一张卡牌拥有过的副本数每翻一倍就升一级，已回收的副本也计算在内。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
@@ -12498,6 +12511,10 @@ msgstr "{countryName} 刷分最多"
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Most liked"
 msgstr "最多喜欢"
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most mastery"
+msgstr "熟练度最高"
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most packs opened"
@@ -14050,7 +14067,7 @@ msgstr "没有缺少的卡牌。你已收集此卡池中的所有卡牌。"
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "Nothing of this kind is on the wall yet."
-msgstr ""
+msgstr "墙上还没有这类内容。"
 
 #: src/routes/recommendations.tsx
 msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."

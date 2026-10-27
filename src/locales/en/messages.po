@@ -11038,6 +11038,14 @@ msgstr "Less watched"
 #~ msgid "Letting go of a hold on its own costs less"
 #~ msgstr "Letting go of a hold on its own costs less"
 
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "level"
+msgstr "level"
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "levels"
+msgstr "levels"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "light"
 msgstr "light"
@@ -12091,6 +12099,11 @@ msgstr "Mastery {level}"
 msgid "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
 msgstr "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
 
+#. placeholder {0}: collector.username
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+msgstr "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
 msgstr "Match sizes to first selected image"
@@ -12481,6 +12494,10 @@ msgstr "Most farmed in {countryName}"
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Most liked"
 msgstr "Most liked"
+
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most mastery"
+msgstr "most mastery"
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most packs opened"
