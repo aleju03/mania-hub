@@ -65,6 +65,10 @@ type CardPool = "all" | "players" | "teams";
    nothing else. Bounded because a long session with a search box can key a
    lot of them. */
 const SHELF_PAGE_CACHE_LIMIT = 60;
+
+/* Rarity, or the cards this collector has held most over time first. */
+const SHELF_SORTS = ["rarity", "mastery"] as const;
+type ShelfSort = (typeof SHELF_SORTS)[number];
 const shelfPageCache = new Map<string, LivePackCommunityCollectionPage>();
 
 function shelfPageKey(
@@ -74,8 +78,9 @@ function shelfPageKey(
   mark: PackCardMark | null,
   query: string,
   pool: CardPool,
+  sort: ShelfSort,
 ) {
-  return `${userId}:${page}:${tier}:${mark ?? ""}:${pool}:${query}`;
+  return `${userId}:${page}:${tier}:${mark ?? ""}:${pool}:${sort}:${query}`;
 }
 
 /* Pages already on the wire, so a turn taken before the warm behind it lands
@@ -89,13 +94,14 @@ function loadShelfPage(
   mark: PackCardMark | null,
   query: string,
   pool: CardPool,
+  sort: ShelfSort,
 ): Promise<LivePackCommunityCollectionPage> {
-  const key = shelfPageKey(userId, page, tier, mark, query, pool);
+  const key = shelfPageKey(userId, page, tier, mark, query, pool, sort);
   const held = shelfPageCache.get(key);
   if (held) return Promise.resolve(held);
   const inFlight = shelfPageRequests.get(key);
   if (inFlight) return inFlight;
-  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, mark, query, pool })
+  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, mark, query, pool, sort: sort === "mastery" ? "mastery" : null })
     .then((next) => {
       rememberShelfPage(key, next);
       return next;
@@ -359,6 +365,7 @@ export function CollectorShelf({ collector, tab }: {
      an "all" because none of them is the resting state. */
   const [mark, setMark] = useState<PackCardMark | null>(null);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ShelfSort>("rarity");
   const [page, setPage] = useState(0);
   const [cardPage, setCardPage] = useState<LivePackCommunityCollectionPage | null>(null);
   const [cardsLoading, setCardsLoading] = useState(true);
@@ -416,7 +423,7 @@ export function CollectorShelf({ collector, tab }: {
      new filter is paired with the old page index, and the read below would
      spend a request (and a warm behind it) on a page that is already on its
      way out. */
-  const filterKey = `${tier}:${mark ?? ""}:${pool}:${debounced}`;
+  const filterKey = `${tier}:${mark ?? ""}:${pool}:${sort}:${debounced}`;
   const [pagedFilter, setPagedFilter] = useState(filterKey);
   if (pagedFilter !== filterKey) {
     setPagedFilter(filterKey);
@@ -426,7 +433,7 @@ export function CollectorShelf({ collector, tab }: {
   const ownerUserId = profile?.collector.userId ?? null;
   // A supporter's shelf is their binder.
   const binder = useSupporterPackStyle(ownerUserId).binder;
-  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, mark, debounced, pool) : null;
+  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, mark, debounced, pool, sort) : null;
   /* Read during the render that the click causes, so a page already in hand
      paints in the same commit instead of a frame later. */
   const cachedPage = requestKey ? shelfPageCache.get(requestKey) ?? null : null;
@@ -444,7 +451,7 @@ export function CollectorShelf({ collector, tab }: {
         setPrefetched([]);
         return;
       }
-      loadShelfPage(ownerUserId, nextPage, tier, mark, debounced, pool)
+      loadShelfPage(ownerUserId, nextPage, tier, mark, debounced, pool, sort)
         .then((next) => {
           if (!cancelled) setPrefetched(next.cards as CollectedCard[]);
         })
@@ -465,7 +472,7 @@ export function CollectorShelf({ collector, tab }: {
     setCardsLoading(true);
     // Whatever was warmed sat next to a page that is no longer on screen.
     setPrefetched([]);
-    loadShelfPage(ownerUserId, page, tier, mark, debounced, pool)
+    loadShelfPage(ownerUserId, page, tier, mark, debounced, pool, sort)
       .then((next) => {
         if (cancelled) return;
         setCardPage(next);
@@ -478,7 +485,7 @@ export function CollectorShelf({ collector, tab }: {
     return () => {
       cancelled = true;
     };
-  }, [ownerUserId, requestKey, page, tier, mark, debounced, pool]);
+  }, [ownerUserId, requestKey, page, tier, mark, debounced, pool, sort]);
 
   /* Mints the next page's faces into the shared thumbnail cache while this
      one is being read, so a turn lands on cards rather than on sketches. */
@@ -689,6 +696,25 @@ export function CollectorShelf({ collector, tab }: {
                   {kind === "players" ? shownPage.playerCount ?? profile.collector.cards : shownPage.teamCount ?? 0}
                 </span>
               )}
+            </button>
+          ))}
+        </div>
+
+        {/* Ordering, kept off the chip rows like the owner's own grid: plain
+            text, so a sort never reads as one more filter. */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Sort by</Trans></span>
+          {SHELF_SORTS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setSort(option)}
+              aria-pressed={sort === option}
+              className={`cursor-pointer text-[12.5px] font-semibold transition-colors ${
+                sort === option ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
+              }`}
+            >
+              {option === "mastery" ? t`Mastery` : t`Rarity`}
             </button>
           ))}
         </div>

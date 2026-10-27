@@ -9657,6 +9657,10 @@ msgstr "Los valores más altos hacen que las notas crucen el playfield más ráp
 msgid "Higher values move receptors lower."
 msgstr "Los valores más altos mueven los receptores hacia abajo."
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "Highest mastery first, counting recycled copies"
+msgstr ""
+
 #: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
 msgstr "PP más alto primero"
@@ -12065,6 +12069,11 @@ msgstr "Con mash: {0}% de precisión con exigencia {1}"
 #: src/components/packs/run/RunInfo.tsx
 msgid "Master sets"
 msgstr "Colecciones maestras"
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Mastery"
+msgstr ""
 
 #: src/components/packs/run/MasteryBadge.tsx
 msgid "Mastery {level}"
@@ -16442,6 +16451,7 @@ msgid "Rare Form"
 msgstr "En forma"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
 #: src/lib/chain-run.ts
 msgid "Rarity"
 msgstr "Rareza"
@@ -19584,6 +19594,7 @@ msgstr "ordenar por"
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
 #: src/routes/maps.tsx
 msgid "Sort by"
 msgstr "Ordenar por"

@@ -244,7 +244,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     const tier = typeof input?.tier === "string" ? input.tier : "all";
     const query = typeof input?.query === "string" ? input.query : "";
     const sort =
-      input?.sort === "newest" ? ("newest" as const) : input?.sort === "copies" ? ("copies" as const) : ("rarity" as const);
+      input?.sort === "newest" || input?.sort === "copies" || input?.sort === "mastery" ? input.sort : ("rarity" as const);
     const duplicatesOnly = input?.duplicatesOnly === true;
     const mark = isPackCardMark(input?.mark) ? input.mark : null;
     const teams = input?.teams === true;

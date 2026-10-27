@@ -57,8 +57,9 @@ type CollectionTierFilter = ManiaCardTier | "all" | "unrated" | "untracked";
 
 /* "newest" orders by when the card first joined the collection (dup pulls do
    not resurface a card); "copies" puts the most duplicated cards first;
+   "mastery" puts the cards held most over time first (recycled copies count);
    "rarity" is the classic tier-then-pp order. */
-type CollectionSortMode = "rarity" | "newest" | "copies";
+type CollectionSortMode = "rarity" | "newest" | "copies" | "mastery";
 
 const COLLECTION_SORTS: Array<{
   id: CollectionSortMode;
@@ -68,6 +69,7 @@ const COLLECTION_SORTS: Array<{
   { id: "rarity", label: msg`Rarity`, hint: msg`Highest tier first, then pp` },
   { id: "newest", label: msg`Newest`, hint: msg`When each card first joined your collection` },
   { id: "copies", label: msg`Copies`, hint: msg`Most copies first` },
+  { id: "mastery", label: msg`Mastery`, hint: msg`Highest mastery first, counting recycled copies` },
 ];
 
 /* How you read your own collection is a standing preference, not a transient
@@ -80,7 +82,7 @@ function readStoredCollectionSort(): CollectionSortMode {
   if (typeof window === "undefined") return "rarity";
   try {
     const stored = window.localStorage.getItem(COLLECTION_SORT_STORAGE_KEY);
-    return stored === "newest" || stored === "copies" ? stored : "rarity";
+    return stored === "newest" || stored === "copies" || stored === "mastery" ? stored : "rarity";
   } catch {
     return "rarity";
   }
@@ -881,7 +883,9 @@ export function CollectionPanel({
           ? b.firstPulledAt - a.firstPulledAt || tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp
           : sortMode === "copies"
             ? b.copies - a.copies || tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp
-            : tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp,
+            : sortMode === "mastery"
+              ? b.copies + (b.recycledCopies ?? 0) - a.copies - (a.recycledCopies ?? 0) || tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp
+              : tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp,
       )
     : [];
   const cards = useServerCollection ? (activeServerPage?.cards as CollectedCard[] | undefined) ?? [] : localCards;

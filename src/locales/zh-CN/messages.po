@@ -9678,6 +9678,10 @@ msgstr "数值越高，音符在游戏区内移动越快。"
 msgid "Higher values move receptors lower."
 msgstr "数值越大，判定线越靠下。"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "Highest mastery first, counting recycled copies"
+msgstr ""
+
 #: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
 msgstr "pp 从高到低"
@@ -12086,6 +12090,11 @@ msgstr "乱拍：准确率 {0}%，难度需求 {1}"
 #: src/components/packs/run/RunInfo.tsx
 msgid "Master sets"
 msgstr "大师套组"
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Mastery"
+msgstr ""
 
 #: src/components/packs/run/MasteryBadge.tsx
 msgid "Mastery {level}"
@@ -16463,6 +16472,7 @@ msgid "Rare Form"
 msgstr "状态正佳"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
 #: src/lib/chain-run.ts
 msgid "Rarity"
 msgstr "稀有度"
@@ -19605,6 +19615,7 @@ msgstr "排序方式"
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
 #: src/routes/maps.tsx
 msgid "Sort by"
 msgstr "排序方式"

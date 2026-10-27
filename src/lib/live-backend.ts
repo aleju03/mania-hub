@@ -4510,6 +4510,8 @@ export async function fetchLivePackCollectorCards(userId: number, options: {
   /* The public shelf includes teams; the showcase picker reads them
      separately, so calls without a pool keep the player-only read. */
   pool?: "all" | "players" | "teams";
+  /* Rarity when left out. */
+  sort?: "mastery" | null;
 } = {}): Promise<LivePackCommunityCollectionPage> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
@@ -4517,6 +4519,7 @@ export async function fetchLivePackCollectorCards(userId: number, options: {
   if (options.tier && options.tier !== "all") query.set("tier", options.tier);
   if (options.query?.trim()) query.set("q", options.query.trim());
   if (options.mark) query.set("mark", options.mark);
+  if (options.sort) query.set("sort", options.sort);
   if (options.pool) {
     query.set("teams", "1");
     if (options.pool !== "all") query.set(options.pool === "teams" ? "teamsOnly" : "playersOnly", "1");
