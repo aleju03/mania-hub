@@ -4442,24 +4442,30 @@ export async function fetchLivePackShowcaseCards(userId: number, options: { fres
 
 /* The shared wall pages over cards and whole sets. Owners are shown only
    when inspecting a card. cardTotal counts cards; total drives pagination. */
+export type LivePackShowcaseWallKind = "players" | "teams" | "sets";
+
 export async function fetchLivePackShowcaseWall(options: {
   page?: number;
   pageSize?: number;
   /* Only the cards wearing this mark, sets flattened to the members that do. */
   mark?: PackCardMark | null;
+  /* Player or team cards alone (sets' members included), or only the sets. */
+  kind?: LivePackShowcaseWallKind | null;
   fresh?: boolean;
 } = {}): Promise<{
   cards: LivePackShowcaseWallCard[];
   total: number;
   cardTotal?: number;
   /* Over the whole wall, whatever the page was filtered to; the backend
-     sends it with the first page only. */
+     sends them with the first page only. */
   markCounts?: Record<PackCardMark, number>;
+  kindCounts?: Record<LivePackShowcaseWallKind, number>;
 }> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
   if (options.pageSize) query.set("pageSize", String(options.pageSize));
   if (options.mark) query.set("mark", options.mark);
+  if (options.kind) query.set("kind", options.kind);
   // Skips the browser's ten-second cache, for the read straight after a save:
   // the whole point of the wall is that you put something on it and see it.
   if (options.fresh) query.set("fresh", String(Date.now()));

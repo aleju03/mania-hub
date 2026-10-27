@@ -14022,6 +14022,10 @@ msgstr "Nothing matched that"
 msgid "Nothing missing. Every card in this pool is in your collection."
 msgstr "Nothing missing. Every card in this pool is in your collection."
 
+#: src/components/packs/collections/ShowcaseTab.tsx
+msgid "Nothing of this kind is on the wall yet."
+msgstr "Nothing of this kind is on the wall yet."
+
 #: src/routes/recommendations.tsx
 msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."
 msgstr "Nothing qualifies under this filter at the moment, but other reasons still have maps."
@@ -15610,6 +15614,7 @@ msgstr "players"
 #: src/components/discord/CommandShowcase.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
+#: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -18510,6 +18515,7 @@ msgstr "Set up your look"
 msgid "Setlist"
 msgstr "Setlist"
 
+#: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/packs.tsx
 msgid "Sets"
 msgstr "Sets"
@@ -20422,6 +20428,7 @@ msgstr "teams"
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
+#: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/SetsView.tsx
 #: src/lib/packs.ts
 msgid "Teams"

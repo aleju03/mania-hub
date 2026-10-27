@@ -14039,6 +14039,10 @@ msgstr "没有匹配的结果"
 msgid "Nothing missing. Every card in this pool is in your collection."
 msgstr "没有缺少的卡牌。你已收集此卡池中的所有卡牌。"
 
+#: src/components/packs/collections/ShowcaseTab.tsx
+msgid "Nothing of this kind is on the wall yet."
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."
 msgstr "当前筛选下暂时没有符合的谱面，但其他理由下还有。"
@@ -15627,6 +15631,7 @@ msgstr "玩家"
 #: src/components/discord/CommandShowcase.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
+#: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -18527,6 +18532,7 @@ msgstr "设置你的外观"
 msgid "Setlist"
 msgstr "曲目单"
 
+#: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/packs.tsx
 msgid "Sets"
 msgstr "卡组"
@@ -20439,6 +20445,7 @@ msgstr "战队"
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
+#: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/SetsView.tsx
 #: src/lib/packs.ts
 msgid "Teams"

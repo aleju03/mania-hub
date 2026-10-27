@@ -38,8 +38,9 @@ export function MasteryRim({ copies }: { copies: number }) {
 }
 
 /* A card's mastery: a level for every doubling of the copies a collector has
-   held of it (recycled ones included), drawn as a small cut gem in the
-   card's bottom-left corner. Nothing below the first level. */
+   held of it (recycled ones included), drawn as a small cut gem and the level
+   inside the tile's corner chip, beside the copy count, so it never sits on
+   the card's face. Nothing below the first level. */
 export function MasteryBadge({ copies }: { copies: number }) {
   const { t } = useLingui();
   const level = masteryLevel(copies);
@@ -48,15 +49,11 @@ export function MasteryBadge({ copies }: { copies: number }) {
   const bonus = masteryRecycleBonusPercent(copies);
   return (
     <span
-      className="absolute bottom-1.5 left-1.5 z-[6] grid h-[22px] w-[22px] place-items-center"
+      className="inline-flex items-center gap-[3px]"
       title={t`Mastery ${level}: ${copies} copies held, next at ${next}. Spares recycle for +${bonus}%.`}
     >
-      <span
-        aria-hidden="true"
-        className="absolute inset-[3px] rotate-45 rounded-[4px] shadow-[0_1px_3px_rgba(0,0,0,0.6)]"
-        style={{ background: masteryFill(level) }}
-      />
-      <span className="relative text-[11px] font-black leading-none text-black/80 tabular-nums">{level}</span>
+      <span aria-hidden="true" className="h-[7px] w-[7px] rotate-45 rounded-[1.5px]" style={{ background: masteryFill(level) }} />
+      {level}
     </span>
   );
 }

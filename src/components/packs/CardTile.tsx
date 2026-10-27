@@ -7,7 +7,7 @@ import { fetchPackPlayerScores } from "#/lib/packs";
 import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
 import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
 import { effectiveCardLook } from "#/lib/supporter-card-looks";
-import type { RunEdition } from "#/lib/pack-run";
+import { masteryLevel, type RunEdition } from "#/lib/pack-run";
 import { EditionSheen } from "./run/EditionSheen";
 import { MasteryBadge, MasteryRim } from "./run/MasteryBadge";
 import {
@@ -288,6 +288,10 @@ export function CollectionCardTile({
     previousThumbnailRef.current = thumbnail;
   }, [thumbnail]);
 
+  const heldCopies = card.copies + (card.recycledCopies ?? 0);
+  const hasCopyCount = showCopies && card.copies > 1;
+  const hasMastery = mastery && masteryLevel(heldCopies) > 0;
+
   return (
     <div ref={hostRef} className="relative" style={{ aspectRatio: "5 / 7" }}>
       <CollectionCardFacePlaceholder card={card} />
@@ -314,13 +318,14 @@ export function CollectionCardTile({
           <EditionSheen edition={edition} />
         </span>
       )}
-      {showCopies && card.copies > 1 && (
-        <span className="absolute right-1.5 top-1.5 rounded bg-black/70 px-1 py-px text-[10px] font-bold text-white tabular-nums">
-          x{card.copies}
+      {mastery && <MasteryRim copies={heldCopies} />}
+      {(hasCopyCount || hasMastery) && (
+        <span className="absolute right-1.5 top-1.5 z-[6] inline-flex items-center gap-1 rounded bg-black/70 px-1 py-px text-[10px] font-bold leading-[14px] text-white tabular-nums">
+          {hasMastery && <MasteryBadge copies={heldCopies} />}
+          {hasMastery && hasCopyCount && <span aria-hidden="true" className="h-2.5 w-px bg-white/25" />}
+          {hasCopyCount && <span>x{card.copies}</span>}
         </span>
       )}
-      {mastery && <MasteryRim copies={card.copies + (card.recycledCopies ?? 0)} />}
-      {mastery && <MasteryBadge copies={card.copies + (card.recycledCopies ?? 0)} />}
     </div>
   );
 }
