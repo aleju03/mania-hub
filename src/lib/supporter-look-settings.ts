@@ -44,7 +44,7 @@ export interface SupporterLookState {
 
 const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
 
-async function requireViewer(): Promise<{ userId: number; username: string; base: string } | null> {
+export async function requireViewer(): Promise<{ userId: number; username: string; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
   const auth = await readCurrentAuth();
   if (!auth.viewer) return null;

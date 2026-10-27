@@ -3399,6 +3399,10 @@ msgstr "ámbar"
 #~ msgid "Amethyst"
 #~ msgstr "Amatista"
 
+#: src/lib/chain-run.ts
+msgid "An Eternal never leaves."
+msgstr "Una Eternal nunca se va."
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "an external application"
 msgstr "una aplicación externa"
@@ -3744,8 +3748,8 @@ msgid "Audiowide"
 msgstr "Audiowide"
 
 #: src/routes/terms.tsx
-msgid "August 23, 2026"
-msgstr "23 de agosto de 2026"
+#~ msgid "August 23, 2026"
+#~ msgstr "23 de agosto de 2026"
 
 #: src/lib/supporter-foils.ts
 #: src/lib/supporter-name-styles.ts
@@ -4508,6 +4512,7 @@ msgstr "¿No puedes pagar con Ko-fi? Puedes dejar una propina por lava.top."
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/CustomThemeCredit.tsx
 #: src/routes/report.tsx
 msgid "Cancel"
 msgstr "Cancelar"
@@ -6991,6 +6996,11 @@ msgstr "Doble toque"
 msgid "Double Time"
 msgstr "Double Time"
 
+#. placeholder {0}: entry.card.doubled
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "Doubled {0} times."
+msgstr "Duplicada {0} veces."
+
 #: src/routes/snipes.tsx
 msgid "Doubles the columns into two stages."
 msgstr "Duplica las columnas en dos stages."
@@ -7547,6 +7557,10 @@ msgstr "las estimaciones son aproximadas hasta que analicemos más plays de este
 #: src/components/communities/field-options.tsx
 msgid "Estonian"
 msgstr "Estonio"
+
+#: src/lib/chain-run.ts
+msgid "Eternal"
+msgstr "Eternal"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Ethereal"
@@ -9858,6 +9872,10 @@ msgstr "Puede que lo hayan retirado, o que todavía esté esperando aprobación.
 msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 msgstr "Lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
 
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "It shows something that shouldn't be here"
+msgstr "Muestra algo que no debería estar aquí"
+
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "It sits behind everything printed on your card, on every copy of it."
 msgstr "Va detrás de todo lo impreso en tu carta, en cada copia de ella."
@@ -9865,6 +9883,10 @@ msgstr "Va detrás de todo lo impreso en tu carta, en cada copia de ella."
 #: src/routes/hashi.tsx
 msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
 msgstr "Se queda en la bandeja del sistema y casi no usa CPU, con unos 3 MB de memoria en Windows."
+
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "It uses my work without permission"
+msgstr "Usa mi trabajo sin permiso"
 
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
@@ -12139,6 +12161,10 @@ msgstr "Líneas de neón"
 #~ msgid "Neri"
 #~ msgstr ""
 
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "Never leaves your hand. Its base doubles every time it plays, for the rest of the run."
+msgstr "Nunca sale de tu mano. Su base se duplica cada vez que juega, por el resto de la partida."
+
 #: src/routes/recommendations.tsx
 msgid "never loaded here"
 msgstr "nunca cargado aquí"
@@ -13446,6 +13472,10 @@ msgstr "Obtenida"
 #: src/components/packs/CardSpotlight.tsx
 msgid "Obtained on {dateText}"
 msgstr "Obtenida el {dateText}"
+
+#: src/routes/terms.tsx
+msgid "October 26, 2026"
+msgstr "26 de octubre de 2026"
 
 #: src/routes/privacy.tsx
 msgid "October 9, 2026"
@@ -16426,6 +16456,10 @@ msgstr "Replays disponibles hasta ahora"
 msgid "Replays play with their player's published skin. Turn off to always use yours."
 msgstr "Los replays se reproducen con el skin publicado de su jugador. Desactívalo para usar siempre el tuyo."
 
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "Report"
+msgstr "Reportar"
+
 #. placeholder {0}: community.name
 #: src/components/communities/CommunityReportModal.tsx
 msgid "Report {0}"
@@ -16456,6 +16490,10 @@ msgstr "Reportar otra cosa"
 #: src/routes/communities_.$id.tsx
 msgid "report this server"
 msgstr "reportar este servidor"
+
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "Report this theme"
+msgstr "Reportar este tema"
 
 #: src/components/packs/run/chain/ChainShop.tsx
 #: src/components/packs/run/RunShop.tsx
@@ -17441,6 +17479,7 @@ msgstr "Enviar una propina"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
+#: src/components/supporter/CustomThemeCredit.tsx
 #: src/routes/report.tsx
 msgid "Send report"
 msgstr "Enviar reporte"
@@ -17459,6 +17498,7 @@ msgid "Send to back"
 msgstr "Enviar atrás"
 
 #: src/components/player/AddScoreModal.tsx
+#: src/components/supporter/CustomThemeCredit.tsx
 #: src/routes/report.tsx
 msgid "Sending..."
 msgstr "Enviando..."
@@ -19207,10 +19247,18 @@ msgstr "Beneficios de supporter"
 msgid "Supporter ranks"
 msgstr "Rangos de supporter"
 
+#: src/routes/terms.tsx
+msgid "Supporter Themes And Uploads"
+msgstr "Temas y archivos de supporters"
+
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 #: src/routes/supporter.tsx
 msgid "Supporter until {until}"
 msgstr "Supporter hasta el {until}"
+
+#: src/routes/terms.tsx
+msgid "Supporters can upload images and make their own profile themes, including shader code others can see and use. Whoever uploads or writes them is responsible for them and must have the right to share them. They go live without review."
+msgstr "Los supporters pueden subir imágenes y crear sus propios temas de perfil, incluido código de shaders que otros pueden ver y usar. Quien los sube o escribe es responsable de ellos y debe tener derecho a compartirlos. Se publican sin revisión."
 
 #: src/routes/support.tsx
 #~ msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, card foils, packs cosmetics, extra profile stats and video share links."
@@ -19529,6 +19577,10 @@ msgstr "¡Gracias! Inicia sesión y pega abajo el número de pedido del correo d
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Thank you! Your supporter time is on."
 msgstr "¡Gracias! Ya tienes tu tiempo de supporter."
+
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "Thanks, the report was sent."
+msgstr "Gracias, el reporte fue enviado."
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
@@ -20554,6 +20606,17 @@ msgstr "Tono del tema"
 msgid "Theme saturation"
 msgstr "Saturación del tema"
 
+#. placeholder {0}: theme.name
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "Theme: {0}"
+msgstr "Tema: {0}"
+
+#. placeholder {0}: theme.name
+#. placeholder {1}: theme.author.username
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "Theme: {0} by {1}"
+msgstr "Tema: {0}, de {1}"
+
 #: src/lib/pack-run.ts
 msgid "There is no reward to pick."
 msgstr "No hay ninguna recompensa para elegir."
@@ -21098,6 +21161,10 @@ msgstr "Para prevenir el abuso, el servidor cuenta las peticiones por dirección
 #: src/routes/privacy.tsx
 msgid "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
 msgstr "Para informar de un error, usa el formulario <0>Reportar un error</0> del sitio. Para asuntos de privacidad, eliminación, atribución, retirada de contenido o cualquier otra cuestión, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
+
+#: src/routes/terms.tsx
+msgid "To report a theme, use Report under the profile wearing it, or email <0>contact@mania-tracker.com</0>. A theme or image that infringes someone's rights or breaks these terms is taken down, and a supporter who keeps uploading such content loses the ability to make themes."
+msgstr "Para reportar un tema, usa Reportar debajo del perfil que lo lleva, o escribe a <0>contact@mania-tracker.com</0>. Un tema o imagen que infrinja los derechos de alguien o rompa estos términos se retira, y un supporter que siga subiendo ese tipo de contenido pierde la posibilidad de crear temas."
 
 #: src/routes/supporter.tsx
 msgid "to set up your avatar frame, name tag and card look."
@@ -22522,6 +22589,10 @@ msgstr "Sobre qué se imprimen tus packs, todos los tipos por igual. El nombre y
 msgid "What's new"
 msgstr "Novedades"
 
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "What's wrong with it? (optional)"
+msgstr "¿Qué tiene de malo? (opcional)"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "When each card first joined your collection"
 msgstr "Cuándo entró cada carta a tu colección"
@@ -22557,6 +22628,10 @@ msgstr "Qué copia"
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"
 msgstr "Qué plays se miran"
+
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "Which work is yours, and where can it be seen?"
+msgstr "¿Qué trabajo es tuyo y dónde se puede ver?"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "while tracked"

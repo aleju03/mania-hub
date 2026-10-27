@@ -46,7 +46,7 @@ export interface AdminSupportersView {
   supporters: AdminSupporterRow[];
 }
 
-async function adminRequest<T>(path: string, body?: unknown): Promise<T> {
+export async function adminRequest<T>(path: string, body?: unknown): Promise<T> {
   const { requireAdminAccess } = await import("./auth");
   await requireAdminAccess("Manage supporters");
   const base = getServerLiveBackendUrl();

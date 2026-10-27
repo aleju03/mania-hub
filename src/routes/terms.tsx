@@ -19,7 +19,7 @@ export const Route = createFileRoute("/terms")({
 function TermsPage() {
   const { t } = useLingui();
   return (
-    <LegalDocument eyebrow={t`Terms`} title={t`Terms of Service`} updatedAt={t`August 23, 2026`}>
+    <LegalDocument eyebrow={t`Terms`} title={t`Terms of Service`} updatedAt={t`October 26, 2026`}>
       <LegalSection title={t`Unofficial Project`}>
         <LegalParagraph>
           <Trans>
@@ -83,6 +83,30 @@ function TermsPage() {
               contact@mania-tracker.com
             </a>{' '}
             or contact the maintainer through the public osu! profile linked in the footer.
+          </Trans>
+        </LegalParagraph>
+      </LegalSection>
+
+      <LegalSection title={t`Supporter Themes And Uploads`}>
+        <LegalParagraph>
+          <Trans>
+            Supporters can upload images and make their own profile themes, including shader code
+            others can see and use. Whoever uploads or writes them is responsible for them and must
+            have the right to share them. They go live without review.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
+            To report a theme, use Report under the profile wearing it, or email{' '}
+            <a
+              href="mailto:contact@mania-tracker.com"
+              className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
+            >
+              contact@mania-tracker.com
+            </a>
+            . A theme or image that infringes someone's rights or breaks these terms is taken
+            down, and a supporter who keeps uploading such content loses the ability to make
+            themes.
           </Trans>
         </LegalParagraph>
       </LegalSection>

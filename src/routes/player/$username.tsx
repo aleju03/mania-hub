@@ -88,6 +88,7 @@ import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "../../components/supporter/SupporterNameStyle";
 import { SupporterRankBadge } from "../../components/supporter/SupporterRankBadge";
 import { ProfileThemeBackdrop } from "../../components/supporter/ProfileThemeBackdrop";
+import { CustomThemeCredit } from "../../components/supporter/CustomThemeCredit";
 import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "../../lib/profile-stats";
 import { saveSupporterProfilePlaysSetting, saveSupporterProfileStatsSetting } from "../../lib/supporter-look-settings";
@@ -3178,6 +3179,11 @@ export function PlayerProfilePage({
           )}
         </div>
       </div>
+      {customTheme && !profileTheme ? (
+        <div className={band}>
+          <CustomThemeCredit theme={customTheme} ownerId={profileUserId} />
+        </div>
+      ) : null}
     </div>
   );
 }
