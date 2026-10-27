@@ -3334,6 +3334,7 @@ msgid "Against the heaviest built-in theme: saving needs 1.00x or less."
 msgstr ""
 
 #: src/components/player/BestScoresControls.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Age"
 msgstr "时间"
 
@@ -4337,6 +4338,7 @@ msgstr "最佳卡包"
 #~ msgid "Best pack {0}"
 #~ msgstr "最佳卡包 {0}"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Best Performance"
@@ -16747,6 +16749,7 @@ msgid "Recent plays"
 msgstr "最近游玩"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Recent Plays"
@@ -19620,6 +19623,7 @@ msgid "sort"
 msgstr "排序"
 
 #: src/components/player/BestScoresControls.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/tracker.tsx
 msgid "Sort"
 msgstr "排序"

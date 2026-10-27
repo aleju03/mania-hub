@@ -729,11 +729,25 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         <InspectorRow label={t`Base`}>
           <BasePad value={look.base} onChange={(base) => { lookTouched.current = true; setLook({ ...look, base }); }} label={t`Base colour`} />
         </InspectorRow>
-        <div className="mt-2 flex items-center gap-2">
-          <div className="flex h-12 flex-1 flex-col justify-center gap-1.5 rounded-lg px-2.5 ring-1 ring-white/[0.07]" style={{ backgroundColor: look.base }}>
-            <span className="block h-1.5 w-2/3 rounded" style={{ background: `hsl(${look.hue} ${Math.round(look.sat * 100)}% 62%)` }} />
-            <span className="block h-1.5 w-1/2 rounded bg-white/40" />
+        {/* A corner of a profile in the tint: the site's own colour classes
+            under the theme's variables, so it is the real result. */}
+        <div
+          className="mt-2 overflow-hidden rounded-lg ring-1 ring-white/[0.07]"
+          style={{ backgroundColor: look.base, "--theme-hue": String(look.hue), "--theme-sat": String(look.sat), "--theme-surface": "3" } as React.CSSProperties}
+          aria-hidden="true"
+        >
+          <div className="flex items-end gap-3 px-3 pt-2 text-[11.5px] font-semibold">
+            <span className="border-b-2 border-osu-pink pb-1.5 text-white">{t`Best Performance`}</span>
+            <span className="pb-2 text-osu-f1">{t`Recent Plays`}</span>
           </div>
+          <div className="flex items-center gap-2 bg-osu-b5/80 px-3 py-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1">{t`Sort`}</span>
+            <span className="rounded-md bg-osu-b3 px-2 py-0.5 text-[11px] font-semibold text-osu-pink-light">PP</span>
+            <span className="text-[11px] font-semibold text-osu-l2">{t`Age`}</span>
+            <span className="ml-auto text-[11px] font-semibold text-osu-pink-light">osu! profile</span>
+          </div>
+        </div>
+        <div className="mt-2 flex justify-end">
           <SmallButton onClick={() => {
             const sample = glRef.current?.capture(64, 36, { time: moment, pointer: CENTRE, scroll: 0 });
             if (sample) {

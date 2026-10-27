@@ -3301,6 +3301,7 @@ msgid "Against the heaviest built-in theme: saving needs 1.00x or less."
 msgstr "Against the heaviest built-in theme: saving needs 1.00x or less."
 
 #: src/components/player/BestScoresControls.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Age"
 msgstr "Age"
 
@@ -4304,6 +4305,7 @@ msgstr "Best pack"
 #~ msgid "Best pack {0}"
 #~ msgstr "Best pack {0}"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Best Performance"
@@ -16730,6 +16732,7 @@ msgid "Recent plays"
 msgstr "Recent plays"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Recent Plays"
@@ -19603,6 +19606,7 @@ msgid "sort"
 msgstr "sort"
 
 #: src/components/player/BestScoresControls.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/tracker.tsx
 msgid "Sort"
 msgstr "Sort"
