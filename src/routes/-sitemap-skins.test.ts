@@ -17,8 +17,8 @@ describe("sitemap", () => {
 
   it("adds a url per skin, with the lastmod at date precision", () => {
     const xml = buildSitemap(ORIGIN, [
-      { path: "/skins/r-skin-v1-2-bars", lastmod: "2026-08-10T14:03:11.000Z" },
-      { path: "/skins/gray-malevich-edited", lastmod: null },
+      { path: "/skins/r-skin-v1-2-bars", lastmod: "2026-08-10T14:03:11.000Z", image: null },
+      { path: "/skins/gray-malevich-edited", lastmod: null, image: null },
     ]);
     expect(xml).toContain("<loc>https://mania-tracker.com/skins/r-skin-v1-2-bars</loc>");
     expect(xml).toContain("<lastmod>2026-08-10</lastmod>");
@@ -29,14 +29,25 @@ describe("sitemap", () => {
   });
 
   it("drops a lastmod it cannot parse instead of emitting it", () => {
-    const xml = buildSitemap(ORIGIN, [{ path: "/skins/x", lastmod: "not a date" }]);
+    const xml = buildSitemap(ORIGIN, [{ path: "/skins/x", lastmod: "not a date", image: null }]);
     expect(xml).not.toContain("<lastmod>");
     expect(xml).toContain("<loc>https://mania-tracker.com/skins/x</loc>");
   });
 
   it("escapes a slug that would otherwise break the document", () => {
-    const xml = buildSitemap(ORIGIN, [{ path: "/skins/a&b<c", lastmod: null }]);
+    const xml = buildSitemap(ORIGIN, [{ path: "/skins/a&b<c", lastmod: null, image: null }]);
     expect(xml).toContain("<loc>https://mania-tracker.com/skins/a&amp;b&lt;c</loc>");
+  });
+
+  it("names a skin's preview as its page image", () => {
+    const preview = "https://api.mania-tracker.com/api/skins/file/abc/preview-4k-r1.webp";
+    const xml = buildSitemap(ORIGIN, [
+      { path: "/skins/with-preview", lastmod: null, image: preview },
+      { path: "/skins/without-preview", lastmod: null, image: null },
+    ]);
+    expect(xml).toContain('xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"');
+    expect(xml).toContain(`<image:loc>${preview}</image:loc>`);
+    expect(xml.match(/<image:image>/g)).toHaveLength(1);
   });
 });
 

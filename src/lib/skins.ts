@@ -402,6 +402,9 @@ export interface SkinSitemapEntry {
   // ISO instant of the last change to the skin, or null when unknown; the
   // caller turns it into a lastmod hint.
   lastmod: string | null;
+  // The cover preview the page uses as its og:image, so a crawler pairs the
+  // page with that image. Null when the skin has none.
+  image: string | null;
 }
 
 // The backend clamps a list page to SKIN_LIST_MAX_PAGE_SIZE, so the whole
@@ -447,6 +450,7 @@ export async function fetchSkinSitemapEntries(): Promise<SkinSitemapEntry[]> {
       entries.push({
         path: `/skins/${skin.slug ?? skin.id}`,
         lastmod: replaced && (!listed || replaced > listed) ? replaced : listed,
+        image: skin.previewUrl ?? null,
       });
     }
     if (skins.length < SKIN_LIST_MAX_PAGE_SIZE || seen >= (body.total ?? 0)) break;
