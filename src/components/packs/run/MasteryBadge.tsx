@@ -50,7 +50,7 @@ export function MasteryBadge({ copies }: { copies: number }) {
   return (
     <span
       className="inline-flex items-center gap-[3px]"
-      title={t`Mastery ${level}: ${copies} copies held, next at ${next}. Spares recycle for +${bonus}%.`}
+      title={t`Card level ${level}: ${copies} copies held, next at ${next}. Spares recycle for +${bonus}%.`}
     >
       <span aria-hidden="true" className="h-[7px] w-[7px] rotate-45 rounded-[1.5px]" style={{ background: masteryFill(level) }} />
       {level}
@@ -72,7 +72,7 @@ export function MasteryLine({ copies, own }: { copies: number; own: boolean }) {
         <span className="relative grid h-4 w-4 place-items-center" aria-hidden="true">
           <span className="absolute inset-[2px] rotate-45 rounded-[3px]" style={{ background: masteryFill(level) }} />
         </span>
-        {t`Mastery ${level}`}
+        {t`Card level ${level}`}
       </span>
       <span className="h-3 w-px bg-white/15" aria-hidden="true" />
       <span className="tabular-nums">{t`${copies} copies held, next level at ${next}`}</span>

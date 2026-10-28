@@ -167,7 +167,7 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
       )}
 
       {(boards.mastery?.length ?? 0) > 0 && (
-        <Board title={t`most mastery`}>
+        <Board title={t`most card levels`}>
           {boards.mastery!.map((collector, index) => (
             <CollectorRow
               key={collector.userId}
@@ -175,7 +175,7 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
               index={index}
               value={formatNumber(collector.mastery)}
               unit={collector.mastery === 1 ? t`level` : t`levels`}
-              title={t`Mastery levels added up over every card ${collector.username} has held. A card gains a level each time the copies held of it double, recycled copies included.`}
+              title={t`Card levels added up over every card ${collector.username} has held. A card gains a level each time the copies held of it double, recycled copies included.`}
             />
           ))}
         </Board>

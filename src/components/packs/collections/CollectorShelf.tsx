@@ -714,7 +714,7 @@ export function CollectorShelf({ collector, tab }: {
                 sort === option ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
               }`}
             >
-              {option === "mastery" ? t`Mastery` : t`Rarity`}
+              {option === "mastery" ? t`Card level` : t`Rarity`}
             </button>
           ))}
         </div>

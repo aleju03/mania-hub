@@ -4831,6 +4831,24 @@ msgstr "卡牌闪膜与图案"
 msgid "Card front"
 msgstr "卡片正面"
 
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Card level"
+msgstr "卡牌等级"
+
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "Card level {level}"
+msgstr "卡牌等级 {level}"
+
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "Card level {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
+msgstr "卡牌等级 {level}：已获得 {copies} 张，下一级需要 {next} 张。回收重复时多得 {bonus}%。"
+
+#. placeholder {0}: collector.username
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "Card levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+msgstr "{0} 拥有过的所有卡牌的等级总和。一张卡牌拥有过的副本数每翻一倍就升一级，已回收的副本也计算在内。"
+
 #: src/routes/packs.tsx
 msgid "Card Packs"
 msgstr "卡包"
@@ -4886,8 +4904,13 @@ msgstr "来自你所在国家/地区的卡片计分两次。"
 
 #. placeholder {0}: N.hoarder.chips
 #: src/lib/pack-run.ts
-msgid "Cards give +{0} notes per mastery level."
-msgstr "卡片每个精通等级 +{0} 音符。"
+msgid "Cards give +{0} notes per card level."
+msgstr "卡牌每级卡牌等级提供 +{0} 音符。"
+
+#. placeholder {0}: N.hoarder.chips
+#: src/lib/pack-run.ts
+#~ msgid "Cards give +{0} notes per mastery level."
+#~ msgstr "卡片每个精通等级 +{0} 音符。"
 
 #: src/components/packs/run/RunInfo.tsx
 msgid "cards held"
@@ -9040,8 +9063,14 @@ msgstr "每开出一个非单项的卡包获得 +{0} 连击，遇到单项则降
 #. placeholder {0}: N.grind.step
 #. placeholder {1}: N.grind.level
 #: src/lib/pack-run.ts
-msgid "Gains +{0} combo for every pack with a card at mastery level {1} or higher."
-msgstr "每开出一个含有精通等级 {1} 及以上卡片的卡包获得 +{0} 连击。"
+msgid "Gains +{0} combo for every pack with a card at card level {1} or higher."
+msgstr "每有一包含有卡牌等级 {1} 或以上的卡牌，获得 +{0} 连击。"
+
+#. placeholder {0}: N.grind.step
+#. placeholder {1}: N.grind.level
+#: src/lib/pack-run.ts
+#~ msgid "Gains +{0} combo for every pack with a card at mastery level {1} or higher."
+#~ msgstr "每开出一个含有精通等级 {1} 及以上卡片的卡包获得 +{0} 连击。"
 
 #. placeholder {0}: N.metronome.step
 #: src/lib/pack-run.ts
@@ -9705,8 +9734,12 @@ msgid "Higher values move receptors lower."
 msgstr "数值越大，判定线越靠下。"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "Highest mastery first, counting recycled copies"
-msgstr "熟练度最高的在前，包括已回收的副本"
+msgid "Highest card level first, counting recycled copies"
+msgstr "卡牌等级最高的在前，包括已回收的副本"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Highest mastery first, counting recycled copies"
+#~ msgstr "熟练度最高的在前，包括已回收的副本"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
@@ -12139,25 +12172,25 @@ msgstr "大师套组"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
-msgid "Mastery"
-msgstr "熟练度"
+#~ msgid "Mastery"
+#~ msgstr "熟练度"
 
 #: src/components/packs/run/MasteryBadge.tsx
-msgid "Mastery {level}"
-msgstr "熟练度 {level}"
+#~ msgid "Mastery {level}"
+#~ msgstr "熟练度 {level}"
 
 #: src/components/packs/run/MasteryBadge.tsx
 #~ msgid "Mastery {level}: {copies} copies held, next at {next}"
 #~ msgstr "熟练度 {level}：已获得 {copies} 张，下一级需要 {next} 张"
 
 #: src/components/packs/run/MasteryBadge.tsx
-msgid "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
-msgstr "熟练度 {level}：已获得 {copies} 张，下一级需要 {next} 张。回收重复时多得 {bonus}%。"
+#~ msgid "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
+#~ msgstr "熟练度 {level}：已获得 {copies} 张，下一级需要 {next} 张。回收重复时多得 {bonus}%。"
 
 #. placeholder {0}: collector.username
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
-msgstr "{0} 拥有过的所有卡牌的熟练度等级总和。一张卡牌拥有过的副本数每翻一倍就升一级，已回收的副本也计算在内。"
+#~ msgid "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+#~ msgstr "{0} 拥有过的所有卡牌的熟练度等级总和。一张卡牌拥有过的副本数每翻一倍就升一级，已回收的副本也计算在内。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
@@ -12523,6 +12556,10 @@ msgstr "更多观看"
 msgid "Most active around <0>{0}</0>"
 msgstr "最活跃的时段在<0>{0}</0>"
 
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most card levels"
+msgstr "卡牌等级最高"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "Most cards"
 msgstr "卡片最多"
@@ -12552,8 +12589,8 @@ msgid "Most liked"
 msgstr "最多喜欢"
 
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "most mastery"
-msgstr "熟练度最高"
+#~ msgid "most mastery"
+#~ msgstr "熟练度最高"
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most packs opened"

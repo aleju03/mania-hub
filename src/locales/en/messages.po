@@ -4798,6 +4798,24 @@ msgstr "Card foil and art"
 msgid "Card front"
 msgstr "Card front"
 
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Card level"
+msgstr "Card level"
+
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "Card level {level}"
+msgstr "Card level {level}"
+
+#: src/components/packs/run/MasteryBadge.tsx
+msgid "Card level {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
+msgstr "Card level {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
+
+#. placeholder {0}: collector.username
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "Card levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+msgstr "Card levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+
 #: src/routes/packs.tsx
 msgid "Card Packs"
 msgstr "Card Packs"
@@ -4853,8 +4871,13 @@ msgstr "Cards from your country score twice."
 
 #. placeholder {0}: N.hoarder.chips
 #: src/lib/pack-run.ts
-msgid "Cards give +{0} notes per mastery level."
-msgstr "Cards give +{0} notes per mastery level."
+msgid "Cards give +{0} notes per card level."
+msgstr "Cards give +{0} notes per card level."
+
+#. placeholder {0}: N.hoarder.chips
+#: src/lib/pack-run.ts
+#~ msgid "Cards give +{0} notes per mastery level."
+#~ msgstr "Cards give +{0} notes per mastery level."
 
 #: src/components/packs/run/RunInfo.tsx
 msgid "cards held"
@@ -9019,8 +9042,14 @@ msgstr "Gains +{0} combo for every pack that is not a Single and drops to 0 on a
 #. placeholder {0}: N.grind.step
 #. placeholder {1}: N.grind.level
 #: src/lib/pack-run.ts
-msgid "Gains +{0} combo for every pack with a card at mastery level {1} or higher."
-msgstr "Gains +{0} combo for every pack with a card at mastery level {1} or higher."
+msgid "Gains +{0} combo for every pack with a card at card level {1} or higher."
+msgstr "Gains +{0} combo for every pack with a card at card level {1} or higher."
+
+#. placeholder {0}: N.grind.step
+#. placeholder {1}: N.grind.level
+#: src/lib/pack-run.ts
+#~ msgid "Gains +{0} combo for every pack with a card at mastery level {1} or higher."
+#~ msgstr "Gains +{0} combo for every pack with a card at mastery level {1} or higher."
 
 #. placeholder {0}: N.metronome.step
 #: src/lib/pack-run.ts
@@ -9688,8 +9717,12 @@ msgid "Higher values move receptors lower."
 msgstr "Higher values move receptors lower."
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "Highest mastery first, counting recycled copies"
-msgstr "Highest mastery first, counting recycled copies"
+msgid "Highest card level first, counting recycled copies"
+msgstr "Highest card level first, counting recycled copies"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Highest mastery first, counting recycled copies"
+#~ msgstr "Highest mastery first, counting recycled copies"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
@@ -12122,25 +12155,25 @@ msgstr "Master sets"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
-msgid "Mastery"
-msgstr "Mastery"
+#~ msgid "Mastery"
+#~ msgstr "Mastery"
 
 #: src/components/packs/run/MasteryBadge.tsx
-msgid "Mastery {level}"
-msgstr "Mastery {level}"
+#~ msgid "Mastery {level}"
+#~ msgstr "Mastery {level}"
 
 #: src/components/packs/run/MasteryBadge.tsx
 #~ msgid "Mastery {level}: {copies} copies held, next at {next}"
 #~ msgstr "Mastery {level}: {copies} copies held, next at {next}"
 
 #: src/components/packs/run/MasteryBadge.tsx
-msgid "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
-msgstr "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
+#~ msgid "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
+#~ msgstr "Mastery {level}: {copies} copies held, next at {next}. Spares recycle for +{bonus}%."
 
 #. placeholder {0}: collector.username
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
-msgstr "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+#~ msgid "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
+#~ msgstr "Mastery levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
@@ -12506,6 +12539,10 @@ msgstr "More watched"
 msgid "Most active around <0>{0}</0>"
 msgstr "Most active around <0>{0}</0>"
 
+#: src/components/packs/collections/RecordBoards.tsx
+msgid "most card levels"
+msgstr "most card levels"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "Most cards"
 msgstr "Most cards"
@@ -12535,8 +12572,8 @@ msgid "Most liked"
 msgstr "Most liked"
 
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "most mastery"
-msgstr "most mastery"
+#~ msgid "most mastery"
+#~ msgstr "most mastery"
 
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "most packs opened"

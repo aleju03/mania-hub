@@ -69,7 +69,7 @@ const COLLECTION_SORTS: Array<{
   { id: "rarity", label: msg`Rarity`, hint: msg`Highest tier first, then pp` },
   { id: "newest", label: msg`Newest`, hint: msg`When each card first joined your collection` },
   { id: "copies", label: msg`Copies`, hint: msg`Most copies first` },
-  { id: "mastery", label: msg`Mastery`, hint: msg`Highest mastery first, counting recycled copies` },
+  { id: "mastery", label: msg`Card level`, hint: msg`Highest card level first, counting recycled copies` },
 ];
 
 /* How you read your own collection is a standing preference, not a transient
