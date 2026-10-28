@@ -2098,11 +2098,10 @@ export function PlayerProfilePage({
       </span>,
     );
   }
-  // Joined date and playstyle are static profile facts, not live status, so
-  // they sit on the stat rail with the other facts instead of trailing the
-  // name alongside a link and a presence readout.
+  // The join date is a static profile fact, not live status, so it sits on
+  // the stat rail with the other facts instead of trailing the name
+  // alongside a link and a presence readout.
   const joinedValue = !profileStatsProjectedOnly && hasValidDate(user.join_date) ? formatDate(user.join_date) : null;
-  const playstyleValue = user.playstyle?.length ? user.playstyle.join(", ") : null;
 
   return (
     <div className="flex-1">
@@ -2485,18 +2484,12 @@ export function PlayerProfilePage({
                 ? <Skeleton className="h-[19px] w-10" />
                 : railTotals.playTime == null ? "-" : t`${formatNumber(Math.floor(railTotals.playTime / 3600))}h`}
             />
-            {/* One quiet line rather than two label/value blocks: at rail-stat
-                weight these claimed a whole row to themselves on mobile, which
-                is more than a join date and a playstyle are worth. */}
-            {(joinedValue || playstyleValue) && (
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-osu-f1">
-                {joinedValue && (
-                  <span><Trans>Joined <strong className="font-semibold text-osu-l2">{joinedValue}</strong></Trans></span>
-                )}
-                {joinedValue && playstyleValue && <span className="text-osu-b1">·</span>}
-                {playstyleValue && (
-                  <span><Trans>Plays with <strong className="font-semibold capitalize text-osu-l2">{playstyleValue}</strong></Trans></span>
-                )}
+            {/* One quiet line rather than a label/value block: at rail-stat
+                weight it claimed a whole row to itself on mobile, which is
+                more than a join date is worth. */}
+            {joinedValue && (
+              <div className="text-[11px] text-osu-f1">
+                <Trans>Joined <strong className="font-semibold text-osu-l2">{joinedValue}</strong></Trans>
               </div>
             )}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:ml-auto">

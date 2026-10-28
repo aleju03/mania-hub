@@ -13927,8 +13927,8 @@ msgid "Plays when a combo above 20 is lost."
 msgstr "Suena cuando se pierde un combo de más de 20."
 
 #: src/routes/player/$username.tsx
-msgid "Plays with <0>{playstyleValue}</0>"
-msgstr "Juega con <0>{playstyleValue}</0>"
+#~ msgid "Plays with <0>{playstyleValue}</0>"
+#~ msgstr "Juega con <0>{playstyleValue}</0>"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "Plays with those mods can't be added."

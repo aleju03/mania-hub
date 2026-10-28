@@ -13939,8 +13939,8 @@ msgid "Plays when a combo above 20 is lost."
 msgstr "连击超过 20 时才会播放断连音效。"
 
 #: src/routes/player/$username.tsx
-msgid "Plays with <0>{playstyleValue}</0>"
-msgstr "使用 <0>{playstyleValue}</0> 游玩"
+#~ msgid "Plays with <0>{playstyleValue}</0>"
+#~ msgstr "使用 <0>{playstyleValue}</0> 游玩"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "Plays with those mods can't be added."
