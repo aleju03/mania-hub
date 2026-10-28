@@ -352,7 +352,7 @@ export function BestSortControl({
               : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
             }`}
         >
-          <Trans>Age</Trans>
+          <Trans>Date</Trans>
           <SortArrow direction={ageDirection} />
         </button>
       </div>

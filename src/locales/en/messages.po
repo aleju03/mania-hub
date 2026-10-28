@@ -3211,8 +3211,8 @@ msgid "Advanced"
 msgstr "Advanced"
 
 #: src/components/player/BestScoresControls.tsx
-msgid "Age"
-msgstr "Age"
+#~ msgid "Age"
+#~ msgstr "Age"
 
 #: src/routes/player/$username.tsx
 #~ msgid "Age {ageArrow}"
@@ -6313,6 +6313,7 @@ msgstr "Data Sources"
 msgid "Data The Site Uses"
 msgstr "Data The Site Uses"
 
+#: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Date"
 msgstr "Date"
