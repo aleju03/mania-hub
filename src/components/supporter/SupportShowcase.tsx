@@ -553,10 +553,11 @@ function CardHand({ foil }: { foil: SupporterFoilId }) {
 /* --- Packs ----------------------------------------------------------------------- */
 
 /* An opening's slash on loop: the live swatch (BladeSwatch) recorded on black
-   at 100x84, one 1.7 s cycle (foundry's grab-blades), and played with screen
+   at 116x84 (2x), one 1.7 s cycle (foundry's grab-blades), and played with screen
    blending so its light adds onto the tile the way the WebGL does. A short
    video starts at once; four live WebGL swatches each waited their turn for a
-   context. Reduced motion keeps the drawn still. Kept under /videos/, which
+   context. Encoded at CRF 10: at a low bitrate the dark glow breaks into
+   blocks. Reduced motion keeps the drawn still. Kept under /videos/, which
    the service worker leaves alone (Safari plays video only with ranges). */
 function BladeLoop({ blade, className }: { blade: SupporterBladeId; className: string }) {
   const [moving, setMoving] = useState<boolean | null>(null);
@@ -566,7 +567,7 @@ function BladeLoop({ blade, className }: { blade: SupporterBladeId; className: s
     <span className={`relative isolate block overflow-hidden ${className}`}>
       {moving && (
         <video
-          src={`/videos/blades/${blade}.mp4`}
+          src={`/videos/blades/${blade}-v2.mp4`}
           autoPlay
           loop
           muted
