@@ -4443,8 +4443,8 @@ msgid "Card rank"
 msgstr "Rating de la carta"
 
 #: src/lib/signature-style.ts
-msgid "Card tier"
-msgstr "Nivel de la carta"
+#~ msgid "Card tier"
+#~ msgstr "Nivel de la carta"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "cards"
@@ -6089,6 +6089,10 @@ msgstr "Porcentaje de acc actual."
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Current backdrop"
 msgstr "Fondo actual"
+
+#: src/lib/signature-shared.ts
+msgid "Current month"
+msgstr "Mes actual"
 
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "current pp"

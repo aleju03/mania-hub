@@ -18,6 +18,7 @@ import {
   maniaTierCardElement,
   MANIACARD_H,
   MANIACARD_W,
+  starDataUrl,
 } from "../../../lib/maniacard-art";
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../../lib/maniacard";
 import type { ManiaSkills } from "../../../lib/maniacard";
@@ -45,8 +46,11 @@ import type { LivePlayerActivitySnapshot, LivePlayerDanEvidence } from "../../..
 import {
   activityTodayKey,
   activityWindowStart,
+  buildSignatureActivityMonth,
   buildSignatureActivityWindow,
   type SignatureActivityCell,
+  type SignatureActivityDayInput,
+  type SignatureActivityMonth,
   type SignatureActivityWindow,
 } from "../../../lib/signature-activity";
 import { signatureDesign, type SignatureType } from "../../../lib/signature-shared";
@@ -56,12 +60,10 @@ import {
   stylePaintedBackground,
   styleNeedsProfileImage,
   styleUsesImage,
-  styleUsesTier,
   type SignatureStyle,
 } from "../../../lib/signature-style";
 import { avatarSquareDataUrl, backgroundImageDataUrl, beatmapCoverBandDataUrl, type SignatureBackgroundSources } from "./-backgrounds";
-import { cosmicStarsDataUrl, signatureArtLayers, tierFlecksDataUrl } from "./-art";
-import { getCosmicTierPalette } from "../../../lib/maniacard-cosmic";
+import { signatureArtLayers } from "./-art";
 import type { SignatureTiming } from "../../../lib/signature-timing";
 import type { SignatureProfileSnapshot as ProfileSnapshot, ResolvedSignature } from "../../../lib/signature-resolve";
 import { buildPpCumulativeDistribution, calculateUserProfileInsights } from "../../../lib/profile-insights";
@@ -221,21 +223,17 @@ async function styleLayers(
   };
 }
 
-/* `onBright` because the default is faint white, which on a Legendary front is
-   white on gold - the mark disappears exactly where the background is
-   loudest.
-
-   Null when the player turned it off. Every layout puts the mark in its
+/* Null when the player turned it off. Every layout puts the mark in its
    children array unconditionally and lets this decide, so nothing can end up
    with a mark that ignores the setting. */
-function wordmark(style: SignatureStyle, right = 16, bottom = 12, onBright = false): ReactNode {
+function wordmark(style: SignatureStyle, right = 16, bottom = 12): ReactNode {
   if (!style.watermark) return null;
   return h("div", {
     key: "mark",
     style: {
       position: "absolute", right: `${right}px`, bottom: `${bottom}px`,
       fontSize: "11px",
-      color: onBright ? "rgba(0,0,0,0.34)" : "rgba(255,255,255,0.28)",
+      color: "rgba(255,255,255,0.28)",
       letterSpacing: "0.02em",
     },
   }, "mania-tracker.com");
@@ -406,7 +404,7 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   if (!user || !skills) return renderPlate(ctx, "No ranked mania plays tracked yet.");
 
   const tier = getManiaCardTier(skills.cardPower);
-  const avatarSize = ctx.design === 4 ? 454 : 140;
+  const avatarSize = ctx.design === 4 ? 454 : BANNER_AVATAR;
   const sourceAvatarUrl = ogAvatarUrl(ctx.request, user.avatar_url, user.id);
   /* resvg does not decode GIFs, so handing an animated osu! avatar straight
      to ImageResponse leaves the card's avatar frame blank. Dynamic renders
@@ -419,9 +417,8 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
 
   const style = MANIA_TIER_STYLES[tier];
   const background = await styleLayers(ctx, spec, backgroundSourcesFrom(snapshot));
-  const tierBacked = !background.custom && styleUsesTier(ctx.style);
-  const statColor = accentHex(ctx.style, "rgba(255,255,255,0.88)");
   const username = clamp(user.username || ctx.resolved.username, 20);
+  const tierColor = tierTextColor(style);
 
   /* No rank and no pp on the image. Both move on osu! faster than a cached
      snapshot can follow, so an embed showing them is wrong more often than it
@@ -429,177 +426,52 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
      numbers. Card power is derived from a top-plays set that moves slowly, so
      it can be stood behind. */
 
-  const avatar = (size: number) => h("img", {
-    key: "avatar",
-    src: avatarUrl,
-    width: size,
-    height: size,
-    style: {
-      width: `${size}px`, height: `${size}px`, borderRadius: "18px", objectFit: "cover",
-      // The card frames its image; on a bright front an unframed avatar reads
-      // as a hole cut in the gradient.
-      ...(tierBacked ? { border: "3px solid rgba(255,255,255,0.42)" } : {}),
-    },
-  });
-
-  /* The tier as coloured text rather than a filled pill. A gold lozenge reads
-     as a generic "badge" component from any web page; the tier's own colour on
-     bare type reads as this card's tier. alignSelf keeps it to its own width -
-     a flex child in a column stretches, and a tier label as wide as the card
-     stops looking like a label at all. */
-  const tierText = (align: "flex-start" | "center" = "flex-start") => h("div", {
+  /* Bare type like every other render. The tier rides on the portrait's rim
+     and the label; the card front is its own design for anyone who wants the
+     whole card. */
+  const tierLabel = h("div", {
     key: "tier",
     style: {
-      display: "flex", alignSelf: align, alignItems: "center",
-      fontSize: "13px", fontWeight: 900, letterSpacing: "0.16em",
-      textTransform: "uppercase", color: tierTextColor(style),
+      display: "flex", flexShrink: 0, fontSize: "13px", fontWeight: 900,
+      letterSpacing: "0.16em", textTransform: "uppercase", color: tierColor,
     },
   }, style.label);
-
-  /* The tier art is a background the player chose, not something every card
-     wears. It used to be painted whenever no picture was set, which meant
-     "None" still produced a gold wash. Now it draws only when it is the
-     selected background, and every other choice carries the tier through the
-     label alone. */
-  const backdrop = [
-    ...background.layers,
-    ...(tierBacked ? tierLayers(tier, style, spec) : []),
-  ];
-
-  // Design 1: banner.
-  const nameBlock = [
-    h("div", { key: "n", style: { fontSize: "38px", fontWeight: 900, lineHeight: 1 } }, username),
-    tierText(),
-  ];
-  const bannerStatRows = cardStatRows(skills, 300, statColor);
+  const power = h("div", { key: "power", style: { display: "flex", alignItems: "center", gap: "6px" } }, [
+    h("img", { key: "s", src: starDataUrl("#fcd34d"), width: 16, height: 16, style: { width: "16px", height: "16px" } }),
+    h("div", { key: "v", style: { display: "flex", fontSize: "15px", fontWeight: 900, color: "rgba(255,255,255,0.80)" } }, skills.starAvg.toFixed(2)),
+  ]);
 
   return renderPng(ctx, frame(spec.width, spec.height, [
-    ...backdrop,
+    ...background.layers,
     h("div", {
       key: "row",
-      style: { display: "flex", alignItems: "center", gap: "22px", padding: "0 26px", width: "100%" },
+      style: { display: "flex", alignItems: "center", gap: "26px", padding: "0 26px", width: "100%" },
     }, [
-      avatar(140),
-      /* On the tier background the name and stats sit on the card's own dark
-         plates rather than bare on the gradient. It is the difference between
-         a card and a rectangle of colour, and it is what lets the front stay
-         as bright as the real one instead of being dimmed until the text
-         works. Everywhere else they stay bare - a panel over a flat surface is
-         a box around nothing. */
-      tierBacked
-        ? tierPanel(nameBlock, "mid", "10px 16px")
-        : h("div", { key: "mid", style: { display: "flex", flexDirection: "column", gap: "10px", width: "300px" } }, nameBlock),
-      tierBacked
-        ? h("div", { key: "statwrap", style: { display: "flex", flex: 1, justifyContent: "flex-end" } }, [
-          tierPanel(
-            [h("div", { key: "rows", style: { display: "flex", flexDirection: "column", gap: "9px" } }, bannerStatRows)],
-            "stats",
-            "12px 16px",
-          ),
-        ])
-        : h("div", {
-          key: "stats",
-          style: { display: "flex", flexDirection: "column", gap: "10px", flex: 1, minWidth: "0" },
-        }, bannerStatRows),
+      h("img", {
+        key: "avatar",
+        src: avatarUrl,
+        width: BANNER_AVATAR,
+        height: BANNER_AVATAR,
+        style: {
+          width: `${BANNER_AVATAR}px`, height: `${BANNER_AVATAR}px`, borderRadius: "36px",
+          objectFit: "cover", border: `3px solid ${tierColor}`,
+        },
+      }),
+      h("div", { key: "mid", style: { display: "flex", flexDirection: "column", gap: "12px", flex: 1, minWidth: "0" } }, [
+        h("div", { key: "n", style: { display: "flex", fontSize: "46px", fontWeight: 900, lineHeight: 1 } }, username),
+        h("div", { key: "meta", style: { display: "flex", alignItems: "center", gap: "14px" } }, [
+          tierLabel,
+          h("div", { key: "d", style: { width: "1px", height: "14px", background: "rgba(255,255,255,0.16)" } }),
+          power,
+        ]),
+      ]),
+      cardStatNumerals(skills, accentHex(ctx.style, "#ffffff")),
     ]),
-    wordmark(ctx.style, 16, 12, tierBacked),
+    wordmark(ctx.style, 16, 10),
   ]));
 }
 
-/* The card's own front, not a tint of it. What this used to draw was
-   `edgeFill` - the single dark colour the app uses for a card's EDGE - under a
-   disc of glow, which is why it read as a plain gradient in the rarity's base
-   colour. The front is the tier's full badge gradient with a fleck field over
-   it, and for the two cosmic tiers a layered foil instead. Those are the same
-   values the 3D card and the DOM card draw from, so nothing here can drift
-   from a tier's real look.
- *
- * The scrim is not optional. A Legendary front starts at #fff7ad, and the
- * banner's name and stats are plain white on top - the same problem an
- * arbitrary photograph poses, and the same answer. */
-export function tierLayers(
-  tier: ReturnType<typeof getManiaCardTier>,
-  style: (typeof MANIA_TIER_STYLES)[ReturnType<typeof getManiaCardTier>],
-  spec: { width: number; height: number },
-): ReactNode[] {
-  const cosmic = getCosmicTierPalette(tier);
-  const layer = (key: string, background: string) => h("div", {
-    key,
-    style: { position: "absolute", ...FILL, background },
-  });
-
-  const base = cosmic
-    // Positions and radii carried over as fractions of the 1000x1400 card
-    // texture the palette was tuned against.
-    ? [
-      layer("base", `linear-gradient(135deg, ${cosmic.base.map(([offset, color]) => `${color} ${offset * 100}%`).join(", ")})`),
-      layer("foilA", `radial-gradient(circle at 25% 15%, ${cosmic.foilA[0]} 0%, ${cosmic.foilA[1]} 20%, rgba(0,0,0,0) 62%)`),
-      layer("foilB", `radial-gradient(circle at 80% 79%, ${cosmic.foilB[0]} 0%, ${cosmic.foilB[1]} 26%, rgba(0,0,0,0) 58%)`),
-      layer("aurora", `linear-gradient(125deg, ${cosmic.aurora[0]} 0%, ${cosmic.aurora[1]} 34%, ${cosmic.aurora[2]} 46%, ${cosmic.aurora[3]} 66%, ${cosmic.aurora[4]} 100%)`),
-      h("img", {
-        key: "stars",
-        src: cosmicStarsDataUrl(spec.width, spec.height, cosmic.stars),
-        width: spec.width,
-        height: spec.height,
-        style: { position: "absolute", top: "0", left: "0", width: `${spec.width}px`, height: `${spec.height}px` },
-      }),
-    ]
-    : [
-      layer("base", style.badgeGradient),
-      h("img", {
-        key: "flecks",
-        src: tierFlecksDataUrl(spec.width, spec.height),
-        width: spec.width,
-        height: spec.height,
-        style: { position: "absolute", top: "0", left: "0", width: `${spec.width}px`, height: `${spec.height}px` },
-      }),
-    ];
-
-  return [
-    ...base,
-    /* The card's sheen: a highlight off the top-left corner and a shadow into
-       the far one. Without it a gradient stretched across a wide banner is a
-       flat wash - the card gets away with the same gradient because it is tall
-       and lit. */
-    layer("sheen", "linear-gradient(118deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 24%, rgba(0,0,0,0) 46%, rgba(0,0,0,0.30) 100%)"),
-    /* A rim in the tier's own bright colour. On the real card this is the
-       border, and it is most of what makes a card look like an object rather
-       than a rectangle of colour. */
-    h("div", {
-      key: "rim",
-      style: {
-        position: "absolute", ...FILL,
-        border: `2px solid ${hexAlpha(tierTextColor(style), 0.55)}`,
-        borderRadius: "4px",
-      },
-    }),
-  ];
-}
-
-/* The dark plates the card puts its name and stats on. They are why the front
-   can be bright and the text still legible: the card does not dim its whole
-   face, it lays panels on it. Values from drawStats and drawBackTopPlate in
-   cardTexture.ts - a soft black fill with a light hairline. */
-const TIER_PANEL: Record<string, string> = {
-  background: "rgba(0,0,0,0.34)",
-  border: "1px solid rgba(255,255,255,0.16)",
-};
-
-function tierPanel(children: ReactNode[], key: string, padding: string, radius = 14): ReactNode {
-  return h("div", {
-    key,
-    style: {
-      display: "flex", flexDirection: "column", padding, borderRadius: `${radius}px`,
-      ...TIER_PANEL,
-    },
-  }, children);
-}
-
-/* The same three stats the in-app card fronts, printed as the same numbers, so
-   an embed and the card never disagree. The card itself draws them as bare
-   numerals; the bar here is decoration on top of that and is scaled against
-   CARD_STAT_SCALE, since these sit on a ~0-1000 range rather than a percent. */
-const CARD_STAT_SCALE = 1000;
+const BANNER_AVATAR = 132;
 
 /* A tier's readable colour is the bright end of its badge gradient - glowColor
    carries an alpha and would print the label half transparent, and edgeFill is
@@ -609,26 +481,26 @@ function tierTextColor(style: { badgeGradient: string }): string {
   return /#[0-9a-f]{6}/i.exec(style.badgeGradient)?.[0] ?? "#ffffff";
 }
 
-function cardStatRows(skills: ManiaSkills, width: number, color: string): ReactNode[] {
-  const rows: Array<{ label: string; value: number }> = [
-    { label: "Control", value: skills.fingerControl },
-    { label: "Speed", value: skills.speed },
-    { label: "Precision", value: skills.accuracy },
+/* The same three stats the card front prints, as the same bare numerals, so
+   an embed and the card never disagree. */
+function cardStatNumerals(skills: ManiaSkills, ink: string): ReactNode {
+  const rows: Array<[string, number]> = [
+    ["Control", skills.fingerControl],
+    ["Speed", skills.speed],
+    ["Precision", skills.accuracy],
   ];
-  return rows.map((row) => h("div", {
-    key: row.label,
-    style: { display: "flex", alignItems: "center", gap: "10px" },
-  }, [
-    h("div", {
-      key: "l",
-      style: { width: "76px", fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,0.66)", flexShrink: 0 },
-    }, row.label),
-    bar(Math.max(40, width - 76 - 56), (row.value / CARD_STAT_SCALE) * 100, color),
-    h("div", {
-      key: "v",
-      style: { width: "46px", fontSize: "14px", fontWeight: 900, textAlign: "right", flexShrink: 0 },
-    }, String(Math.round(row.value))),
-  ]));
+  const out: ReactNode[] = [];
+  rows.forEach(([label, value], index) => {
+    if (index) out.push(h("div", { key: `d${index}`, style: { width: "1px", height: "56px", background: "rgba(255,255,255,0.14)" } }));
+    out.push(h("div", { key: label, style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
+      h("div", { key: "v", style: { display: "flex", fontSize: "44px", fontWeight: 900, lineHeight: 1, color: ink } }, String(Math.round(value))),
+      h("div", {
+        key: "l",
+        style: { display: "flex", fontSize: "11px", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.52)" },
+      }, label),
+    ]));
+  });
+  return h("div", { key: "stats", style: { display: "flex", alignItems: "center", gap: "30px", flexShrink: 0 } }, out);
 }
 
 // --- goals -------------------------------------------------------------
@@ -2440,7 +2312,10 @@ async function fetchActivityYear(userId: number, year: number): Promise<LivePlay
 /* Today is read in the zone the backend bucketed the days in, which the first
    answer names. The window crosses New Year for most of the year, so the year
    before is read too whenever the window starts in it. */
-async function fetchActivityWindow(ctx: SignatureRenderContext, weekCount: number): Promise<SignatureActivityWindow | null> {
+async function fetchActivityDays(
+  ctx: SignatureRenderContext,
+  weekCount: number,
+): Promise<{ days: SignatureActivityDayInput[]; todayKey: string } | null> {
   return measure(ctx, "activity", async () => {
     const userId = ctx.resolved.userId;
     const nowYear = new Date().getUTCFullYear();
@@ -2460,8 +2335,20 @@ async function fetchActivityWindow(ctx: SignatureRenderContext, weekCount: numbe
       const earlier = await fetchActivityYear(userId, year);
       if (earlier) snapshots.push(earlier);
     }
-    return buildSignatureActivityWindow(snapshots.flatMap((snapshot) => snapshot.days), todayKey, weekCount);
+    return { days: snapshots.flatMap((snapshot) => snapshot.days), todayKey };
   });
+}
+
+async function fetchActivityWindow(ctx: SignatureRenderContext, weekCount: number): Promise<SignatureActivityWindow | null> {
+  const read = await fetchActivityDays(ctx, weekCount);
+  return read && buildSignatureActivityWindow(read.days, read.todayKey, weekCount);
+}
+
+/* Six weeks always reach back past the first of the month, so a January
+   month reads December too and its streak can cross New Year. */
+async function fetchActivityMonth(ctx: SignatureRenderContext): Promise<SignatureActivityMonth | null> {
+  const read = await fetchActivityDays(ctx, 6);
+  return read && buildSignatureActivityMonth(read.days, read.todayKey);
 }
 
 function activityCellColor(cell: SignatureActivityCell, fullAt: number, accent: string): string {
@@ -2536,6 +2423,45 @@ function activityBars(
   ]);
 }
 
+const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+
+/* A wall calendar for the month: Sunday-first rows, the day number in each
+   cell, the days still to come left faint. The card is too narrow for the
+   wordmark on the header line, so it sits across from the month name. */
+function activityMonthGrid(
+  month: SignatureActivityMonth,
+  width: number,
+  rowHeight: number,
+  accent: string,
+  dim: string,
+  mark: boolean,
+): ReactNode {
+  const gap = 4;
+  const cell = (width - gap * 6) / 7;
+  return h("div", { key: "month", style: { display: "flex", flexDirection: "column", gap: `${gap}px` } }, [
+    h("div", { key: "label", style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "2px" } }, [
+      h("div", { key: "m", style: { display: "flex", fontSize: "13px", fontWeight: 900, color: "#ffffff" } }, month.label),
+      ...(mark ? [h("div", { key: "w", style: { display: "flex", fontSize: "11px", color: "rgba(255,255,255,0.28)", letterSpacing: "0.02em" } }, "mania-tracker.com")] : []),
+    ]),
+    h("div", { key: "weekdays", style: { display: "flex", gap: `${gap}px` } },
+      WEEKDAY_LETTERS.map((letter, index) => h("div", {
+        key: `${index}`,
+        style: { display: "flex", justifyContent: "center", width: `${cell}px`, fontSize: "11px", color: dim },
+      }, letter))),
+    ...month.rows.map((row, rowIndex) => h("div", { key: `r${rowIndex}`, style: { display: "flex", gap: `${gap}px` } },
+      row.map((day, index) => h("div", {
+        key: `${index}`,
+        style: {
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: `${cell}px`, height: `${rowHeight}px`, borderRadius: "4px",
+          fontSize: "11px", fontWeight: 700,
+          background: !day ? "transparent" : day.future ? "rgba(255,255,255,0.03)" : activityCellColor(day, month.fullAt, accent),
+          color: !day ? "transparent" : day.future ? "rgba(255,255,255,0.22)" : day.plays > 0 ? "#ffffff" : dim,
+        },
+      }, day ? String(day.day) : "")))),
+  ]);
+}
+
 function activityStat(key: string, value: string, label: string, dim: string): ReactNode {
   return h("div", { key, style: { display: "flex", alignItems: "baseline", gap: "6px" } }, [
     h("div", { key: "v", style: { fontSize: "15px", fontWeight: 900, color: "#ffffff" } }, value),
@@ -2545,9 +2471,14 @@ function activityStat(key: string, value: string, label: string, dim: string): R
 
 async function renderActivity(ctx: SignatureRenderContext): Promise<Buffer> {
   const spec = signatureDesign(ctx.type, ctx.design)!;
+  const isMonth = ctx.design === 4;
   const weekCount = ctx.design === 2 ? 26 : 53;
-  const window = await fetchActivityWindow(ctx, weekCount).catch(() => null);
-  if (!window) return renderPlate(ctx, "No tracked plays yet.");
+  const [window, month] = await Promise.all([
+    isMonth ? null : fetchActivityWindow(ctx, weekCount).catch(() => null),
+    isMonth ? fetchActivityMonth(ctx).catch(() => null) : null,
+  ]);
+  const totals = window ?? month;
+  if (!totals) return renderPlate(ctx, "No tracked plays yet.");
 
   const avatarSize = 34;
   const [background, avatarSrc] = await Promise.all([
@@ -2565,25 +2496,32 @@ async function renderActivity(ctx: SignatureRenderContext): Promise<Buffer> {
   // uppercase label on the name's baseline reads as sitting low.
   const header = h("div", { key: "head", style: { display: "flex", alignItems: "center", gap: "12px" } }, [
     ...(avatarSrc ? [avatarBox(avatarSrc, avatarSize)] : []),
-    h("div", { key: "n", style: { display: "flex", fontSize: "18px", fontWeight: 900, lineHeight: 1 } }, clamp(ctx.resolved.username, 22)),
+    // Shrinks with an ellipsis so a wide name on the narrow month card cannot
+    // push the label out of the frame.
+    h("div", {
+      key: "n",
+      style: { display: "block", minWidth: 0, flexShrink: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: "18px", fontWeight: 900, lineHeight: 1.1 },
+    }, clamp(ctx.resolved.username, 22)),
     h("div", {
       key: "l",
-      style: { display: "flex", fontSize: "11px", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: dim, lineHeight: 1 },
+      style: { display: "flex", flexShrink: 0, fontSize: "11px", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: dim, lineHeight: 1 },
     }, "Activity"),
   ]);
-  const span = ctx.design === 2 ? "in 6 months" : "in the past year";
+  const span = isMonth ? "this month" : ctx.design === 2 ? "in 6 months" : "in the past year";
   const divider = (key: string) => h("div", { key, style: { width: "1px", height: "12px", background: "rgba(255,255,255,0.14)" } });
   const stats = h("div", { key: "stats", style: { display: "flex", alignItems: "center", gap: "14px" } }, [
-    activityStat("plays", nf(window.plays), window.plays === 1 ? `play ${span}` : `plays ${span}`, dim),
+    activityStat("plays", nf(totals.plays), totals.plays === 1 ? `play ${span}` : `plays ${span}`, dim),
     divider("d1"),
-    activityStat("days", nf(window.activeDays), window.activeDays === 1 ? "active day" : "active days", dim),
-    ...(window.streak > 1
-      ? [divider("d2"), activityStat("streak", `${window.streak}d`, "streak", dim)]
+    activityStat("days", nf(totals.activeDays), totals.activeDays === 1 ? "active day" : "active days", dim),
+    ...(totals.streak > 1
+      ? [divider("d2"), activityStat("streak", `${totals.streak}d`, "streak", dim)]
       : []),
   ]);
-  const chart = ctx.design === 3
-    ? activityBars(window, inner, 80, accent, dim)
-    : activityGrid(window, inner, 3, accent, dim);
+  const chart = month
+    ? activityMonthGrid(month, inner, 28, accent, dim, ctx.style.watermark)
+    : ctx.design === 3
+      ? activityBars(window!, inner, 80, accent, dim)
+      : activityGrid(window!, inner, 3, accent, dim);
 
   return renderPng(ctx, frame(spec.width, spec.height, [
     ...background.layers,
@@ -2594,7 +2532,9 @@ async function renderActivity(ctx: SignatureRenderContext): Promise<Buffer> {
         padding: `18px ${padX}px 14px`, width: "100%",
       },
     }, [header, chart, stats]),
-    wordmark(ctx.style),
+    // On the header line, level with the name: in the bottom corner it ran
+    // into a long stats row.
+    isMonth ? null : headerWordmark(ctx.style, padX, 28),
   ]));
 }
 

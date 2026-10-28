@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { activityTodayKey, activityWindowStart, buildSignatureActivityWindow } from "./signature-activity";
+import { activityTodayKey, activityWindowStart, buildSignatureActivityMonth, buildSignatureActivityWindow } from "./signature-activity";
 
 describe("buildSignatureActivityWindow", () => {
   // 2026-10-23 is a Friday.
@@ -44,6 +44,33 @@ describe("buildSignatureActivityWindow", () => {
     for (let index = 1; index < window.months.length; index++) {
       expect(window.months[index]!.week - window.months[index - 1]!.week).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+describe("buildSignatureActivityMonth", () => {
+  it("lays the month out Sunday first, counts only its days, and marks the days after today", () => {
+    // October 2026 starts on a Thursday.
+    const month = buildSignatureActivityMonth([
+      { date: "2026-09-30", scoreCount: 9, sessionCount: 1 },
+      { date: "2026-10-01", scoreCount: 3, sessionCount: 1 },
+      { date: "2026-10-22", scoreCount: 5, sessionCount: 1 },
+    ], "2026-10-23");
+    expect(month.label).toBe("October");
+    expect(month.rows).toHaveLength(5);
+    expect(month.rows[0]!.slice(0, 4)).toEqual([null, null, null, null]);
+    expect(month.rows[0]![4]).toMatchObject({ date: "2026-10-01", day: 1, plays: 3, future: false });
+    expect(month.rows[4]![6]).toMatchObject({ day: 31, future: true });
+    expect(month.rows[3]![6]).toMatchObject({ day: 24, future: true });
+    expect(month.plays).toBe(8);
+    expect(month.activeDays).toBe(2);
+  });
+
+  it("runs the streak back past the first of the month", () => {
+    const month = buildSignatureActivityMonth(
+      ["2026-09-30", "2026-10-01", "2026-10-02"].map((date) => ({ date, scoreCount: 1, sessionCount: 1 })),
+      "2026-10-02",
+    );
+    expect(month.streak).toBe(3);
   });
 });
 

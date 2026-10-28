@@ -4455,8 +4455,8 @@ msgid "Card rank"
 msgstr "卡片等级"
 
 #: src/lib/signature-style.ts
-msgid "Card tier"
-msgstr "卡片稀有度"
+#~ msgid "Card tier"
+#~ msgstr "卡片稀有度"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "cards"
@@ -6101,6 +6101,10 @@ msgstr "当前准确率百分比。"
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Current backdrop"
 msgstr "当前背景"
+
+#: src/lib/signature-shared.ts
+msgid "Current month"
+msgstr "本月"
 
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "current pp"

@@ -35,8 +35,6 @@ export interface SignatureBackgroundOption {
   painted?: boolean;
   /** Site artwork drawn over the painted base. */
   art?: SignatureBackgroundArt;
-  /** The layout's own art, which only the maniacard has. */
-  tier?: boolean;
   /** Where this is worth offering. Absent means every type. */
   types?: SignatureType[];
   /** Swatch for the picker. Painted entries have none: they show their colour. */
@@ -54,11 +52,6 @@ export interface SignatureBackgroundOption {
    new caller must use that path rather than fetch(). */
 export const SIGNATURE_BACKGROUNDS: SignatureBackgroundOption[] = [
   { id: "none", label: msg`None`, swatch: "#1a1320" },
-  /* The maniacard's tier art - the gold wash a Legendary card carries in the
-     app. It is an option rather than the thing every card gets whether or not
-     a background was chosen, because a look nobody picked and nobody can turn
-     off is not a style, it is a constraint. */
-  { id: "tier", label: msg`Card tier`, tier: true, types: ["maniacard"], swatch: "linear-gradient(135deg,#4a2f10,#c8952f)" },
   { id: "solid", label: msg`Solid`, painted: true },
   { id: "gradient", label: msg`Gradient`, painted: true },
   /* The site's own two backdrops, in the player's colour. Both are drawn
@@ -76,18 +69,10 @@ export function signatureBackground(id: string): SignatureBackgroundOption | nul
   return SIGNATURE_BACKGROUNDS.find((entry) => entry.id === id) ?? null;
 }
 
-/** The picker's options for one type. Only the maniacard has tier art, and an
-    option that draws nothing is worse than an option that is not there. */
+/** The picker's options for one type. An option that draws nothing is worse
+    than an option that is not there. */
 export function signatureBackgroundsFor(type: SignatureType): SignatureBackgroundOption[] {
   return SIGNATURE_BACKGROUNDS.filter((entry) => !entry.types || entry.types.includes(type));
-}
-
-/* The maniacard opens on its tier art, everything else on a flat surface. Per
-   type rather than one constant because "the layout's own look" means
-   different things: the maniacard has art to fall back to and the goals list
-   does not. */
-export function defaultSignatureBackground(type?: SignatureType): SignatureBackgroundId {
-  return type === "maniacard" ? "tier" : "none";
 }
 
 export interface SignatureAccentOption {
@@ -254,7 +239,7 @@ export function normalizeSignatureStyle(raw: unknown, type?: SignatureType): Sig
   // A background a type cannot draw is as stale as one that no longer exists,
   // so both land on that type's default rather than on nothing at all.
   const usable = option && (!option.types || !type || option.types.includes(type));
-  const background = usable ? option.id : defaultSignatureBackground(type);
+  const background = usable ? option.id : DEFAULT_SIGNATURE_STYLE.background;
   return {
     background,
     accent: normalizeSignatureAccent(input.accent),
@@ -355,12 +340,6 @@ export function styleNeedsProfileImage(style: SignatureStyle): boolean {
 
 export function styleIsCustomImage(style: SignatureStyle): boolean {
   return signatureBackground(style.background)?.custom === true;
-}
-
-/** True when the layout should draw its own art - today only the maniacard's
-    tier wash, which used to be unconditional. */
-export function styleUsesTier(style: SignatureStyle): boolean {
-  return signatureBackground(style.background)?.tier === true;
 }
 
 /** True when the brightness slider has something to act on. */
