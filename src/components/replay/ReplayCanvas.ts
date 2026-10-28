@@ -63,6 +63,10 @@ const LEADERBOARD_EXPLOSION_ASSETS: ReplaySkinImageAsset[] = [1, 2].map((part) =
 // reaching for, so the bottom chrome may reveal there (CSS px).
 const OVERLAY_APPROACH_EDGE_PX = 12;
 const OVERLAY_TOUCH_TARGET_PX = 44;
+// A finger rests this long on an overlay before it picks it up, and moving
+// further than the slop first leaves the overlay where it is.
+const OVERLAY_TOUCH_HOLD_MS = 300;
+const OVERLAY_TOUCH_HOLD_SLOP_PX = 10;
 // Set on the stage canvas so a held finger never starts an iOS text
 // selection or callout.
 const CANVAS_NO_SELECT_STYLES = ["user-select", "-webkit-user-select", "-webkit-touch-callout"];
@@ -855,6 +859,7 @@ export class ManiaReplayRenderer {
   private overlaySettingsInputSignature = "";
   private overlayReferenceLayout: ReplayOverlayReference | null = null;
   private overlayLayoutPrepared = false;
+  private touchOverlayHold: { pointerId: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
   private onMissThumbHandChange: ((hand: ReplayThumbHand) => void) | null = null;
   private onContextLost: ((wasPlaying: boolean) => void) | null = null;
@@ -2841,13 +2846,31 @@ export class ManiaReplayRenderer {
     this.overlayLayoutPrepared = true;
   }
 
+  // Still where the defaults put it: a drag never lands on these exact
+  // fractions, and a binding only copies the drawn spot back.
+  private isDefaultPlacement(id: ReplayOverlayId): boolean {
+    const placement = this.getOverlayPlacement(id);
+    const fallback = DEFAULT_REPLAY_OVERLAY_SETTINGS[id];
+    return fallback.x !== REPLAY_OVERLAY_ANCHORED_COORD
+      && Math.abs(placement.x - fallback.x) < 0.0001
+      && Math.abs(placement.y - fallback.y) < 0.0001
+      && Math.abs(placement.scale - fallback.scale) < 0.0001;
+  }
+
   getOverlaySettingsSnapshot(options?: { resolveLayout?: boolean }): ReplayOverlaySettings {
     const layout = this.cachedLayout ?? this.getLayout();
     const reference = this.getOverlayReference(layout);
+    // An overlay still on its default spot that lands on the lanes only
+    // because this viewport has no room beside them (a phone held upright)
+    // stays unbound, or a wider export would carry it onto the lanes too.
+    const unplaced = new Set(this.overlayHitboxes
+      .filter((box) => this.isDefaultPlacement(box.id) && replayOverlayRegion(box, layout) === "playfield")
+      .map((box) => box.id));
     // Only moved art joins HUD fitting, using its visible bounds rather than
     // the transparent canvas. Untouched art still belongs to the skin layout.
     const boxes = options?.resolveLayout
-      ? this.overlayHitboxes.filter((box) => !isReplayStageArtOverlay(box.id) || this.isStageArtPlaced(box.id)).map((box) => (
+      ? this.overlayHitboxes.filter((box) => !unplaced.has(box.id)
+        && (!isReplayStageArtOverlay(box.id) || this.isStageArtPlaced(box.id))).map((box) => (
           box.id === "leaderboard" && this.ruleset.accuracyMode === "lazer"
             // Hover/pause changes the hitbox, never the saved fitting geometry.
             ? { ...box, width: this.getLazerLeaderboardLayoutWidth() * this.getOverlayScale(layout, "leaderboard") }
@@ -2891,6 +2914,10 @@ export class ManiaReplayRenderer {
     }
     let settings = normalizeReplayOverlaySettings(this.overlaySettings);
     for (const id of Object.keys(settings) as ReplayOverlayId[]) {
+      if (unplaced.has(id)) {
+        settings = updateReplayOverlayPlacement(settings, id, { reference: undefined }, this.ruleset.accuracyMode === "lazer");
+        continue;
+      }
       const placement = this.getOverlayPlacement(id);
       const box = boxes.find((entry) => entry.id === id);
       if (box) {
@@ -3080,6 +3107,7 @@ export class ManiaReplayRenderer {
   }
 
   private removeOverlayPointerHandlers() {
+    this.clearTouchOverlayHold();
     this.canvas.style.touchAction = this.previousCanvasTouchAction;
     this.canvas.style.outline = this.previousCanvasOutline;
     for (const [name, value] of this.previousCanvasSelectStyles) this.canvas.style.setProperty(name, value);
@@ -3389,35 +3417,67 @@ export class ManiaReplayRenderer {
       }
     }
 
-    this.activeOverlayPointers.set(event.pointerId, { id: hitbox.id, ...point });
-    this.canvas.setPointerCapture(event.pointerId);
+    // An instant grab moved the thin health bar beside the lanes, or the miss
+    // counter a phone draws over them, whenever a tap or swipe started near
+    // it. A second finger on an overlay already held still pinches at once.
+    const pinching = Array.from(this.activeOverlayPointers.values()).some((pointer) => pointer.id === hitbox.id);
+    if (event.pointerType === "touch" && !pinching) {
+      this.clearTouchOverlayHold();
+      const { pointerId } = event;
+      const hold = {
+        pointerId, ...point,
+        timer: setTimeout(() => {
+          if (this.touchOverlayHold !== hold) return;
+          this.touchOverlayHold = null;
+          if (this.destroyed) return;
+          const current = this.overlayHitboxes.find((box) => box.id === hitbox.id);
+          if (!current) return;
+          this.beginOverlayPointerGesture(pointerId, "touch", { x: hold.x, y: hold.y }, current);
+          if (typeof navigator !== "undefined") navigator.vibrate?.(8);
+        }, OVERLAY_TOUCH_HOLD_MS),
+      };
+      this.touchOverlayHold = hold;
+      event.preventDefault();
+      return;
+    }
+    this.beginOverlayPointerGesture(event.pointerId, event.pointerType, point, hitbox);
+    event.preventDefault();
+  };
+
+  private clearTouchOverlayHold() {
+    if (this.touchOverlayHold) clearTimeout(this.touchOverlayHold.timer);
+    this.touchOverlayHold = null;
+  }
+
+  private beginOverlayPointerGesture(pointerId: number, pointerType: string, point: { x: number; y: number }, hitbox: ReplayOverlayHitbox) {
+    this.activeOverlayPointers.set(pointerId, { id: hitbox.id, ...point });
+    this.canvas.setPointerCapture(pointerId);
     const placement = this.getOverlayPlacement(hitbox.id);
     const origin = this.getOverlayPlacementOrigin(hitbox);
     const otherPointer = Array.from(this.activeOverlayPointers.entries())
-      .find(([pointerId, pointer]) => pointerId !== event.pointerId && pointer.id === hitbox.id);
+      .find(([otherId, pointer]) => otherId !== pointerId && pointer.id === hitbox.id);
 
     if (otherPointer) {
       this.draggingOverlay = null;
       this.resizingOverlay = null;
       this.pinchingOverlay = {
         id: hitbox.id,
-        pointerIds: [otherPointer[0], event.pointerId],
+        pointerIds: [otherPointer[0], pointerId],
         startDistance: Math.max(1, this.getPointerDistance(otherPointer[1], point)),
         startScale: placement.scale,
         startWidth: hitbox.width,
         startHeight: hitbox.height,
       };
       this.canvas.style.cursor = "nwse-resize";
-      event.preventDefault();
       return;
     }
 
-    const resizeDirection = this.getOverlayResizeDirection(hitbox, point.x, point.y, event.pointerType);
+    const resizeDirection = this.getOverlayResizeDirection(hitbox, point.x, point.y, pointerType);
     if (resizeDirection) {
       this.resizingOverlay = {
         id: hitbox.id,
         direction: resizeDirection,
-        pointerId: event.pointerId,
+        pointerId,
         startX: point.x,
         startY: point.y,
         startPlacementX: origin.x,
@@ -3428,13 +3488,12 @@ export class ManiaReplayRenderer {
         selected: this.getSelectedOverlaySnapshots(hitbox.id),
       };
       this.canvas.style.cursor = this.getOverlayPointerCursor(point.x, point.y);
-      event.preventDefault();
       return;
     }
 
     this.draggingOverlay = {
       id: hitbox.id,
-      pointerId: event.pointerId,
+      pointerId,
       startX: point.x,
       startY: point.y,
       startPlacementX: origin.x,
@@ -3444,8 +3503,7 @@ export class ManiaReplayRenderer {
       selected: this.getSelectedOverlaySnapshots(hitbox.id),
     };
     this.canvas.style.cursor = "grabbing";
-    event.preventDefault();
-  };
+  }
 
   private handleOverlayPointerMove = (event: PointerEvent) => {
     // Recover even if the release happened outside the browser and no
@@ -3457,6 +3515,12 @@ export class ManiaReplayRenderer {
       box.id === "leaderboard" && point.x >= box.x && point.x <= box.x + box.width
       && point.y >= box.y && point.y <= box.y + box.height
     ));
+    const hold = this.touchOverlayHold;
+    if (hold?.pointerId === event.pointerId) {
+      if (Math.hypot(point.x - hold.x, point.y - hold.y) > OVERLAY_TOUCH_HOLD_SLOP_PX) this.clearTouchOverlayHold();
+      event.preventDefault();
+      return;
+    }
     const activePointer = this.activeOverlayPointers.get(event.pointerId);
     if (activePointer) {
       this.activeOverlayPointers.set(event.pointerId, { ...activePointer, ...point });
@@ -3616,6 +3680,7 @@ export class ManiaReplayRenderer {
 
   private finishOverlayPointerInteraction(pointerId: number) {
     const hadMarquee = this.selectingOverlays?.pointerId === pointerId;
+    if (this.touchOverlayHold?.pointerId === pointerId) this.clearTouchOverlayHold();
     this.activeOverlayPointers.delete(pointerId);
     if (this.missThumbTagPress?.pointerId === pointerId) this.missThumbTagPress = null;
     if (hadMarquee) this.selectingOverlays = null;
@@ -3628,6 +3693,7 @@ export class ManiaReplayRenderer {
   }
 
   private cancelOverlayInteractions() {
+    this.clearTouchOverlayHold();
     const pointers = new Set(this.activeOverlayPointers.keys());
     // Marquee selection also captures the pointer, but has no overlay id.
     for (const gesture of [this.selectingOverlays, this.draggingOverlay, this.resizingOverlay, this.missThumbTagPress]) {
