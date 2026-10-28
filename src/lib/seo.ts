@@ -19,7 +19,7 @@ export const DEFAULT_DESCRIPTION =
 // rows mixing pp gains and skill picks.
 // 50: the player card became an osu! profile header: cover on top, avatar on
 // the seam, team, a 90-day rank line, and ranks split by keymode.
-export const OG_IMAGE_VERSION = "50";
+export const OG_IMAGE_VERSION = "51";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text
