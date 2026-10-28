@@ -17,7 +17,7 @@ const FLAG_INK = "#7fd3ff";
 const LIT_INK: Record<"cc" | "key" | "skill", string> = { cc: FLAG_INK, key: KEY_INK, skill: SKILL_INK };
 const TEXT_SHADOW = "0 1px 3px rgba(0,0,0,0.55)";
 
-/* Trait text widths at 11px Torus Heavy (measured), for picking the widest
+/* Trait text widths at 11px Tracker Round Heavy (measured), for picking the widest
    chip set a narrow card can hold without wrapping or clipping. */
 const SKILL_TEXT_W: Record<ChainCard["skill"], number> = {
   Stream: 34, Jumpstream: 11.6, Handstream: 14.7, Stamina: 39.1, Jack: 22, Chordjack: 13.4, Tech: 22.2, Speed: 28.1,

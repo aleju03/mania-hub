@@ -44,7 +44,7 @@ describe("scoped replay fonts", () => {
     const load = vi.fn().mockResolvedValue([]);
     Object.defineProperty(document, "fonts", { configurable: true, value: { load } });
     const { ensureReplayFontStyle } = await import("./replay-fonts");
-    await ensureReplayFontStyle({ family: "Torus, sans-serif", weight: "700" });
+    await ensureReplayFontStyle({ family: "Tracker Round, sans-serif", weight: "700" });
     expect(load).toHaveBeenCalledOnce();
     expect(document.querySelectorAll("link")).toHaveLength(0);
   });

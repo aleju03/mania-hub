@@ -335,7 +335,7 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
           position: "relative",
           overflow: "hidden",
           background: "#0b070a",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -803,7 +803,7 @@ async function renderReplayOgCard(
     + (extraMods ? MOD_BADGE_GAP + extraModsWidth : 0);
   const resultWidth = GRADE_W + (modsWidth > 0 ? modsWidth + HERO_GAP : 0);
   const nameRoom = WIDTH - CONTENT_PAD_X * 2 - AVATAR_SIZE - HERO_GAP - resultWidth - 36;
-  // 0.62em per character is Torus Heavy's average advance, measured off the
+  // 0.62em per character is Tracker Round Heavy's average advance, measured off the
   // rendered card. The name gives up size first and characters only once the
   // smallest size it may take still would not fit.
   const NAME_CHAR_EM = 0.62;
@@ -831,7 +831,7 @@ async function renderReplayOgCard(
             style: { display: "flex", flexDirection: "row", alignItems: "center", gap: "7px" },
           },
           [
-            // Torus has no ★ glyph (it rasterizes as tofu), so the star is
+            // Tracker Round has no ★ glyph (it rasterizes as tofu), so the star is
             // the same inline svg the other cards use.
             h("img", {
               key: "icon",
@@ -859,7 +859,7 @@ async function renderReplayOgCard(
           position: "relative",
           overflow: "hidden",
           background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -1316,8 +1316,8 @@ function playerRankGraph(history: number[] | null | undefined): ReactNode {
 async function renderPlayerOg(request: Request, rawUsername: string): Promise<Response> {
   const username = rawUsername.trim().slice(0, 64);
   const [regularFont, heavyFont, user] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy.ttf"),
     resolveOgPlayer(request, username),
   ]);
 
@@ -1373,7 +1373,7 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
           position: "relative",
           overflow: "hidden",
           background: panel,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -1692,7 +1692,7 @@ async function renderPulledCardOg(
           display: "flex",
           flexDirection: "column",
           background: "#120d15",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
         },
       },
       [
@@ -2186,8 +2186,8 @@ function sticker(props: StickerProps) {
    surface; no gradients, glows, or radial decorations. */
 async function renderHomeOg(request: Request, country: string): Promise<Response> {
   const [regularFont, heavyFont, rankings] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy.ttf"),
     getRankings({ data: { type: "performance", page: 1, country } }),
   ]);
 
@@ -2246,7 +2246,7 @@ async function renderHomeOg(request: Request, country: string): Promise<Response
           position: "relative",
           overflow: "hidden",
           background: "#1a1620",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -2308,8 +2308,8 @@ async function renderRankingsOg(
   country: string,
 ): Promise<Response> {
   const [regularFont, heavyFont, rankings] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy.ttf"),
     getRankings({ data: { type: "performance", page: 1, country } }),
   ]);
 
@@ -2361,7 +2361,7 @@ async function renderRankingsOg(
           position: "relative",
           overflow: "hidden",
           background: "#1a1620",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -2475,8 +2475,8 @@ function pickSnipesOgHero(events: SnipeEvent[]): SnipeEvent | null {
 
 async function renderSnipesOg(request: Request, scope: string): Promise<Response> {
   const [regularFont, heavyFont, events] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy.ttf"),
     fetchSnipesOgEvents(scope),
   ]);
   const hero = pickSnipesOgHero(events);
@@ -2508,7 +2508,7 @@ async function renderSnipesOg(request: Request, scope: string): Promise<Response
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -2688,8 +2688,8 @@ async function renderCountryOg(
   rawTitle: string,
 ): Promise<Response> {
   const [regularFont, heavyFont, rankings] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy.ttf"),
     getRankings({ data: { type: "performance", page: 1, country } }),
   ]);
 
@@ -2714,7 +2714,7 @@ async function renderCountryOg(
           position: "relative",
           overflow: "hidden",
           background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -3002,7 +3002,7 @@ function laneNote(props: {
 }
 
 /* The lockup as the site header draws it: the mania mode glyph from the
-   osu-extra font in pink, then the lowercase Torus wordmark with the
+   osu-extra font in pink, then the lowercase Tracker Round wordmark with the
    second word in pink. The whole group is what flex centres, as in the
    header; centring the words alone left the glyph hanging too far out. */
 function brandLockup(key: string, top: number, fontSize: number) {
@@ -3156,7 +3156,7 @@ async function renderDefaultBrandOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: DEFAULT_OG_SURFACE,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -3316,7 +3316,7 @@ async function renderCollectionOg(request: Request, id: string): Promise<Respons
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -3516,7 +3516,7 @@ async function renderFarmHelperOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -3758,7 +3758,7 @@ async function renderMapsSearchOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -3985,7 +3985,7 @@ async function renderMapsCollectionsOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -4179,7 +4179,7 @@ async function renderPacksOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -4369,7 +4369,7 @@ async function renderSkinsOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -4543,7 +4543,7 @@ async function renderBBCodeOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -4871,7 +4871,7 @@ async function renderDiscordOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -5116,7 +5116,7 @@ async function renderDefaultOg(request: Request, url: URL): Promise<Response> {
           overflow: "hidden",
           background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
           padding: "80px",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },

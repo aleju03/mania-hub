@@ -21,7 +21,7 @@ export const PACK_RIP_STRIP_FRACTION = 0.27;
 // seal: below this there is no pack left to drop away.
 export const PACK_MAX_RIP_STRIP_FRACTION = 0.95;
 
-const FONT = "Torus, Arial, sans-serif";
+const FONT = "Tracker Round, Arial, sans-serif";
 
 function random01(value: number) {
   const x = Math.sin(value) * 43758.5453123;

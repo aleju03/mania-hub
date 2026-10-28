@@ -164,7 +164,7 @@ function frame(width: number, height: number, children: ReactNode[], background?
         position: "relative",
         overflow: "hidden",
         background: background ?? "transparent",
-        fontFamily: '"Torus OG"',
+        fontFamily: '"Tracker Round OG"',
         color: "#ffffff",
       },
     },
@@ -697,8 +697,8 @@ export function completedGoalDate(goal: UserGoal, timeZone: string | null): stri
   return formatDate(new Date(goal.completedAt).toISOString(), timeZone ?? "UTC");
 }
 
-/* The tick. Drawn as an SVG image rather than a text glyph: satori lays text
-   out with the fonts the card loaded, and Torus has no check in it. */
+/* The tick. Drawn as an SVG image rather than a text glyph, so it never
+   depends on what the card's fonts happen to cover. */
 function checkGlyphDataUrl(color: string): string {
   return svgDataUrl(
     `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">`
@@ -1015,7 +1015,7 @@ function skillsUnavailable(skills: MyDataSkillBreakdown | null): string | null {
    The labels are not in there: text inside an embedded SVG is laid out by the
    rasterizer, which never sees the fonts loaded for the card, so it fell back
    to a default face and printed "Chordstream" wider and softer than every
-   other word on the image. As satori nodes they use Torus like everything
+   other word on the image. As satori nodes they use Tracker Round like everything
    else. */
 function radarGeometryFor(entries: ReturnType<typeof skillModeEntries>, width: number, height: number) {
   const fontSize = Math.max(9, Math.round(Math.min(width, height) * 0.046));

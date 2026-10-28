@@ -32,6 +32,14 @@
   }
 }
 
+@font-face { font-family: "Tracker Round"; font-weight: 100; src: url("/fonts/TrackerRound-Thin.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 300; src: url("/fonts/TrackerRound-Light.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 400; src: url("/fonts/TrackerRound-Regular.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 600; src: url("/fonts/TrackerRound-SemiBold.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 700; src: url("/fonts/TrackerRound-SemiBold.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 800; src: url("/fonts/TrackerRound-Bold.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 900; src: url("/fonts/TrackerRound-Heavy.woff2") format("woff2"); font-display: swap; }
+/* Torus only draws the lazer results screen in the replay viewer, which copies osu!. */
 @font-face { font-family: "Torus"; font-weight: 100; src: url("/fonts/Torus-Thin.otf") format("opentype"); font-display: swap; }
 @font-face { font-family: "Torus"; font-weight: 300; src: url("/fonts/Torus-Light.otf") format("opentype"); font-display: swap; }
 @font-face { font-family: "Torus"; font-weight: 400; src: url("/fonts/Torus-Regular.otf") format("opentype"); font-display: swap; }
@@ -61,7 +69,7 @@ html {
 }
 
 @theme inline {
-  --font-sans: "Torus", "Inter", "Helvetica Neue", Tahoma, Arial, sans-serif;
+  --font-sans: "Tracker Round", "Inter", "Helvetica Neue", Tahoma, Arial, sans-serif;
   --color-osu-b6: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-b5: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(15% - 8% * (1 - var(--theme-sat))));
   --color-osu-b4: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(20% - 8% * (1 - var(--theme-sat)))); --color-osu-b3: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(25% - 8% * (1 - var(--theme-sat))));
   --color-osu-b2: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(30% - 8% * (1 - var(--theme-sat)))); --color-osu-b1: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(40% - 8% * (1 - var(--theme-sat))));

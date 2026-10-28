@@ -2889,7 +2889,7 @@ function StatItem({
           : "text-white";
   return (
     <div className="flex-1 px-3 py-2">
-      <div className={`text-[17px] font-bold leading-none tabular-nums ${valueColor}`} style={{ fontFamily: "Torus" }}>
+      <div className={`text-[17px] font-bold leading-none tabular-nums ${valueColor}`} style={{ fontFamily: "Tracker Round" }}>
         {value}
       </div>
       <div className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1 font-semibold">{label}</div>
@@ -3265,7 +3265,7 @@ function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: st
                   </div>
                 ) : null}
                 {p.pp ? (
-                  <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
+                  <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Tracker Round" }}>
                     <span className="text-[12px] font-bold">{Math.round(p.pp)}</span>
                     <span className="text-[8px] text-osu-pink/70 font-bold uppercase">pp</span>
                   </span>
@@ -3318,7 +3318,7 @@ function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; coun
             onClick={() => window.open(`https://osu.ppy.sh/users/${p.id}/mania`, "_blank", "noopener,noreferrer")}
             meta={
               p.count ? (
-                <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
+                <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Tracker Round" }}>
                   <span className="text-[12px] font-bold">{formatNumber(p.count)}</span>
                   <span className="text-[8px] text-osu-pink/70 font-bold lowercase">x</span>
                 </span>
@@ -3427,11 +3427,11 @@ function FarmedCard({
 
         <div className="flex items-center gap-3 mt-1.5">
           <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-blue" style={{ fontFamily: "Torus" }}>{map.playerCount}</span>
+            <span className="text-[11px] font-bold text-osu-blue" style={{ fontFamily: "Tracker Round" }}>{map.playerCount}</span>
             <span className="text-[8px] text-osu-f1 uppercase"><Plural value={map.playerCount} one="player" other="players" /></span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>~{Math.round(map.avgPp)}</span>
+            <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Tracker Round" }}>~{Math.round(map.avgPp)}</span>
             <span className="text-[8px] text-osu-f1 uppercase"><Trans>avg pp</Trans></span>
           </div>
         </div>
@@ -3493,11 +3493,11 @@ function MostPlayedCard({
 
         <div className="flex items-center gap-3 mt-1.5">
           <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>{formatNumber(map.totalPlays)}</span>
+            <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Tracker Round" }}>{formatNumber(map.totalPlays)}</span>
             <span className="text-[8px] text-osu-f1 uppercase"><Trans>plays</Trans></span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-blue" style={{ fontFamily: "Torus" }}>{map.playerCount}</span>
+            <span className="text-[11px] font-bold text-osu-blue" style={{ fontFamily: "Tracker Round" }}>{map.playerCount}</span>
             <span className="text-[8px] text-osu-f1 uppercase"><Plural value={map.playerCount} one="player" other="players" /></span>
           </div>
         </div>
@@ -3547,11 +3547,11 @@ function FavouriteCard({
 
         <div className="flex items-center gap-3 mt-1.5">
           <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>{fav.playerCount}</span>
+            <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Tracker Round" }}>{fav.playerCount}</span>
             <span className="text-[8px] text-osu-f1 uppercase">{selectedCountry} favs</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(fav.globalFavouriteCount)}</span>
+            <span className="text-[11px] font-bold text-osu-l2" style={{ fontFamily: "Tracker Round" }}>{formatNumber(fav.globalFavouriteCount)}</span>
             <span className="text-[8px] text-osu-f1 uppercase"><Trans>global</Trans></span>
           </div>
         </div>
@@ -5024,11 +5024,11 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           </div>
           <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-start flex-shrink-0">
             <div className="flex items-center gap-1">
-              <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalFavouriteCount)}</span>
+              <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Tracker Round" }}>{formatNumber(bm.globalFavouriteCount)}</span>
               <span className="text-[9px] text-osu-f1 uppercase"><Trans>favs</Trans></span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalPlayCount)}</span>
+              <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Tracker Round" }}>{formatNumber(bm.globalPlayCount)}</span>
               <span className="text-[9px] text-osu-f1 uppercase"><Trans>plays</Trans></span>
             </div>
             <a

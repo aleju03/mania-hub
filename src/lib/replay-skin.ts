@@ -350,18 +350,18 @@ export const DEFAULT_REPLAY_COMBO_FONT_SET: ReplayComboFontSet = "set1";
 export const DEFAULT_REPLAY_JUDGEMENT_SET: ReplayJudgementSet = "skin";
 
 const REPLAY_COMBO_FONT_STYLES: Record<ReplayComboFontSet, ReplayComboFontStyle> = {
-  set1: { family: "Torus, sans-serif", weight: "700" },
+  set1: { family: "Tracker Round, sans-serif", weight: "700" },
   set2: { family: "\"Fredoka One\", Fredoka, \"Baloo 2\", \"Arial Rounded MT Bold\", sans-serif", weight: "800" },
   set3: { family: "Roboto, Arial, sans-serif", weight: "700" },
   set4: { family: "Knewave, \"Comic Sans MS\", cursive", weight: "700" },
-  set5: { family: "Torus, sans-serif", weight: "700" },
+  set5: { family: "Tracker Round, sans-serif", weight: "700" },
   set6: { family: "\"DSEG7 Classic\", \"Digital-7\", \"Courier New\", monospace", weight: "700" },
   set7: { family: "\"PT Sans\", \"Source Sans 3\", sans-serif", weight: "400" },
   set8: { family: "\"Courier New\", monospace", weight: "700" },
   set9: { family: "Lato, sans-serif", weight: "600" },
   set10: { family: "\"Nimbus Sans Narrow\", \"Arial Narrow\", Arial, sans-serif", weight: "700" },
   set11: { family: "Nunito, \"Fredoka One\", Fredoka, \"Arial Rounded MT Bold\", sans-serif", weight: "800" },
-  set12: { family: "Torus, sans-serif", weight: "700" },
+  set12: { family: "Tracker Round, sans-serif", weight: "700" },
   set13: { family: "\"Roboto Condensed\", Roboto, Arial, sans-serif", weight: "300" },
   set14: { family: "GeosansLight, \"Century Gothic\", sans-serif", weight: "400" },
   set15: { family: "\"Open Sans\", \"Noto Sans\", sans-serif", weight: "800", style: "italic" },

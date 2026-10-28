@@ -718,7 +718,7 @@ function HomePage() {
         <div className="max-w-[1200px] mx-auto text-center">
           <div className="flex items-center justify-center gap-3">
             <span className="mode-icon text-osu-pink text-3xl sm:text-5xl">{"\ue802"}</span>
-            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? <Trans>Global</Trans> : selectedIsRegion ? countryName : selectedCountry}</span></h1>
+            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Tracker Round" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? <Trans>Global</Trans> : selectedIsRegion ? countryName : selectedCountry}</span></h1>
           </div>
         </div>
       </section>
@@ -884,7 +884,7 @@ function HomePage() {
                       />
                     </>
                   )}
-                  <div className="text-3xl font-bold text-osu-pink leading-none" style={{ fontFamily: "Torus" }}>
+                  <div className="text-3xl font-bold text-osu-pink leading-none" style={{ fontFamily: "Tracker Round" }}>
                     {Math.round(p.score.pp ?? 0)}pp
                   </div>
                   <div className="mt-3 flex items-center justify-center gap-2 max-w-full">

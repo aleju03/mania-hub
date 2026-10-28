@@ -166,7 +166,7 @@ function MethodCoin({ keyCount, className }: { keyCount: number; className: stri
 }
 
 // An Overall that rolls to its new value instead of swapping, so flipping the
-// method reads as the number moving. Server-rendered at its value. Torus has
+// method reads as the number moving. Server-rendered at its value. The font has
 // proportional digits, so the rolling text would change width every frame and
 // shove whatever sits after it; the box takes the final value's width once and
 // the rolling text is drawn over it.

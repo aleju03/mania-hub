@@ -83,7 +83,7 @@ describe("buildFaceLayout", () => {
     expect(team.tag.letters.map((letter) => letter.text)).toEqual(["7", "L", "U", "V"]);
     for (const letter of team.tag.letters) {
       expect(letter.x).toBe(135);
-      expect(measure(letter.text, team.tag.fontSize, "Torus", 900)).toBeLessThanOrEqual(270);
+      expect(measure(letter.text, team.tag.fontSize, "Tracker Round", 900)).toBeLessThanOrEqual(270);
     }
     const ys = team.tag.letters.map((letter) => letter.y);
     expect(ys).toEqual([...ys].sort((a, b) => a - b));
@@ -95,7 +95,7 @@ describe("buildFaceLayout", () => {
     expect(layout.masks.flag?.rect).toEqual(team.flag);
     // The three numbers stay apart at their size.
     const [first, second] = layout.front.stats;
-    const widest = Math.max(...layout.front.stats.map((stat) => measure(String(stat.value), team.statValueSize, "Torus", 900)));
+    const widest = Math.max(...layout.front.stats.map((stat) => measure(String(stat.value), team.statValueSize, "Tracker Round", 900)));
     expect(second.x - first.x - widest).toBeGreaterThanOrEqual(40);
   });
 
@@ -112,7 +112,7 @@ describe("buildFaceLayout", () => {
 
     expect(name.lines).toHaveLength(2);
     expect(name.lines[1].endsWith("...")).toBe(true);
-    for (const line of name.lines) expect(measure(line, name.fontSize, "Torus", 800)).toBeLessThanOrEqual(646);
+    for (const line of name.lines) expect(measure(line, name.fontSize, "Tracker Round", 800)).toBeLessThanOrEqual(646);
     expect(layout.front.tierLabel.y).toBe(name.y + name.lineHeight + 76);
   });
 

@@ -1,13 +1,13 @@
-const CACHE_NAME = "static-v5";
+const CACHE_NAME = "static-v6";
 
 const PRECACHE_URLS = [
   // Fonts
-  "/fonts/Torus-Regular.otf",
-  "/fonts/Torus-Heavy.otf",
-  "/fonts/Torus-SemiBold.otf",
-  "/fonts/Torus-Bold.otf",
-  "/fonts/Torus-Light.otf",
-  "/fonts/Torus-Thin.otf",
+  "/fonts/TrackerRound-Regular.woff2",
+  "/fonts/TrackerRound-Heavy.woff2",
+  "/fonts/TrackerRound-SemiBold.woff2",
+  "/fonts/TrackerRound-Bold.woff2",
+  "/fonts/TrackerRound-Light.woff2",
+  "/fonts/TrackerRound-Thin.woff2",
   "/fonts/Venera-500.otf",
   "/fonts/extra.woff2",
   "/fonts/extra.woff",

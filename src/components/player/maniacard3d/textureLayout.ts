@@ -65,20 +65,20 @@ function buildTeamFaceLayout(data: ManiaCardReadyData, measure: MeasureText): Fa
   // As big as the widest letter fits across the spine and the whole tag fits
   // down it.
   const letters = Array.from(team.tag.trim() || "?");
-  const widest = Math.max(...letters.map((letter) => measure(letter, 100, "Torus", 900)), 1);
+  const widest = Math.max(...letters.map((letter) => measure(letter, 100, "Tracker Round", 900)), 1);
   const tagFontSize = Math.round(Math.min(240, ((TEAM_SPINE.width - 64) / widest) * 100, 1240 / (letters.length * 0.9)));
   const cell = tagFontSize * 0.9;
   const tagTop = (TEAM_SPINE.height - cell * letters.length) / 2;
 
   const nameFontSize = 56;
-  const nameLines = wrapToLines(data.user.username, TEAM_COLUMN.width, 2, (text) => measure(text, nameFontSize, "Torus", 800));
+  const nameLines = wrapToLines(data.user.username, TEAM_COLUMN.width, 2, (text) => measure(text, nameFontSize, "Tracker Round", 800));
   const nameY = TEAM_FLAG.y + TEAM_FLAG.height + 86;
   const nameLineHeight = 64;
 
   // Three columns under the rarity, each number as big as the widest one fits
   // with a clear gap to its neighbour.
   const columnWidth = TEAM_COLUMN.width / 3;
-  const widestValue = Math.max(...data.stats.map((stat) => measure(String(stat.value), 100, "Torus", 900)), 1);
+  const widestValue = Math.max(...data.stats.map((stat) => measure(String(stat.value), 100, "Tracker Round", 900)), 1);
   const statValueSize = Math.round(Math.min(96, ((columnWidth - 48) / widestValue) * 100));
   const statsY = 880;
 
@@ -160,7 +160,7 @@ export function buildFaceLayout(data: ManiaCardReadyData, measure: MeasureText):
   const username = truncateToWidth(
     data.user.username,
     usernameMaxWidth,
-    (text) => measure(text, usernameFontSize, "Torus", 900),
+    (text) => measure(text, usernameFontSize, "Tracker Round", 900),
   );
 
   return {

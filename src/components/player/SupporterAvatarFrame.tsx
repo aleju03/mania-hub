@@ -157,7 +157,7 @@ function DanCardText({ dan, rect, line }: { dan: FrameDan; rect: readonly [numbe
     <svg
       viewBox="0 0 48.75 24.3"
       className="absolute overflow-visible"
-      style={{ left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${h * 100}%`, fontFamily: "Torus, sans-serif" }}
+      style={{ left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${h * 100}%`, fontFamily: "Tracker Round, sans-serif" }}
     >
       <text x="0" y="9.5" fill="#2b3142" fontSize={name.length > 7 ? 8 : 10} fontWeight={700} textLength={name.length > 9 ? 48 : undefined} lengthAdjust="spacingAndGlyphs">{name}</text>
       <text x="0" y="20.5" fill="#2b3142" fillOpacity={0.8} fontSize={line.length > 14 ? 5.4 : 6.5} fontWeight={600}>{line}</text>

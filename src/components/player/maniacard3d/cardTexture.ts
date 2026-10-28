@@ -8,7 +8,7 @@ import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilDataU
 import { getCosmicTierPalette as cosmicPaletteFor, motifKeepsStarfield } from "#/lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
-const FONT = "Torus, Arial, sans-serif";
+const FONT = "Tracker Round, Arial, sans-serif";
 /* Caveat Brush (SIL OFL, public/fonts/handwriting/), for the serial
    handwritten on a card's back. Loaded only when a back carries one. */
 const HAND_FONT_FILE = "/fonts/handwriting/CaveatBrush-Regular.ttf";
@@ -29,9 +29,9 @@ function loadMarkerFont(): Promise<void> {
 
    Canvas text never triggers a webfont download the way DOM text does: it uses
    whatever is already loaded and silently falls back to Arial for the rest, so
-   `font-display: swap` cannot save it either. Torus ships one file per weight,
+   `font-display: swap` cannot save it either. Tracker Round ships one file per weight,
    so the weights the surrounding page happens to have rendered decide which
-   parts of the card get the real font: the username (900) came out in Torus
+   parts of the card get the real font: the username (900) came out in Tracker Round
    while the stats block and the star average (800) came out in Arial. Force
    both in before measuring, and the card stops depending on that. */
 const FONT_WEIGHTS = [800, 900];
@@ -123,7 +123,7 @@ export async function loadCardFonts(): Promise<void> {
   if (typeof document === "undefined" || !document.fonts?.load) return;
   const loads = FONT_WEIGHTS.map((weight) =>
     // A missing or 404ing face is exactly the fallback case: draw anyway.
-    document.fonts.load(`${weight} 40px Torus`).catch(() => []),
+    document.fonts.load(`${weight} 40px Tracker Round`).catch(() => []),
   );
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<void>((resolve) => {

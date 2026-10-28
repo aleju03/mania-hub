@@ -31,7 +31,7 @@ type PanelGradients = { left: FillGradient; right: FillGradient; border: FillGra
 
 function label(size: number, weight: "400" | "600", right = false): Text {
   const text = new Text({ text: "", style: {
-    fontFamily: "Torus, sans-serif", fontSize: size, fontWeight: weight, fill: 0xffffff,
+    fontFamily: "Tracker Round, sans-serif", fontSize: size, fontWeight: weight, fill: 0xffffff,
     dropShadow: { color: 0x000000, alpha: 0.2, blur: 0, angle: Math.PI / 2, distance: size * 0.06 },
   } });
   text.anchor.set(right ? 1 : 0, 0);

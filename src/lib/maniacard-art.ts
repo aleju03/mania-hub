@@ -407,7 +407,7 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
           overflow: "hidden",
           borderRadius: `${cornerRadius}px`,
           background: cosmic ? "#000000" : style.badgeGradient,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
