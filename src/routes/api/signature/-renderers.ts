@@ -6,12 +6,12 @@
 // string and inlined as a base64 data URL, which is the technique /api/og
 // already uses for its card art.
 
-import { ImageResponse } from "@vercel/og";
 import { createElement as h } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { getServerLiveBackendUrl } from "../../../lib/live-backend";
 import { bridgeAuthHeaders } from "../../../lib/live-backend-tokens";
+import { renderOgPng } from "../../../lib/og-image-response";
 import { clamp, loadOgFonts, ogAvatarUrl, ogFontList, ogRenderGate } from "../../../lib/og-render";
 import {
   cosmicLaurelDataUrl,
@@ -100,14 +100,11 @@ export interface SignatureRenderContext {
 async function renderPng(ctx: SignatureRenderContext, node: ReactElement): Promise<Buffer> {
   const spec = signatureDesign(ctx.type, ctx.design)!;
   const [regularFont, heavyFont] = await loadOgFonts(ctx.request);
-  return rasterize(ctx, async () => {
-    const response = new ImageResponse(node, {
-      width: spec.width,
-      height: spec.height,
-      fonts: ogFontList(regularFont, heavyFont),
-  });
-  return Buffer.from(await response.arrayBuffer());
-  });
+  return rasterize(ctx, () => renderOgPng(node, {
+    width: spec.width,
+    height: spec.height,
+    fonts: ogFontList(regularFont, heavyFont),
+  }));
 }
 
 /* satori does not implement the `inset` shorthand: a div given `inset: 0`
@@ -368,7 +365,7 @@ async function renderManiacardFront(
     cosmicLaurelDataUrl(ctx.request, tier).catch(() => null),
   ]);
   return rasterize(ctx, async () => {
-    const response = new ImageResponse(
+    const png = await renderOgPng(
       maniaTierCardElement({
         username: clamp(user.username || ctx.resolved.username, 20),
         avatarUrl,
@@ -383,7 +380,7 @@ async function renderManiacardFront(
       { width: MANIACARD_W, height: MANIACARD_H, fonts: ogFontList(regularFont, heavyFont) },
     );
     const { default: sharp } = await import("sharp");
-    return sharp(Buffer.from(await response.arrayBuffer()))
+    return sharp(png)
       .resize(spec.width, spec.height, { fit: "fill" })
       .png()
       .toBuffer();

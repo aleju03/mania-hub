@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "./og-image-response";
+import { ogFontList } from "./og-render";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
@@ -7,13 +8,16 @@ import { loadRenderModBadges, renderModBadge } from "./og-mod-badge";
 
 afterEach(() => vi.unstubAllGlobals());
 
+const fontFile = (name: string) => readFile(new URL(`../../public/fonts/${name}`, import.meta.url)).then((data) => data.buffer as ArrayBuffer);
+const fonts = async () => ogFontList(await fontFile("Torus-Regular.otf"), await fontFile("Torus-Heavy.otf"));
+
 it("preserves a custom speed when the badge assets fail to load", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503 })));
   const [badge] = await loadRenderModBadges(new Request("http://localhost:3000/replay"), [{ acronym: "DC", rate: 0.9 }]);
   const element = h("div", { style: { display: "flex", background: "#120d15", width: "100%", height: "100%" } }, renderModBadge(badge, 0, 44));
   expect(renderToStaticMarkup(element)).toContain("0.90x");
   // Exercise the actual Satori renderer as well as the text fallback.
-  const response = new ImageResponse(element, { width: 240, height: 80 });
+  const response = new ImageResponse(element, { width: 240, height: 80, fonts: await fonts() });
   expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(100);
 });
 
@@ -27,5 +31,5 @@ it("renders the shipped badge masks and custom speed extender together", async (
   expect(badges[1].extender).toMatch(/^data:image\/svg\+xml;base64,/);
   const element = h("div", { style: { display: "flex", background: "#120d15", width: "100%", height: "100%" } }, badges.map((badge, i) => renderModBadge(badge, i, 44)));
   expect(renderToStaticMarkup(element)).toContain("1.20x");
-  expect((await new ImageResponse(element, { width: 320, height: 80 }).arrayBuffer()).byteLength).toBeGreaterThan(100);
+  expect((await new ImageResponse(element, { width: 320, height: 80, fonts: await fonts() }).arrayBuffer()).byteLength).toBeGreaterThan(100);
 });

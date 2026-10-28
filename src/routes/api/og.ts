@@ -1,4 +1,4 @@
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "../../lib/og-image-response";
 import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
 import type { ReactNode } from "react";

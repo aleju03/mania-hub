@@ -2,6 +2,8 @@ import { defineConfig, type Plugin, type ServerOptions } from 'vite'
 import { devtools } from '@tanstack/devtools-vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
@@ -83,6 +85,8 @@ function devServerOptions(): ServerOptions {
   return options
 }
 
+const NATIVE_IMAGE_PACKAGES = ['@resvg/resvg-js', 'sharp']
+
 const config = defineConfig({
   server: devServerOptions(),
   build: {
@@ -100,6 +104,27 @@ const config = defineConfig({
     // Vercel fails looking for it. Vercel remains the rollback target for the
     // VPS migration, so it has to keep building.
     preset: process.env.VERCEL ? 'vercel' : 'node-server',
+    // The two native image packages are marked external up front and traced
+    // into the server output here. Left to Nitro, resvg's CommonJS wrapper is
+    // loaded by the commonjs pass before Nitro's externals get a say, which
+    // then fails parsing its .node binary; sharp is bundled without its
+    // binary, and only shipped before because @vercel/og pulled it in.
+    unenv: [{ external: NATIVE_IMAGE_PACKAGES }],
+    hooks: {
+      async compiled(nitro) {
+        if (nitro.options.dev) return
+        const { traceNodeModules } = await import('nf3')
+        // Both entries: the server imports sharp's ESM build, resvg's only
+        // entry is CommonJS.
+        const require = createRequire(import.meta.url)
+        const entries = NATIVE_IMAGE_PACKAGES.flatMap((name) => [require.resolve(name), fileURLToPath(import.meta.resolve(name))])
+        await traceNodeModules([...new Set(entries)], {
+          rootDir: nitro.options.rootDir,
+          outDir: nitro.options.output.serverDir,
+          conditions: nitro.options.exportConditions,
+        })
+      },
+    },
     rollupConfig: {
       onwarn: suppressDependencyBuildWarnings,
     },
