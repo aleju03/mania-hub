@@ -477,11 +477,13 @@ export function RangePill({
   );
 
   if (heading) {
+    // At rest the rail already reads "Any", so the heading row skips the
+    // repeat; a long translation of it overran the next column.
     return (
       <div className="flex w-full flex-col gap-1">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex min-h-[18px] items-center justify-between gap-3">
           {heading}
-          {value}
+          {(active || editing) && value}
         </div>
         {rail}
       </div>
