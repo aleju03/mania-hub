@@ -89,6 +89,10 @@ const NATIVE_IMAGE_PACKAGES = ['@resvg/resvg-js', 'sharp']
 
 const config = defineConfig({
   server: devServerOptions(),
+  // Dev only: the dependency pre-bundler would otherwise try to bundle resvg's
+  // .node binary and stop the dev server; Node loads both packages as-is.
+  optimizeDeps: { exclude: NATIVE_IMAGE_PACKAGES },
+  ssr: { external: NATIVE_IMAGE_PACKAGES, optimizeDeps: { exclude: NATIVE_IMAGE_PACKAGES } },
   build: {
     chunkSizeWarningLimit: 1500,
     // Skips the gzip-size column in build logs; run a local build with this
