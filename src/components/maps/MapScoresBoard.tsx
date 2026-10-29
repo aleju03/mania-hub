@@ -168,6 +168,29 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beatmapId, cacheKey, viewerId, country, name, friendSync]);
 
+  // A board opened on a filter (back from the friends sign-in) still needs the
+  // country list, which only the unfiltered board carries; it also warms that board.
+  const needCountries = countries.length === 0 && (country !== "" || name !== "");
+  useEffect(() => {
+    if (!needCountries) return;
+    const key = `${beatmapId}:${viewerId ?? ""}::`;
+    const cached = cachedBoard(key);
+    if (cached?.countries) {
+      setCountries(cached.countries);
+      return;
+    }
+    let cancelled = false;
+    fetchLiveMapScores(beatmapId, viewerId)
+      .then((snapshot) => {
+        boardCache.set(key, { snapshot, at: Date.now() });
+        if (!cancelled && snapshot.countries) setCountries(snapshot.countries);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [needCountries, beatmapId, viewerId]);
+
   // The viewer's own country sits right under "All countries", lifted out of the count order.
   const countryOptions = useMemo<SelectMenuOption<string>[]>(() => {
     const own = countries.find(({ code }) => code === viewerCountry);
