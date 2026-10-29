@@ -1878,6 +1878,23 @@ msgstr "#{0} del país"
 msgid "#{0} global"
 msgstr "#{0} global"
 
+#. placeholder {0}: number(serial)
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "#{0} goes back. You keep {remaining}."
+#~ msgstr "Devuelves la #{0}. Te quedan {remaining}."
+
+#. placeholder {0}: number(done.serial)
+#. placeholder {1}: number(done.gained)
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "#{0} is back in the pool. +{1} shards."
+#~ msgstr "La #{0} volvió al grupo. +{1} fragmentos."
+
+#. placeholder {0}: number(done.serial)
+#. placeholder {1}: number(done.gained)
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "#{0} is back in the pool. You got {1} shards."
+msgstr "La #{0} volvió al grupo. Te dio {1} fragmentos."
+
 #. placeholder {0}: formatNumber(percentile.rank)
 #. placeholder {1}: formatNumber(percentile.players)
 #: src/components/player/ProfileStatCards.tsx
@@ -3998,6 +4015,10 @@ msgstr "atrás"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back"
 msgstr "Volver"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Back in the pool"
+msgstr "De vuelta al grupo"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "back to collection"
@@ -6269,6 +6290,10 @@ msgstr "No se pudo cargar este ranking."
 msgid "Could not load this score."
 msgstr "No se pudo cargar esta puntuación."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Could not load your copies. Close and try again."
+msgstr "No se pudieron cargar tus copias. Cierra e inténtalo de nuevo."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not match the image sizes."
 msgstr "No se pudieron igualar los tamaños de las imágenes."
@@ -6280,6 +6305,10 @@ msgstr "No se pudo conectar con Discord para verificar esa invitación. Inténta
 #: src/components/packs/StreakGame.tsx
 msgid "Could not reach the player pool. Try again in a moment."
 msgstr "No se pudo acceder al grupo de jugadores. Inténtalo de nuevo en un momento."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Could not reach the server. Nothing changed."
+msgstr "No se pudo contactar al servidor. No cambió nada."
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Could not reach the server. Try again."
@@ -7339,6 +7368,7 @@ msgstr "suficiente"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/packs/ReleaseCopyDialog.tsx
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Done"
@@ -10437,6 +10467,10 @@ msgstr "Se queda en la bandeja del sistema y casi no usa CPU, con unos 3 MB de m
 msgid "It uses my work without permission"
 msgstr "Usa mi trabajo sin permiso"
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "It waits for the next pull of this card. Every pull, yours included, has a 50% chance of getting a number from the pool, lowest first, instead of a new one."
+#~ msgstr "Queda esperando la próxima vez que alguien saque esta carta. Cada vez que sale, también si la sacas tú, hay un 50% de probabilidad de que traiga un número del grupo, el más bajo primero, en vez de uno nuevo."
+
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
 msgstr "Ya está en tu colección."
@@ -11567,6 +11601,10 @@ msgstr "Cargando top plays..."
 #: src/routes/packs.tsx
 msgid "Loading your collection..."
 msgstr "Cargando tu colección..."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Loading your copies…"
+msgstr "Cargando tus copias…"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Loading your data…"
@@ -14406,6 +14444,10 @@ msgstr "Una copia para un amigo, la #{0}. Te quedas con {remaining}."
 msgid "One copy for a friend. You keep {remaining}."
 msgstr "Una copia para un amigo. Te quedas con {remaining}."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "One copy goes back. You keep {remaining}."
+#~ msgstr "Devuelves una copia. Te quedan {remaining}."
+
 #: src/lib/pack-run.ts
 msgid "One free reroll per shop"
 msgstr "Una renovación gratis por tienda"
@@ -16359,6 +16401,20 @@ msgstr "Morado"
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
 msgstr "Pon cualquier play tuyo que el sitio haya registrado bajo las estadísticas de tu perfil, con un título tuyo y su pp, MSD o dan."
+
+#. placeholder {0}: number(serial)
+#. placeholder {1}: number(gain)
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Put back #{0} +{1} shards"
+msgstr "Devolver la #{0} +{1} fragmentos"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Put back in the pool"
+msgstr "Devolver al grupo"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Put back in the pool…"
+msgstr "Devolver al grupo…"
 
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "Put it on my card"
@@ -20719,6 +20775,10 @@ msgstr "Ese coleccionista ya no está disponible."
 msgid "That copy is already promised to someone or no longer yours. Pick another."
 msgstr "Esa copia ya está prometida a alguien o ya no es tuya. Elige otra."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "That copy is no longer yours. Nothing changed."
+msgstr "Esa copia ya no es tuya. No cambió nada."
+
 #: src/components/packs/run/RunCharmRail.tsx
 #: src/components/packs/run/RunShop.tsx
 msgid "That did not go through. Please try again."
@@ -21412,6 +21472,10 @@ msgstr "El próximo cálculo está en marcha ahora mismo."
 msgid "The next rating pass runs {when}."
 msgstr "El próximo cálculo empieza {when}."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "The next time anyone pulls this card, there's a 50% chance it comes with this number instead of a new one."
+msgstr "La próxima vez que alguien saque esta carta, hay un 50% de probabilidad de que salga con este número en vez de uno nuevo."
+
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The only one ever pulled"
 msgstr "La única que se ha sacado"
@@ -22028,6 +22092,10 @@ msgstr "Así se ve en la página de skins."
 #: src/components/packs/GoatHoldersButton.tsx
 #~ msgid "This is not available yet. Check back soon."
 #~ msgstr "Esto aún no está disponible. Vuelve pronto."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "This is your only copy, so the card leaves your collection."
+msgstr "Es tu única copia, así que la carta sale de tu colección."
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "This is your own gift code. Send the link to a friend."
@@ -24390,6 +24458,15 @@ msgstr ""
 msgid "you could gain"
 msgstr "ganancia potencial"
 
+#. placeholder {0}: number(serial)
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "You give back #{0} and keep {remaining}."
+msgstr "Devuelves la #{0} y te quedas con {remaining}."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "You give back one copy and keep {remaining}."
+msgstr "Devuelves una copia y te quedas con {remaining}."
+
 #: src/components/packs/StreakGame.tsx
 msgid "You got {streak} right, a new best."
 msgstr "Acertaste {streak}, un nuevo récord."
@@ -24581,6 +24658,10 @@ msgstr "Tu carta"
 msgid "Your card is not ready yet."
 msgstr "Tu carta todavía no está lista."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
+msgstr "Tu nivel de carta se va con ella. Quien saque este número queda en nivel {carriedLevel} y tú bajas a nivel {levelLeft}."
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your collection as binder pages, three by three in plastic pockets, for you and anyone visiting your shelf."
 msgstr "Tu colección como páginas de carpeta, de tres en tres en fundas de plástico, para ti y para quien visite tu estante."
@@ -24698,6 +24779,10 @@ msgstr "Tus números."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your only copy. It leaves your collection when they accept."
 msgstr "Tu única copia. Sale de tu colección cuando la acepte."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "Your only copy. The card leaves your collection."
+#~ msgstr "Es tu única copia. La carta sale de tu colección."
 
 #: src/routes/dan-estimates.tsx
 msgid "Your osu! top plays, everything recorded while you were tracked, and any score links you added, keeping your best play on each chart at each rate. Charts flagged as vibro are left out. A rate nobody has rated a chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to count."

@@ -447,6 +447,16 @@ export function duplicateShardValue(card: CollectedCard): number {
    has to price the duplicates the same way recycling only the duplicates does,
    or "recycle all" would be a strictly better way to cash in duplicates than
    the button that exists for it. */
+/* What putting one copy back in the pool pays: what recycling that copy
+   would, the full tier value for the last copy and the duplicate rate for a
+   spare (backend releasePackCardCopy). */
+export function releaseShardValue(card: CollectedCard): number {
+  if (card.recyclable === false || card.copies <= 0) return 0;
+  return card.copies === 1
+    ? shardValueForTier(card.tier)
+    : sparesShardValue(card.tier, 1, card.copies + (card.recycledCopies ?? 0));
+}
+
 export function wholeCardShardValue(card: CollectedCard): number {
   if (card.recyclable === false || card.copies <= 0) return 0;
   return shardValueForTier(card.tier) + duplicateShardValue(card);

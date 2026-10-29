@@ -677,6 +677,32 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
     };
   });
 
+/* Puts one numbered copy back in the pool for the next pull of that card,
+   paid like recycling it (backend pack-copy-pool.ts). Player cards only. */
+export const releaseServerPackCardCopy = createServerFn({ method: "POST" })
+  .validator((input: { cardKey?: unknown; serial?: unknown }) => {
+    const cardKey = typeof input?.cardKey === "string" ? sanitizeCardKey(input.cardKey) : null;
+    const serial = Math.floor(Number(input?.serial) || 0);
+    if (!cardKey || serial <= 0 || !Number.isSafeInteger(serial)) throw new Error("Invalid release request.");
+    return { mode: "release" as const, cardKey, serial };
+  })
+  .handler(async ({ data }): Promise<{ released: boolean; gained: number; payload: string; rev: number } | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return null;
+    const url = target.url.replace("/api/pack-wallet/", "/api/pack-collection/");
+    const response = await fetch(url, { method: "POST", headers: target.headers, body: JSON.stringify(data) });
+    if (!response.ok) throw new Error(`Pack copy release failed (${response.status}).`);
+    const body = (await response.json()) as { released?: unknown; gained?: unknown; payload?: unknown; rev?: unknown };
+    return {
+      released: body.released === true,
+      gained: Number(body.gained) || 0,
+      payload: typeof body.payload === "string" ? body.payload : "",
+      rev: Number(body.rev) || 0,
+    };
+  });
+
 /* Persists a re-minted card's skills snapshot for a synced wallet. A synced
    wallet's cards live in server rows, not in the pushed blob, so the client
    cannot repair a legacy card by mutating its own wallet: without this call

@@ -1878,6 +1878,23 @@ msgstr "#{0} country"
 msgid "#{0} global"
 msgstr "#{0} global"
 
+#. placeholder {0}: number(serial)
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "#{0} goes back. You keep {remaining}."
+#~ msgstr "#{0} goes back. You keep {remaining}."
+
+#. placeholder {0}: number(done.serial)
+#. placeholder {1}: number(done.gained)
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "#{0} is back in the pool. +{1} shards."
+#~ msgstr "#{0} is back in the pool. +{1} shards."
+
+#. placeholder {0}: number(done.serial)
+#. placeholder {1}: number(done.gained)
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "#{0} is back in the pool. You got {1} shards."
+msgstr "#{0} is back in the pool. You got {1} shards."
+
 #. placeholder {0}: formatNumber(percentile.rank)
 #. placeholder {1}: formatNumber(percentile.players)
 #: src/components/player/ProfileStatCards.tsx
@@ -4002,6 +4019,10 @@ msgstr "back"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back"
 msgstr "Back"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Back in the pool"
+msgstr "Back in the pool"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "back to collection"
@@ -6273,6 +6294,10 @@ msgstr "Could not load this leaderboard."
 msgid "Could not load this score."
 msgstr "Could not load this score."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Could not load your copies. Close and try again."
+msgstr "Could not load your copies. Close and try again."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not match the image sizes."
 msgstr "Could not match the image sizes."
@@ -6284,6 +6309,10 @@ msgstr "Could not reach Discord to check that invite. Try again in a moment."
 #: src/components/packs/StreakGame.tsx
 msgid "Could not reach the player pool. Try again in a moment."
 msgstr "Could not reach the player pool. Try again in a moment."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Could not reach the server. Nothing changed."
+msgstr "Could not reach the server. Nothing changed."
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Could not reach the server. Try again."
@@ -7343,6 +7372,7 @@ msgstr "done"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/packs/ReleaseCopyDialog.tsx
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Done"
@@ -10441,6 +10471,10 @@ msgstr "It sits in the tray and uses next to no CPU and about 3 MB of memory on 
 msgid "It uses my work without permission"
 msgstr "It uses my work without permission"
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "It waits for the next pull of this card. Every pull, yours included, has a 50% chance of getting a number from the pool, lowest first, instead of a new one."
+#~ msgstr "It waits for the next pull of this card. Every pull, yours included, has a 50% chance of getting a number from the pool, lowest first, instead of a new one."
+
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
 msgstr "It's already in your collection."
@@ -11571,6 +11605,10 @@ msgstr "Loading top plays..."
 #: src/routes/packs.tsx
 msgid "Loading your collection..."
 msgstr "Loading your collection..."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Loading your copies…"
+msgstr "Loading your copies…"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Loading your data…"
@@ -14410,6 +14448,10 @@ msgstr "One copy for a friend, #{0}. You keep {remaining}."
 msgid "One copy for a friend. You keep {remaining}."
 msgstr "One copy for a friend. You keep {remaining}."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "One copy goes back. You keep {remaining}."
+#~ msgstr "One copy goes back. You keep {remaining}."
+
 #: src/lib/pack-run.ts
 msgid "One free reroll per shop"
 msgstr "One free reroll per shop"
@@ -16363,6 +16405,20 @@ msgstr "Purple"
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
 msgstr "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
+
+#. placeholder {0}: number(serial)
+#. placeholder {1}: number(gain)
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Put back #{0} +{1} shards"
+msgstr "Put back #{0} +{1} shards"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Put back in the pool"
+msgstr "Put back in the pool"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Put back in the pool…"
+msgstr "Put back in the pool…"
 
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "Put it on my card"
@@ -20723,6 +20779,10 @@ msgstr "That collector is no longer available."
 msgid "That copy is already promised to someone or no longer yours. Pick another."
 msgstr "That copy is already promised to someone or no longer yours. Pick another."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "That copy is no longer yours. Nothing changed."
+msgstr "That copy is no longer yours. Nothing changed."
+
 #: src/components/packs/run/RunCharmRail.tsx
 #: src/components/packs/run/RunShop.tsx
 msgid "That did not go through. Please try again."
@@ -21416,6 +21476,10 @@ msgstr "The next rating pass is running now."
 msgid "The next rating pass runs {when}."
 msgstr "The next rating pass runs {when}."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "The next time anyone pulls this card, there's a 50% chance it comes with this number instead of a new one."
+msgstr "The next time anyone pulls this card, there's a 50% chance it comes with this number instead of a new one."
+
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The only one ever pulled"
 msgstr "The only one ever pulled"
@@ -22032,6 +22096,10 @@ msgstr "This is how it looks on the skins page."
 #: src/components/packs/GoatHoldersButton.tsx
 #~ msgid "This is not available yet. Check back soon."
 #~ msgstr "This is not available yet. Check back soon."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "This is your only copy, so the card leaves your collection."
+msgstr "This is your only copy, so the card leaves your collection."
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "This is your own gift code. Send the link to a friend."
@@ -24394,6 +24462,15 @@ msgstr "You can't make themes anymore."
 msgid "you could gain"
 msgstr "you could gain"
 
+#. placeholder {0}: number(serial)
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "You give back #{0} and keep {remaining}."
+msgstr "You give back #{0} and keep {remaining}."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "You give back one copy and keep {remaining}."
+msgstr "You give back one copy and keep {remaining}."
+
 #: src/components/packs/StreakGame.tsx
 msgid "You got {streak} right, a new best."
 msgstr "You got {streak} right, a new best."
@@ -24585,6 +24662,10 @@ msgstr "Your card"
 msgid "Your card is not ready yet."
 msgstr "Your card is not ready yet."
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
+msgstr "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your collection as binder pages, three by three in plastic pockets, for you and anyone visiting your shelf."
 msgstr "Your collection as binder pages, three by three in plastic pockets, for you and anyone visiting your shelf."
@@ -24702,6 +24783,10 @@ msgstr "Your numbers."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your only copy. It leaves your collection when they accept."
 msgstr "Your only copy. It leaves your collection when they accept."
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "Your only copy. The card leaves your collection."
+#~ msgstr "Your only copy. The card leaves your collection."
 
 #: src/routes/dan-estimates.tsx
 msgid "Your osu! top plays, everything recorded while you were tracked, and any score links you added, keeping your best play on each chart at each rate. Charts flagged as vibro are left out. A rate nobody has rated a chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to count."

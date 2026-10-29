@@ -1,9 +1,10 @@
 import { GiftSpareDialog } from "./GiftSpareDialog";
+import { ReleaseCopyDialog } from "./ReleaseCopyDialog";
 import { useCardContextMenu } from "./useCardContextMenu";
 import { MissingPlayerTile } from "./MissingPlayerTile";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Gift, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
+import { Gift, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
@@ -131,6 +132,8 @@ interface CollectionPanelProps {
   /* Recycle callbacks return the shards gained so the panel can play the
      clink and spawn the "+N" burst at the click point. */
   onRecycleCard: (cardKey: string) => number | Promise<number>;
+  /* Puts one numbered copy back in the pool (synced collections only). */
+  onReleaseCopy?: (cardKey: string, serial: number) => Promise<{ released: boolean; gained: number } | null>;
   onRecycleWhole: (cardKey: string) => number | Promise<number>;
   onRecycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
   onRecycleWholeMatching: (filter: {
@@ -477,6 +480,7 @@ export function CollectionPanel({
   collectionRevision = 0,
   onGiftSent,
   onRecycleCard,
+  onReleaseCopy,
   onRecycleWhole,
   onRecycleWholeMany,
   onRecycleWholeMatching,
@@ -630,6 +634,7 @@ export function CollectionPanel({
   const [serverMissingKey, setServerMissingKey] = useState<string | null>(null);
   const [serverRefreshKey, setServerRefreshKey] = useState(0);
   const [giftCard, setGiftCard] = useState<CollectedCard | null>(null);
+  const [releaseCard, setReleaseCard] = useState<CollectedCard | null>(null);
   const lastCollectionRevision = useRef(collectionRevision);
   useEffect(() => {
     if (lastCollectionRevision.current === collectionRevision) return;
@@ -2002,6 +2007,12 @@ export function CollectionPanel({
         }
       }} />}
 
+      {releaseCard && onReleaseCopy && <ReleaseCopyDialog card={releaseCard} onClose={() => setReleaseCard(null)} onRelease={onReleaseCopy} onReleased={(gained) => {
+        playRecycleClink(gained);
+        serverCollectionPageCache.clear();
+        setServerRefreshKey((value) => value + 1);
+      }} />}
+
       {menu && (
         <>
           <div
@@ -2080,6 +2091,13 @@ export function CollectionPanel({
                 <Gift className="h-3 w-3" />{t`Gift a card…`}
               </button>
             )}
+            {onReleaseCopy && syncStatus === "synced" && !menu.card.team && menu.card.recyclable !== false && menu.card.copies > 0
+              && canPutBack(menu.card) && (
+              <button type="button" role="menuitem" onClick={() => { setReleaseCard(menu.card); setMenu(null); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer">
+                <Undo2 className="h-3 w-3" />{t`Put back in the pool…`}
+              </button>
+            )}
             {menu.card.recyclable !== false && menu.card.copies > 1 && (
               <button
                 type="button"
@@ -2129,6 +2147,14 @@ export function CollectionPanel({
       />
     </section>
   );
+}
+
+/* Only cards a pack can deal go back in the pool: the card, its GOAT and its
+   circulating Eternal. A hand-granted variant (award-style Eternals among them)
+   is never pulled, so its number would never come out again. */
+function canPutBack(card: CollectedCard): boolean {
+  const key = packCardKeyOf(card);
+  return key === String(card.userId) || key === `${card.userId}:goat` || key === `${card.userId}:eternal`;
 }
 
 /* The collection page: the usual grid, or a supporter's binder pages. */

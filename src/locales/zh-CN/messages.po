@@ -1887,6 +1887,23 @@ msgstr "国内 #{0}"
 msgid "#{0} global"
 msgstr "全球第 {0} 名"
 
+#. placeholder {0}: number(serial)
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "#{0} goes back. You keep {remaining}."
+#~ msgstr "放回 #{0}。你还剩 {remaining} 份。"
+
+#. placeholder {0}: number(done.serial)
+#. placeholder {1}: number(done.gained)
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "#{0} is back in the pool. +{1} shards."
+#~ msgstr "#{0} 已放回卡池。+{1} 碎片。"
+
+#. placeholder {0}: number(done.serial)
+#. placeholder {1}: number(done.gained)
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "#{0} is back in the pool. You got {1} shards."
+msgstr "#{0} 已放回卡池。你获得了 {1} 碎片。"
+
 #. placeholder {0}: formatNumber(percentile.rank)
 #. placeholder {1}: formatNumber(percentile.players)
 #: src/components/player/ProfileStatCards.tsx
@@ -4035,6 +4052,10 @@ msgstr "返回"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back"
 msgstr "返回"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Back in the pool"
+msgstr "已放回卡池"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "back to collection"
@@ -6306,6 +6327,10 @@ msgstr "无法加载该排行榜。"
 msgid "Could not load this score."
 msgstr "无法加载此成绩。"
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Could not load your copies. Close and try again."
+msgstr "无法读取你的副本。请关闭后重试。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not match the image sizes."
 msgstr "无法统一图片尺寸。"
@@ -6317,6 +6342,10 @@ msgstr "无法连接 Discord 校验这个邀请链接。请稍后再试。"
 #: src/components/packs/StreakGame.tsx
 msgid "Could not reach the player pool. Try again in a moment."
 msgstr "无法读取玩家池。请稍后再试。"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Could not reach the server. Nothing changed."
+msgstr "无法连接服务器。没有任何改动。"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Could not reach the server. Try again."
@@ -7376,6 +7405,7 @@ msgstr "刷够"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/packs/ReleaseCopyDialog.tsx
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Done"
@@ -10458,6 +10488,10 @@ msgstr "它常驻在系统托盘，几乎不占 CPU，在 Windows 上大约只�
 msgid "It uses my work without permission"
 msgstr "未经许可使用了我的作品"
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "It waits for the next pull of this card. Every pull, yours included, has a 50% chance of getting a number from the pool, lowest first, instead of a new one."
+#~ msgstr "它会等待这张卡片的下一次抽取。每次抽到这张卡（包括你自己）都有 50% 的几率拿到卡池里的编号（从最小的开始），而不是新编号。"
+
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
 msgstr "已经在你的收藏里了。"
@@ -11588,6 +11622,10 @@ msgstr "正在加载最佳成绩..."
 #: src/routes/packs.tsx
 msgid "Loading your collection..."
 msgstr "正在加载你的收藏册…"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Loading your copies…"
+msgstr "正在读取你的副本…"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Loading your data…"
@@ -14427,6 +14465,10 @@ msgstr "送一份给朋友（#{0}），你还保留 {remaining} 份。"
 msgid "One copy for a friend. You keep {remaining}."
 msgstr "送一份给朋友，你还保留 {remaining} 份。"
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "One copy goes back. You keep {remaining}."
+#~ msgstr "放回一份。你还剩 {remaining} 份。"
+
 #: src/lib/pack-run.ts
 msgid "One free reroll per shop"
 msgstr "每次商店免费刷新一次"
@@ -16380,6 +16422,20 @@ msgstr "紫色"
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
 msgstr "把本站记录过的任意一次游玩放在主页数据下方，配上你自己的标题，并显示它的 pp、MSD 或段位。"
+
+#. placeholder {0}: number(serial)
+#. placeholder {1}: number(gain)
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Put back #{0} +{1} shards"
+msgstr "放回 #{0} +{1} 碎片"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Put back in the pool"
+msgstr "放回卡池"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Put back in the pool…"
+msgstr "放回卡池…"
 
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "Put it on my card"
@@ -20740,6 +20796,10 @@ msgstr "该收藏者已不可用。"
 msgid "That copy is already promised to someone or no longer yours. Pick another."
 msgstr "这份已经许给别人，或已不在你手上。请换一份。"
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "That copy is no longer yours. Nothing changed."
+msgstr "这份副本已经不属于你。没有任何改动。"
+
 #: src/components/packs/run/RunCharmRail.tsx
 #: src/components/packs/run/RunShop.tsx
 msgid "That did not go through. Please try again."
@@ -21433,6 +21493,10 @@ msgstr "下一轮评分正在进行。"
 msgid "The next rating pass runs {when}."
 msgstr "下一轮评分将在{when}进行。"
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "The next time anyone pulls this card, there's a 50% chance it comes with this number instead of a new one."
+msgstr "下次有人抽到这张卡片时，有 50% 的几率拿到这个编号，而不是新编号。"
+
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The only one ever pulled"
 msgstr "唯一一张被抽到的"
@@ -22049,6 +22113,10 @@ msgstr "这就是它在皮肤页面上的样子。"
 #: src/components/packs/GoatHoldersButton.tsx
 #~ msgid "This is not available yet. Check back soon."
 #~ msgstr "这个功能还不可用。请稍后再来。"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "This is your only copy, so the card leaves your collection."
+msgstr "这是你唯一的一份，卡片会离开你的收藏。"
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "This is your own gift code. Send the link to a friend."
@@ -24411,6 +24479,15 @@ msgstr ""
 msgid "you could gain"
 msgstr "潜在收益"
 
+#. placeholder {0}: number(serial)
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "You give back #{0} and keep {remaining}."
+msgstr "你放回 #{0}，还剩 {remaining} 份。"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "You give back one copy and keep {remaining}."
+msgstr "你放回一份，还剩 {remaining} 份。"
+
 #: src/components/packs/StreakGame.tsx
 msgid "You got {streak} right, a new best."
 msgstr "你答对了 {streak} 题，创下新纪录。"
@@ -24602,6 +24679,10 @@ msgstr "你的卡片"
 msgid "Your card is not ready yet."
 msgstr "你的卡片还没准备好。"
 
+#: src/components/packs/ReleaseCopyDialog.tsx
+msgid "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
+msgstr "你的卡牌等级会随它一起转移。拿到这个编号的人会获得 {carriedLevel} 级，你会降到 {levelLeft} 级。"
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your collection as binder pages, three by three in plastic pockets, for you and anyone visiting your shelf."
 msgstr "你的收藏变成卡册内页，每页三乘三的塑料卡袋，你和访问你展示架的人都能看到。"
@@ -24719,6 +24800,10 @@ msgstr "你的数据。"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your only copy. It leaves your collection when they accept."
 msgstr "这是你唯一的一张。对方接受后它会离开你的收藏。"
+
+#: src/components/packs/ReleaseCopyDialog.tsx
+#~ msgid "Your only copy. The card leaves your collection."
+#~ msgstr "这是你唯一的一份。卡片会离开你的收藏。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Your osu! top plays, everything recorded while you were tracked, and any score links you added, keeping your best play on each chart at each rate. Charts flagged as vibro are left out. A rate nobody has rated a chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to count."

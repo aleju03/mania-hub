@@ -125,7 +125,7 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
 
 /* Which numbered copy goes. The lowest numbers lead and the first three wear
    the medal colours, so giving away a #1 is never an accident. */
-function CopyPicker({ held, picked, locked, onPick }: { held: HeldCopies; picked: number | null; locked: boolean; onPick: (serial: number) => void }) {
+export function CopyPicker({ held, picked, locked, onPick }: { held: HeldCopies; picked: number | null; locked: boolean; onPick: (serial: number) => void }) {
   const { t } = useLingui();
   const tone = (serial: number) => serial === 1 ? "text-amber-300" : serial === 2 ? "text-slate-200" : serial === 3 ? "text-orange-300" : "text-white";
   return <div className="mt-3">

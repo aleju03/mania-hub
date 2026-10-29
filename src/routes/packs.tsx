@@ -1609,6 +1609,7 @@ function PacksPage() {
                       showLoginNudge={!auth.viewer && auth.loginAvailable}
                       syncStatus={walletApi.syncStatus}
                       onRecycleCard={walletApi.recycleCard}
+                      onReleaseCopy={walletApi.releaseCopy}
                       onRecycleWhole={walletApi.recycleWhole}
                       onRecycleWholeMany={walletApi.recycleWholeMany}
                       onRecycleWholeMatching={walletApi.recycleWholeMatching}
