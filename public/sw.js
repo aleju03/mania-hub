@@ -1,4 +1,4 @@
-const CACHE_NAME = "static-v7";
+const CACHE_NAME = "static-v8";
 
 const PRECACHE_URLS = [
   // Fonts
