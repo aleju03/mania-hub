@@ -2504,17 +2504,18 @@ html[data-custom-cursor="true"] * {
   width: 8%;
   height: auto;
   border-bottom: none;
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  /* kept faint: at the top lip's strength a line down every card read as a seam */
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 0 50% 50% 0 / 0 5px 5px 0;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
 }
 @media (min-width: 900px) {
   .bnd--zip .bnd-page--left .bnd-pocket::before {
     inset: 0 0 0 auto;
     border-right: none;
-    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    border-left: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 50% 0 0 50% / 5px 0 0 5px;
-    background: linear-gradient(270deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+    background: linear-gradient(270deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
   }
 }
 .bnd-leaf {
