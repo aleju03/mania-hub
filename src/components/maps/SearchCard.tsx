@@ -29,7 +29,9 @@ export { starRatingColor, starSpectrumGradient, StarRatingBadge };
 // A diff's stars at a speed mod or on Sunny's scale, falling back to osu!'s
 // nomod value where the chart has none.
 export function starsAtRate(entry: LiveMapSearchEntry, rate: "ht" | "dt" | "" | undefined, scale?: "sunny" | ""): number {
-  const atRate = scale === "sunny" ? entry.sunnyStars : rate === "ht" ? entry.starsHt : rate === "dt" ? entry.starsDt : null;
+  const atRate = scale === "sunny"
+    ? rate === "ht" ? entry.sunnyHt : rate === "dt" ? entry.sunnyDt : entry.sunnyStars
+    : rate === "ht" ? entry.starsHt : rate === "dt" ? entry.starsDt : null;
   return atRate != null && atRate > 0 ? atRate : entry.stars;
 }
 

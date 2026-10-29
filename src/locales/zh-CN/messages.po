@@ -13146,6 +13146,10 @@ msgstr "osu! 最近成绩已加载。{0} 后可以再次刷新。"
 msgid "osu! score link"
 msgstr "osu! 成绩链接"
 
+#: src/components/maps/MapSearchSection.tsx
+msgid "osu! star rating"
+msgstr "osu! 星级"
+
 #: src/routes/player/$username.tsx
 #~ msgid "osu! Supporter"
 #~ msgstr "osu! Supporter"
@@ -17895,6 +17899,14 @@ msgstr "日"
 #: src/components/me/MyDataPanel.tsx
 msgid "Sundays"
 msgstr "周日"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Sunny star rating"
+msgstr "Sunny 星级"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Sunny's Star Rating Rebirth"
+msgstr "Sunny 的 Star Rating Rebirth"
 
 #: src/routes/__root.tsx
 msgid "support"

@@ -86,7 +86,7 @@ export interface MapSearchUiState {
   // card stars follow it. Empty is nomod.
   rate: "ht" | "dt" | "";
   // "sunny" reads the Difficulty filter, sort and card stars on Sunny's Star
-  // Rating Rebirth; it has no HT/DT values, so it and rate exclude each other.
+  // Rating Rebirth instead of osu!'s, at `rate` when set.
   starScale: "sunny" | "";
   // Per-skillset MSD bounds, 0 for an open side (lib/map-search-msd.ts).
   msd: MsdRanges;
@@ -314,9 +314,8 @@ function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
 }
 
 // The star filter. Its heading picks the star rating it reads, osu!'s or
-// Sunny's Star Rating Rebirth, and the HT and DT badges beside it read osu!'s
-// stars at that speed: the filter, the Difficulty sort and the card stars.
-// Sunny has no HT/DT values, so picking either side clears the other.
+// Sunny's Star Rating Rebirth, and the HT and DT badges beside it read that
+// rating at that speed: the filter, the Difficulty sort and the card stars.
 function StarSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   const { t } = useLingui();
   const rateToggle = (mod: "HT" | "DT", rate: "ht" | "dt") => (
@@ -325,10 +324,10 @@ function StarSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
       aria-pressed={ui.rate === rate}
       aria-label={mod === "HT" ? t`Half Time stars` : t`Double Time stars`}
       title={mod === "HT" ? t`Half Time stars` : t`Double Time stars`}
-      onClick={() => apply({ rate: ui.rate === rate ? "" : rate, starScale: "", page: 0 })}
-      className={`inline-flex cursor-pointer transition-opacity hover:brightness-110 ${ui.rate === rate ? "" : "opacity-40 grayscale"}`}
+      onClick={() => apply({ rate: ui.rate === rate ? "" : rate, page: 0 })}
+      className={`-my-0.5 inline-flex cursor-pointer transition-opacity hover:brightness-110 ${ui.rate === rate ? "" : "opacity-40 grayscale"}`}
     >
-      <ModBadge mod={mod} size={0.62} plain />
+      <ModBadge mod={mod} size={0.8} plain />
     </button>
   );
   const scaleOption = (scale: "" | "sunny", label: string, title: string) => (
@@ -336,7 +335,7 @@ function StarSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
       type="button"
       aria-pressed={ui.starScale === scale}
       title={title}
-      onClick={() => apply(scale === "sunny" ? { starScale: "sunny", rate: "", page: 0 } : { starScale: "", page: 0 })}
+      onClick={() => apply({ starScale: scale, page: 0 })}
       className={`cursor-pointer text-[10px] font-bold uppercase tracking-[0.08em] transition-colors ${ui.starScale === scale ? "text-osu-f1" : "text-osu-f1/40 hover:text-osu-f1/70"}`}
     >
       {label}
@@ -355,8 +354,10 @@ function StarSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
           {scaleOption("", "osu!", t`osu! star rating`)}
           <span aria-hidden className="h-2.5 w-px bg-white/15" />
           {scaleOption("sunny", "Sunny", t`Sunny's Star Rating Rebirth`)}
-          {rateToggle("HT", "ht")}
-          {rateToggle("DT", "dt")}
+          <span className="ml-1 inline-flex items-center gap-1">
+            {rateToggle("HT", "ht")}
+            {rateToggle("DT", "dt")}
+          </span>
         </span>
       )}
       onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })}
@@ -2007,8 +2008,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           {/* On the grid the four sliders share the three columns right of
               status, so they stay on one row. Difficulty gets a wider share
               for the osu!/Sunny and HT/DT switches in its heading. */}
-          <div className="hidden basis-full gap-x-8 sm:max-[1139px]:flex min-[1140px]:col-span-3 min-[1140px]:grid min-[1140px]:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
-            <div className="min-w-0 flex-[1.4]">
+          <div className="hidden basis-full gap-x-8 sm:max-[1139px]:flex min-[1140px]:col-span-3 min-[1140px]:grid min-[1140px]:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))]">
+            <div className="min-w-0 flex-[1.5]">
               <StarSlider ui={ui} apply={apply} />
             </div>
             <div className="min-w-0 flex-1">

@@ -13173,6 +13173,10 @@ msgstr "osu! recents are loaded. Refresh available in {0}."
 msgid "osu! score link"
 msgstr "osu! score link"
 
+#: src/components/maps/MapSearchSection.tsx
+msgid "osu! star rating"
+msgstr "osu! star rating"
+
 #: src/routes/player/$username.tsx
 #~ msgid "osu! Supporter"
 #~ msgstr "osu! Supporter"
@@ -17930,6 +17934,14 @@ msgstr "Sun"
 #: src/components/me/MyDataPanel.tsx
 msgid "Sundays"
 msgstr "Sundays"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Sunny star rating"
+msgstr "Sunny star rating"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Sunny's Star Rating Rebirth"
+msgstr "Sunny's Star Rating Rebirth"
 
 #: src/routes/__root.tsx
 msgid "support"

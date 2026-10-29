@@ -3124,9 +3124,11 @@ export interface LiveMapSearchEntry {
   // lands, absent on older cached payloads.
   starsHt?: number | null;
   starsDt?: number | null;
-  // Sunny's Star Rating Rebirth; null without a chart classification, absent
-  // on older cached payloads.
+  // Sunny's Star Rating Rebirth, at 1.0x and 0.75x / 1.5x; null without a
+  // chart analysis, absent on older cached payloads.
   sunnyStars?: number | null;
+  sunnyHt?: number | null;
+  sunnyDt?: number | null;
   bpm: number;
   // Overall Difficulty from stored osu! metadata. Optional for cached payloads
   // produced before this field shipped; null when metadata is incomplete.
@@ -3200,7 +3202,8 @@ export interface LiveMapSearchParams {
   vibro?: "only" | "hide" | "";
   // Speed mod the stars are read at; the star bounds and Difficulty sort follow it.
   rate?: "ht" | "dt" | "";
-  // "sunny" reads the star bounds and Difficulty sort on Sunny's Star Rating Rebirth.
+  // "sunny" reads the star bounds and Difficulty sort on Sunny's Star Rating
+  // Rebirth (at `rate` when set).
   starScale?: "sunny" | "";
   // `key:min-max` pairs (lib/map-search-msd.ts); empty for none.
   msd?: string;

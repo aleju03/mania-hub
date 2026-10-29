@@ -437,7 +437,7 @@ export function RangePill({
       }}
       placeholder={skin.placeholder}
       aria-label={t`${ariaLabel} range`}
-      className={`shrink-0 w-24 bg-transparent ${valueClassName} font-semibold tabular-nums text-osu-l2 border-b border-osu-b3 outline-none focus:border-osu-pink placeholder:text-osu-f1/30`}
+      className={`${heading ? "min-w-0 w-[4.5rem] text-right" : "shrink-0 w-24"} bg-transparent ${valueClassName} font-semibold tabular-nums text-osu-l2 border-b border-osu-b3 outline-none focus:border-osu-pink placeholder:text-osu-f1/30`}
     />
   ) : (
     <span
