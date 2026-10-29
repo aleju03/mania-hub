@@ -352,8 +352,10 @@ function MapScoresList({
   if (error) return <span className="text-[11.5px] text-osu-f1">{t`Could not load the scores.`}</span>;
   if (!board) {
     return (
-      <div className="flex flex-col" aria-busy="true">
-        {Array.from({ length: 8 }, (_, index) => (
+      // As tall as the card allows, like a loaded board, so the centered card
+      // does not shrink and jump for the frames before the scores arrive.
+      <div className="flex min-h-[100dvh] flex-col overflow-hidden" aria-busy="true">
+        {Array.from({ length: 24 }, (_, index) => (
           <div key={index} className="flex items-center gap-2.5 border-t border-white/[0.07] py-2 first:border-t-0">
             <Skeleton className="h-3 w-5" />
             <Skeleton className="h-6 w-6 rounded-full" />

@@ -1041,8 +1041,8 @@ export function MapDetailModal({
     if (initialRate < 1) setHtRate(initialRate);
     if (initialRate > 1) setDtRate(initialRate);
   }, [entry?.beatmapId, initialRate]);
-  // The panel is centered, so a rate or tab switch that changes its height would
-  // move all of it. Switching pins its top where it was and lets it grow down.
+  // The panel is centered, so a rate switch that changes its height would move
+  // all of it. Switching pins its top where it was and lets it grow down.
   const panelRef = useRef<HTMLDivElement>(null);
   const [pinnedTop, setPinnedTop] = useState<number | null>(null);
   const pinPanel = () => {
@@ -1295,9 +1295,6 @@ export function MapDetailModal({
                         // the score returns the selection to the diff it was set on.
                         if (id === "score" && play) setSelectedDiffId(play.beatmapId);
                         setShareCopied(false);
-                        // Each tab has its own height, and the Scores board
-                        // grows as it loads: hold the top still, like a rate switch.
-                        if (id !== shownTab) pinPanel();
                         setTab(id);
                       }}
                       className={`-mb-px cursor-pointer border-b-2 px-2.5 pb-2 text-[11.5px] font-bold uppercase tracking-[0.06em] transition-colors ${
