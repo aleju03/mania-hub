@@ -6654,6 +6654,10 @@ msgstr "Done"
 msgid "done with it"
 msgstr "done with it"
 
+#: src/components/maps/MapSearchSection.tsx
+msgid "Double Time stars"
+msgstr "Double Time stars"
+
 #: src/routes/snipes.tsx
 msgid "Doubles the columns into two stages."
 msgstr "Doubles the columns into two stages."
@@ -8298,6 +8302,10 @@ msgstr "Grid"
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
 msgstr "Guess at random"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Half Time stars"
+msgstr "Half Time stars"
 
 #: src/lib/signature-shared.ts
 msgid "Half year"

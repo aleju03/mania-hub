@@ -3120,6 +3120,13 @@ export interface LiveMapSearchEntry {
   status: string;
   keyCount: number;
   stars: number;
+  // osu!lazer star rating at 0.75x / 1.5x. Null until the chart analysis
+  // lands, absent on older cached payloads.
+  starsHt?: number | null;
+  starsDt?: number | null;
+  // Sunny's Star Rating Rebirth; null without a chart classification, absent
+  // on older cached payloads.
+  sunnyStars?: number | null;
   bpm: number;
   // Overall Difficulty from stored osu! metadata. Optional for cached payloads
   // produced before this field shipped; null when metadata is incomplete.
@@ -3191,6 +3198,10 @@ export interface LiveMapSearchParams {
   // "only" keeps just vibro charts, "hide" drops them; skill picks drop them
   // unless this is "only".
   vibro?: "only" | "hide" | "";
+  // Speed mod the stars are read at; the star bounds and Difficulty sort follow it.
+  rate?: "ht" | "dt" | "";
+  // "sunny" reads the star bounds and Difficulty sort on Sunny's Star Rating Rebirth.
+  starScale?: "sunny" | "";
   // `key:min-max` pairs (lib/map-search-msd.ts); empty for none.
   msd?: string;
   starMin: number | null;
@@ -3272,6 +3283,8 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.skills?.length) query.set("skills", params.skills.join(","));
   if (params.skillsExclude?.length) query.set("skillsExclude", params.skillsExclude.join(","));
   if (params.vibro) query.set("vibro", params.vibro);
+  if (params.rate) query.set("rate", params.rate);
+  if (params.starScale) query.set("starScale", params.starScale);
   if (params.msd) query.set("msd", params.msd);
   if (params.starMin != null) query.set("starMin", String(params.starMin));
   if (params.starMax != null) query.set("starMax", String(params.starMax));

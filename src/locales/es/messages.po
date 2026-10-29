@@ -6627,6 +6627,10 @@ msgstr "Listo"
 msgid "done with it"
 msgstr "suficiente"
 
+#: src/components/maps/MapSearchSection.tsx
+msgid "Double Time stars"
+msgstr "Estrellas con Double Time"
+
 #: src/routes/snipes.tsx
 msgid "Doubles the columns into two stages."
 msgstr "Duplica las columnas en dos stages."
@@ -8267,6 +8271,10 @@ msgstr "Cuadrícula"
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
 msgstr "Adivinar al azar"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Half Time stars"
+msgstr "Estrellas con Half Time"
 
 #: src/lib/signature-shared.ts
 msgid "Half year"

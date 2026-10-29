@@ -22,6 +22,7 @@ import { SearchCard, toPreviewTrack } from "./SearchCard";
 import { savedSearchSortToRestore } from "./searchSortPreference";
 import { savedSearchVibroToRestore } from "./searchVibroPreference";
 import { StarRangePill } from "./StarRangePill";
+import { ModBadge } from "../ui/ModBadge";
 import {
   ACCENT_CHIP_TEXT,
   accentChipRing,
@@ -81,6 +82,12 @@ export interface MapSearchUiState {
   skillsExclude: string[];
   // Vibro chip: "only" includes just vibro charts, "hide" excludes them.
   vibro: "only" | "hide" | "";
+  // Speed mod the stars are read at: the Difficulty filter and sort and the
+  // card stars follow it. Empty is nomod.
+  rate: "ht" | "dt" | "";
+  // "sunny" reads the Difficulty filter, sort and card stars on Sunny's Star
+  // Rating Rebirth; it has no HT/DT values, so it and rate exclude each other.
+  starScale: "sunny" | "";
   // Per-skillset MSD bounds, 0 for an open side (lib/map-search-msd.ts).
   msd: MsdRanges;
   starMin: number;
@@ -155,6 +162,8 @@ function stateKey(s: MapSearchUiState): string {
     [...s.skills].sort(),
     [...s.skillsExclude].sort(),
     s.vibro,
+    s.rate,
+    s.starScale,
     serializeMsdRanges(s.msd),
     s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.odMin, s.odMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax, s.danMinStep, s.danMaxStep, s.danKeys, s.danLn,
     s.sort, s.dir, s.page,
@@ -304,10 +313,54 @@ function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   );
 }
 
-function StarSlider({ ui, apply, heading }: { ui: MapSearchUiState; apply: ApplyFn; heading?: ReactNode }) {
+// The star filter. Its heading picks the star rating it reads, osu!'s or
+// Sunny's Star Rating Rebirth, and the HT and DT badges beside it read osu!'s
+// stars at that speed: the filter, the Difficulty sort and the card stars.
+// Sunny has no HT/DT values, so picking either side clears the other.
+function StarSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   const { t } = useLingui();
+  const rateToggle = (mod: "HT" | "DT", rate: "ht" | "dt") => (
+    <button
+      type="button"
+      aria-pressed={ui.rate === rate}
+      aria-label={mod === "HT" ? t`Half Time stars` : t`Double Time stars`}
+      title={mod === "HT" ? t`Half Time stars` : t`Double Time stars`}
+      onClick={() => apply({ rate: ui.rate === rate ? "" : rate, starScale: "", page: 0 })}
+      className={`inline-flex cursor-pointer transition-opacity hover:brightness-110 ${ui.rate === rate ? "" : "opacity-40 grayscale"}`}
+    >
+      <ModBadge mod={mod} size={0.62} plain />
+    </button>
+  );
+  const scaleOption = (scale: "" | "sunny", label: string, title: string) => (
+    <button
+      type="button"
+      aria-pressed={ui.starScale === scale}
+      title={title}
+      onClick={() => apply(scale === "sunny" ? { starScale: "sunny", rate: "", page: 0 } : { starScale: "", page: 0 })}
+      className={`cursor-pointer text-[10px] font-bold uppercase tracking-[0.08em] transition-colors ${ui.starScale === scale ? "text-osu-f1" : "text-osu-f1/40 hover:text-osu-f1/70"}`}
+    >
+      {label}
+    </button>
+  );
   return (
-    <StarRangePill lo={0} hi={15} min={ui.starMin} max={ui.starMax} step={0.1} ariaLabel={t`Star rating`} heading={heading} onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })} />
+    <StarRangePill
+      lo={0}
+      hi={15}
+      min={ui.starMin}
+      max={ui.starMax}
+      step={0.1}
+      ariaLabel={ui.starScale === "sunny" ? t`Sunny star rating` : t`Star rating`}
+      heading={(
+        <span className="inline-flex items-center gap-1.5">
+          {scaleOption("", "osu!", t`osu! star rating`)}
+          <span aria-hidden className="h-2.5 w-px bg-white/15" />
+          {scaleOption("sunny", "Sunny", t`Sunny's Star Rating Rebirth`)}
+          {rateToggle("HT", "ht")}
+          {rateToggle("DT", "dt")}
+        </span>
+      )}
+      onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })}
+    />
   );
 }
 
@@ -1522,7 +1575,7 @@ function MobileFilterSheet({
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
           <KeysChips ui={ui} apply={apply} inline />
           <StatusChips ui={ui} apply={apply} />
-          <StarSlider ui={ui} apply={apply} heading={<FilterHeading>{t`Difficulty`}</FilterHeading>} />
+          <StarSlider ui={ui} apply={apply} />
           {showDan ? (
             <ChipGroup label={t`Dan (est.)`}>
               <DanPicker ui={ui} apply={apply} inline />
@@ -1729,6 +1782,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       skills: ui.skills,
       skillsExclude: ui.skillsExclude,
       vibro: ui.vibro,
+      rate: ui.rate,
+      starScale: ui.starScale,
       msd: serializeMsdRanges(ui.msd),
       starMin: ui.starMin > 0 ? ui.starMin : null,
       starMax: ui.starMax > 0 ? ui.starMax : null,
@@ -1806,7 +1861,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     ui.skills.length > 0 ||
     ui.skillsExclude.length > 0 ||
     activeMsdKeys(ui.msd).length > 0 ||
-    ui.starMin > 0 || ui.starMax > 0 ||
+    ui.rate !== "" || ui.starScale !== "" || ui.starMin > 0 || ui.starMax > 0 ||
     ui.bpmMin > 0 || ui.bpmMax > 0 ||
     ui.odMin > 0 || ui.odMax > 0 ||
     ui.lenMin > 0 || ui.lenMax > 0 ||
@@ -1818,7 +1873,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const collapsedFilterCount =
     ui.keys.length + ui.keysExclude.length +
     ui.statuses.length + ui.statusesExclude.length +
-    (ui.starMin > 0 || ui.starMax > 0 ? 1 : 0) +
+    (ui.rate !== "" || ui.starScale !== "" || ui.starMin > 0 || ui.starMax > 0 ? 1 : 0) +
     (ui.bpmMin > 0 || ui.bpmMax > 0 ? 1 : 0) +
     (ui.odMin > 0 || ui.odMax > 0 ? 1 : 0) +
     (ui.lenMin > 0 || ui.lenMax > 0 ? 1 : 0) +
@@ -1836,7 +1891,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     apply({
       q: "", keys: [], keysExclude: [], statuses: [], statusesExclude: [], patterns: [], patternsExclude: [],
       skills: [], skillsExclude: [], msd: {},
-      starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, odMin: 0, odMax: 0, lenMin: 0, lenMax: 0, lnMin: 0, lnMax: 0,
+      rate: "", starScale: "", starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, odMin: 0, odMax: 0, lenMin: 0, lenMax: 0, lnMin: 0, lnMax: 0,
       danMin: null, danMax: null, danMinStep: null, danMaxStep: null, danKeys: null, danLn: null,
       page: 0,
     });
@@ -1950,10 +2005,11 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
             <StatusChips ui={ui} apply={apply} />
           </div>
           {/* On the grid the four sliders share the three columns right of
-              status, so they stay on one row. */}
-          <div className="hidden basis-full gap-x-8 sm:max-[1139px]:flex min-[1140px]:col-span-3 min-[1140px]:grid min-[1140px]:grid-cols-4">
-            <div className="min-w-0 flex-1">
-              <StarSlider ui={ui} apply={apply} heading={<FilterHeading>{t`Difficulty`}</FilterHeading>} />
+              status, so they stay on one row. Difficulty gets a wider share
+              for the osu!/Sunny and HT/DT switches in its heading. */}
+          <div className="hidden basis-full gap-x-8 sm:max-[1139px]:flex min-[1140px]:col-span-3 min-[1140px]:grid min-[1140px]:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+            <div className="min-w-0 flex-[1.4]">
+              <StarSlider ui={ui} apply={apply} />
             </div>
             <div className="min-w-0 flex-1">
               <BpmSlider ui={ui} apply={apply} heading={<FilterHeading>{t`BPM`}</FilterHeading>} />
@@ -2028,6 +2084,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
                 <SearchCard
                   key={entry.beatmapId}
                   entry={entry}
+                  rate={ui.rate}
+                  starScale={ui.starScale}
                   preview={preview}
                   showSkill={resultSkillFiltered}
                   onOpen={(opened) => {

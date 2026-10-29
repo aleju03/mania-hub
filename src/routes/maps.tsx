@@ -195,6 +195,11 @@ type MapsSearch = {
   sPatterns: string;
   sSkills: string;
   sVibro: "only" | "hide" | "";
+  // Speed mod the stars are read at (Difficulty filter, sort and card stars).
+  sRate: "ht" | "dt" | "";
+  // Star rating the Difficulty filter, sort and card stars read: osu!'s or
+  // Sunny's Star Rating Rebirth.
+  sStarScale: "sunny" | "";
   sMsd: string;
   sCountryOnly: boolean;
   sSort: string;
@@ -303,6 +308,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sPatterns: "",
   sSkills: "",
   sVibro: "",
+  sRate: "",
+  sStarScale: "",
   sMsd: "",
   sCountryOnly: false,
   sSort: DEFAULT_SEARCH_SORT.sort,
@@ -775,6 +782,8 @@ export const Route = createFileRoute("/maps")({
     sPatterns: sanitizeSearchTriStateCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
     sSkills: sanitizeSearchTriStateCsv(search.sSkills, SEARCH_SKILL_VALUES),
     sVibro: search.sVibro === "only" || search.sVibro === "hide" ? search.sVibro : DEFAULT_MAPS_SEARCH.sVibro,
+    sRate: search.sRate === "ht" || search.sRate === "dt" ? search.sRate : DEFAULT_MAPS_SEARCH.sRate,
+    sStarScale: search.sStarScale === "sunny" ? "sunny" : DEFAULT_MAPS_SEARCH.sStarScale,
     sMsd: serializeMsdRanges(parseMsdRanges(search.sMsd)),
     sCountryOnly: false,
     sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
@@ -1174,6 +1183,8 @@ function MapsPage() {
       skills: [...skills.includes],
       skillsExclude: [...skills.excludes],
       vibro: mapsSearch.sVibro,
+      rate: mapsSearch.sRate,
+      starScale: mapsSearch.sStarScale,
       msd: msdRangesForFacet(parseMsdRanges(mapsSearch.sMsd), [...keys.includes]),
       starMin: mapsSearch.sStarMin,
       starMax: mapsSearch.sStarMax,
@@ -1222,6 +1233,8 @@ function MapsPage() {
       writeSearchVibroPreference(patch.vibro);
     }
     if (patch.msd !== undefined) next.sMsd = serializeMsdRanges(patch.msd);
+    if (patch.rate !== undefined) next.sRate = patch.rate;
+    if (patch.starScale !== undefined) next.sStarScale = patch.starScale;
     if (patch.starMin !== undefined) next.sStarMin = patch.starMin;
     if (patch.starMax !== undefined) next.sStarMax = patch.starMax;
     if (patch.bpmMin !== undefined) next.sBpmMin = patch.bpmMin;

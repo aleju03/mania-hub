@@ -26,6 +26,13 @@ export { starRatingColor, starSpectrumGradient, StarRatingBadge };
 
 // The matching diffs of a search entry's set, easiest first. Collection items
 // and older payloads carry no diff list, so the entry stands alone.
+// A diff's stars at a speed mod or on Sunny's scale, falling back to osu!'s
+// nomod value where the chart has none.
+export function starsAtRate(entry: LiveMapSearchEntry, rate: "ht" | "dt" | "" | undefined, scale?: "sunny" | ""): number {
+  const atRate = scale === "sunny" ? entry.sunnyStars : rate === "ht" ? entry.starsHt : rate === "dt" ? entry.starsDt : null;
+  return atRate != null && atRate > 0 ? atRate : entry.stars;
+}
+
 export function entryDiffs(entry: LiveMapSearchEntry): LiveMapSearchEntry[] {
   if (!entry.diffs || entry.diffs.length === 0) return [entry];
   return [...entry.diffs].sort((a, b) => a.keyCount - b.keyCount || a.stars - b.stars || a.beatmapId - b.beatmapId);
@@ -187,8 +194,14 @@ export function SearchCard({
   onOpen,
   preview,
   showSkill = false,
+  rate,
+  starScale,
 }: {
   entry: LiveMapSearchEntry;
+  /** Speed mod the stars are shown at. */
+  rate?: "ht" | "dt" | "";
+  /** "sunny" shows Sunny's Star Rating Rebirth instead of osu!'s. */
+  starScale?: "sunny" | "";
   onOpen?: (entry: LiveMapSearchEntry) => void;
   preview?: MapPreviewAudio;
   /** Lead the tag row with the skill tiles the chart counts toward. */
@@ -202,8 +215,8 @@ export function SearchCard({
   }, [coverFailed]);
   const diffs = entryDiffs(entry);
   const multi = diffs.length > 1;
-  const starLo = Math.min(...diffs.map((diff) => diff.stars));
-  const starHi = Math.max(...diffs.map((diff) => diff.stars));
+  const starLo = Math.min(...diffs.map((diff) => starsAtRate(diff, rate, starScale)));
+  const starHi = Math.max(...diffs.map((diff) => starsAtRate(diff, rate, starScale)));
   const tiles = showSkill ? skillTiles(diffs) : [];
   // A family chip that names a skill already in the skill chip would repeat it.
   const familyTags = (multi ? setPatterns(diffs) : familyPatternTags(entry)).filter((pattern) => !tiles.includes(pattern));
@@ -247,7 +260,7 @@ export function SearchCard({
           </span>
         </span>
         <StarRatingBadge
-          stars={multi ? starHi : entry.stars}
+          stars={multi ? starHi : starsAtRate(entry, rate, starScale)}
           label={multi && starHi - starLo >= 0.05 ? `${starLo.toFixed(1)}–${starHi.toFixed(1)}` : undefined}
           className="absolute top-2 right-2"
         />
@@ -271,8 +284,8 @@ export function SearchCard({
                   <span
                     key={diff.beatmapId}
                     className="h-2.5 w-2.5 rounded-full ring-1 ring-white/15"
-                    style={{ background: starRatingColor(diff.stars) }}
-                    title={`[${diff.version}] ★${diff.stars.toFixed(2)}`}
+                    style={{ background: starRatingColor(starsAtRate(diff, rate, starScale)) }}
+                    title={`[${diff.version}] ★${starsAtRate(diff, rate, starScale).toFixed(2)}`}
                   />
                 ))}
               </span>

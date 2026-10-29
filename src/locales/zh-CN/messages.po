@@ -6639,6 +6639,10 @@ msgstr "完成"
 msgid "done with it"
 msgstr "刷够了"
 
+#: src/components/maps/MapSearchSection.tsx
+msgid "Double Time stars"
+msgstr "Double Time 星级"
+
 #: src/routes/snipes.tsx
 msgid "Doubles the columns into two stages."
 msgstr "把轨道翻倍，分成两个舞台。"
@@ -8279,6 +8283,10 @@ msgstr "网格"
 #: src/components/packs/StreakGame.tsx
 msgid "Guess at random"
 msgstr "随机猜一个"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Half Time stars"
+msgstr "Half Time 星级"
 
 #: src/lib/signature-shared.ts
 msgid "Half year"

@@ -71,6 +71,7 @@ import { NeighborhoodGraph } from "../components/farm-helper/NeighborhoodGraph";
 import { SearchInput } from "../components/ui/SearchInput";
 import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
+import { StarRatingBadge } from "../components/ui/StarRating";
 import { SortArrow } from "../components/ui/SortArrow";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
@@ -2068,7 +2069,7 @@ function SkillRow({
           <ModList mods={rec.recommendedMods} size={0.58} className="max-w-[92px]" />
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-x-2 text-[11px] leading-tight">
-          <span className="shrink-0 tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
+          <StarRatingBadge stars={rec.stars} className="shrink-0" />
           <span className="shrink-0 tabular-nums text-osu-f1">{rec.keys}K</span>
           {status ? <span className={`shrink-0 rounded px-1 py-0.5 font-bold leading-none ${status.className}`}>{i18n._(status.label)}</span> : null}
           <span className="min-w-0 truncate text-osu-f1">
@@ -2238,7 +2239,7 @@ function RecRow({
                 <Trans>clear attempt</Trans>
               </span>
             ) : null}
-            <span className="shrink-0 tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
+            <StarRatingBadge stars={rec.stars} className="shrink-0" />
             <span className="shrink-0 tabular-nums text-osu-f1">{rec.keys}K</span>
             <span className="min-w-0 truncate text-osu-f1">
               {rec.artist}
@@ -2392,7 +2393,7 @@ function RecPreview({
                 <Trans>clear attempt</Trans>
               </span>
             ) : null}
-            <span className="tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
+            <StarRatingBadge stars={rec.stars} />
             <span className="tabular-nums text-osu-l2">{rec.keys}K</span>
             {rec.bpm ? <span className="tabular-nums text-osu-f1">{Math.round(rec.bpm)} bpm</span> : null}
             {rec.lengthSec ? <span className="tabular-nums text-osu-f1">{formatLength(rec.lengthSec)}</span> : null}
