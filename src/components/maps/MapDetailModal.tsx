@@ -901,6 +901,7 @@ export function MapDetailModal({
   status = "ready",
   actions,
   initialRate = 1,
+  starScale = "",
   scoreOnly = false,
 }: {
   entry: LiveMapSearchEntry | null;
@@ -908,6 +909,9 @@ export function MapDetailModal({
   /** The DT/HT toggle the modal opens on when there is no play, for a list
       that recommended the chart at that rate. */
   initialRate?: 1 | 1.5 | 0.75;
+  /** "sunny" shows Sunny's Star Rating Rebirth where the catalog has it for
+      the rate (1.0x, 0.75x, 1.5x), as the search view it was opened from does. */
+  starScale?: "sunny" | "";
   /** Extra buttons for the footer, after Share. */
   actions?: ReactNode;
   /** Just the play, no tabs: the card was opened from this map's own Scores tab. */
@@ -1136,7 +1140,11 @@ export function MapDetailModal({
   }, [entry, fileStatsById, fileStatsId, playRate, setKnown]);
   const fileStats = fileStatsId != null ? fileStatsById[fileStatsId] : undefined;
   const fileStatsPending = fileStatsId != null && fileStats === undefined;
-  const shownStars = active ? rateStars ?? fileStats?.stars ?? active.stars : 0;
+  const sunnyStars = starScale === "sunny" && active && !offCatalog && !playedInverse
+    ? playRate === 1 ? active.sunnyStars : playRate === 0.75 ? active.sunnyHt : playRate === 1.5 ? active.sunnyDt : null
+    : null;
+  const shownStars = active ? sunnyStars ?? rateStars ?? fileStats?.stars ?? active.stars : 0;
+  const diffStars = (diff: LiveMapSearchEntry) => (starScale === "sunny" ? diff.sunnyStars ?? diff.stars : diff.stars);
   const msdShown = !!(active?.msd || activeAnalysis?.msd || (offCatalog && rateMsd));
   // Both tails always show their rate, so turning one on never shifts the other.
   const speedMods = playedRate === 1 && previewSet ? (
@@ -1180,11 +1188,11 @@ export function MapDetailModal({
           >
             <span
               className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/15"
-              style={{ background: starRatingColor(diff.stars) }}
+              style={{ background: starRatingColor(diffStars(diff)) }}
             />
             {mixedKeys && <span className="text-osu-f1">{diff.keyCount}K</span>}
             <span className="max-w-[180px] truncate">{diff.version}</span>
-            <span className="tabular-nums text-osu-yellow">★{diff.stars.toFixed(2)}</span>
+            <span className="tabular-nums text-osu-yellow">★{diffStars(diff).toFixed(2)}</span>
           </button>
         );
       })}
@@ -1241,7 +1249,7 @@ export function MapDetailModal({
                     <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">{active.keyCount}K</span>
                     {numbersKnown ? (
                       <>
-                        {starsUnknown ? null : <StarRatingBadge stars={shownStars} className={`transition-opacity ${starsPending ? "opacity-50" : ""}`} />}
+                        {starsUnknown ? null : <StarRatingBadge stars={shownStars} className={`transition-opacity ${starsPending && sunnyStars == null ? "opacity-50" : ""}`} />}
                         {local ? null : (
                           <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
                             {BEATMAP_STATUS_LABELS[active.status.toLowerCase()]

@@ -2108,7 +2108,12 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           </div>
         )}
       </div>
-      <MapDetailModal entry={detail} onClose={() => setDetail(null)} />
+      <MapDetailModal
+        entry={detail}
+        onClose={() => setDetail(null)}
+        starScale={ui.starScale}
+        initialRate={ui.rate === "ht" ? 0.75 : ui.rate === "dt" ? 1.5 : 1}
+      />
       <MapPreviewPlayerBar preview={preview} tracks={previewTracks} clearsStickyBar={totalPages > 1} />
     </div>
   );
