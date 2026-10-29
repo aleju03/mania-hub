@@ -127,8 +127,8 @@ msgstr "{0, plural, one {# chart} other {# charts}}"
 
 #. placeholder {0}: report.distinctOwners
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "{0, plural, one {# collector} other {# collectors}}"
-msgstr "{0, plural, one {# collector} other {# collectors}}"
+#~ msgid "{0, plural, one {# collector} other {# collectors}}"
+#~ msgstr "{0, plural, one {# collector} other {# collectors}}"
 
 #. placeholder {0}: connected.length
 #: src/components/settings/CompanellaGroup.tsx
@@ -146,10 +146,8 @@ msgid "{0, plural, one {# convert is left out, as osu! leaves converts out of it
 msgstr "{0, plural, one {# convert is left out, as osu! leaves converts out of its own keymode totals.} other {# converts are left out, as osu! leaves converts out of its own keymode totals.}}"
 
 #. placeholder {0}: collector.copies
-#. placeholder {0}: pulls.copies
 #. placeholder {0}: report.copies
 #: src/components/packs/CardCollectors.tsx
-#: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {# copy} other {# copies}}"
 msgstr "{0, plural, one {# copy} other {# copies}}"
 
@@ -268,8 +266,8 @@ msgstr "{0, plural, one {# team} other {# teams}}"
 
 #. placeholder {0}: report.distinctOwners - collectors.length
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "{0, plural, one {+# more collector} other {+# more collectors}}"
-msgstr "{0, plural, one {+# more collector} other {+# more collectors}}"
+#~ msgid "{0, plural, one {+# more collector} other {+# more collectors}}"
+#~ msgstr "{0, plural, one {+# more collector} other {+# more collectors}}"
 
 #. placeholder {0}: streakShardValue(streak)
 #: src/components/packs/StreakGame.tsx
@@ -295,8 +293,8 @@ msgstr "{0, plural, one {goal deleted} other {# goals deleted}}"
 
 #. placeholder {0}: pulls.ownerCount
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "{0, plural, one {holder} other {holders}}"
-msgstr "{0, plural, one {holder} other {holders}}"
+#~ msgid "{0, plural, one {holder} other {holders}}"
+#~ msgstr "{0, plural, one {holder} other {holders}}"
 
 #. placeholder {0}: Number(ownerCount)
 #. placeholder {0}: shared.owners
@@ -2013,8 +2011,8 @@ msgstr "+{0} combo per collector level."
 #. placeholder {0}: formatNumber(hidden)
 #. placeholder {1}: formatNumber(ownersPerCard)
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "+{0} more (list capped at {1})"
-msgstr "+{0} more (list capped at {1})"
+#~ msgid "+{0} more (list capped at {1})"
+#~ msgstr "+{0} more (list capped at {1})"
 
 #. placeholder {0}: EDITION_EFFECTS.foil.chips
 #: src/lib/pack-run.ts
@@ -4858,8 +4856,8 @@ msgid "cards collected"
 msgstr "cards collected"
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "Cards found"
-msgstr "Cards found"
+#~ msgid "Cards found"
+#~ msgstr "Cards found"
 
 #: src/lib/pack-run.ts
 msgid "Cards from your country score nothing."
@@ -5592,7 +5590,6 @@ msgstr "Clip not found"
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
-#: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
 #: src/components/packs/PackDialog.tsx
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
@@ -5761,7 +5758,6 @@ msgstr "Collector XP"
 msgid "collectors"
 msgstr "collectors"
 
-#: src/components/packs/GoatHoldersButton.tsx
 #: src/routes/packs_.collections.tsx
 msgid "Collectors"
 msgstr "Collectors"
@@ -9297,8 +9293,8 @@ msgstr "GOAT and Eternal cards give x{0} combo, Mythic and better x{1}."
 #~ msgstr "GOAT and Eternal cards give x{0} combo."
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "GOAT holders"
-msgstr "GOAT holders"
+#~ msgid "GOAT holders"
+#~ msgstr "GOAT holders"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "GOAT roster"
@@ -9317,8 +9313,8 @@ msgid "GOATs can't take mods."
 msgstr "GOATs can't take mods."
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "GOATs discovered"
-msgstr "GOATs discovered"
+#~ msgid "GOATs discovered"
+#~ msgstr "GOATs discovered"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Goes by the country on someone's osu! account, and anyone already in can still share the invite."
@@ -10928,8 +10924,8 @@ msgid "Later"
 msgstr "Later"
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "Latest"
-msgstr "Latest"
+#~ msgid "Latest"
+#~ msgstr "Latest"
 
 #: src/components/layout/ChangelogModal.tsx
 msgctxt "changelog"
@@ -11589,7 +11585,6 @@ msgid "loading..."
 msgstr "loading..."
 
 #: src/components/packs/CardCollectors.tsx
-#: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayBufferingIndicator.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -14581,8 +14576,8 @@ msgstr "Open {0}'s profile in a new tab"
 
 #. placeholder {0}: owner.username
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "Open {0}'s pull of {label}"
-msgstr "Open {0}'s pull of {label}"
+#~ msgid "Open {0}'s pull of {label}"
+#~ msgstr "Open {0}'s pull of {label}"
 
 #. placeholder {0}: card.player.team.name
 #: src/components/packs/PackSummary.tsx
@@ -16315,7 +16310,6 @@ msgstr "Publishing."
 msgid "Pull this card while signed in before gifting it."
 msgstr "Pull this card while signed in before gifting it."
 
-#: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/PackPulse.tsx
 msgid "pulled"
 msgstr "pulled"
@@ -20117,8 +20111,8 @@ msgstr "Still only"
 
 #. placeholder {0}: formatNumber(undiscovered.length)
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "Still out there ({0})"
-msgstr "Still out there ({0})"
+#~ msgid "Still out there ({0})"
+#~ msgstr "Still out there ({0})"
 
 #. placeholder {0}: player.username
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -22036,8 +22030,8 @@ msgid "This is how it looks on the skins page."
 msgstr "This is how it looks on the skins page."
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "This is not available yet. Check back soon."
-msgstr "This is not available yet. Check back soon."
+#~ msgid "This is not available yet. Check back soon."
+#~ msgstr "This is not available yet. Check back soon."
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "This is your own gift code. Send the link to a friend."

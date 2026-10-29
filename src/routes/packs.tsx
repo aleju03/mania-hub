@@ -15,7 +15,6 @@ import { SetsView, packBinderActions, notifyPackBindersChanged } from "../compon
 import { WishlistLine } from "../components/packs/WishlistLine";
 import { useWishlist } from "../components/packs/useWishlist";
 import { GamePacks } from "../components/packs/GamePacks";
-import { GoatHoldersButton } from "../components/packs/GoatHoldersButton";
 import { GoatPoll } from "../components/packs/GoatPoll";
 import {
   getCachedCardBackDataUrl,
@@ -1298,7 +1297,6 @@ function PacksPage() {
                   </span>
                   <span><Trans>shards</Trans></span>
                 </div>
-                <GoatHoldersButton />
               </div>
             )}
             {/* Temporary GOAT vote. It owns its own placement (RAIL_LAYOUT in

@@ -136,8 +136,8 @@ msgstr "{0, plural, other {# 张谱面}}"
 
 #. placeholder {0}: report.distinctOwners
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "{0, plural, one {# collector} other {# collectors}}"
-msgstr "{0, plural, other {# 位收藏者}}"
+#~ msgid "{0, plural, one {# collector} other {# collectors}}"
+#~ msgstr "{0, plural, other {# 位收藏者}}"
 
 #. placeholder {0}: connected.length
 #: src/components/settings/CompanellaGroup.tsx
@@ -155,10 +155,8 @@ msgid "{0, plural, one {# convert is left out, as osu! leaves converts out of it
 msgstr "{0, plural, other {有 # 个转谱成绩未计入，osu! 自己的键数统计同样不计入转谱。}}"
 
 #. placeholder {0}: collector.copies
-#. placeholder {0}: pulls.copies
 #. placeholder {0}: report.copies
 #: src/components/packs/CardCollectors.tsx
-#: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {# copy} other {# copies}}"
 msgstr "{0, plural, other {# 张}}"
 
@@ -277,8 +275,8 @@ msgstr "{0, plural, other {# 个战队}}"
 
 #. placeholder {0}: report.distinctOwners - collectors.length
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "{0, plural, one {+# more collector} other {+# more collectors}}"
-msgstr "{0, plural, other {还有 # 位收藏者}}"
+#~ msgid "{0, plural, one {+# more collector} other {+# more collectors}}"
+#~ msgstr "{0, plural, other {还有 # 位收藏者}}"
 
 #. placeholder {0}: streakShardValue(streak)
 #: src/components/packs/StreakGame.tsx
@@ -304,8 +302,8 @@ msgstr "{0, plural, other {已删除 # 个目标}}"
 
 #. placeholder {0}: pulls.ownerCount
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "{0, plural, one {holder} other {holders}}"
-msgstr "{0, plural, other {持有者}}"
+#~ msgid "{0, plural, one {holder} other {holders}}"
+#~ msgstr "{0, plural, other {持有者}}"
 
 #. placeholder {0}: Number(ownerCount)
 #. placeholder {0}: shared.owners
@@ -2022,8 +2020,8 @@ msgstr "每个收藏家等级 +{0} 连击。"
 #. placeholder {0}: formatNumber(hidden)
 #. placeholder {1}: formatNumber(ownersPerCard)
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "+{0} more (list capped at {1})"
-msgstr "还有 {0} 位(列表上限 {1})"
+#~ msgid "+{0} more (list capped at {1})"
+#~ msgstr "还有 {0} 位(列表上限 {1})"
 
 #. placeholder {0}: EDITION_EFFECTS.foil.chips
 #: src/lib/pack-run.ts
@@ -4891,8 +4889,8 @@ msgid "cards collected"
 msgstr "已收集卡片"
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "Cards found"
-msgstr "找到的卡片"
+#~ msgid "Cards found"
+#~ msgstr "找到的卡片"
 
 #: src/lib/pack-run.ts
 msgid "Cards from your country score nothing."
@@ -5625,7 +5623,6 @@ msgstr "找不到片段"
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
-#: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
 #: src/components/packs/PackDialog.tsx
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
@@ -5794,7 +5791,6 @@ msgstr "收藏家经验"
 msgid "collectors"
 msgstr "收藏者"
 
-#: src/components/packs/GoatHoldersButton.tsx
 #: src/routes/packs_.collections.tsx
 msgid "Collectors"
 msgstr "收藏者"
@@ -9318,8 +9314,8 @@ msgstr "GOAT 与 Eternal 卡片 x{0} 连击，Mythic 及以上 x{1}。"
 #~ msgstr "GOAT 与 Eternal 卡片 x{0} 连击。"
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "GOAT holders"
-msgstr "GOAT 持有者"
+#~ msgid "GOAT holders"
+#~ msgstr "GOAT 持有者"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "GOAT roster"
@@ -9338,8 +9334,8 @@ msgid "GOATs can't take mods."
 msgstr "GOAT 不能加 mod。"
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "GOATs discovered"
-msgstr "已发现的 GOAT"
+#~ msgid "GOATs discovered"
+#~ msgstr "已发现的 GOAT"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Goes by the country on someone's osu! account, and anyone already in can still share the invite."
@@ -10945,8 +10941,8 @@ msgid "Later"
 msgstr "更晚"
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "Latest"
-msgstr "最新"
+#~ msgid "Latest"
+#~ msgstr "最新"
 
 #: src/components/layout/ChangelogModal.tsx
 msgctxt "changelog"
@@ -11606,7 +11602,6 @@ msgid "loading..."
 msgstr "加载中…"
 
 #: src/components/packs/CardCollectors.tsx
-#: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayBufferingIndicator.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -14598,8 +14593,8 @@ msgstr "在新标签页打开 {0} 的主页"
 
 #. placeholder {0}: owner.username
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "Open {0}'s pull of {label}"
-msgstr "打开 {0} 抽到的 {label}"
+#~ msgid "Open {0}'s pull of {label}"
+#~ msgstr "打开 {0} 抽到的 {label}"
 
 #. placeholder {0}: card.player.team.name
 #: src/components/packs/PackSummary.tsx
@@ -16332,7 +16327,6 @@ msgstr "正在发布。"
 msgid "Pull this card while signed in before gifting it."
 msgstr "登录后抽到这张卡片，才能把它送出。"
 
-#: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/PackPulse.tsx
 msgid "pulled"
 msgstr "已抽到"
@@ -20134,8 +20128,8 @@ msgstr ""
 
 #. placeholder {0}: formatNumber(undiscovered.length)
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "Still out there ({0})"
-msgstr "尚未被找到 ({0})"
+#~ msgid "Still out there ({0})"
+#~ msgstr "尚未被找到 ({0})"
 
 #. placeholder {0}: player.username
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -22053,8 +22047,8 @@ msgid "This is how it looks on the skins page."
 msgstr "这就是它在皮肤页面上的样子。"
 
 #: src/components/packs/GoatHoldersButton.tsx
-msgid "This is not available yet. Check back soon."
-msgstr "这个功能还不可用。请稍后再来。"
+#~ msgid "This is not available yet. Check back soon."
+#~ msgstr "这个功能还不可用。请稍后再来。"
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "This is your own gift code. Send the link to a friend."
