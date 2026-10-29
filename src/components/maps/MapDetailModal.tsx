@@ -8,7 +8,7 @@ import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { invertManiaOsuText } from "#dan/invert-mod";
-import { MapScoresBoard, mapScoreEntryScore } from "./MapScoresBoard";
+import { MapScoresBoard, mapScoreEntryScore, pendingFriendsBoard } from "./MapScoresBoard";
 import { ScorePlayDetailModal } from "../player/ScorePlayDetailModal";
 import { getBeatmapFile } from "../../lib/osu";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
@@ -934,10 +934,12 @@ export function MapDetailModal({
   // A Scores tab row opens its play as a card stacked over this one.
   const [openedScore, setOpenedScore] = useState<OsuScore | null>(null);
 
-  useEffect(() => {
+  // Before paint: a reopened card would otherwise show the last map's tab for a frame.
+  useLayoutEffect(() => {
     setSelectedDiffId(entry ? entry.beatmapId : null);
     setShareCopied(false);
-    setTab("score");
+    // Back from loading friends: straight to that map's Friends board.
+    setTab(entry && !play && pendingFriendsBoard() === entry.beatmapId ? "scores" : "score");
     setOpenedScore(null);
   }, [entry?.beatmapId, play?.scoreId, play?.playedAt]);
 
@@ -1039,8 +1041,8 @@ export function MapDetailModal({
     if (initialRate < 1) setHtRate(initialRate);
     if (initialRate > 1) setDtRate(initialRate);
   }, [entry?.beatmapId, initialRate]);
-  // The panel is centered, so a rate switch that changes its height would move
-  // all of it. Switching pins its top where it was and lets it grow down.
+  // The panel is centered, so a rate or tab switch that changes its height would
+  // move all of it. Switching pins its top where it was and lets it grow down.
   const panelRef = useRef<HTMLDivElement>(null);
   const [pinnedTop, setPinnedTop] = useState<number | null>(null);
   const pinPanel = () => {
@@ -1293,6 +1295,9 @@ export function MapDetailModal({
                         // the score returns the selection to the diff it was set on.
                         if (id === "score" && play) setSelectedDiffId(play.beatmapId);
                         setShareCopied(false);
+                        // Each tab has its own height, and the Scores board
+                        // grows as it loads: hold the top still, like a rate switch.
+                        if (id !== shownTab) pinPanel();
                         setTab(id);
                       }}
                       className={`-mb-px cursor-pointer border-b-2 px-2.5 pb-2 text-[11.5px] font-bold uppercase tracking-[0.06em] transition-colors ${
@@ -1312,6 +1317,7 @@ export function MapDetailModal({
                   <>
                     {diffPicker}
                     <MapScoresBoard
+                      key={active.beatmapId}
                       beatmapId={active.beatmapId}
                       onOpen={(row) => setOpenedScore(mapScoreEntryScore(row, active))}
                     />

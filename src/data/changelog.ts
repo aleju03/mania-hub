@@ -46,6 +46,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-10-29", text: "Now you can load leaderboard scores past the top 50, and filter them by country and by friends.", kind: "new", to: "/maps" },
   { date: "2026-10-29", text: "Added Sunny star rating and an HT/DT filter to map search.", to: "/maps", image: { src: "/images/changelog/2026-10-29-sunny-star-filter.webp", alt: "The osu! and Sunny star filter with HT and DT", width: 231, height: 69 } },
   { date: "2026-10-28", text: "Added a \"Current month\" layout to the activity dynamic render.", to: "/dynamic-renders", image: { src: "/images/changelog/2026-10-28-activity-current-month.webp", alt: "The Current month activity render", width: 420, height: 340 } },
   { date: "2026-10-26", text: "Added an OD filter to map search.", to: "/maps" },

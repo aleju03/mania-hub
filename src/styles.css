@@ -241,6 +241,12 @@ html[data-custom-cursor="true"] * {
   100% { transform: translateX(300%); }
 }
 
+@keyframes friends-doodle-wobble {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-7deg); }
+  60% { transform: rotate(5deg); }
+  85% { transform: rotate(-2deg); }
+}
 @keyframes skeleton-pulse {
   0%, 100% { background-color: rgba(255, 255, 255, 0.045); }
   50% { background-color: rgba(255, 255, 255, 0.065); }

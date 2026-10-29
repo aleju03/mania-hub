@@ -31,18 +31,21 @@ export const Route = createFileRoute("/api/auth/osu")({
         const redirectUri = getAuthRedirectUri(request);
         const state = crypto.randomUUID();
         const next = normalizeAuthNext(requestUrl.searchParams.get("next"), request);
+        // Loading friends is its own opt-in sign-in, the only one that asks for friends.read.
+        const friends = requestUrl.searchParams.get("friends") === "1";
         const stateCookie = await createOAuthStateCookieHeader({
           state,
           next,
           redirectUri,
           issuedAt: Date.now(),
+          ...(friends ? { friends: true } : {}),
         }, request);
 
         const authorizeUrl = new URL("https://osu.ppy.sh/oauth/authorize");
         authorizeUrl.searchParams.set("client_id", clientId);
         authorizeUrl.searchParams.set("redirect_uri", redirectUri);
         authorizeUrl.searchParams.set("response_type", "code");
-        authorizeUrl.searchParams.set("scope", "identify public");
+        authorizeUrl.searchParams.set("scope", friends ? "identify friends.read" : "identify public");
         authorizeUrl.searchParams.set("state", state);
 
         return appendCookies(redirectResponse(authorizeUrl), [stateCookie]);

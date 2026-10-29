@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, ChevronDown, type LucideIcon } from "lucide-react";
@@ -54,27 +55,58 @@ export function SelectMenu<T extends string>({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [dropUp, setDropUp] = useState(false);
+  const [place, setPlace] = useState<CSSProperties | null>(null);
+  // Touch screens open without focusing the search box, so the keyboard stays down until asked for.
+  const [focusSearch, setFocusSearch] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // Matched by attribute, not menuRef: the search box focuses itself before the
+  // menu's ref is attached, and that blur must not read as leaving the menu.
+  const menuId = useId();
+  const inside = (node: Node | null) => Boolean(node && (
+    ref.current?.contains(node) || (node instanceof Element && node.closest("[data-select-menu]")?.getAttribute("data-select-menu") === menuId)
+  ));
   const selected = options.find((option) => option.value === value) ?? options[0];
   const query = search.trim().toLowerCase();
   const visibleOptions = query
     ? options.filter((option) => option.label.toLowerCase().includes(query))
     : options;
 
-  useEffect(() => {
-    if (!open || !ref.current) return;
-    // Measured on open rather than tracked: the popover closes on scroll-adjacent
-    // interactions anyway, so one reading at the moment it appears is enough.
-    const rect = ref.current.getBoundingClientRect();
-    const below = window.innerHeight - rect.bottom;
-    setDropUp(below < MENU_MAX_HEIGHT_PX && rect.top > below);
-  }, [open]);
+  // The popover is portalled and fixed to the viewport, so a scrolling or
+  // clipped parent (a modal body) can never cut it off. Placed on open and
+  // kept on the trigger while anything scrolls or resizes.
+  useLayoutEffect(() => {
+    if (!open) return;
+    setFocusSearch(typeof window.matchMedia !== "function" || window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+    const measure = () => {
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const below = window.innerHeight - rect.bottom - 8;
+      const above = rect.top - 8;
+      const up = below < MENU_MAX_HEIGHT_PX && above > below;
+      setDropUp(up);
+      setPlace({
+        position: "fixed",
+        ...(up ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
+        ...(align === "right" ? { right: window.innerWidth - rect.right } : { left: rect.left }),
+        ...(block ? { width: rect.width } : {}),
+        maxHeight: Math.max(120, Math.min(MENU_MAX_HEIGHT_PX, (up ? above : below) - 4)),
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [open, align, block]);
 
   useEffect(() => {
     if (!open) return;
     const onDown = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+      if (!inside(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -97,7 +129,7 @@ export function SelectMenu<T extends string>({
       ref={ref}
       className={`relative ${className}`}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+        if (!inside(event.relatedTarget as Node | null)) setOpen(false);
       }}
       onKeyDown={(event) => {
         const arrow = event.key === "ArrowDown" || event.key === "ArrowUp";
@@ -106,7 +138,7 @@ export function SelectMenu<T extends string>({
         event.preventDefault();
         const key = event.key;
         const focusOption = () => {
-          const buttons = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []);
+          const buttons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []);
           if (!buttons.length) return;
           const focused = buttons.indexOf(document.activeElement as HTMLButtonElement);
           const selectedIndex = Math.max(0, buttons.findIndex((button) => button.getAttribute("aria-selected") === "true"));
@@ -141,25 +173,26 @@ export function SelectMenu<T extends string>({
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
       </button>
 
+      {typeof document !== "undefined" && createPortal(
       <AnimatePresence>
-        {open && (
+        {open && place && (
           <motion.div
+            ref={menuRef}
+            data-select-menu={menuId}
             initial={{ opacity: 0, y: dropUp ? 4 : -4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: dropUp ? 4 : -4, scale: 0.98 }}
             transition={{ duration: 0.12 }}
             role="listbox"
             aria-label={ariaLabel}
-            style={{ maxHeight: MENU_MAX_HEIGHT_PX }}
-            className={`absolute z-[70] min-w-[9.5rem] overflow-y-auto rounded-lg border border-osu-b3/50 bg-osu-b5 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.55)] ${
-              align === "right" ? "right-0" : "left-0"
-            } ${dropUp ? "bottom-full mb-1" : "top-full mt-1"} ${block ? "w-full" : ""}`}
+            style={place}
+            className="z-[300] min-w-[9.5rem] overflow-y-auto rounded-lg border border-osu-b3/50 bg-osu-b5 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.55)]"
           >
             {searchable && (
               <input
                 type="text"
                 value={search}
-                autoFocus
+                autoFocus={focusSearch}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={searchPlaceholder ?? t`Search`}
                 className="mb-1 w-full rounded-md border border-osu-b3/40 bg-osu-b4 px-2 py-1.5 text-xs text-osu-l1 placeholder:text-osu-f1/55 focus:border-osu-pink/50 focus:outline-none"
@@ -198,7 +231,9 @@ export function SelectMenu<T extends string>({
             })}
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      )}
     </div>
   );
 }

@@ -385,6 +385,8 @@ export interface LiveMapScoresSnapshot {
   entries: LiveMapScoreEntry[];
   /** The asking player's best when it is not among `entries`. */
   self: LiveMapScoreEntry | null;
+  /** Players per country on the whole board, on the unfiltered first page only. */
+  countries?: Array<{ code: string; count: number }>;
 }
 
 export type LiveMapsRefreshProgressStatus = "queued" | "running" | "done" | "failed";
@@ -3048,9 +3050,16 @@ export async function fetchLiveSnipeBoard(
 }
 
 /** The top tracked plays on one chart across every tracked country, by lazer accuracy. */
-export async function fetchLiveMapScores(beatmapId: number, userId?: number | null): Promise<LiveMapScoresSnapshot> {
+export async function fetchLiveMapScores(
+  beatmapId: number,
+  userId?: number | null,
+  options: { offset?: number; country?: string; name?: string } = {},
+): Promise<LiveMapScoresSnapshot> {
   const query = new URLSearchParams({ beatmap: String(beatmapId) });
   if (userId != null && userId > 0) query.set("user", String(userId));
+  if (options.offset) query.set("offset", String(options.offset));
+  if (options.country) query.set("country", options.country);
+  if (options.name) query.set("q", options.name);
   return fetchLiveJson(`/api/snapshots/map-scores?${query.toString()}`);
 }
 

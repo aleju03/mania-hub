@@ -1,17 +1,22 @@
-import { useEffect, useState } from "react";
-import { useLingui } from "@lingui/react/macro";
+import { useEffect, useMemo, useState } from "react";
+import { Plural, useLingui } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
+import { Search } from "lucide-react";
 import { fetchLiveMapScores, type LiveMapScoreEntry, type LiveMapScoresSnapshot, type LiveMapSearchEntry } from "../../lib/live-backend";
 import { formatAccuracy, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { getManiaGradeFromAccuracy } from "../../lib/score";
 import { useLocale } from "../../lib/locale-context";
 import { useAuth } from "../../lib/auth-context";
+import { displayCountryName } from "../../lib/country";
+import { forgetMyFriends, getMyFriendSync, getMyFriendsMapScores, type FriendSync } from "../../lib/map-friends";
 import type { OsuScore } from "../../lib/types";
 import { Avatar } from "../ui/Avatar";
 import { ScoreVideoMark, VideoMark } from "../ui/CompanellaMark";
 import { CountryFlag } from "../ui/CountryFlag";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
+import { SelectMenu, type SelectMenuOption } from "../ui/SelectMenu";
+import { FriendsLoadButton } from "./FriendsLoadButton";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { UsernameText } from "../ui/UsernameText";
 
@@ -23,6 +28,25 @@ const boardCache = new Map<string, { snapshot: LiveMapScoresSnapshot; at: number
 function cachedBoard(key: string): LiveMapScoresSnapshot | null {
   const hit = boardCache.get(key);
   return hit && Date.now() - hit.at < BOARD_CACHE_TTL_MS ? hit.snapshot : null;
+}
+
+// The picker's Friends entry; country codes are two letters, so this never collides.
+const FRIENDS = "@friends";
+// The map whose Friends board to open on return from the friends sign-in.
+const FRIENDS_RETURN_KEY = "mh-map-scores-friends";
+
+/** The map a friends sign-in left from, which its modal opens on the Scores tab. */
+export function pendingFriendsBoard(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    return Number(window.sessionStorage.getItem(FRIENDS_RETURN_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function clearFriendBoards(): void {
+  for (const key of boardCache.keys()) if (key.includes(`:${FRIENDS}:`)) boardCache.delete(key);
 }
 
 /** A board row as the score the play card reads. */
@@ -58,21 +82,81 @@ export function mapScoreEntryScore(entry: LiveMapScoreEntry, map: LiveMapSearchE
 /** The top tracked plays on one chart, ranked by lazer accuracy. */
 export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpen: (entry: LiveMapScoreEntry) => void }) {
   const { t } = useLingui();
-  const viewerId = useAuth().viewer?.id ?? null;
-  const cacheKey = `${beatmapId}:${viewerId ?? ""}`;
-  const [board, setBoard] = useState<LiveMapScoresSnapshot | null>(() => cachedBoard(cacheKey));
+  const locale = useLocale();
+  const viewer = useAuth().viewer;
+  const viewerId = viewer?.id ?? null;
+  const viewerCountry = viewer?.countryCode ?? null;
+  // Back from the friends sign-in, which opens straight on the Friends board.
+  const [returning] = useState(() => viewerId != null && pendingFriendsBoard() === beatmapId);
+  const [country, setCountry] = useState(returning ? FRIENDS : "");
+  // undefined until read; null when the viewer has not loaded their friends.
+  const [friendSync, setFriendSync] = useState<FriendSync | null | undefined>(undefined);
+  const [friendsBusy, setFriendsBusy] = useState(false);
+  const [queryInput, setQueryInput] = useState("");
+  const [name, setName] = useState("");
+  const cacheKey = `${beatmapId}:${viewerId ?? ""}:${country}:${name}`;
+  // Tagged with its filters: a new filter keeps the old rows up until its own arrive.
+  const [loaded, setLoaded] = useState<{ key: string; snapshot: LiveMapScoresSnapshot } | null>(() => {
+    const snapshot = cachedBoard(cacheKey);
+    return snapshot ? { key: cacheKey, snapshot } : null;
+  });
+  const board = loaded?.snapshot ?? null;
+  const current = loaded?.key === cacheKey;
+  // The country list comes with the unfiltered board and stays while a filter is on.
+  const [countries, setCountries] = useState<Array<{ code: string; count: number }>>(() => cachedBoard(cacheKey)?.countries ?? []);
   const [error, setError] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    if (pendingFriendsBoard() === beatmapId) {
+      try {
+        window.sessionStorage.removeItem(FRIENDS_RETURN_KEY);
+      } catch {
+        // Private mode: the flag only picks the opening tab.
+      }
+    }
+    if (!viewerId) return;
+    let cancelled = false;
+    getMyFriendSync()
+      .then((sync) => {
+        if (!cancelled) setFriendSync(sync);
+      })
+      .catch(() => {
+        if (!cancelled) setFriendSync(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [beatmapId, viewerId]);
+
+  const friends = country === FRIENDS;
+  const fetchPage = (offset: number) => friends
+    ? getMyFriendsMapScores({ data: { beatmapId, offset, name } })
+    : fetchLiveMapScores(beatmapId, viewerId, { offset, country, name });
+
+  useEffect(() => {
+    const timer = setTimeout(() => setName(queryInput.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [queryInput]);
 
   useEffect(() => {
     const cached = cachedBoard(cacheKey);
-    setBoard(cached);
     setError(false);
-    if (cached) return;
+    setLoadingMore(false);
+    if (cached) {
+      setLoaded({ key: cacheKey, snapshot: cached });
+      if (cached.countries) setCountries(cached.countries);
+      return;
+    }
+    // The friends board waits for the list; without one it is the sign-in note.
+    if (friends && !friendSync) return;
     let cancelled = false;
-    fetchLiveMapScores(beatmapId, viewerId)
+    fetchPage(0)
       .then((snapshot) => {
         boardCache.set(cacheKey, { snapshot, at: Date.now() });
-        if (!cancelled) setBoard(snapshot);
+        if (cancelled) return;
+        setLoaded({ key: cacheKey, snapshot });
+        if (snapshot.countries) setCountries(snapshot.countries);
       })
       .catch(() => {
         if (!cancelled) setError(true);
@@ -80,8 +164,168 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
     return () => {
       cancelled = true;
     };
-  }, [beatmapId, cacheKey, viewerId]);
+    // fetchPage reads only the values listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beatmapId, cacheKey, viewerId, country, name, friendSync]);
 
+  // The viewer's own country sits right under "All countries", lifted out of the count order.
+  const countryOptions = useMemo<SelectMenuOption<string>[]>(() => {
+    const own = countries.find(({ code }) => code === viewerCountry);
+    return [
+      { value: "", label: t`All countries` },
+      ...(viewerId ? [{ value: FRIENDS, label: t`Friends` }] : []),
+      ...[...(own ? [own] : []), ...countries.filter((entry) => entry !== own)].map(({ code, count }) => ({
+        value: code,
+        label: `${displayCountryName(code, locale)} (${count})`,
+        leading: <CountryFlag code={code} size="sm" decorative />,
+      })),
+    ];
+  }, [countries, viewerCountry, viewerId, locale, t]);
+
+  const loadMore = () => {
+    if (!board || !current || loadingMore) return;
+    const key = cacheKey;
+    setLoadingMore(true);
+    fetchPage(board.entries.length)
+      .then((page) => {
+        // The board can shift between pages; a player who moved keeps one row.
+        const seen = new Set(board.entries.map((entry) => entry.user.id));
+        const fresh = page.entries.filter((entry) => !seen.has(entry.user.id));
+        const entries = [...board.entries, ...fresh];
+        // A page with nothing new is the end, also past the deepest offset the endpoint reads.
+        const next = { ...board, entries, total: fresh.length > 0 ? page.total : entries.length };
+        boardCache.set(key, { snapshot: next, at: Date.now() });
+        setLoaded((held) => (held?.snapshot === board ? { key, snapshot: next } : held));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  };
+
+  const startFriendsSignIn = () => {
+    try {
+      window.sessionStorage.setItem(FRIENDS_RETURN_KEY, String(beatmapId));
+    } catch {
+      // Without it the return lands on the map's info tab.
+    }
+    window.location.assign(`/api/auth/osu?friends=1&next=${encodeURIComponent(`/maps?map=${beatmapId}`)}`);
+  };
+
+  const forgetFriends = () => {
+    setFriendsBusy(true);
+    forgetMyFriends()
+      .then((ok) => {
+        if (!ok) return;
+        clearFriendBoards();
+        setFriendSync(null);
+        setCountry("");
+      })
+      .catch(() => {})
+      .finally(() => setFriendsBusy(false));
+  };
+
+  const filtered = country !== "" || name !== "";
+  // Up from the first frame, so the search row never pops in; only a board
+  // known to be empty goes without it.
+  const emptyBoard = current && board != null && board.entries.length === 0 && !filtered;
+  const controls = !emptyBoard ? (
+    <div className="mb-2 flex items-center gap-2">
+      <div className="relative min-w-0 flex-1">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" aria-hidden="true" />
+        <input
+          value={queryInput}
+          onChange={(event) => setQueryInput(event.target.value)}
+          placeholder={t`Search players`}
+          maxLength={32}
+          className="w-full rounded-lg bg-osu-b4 py-1.5 pl-8 pr-3 text-[13px] text-osu-l1 outline-none ring-1 ring-white/5 placeholder:text-osu-f1/60 focus:ring-osu-pink/40"
+        />
+      </div>
+      {countries.length > 1 || viewerId || !board ? (
+        <SelectMenu
+          value={country}
+          options={countryOptions}
+          onChange={setCountry}
+          ariaLabel={t`Country`}
+          align="right"
+          searchable
+          searchPlaceholder={t`Search countries`}
+        />
+      ) : null}
+    </div>
+  ) : null;
+
+  const reloadAt = friendSync ? friendSync.nextSyncAt : 0;
+  const friendsLine = friends && friendSync ? (
+    <div className="mb-2 flex items-center gap-2.5 text-[11px] text-osu-f1">
+      <span><Plural value={friendSync.count} one="# friend loaded" other="# friends loaded" /></span>
+      <span className="h-3 w-px bg-white/[0.12]" aria-hidden="true" />
+      <button
+        type="button"
+        onClick={startFriendsSignIn}
+        disabled={Date.now() < reloadAt}
+        title={Date.now() < reloadAt ? t`You can reload your friends again in a few minutes.` : undefined}
+        className="font-semibold text-osu-pink-light transition-colors hover:text-white disabled:text-osu-f1/60"
+      >
+        {t`Reload`}
+      </button>
+      <span className="h-3 w-px bg-white/[0.12]" aria-hidden="true" />
+      <button
+        type="button"
+        onClick={forgetFriends}
+        disabled={friendsBusy}
+        className="font-semibold text-osu-f1 transition-colors hover:text-white"
+      >
+        {t`Forget friends`}
+      </button>
+    </div>
+  ) : null;
+
+  const friendsMissing = friends && friendSync === null;
+
+  return (
+    <div className="flex flex-col">
+      {controls}
+      {friendsLine}
+      {friendsMissing ? (
+        <div className="flex flex-col items-center gap-2 py-6 text-[11.5px] text-osu-f1">
+          {/* Back from the sign-in without a list: osu! refused or the read failed. */}
+          {returning ? <span>{t`Could not load your friends.`}</span> : null}
+          <FriendsLoadButton label={t`Load your osu! friends`} onClick={startFriendsSignIn} />
+        </div>
+      ) : (
+      <div className={board && !current ? "opacity-60 transition-opacity" : "transition-opacity"}>
+        <MapScoresList
+          board={board}
+          error={error}
+          filtered={filtered}
+          viewerId={viewerId}
+          loadingMore={loadingMore || !current}
+          onLoadMore={loadMore}
+          onOpen={onOpen}
+        />
+      </div>
+      )}
+    </div>
+  );
+}
+
+function MapScoresList({
+  board,
+  error,
+  filtered,
+  viewerId,
+  loadingMore,
+  onLoadMore,
+  onOpen,
+}: {
+  board: LiveMapScoresSnapshot | null;
+  error: boolean;
+  filtered: boolean;
+  viewerId: number | null;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+  onOpen: (entry: LiveMapScoreEntry) => void;
+}) {
+  const { t } = useLingui();
   if (error) return <span className="text-[11.5px] text-osu-f1">{t`Could not load the scores.`}</span>;
   if (!board) {
     return (
@@ -98,7 +342,11 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
     );
   }
   if (board.entries.length === 0) {
-    return <span className="text-[11.5px] text-osu-f1">{t`No tracked plays on this difficulty yet.`}</span>;
+    return (
+      <span className="text-[11.5px] text-osu-f1">
+        {filtered ? t`No tracked plays match.` : t`No tracked plays on this difficulty yet.`}
+      </span>
+    );
   }
 
   return (
@@ -106,7 +354,19 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
       {board.entries.map((entry) => (
         <MapScoreRow key={entry.user.id} entry={entry} own={entry.user.id === viewerId} onOpen={onOpen} />
       ))}
-      {board.self ? (
+      {board.entries.length < board.total ? (
+        <div className="flex justify-center border-t border-white/[0.07] pt-2">
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="rounded px-3 py-1 text-[12px] font-semibold text-osu-pink-light transition-colors hover:text-white disabled:text-osu-f1"
+          >
+            {loadingMore ? t`Loading...` : t`Load more`}
+          </button>
+        </div>
+      ) : null}
+      {board.self && !board.entries.some((entry) => entry.user.id === board.self?.user.id) ? (
         <div className="mt-1 border-t border-white/[0.07] pt-1">
           <MapScoreRow entry={board.self} own onOpen={onOpen} />
         </div>

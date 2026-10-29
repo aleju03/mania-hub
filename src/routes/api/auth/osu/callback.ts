@@ -49,7 +49,8 @@ export const Route = createFileRoute("/api/auth/osu/callback")({
         const {
           clearOAuthStateCookieHeader,
           createAuthCookieHeader,
-          exchangeOsuCodeForViewer,
+          exchangeOsuCode,
+          loadOsuFriends,
           normalizeAuthNext,
           readOAuthStateCookie,
         } = await import("#/lib/auth-server");
@@ -68,9 +69,11 @@ export const Route = createFileRoute("/api/auth/osu/callback")({
         }
 
         try {
-          const viewer = await exchangeOsuCodeForViewer(code, stateCookie.redirectUri);
+          const { viewer, accessToken } = await exchangeOsuCode(code, stateCookie.redirectUri);
           const authCookie = await createAuthCookieHeader(viewer, request);
           recordSignIn(viewer);
+          // The page reads how it went from the friends status it fetches on return.
+          if (stateCookie.friends) await loadOsuFriends(viewer.id, accessToken);
           return redirectWithCookies(request, next, [authCookie, clearState]);
         } catch (error) {
           console.warn("[auth] osu login failed", error);

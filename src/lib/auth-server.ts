@@ -34,6 +34,8 @@ interface OAuthStatePayload {
   next: string;
   redirectUri: string;
   issuedAt: number;
+  /** Signed in with friends.read to load the player's friends (loadOsuFriends). */
+  friends?: boolean;
 }
 
 interface OsuTokenResponse {
@@ -393,6 +395,7 @@ export async function readOAuthStateCookie(raw: string | undefined): Promise<OAu
     next: state.next,
     redirectUri: state.redirectUri,
     issuedAt: state.issuedAt,
+    ...(state.friends === true ? { friends: true } : {}),
   };
 }
 
@@ -437,6 +440,11 @@ function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number): 
 }
 
 export async function exchangeOsuCodeForViewer(code: string, redirectUri: string): Promise<AuthViewer> {
+  return (await exchangeOsuCode(code, redirectUri)).viewer;
+}
+
+/** The viewer and their access token, which callers use once and drop. */
+export async function exchangeOsuCode(code: string, redirectUri: string): Promise<{ viewer: AuthViewer; accessToken: string }> {
   const tokenResponse = await fetchWithTimeout(
     "https://osu.ppy.sh/oauth/token",
     {
@@ -489,11 +497,52 @@ export async function exchangeOsuCodeForViewer(code: string, redirectUri: string
   await reportLoginToBackend(me);
 
   return {
-    id,
-    username: me.username,
-    avatarUrl: me.avatar_url ?? "",
-    countryCode: me.country_code ?? null,
+    viewer: {
+      id,
+      username: me.username,
+      avatarUrl: me.avatar_url ?? "",
+      countryCode: me.country_code ?? null,
+    },
+    accessToken: token.access_token,
   };
+}
+
+type LoadFriendsResult = "loaded" | "too_soon" | "failed";
+
+/* Reads the player's osu! friends with their own friends.read token and hands
+   the ids to the backend (features/user-friends.ts). The token is not kept,
+   so this runs only when the player asks again, never on its own. */
+export async function loadOsuFriends(userId: number, accessToken: string): Promise<LoadFriendsResult> {
+  const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
+  if (!base) return "failed";
+  try {
+    // Checked first so a reload inside the cooldown never reaches osu!.
+    const status = await fetchWithTimeout(`${base}/api/session/friends?user=${userId}`, { headers: bridgeAuthHeaders() }, LOGIN_REPORT_TIMEOUT_MS);
+    const held = status.ok ? (await status.json() as { sync?: { nextSyncAt?: number } | null }).sync : null;
+    if (held?.nextSyncAt && Date.now() < held.nextSyncAt) return "too_soon";
+
+    const response = await fetchWithTimeout(
+      "https://osu.ppy.sh/api/v2/friends",
+      { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json", "x-api-version": OSU_API_VERSION } },
+      OSU_OAUTH_TIMEOUT_MS,
+    );
+    if (!response.ok) return "failed";
+    const list = await response.json() as unknown;
+    if (!Array.isArray(list)) return "failed";
+    // Users on this API version; newer versions answer relations with a target_id.
+    const friendIds = list
+      .map((item) => Number((item as { target_id?: unknown; id?: unknown }).target_id ?? (item as { id?: unknown }).id))
+      .filter((id) => Number.isSafeInteger(id) && id > 0);
+    const stored = await fetchWithTimeout(
+      `${base}/api/session/friends`,
+      { method: "POST", headers: bridgeAuthHeaders(true), body: JSON.stringify({ userId, friendIds }) },
+      OSU_OAUTH_TIMEOUT_MS,
+    );
+    return stored.ok ? "loaded" : stored.status === 429 ? "too_soon" : "failed";
+  } catch (error) {
+    console.warn("[auth] friends load failed", error);
+    return "failed";
+  }
 }
 
 /* /me is the one osu! answer that still describes a restricted account (every

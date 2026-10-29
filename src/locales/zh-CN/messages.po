@@ -176,6 +176,11 @@ msgstr "{0, plural, other {# 张}}"
 msgid "{0, plural, one {# diff} other {# diffs}}"
 msgstr "{0, plural, other {# 个难度}}"
 
+#. placeholder {0}: friendSync.count
+#: src/components/maps/MapScoresBoard.tsx
+msgid "{0, plural, one {# friend loaded} other {# friends loaded}}"
+msgstr "{0, plural, other {已载入 # 位好友}}"
+
 #. placeholder {0}: diffs.length
 #: src/components/me/GoalsPanel.tsx
 msgid "{0, plural, one {# mania diff} other {# mania diffs}}"
@@ -3250,6 +3255,10 @@ msgstr "整体"
 msgid "All collections"
 msgstr "全部收藏"
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "All countries"
+msgstr "所有国家/地区"
+
 #: src/routes/communities_.$id.tsx
 msgid "All Discord servers"
 msgstr "全部 Discord 服务器"
@@ -5578,6 +5587,10 @@ msgstr "无法加载该排行榜。"
 msgid "Could not load this score."
 msgstr "无法加载此成绩。"
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Could not load your friends."
+msgstr "无法载入你的好友。"
+
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Could not load your journal."
 #~ msgstr "无法加载你的日志。"
@@ -5947,6 +5960,7 @@ msgstr "国内"
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/maps/MapScoresBoard.tsx
 #: src/routes/player/$username.tsx
 msgid "Country"
 msgstr "国家/地区"
@@ -7914,6 +7928,10 @@ msgstr "立即强制轮换收藏夹（仅管理员）"
 #~ msgid "Forge into {0}"
 #~ msgstr "熔铸成 {0}"
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Forget friends"
+msgstr "清除好友"
+
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Forging..."
 #~ msgstr "熔铸中…"
@@ -7958,6 +7976,10 @@ msgstr "五"
 #: src/components/me/MyDataPanel.tsx
 msgid "Fridays"
 msgstr "周五"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Friends"
+msgstr "好友"
 
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
@@ -10083,6 +10105,7 @@ msgstr "加载某位玩家的 me! 页面"
 msgid "Load into editor"
 msgstr "载入编辑器"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Load more"
@@ -10108,6 +10131,10 @@ msgstr "加载更早的变化"
 #: src/routes/player/$username.tsx
 msgid "Load osu! recents"
 msgstr "加载 osu! 最近成绩"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Load your osu! friends"
+msgstr "载入你的 osu! 好友"
 
 #. placeholder {0}: record.skin.name
 #. placeholder {0}: skin.name
@@ -10268,6 +10295,7 @@ msgstr "正在加载你的数据…"
 msgid "loading..."
 msgstr "加载中…"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/SetsView.tsx
@@ -12086,6 +12114,10 @@ msgstr "这个战队的成员还没有已追踪的游玩记录。"
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays match those controls."
 msgstr "没有符合筛选条件的追踪成绩。"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "No tracked plays match."
+msgstr "没有匹配的追踪成绩。"
 
 #: src/components/maps/MapScoresBoard.tsx
 msgid "No tracked plays on this difficulty yet."
@@ -15086,6 +15118,10 @@ msgstr "周围没有其他操作的放手难度降低"
 #~ msgid "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
 #~ msgstr "以前不管同一只手的其他手指忙不忙，长条放手的难度都一样。现在，如果同一只手附近没有其他按下或放手，这次放手的难度更低，所以由长条组成的慢速谱面评分会降低。"
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Reload"
+msgstr "重新载入"
+
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
 #~ msgstr "立即刷新"
@@ -16014,6 +16050,7 @@ msgstr "搜索收藏夹"
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Search countries"
 msgstr "搜索国家/地区"
 
@@ -16095,6 +16132,10 @@ msgstr "搜索玩家…"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Search player... or score ID"
 msgstr "搜索玩家…或成绩 ID"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Search players"
+msgstr "搜索玩家"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Search players by username"
@@ -21683,6 +21724,10 @@ msgstr "现在，无论你是离线、在私服上游玩，还是被 osu! 限制
 #: src/routes/integrations_.companella.tsx
 #~ msgid "You can now submit plays to your Mania Tracker account whether you're offline, playing on a private server or restricted from osu!. They're sent by Companella, a desktop app made by a different developer (<0>erdbee.re</0>). It only works with osu!stable, so lazer plays can't be submitted this way."
 #~ msgstr "现在，无论你是离线、在私服上游玩，还是被 osu! 限制，都可以向你的 Mania Tracker 账号上传成绩。成绩由 Companella 上传，这是一款由其他开发者制作的桌面应用（<0>erdbee.re</0>）。它只支持 osu!stable，lazer 的成绩无法通过这种方式上传。"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "You can reload your friends again in a few minutes."
+msgstr "几分钟后可以再次载入好友。"
 
 #: src/routes/integrations_.companella.tsx
 #~ msgid "You can revoke Companella's connection from <0>Integrations</0> in the user menu. It stops sending plays right away."

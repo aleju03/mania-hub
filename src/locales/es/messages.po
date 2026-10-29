@@ -164,6 +164,11 @@ msgstr "{0, plural, one {# copia} other {# copias}}"
 msgid "{0, plural, one {# diff} other {# diffs}}"
 msgstr "{0, plural, one {# diff} other {# diffs}}"
 
+#. placeholder {0}: friendSync.count
+#: src/components/maps/MapScoresBoard.tsx
+msgid "{0, plural, one {# friend loaded} other {# friends loaded}}"
+msgstr "{0, plural, one {# amigo cargado} other {# amigos cargados}}"
+
 #. placeholder {0}: diffs.length
 #: src/components/me/GoalsPanel.tsx
 msgid "{0, plural, one {# mania diff} other {# mania diffs}}"
@@ -3238,6 +3243,10 @@ msgstr "Todos los clears"
 msgid "All collections"
 msgstr "Todas las colecciones"
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "All countries"
+msgstr "Todos los países"
+
 #: src/routes/communities_.$id.tsx
 msgid "All Discord servers"
 msgstr "Todos los servidores de Discord"
@@ -5566,6 +5575,10 @@ msgstr "No se pudo cargar este ranking."
 msgid "Could not load this score."
 msgstr "No se pudo cargar esta puntuación."
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Could not load your friends."
+msgstr "No se pudieron cargar tus amigos."
+
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Could not load your journal."
 #~ msgstr "No se pudo cargar tu diario."
@@ -5935,6 +5948,7 @@ msgstr "país"
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/maps/MapScoresBoard.tsx
 #: src/routes/player/$username.tsx
 msgid "Country"
 msgstr "País"
@@ -7902,6 +7916,10 @@ msgstr "Forzar una nueva rotación de colecciones ahora (solo admin)"
 #~ msgid "Forge into {0}"
 #~ msgstr "Forjar en {0}"
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Forget friends"
+msgstr "Olvidar amigos"
+
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Forging..."
 #~ msgstr "Forjando..."
@@ -7946,6 +7964,10 @@ msgstr "vie"
 #: src/components/me/MyDataPanel.tsx
 msgid "Fridays"
 msgstr "viernes"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Friends"
+msgstr "Amigos"
 
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
@@ -10071,6 +10093,7 @@ msgstr "Cargar la página me! de un jugador"
 msgid "Load into editor"
 msgstr "Cargar en el editor"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Load more"
@@ -10096,6 +10119,10 @@ msgstr "Cargar cambios anteriores"
 #: src/routes/player/$username.tsx
 msgid "Load osu! recents"
 msgstr "Cargar recientes de osu!"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Load your osu! friends"
+msgstr "Cargar tus amigos de osu!"
 
 #. placeholder {0}: record.skin.name
 #. placeholder {0}: skin.name
@@ -10256,6 +10283,7 @@ msgstr "Cargando tus datos…"
 msgid "loading..."
 msgstr "cargando..."
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/SetsView.tsx
@@ -12074,6 +12102,10 @@ msgstr "Todavía no hay plays trackeadas de los miembros de este equipo."
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays match those controls."
 msgstr "Ninguna play trackeada coincide con esos controles."
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "No tracked plays match."
+msgstr "Ninguna play trackeada coincide."
 
 #: src/components/maps/MapScoresBoard.tsx
 msgid "No tracked plays on this difficulty yet."
@@ -15074,6 +15106,10 @@ msgstr "Los releases sin nada alrededor cuentan menos"
 #~ msgid "Releasing a long hold cost the same whether the rest of the hand was busy or not. A release with nothing else pressed or let go around it on the same hand now costs less, so slow charts made of long holds rate lower."
 #~ msgstr "Soltar un hold largo costaba lo mismo estuviera ocupado o no el resto de la mano. Un release sin nada más presionado o soltado cerca en la misma mano ahora cuesta menos, así que los charts lentos hechos de holds largos califican más bajo."
 
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Reload"
+msgstr "Recargar"
+
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
 #~ msgstr "Recargar ahora"
@@ -16002,6 +16038,7 @@ msgstr "Buscar colecciones"
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Search countries"
 msgstr "Buscar países"
 
@@ -16083,6 +16120,10 @@ msgstr "Buscar jugador..."
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Search player... or score ID"
 msgstr "Buscar jugador... o ID de score"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Search players"
+msgstr "Buscar jugadores"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Search players by username"
@@ -21671,6 +21712,10 @@ msgstr "Ya puedes enviar plays a tu cuenta de Mania Tracker aunque estés offlin
 #: src/routes/integrations_.companella.tsx
 #~ msgid "You can now submit plays to your Mania Tracker account whether you're offline, playing on a private server or restricted from osu!. They're sent by Companella, a desktop app made by a different developer (<0>erdbee.re</0>). It only works with osu!stable, so lazer plays can't be submitted this way."
 #~ msgstr "Ya puedes enviar partidas a tu cuenta de Mania Tracker aunque estés offline, jugando en un servidor privado o restringido de osu!. Las envía Companella, una app de escritorio hecha por otro desarrollador (<0>erdbee.re</0>). Solo funciona con osu!stable, así que las partidas de lazer no se pueden enviar así."
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "You can reload your friends again in a few minutes."
+msgstr "Puedes volver a cargar tus amigos en unos minutos."
 
 #: src/routes/integrations_.companella.tsx
 #~ msgid "You can revoke Companella's connection from <0>Integrations</0> in the user menu. It stops sending plays right away."
