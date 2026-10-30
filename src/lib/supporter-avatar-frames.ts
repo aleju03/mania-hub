@@ -124,7 +124,8 @@ const FRAME_GEOMETRY = {
   "ln-hold-5": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1008, 0.125, 0.1008, 0.0766] },
   "ln-hold-9": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.125, 0.125, 0.125, 0.1048] },
   "loading-bar": { box: [-0.2419, -0.2419, 1.4839, 1.5806], overhang: [0, 0, 0, 0.121] },
-  "makiba-peek": { box: [-0.2903, -0.3387, 1.5806, 1.5806], overhang: [0.0726, 0.3226, 0.1169, 0.0847] },
+  "makiba-peek": { roundStill: true, box: [-0.2903, -0.3387, 1.5806, 1.5806], overhang: [0.0726, 0.3306, 0.1169, 0.0847] },
+  "makiba-chubby": { roundStill: true, box: [-0.2903, -0.3387, 1.5806, 1.5806], overhang: [0.0726, 0.3387, 0.1169, 0.0847] },
   "margin-doodles": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2863, 0.2581, 0.2823, 0.3024] },
   "neon-ears": { box: [-0.2419, -0.3387, 1.4839, 1.5806], overhang: [0, 0.2944, 0, 0] },
   "note-highway": { box: [-0.2419, -0.4677, 1.4839, 1.7097], overhang: [0, 0.3952, 0, 0] },
@@ -212,7 +213,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 57;
+const FRAME_ART_VERSION = 60;
 
 /* `round`: the still for a round avatar, where the frame has one. */
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {

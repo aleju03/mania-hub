@@ -1198,9 +1198,8 @@ export function Nav() {
                             <UnreadBadge count={replyAlert.count} className="-right-1.5 -top-1.5" />
                           ) : null}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold">
-                          <UsernameText username={auth.viewer.username} userId={auth.viewer.id} />
-                        </span>
+                        {/* the name truncates itself: a clipping wrapper cut a name style's glow off its first letter */}
+                        <UsernameText username={auth.viewer.username} userId={auth.viewer.id} className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold" />
                         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${mobileAccountOpen ? "rotate-180" : ""}`} strokeWidth={2.2} />
                       </button>
                       {viewerCountryTracked && viewerCountryCode ? (

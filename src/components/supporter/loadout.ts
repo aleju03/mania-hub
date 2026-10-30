@@ -242,6 +242,7 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
     entries: [
       { id: "cat-parade", label: msg`Cat parade` },
       { id: "makiba-peek", label: msg`Makiba` },
+      { id: "makiba-chubby", label: msg`Chubby Makiba` },
       { id: "neon-ears", label: msg`Neon ears` },
     ],
   },

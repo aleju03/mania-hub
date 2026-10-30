@@ -33,6 +33,7 @@ export const SUPPORTER_COMPANION_IDS = [
   "maneki-neko",
   "cat-maxwell",
   "makiba",
+  "makiba-chubby",
 ] as const;
 
 export type BuiltInCompanionId = (typeof SUPPORTER_COMPANION_IDS)[number];
@@ -102,6 +103,7 @@ export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   licensed("maneki-neko", msg`Maneki-neko`, "Rice & Soy Sauce", "50b5d360717c442c971b3db0576606c4", 0, { matte: false }),
   licensed("cat-maxwell", msg`Maxwell the cat`, "Zhuier", "4175776146ba4550a8dd643363b7b0aa", 0.75),
   { id: "makiba", name: msg`Makiba`, kind: "model", url: "/models/companions/makiba.glb", thumb: "/models/companions/thumbs/makiba.webp", facing: -0.3 },
+  { id: "makiba-chubby", name: msg`Chubby Makiba`, kind: "model", url: "/models/companions/makiba-chubby.glb", thumb: "/models/companions/thumbs/makiba-chubby.webp", facing: -0.3 },
 ];
 
 export interface SubmittedCompanion {

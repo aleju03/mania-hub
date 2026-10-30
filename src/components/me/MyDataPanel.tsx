@@ -28,7 +28,15 @@ import {
   type MyDataTrackedPlay,
   type MyDataTrackedSort,
 } from "../../lib/my-data";
-import { openLiveEventSource } from "../../lib/live-backend";
+import { fetchLiveSupporterProfileLook, openLiveEventSource, peekLiveSupporterCustomTheme, peekLiveSupporterFrame, peekLiveSupporterNameFont, peekLiveSupporterNameStyle, peekLiveSupporterProfileTheme } from "../../lib/live-backend";
+import { frameOverhangMargins, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
+import { SupporterStyledName } from "../supporter/SupporterNameStyle";
+import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
+import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
+import { profileThemeStyle, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
+import { customThemeStyle, type CustomTheme } from "../../lib/custom-themes";
+import { ProfileThemeBackdrop } from "../supporter/ProfileThemeBackdrop";
 import { SkillBreakdownBody } from "../player/SkillBreakdown";
 import { DanEvidenceModal } from "../player/DanEvidenceModal";
 import { SkillPlaysExplorer } from "../player/SkillPlaysExplorer";
@@ -94,12 +102,20 @@ const TOP_SORT_OPTIONS: Array<{ value: MyDataTopPlaySort; label: MessageDescript
   { value: "accuracy_desc", label: msg`Accuracy` },
 ];
 
-function PageShell({ children }: { children: React.ReactNode }) {
+/* A supporter's profile theme plays behind the page as it does on their
+   profile, through a see-through body band (the panels stay opaque). */
+function PageShell({ profileTheme = null, customTheme = null, children }: { profileTheme?: SupporterProfileThemeId | null; customTheme?: CustomTheme | null; children: React.ReactNode }) {
   const { t } = useLingui();
+  const themed = profileTheme ?? customTheme;
   return (
-    <div className="min-h-screen">
+    <div className={themed ? "relative min-h-screen overflow-clip" : "min-h-screen"} style={customTheme && !profileTheme ? customThemeStyle(customTheme) : profileThemeStyle(profileTheme)}>
+      {themed && (
+        <div aria-hidden className="pointer-events-none sticky top-0 h-0">
+          <ProfileThemeBackdrop theme={themed} scroll className="absolute inset-x-0 top-0 h-screen" />
+        </div>
+      )}
       <PageHeader iconSrc="/images/icons/profile.svg" title={t`my stats`} />
-      <div className="bg-osu-b5 min-h-[80vh]">
+      <div className={`${themed ? "relative bg-osu-b5/[0.78]" : "bg-osu-b5"} min-h-[80vh]`}>
         <div className="mx-auto max-w-[1080px] px-3 py-5 sm:px-5 sm:py-7 space-y-5">{children}</div>
       </div>
     </div>
@@ -176,6 +192,22 @@ export function MyDataPanel() {
   const noDans = useNoDans();
   // Keep the feed tab and its pagination intact while exploring skill plays.
   const [skillPlaysView, setSkillPlaysView] = useState<"msd" | "dan" | null>(null);
+
+  /* The viewer's supporter frame, name style and name font, as their profile wears them. */
+  const [look, setLook] = useState<{ frame: SupporterAvatarFrameId | null; nameStyle: SupporterNameStyleId | null; nameFont: SupporterNameFontId | null; profileTheme: SupporterProfileThemeId | null; customTheme: CustomTheme | null } | null>(null);
+  const viewerId = viewer?.id ?? 0;
+  useEffect(() => {
+    if (!viewerId) return;
+    let alive = true;
+    const known = peekLiveSupporterFrame(viewerId);
+    if (known !== undefined) setLook({ frame: known, nameStyle: peekLiveSupporterNameStyle(viewerId) ?? null, nameFont: peekLiveSupporterNameFont(viewerId) ?? null, profileTheme: peekLiveSupporterProfileTheme(viewerId) ?? null, customTheme: peekLiveSupporterCustomTheme(viewerId) ?? null });
+    void fetchLiveSupporterProfileLook(viewerId).then((value) => {
+      if (alive) setLook({ frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, customTheme: value.customTheme });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [viewerId]);
 
   const [summary, setSummary] = useState<MyDataSummary | null>(null);
   const [feed, setFeed] = useState<MyDataTrackedPlay[]>([]);
@@ -550,7 +582,7 @@ export function MyDataPanel() {
 
   if (loading) {
     return (
-      <PageShell>
+      <PageShell profileTheme={look?.profileTheme} customTheme={look?.customTheme}>
         <div className="flex items-center justify-center gap-2 py-20 text-[13px] text-osu-f1">
           <Loader2 className="h-4 w-4 animate-spin" />
           {t`Loading your data…`}
@@ -562,9 +594,10 @@ export function MyDataPanel() {
   const username = summary?.username ?? viewer.username;
   const country = summary?.countryCode ?? viewer.countryCode ?? null;
   const tracked = summary?.tracked ?? false;
+  const frame = look?.frame ?? null;
 
   return (
-    <PageShell>
+    <PageShell profileTheme={look?.profileTheme} customTheme={look?.customTheme}>
       <div className="relative overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
         {summary?.coverUrl ? (
           <>
@@ -575,12 +608,30 @@ export function MyDataPanel() {
           </>
         ) : null}
         <div className={`relative flex items-end gap-3.5 px-4 pb-3 ${summary?.coverUrl ? "pt-16" : "pt-4"}`}>
-          <Avatar url={summary?.avatarUrl ?? viewer.avatarUrl} userId={viewer.id} size={68} />
+          {frame ? (
+            // round, as the avatar is here unframed, unless the art frames a square window;
+            // a frame whose art passes behind the avatar holds its round-holed still
+            <div className="relative shrink-0" style={frameOverhangMargins(frame, "68px", "12px")}>
+              <div className="h-[68px] w-[68px] overflow-hidden" style={framedAvatarStyle(frame, { round: true })}>
+                <Avatar url={summary?.avatarUrl ?? viewer.avatarUrl} userId={viewer.id} size={68} shape="square" />
+              </div>
+              <SupporterAvatarFrame frame={frame} userId={viewer.id} round still={!!supporterFrameGeometry(frame).roundStill} />
+            </div>
+          ) : (
+            <Avatar url={summary?.avatarUrl ?? viewer.avatarUrl} userId={viewer.id} size={68} />
+          )}
           <div className="min-w-0 flex-1 pb-0.5">
             <div className="flex items-center gap-2">
-              <Link to="/player/$username" params={{ username }} className="truncate text-[17px] font-bold text-white hover:text-osu-pink-light">
-                {username}
-              </Link>
+              {look?.nameStyle || look?.nameFont ? (
+                <Link to="/player/$username" params={{ username }} className="flex min-w-0 transition-opacity hover:opacity-85">
+                  {/* the name truncates itself, so its style's glow draws past the box */}
+                  <SupporterStyledName nameStyle={look.nameStyle} nameFont={look.nameFont} name={username} className="min-w-0 truncate text-[17px] font-bold text-white" />
+                </Link>
+              ) : (
+                <Link to="/player/$username" params={{ username }} className="truncate text-[17px] font-bold text-white hover:text-osu-pink-light">
+                  {username}
+                </Link>
+              )}
               {country ? <CountryFlag code={country} size="md" decorative /> : null}
             </div>
             {/* translate="no": these spans mount as the summary loads and

@@ -6065,6 +6065,11 @@ msgstr "Chrome"
 msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 msgstr "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 
+#: src/components/supporter/loadout.ts
+#: src/lib/supporter-companions.ts
+msgid "Chubby Makiba"
+msgstr "Chubby Makiba"
+
 #: src/lib/supporter-companions.ts
 msgid "Chubby Teto"
 msgstr "Chubby Teto"

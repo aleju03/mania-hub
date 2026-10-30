@@ -1996,9 +1996,7 @@ function MapsPage() {
                         <div className="text-[10px] uppercase tracking-wider text-osu-f1">
                           <Trans>random pick from</Trans>
                         </div>
-                        <div className="text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors truncate">
-                          <UsernameText username={randomPick.player.username} userId={randomPick.player.id} />
-                        </div>
+                        <UsernameText username={randomPick.player.username} userId={randomPick.player.id} className="block truncate text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors" />
                         <div className="text-[10px] text-osu-f1">
                           <Trans>{randomPick.player.favouriteCount} favourites</Trans>
                         </div>

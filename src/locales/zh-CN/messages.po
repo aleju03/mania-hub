@@ -6050,6 +6050,11 @@ msgstr "铬面"
 msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 msgstr "铬面、霓虹和彩虹卡面在计分时生效 {0} 次。"
 
+#: src/components/supporter/loadout.ts
+#: src/lib/supporter-companions.ts
+msgid "Chubby Makiba"
+msgstr "胖胖 Makiba"
+
 #: src/lib/supporter-companions.ts
 msgid "Chubby Teto"
 msgstr "胖胖重音Teto"

@@ -6038,6 +6038,11 @@ msgstr "Cromo"
 msgid "Chrome, Neon and Rainbow finishes apply {0} times when scored."
 msgstr "Los acabados Chrome, Neón y Arcoíris se aplican {0} veces al puntuar."
 
+#: src/components/supporter/loadout.ts
+#: src/lib/supporter-companions.ts
+msgid "Chubby Makiba"
+msgstr "Makiba gordita"
+
 #: src/lib/supporter-companions.ts
 msgid "Chubby Teto"
 msgstr "Teto gordita"
