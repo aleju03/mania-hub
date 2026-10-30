@@ -291,7 +291,7 @@ function SetManager({ syncStatus, onClose }: {
                   <Trans>Nothing in here yet.</Trans>
                 </div>
               ) : (
-                <ShowcaseCards cards={selected.cards} ownerUserId={auth.viewer?.id ?? null}
+                <ShowcaseCards grid cards={selected.cards} ownerUserId={auth.viewer?.id ?? null}
                   onCardOpen={() => setInspecting(true)} onCardClose={() => setInspecting(false)} />
               )}
             </div>
