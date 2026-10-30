@@ -37,6 +37,11 @@ export interface SkillHistoryNote {
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
+    date: "2026-10-30",
+    text: "Fixed some 4K chordjack maps counting toward Tech instead of Jack.",
+    keyCounts: [4],
+  },
+  {
     date: "2026-10-26",
     text: "Fixed some 4K plays counting toward the wrong Dan skillset.",
     keyCounts: [4],
