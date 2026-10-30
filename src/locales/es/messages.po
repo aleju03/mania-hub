@@ -4319,16 +4319,16 @@ msgstr "Cargando..."
 
 #: src/routes/report.tsx
 msgid "Bug"
-msgstr "Error"
+msgstr "Bug"
 
 #: src/routes/__root.tsx
 msgid "bugs and feedback"
-msgstr "errores y sugerencias"
+msgstr "bugs y sugerencias"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/report.tsx
 msgid "Bugs and feedback"
-msgstr "Errores y sugerencias"
+msgstr "Bugs y sugerencias"
 
 #: src/routes/maps.tsx
 msgid "Building maps for the first time..."
@@ -8835,7 +8835,7 @@ msgstr "Mapa híbrido: {0}, {1}"
 
 #: src/routes/news_.prism.tsx
 msgid "If a chart's rating looks wrong to you, send it through <0>Bugs and feedback</0>."
-msgstr "Si el rating de un chart te parece mal, envíalo por <0>Errores y sugerencias</0>."
+msgstr "Si el rating de un chart te parece mal, envíalo por <0>Bugs y sugerencias</0>."
 
 #: src/routes/news_.prism.tsx
 #~ msgid "If a chart's rating looks wrong to you, send it through <0>Report a bug</0>."
@@ -10541,7 +10541,7 @@ msgstr "Mania Tracker cuenta las vistas de página y el uso de funciones con su 
 
 #: src/routes/terms.tsx
 msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
-msgstr "Mania Tracker muestra metadatos públicos, proyecciones en caché y vistas derivadas de la comunidad como referencia. Para informar de un error o enviar una sugerencia, usa el formulario <0>Errores y sugerencias</0> del sitio. Si eres propietario de contenido mostrado en el sitio y tienes algún asunto de atribución, retirada o datos, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
+msgstr "Mania Tracker muestra metadatos públicos, proyecciones en caché y vistas derivadas de la comunidad como referencia. Para informar de un error o enviar una sugerencia, usa el formulario <0>Bugs y sugerencias</0> del sitio. Si eres propietario de contenido mostrado en el sitio y tienes algún asunto de atribución, retirada o datos, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
 
 #: src/routes/terms.tsx
 #~ msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug, use the <0>Report a bug</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -20007,7 +20007,7 @@ msgstr "Para prevenir el abuso, el servidor cuenta las peticiones por dirección
 
 #: src/routes/privacy.tsx
 msgid "To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
-msgstr "Para informar de un error o enviar una sugerencia, usa el formulario <0>Errores y sugerencias</0> del sitio. Para asuntos de privacidad, eliminación, atribución, retirada de contenido o cualquier otra cuestión, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
+msgstr "Para informar de un error o enviar una sugerencia, usa el formulario <0>Bugs y sugerencias</0> del sitio. Para asuntos de privacidad, eliminación, atribución, retirada de contenido o cualquier otra cuestión, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
 
 #: src/routes/privacy.tsx
 #~ msgid "To report a bug, use the <0>Report a bug</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
