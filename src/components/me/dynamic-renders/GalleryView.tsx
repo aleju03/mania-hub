@@ -9,7 +9,8 @@ import {
   type SignatureDesign,
   type SignatureType,
 } from "../../../lib/signature-shared";
-import { CopyButton, KeyModeControls, LinkActions, PreviewImage, StyleControls } from "./controls";
+import { signatureRenderSize } from "../../../lib/signature-style";
+import { CardSizeControls, CopyButton, KeyModeControls, LinkActions, PreviewImage, StyleControls } from "./controls";
 import { useSignaturePreview } from "./use-signature-preview";
 import type { DynamicRenders } from "./use-dynamic-renders";
 
@@ -40,6 +41,7 @@ function Thumbnail({
     skillsKeyCount: renders.skillsKeyCount,
     debounceMs: THUMB_DEBOUNCE_MS,
   });
+  const size = signatureRenderSize(spec, renders.styles[type]);
   return (
     <button
       type="button"
@@ -50,11 +52,11 @@ function Thumbnail({
         layoutId={`gallery-${type}-${spec.design}`}
         className="flex w-full justify-center rounded-xl bg-white/[0.03] p-3 transition-[filter,background-color] group-hover:bg-white/[0.05] group-hover:brightness-110"
       >
-        <PreviewImage spec={spec} imageUrl={preview.imageUrl} state={preview.state} />
+        <PreviewImage size={size} imageUrl={preview.imageUrl} state={preview.state} />
       </motion.div>
       <div className="flex w-full items-baseline justify-between gap-3 px-1">
         <span className="text-[13.5px] font-bold text-white">{i18n._(spec.label)}</span>
-        <span className="text-[11px] tabular-nums text-osu-f1">{spec.width} x {spec.height}</span>
+        <span className="text-[11px] tabular-nums text-osu-f1">{size.width} x {size.height}</span>
       </div>
     </button>
   );
@@ -74,6 +76,7 @@ function Editor({
     skillsKeyCount: renders.skillsKeyCount,
   });
   const url = renders.urlFor(type, spec.design);
+  const size = signatureRenderSize(spec, renders.styles[type]);
 
   return (
     <div>
@@ -93,7 +96,7 @@ function Editor({
         layoutId={`gallery-${type}-${spec.design}`}
         className="flex justify-center rounded-xl bg-white/[0.03] p-4"
       >
-        <PreviewImage spec={spec} imageUrl={preview.imageUrl} state={preview.state} />
+        <PreviewImage size={size} imageUrl={preview.imageUrl} state={preview.state} />
       </motion.div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2.5">
@@ -109,11 +112,11 @@ function Editor({
         </div>
       </div>
 
-      {spec.ownArt ? null : (
-        <div className="mt-5 border-t border-white/[0.07] pt-5">
-          <StyleControls key={type} renders={renders} type={type} />
-        </div>
-      )}
+      <div className="mt-5 border-t border-white/[0.07] pt-5">
+        {spec.ownArt
+          ? <CardSizeControls renders={renders} type={type} />
+          : <StyleControls key={type} renders={renders} type={type} />}
+      </div>
     </div>
   );
 }

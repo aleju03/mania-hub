@@ -4464,8 +4464,8 @@ msgid "Card rank"
 msgstr "卡片等级"
 
 #: src/lib/signature-style.ts
-#~ msgid "Card tier"
-#~ msgstr "卡片稀有度"
+msgid "Card tier"
+msgstr "卡片稀有度"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "cards"
@@ -9560,6 +9560,7 @@ msgstr "语言"
 msgid "Language"
 msgstr "语言"
 
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Large"
 msgstr "大"
@@ -10890,6 +10891,10 @@ msgstr "BPM 中位数"
 msgid "Median by Keymode"
 msgstr "各键数中位数"
 
+#: src/components/me/dynamic-renders/controls.tsx
+msgid "Medium"
+msgstr "中"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Meeting the target gives full credit for the chart's level. The next percentage point is also a normal clear. Bonus credit starts above that, stays small until 99%, then rises faster. Scores below the target get partial credit down to the cutoff: 4 points below for regular, 1 point for 6K/7K LN, and 94.5% for 4K LN. The lowest credit is 1.25 levels below the chart, or 1.5 for 4K LN. The 4K LN bonus maxes out at 99.7%:"
 #~ msgstr ""
@@ -11474,7 +11479,6 @@ msgstr "最新的最佳成绩"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/GiftInbox.tsx
-#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next"
@@ -14232,7 +14236,6 @@ msgstr "预览图已上传。"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/GiftInbox.tsx
-#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Previous"
@@ -17087,6 +17090,7 @@ msgstr "单点叠键"
 msgid "size"
 msgstr "大小"
 
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Size"
@@ -17313,6 +17317,7 @@ msgstr "把歌曲放慢到 0.75倍速并降低音调。"
 msgid "Slows the song down to 0.75x."
 msgstr "把歌曲放慢到 0.75倍速。"
 
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "小"

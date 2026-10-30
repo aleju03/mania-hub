@@ -59,6 +59,7 @@ import {
   resolveSkillsetDanPick,
   stylePaintedBackground,
   styleNeedsProfileImage,
+  signatureRenderSize,
   styleUsesImage,
   type SignatureStyle,
 } from "../../../lib/signature-style";
@@ -150,6 +151,10 @@ function hexAlpha(hex: string, alpha: number): string {
 
    SURFACE is still the compositing base an image background fades toward -
    there the picture is the background, and it has to end up opaque. */
+/* Baked in rather than left to the page: an osu! profile shows the image
+   as-is, and the card front is already rounded. */
+const FRAME_RADIUS = 12;
+
 function frame(width: number, height: number, children: ReactNode[], background?: string): ReactElement {
   return h(
     "div",
@@ -160,6 +165,7 @@ function frame(width: number, height: number, children: ReactNode[], background?
         display: "flex",
         position: "relative",
         overflow: "hidden",
+        borderRadius: `${FRAME_RADIUS}px`,
         background: background ?? "transparent",
         fontFamily: '"Torus OG"',
         color: "#ffffff",
@@ -359,7 +365,7 @@ async function renderManiacardFront(
   tier: ReturnType<typeof getManiaCardTier>,
   avatarUrl: string,
 ): Promise<Buffer> {
-  const spec = signatureDesign(ctx.type, ctx.design)!;
+  const size = signatureRenderSize(signatureDesign(ctx.type, ctx.design)!, ctx.style);
   const [[regularFont, heavyFont], laurelUrl] = await Promise.all([
     loadOgFonts(ctx.request),
     cosmicLaurelDataUrl(ctx.request, tier).catch(() => null),
@@ -381,7 +387,7 @@ async function renderManiacardFront(
     );
     const { default: sharp } = await import("sharp");
     return sharp(png)
-      .resize(spec.width, spec.height, { fit: "fill" })
+      .resize(size.width, size.height, { fit: "fill" })
       .png()
       .toBuffer();
   });
@@ -401,7 +407,8 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   if (!user || !skills) return renderPlate(ctx, "No ranked mania plays tracked yet.");
 
   const tier = getManiaCardTier(skills.cardPower);
-  const avatarSize = ctx.design === 4 ? 454 : BANNER_AVATAR;
+  const cardFront = spec.ownArt === true;
+  const avatarSize = cardFront ? 454 : BANNER_AVATAR;
   const sourceAvatarUrl = ogAvatarUrl(ctx.request, user.avatar_url, user.id);
   /* resvg does not decode GIFs, so handing an animated osu! avatar straight
      to ImageResponse leaves the card's avatar frame blank. Dynamic renders
@@ -410,10 +417,11 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
      consistently supported input format. Keep the original URL as a fallback
      for archived players whose avatar is a site-local asset. */
   const avatarUrl = await avatarSquareDataUrl(sourceAvatarUrl, avatarSize) ?? sourceAvatarUrl;
-  if (ctx.design === 4) return renderManiacardFront(ctx, user, skills, tier, avatarUrl);
+  if (cardFront) return renderManiacardFront(ctx, user, skills, tier, avatarUrl);
 
   const style = MANIA_TIER_STYLES[tier];
   const background = await styleLayers(ctx, spec, backgroundSourcesFrom(snapshot));
+  if (ctx.style.background === "tier") background.layers.push(...tierBackdrop(tier, spec));
   const username = clamp(user.username || ctx.resolved.username, 20);
   const tierColor = tierTextColor(style);
 
@@ -469,6 +477,29 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
 }
 
 const BANNER_AVATAR = 132;
+
+/* "Card tier": the card's rarity gradient behind the portrait only, cut on a
+   slant before the name, so the numbers stay on the dark surface. */
+function tierBackdrop(tier: ReturnType<typeof getManiaCardTier>, spec: { width: number; height: number }): ReactNode[] {
+  const stops = [...MANIA_TIER_STYLES[tier].badgeGradient.matchAll(/(#[0-9a-f]{6}) (\d+)%/gi)]
+    .map((match) => `<stop offset="${Number(match[2]) / 100}" stop-color="${match[1]}"/>`)
+    .join("");
+  const cut = 196;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${spec.width}" height="${spec.height}">`
+    + `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">${stops}</linearGradient></defs>`
+    + `<rect width="${spec.width}" height="${spec.height}" fill="${SURFACE}"/>`
+    + `<path d="M0 0 L${cut} 0 L${cut - 40} ${spec.height} L0 ${spec.height} Z" fill="url(#g)"/>`
+    + `</svg>`;
+  return [
+    h("img", {
+      key: "tier",
+      src: svgDataUrl(svg),
+      width: spec.width,
+      height: spec.height,
+      style: { position: "absolute", top: "0", left: "0", width: `${spec.width}px`, height: `${spec.height}px` },
+    }),
+  ];
+}
 
 /* A tier's readable colour is the bright end of its badge gradient - glowColor
    carries an alpha and would print the label half transparent, and edgeFill is

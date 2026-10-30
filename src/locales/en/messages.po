@@ -4479,8 +4479,8 @@ msgid "Card rank"
 msgstr "Card rank"
 
 #: src/lib/signature-style.ts
-#~ msgid "Card tier"
-#~ msgstr "Card tier"
+msgid "Card tier"
+msgstr "Card tier"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "cards"
@@ -9587,6 +9587,7 @@ msgstr "language"
 msgid "Language"
 msgstr "Language"
 
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Large"
 msgstr "Large"
@@ -10917,6 +10918,10 @@ msgstr "Median BPM"
 msgid "Median by Keymode"
 msgstr "Median by Keymode"
 
+#: src/components/me/dynamic-renders/controls.tsx
+msgid "Medium"
+msgstr "Medium"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Meeting the target gives full credit for the chart's level. The next percentage point is also a normal clear. Bonus credit starts above that, stays small until 99%, then rises faster. Scores below the target get partial credit down to the cutoff: 4 points below for regular, 1 point for 6K/7K LN, and 94.5% for 4K LN. The lowest credit is 1.25 levels below the chart, or 1.5 for 4K LN. The 4K LN bonus maxes out at 99.7%:"
 #~ msgstr "Meeting the target gives full credit for the chart's level. The next percentage point is also a normal clear. Bonus credit starts above that, stays small until 99%, then rises faster. Scores below the target get partial credit down to the cutoff: 4 points below for regular, 1 point for 6K/7K LN, and 94.5% for 4K LN. The lowest credit is 1.25 levels below the chart, or 1.5 for 4K LN. The 4K LN bonus maxes out at 99.7%:"
@@ -11501,7 +11506,6 @@ msgstr "Newest Top Play"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/GiftInbox.tsx
-#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next"
@@ -14259,7 +14263,6 @@ msgstr "Previews uploaded."
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/GiftInbox.tsx
-#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Previous"
@@ -17122,6 +17125,7 @@ msgstr "Single-note jacks"
 msgid "size"
 msgstr "size"
 
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Size"
@@ -17348,6 +17352,7 @@ msgstr "Slows the song down to 0.75x and lowers the pitch."
 msgid "Slows the song down to 0.75x."
 msgstr "Slows the song down to 0.75x."
 
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "Small"

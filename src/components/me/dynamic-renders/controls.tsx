@@ -8,8 +8,9 @@ import { ConfirmModal } from "../../ui/ConfirmModal";
 import { Switch } from "../../ui/Switch";
 import { checkSignatureImageUrl } from "../../../lib/signature";
 import type { SignatureImageProbe } from "../../../routes/api/signature/-backgrounds";
-import type { SignatureDesign, SignatureType } from "../../../lib/signature-shared";
+import type { SignatureType } from "../../../lib/signature-shared";
 import {
+  SIGNATURE_CARD_SIZES,
   normalizeSignatureImageUrl,
   resolveSkillsetDanPick,
   signatureBackground,
@@ -23,6 +24,7 @@ import {
   SIGNATURE_BRIGHTNESS_RANGE,
   SIGNATURE_IMAGE_URL_MAX,
   SIGNATURE_OPACITY_RANGE,
+  type SignatureCardSize,
 } from "../../../lib/signature-style";
 import type { SignaturePreviewState } from "./use-signature-preview";
 import type { DynamicRenders } from "./use-dynamic-renders";
@@ -229,19 +231,40 @@ const PROBE_MESSAGE: Record<SignatureImageProbe, MessageDescriptor | null> = {
   "too-large": msg`That image is too large to draw.`,
 };
 
+const CARD_SIZE_LABELS: Record<SignatureCardSize, MessageDescriptor> = {
+  large: msg`Large`,
+  medium: msg`Medium`,
+  small: msg`Small`,
+};
+
+/* The card front draws a finished card, so size is the one thing to pick. */
+export function CardSizeControls({ renders, type }: { renders: DynamicRenders; type: SignatureType }) {
+  const { t, i18n } = useLingui();
+  const value = renders.styles[type].cardSize;
+  return (
+    <Field label={t`Size`}>
+      {(Object.keys(SIGNATURE_CARD_SIZES) as SignatureCardSize[]).map((size) => (
+        <Chip key={size} small active={value === size} onClick={() => renders.patchStyle(type, { cardSize: size })}>
+          {i18n._(CARD_SIZE_LABELS[size])}
+        </Chip>
+      ))}
+    </Field>
+  );
+}
+
 /* The picture in a box whose ratio is reserved up front, so nothing shifts
    when the frame lands. The previous frame stays up while the next renders. */
 export function PreviewImage({
-  spec,
+  size,
   imageUrl,
   state,
   className = "",
-}: { spec: SignatureDesign; imageUrl: string | null; state: SignaturePreviewState; className?: string }) {
+}: { size: { width: number; height: number }; imageUrl: string | null; state: SignaturePreviewState; className?: string }) {
   const { t } = useLingui();
   return (
     <div
       className={`relative w-full ${className}`}
-      style={{ maxWidth: `${spec.width}px`, aspectRatio: `${spec.width} / ${spec.height}` }}
+      style={{ maxWidth: `${size.width}px`, aspectRatio: `${size.width} / ${size.height}` }}
     >
       {!imageUrl ? (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/[0.03]">

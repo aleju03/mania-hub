@@ -34,7 +34,7 @@ describe("normalizeSignatureStyle", () => {
     const style = {
       background: "cover", accent: "#3fd4d0", color: "#112233",
       opacity: 40, blur: 12, brightness: 80, imageUrl: null, keyCount: 7, lnKeyCount: 4,
-      watermark: false, skillsetSide: "ln",
+      watermark: false, skillsetSide: "ln", cardSize: "medium",
     };
     expect(normalizeSignatureStyle(style)).toEqual(style);
   });
@@ -66,12 +66,14 @@ describe("normalizeSignatureStyle", () => {
     expect(style.background).toBe(DEFAULT_SIGNATURE_STYLE.background);
   });
 
-  /* The banner draws bare type now, so a stored "Card tier" choice falls back
-     to the plain default like any other id that no longer exists. */
-  it("falls back from the retired tier background", () => {
+  /* "Card tier" is a ManiaCard choice, never the default, and a stored one
+     from before it came back still resolves to it. */
+  it("offers the tier background on the maniacard only", () => {
     expect(normalizeSignatureStyle({}, "maniacard").background).toBe("none");
-    expect(normalizeSignatureStyle({ background: "tier" }, "maniacard").background).toBe("none");
-    expect(signatureBackgroundsFor("maniacard").map((entry) => entry.id)).not.toContain("tier");
+    expect(normalizeSignatureStyle({ background: "tier" }, "maniacard").background).toBe("tier");
+    expect(normalizeSignatureStyle({ background: "tier" }, "goals").background).toBe("none");
+    expect(signatureBackgroundsFor("maniacard").map((entry) => entry.id)).toContain("tier");
+    expect(signatureBackgroundsFor("goals").map((entry) => entry.id)).not.toContain("tier");
   });
 
   it("clamps the sliders into range instead of trusting them", () => {
