@@ -159,6 +159,24 @@ it("hides the glow while typing until the mouse moves again", () => {
   input.remove();
 });
 
+it("keeps a drawn orb at the edge while typing", () => {
+  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, trail: false, glow: 0, size: 200 });
+  render(<CustomCursor />);
+  const input = document.createElement("input");
+  document.body.appendChild(input);
+  movePointer(300, 4);
+  drawFrame(16);
+  drawFrame(32);
+  expect(cursor()).toBe("none");
+
+  context.drawImage.mockClear();
+  fireEvent.keyDown(input, { key: "a", code: "KeyA" });
+  drawFrame(48);
+  expect(context.drawImage).toHaveBeenCalledOnce();
+  expect(cursor()).toBe("none");
+  input.remove();
+});
+
 it("draws the orb itself over CSS-zoomed content, which would rescale the native image", () => {
   render(<CustomCursor />);
   const zoomedNode = document.createElement("div");

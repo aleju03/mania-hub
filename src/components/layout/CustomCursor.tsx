@@ -179,7 +179,7 @@ function CursorOverlay() {
     if (!canvas) return;
 
     let settings: CursorSettings = readCursorSettings();
-    const pointer = { x: -100, y: -100, pressed: false, inside: false };
+    const pointer = { x: -100, y: -100, pressed: false, inside: false, typing: false };
     let pressScale = 1;
     let smoking = false;
     let smokeStartsStroke = true;
@@ -293,7 +293,7 @@ function CursorOverlay() {
         context.globalAlpha = 1;
       }
 
-      if (glowSprite && pointer.inside) {
+      if (glowSprite && pointer.inside && !pointer.typing) {
         const size = glowSprite.size * pressScale;
         context.drawImage(glowSprite.canvas, pointer.x - size / 2, pointer.y - size / 2, size, size);
       }
@@ -333,6 +333,7 @@ function CursorOverlay() {
       pointer.x = event.clientX;
       pointer.y = event.clientY;
       pointer.inside = true;
+      pointer.typing = false;
       drawnOrb = needsDrawnOrb(event.target);
 
       if (settings.trail) {
@@ -375,10 +376,11 @@ function CursorOverlay() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (isEditableTarget(event.target)) {
-        // The system hides the pointer while typing; hide the effects with it
-        // until the mouse moves again.
+        // The system hides the pointer while typing; hide the glow and trail
+        // with it until the mouse moves again. A drawn orb stays, since it is
+        // the only cursor there is near the edges.
         if (event.key.length === 1 || event.key === "Backspace" || event.key === "Delete" || event.key === "Enter") {
-          pointer.inside = false;
+          pointer.typing = true;
           trail.length = 0;
           ensureRunning();
         }
