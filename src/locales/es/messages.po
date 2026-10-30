@@ -3299,7 +3299,7 @@ msgstr "Todas las filas"
 
 #: src/routes/skins.tsx
 msgid "all skins"
-msgstr ""
+msgstr "todas las skins"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "All three forges are used. They return after 24 hours."
@@ -6544,7 +6544,7 @@ msgstr "Descartar"
 
 #: src/routes/skins.tsx
 msgid "display"
-msgstr "pantalla"
+msgstr "resolución"
 
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
@@ -9813,7 +9813,7 @@ msgstr "Con me gusta"
 
 #: src/routes/skins.tsx
 msgid "liked by you"
-msgstr ""
+msgstr "con tu like"
 
 #: src/routes/skins.tsx
 msgid "likes"

@@ -3311,7 +3311,7 @@ msgstr "全部记录"
 
 #: src/routes/skins.tsx
 msgid "all skins"
-msgstr ""
+msgstr "全部皮肤"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "All three forges are used. They return after 24 hours."
@@ -9825,7 +9825,7 @@ msgstr "已喜欢"
 
 #: src/routes/skins.tsx
 msgid "liked by you"
-msgstr ""
+msgstr "你赞过的"
 
 #: src/routes/skins.tsx
 msgid "likes"
