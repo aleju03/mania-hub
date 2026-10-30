@@ -11,14 +11,13 @@ import {
 } from "../../lib/live-backend";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { Pagination } from "../ui/Pagination";
-import { Skeleton } from "../ui/LoadingSkeleton";
 import { MapDetailModal } from "./MapDetailModal";
 import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
 import { SkillPicker, validPatternIds, validSkillIds } from "./PatternPicker";
 import { playPatternHit } from "./patternSfx";
 import { RangePill, type RangePillSkin } from "./RangePill";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
-import { SearchCard, toPreviewTrack } from "./SearchCard";
+import { SearchCardGrid, SearchCardGridSkeleton, toPreviewTrack } from "./SearchCard";
 import { savedSearchSortToRestore } from "./searchSortPreference";
 import { savedSearchVibroToRestore } from "./searchVibroPreference";
 import { StarRangePill } from "./StarRangePill";
@@ -36,6 +35,7 @@ import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useNoDans } from "../../store";
 import { activeMsdKeys, isPrismKeyFacet, isPrismOnlyMsdKey, MSD_FILTER_MAX, MSD_FILTER_SKILLSET, msdRangesForFacet, serializeMsdRanges, type MsdRanges, msdFilterKeysFor } from "../../lib/map-search-msd";
 import { MSD_SKILLSET_META, msdSkillsetMeta, OVERALL_AXIS_META, PATTERN_RATING_META, type SkillAxisMeta } from "../../lib/skill-axes";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 const SEARCH_PAGE_SIZE = 24;
 const SEARCH_INITIAL_SKELETON_COUNT = 12;
@@ -62,7 +62,7 @@ const STATUS_OPTIONS = [
 const SORT_OPTIONS = [
   { id: "playcount", label: msg`Most played` },
   { id: "stars", label: msg`Difficulty` },
-  { id: "msd", label: msg`MSD` },
+  { id: "msd", label: msg`Rating` },
   { id: "bpm", label: msg`BPM` },
   { id: "length", label: msg`Length` },
   { id: "date", label: msg`Newest` },
@@ -857,7 +857,7 @@ function DanStepGauge({
 
   const scale = size / GAUGE_W;
   return (
-    <div className="relative" style={{ width: size }}>
+    <div className="relative" style={{ width: scaledPx(size) }}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${GAUGE_W} ${GAUGE_CY + 8}`}
@@ -1509,7 +1509,7 @@ function MobileFilterSheet({
               <DanPicker ui={ui} apply={apply} inline />
             </ChipGroup>
           ) : null}
-          <ChipGroup label={t`MSD`}>
+          <ChipGroup label={t`Rating`}>
             <MsdPanel ui={ui} apply={apply} />
           </ChipGroup>
           <ChipGroup label={t`BPM`}>
@@ -1544,55 +1544,6 @@ function MobileFilterSheet({
   );
 }
 
-function SearchCardSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
-      <div className="relative h-[100px]">
-        <Skeleton className="h-full w-full rounded-none" />
-        <Skeleton className="absolute left-2 top-2 h-[18px] w-9 rounded" />
-        <Skeleton className="absolute right-2 top-2 h-[18px] w-14 rounded" />
-        <Skeleton className="absolute bottom-2 right-2 h-[18px] w-16 rounded-full" />
-        <div className="absolute bottom-2 left-3 right-20 flex flex-col gap-1.5">
-          <Skeleton className="h-3.5 w-4/5" />
-          <Skeleton className="h-3 w-1/2" />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2 px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <Skeleton className="h-3.5 w-24" />
-          <Skeleton className="h-3 w-9" />
-        </div>
-        <div className="flex items-center gap-1">
-          <Skeleton className="h-5 w-14 rounded" />
-          <Skeleton className="h-5 w-16 rounded" />
-          <Skeleton className="h-5 w-14 rounded" />
-        </div>
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <div className="flex items-center gap-1.5">
-            <Skeleton className="h-7 w-7 rounded-full" />
-            <Skeleton className="h-3 w-14" />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Skeleton className="h-5 w-12 rounded" />
-            <Skeleton className="h-5 w-12 rounded" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SearchCardGridSkeleton() {
-  return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4" aria-hidden="true">
-      {Array.from({ length: SEARCH_INITIAL_SKELETON_COUNT }).map((_, index) => (
-        <SearchCardSkeleton key={index} />
-      ))}
-    </div>
-  );
-}
-
 export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
@@ -1601,10 +1552,6 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const [ui, setUi] = useState<MapSearchUiState>(state);
   const [searchInput, setSearchInput] = useState(state.q);
   const [result, setResult] = useState<LiveMapSearchResult | null>(null);
-  // Whether the shown result came from a skill-filtered query. Read from the
-  // result rather than the live filter, so the cards' skill chips switch in the
-  // same frame as the cards themselves.
-  const [resultSkillFiltered, setResultSkillFiltered] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<LiveMapSearchEntry | null>(null);
@@ -1737,7 +1684,6 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       .then((data) => {
         if (cancelled) return;
         setResult(data);
-        setResultSkillFiltered(ui.skills.length + ui.skillsExclude.length > 0);
         lastResultRef.current = data;
         setLoading(false);
       })
@@ -1902,7 +1848,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
               </div>
             ) : null}
             <div className={noDans ? "min-[1140px]:col-start-4" : ""}>
-              <ChipGroup label={t`MSD`}>
+              <ChipGroup label={t`Rating`}>
                 <MsdPicker ui={ui} apply={apply} />
               </ChipGroup>
             </div>
@@ -1992,27 +1938,21 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           <div className="py-16 text-center text-[13px] text-osu-f1">{effectiveError}</div>
         ) : showLoadingSkeleton ? (
           <div className="transition-opacity" aria-busy="true">
-            <SearchCardGridSkeleton />
+            <SearchCardGridSkeleton count={SEARCH_INITIAL_SKELETON_COUNT} />
           </div>
         ) : items.length === 0 && !loading ? (
           <div className="py-16 text-center text-[13px] text-osu-f1"><Trans>No maps match these filters.</Trans></div>
         ) : (
           <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {items.map((entry: LiveMapSearchEntry) => (
-                <SearchCard
-                  key={entry.beatmapId}
-                  entry={entry}
-                  preview={preview}
-                  showSkill={resultSkillFiltered}
-                  onOpen={(opened) => {
-                    // The detail modal has its own audio; don't play over it.
-                    stopPreview();
-                    setDetail(opened);
-                  }}
-                />
-              ))}
-            </div>
+            <SearchCardGrid
+              items={items}
+              preview={preview}
+              onOpen={(opened) => {
+                // The detail modal has its own audio; don't play over it.
+                stopPreview();
+                setDetail(opened);
+              }}
+            />
             {totalPages > 1 && (
               <div
                 className="sticky bottom-0 z-10 -mx-4 sm:-mx-5 mt-6 px-4 sm:px-5 py-2 bg-osu-b5/90 backdrop-blur-sm border-t border-osu-b3/30 [&>div]:!mt-0 relative after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:bg-osu-b5/90 after:backdrop-blur-sm after:content-['']"

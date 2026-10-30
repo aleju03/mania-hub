@@ -70,10 +70,15 @@ describe("pull OG cache key", () => {
   it("leaves ordinary cards on the keys already in R2 and moves a supporter's with their look", () => {
     expect(pulledCardLookKeySegment({ card: {} })).toBe("");
     expect(pulledCardLookKeySegment({ card: { supporterLook: null } })).toBe("");
-    const stars = pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", foil: "holo" } } });
-    const ice = pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", foil: "cracked-ice" } } });
-    expect(stars).toBe(":sl-stars-holo");
-    expect(ice).toBe(":sl-stars-cracked-ice");
-    expect(pulledCardLookKeySegment({ team: {}, card: { supporterLook: { motif: "stars", foil: "holo" } } })).toBe("");
+    const holo = pulledCardLookKeySegment({ card: { supporterLook: { motif: "none", foil: "holo" } } });
+    const ice = pulledCardLookKeySegment({ card: { supporterLook: { motif: "none", foil: "cracked-ice" } } });
+    expect(holo).toBe(":sl-none-holo");
+    expect(ice).toBe(":sl-none-cracked-ice");
+    // the retired preset doodles read as no art, on the same key as "none"
+    expect(pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", foil: "holo" } } })).toBe(":sl-none-holo");
+    const hash = "a".repeat(64);
+    const custom = { motif: "custom", foil: "holo", url: `https://cdn.mania-tracker.com/supporter-motifs/${hash}.webp`, scale: 1.5, opacity: 0.9 };
+    expect(pulledCardLookKeySegment({ card: { supporterLook: custom } })).toBe(`:sl-custom.${hash.slice(0, 16)}.1.5.0.9-holo`);
+    expect(pulledCardLookKeySegment({ team: {}, card: { supporterLook: { motif: "none", foil: "holo" } } })).toBe("");
   });
 });

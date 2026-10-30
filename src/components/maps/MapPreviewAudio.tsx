@@ -269,47 +269,9 @@ export function useMapPreviewAudio(): MapPreviewAudio {
   };
 }
 
-// Circumference of the r=12.5 ring in the 28x28 button viewBox.
-const RING_RADIUS = 12.5;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-// Progress arc around the play button while this set is playing, osu-web
-// beatmapset-panel style. Driven straight on the DOM node from a rAF loop so
-// only this circle updates per frame.
-function PreviewProgressRing({ getAudio }: { getAudio: () => HTMLAudioElement | null }) {
-  const arcRef = useRef<SVGCircleElement | null>(null);
-
-  useEffect(() => {
-    let raf = 0;
-    const tick = () => {
-      const audio = getAudio();
-      const arc = arcRef.current;
-      if (audio && arc) {
-        const duration = audio.duration;
-        const ratio = Number.isFinite(duration) && duration > 0 ? Math.min(1, audio.currentTime / duration) : 0;
-        arc.style.strokeDashoffset = `${RING_CIRCUMFERENCE * (1 - ratio)}`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [getAudio]);
-
-  return (
-    <circle
-      ref={arcRef}
-      cx="14"
-      cy="14"
-      r={RING_RADIUS}
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeDasharray={RING_CIRCUMFERENCE}
-      strokeDashoffset={RING_CIRCUMFERENCE}
-    />
-  );
-}
-
+// The card's play button: the same rounded square as the osu! and download
+// buttons beside it. The icon pulses while a slow load is pending; playback
+// progress lives in the player bar.
 export function MapPreviewButton({ beatmapsetId, preview }: { beatmapsetId: number; preview: MapPreviewAudio }) {
   const { t } = useLingui();
   const playing = preview.playingSetId === beatmapsetId;
@@ -334,14 +296,11 @@ export function MapPreviewButton({ beatmapsetId, preview }: { beatmapsetId: numb
   if (preview.isUnavailable(beatmapsetId)) {
     return (
       <span
-        className="relative grid h-7 w-7 shrink-0 place-items-center text-osu-f1/40"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-osu-f1/40"
         title={t`No preview audio`}
         aria-label={t`No preview audio`}
       >
-        <svg viewBox="0 0 28 28" fill="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
-          <circle cx="14" cy="14" r={RING_RADIUS} stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
-        </svg>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
           <path d="M11 5 6 9H3v6h3l5 4V5Z" />
           <path d="m16 9 5 6M21 9l-5 6" />
         </svg>
@@ -360,36 +319,16 @@ export function MapPreviewButton({ beatmapsetId, preview }: { beatmapsetId: numb
       aria-label={playing ? t`Pause preview` : t`Play preview`}
       aria-pressed={playing}
       title={playing ? t`Pause preview` : t`Play preview`}
-      className={`relative grid h-7 w-7 shrink-0 cursor-pointer place-items-center transition-colors ${
+      className={`grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg bg-white/[0.07] transition-colors hover:bg-white/[0.12] ${
         playing || loading || paused ? "text-osu-pink-light" : "text-osu-l2 hover:text-white"
       }`}
     >
-      <svg
-        viewBox="0 0 28 28"
-        fill="none"
-        className={`absolute inset-0 h-full w-full -rotate-90 ${showLoading ? "animate-spin" : ""}`}
-        aria-hidden="true"
-      >
-        <circle cx="14" cy="14" r={RING_RADIUS} stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
-        {showLoading && (
-          <circle
-            cx="14"
-            cy="14"
-            r={RING_RADIUS}
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeDasharray={`${RING_CIRCUMFERENCE * 0.25} ${RING_CIRCUMFERENCE * 0.75}`}
-          />
-        )}
-        {(playing || paused) && <PreviewProgressRing getAudio={preview.getAudio} />}
-      </svg>
       {playing ? (
-        <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
           <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
         </svg>
       ) : (
-        <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor" className={`h-3.5 w-3.5 ${showLoading ? "animate-pulse" : ""}`} aria-hidden="true">
           <path d="M8 5.14v13.72L19 12 8 5.14Z" />
         </svg>
       )}

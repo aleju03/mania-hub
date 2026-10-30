@@ -9,6 +9,7 @@ import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
+import { uiScalePostcss } from './scripts/ui-scale-postcss'
 
 function staticCacheHeaders(): Plugin {
   const middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
@@ -85,6 +86,14 @@ function devServerOptions(): ServerOptions {
 
 const config = defineConfig({
   server: devServerOptions(),
+  css: {
+    postcss: {
+      // The UI Scaling setting: px lengths in the app's own CSS follow
+      // --ui-scale (scripts/ui-scale-postcss.ts). Tailwind generates its
+      // utilities before this runs, so they are covered too.
+      plugins: [uiScalePostcss({ include: (file) => file.includes('/src/') && !file.includes('/node_modules/') })],
+    },
+  },
   build: {
     chunkSizeWarningLimit: 1500,
     // Skips the gzip-size column in build logs; run a local build with this

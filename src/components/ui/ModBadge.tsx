@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 export const MOD_BADGE_FILE_NAMES: Record<string, string> = {
   // Classic / stable mods
@@ -85,12 +86,12 @@ export function ModBadge({ mod, size = 1, rate, color, detail, plain = false, ta
   // Spans, not divs: the badge also renders inside <p> prose (dan-estimates
   // explainer), where a div would make the SSR HTML invalid and break hydration.
   const iconPill = file ? (
-    <span className="relative inline-block flex-shrink-0 align-middle" style={{ width, height }} title={title}>
+    <span className="relative inline-block flex-shrink-0 align-middle" style={{ width: scaledPx(width), height: scaledPx(height) }} title={title}>
       <span className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
       <span
         className="absolute"
         style={{
-          inset,
+          inset: scaledPx(inset),
           ...mask(`/images/badges/mods/mod-${file}.svg`),
           backgroundColor: `color-mix(in srgb-linear, black, ${bg} 10%)`,
         }}
@@ -99,13 +100,13 @@ export function ModBadge({ mod, size = 1, rate, color, detail, plain = false, ta
   ) : (
     <span
       className="relative flex-shrink-0 inline-flex items-center justify-center align-middle"
-      style={{ width, height }}
+      style={{ width: scaledPx(width), height: scaledPx(height) }}
       title={title}
     >
       <span className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
       <span
         className="relative font-bold leading-none"
-        style={{ fontSize: `${12 * size}px`, color: `color-mix(in srgb-linear, black, ${bg} 10%)` }}
+        style={{ fontSize: scaledPx(12 * size), color: `color-mix(in srgb-linear, black, ${bg} 10%)` }}
       >
         {mod}
       </span>
@@ -130,12 +131,12 @@ export function ModBadge({ mod, size = 1, rate, color, detail, plain = false, ta
         <span
           className="inline-flex items-center justify-center"
           style={{
-            width: extenderWidth,
-            height,
-            marginLeft: -overlap,
-            paddingLeft: overlap,
-            paddingRight: 3 * size,
-            paddingBottom: 1 * size,
+            width: scaledPx(extenderWidth),
+            height: scaledPx(height),
+            marginLeft: scaledPx(-overlap),
+            paddingLeft: scaledPx(overlap),
+            paddingRight: scaledPx(3 * size),
+            paddingBottom: scaledPx(1 * size),
             backgroundColor: darkerBg,
             maskImage: "url(/images/badges/mods/mod-icon-extender.svg)",
             WebkitMaskImage: "url(/images/badges/mods/mod-icon-extender.svg)",
@@ -147,7 +148,7 @@ export function ModBadge({ mod, size = 1, rate, color, detail, plain = false, ta
             WebkitMaskRepeat: "no-repeat",
           }}
         >
-          <span className="font-bold leading-none whitespace-nowrap" style={{ fontSize, color: bg }}>
+          <span className="font-bold leading-none whitespace-nowrap" style={{ fontSize: scaledPx(fontSize), color: bg }}>
             {tail ?? tailText}
           </span>
         </span>

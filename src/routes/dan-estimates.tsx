@@ -391,7 +391,7 @@ function DanEstimatesPage() {
           <Details summary={t`How a chart's skill is picked`}>
             <p>
               <Trans>
-                4K regular reads the play's MSD skillsets: jack from JackSpeed and Chordjack, tech from
+                4K regular reads the play's skillsets: jack from JackSpeed and Chordjack, tech from
                 Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina.
                 Speed and tech are told apart by how the chart is played, and a chart that could be
                 either counts as both.

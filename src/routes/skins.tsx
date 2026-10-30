@@ -40,6 +40,7 @@ import {
   type SkinSummary,
 } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 // All fields optional at the type level so links can target /skins without a
 // search object; validateSearch still normalizes every field on read.
@@ -392,7 +393,7 @@ function SkinsPage() {
   // rail layout, where the drawer has nothing left to do.
   useEffect(() => {
     if (!filtersOpen) return;
-    const wide = window.matchMedia("(min-width: 64rem)");
+    const wide = window.matchMedia(scaledMediaQuery("(min-width: 64rem)"));
     const close = () => setFiltersOpen(false);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();

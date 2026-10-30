@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import viteReact from "@vitejs/plugin-react";
 
 // Without this file vitest loads vite.config.ts, and the tanstackStart plugin
@@ -28,6 +28,8 @@ export default defineConfig({
   // Restrict discovery so gitignored investigation copies never run as tests.
   test: {
     include: ["{src,scripts}/**/*.{test,spec}.?(c|m)[jt]s?(x)"],
+    // A route whose URL ends in /spec (the theme spec page), not a test.
+    exclude: [...configDefaults.exclude, "src/routes/supporter_.themes.spec.tsx"],
   },
   plugins: [viteReact({ babel: { plugins: ["@lingui/babel-plugin-lingui-macro"] } })],
   resolve: {

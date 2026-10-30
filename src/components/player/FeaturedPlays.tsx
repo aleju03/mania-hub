@@ -58,7 +58,7 @@ function PlayMetric({ play, show }: { play: ProfilePlaySnapshot; show: ProfilePl
       <div className={`text-[28px] font-black leading-none tabular-nums ${show === "msd" ? "text-osu-blue" : "text-osu-pink-light"}`}>
         {show === "msd" ? value.toFixed(2) : Math.round(value)}
       </div>
-      <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">{show === "msd" ? t`MSD` : t`pp`}</div>
+      <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">{show === "msd" ? t`Rating` : t`pp`}</div>
     </div>
   );
 }
@@ -233,7 +233,7 @@ export function FeaturedPlayDialog({ slotLabel, current, onSave, onReset, onClos
     onReset().then(onClose).catch(() => setError(t`That didn't save. Try again.`)).finally(() => setSaving(false));
   };
 
-  const metricLabel: Record<ProfilePlayMetric, string> = { pp: t`pp`, msd: t`MSD`, dan: t`Dan` };
+  const metricLabel: Record<ProfilePlayMetric, string> = { pp: t`pp`, msd: t`Rating`, dan: t`Dan` };
   const isPicked = (choice: ProfilePlayChoice) => play?.beatmapId === choice.beatmapId && play.day === choice.day;
 
   return createPortal(
@@ -259,7 +259,7 @@ export function FeaturedPlayDialog({ slotLabel, current, onSave, onReset, onClos
             <FeaturedPlayCard entry={{ title: cleanTitle || t`Your title`, show, play }} link={false} />
           ) : (
             <div className="grid h-[120px] place-items-center rounded-xl border border-dashed border-osu-b3/50 text-[12px] text-osu-f1">
-              {play ? t`This play has no pp, MSD or dan to show.` : t`Pick a play below.`}
+              {play ? t`This play has no pp, rating or dan to show.` : t`Pick a play below.`}
             </div>
           )}
         </div>

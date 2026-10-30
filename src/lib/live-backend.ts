@@ -3072,6 +3072,9 @@ export interface LiveMapSearchEntry {
   // primary first; empty for LN charts, absent on cached payloads.
   danTiles?: string[];
   covers: Record<string, string> | null;
+  // The set's dominant cover colour (#rrggbb), sampled once by the backend; the
+  // map card and detail modal tint with it. Absent until the set is sampled.
+  coverColor?: string;
   // From the unified chart analysis; null until the chart's analysis job lands.
   dan?: { label: string; family: string; rawDan: number } | null;
   msd?: Record<string, number> | null;

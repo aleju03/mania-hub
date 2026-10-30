@@ -149,7 +149,7 @@ export function SearchInput({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.12 }}
-            className="absolute top-full left-0 right-0 mt-1 bg-osu-b4 border border-osu-b3/50 rounded-lg overflow-hidden z-50 shadow-[0_10px_20px_rgba(0,0,0,0.4)]"
+            className="absolute top-full right-0 mt-1 w-full min-w-[13rem] bg-osu-b4 border border-osu-b3/50 rounded-lg overflow-hidden z-50 shadow-[0_10px_20px_rgba(0,0,0,0.4)]"
           >
             {results.map((u) => {
               const disabled = disabledIds?.has(u.id) ?? false;

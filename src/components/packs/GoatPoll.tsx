@@ -31,6 +31,7 @@ import { CountryFlag } from "#/components/ui/CountryFlag";
 import { SearchInput } from "#/components/ui/SearchInput";
 import { GoatPollVotersModal } from "./GoatPollVoters";
 import { UsernameText } from "../ui/UsernameText";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 /* The temporary community vote for the next GOAT card: a timed window where
    players put names up and vote them up or down.
@@ -103,7 +104,7 @@ const STATUS_MESSAGES: Partial<Record<GoatPollWriteStatus, ReturnType<typeof msg
 function useRailWidth(): boolean {
   const [wide, setWide] = useState(false);
   useEffect(() => {
-    const query = window.matchMedia(`(min-width: ${RAIL_MIN_WIDTH}px)`);
+    const query = window.matchMedia(scaledMediaQuery(`(min-width: ${RAIL_MIN_WIDTH}px)`));
     const sync = () => setWide(query.matches);
     sync();
     query.addEventListener("change", sync);

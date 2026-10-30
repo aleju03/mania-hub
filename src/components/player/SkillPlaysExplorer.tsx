@@ -518,7 +518,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
             value={view}
             options={views.map((option) => ({
               value: option,
-              label: option === "msd" ? "MSD" : option === "dan" ? t`Dan` : t`Unrated`,
+              label: option === "msd" ? t`Rating` : option === "dan" ? t`Dan` : t`Unrated`,
               onPrefetch: () => prefetchSkillPlaysExplorerView(userId, modes, option),
             }))}
             onChange={onViewChange}
@@ -566,7 +566,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
             value={unratedSort}
             options={[
               { value: "pp" as const, label: "PP", color: "#ff66aa" },
-              { value: "msd" as const, label: "MSD", color: OVERALL_AXIS_META.color },
+              { value: "msd" as const, label: t`Rating`, color: OVERALL_AXIS_META.color },
               { value: "dan" as const, label: t`Dan`, color: SIDE_COLOR.rc },
             ].map((option) => ({
               ...option,
@@ -1022,7 +1022,7 @@ function UnratedPlayRow({
   // Same three states the map card prints (MapDetailModal): a play the
   // compute has not reached yet is pending, not vibro.
   const reason = play.ratingExclusionReason === "msd_floor"
-    ? t`Accuracy below skill rating range, so this play has no MSD rating on any skillset.`
+    ? t`Accuracy below skill rating range, so this play has no rating on any skillset.`
     : play.ratingExclusionReason === "pending_calibration"
       ? t`Skill rating recalculation pending`
       : play.ratingExclusionReason === "unverifiable_revision"
@@ -1729,14 +1729,14 @@ function UnratedValueCell({ item, keyCount, unratedSort }: { item: LivePlayerUnr
         : (item.msd != null ? item.msd.toFixed(2) : "-")}
     </div>
   );
-  const leadLabel = unratedSort === "pp" ? "pp" : unratedSort === "msd" ? "MSD" : t`chart dan`;
+  const leadLabel = unratedSort === "pp" ? "pp" : unratedSort === "msd" ? t`rating` : t`chart dan`;
   const rest = (["pp", "msd", "dan"] as const).filter((axis) => axis !== unratedSort).map((axis) => {
     const value = axis === "pp"
       ? (item.pp != null ? formatPP(item.pp, locale) : "-")
       : axis === "msd"
         ? (item.msd != null ? item.msd.toFixed(2) : "-")
         : (item.dan?.label ?? "-");
-    return `${axis === "pp" ? "pp" : axis === "msd" ? "MSD" : t`dan`} ${value}`;
+    return `${axis === "pp" ? "pp" : axis === "msd" ? t`rating` : t`dan`} ${value}`;
   });
   return (
     <div className="flex w-20 shrink-0 flex-col items-end gap-1 text-right sm:w-24">

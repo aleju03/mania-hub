@@ -59,6 +59,7 @@ import {
   type SlotId,
   type SlotValue,
 } from "./loadout";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 /* The right side of the /supporter loadout: the six slots, each showing what
    it holds, and under them the drawer of the open slot. Pointing at an item
@@ -81,7 +82,7 @@ export function FrameThumb({ frame, avatar, size, live = false }: { frame: Suppo
   const avatarLeft = (size - spanX * scale) / 2 - minX * scale;
   const avatarTop = (size - spanY * scale) / 2 - minY * scale;
   return (
-    <span className="relative block" style={{ width: size, height: size }}>
+    <span className="relative block" style={{ width: scaledPx(size), height: scaledPx(size) }}>
       <span className="absolute" style={{ left: avatarLeft, top: avatarTop, width: scale, height: scale }}>
         <img src={avatar} alt="" className="h-full w-full bg-osu-b3 object-cover" style={framedAvatarStyle(frame) ?? { borderRadius: FRAMED_AVATAR_RADIUS }} />
         {frame && <SupporterAvatarFrame frame={frame} still={!live} userId={avatarUrlUserId(avatar)} />}

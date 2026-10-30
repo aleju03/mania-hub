@@ -8,7 +8,7 @@ import { useLocale } from "../../lib/locale-context";
 import { avatarImageSrc } from "../ui/Avatar";
 import { MapDetailModal } from "./MapDetailModal";
 import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
-import { SearchCard, toPreviewTrack } from "./SearchCard";
+import { SearchCardGrid, toPreviewTrack } from "./SearchCard";
 import { UserCollectionEditor } from "./UserCollectionEditor";
 import { useHoldToConfirm } from "../../lib/use-hold-to-confirm";
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
@@ -252,21 +252,16 @@ export function UserCollectionDetailView({ collection }: { collection: Collectio
         {cards.length === 0 ? (
           <div className="py-16 text-center text-[13px] text-osu-f1">{t`This collection has no maps in it yet.`}</div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-            {cards.map((entry) => (
-              <SearchCard
-                key={entry.beatmapId}
-                entry={entry}
-                onOpen={(opened) => {
-                  // The detail modal has its own chart-preview audio; don't
-                  // leave the card's song preview playing over it.
-                  stopPreview();
-                  setMapEntry(opened);
-                }}
-                preview={preview}
-              />
-            ))}
-          </div>
+          <SearchCardGrid
+            items={cards}
+            preview={preview}
+            onOpen={(opened) => {
+              // The detail modal has its own chart-preview audio; don't
+              // leave the card's song preview playing over it.
+              stopPreview();
+              setMapEntry(opened);
+            }}
+          />
         )}
 
         <UserCollectionEditor

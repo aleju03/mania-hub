@@ -12,11 +12,12 @@ import { runSound } from "./runSound";
 import { SHOP_FEEL } from "./shopFeel";
 import { cancelGhost, confirmGhost, startGhost, useShardFloats, useShudder } from "./shopMotion";
 import { Shards } from "./Shards";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 function useWide(): boolean {
   const [wide, setWide] = useState(true);
   useEffect(() => {
-    const query = window.matchMedia("(min-width: 768px)");
+    const query = window.matchMedia(scaledMediaQuery("(min-width: 768px)"));
     const update = () => setWide(query.matches);
     update();
     query.addEventListener("change", update);

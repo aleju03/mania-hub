@@ -349,14 +349,14 @@ export const NAME_STYLE_GROUPS: { key: string; title: MessageDescriptor; styles:
   {
     key: "effects",
     title: msg`Effects`,
-    styles: ["chrome", "molten-gold", "ethereal", "pearl", "galaxy", "heatmap", "note-rain", "plasma", "ink", "caustics", "lava", "dither", "mesh", "aurora", "glitch"],
+    styles: ["chrome", "molten-gold", "ethereal", "pearl", "galaxy", "heatmap", "note-rain", "plasma", "ink", "caustics", "lava", "inferno", "hellfire", "dither", "mesh", "aurora", "glitch"],
   },
   { key: "gradients", title: msg`Gradients`, styles: ["holo", "gold", "rainbow", "sunset", "ember", "frost"] },
   { key: "glow", title: msg`Glow and retro`, styles: ["neon", "hit-light", "300g", "pixel", "terminal", "sticker", "plate"] },
 ];
 
 export const NAME_FONT_GROUPS: { key: string; title: MessageDescriptor; fonts: SupporterNameFontId[] }[] = [
-  { key: "game", title: msg`Game and tech`, fonts: ["pixel", "silkscreen", "vt323", "majormono", "orbitron", "audiowide", "michroma", "zendots", "rubikglitch", "pixelify", "jersey", "doto", "tektur"] },
+  { key: "game", title: msg`Game and tech`, fonts: ["pixel", "silkscreen", "vt323", "majormono", "orbitron", "audiowide", "michroma", "zendots", "rubikglitch", "pixelify", "jersey", "doto", "tektur", "monocraft"] },
   { key: "bold", title: msg`Bold`, fonts: ["unbounded", "bungee", "russo", "blackops", "bebas", "monoton", "delagothic", "rubikmono", "climatecrisis"] },
   { key: "fun", title: msg`Fun`, fonts: ["righteous", "bangers", "luckiest", "shrikhand", "creepster", "fredoka", "bagel", "rampart"] },
   { key: "hand", title: msg`Handwritten`, fonts: ["marker", "rocksalt", "pacifico", "lobster", "caveat", "sedgwick", "yellowtail", "greatvibes"] },

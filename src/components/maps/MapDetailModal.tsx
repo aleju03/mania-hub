@@ -1,9 +1,10 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, type CSSProperties, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, isLocalChartId, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
 import type { MapsFavouriteBeatmapset, OsuScore } from "../../lib/types";
-import { formatDuration, formatNumber } from "../../lib/format";
+import { formatDuration, formatNumber, intlLocaleTag } from "../../lib/format";
+import { useLocale } from "../../lib/locale-context";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
@@ -24,7 +25,6 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import type { VibroAnalysis } from "#dan/vibro-sections";
-import { msdHeadline } from "#dan/msd-headline";
 import { hasLnAxis } from "#dan/ln-axis-keymodes";
 import { usesPrism } from "#dan/prism/switch";
 import { useNoDans } from "../../store";
@@ -40,9 +40,12 @@ import {
   oszDownloadUrl,
   patternLabel,
   subPatternTags,
-  StarRatingBadge,
-  starRatingColor,
+  skillTiles,
+  coverTintColor,
 } from "./SearchCard";
+import { HoverTip } from "../ui/HoverTip";
+import { resolveShownMsd } from "../../lib/shown-msd";
+import { DiffTabs, InlineStats, MapDetailHeader, type DetailStars, type InlineStat } from "./MapDetailHeader";
 
 // The banner art lands after the modal does, so it fades in rather than
 // snapping over the header. The ref check is for a cover already in the browser
@@ -251,7 +254,7 @@ function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyC
     <div className="flex flex-col gap-4 border-t border-white/[0.07] pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-wide text-osu-f1/60"><Trans>MSD skill rating</Trans></div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-osu-f1/60"><Trans>Skill rating</Trans></div>
           <div className="mt-1 text-xs text-osu-l2">{headline.label}</div>
         </div>
         {!play.ratingExcluded && <span className="text-[30px] font-black tabular-nums leading-none" style={{ color: headline.color }}>{headline.value.toFixed(2)}</span>}
@@ -284,18 +287,6 @@ export function accuracyCurrencyLabel(currency: "stable" | "v2"): string {
   return currency === "v2" ? "ScoreV2" : "stable";
 }
 
-function Stat({ label, value, badge }: { label: string; value: string; badge?: string }) {
-  return (
-    <div className="flex min-w-0 flex-col">
-      <span className="flex items-center gap-1.5 text-[16px] font-bold text-osu-l1 tabular-nums leading-none">
-        {value}
-        {badge && <span className="rounded bg-osu-b3 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-osu-l2">{badge}</span>}
-      </span>
-      <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{label}</span>
-    </div>
-  );
-}
-
 // The osu! bpm is the timing point that holds the most wall-clock time, so
 // gimmick timing (a set timed at 999 as a joke) and long off-tempo intros
 // misreport the tempo the notes run at. When the note-weighted tempo the chart
@@ -305,17 +296,6 @@ function realBpm(bpm: number, noteBpm: number | null | undefined): string | null
   if (noteBpm == null || !(noteBpm > 0) || !(bpm > 0)) return null;
   if (Math.abs(noteBpm - bpm) / bpm < 0.03) return null;
   return String(Math.round(noteBpm * 100) / 100);
-}
-
-// A Stat whose value the stub does not carry yet: the label is already true, so
-// only the number waits. Same 16px value height, so nothing moves when it lands.
-function PendingStat({ label }: { label: string }) {
-  return (
-    <div className="flex min-w-0 flex-col">
-      <Skeleton className="h-4 w-10" />
-      <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{label}</span>
-    </div>
-  );
 }
 
 // The MSD strip's frame while the entry is in flight. Every play in a skill
@@ -351,7 +331,7 @@ function SpeedModBadge({ mod, rate, on, min, max, onToggle, onRate }: {
     if (force || next !== rate || on) onRate(next);
   };
   return (
-    <span className={`relative inline-flex transition-opacity hover:brightness-110 ${on ? "" : "opacity-40 grayscale"}`}>
+    <span className={`relative inline-flex transition-opacity hover:brightness-110 ${on ? "" : "opacity-50 grayscale mix-blend-luminosity"}`}>
       <ModBadge
         mod={mod}
         size={size}
@@ -404,8 +384,8 @@ function PendingMsdBlock({ label }: { label?: string }) {
   const { t } = useLingui();
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{label ?? t`MSD`}</span>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{label ?? t`Rating`}</span>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-white/[0.04] px-3.5 py-2.5">
         <div className="flex min-h-10 items-center gap-4 sm:border-r sm:border-white/10 sm:pr-5">
           <Skeleton className="h-10 w-10 rounded-full" />
           <Skeleton className="h-[18px] w-12" />
@@ -471,43 +451,6 @@ function prismFlooredSkillsets(keyCount: number | null | undefined, skillsets: A
 
 /** The site's hover tip, in place of the browser's title tooltip. Portaled and
  * kept inside the viewport so the modal's scroll box cannot clip it. */
-function HoverTip({ tip, className, children }: { tip: ReactNode; className: string; children: ReactNode }) {
-  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
-  const [left, setLeft] = useState<number | null>(null);
-  const tipRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (!anchor || !tipRef.current) return setLeft(null);
-    const width = tipRef.current.offsetWidth;
-    setLeft(Math.min(Math.max(anchor.x - width / 2, 8), window.innerWidth - width - 8));
-  }, [anchor]);
-  useEffect(() => {
-    if (!anchor) return;
-    const close = () => setAnchor(null);
-    window.addEventListener("scroll", close, true);
-    return () => window.removeEventListener("scroll", close, true);
-  }, [anchor]);
-  if (!tip) return <div className={className}>{children}</div>;
-  return (
-    <div
-      className={className}
-      onMouseEnter={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setAnchor({ x: rect.left + rect.width / 2, y: rect.top }); }}
-      onMouseLeave={() => setAnchor(null)}
-    >
-      {children}
-      {anchor && createPortal(
-        <div
-          ref={tipRef}
-          role="tooltip"
-          className="pointer-events-none fixed z-[200] max-w-72 -translate-y-full rounded-lg bg-osu-b3 px-3 py-2 text-xs leading-relaxed text-osu-l2 shadow-xl shadow-black/40"
-          style={{ left: left ?? 0, top: anchor.y - 8, visibility: left == null ? "hidden" : undefined }}
-        >
-          {tip}
-        </div>,
-        document.body,
-      )}
-    </div>
-  );
-}
 
 function halvesTip(
   i18n: ReturnType<typeof useLingui>["i18n"], name: string, keyCount: number | null | undefined, values: Record<string, number> | null | undefined,
@@ -535,16 +478,6 @@ function skillsetLabel(i18n: ReturnType<typeof useLingui>["i18n"], name: string,
   const label = (usesPrism(keyCount) ? PRISM_SKILLSET_LABELS[name] : undefined) ?? MSD_SKILLSET_LABELS[name];
   return label ? i18n._(label) : name;
 }
-
-const BEATMAP_STATUS_LABELS: Record<string, MessageDescriptor> = {
-  ranked: msg`Ranked`,
-  approved: msg`Ranked`,
-  qualified: msg`Qualified`,
-  loved: msg`Loved`,
-  graveyard: msg`Graveyard`,
-  pending: msg`Pending`,
-  wip: msg`Pending`,
-};
 
 /** Matches osu-web's rate rendering on mod badges: 2 decimals + "x" (U+00D7). */
 function formatRate(rate: number): string {
@@ -692,21 +625,17 @@ export function MsdBlock({
   // MSD and dan replace the 1.0x pair wholesale: a rate-adjusted MSD next to a
   // 1.0x dan badge would describe two different charts. When the rate values
   // never landed the whole block falls back to 1.0x and says so.
-  const rateAdjusted = (rate !== 1 || inverse) && rateMsd != null;
+  const { rateAdjusted, msd, overall } = resolveShownMsd({ entry, msdLn, analysisMsd, analysisLnIdentity, rate, rateMsd, rateDan, inverse });
   // The LN-adjusted (tail-aware) values simply ARE the msd shown when the
   // chart has an eligible tail pass, using the release-weighting policy shared
   // with player ratings. Bulk search rows carry them, so the number shows from first
   // paint; the lazily fetched analysis only overrides when it is fresher than
   // the index (base msd remains for pre-msdLn cached payloads).
-  const msd = rateAdjusted ? rateMsd : msdLn ?? analysisMsd ?? entry.msdLn ?? entry.msd ?? null;
-  if (!msd) return null;
+  if (!msd || overall == null) return null;
   // An LN number shows on 4K and on the keymodes whose LN axis is published
   // (hasLnAxis), never from an older cached artifact of another keymode. The backend
   // publishes the LN number on every chart past the hold line, LN identity
   // or not; identity only decides whether LN can be the headline.
-  const hasLnIdentity = rateAdjusted
-    ? rateDan == null || rateDan.family === "ln"
-    : analysisLnIdentity ?? (entry.primaryPattern === "ln" || entry.dan?.family === "ln");
   // 6K-8K's LN number shows whenever their LN axis is published (Prism).
   const lnShown = entry.keyCount === 4 || hasLnAxis(entry.keyCount);
   const skillsetNames = lnShown && Number(msd.LN ?? 0) > 0
@@ -718,10 +647,6 @@ export function MsdBlock({
     // (Technical); a 0.18 next to real values reads as data, so drop it.
     .filter(({ value }) => value >= 1)
     .sort((a, b) => b.value - a.value);
-  // On a 4K LN chart the headline is the higher of Overall and LN: native
-  // Overall never sees a tail, so on its own it prices the rice that is left
-  // once the holds are cut off.
-  const overall = msdHeadline(msd, entry.keyCount, hasLnIdentity);
   const topName = skillsets[0]?.name;
   const floored = prismFlooredSkillsets(entry.keyCount, skillsets);
 
@@ -729,8 +654,8 @@ export function MsdBlock({
   // "MSD" alone at 1.0x; a rate-modded play names the speed the numbers are
   // for, including when only the 1.0x pair could be shown.
   const heading = inverse && rateAdjusted
-    ? rate === 1 ? t`MSD with Inverse` : t`MSD at ${formatRate(rate)} with Inverse`
-    : rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
+    ? rate === 1 ? t`Rating with Inverse` : t`Rating at ${formatRate(rate)} with Inverse`
+    : rate === 1 ? t`Rating` : t`Rating at ${formatRate(rateAdjusted ? rate : 1)}`;
   const sectionRate = rateAdjusted ? rate : 1;
   const displaySections = groupDetectedSections(vibroAnalysis?.sections ?? [], sectionRate);
   const other = rateAdjusted ? (secondaryDan ? rateSecondaryDan : null) : secondaryDan;
@@ -765,14 +690,14 @@ export function MsdBlock({
         <div hidden={!sectionsOpen} className="text-[11px] text-osu-f1/75">
           <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
             {displaySections.map((section) => (
-              <li key={section.startTime} className="whitespace-nowrap rounded bg-osu-b4/40 px-2 py-1 font-mono text-osu-f1/85 tabular-nums">
+              <li key={section.startTime} className="whitespace-nowrap rounded bg-white/[0.04] px-2 py-1 font-mono text-osu-f1/85 tabular-nums">
                 {formatSectionTime(section.startTime / sectionRate)}–{formatSectionTime(section.endTime / sectionRate)}
               </li>
             ))}
           </ul>
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-white/[0.04] px-3.5 py-2.5">
         {/* Verdict group: dan badge + Overall, split from the skillset grid.
             min-h keeps the row the badge's height even on diffs that have no
             dan verdict, so switching diffs doesn't resize the MSD box. */}
@@ -917,7 +842,11 @@ export function MapDetailModal({
   // than as zeroes. "missing"/"error": that fetch is done and brought nothing.
   status?: "ready" | "pending" | "missing" | "error";
 }) {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
+  const intlLocale = intlLocaleTag(useLocale());
+  // The set's cover colour from the payload, as the panel's tint.
+  const coverTint = entry?.coverColor ? coverTintColor(entry.coverColor) : null;
+  const compactPlays = (n: number) => new Intl.NumberFormat(intlLocale, { notation: "compact", maximumFractionDigits: 1 }).format(Math.max(0, n));
   // Which diff of the set is in focus; defaults to the entry's representative.
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
@@ -1160,33 +1089,53 @@ export function MapDetailModal({
   // Share copies the score's link from either tab.
   const shareScore = play != null && (shownTab === "score" || local);
 
+  const headerTiles = active ? skillTiles([active]).slice(0, 2) : [];
+  // What the rating panel rates, shared with the header's big number so the
+  // two always read the same Overall.
+  const shownMsdSource = active ? {
+    entry: active,
+    msdLn: activeAnalysis?.msdLn ?? null,
+    analysisMsd: offCatalog && playRate === 1 ? rateMsd : activeAnalysis?.msd,
+    analysisLnIdentity: activeAnalysis?.lnIdentity,
+    rate: playRate,
+    rateMsd,
+    rateDan,
+    inverse: playedInverse,
+  } : null;
+  const headerRating = shownMsdSource && msdShown ? resolveShownMsd(shownMsdSource).overall : null;
+  const headerStars: DetailStars = numbersKnown
+    ? starsUnknown ? null : { value: shownStars, dim: starsPending }
+    : fileStats?.stars ? { value: shownStars, dim: false }
+    : pending && !starsUnknown ? "pending" : null;
+  const headerStatus = active && numbersKnown && !local ? active.status : null;
+  const inlineStats: InlineStat[] = !active ? [] : fileStats || fileStatsPending
+    ? [
+      { key: "bpm", value: fileStats ? String(Math.round(fileStats.bpm)) : null, label: t`BPM` },
+      { key: "length", value: fileStats ? formatDuration(fileStats.length) : null },
+      { key: "ln", value: fileStats ? formatNumber(fileStats.lnCount) : null, label: t`Long Notes` },
+      { key: "od", value: fileStats ? fileStats.od.toFixed(1) : null, label: t`OD`, labelFirst: true },
+    ]
+    : [
+      { key: "bpm", value: numbersKnown ? realBpmStat ?? String(Math.round(active.bpm)) : null, label: t`BPM` },
+      { key: "length", value: numbersKnown ? formatDuration(active.length) : null },
+      ...(local ? [] : [{ key: "plays", value: numbersKnown ? compactPlays(active.playCount) : null, label: t`plays` }]),
+      {
+        key: "ln",
+        value: numbersKnown ? formatNumber((starsKey != null ? inverseLnCountByKey[starsKey] : undefined) ?? active.lnCount) : null,
+        label: t`Long Notes`,
+      },
+      {
+        key: "od",
+        value: !numbersKnown || (active.od == null && analysisPending) ? null : activeOd == null ? "—" : activeOd.toFixed(1),
+        label: t`OD`,
+        labelFirst: true,
+      },
+    ];
+
   // Every matching diff of the set, easiest first. Shared by Map info and
   // Scores, where switching diffs switches the board.
   const diffPicker = active && diffs.length > 1 ? (
-    <div className="flex flex-wrap gap-1.5">
-      {diffs.map((diff) => {
-        const isActive = diff.beatmapId === active.beatmapId;
-        return (
-          <button
-            key={diff.beatmapId}
-            type="button"
-            onClick={() => setSelectedDiffId(diff.beatmapId)}
-            aria-pressed={isActive}
-            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10.5px] font-semibold cursor-pointer transition-colors ${
-              isActive ? "bg-osu-b3 text-white" : "bg-osu-b4/60 text-osu-l2 hover:bg-osu-b4 hover:text-osu-l1"
-            }`}
-          >
-            <span
-              className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/15"
-              style={{ background: starRatingColor(diff.stars) }}
-            />
-            {mixedKeys && <span className="text-osu-f1">{diff.keyCount}K</span>}
-            <span className="max-w-[180px] truncate">{diff.version}</span>
-            <span className="tabular-nums text-osu-yellow">★{diff.stars.toFixed(2)}</span>
-          </button>
-        );
-      })}
-    </div>
+    <DiffTabs diffs={diffs} activeId={active.beatmapId} mixedKeys={mixedKeys} onSelect={setSelectedDiffId} />
   ) : null;
 
   if (typeof document === "undefined") return null;
@@ -1211,60 +1160,37 @@ export function MapDetailModal({
           <div className="absolute inset-0 bg-black/85" onClick={onClose} />
           <motion.div
             ref={panelRef}
-            style={pinnedTop == null ? undefined : { maxHeight: `calc(100dvh - ${pinnedTop}px - 0.75rem)` }}
-            className="modal-card-mobile-safe relative isolate z-10 w-full max-w-[760px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl flex flex-col"
+            style={{
+              ...(pinnedTop == null ? {} : { maxHeight: `calc(100dvh - ${pinnedTop}px - 0.75rem)` }),
+              ...(coverTint ? { "--tint": coverTint } : {}),
+            } as CSSProperties}
+            className={`modal-card-mobile-safe relative isolate z-10 w-full max-w-[760px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 shadow-2xl flex flex-col ${
+              coverTint ? "ring-[color-mix(in_srgb,var(--tint)_30%,transparent)]" : "ring-white/10"
+            }`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
           >
             <div className="pointer-events-none absolute inset-0 bg-osu-b5" aria-hidden="true" />
+            {coverTint ? (
+              <div
+                className="pointer-events-none absolute inset-0"
+                aria-hidden="true"
+                style={{ background: "linear-gradient(to bottom, color-mix(in srgb, var(--tint) 28%, transparent), color-mix(in srgb, var(--tint) 9%, transparent) 55%, color-mix(in srgb, var(--tint) 5%, transparent))" }}
+              />
+            ) : null}
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-              {/* Header banner */}
-              <div className="relative h-[92px] shrink-0">
-                {hasBanner ? <BannerCover key={local ? entry.beatmapId : entry.beatmapsetId} src={mapCoverUrl(entry)} /> : null}
-                <div className="absolute inset-0 bg-gradient-to-t from-osu-b5 via-osu-b5/70 to-black/40" />
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label={t`Close`}
-                  className="absolute top-2.5 right-2.5 z-10 grid h-7 w-7 place-items-center rounded-full bg-black/50 text-white/80 hover:bg-black/70 hover:text-white transition-colors cursor-pointer"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="h-4 w-4">
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
-                <div className="absolute inset-x-0 bottom-0 p-3.5 pr-12">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">{active.keyCount}K</span>
-                    {numbersKnown ? (
-                      <>
-                        {starsUnknown ? null : <StarRatingBadge stars={shownStars} className={`transition-opacity ${starsPending ? "opacity-50" : ""}`} />}
-                        {local ? null : (
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
-                            {BEATMAP_STATUS_LABELS[active.status.toLowerCase()]
-                              ? i18n._(BEATMAP_STATUS_LABELS[active.status.toLowerCase()])
-                              : active.status}
-                          </span>
-                        )}
-                      </>
-                    ) : fileStats?.stars ? (
-                      <StarRatingBadge stars={shownStars} />
-                    ) : pending && !starsUnknown ? (
-                      // A skeleton's tint is invisible against the banner art,
-                      // so the star badge's place is held in the banner's own
-                      // language instead.
-                      <span className="inline-flex h-[14px] w-[52px] rounded-full bg-black/50" aria-hidden="true" />
-                    ) : null}
-                  </div>
-                  <h2 className="mt-1 text-[17px] font-bold text-white leading-tight truncate drop-shadow">{entry.title}</h2>
-                  <p className="text-[11px] text-white/75 truncate">
-                    {entry.artist}
-                    {entry.creator ? <span className="text-white/50"> · <Trans>mapped by {entry.creator}</Trans></span> : null}
-                    <span className="text-white/50"> · [{active.version}]</span>
-                  </p>
-                </div>
-              </div>
+              <MapDetailHeader
+                entry={entry}
+                active={active}
+                cover={hasBanner ? <BannerCover key={local ? entry.beatmapId : entry.beatmapsetId} src={mapCoverUrl(entry)} /> : null}
+                stars={headerStars}
+                status={headerStatus}
+                tiles={headerTiles}
+                rating={headerRating}
+                onClose={onClose}
+              />
 
               {/* Two tabs only when a score opened the card: the play first,
                   the map's own detail behind it. A play on a chart with no
@@ -1309,45 +1235,13 @@ export function MapDetailModal({
                 ) : (
                   <>
                 {diffPicker}
-                {/* Stats */}
-                {fileStats || fileStatsPending ? (
-                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:grid-cols-4 sm:gap-2">
-                    {fileStats ? (
-                      <>
-                        <Stat label={t`BPM`} value={String(Math.round(fileStats.bpm))} />
-                        <Stat label={t`Length`} value={formatDuration(fileStats.length)} />
-                        <Stat label={t`LN notes`} value={formatNumber(fileStats.lnCount)} />
-                        <Stat label={t`OD`} value={fileStats.od.toFixed(1)} />
-                      </>
-                    ) : (
-                      [t`BPM`, t`Length`, t`LN notes`, t`OD`].map((label) => <PendingStat key={label} label={label} />)
-                    )}
-                  </div>
-                ) : numbersKnown || pending ? (
-                  <div className={`flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:gap-2 ${local ? "sm:grid-cols-4" : "sm:grid-cols-5"}`}>
-                    {numbersKnown ? (
-                      <>
-                        <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm))} />
-                        <Stat label={t`Length`} value={formatDuration(active.length)} />
-                        {local ? null : <Stat label={t`Plays`} value={formatNumber(active.playCount)} />}
-                        <Stat label={t`LN notes`} value={formatNumber((starsKey != null ? inverseLnCountByKey[starsKey] : undefined) ?? active.lnCount)} />
-                        {active.od == null && analysisPending ? (
-                          <PendingStat label={t`OD`} />
-                        ) : (
-                          <Stat label={t`OD`} value={activeOd == null ? "—" : activeOd.toFixed(1)} />
-                        )}
-                      </>
-                    ) : (
-                      (local ? [t`BPM`, t`Length`, t`LN notes`, t`OD`] : [t`BPM`, t`Length`, t`Plays`, t`LN notes`, t`OD`]).map((label) => <PendingStat key={label} label={label} />)
-                    )}
-                    {/* The osu! timing figure, when the note-weighted tempo took
-                        the stat. Its own row: inline it would run under the next
-                        stat on a phone, and giving one cell a second line leaves
-                        the rest of the row with a gap under their values. */}
-                    {numbersKnown && realBpmStat ? (
-                      <span className="w-full col-span-full -mt-1 text-[10px] text-osu-f1/70">{t`timed at ${Math.round(active.bpm)}`}</span>
-                    ) : null}
-                  </div>
+                {/* Stats: one plain line, "165 BPM | 2:09 | 2.4M plays | 109 Long Notes | OD 7". */}
+                {fileStats || fileStatsPending || numbersKnown || pending ? (
+                  <InlineStats
+                    stats={inlineStats}
+                    // The osu! timing figure, when the note-weighted tempo took the BPM.
+                    note={numbersKnown && !fileStats && !fileStatsPending && realBpmStat ? t`timed at ${Math.round(active.bpm)}` : undefined}
+                  />
                 ) : null}
 
                 {/* The catalog entry brought nothing back: say so where its
@@ -1368,14 +1262,8 @@ export function MapDetailModal({
                   <div aria-busy={ratePending}>
                     <MsdBlock
                       pending={ratePending}
-                      entry={active}
-                      msdLn={activeAnalysis?.msdLn ?? null}
-                      analysisMsd={offCatalog && playRate === 1 ? rateMsd : activeAnalysis?.msd}
+                      {...shownMsdSource!}
                       analysisDan={offCatalog && playRate === 1 ? rateDan : activeAnalysis?.status === "ready" ? activeAnalysis.primaryDan : undefined}
-                      analysisLnIdentity={activeAnalysis?.lnIdentity}
-                      rate={playRate}
-                      rateMsd={rateMsd}
-                      rateDan={rateDan}
                       secondaryDan={(offCatalog && playRate === 1 ? rateAnalysis?.secondaryDan : activeAnalysis?.secondaryDan) ?? null}
                       rateSecondaryDan={rateAnalysis?.secondaryDan ?? null}
                       vibroAnalysis={offCatalog || (playedInverse && !ratePending) ? rateAnalysis?.vibroAnalysis : playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
@@ -1404,7 +1292,7 @@ export function MapDetailModal({
                 {!active.msd && patterns.length > 0 && (
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`Pattern profile`}</span>
-                    <div className="grid items-center gap-3 rounded-lg bg-osu-b4/40 p-3 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)]">
+                    <div className="grid items-center gap-3 rounded-lg bg-white/[0.04] p-3 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)]">
                       <div className="flex justify-center">
                         <PatternRadar patterns={active.patterns} />
                       </div>
@@ -1450,11 +1338,12 @@ export function MapDetailModal({
                     flatBackdrop
                   />
                 ) : pending && !local ? (
-                  <div className="h-[300px] shrink-0 rounded-lg bg-osu-b4/30" aria-hidden="true" />
+                  <div className="h-[300px] shrink-0 rounded-lg bg-white/[0.03]" aria-hidden="true" />
                 ) : null}
                   </>
                 )}
               </div>
+
 
               {/* Actions: one footer under both tabs, so switching tabs never
                   moves the links. */}
@@ -1466,7 +1355,7 @@ export function MapDetailModal({
                     href={setKnown ? osuBeatmapUrl(active) : `https://osu.ppy.sh/beatmaps/${active.beatmapId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-pink px-3 py-2 text-[12px] font-bold text-white hover:bg-osu-pink-light transition-colors sm:justify-start sm:px-3"
+                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-white/[0.07] px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-white/[0.12] hover:text-white transition-colors sm:justify-start sm:px-3"
                   >
                     osu! web
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
@@ -1482,7 +1371,7 @@ export function MapDetailModal({
                     <>
                       <a
                         href={oszDownloadUrl(entry.beatmapsetId)}
-                        className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:justify-start sm:px-3"
+                        className="order-first inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-osu-pink px-3.5 py-2 text-[12px] font-bold text-white shadow-[0_2px_10px_-2px] shadow-osu-pink/50 hover:bg-osu-pink-light transition-colors sm:justify-start"
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
                           <path d="M12 3v10" />
@@ -1493,7 +1382,7 @@ export function MapDetailModal({
                       </a>
                       <a
                         href={osuDirectUrl(entry.beatmapsetId)}
-                        className="hidden items-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:inline-flex"
+                        className={`hidden items-center gap-1.5 whitespace-nowrap rounded-lg bg-white/[0.07] px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-white/[0.12] hover:text-white transition-colors sm:inline-flex`}
                       >
                         <OsuLogo className="h-3.5 w-3.5" />
                         {t`Open in osu!`}
@@ -1514,7 +1403,7 @@ export function MapDetailModal({
                         window.setTimeout(() => setShareCopied(false), 1600);
                       }).catch(() => {});
                     }}
-                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40 sm:justify-start sm:px-3"
+                    className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-white/[0.07] px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-white/[0.12] hover:text-white transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40 sm:justify-start sm:px-3`}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
                       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />

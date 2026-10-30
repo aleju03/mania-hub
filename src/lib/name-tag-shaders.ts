@@ -113,7 +113,7 @@ const twinkleStars = (scale: string, threshold: string) => `
   }`;
 
 // language=GLSL
-const OWN_SHADERS: Record<Exclude<ShaderNameStyle, "chrome" | "molten-gold" | "glitch">, string> = {
+const OWN_SHADERS: Record<Exclude<ShaderNameStyle, "chrome" | "molten-gold" | "glitch" | FireStyle>, string> = {
   // Heatmap: a thermal camera, cool at the edges, hot in the thick of the
   // letters, heat waves rising through.
   heatmap: letterShader(`
@@ -318,6 +318,120 @@ void main() {
 }
 `;
 
+type FireStyle = "inferno" | "hellfire";
+
+/* Inferno and Hellfire: crisp burning letters behind a dark edge, tongues of
+   flame rising off them and flaring every few seconds (a beat, then a rest),
+   sparks thrown up by the flare. They differ only in the colour of the fire. */
+const FIRE_LOOKS: Record<FireStyle, { ramp: string; edge: string }> = {
+  inferno: {
+    ramp: `
+    vec3 c = mix(vec3(.22, .01, 0.), vec3(.85, .12, .02), smoothstep(0., .3, h));
+    c = mix(c, vec3(1., .42, .04), smoothstep(.25, .55, h));
+    c = mix(c, vec3(1., .78, .25), smoothstep(.5, .8, h));
+    return mix(c, vec3(1., .97, .85), smoothstep(.8, 1., h));`,
+    edge: "vec3(.07, .01, 0.)",
+  },
+  hellfire: {
+    ramp: `
+    vec3 c = mix(vec3(.08, .0, .14), vec3(.38, .06, .7), smoothstep(0., .32, h));
+    c = mix(c, vec3(.42, .38, 1.), smoothstep(.28, .58, h));
+    c = mix(c, vec3(.4, .82, 1.), smoothstep(.55, .82, h));
+    return mix(c, vec3(.92, .98, 1.), smoothstep(.82, 1., h));`,
+    edge: "vec3(.04, .0, .08)",
+  },
+};
+
+function fireShader(style: FireStyle): string {
+  const look = FIRE_LOOKS[style];
+  // language=GLSL
+  return `${PRELUDE}
+vec3 ramp(float h) {
+  h = clamp(h, 0., 1.);
+  ${look.ramp}
+}
+
+float dilate(vec2 uv, float r, float aspect) {
+  float m = 0.;
+  for (int i = 0; i < 12; i++) {
+    float a = float(i) * .5236;
+    m = max(m, glyph(uv + vec2(cos(a) * r / aspect, sin(a) * r)));
+  }
+  return m;
+}
+
+void main() {
+  vec2 uv = v_imageUV;
+  float aspect = u_imageAspectRatio;
+  float t = u_time;
+  vec2 p = vec2(uv.x * aspect, uv.y);
+  float body = glyph(uv);
+
+  // a flare every 4.8s: a quick eased rise, a slower fall, then a rest
+  float ph = fract(t / 4.8);
+  float flare = smoothstep(0., .1, ph) * (1. - smoothstep(.1, .42, ph));
+  flare = flare * flare * (3. - 2. * flare);
+
+  // rising turbulence, domain-warped so the tongues twist instead of wobbling
+  vec2 q = vec2(p.x * 3., p.y * 2.2 + t * 2.);
+  q.x += (fbm(q * .6 + 3.1) - .5) * 1.4;
+  float tongue = fbm(q);
+  float lick = noise(vec2(p.x * 9., p.y * 6. + t * 4.));
+
+  // fuel from the letters below, read off a blurred copy of the mask (its
+  // mipmaps) so the flames rise smoothly instead of in stacked copies
+  float reach = .05 * (1. + flare * .6);
+  vec2 bend = vec2((tongue - .5) * .1 / aspect, 0.);
+  float fuel = 0.;
+  for (int i = 0; i < 7; i++) {
+    float k = float(i);
+    vec2 at = uv + bend * k * .45 + vec2(0., k * reach);
+    float g = (at.x < 0. || at.y < 0. || at.x > 1. || at.y > 1.) ? 0. : texture(u_image, at, 2.2 + k * .4).a;
+    fuel = max(fuel, g * (1. - k / 8.));
+  }
+  float above = 1. - clamp(fuel * 1.7, 0., 1.);
+  // only the stronger tongues climb higher, so each one narrows as it rises
+  float fuelVal = tongue * 1.3 + lick * .22 + flare * .14 - .12;
+  float flame = clamp((fuelVal - above * 1.05) * 3.2, 0., 1.) * step(above, .99);
+  flame *= 1. - above * .35;
+
+  // sparks thrown up by the flare, drifting and fading as they climb
+  vec2 sc = vec2(p.x * 7., p.y * 7. + t * 2.6);
+  vec2 sid = floor(sc);
+  vec2 sf = fract(sc) - .5;
+  float sh = hash(sid);
+  vec2 sat = (vec2(hash(sid + 1.7), hash(sid + 4.1)) - .5) * .6;
+  float spark = smoothstep(.09, 0., length(sf - sat)) * step(.9, sh);
+  spark *= smoothstep(.02, .2, dilate(uv + vec2(0., .2), .12, aspect)) * (.15 + .85 * flare);
+
+  // the dark edge that keeps the letters crisp on any cover
+  float edge = dilate(uv, .038, aspect) * (1. - body);
+
+  // white-hot in the thick of each stroke, hotter low in the letters, a heat
+  // band climbing them on the flare
+  float depth = depthAt(uv, aspect) * body;
+  float heat = .58 + .3 * depth + .14 * uv.y + .12 * (tongue - .5) + .1 * (lick - .5);
+  heat += flare * .18 * smoothstep(.15, 0., abs(uv.y - (1. - ph * 2.4)));
+  vec3 bodyColor = ramp(heat);
+
+  // composite back to front: flames, sparks, the dark edge, the letters
+  vec3 color = ramp(flame * .95);
+  float alpha = smoothstep(.04, .35, flame) * .96 * (1. - body);
+  color = mix(color, ramp(.92), spark * (1. - body));
+  alpha = max(alpha, spark * (1. - body));
+  float edgeA = edge * .88;
+  color = mix(color, ${look.edge}, edgeA);
+  alpha = max(alpha, edgeA);
+  color = mix(color, bodyColor, body);
+  alpha = max(alpha, body);
+  fragColor = vec4(color * alpha, alpha);
+}
+`;
+}
+
+const FIRE_SHADERS: Record<FireStyle, string> = { inferno: fireShader("inferno"), hellfire: fireShader("hellfire") };
+const isFireStyle = (style: ShaderNameStyle): style is FireStyle => style in FIRE_SHADERS;
+
 const SIZING = {
   u_fit: ShaderFitOptions.contain,
   u_scale: 1,
@@ -443,6 +557,7 @@ async function buildStyle(style: ShaderNameStyle, mask: { url: string; aspect: n
     };
   }
   const image = await loadImage(mask.url);
+  if (isFireStyle(style)) return { shader: FIRE_SHADERS[style], uniforms: { u_image: image }, mipmaps: ["u_image"] };
   return { shader: style === "glitch" ? glitchShader : OWN_SHADERS[style], uniforms: { u_image: image } };
 }
 

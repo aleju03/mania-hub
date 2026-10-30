@@ -58,6 +58,7 @@ import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live
 import { BackendOfflineScreen } from "../components/BackendOfflineScreen";
 import { seedCountryTierCache } from "../lib/use-country-warming";
 import { isWindowActive, subscribeWindowActivity } from "../lib/window-activity";
+import { UI_SCALE_BOOT_SCRIPT } from "../lib/ui-scale";
 import { reapplyThemeToDom, useChangelogNotify } from "../store";
 import appCss from "../styles.css?url";
 
@@ -740,6 +741,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             __html: `(function(){try{var h=null;var t=localStorage.getItem("mania-hub-theme-v1");if(t!=null){var tn=Number(t);if(isFinite(tn))h=tn;}if(h==null){var s=localStorage.getItem("mania-hub-cache-v5");if(s){var p=JSON.parse(s);var bh=p&&p.state&&p.state.themeHue;if(typeof bh==="number"&&isFinite(bh))h=bh;}}if(h!=null){var n=((Math.round(h)%360)+360)%360;document.documentElement.style.setProperty("--theme-hue",String(n));if(n!==333)document.documentElement.style.setProperty("--theme-hue-mix","1");}var sv=localStorage.getItem("mania-hub-theme-sat-v1");if(sv!=null){var sn=Number(sv);if(isFinite(sn))document.documentElement.style.setProperty("--theme-sat",String(Math.max(0,Math.min(100,Math.round(sn)))/100));}}catch(e){}})();`,
           }}
         />
+        <script dangerouslySetInnerHTML={{ __html: UI_SCALE_BOOT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: CHUNK_LOAD_RECOVERY_SCRIPT }} />
       </head>
       <body className="min-h-screen flex flex-col font-sans antialiased">

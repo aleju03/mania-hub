@@ -80,6 +80,7 @@ import { UsernameText } from "../components/ui/UsernameText";
 import { useAuth } from "../lib/auth-context";
 import { pageSeo } from "../lib/seo";
 import { getI18n } from "../lib/i18n";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 type I18nLike = ReturnType<typeof getI18n>;
 
@@ -421,10 +422,10 @@ const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : use
 // while mounted updates the tree (SSR-safe: false until a window exists).
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() =>
-    typeof window === "undefined" ? false : window.matchMedia(query).matches,
+    typeof window === "undefined" ? false : window.matchMedia(scaledMediaQuery(query)).matches,
   );
   useEffect(() => {
-    const list = window.matchMedia(query);
+    const list = window.matchMedia(scaledMediaQuery(query));
     setMatches(list.matches);
     const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
     list.addEventListener("change", onChange);

@@ -29,6 +29,7 @@ import { RunTally } from "./RunTally";
 import { RUN_FEEL } from "./runFeel";
 import { runSound } from "./runSound";
 import { Shards } from "./Shards";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 /* What the page's run open answered. `dealt` carries the hand to deal and
    the run's side of it; the rest put the pack back with a message. */
@@ -90,7 +91,7 @@ const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(re
 function useWideTable(): boolean {
   const [wide, setWide] = useState(true);
   useEffect(() => {
-    const query = window.matchMedia("(min-width: 768px)");
+    const query = window.matchMedia(scaledMediaQuery("(min-width: 768px)"));
     const update = () => setWide(query.matches);
     update();
     query.addEventListener("change", update);

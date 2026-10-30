@@ -29,6 +29,7 @@ import { MANIA_GLYPH_D, maniaTriangleOverlaySvg } from "../../lib/maniacard";
 import { useCountryWarming } from "../../lib/use-country-warming";
 import type { LeanRankingEntry, RankingsResponse } from "../../lib/types";
 import { useAppStore, useNoDans, useSelectedCountry } from "../../store";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 // Authentic Discord palette so the previews read as real Discord messages.
 const D = {
@@ -299,7 +300,7 @@ function BotAvatar({ size = 40 }: { size?: number }) {
       src="/images/discord/bot-avatar.png"
       alt="maniabot"
       className="shrink-0 rounded-full object-cover"
-      style={{ width: size, height: size }}
+      style={{ width: scaledPx(size), height: scaledPx(size) }}
       loading="lazy"
     />
   );

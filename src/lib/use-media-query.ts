@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 /**
  * Whether a CSS media query matches, as render state.
@@ -12,11 +13,11 @@ import { useSyncExternalStore } from "react";
 export function useMediaQuery(query: string): boolean | null {
   return useSyncExternalStore(
     (onChange) => {
-      const media = window.matchMedia(query);
+      const media = window.matchMedia(scaledMediaQuery(query));
       media.addEventListener("change", onChange);
       return () => media.removeEventListener("change", onChange);
     },
-    () => window.matchMedia(query).matches,
+    () => window.matchMedia(scaledMediaQuery(query)).matches,
     () => null,
   );
 }

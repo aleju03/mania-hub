@@ -25,6 +25,7 @@ import { PACK_TYPE_NAME_LABELS, PACK_TYPES, type PackTypeId } from "../../../lib
 import { pageSeo, pullOgImagePath } from "../../../lib/seo";
 import { effectiveCardLook } from "../../../lib/supporter-card-looks";
 import { UsernameText } from "../../../components/ui/UsernameText";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 export const Route = createFileRoute("/pull/$ownerId/$cardId")({
   validateSearch: (search: Record<string, unknown>): { pull?: number } => {
@@ -63,7 +64,7 @@ function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 640px)").matches
+    window.matchMedia(scaledMediaQuery("(max-width: 640px)")).matches
   );
 }
 

@@ -28,6 +28,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
 import { useLocale } from "../../lib/locale-context";
 import { UsernameText } from "../ui/UsernameText";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 // Leaf destinations. Kept `as const` (not typed) so each `to` stays a literal
 // route path; TanStack Router's Link types reject a widened `string`.
@@ -285,6 +286,7 @@ export function Nav() {
   const linkRefs = useRef<Map<string, HTMLElement>>(new Map());
   const closeGroupTimer = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dimRef = useRef<HTMLDivElement | null>(null);
   const [dimHeight, setDimHeight] = useState(0);
   const [barRect, setBarRect] = useState<{ left: number; width: number } | null>(null);
 
@@ -331,7 +333,10 @@ export function Nav() {
     if (!openGroup) return;
     const el = dropdownRef.current;
     if (!el) return;
-    setDimHeight(Math.max(0, Math.ceil(el.getBoundingClientRect().bottom) - 60 + 22));
+    // Measured from the band's own top, which is the navbar's height at the
+    // current UI scale.
+    const bandTop = dimRef.current?.getBoundingClientRect().top ?? 60;
+    setDimHeight(Math.max(0, Math.ceil(el.getBoundingClientRect().bottom - bandTop) + 22));
   }, [openGroup]);
 
   const selectedIsGlobal = isGlobalScope(selectedCountry);
@@ -635,6 +640,7 @@ export function Nav() {
           themed accent line marking its end. Sits below the header (z-50) so the
           bar and dropdown stay bright. */}
       <div
+        ref={dimRef}
         className={`fixed inset-x-0 top-[60px] z-40 bg-gradient-to-b from-black/25 via-black/40 to-black/55 backdrop-blur-md transition-opacity duration-150 ${
           openGroup ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
@@ -735,7 +741,7 @@ export function Nav() {
           </motion.div>
 
           {/* Desktop nav links */}
-          <div ref={linksContainerRef} className="relative hidden md:flex items-center gap-1">
+          <div ref={linksContainerRef} className="relative hidden lg:flex items-center gap-1">
             {NAV_TOP.map((top) => {
               if (top.kind === "link") {
                 const leaf = NAV_LEAVES[top.id];
@@ -816,8 +822,10 @@ export function Nav() {
           </div>
         </div>
 
-        {/* Desktop search + dev tools */}
-        <div className="hidden md:flex items-center gap-2 ml-3">
+        {/* Desktop search + dev tools. The bar needs about 1,170px with the
+            full-width picker and search, so the desktop layout starts at lg
+            and the two stay narrow until xl. */}
+        <div className="hidden lg:flex items-center gap-2 ml-3">
           {devMode && (
             <>
               <div ref={adminMenuRef} className="relative">
@@ -1014,9 +1022,9 @@ export function Nav() {
               )}
             </div>
           ) : null}
-          <CountrySelector className="w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
+          <CountrySelector className="w-36 xl:w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
           <SearchInput
-            className="w-52"
+            className="w-32 xl:w-52"
             placeholder={t`find player...`}
             onSearch={handleSearch}
             onSearchOsu={searchPlayersOnOsu}
@@ -1051,7 +1059,7 @@ export function Nav() {
 
         {/* Mobile hamburger button */}
         <button
-          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg hover:bg-osu-b3/50 transition-colors cursor-pointer"
+          className="lg:hidden flex items-center justify-center w-9 h-9 rounded-lg hover:bg-osu-b3/50 transition-colors cursor-pointer"
           onClick={() => {
             restoreMenuAfterSettingsCloseRef.current = false;
             setMenuOpen(!menuOpen);
@@ -1078,16 +1086,16 @@ export function Nav() {
       {/* Mobile drawer — pure CSS transitions for compositor-thread animation */}
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-[55] bg-black/60 md:hidden transition-opacity duration-200 ease-out ${
+        className={`fixed inset-0 z-[55] bg-black/60 lg:hidden transition-opacity duration-200 ease-out ${
           menuOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setMenuOpen(false)}
-        style={{ top: 60 }}
+        style={{ top: scaledPx(60) }}
         aria-hidden={!menuOpen}
       />
       {/* Drawer panel */}
       <div
-        className={`fixed top-[60px] right-0 h-[calc(100dvh-60px)] w-64 bg-osu-b5 z-[60] md:hidden border-l border-osu-b3/30 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] transform-gpu will-change-transform transition-transform duration-250 ease-out ${
+        className={`fixed top-[60px] right-0 h-[calc(100dvh-60px)] w-64 bg-osu-b5 z-[60] lg:hidden border-l border-osu-b3/30 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] transform-gpu will-change-transform transition-transform duration-250 ease-out ${
           menuOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
         aria-hidden={!menuOpen}

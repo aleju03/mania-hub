@@ -36,6 +36,8 @@ export const SUPPORTER_NAME_STYLES = [
   "lava",
   "dither",
   "mesh",
+  "inferno",
+  "hellfire",
 ] as const;
 
 export type SupporterNameStyleId = (typeof SUPPORTER_NAME_STYLES)[number];
@@ -43,7 +45,7 @@ export type SupporterNameStyleId = (typeof SUPPORTER_NAME_STYLES)[number];
 /* Styles that also run as a WebGL shader over big names (name-tag-shaders.ts). */
 export const SHADER_NAME_STYLES = [
   "chrome", "ethereal", "aurora", "glitch", "molten-gold", "pearl", "galaxy", "heatmap",
-  "note-rain", "plasma", "ink", "caustics", "lava", "dither", "mesh",
+  "note-rain", "plasma", "ink", "caustics", "lava", "dither", "mesh", "inferno", "hellfire",
 ] as const satisfies readonly SupporterNameStyleId[];
 
 export type ShaderNameStyle = (typeof SHADER_NAME_STYLES)[number];
@@ -85,4 +87,6 @@ export const SUPPORTER_NAME_STYLE_LABELS: Record<SupporterNameStyleId, MessageDe
   lava: msg`Lava lamp`,
   dither: msg`Dither`,
   mesh: msg`Mesh gradient`,
+  inferno: msg`Inferno`,
+  hellfire: msg`Hellfire`,
 };

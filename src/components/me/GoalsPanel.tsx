@@ -31,6 +31,7 @@ import {
 } from "../../lib/goals";
 import type { I18n, MessageDescriptor } from "@lingui/core";
 import type { OsuBeatmap, OsuBeatmapset } from "../../lib/types";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 const ICONS = {
   beatmapsets: "/images/icons/beatmapsets.svg",
@@ -1320,7 +1321,7 @@ function GoalRing({ pct, accent, size, stroke, children }: { pct: number | null;
   const value = pct == null ? 0 : clampPct(pct);
   const offset = circumference * (1 - value / 100);
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
+    <div className="relative shrink-0" style={{ width: scaledPx(size), height: scaledPx(size) }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" className="text-osu-b3/40" strokeWidth={stroke} />
         {pct != null && value > 0 ? (

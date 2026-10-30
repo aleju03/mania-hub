@@ -259,7 +259,7 @@ function RankingsPage() {
     <PageTabs
       items={[
         { id: "pp" as LeaderboardTab, label: t`Performance` },
-        { id: "skills" as LeaderboardTab, label: t`MSD` },
+        { id: "skills" as LeaderboardTab, label: t`Rating` },
         { id: "dan" as LeaderboardTab, label: t`Dan` },
         { id: "clears" as LeaderboardTab, label: t`Clears` },
         { id: "unrated" as LeaderboardTab, label: t`Unrated` },

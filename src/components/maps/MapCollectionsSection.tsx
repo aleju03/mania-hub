@@ -21,7 +21,7 @@ import { CoverStrip } from "./CollectionCovers";
 import { UserCollectionsSection } from "./UserCollectionsSection";
 import { MapDetailModal } from "./MapDetailModal";
 import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
-import { PATTERN_COLOR, SearchCard, patternLabel, toPreviewTrack } from "./SearchCard";
+import { PATTERN_COLOR, patternLabel, SearchCardGrid, toPreviewTrack } from "./SearchCard";
 import { useNoDans } from "../../store";
 
 // Auto-rotating map packs grouped by pattern, keymode, and difficulty bucket.
@@ -66,7 +66,7 @@ function danContext(summary: Pick<LiveMapCollectionSummary, "keyCount" | "patter
   return summary.pattern === "ln" ? "ln" : "reform";
 }
 
-// "7–8 dan", "Alpha–Gamma", "Delta+", "up to 3 dan" / "18–22 MSD", "30+ MSD".
+// "7–8 dan", "Alpha–Gamma", "Delta+", "up to 3 dan" / "18–22 rating", "30+ rating".
 function bucketLabel(summary: LiveMapCollectionSummary): string {
   const { axis, bucketLo: lo, bucketHi: hi } = summary;
   if (axis === "dan") {
@@ -79,10 +79,10 @@ function bucketLabel(summary: LiveMapCollectionSummary): string {
     if (lo != null && hi != null) return `${name(lo)}–${name(hi)}${suffix(hi)}`;
     return "dan";
   }
-  if (lo == null && hi != null) return `under ${hi} MSD`;
-  if (lo != null && hi == null) return `${lo}+ MSD`;
-  if (lo != null && hi != null) return `${lo}–${hi} MSD`;
-  return "MSD";
+  if (lo == null && hi != null) return `under ${hi} rating`;
+  if (lo != null && hi == null) return `${lo}+ rating`;
+  if (lo != null && hi != null) return `${lo}–${hi} rating`;
+  return "Rating";
 }
 
 // Where a ladder starts, for buckets left open at the bottom: "up to 3 dan"
@@ -332,7 +332,7 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
               options={["dan", "msd"]}
               value={axis}
               onChange={onAxisChange}
-              render={(option) => (option === "dan" ? t`Dan est.` : t`MSD`)}
+              render={(option) => (option === "dan" ? t`Dan est.` : t`Rating`)}
             />
           ) : null}
         </div>
@@ -474,21 +474,16 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {detail.items.map((entry) => (
-              <SearchCard
-                key={entry.beatmapId}
-                entry={entry}
-                onOpen={(opened) => {
-                  // The detail modal has its own chart-preview audio; don't
-                  // leave the card's song preview playing over it.
-                  stopPreview();
-                  setMapEntry(opened);
-                }}
-                preview={preview}
-              />
-            ))}
-          </div>
+          <SearchCardGrid
+            items={detail.items}
+            preview={preview}
+            onOpen={(opened) => {
+              // The detail modal has its own chart-preview audio; don't
+              // leave the card's song preview playing over it.
+              stopPreview();
+              setMapEntry(opened);
+            }}
+          />
         </>
       )}
       <MapDetailModal entry={mapEntry} onClose={() => setMapEntry(null)} />

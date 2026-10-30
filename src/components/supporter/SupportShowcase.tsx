@@ -45,6 +45,7 @@ import {
 } from "../../lib/supporter-pack-style";
 import type { ProfileStatsData } from "../../lib/profile-stats";
 import type { SupporterLook } from "../../lib/supporter-card-looks";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 /* The live pictures on /support, one per perk: each is the real thing the
    perk draws (the theme's backdrop, the frame's video, the name's shader,
@@ -197,7 +198,7 @@ export function HeroStage() {
       >
         <div className="shrink-0" style={{ padding: `${HERO_ROOM[0] * size}px ${HERO_ROOM[1] * size}px ${HERO_ROOM[2] * size}px` }}>
           <AnimatePresence mode="wait">
-            <motion.div key={look.frame} {...fade} className="relative" style={{ width: size, height: size }}>
+            <motion.div key={look.frame} {...fade} className="relative" style={{ width: scaledPx(size), height: scaledPx(size) }}>
               <img src={you.avatar} alt="" className="h-full w-full max-w-none rounded-2xl bg-osu-b3 object-cover" style={framedAvatarStyle(look.frame)} />
               <SupporterAvatarFrame frame={look.frame} still={!near} userId={avatarUrlUserId(you.avatar)} />
             </motion.div>

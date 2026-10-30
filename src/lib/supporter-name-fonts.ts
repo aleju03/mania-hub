@@ -53,6 +53,7 @@ export const SUPPORTER_NAME_FONTS = [
   "bodoni",
   "uncial",
   "limelight",
+  "monocraft",
 ] as const;
 
 export type SupporterNameFontId = (typeof SUPPORTER_NAME_FONTS)[number];
@@ -107,4 +108,5 @@ export const SUPPORTER_NAME_FONT_LABELS: Record<SupporterNameFontId, MessageDesc
   bodoni: msg`Fashion`,
   uncial: msg`Celtic`,
   limelight: msg`Art deco`,
+  monocraft: msg`Monocraft`,
 };

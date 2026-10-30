@@ -326,8 +326,12 @@ describe("replay skin settings UI", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
 
     expect(source).toContain("const CATALOG_KEYMODE_FILTERS = [0, 4, 5, 6, 7, 8, 9, 10];");
-    expect(source).toContain("fetchSkinsListDirect({ q: query.trim(), page: 0, k: keymode })");
-    expect(source).toContain("}, [query, keymode]);");
+    // Both catalogs (the public list and a signed-in viewer's, with "mine")
+    // take the keymode filter, and a change refetches.
+    expect(source).toContain("const params = { q: query.trim(), page: 0, k: keymode };");
+    expect(source).toContain("fetchViewerSkinsList({ data: { ...params, mine } })");
+    expect(source).toContain("fetchSkinsListDirect(params)");
+    expect(source).toContain("}, [query, keymode, mine, signedIn]);");
   });
 
   it("drops the note shape and LN tail controls from settings under a custom skin", () => {

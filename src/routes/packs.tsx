@@ -1228,6 +1228,8 @@ function PacksPage() {
           animate below overflow:clip. The open-pack sequence owns several such
           transitions, so let the viewport own clipping until it returns home. */}
       {runTableActive && (
+        // The game lays itself out at fixed sizes, so UI Scaling leaves it at 1x.
+        <div className="ui-scale-fixed contents">
         <ChainTable
           view={chainApi.view}
           best={chainApi.best}
@@ -1239,6 +1241,7 @@ function PacksPage() {
           loadSheet={loadChainSheet}
           onExit={() => showRunView(false)}
         />
+        </div>
       )}
       <div
         className={`relative z-10 flex flex-1 flex-col bg-osu-b5 ${phase === "pack" ? "overflow-clip" : ""}`}

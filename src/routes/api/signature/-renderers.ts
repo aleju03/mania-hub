@@ -2315,7 +2315,7 @@ function featuredSnapshot(entry: ProfilePlay): InsightScoreSnapshot {
 
 function featuredMetric(entry: ProfilePlay, accent: string): { value: string; unit: string; color: string } | null {
   const { play } = entry;
-  if (entry.show === "msd" && play.msd != null) return { value: play.msd.toFixed(2), unit: "MSD", color: RICE_BLUE };
+  if (entry.show === "msd" && play.msd != null) return { value: play.msd.toFixed(2), unit: "rating", color: RICE_BLUE };
   if (entry.show === "dan" && play.dan) return { value: play.dan.label, unit: play.dan.family === "ln" ? "LN dan" : "dan", color: LN_ORANGE };
   return play.pp != null ? { value: String(Math.round(play.pp)), unit: "pp", color: accent } : null;
 }

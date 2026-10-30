@@ -151,7 +151,7 @@ msgstr "{0, plural, one {# convert is left out, as osu! leaves converts out of i
 msgid "{0, plural, one {# copy} other {# copies}}"
 msgstr "{0, plural, one {# copy} other {# copies}}"
 
-#. placeholder {0}: diffs.length
+#. placeholder {0}: model.diffs.length
 #: src/components/maps/SearchCard.tsx
 msgid "{0, plural, one {# diff} other {# diffs}}"
 msgstr "{0, plural, one {# diff} other {# diffs}}"
@@ -461,6 +461,11 @@ msgstr "{0} day"
 msgid "{0} days"
 msgstr "{0} days"
 
+#. placeholder {0}: label(1)
+#: src/components/settings/SettingsPanel.tsx
+msgid "{0} default"
+msgstr "{0} default"
+
 #. placeholder {0}: entry.user.username
 #. placeholder {0}: score.beatmapset?.title ?? scoreTitleFallback
 #: src/components/packs/album/AlbumView.tsx
@@ -581,6 +586,7 @@ msgid "{0} maniacard"
 msgstr "{0} maniacard"
 
 #. placeholder {0}: formatNumber(currentTotal)
+#. placeholder {0}: formatNumber(currentTotal, locale)
 #: src/routes/maps.tsx
 msgid "{0} maps"
 msgstr "{0} maps"
@@ -594,8 +600,8 @@ msgstr "{0} maps · rotated {1}"
 #. placeholder {0}: formatNumber(currentTotal, locale)
 #. placeholder {1}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
-msgid "{0} maps · updated {1}"
-msgstr "{0} maps · updated {1}"
+#~ msgid "{0} maps · updated {1}"
+#~ msgstr "{0} maps · updated {1}"
 
 #. placeholder {0}: length.value
 #: src/components/player/ProfileStatCards.tsx
@@ -748,7 +754,6 @@ msgstr "{0} players with a clear"
 #. placeholder {0}: compact(insights.grind.mostPlayed.plays)
 #. placeholder {0}: compact(judgement.plays)
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
-#: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -777,11 +782,16 @@ msgid "{0} plays since {1}"
 msgstr "{0} plays since {1}"
 
 #. placeholder {0}: formatNumber(randomPickCount, locale)
+#: src/routes/maps.tsx
+msgid "{0} possible picks"
+msgstr "{0} possible picks"
+
+#. placeholder {0}: formatNumber(randomPickCount, locale)
 #. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
 #. placeholder {2}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
-msgid "{0} possible picks · {1} unique sets · updated {2}"
-msgstr "{0} possible picks · {1} unique sets · updated {2}"
+#~ msgid "{0} possible picks · {1} unique sets · updated {2}"
+#~ msgstr "{0} possible picks · {1} unique sets · updated {2}"
 
 #. placeholder {0}: entry.name
 #. placeholder {0}: skin.name
@@ -867,6 +877,11 @@ msgstr "{0} total"
 #: src/routes/rankings.tsx
 msgid "{0} tracked players"
 msgstr "{0} tracked players"
+
+#. placeholder {0}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
+#: src/routes/maps.tsx
+msgid "{0} unique sets"
+msgstr "{0} unique sets"
 
 #. placeholder {0}: nominee.up
 #. placeholder {1}: nominee.down
@@ -1217,6 +1232,10 @@ msgstr "{days}d ago"
 #: src/components/replay/ReplayControls.tsx
 msgid "{DEFAULT_EXPORT_CLIP_SECONDS}s from here"
 msgstr "{DEFAULT_EXPORT_CLIP_SECONDS}s from here"
+
+#: src/components/maps/MapDetailVariants.tsx
+#~ msgid "{diffCount, plural, one {# diff} other {# diffs}}"
+#~ msgstr "{diffCount, plural, one {# diff} other {# diffs}}"
 
 #: src/components/skins/SkinCard.tsx
 msgid "{downloadCountLabel} downloads"
@@ -2075,6 +2094,7 @@ msgstr "+{amount} shards to your pack wallet."
 msgid "+{gap}pp to go"
 msgstr "+{gap}pp to go"
 
+#: src/components/maps/MapDetailHeader.tsx
 #: src/routes/communities.tsx
 msgid "+{hidden} more"
 msgstr "+{hidden} more"
@@ -2446,8 +2466,12 @@ msgid "4K regular"
 msgstr "4K regular"
 
 #: src/routes/dan-estimates.tsx
-msgid "4K regular reads the play's MSD skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
-msgstr "4K regular reads the play's MSD skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
+#~ msgid "4K regular reads the play's MSD skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
+#~ msgstr "4K regular reads the play's MSD skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
+
+#: src/routes/dan-estimates.tsx
+msgid "4K regular reads the play's skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
+msgstr "4K regular reads the play's skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
 
 #: src/routes/dan-estimates.tsx
 msgid "5. Dan courses and practice charts"
@@ -3058,8 +3082,12 @@ msgid "Accuracy below skill rating range"
 msgstr "Accuracy below skill rating range"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Accuracy below skill rating range, so this play has no MSD rating on any skillset."
-msgstr "Accuracy below skill rating range, so this play has no MSD rating on any skillset."
+#~ msgid "Accuracy below skill rating range, so this play has no MSD rating on any skillset."
+#~ msgstr "Accuracy below skill rating range, so this play has no MSD rating on any skillset."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Accuracy below skill rating range, so this play has no rating on any skillset."
+msgstr "Accuracy below skill rating range, so this play has no rating on any skillset."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Accuracy or unstable rate for every column, one cell per finger."
@@ -4605,6 +4633,11 @@ msgstr "Bring forward"
 msgid "Bring to front"
 msgstr "Bring to front"
 
+#. Short label under a skillset bar: Bracket (6K-8K)
+#: src/components/maps/SearchCard.tsx
+msgid "BRK"
+msgstr "BRK"
+
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
 msgid "BROKE"
@@ -4635,8 +4668,12 @@ msgid "Browse collections"
 msgstr "Browse collections"
 
 #: src/routes/maps.tsx
-msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
-msgstr "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
+#~ msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
+#~ msgstr "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
+
+#: src/routes/maps.tsx
+msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and rating."
+msgstr "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and rating."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -5364,7 +5401,9 @@ msgstr "Circles"
 msgid "Cirno fumo"
 msgstr "Cirno fumo"
 
+#. Short label under a skillset bar: Chordjack
 #: src/components/maps/PatternRadar.tsx
+#: src/components/maps/SearchCard.tsx
 msgid "CJ"
 msgstr "CJ"
 
@@ -5605,7 +5644,7 @@ msgstr "Clip not found"
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/layout/ChangelogModal.tsx
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/MapDetailHeader.tsx
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/RemovePlaysSheet.tsx
 #: src/components/packs/CardCollectors.tsx
@@ -5631,6 +5670,7 @@ msgstr "Clip not found"
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/ui/ImageLightbox.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/skins.tsx
 #: src/routes/supporter_.themes.gallery.tsx
@@ -6801,6 +6841,11 @@ msgstr "CRT monitor"
 msgid "Crystal wings"
 msgstr "Crystal wings"
 
+#. Short label under a skillset bar: Chordstream (6K-8K)
+#: src/components/maps/SearchCard.tsx
+msgid "CS"
+msgstr "CS"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
 msgstr "Ctrl/Cmd-click images to add or remove them."
@@ -7332,6 +7377,11 @@ msgstr "display"
 msgid "Dither"
 msgstr "Dither"
 
+#. Short label under a skillset bar: Delay (6K-8K)
+#: src/components/maps/SearchCard.tsx
+msgid "DLY"
+msgstr "DLY"
+
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
 msgstr "Does {hidden} have more or fewer 7K top plays than {shown}?"
@@ -7430,6 +7480,7 @@ msgstr "Download .osk"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/SearchCard.tsx
+#: src/routes/maps.tsx
 msgid "Download .osz"
 msgstr "Download .osz"
 
@@ -8311,8 +8362,12 @@ msgid "Failed plays do not credit a dan."
 msgstr "Failed plays do not credit a dan."
 
 #: src/components/player/RecentPlayRatingCells.tsx
-msgid "Failed plays do not receive an MSD rating."
-msgstr "Failed plays do not receive an MSD rating."
+msgid "Failed plays do not receive a rating."
+msgstr "Failed plays do not receive a rating."
+
+#: src/components/player/RecentPlayRatingCells.tsx
+#~ msgid "Failed plays do not receive an MSD rating."
+#~ msgstr "Failed plays do not receive an MSD rating."
 
 #: src/routes/replay.tsx
 msgid "Failed to load replay"
@@ -8708,6 +8763,10 @@ msgstr "Finishing this looks risky for you; treat it as a clear attempt, not a f
 #: src/components/communities/field-options.tsx
 msgid "Finnish"
 msgstr "Finnish"
+
+#: src/lib/supporter-name-styles.ts
+#~ msgid "Fire"
+#~ msgstr "Fire"
 
 #. placeholder {0}: link.fires
 #: src/components/packs/run/chain/ChainDetails.tsx
@@ -9428,10 +9487,9 @@ msgstr "Grassroots"
 msgid "graveyard"
 msgstr "graveyard"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 #: src/lib/pack-run.ts
-#: src/routes/maps.tsx
 msgid "Graveyard"
 msgstr "Graveyard"
 
@@ -9622,6 +9680,10 @@ msgstr "Hebrew"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Height of the exported image, in pixels"
 msgstr "Height of the exported image, in pixels"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Hellfire"
+msgstr "Hellfire"
 
 #: src/lib/pack-run.ts
 msgid "Herd"
@@ -10037,7 +10099,9 @@ msgstr "HP bar fill"
 msgid "HP bar marker"
 msgstr "HP bar marker"
 
+#. Short label under a skillset bar: Handstream
 #: src/components/maps/PatternRadar.tsx
+#: src/components/maps/SearchCard.tsx
 msgid "HS"
 msgstr "HS"
 
@@ -10327,6 +10391,7 @@ msgstr "indigo"
 msgid "Indonesian"
 msgstr "Indonesian"
 
+#: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Inferno"
 msgstr "Inferno"
@@ -10542,6 +10607,11 @@ msgstr "Japanese"
 msgid "Jersey"
 msgstr "Jersey"
 
+#. Short label under a skillset bar: Jack (6K-8K)
+#: src/components/maps/SearchCard.tsx
+msgid "JK"
+msgstr "JK"
+
 #: src/components/communities/CommunityCard.tsx
 msgid "Join"
 msgstr "Join"
@@ -10566,9 +10636,16 @@ msgstr "Joined <0>{joinedValue}</0>"
 msgid "Joke charts"
 msgstr "Joke charts"
 
+#. Short label under a skillset bar: Jumpstream
 #: src/components/maps/PatternRadar.tsx
+#: src/components/maps/SearchCard.tsx
 msgid "JS"
 msgstr "JS"
+
+#. Short label under a skillset bar: Jackspeed
+#: src/components/maps/SearchCard.tsx
+msgid "JSP"
+msgstr "JSP"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Judged"
@@ -11106,7 +11183,6 @@ msgstr "Legendary and better cards score nothing."
 msgid "Legendary charms and endless runs"
 msgstr "Legendary charms and endless runs"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -11386,8 +11462,8 @@ msgid "LN Inverse"
 msgstr "LN Inverse"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "LN notes"
-msgstr "LN notes"
+#~ msgid "LN notes"
+#~ msgstr "LN notes"
 
 #: src/components/prism/PrismUpdates.tsx
 msgid "LN on hybrids"
@@ -11735,6 +11811,10 @@ msgstr "Logout"
 msgid "long notes"
 msgstr "long notes"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Long Notes"
+msgstr "Long Notes"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Long-note and hold-heavy charts."
 msgstr "Long-note and hold-heavy charts."
@@ -11791,9 +11871,8 @@ msgstr "Lots of small things drifting: petals, embers, snow, rain"
 msgid "loved"
 msgstr "loved"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/maps.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Loved"
 msgstr "Loved"
 
@@ -12071,7 +12150,7 @@ msgstr "mapped by"
 #. placeholder {0}: bm.creator
 #. placeholder {0}: entry.creator
 #. placeholder {0}: fav.creator
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/MapDetailHeader.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/routes/maps.tsx
 msgid "mapped by {0}"
@@ -12080,8 +12159,12 @@ msgstr "mapped by {0}"
 #. placeholder {0}: entry.creator
 #. placeholder {1}: formatNumber(entry.playCount)
 #: src/components/maps/SearchCard.tsx
-msgid "mapped by {0} · {1} plays"
-msgstr "mapped by {0} · {1} plays"
+#~ msgid "mapped by {0} · {1} plays"
+#~ msgstr "mapped by {0} · {1} plays"
+
+#: src/routes/maps.tsx
+msgid "mapped by {creator}"
+msgstr "mapped by {creator}"
 
 #: src/lib/replay-overlays.ts
 msgid "Mapper"
@@ -12502,6 +12585,10 @@ msgstr "Mondays"
 msgid "Mono caps"
 msgstr "Mono caps"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Monocraft"
+msgstr "Monocraft"
+
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Month {month}"
 msgstr "Month {month}"
@@ -12694,40 +12781,38 @@ msgstr "msd"
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
-#: src/components/player/FeaturedPlays.tsx
-#: src/routes/rankings.tsx
-msgid "MSD"
-msgstr "MSD"
+#~ msgid "MSD"
+#~ msgstr "MSD"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "MSD and dan on recent plays"
-msgstr "MSD and dan on recent plays"
+#~ msgid "MSD and dan on recent plays"
+#~ msgstr "MSD and dan on recent plays"
 
 #. placeholder {0}: formatRate(rateAdjusted ? rate : 1)
 #: src/components/maps/MapDetailModal.tsx
-msgid "MSD at {0}"
-msgstr "MSD at {0}"
+#~ msgid "MSD at {0}"
+#~ msgstr "MSD at {0}"
 
 #. placeholder {0}: formatRate(rate)
 #: src/components/maps/MapDetailModal.tsx
-msgid "MSD at {0} with Inverse"
-msgstr "MSD at {0} with Inverse"
+#~ msgid "MSD at {0} with Inverse"
+#~ msgstr "MSD at {0} with Inverse"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "MSD on recent plays"
-msgstr "MSD on recent plays"
+#~ msgid "MSD on recent plays"
+#~ msgstr "MSD on recent plays"
 
 #: src/components/me/MyDataPanel.tsx
-msgid "MSD plays"
-msgstr "MSD plays"
+#~ msgid "MSD plays"
+#~ msgstr "MSD plays"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "MSD skill rating"
-msgstr "MSD skill rating"
+#~ msgid "MSD skill rating"
+#~ msgstr "MSD skill rating"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "MSD with Inverse"
-msgstr "MSD with Inverse"
+#~ msgid "MSD with Inverse"
+#~ msgstr "MSD with Inverse"
 
 #: src/lib/pack-run.ts
 msgid "Multiplayer"
@@ -14664,8 +14749,8 @@ msgid "Open image in new tab"
 msgstr "Open image in new tab"
 
 #: src/routes/maps.tsx
-msgid "Open in"
-msgstr "Open in"
+#~ msgid "Open in"
+#~ msgstr "Open in"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/maps.tsx
@@ -14928,6 +15013,7 @@ msgstr "other"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 msgid "Other"
@@ -15355,10 +15441,9 @@ msgstr "Pencil test"
 msgid "pending"
 msgstr "pending"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
-#: src/routes/maps.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Pending"
 msgstr "Pending"
 
@@ -15809,6 +15894,7 @@ msgstr "Playing {mode}"
 msgid "Playing it as written scores higher, so Prism rates it as written."
 msgstr "Playing it as written scores higher, so Prism rates it as written."
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -15816,7 +15902,6 @@ msgstr "Playing it as written scores higher, so Prism rates it as written."
 msgid "plays"
 msgstr "plays"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
@@ -16403,8 +16488,12 @@ msgid "Purple"
 msgstr "Purple"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
-msgstr "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
+#~ msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
+#~ msgstr "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, rating or dan."
+msgstr "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, rating or dan."
 
 #. placeholder {0}: number(serial)
 #. placeholder {1}: number(gain)
@@ -16452,9 +16541,8 @@ msgstr "Quadstream"
 msgid "qualified"
 msgstr "qualified"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/maps.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Qualified"
 msgstr "Qualified"
 
@@ -16567,9 +16655,8 @@ msgstr "Rank is set by the cards of the team's strongest members."
 msgid "ranked"
 msgstr "ranked"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/maps.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Ranked"
 msgstr "Ranked"
 
@@ -16650,6 +16737,10 @@ msgstr "rated from {plays} plays across your top plays and tracked history, DT a
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 msgstr "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Rated plays"
+msgstr "Rated plays"
+
 #: src/routes/dan-estimates.tsx
 msgid "Rates count at the speed you played. Runengon [4K Hard] is 4th dan at 1.0x and about 9th under <0/>, so a <1/> pass on it counts as 9th, and a 0.75x pass counts for what the chart is worth at 0.75x. OD works the same way: <2/> and <3/> rate the chart at the OD you played."
 msgstr "Rates count at the speed you played. Runengon [4K Hard] is 4th dan at 1.0x and about 9th under <0/>, so a <1/> pass on it counts as 9th, and a 0.75x pass counts for what the chart is worth at 0.75x. OD works the same way: <2/> and <3/> rate the chart at the OD you played."
@@ -16658,9 +16749,35 @@ msgstr "Rates count at the speed you played. Runengon [4K Hard] is 4th dan at 1.
 msgid "Rates per chart"
 msgstr "Rates per chart"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "rating"
+msgstr "rating"
+
+#: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/MapSearchSection.tsx
+#: src/components/player/FeaturedPlays.tsx
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillHistoryModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/routes/rankings.tsx
 msgid "Rating"
 msgstr "Rating"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Rating and dan on recent plays"
+msgstr "Rating and dan on recent plays"
+
+#. placeholder {0}: formatRate(rateAdjusted ? rate : 1)
+#: src/components/maps/MapDetailModal.tsx
+msgid "Rating at {0}"
+msgstr "Rating at {0}"
+
+#. placeholder {0}: formatRate(rate)
+#: src/components/maps/MapDetailModal.tsx
+msgid "Rating at {0} with Inverse"
+msgstr "Rating at {0} with Inverse"
 
 #: src/routes/dan-estimates.tsx
 msgid "Rating engines and LN charts"
@@ -16669,6 +16786,10 @@ msgstr "Rating engines and LN charts"
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Rating history chart"
 msgstr "Rating history chart"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Rating on recent plays"
+msgstr "Rating on recent plays"
 
 #: src/components/player/SkillHistoryGraph.tsx
 msgid "Rating system update"
@@ -16681,6 +16802,10 @@ msgstr "Rating the plays failed. It retries automatically, check back in a bit."
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Rating update"
 msgstr "Rating update"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Rating with Inverse"
+msgstr "Rating with Inverse"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating your plays failed. It retries automatically, check back in a bit."
@@ -17503,6 +17628,7 @@ msgstr "Rerolls"
 #: src/components/layout/ThemePicker.tsx
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/settings/SettingsPanel.tsx
 msgid "Reset"
 msgstr "Reset"
 
@@ -18952,6 +19078,7 @@ msgstr "Show export details"
 msgid "show fewer"
 msgstr "show fewer"
 
+#: src/components/maps/MapDetailHeader.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/routes/report.tsx
 msgid "Show fewer"
@@ -19098,12 +19225,20 @@ msgid "Shows leaderboards for the mods you have on and sends your mania plays to
 msgstr "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "Shows the MSD and dan of each play in Recent Plays"
-msgstr "Shows the MSD and dan of each play in Recent Plays"
+#~ msgid "Shows the MSD and dan of each play in Recent Plays"
+#~ msgstr "Shows the MSD and dan of each play in Recent Plays"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "Shows the MSD of each play in Recent Plays"
-msgstr "Shows the MSD of each play in Recent Plays"
+#~ msgid "Shows the MSD of each play in Recent Plays"
+#~ msgstr "Shows the MSD of each play in Recent Plays"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the rating and dan of each play in Recent Plays"
+msgstr "Shows the rating and dan of each play in Recent Plays"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the rating of each play in Recent Plays"
+msgstr "Shows the rating of each play in Recent Plays"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows your cards with a quick fade instead of the full reveal"
@@ -19334,6 +19469,10 @@ msgstr "size"
 msgid "Size"
 msgstr "Size"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Size of text and controls across the site"
+msgstr "Size of text and controls across the site"
+
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Size variety"
 msgstr "Size variety"
@@ -19382,6 +19521,7 @@ msgstr "Skill charts need rated plays in 4K or 7K."
 msgid "Skill radar"
 msgstr "Skill radar"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
 msgid "Skill rating"
@@ -19892,6 +20032,11 @@ msgstr "Spotlight"
 msgid "SSR card"
 msgstr "SSR card"
 
+#. Short label under a skillset bar: Stamina
+#: src/components/maps/SearchCard.tsx
+msgid "STA"
+msgstr "STA"
+
 #: src/routes/skins.tsx
 msgid "stable"
 msgstr "stable"
@@ -20217,6 +20362,11 @@ msgstr "Storyboard"
 #: src/components/replay/ReplayControls.tsx
 msgid "Storyboard…"
 msgstr "Storyboard…"
+
+#. Short label under a skillset bar: Stream
+#: src/components/maps/SearchCard.tsx
+msgid "STR"
+msgstr "STR"
 
 #: src/components/packs/StreakGame.tsx
 msgid "streak"
@@ -20620,6 +20770,11 @@ msgstr "Teams only, new teams first"
 #: src/routes/packs.tsx
 msgid "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
 msgstr "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
+
+#. Short label under a skillset bar: Technical
+#: src/components/maps/SearchCard.tsx
+msgid "TEC"
+msgstr "TEC"
 
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
@@ -21935,8 +22090,12 @@ msgid "This account is not in the Companella beta."
 msgstr "This account is not in the Companella beta."
 
 #: src/components/player/RecentPlayRatingCells.tsx
-msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
-msgstr "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
+#~ msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
+#~ msgstr "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This attempt has no saved rating. Skill ratings keep selected plays, so a weaker repeat may have none."
+msgstr "This attempt has no saved rating. Skill ratings keep selected plays, so a weaker repeat may have none."
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This attempt is no longer stored, so its dan credit cannot be checked."
@@ -22143,12 +22302,20 @@ msgid "This play does not count toward dan."
 msgstr "This play does not count toward dan."
 
 #: src/components/player/FeaturedPlays.tsx
-msgid "This play has no pp, MSD or dan to show."
-msgstr "This play has no pp, MSD or dan to show."
+#~ msgid "This play has no pp, MSD or dan to show."
+#~ msgstr "This play has no pp, MSD or dan to show."
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "This play has no pp, rating or dan to show."
+msgstr "This play has no pp, rating or dan to show."
 
 #: src/components/player/RecentPlayRatingCells.tsx
-msgid "This play is below the accuracy needed for an MSD rating."
-msgstr "This play is below the accuracy needed for an MSD rating."
+msgid "This play is below the accuracy needed for a rating."
+msgstr "This play is below the accuracy needed for a rating."
+
+#: src/components/player/RecentPlayRatingCells.tsx
+#~ msgid "This play is below the accuracy needed for an MSD rating."
+#~ msgstr "This play is below the accuracy needed for an MSD rating."
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is excluded from skill ratings."
@@ -22695,6 +22862,10 @@ msgstr "Track pp and accuracy goals and how close each one is."
 msgid "Tracked"
 msgstr "Tracked"
 
+#: src/routes/maps.tsx
+msgid "tracked favs"
+msgstr "tracked favs"
+
 #: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "tracked history"
@@ -22923,6 +23094,10 @@ msgstr "Type a range: 40-60, 50+, <30"
 #: src/components/player/ActivityPanel.tsx
 msgid "Typical session <0>{0} plays</0>"
 msgstr "Typical session <0>{0} plays</0>"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "UI scaling"
+msgstr "UI scaling"
 
 #: src/components/communities/field-options.tsx
 msgid "Ukrainian"
@@ -23176,6 +23351,11 @@ msgstr "Update file"
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Update the skin"
 msgstr "Update the skin"
+
+#. placeholder {0}: formatTimeAgo(mapsUpdatedAt, locale)
+#: src/routes/maps.tsx
+msgid "updated {0}"
+msgstr "updated {0}"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "updated {updatedAtLabel}"

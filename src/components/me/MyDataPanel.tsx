@@ -632,7 +632,7 @@ export function MyDataPanel() {
                   <FeedTab active={!activeSkillPlaysView && feedTab === "top"} onClick={() => { setSkillPlaysView(null); setFeedTab("top"); }}>{t`Top plays`}</FeedTab>
                   {canExploreSkills ? (
                     <>
-                      <FeedTab active={activeSkillPlaysView === "msd"} onClick={() => setSkillPlaysView("msd")}>{t`MSD plays`}</FeedTab>
+                      <FeedTab active={activeSkillPlaysView === "msd"} onClick={() => setSkillPlaysView("msd")}>{t`Rated plays`}</FeedTab>
                       {!noDans ? <FeedTab active={activeSkillPlaysView === "dan"} onClick={() => setSkillPlaysView("dan")}>{t`Dan plays`}</FeedTab> : null}
                     </>
                   ) : null}

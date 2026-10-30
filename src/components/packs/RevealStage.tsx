@@ -35,6 +35,7 @@ import { TierBurst } from "./TierBurst";
 import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
 import { UsernameText } from "../ui/UsernameText";
 import { EDITION_COPY, EDITION_TINT } from "#/lib/pack-run";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 export interface PackCardState {
   player: PackPlayer;
@@ -212,7 +213,7 @@ function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 640px)").matches
+    window.matchMedia(scaledMediaQuery("(max-width: 640px)")).matches
   );
 }
 

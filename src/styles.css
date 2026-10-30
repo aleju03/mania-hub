@@ -61,6 +61,44 @@
    it up so the panels and buttons take the theme's colour too. */
 :root { --theme-hue: 333; --theme-sat: 1; --theme-surface: 1; }
 
+/* The UI Scaling setting (src/lib/ui-scale.ts). rem sizes follow the root
+   font size; px sizes in this stylesheet are rewritten at build time to
+   multiply by it (scripts/ui-scale-postcss.ts). Icons sized by their width
+   and height attributes (lucide's size prop) have no CSS length to rewrite,
+   so they take it as a zoom; one with its own size class is already scaled. */
+:root { --ui-scale: 1; --ui-root-scale: var(--ui-scale); }
+html { font-size: calc(100% * var(--ui-scale)); }
+/* A subtree laid out at fixed sizes (the pack-run game, the lazer results
+   screen) stays at 1x: px lengths read --ui-scale, and Tailwind's rem tokens
+   are divided back by the root's scale (--ui-root-scale keeps the value the
+   root computed, since custom properties inherit resolved). */
+.ui-scale-fixed {
+  --ui-scale: 1;
+  font-size: calc(1rem / var(--ui-root-scale));
+  --spacing: calc(0.25rem / var(--ui-root-scale));
+  --text-xs: calc(0.75rem / var(--ui-root-scale)); --text-sm: calc(0.875rem / var(--ui-root-scale));
+  --text-base: calc(1rem / var(--ui-root-scale)); --text-lg: calc(1.125rem / var(--ui-root-scale));
+  --text-xl: calc(1.25rem / var(--ui-root-scale)); --text-2xl: calc(1.5rem / var(--ui-root-scale));
+  --text-3xl: calc(1.875rem / var(--ui-root-scale)); --text-4xl: calc(2.25rem / var(--ui-root-scale));
+  --text-5xl: calc(3rem / var(--ui-root-scale)); --text-6xl: calc(3.75rem / var(--ui-root-scale));
+  --radius-xs: calc(0.125rem / var(--ui-root-scale)); --radius-sm: calc(0.25rem / var(--ui-root-scale));
+  --radius-md: calc(0.375rem / var(--ui-root-scale)); --radius-lg: calc(0.5rem / var(--ui-root-scale));
+  --radius-xl: calc(0.75rem / var(--ui-root-scale)); --radius-2xl: calc(1rem / var(--ui-root-scale));
+  --radius-3xl: calc(1.5rem / var(--ui-root-scale));
+  --container-xs: calc(20rem / var(--ui-root-scale)); --container-sm: calc(24rem / var(--ui-root-scale));
+  --container-md: calc(28rem / var(--ui-root-scale)); --container-lg: calc(32rem / var(--ui-root-scale));
+  --container-xl: calc(36rem / var(--ui-root-scale)); --container-2xl: calc(42rem / var(--ui-root-scale));
+  --container-3xl: calc(48rem / var(--ui-root-scale)); --container-4xl: calc(56rem / var(--ui-root-scale));
+}
+.ui-scale-fixed :is(svg, img) { zoom: 1 !important; }
+svg.lucide:not([class*=" h-"]):not([class*=" w-"]):not([class*=" size-"]) { zoom: var(--ui-scale); }
+/* Same for images and other icons sized only by their attributes: no size
+   class and no inline width (an inline width is already scaled, see scaledPx). */
+:is(img, svg:not(.lucide))[width]:not([class^="h-"], [class*=" h-"], [class^="w-"], [class*=" w-"], [class^="size-"], [class*=" size-"], [style*="width"]) {
+  zoom: var(--ui-scale);
+}
+svg :is(svg, img)[width] { zoom: 1; }
+
 html {
   scrollbar-gutter: stable;
   color-scheme: dark;
@@ -866,7 +904,9 @@ html[data-custom-cursor="true"] * {
 .name-tag--caustics,
 .name-tag--lava,
 .name-tag--dither,
-.name-tag--mesh {
+.name-tag--mesh,
+.name-tag--inferno,
+.name-tag--hellfire {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1257,6 +1297,46 @@ html[data-custom-cursor="true"] * {
   animation: name-tag-slide 16s linear infinite;
 }
 
+/* Inferno and Hellfire, as CSS for small names and until the shader draws. Crisp letters
+   behind a dark edge (two tight shadows) so they read at list sizes on any
+   cover; every 4.8s a flare: a heat band climbs the letters and the glow
+   leaps, then a rest. */
+.name-tag--inferno {
+  background-image:
+    linear-gradient(0deg, transparent 0 36%, rgba(255, 252, 230, 0.95) 47%, transparent 58% 100%),
+    linear-gradient(0deg, #fff3b8 0%, #ffc43c 30%, #ff6e12 62%, #c41c05 100%);
+  background-size: 100% 300%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 0 0%, 0 0;
+  filter: drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(255, 110, 20, 0.5));
+  animation: name-tag-inferno-flare 4.8s ease-in-out infinite;
+}
+@keyframes name-tag-inferno-flare {
+  0% { background-position: 0 0%, 0 0; filter: drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(255, 110, 20, 0.5)); }
+  8% { filter: drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.08em 0.12em rgba(255, 150, 40, 0.95)); }
+  32%, 100% { background-position: 0 100%, 0 0; filter: drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(255, 110, 20, 0.5)); }
+}
+.name-tag--hellfire {
+  background-image:
+    linear-gradient(0deg, transparent 0 36%, rgba(240, 250, 255, 0.95) 47%, transparent 58% 100%),
+    linear-gradient(0deg, #f0f9ff 0%, #8ad6ff 28%, #6e5cff 60%, #44107a 100%);
+  background-size: 100% 300%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 0 0%, 0 0;
+  filter: drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(120, 90, 255, 0.55));
+  animation: name-tag-hellfire-flare 4.8s ease-in-out infinite;
+}
+@keyframes name-tag-hellfire-flare {
+  0% { background-position: 0 0%, 0 0; filter: drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(120, 90, 255, 0.55)); }
+  8% { filter: drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.08em 0.12em rgba(130, 200, 255, 0.95)); }
+  32%, 100% { background-position: 0 100%, 0 0; filter: drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(120, 90, 255, 0.55)); }
+}
+/* Big fire names get room above the letters for the shader's flames. */
+.name-tag--hero:is(.name-tag--inferno, .name-tag--hellfire) {
+  padding-top: 0.8em;
+  margin-top: -0.8em;
+}
+
 /* A big name waiting for its liquid-metal shader: plain metal without the CSS
    look's hard reflection band, so the real shader takes over without a flash. */
 .name-tag--chrome.name-tag--pending {
@@ -1281,6 +1361,14 @@ html[data-custom-cursor="true"] * {
 }
 .name-tag--chrome > .name-tag-shader {
   filter: drop-shadow(0 0.04em 0.06em rgba(0, 0, 0, 0.6));
+}
+/* Fire's live canvas draws its own dark edge; the name's box adds the glow,
+   so it escapes the hero's truncation. */
+.name-tag--inferno.name-tag--live {
+  filter: drop-shadow(0 -0.06em 0.3em rgba(255, 90, 20, 0.45)) !important;
+}
+.name-tag--hellfire.name-tag--live {
+  filter: drop-shadow(0 -0.06em 0.3em rgba(110, 90, 255, 0.5)) !important;
 }
 .name-tag--live {
   color: transparent !important;
@@ -1380,6 +1468,13 @@ html[data-custom-cursor="true"] * {
   src: url("/fonts/name/playfair.woff2") format("woff2");
 }
 
+@font-face {
+  font-family: "Name Monocraft";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/monocraft2.woff2") format("woff2");
+}
 @font-face {
   font-family: "Name Silkscreen";
   font-weight: 400;
@@ -1745,6 +1840,17 @@ html[data-custom-cursor="true"] * {
   margin-block: -0.5em;
 }
 
+.name-font--monocraft {
+  font-family: "Name Monocraft", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
 .name-font--silkscreen {
   font-family: "Name Silkscreen", var(--font-sans, sans-serif);
   font-weight: 400;

@@ -17,6 +17,7 @@ import { isWindowActive, subscribeWindowActivity } from "#/lib/window-activity";
 import { fetchLiveSupporterLook, peekLiveSupporterLook } from "#/lib/live-backend";
 import { parseSupporterLook, supporterLookSignature, type SupporterLook } from "#/lib/supporter-card-looks";
 import { useWebGlSlot } from "../../../lib/gl-budget";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -24,7 +25,7 @@ function useReducedMotion() {
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
 
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const query = window.matchMedia(scaledMediaQuery("(prefers-reduced-motion: reduce)"));
     const update = () => setReduced(query.matches);
     update();
     if (typeof query.addEventListener === "function") {
@@ -42,7 +43,7 @@ function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 640px)").matches
+    window.matchMedia(scaledMediaQuery("(max-width: 640px)")).matches
   );
 }
 

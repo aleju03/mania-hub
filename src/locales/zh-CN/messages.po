@@ -160,7 +160,7 @@ msgstr "{0, plural, other {有 # 个转谱成绩未计入，osu! 自己的键数
 msgid "{0, plural, one {# copy} other {# copies}}"
 msgstr "{0, plural, other {# 张}}"
 
-#. placeholder {0}: diffs.length
+#. placeholder {0}: model.diffs.length
 #: src/components/maps/SearchCard.tsx
 msgid "{0, plural, one {# diff} other {# diffs}}"
 msgstr "{0, plural, other {# 个难度}}"
@@ -470,6 +470,11 @@ msgstr "{0} 天"
 msgid "{0} days"
 msgstr "{0} 天"
 
+#. placeholder {0}: label(1)
+#: src/components/settings/SettingsPanel.tsx
+msgid "{0} default"
+msgstr ""
+
 #. placeholder {0}: entry.user.username
 #. placeholder {0}: score.beatmapset?.title ?? scoreTitleFallback
 #: src/components/packs/album/AlbumView.tsx
@@ -590,6 +595,7 @@ msgid "{0} maniacard"
 msgstr "{0} maniacard"
 
 #. placeholder {0}: formatNumber(currentTotal)
+#. placeholder {0}: formatNumber(currentTotal, locale)
 #: src/routes/maps.tsx
 msgid "{0} maps"
 msgstr "{0} 张谱面"
@@ -603,8 +609,8 @@ msgstr "{0} 张谱面 · {1}轮换"
 #. placeholder {0}: formatNumber(currentTotal, locale)
 #. placeholder {1}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
-msgid "{0} maps · updated {1}"
-msgstr "{0} 张谱面 · 更新于 {1}"
+#~ msgid "{0} maps · updated {1}"
+#~ msgstr "{0} 张谱面 · 更新于 {1}"
 
 #. placeholder {0}: length.value
 #: src/components/player/ProfileStatCards.tsx
@@ -757,7 +763,6 @@ msgstr "{0} 名玩家已通过"
 #. placeholder {0}: compact(insights.grind.mostPlayed.plays)
 #. placeholder {0}: compact(judgement.plays)
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
-#: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -786,11 +791,16 @@ msgid "{0} plays since {1}"
 msgstr "自 {1} 起 {0} 次游玩"
 
 #. placeholder {0}: formatNumber(randomPickCount, locale)
+#: src/routes/maps.tsx
+msgid "{0} possible picks"
+msgstr "{0} 个可抽选项"
+
+#. placeholder {0}: formatNumber(randomPickCount, locale)
 #. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
 #. placeholder {2}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
-msgid "{0} possible picks · {1} unique sets · updated {2}"
-msgstr "{0} 个可抽选项 · {1} 个不同谱面集 · 更新于 {2}"
+#~ msgid "{0} possible picks · {1} unique sets · updated {2}"
+#~ msgstr "{0} 个可抽选项 · {1} 个不同谱面集 · 更新于 {2}"
 
 #. placeholder {0}: entry.name
 #. placeholder {0}: skin.name
@@ -876,6 +886,11 @@ msgstr "共 {0} 场"
 #: src/routes/rankings.tsx
 msgid "{0} tracked players"
 msgstr "{0} 名被追踪玩家"
+
+#. placeholder {0}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
+#: src/routes/maps.tsx
+msgid "{0} unique sets"
+msgstr "{0} 个不同谱面集"
 
 #. placeholder {0}: nominee.up
 #. placeholder {1}: nominee.down
@@ -1226,6 +1241,10 @@ msgstr "{days} 天前"
 #: src/components/replay/ReplayControls.tsx
 msgid "{DEFAULT_EXPORT_CLIP_SECONDS}s from here"
 msgstr "从此处 {DEFAULT_EXPORT_CLIP_SECONDS}s"
+
+#: src/components/maps/MapDetailVariants.tsx
+#~ msgid "{diffCount, plural, one {# diff} other {# diffs}}"
+#~ msgstr "{diffCount, plural, other {# 个难度}}"
 
 #: src/components/skins/SkinCard.tsx
 msgid "{downloadCountLabel} downloads"
@@ -2084,6 +2103,7 @@ msgstr "卡包钱包 +{amount} 碎片。"
 msgid "+{gap}pp to go"
 msgstr "还差 {gap}pp"
 
+#: src/components/maps/MapDetailHeader.tsx
 #: src/routes/communities.tsx
 msgid "+{hidden} more"
 msgstr "还有 {hidden} 个"
@@ -2455,8 +2475,12 @@ msgid "4K regular"
 msgstr "4K 单点"
 
 #: src/routes/dan-estimates.tsx
-msgid "4K regular reads the play's MSD skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
-msgstr "4K 单点读取成绩的 MSD 技能项：叠来自 JackSpeed 和 Chordjack，技来自 Technical 和 Jumpstream，速度来自 Stream，耐力来自 Handstream 和 Stamina。速度和技按谱面的打法区分，两者都说得通的谱面同时计入两边。"
+#~ msgid "4K regular reads the play's MSD skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
+#~ msgstr "4K 单点读取成绩的 MSD 技能项：叠来自 JackSpeed 和 Chordjack，技来自 Technical 和 Jumpstream，速度来自 Stream，耐力来自 Handstream 和 Stamina。速度和技按谱面的打法区分，两者都说得通的谱面同时计入两边。"
+
+#: src/routes/dan-estimates.tsx
+msgid "4K regular reads the play's skillsets: jack from JackSpeed and Chordjack, tech from Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina. Speed and tech are told apart by how the chart is played, and a chart that could be either counts as both."
+msgstr "4K 单点读取成绩的技能项：叠来自 JackSpeed 和 Chordjack，技来自 Technical 和 Jumpstream，速度来自 Stream，耐力来自 Handstream 和 Stamina。速度和技按谱面的打法区分，两者都说得通的谱面同时计入两边。"
 
 #: src/routes/dan-estimates.tsx
 msgid "5. Dan courses and practice charts"
@@ -3091,8 +3115,12 @@ msgid "Accuracy below skill rating range"
 msgstr "准确率低于技能评级范围"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Accuracy below skill rating range, so this play has no MSD rating on any skillset."
-msgstr "准确率低于技能评级范围，因此此成绩在任何技能类别中都没有 MSD 评级。"
+#~ msgid "Accuracy below skill rating range, so this play has no MSD rating on any skillset."
+#~ msgstr "准确率低于技能评级范围，因此此成绩在任何技能类别中都没有 MSD 评级。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Accuracy below skill rating range, so this play has no rating on any skillset."
+msgstr "准确率低于技能评级范围，因此此成绩在任何技能类别中都没有评分。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Accuracy or unstable rate for every column, one cell per finger."
@@ -4638,6 +4666,11 @@ msgstr ""
 msgid "Bring to front"
 msgstr "置于顶层"
 
+#. Short label under a skillset bar: Bracket (6K-8K)
+#: src/components/maps/SearchCard.tsx
+msgid "BRK"
+msgstr "BRK"
+
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
 msgid "BROKE"
@@ -4668,8 +4701,12 @@ msgid "Browse collections"
 msgstr "浏览收藏册"
 
 #: src/routes/maps.tsx
-msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
-msgstr "浏览按键型、段位估计和 MSD 分组的 osu!mania 轮换图包。"
+#~ msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
+#~ msgstr "浏览按键型、段位估计和 MSD 分组的 osu!mania 轮换图包。"
+
+#: src/routes/maps.tsx
+msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and rating."
+msgstr "浏览按键型、段位估计和评分分组的 osu!mania 轮换图包。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -5397,7 +5434,9 @@ msgstr "圆形"
 msgid "Cirno fumo"
 msgstr "琪露诺 fumo"
 
+#. Short label under a skillset bar: Chordjack
 #: src/components/maps/PatternRadar.tsx
+#: src/components/maps/SearchCard.tsx
 msgid "CJ"
 msgstr "CJ"
 
@@ -5638,7 +5677,7 @@ msgstr "找不到片段"
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/layout/ChangelogModal.tsx
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/MapDetailHeader.tsx
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/RemovePlaysSheet.tsx
 #: src/components/packs/CardCollectors.tsx
@@ -5664,6 +5703,7 @@ msgstr "找不到片段"
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/ui/ImageLightbox.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/skins.tsx
 #: src/routes/supporter_.themes.gallery.tsx
@@ -6834,6 +6874,11 @@ msgstr "CRT 显示器"
 msgid "Crystal wings"
 msgstr "水晶翅膀"
 
+#. Short label under a skillset bar: Chordstream (6K-8K)
+#: src/components/maps/SearchCard.tsx
+msgid "CS"
+msgstr "CS"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
 msgstr "按住 Ctrl/Cmd 点击图片以添加或移除。"
@@ -7365,6 +7410,11 @@ msgstr "显示"
 msgid "Dither"
 msgstr "抖动"
 
+#. Short label under a skillset bar: Delay (6K-8K)
+#: src/components/maps/SearchCard.tsx
+msgid "DLY"
+msgstr "DLY"
+
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
 msgstr "{hidden} 的 7K 最佳成绩比 {shown} 多还是少？"
@@ -7463,6 +7513,7 @@ msgstr "下载 .osk"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/SearchCard.tsx
+#: src/routes/maps.tsx
 msgid "Download .osz"
 msgstr "下载 .osz"
 
@@ -8332,8 +8383,12 @@ msgid "Failed plays do not credit a dan."
 msgstr "失败的成绩不计入段位。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
-msgid "Failed plays do not receive an MSD rating."
-msgstr "未通过的成绩不会获得 MSD 评级。"
+msgid "Failed plays do not receive a rating."
+msgstr "未通过的成绩不会获得评分。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+#~ msgid "Failed plays do not receive an MSD rating."
+#~ msgstr "未通过的成绩不会获得 MSD 评级。"
 
 #: src/routes/replay.tsx
 msgid "Failed to load replay"
@@ -8729,6 +8784,10 @@ msgstr "以你的水平打完这张有风险，把它当作通关尝试而不是
 #: src/components/communities/field-options.tsx
 msgid "Finnish"
 msgstr "芬兰语"
+
+#: src/lib/supporter-name-styles.ts
+#~ msgid "Fire"
+#~ msgstr "火焰"
 
 #. placeholder {0}: link.fires
 #: src/components/packs/run/chain/ChainDetails.tsx
@@ -9449,10 +9508,9 @@ msgstr "草根"
 msgid "graveyard"
 msgstr "坟场"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 #: src/lib/pack-run.ts
-#: src/routes/maps.tsx
 msgid "Graveyard"
 msgstr "坟场"
 
@@ -9643,6 +9701,10 @@ msgstr "希伯来语"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Height of the exported image, in pixels"
 msgstr "导出图片的高度，单位像素"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Hellfire"
+msgstr "地狱火"
 
 #: src/lib/pack-run.ts
 msgid "Herd"
@@ -10054,7 +10116,9 @@ msgstr "血条填充"
 msgid "HP bar marker"
 msgstr "血条标记"
 
+#. Short label under a skillset bar: Handstream
 #: src/components/maps/PatternRadar.tsx
+#: src/components/maps/SearchCard.tsx
 msgid "HS"
 msgstr "HS"
 
@@ -10344,6 +10408,7 @@ msgstr "靛蓝"
 msgid "Indonesian"
 msgstr "印尼语"
 
+#: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Inferno"
 msgstr "炼狱"
@@ -10559,6 +10624,11 @@ msgstr "日语"
 msgid "Jersey"
 msgstr ""
 
+#. Short label under a skillset bar: Jack (6K-8K)
+#: src/components/maps/SearchCard.tsx
+msgid "JK"
+msgstr "JK"
+
 #: src/components/communities/CommunityCard.tsx
 msgid "Join"
 msgstr "加入"
@@ -10583,9 +10653,16 @@ msgstr "注册于 <0>{joinedValue}</0>"
 msgid "Joke charts"
 msgstr "整活谱"
 
+#. Short label under a skillset bar: Jumpstream
 #: src/components/maps/PatternRadar.tsx
+#: src/components/maps/SearchCard.tsx
 msgid "JS"
 msgstr "JS"
+
+#. Short label under a skillset bar: Jackspeed
+#: src/components/maps/SearchCard.tsx
+msgid "JSP"
+msgstr "JSP"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Judged"
@@ -11123,7 +11200,6 @@ msgstr "Legendary 及以上卡片不计分。"
 msgid "Legendary charms and endless runs"
 msgstr "传说护符和无尽模式"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -11403,8 +11479,8 @@ msgid "LN Inverse"
 msgstr "LN 反键"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "LN notes"
-msgstr "长条数"
+#~ msgid "LN notes"
+#~ msgstr "长条数"
 
 #: src/components/prism/PrismUpdates.tsx
 msgid "LN on hybrids"
@@ -11752,6 +11828,10 @@ msgstr "退出登录"
 msgid "long notes"
 msgstr "长条占比"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Long Notes"
+msgstr "长条"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Long-note and hold-heavy charts."
 msgstr "以长条和按住为主的谱面。"
@@ -11808,9 +11888,8 @@ msgstr ""
 msgid "loved"
 msgstr "社区喜爱"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/maps.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Loved"
 msgstr "社区喜爱"
 
@@ -12088,7 +12167,7 @@ msgstr "谱师"
 #. placeholder {0}: bm.creator
 #. placeholder {0}: entry.creator
 #. placeholder {0}: fav.creator
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/MapDetailHeader.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/routes/maps.tsx
 msgid "mapped by {0}"
@@ -12097,8 +12176,12 @@ msgstr "谱师 {0}"
 #. placeholder {0}: entry.creator
 #. placeholder {1}: formatNumber(entry.playCount)
 #: src/components/maps/SearchCard.tsx
-msgid "mapped by {0} · {1} plays"
-msgstr "谱师 {0} · {1} 次游玩"
+#~ msgid "mapped by {0} · {1} plays"
+#~ msgstr "谱师 {0} · {1} 次游玩"
+
+#: src/routes/maps.tsx
+msgid "mapped by {creator}"
+msgstr ""
 
 #: src/lib/replay-overlays.ts
 msgid "Mapper"
@@ -12519,6 +12602,10 @@ msgstr "周一"
 msgid "Mono caps"
 msgstr ""
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Monocraft"
+msgstr "Monocraft"
+
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Month {month}"
 msgstr "第 {month} 个月"
@@ -12711,40 +12798,38 @@ msgstr "msd"
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
-#: src/components/player/FeaturedPlays.tsx
-#: src/routes/rankings.tsx
-msgid "MSD"
-msgstr "MSD"
+#~ msgid "MSD"
+#~ msgstr "MSD"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "MSD and dan on recent plays"
-msgstr "在最近成绩中显示 MSD 和段位"
+#~ msgid "MSD and dan on recent plays"
+#~ msgstr "在最近成绩中显示 MSD 和段位"
 
 #. placeholder {0}: formatRate(rateAdjusted ? rate : 1)
 #: src/components/maps/MapDetailModal.tsx
-msgid "MSD at {0}"
-msgstr "{0} 下的 MSD"
+#~ msgid "MSD at {0}"
+#~ msgstr "{0} 下的 MSD"
 
 #. placeholder {0}: formatRate(rate)
 #: src/components/maps/MapDetailModal.tsx
-msgid "MSD at {0} with Inverse"
-msgstr "{0} Inverse 下的 MSD"
+#~ msgid "MSD at {0} with Inverse"
+#~ msgstr "{0} Inverse 下的 MSD"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "MSD on recent plays"
-msgstr "在最近成绩中显示 MSD"
+#~ msgid "MSD on recent plays"
+#~ msgstr "在最近成绩中显示 MSD"
 
 #: src/components/me/MyDataPanel.tsx
-msgid "MSD plays"
-msgstr "MSD 成绩"
+#~ msgid "MSD plays"
+#~ msgstr "MSD 成绩"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "MSD skill rating"
-msgstr "MSD 技能评级"
+#~ msgid "MSD skill rating"
+#~ msgstr "MSD 技能评级"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "MSD with Inverse"
-msgstr "Inverse 下的 MSD"
+#~ msgid "MSD with Inverse"
+#~ msgstr "Inverse 下的 MSD"
 
 #: src/lib/pack-run.ts
 msgid "Multiplayer"
@@ -14681,8 +14766,8 @@ msgid "Open image in new tab"
 msgstr "在新标签页打开图片"
 
 #: src/routes/maps.tsx
-msgid "Open in"
-msgstr "在此打开"
+#~ msgid "Open in"
+#~ msgstr "在此打开"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/maps.tsx
@@ -14945,6 +15030,7 @@ msgstr "其他"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 msgid "Other"
@@ -15372,10 +15458,9 @@ msgstr "铅笔稿"
 msgid "pending"
 msgstr "待定"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
-#: src/routes/maps.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Pending"
 msgstr "待定"
 
@@ -15826,6 +15911,7 @@ msgstr "{mode} 游玩中"
 msgid "Playing it as written scores higher, so Prism rates it as written."
 msgstr "按谱面正常游玩得分更高，所以 Prism 按谱面本身评分。"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -15833,7 +15919,6 @@ msgstr "按谱面正常游玩得分更高，所以 Prism 按谱面本身评分�
 msgid "plays"
 msgstr "游玩次数"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
@@ -16420,8 +16505,12 @@ msgid "Purple"
 msgstr "紫色"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
-msgstr "把本站记录过的任意一次游玩放在主页数据下方，配上你自己的标题，并显示它的 pp、MSD 或段位。"
+#~ msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, MSD or dan."
+#~ msgstr "把本站记录过的任意一次游玩放在主页数据下方，配上你自己的标题，并显示它的 pp、MSD 或段位。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Put any play the site tracked of you under your profile stats, with a title of your own and its pp, rating or dan."
+msgstr "把本站记录过的任意一次游玩放在主页数据下方，配上你自己的标题，并显示它的 pp、评分或段位。"
 
 #. placeholder {0}: number(serial)
 #. placeholder {1}: number(gain)
@@ -16469,9 +16558,8 @@ msgstr "四押切"
 msgid "qualified"
 msgstr "过审"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/maps.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Qualified"
 msgstr "过审"
 
@@ -16584,9 +16672,8 @@ msgstr "卡片评级由战队中最强成员的卡片决定。"
 msgid "ranked"
 msgstr "上架"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/maps.tsx
+#: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Ranked"
 msgstr "上架"
 
@@ -16667,6 +16754,10 @@ msgstr "根据你的最佳成绩与追踪历史中的 {plays} 个成绩评定，
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 msgstr "仅依据 {plays} 个成绩评分，在更多 {keyCount}K 成绩被评分之前只能当作粗略估算"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Rated plays"
+msgstr "评分成绩"
+
 #: src/routes/dan-estimates.tsx
 msgid "Rates count at the speed you played. Runengon [4K Hard] is 4th dan at 1.0x and about 9th under <0/>, so a <1/> pass on it counts as 9th, and a 0.75x pass counts for what the chart is worth at 0.75x. OD works the same way: <2/> and <3/> rate the chart at the OD you played."
 msgstr "倍速按你游玩的速度计算。Runengon [4K Hard] 在 1.0x 下是 4 段，开 <0/> 后约为 9 段，所以开 <1/> 的通过按 9 段计入，而 0.75x 的通过按谱面在 0.75x 下的段位计入。OD 同理：<2/> 和 <3/> 会按你游玩时的 OD 评定谱面。"
@@ -16675,9 +16766,35 @@ msgstr "倍速按你游玩的速度计算。Runengon [4K Hard] 在 1.0x 下是 4
 msgid "Rates per chart"
 msgstr "每张谱面的倍速数"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "rating"
+msgstr "评分"
+
+#: src/components/maps/MapCollectionsSection.tsx
+#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/MapSearchSection.tsx
+#: src/components/player/FeaturedPlays.tsx
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillHistoryModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/routes/rankings.tsx
 msgid "Rating"
 msgstr "评分"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Rating and dan on recent plays"
+msgstr "在最近成绩中显示评分和段位"
+
+#. placeholder {0}: formatRate(rateAdjusted ? rate : 1)
+#: src/components/maps/MapDetailModal.tsx
+msgid "Rating at {0}"
+msgstr "{0} 下的评分"
+
+#. placeholder {0}: formatRate(rate)
+#: src/components/maps/MapDetailModal.tsx
+msgid "Rating at {0} with Inverse"
+msgstr "{0} Inverse 下的评分"
 
 #: src/routes/dan-estimates.tsx
 msgid "Rating engines and LN charts"
@@ -16686,6 +16803,10 @@ msgstr "评级引擎和 LN 谱面"
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Rating history chart"
 msgstr "评分历史图表"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Rating on recent plays"
+msgstr "在最近成绩中显示评分"
 
 #: src/components/player/SkillHistoryGraph.tsx
 msgid "Rating system update"
@@ -16698,6 +16819,10 @@ msgstr "成绩评分失败。系统会自动重试，请稍后再来看。"
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Rating update"
 msgstr "评分更新"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Rating with Inverse"
+msgstr "Inverse 下的评分"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating your plays failed. It retries automatically, check back in a bit."
@@ -17520,6 +17645,7 @@ msgstr "刷新次数"
 #: src/components/layout/ThemePicker.tsx
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/settings/SettingsPanel.tsx
 msgid "Reset"
 msgstr "重置"
 
@@ -18969,6 +19095,7 @@ msgstr "显示导出详情"
 msgid "show fewer"
 msgstr "收起"
 
+#: src/components/maps/MapDetailHeader.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/routes/report.tsx
 msgid "Show fewer"
@@ -19115,12 +19242,20 @@ msgid "Shows leaderboards for the mods you have on and sends your mania plays to
 msgstr "按你当前的 mod 显示排行榜，并把你的 mania 成绩发送到你的个人资料，资料页还能显示你正在玩什么。"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "Shows the MSD and dan of each play in Recent Plays"
-msgstr "在最近成绩中显示每个成绩的 MSD 和段位"
+#~ msgid "Shows the MSD and dan of each play in Recent Plays"
+#~ msgstr "在最近成绩中显示每个成绩的 MSD 和段位"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "Shows the MSD of each play in Recent Plays"
-msgstr "在最近成绩中显示每个成绩的 MSD"
+#~ msgid "Shows the MSD of each play in Recent Plays"
+#~ msgstr "在最近成绩中显示每个成绩的 MSD"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the rating and dan of each play in Recent Plays"
+msgstr "在最近成绩中显示每个成绩的评分和段位"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the rating of each play in Recent Plays"
+msgstr "在最近成绩中显示每个成绩的评分"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows your cards with a quick fade instead of the full reveal"
@@ -19351,6 +19486,10 @@ msgstr "大小"
 msgid "Size"
 msgstr "大小"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Size of text and controls across the site"
+msgstr "全站文字和控件的大小"
+
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Size variety"
 msgstr ""
@@ -19399,6 +19538,7 @@ msgstr "技能谱面需要 4K 或 7K 的已评分成绩。"
 msgid "Skill radar"
 msgstr "技能雷达图"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
 msgid "Skill rating"
@@ -19909,6 +20049,11 @@ msgstr "聚光灯"
 msgid "SSR card"
 msgstr "SSR 卡"
 
+#. Short label under a skillset bar: Stamina
+#: src/components/maps/SearchCard.tsx
+msgid "STA"
+msgstr "STA"
+
 #: src/routes/skins.tsx
 msgid "stable"
 msgstr "stable"
@@ -20234,6 +20379,11 @@ msgstr "故事板"
 #: src/components/replay/ReplayControls.tsx
 msgid "Storyboard…"
 msgstr "故事板…"
+
+#. Short label under a skillset bar: Stream
+#: src/components/maps/SearchCard.tsx
+msgid "STR"
+msgstr "STR"
 
 #: src/components/packs/StreakGame.tsx
 msgid "streak"
@@ -20637,6 +20787,11 @@ msgstr "仅限战队，新战队优先"
 #: src/routes/packs.tsx
 msgid "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
 msgstr "撕开 maniacard 补充包：随机的 osu!mania 玩家被制成收藏卡，带有技能数据和稀有度等级。"
+
+#. Short label under a skillset bar: Technical
+#: src/components/maps/SearchCard.tsx
+msgid "TEC"
+msgstr "TEC"
 
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
@@ -21952,8 +22107,12 @@ msgid "This account is not in the Companella beta."
 msgstr "此账号不在 Companella 测试名单中。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
-msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
-msgstr "这次尝试没有保存的 MSD。能力评级只保留选定的成绩，因此较弱的重复尝试可能没有评级。"
+#~ msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
+#~ msgstr "这次尝试没有保存的 MSD。能力评级只保留选定的成绩，因此较弱的重复尝试可能没有评级。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This attempt has no saved rating. Skill ratings keep selected plays, so a weaker repeat may have none."
+msgstr "这次尝试没有保存的评分。能力评级只保留选定的成绩，因此较弱的重复尝试可能没有评分。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This attempt is no longer stored, so its dan credit cannot be checked."
@@ -22160,12 +22319,20 @@ msgid "This play does not count toward dan."
 msgstr "这个成绩不计入段位。"
 
 #: src/components/player/FeaturedPlays.tsx
-msgid "This play has no pp, MSD or dan to show."
-msgstr "这次游玩没有可显示的 pp、MSD 或段位。"
+#~ msgid "This play has no pp, MSD or dan to show."
+#~ msgstr "这次游玩没有可显示的 pp、MSD 或段位。"
+
+#: src/components/player/FeaturedPlays.tsx
+msgid "This play has no pp, rating or dan to show."
+msgstr "这次游玩没有可显示的 pp、评分或段位。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
-msgid "This play is below the accuracy needed for an MSD rating."
-msgstr "这次成绩的准确率未达到 MSD 评级要求。"
+msgid "This play is below the accuracy needed for a rating."
+msgstr "这次成绩的准确率未达到评分要求。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+#~ msgid "This play is below the accuracy needed for an MSD rating."
+#~ msgstr "这次成绩的准确率未达到 MSD 评级要求。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This play is excluded from skill ratings."
@@ -22712,6 +22879,10 @@ msgstr "追踪 pp 和准确率目标，以及各自还差多少。"
 msgid "Tracked"
 msgstr "已追踪"
 
+#: src/routes/maps.tsx
+msgid "tracked favs"
+msgstr "追踪玩家收藏"
+
 #: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "tracked history"
@@ -22940,6 +23111,10 @@ msgstr "输入区间：40-60、50+、<30"
 #: src/components/player/ActivityPanel.tsx
 msgid "Typical session <0>{0} plays</0>"
 msgstr "一场通常打 <0>{0} 次</0>"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "UI scaling"
+msgstr "界面缩放"
 
 #: src/components/communities/field-options.tsx
 msgid "Ukrainian"
@@ -23193,6 +23368,11 @@ msgstr "更新文件"
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Update the skin"
 msgstr "更新皮肤"
+
+#. placeholder {0}: formatTimeAgo(mapsUpdatedAt, locale)
+#: src/routes/maps.tsx
+msgid "updated {0}"
+msgstr "更新于 {0}"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "updated {updatedAtLabel}"

@@ -5,6 +5,7 @@ import { ensureSupporterNameStyles, getSupporterListFrame, subscribeSupporterNam
 import { framedAvatarStyle, supporterFrameGeometry } from "../../lib/supporter-avatar-frames";
 import { useHydrated } from "../../lib/use-hydrated";
 import { SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
+import { scaledPx } from "../../lib/ui-scale-values";
 
 type ParsedAvatarUrl = {
   userId: number;
@@ -116,12 +117,12 @@ export function Avatar({
     const fade = inner * (1 + left + right) > size * LIST_FRAME_CLIP;
     const pad = { x: fade ? (size * (LIST_FRAME_CLIP - 1)) / 2 : 0, y: fade ? size : 0 };
     return (
-      <span className="relative block flex-shrink-0" style={{ width: size, height: size }}>
+      <span className="relative block flex-shrink-0" style={{ width: scaledPx(size), height: scaledPx(size) }}>
         <span
           className="pointer-events-none absolute"
-          style={{ left: -pad.x, top: -pad.y, width: size + 2 * pad.x, height: size + 2 * pad.y, ...(fade ? { maskImage: LIST_FRAME_FADE, WebkitMaskImage: LIST_FRAME_FADE } : {}) }}
+          style={{ left: scaledPx(-pad.x), top: scaledPx(-pad.y), width: scaledPx(size + 2 * pad.x), height: scaledPx(size + 2 * pad.y), ...(fade ? { maskImage: LIST_FRAME_FADE, WebkitMaskImage: LIST_FRAME_FADE } : {}) }}
         >
-          <span className="absolute" style={{ left: pad.x + x, top: pad.y + y, width: inner, height: inner }}>
+          <span className="absolute" style={{ left: scaledPx(pad.x + x), top: scaledPx(pad.y + y), width: scaledPx(inner), height: scaledPx(inner) }}>
             <img
               src={imageUrl}
               alt={t`avatar`}
@@ -145,7 +146,7 @@ export function Avatar({
         width={size}
         height={size}
         className={`${shapeClass} ${onlineClass} flex-shrink-0 object-cover`}
-        style={{ width: size, height: size }}
+        style={{ width: scaledPx(size), height: scaledPx(size) }}
         loading="lazy"
         onError={() => setImageFailed(true)}
       />
@@ -154,7 +155,7 @@ export function Avatar({
   return (
     <div
       className={`${shapeClass} ${onlineClass} flex-shrink-0 bg-osu-b6`}
-      style={{ width: size, height: size }}
+      style={{ width: scaledPx(size), height: scaledPx(size) }}
     />
   );
 }

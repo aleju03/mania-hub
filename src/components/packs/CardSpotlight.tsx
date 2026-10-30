@@ -24,6 +24,7 @@ import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { rememberTeamName } from "../../lib/analytics-teams";
 import { effectiveCardLook } from "../../lib/supporter-card-looks";
 import { UsernameText } from "../ui/UsernameText";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 export interface CardSpotlightTarget {
   card: CollectedCard;
@@ -55,7 +56,7 @@ function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 640px)").matches
+    window.matchMedia(scaledMediaQuery("(max-width: 640px)")).matches
   );
 }
 

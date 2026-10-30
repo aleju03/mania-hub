@@ -161,7 +161,7 @@ export function UnratedPlaysBoard({
           value={shown.sort}
           options={[
             { value: "pp" as const, label: "PP" },
-            { value: "msd" as const, label: "MSD" },
+            { value: "msd" as const, label: t`Rating` },
             { value: "dan" as const, label: t`Dan` },
           ]}
           onChange={(next) => choose({ sort: next })}
@@ -217,7 +217,7 @@ export function UnratedPlaysBoard({
               <th className="py-2.5 px-3 text-left">{t`Player`}</th>
               <th className="py-2.5 px-3 text-left">{t`Map`}</th>
               <th className={`py-2.5 px-3 text-right ${servedSort === "pp" ? "text-osu-l2" : ""}`}>PP</th>
-              <th className={`py-2.5 px-3 text-right ${servedSort === "msd" ? "text-osu-l2" : ""}`}>MSD</th>
+              <th className={`py-2.5 px-3 text-right ${servedSort === "msd" ? "text-osu-l2" : ""}`}>{t`Rating`}</th>
               <th className={`py-2.5 px-3 text-right ${servedSort === "dan" ? "text-osu-l2" : ""}`}>{t`Dan`}</th>
             </tr>
           </thead>
@@ -387,6 +387,7 @@ const UnratedPlayTableRow = memo(function UnratedPlayTableRow({ entry, sort, str
 });
 
 const UnratedPlayCard = memo(function UnratedPlayCard({ entry, sort }: { entry: UnratedPlayEntry; sort: UnratedPlaysSort }) {
+  const { t } = useLingui();
   const others = (["pp", "msd", "dan"] as const).filter((axis) => axis !== sort);
   return (
     <div className="rounded-lg bg-osu-b4/50 p-3">
@@ -408,7 +409,7 @@ const UnratedPlayCard = memo(function UnratedPlayCard({ entry, sort }: { entry: 
         <div className="flex shrink-0 flex-col items-end gap-1 text-right">
           {others.map((axis) => (
             <span key={axis} className="flex items-center gap-1.5">
-              <span className="text-[8px] font-semibold uppercase tracking-wide text-osu-f1">{axis === "pp" ? "PP" : axis === "msd" ? "MSD" : "Dan"}</span>
+              <span className="text-[8px] font-semibold uppercase tracking-wide text-osu-f1">{axis === "pp" ? "PP" : axis === "msd" ? t`Rating` : t`Dan`}</span>
               <ValueCell entry={entry} axis={axis} sort={sort} />
             </span>
           ))}

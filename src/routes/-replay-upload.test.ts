@@ -121,10 +121,11 @@ describe("replay upload mode", () => {
 
     // Ownership is the backend's call, and the file only goes after the row it
     // was authorized against.
-    const deleteHandler = uploadsSource.slice(uploadsSource.indexOf("export const deleteUploadedReplay"));
-    expect(deleteHandler.indexOf("deleteUploadedReplayIndexRow"))
-      .toBeLessThan(deleteHandler.indexOf("deleteUploadedReplayObjects"));
-    expect(uploadsSource).toContain("if (!authorized.ok) return { ok: false, error: authorized.error };");
+    const deleteSource = fs.readFileSync(path.resolve(__dirname, "../lib/uploaded-replay-delete-server.ts"), "utf8");
+    expect(uploadsSource).toContain("removeUploadedReplay(data.id, { userId: auth.viewer?.id ?? null, asAdmin })");
+    expect(deleteSource.indexOf("deleteUploadedReplayIndexRow({"))
+      .toBeLessThan(deleteSource.indexOf("deleteUploadedReplayObjects(id)"));
+    expect(deleteSource).toContain("if (!authorized.ok) return { ok: false, error: authorized.error };");
     // A signed-out visitor has no shelf, and only an admin sees everyone's.
     expect(uploadsSource).toContain("const allOwners = data.allOwners && auth.canUseAdminFeatures;");
 
