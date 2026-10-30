@@ -30,6 +30,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const renderer of renderers.splice(0)) renderer.destroy();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 function viewer() {
@@ -58,9 +59,11 @@ function pointer(canvas: HTMLCanvasElement, type: string, x: number, y: number, 
 }
 
 describe("thin replay overlay gestures", () => {
-  it("moves the HP bar with one finger even when the finger misses its two-pixel line", () => {
+  it("moves the HP bar with one held finger even when the finger misses its two-pixel line", () => {
+    vi.useFakeTimers();
     const { canvas, renderer, save } = viewer();
     expect(pointer(canvas, "pointerdown", 253, 300).defaultPrevented).toBe(true);
+    vi.advanceTimersByTime(300);
     pointer(canvas, "pointermove", 313, 280);
     pointer(canvas, "pointerup", 313, 280);
 
@@ -72,9 +75,27 @@ describe("thin replay overlay gestures", () => {
     expect(canvas.hasPointerCapture(1)).toBe(false);
   });
 
+  it("leaves the HP bar in place when a tap or swipe starts on it without a hold", () => {
+    vi.useFakeTimers();
+    const { canvas, renderer, save } = viewer();
+    pointer(canvas, "pointerdown", 253, 300);
+    pointer(canvas, "pointermove", 213, 300);
+    vi.advanceTimersByTime(300);
+    pointer(canvas, "pointermove", 173, 300);
+    pointer(canvas, "pointerup", 173, 300);
+    pointer(canvas, "pointerdown", 253, 300);
+    vi.advanceTimersByTime(100);
+    pointer(canvas, "pointerup", 253, 300);
+    vi.advanceTimersByTime(300);
+    expect(save).not.toHaveBeenCalled();
+    expect(renderer.getOverlaySettingsSnapshot().healthBar.x).toBe(DEFAULT_REPLAY_OVERLAY_SETTINGS.healthBar.x);
+  });
+
   it("uses two fingers to resize instead of turning a one-finger drag into a resize", () => {
+    vi.useFakeTimers();
     const { canvas, renderer } = viewer();
     pointer(canvas, "pointerdown", 241, 280);
+    vi.advanceTimersByTime(300);
     pointer(canvas, "pointerdown", 241, 320, 2);
     pointer(canvas, "pointermove", 241, 360, 2);
     expect(renderer.getOverlaySettingsSnapshot().healthBar.scale).toBeCloseTo(2);

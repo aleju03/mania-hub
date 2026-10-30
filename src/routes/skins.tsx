@@ -69,6 +69,8 @@ interface SkinsSearch {
   // lazer. The two booleans keep the existing compact URL shape.
   lazer?: boolean;
   stable?: boolean;
+  // Percy LNs: true keeps them, false keeps the rest, unset is any.
+  percy?: boolean;
   // What the tap notes are; "" is any.
   shape?: SkinNoteShape | "";
   // Recommended resolution, normalized "1920x1080"; "" is any.
@@ -88,6 +90,7 @@ const DEFAULT_SKINS_SEARCH = {
   shots: false,
   lazer: false,
   stable: false,
+  percy: undefined as boolean | undefined,
   shape: "" as SkinNoteShape | "",
   res: "",
 };
@@ -107,7 +110,7 @@ const SORT_OPTIONS: Array<{ key: string; label: ReturnType<typeof msg>; ascLabel
 // Every filter in the rail back at its default; search text and sort stay.
 const CLEARED_FILTERS = {
   k: 0, special: false, mine: false, liked: false, cover: false, stage: false, shots: false,
-  lazer: false, stable: false, shape: "" as const, res: "",
+  lazer: false, stable: false, percy: undefined, shape: "" as const, res: "",
 };
 
 // The note-shape chips, labelled by what the notes are called in the wild.
@@ -159,6 +162,7 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
     // normalize it to the explicit "any" state instead of showing ambiguity.
     lazer: rawLazer && !rawStable,
     stable: rawStable && !rawLazer,
+    percy: searchFlag(search.percy) ? true : search.percy === false || search.percy === "false" || search.percy === 0 || search.percy === "0" ? false : undefined,
     shape: isSkinNoteShape(search.shape) ? search.shape : DEFAULT_SKINS_SEARCH.shape,
     res: typeof search.res === "string" ? (normalizeSkinResolution(search.res) ?? DEFAULT_SKINS_SEARCH.res) : DEFAULT_SKINS_SEARCH.res,
   };
@@ -169,7 +173,7 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
 export function isSkinsBrowseView(search: SkinsSearch): boolean {
   return !search.q && !search.k && !search.mine && !search.liked
     && !search.cover && !search.stage && !search.shots && !search.lazer && !search.stable
-    && !search.shape && !search.res
+    && search.percy == null && !search.shape && !search.res
     && (search.sort ?? "newest") === "newest";
 }
 
@@ -323,7 +327,7 @@ function SkinCardSkeleton() {
 function SkinsPage() {
   const {
     q = "", page = 0, sort = "newest", k = 0, special = false, mine = false, liked = false,
-    cover = false, stage = false, shots = false, lazer = false, stable = false, shape = "", res = "",
+    cover = false, stage = false, shots = false, lazer = false, stable = false, percy, shape = "", res = "",
   } = Route.useSearch();
   const { t, i18n } = useLingui();
   const navigate = useNavigate();
@@ -346,7 +350,7 @@ function SkinsPage() {
   const likedActive = liked && (viewerId != null || likeGuest != null);
   // Whether anything beyond the plain browse view is narrowing the grid, for
   // the empty state's wording and for where a fresh publish may land.
-  const traitFilterCount = [cover, stage, shots, lazer !== stable, Boolean(shape), Boolean(res)].filter(Boolean).length;
+  const traitFilterCount = [cover, stage, shots, lazer !== stable, percy != null, Boolean(shape), Boolean(res)].filter(Boolean).length;
   const traitFiltersActive = traitFilterCount > 0;
   // One client axis: only a lone flag narrows anything. Neither is every skin,
   // and parseSkinsSearch normalizes legacy links carrying both back to neither.
@@ -356,7 +360,7 @@ function SkinsPage() {
 
   // Each unfiltered catalogue page can seed its grid on a cold load.
   const ssrList = Route.useLoaderData();
-  const isBrowse = isSkinsBrowseView({ q, sort, k, mine, liked, cover, stage, shots, lazer, stable, shape, res });
+  const isBrowse = isSkinsBrowseView({ q, sort, k, mine, liked, cover, stage, shots, lazer, stable, percy, shape, res });
   const ssrSeeded = ssrList != null && ssrList.page === page && isBrowse;
 
   // Seeded from the in-memory list cache so walking back from a skin page
@@ -364,7 +368,7 @@ function SkinsPage() {
   // server-rendered page starts on its own skins rather than on skeletons it
   // would replace a moment later.
   const [data, setData] = useState<SkinsListResult | null>(
-    () => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant, owner, liked: likedActive, cover, stage, shots, client, shape: shapeParam, res: resParam }))
+    () => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant, owner, liked: likedActive, cover, stage, shots, client, percy, shape: shapeParam, res: resParam }))
       ?? (ssrSeeded ? ssrList : null),
   );
   const [loading, setLoading] = useState(!ssrSeeded);
@@ -422,11 +426,11 @@ function SkinsPage() {
     (patch: SkinsSearch) => {
       void navigate({
         to: "/skins",
-        search: { q, sort, k, special, mine, liked, cover, stage, shots, lazer, stable, shape, res, page: 0, ...patch },
+        search: { q, sort, k, special, mine, liked, cover, stage, shots, lazer, stable, percy, shape, res, page: 0, ...patch },
         replace: true,
       });
     },
-    [navigate, q, sort, k, special, mine, liked, cover, stage, shots, lazer, stable, shape, res],
+    [navigate, q, sort, k, special, mine, liked, cover, stage, shots, lazer, stable, percy, shape, res],
   );
 
   // Debounced text search: typing updates local state, the URL follows.
@@ -445,7 +449,7 @@ function SkinsPage() {
       setFailed(true);
       return;
     }
-    const cacheKey = skinsListCacheKey({ q, page, sort, k, variant, owner, liked: likedActive, cover, stage, shots, client, shape: shapeParam, res: resParam });
+    const cacheKey = skinsListCacheKey({ q, page, sort, k, variant, owner, liked: likedActive, cover, stage, shots, client, percy, shape: shapeParam, res: resParam });
     // The server-rendered grid is already on screen and was fetched for this
     // very request, so the first pass has nothing to do: fetching here would
     // pull the same 24 rows a second time, once in the HTML and once over the
@@ -469,7 +473,7 @@ function SkinsPage() {
     // The liked filter is the exception: a signed-in viewer's likes are only
     // taken from the vouched-for account, so it goes through a server fn; a
     // guest's are asked for by the browser's guest id, uncached.
-    const listParams = { q, page, sort, k, variant, owner, cover, stage, shots, client, shape: shapeParam, res: resParam };
+    const listParams = { q, page, sort, k, variant, owner, cover, stage, shots, client, percy, shape: shapeParam, res: resParam };
     const request = likedActive && likeGuest == null
       ? fetchLikedSkinsList({ data: listParams, signal: controller.signal })
       : fetchSkinsListDirect(likedActive && likeGuest ? { ...listParams, liked: true, guest: likeGuest } : listParams, { signal: controller.signal });
@@ -487,7 +491,7 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, sort, k, variant, owner, likedActive, likeGuest, cover, stage, shots, client, shapeParam, resParam, reloadTick, ssrList]);
+  }, [q, page, sort, k, variant, owner, likedActive, likeGuest, cover, stage, shots, client, percy, shapeParam, resParam, reloadTick, ssrList]);
 
   useEffect(() => {
     if (!viewerId || !isLiveBackendConfigured()) {
@@ -636,6 +640,19 @@ function SkinsPage() {
           <Trans>lazer</Trans>
         </RailOption>
       </RailSection>
+      {/* Percy LNs, read from each skin's LN body art. Picking the
+          active option clears it. */}
+      <RailSection label={t`LN`}>
+        <RailOption active={percy == null} onClick={() => applySearch({ percy: undefined })}>
+          <Trans>any</Trans>
+        </RailOption>
+        <RailOption active={percy === true} onClick={() => applySearch({ percy: percy === true ? undefined : true })}>
+          <Trans>Percy</Trans>
+        </RailOption>
+        <RailOption active={percy === false} onClick={() => applySearch({ percy: percy === false ? undefined : false })}>
+          <Trans>no Percy</Trans>
+        </RailOption>
+      </RailSection>
       {/* Independent checkboxes: each one narrows to skins that
           ship the thing, so they wear a box, not a dot. */}
       <RailSection label={t`includes`}>
@@ -710,7 +727,7 @@ function SkinsPage() {
                 takes the middle column at the header's width and the rail
                 hangs in the left margin, so the skins stay centered under
                 the page header the way they were before the rail. */}
-            <div className="lg:grid lg:grid-cols-[176px_minmax(0,1fr)] lg:gap-x-8 lg:gap-y-5 min-[102.5rem]:grid-cols-[minmax(176px,1fr)_minmax(0,1160px)_minmax(176px,1fr)]">
+            <div className="lg:grid lg:grid-cols-[176px_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:gap-x-8 lg:gap-y-5 min-[102.5rem]:grid-cols-[minmax(176px,1fr)_minmax(0,1160px)_minmax(176px,1fr)]">
             {/* Search and sort share one bar over the grid, level with the
                 top of the rail. No surface of its own, so the falling notes
                 show through. */}

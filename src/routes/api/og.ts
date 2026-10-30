@@ -1,4 +1,4 @@
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "../../lib/og-image-response";
 import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
 import type { ReactNode } from "react";
@@ -1476,9 +1476,10 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
               display: "flex",
               alignItems: "flex-start",
               // Five columns fill the row; fewer keep their spacing instead of
-              // drifting to the edges.
+              // drifting to the edges. satori throws on a style key set to
+              // undefined, so the gap is left out rather than unset.
               justifyContent: keymodes.length === 2 ? "space-between" : "flex-start",
-              gap: keymodes.length === 2 ? undefined : "48px",
+              ...(keymodes.length === 2 ? {} : { gap: "48px" }),
               position: "absolute",
               top: "430px",
               left: "56px",

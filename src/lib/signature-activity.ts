@@ -62,6 +62,22 @@ export function activityWindowStart(todayKey: string, weekCount: number): string
   return addDays(todayKey, -weekday - (weekCount - 1) * 7);
 }
 
+// The current day is still in progress: an empty today does not end it.
+function activityStreak(byDate: Map<string, SignatureActivityDayInput>, todayKey: string): number {
+  let streak = 0;
+  let cursor = (byDate.get(todayKey)?.scoreCount ?? 0) > 0 ? todayKey : addDays(todayKey, -1);
+  while ((byDate.get(cursor)?.scoreCount ?? 0) > 0) {
+    streak++;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
+function activityFullAt(plays: number, sessions: number, activeDays: number): number {
+  const typicalSession = sessions > 0 ? plays / sessions : activeDays > 0 ? plays / activeDays : 1;
+  return Math.max(1, Math.round(typicalSession * 2.4));
+}
+
 export function buildSignatureActivityWindow(
   days: SignatureActivityDayInput[],
   todayKey: string,
@@ -103,22 +119,71 @@ export function buildSignatureActivityWindow(
     weeklyPlays.push(weekPlays);
   }
 
-  // The current day is still in progress: an empty today does not end it.
-  let streak = 0;
-  let cursor = (byDate.get(todayKey)?.scoreCount ?? 0) > 0 ? todayKey : addDays(todayKey, -1);
-  while ((byDate.get(cursor)?.scoreCount ?? 0) > 0) {
-    streak++;
-    cursor = addDays(cursor, -1);
-  }
-
-  const typicalSession = sessions > 0 ? plays / sessions : activeDays > 0 ? plays / activeDays : 1;
   return {
     weeks,
     months,
     weeklyPlays,
     plays,
     activeDays,
-    streak,
-    fullAt: Math.max(1, Math.round(typicalSession * 2.4)),
+    streak: activityStreak(byDate, todayKey),
+    fullAt: activityFullAt(plays, sessions, activeDays),
+  };
+}
+
+export interface SignatureActivityMonth {
+  label: string;
+  /** Sunday-first rows. Days outside the month are null, days after today future. */
+  rows: Array<Array<(SignatureActivityCell & { day: number; future: boolean }) | null>>;
+  plays: number;
+  activeDays: number;
+  streak: number;
+  fullAt: number;
+}
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/* The calendar month today falls in. The streak reads every day given, so it
+   can run back past the first of the month. */
+export function buildSignatureActivityMonth(
+  days: SignatureActivityDayInput[],
+  todayKey: string,
+): SignatureActivityMonth {
+  const byDate = new Map(days.map((day) => [day.date, day]));
+  const first = `${todayKey.slice(0, 8)}01`;
+  const firstDate = parseKey(first);
+  const length = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth() + 1, 0)).getUTCDate();
+  const lead = firstDate.getUTCDay();
+  const rows: SignatureActivityMonth["rows"] = [];
+  let plays = 0;
+  let sessions = 0;
+  let activeDays = 0;
+
+  for (let slot = 0; slot < Math.ceil((lead + length) / 7) * 7; slot++) {
+    if (slot % 7 === 0) rows.push([]);
+    const day = slot - lead + 1;
+    if (day < 1 || day > length) {
+      rows[rows.length - 1]!.push(null);
+      continue;
+    }
+    const date = addDays(first, day - 1);
+    const future = date > todayKey;
+    const entry = future ? undefined : byDate.get(date);
+    const count = Math.max(0, entry?.scoreCount ?? 0);
+    rows[rows.length - 1]!.push({ date, plays: count, day, future });
+    plays += count;
+    sessions += Math.max(0, entry?.sessionCount ?? 0);
+    if (count > 0) activeDays++;
+  }
+
+  return {
+    label: MONTH_NAMES[firstDate.getUTCMonth()]!,
+    rows,
+    plays,
+    activeDays,
+    streak: activityStreak(byDate, todayKey),
+    fullAt: activityFullAt(plays, sessions, activeDays),
   };
 }

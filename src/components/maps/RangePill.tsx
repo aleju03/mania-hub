@@ -437,7 +437,7 @@ export function RangePill({
       }}
       placeholder={skin.placeholder}
       aria-label={t`${ariaLabel} range`}
-      className={`shrink-0 w-24 bg-transparent ${valueClassName} font-semibold tabular-nums text-osu-l2 border-b border-osu-b3 outline-none focus:border-osu-pink placeholder:text-osu-f1/30`}
+      className={`${heading ? "min-w-0 w-[4.5rem] text-right" : "shrink-0 w-24"} bg-transparent ${valueClassName} font-semibold tabular-nums text-osu-l2 border-b border-osu-b3 outline-none focus:border-osu-pink placeholder:text-osu-f1/30`}
     />
   ) : (
     <span
@@ -477,11 +477,13 @@ export function RangePill({
   );
 
   if (heading) {
+    // At rest the rail already reads "Any", so the heading row skips the
+    // repeat; a long translation of it overran the next column.
     return (
       <div className="flex w-full flex-col gap-1">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex min-h-[18px] items-center justify-between gap-3">
           {heading}
-          {value}
+          {(active || editing) && value}
         </div>
         {rail}
       </div>

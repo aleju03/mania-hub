@@ -1,4 +1,4 @@
-import { Fragment, useCallback, type CSSProperties, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, isLocalChartId, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
@@ -9,7 +9,7 @@ import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { invertManiaOsuText } from "#dan/invert-mod";
-import { MapScoresBoard, mapScoreEntryScore } from "./MapScoresBoard";
+import { MapScoresBoard, mapScoreEntryScore, pendingFriendsBoard } from "./MapScoresBoard";
 import { ScorePlayDetailModal } from "../player/ScorePlayDetailModal";
 import { getBeatmapFile } from "../../lib/osu";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
@@ -146,7 +146,7 @@ export interface MapDetailPlayContext {
   /** Absent for a play no skill list rated, which leaves the score without a side panel. */
   rating?: number;
   ratingExcluded?: boolean;
-  ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision";
+  ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision" | "chart_disabled";
   ratingLabel: string;
   ratingColor: string;
   // Dan evidence has two distinct values: the chart's base rating and the
@@ -262,6 +262,7 @@ function PlaySkillRatings({ play, keyCount }: { play: MapDetailPlayContext; keyC
       {play.ratingExcluded ? (
         <p className="text-xs text-osu-red-light">{play.ratingExclusionReason === "pending_calibration" ? t`Skill rating recalculation pending`
           : play.ratingExclusionReason === "unverifiable_revision" ? t`Chart edited after this play`
+          : play.ratingExclusionReason === "chart_disabled" ? t`Not counted for now`
           : play.ratingExclusionReason === "msd_floor" ? t`Accuracy below skill rating range` : play.unrateable ? t`Unrateable chart` : t`Vibro detected`}</p>
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-2.5" aria-label={t`Skill breakdown`}>
@@ -657,7 +658,9 @@ export function MsdBlock({
     ? rate === 1 ? t`Rating with Inverse` : t`Rating at ${formatRate(rate)} with Inverse`
     : rate === 1 ? t`Rating` : t`Rating at ${formatRate(rateAdjusted ? rate : 1)}`;
   const sectionRate = rateAdjusted ? rate : 1;
-  const displaySections = groupDetectedSections(vibroAnalysis?.sections ?? [], sectionRate);
+  // An unrateable chart only leaves skill ratings; map info shows it as a plain chart.
+  const shownVibro = vibroAnalysis && vibroAnalysis.status !== "clean" && !isUnrateableExclusion(vibroAnalysis) ? vibroAnalysis : null;
+  const displaySections = groupDetectedSections(shownVibro?.sections ?? [], sectionRate);
   const other = rateAdjusted ? (secondaryDan ? rateSecondaryDan : null) : secondaryDan;
   const otherDan = dan && other && other.family !== dan.family ? other : null;
 
@@ -668,7 +671,7 @@ export function MsdBlock({
       <div className="flex items-baseline justify-between gap-3">
         <span className="flex items-baseline gap-3">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{heading}</span>
-          {vibroAnalysis && vibroAnalysis.status !== "clean" && (
+          {shownVibro && (
             <button
               type="button"
               aria-expanded={sectionsOpen}
@@ -679,14 +682,13 @@ export function MsdBlock({
             </button>
           )}
         </span>
-        {(vibroAnalysis ? vibroAnalysis.status !== "clean" : entry.vibro) && (
+        {(vibroAnalysis ? shownVibro : entry.vibro) && (
           <span className="text-[9.5px] font-semibold text-[#ffcf70]">
-            {vibroAnalysis?.status === "adjusted" ? t`localized vibro detected`
-              : (vibroAnalysis ? isUnrateableExclusion(vibroAnalysis) : entry.unrateable) ? t`unrateable chart` : t`vibro chart, estimates unreliable`}
+            {shownVibro?.status === "adjusted" ? t`localized vibro detected` : t`vibro chart, estimates unreliable`}
           </span>
         )}
       </div>
-      {vibroAnalysis && vibroAnalysis.status !== "clean" && (
+      {shownVibro && (
         <div hidden={!sectionsOpen} className="text-[11px] text-osu-f1/75">
           <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
             {displaySections.map((section) => (
@@ -824,6 +826,7 @@ export function MapDetailModal({
   status = "ready",
   actions,
   initialRate = 1,
+  starScale = "",
   scoreOnly = false,
 }: {
   entry: LiveMapSearchEntry | null;
@@ -831,6 +834,9 @@ export function MapDetailModal({
   /** The DT/HT toggle the modal opens on when there is no play, for a list
       that recommended the chart at that rate. */
   initialRate?: 1 | 1.5 | 0.75;
+  /** "sunny" shows Sunny's Star Rating Rebirth where the catalog has it for
+      the rate (1.0x, 0.75x, 1.5x), as the search view it was opened from does. */
+  starScale?: "sunny" | "";
   /** Extra buttons for the footer, after Share. */
   actions?: ReactNode;
   /** Just the play, no tabs: the card was opened from this map's own Scores tab. */
@@ -857,10 +863,12 @@ export function MapDetailModal({
   // A Scores tab row opens its play as a card stacked over this one.
   const [openedScore, setOpenedScore] = useState<OsuScore | null>(null);
 
-  useEffect(() => {
+  // Before paint: a reopened card would otherwise show the last map's tab for a frame.
+  useLayoutEffect(() => {
     setSelectedDiffId(entry ? entry.beatmapId : null);
     setShareCopied(false);
-    setTab("score");
+    // Back from loading friends: straight to that map's Friends board.
+    setTab(entry && !play && pendingFriendsBoard() === entry.beatmapId ? "scores" : "score");
     setOpenedScore(null);
   }, [entry?.beatmapId, play?.scoreId, play?.playedAt]);
 
@@ -1063,7 +1071,11 @@ export function MapDetailModal({
   }, [entry, fileStatsById, fileStatsId, playRate, setKnown]);
   const fileStats = fileStatsId != null ? fileStatsById[fileStatsId] : undefined;
   const fileStatsPending = fileStatsId != null && fileStats === undefined;
-  const shownStars = active ? rateStars ?? fileStats?.stars ?? active.stars : 0;
+  const sunnyStars = starScale === "sunny" && active && !offCatalog && !playedInverse
+    ? playRate === 1 ? active.sunnyStars : playRate === 0.75 ? active.sunnyHt : playRate === 1.5 ? active.sunnyDt : null
+    : null;
+  const shownStars = active ? sunnyStars ?? rateStars ?? fileStats?.stars ?? active.stars : 0;
+  const diffStars = (diff: LiveMapSearchEntry) => (starScale === "sunny" ? diff.sunnyStars ?? diff.stars : diff.stars);
   const msdShown = !!(active?.msd || activeAnalysis?.msd || (offCatalog && rateMsd));
   // Both tails always show their rate, so turning one on never shifts the other.
   const speedMods = playedRate === 1 && previewSet ? (
@@ -1104,7 +1116,7 @@ export function MapDetailModal({
   } : null;
   const headerRating = shownMsdSource && msdShown ? resolveShownMsd(shownMsdSource).overall : null;
   const headerStars: DetailStars = numbersKnown
-    ? starsUnknown ? null : { value: shownStars, dim: starsPending }
+    ? starsUnknown ? null : { value: shownStars, dim: starsPending && sunnyStars == null }
     : fileStats?.stars ? { value: shownStars, dim: false }
     : pending && !starsUnknown ? "pending" : null;
   const headerStatus = active && numbersKnown && !local ? active.status : null;
@@ -1135,7 +1147,7 @@ export function MapDetailModal({
   // Every matching diff of the set, easiest first. Shared by Map info and
   // Scores, where switching diffs switches the board.
   const diffPicker = active && diffs.length > 1 ? (
-    <DiffTabs diffs={diffs} activeId={active.beatmapId} mixedKeys={mixedKeys} onSelect={setSelectedDiffId} />
+    <DiffTabs diffs={diffs.map((diff) => ({ ...diff, stars: diffStars(diff) }))} activeId={active.beatmapId} mixedKeys={mixedKeys} onSelect={setSelectedDiffId} />
   ) : null;
 
   if (typeof document === "undefined") return null;
@@ -1228,6 +1240,7 @@ export function MapDetailModal({
                   <>
                     {diffPicker}
                     <MapScoresBoard
+                      key={active.beatmapId}
                       beatmapId={active.beatmapId}
                       onOpen={(row) => setOpenedScore(mapScoreEntryScore(row, active))}
                     />

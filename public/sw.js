@@ -1,4 +1,4 @@
-const CACHE_NAME = "static-v8";
+const CACHE_NAME = "static-v9";
 
 const PRECACHE_URLS = [
   // Fonts
@@ -8,7 +8,7 @@ const PRECACHE_URLS = [
   "/fonts/TrackerRound-Bold.woff2",
   "/fonts/TrackerRound-Light.woff2",
   "/fonts/TrackerRound-Thin.woff2",
-  "/fonts/Venera-500.otf",
+  "/fonts/Venera-500.woff2",
   "/fonts/extra.woff2",
   "/fonts/extra.woff",
   "/fonts/extra.ttf",

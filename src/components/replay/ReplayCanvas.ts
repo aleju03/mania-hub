@@ -63,6 +63,10 @@ const LEADERBOARD_EXPLOSION_ASSETS: ReplaySkinImageAsset[] = [1, 2].map((part) =
 // reaching for, so the bottom chrome may reveal there (CSS px).
 const OVERLAY_APPROACH_EDGE_PX = 12;
 const OVERLAY_TOUCH_TARGET_PX = 44;
+// A finger rests this long on an overlay before it picks it up, and moving
+// further than the slop first leaves the overlay where it is.
+const OVERLAY_TOUCH_HOLD_MS = 300;
+const OVERLAY_TOUCH_HOLD_SLOP_PX = 10;
 // Set on the stage canvas so a held finger never starts an iOS text
 // selection or callout.
 const CANVAS_NO_SELECT_STYLES = ["user-select", "-webkit-user-select", "-webkit-touch-callout"];
@@ -267,6 +271,11 @@ const LN_BODY_FILLER_ROWS = 8;
 // 32800 of its units, which are 768ths of the stage height: 20500 in the
 // 480-space the layout scale is measured in.
 const LAZER_LN_BODY_SPAN = 32800 * (480 / 768);
+// stable stretches a cascaded body to the lane's width but gives each texel
+// row a fixed 480/768 of a 480-space unit (half that at @2x), whatever the
+// art's width: the texture is native at 768 tall. Fitted on Percy caps in
+// stable screenshots across 64- to 200-wide strips.
+const STABLE_LN_BODY_ROW_UNITS = 480 / 768;
 // What the inline mobile canvas used to be (~390-430px tall). Inline portrait
 // layouts anchor skin scale and scroll speed to this instead of the real
 // height, so the taller redesigned stage adds lookahead rather than speed.
@@ -850,6 +859,7 @@ export class ManiaReplayRenderer {
   private overlaySettingsInputSignature = "";
   private overlayReferenceLayout: ReplayOverlayReference | null = null;
   private overlayLayoutPrepared = false;
+  private touchOverlayHold: { pointerId: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
   private onMissThumbHandChange: ((hand: ReplayThumbHand) => void) | null = null;
   private onContextLost: ((wasPlaying: boolean) => void) | null = null;
@@ -2836,13 +2846,31 @@ export class ManiaReplayRenderer {
     this.overlayLayoutPrepared = true;
   }
 
+  // Still where the defaults put it: a drag never lands on these exact
+  // fractions, and a binding only copies the drawn spot back.
+  private isDefaultPlacement(id: ReplayOverlayId): boolean {
+    const placement = this.getOverlayPlacement(id);
+    const fallback = DEFAULT_REPLAY_OVERLAY_SETTINGS[id];
+    return fallback.x !== REPLAY_OVERLAY_ANCHORED_COORD
+      && Math.abs(placement.x - fallback.x) < 0.0001
+      && Math.abs(placement.y - fallback.y) < 0.0001
+      && Math.abs(placement.scale - fallback.scale) < 0.0001;
+  }
+
   getOverlaySettingsSnapshot(options?: { resolveLayout?: boolean }): ReplayOverlaySettings {
     const layout = this.cachedLayout ?? this.getLayout();
     const reference = this.getOverlayReference(layout);
+    // An overlay still on its default spot that lands on the lanes only
+    // because this viewport has no room beside them (a phone held upright)
+    // stays unbound, or a wider export would carry it onto the lanes too.
+    const unplaced = new Set(this.overlayHitboxes
+      .filter((box) => this.isDefaultPlacement(box.id) && replayOverlayRegion(box, layout) === "playfield")
+      .map((box) => box.id));
     // Only moved art joins HUD fitting, using its visible bounds rather than
     // the transparent canvas. Untouched art still belongs to the skin layout.
     const boxes = options?.resolveLayout
-      ? this.overlayHitboxes.filter((box) => !isReplayStageArtOverlay(box.id) || this.isStageArtPlaced(box.id)).map((box) => (
+      ? this.overlayHitboxes.filter((box) => !unplaced.has(box.id)
+        && (!isReplayStageArtOverlay(box.id) || this.isStageArtPlaced(box.id))).map((box) => (
           box.id === "leaderboard" && this.ruleset.accuracyMode === "lazer"
             // Hover/pause changes the hitbox, never the saved fitting geometry.
             ? { ...box, width: this.getLazerLeaderboardLayoutWidth() * this.getOverlayScale(layout, "leaderboard") }
@@ -2886,6 +2914,10 @@ export class ManiaReplayRenderer {
     }
     let settings = normalizeReplayOverlaySettings(this.overlaySettings);
     for (const id of Object.keys(settings) as ReplayOverlayId[]) {
+      if (unplaced.has(id)) {
+        settings = updateReplayOverlayPlacement(settings, id, { reference: undefined }, this.ruleset.accuracyMode === "lazer");
+        continue;
+      }
       const placement = this.getOverlayPlacement(id);
       const box = boxes.find((entry) => entry.id === id);
       if (box) {
@@ -3075,6 +3107,7 @@ export class ManiaReplayRenderer {
   }
 
   private removeOverlayPointerHandlers() {
+    this.clearTouchOverlayHold();
     this.canvas.style.touchAction = this.previousCanvasTouchAction;
     this.canvas.style.outline = this.previousCanvasOutline;
     for (const [name, value] of this.previousCanvasSelectStyles) this.canvas.style.setProperty(name, value);
@@ -3384,35 +3417,67 @@ export class ManiaReplayRenderer {
       }
     }
 
-    this.activeOverlayPointers.set(event.pointerId, { id: hitbox.id, ...point });
-    this.canvas.setPointerCapture(event.pointerId);
+    // An instant grab moved the thin health bar beside the lanes, or the miss
+    // counter a phone draws over them, whenever a tap or swipe started near
+    // it. A second finger on an overlay already held still pinches at once.
+    const pinching = Array.from(this.activeOverlayPointers.values()).some((pointer) => pointer.id === hitbox.id);
+    if (event.pointerType === "touch" && !pinching) {
+      this.clearTouchOverlayHold();
+      const { pointerId } = event;
+      const hold = {
+        pointerId, ...point,
+        timer: setTimeout(() => {
+          if (this.touchOverlayHold !== hold) return;
+          this.touchOverlayHold = null;
+          if (this.destroyed) return;
+          const current = this.overlayHitboxes.find((box) => box.id === hitbox.id);
+          if (!current) return;
+          this.beginOverlayPointerGesture(pointerId, "touch", { x: hold.x, y: hold.y }, current);
+          if (typeof navigator !== "undefined") navigator.vibrate?.(8);
+        }, OVERLAY_TOUCH_HOLD_MS),
+      };
+      this.touchOverlayHold = hold;
+      event.preventDefault();
+      return;
+    }
+    this.beginOverlayPointerGesture(event.pointerId, event.pointerType, point, hitbox);
+    event.preventDefault();
+  };
+
+  private clearTouchOverlayHold() {
+    if (this.touchOverlayHold) clearTimeout(this.touchOverlayHold.timer);
+    this.touchOverlayHold = null;
+  }
+
+  private beginOverlayPointerGesture(pointerId: number, pointerType: string, point: { x: number; y: number }, hitbox: ReplayOverlayHitbox) {
+    this.activeOverlayPointers.set(pointerId, { id: hitbox.id, ...point });
+    this.canvas.setPointerCapture(pointerId);
     const placement = this.getOverlayPlacement(hitbox.id);
     const origin = this.getOverlayPlacementOrigin(hitbox);
     const otherPointer = Array.from(this.activeOverlayPointers.entries())
-      .find(([pointerId, pointer]) => pointerId !== event.pointerId && pointer.id === hitbox.id);
+      .find(([otherId, pointer]) => otherId !== pointerId && pointer.id === hitbox.id);
 
     if (otherPointer) {
       this.draggingOverlay = null;
       this.resizingOverlay = null;
       this.pinchingOverlay = {
         id: hitbox.id,
-        pointerIds: [otherPointer[0], event.pointerId],
+        pointerIds: [otherPointer[0], pointerId],
         startDistance: Math.max(1, this.getPointerDistance(otherPointer[1], point)),
         startScale: placement.scale,
         startWidth: hitbox.width,
         startHeight: hitbox.height,
       };
       this.canvas.style.cursor = "nwse-resize";
-      event.preventDefault();
       return;
     }
 
-    const resizeDirection = this.getOverlayResizeDirection(hitbox, point.x, point.y, event.pointerType);
+    const resizeDirection = this.getOverlayResizeDirection(hitbox, point.x, point.y, pointerType);
     if (resizeDirection) {
       this.resizingOverlay = {
         id: hitbox.id,
         direction: resizeDirection,
-        pointerId: event.pointerId,
+        pointerId,
         startX: point.x,
         startY: point.y,
         startPlacementX: origin.x,
@@ -3423,13 +3488,12 @@ export class ManiaReplayRenderer {
         selected: this.getSelectedOverlaySnapshots(hitbox.id),
       };
       this.canvas.style.cursor = this.getOverlayPointerCursor(point.x, point.y);
-      event.preventDefault();
       return;
     }
 
     this.draggingOverlay = {
       id: hitbox.id,
-      pointerId: event.pointerId,
+      pointerId,
       startX: point.x,
       startY: point.y,
       startPlacementX: origin.x,
@@ -3439,8 +3503,7 @@ export class ManiaReplayRenderer {
       selected: this.getSelectedOverlaySnapshots(hitbox.id),
     };
     this.canvas.style.cursor = "grabbing";
-    event.preventDefault();
-  };
+  }
 
   private handleOverlayPointerMove = (event: PointerEvent) => {
     // Recover even if the release happened outside the browser and no
@@ -3452,6 +3515,12 @@ export class ManiaReplayRenderer {
       box.id === "leaderboard" && point.x >= box.x && point.x <= box.x + box.width
       && point.y >= box.y && point.y <= box.y + box.height
     ));
+    const hold = this.touchOverlayHold;
+    if (hold?.pointerId === event.pointerId) {
+      if (Math.hypot(point.x - hold.x, point.y - hold.y) > OVERLAY_TOUCH_HOLD_SLOP_PX) this.clearTouchOverlayHold();
+      event.preventDefault();
+      return;
+    }
     const activePointer = this.activeOverlayPointers.get(event.pointerId);
     if (activePointer) {
       this.activeOverlayPointers.set(event.pointerId, { ...activePointer, ...point });
@@ -3611,6 +3680,7 @@ export class ManiaReplayRenderer {
 
   private finishOverlayPointerInteraction(pointerId: number) {
     const hadMarquee = this.selectingOverlays?.pointerId === pointerId;
+    if (this.touchOverlayHold?.pointerId === pointerId) this.clearTouchOverlayHold();
     this.activeOverlayPointers.delete(pointerId);
     if (this.missThumbTagPress?.pointerId === pointerId) this.missThumbTagPress = null;
     if (hadMarquee) this.selectingOverlays = null;
@@ -3623,6 +3693,7 @@ export class ManiaReplayRenderer {
   }
 
   private cancelOverlayInteractions() {
+    this.clearTouchOverlayHold();
     const pointers = new Set(this.activeOverlayPointers.keys());
     // Marquee selection also captures the pointer, but has no overlay id.
     for (const gesture of [this.selectingOverlays, this.draggingOverlay, this.resizingOverlay, this.missThumbTagPress]) {
@@ -7544,7 +7615,10 @@ export class ManiaReplayRenderer {
 
     const bodyAsset = assets.lnBody;
     const headAsset = this.noteAnimationFrame(assets.lnHead ?? assets.tap, noteTime);
-    const tailAsset = this.noteAnimationFrame(assets.lnTail, noteTime);
+    // A skin with no tail image gets the head art there, flipped like a tail
+    // (lazer's LegacyHoldNoteTailPiece: tail, else head, else note; stable
+    // draws the same).
+    const tailAsset = this.noteAnimationFrame(assets.lnTail ?? assets.lnHead ?? assets.tap, noteTime);
     const headHeight = headAsset ? this.getNoteAssetHeight(headAsset, colWidth, layout, layout.noteHeight) : layout.noteHeight;
     // A cap that draws nothing occupies no box. Skins routinely point the tail
     // at a blank placeholder (a 1x1 or 5x4 transparent png, or the default
@@ -7552,8 +7626,8 @@ export class ManiaReplayRenderer {
     // its own rounded cap. Sizing a box off that placeholder's aspect invents a
     // lane-width-tall cap out of one transparent pixel, and since the body's
     // cascade starts at the box's far edge, the hold grows by that much and
-    // eats the gap to the next note. Zero here, and likewise with no tail asset
-    // at all: the body then runs to the end line exactly, as in game.
+    // eats the gap to the next note. Zero here: the body then runs to the end
+    // line exactly, as in game.
     const tailArtTop = tailAsset ? this.lnTailArtTop(tailAsset) : null;
     const tailHeight = tailAsset && tailArtTop !== null
       ? this.getNoteAssetHeight(tailAsset, colWidth, layout, layout.noteHeight)
@@ -7571,7 +7645,8 @@ export class ManiaReplayRenderer {
     let bodyTailY = this.skinSettings.upscroll ? tailBoxTop + tailHeight : tailBoxTop;
     // lazer runs the body half a tail note past the end line, blank cap or
     // not (lazer falls back to the head art when there is no tail), and draws
-    // the cap over it with no clip.
+    // the cap over it. Both sit in DrawableHoldNote's masking container, which
+    // ends at the head's centre, so the cap is cut there below.
     const lazerBodies = this.skinProfile.lazerBodies;
     if (lazerBodies) {
       const lazerTailHeight = tailAsset ? this.getNoteAssetHeight(tailAsset, colWidth, layout, layout.noteHeight) : headHeight;
@@ -7610,8 +7685,7 @@ export class ManiaReplayRenderer {
     if (bodyAsset && clipBottom > clipTop) {
       const baseAlpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55);
       const bodyStyle = this.skinProfile.noteBodyStyles[col] ?? 1;
-      const lazerScale = lazerBodies ? layout.layoutScale : undefined;
-      for (const full of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom, bodyStyle, lazerScale)) {
+      for (const full of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom, bodyStyle, layout.layoutScale, lazerBodies)) {
         const tile = clipLnBodyTile(full, clipTop, clipBottom);
         if (!tile) continue;
         const tileHeight = tile.bottom - tile.top;
@@ -7646,10 +7720,34 @@ export class ManiaReplayRenderer {
       const alpha = bodyAlpha
         * this.topFadeAlpha(Math.max(0, Math.min(tailTop + tailHeight, fadeHeight)), fadeHeight, 0.55)
         * this.getHiddenAlphaForVerticalSpan(tailTop, tailTop + tailHeight, visibilityLayout);
-      // Stable flips the tail texture vertically on downscroll (lazer's
-      // LegacyHoldNoteTailPiece inverts the scroll direction), so tail art is
-      // authored upside down; mirror it back.
-      this.drawSkinImage(tailAsset, colX + colWidth / 2, tailTop, colWidth, tailHeight, 0.5, 0, alpha, 0xffffff, !this.skinSettings.upscroll);
+      // lazer's mask: on a hold shorter than half a head, or one held down to
+      // its last half-head, the cap would otherwise show below the head.
+      let visibleTop = tailTop;
+      let visibleBottom = tailTop + tailHeight;
+      if (lazerBodies) {
+        if (this.skinSettings.upscroll) visibleTop = Math.max(visibleTop, bodyHeadY);
+        else visibleBottom = Math.min(visibleBottom, bodyHeadY);
+      }
+      if (visibleBottom > visibleTop) {
+        // Stable flips the tail texture vertically on downscroll (lazer's
+        // LegacyHoldNoteTailPiece inverts the scroll direction), so tail art
+        // is authored upside down; mirror it back. Mirrored, the screen band's
+        // fractions run from the texture's bottom.
+        const flipY = !this.skinSettings.upscroll;
+        const near = (visibleTop - tailTop) / tailHeight;
+        const far = (visibleBottom - tailTop) / tailHeight;
+        this.drawSkinImageVerticalStrip(
+          tailAsset,
+          colX + colWidth / 2,
+          visibleTop,
+          colWidth,
+          visibleBottom - visibleTop,
+          flipY ? 1 - far : near,
+          flipY ? 1 - near : far,
+          alpha,
+          flipY,
+        );
+      }
     }
 
     if (headAsset) {
@@ -7676,7 +7774,7 @@ export class ManiaReplayRenderer {
   }
 
   // Stable's default NoteBodyStyle cascades the LN body instead of stretching
-  // it: the art runs at its natural aspect from the tail end toward the head
+  // it: the art runs at the lane's width from the tail end toward the head
   // and repeats when the hold outruns it. Percy bodies live or die by this -
   // one 4000px tall strip whose rounded cap sits behind a transparent
   // lead-in, so the hold shows a cap and reads shorter than it is. Stretched,
@@ -7691,9 +7789,10 @@ export class ManiaReplayRenderer {
     bodyTop: number,
     bodyBottom: number,
     bodyStyle: number,
-    // Set for a lazer skin: px per 480-space unit, which sizes lazer's one
+    // px per 480-space unit, which sizes stable's rows and lazer's one
     // stretched copy.
-    lazerLayoutScale?: number,
+    layoutScale: number,
+    lazer: boolean,
   ): LnBodyTile[] {
     // The upscroll flip on the stretched copy keeps the art's cap end facing
     // the tail, the same orientation every cascade path below draws with.
@@ -7709,12 +7808,12 @@ export class ManiaReplayRenderer {
     // A Percy strip comes out about four times taller than at natural aspect,
     // so its transparent lead-in reads as a gap and the step into the body is
     // magnified into a soft fade. A cropped strip keeps its share of the span.
-    const lazerScale = lazerLayoutScale && lazerLayoutScale > 0 ? lazerLayoutScale : 0;
-    const lazer = lazerScale > 0;
+    const unitScale = layoutScale > 0 ? layoutScale : 1;
+    const assetScale = asset.scale && asset.scale > 0 ? asset.scale : 1;
     const fullSourceHeight = asset.sourceHeight && asset.sourceHeight > sourceHeight ? asset.sourceHeight : sourceHeight;
     const tileHeight = lazer
-      ? LAZER_LN_BODY_SPAN * lazerScale * (sourceHeight / fullSourceHeight)
-      : sourceHeight * (colWidth / sourceWidth);
+      ? LAZER_LN_BODY_SPAN * unitScale * (sourceHeight / fullSourceHeight)
+      : (sourceHeight / assetScale) * STABLE_LN_BODY_ROW_UNITS * unitScale;
     if (!(tileHeight > 0)) return stretched;
 
     const upscroll = this.skinSettings.upscroll;

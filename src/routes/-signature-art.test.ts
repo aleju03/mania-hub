@@ -6,7 +6,7 @@
    the preview that produced it, and nothing downstream could tell. */
 import { describe, expect, it } from "vitest";
 
-import { cosmicStarsDataUrl, planNoteRain, signatureArtLayers, tierFlecksDataUrl, trianglesArtDataUrl } from "./api/signature/-art";
+import { planNoteRain, signatureArtLayers, trianglesArtDataUrl } from "./api/signature/-art";
 import { canHoldNote, NOTE_SPRITES } from "../lib/note-sprites";
 import { normalizeSignatureStyle } from "../lib/signature-style";
 
@@ -156,39 +156,3 @@ describe("signatureArtLayers", () => {
   });
 });
 
-describe("tierFlecksDataUrl", () => {
-  it("draws the card's fleck field as a transparent overlay", () => {
-    const svg = decode(tierFlecksDataUrl(880, 200));
-    expect(svg).toContain("<polygon");
-    // No background rect: this rides on top of the tier gradient, which is a
-    // satori layer rather than part of this image.
-    expect(svg).not.toContain("<rect");
-  });
-
-  it("draws the same field every time", () => {
-    expect(tierFlecksDataUrl(880, 200)).toBe(tierFlecksDataUrl(880, 200));
-  });
-
-  it("keeps fleck size to the card rather than the count", () => {
-    const count = (url: string) => (decode(url).match(/<polygon/g) ?? []).length;
-    expect(count(tierFlecksDataUrl(880, 200))).toBeGreaterThan(count(tierFlecksDataUrl(300, 300)));
-  });
-});
-
-/* Flecks and stars set their alpha per shape rather than inheriting it from a
-   group, which matters: resvg, the rasterizer these actually render through,
-   does not carry an inherited fill-opacity down to a group's children. */
-describe("cosmicStarsDataUrl", () => {
-  it("varies its stars rather than laying down a uniform field", () => {
-    const svg = decode(cosmicStarsDataUrl(880, 200, ["255, 255, 255", "148, 163, 255"]));
-    const alphas = [...svg.matchAll(/fill-opacity="([\d.]+)"/g)].map(([, value]) => Number(value));
-    expect(alphas.length).toBeGreaterThan(18);
-    expect(Math.max(...alphas)).toBeGreaterThan(Math.min(...alphas) * 3);
-    expect(svg).toContain("rgb(148, 163, 255)");
-  });
-
-  it("draws the same field every time", () => {
-    const colors = ["255, 255, 255"];
-    expect(cosmicStarsDataUrl(880, 200, colors)).toBe(cosmicStarsDataUrl(880, 200, colors));
-  });
-});

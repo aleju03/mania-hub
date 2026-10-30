@@ -558,6 +558,26 @@ describe("overlay layout across fullscreen and video export", () => {
     expect(judgementFrame(viewer)).toEqual(moved);
   });
 
+  it("keeps a default overlay that a phone draws over the lanes off the lanes of a wider export", () => {
+    const draw = (renderer: OverlayRenderer) => {
+      renderer.overlayHitboxes = [];
+      const layout = renderer.getLayout();
+      const scale = renderer.getOverlayScale(layout, "misses");
+      return { layout, frame: renderer.getOverlayFrame(layout, "misses", 110 * scale, 50 * scale) };
+    };
+    const phone = overlayRenderer();
+    Object.assign(phone, { cssWidth: 390, cssHeight: 760, keyCount: 4, skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4) });
+    const viewed = draw(phone);
+    expect(viewed.frame.x + viewed.frame.width).toBeGreaterThan(viewed.layout.playfieldX);
+    // Also covers a placement an earlier session already bound to the phone.
+    for (const settings of [phone.getOverlaySettingsSnapshot({ resolveLayout: true }), phone.getOverlaySettingsSnapshot()]) {
+      const exporter = overlayRenderer(JSON.parse(JSON.stringify(settings)));
+      Object.assign(exporter, { cssWidth: 1920, cssHeight: 1080, fullscreenLayout: true, keyCount: 4, skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4) });
+      const exported = draw(exporter);
+      expect(exported.frame.x + exported.frame.width).toBeLessThanOrEqual(exported.layout.playfieldX);
+    }
+  });
+
   it("keeps an anchored hit-error bar on its computed anchor", () => {
     const viewer = overlayRenderer();
     const layout = viewer.getLayout();

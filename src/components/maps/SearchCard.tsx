@@ -32,6 +32,15 @@ export { starRatingColor, starSpectrumGradient, starTextColor, StarRatingBadge }
 
 // The matching diffs of a search entry's set, easiest first. Collection items
 // and older payloads carry no diff list, so the entry stands alone.
+// A diff's stars at a speed mod or on Sunny's scale, falling back to osu!'s
+// nomod value where the chart has none.
+export function starsAtRate(entry: LiveMapSearchEntry, rate: "ht" | "dt" | "" | undefined, scale?: "sunny" | ""): number {
+  const atRate = scale === "sunny"
+    ? rate === "ht" ? entry.sunnyHt : rate === "dt" ? entry.sunnyDt : entry.sunnyStars
+    : rate === "ht" ? entry.starsHt : rate === "dt" ? entry.starsDt : null;
+  return atRate != null && atRate > 0 ? atRate : entry.stars;
+}
+
 export function entryDiffs(entry: LiveMapSearchEntry): LiveMapSearchEntry[] {
   if (!entry.diffs || entry.diffs.length === 0) return [entry];
   return [...entry.diffs].sort((a, b) => a.keyCount - b.keyCount || a.stars - b.stars || a.beatmapId - b.beatmapId);
@@ -179,19 +188,19 @@ export function Hairline({ className = "bg-white/15" }: { className?: string }) 
   return <span aria-hidden="true" className={`h-3 w-px shrink-0 ${className}`} />;
 }
 
-function useCardModel(entry: LiveMapSearchEntry) {
+function useCardModel(entry: LiveMapSearchEntry, rate?: "ht" | "dt" | "", starScale?: "sunny" | "") {
   const diffs = entryDiffs(entry);
   const multi = diffs.length > 1;
-  const byStars = [...diffs].sort((a, b) => a.stars - b.stars);
-  const starLo = byStars[0].stars;
-  const starHi = byStars[byStars.length - 1].stars;
+  const starsOf = (diff: LiveMapSearchEntry) => starsAtRate(diff, rate, starScale);
+  const byStars = [...diffs].sort((a, b) => starsOf(a) - starsOf(b));
+  const starLo = starsOf(byStars[0]);
+  const starHi = starsOf(byStars[byStars.length - 1]);
   // Two tiles at most: a third starts reading as noise.
   const tiles = skillTiles(diffs).slice(0, 2);
   const familyTags = (multi ? setPatterns(diffs) : familyPatternTags(entry)).filter((pattern) => !tiles.includes(pattern));
   const subTags = subPatternTags(diffs, familyTags, 1);
   const vibro = diffs.some((diff) => diff.vibro) || entry.vibro === true;
-  const unrateable = vibro && [entry, ...diffs].every((diff) => !diff.vibro || diff.unrateable === true);
-  return { diffs, byStars, multi, starLo, starHi, tiles, familyTags, subTags, vibro, unrateable, hardest: byStars[byStars.length - 1] };
+  return { diffs, byStars, multi, starLo, starHi, tiles, familyTags, subTags, vibro, hardest: byStars[byStars.length - 1] };
 }
 
 type CardModel = ReturnType<typeof useCardModel>;
@@ -247,9 +256,9 @@ function SkillLine({ model, className = "" }: { model: CardModel; className?: st
       {model.vibro ? (
         <span
           className="rounded bg-[#ffb02e]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#ffcf70]"
-          title={model.unrateable ? t`Unrateable chart: plays on it do not count toward skill or dan ratings` : t`Vibro chart: difficulty estimates are unreliable`}
+          title={t`Vibro chart: difficulty estimates are unreliable`}
         >
-          {model.unrateable ? t`Unrateable` : t`Vibro`}
+          {t`Vibro`}
         </span>
       ) : null}
     </span>
@@ -303,6 +312,10 @@ export function OszButton({ beatmapsetId }: { beatmapsetId: number }) {
 
 type CardProps = {
   entry: LiveMapSearchEntry;
+  /** Speed mod the stars are shown at. */
+  rate?: "ht" | "dt" | "";
+  /** "sunny" shows Sunny's Star Rating Rebirth instead of osu!'s. */
+  starScale?: "sunny" | "";
   onOpen?: (entry: LiveMapSearchEntry) => void;
   preview?: MapPreviewAudio;
 };
@@ -405,8 +418,8 @@ export function coverTintColor(hex: string): string | null {
 // The map card: cover with the key count and status, the hardest diff's
 // skillset ratings as a bar strip, the skill tiles, then the set's star range
 // and actions. Country-agnostic, so the same card serves search and collections.
-export function SearchCard({ entry, onOpen, preview }: CardProps) {
-  const model = useCardModel(entry);
+export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProps) {
+  const model = useCardModel(entry, rate, starScale);
   const hasBars = !!(model.hardest.msdLn ?? model.hardest.msd);
   return (
     <MapCardFrame
@@ -532,15 +545,19 @@ export function SearchCardGrid({
   items,
   preview,
   onOpen,
+  rate,
+  starScale,
 }: {
   items: LiveMapSearchEntry[];
   preview?: MapPreviewAudio;
   onOpen?: (entry: LiveMapSearchEntry) => void;
+  rate?: "ht" | "dt" | "";
+  starScale?: "sunny" | "";
 }) {
   return (
     <div className={SEARCH_CARD_GRID}>
       {items.map((entry) => (
-        <SearchCard key={entry.beatmapId} entry={entry} preview={preview} onOpen={onOpen} />
+        <SearchCard key={entry.beatmapId} entry={entry} preview={preview} onOpen={onOpen} rate={rate} starScale={starScale} />
       ))}
     </div>
   );

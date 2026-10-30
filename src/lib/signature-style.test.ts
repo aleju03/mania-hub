@@ -12,7 +12,6 @@ import { resolveSkillsetDanPick,
   stylePaintedBackground,
   styleNeedsProfileImage,
   styleUsesImage,
-  styleUsesTier,
   DEFAULT_SIGNATURE_STYLE,
   SIGNATURE_ACCENTS,
   SIGNATURE_BACKGROUNDS,
@@ -67,16 +66,12 @@ describe("normalizeSignatureStyle", () => {
     expect(style.background).toBe(DEFAULT_SIGNATURE_STYLE.background);
   });
 
-  /* The maniacard has tier art to open on and the others do not, so "the
-     layout's own look" is a different id per type. A background only one type
-     can draw must not survive on the others either. */
-  it("defaults and filters the background per type", () => {
-    expect(normalizeSignatureStyle({}, "maniacard").background).toBe("tier");
-    expect(normalizeSignatureStyle({}, "goals").background).toBe("none");
-    expect(normalizeSignatureStyle({ background: "tier" }, "maniacard").background).toBe("tier");
-    expect(normalizeSignatureStyle({ background: "tier" }, "skills").background).toBe("none");
-    expect(signatureBackgroundsFor("goals").map((entry) => entry.id)).not.toContain("tier");
-    expect(signatureBackgroundsFor("maniacard").map((entry) => entry.id)).toContain("tier");
+  /* The banner draws bare type now, so a stored "Card tier" choice falls back
+     to the plain default like any other id that no longer exists. */
+  it("falls back from the retired tier background", () => {
+    expect(normalizeSignatureStyle({}, "maniacard").background).toBe("none");
+    expect(normalizeSignatureStyle({ background: "tier" }, "maniacard").background).toBe("none");
+    expect(signatureBackgroundsFor("maniacard").map((entry) => entry.id)).not.toContain("tier");
   });
 
   it("clamps the sliders into range instead of trusting them", () => {
@@ -117,10 +112,7 @@ describe("normalizeSignatureStyleMap", () => {
   it("treats a null column as that type's defaults", () => {
     const map = normalizeSignatureStyleMap(null);
     for (const type of SIGNATURE_TYPES) {
-      expect(map[type]).toEqual({
-        ...DEFAULT_SIGNATURE_STYLE,
-        background: type === "maniacard" ? "tier" : DEFAULT_SIGNATURE_STYLE.background,
-      });
+      expect(map[type]).toEqual(DEFAULT_SIGNATURE_STYLE);
     }
   });
 
@@ -159,16 +151,6 @@ describe("style helpers", () => {
     expect(styleUsesImage(normalizeSignatureStyle({ background: "none" }))).toBe(false);
   });
 
-  /* The tier wash used to be painted whenever no picture was set, so "None"
-     still produced one. It is a background like any other now, which means
-     nothing but the tier background may claim it. */
-  it("only draws tier art for the tier background", () => {
-    expect(styleUsesTier(normalizeSignatureStyle({ background: "tier" }, "maniacard"))).toBe(true);
-    for (const background of ["none", "solid", "gradient", "cover", "custom"]) {
-      expect(styleUsesTier(normalizeSignatureStyle({ background }, "maniacard"))).toBe(false);
-    }
-  });
-
   it("paints a solid as a flat colour and a gradient as stops of it", () => {
     const solid = stylePaintedBackground(normalizeSignatureStyle({ background: "solid", color: "#204080" }));
     expect(solid).toBe("#204080");
@@ -178,7 +160,7 @@ describe("style helpers", () => {
   });
 
   it("paints nothing for a background that is not painted", () => {
-    for (const background of ["none", "tier", "cover", "map", "custom"]) {
+    for (const background of ["none", "cover", "map", "custom"]) {
       expect(stylePaintedBackground(normalizeSignatureStyle({ background }, "maniacard"))).toBeNull();
     }
   });

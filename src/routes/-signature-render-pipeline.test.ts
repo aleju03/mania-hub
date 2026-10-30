@@ -1,13 +1,13 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ImageResponse } from "@vercel/og";
+import { renderOgPng } from "../lib/og-image-response";
 import { renderSignature } from "./api/signature/-renderers";
 import { avatarSquareDataUrl, beatmapCoverBandDataUrl } from "./api/signature/-backgrounds";
 import { ogRenderGate } from "../lib/og-render";
 import { normalizeSignatureStyle } from "../lib/signature-style";
 import type { OsuScore } from "../lib/types";
 
-vi.mock("@vercel/og", () => ({ ImageResponse: vi.fn() }));
+vi.mock("../lib/og-image-response", () => ({ renderOgPng: vi.fn() }));
 vi.mock("../lib/og-render", async (original) => ({
   ...await original<typeof import("../lib/og-render")>(),
   loadOgFonts: async () => [new ArrayBuffer(0), new ArrayBuffer(0)],
@@ -38,9 +38,9 @@ describe("signature render pipeline", () => {
     let finishAvatar!: (value: null) => void;
     vi.mocked(avatarSquareDataUrl).mockImplementation(() => new Promise((resolve) => { finishAvatar = resolve; }));
     vi.mocked(beatmapCoverBandDataUrl).mockResolvedValue(null);
-    vi.mocked(ImageResponse).mockImplementation(function () {
+    vi.mocked(renderOgPng).mockImplementation(async () => {
       expect(ogRenderGate.activeCount).toBe(1);
-      return { arrayBuffer: async () => new Uint8Array([1, 2]).buffer } as ImageResponse;
+      return Buffer.from([1, 2]);
     });
     const pending = renderSignature({
       request: new Request("https://mania-tracker.com"), type: "insights", design: 1,
@@ -51,7 +51,7 @@ describe("signature render pipeline", () => {
     });
     await vi.waitFor(() => expect(beatmapCoverBandDataUrl).toHaveBeenCalledTimes(1));
     expect(ogRenderGate.activeCount).toBe(0);
-    expect(ImageResponse).not.toHaveBeenCalled();
+    expect(renderOgPng).not.toHaveBeenCalled();
     finishAvatar(null);
     expect(await pending).toEqual(Buffer.from([1, 2]));
     expect(ogRenderGate.activeCount).toBe(0);

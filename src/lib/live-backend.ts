@@ -59,7 +59,7 @@ export interface LivePlayerSkillPlay {
   overallRating: number;
   /** No skill rating exists; Dan credit is evaluated independently. */
   ratingExcluded?: boolean;
-  ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision";
+  ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision" | "chart_disabled";
   /** Why a pending_calibration play waits; absent on older payloads. */
   pendingReason?: LivePlayerDanPendingPlay["reason"];
   pp: number | null;
@@ -112,6 +112,7 @@ export type LiveDanRejectReason =
   | "no_chart_dan"
   | "chart_repeat_limit"
   | "unverifiable_revision"
+  | "chart_disabled"
   | "below_bar";
 
 /** One rated play that credits no dan, with the rule that stopped it. */
@@ -394,6 +395,8 @@ export interface LiveMapScoresSnapshot {
   entries: LiveMapScoreEntry[];
   /** The asking player's best when it is not among `entries`. */
   self: LiveMapScoreEntry | null;
+  /** Players per country on the whole board, on the unfiltered first page only. */
+  countries?: Array<{ code: string; count: number }>;
 }
 
 export type LiveMapsRefreshProgressStatus = "queued" | "running" | "done" | "failed";
@@ -2266,7 +2269,7 @@ export interface LiveRecentPlayRating {
   jobs?: Array<{ id: number; runAfter: string }>;
 }
 
-export type LiveRecentRatingMissingReason = "pending" | "not_retained" | "below_floor" | "below_bar" | "low_od" | "excluded" | "not_analyzed" | "unsupported" | "failed_play" | "chart_changed";
+export type LiveRecentRatingMissingReason = "pending" | "not_retained" | "below_floor" | "below_bar" | "low_od" | "excluded" | "not_analyzed" | "unsupported" | "failed_play" | "chart_changed" | "chart_disabled";
 
 export interface LiveRecentPlayRatingRequest {
   scoreId: number;
@@ -2975,9 +2978,16 @@ export async function fetchLiveSnipeBoard(
 }
 
 /** The top tracked plays on one chart across every tracked country, by lazer accuracy. */
-export async function fetchLiveMapScores(beatmapId: number, userId?: number | null): Promise<LiveMapScoresSnapshot> {
+export async function fetchLiveMapScores(
+  beatmapId: number,
+  userId?: number | null,
+  options: { offset?: number; country?: string; name?: string } = {},
+): Promise<LiveMapScoresSnapshot> {
   const query = new URLSearchParams({ beatmap: String(beatmapId) });
   if (userId != null && userId > 0) query.set("user", String(userId));
+  if (options.offset) query.set("offset", String(options.offset));
+  if (options.country) query.set("country", options.country);
+  if (options.name) query.set("q", options.name);
   return fetchLiveJson(`/api/snapshots/map-scores?${query.toString()}`);
 }
 
@@ -3047,6 +3057,15 @@ export interface LiveMapSearchEntry {
   status: string;
   keyCount: number;
   stars: number;
+  // osu!lazer star rating at 0.75x / 1.5x. Null until the chart analysis
+  // lands, absent on older cached payloads.
+  starsHt?: number | null;
+  starsDt?: number | null;
+  // Sunny's Star Rating Rebirth, at 1.0x and 0.75x / 1.5x; null without a
+  // chart analysis, absent on older cached payloads.
+  sunnyStars?: number | null;
+  sunnyHt?: number | null;
+  sunnyDt?: number | null;
   bpm: number;
   // Overall Difficulty from stored osu! metadata. Optional for cached payloads
   // produced before this field shipped; null when metadata is incomplete.
@@ -3091,8 +3110,6 @@ export interface LiveMapSearchEntry {
   // Vibro-like chart per the classifier; informational while browsing.
   // Player eligibility never hides its ordinary estimate from search.
   vibro?: boolean;
-  // Excluded by the unrateable rules alone: shown as unrateable, not vibro.
-  unrateable?: boolean;
   // Search results are one entry per beatmapset: the top-level fields describe
   // the representative diff and `diffs` lists every filter-matching diff of the
   // set (easiest first). Absent on collection items, which are already deduped.
@@ -3123,12 +3140,19 @@ export interface LiveMapSearchParams {
   // "only" keeps just vibro charts, "hide" drops them; skill picks drop them
   // unless this is "only".
   vibro?: "only" | "hide" | "";
+  // Speed mod the stars are read at; the star bounds and Difficulty sort follow it.
+  rate?: "ht" | "dt" | "";
+  // "sunny" reads the star bounds and Difficulty sort on Sunny's Star Rating
+  // Rebirth (at `rate` when set).
+  starScale?: "sunny" | "";
   // `key:min-max` pairs (lib/map-search-msd.ts); empty for none.
   msd?: string;
   starMin: number | null;
   starMax: number | null;
   bpmMin: number | null;
   bpmMax: number | null;
+  odMin?: number | null;
+  odMax?: number | null;
   lenMin: number | null;
   lenMax: number | null;
   danMin: number | null;
@@ -3202,11 +3226,15 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.skills?.length) query.set("skills", params.skills.join(","));
   if (params.skillsExclude?.length) query.set("skillsExclude", params.skillsExclude.join(","));
   if (params.vibro) query.set("vibro", params.vibro);
+  if (params.rate) query.set("rate", params.rate);
+  if (params.starScale) query.set("starScale", params.starScale);
   if (params.msd) query.set("msd", params.msd);
   if (params.starMin != null) query.set("starMin", String(params.starMin));
   if (params.starMax != null) query.set("starMax", String(params.starMax));
   if (params.bpmMin != null) query.set("bpmMin", String(params.bpmMin));
   if (params.bpmMax != null) query.set("bpmMax", String(params.bpmMax));
+  if (params.odMin != null) query.set("odMin", String(params.odMin));
+  if (params.odMax != null) query.set("odMax", String(params.odMax));
   if (params.lenMin != null) query.set("lenMin", String(params.lenMin));
   if (params.lenMax != null) query.set("lenMax", String(params.lenMax));
   if (params.danMin != null) query.set("danMin", String(params.danMin));

@@ -81,6 +81,15 @@ describe("skins search params", () => {
     expect(parseSkinsSearch({ stable: "1", lazer: "1" })).toMatchObject({ stable: false, lazer: false });
   });
 
+  it("reads the Percy filter as yes, no or any", () => {
+    expect(parseSkinsSearch({ percy: true }).percy).toBe(true);
+    expect(parseSkinsSearch({ percy: "1" }).percy).toBe(true);
+    expect(parseSkinsSearch({ percy: false }).percy).toBe(false);
+    expect(parseSkinsSearch({ percy: "0" }).percy).toBe(false);
+    expect(parseSkinsSearch({ percy: "maybe" }).percy).toBeUndefined();
+    expect(parseSkinsSearch({}).percy).toBeUndefined();
+  });
+
   it("keeps a known note shape and drops anything else", () => {
     for (const shape of ["circle", "arrow", "bar", "other"]) {
       expect(parseSkinsSearch({ shape }).shape).toBe(shape);

@@ -53,6 +53,7 @@ import { Route as AdminCompanellaRouteImport } from './routes/admin/companella'
 import { Route as AdminCompanellaFlagsRouteImport } from './routes/admin/companella-flags'
 import { Route as AdminCompanellaPlayersRouteImport } from './routes/admin/companella-players'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
+import { Route as AdminDisabledChartsRouteImport } from './routes/admin/disabled-charts'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
 import { Route as AdminDynamicRendersRouteImport } from './routes/admin/dynamic-renders'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
@@ -362,6 +363,11 @@ const AdminCompanellaPlayersRoute = AdminCompanellaPlayersRouteImport.update({
 const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
   id: '/admin/dan-classifier',
   path: '/admin/dan-classifier',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDisabledChartsRoute = AdminDisabledChartsRouteImport.update({
+  id: '/admin/disabled-charts',
+  path: '/admin/disabled-charts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminDiscordRoute = AdminDiscordRouteImport.update({
@@ -878,6 +884,7 @@ export interface FileRoutesByFullPath {
   '/admin/companella-flags': typeof AdminCompanellaFlagsRoute
   '/admin/companella-players': typeof AdminCompanellaPlayersRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
+  '/admin/disabled-charts': typeof AdminDisabledChartsRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
@@ -1014,6 +1021,7 @@ export interface FileRoutesByTo {
   '/admin/companella-flags': typeof AdminCompanellaFlagsRoute
   '/admin/companella-players': typeof AdminCompanellaPlayersRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
+  '/admin/disabled-charts': typeof AdminDisabledChartsRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
@@ -1151,6 +1159,7 @@ export interface FileRoutesById {
   '/admin/companella-flags': typeof AdminCompanellaFlagsRoute
   '/admin/companella-players': typeof AdminCompanellaPlayersRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
+  '/admin/disabled-charts': typeof AdminDisabledChartsRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
@@ -1289,6 +1298,7 @@ export interface FileRouteTypes {
     | '/admin/companella-flags'
     | '/admin/companella-players'
     | '/admin/dan-classifier'
+    | '/admin/disabled-charts'
     | '/admin/discord'
     | '/admin/dynamic-renders'
     | '/admin/live-backend'
@@ -1425,6 +1435,7 @@ export interface FileRouteTypes {
     | '/admin/companella-flags'
     | '/admin/companella-players'
     | '/admin/dan-classifier'
+    | '/admin/disabled-charts'
     | '/admin/discord'
     | '/admin/dynamic-renders'
     | '/admin/live-backend'
@@ -1561,6 +1572,7 @@ export interface FileRouteTypes {
     | '/admin/companella-flags'
     | '/admin/companella-players'
     | '/admin/dan-classifier'
+    | '/admin/disabled-charts'
     | '/admin/discord'
     | '/admin/dynamic-renders'
     | '/admin/live-backend'
@@ -1698,6 +1710,7 @@ export interface RootRouteChildren {
   AdminCompanellaFlagsRoute: typeof AdminCompanellaFlagsRoute
   AdminCompanellaPlayersRoute: typeof AdminCompanellaPlayersRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
+  AdminDisabledChartsRoute: typeof AdminDisabledChartsRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
   AdminDynamicRendersRoute: typeof AdminDynamicRendersRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
@@ -2083,6 +2096,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/dan-classifier'
       fullPath: '/admin/dan-classifier'
       preLoaderRoute: typeof AdminDanClassifierRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/disabled-charts': {
+      id: '/admin/disabled-charts'
+      path: '/admin/disabled-charts'
+      fullPath: '/admin/disabled-charts'
+      preLoaderRoute: typeof AdminDisabledChartsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/discord': {
@@ -2897,6 +2917,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCompanellaFlagsRoute: AdminCompanellaFlagsRoute,
   AdminCompanellaPlayersRoute: AdminCompanellaPlayersRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
+  AdminDisabledChartsRoute: AdminDisabledChartsRoute,
   AdminDiscordRoute: AdminDiscordRoute,
   AdminDynamicRendersRoute: AdminDynamicRendersRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,

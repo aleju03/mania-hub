@@ -20,6 +20,7 @@ import {
   submitBugReport,
   type BugReportContext,
   type BugReportFailReason,
+  type BugReportKind,
   type BugReportStatus,
   type MyBugReport,
 } from "../lib/bug-reports";
@@ -42,7 +43,10 @@ import { pageSeo } from "../lib/seo";
 import { useAppStore } from "../store";
 
 /*
- * Telling the owner something on the site is broken.
+ * Telling the owner something on the site is broken, or anything else about
+ * it. Bugs and feedback share the form, the thread and the board; the kind
+ * picked above the composer changes the wording, and feedback leaves the
+ * browser details out because nothing needs reproducing.
  *
  * No login is asked for. Whoever hit the bug is the person worth hearing from,
  * and most people find one before they ever sign in. What a login buys is the
@@ -73,15 +77,16 @@ const REPORTER_THREAD_PREVIEW_COUNT = 6;
 
 type Phase = "idle" | "sending" | "sent";
 
-type ReportSearch = { from?: string };
+type ReportSearch = { from?: string; kind?: "feedback" };
 
 export const Route = createFileRoute("/report")({
   validateSearch: (search: Record<string, unknown>): ReportSearch => ({
     from: normalizeBugReportSourcePath(search.from),
+    kind: search.kind === "feedback" ? "feedback" : undefined,
   }),
   head: ({ match }) => pageSeo({
-    title: "Report a bug",
-    description: "Tell the owner something on Mania Tracker is broken.",
+    title: "Bugs and feedback",
+    description: "Report something broken on Mania Tracker or send feedback about it.",
     path: "/report",
     origin: match.context.origin,
     noindex: true,
@@ -97,6 +102,8 @@ function ReportPage() {
   const search = Route.useSearch();
   const sourcePagePath = search.from;
 
+  const [kind, setKind] = useState<BugReportKind>(search.kind ?? "bug");
+  const [sentKind, setSentKind] = useState<BugReportKind>("bug");
   const [body, setBody] = useState("");
   const images = useBugReportScreenshots();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -158,8 +165,11 @@ function ReportPage() {
     field.style.height = `${Math.min(field.scrollHeight, 420)}px`;
   }, [body, phase]);
 
+  const feedback = kind === "feedback";
+  const tooShort = feedback ? t`Say a little more.` : t`Say a little more about what went wrong.`;
+
   const failMessage = (reason: BugReportFailReason): string => {
-    if (reason === "invalid_report") return t`Say a little more about what went wrong.`;
+    if (reason === "invalid_report") return tooShort;
     if (reason === "too_many_reports") return t`That is a lot of reports for one day. Try again tomorrow.`;
     if (reason === "rate_limited") return t`Too many reports just now. Try again in a bit.`;
     return t`Could not send that. Try again.`;
@@ -180,9 +190,10 @@ function ReportPage() {
     const selectedFiles = images.files.slice();
     setUploads(selectedFiles.map(() => "waiting"));
     try {
-      const context = collectBugReportContext({ locale, country });
+      const context = feedback ? undefined : collectBugReportContext({ locale, country });
       const result = await submitBugReport({
         data: {
+          kind,
           body: trimmed,
           pagePath: sourcePagePath,
           context,
@@ -205,6 +216,7 @@ function ReportPage() {
         setUploadWarning(true);
       }
       track("bug_report_submit", {
+        kind,
         duplicate: result.duplicate,
         screenshot_count: selectedFiles.length,
         signed_in: signedIn,
@@ -212,6 +224,7 @@ function ReportPage() {
       setBody("");
       images.clear();
       setUploads([]);
+      setSentKind(kind);
       setPhase("sent");
       refreshMine();
     } catch {
@@ -222,12 +235,14 @@ function ReportPage() {
   };
 
   const browser = describeBrowser(clientContext?.userAgent as string | undefined);
-  const contextBits = [
-    sourcePagePath,
-    browser,
-    clientContext?.viewport as string | undefined,
-    clientContext?.locale as string | undefined,
-  ].filter((bit): bit is string => Boolean(bit));
+  const contextBits = (feedback
+    ? [sourcePagePath]
+    : [
+      sourcePagePath,
+      browser,
+      clientContext?.viewport as string | undefined,
+      clientContext?.locale as string | undefined,
+    ]).filter((bit): bit is string => Boolean(bit));
 
   const canSend = trimmedLength >= BODY_MIN && !busy;
   // Key names, not words: left untranslated on purpose, and read off the
@@ -238,14 +253,17 @@ function ReportPage() {
     <div className="min-h-[calc(100vh-60px)] bg-osu-b5">
       <div className="mx-auto w-full max-w-[680px] px-4 py-7 sm:px-5 sm:py-9">
         <h1 className="text-[22px] font-bold text-white">
-          <Trans>Report a bug</Trans>
+          <Trans>Bugs and feedback</Trans>
         </h1>
         <p className="mt-1 text-[13px] text-osu-f1">
-          <Trans>Found something broken? Describe what happened.</Trans>
+          {feedback
+            ? <Trans>Suggestions, ideas or anything else about the site.</Trans>
+            : <Trans>Found something broken? Describe what happened.</Trans>}
         </p>
 
         {phase === "sent" ? (
           <SentPanel
+            kind={sentKind}
             signedIn={signedIn}
             uploadWarning={uploadWarning}
             onAgain={() => {
@@ -256,6 +274,7 @@ function ReportPage() {
           />
         ) : (
           <>
+            <KindToggle kind={kind} disabled={busy} onChange={setKind} />
             <div
               onDragEnter={(event) => {
                 if (busy || !Array.from(event.dataTransfer.items).some((item) => item.kind === "file")) return;
@@ -277,7 +296,7 @@ function ReportPage() {
                 setDragActive(false);
                 if (!busy) addFiles(event.dataTransfer.files);
               }}
-              className={`relative mt-5 rounded-xl border bg-osu-b6/50 transition-colors duration-[120ms] ${
+              className={`relative mt-3 rounded-xl border bg-osu-b6/50 transition-colors duration-[120ms] ${
                 dragActive
                   ? "border-osu-pink/60 bg-osu-pink/[0.06]"
                   : "border-osu-b3/40 focus-within:border-osu-pink/45"
@@ -302,7 +321,7 @@ function ReportPage() {
                   }
                 }}
                 rows={1}
-                placeholder={t`What seems wrong?`}
+                placeholder={feedback ? t`What would you add or change?` : t`What seems wrong?`}
                 className={`block max-h-[420px] w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[14px] leading-relaxed text-osu-l1 outline-none placeholder:text-osu-f1/55 disabled:opacity-60 ${
                   images.files.length ? "min-h-[84px]" : "min-h-[136px]"
                 }`}
@@ -339,7 +358,7 @@ function ReportPage() {
                 />
                 <span className="min-w-0 truncate text-[11px] text-osu-f1">
                   {trimmedLength > 0 && trimmedLength < BODY_MIN
-                    ? t`Say a little more about what went wrong.`
+                    ? tooShort
                     : t`Paste, drop or pick a screenshot.`}
                 </span>
                 <div className="ml-auto flex flex-shrink-0 items-center gap-2.5">
@@ -359,7 +378,7 @@ function ReportPage() {
                     className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg bg-osu-pink px-3.5 text-[12px] font-semibold text-white transition-[background-color,filter] duration-[120ms] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    <Trans>Send report</Trans>
+                    {feedback ? <Trans>Send feedback</Trans> : <Trans>Send report</Trans>}
                   </button>
                 </div>
               </div>
@@ -369,17 +388,20 @@ function ReportPage() {
               ? <p className="mt-2 text-[12px] text-osu-pink-light">{error ?? images.error}</p>
               : null}
 
-            <p className="mt-2.5 text-[11px] leading-relaxed text-osu-f1" title={String(clientContext?.userAgent ?? "")}>
-              <Trans>Sent along with it:</Trans>{" "}
-              {contextBits.length
-                ? contextBits.map((bit, index) => (
+            {contextBits.length || !feedback ? (
+              <p
+                className="mt-2.5 text-[11px] leading-relaxed text-osu-f1"
+                title={feedback ? undefined : String(clientContext?.userAgent ?? "")}
+              >
+                <Trans>Sent along with it:</Trans>{" "}
+                {contextBits.map((bit, index) => (
                   <span key={bit + index}>
                     {index ? <span className="px-1 text-osu-f1/50">/</span> : null}
                     <span className="text-osu-l2">{bit}</span>
                   </span>
-                ))
-                : null}
-            </p>
+                ))}
+              </p>
+            ) : null}
 
           </>
         )}
@@ -406,6 +428,45 @@ function ReportPage() {
   );
 }
 
+/** Bug or feedback. Switching keeps what is already written. */
+function KindToggle({
+  kind,
+  disabled,
+  onChange,
+}: {
+  kind: BugReportKind;
+  disabled: boolean;
+  onChange: (kind: BugReportKind) => void;
+}) {
+  const { t } = useLingui();
+  const options: { value: BugReportKind; label: string }[] = [
+    { value: "bug", label: t`Bug` },
+    { value: "feedback", label: t`Feedback` },
+  ];
+  return (
+    <div role="radiogroup" aria-label={t`Kind`} className="mt-5 inline-flex rounded-lg bg-osu-b6/60 p-0.5">
+      {options.map((option) => {
+        const active = option.value === kind;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onChange(option.value)}
+            className={`h-7 cursor-pointer rounded-md px-3.5 text-[12px] font-semibold transition-colors duration-[120ms] disabled:cursor-not-allowed ${
+              active ? "bg-osu-b4 text-white" : "text-osu-f1 hover:text-osu-l2"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** "Cmd + Enter" on a Mac, "Ctrl + Enter" everywhere else. */
 function shortcutLabel(): string {
   if (typeof navigator === "undefined") return "Ctrl + Enter";
@@ -414,10 +475,12 @@ function shortcutLabel(): string {
 }
 
 function SentPanel({
+  kind,
   signedIn,
   uploadWarning,
   onAgain,
 }: {
+  kind: BugReportKind;
   signedIn: boolean;
   uploadWarning: boolean;
   onAgain: () => void;
@@ -429,12 +492,14 @@ function SentPanel({
           <Check className="h-4 w-4" />
         </span>
         <span className="text-[15px] font-semibold text-white">
-          <Trans>Report sent</Trans>
+          {kind === "feedback" ? <Trans>Feedback sent</Trans> : <Trans>Report sent</Trans>}
         </span>
       </div>
       {uploadWarning ? (
         <p className="mt-1.5 text-[12px] text-osu-pink-light">
-          <Trans>The report was sent, but at least one image did not upload.</Trans>
+          {kind === "feedback"
+            ? <Trans>Your feedback was sent, but at least one image did not upload.</Trans>
+            : <Trans>The report was sent, but at least one image did not upload.</Trans>}
         </p>
       ) : null}
       <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -443,7 +508,7 @@ function SentPanel({
           onClick={onAgain}
           className="inline-flex h-8 cursor-pointer items-center rounded-lg border border-osu-b3/40 bg-osu-b4/60 px-3 text-[12px] text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/60 hover:text-white"
         >
-          <Trans>Report something else</Trans>
+          {kind === "feedback" ? <Trans>Send something else</Trans> : <Trans>Report something else</Trans>}
         </button>
         {!signedIn ? <LoginLink label={<Trans>Sign in to read replies</Trans>} /> : null}
       </div>
@@ -1013,7 +1078,7 @@ function ReportRow({
         <span className="flex-shrink-0 text-[11px] text-osu-f1">
           {formatTimeAgo(new Date(report.createdAt).toISOString(), locale)}
         </span>
-        <StatusChip status={report.status} />
+        <StatusChip status={report.status} kind={report.kind} />
       </button>
 
       {open ? (
@@ -1075,7 +1140,7 @@ function MyReports({
   return (
     <section className="mt-10">
       <h2 className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
-        <Trans>Your reports</Trans>
+        <Trans>What you sent</Trans>
       </h2>
       <ul className="mt-3.5 space-y-2">
         {reports.map((report) => (
@@ -1092,15 +1157,16 @@ function MyReports({
   );
 }
 
-function StatusChip({ status }: { status: BugReportStatus }) {
+function StatusChip({ status, kind }: { status: BugReportStatus; kind: BugReportKind | undefined }) {
   const { t } = useLingui();
+  const feedback = kind === "feedback";
   const label: Record<BugReportStatus, string> = {
     new: t`open`,
     investigating: t`looking into it`,
     pending: t`on the to-do list`,
-    fixed: t`fixed`,
-    wontfix: t`not a bug`,
-    duplicate: t`already reported`,
+    fixed: feedback ? t`done` : t`fixed`,
+    wontfix: feedback ? t`not planned` : t`not a bug`,
+    duplicate: feedback ? t`already suggested` : t`already reported`,
     // The backend never sends this one to a reporter (it reads as "open"
     // instead, see toBugReportForReporter); the arm only keeps the map total.
     notabug: t`open`,

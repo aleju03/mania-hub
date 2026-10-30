@@ -77,3 +77,15 @@ it.each([0.75, 1, 1.5])("measures the display gap at the displayed %sx speed", (
   expect(screen.getAllByRole("listitem", { hidden: true })).toHaveLength(rate === 1.5 ? 1 : 2);
   if (rate === 1.5) expect(screen.getByText("0:40.00–0:41.33")).toBeTruthy();
 });
+
+it("shows an unrateable chart as a plain chart: no flag, no sections", () => {
+  render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={MAP_ENTRY} vibroAnalysis={{
+    version: 1, status: "excluded", excludedDurationMs: 30_000, activeDurationMs: 30_000,
+    timeShare: 1, noteShare: 1, judgementShare: 1, repeatShare: 0, remainingNotes: 0, reasonShares: { mash: 1 },
+    sections: [{ startTime: 185, endTime: 30_792, reasons: ["mash"] }],
+  }} /></I18nProvider>);
+  expect(screen.queryByText("Detected sections")).toBeNull();
+  expect(screen.queryByText(/unrateable/i)).toBeNull();
+  expect(screen.queryByText(/vibro/i)).toBeNull();
+  expect(screen.queryAllByRole("listitem", { hidden: true })).toHaveLength(0);
+});

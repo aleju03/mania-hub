@@ -7,7 +7,7 @@ const ORIGIN = "https://mania-tracker.com";
 
 describe("sitemap players", () => {
   it("adds a url per player after the skins, with the lastmod at date precision", () => {
-    const xml = buildSitemap(ORIGIN, [{ path: "/skins/x", lastmod: null }], [
+    const xml = buildSitemap(ORIGIN, [{ path: "/skins/x", lastmod: null, image: null }], [
       { path: "/player/Some%20Player", lastmod: "2026-09-12T08:30:00.000Z" },
       { path: "/player/Undated", lastmod: null },
     ]);

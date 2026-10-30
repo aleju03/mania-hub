@@ -1027,6 +1027,8 @@ function UnratedPlayRow({
       ? t`Skill rating recalculation pending`
       : play.ratingExclusionReason === "unverifiable_revision"
         ? t`This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count.`
+      : play.ratingExclusionReason === "chart_disabled"
+        ? t`This chart does not count toward skill or dan ratings for now.`
         : play.unrateable
           ? t`Unrateable chart. This play does not count toward skill or dan ratings.`
           : t`Vibro detected. This play does not count toward skill or dan ratings.`;
@@ -1399,6 +1401,8 @@ function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
               ? t`This chart is not built in a way a dan level can be read off a clear of it.`
               : rejected.reason === "chart_unanalyzed"
                 ? t`This chart has not been analyzed yet, so there is no dan level to credit. It can count later.`
+                : rejected.reason === "chart_disabled"
+                  ? t`This chart does not count toward skill or dan ratings for now.`
                 : rejected.reason === "unverifiable_revision"
                   ? t`This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan.`
                 : rejected.reason === "no_chart_dan"

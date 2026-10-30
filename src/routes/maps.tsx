@@ -58,6 +58,7 @@ import type {
 } from "../lib/types";
 import { useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
+import { fetchMapSharePreview, mapCoverUrl, MAP_COVER_HEIGHT, MAP_COVER_WIDTH, type MapSharePreview } from "../lib/map-share-preview";
 import { getI18n } from "../lib/i18n";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getPreviewAudioProxyUrl } from "../lib/audio-url";
@@ -168,6 +169,8 @@ type MapsSearch = {
   sStarMax: number;
   sBpmMin: number;
   sBpmMax: number;
+  sOdMin: number;
+  sOdMax: number;
   sLenMin: number;
   sLenMax: number;
   sLnMin: number;
@@ -184,6 +187,11 @@ type MapsSearch = {
   sPatterns: string;
   sSkills: string;
   sVibro: "only" | "hide" | "";
+  // Speed mod the stars are read at (Difficulty filter, sort and card stars).
+  sRate: "ht" | "dt" | "";
+  // Star rating the Difficulty filter, sort and card stars read: osu!'s or
+  // Sunny's Star Rating Rebirth.
+  sStarScale: "sunny" | "";
   sMsd: string;
   sCountryOnly: boolean;
   sSort: string;
@@ -237,6 +245,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sStarMax: 0,
   sBpmMin: 0,
   sBpmMax: 0,
+  sOdMin: 0,
+  sOdMax: 0,
   sLenMin: 0,
   sLenMax: 0,
   sLnMin: 0,
@@ -250,6 +260,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sPatterns: "",
   sSkills: "",
   sVibro: "",
+  sRate: "",
+  sStarScale: "",
   sMsd: "",
   sCountryOnly: false,
   sSort: DEFAULT_SEARCH_SORT.sort,
@@ -475,8 +487,31 @@ function resetAudioElement(audio: HTMLAudioElement | null, unload = false): void
 // ── Route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/maps")({
+  loaderDeps: ({ search }) => ({ map: search.map }),
+  // Only the server render needs this: it names the map and puts its cover in
+  // the embed of a shared ?map= link. In the browser the modal fetches the
+  // entry itself, so a client navigation never waits on it.
+  loader: async ({ deps }): Promise<MapSharePreview | null> => {
+    if (typeof window !== "undefined" || deps.map <= 0) return null;
+    return fetchMapSharePreview({ data: { beatmapId: deps.map } });
+  },
+  staleTime: Infinity,
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
+    const shared = match.loaderData as MapSharePreview | null | undefined;
+    if (shared && match.search.map > 0) {
+      const stars = shared.stars.toFixed(2);
+      return pageSeo({
+        title: `${shared.artist} - ${shared.title} [${shared.version}]`,
+        description: i18n._(msg`${stars}★ · mapped by ${shared.creator}`),
+        path: withSearchParams("/maps", { map: match.search.map }),
+        origin: match.context.origin,
+        image: shared.hasCover ? mapCoverUrl(shared.beatmapsetId) : undefined,
+        imageWidth: MAP_COVER_WIDTH,
+        imageHeight: MAP_COVER_HEIGHT,
+        imageKind: "maps-search",
+      });
+    }
     // Search + collections are global catalog views with their own OG
     // cards; the country-scoped lenses share the country mosaic below.
     const tab = match.search.tab;
@@ -564,6 +599,8 @@ export const Route = createFileRoute("/maps")({
     sStarMax: clampSearchNumber(search.sStarMax, 0, 20),
     sBpmMin: clampSearchNumber(search.sBpmMin, 0, 2000),
     sBpmMax: clampSearchNumber(search.sBpmMax, 0, 2000),
+    sOdMin: clampSearchNumber(search.sOdMin, 0, 10),
+    sOdMax: clampSearchNumber(search.sOdMax, 0, 10),
     sLenMin: clampSearchNumber(search.sLenMin, 0, 100000),
     sLenMax: clampSearchNumber(search.sLenMax, 0, 100000),
     sLnMin: clampSearchNumber(search.sLnMin, 0, 100),
@@ -577,6 +614,8 @@ export const Route = createFileRoute("/maps")({
     sPatterns: sanitizeSearchTriStateCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
     sSkills: sanitizeSearchTriStateCsv(search.sSkills, SEARCH_SKILL_VALUES),
     sVibro: search.sVibro === "only" || search.sVibro === "hide" ? search.sVibro : DEFAULT_MAPS_SEARCH.sVibro,
+    sRate: search.sRate === "ht" || search.sRate === "dt" ? search.sRate : DEFAULT_MAPS_SEARCH.sRate,
+    sStarScale: search.sStarScale === "sunny" ? "sunny" : DEFAULT_MAPS_SEARCH.sStarScale,
     sMsd: serializeMsdRanges(parseMsdRanges(search.sMsd)),
     sCountryOnly: false,
     sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
@@ -976,11 +1015,15 @@ function MapsPage() {
       skills: [...skills.includes],
       skillsExclude: [...skills.excludes],
       vibro: mapsSearch.sVibro,
+      rate: mapsSearch.sRate,
+      starScale: mapsSearch.sStarScale,
       msd: msdRangesForFacet(parseMsdRanges(mapsSearch.sMsd), [...keys.includes]),
       starMin: mapsSearch.sStarMin,
       starMax: mapsSearch.sStarMax,
       bpmMin: mapsSearch.sBpmMin,
       bpmMax: mapsSearch.sBpmMax,
+      odMin: mapsSearch.sOdMin,
+      odMax: mapsSearch.sOdMax,
       lenMin: mapsSearch.sLenMin,
       lenMax: mapsSearch.sLenMax,
       lnMin: mapsSearch.sLnMin,
@@ -1022,10 +1065,14 @@ function MapsPage() {
       writeSearchVibroPreference(patch.vibro);
     }
     if (patch.msd !== undefined) next.sMsd = serializeMsdRanges(patch.msd);
+    if (patch.rate !== undefined) next.sRate = patch.rate;
+    if (patch.starScale !== undefined) next.sStarScale = patch.starScale;
     if (patch.starMin !== undefined) next.sStarMin = patch.starMin;
     if (patch.starMax !== undefined) next.sStarMax = patch.starMax;
     if (patch.bpmMin !== undefined) next.sBpmMin = patch.bpmMin;
     if (patch.bpmMax !== undefined) next.sBpmMax = patch.bpmMax;
+    if (patch.odMin !== undefined) next.sOdMin = patch.odMin;
+    if (patch.odMax !== undefined) next.sOdMax = patch.odMax;
     if (patch.lenMin !== undefined) next.sLenMin = patch.lenMin;
     if (patch.lenMax !== undefined) next.sLenMax = patch.lenMax;
     if (patch.lnMin !== undefined) next.sLnMin = patch.lnMin;

@@ -343,7 +343,7 @@ function PrismAnnouncement() {
               </p>
               <p>
                 <Trans>
-                  If a chart's rating looks wrong to you, send it through <Link to="/report" search={{ from: "/news/prism" }} className={LINK}>Report a bug</Link>.
+                  If a chart's rating looks wrong to you, send it through <Link to="/report" search={{ from: "/news/prism" }} className={LINK}>Bugs and feedback</Link>.
                 </Trans>
               </p>
             </Section>

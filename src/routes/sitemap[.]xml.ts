@@ -46,11 +46,12 @@ function urlEntry(
   changefreq: string,
   priority: string,
   lastmod?: string | null,
+  image?: string | null,
 ): string {
   return `  <url>
     <loc>${escapeXml(loc)}</loc>${lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : ""}
     <changefreq>${changefreq}</changefreq>
-    <priority>${priority}</priority>
+    <priority>${priority}</priority>${image ? `\n    <image:image>\n      <image:loc>${escapeXml(image)}</image:loc>\n    </image:image>` : ""}
   </url>`;
 }
 
@@ -64,7 +65,7 @@ export function buildSitemap(
       urlEntry(`${origin}${path}`, changefreq, priority)),
     // Every public skin page, also reachable through /skins pagination.
     ...skins.map((skin) =>
-      urlEntry(`${origin}${skin.path}`, "monthly", "0.6", lastmodDate(skin.lastmod))),
+      urlEntry(`${origin}${skin.path}`, "monthly", "0.6", lastmodDate(skin.lastmod), skin.image)),
     // Ranked player profiles. No page links to one in its server HTML (every
     // player list fills in the browser), so without these a crawler only
     // finds a profile by running the page's JavaScript.
@@ -73,7 +74,7 @@ export function buildSitemap(
   ].join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${urls}
 </urlset>`;
 }
