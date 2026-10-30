@@ -73,8 +73,6 @@ export const packBinderActions = {
 
 export type PackBinderActions = typeof packBinderActions;
 
-const SET_PAGE_SIZE = 6;
-
 export function SetsView({ syncStatus }: { syncStatus: "local" | "syncing" | "synced" }) {
   return <SetManager syncStatus={syncStatus} />;
 }
@@ -100,14 +98,10 @@ function SetManager({ syncStatus, onClose }: {
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [page, setPage] = useState(0);
   const selected = binders?.find((binder) => binder.id === selectedId) ?? binders?.[0];
-  const totalPages = Math.max(1, Math.ceil((selected?.cards.length ?? 0) / SET_PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages - 1);
   const atSetLimit = (binders?.length ?? 0) >= BINDER_MAX_PER_COLLECTOR;
 
   useEffect(() => {
-    setPage(0);
     setRenaming(null);
     setConfirmDelete(null);
   }, [selected?.id]);
@@ -297,15 +291,10 @@ function SetManager({ syncStatus, onClose }: {
                   <Trans>Nothing in here yet.</Trans>
                 </div>
               ) : (
-                <ShowcaseCards cards={selected.cards.slice(currentPage * SET_PAGE_SIZE, (currentPage + 1) * SET_PAGE_SIZE)} ownerUserId={auth.viewer?.id ?? null}
+                <ShowcaseCards cards={selected.cards} ownerUserId={auth.viewer?.id ?? null}
                   onCardOpen={() => setInspecting(true)} onCardClose={() => setInspecting(false)} />
               )}
             </div>
-            {totalPages > 1 && <div className="mt-4 flex items-center gap-3 text-[11px] text-osu-f1">
-              <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} className="cursor-pointer py-1 hover:text-white disabled:cursor-default disabled:opacity-30">{t`Previous`}</button>
-              <span className="tabular-nums">{currentPage + 1} / {totalPages}</span>
-              <button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)} className="cursor-pointer py-1 hover:text-white disabled:cursor-default disabled:opacity-30">{t`Next`}</button>
-            </div>}
           </section>
           )}
         </div>
