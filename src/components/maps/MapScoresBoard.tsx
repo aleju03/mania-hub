@@ -259,7 +259,7 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
           onChange={(event) => setQueryInput(event.target.value)}
           placeholder={t`Search players`}
           maxLength={32}
-          className="w-full rounded-lg bg-osu-b4 py-1.5 pl-8 pr-3 text-[13px] text-osu-l1 outline-none ring-1 ring-white/5 placeholder:text-osu-f1/60 focus:ring-osu-pink/40"
+          className="w-full rounded-lg bg-white/[0.06] py-1.5 pl-8 pr-3 text-[13px] text-osu-l1 outline-none ring-1 ring-white/[0.06] placeholder:text-osu-f1/60 focus:ring-osu-pink/40"
         />
       </div>
       {countries.length > 1 || viewerId || !board ? (
@@ -271,6 +271,7 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
           align="right"
           searchable
           searchPlaceholder={t`Search countries`}
+          translucent
         />
       ) : null}
     </div>

@@ -33,6 +33,9 @@ interface SelectMenuProps<T extends string> {
   // Fills its container and pushes the chevron to the right, for a select
   // sitting in a form beside full-width inputs rather than in a toolbar.
   block?: boolean;
+  // A see-through button for a select on a tinted surface (the map card's
+  // cover colour), where the solid fill would sit on it as a grey box.
+  translucent?: boolean;
   disabled?: boolean;
 }
 
@@ -51,6 +54,7 @@ export function SelectMenu<T extends string>({
   searchable = false,
   searchPlaceholder,
   block = false,
+  translucent = false,
   disabled = false,
 }: SelectMenuProps<T>) {
   const { t } = useLingui();
@@ -162,7 +166,9 @@ export function SelectMenu<T extends string>({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`inline-flex items-center gap-1.5 rounded-md border border-osu-b3/50 bg-osu-b4 px-2.5 py-1.5 text-xs font-semibold text-osu-l2 transition-colors hover:border-osu-b3 hover:bg-osu-b4/80 cursor-pointer disabled:cursor-default disabled:opacity-50 ${
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold text-osu-l2 transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50 ${
+          translucent ? "border-white/[0.06] bg-white/[0.06] hover:bg-white/[0.1]" : "border-osu-b3/50 bg-osu-b4 hover:border-osu-b3 hover:bg-osu-b4/80"
+        } ${
           block ? "w-full justify-between" : ""
         }`}
       >
