@@ -133,6 +133,12 @@ describe("native proxy", () => {
     await forwardNativeRequest(board("?speed=dt%26user%3D5&mods=../x"), "chartLeaderboard", { md5 });
     expect(calls[0].url).toBe(`${BACKEND}/api/integrations/companella/native/charts/${md5}/leaderboard`);
     mockBackend(new Response("{}", { status: 200 }));
+    await forwardNativeRequest(board("?offset=50&country=cr&q=Some%20[Name]_2&friends=1"), "chartLeaderboard", { md5 });
+    expect(new URL(calls[0].url).searchParams.toString()).toBe("offset=50&country=cr&q=Some+%5BName%5D_2&friends=1");
+    mockBackend(new Response("{}", { status: 200 }));
+    await forwardNativeRequest(board("?offset=-1&country=C1&q=a%0Ab&friends=-"), "chartLeaderboard", { md5 });
+    expect(calls[0].url).toBe(`${BACKEND}/api/integrations/companella/native/charts/${md5}/leaderboard`);
+    mockBackend(new Response("{}", { status: 200 }));
     await forwardNativeRequest(new Request("https://mania-tracker.com/api/integrations/companella/v1/me?speed=dt"), "me");
     expect(calls[0].url).toBe(`${BACKEND}/api/integrations/companella/native/me`);
   });
