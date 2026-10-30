@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { MessageDescriptor } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { usesPrism } from "#dan/prism/switch";
@@ -398,23 +398,6 @@ function SkillsetBars({ diff }: { diff: LiveMapSearchEntry }) {
   );
 }
 
-// The backend's sampled cover colour (entry.coverColor, #rrggbb) pulled into
-// a band that reads as a tint on the dark body whatever the cover: mid
-// lightness, capped saturation. Shared by the card and the map detail modal.
-export function coverTintColor(hex: string): string | null {
-  const match = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!match) return null;
-  const value = parseInt(match[1], 16);
-  const [r, g, b] = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((channel) => channel / 255);
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const d = max - min;
-  const l = (max + min) / 2;
-  const s = d === 0 ? 0 : l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  const h = d === 0 ? 0 : max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  return `hsl(${Math.round(h * 60)} ${Math.round(Math.min(0.7, s) * 100)}% 50%)`;
-}
-
 // The map card: cover with the key count and status, the hardest diff's
 // skillset ratings as a bar strip, the skill tiles, then the set's star range
 // and actions. Country-agnostic, so the same card serves search and collections.
@@ -424,7 +407,6 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
   return (
     <MapCardFrame
       coverUrl={mapCoverUrl(entry)}
-      coverColor={entry.coverColor}
       keyLabel={keyModeLabel(model.diffs)}
       status={entry.status}
       title={entry.title}
@@ -434,7 +416,6 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
       onOpen={onOpen ? () => onOpen(model.hardest === entry || !entry.diffs?.length ? entry : {
         ...model.hardest,
         covers: entry.covers,
-        coverColor: entry.coverColor,
         diffCount: entry.diffCount,
         diffs: entry.diffs,
       }) : undefined}
@@ -459,10 +440,9 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
 
 // The map card's frame, shared by search and the other /maps tabs: the cover
 // with the keymode and status in its corners and the title over it, fading
-// into a body washed with the set's cover colour (coverColor from the backend).
+// into the body.
 export function MapCardFrame({
   coverUrl,
-  coverColor,
   keyLabel,
   status,
   title,
@@ -472,7 +452,6 @@ export function MapCardFrame({
   children,
 }: {
   coverUrl: string;
-  coverColor?: string;
   keyLabel?: string | null;
   status?: string | null;
   title: string;
@@ -483,14 +462,10 @@ export function MapCardFrame({
   children: ReactNode;
 }) {
   const { t } = useLingui();
-  const tint = coverColor ? coverTintColor(coverColor) : null;
   const clickable = !!onOpen;
   return (
     <div
-      className={`group relative isolate flex flex-col overflow-hidden rounded-2xl bg-osu-b4 ring-1 transition-shadow ${
-        tint ? "ring-[color-mix(in_srgb,var(--tint)_14%,transparent)] hover:ring-[color-mix(in_srgb,var(--tint)_55%,transparent)]" : "ring-white/5 hover:ring-white/20"
-      } ${clickable ? "cursor-pointer" : ""}`}
-      style={tint ? ({ "--tint": tint } as CSSProperties) : undefined}
+      className={`group relative isolate flex flex-col overflow-hidden rounded-2xl bg-osu-b4 ring-1 ring-white/5 transition-shadow hover:ring-white/20 ${clickable ? "cursor-pointer" : ""}`}
       onClick={onOpen}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
@@ -500,14 +475,6 @@ export function MapCardFrame({
       } : undefined}
       title={clickable ? t`View details` : undefined}
     >
-      {tint ? (
-        // The cover's colour washed over the body, strongest under the art.
-        <div
-          className="pointer-events-none absolute inset-0 -z-10"
-          aria-hidden="true"
-          style={{ background: "linear-gradient(to bottom, color-mix(in srgb, var(--tint) 30%, transparent), color-mix(in srgb, var(--tint) 10%, transparent))" }}
-        />
-      ) : null}
       <div className="relative h-[118px] shrink-0">
         {/* The cover dissolves into the body. The title's shade sits inside the
             mask too, so it fades with the art and the box edge never shows. */}

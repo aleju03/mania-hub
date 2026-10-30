@@ -29,9 +29,9 @@ re-encoded as WebP at most 1024 px.
 | plush-black-cat.glb | dro | https://sketchfab.com/3d-models/0a81d050ac2c4f2c9adce8b640af1eeb |
 | maneki-neko.glb | Rice & Soy Sauce | https://sketchfab.com/3d-models/50b5d360717c442c971b3db0576606c4 |
 | cat-maxwell.glb | Zhuier | https://sketchfab.com/3d-models/4175776146ba4550a8dd643363b7b0aa |
-| cat-sleeping.glb | Psu | https://sketchfab.com/3d-models/3f7608e2b6b248bf83db09fb21125c2b |
 
 blob-pink.glb is the site's own model, built by local-notes/companions/blob/make_blob.py.
 leek.glb is the site's own model, made in Blender (~/Projects/3d-modelling/leek); its cel shading is drawn by src/lib/companion-toon.ts from the materials' toon extras.
 fairy-white.glb, fairy-red.glb and fairy-blue.glb are the site's own models, made in Blender (~/Projects/3d-modelling/fairies/build_navi.py); src/lib/companion-toon.ts draws their light and wings from the materials' extras (extras.light, extras.wing) and beats the wings and hovers the fairy from the nodes' extras (extras.flap, extras.hover).
 taiko-don.glb and taiko-ka.glb are the site's own models, made in Blender (~/Projects/3d-modelling/donchan/build_donchan.py); the characters, Don-chan and Ka-chan, are Bandai Namco's (Taiko no Tatsujin). src/lib/companion-toon.ts draws their flat cel colour from the materials' toon extras; they sit still (no motion extras).
+makiba.glb is the site's own model, made in Blender (~/Projects/3d-modelling/makiba/build_makiba.py) from a 2D drawing of the anime cat Makiba; the character is not the site's. src/lib/companion-toon.ts draws its cel shading from the materials' toon extras; it sits still (no motion extras).

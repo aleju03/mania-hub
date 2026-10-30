@@ -321,8 +321,8 @@ void main() {
 type FireStyle = "inferno" | "hellfire";
 
 /* Inferno and Hellfire: crisp burning letters behind a dark edge, tongues of
-   flame rising off them and flaring every few seconds (a beat, then a rest),
-   sparks thrown up by the flare. They differ only in the colour of the fire. */
+   flame rising off them at a steady height and licking over their tops, a
+   few sparks drifting up. They differ only in the colour of the fire. */
 const FIRE_LOOKS: Record<FireStyle, { ramp: string; edge: string }> = {
   inferno: {
     ramp: `
@@ -367,11 +367,6 @@ void main() {
   vec2 p = vec2(uv.x * aspect, uv.y);
   float body = glyph(uv);
 
-  // a flare every 4.8s: a quick eased rise, a slower fall, then a rest
-  float ph = fract(t / 4.8);
-  float flare = smoothstep(0., .1, ph) * (1. - smoothstep(.1, .42, ph));
-  flare = flare * flare * (3. - 2. * flare);
-
   // rising turbulence, domain-warped so the tongues twist instead of wobbling
   vec2 q = vec2(p.x * 3., p.y * 2.2 + t * 2.);
   q.x += (fbm(q * .6 + 3.1) - .5) * 1.4;
@@ -380,7 +375,7 @@ void main() {
 
   // fuel from the letters below, read off a blurred copy of the mask (its
   // mipmaps) so the flames rise smoothly instead of in stacked copies
-  float reach = .05 * (1. + flare * .6);
+  float reach = .05;
   vec2 bend = vec2((tongue - .5) * .1 / aspect, 0.);
   float fuel = 0.;
   for (int i = 0; i < 7; i++) {
@@ -391,28 +386,33 @@ void main() {
   }
   float above = 1. - clamp(fuel * 1.7, 0., 1.);
   // only the stronger tongues climb higher, so each one narrows as it rises
-  float fuelVal = tongue * 1.3 + lick * .22 + flare * .14 - .12;
+  float fuelVal = tongue * 1.3 + lick * .22 - .12;
   float flame = clamp((fuelVal - above * 1.05) * 3.2, 0., 1.) * step(above, .99);
   flame *= 1. - above * .35;
 
-  // sparks thrown up by the flare, drifting and fading as they climb
+  // a few sparks drifting up and fading as they climb
   vec2 sc = vec2(p.x * 7., p.y * 7. + t * 2.6);
   vec2 sid = floor(sc);
   vec2 sf = fract(sc) - .5;
   float sh = hash(sid);
   vec2 sat = (vec2(hash(sid + 1.7), hash(sid + 4.1)) - .5) * .6;
   float spark = smoothstep(.09, 0., length(sf - sat)) * step(.9, sh);
-  spark *= smoothstep(.02, .2, dilate(uv + vec2(0., .2), .12, aspect)) * (.15 + .85 * flare);
+  spark *= smoothstep(.02, .2, dilate(uv + vec2(0., .2), .12, aspect)) * .35;
 
   // the dark edge that keeps the letters crisp on any cover
   float edge = dilate(uv, .038, aspect) * (1. - body);
 
-  // white-hot in the thick of each stroke, hotter low in the letters, a heat
-  // band climbing them on the flare
+  // white-hot in the thick of each stroke, hotter low in the letters
   float depth = depthAt(uv, aspect) * body;
   float heat = .58 + .3 * depth + .14 * uv.y + .12 * (tongue - .5) + .1 * (lick - .5);
-  heat += flare * .18 * smoothstep(.15, 0., abs(uv.y - (1. - ph * 2.4)));
   vec3 bodyColor = ramp(heat);
+  // the strongest tongues lick down over the tops of the letters, in the
+  // same turbulence as the flames above them, so the fire wraps the name
+  // instead of standing behind it. Read off a heavily blurred mask so the
+  // overlap is a soft wash, never a second copy of the letter shapes.
+  float top = body * smoothstep(0., .2, texture(u_image, uv, 3.).a - texture(u_image, uv - vec2(0., .14), 3.).a);
+  float front = top * smoothstep(.62, .95, fuelVal);
+  bodyColor = mix(bodyColor, ramp(.5 + .3 * tongue), front * .75);
 
   // composite back to front: flames, sparks, the dark edge, the letters
   vec3 color = ramp(flame * .95);

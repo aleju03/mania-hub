@@ -432,9 +432,6 @@ export interface MapsAggregatedBeatmap {
   artist: string;
   creator: string;
   covers: OsuCovers;
-  // The set's cover colour (#rrggbb) from the backend's cover sampler; the
-  // /maps cards tint with it. Absent until the set has been sampled.
-  coverColor?: string;
   status: string;
   globalPlayCount: number;
   totalPlays: number;
@@ -448,9 +445,6 @@ export interface MapsAggregatedFavourite {
   artist: string;
   creator: string;
   covers: OsuCovers;
-  // The set's cover colour (#rrggbb) from the backend's cover sampler; the
-  // /maps cards tint with it. Absent until the set has been sampled.
-  coverColor?: string;
   status: string;
   globalPlayCount: number;
   globalFavouriteCount: number;
@@ -482,9 +476,6 @@ export interface MapsFarmedEntry {
   artist: string;
   creator: string;
   covers: OsuCovers;
-  // The set's cover colour (#rrggbb) from the backend's cover sampler; the
-  // /maps cards tint with it. Absent until the set has been sampled.
-  coverColor?: string;
   status: string;
   playerCount: number;
   players: MapsFarmedPlayer[];
@@ -499,9 +490,6 @@ export interface MapsFavouriteBeatmapset {
   artist: string;
   creator: string;
   covers: OsuCovers;
-  // The set's cover colour (#rrggbb) from the backend's cover sampler; the
-  // /maps cards tint with it. Absent until the set has been sampled.
-  coverColor?: string;
   status: string;
   globalPlayCount: number;
   globalFavouriteCount: number;

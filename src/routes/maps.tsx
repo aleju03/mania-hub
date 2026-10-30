@@ -3,7 +3,7 @@ import { Trans, Plural, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import { Children, Fragment, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dices } from "lucide-react";
@@ -45,7 +45,7 @@ import { MapDetailModal } from "../components/maps/MapDetailModal";
 import { ChartPreviewPanel } from "../components/maps/ChartPreviewPanel";
 import { DiffTabs } from "../components/maps/MapDetailHeader";
 import { BeatmapStatusBadge, MAP_STATUS_LABELS } from "../components/ui/BeatmapStatusBadge";
-import { stripKeymodePrefix, Hairline, MapCardFooter, MapCardFrame, OszButton, OsuDirectButton, PATTERN_COLOR, SearchCardGridSkeleton, StarRatingBadge, coverTintColor } from "../components/maps/SearchCard";
+import { stripKeymodePrefix, Hairline, MapCardFooter, MapCardFrame, OszButton, OsuDirectButton, PATTERN_COLOR, SearchCardGridSkeleton, StarRatingBadge } from "../components/maps/SearchCard";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import type {
@@ -2491,10 +2491,6 @@ function MapDetailsModal({
 
   useBodyScrollLock(bodyLockActive);
 
-  // The set's cover colour from the backend, as the panel's tint (same as the map modal).
-  const coverColor = details ? (details.kind === "favourite" ? details.fav.coverColor : details.map.coverColor) : undefined;
-  const tint = coverColor ? coverTintColor(coverColor) : null;
-
   if (typeof document === "undefined") return null;
 
   return createPortal(
@@ -2513,10 +2509,7 @@ function MapDetailsModal({
             onClick={onClose}
           />
           <motion.div
-            className={`modal-card-mobile-safe relative isolate z-10 w-full max-w-[640px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 shadow-2xl flex flex-col ${
-              tint ? "ring-[color-mix(in_srgb,var(--tint)_30%,transparent)]" : "ring-white/10"
-            }`}
-            style={tint ? ({ "--tint": tint } as CSSProperties) : undefined}
+            className="modal-card-mobile-safe relative isolate z-10 w-full max-w-[640px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl flex flex-col"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2524,13 +2517,6 @@ function MapDetailsModal({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="pointer-events-none absolute inset-0 bg-osu-b5" aria-hidden="true" />
-            {tint ? (
-              <div
-                className="pointer-events-none absolute inset-0"
-                aria-hidden="true"
-                style={{ background: "linear-gradient(to bottom, color-mix(in srgb, var(--tint) 28%, transparent), color-mix(in srgb, var(--tint) 9%, transparent) 55%, color-mix(in srgb, var(--tint) 5%, transparent))" }}
-              />
-            ) : null}
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               <MapDetailsContent details={details} country={country} onClose={onClose} />
             </div>
@@ -2652,7 +2638,7 @@ function MapDetailsContent({
       </button>
 
       {/* Header, matching the map detail modal: the cover dissolves into the
-          tinted panel, keymode and status in its corner, the title over it. */}
+          panel, keymode and status in its corner, the title over it. */}
       <div className="relative z-10 h-[188px] shrink-0">
         <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_35%,transparent)]">
           <div
@@ -3246,7 +3232,6 @@ function FarmedCard({
   return (
     <MapCardFrame
       coverUrl={map.covers["card@2x"] ?? map.covers.card}
-      coverColor={map.coverColor}
       keyLabel={`${map.cs}K`}
       status={map.status}
       title={map.title}
@@ -3335,7 +3320,6 @@ function MostPlayedCard({
   return (
     <MapCardFrame
       coverUrl={map.covers["card@2x"] ?? map.covers.card}
-      coverColor={map.coverColor}
       keyLabel={kc ? `${kc}K` : null}
       status={map.status}
       title={map.title}
@@ -3384,7 +3368,6 @@ function FavouriteCard({
   return (
     <MapCardFrame
       coverUrl={fav.covers["card@2x"] ?? fav.covers.card}
-      coverColor={fav.coverColor}
       status={fav.status}
       title={fav.title}
       artist={fav.artist}
@@ -3911,7 +3894,6 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const displayDuration = duration > 0 ? Math.min(duration, RANDOM_REPLAY_PREVIEW_MS / 1000) : 0;
   const getPreviewAudio = useCallback(() => audioRef.current, []);
 
-  const tint = bm.coverColor ? coverTintColor(bm.coverColor) : null;
   const diffTabs = [...maniaBeatmaps]
     .sort((a, b) => a.cs - b.cs || a.difficultyRating - b.difficultyRating)
     .map((map) => ({ beatmapId: map.id, stars: map.difficultyRating, version: map.version, keyCount: Math.round(map.cs), length: map.totalLength }));
@@ -3919,19 +3901,8 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   return (
     <div className="relative w-[640px] max-w-full">
       <div
-        className={`relative isolate rounded-2xl bg-osu-b4 ring-1 transition-shadow ${
-          tint ? "ring-[color-mix(in_srgb,var(--tint)_18%,transparent)] hover:ring-[color-mix(in_srgb,var(--tint)_45%,transparent)]" : "ring-white/5 hover:ring-white/15"
-        }`}
-        style={tint ? ({ "--tint": tint } as CSSProperties) : undefined}
+        className="relative isolate rounded-2xl bg-osu-b4 ring-1 ring-white/5 transition-shadow hover:ring-white/15"
       >
-        {tint ? (
-          // Same wash as the map cards: the set's cover colour over the body.
-          <div
-            className="pointer-events-none absolute inset-0 -z-10 rounded-2xl"
-            aria-hidden="true"
-            style={{ background: "linear-gradient(to bottom, color-mix(in srgb, var(--tint) 30%, transparent), color-mix(in srgb, var(--tint) 9%, transparent))" }}
-          />
-        ) : null}
         <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-2xl overflow-hidden">
         {/* The cover dissolves into the body; the title's shade fades with it. */}
         <div className="relative w-full h-[220px] overflow-hidden [mask-image:linear-gradient(to_bottom,black_45%,transparent)]">

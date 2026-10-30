@@ -85,6 +85,7 @@ const FRAME_GEOMETRY = {
   "course-run": { box: [-0.2419, -0.5645, 1.7419, 1.9355], overhang: [0, 0.3468, 0.1452, 0] },
   "crayon-border": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2056, 0.2016, 0.2097, 0.2056] },
   "crown-sketch": { box: [-0.2419, -0.6452, 1.5323, 1.129], overhang: [0.1411, 0.4435, 0, 0] },
+  "crown-sketch-gold": { box: [-0.2419, -0.6452, 1.5323, 1.129], overhang: [0.1411, 0.4315, 0, 0] },
   "crt-monitor": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.7419], overhang: [0.1895, 0.0968, 0.1895, 0.4556] },
   "dan-license": { box: [-0.2419, -0.2419, 1.4839, 2.0887], overhang: [0, 0, 0, 0.6129], stillOnly: true, danWindow: [0.2636, 0.6931, 0.1793, 0.1274], swingPivot: [0.5, 0.5946], danText: [0.4755, 0.7359, 0.2649, 0.0938], sheenCard: [0.2337, 0.6274, 0.5299, 0.2413, 0.045] },
   "dan-skip-1-eta": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1048, 0.129, 0.1048, 0.1653] },
@@ -123,7 +124,7 @@ const FRAME_GEOMETRY = {
   "ln-hold-5": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1008, 0.125, 0.1008, 0.0766] },
   "ln-hold-9": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.125, 0.125, 0.125, 0.1048] },
   "loading-bar": { box: [-0.2419, -0.2419, 1.4839, 1.5806], overhang: [0, 0, 0, 0.121] },
-  "makiba-peek": { box: [-0.2903, -0.3387, 1.5806, 1.5806], overhang: [0, 0.2786, 0.1572, 0] },
+  "makiba-peek": { box: [-0.2903, -0.3387, 1.5806, 1.5806], overhang: [0.0726, 0.3226, 0.1169, 0.0847] },
   "margin-doodles": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2863, 0.2581, 0.2823, 0.3024] },
   "neon-ears": { box: [-0.2419, -0.3387, 1.4839, 1.5806], overhang: [0, 0.2944, 0, 0] },
   "note-highway": { box: [-0.2419, -0.4677, 1.4839, 1.7097], overhang: [0, 0.3952, 0, 0] },
@@ -211,7 +212,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 54;
+const FRAME_ART_VERSION = 57;
 
 /* `round`: the still for a round avatar, where the frame has one. */
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {

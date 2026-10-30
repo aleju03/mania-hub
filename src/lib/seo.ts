@@ -107,10 +107,13 @@ export type MetaEntry =
 
 export type LinkEntry = { rel: string; href: string };
 
-export function absoluteUrl(path: string, origin: string): string {
+// origin can be missing at runtime: when the server render fails, the client
+// hydrates the route before the root's beforeLoad has put it on the context,
+// and a throw here turned that recoverable error into a blank page.
+export function absoluteUrl(path: string, origin: string | undefined): string {
   if (/^https?:\/\//i.test(path)) return path;
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  const base = origin.replace(/\/+$/, "");
+  const base = (origin ?? "").replace(/\/+$/, "");
   return base ? `${base}${normalized}` : normalized;
 }
 

@@ -73,7 +73,7 @@ function StarSlot({ stars }: { stars: DetailStars }) {
 export function MapDetailHeader({ entry, active, cover, stars, status, tiles, rating, onClose }: MapDetailHeaderProps) {
   return (
     <div className="relative h-[188px] shrink-0">
-      {/* The cover dissolves into the (tinted) panel; the title's shade fades
+      {/* The cover dissolves into the panel; the title's shade fades
           with the art inside the mask, so no edge shows. */}
       <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_35%,transparent)]">
         {cover}

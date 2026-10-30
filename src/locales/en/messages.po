@@ -10563,6 +10563,10 @@ msgid "Gold pack"
 msgstr "Gold pack"
 
 #: src/components/supporter/loadout.ts
+msgid "Gold sketch crown"
+msgstr "Gold sketch crown"
+
+#: src/components/supporter/loadout.ts
 msgid "Gold wings"
 msgstr "Gold wings"
 
@@ -13454,6 +13458,7 @@ msgid "Makes a card {name}. {0}"
 msgstr "Makes a card {name}. {0}"
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-companions.ts
 msgid "Makiba"
 msgstr "Makiba"
 
@@ -21967,8 +21972,8 @@ msgid "Skips the last few players and maps you were shown."
 msgstr "Skips the last few players and maps you were shown."
 
 #: src/lib/supporter-companions.ts
-msgid "Sleeping cat"
-msgstr "Sleeping cat"
+#~ msgid "Sleeping cat"
+#~ msgstr "Sleeping cat"
 
 #: src/components/packs/PackSummary.tsx
 msgid "sliced"

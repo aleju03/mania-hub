@@ -33,8 +33,8 @@ interface SelectMenuProps<T extends string> {
   // Fills its container and pushes the chevron to the right, for a select
   // sitting in a form beside full-width inputs rather than in a toolbar.
   block?: boolean;
-  // A see-through button for a select on a tinted surface (the map card's
-  // cover colour), where the solid fill would sit on it as a grey box.
+  // A see-through button for a select over cover art or a panel, where the
+  // solid fill would sit on it as a grey box.
   translucent?: boolean;
   disabled?: boolean;
 }

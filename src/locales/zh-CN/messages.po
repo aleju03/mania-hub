@@ -10544,6 +10544,10 @@ msgid "Gold pack"
 msgstr "金色卡包"
 
 #: src/components/supporter/loadout.ts
+msgid "Gold sketch crown"
+msgstr "金色手绘王冠"
+
+#: src/components/supporter/loadout.ts
 msgid "Gold wings"
 msgstr "金色翅膀"
 
@@ -13427,6 +13431,7 @@ msgid "Makes a card {name}. {0}"
 msgstr "让一张卡变成 {name}。{0}"
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-companions.ts
 msgid "Makiba"
 msgstr "Makiba"
 
@@ -21932,8 +21937,8 @@ msgid "Skips the last few players and maps you were shown."
 msgstr "跳过最近展示过的玩家和谱面。"
 
 #: src/lib/supporter-companions.ts
-msgid "Sleeping cat"
-msgstr "睡觉的猫"
+#~ msgid "Sleeping cat"
+#~ msgstr "睡觉的猫"
 
 #: src/components/packs/PackSummary.tsx
 msgid "sliced"

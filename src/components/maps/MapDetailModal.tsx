@@ -41,7 +41,6 @@ import {
   patternLabel,
   subPatternTags,
   skillTiles,
-  coverTintColor,
 } from "./SearchCard";
 import { HoverTip } from "../ui/HoverTip";
 import { resolveShownMsd } from "../../lib/shown-msd";
@@ -850,8 +849,6 @@ export function MapDetailModal({
 }) {
   const { t } = useLingui();
   const intlLocale = intlLocaleTag(useLocale());
-  // The set's cover colour from the payload, as the panel's tint.
-  const coverTint = entry?.coverColor ? coverTintColor(entry.coverColor) : null;
   const compactPlays = (n: number) => new Intl.NumberFormat(intlLocale, { notation: "compact", maximumFractionDigits: 1 }).format(Math.max(0, n));
   // Which diff of the set is in focus; defaults to the entry's representative.
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
@@ -1174,24 +1171,14 @@ export function MapDetailModal({
             ref={panelRef}
             style={{
               ...(pinnedTop == null ? {} : { maxHeight: `calc(100dvh - ${pinnedTop}px - 0.75rem)` }),
-              ...(coverTint ? { "--tint": coverTint } : {}),
             } as CSSProperties}
-            className={`modal-card-mobile-safe relative isolate z-10 w-full max-w-[760px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 shadow-2xl flex flex-col ${
-              coverTint ? "ring-[color-mix(in_srgb,var(--tint)_30%,transparent)]" : "ring-white/10"
-            }`}
+            className="modal-card-mobile-safe relative isolate z-10 w-full max-w-[760px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl flex flex-col"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
           >
             <div className="pointer-events-none absolute inset-0 bg-osu-b5" aria-hidden="true" />
-            {coverTint ? (
-              <div
-                className="pointer-events-none absolute inset-0"
-                aria-hidden="true"
-                style={{ background: "linear-gradient(to bottom, color-mix(in srgb, var(--tint) 28%, transparent), color-mix(in srgb, var(--tint) 9%, transparent) 55%, color-mix(in srgb, var(--tint) 5%, transparent))" }}
-              />
-            ) : null}
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               <MapDetailHeader
                 entry={entry}

@@ -253,7 +253,7 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
   {
     key: "crowns",
     title: msg`Crowns`,
-    entries: [{ id: "crown", label: msg`Crown` }, { id: "crown-sketch", label: msg`Sketch crown` }],
+    entries: [{ id: "crown", label: msg`Crown` }, { id: "crown-sketch", label: msg`Sketch crown` }, { id: "crown-sketch-gold", label: msg`Gold sketch crown` }],
   },
   {
     key: "shrine",

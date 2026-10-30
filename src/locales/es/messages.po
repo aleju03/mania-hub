@@ -10532,6 +10532,10 @@ msgid "Gold pack"
 msgstr "Pack dorado"
 
 #: src/components/supporter/loadout.ts
+msgid "Gold sketch crown"
+msgstr "Corona de boceto dorada"
+
+#: src/components/supporter/loadout.ts
 msgid "Gold wings"
 msgstr "Alas doradas"
 
@@ -13415,6 +13419,7 @@ msgid "Makes a card {name}. {0}"
 msgstr "Hace una carta {name}. {0}"
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-companions.ts
 msgid "Makiba"
 msgstr "Makiba"
 
@@ -21920,8 +21925,8 @@ msgid "Skips the last few players and maps you were shown."
 msgstr "Omite los últimos jugadores y mapas que ya se te mostraron."
 
 #: src/lib/supporter-companions.ts
-msgid "Sleeping cat"
-msgstr "Gato dormido"
+#~ msgid "Sleeping cat"
+#~ msgstr "Gato dormido"
 
 #: src/components/packs/PackSummary.tsx
 msgid "sliced"

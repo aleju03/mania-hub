@@ -1303,39 +1303,26 @@ html[data-custom-cursor="true"] * {
   animation: name-tag-slide 16s linear infinite;
 }
 
-/* Inferno and Hellfire, as CSS for small names and until the shader draws. Crisp letters
-   behind a dark edge (two tight shadows) so they read at list sizes on any
-   cover; every 4.8s a flare: a heat band climbs the letters and the glow
-   leaps, then a rest. */
+/* Inferno and Hellfire, as CSS for small names and until the shader draws.
+   White-hot letters with the colour in the glow around them, and a thin dark
+   rim so they hold on a bright cover. Every 4.8s the glow flares, then rests. */
 .name-tag--inferno {
-  background-image:
-    linear-gradient(0deg, transparent 0 36%, rgba(255, 252, 230, 0.95) 47%, transparent 58% 100%),
-    linear-gradient(0deg, #fff3b8 0%, #ffc43c 30%, #ff6e12 62%, #c41c05 100%);
-  background-size: 100% 300%, 100% 100%;
-  background-repeat: no-repeat;
-  background-position: 0 0%, 0 0;
-  filter: drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(255, 110, 20, 0.5));
+  background-image: linear-gradient(0deg, #ffb35c 0%, #ffe2b0 55%, #fff6e4 100%);
+  filter: drop-shadow(0 0.03em 0.04em rgba(60, 10, 0, 0.7)) drop-shadow(0 0 0.12em rgba(255, 110, 20, 0.85)) drop-shadow(0 0 0.32em rgba(255, 50, 0, 0.45));
   animation: name-tag-inferno-flare 4.8s ease-in-out infinite;
 }
 @keyframes name-tag-inferno-flare {
-  0% { background-position: 0 0%, 0 0; filter: drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(255, 110, 20, 0.5)); }
-  8% { filter: drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.08em 0.12em rgba(255, 150, 40, 0.95)); }
-  32%, 100% { background-position: 0 100%, 0 0; filter: drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0 0.025em #2a0400) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(255, 110, 20, 0.5)); }
+  0%, 32%, 100% { filter: drop-shadow(0 0.03em 0.04em rgba(60, 10, 0, 0.7)) drop-shadow(0 0 0.12em rgba(255, 110, 20, 0.85)) drop-shadow(0 0 0.32em rgba(255, 50, 0, 0.45)); }
+  10% { filter: drop-shadow(0 0.03em 0.04em rgba(60, 10, 0, 0.7)) drop-shadow(0 0 0.14em rgba(255, 140, 40, 1)) drop-shadow(0 -0.04em 0.42em rgba(255, 70, 0, 0.7)); }
 }
 .name-tag--hellfire {
-  background-image:
-    linear-gradient(0deg, transparent 0 36%, rgba(240, 250, 255, 0.95) 47%, transparent 58% 100%),
-    linear-gradient(0deg, #f0f9ff 0%, #8ad6ff 28%, #6e5cff 60%, #44107a 100%);
-  background-size: 100% 300%, 100% 100%;
-  background-repeat: no-repeat;
-  background-position: 0 0%, 0 0;
-  filter: drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(120, 90, 255, 0.55));
+  background-image: linear-gradient(0deg, #a9b4ff 0%, #e2ecff 55%, #f7fbff 100%);
+  filter: drop-shadow(0 0.03em 0.04em rgba(10, 0, 40, 0.7)) drop-shadow(0 0 0.12em rgba(120, 110, 255, 0.85)) drop-shadow(0 0 0.32em rgba(90, 50, 255, 0.45));
   animation: name-tag-hellfire-flare 4.8s ease-in-out infinite;
 }
 @keyframes name-tag-hellfire-flare {
-  0% { background-position: 0 0%, 0 0; filter: drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(120, 90, 255, 0.55)); }
-  8% { filter: drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.08em 0.12em rgba(130, 200, 255, 0.95)); }
-  32%, 100% { background-position: 0 100%, 0 0; filter: drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0 0.025em #0c0218) drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.55)) drop-shadow(0 -0.03em 0.07em rgba(120, 90, 255, 0.55)); }
+  0%, 32%, 100% { filter: drop-shadow(0 0.03em 0.04em rgba(10, 0, 40, 0.7)) drop-shadow(0 0 0.12em rgba(120, 110, 255, 0.85)) drop-shadow(0 0 0.32em rgba(90, 50, 255, 0.45)); }
+  10% { filter: drop-shadow(0 0.03em 0.04em rgba(10, 0, 40, 0.7)) drop-shadow(0 0 0.14em rgba(150, 170, 255, 1)) drop-shadow(0 -0.04em 0.42em rgba(100, 60, 255, 0.7)); }
 }
 /* Big fire names get room above the letters for the shader's flames. */
 .name-tag--hero:is(.name-tag--inferno, .name-tag--hellfire) {

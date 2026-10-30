@@ -1334,11 +1334,11 @@ vec3 theme(vec2 uv, vec2 p, float t) {
     // the sun's reflection breaks into glints that flicker as the waves pass
     // flecks wider than tall, as sun on water breaks up
     float glint = smoothstep(.75, 1., streak) * step(.4, noise(vec2(q.x * 22., y * 140. + depth * 8. - t * 2.)));
-    float column = exp(-abs(q.x - sp.x) / (.06 + -y * .3)) * exp(y * 3.);
-    // Far below the horizon (behind the page once it scrolls past the hero)
-    // depth hardly changes, so the waves stretch into big blobs and the glints
-    // into vertical bars: the sea settles into plain dark water there.
-    float near = smoothstep(-.3, -.1, y);
+    float column = exp(-abs(q.x - sp.x) / (.06 + -y * .3)) * exp(y * 10.);
+    // Away from the horizon depth hardly changes, so the wave rows widen into
+    // flat blotches and the glints into vertical bars: the light stays in the
+    // thin rows near the horizon and the sea below settles into plain dark water.
+    float near = smoothstep(-.14, -.03, y);
     col += vec3(1., .7, .75) * column * (smoothstep(.5, 1., streak) * .45 + glint * .8) * near;
     col += vec3(.6, .5, .9) * smoothstep(.85, 1., streak) * exp(y * 5.) * .18 * near;
   }
