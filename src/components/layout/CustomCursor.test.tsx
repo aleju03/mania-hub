@@ -123,18 +123,40 @@ it("draws a large orb itself where the browser would drop the native image at th
   render(<CustomCursor />);
   const native = cursor();
   movePointer(window.innerWidth - 4, 300);
-  // Swapped in the frame that paints the orb, never before it.
+  // The native image stays until the drawn orb has painted once.
   expect(cursor()).toBe(native);
   drawFrame(16);
-  expect(cursor()).toBe("none");
+  expect(cursor()).toBe(native);
   expect(context.drawImage).toHaveBeenCalledOnce();
+  drawFrame(32);
+  expect(cursor()).toBe("none");
 
   movePointer(300, 300);
   expect(cursor()).toBe("none");
   context.drawImage.mockClear();
-  drawFrame(32);
+  drawFrame(48);
   expect(cursor()).toBe(native);
   expect(context.drawImage).not.toHaveBeenCalled();
+});
+
+it("hides the glow while typing until the mouse moves again", () => {
+  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, trail: false, glow: 50 });
+  render(<CustomCursor />);
+  const input = document.createElement("input");
+  document.body.appendChild(input);
+  movePointer();
+  drawFrame(16);
+  expect(context.drawImage).toHaveBeenCalledOnce();
+
+  context.drawImage.mockClear();
+  fireEvent.keyDown(input, { key: "a", code: "KeyA" });
+  drawFrame(32);
+  expect(context.drawImage).not.toHaveBeenCalled();
+
+  movePointer(124, 80);
+  drawFrame(48);
+  expect(context.drawImage).toHaveBeenCalledOnce();
+  input.remove();
 });
 
 it("draws the orb itself over CSS-zoomed content, which would rescale the native image", () => {
@@ -144,12 +166,13 @@ it("draws the orb itself over CSS-zoomed content, which would rescale the native
   document.body.appendChild(zoomedNode);
   movePointer(300, 300, zoomedNode);
   drawFrame(16);
-  expect(cursor()).toBe("none");
   expect(context.drawImage).toHaveBeenCalledOnce();
+  drawFrame(32);
+  expect(cursor()).toBe("none");
 
   context.drawImage.mockClear();
   fireEvent.mouseLeave(root);
-  drawFrame(32);
+  drawFrame(48);
   expect(context.drawImage).not.toHaveBeenCalled();
   zoomedNode.remove();
 });

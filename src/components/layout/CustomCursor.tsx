@@ -16,6 +16,9 @@ const SMOKE_MAX_POINTS = 4000;
    the edge of the page (it could pass for browser UI) and show the fallback
    arrow instead. */
 const NATIVE_CURSOR_EDGE_LIMIT = 32;
+/* The native image hides a frame after the drawn orb first paints, so the
+   swap starts this far before the image would reach the edge. */
+const DRAWN_ORB_LEAD = 16;
 
 interface TrailPoint {
   x: number;
@@ -198,11 +201,15 @@ function CursorOverlay() {
     // Where the browser would drop or rescale the native image, hide it and
     // draw the orb on the canvas instead.
     let drawnOrb = false;
+    // Firefox hides the native image before the canvas frame that replaces it
+    // reaches the screen, so the orb blinks out for a frame. Keep the native
+    // image until the drawn orb has painted once.
+    let orbPainted = false;
     let appliedCursor = "";
     let zoomTarget: EventTarget | null = null;
     let zoomed = false;
     const updateNativeCursor = () => {
-      const next = drawnOrb ? "none" : (pointer.pressed ? pressedCursor : normalCursor).css;
+      const next = drawnOrb && orbPainted ? "none" : (pointer.pressed ? pressedCursor : normalCursor).css;
       if (next === appliedCursor) return;
       appliedCursor = next;
       root.style.setProperty("--custom-cursor", next);
@@ -215,7 +222,7 @@ function CursorOverlay() {
       if (zoomed) return true;
       const size = Math.max(normalCursor.size, pressedCursor.size);
       if (size <= NATIVE_CURSOR_EDGE_LIMIT) return false;
-      const half = size / 2 + 1;
+      const half = size / 2 + 1 + DRAWN_ORB_LEAD;
       const width = root.clientWidth || window.innerWidth;
       const height = root.clientHeight || window.innerHeight;
       return pointer.x < half || pointer.y < half || pointer.x > width - half || pointer.y > height - half;
@@ -246,8 +253,6 @@ function CursorOverlay() {
       const dt = lastFrameAt == null ? 0.016 : Math.min(0.05, (time - lastFrameAt) / 1000);
       lastFrameAt = time;
 
-      // Switch between the native and drawn orb in the frame that paints the
-      // canvas, so neither shows a frame without the other.
       updateNativeCursor();
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
@@ -296,6 +301,9 @@ function CursorOverlay() {
       if (drawnOrb && pointer.inside && normalCursor.image) {
         const size = normalCursor.size * pressScale;
         context.drawImage(normalCursor.image, pointer.x - size / 2, pointer.y - size / 2, size, size);
+        orbPainted = true;
+      } else {
+        orbPainted = false;
       }
 
       const targetScale = pointer.pressed ? 1.25 : 1;
@@ -304,7 +312,8 @@ function CursorOverlay() {
       const idle =
         smoke.length === 0 &&
         trail.length === 0 &&
-        Math.abs(pressScale - targetScale) < 0.01;
+        Math.abs(pressScale - targetScale) < 0.01 &&
+        !(orbPainted && appliedCursor !== "none");
       if (!idle && isPageVisible()) {
         rafId = requestAnimationFrame(draw);
       } else {
@@ -364,8 +373,18 @@ function CursorOverlay() {
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== "KeyC" || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (isEditableTarget(event.target)) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isEditableTarget(event.target)) {
+        // The system hides the pointer while typing; hide the effects with it
+        // until the mouse moves again.
+        if (event.key.length === 1 || event.key === "Backspace" || event.key === "Delete" || event.key === "Enter") {
+          pointer.inside = false;
+          trail.length = 0;
+          ensureRunning();
+        }
+        return;
+      }
+      if (event.code !== "KeyC") return;
       if (!smoking) {
         smoking = true;
         smokeStartsStroke = true;
