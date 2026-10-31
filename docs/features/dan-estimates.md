@@ -79,7 +79,7 @@ Fresh analyses register families; `recompute_chart_family_sweep` backfills from 
 
 - Identity is a note fingerprint (`dan-skillset-identity.ts`: key count, exact OD, every note's column/head/tail). Metadata and global offset are ignored; any upload with the same fingerprint qualifies. App imports are matched on the fingerprint of the file they were played on, so an upload the site never cached counts too (`docs/companella-integration.md`).
 - An upload with identical notes but a different OD is an **OD variant**: it counts only on a Difficulty Adjust run that sets the reference OD and changes nothing else that matters (HP not below the file's).
-- At the full bar the baseline is exactly the named tier, with no overclear bonus. Within one point under the bar it takes the "-" credit, and only lifts a tile the player's clears already opened. Below that, or on 4K LN, nothing.
+- At the full bar the baseline is exactly the named tier, with no overclear bonus. Within one point under the bar it takes the "-" credit, and only lifts a tile the player's clears already opened. A tile already at or over that credit but still under the level keeps its number and shows the near clear. Below that, or on 4K LN, nothing.
 - The credit applies only inside the registered skillset (a Release/General chart credits Release; General keeps the ordinary credit). Sides with only practice credit carry `skillsetsOnly` and show no overall dan until ordinary evidence or a course supports one.
 
 ## Adding missing evidence
