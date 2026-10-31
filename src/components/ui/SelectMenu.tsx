@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -16,6 +16,9 @@ export interface SelectMenuOption<T extends string> {
   // Anything the option should carry that is not a lucide glyph, a country flag
   // being the case this exists for. Drawn in the same place as `icon`.
   leading?: ReactNode;
+  // A small heading drawn above the first option of each run with this label,
+  // for long lists made of different kinds of entry.
+  group?: string;
 }
 
 interface SelectMenuProps<T extends string> {
@@ -203,30 +206,38 @@ export function SelectMenu<T extends string>({
                 <Trans>No matches</Trans>
               </div>
             )}
-            {visibleOptions.map((option) => {
+            {visibleOptions.map((option, index) => {
               const OptionIcon = option.icon;
               const active = option.value === value;
+              const heading = option.group && option.group !== visibleOptions[index - 1]?.group ? option.group : null;
               return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                    setSearch("");
-                    triggerRef.current?.focus();
-                  }}
-                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors cursor-pointer ${
-                    active ? "bg-osu-b3/50 text-white" : "text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
-                  }`}
-                >
-                  {OptionIcon && <OptionIcon className={`h-3.5 w-3.5 ${option.colorClass ?? "text-osu-f1"}`} />}
-                  {option.leading}
-                  <span className="flex-1">{option.label}</span>
-                  {active && <Check className="h-3.5 w-3.5 text-osu-pink" />}
-                </button>
+                <Fragment key={option.value}>
+                  {heading && (
+                    <div className="flex items-center gap-2 px-2.5 pt-2 pb-1 text-[11px] font-semibold uppercase text-osu-f1">
+                      <span className="whitespace-nowrap">{heading}</span>
+                      <span className="h-px flex-1 bg-osu-b3/35" />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    onClick={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                      setSearch("");
+                      triggerRef.current?.focus();
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors cursor-pointer ${
+                      active ? "bg-osu-b3/50 text-white" : "text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
+                    }`}
+                  >
+                    {OptionIcon && <OptionIcon className={`h-3.5 w-3.5 ${option.colorClass ?? "text-osu-f1"}`} />}
+                    {option.leading}
+                    <span className="flex-1">{option.label}</span>
+                    {active && <Check className="h-3.5 w-3.5 text-osu-pink" />}
+                  </button>
+                </Fragment>
               );
             })}
           </motion.div>

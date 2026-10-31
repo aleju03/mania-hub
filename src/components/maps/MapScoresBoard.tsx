@@ -8,6 +8,7 @@ import { getManiaGradeFromAccuracy } from "../../lib/score";
 import { useLocale } from "../../lib/locale-context";
 import { useAuth } from "../../lib/auth-context";
 import { displayCountryName } from "../../lib/country";
+import { CONTINENT_OPTIONS, REGION_OPTIONS, type RegionDef } from "../../lib/regions";
 import { forgetMyFriends, getMyFriendSync, getMyFriendsMapScores, type FriendSync } from "../../lib/map-friends";
 import type { OsuScore } from "../../lib/types";
 import { Avatar } from "../ui/Avatar";
@@ -30,7 +31,7 @@ function cachedBoard(key: string): LiveMapScoresSnapshot | null {
   return hit && Date.now() - hit.at < BOARD_CACHE_TTL_MS ? hit.snapshot : null;
 }
 
-// The picker's Friends entry; country codes are two letters, so this never collides.
+// The picker's Friends entry; country and region codes never start with "@".
 const FRIENDS = "@friends";
 // The map whose Friends board to open on return from the friends sign-in.
 const FRIENDS_RETURN_KEY = "mh-map-scores-friends";
@@ -191,17 +192,32 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
     };
   }, [needCountries, beatmapId, viewerId]);
 
-  // The viewer's own country sits right under "All countries", lifted out of the count order.
+  // The viewer's own country sits right under "All countries", lifted out of the
+  // count order, then the continents and regions, then the other countries.
   const countryOptions = useMemo<SelectMenuOption<string>[]>(() => {
     const own = countries.find(({ code }) => code === viewerCountry);
+    const option = (code: string, count: number, group?: string): SelectMenuOption<string> => ({
+      value: code,
+      group,
+      label: `${displayCountryName(code, locale)} (${count})`,
+      leading: <CountryFlag code={code} size="sm" decorative />,
+    });
+    // A region shows once it holds players from two countries; a region with
+    // all of its continent's players is the continent's board again.
+    const tally = (region: RegionDef) => {
+      const members = countries.filter(({ code }) => region.countries.includes(code));
+      return { region, places: members.length, count: members.reduce((sum, { count }) => sum + count, 0) };
+    };
+    const continents = CONTINENT_OPTIONS.map(tally).filter(({ places }) => places > 1);
+    const regions = REGION_OPTIONS.map(tally).filter(({ region, places, count }) => places > 1
+      && !continents.some((continent) => continent.count === count && region.countries.every((code) => continent.region.countries.includes(code))));
     return [
       { value: "", label: t`All countries` },
       ...(viewerId ? [{ value: FRIENDS, label: t`Friends` }] : []),
-      ...[...(own ? [own] : []), ...countries.filter((entry) => entry !== own)].map(({ code, count }) => ({
-        value: code,
-        label: `${displayCountryName(code, locale)} (${count})`,
-        leading: <CountryFlag code={code} size="sm" decorative />,
-      })),
+      ...(own ? [option(own.code, own.count)] : []),
+      ...continents.map(({ region, count }) => option(region.code, count, t`Continents`)),
+      ...regions.map(({ region, count }) => option(region.code, count, t`Subregions`)),
+      ...countries.filter((entry) => entry !== own).map(({ code, count }) => option(code, count, t`Countries`)),
     ];
   }, [countries, viewerCountry, viewerId, locale, t]);
 

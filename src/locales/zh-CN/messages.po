@@ -2971,7 +2971,7 @@ msgstr "这次通过所依据的准确率，按该段位表自己的计分方式
 msgid "Accuracy:"
 msgstr "准确率："
 
-#. placeholder {0}: formatDate(peakRankDate)
+#. placeholder {0}: formatDate(peakRankDate, "UTC", locale)
 #: src/routes/player/$username.tsx
 msgid "achieved {0}"
 msgstr "达成于 {0}"
@@ -4629,7 +4629,7 @@ msgstr "谱面在此成绩之后被修改"
 msgid "Chart estimate"
 msgstr "谱面估计"
 
-#. placeholder {0}: chart.toFixed(2)
+#. placeholder {0}: formatDanValue(chart)
 #: src/components/maps/DanProgressRail.tsx
 msgid "Chart estimate: {0}"
 msgstr "谱面估计值：{0}"
@@ -5391,6 +5391,7 @@ msgid "Content"
 msgstr "内容"
 
 #: src/components/layout/CountrySelector.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Continents"
 msgstr "大洲"
 
@@ -5951,6 +5952,7 @@ msgstr "正在统计符合要求的成绩"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/layout/CountrySelector.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Countries"
 msgstr "国家/地区"
 
@@ -7254,7 +7256,7 @@ msgstr "全部"
 msgid "everything else the archive ships"
 msgstr "压缩包里的其他所有文件"
 
-#. placeholder {0}: dan.rawDan.toFixed(2)
+#. placeholder {0}: formatDanValue(dan.rawDan)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Exact estimate: {0}"
 msgstr "精确估计：{0}"
@@ -17935,6 +17937,7 @@ msgid "Submit plays to your account whether you're offline, on a private server 
 msgstr "无论你是离线、在私服上游玩，还是被 osu! 限制，都可以通过 Companella 向你的账号上传成绩。"
 
 #: src/components/layout/CountrySelector.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Subregions"
 msgstr "子区域"
 
@@ -21966,7 +21969,7 @@ msgstr "你的国家/地区还没有被追踪，所以没有地方记录你的�
 msgid "Your credit"
 msgstr "你的计入值"
 
-#. placeholder {0}: landedValue.toFixed(2)
+#. placeholder {0}: formatDanValue(landedValue)
 #: src/components/maps/DanProgressRail.tsx
 msgid "Your credit: {0}"
 msgstr "你的计入值：{0}"

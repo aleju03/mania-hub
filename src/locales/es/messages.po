@@ -2959,7 +2959,7 @@ msgstr "Acc con la que se juzgó este clear, en el sistema de puntuación de la 
 msgid "Accuracy:"
 msgstr "Precisión:"
 
-#. placeholder {0}: formatDate(peakRankDate)
+#. placeholder {0}: formatDate(peakRankDate, "UTC", locale)
 #: src/routes/player/$username.tsx
 msgid "achieved {0}"
 msgstr "logrado el {0}"
@@ -4617,7 +4617,7 @@ msgstr "Chart editado después de este play"
 msgid "Chart estimate"
 msgstr "Estimación del mapa"
 
-#. placeholder {0}: chart.toFixed(2)
+#. placeholder {0}: formatDanValue(chart)
 #: src/components/maps/DanProgressRail.tsx
 msgid "Chart estimate: {0}"
 msgstr "Estimación del mapa: {0}"
@@ -5379,6 +5379,7 @@ msgid "Content"
 msgstr "Contenido"
 
 #: src/components/layout/CountrySelector.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Continents"
 msgstr "Continentes"
 
@@ -5939,6 +5940,7 @@ msgstr "contando plays con pp"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/layout/CountrySelector.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Countries"
 msgstr "Países"
 
@@ -7242,7 +7244,7 @@ msgstr "todo"
 msgid "everything else the archive ships"
 msgstr "todo lo demás que trae el archivo"
 
-#. placeholder {0}: dan.rawDan.toFixed(2)
+#. placeholder {0}: formatDanValue(dan.rawDan)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Exact estimate: {0}"
 msgstr "Estimación exacta: {0}"
@@ -17923,6 +17925,7 @@ msgid "Submit plays to your account whether you're offline, on a private server 
 msgstr "Envía plays a tu cuenta aunque estés offline, en un servidor privado o restringido de osu!, con Companella."
 
 #: src/components/layout/CountrySelector.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Subregions"
 msgstr "Subregiones"
 
@@ -21954,7 +21957,7 @@ msgstr "Tu país aún no está en el tracker, así que no hay nada contra lo que
 msgid "Your credit"
 msgstr "Tu crédito"
 
-#. placeholder {0}: landedValue.toFixed(2)
+#. placeholder {0}: formatDanValue(landedValue)
 #: src/components/maps/DanProgressRail.tsx
 msgid "Your credit: {0}"
 msgstr "Tu crédito: {0}"
