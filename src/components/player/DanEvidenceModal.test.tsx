@@ -5,13 +5,13 @@ import { afterEach, expect, it, vi } from "vitest";
 import { getI18n } from "#/lib/i18n";
 import type { LivePlayerDanCourseEvidence } from "#/lib/live-backend";
 
-const { fetchEvidence } = vi.hoisted(() => ({ fetchEvidence: vi.fn() }));
+const { fetchEvidence, mapDetail } = vi.hoisted(() => ({ fetchEvidence: vi.fn(), mapDetail: vi.fn() }));
 vi.mock("#/lib/live-backend", () => ({
   fetchLivePlayerDanEvidenceDirect: fetchEvidence,
-  loadLiveMapSearchEntry: vi.fn(), peekLiveMapSearchEntry: vi.fn(), prefetchLiveMapSearchEntry: vi.fn(),
+  loadLiveMapSearchEntry: vi.fn(() => Promise.resolve(null)), peekLiveMapSearchEntry: vi.fn(), prefetchLiveMapSearchEntry: vi.fn(),
 }));
 vi.mock("@tanstack/react-router", () => ({ Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }));
-vi.mock("../maps/MapDetailModal", () => ({ MapDetailModal: () => null }));
+vi.mock("../maps/MapDetailModal", () => ({ MapDetailModal: (props: unknown) => { mapDetail(props); return null; } }));
 vi.mock("./SkillPlaysModal", () => ({ rateModFor: () => null, stubEntry: () => null, PlayModBadges: () => null }));
 vi.mock("../../lib/locale-context", () => ({ useLocale: () => "en" }));
 
@@ -35,10 +35,19 @@ it("shows and opens a certified skillset when there are no algorithmic clears", 
   expect(screen.queryByText("No qualifying clears yet")).toBeNull();
   fireEvent.click(button);
   // The credential is one row in the clears list, not a panel above it: the
-  // chart, what it granted, and a click through to the score.
+  // chart, what it granted, and a click through to the same score screen the
+  // clears open.
   const row = await screen.findByRole("button", { name: /Aquaris.*1\.3x.*96.*delta/i });
   fireEvent.click(row);
-  expect(onOpenCourseScore).toHaveBeenCalledWith(credential);
+  expect(onOpenCourseScore).not.toHaveBeenCalled();
+  expect(mapDetail).toHaveBeenLastCalledWith(expect.objectContaining({
+    play: expect.objectContaining({
+      beatmapId: 999, accuracy: 0.96,
+      dan: expect.objectContaining({ chartRating: 14, chartLabel: "delta", creditedLabel: "delta" }),
+      // A graveyard chart has no osu! leaderboard to link the score on.
+      score: expect.objectContaining({ rank: "S", scoreUrl: null }),
+    }),
+  }));
 });
 
 it("unfolds the plays still analyzing from the count line, with why each waits", async () => {

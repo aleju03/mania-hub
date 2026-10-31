@@ -24,6 +24,7 @@ import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { MapDetailModal } from "../maps/MapDetailModal";
 import { PlayModBadges, rateModFor, stubEntry } from "./SkillPlaysModal";
+import type { MapDetailPlayContext } from "../maps/MapDetailModal";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
 
@@ -63,9 +64,9 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // The map-detail view for a clicked clear, stacked on top of this list,
   // same pattern as SkillPlaysModal: opens on the click with what the row
   // knows and upgrades in place when the catalog entry lands.
-  // `clear` is null for a play still analyzing: it has no dan marks to draw.
+  // `dan` is null for a play still analyzing: it has no dan marks to draw.
   const [detail, setDetail] = useState<
-    { play: LivePlayerSkillPlay; clear: LivePlayerDanEvidencePlay | null; entry: LiveMapSearchEntry; status: "ready" | "pending" | "missing" | "error" } | null
+    { play: LivePlayerSkillPlay; dan: DetailDan | null; entry: LiveMapSearchEntry; status: "ready" | "pending" | "missing" | "error" } | null
   >(null);
   // The "all clears" list opens on the window the average reads; the rest
   // pages in a batch at a time, appended under the first twenty.
@@ -112,19 +113,19 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
     return () => controller.abort();
   }, [keyCount, reloadKey, side, userId]);
 
-  const openDetail = (play: LivePlayerSkillPlay, clear: LivePlayerDanEvidencePlay | null) => {
+  const openDetail = (play: LivePlayerSkillPlay, dan: DetailDan | null) => {
     const cached = peekLiveMapSearchEntry(play.beatmapId);
     if (cached !== undefined) {
-      setDetail({ play, clear, entry: cached ?? stubEntry(play), status: cached ? "ready" : "missing" });
+      setDetail({ play, dan, entry: cached ?? stubEntry(play), status: cached ? "ready" : "missing" });
       return;
     }
-    setDetail({ play, clear, entry: stubEntry(play), status: "pending" });
+    setDetail({ play, dan, entry: stubEntry(play), status: "pending" });
     loadLiveMapSearchEntry(play.beatmapId)
       .then((entry) => {
         if (!mountedRef.current) return;
         setDetail((current) => (
           current && current.play.beatmapId === play.beatmapId && current.status === "pending"
-            ? { play, clear, entry: entry ?? current.entry, status: entry ? "ready" : "missing" }
+            ? { ...current, entry: entry ?? current.entry, status: entry ? "ready" : "missing" }
             : current
         ));
       })
@@ -315,6 +316,24 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
     ? section.plays.find((clear) => clear.play.beatmapId === section.skillsetClear!.beatmapId
       && Math.abs(clear.clearAccuracy - section.skillsetClear!.accuracy) < 1e-6) ?? null
     : null;
+  // A practice-chart run opens the same score screen as the clears under it.
+  // A near clear that is also one of the rows brings that row's play along;
+  // otherwise the play is rebuilt from the run the credential carries.
+  const openCredential = (section: (typeof sections)[number]) => {
+    const credential = section.skillsetClear;
+    if (!credential) return;
+    const run = nearClearRunOf(section);
+    const passed = credential.accuracy + 1e-9 >= credential.bar;
+    openDetail(run?.play ?? credentialPlay(credential, keyCount), {
+      chartRating: run?.chartDan ?? (passed ? credential.rawDan : null),
+      chartLabel: run?.chartDanLabel ?? credential.level,
+      creditedRating: credential.rawDan,
+      creditedLabel: credential.label,
+      accuracy: credential.accuracy,
+      ...(credential.displayedAccuracy != null ? { currency: credential.currency } : {}),
+      family: side,
+    });
+  };
   const renderClears = (section: (typeof sections)[number]) => (
     <>
       {/* A verified clear only when it is not in the list under it: a stored
@@ -331,7 +350,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
             credential={section.skillsetClear}
             color={section.color}
             formatDan={formatDan}
-            onOpen={onOpenCourseScore ? () => onOpenCourseScore(section.skillsetClear!) : undefined}
+            onOpen={() => openCredential(section)}
+            onPrefetch={() => prefetchLiveMapSearchEntry(section.skillsetClear!.beatmapId)}
           />
         </div>
       ) : null}
@@ -342,7 +362,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
           position={index + 1}
           color={section.color}
           formatDan={formatDan}
-          onOpen={() => openDetail(clear.play, clear)}
+          onOpen={() => openDetail(clear.play, clearDan(clear, side))}
           onPrefetch={() => prefetchLiveMapSearchEntry(clear.play.beatmapId)}
         />
       ))}
@@ -751,30 +771,77 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
             sharePath: skillPlayShareLink(username, detail.play, `dan:${side}`),
             score: detail.play.score,
             skillRatings: detail.play.skillRatings,
-            rating: detail.clear?.chartDan ?? 0,
+            rating: detail.dan?.chartRating ?? 0,
             ratingLabel: t`chart dan`,
             ratingColor: color,
             // A play still analyzing has no dan marks yet: the card says so
             // where the rating would print, the same way an unrated skill
             // play does, and the rail stays empty until it is rated.
-            ...(detail.clear ? {
-              // The chart's dan and the level this clear credited are the rail's
-              // two marks, so the score screen reads them as dan rather than as a
-              // generic rating pair.
-              dan: {
-                chartRating: detail.clear.chartDan,
-                chartLabel: detail.clear.chartDanLabel,
-                creditedRating: detail.clear.creditedDan,
-                creditedLabel: detail.clear.creditedDanLabel,
-                accuracy: detail.clear.clearAccuracy,
-                family: side,
-              },
-            } : { ratingExcluded: true, ratingExclusionReason: "pending_calibration" as const }),
+            ...(detail.dan
+              ? { dan: detail.dan }
+              : { ratingExcluded: true, ratingExclusionReason: "pending_calibration" as const }),
           }}
         />
       ) : null}
     </>
   );
+}
+
+type DetailDan = NonNullable<MapDetailPlayContext["dan"]>;
+
+// The chart's dan and the level this clear credited are the rail's two marks,
+// so the score screen reads them as dan rather than as a generic rating pair.
+function clearDan(clear: LivePlayerDanEvidencePlay, side: "rc" | "ln"): DetailDan {
+  return {
+    chartRating: clear.chartDan,
+    chartLabel: clear.chartDanLabel,
+    creditedRating: clear.creditedDan,
+    creditedLabel: clear.creditedDanLabel,
+    accuracy: clear.clearAccuracy,
+    family: side,
+  };
+}
+
+const SPEED_MODS: Record<string, number> = { DT: 1.5, NC: 1.5, HT: 0.75, DC: 0.75 };
+
+// A practice-chart run as a play row, for a credential the clears list does
+// not carry. The score card shows the accuracy the player's client did.
+function credentialPlay(credential: LivePlayerDanCourseEvidence, keyCount: number): LivePlayerSkillPlay {
+  const rateMod = credential.mods.find((mod) => mod in SPEED_MODS) ?? null;
+  // Only a solo id on a chart with a leaderboard resolves on osu!, the same
+  // rule as the headline's course link.
+  const status = credential.beatmapStatus;
+  const linkable = credential.soloScoreId != null && !credential.companella
+    && (status === "loved" || status === "ranked" || status === "approved" || status === "qualified");
+  return {
+    beatmapId: credential.beatmapId,
+    beatmapsetId: credential.beatmapsetId,
+    title: credential.title,
+    artist: credential.artist,
+    creator: null,
+    version: credential.version,
+    coverUrl: credential.beatmapsetId ? `https://assets.ppy.sh/beatmaps/${credential.beatmapsetId}/covers/list.jpg` : null,
+    beatmapStatus: credential.beatmapStatus,
+    keyCount,
+    rating: credential.rawDan,
+    overallRating: credential.rawDan,
+    pp: null,
+    accuracy: credential.displayedAccuracy ?? credential.accuracy,
+    rate: credential.modRate ?? (rateMod ? SPEED_MODS[rateMod] : 1),
+    mods: credential.mods,
+    rateMod,
+    playedAt: credential.playedAt,
+    source: "tracked",
+    scoreId: credential.scoreId,
+    ...(credential.companella ? { importId: credential.companella.importId } : {}),
+    score: {
+      statistics: credential.statistics,
+      maxCombo: credential.maxCombo,
+      totalScore: credential.totalScore,
+      rank: credential.rank,
+      scoreUrl: linkable ? `https://osu.ppy.sh/scores/${credential.soloScoreId}` : null,
+    },
+  };
 }
 
 // The "still analyzing" line. Only the count is the link: it swaps the whole
@@ -908,11 +975,13 @@ function CredentialRow({
   color,
   formatDan,
   onOpen,
+  onPrefetch,
 }: {
   credential: LivePlayerDanCourseEvidence;
   color: string;
   formatDan: (label: string) => string;
-  onOpen?: () => void;
+  onOpen: () => void;
+  onPrefetch: () => void;
 }) {
   const { t } = useLingui();
   const currency = credential.displayedAccuracy != null
@@ -925,13 +994,14 @@ function CredentialRow({
     <button
       type="button"
       onClick={onOpen}
-      disabled={!onOpen}
-      className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left transition-colors enabled:cursor-pointer enabled:hover:bg-osu-b4"
+      onPointerEnter={onPrefetch}
+      onFocus={onPrefetch}
+      className="group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-osu-b4"
       title={`${credential.artist} - ${credential.title} [${credential.version}] · ${
         passed
           ? t`The ${formatDan(credential.level)} chart of this skillset ladder: clearing it sets the level outright, and a higher estimate is kept`
           : t`The ${level} chart of this skillset ladder: a run within one point of the bar sets ${credited}, and a higher estimate is kept`
-      }${onOpen ? ` · ${t`view the score`}` : ""}`}
+      } · ${t`view map details`}`}
     >
       <span className="w-4 shrink-0 text-right text-[10px] leading-none" style={{ color }} aria-hidden>{passed ? "✓" : ""}</span>
       <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-osu-l1 group-hover:text-white">
