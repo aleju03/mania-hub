@@ -6670,6 +6670,10 @@ msgstr "下载"
 msgid "Download .osk"
 msgstr "下载 .osk"
 
+#: src/components/replay/ReplayInfo.tsx
+msgid "Download .osr"
+msgstr "下载 .osr"
+
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/SearchCard.tsx
 msgid "Download .osz"

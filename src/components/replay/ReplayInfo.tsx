@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeftRight, Check, Share2, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, Download, Share2, Trash2 } from "lucide-react";
 import { useLingui } from "@lingui/react/macro";
 import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { avatarImageSrc } from "#/components/ui/Avatar";
@@ -33,6 +33,8 @@ interface ReplayInfoProps {
   mods?: OsuMod[];
   fallbackBeatmapsetId?: number;
   shareUrl?: string;
+  /** Same-origin link to the replay's .osr; null for imports and unsaved files. */
+  downloadUrl?: string | null;
   /** Present only on an uploaded replay the viewer owns (or an admin's view). */
   onDeleteUpload?: () => void;
   deletingUpload?: boolean;
@@ -44,7 +46,7 @@ interface ReplayInfoProps {
   onClear: () => void;
 }
 
-export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, onDeleteUpload, deletingUpload = false, playerProfile, judgeAsLazer, onSelectClient, onClear }: ReplayInfoProps) {
+export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, downloadUrl, onDeleteUpload, deletingUpload = false, playerProfile, judgeAsLazer, onSelectClient, onClear }: ReplayInfoProps) {
   const h = replay.header;
   const viewerTimeZone = useViewerTimeZone();
   // An upload has no API score, so the client comes from the .osr's own version
@@ -234,6 +236,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
         </div>
         <div className="mt-2 flex items-center justify-end gap-1.5">
           {shareUrl && <ShareReplayButton shareUrl={shareUrl} />}
+          {downloadUrl && <DownloadReplayButton href={downloadUrl} />}
           {onDeleteUpload && <DeleteUploadButton onDelete={onDeleteUpload} busy={deletingUpload} compact />}
           <BackButton onClear={onClear} />
         </div>
@@ -319,6 +322,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
           {/* No Share here: the Visual Settings playbar inside the stage already
               carries the share panel on desktop. */}
           <div className="flex shrink-0 items-center gap-2 self-start pt-1.5">
+            {downloadUrl && <DownloadReplayButton href={downloadUrl} />}
             {onDeleteUpload && <DeleteUploadButton onDelete={onDeleteUpload} busy={deletingUpload} />}
             <BackButton onClear={onClear} />
           </div>
@@ -486,6 +490,20 @@ function BackButton({ onClear }: { onClear: () => void }) {
     >
       {t`Back`}
     </button>
+  );
+}
+
+function DownloadReplayButton({ href }: { href: string }) {
+  const { t } = useLingui();
+  return (
+    <a
+      href={href}
+      download
+      className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/15 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:border-white/30 hover:bg-white/25 [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]"
+    >
+      <Download className="h-3.5 w-3.5" strokeWidth={2.3} aria-hidden="true" />
+      {t`Download .osr`}
+    </a>
   );
 }
 

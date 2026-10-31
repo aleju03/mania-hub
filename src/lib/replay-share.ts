@@ -48,3 +48,54 @@ function safeUrl(url: string, base: string): URL | null {
     return null;
   }
 }
+
+/** Same-origin link to the replay's .osr: a score's or an upload's. Imports
+ *  and unsaved local files get none. */
+export function buildReplayDownloadUrl({
+  scoreId,
+  uploadId,
+  filename,
+}: {
+  scoreId?: number | null;
+  uploadId?: string | null;
+  filename?: string | null;
+}): string | null {
+  const params = new URLSearchParams();
+  if (uploadId) params.set("uploadId", uploadId);
+  else if (scoreId != null && Number.isSafeInteger(scoreId) && scoreId > 0) params.set("scoreId", String(scoreId));
+  else return null;
+  if (filename) params.set("name", filename);
+  return `/api/replay-file?${params.toString()}`;
+}
+
+/** osu!'s own export name: "player - artist - title [diff] (date) OsuMania.osr". */
+export function replayDownloadFilename({
+  playerName,
+  artist,
+  title,
+  version,
+  playedAt,
+}: {
+  playerName?: string | null;
+  artist?: string | null;
+  title?: string | null;
+  version?: string | null;
+  playedAt?: string | null;
+}): string {
+  const parts = [playerName, artist, title].map((part) => part?.trim()).filter(Boolean);
+  let name = parts.join(" - ");
+  if (version?.trim()) name += ` [${version.trim()}]`;
+  const date = playedAt ? new Date(playedAt) : null;
+  if (date && Number.isFinite(date.getTime())) {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    name += ` (${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}_${pad(date.getUTCHours())}-${pad(date.getUTCMinutes())})`;
+  }
+  return sanitizeReplayFilename(`${name || "replay"} OsuMania.osr`);
+}
+
+/** Strips characters Windows and macOS refuse in file names. */
+export function sanitizeReplayFilename(name: string): string {
+  const cleaned = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
+  if (!cleaned || cleaned === ".osr") return "replay.osr";
+  return cleaned.toLowerCase().endsWith(".osr") ? cleaned : `${cleaned}.osr`;
+}

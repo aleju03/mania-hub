@@ -42,7 +42,7 @@ import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability, isReplayFileMissingError, replayFileMissingMessage } from "../lib/replay-score-availability";
 import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
-import { buildReplayShareUrl } from "../lib/replay-share";
+import { buildReplayDownloadUrl, buildReplayShareUrl, replayDownloadFilename } from "../lib/replay-share";
 import { getBeatmapAudioUrl, getBeatmapAudioWaveUrl, getBeatmapHitsoundsUrl, getInlineBackgroundUrl } from "../lib/audio-url";
 import { readReplayAudioClock } from "../lib/replay-audio-clock";
 import { ReplayHitsoundPlayer } from "../lib/replay-hitsounds";
@@ -2020,6 +2020,22 @@ function ReplayPage() {
     });
   }, [replay, loadedUploadId, uploadId, importId, uploadedReplayShareUrl, scoreId]);
 
+  // The .osr behind the footer's Download button, named the way osu!
+  // names its own exports. Imports and unsaved local files have none.
+  const replayDownloadUrl = useMemo(() => {
+    if (!replay || importId != null) return null;
+    const filename = replayDownloadFilename({
+      playerName: replay.header.playerName,
+      artist: scoreInfo?.beatmapset?.artist ?? beatmap?.artist,
+      title: scoreInfo?.beatmapset?.title ?? beatmap?.title,
+      version: scoreInfo?.beatmap?.version ?? beatmap?.version,
+      playedAt: scoreInfo?.ended_at ?? scoreInfo?.created_at,
+    });
+    if (loadedUploadId != null) return buildReplayDownloadUrl({ uploadId: loadedUploadId, filename });
+    if (uploadId != null) return null;
+    return buildReplayDownloadUrl({ scoreId, filename });
+  }, [replay, importId, loadedUploadId, uploadId, scoreId, scoreInfo, beatmap]);
+
   // For uploaded files, uploader identity wins even when the embedded score id
   // happens to resolve to a different osu! player. Ordinary score replays keep
   // using the player returned by the score API.
@@ -2041,6 +2057,7 @@ function ReplayPage() {
       mods={starMods}
       fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId}
       shareUrl={replayShareUrl ?? undefined}
+      downloadUrl={replayDownloadUrl}
       onDeleteUpload={canDeleteLoadedUpload ? handleDeleteLoadedUpload : undefined}
       deletingUpload={deletingUpload}
       playerProfile={playerProfile}

@@ -6685,6 +6685,10 @@ msgstr "Download"
 msgid "Download .osk"
 msgstr "Download .osk"
 
+#: src/components/replay/ReplayInfo.tsx
+msgid "Download .osr"
+msgstr "Download .osr"
+
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/SearchCard.tsx
 msgid "Download .osz"

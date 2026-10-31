@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildReplayShareUrl, roundShareSeconds, withReplayShareTime } from "./replay-share";
+import { buildReplayDownloadUrl, buildReplayShareUrl, replayDownloadFilename, roundShareSeconds, sanitizeReplayFilename, withReplayShareTime } from "./replay-share";
 
 const ORIGIN = "https://mania-tracker.com";
 
@@ -54,5 +54,25 @@ describe("roundShareSeconds", () => {
     expect(roundShareSeconds(0.04)).toBeNull();
     expect(roundShareSeconds(-3)).toBeNull();
     expect(roundShareSeconds(Number.POSITIVE_INFINITY)).toBeNull();
+  });
+});
+
+describe("replay downloads", () => {
+  it("links a score or an upload and nothing else", () => {
+    expect(buildReplayDownloadUrl({ scoreId: 123 })).toBe("/api/replay-file?scoreId=123");
+    expect(buildReplayDownloadUrl({ uploadId: "abc", scoreId: 123 })).toBe("/api/replay-file?uploadId=abc");
+    expect(buildReplayDownloadUrl({})).toBeNull();
+  });
+
+  it("names the file like an osu! export", () => {
+    expect(replayDownloadFilename({
+      playerName: "player",
+      artist: "Artist",
+      title: "Song: Remix?",
+      version: "Hard",
+      playedAt: "2026-10-31T11:25:00Z",
+    })).toBe("player - Artist - Song Remix [Hard] (2026-10-31_11-25) OsuMania.osr");
+    expect(replayDownloadFilename({})).toBe("replay OsuMania.osr");
+    expect(sanitizeReplayFilename("../x")).toBe("..x.osr");
   });
 });

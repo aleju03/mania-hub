@@ -74,6 +74,7 @@ import { Route as ApiCommunityImageRouteImport } from './routes/api/community-im
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiOszRouteImport } from './routes/api/osz'
+import { Route as ApiReplayFileRouteImport } from './routes/api/replay-file'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
@@ -459,6 +460,11 @@ const ApiOszRoute = ApiOszRouteImport.update({
   path: '/api/osz',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiReplayFileRoute = ApiReplayFileRouteImport.update({
+  id: '/api/replay-file',
+  path: '/api/replay-file',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiReplayUploadRoute = ApiReplayUploadRouteImport.update({
   id: '/api/replay-upload',
   path: '/api/replay-upload',
@@ -833,6 +839,7 @@ export interface FileRoutesByFullPath {
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/osz': typeof ApiOszRoute
+  '/api/replay-file': typeof ApiReplayFileRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
@@ -958,6 +965,7 @@ export interface FileRoutesByTo {
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/osz': typeof ApiOszRoute
+  '/api/replay-file': typeof ApiReplayFileRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
@@ -1084,6 +1092,7 @@ export interface FileRoutesById {
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/osz': typeof ApiOszRoute
+  '/api/replay-file': typeof ApiReplayFileRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
@@ -1211,6 +1220,7 @@ export interface FileRouteTypes {
     | '/api/favicon'
     | '/api/og'
     | '/api/osz'
+    | '/api/replay-file'
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/sync'
@@ -1336,6 +1346,7 @@ export interface FileRouteTypes {
     | '/api/favicon'
     | '/api/og'
     | '/api/osz'
+    | '/api/replay-file'
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/sync'
@@ -1461,6 +1472,7 @@ export interface FileRouteTypes {
     | '/api/favicon'
     | '/api/og'
     | '/api/osz'
+    | '/api/replay-file'
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/sync'
@@ -1587,6 +1599,7 @@ export interface RootRouteChildren {
   ApiFaviconRoute: typeof ApiFaviconRoute
   ApiOgRoute: typeof ApiOgRoute
   ApiOszRoute: typeof ApiOszRoute
+  ApiReplayFileRoute: typeof ApiReplayFileRoute
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
   ApiSyncRoute: typeof ApiSyncRoute
@@ -2087,6 +2100,13 @@ declare module '@tanstack/react-router' {
       path: '/api/osz'
       fullPath: '/api/osz'
       preLoaderRoute: typeof ApiOszRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/replay-file': {
+      id: '/api/replay-file'
+      path: '/api/replay-file'
+      fullPath: '/api/replay-file'
+      preLoaderRoute: typeof ApiReplayFileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/replay-upload': {
@@ -2698,6 +2718,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiFaviconRoute: ApiFaviconRoute,
   ApiOgRoute: ApiOgRoute,
   ApiOszRoute: ApiOszRoute,
+  ApiReplayFileRoute: ApiReplayFileRoute,
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
   ApiSyncRoute: ApiSyncRoute,

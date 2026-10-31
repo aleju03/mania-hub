@@ -113,7 +113,8 @@ async function downloadReplay(
   throw firstError ?? new Error("Failed to download replay");
 }
 
-async function getReplayBuffer(data: { scoreId: number; mode: string }): Promise<Buffer> {
+/** The score's raw .osr: the R2 copy the viewer left behind, else one osu! download. */
+export async function getReplayBuffer(data: { scoreId: number; mode: string }): Promise<Buffer> {
   const {
     getCachedReplay,
     getCachedReplayEndpointKind,
