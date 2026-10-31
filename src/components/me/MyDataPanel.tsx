@@ -34,7 +34,7 @@ import { DanEvidenceModal } from "../player/DanEvidenceModal";
 import { SkillPlaysExplorer } from "../player/SkillPlaysExplorer";
 import { useNoDans } from "../../store";
 import { qualifyingSkillModes, skillRatingAccent } from "../../lib/skill-axes";
-import { getScoreTimestamp } from "../../lib/score";
+import { getManiaKeyModCount, getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
 import {
   compact,
@@ -153,7 +153,7 @@ function scoreHasMods(score: MyDataTrackedPlay): boolean {
 function scoreMatchesTrackedFilters(score: MyDataTrackedPlay, filters: MyDataTrackedFeedParams): boolean {
   if (filters.archive === "archived" && !score.archived) return false;
   if (filters.archive === "current" && score.archived) return false;
-  if (filters.key && filters.key !== "all" && Math.round(score.beatmap?.cs ?? 0) !== Number(filters.key)) return false;
+  if (filters.key && filters.key !== "all" && (getManiaKeyModCount(score.mods) ?? Math.round(score.beatmap?.cs ?? 0)) !== Number(filters.key)) return false;
   if (filters.mods === "nomod" && scoreHasMods(score)) return false;
   if (filters.mods === "modded" && !scoreHasMods(score)) return false;
   const query = normalizedQuery(filters.query ?? "");
