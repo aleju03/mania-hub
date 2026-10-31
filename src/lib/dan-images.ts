@@ -125,6 +125,15 @@ export function danTierColor(suffix: string): string | null {
   return DAN_TIER_COLORS[suffix] ?? null;
 }
 
+// rawDan centres each level on its integer (14 spans 13.5-14.5). Shown numbers
+// are lifted half a level so the whole part names the dan (14.0-15.0 is 14),
+// the way other dan estimators print them. Storage and math stay centred.
+export const DAN_DISPLAY_OFFSET = 0.5;
+
+export function formatDanValue(rawDan: number, digits = 2): string {
+  return (rawDan + DAN_DISPLAY_OFFSET).toFixed(digits);
+}
+
 // ── Dan picker scale ─────────────────────────────────────────────────────────
 // The picker filters the classifier's numeric rawDan, which every family maps
 // onto its own course ladder: 4K reform 1..10 then alpha(11)..kappa(20), 4K LN

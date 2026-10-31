@@ -18,7 +18,7 @@ import {
   type LivePlayerSkillPlay,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatTimeAgo } from "../../lib/format";
-import { danBareLabel, danScaleContextFor, danTierName, danTierSuffix, getDanTierImageSrc } from "../../lib/dan-images";
+import { danBareLabel, danScaleContextFor, danTierName, danTierSuffix, formatDanValue, getDanTierImageSrc } from "../../lib/dan-images";
 import { DanStepRail } from "./DanStepRail";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
@@ -441,7 +441,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                           aria-expanded={stepsAt != null}
                           className="inline-flex cursor-pointer items-center gap-1 text-[11px] tabular-nums text-osu-f1 transition-colors hover:text-white"
                         >
-                          <Trans>Exact estimate: {dan.rawDan.toFixed(2)}</Trans>
+                          <Trans>Exact estimate: {formatDanValue(dan.rawDan)}</Trans>
                           <ChevronDown size={12} className={`transition-transform ${stepsAt ? "rotate-180" : ""}`} />
                         </button>
                         {allInHeader && evidence ? (

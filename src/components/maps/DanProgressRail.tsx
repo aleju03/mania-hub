@@ -6,6 +6,7 @@ import {
   danScaleLabel,
   danTierColor,
   danTierSuffix,
+  formatDanValue,
   type DanScaleContext,
 } from "../../lib/dan-images";
 
@@ -79,7 +80,7 @@ export function DanProgressRail({
     <div className="flex h-full min-h-[260px] flex-col gap-3">
       <div className="flex h-4 items-baseline justify-between gap-1">
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Dan credit</Trans></span>
-        {hover != null && <span className="text-[10px] tabular-nums text-osu-f1/70">{danScaleLabel(hover, context)} · {hover.toFixed(2)}</span>}
+        {hover != null && <span className="text-[10px] tabular-nums text-osu-f1/70">{danScaleLabel(hover, context)} · {formatDanValue(hover)}</span>}
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)] items-center gap-2">
         <div className="flex min-w-0 flex-col gap-1.5">
@@ -87,7 +88,7 @@ export function DanProgressRail({
             <span className="h-1.5 w-1.5 rotate-45 border border-osu-l2" aria-hidden="true" />
             <Trans>Chart estimate</Trans>
           </span>
-          <span className="text-[25px] font-bold leading-none tabular-nums text-osu-l2">{chart?.toFixed(2) ?? "—"}</span>
+          <span className="text-[25px] font-bold leading-none tabular-nums text-osu-l2">{chart != null ? formatDanValue(chart) : "—"}</span>
           <span className="text-[11px] font-semibold text-osu-f1/70">{danDisplayLabel(chartLabel) ?? "—"}</span>
         </div>
         <span className="text-lg text-osu-f1/40" aria-hidden="true">→</span>
@@ -96,7 +97,7 @@ export function DanProgressRail({
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: landedValue != null ? accent : "currentColor" }} aria-hidden="true" />
             <Trans>Your credit</Trans>
           </span>
-          <span className="text-[25px] font-bold leading-none tabular-nums" style={{ color: landedValue != null ? accent : "var(--color-osu-f1)" }}>{landedValue?.toFixed(2) ?? "—"}</span>
+          <span className="text-[25px] font-bold leading-none tabular-nums" style={{ color: landedValue != null ? accent : "var(--color-osu-f1)" }}>{landedValue != null ? formatDanValue(landedValue) : "—"}</span>
           <span className="text-[11px] font-semibold text-osu-l1">{landedValue != null ? danDisplayLabel(landedLabel) ?? "—" : rejected ? t`No dan credit` : "—"}</span>
         </div>
       </div>
@@ -111,12 +112,12 @@ export function DanProgressRail({
                   key={level}
                   className="absolute inset-x-0 flex translate-y-1/2 items-center gap-2"
                   style={{ bottom: `${at(level) * 100}%` }}
-                  title={`${label}: ${(level - 0.5).toFixed(2)}–${(level + 0.5).toFixed(2)}`}
+                  title={`${label}: ${formatDanValue(level - 0.5)}–${formatDanValue(level + 0.5)}`}
                 >
                   {src ? <img src={src} alt={label} className={`h-6 w-6 object-contain ${level === landedBand ? "opacity-90" : "opacity-40"}`} /> : <span className="w-6" />}
                   <span className={`flex flex-col gap-1 ${level === landedBand ? "text-osu-l2" : "text-osu-f1/50"}`}>
                     <span className="text-[11px] font-semibold">{label}</span>
-                    <span className="text-[9px] tabular-nums">{(level - 0.5).toFixed(1)}–{(level + 0.5).toFixed(1)}</span>
+                    <span className="text-[9px] tabular-nums">{formatDanValue(level - 0.5, 1)}–{formatDanValue(level + 0.5, 1)}</span>
                   </span>
                 </span>
               );
@@ -142,7 +143,7 @@ export function DanProgressRail({
             {chart != null && (
               <span
                 data-testid="dan-chart-marker"
-                title={t`Chart estimate: ${chart.toFixed(2)}`}
+                title={t`Chart estimate: ${formatDanValue(chart)}`}
                 className="absolute left-1/4 h-2 w-2 -translate-x-1/2 translate-y-1/2 rotate-45 border border-osu-l2 bg-osu-b4"
                 style={{ bottom: `${at(chart) * 100}%` }}
               />
@@ -150,7 +151,7 @@ export function DanProgressRail({
             {landedValue != null && (
               <span
                 data-testid="dan-credit-marker"
-                title={t`Your credit: ${landedValue.toFixed(2)}`}
+                title={t`Your credit: ${formatDanValue(landedValue)}`}
                 className="absolute left-3/4 h-3 w-3 -translate-x-1/2 translate-y-1/2 rounded-full border border-white/25"
                 style={{ bottom: `${at(landedValue) * 100}%`, background: accent }}
               />

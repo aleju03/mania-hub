@@ -262,7 +262,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     fireEvent.click(await screen.findByText("Best 102"));
     const popup = within(screen.getByTestId("map-rating-state"));
     expect(popup.getByText("4-")).toBeTruthy();
-    expect(popup.getByText("3.68")).toBeTruthy();
+    expect(popup.getByText("4.18")).toBeTruthy();
     expect(popup.getByText("Your credit")).toBeTruthy();
     expect(screen.queryByText("No MSD rating")).toBeNull();
     expect(popup.queryByText("does not count")).toBeNull();

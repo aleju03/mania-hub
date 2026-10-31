@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { danVariantForOffset } from "#dan/dan-estimator/labels";
-import { danLadderBounds, danScaleLabel, danTierColor, danTierName, danTierSuffix, type DanScaleContext } from "../../lib/dan-images";
+import { danLadderBounds, danScaleLabel, danTierColor, danTierName, danTierSuffix, formatDanValue, type DanScaleContext } from "../../lib/dan-images";
 
 // Every step is 0.2 wide and starts 0.1 past a multiple of 0.2 (12.9, 13.1,
 // 13.3 ...), so a level's five steps run from level - 0.5 to level + 0.5.
@@ -58,7 +58,7 @@ export function DanStepRail({
           className="absolute left-0 flex w-[52px] translate-y-1/2 items-center"
           style={{ bottom: `${at(tick) * 100}%` }}
         >
-          <span className="w-9 text-right text-[10px] tabular-nums text-osu-f1">{tick.toFixed(1)}</span>
+          <span className="w-9 text-right text-[10px] tabular-nums text-osu-f1">{formatDanValue(tick, 1)}</span>
           <span className="ml-1 h-px w-2 bg-white/20" />
         </span>
       ))}
@@ -94,7 +94,7 @@ export function DanStepRail({
       <span
         className="absolute left-[46px] h-2.5 w-2.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-osu-b3 bg-white"
         style={{ bottom: `${at(rawDan) * 100}%` }}
-        title={rawDan.toFixed(2)}
+        title={formatDanValue(rawDan)}
       />
     </div>
   );

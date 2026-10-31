@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { useLingui } from "@lingui/react/macro";
 import type { LiveRecentRatingMissingReason } from "#/lib/live-backend";
 import { OVERALL_AXIS_META } from "#/lib/skill-axes";
+import { formatDanValue } from "#/lib/dan-images";
 import { DanMark } from "./DanMark";
 import type { RecentPlayRatingView } from "./recent-play-ratings";
 
@@ -16,7 +17,7 @@ export function RecentPlayRatingCells({ rating, keyCount, hideDan, compact = fal
   const cell = compact ? "inline-flex items-center gap-1" : "flex w-[4.5rem] flex-col items-end justify-center gap-1 text-right";
   return <>
     {!hideDan && <div className={cell}>
-      {dan ? <DanMark label={dan.label ?? dan.rawDan.toFixed(1)} keyCount={keyCount} side={dan.side} compact={compact} />
+      {dan ? <DanMark label={dan.label ?? formatDanValue(dan.rawDan, 1)} keyCount={keyCount} side={dan.side} compact={compact} />
         : <RatingStatus axis={t`Dan`} dan reason={rating?.missing?.dan} rating={rating} compact={compact} />}
     </div>}
     <div className={cell}>
