@@ -101,7 +101,7 @@ export function LeaderboardTable({
                         to="/player/$username"
                         params={{ username: row.user.username }}
                         onClick={(event) => event.stopPropagation()}
-                        className="min-w-0 truncate"
+                        className="glow-room min-w-0 truncate"
                       >
                         <UsernameText
                           username={row.user.username}

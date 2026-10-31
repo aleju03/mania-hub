@@ -6,7 +6,7 @@ import { getLiveBackendUrl } from "./live-backend";
 import { bridgeAuthHeaders } from "./live-backend-tokens";
 import { requireViewer } from "./supporter-look-settings";
 
-/* The supporter's own themes behind /supporter/themes (backend
+/* The supporter's own themes behind /workshop/themes (backend
    features/custom-themes.ts): list, open, save, publish, delete and wear,
    through the bridge with the viewer from the login cookie. The gallery is
    public and read straight from the backend. */

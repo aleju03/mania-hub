@@ -57,8 +57,8 @@ const highlight = HighlightStyle.define([
 const look = EditorView.theme({
   "&": { height: "100%", fontSize: "12.5px", backgroundColor: "transparent", color: "#efe7f4" },
   ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", lineHeight: "1.55" },
-  ".cm-content": { caretColor: "#ff66ab" },
-  ".cm-cursor": { borderLeftColor: "#ff66ab" },
+  ".cm-content": { caretColor: "var(--color-osu-pink)" },
+  ".cm-cursor": { borderLeftColor: "var(--color-osu-pink)" },
   ".cm-gutters": { backgroundColor: "transparent", color: "#6d6274", border: "none" },
   ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "rgba(255,255,255,0.035)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "rgba(255,102,171,0.25) !important" },

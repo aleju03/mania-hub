@@ -1038,10 +1038,11 @@ msgid "{0} up · {1} down"
 msgstr "{0} 赞成 · {1} 反对"
 
 #. placeholder {0}: theme.wearers
-#: src/routes/supporter_.themes.gallery.tsx
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.index.tsx
+#: src/routes/workshop.themes.gallery.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "{0} wearing it"
-msgstr ""
+msgstr "{0} 人在用"
 
 #. placeholder {0}: playerPeakMember.username
 #. placeholder {1}: formatDate(playerPeak.updated_at, "UTC", locale)
@@ -1138,6 +1139,11 @@ msgstr "{0} 的 me! 页面是空的。"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "{0}/{averageWindow} plays"
 #~ msgstr "{0}/{averageWindow} 次游玩"
+
+#. placeholder {0}: flash.flashes
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "{0}/s"
+msgstr "{0}/秒"
 
 #. placeholder {0}: (odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")
 #. placeholder {1}: HONORARY_PACK_POOL.length
@@ -2682,10 +2688,11 @@ msgstr "每张谱面 1 个倍速"
 msgid "1 screenshot"
 msgstr "1 张截图"
 
-#: src/routes/supporter_.themes.gallery.tsx
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.index.tsx
+#: src/routes/workshop.themes.gallery.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "1 wearing it"
-msgstr ""
+msgstr "1 人在用"
 
 #: src/routes/news_.prism.tsx
 msgid "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
@@ -3055,6 +3062,10 @@ msgstr "谱面为 {0}，按此准确率计为 {1}"
 msgid "A {chart} chart, credited as {credit} at this accuracy"
 msgstr "谱面为 {chart}，按此准确率计为 {credit}"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "A {T}px square with the avatar in the middle. Draw on a transparent background; the art can reach out to the canvas edge, and the avatar has to stay mostly clear."
+msgstr "一个 {T}px 的正方形，头像在正中间。请在透明背景上绘制；图案可以延伸到画布边缘，头像区域需要基本保持空白。"
+
 #. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
 #: src/routes/player/$username.tsx
 msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
@@ -3328,6 +3339,10 @@ msgstr "低于所属段位表最低 OD 的成绩不计分：常规谱面为 5.5�
 #~ msgid "A play with a mod only lazer has (DA, IN, HO, NR and others) now counts as a lazer play when the site can't tell which client it was set on, so its LN accuracy is read the way lazer judges holds."
 #~ msgstr ""
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "A PNG or WebP with transparency. It's also what lists, Safari and reduced motion show."
+msgstr "带透明通道的 PNG 或 WebP。列表、Safari 和减少动态效果时也会显示它。"
+
 #: src/routes/hashi.tsx
 msgid "A profile showing the map its player is playing"
 msgstr "显示玩家正在游玩谱面的个人资料"
@@ -3340,7 +3355,7 @@ msgstr "显示玩家正在游玩谱面的个人资料"
 msgid "A rating is not supported for this chart or mod combination."
 msgstr "此谱面或模组组合暂不支持评级。"
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "a remix"
 msgstr ""
 
@@ -3432,6 +3447,10 @@ msgstr ""
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "A theme holds up to four pictures."
 msgstr ""
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "A WebM with alpha (VP9), the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
+msgstr "带 alpha 通道的 WebM（VP9），同样的正方形，小于 2 MB。让第一帧与图片一致，开始播放时就不会跳动。"
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
@@ -3683,6 +3702,10 @@ msgstr "将 {cardCount} 张卡牌添加到卡组…"
 msgid "Add a card to your showcase"
 msgstr "把一张卡片加入展示柜"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Add a loop (optional)"
+msgstr "添加循环动画（可选）"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Add a message (optional)"
 msgstr "添加留言（可选）"
@@ -3699,6 +3722,10 @@ msgstr ""
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Add a play for {username}"
 #~ msgstr "为 {username} 添加成绩"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Add a round version (optional)"
+msgstr "添加圆形版本（可选）"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Add a screenshot"
@@ -3749,6 +3776,10 @@ msgstr "从 osu! 最近成绩里补上失败或漏掉的记录。"
 msgid "Add image"
 msgstr ""
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Add its picture first."
+msgstr "请先添加图片。"
+
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Add layer"
 msgstr ""
@@ -3780,6 +3811,10 @@ msgstr "添加成绩"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Add the {label} run"
 msgstr "添加{label}的成绩"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Add the picture"
+msgstr "添加图片"
 
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Add the text that reads wrong."
@@ -4395,6 +4430,10 @@ msgstr "箭头"
 msgid "Arrows"
 msgstr "箭头"
 
+#: src/routes/workshop.index.tsx
+#~ msgid "Art around your avatar, on your profile and in every list. Draw it on the template, add a loop if you like."
+#~ msgstr "围绕头像的图案，显示在你的主页和所有列表中。在模板上绘制，喜欢的话再加一段循环动画。"
+
 #: src/lib/supporter-name-fonts.ts
 msgid "Art deco"
 msgstr ""
@@ -4581,7 +4620,12 @@ msgstr "头像"
 msgid "Avatar frame"
 msgstr "头像框"
 
+#: src/routes/workshop.frames.tsx
+msgid "avatar frames"
+msgstr "头像框"
+
 #: src/routes/support.tsx
+#: src/routes/workshop.frames.tsx
 msgid "Avatar frames"
 msgstr "头像框"
 
@@ -5304,6 +5348,10 @@ msgstr "浏览按键型、段位估计和评分分组的 osu!mania 轮换图包�
 msgid "Browse skins"
 msgstr "浏览皮肤"
 
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Browse themes"
+#~ msgstr "浏览主题"
+
 #: src/routes/privacy.tsx
 msgid "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
 msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它们过期、被替换，或你清除 localStorage。osu! 登录会话最长可保持 30 天，除非你提前登出。"
@@ -5341,7 +5389,7 @@ msgstr "问题与建议"
 msgid "Bugs and feedback"
 msgstr "问题与建议"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it."
 msgstr ""
 
@@ -5390,12 +5438,18 @@ msgid "Buy"
 msgstr "购买"
 
 #. placeholder {0}: by.username || by.id
-#. placeholder {0}: summary.author.username
-#. placeholder {0}: theme.author.username
+#. placeholder {0}: frame.submittedBy.username
+#. placeholder {0}: slide.kind === "frame" ? slide.frame.submittedBy.username : slide.theme.author.username
 #: src/components/supporter/SupporterExtras.tsx
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/workshop.index.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "by {0}"
 msgstr "来自 {0}"
+
+#: src/routes/workshop.index.tsx
+msgid "by {by}"
+msgstr "作者 {by}"
 
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
@@ -5443,7 +5497,7 @@ msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
 #: src/components/supporter/CustomThemeCredit.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/report.tsx
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Cancel"
 msgstr "取消"
 
@@ -5989,6 +6043,10 @@ msgstr "选择文件"
 #~ msgid "Choose a finish"
 #~ msgstr "选择外观"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Choose a loop"
+msgstr "选择循环动画"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Choose a mania difficulty"
 msgstr "选择一个 mania 难度"
@@ -5996,6 +6054,14 @@ msgstr "选择一个 mania 难度"
 #: src/components/packs/GoatPoll.tsx
 msgid "Choose a new GOAT"
 msgstr "选出新的 GOAT"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Choose a picture"
+msgstr "选择图片"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Choose a round version"
+msgstr "选择圆形版本"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Choose another collector for your gift."
@@ -6369,7 +6435,7 @@ msgstr "找不到片段"
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/skins.tsx
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Close"
 msgstr "关闭"
 
@@ -6710,6 +6776,7 @@ msgstr "Companella 也会上传你在 osu! 上打出的成绩的回放，这样�
 #~ msgid "Companella now connects to Mania Tracker."
 #~ msgstr "Companella 现已可以连接 Mania Tracker。"
 
+#: src/components/supporter/loadout.ts
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Companion"
 msgstr "小伙伴"
@@ -6861,7 +6928,7 @@ msgstr "把打击转成音符"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ShareClipButton.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
-#: src/routes/supporter_.themes.spec.tsx
+#: src/routes/workshop.themes.spec.tsx
 msgid "Copied"
 msgstr "已复制"
 
@@ -6915,6 +6982,10 @@ msgstr "第 #{0} 份（共 {1} 份）"
 msgid "Copy all"
 msgstr ""
 
+#: src/routes/workshop.themes.spec.tsx
+msgid "Copy as plain text"
+msgstr "复制为纯文本"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Copy BBCode"
@@ -6946,9 +7017,9 @@ msgstr "复制链接地址"
 msgid "Copy share code"
 msgstr "复制分享码"
 
-#: src/routes/supporter_.themes.spec.tsx
-msgid "Copy the spec"
-msgstr ""
+#: src/routes/workshop.themes.spec.tsx
+#~ msgid "Copy the spec"
+#~ msgstr ""
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Copy the theme spec"
@@ -7116,6 +7187,10 @@ msgstr "无法连接服务器。没有任何改动。"
 #: src/components/companella/AuthorizePage.tsx
 msgid "Could not reach the server. Try again."
 msgstr "无法连接服务器，请重试。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Could not read that picture."
+msgstr "无法读取这张图片。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not read your Discord servers. Try connecting again."
@@ -7754,7 +7829,7 @@ msgstr "自定义皮肤"
 msgid "Custom themes are switched off for now, so saving is too."
 msgstr ""
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Custom themes are switched off for now: profiles show their stills, and saving waits."
 msgstr ""
 
@@ -8013,12 +8088,13 @@ msgstr "延迟"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
-#: src/routes/supporter_.themes.index.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Delete"
 msgstr "删除"
 
 #. placeholder {0}: deleting.name
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Delete {0}?"
 msgstr ""
 
@@ -8434,6 +8510,10 @@ msgstr "下载 .osk"
 msgid "Download the .osk, {0}"
 msgstr "下载 .osk，{0}"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Download the template"
+msgstr "下载模板"
+
 #: src/routes/replay.tsx
 msgid "Downloading replay and beatmap{elapsedLabel}"
 msgstr "正在下载回放和谱面{elapsedLabel}"
@@ -8505,6 +8585,19 @@ msgstr "换一组谱面封面"
 msgid "Draw card"
 msgstr "抽卡"
 
+#. placeholder {0}: T / 2
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Draw it at least {0}px square (the template is {T}px)."
+msgstr "至少画成 {0}px 的正方形（模板为 {T}px）。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Draw it on the template"
+msgstr "在模板上绘制"
+
+#: src/routes/workshop.index.tsx
+msgid "Draw it on the template, add a loop if you like."
+msgstr "在模板上绘制，喜欢的话再加一段循环动画。"
+
 #: src/components/packs/RevealStage.tsx
 msgid "Draw the next card"
 msgstr "抽下一张"
@@ -8530,8 +8623,12 @@ msgid "Drop an .osk here, or click to browse"
 msgstr "把 .osk 拖到这里，或点击选择文件"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Drop pictures here"
-msgstr ""
+msgid "Drop or paste pictures here"
+msgstr "拖放或粘贴图片到这里"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Drop pictures here"
+#~ msgstr ""
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Drop the new .osk here, or click to browse"
@@ -8759,7 +8856,7 @@ msgstr "回声"
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Edit"
 msgstr "编辑"
 
@@ -9174,9 +9271,9 @@ msgstr "看你回放的人都会看到这套皮肤。"
 msgid "everything"
 msgstr "全部"
 
-#: src/routes/supporter_.themes.spec.tsx
-msgid "Everything a theme's code gets and has to follow."
-msgstr ""
+#: src/routes/workshop.themes.spec.tsx
+#~ msgid "Everything a theme's code gets and has to follow."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Everything above is an estimate of something unknown. A real dan course is not: it is an exam, and the community has already decided what passing it means. So if the site sees you pass one, your estimate for that side is <0>floored</0> at the course you passed, whatever the average of your skills says. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
@@ -9481,6 +9578,18 @@ msgstr "仅 FC 断连（1 miss）"
 #: src/components/supporter/loadout.ts
 msgid "Feather wings"
 msgstr "羽翼"
+
+#: src/routes/workshop.index.tsx
+msgid "Featured"
+msgstr "精选"
+
+#: src/routes/workshop.index.tsx
+msgid "Featured frame"
+msgstr "精选头像框"
+
+#: src/routes/workshop.index.tsx
+msgid "Featured theme"
+msgstr "精选主题"
 
 #: src/routes/report.tsx
 msgid "Feedback"
@@ -9919,6 +10028,10 @@ msgstr "修复"
 msgid "Flandre fumo"
 msgstr "芙兰朵露 fumo"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Flashing"
+msgstr "闪烁"
+
 #: src/lib/pack-run.ts
 msgid "Flashlight"
 msgstr "Flashlight"
@@ -10070,9 +10183,22 @@ msgstr "四键"
 msgid "fps"
 msgstr ""
 
+#. placeholder {0}: pick.frameCredit.by
+#: src/routes/workshop.index.tsx
+#~ msgid "frame by {0}"
+#~ msgstr "头像框作者 {0}"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Frame name"
+msgstr "头像框名称"
+
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "frames"
 msgstr "帧"
+
+#: src/routes/workshop.index.tsx
+msgid "Frames"
+msgstr "头像框"
 
 #: src/components/packs/run/RunShop.tsx
 #: src/routes/packs.tsx
@@ -10270,7 +10396,8 @@ msgstr "银河"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/lib/pack-run.ts
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Gallery"
 msgstr "画廊"
 
@@ -11303,7 +11430,7 @@ msgstr "推荐是如何生成的"
 msgid "How to pick"
 msgstr "抽取方式"
 
-#: src/routes/supporter_.themes.spec.tsx
+#: src/routes/workshop.themes.spec.tsx
 msgid "How to write the code for your own profile theme."
 msgstr ""
 
@@ -11593,6 +11720,10 @@ msgstr "90 天内"
 msgid "In a row, with a play each day"
 msgstr "连续每天都有游玩"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "In everyone's picker"
+msgstr "已在所有人的选择器中"
+
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "in flight"
 #~ msgstr "进行中"
@@ -11622,7 +11753,7 @@ msgstr "在第 {0} 格"
 msgid "In song select"
 msgstr "选歌中"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "In the gallery"
 msgstr ""
 
@@ -11793,9 +11924,19 @@ msgstr "{hidden} 最早的最佳成绩比 {shown} 更早还是更晚？"
 #~ msgid "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 #~ msgstr "它只能根据本站掌握的成绩来判断。你的 osu! 最佳成绩一定在内，但低于它们的成绩只有在本站追踪你时才存在，也就是要进入你所在国家/地区的前 100，或自己开启追踪，而且只从开启那天算起。几年前就不玩了的人只能按其前 200 个最佳成绩来评，因此读出来会偏低。"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "It crashed on several visitors' devices, so it shows its still until it's looked at."
 msgstr ""
+
+#. placeholder {0}: flash.flashes
+#. placeholder {1}: clock(flash.at)
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It flashes {0} times a second around {1}. Fast flashing can set off seizures: keep it to {FLASH_LIMIT} a second or fewer, or make the change gentler."
+msgstr "它在 {1} 附近每秒闪烁 {0} 次。快速闪烁可能诱发癫痫：请保持在每秒 {FLASH_LIMIT} 次或更少，或让变化更柔和。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "It goes into everyone's picker right away, with your name on it."
+msgstr "它会立即进入所有人的选择器，并署上你的名字。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "It goes live as soon as it's saved."
@@ -11809,11 +11950,11 @@ msgstr ""
 #~ msgid "It is not a title. Those come from clearing a real course on a ladder, and this number has no say in who gets one."
 #~ msgstr "它不是称号。称号来自在段位表上通过真正的课题，这个数字说了不算。"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "It leaves your list and your profile."
 msgstr ""
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "It leaves your list, your profile and the gallery. Anyone already wearing it keeps it."
 msgstr ""
 
@@ -11877,9 +12018,13 @@ msgstr "已经在你的收藏里了。"
 msgid "It's heavier than the limit."
 msgstr ""
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "It's on your profile now."
 msgstr ""
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "It's up: in your picker and everyone else's."
+msgstr "已上线：在你和所有人的选择器里。"
 
 #: src/components/communities/field-options.tsx
 msgid "Italian"
@@ -12074,7 +12219,7 @@ msgid "June 16, 2026"
 msgstr "2026年6月16日"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Just me"
 msgstr ""
 
@@ -12730,9 +12875,22 @@ msgstr "与两侧的卡片连线时，也带上另一侧卡片的特征。"
 msgid "Links to the cards next to it on every trait. The first GOAT in a row doubles the combo."
 msgstr "在所有特征上都与相邻卡片连线。一排中的第一张 GOAT 让连击翻倍。"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "List"
+msgstr "上架"
+
 #: src/routes/communities_.$id.tsx
 msgid "listed"
 msgstr "收录于"
+
+#. placeholder {0}: frame.submittedBy.username
+#: src/components/supporter/WorkshopFrames.tsx
+#~ msgid "Listed, by {0}"
+#~ msgstr "已上架，作者 {0}"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
+msgstr "列表中的头像是圆形的。围绕模板中的圆再画一遍头像框，列表就会使用它；没有的话，你的头像在列表中保持方形。"
 
 #: src/components/communities/field-options.tsx
 msgid "Lithuanian"
@@ -13179,8 +13337,8 @@ msgstr "加载中…"
 #: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 #: src/routes/snipes.tsx
-#: src/routes/supporter_.themes.gallery.tsx
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.gallery.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Loading..."
 msgstr "加载中..."
 
@@ -13207,6 +13365,10 @@ msgstr "检测到局部 vibro"
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Lock for rolls"
 msgstr "随机时锁定"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Locked"
+msgstr "已锁定"
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "Log in to get a share link."
@@ -13332,6 +13494,10 @@ msgstr "正在查找成绩 #{scoreId}"
 msgid "Looking up the score{elapsedLabel}"
 msgstr "正在查找成绩{elapsedLabel}"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Looks fine"
+msgstr "没问题"
+
 #: src/components/packs/StreakGame.tsx
 msgid "Lost the run. The board could not be reached."
 msgstr "本局结束。无法连接排行榜。"
@@ -13378,6 +13544,10 @@ msgstr "作者"
 msgid "Made by <0>(from skin.ini, credited on the card)</0>"
 msgstr "作者 <0>(取自 skin.ini，会署名在卡片上)</0>"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Made by players"
+msgstr "玩家作品"
+
 #: src/routes/skins_.$id.tsx
 msgid "Made for"
 msgstr "适配"
@@ -13406,6 +13576,15 @@ msgstr "仅 4K 主玩家"
 msgid "Main 7K players only"
 msgstr "仅 7K 主玩家"
 
+#: src/routes/workshop.index.tsx
+msgid "Make"
+msgstr "制作"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#: src/routes/workshop.index.tsx
+msgid "Make a frame"
+msgstr "制作头像框"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Make a new link"
 msgstr "换一个新链接"
@@ -13413,6 +13592,15 @@ msgstr "换一个新链接"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Make a new link?"
 msgstr "要换一个新链接吗？"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#: src/routes/workshop.index.tsx
+msgid "Make a theme"
+msgstr "制作主题"
+
+#: src/routes/workshop.index.tsx
+#~ msgid "Make cosmetics of your own. Themes go live as soon as you save them; frames reach everyone's picker once they're reviewed."
+#~ msgstr "制作属于你自己的装扮。主题保存后立即生效；头像框审核通过后进入所有人的选择器。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Make imagemap"
@@ -13427,8 +13615,9 @@ msgid "Make it permanent if you can: a temporary invite hides your server the da
 msgstr "尽量用永久邀请：临时邀请一到期，你的服务器就会被隐藏，直到你贴上新的链接。"
 
 #: src/components/supporter/LoadoutSlots.tsx
+#: src/routes/workshop.index.tsx
 msgid "Make your own"
-msgstr ""
+msgstr "制作你自己的"
 
 #. placeholder {0}: i18n._(variant.text)
 #: src/lib/chain-run.ts
@@ -13439,6 +13628,10 @@ msgstr "让一张卡变成 {name}。{0}"
 #: src/lib/supporter-companions.ts
 msgid "Makiba"
 msgstr "Makiba"
+
+#: src/components/supporter/WorkshopFrames.tsx
+#~ msgid "Making frames is for supporters. You can still try the template and browse what others made."
+#~ msgstr "制作头像框仅限支持者。你仍然可以试用模板并浏览其他人的作品。"
 
 #: src/routes/replay.tsx
 msgid "Making sure a replay is available."
@@ -14131,6 +14324,7 @@ msgid "More followers"
 msgstr "更多关注者"
 
 #: src/components/supporter/SupportShowcase.tsx
+#: src/routes/workshop.index.tsx
 msgid "More frames"
 msgstr "更多头像框"
 
@@ -14259,7 +14453,7 @@ msgstr ""
 msgid "Most Used Mod"
 msgstr "最常用模组"
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Most worn"
 msgstr ""
 
@@ -14427,6 +14621,10 @@ msgstr "名称与简介"
 msgid "Name for screenshot {0}"
 msgstr "第 {0} 张截图的名称"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Name it and submit"
+msgstr "命名并提交"
+
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Name on the replay"
 #~ msgstr ""
@@ -14564,6 +14762,10 @@ msgstr "新的刷分谱面，会自动发到运行过 /subscribe feed:new maps �
 #~ msgid "New folder"
 #~ msgstr "新建文件夹"
 
+#: src/routes/workshop.index.tsx
+msgid "New frames"
+msgstr "新头像框"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "New goal"
 msgstr "新目标"
@@ -14604,7 +14806,7 @@ msgstr "新成绩会通过此连接实时推送。"
 msgid "New set"
 msgstr "新建卡组"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "New theme"
 msgstr ""
 
@@ -14615,6 +14817,11 @@ msgstr "玩家打出新的顶级成绩后会显示在这里。"
 #: src/routes/__root.tsx
 msgid "new updates"
 msgstr "有新更新"
+
+#. placeholder {0}: frame.submittedBy.username
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "New, by {0}"
+msgstr "新作，作者 {0}"
 
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
@@ -14636,7 +14843,7 @@ msgstr "最新"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/player/FeaturedPlays.tsx
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Newest"
 msgstr "最新"
 
@@ -15406,7 +15613,7 @@ msgstr "还没有战队。"
 #~ msgid "No teams yet. Open a Team pack to start collecting them."
 #~ msgstr "还没有战队。开启战队卡包即可开始收集。"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "No themes yet."
 msgstr ""
 
@@ -15506,7 +15713,7 @@ msgstr "还没有人挑选卡片，你可以是第一个。"
 msgid "Nobody has pulled your card yet."
 msgstr "还没有人抽到你的卡片。"
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Nobody has shared a theme yet."
 msgstr ""
 
@@ -15614,6 +15821,11 @@ msgstr "目前你还没有成绩可以评分。转谱和特殊键数会被跳过
 msgid "None on this map"
 msgstr "这张谱面没有"
 
+#: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/workshop.index.tsx
+#~ msgid "None reviewed yet. Yours could be the first."
+#~ msgstr "还没有审核通过的作品。你的可能是第一个。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "None set"
 msgstr "未设置"
@@ -15621,6 +15833,10 @@ msgstr "未设置"
 #: src/components/settings/SettingsPanel.tsx
 msgid "None set. <0>Pick one from the skins page</0>."
 msgstr "尚未设置。<0>去皮肤页面挑一个</0>。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "None yet. Yours could be the first."
+msgstr "还没有作品。你的可能是第一个。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
@@ -15876,6 +16092,10 @@ msgstr "还没有提交任何内容。"
 msgid "Nothing here would move your total"
 msgstr "这里没有能提升你总 pp 的谱面"
 
+#: src/routes/workshop.index.tsx
+msgid "Nothing here yet"
+msgstr "这里还什么都没有"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Nothing in here yet"
 msgstr "这里还什么都没有"
@@ -15948,6 +16168,10 @@ msgstr "没有略高于你 {axisLabel} 评分且你还没玩过的 ranked 谱面
 #: src/components/companella/SecurityActivity.tsx
 msgid "Nothing recorded yet."
 msgstr "暂无记录。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Nothing submitted."
+msgstr "暂无提交。"
 
 #: src/components/player/bbcode/BBCodePreview.tsx
 msgid "Nothing to preview yet."
@@ -16277,6 +16501,10 @@ msgstr "在线"
 #: src/routes/player/$username.tsx
 msgid "Online"
 msgstr "在线"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "only admins see this"
+msgstr "仅管理员可见"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Only approve a request you started yourself. If someone sent you this link, close it."
@@ -16613,7 +16841,7 @@ msgstr "选填"
 #~ msgid "Optional follow-up"
 #~ msgstr "可选补充说明"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "or"
 msgstr ""
 
@@ -16923,6 +17151,7 @@ msgstr "叠加层流速"
 msgid "Overlays"
 msgstr "覆盖层"
 
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/privacy.tsx
 msgid "Overview"
 msgstr "概述"
@@ -17857,6 +18086,10 @@ msgstr "你附近的热门"
 msgid "popular nearby, you haven't played it"
 msgstr "附近很热门，你还没打过"
 
+#: src/routes/workshop.index.tsx
+msgid "Popular themes"
+msgstr "热门主题"
+
 #: src/routes/recommendations.tsx
 msgid "Popular with the players around you, and you have no top play on it with these mods."
 msgstr "在你附近的玩家中很热门，而你在这些模组下还没有它的最佳成绩。"
@@ -18049,6 +18282,7 @@ msgstr "预览"
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/skins/SkinPreviewPickers.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Preview"
 msgstr "预览"
@@ -18214,6 +18448,7 @@ msgstr ""
 #~ msgstr "个人"
 
 #: src/components/layout/Nav.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Profile"
 msgstr "个人资料"
 
@@ -18236,6 +18471,7 @@ msgid "Profile on top"
 msgstr ""
 
 #: src/components/player/ProfileStatCards.tsx
+#: src/components/supporter/loadout.ts
 #: src/components/supporter/SupporterExtras.tsx
 #: src/lib/signature-shared.ts
 #: src/routes/support.tsx
@@ -18247,11 +18483,15 @@ msgstr "个人资料数据"
 msgid "Profile theme"
 msgstr "个人资料主题"
 
+#: src/routes/workshop.themes.spec.tsx
+msgid "Profile theme spec"
+msgstr "主页主题规范"
+
 #: src/routes/support.tsx
 msgid "Profile themes"
 msgstr "个人资料主题"
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Profile themes made by supporters."
 msgstr ""
 
@@ -18394,6 +18634,10 @@ msgstr "放回卡池"
 msgid "Put back in the pool…"
 msgstr "放回卡池…"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Put it on a layer under your drawing and hide it before you export."
+msgstr "把它放在绘图下方的图层上，导出前隐藏它。"
+
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "Put it on my card"
 msgstr "放到我的卡牌上"
@@ -18517,6 +18761,10 @@ msgstr "范围"
 #: src/components/me/GoalsPanel.tsx
 msgid "Rank"
 msgstr "排名"
+
+#: src/components/supporter/loadout.ts
+msgid "Rank and gifts"
+msgstr "等级与礼物"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Rank by"
@@ -19249,9 +19497,10 @@ msgstr "重新载入"
 msgid "Reload page"
 msgstr "重新加载页面"
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.index.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Remix it"
-msgstr ""
+msgstr "改编"
 
 #. placeholder {0}: original.name
 #. placeholder {1}: original.author.username
@@ -19259,7 +19508,7 @@ msgstr ""
 msgid "Remix of {0} by {1}"
 msgstr ""
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "remix one from the gallery"
 msgstr ""
 
@@ -19278,6 +19527,7 @@ msgstr "移除"
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 msgid "Remove"
 msgstr "移除"
 
@@ -19489,6 +19739,18 @@ msgstr "替换{label}的成绩"
 msgid "Replace the draft with {0}"
 msgstr "用 {0} 替换当前草稿"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Replace the loop"
+msgstr "更换循环动画"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Replace the picture"
+msgstr "更换图片"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Replace the round version"
+msgstr "更换圆形版本"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Replace your code?"
 msgstr ""
@@ -19579,7 +19841,7 @@ msgid "Replays play with their player's published skin. Turn off to always use y
 msgstr "回放默认使用玩家发布的皮肤。关闭后始终使用你自己的。"
 
 #: src/components/supporter/CustomThemeCredit.tsx
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Report"
 msgstr "举报"
 
@@ -19772,14 +20034,19 @@ msgstr "正在揭晓你的卡片…"
 #~ msgid "Reverse Shields"
 #~ msgstr "反盾"
 
-#: src/components/companella/SubmissionDetail.tsx
-#~ msgid "Review"
-#~ msgstr ""
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Review"
+msgstr "审核"
 
 #. placeholder {0}: status.cost
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Review ingredients ({available}/{0})"
 #~ msgstr "查看材料（{available}/{0}）"
+
+#. placeholder {0}: frame.submittedBy.username
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Reviewed, by {0}"
+msgstr "已审核，作者 {0}"
 
 #. placeholder {0}: CHAIN_RULES.reviveRows
 #: src/components/packs/run/chain/ChainTable.tsx
@@ -20638,6 +20905,15 @@ msgstr "第二个抽到"
 #~ msgid "Section {songTime}"
 #~ msgstr ""
 
+#: src/routes/workshop.index.tsx
+msgid "See all"
+msgstr "查看全部"
+
+#. placeholder {0}: frames.length
+#: src/routes/workshop.index.tsx
+msgid "See all {0}"
+msgstr "查看全部 {0} 个"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "See every command"
 msgstr "查看所有命令"
@@ -21087,7 +21363,7 @@ msgstr "分享码"
 msgid "Share code copied"
 msgstr "分享码已复制"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Share in the gallery"
 msgstr ""
 
@@ -21282,7 +21558,7 @@ msgstr "收起"
 msgid "Show fewer"
 msgstr "收起"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Show its banner behind my rows in lists"
 msgstr ""
 
@@ -21474,6 +21750,10 @@ msgstr "神社缎带"
 msgid "shuffle"
 msgstr "换一批"
 
+#: src/routes/workshop.index.tsx
+#~ msgid "Shuffle"
+#~ msgstr "随机切换"
+
 #: src/routes/snipes.tsx
 msgid "Shuffles the columns."
 msgstr "随机打乱轨道。"
@@ -21502,9 +21782,10 @@ msgstr "视奏"
 msgid "Sign for the next round"
 msgstr "为下一轮签约"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Sign in"
-msgstr ""
+msgstr "登录"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Sign in again to send a gift."
@@ -21949,6 +22230,11 @@ msgstr "跳过最近展示过的玩家和谱面。"
 msgid "sliced"
 msgstr "已撕开"
 
+#. placeholder {0}: index + 1
+#: src/routes/workshop.index.tsx
+msgid "Slide {0}"
+msgstr "第 {0} 张"
+
 #. placeholder {0}: slot + 1
 #: src/components/player/ProfileStatCards.tsx
 msgid "Slot {0}"
@@ -22262,9 +22548,9 @@ msgstr "西班牙语"
 msgid "Spares recycle for +{bonus}%"
 msgstr "回收重复时多得 {bonus}%"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Spec"
-msgstr ""
+msgstr "规范"
 
 #: src/components/player/LivePresence.tsx
 msgid "Spectating"
@@ -22392,9 +22678,13 @@ msgstr "stable 公式准确率（95%）"
 msgid "Stable-formula acc (96%)"
 msgstr "stable 公式准确率（96%）"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Stack a background, your pictures, particles, fog and light. No code."
 msgstr ""
+
+#: src/routes/workshop.index.tsx
+msgid "Stack layers, or write the shader."
+msgstr "叠加图层，或自己编写着色器。"
 
 #: src/lib/replay-overlays.ts
 #~ msgid "Stacked"
@@ -22552,7 +22842,7 @@ msgstr "从你当前的 me! 页面开始"
 msgid "Start here"
 msgstr "在此开始"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Start one"
 msgstr ""
 
@@ -22677,7 +22967,7 @@ msgstr "仍在加载{elapsedLabel}"
 msgid "Still missing"
 msgstr "仍然缺失"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Still only"
 msgstr ""
 
@@ -22837,6 +23127,7 @@ msgstr "已提交"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/supporter/SupporterExtras.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 msgid "Submit"
 msgstr "提交"
 
@@ -22851,6 +23142,14 @@ msgstr "无论你是离线、在私服上游玩，还是被 osu! 限制，都可
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Submit your own"
 msgstr "提交你自己的"
+
+#: src/components/supporter/WorkshopFrames.tsx
+#~ msgid "Submitted. You can wear it now; it reaches everyone's picker once it's reviewed."
+#~ msgstr "已提交。你现在就可以佩戴；审核通过后会进入所有人的选择器。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Submitting..."
+msgstr "提交中..."
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
@@ -22913,6 +23212,10 @@ msgstr "支持"
 msgid "Support on Ko-fi"
 msgstr "在 Ko-fi 上支持"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Support to submit"
+msgstr "支持后即可提交"
+
 #: src/routes/supporter.tsx
 msgid "supporter"
 msgstr "支持者"
@@ -22931,6 +23234,10 @@ msgstr "支持者福利"
 msgid "Supporter ranks"
 msgstr "支持者段位"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Supporter sections"
+msgstr "支持者栏目"
+
 #: src/routes/terms.tsx
 msgid "Supporter Themes And Uploads"
 msgstr "支持者主题与上传内容"
@@ -22943,6 +23250,10 @@ msgstr "支持者到期：{until}"
 #: src/routes/terms.tsx
 msgid "Supporters can upload images and make their own profile themes, including shader code others can see and use. Whoever uploads or writes them is responsible for them and must have the right to share them. They go live without review."
 msgstr "支持者可以上传图片并制作自己的个人资料主题，包括其他人可以查看和使用的着色器代码。上传或编写者需对其负责，并且必须有权分享。它们无需审核即会上线。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Supporters submit frames to everyone's picker, with their name on them, and wear them on their profile."
+msgstr "支持者可以把头像框提交到所有人的选择器并署名，还能在主页上佩戴。"
 
 #: src/routes/support.tsx
 msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
@@ -23062,15 +23373,16 @@ msgstr "标签"
 msgid "Take it down for good?"
 msgstr "确定要永久下架吗？"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Take off"
-msgstr ""
+msgstr "取下"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Take off the list"
 msgstr "移出列表"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Take out of the gallery"
 msgstr ""
 
@@ -23098,13 +23410,17 @@ msgstr ""
 #~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and look at the 4th one down. That is your dan in that skill. Nothing is added on top of it, and no single pass above it can raise it."
 #~ msgstr "把你在某一个技能上的达标通过拿出来，按谱面的段位排好，然后看第四个。那就是你在这个技能上的段位。上面不会再加任何东西，排在它之上的任何一次通过也拉不高它。"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Taken down"
 msgstr ""
 
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
 msgstr "已被管理员下架。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Taken off the list"
+msgstr "已下架"
 
 #. placeholder {0}: chainModLook(shown.mods[modPick], i18n).name
 #: src/components/packs/run/chain/ChainTable.tsx
@@ -23333,7 +23649,7 @@ msgid "Thank you! Your supporter time is on."
 msgstr "谢谢！你的支持者时长已生效。"
 
 #: src/components/supporter/CustomThemeCredit.tsx
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Thanks, the report was sent."
 msgstr "谢谢，举报已发送。"
 
@@ -23490,6 +23806,10 @@ msgstr "这个 Mamestagram 账号已绑定到另一个 osu! 账号。"
 msgid "That Mamestagram account isn't linked to an osu! account here."
 msgstr "这个 Mamestagram 账号尚未在这里绑定 osu! 账号。"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "That picture is empty."
+msgstr "这张图片是空的。"
+
 #: src/lib/replay-export/errors.ts
 msgid "That range is too short to export."
 msgstr "该范围太短，无法导出。"
@@ -23566,6 +23886,10 @@ msgstr "这个上传已经不存在了。"
 #: src/components/packs/GoatPoll.tsx
 msgid "That username doesn't look right."
 msgstr "这个用户名看起来不对。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "That video is over 2 MB."
+msgstr "视频超过 2 MB。"
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "That's 10 share links today. Try again tomorrow."
@@ -23681,6 +24005,10 @@ msgstr "按 Etterna 评定玩家的方式取最好的 {best} 个技能组的平�
 #: src/routes/dan-estimates.tsx
 msgid "the average of your skills"
 msgstr "各技能的平均"
+
+#: src/routes/workshop.index.tsx
+#~ msgid "The backdrop behind your whole profile. Stack layers with no code, or write the shader yourself."
+#~ msgstr "整个主页的背景。无需代码叠加图层，或自己编写着色器。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
@@ -24183,6 +24511,10 @@ msgstr "第一张卡片 +{0} 音符。"
 msgid "The first card scores twice."
 msgstr "第一张卡片计分两次。"
 
+#: src/routes/workshop.index.tsx
+msgid "The first frame players make goes up here."
+msgstr "玩家做出的第一个头像框会显示在这里。"
+
 #. placeholder {0}: N.headliner.xMult
 #: src/lib/pack-run.ts
 msgid "The first Legendary or better card gives x{0} combo."
@@ -24215,6 +24547,14 @@ msgstr ""
 #: src/components/supporter/SupporterExtras.tsx
 msgid "The four cards under your profile's numbers. Swap any of them, here or from the card itself on your profile."
 msgstr "个人资料数字下方的四项数据。可以在这里更换，也可以直接在个人资料的卡片上更换。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "The frame covers too much of the avatar; keep the middle see-through."
+msgstr "头像框遮挡了太多头像；请让中间保持透明。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "The frame has to be square, like the template."
+msgstr "头像框必须是正方形，和模板一样。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway plays the notes of your replay skin and takes their colour. Off, it keeps its own notes and blue."
@@ -24292,6 +24632,10 @@ msgstr "中间的卡片 x{0} 连击。"
 #: src/components/discord/CommandShowcase.tsx
 msgid "The most farmed maps in a country, ranked by activity."
 msgstr "某个国家/地区最常被刷的谱面，按活跃度排序。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The most flashes in any one second of the loop. Saving needs {FLASH_LIMIT} or fewer."
+msgstr "循环中任意一秒内的最多闪烁次数。保存需要不超过 {FLASH_LIMIT} 次。"
 
 #. placeholder {0}: droppedKeymodes.map((keys) => `${keys}K`).join(", ")
 #: src/components/skins/SkinUpdateModal.tsx
@@ -24757,6 +25101,11 @@ msgstr "该玩家在这张谱面上的成绩"
 msgid "Theme"
 msgstr ""
 
+#. placeholder {0}: pick.themeCredit.by
+#: src/routes/workshop.index.tsx
+#~ msgid "theme by {0}"
+#~ msgstr "主题作者 {0}"
+
 #: src/components/layout/ThemePicker.tsx
 msgid "theme color"
 msgstr "主题色"
@@ -24765,15 +25114,15 @@ msgstr "主题色"
 msgid "Theme color"
 msgstr "主题色"
 
-#: src/routes/supporter_.themes.$themeId.tsx
+#: src/routes/workshop.themes.$themeId.tsx
 msgid "Theme editor"
 msgstr ""
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "theme gallery"
 msgstr ""
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Theme gallery"
 msgstr ""
 
@@ -24785,14 +25134,15 @@ msgstr "主题色相"
 msgid "Theme saturation"
 msgstr "主题饱和度"
 
-#: src/routes/supporter_.themes.spec.tsx
+#: src/routes/workshop.themes.spec.tsx
 msgid "theme spec"
 msgstr ""
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-#: src/routes/supporter_.themes.spec.tsx
+#: src/routes/workshop.index.tsx
+#: src/routes/workshop.themes.spec.tsx
 msgid "Theme spec"
-msgstr ""
+msgstr "主题规范"
 
 #. placeholder {0}: theme.name
 #: src/components/supporter/CustomThemeCredit.tsx
@@ -24806,8 +25156,9 @@ msgid "Theme: {0} by {1}"
 msgstr "主题：{0}，作者 {1}"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/workshop.index.tsx
 msgid "Themes"
-msgstr ""
+msgstr "主题"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "There is no card left to forge into at that rarity."
@@ -25319,7 +25670,7 @@ msgstr "此标签页已切到后台，导出可能会被暂停。"
 msgid "This team has no description."
 msgstr "这个战队没有简介。"
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "This theme isn't in the gallery anymore."
 msgstr ""
 
@@ -25474,7 +25825,11 @@ msgstr ""
 msgid "to {keyCount}K rating"
 msgstr "{keyCount}K 评分"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "to make your own avatar frames."
+msgstr "以制作你自己的头像框。"
+
+#: src/routes/workshop.themes.index.tsx
 msgid "to make your own profile themes."
 msgstr ""
 
@@ -25491,8 +25846,12 @@ msgstr "要反馈 bug 或提出建议，请使用站内的 <0>问题与建议</0
 #~ msgstr "要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如有隐私、删除、署名、下架或其它任何问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
 
 #: src/routes/terms.tsx
-msgid "To report a theme, use Report under the profile wearing it, or email <0>contact@mania-tracker.com</0>. A theme or image that infringes someone's rights or breaks these terms is taken down, and a supporter who keeps uploading such content loses the ability to make themes."
-msgstr "要举报某个主题，请使用使用该主题的个人资料下方的“举报”，或发送邮件至 <0>contact@mania-tracker.com</0>。侵犯他人权利或违反本条款的主题或图片将被移除，持续上传此类内容的支持者将失去制作主题的权限。"
+#~ msgid "To report a theme, use Report under the profile wearing it, or email <0>contact@mania-tracker.com</0>. A theme or image that infringes someone's rights or breaks these terms is taken down, and a supporter who keeps uploading such content loses the ability to make themes."
+#~ msgstr "要举报某个主题，请使用使用该主题的个人资料下方的“举报”，或发送邮件至 <0>contact@mania-tracker.com</0>。侵犯他人权利或违反本条款的主题或图片将被移除，持续上传此类内容的支持者将失去制作主题的权限。"
+
+#: src/routes/terms.tsx
+msgid "To report a theme, use Report under the profile wearing it. A theme or image that infringes someone's rights or breaks these terms is taken down, and a supporter who keeps uploading such content loses the ability to make themes."
+msgstr "要举报主题，请在佩戴它的主页上使用“举报”。侵犯他人权利或违反本条款的主题或图片会被下架，持续上传此类内容的支持者将失去制作主题的权限。"
 
 #: src/routes/supporter.tsx
 msgid "to set up your avatar frame, name tag and card look."
@@ -25838,6 +26197,10 @@ msgstr "请稍后再试。"
 msgid "Try it all on"
 msgstr "全部试用"
 
+#: src/routes/workshop.index.tsx
+msgid "Try it on"
+msgstr "试戴"
+
 #: src/components/replay/ShareClipButton.tsx
 msgid "Try the share link again"
 msgstr "重试分享链接"
@@ -26121,6 +26484,15 @@ msgstr "取消喜欢"
 msgid "Unlink"
 msgstr "解除绑定"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Unlist"
+msgstr "下架"
+
+#. placeholder {0}: frame.submittedBy.username
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Unlisted, by {0}"
+msgstr "已下架，作者 {0}"
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Unlock for rolls"
 msgstr "解锁后可随机"
@@ -26309,6 +26681,10 @@ msgstr "更新中"
 msgid "Upload"
 msgstr "上传"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Upload a picture to see it on your avatar at profile, card and list sizes."
+msgstr "上传图片，即可看到它在主页、卡片和列表尺寸下戴在你头像上的效果。"
+
 #: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Upload a replay"
@@ -26335,10 +26711,18 @@ msgstr "再上传一个"
 msgid "Upload image"
 msgstr "上传图片"
 
+#: src/components/supporter/WorkshopFrames.tsx
+#~ msgid "Upload its picture first."
+#~ msgstr "请先上传图片。"
+
 #: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins.tsx
 msgid "Upload skin"
 msgstr "上传皮肤"
+
+#: src/components/supporter/WorkshopFrames.tsx
+#~ msgid "Upload the picture"
+#~ msgstr "上传图片"
 
 #: src/routes/skins_.$id.tsx
 msgid "Uploaded"
@@ -26888,6 +27272,11 @@ msgstr "等待下一轮评分。届时会评分，此列表会自动更新。"
 msgid "Waiting for the theme"
 msgstr ""
 
+#. placeholder {0}: frame.submittedBy.username
+#: src/components/supporter/WorkshopFrames.tsx
+#~ msgid "Waiting, by {0}"
+#~ msgstr "待审核，作者 {0}"
+
 #: src/lib/chain-run.ts
 msgid "Wallet"
 msgstr "钱包"
@@ -27005,19 +27394,20 @@ msgstr "我们还没有存到 {0} 可用于回放的成绩。"
 msgid "We have no run by {0} on this map. Paste a link to their score to use it."
 msgstr "我们没有 {0} 在这张谱面上的成绩。粘贴其成绩链接就能用。"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Wear"
-msgstr ""
+msgstr "佩戴"
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Wear it"
 msgstr ""
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Wearing"
 msgstr ""
 
-#: src/routes/supporter_.themes.gallery.tsx
+#: src/routes/workshop.themes.gallery.tsx
 msgid "Wearing a theme from the gallery is for supporters. Anyone can remix one to try it in the editor."
 msgstr ""
 
@@ -27086,6 +27476,7 @@ msgstr "与你水平相近的玩家最近在打什么"
 msgid "What seems wrong?"
 msgstr "哪里看起来不对？"
 
+#: src/components/supporter/loadout.ts
 #: src/components/supporter/SupporterExtras.tsx
 msgid "What supporting gets you"
 msgstr "支持可获得的福利"
@@ -27322,7 +27713,7 @@ msgstr "女巫帽与扫帚"
 msgid "with {mods}"
 msgstr "使用 {mods}"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "With code"
 msgstr ""
 
@@ -27342,7 +27733,7 @@ msgstr ""
 msgid "With fewer than two rated skills, your dan is the average of your 20 best passes overall."
 msgstr "已评定的技能少于两个时，你的段位是你全部通过中最好的 20 次的平均。"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "With layers"
 msgstr ""
 
@@ -27373,6 +27764,18 @@ msgstr "接下来在做的"
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Works once, for an account that isn't a supporter and hasn't had a trial."
 msgstr "仅限使用一次，适用于不是支持者且没有试用过的账号。"
+
+#: src/components/supporter/WorkshopTitle.tsx
+#: src/routes/workshop.index.tsx
+msgid "workshop"
+msgstr "创意工坊"
+
+#: src/components/layout/Nav.tsx
+#: src/components/supporter/LoadoutSlots.tsx
+#: src/routes/workshop.frames.tsx
+#: src/routes/workshop.index.tsx
+msgid "Workshop"
+msgstr "创意工坊"
 
 #: src/lib/chain-run.ts
 msgid "World Class"
@@ -27411,7 +27814,7 @@ msgstr "在 BBCode 编辑器里写一段"
 msgid "Write something first."
 msgstr "请先填写内容。"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Write the shader yourself, start from a built-in theme, or paste a Shadertoy one."
 msgstr ""
 
@@ -27536,6 +27939,7 @@ msgstr "你"
 #: src/components/discord/CommandShowcase.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/components/supporter/SupportShowcase.tsx
 msgid "You"
 msgstr "你"
@@ -27649,6 +28053,10 @@ msgstr "几分钟后可以再次载入好友。"
 #: src/routes/news_.companella.tsx
 msgid "You can revoke Companella's connection in <0>Settings</0>, under Preferences. It stops sending plays right away."
 msgstr "你可以在<0>设置</0>的偏好设置中撤销 Companella 的连接。撤销后它会立即停止上传成绩。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+#~ msgid "You can wear it right away. Everyone else sees it in their picker once it's reviewed."
+#~ msgstr "你可以立即佩戴。审核通过后其他人会在选择器中看到它。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "You can't make themes anymore."
@@ -28007,6 +28415,11 @@ msgstr "第一次断连变成连线。"
 #~ msgid "Your first forge"
 #~ msgstr "你的第一次锻造"
 
+#: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/workshop.index.tsx
+msgid "Your frames"
+msgstr "你的头像框"
+
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Your gift week was claimed. Every $3 you give brings a new code."
 msgstr "你赠送的一周已被领取。你每支持 $3 就会获得一个新兑换码。"
@@ -28031,6 +28444,10 @@ msgstr "你的图片"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
 #~ msgstr "你的叠段位是其中最好 20 次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面的那些放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
+
+#: src/routes/workshop.index.tsx
+msgid "Your look"
+msgstr "你的外观"
 
 #: src/lib/chain-run.ts
 msgid "Your lowest card fits anywhere."
@@ -28229,15 +28646,17 @@ msgstr ""
 #~ msgid "Your teams could not be loaded just now. Try again in a moment."
 #~ msgstr "暂时无法加载你的战队，请稍后再试。"
 
-#: src/routes/supporter_.themes.index.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "your themes"
 msgstr ""
 
-#: src/routes/supporter_.themes.gallery.tsx
-#: src/routes/supporter_.themes.index.tsx
-#: src/routes/supporter_.themes.spec.tsx
+#: src/components/supporter/LoadoutSlots.tsx
+#: src/routes/workshop.index.tsx
+#: src/routes/workshop.themes.gallery.tsx
+#: src/routes/workshop.themes.index.tsx
+#: src/routes/workshop.themes.spec.tsx
 msgid "Your themes"
-msgstr ""
+msgstr "你的主题"
 
 #: src/components/player/FeaturedPlays.tsx
 msgid "Your title"
@@ -28279,6 +28698,10 @@ msgstr "整个个人资料都会采用这个主题：配色，以及页面背后
 #: src/components/packs/WishlistLine.tsx
 msgid "Your wishlist"
 msgstr "你的心愿单"
+
+#: src/routes/workshop.index.tsx
+msgid "Yours"
+msgstr "你的"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx

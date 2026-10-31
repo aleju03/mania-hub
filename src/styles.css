@@ -193,6 +193,19 @@ html[data-custom-cursor="true"] * {
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--color-osu-b6); }
 ::-webkit-scrollbar-thumb { background: var(--color-osu-b2); border-radius: 4px; }
+/* A slim scrollbar of the page's own, for panels that scroll inside a page
+   (the /supporter columns): a pill in the accent on a clear track, no
+   arrows. Chrome drops every ::-webkit-scrollbar rule once scrollbar-width or
+   scrollbar-color is set, so those two are for browsers without them only. */
+.scroll-slim::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-slim::-webkit-scrollbar-track { background: transparent; }
+.scroll-slim::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--color-osu-pink) 32%, transparent); border-radius: 999px; }
+.scroll-slim::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--color-osu-pink) 60%, transparent); }
+.scroll-slim::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.scroll-slim::-webkit-scrollbar-corner { background: transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-slim { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--color-osu-pink) 40%, transparent) transparent; }
+}
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .activity-heatmap-grid {
@@ -925,9 +938,21 @@ html[data-custom-cursor="true"] * {
    components layer so a caller's own padding utilities (the hero's p-2 -m-2)
    still win. */
 @layer components {
+  /* For a truncating line (overflow: hidden) that holds a styled name in its
+     text: room past the text on every side for the name's glow, taken back so
+     the layout doesn't move. Without it the line's box cut the halo into a
+     rectangle. */
+  .glow-room {
+    padding: 0.45em 0.7em;
+    margin: -0.45em -0.7em;
+  }
   .name-tag {
     padding-block: 0.25em;
     margin-block: -0.25em;
+    /* the same on the sides: a list name truncates (overflow: hidden), which
+       cut a glow style's halo off flat at the first letter */
+    padding-inline: 0.4em;
+    margin-inline: -0.4em;
   }
 }
 

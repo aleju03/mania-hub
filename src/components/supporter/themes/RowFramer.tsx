@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { rowCrop, type RowFraming } from "../../../lib/custom-theme-editor-gl";
 import { Slider } from "./EditorControls";
@@ -7,9 +7,10 @@ import { Slider } from "./EditorControls";
 const ZOOM_MAX = 4;
 
 /* Frames the banner row on a frame of the theme: drag the box to move it,
-   drag a corner to size it (the opposite corner stays put), or scroll over
-   it or use the slider to zoom. The outside dims, so what the row will show
-   reads at a glance. */
+   drag a corner to size it (the opposite corner stays put), or pinch (or
+   Ctrl+scroll) over it or use the slider to zoom. A plain scroll scrolls the
+   panel as anywhere else. The outside dims, so what the row will show reads
+   at a glance. */
 export function RowFramer({ source, framing, onChange, aspect }: {
   source: { url: string; width: number; height: number } | null;
   framing: RowFraming;
@@ -23,6 +24,22 @@ export function RowFramer({ source, framing, onChange, aspect }: {
   const crop = source ? rowCrop(source.width, source.height, framing, aspect) : null;
   const zoom = (next: number) => onChange({ ...framing, zoom: Math.min(ZOOM_MAX, Math.max(1, next)) });
   const resize = useRef<{ corner: [0 | 1, 0 | 1] } | null>(null);
+  // a pinch (which arrives as Ctrl+wheel) zooms the box; React's wheel listener is
+  // passive, so this one is added by hand to keep the page from zooming too
+  const latest = useRef({ source, framing, zoom });
+  latest.current = { source, framing, zoom };
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const onWheel = (event: WheelEvent) => {
+      const { source: shown, framing: now, zoom: setZoom } = latest.current;
+      if (!shown || !(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      setZoom(now.zoom * (event.deltaY < 0 ? 1.08 : 1 / 1.08));
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+    return () => box.removeEventListener("wheel", onWheel);
+  }, []);
 
   /* A corner dragged to (px, py), in fractions of the frame: the box keeps
      its shape and the opposite corner, within the frame and the zoom range. */
@@ -51,11 +68,6 @@ export function RowFramer({ source, framing, onChange, aspect }: {
         ref={boxRef}
         className="relative w-full touch-none select-none overflow-hidden rounded-lg bg-osu-b6 ring-1 ring-white/[0.07]"
         style={{ aspectRatio: source ? `${source.width} / ${source.height}` : "16 / 10" }}
-        onWheel={(event) => {
-          if (!source) return;
-          event.preventDefault();
-          zoom(framing.zoom * (event.deltaY < 0 ? 1.08 : 1 / 1.08));
-        }}
       >
         {source ? <img src={source.url} alt="" draggable={false} className="absolute inset-0 h-full w-full" /> : null}
         {crop ? (

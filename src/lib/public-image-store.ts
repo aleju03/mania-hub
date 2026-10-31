@@ -80,13 +80,14 @@ export function getPublicBucketBaseUrl(): string | null {
   return getBaseUrl();
 }
 
-/* What the bucket holds: images, and supporters' 3D companions (binary glTF). */
-export type PublicObjectMime = SniffedImageMime | "model/gltf-binary";
+/* What the bucket holds: images, supporters' 3D companions (binary glTF) and
+   the looping videos of their workshop frames (WebM). */
+export type PublicObjectMime = SniffedImageMime | "model/gltf-binary" | "video/webm";
 
 /** Content-addressed key for an image, identical for identical bytes. */
 export function getPublicImageKey(buffer: Buffer, mime: PublicObjectMime, prefix = IMAGE_PREFIX): string {
   const hash = crypto.createHash("sha256").update(buffer).digest("hex");
-  return `${prefix}${hash}.${mime === "model/gltf-binary" ? "glb" : imageMimeExtension(mime)}`;
+  return `${prefix}${hash}.${mime === "model/gltf-binary" ? "glb" : mime === "video/webm" ? "webm" : imageMimeExtension(mime)}`;
 }
 
 export interface StoredImage {

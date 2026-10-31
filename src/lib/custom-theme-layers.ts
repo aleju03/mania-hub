@@ -180,6 +180,12 @@ export function starterLayerDoc(names: Record<LayerKind, string>): LayerDoc {
   };
 }
 
+/* What a new layer theme starts as in the editor: nothing, so the first
+   layer is the maker's own choice. */
+export function emptyLayerDoc(): LayerDoc {
+  return { v: 1, layers: [], finish: { ...DEFAULT_FINISH } };
+}
+
 const HEX = /^#[0-9a-f]{6}$/i;
 const IMAGE_URL = /^(https:\/\/cdn\.mania-tracker\.com\/theme-assets\/[a-f0-9]{64}\.webp|blob:.+)$/;
 

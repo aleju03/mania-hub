@@ -185,15 +185,105 @@ const FRAME_GEOMETRY = {
   "zenith-orbit": { roundStill: true, box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
 } as const satisfies Record<string, FrameGeometry>;
 
-export type SupporterAvatarFrameId = keyof typeof FRAME_GEOMETRY;
+/* The site's own frames, by id. */
+export type BuiltInFrameId = keyof typeof FRAME_GEOMETRY;
+/* A frame a supporter made in the workshop, by its backend id ("u12"). */
+export type WorkshopFrameId = `u${number}`;
+export type SupporterAvatarFrameId = BuiltInFrameId | WorkshopFrameId;
 
-export const SUPPORTER_AVATAR_FRAMES = Object.keys(FRAME_GEOMETRY) as SupporterAvatarFrameId[];
+export const SUPPORTER_AVATAR_FRAMES = Object.keys(FRAME_GEOMETRY) as BuiltInFrameId[];
+
+/* The workshop template every made frame is drawn on: a square canvas with
+   the avatar inset the same on every side, at twice the profile's size. */
+export const WORKSHOP_FRAME_TEMPLATE = { size: 384, avatar: 248, inset: 68 } as const;
+const WORKSHOP_BOX = [
+  -WORKSHOP_FRAME_TEMPLATE.inset / WORKSHOP_FRAME_TEMPLATE.avatar,
+  -WORKSHOP_FRAME_TEMPLATE.inset / WORKSHOP_FRAME_TEMPLATE.avatar,
+  WORKSHOP_FRAME_TEMPLATE.size / WORKSHOP_FRAME_TEMPLATE.avatar,
+  WORKSHOP_FRAME_TEMPLATE.size / WORKSHOP_FRAME_TEMPLATE.avatar,
+] as const;
+
+/* What a page needs to draw a workshop frame: its files and how far its art reaches. */
+export interface WorkshopFrameArt {
+  name: string;
+  still: string;
+  video: string | null;
+  /* The still drawn round a round avatar, for lists; without it lists keep the avatar square. */
+  round: string | null;
+  overhang: readonly [number, number, number, number];
+}
+
+/* Workshop frames this page has been told about (payloads that name one carry
+   its art as `frameArt`). An unknown one draws nothing until its art arrives. */
+const workshopFrames = new Map<string, { art: WorkshopFrameArt; geometry: FrameGeometry }>();
+const workshopListeners = new Set<() => void>();
+
+export function isWorkshopFrameId(value: unknown): value is WorkshopFrameId {
+  return typeof value === "string" && /^u\d{1,12}$/.test(value);
+}
+
+export function parseWorkshopFrameArt(raw: unknown): Record<string, WorkshopFrameArt> {
+  const out: Record<string, WorkshopFrameArt> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    const art = value as { name?: unknown; still?: unknown; video?: unknown; round?: unknown; overhang?: unknown } | null;
+    const overhang = Array.isArray(art?.overhang) && art.overhang.length === 4 ? art.overhang.map(Number) : null;
+    if (!isWorkshopFrameId(id) || typeof art?.still !== "string" || !/^https:\/\//.test(art.still) || !overhang || overhang.some((n) => !Number.isFinite(n))) continue;
+    out[id] = { name: typeof art.name === "string" ? art.name.slice(0, 40) : "", still: art.still, video: typeof art.video === "string" && /^https:\/\//.test(art.video) ? art.video : null, round: typeof art.round === "string" && /^https:\/\//.test(art.round) ? art.round : null, overhang: overhang as [number, number, number, number] };
+  }
+  return out;
+}
+
+export function registerWorkshopFrames(frames: Record<string, WorkshopFrameArt>): void {
+  let changed = false;
+  for (const [id, art] of Object.entries(frames)) {
+    const known = workshopFrames.get(id)?.art;
+    if (known && known.still === art.still && known.video === art.video && known.round === art.round && known.name === art.name) continue;
+    // with a round version a list draws its avatar round; without one it keeps it square
+    workshopFrames.set(id, { art, geometry: art.round
+      ? { box: WORKSHOP_BOX, overhang: art.overhang, roundStill: true, stillOnly: !art.video }
+      : { box: WORKSHOP_BOX, overhang: art.overhang, squareWindow: true, stillOnly: !art.video } });
+    changed = true;
+  }
+  if (changed) {
+    workshopVersion++;
+    for (const listener of workshopListeners) listener();
+  }
+}
+
+let workshopVersion = 0;
+/* Bumps whenever a workshop frame's art arrives, as a store snapshot. */
+export function workshopFramesVersion(): number {
+  return workshopVersion;
+}
+
+export function workshopFrameName(id: SupporterAvatarFrameId): string | null {
+  return isWorkshopFrameId(id) ? workshopFrames.get(id)?.art.name || null : null;
+}
+
+export function subscribeWorkshopFrames(listener: () => void): () => void {
+  workshopListeners.add(listener);
+  return () => workshopListeners.delete(listener);
+}
+
+/* Whether a frame can be drawn now: one of the site's own, or a workshop frame whose art is known. */
+export function isDrawableFrame(id: SupporterAvatarFrameId): boolean {
+  return isWorkshopFrameId(id) ? workshopFrames.has(id) : Object.hasOwn(FRAME_GEOMETRY, id);
+}
+
+/* A drawable stand-in while a workshop frame's art is unknown: no overhang, no art. */
+const NO_GEOMETRY: FrameGeometry = { box: WORKSHOP_BOX, overhang: [0, 0, 0, 0], squareWindow: true, stillOnly: true };
+
+function geometryOf(id: SupporterAvatarFrameId): FrameGeometry {
+  if (isWorkshopFrameId(id)) return workshopFrames.get(id)?.geometry ?? NO_GEOMETRY;
+  return (FRAME_GEOMETRY as Record<string, FrameGeometry>)[id] ?? NO_GEOMETRY;
+}
 
 /* The designs assume a 124px avatar with a 16px corner radius. */
 export const FRAMED_AVATAR_RADIUS = `${(16 / 124) * 100}%`;
 
 export function isSupporterAvatarFrame(value: unknown): value is SupporterAvatarFrameId {
-  return typeof value === "string" && Object.hasOwn(FRAME_GEOMETRY, value);
+  return typeof value === "string" && (Object.hasOwn(FRAME_GEOMETRY, value) || isWorkshopFrameId(value));
 }
 
 /* Style for the avatar under a frame: the designs' corner radius, plus the
@@ -202,13 +292,13 @@ export function isSupporterAvatarFrame(value: unknown): value is SupporterAvatar
    square-window one. */
 export function framedAvatarStyle(frame: SupporterAvatarFrameId | null, { round = false }: { round?: boolean } = {}): { borderRadius: string; filter?: string } | undefined {
   if (!frame) return undefined;
-  const geometry = FRAME_GEOMETRY[frame] as FrameGeometry;
+  const geometry = geometryOf(frame);
   const borderRadius = round && !geometry.squareWindow ? "50%" : FRAMED_AVATAR_RADIUS;
   return geometry.avatarFilter ? { borderRadius, filter: geometry.avatarFilter } : { borderRadius };
 }
 
 export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometry {
-  return FRAME_GEOMETRY[id];
+  return geometryOf(id);
 }
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
@@ -217,6 +307,10 @@ const FRAME_ART_VERSION = 60;
 
 /* `round`: the still for a round avatar, where the frame has one. */
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {
-  if (kind === "still" && round && (FRAME_GEOMETRY[id] as FrameGeometry).roundStill) return `/images/supporter-frames/${id}-round.png?v=${FRAME_ART_VERSION}`;
+  if (isWorkshopFrameId(id)) {
+    const art = workshopFrames.get(id)?.art;
+    return (kind === "video" ? art?.video : round ? art?.round : null) ?? art?.still ?? "";
+  }
+  if (kind === "still" && round && geometryOf(id).roundStill) return `/images/supporter-frames/${id}-round.png?v=${FRAME_ART_VERSION}`;
   return `/images/supporter-frames/${id}.${kind === "video" ? "webm" : "png"}?v=${FRAME_ART_VERSION}`;
 }

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { PageHeader } from "../components/layout/PageHeader";
+import { WorkshopTitle } from "../components/supporter/WorkshopTitle";
 import { ReportModal } from "../components/supporter/CustomThemeCredit";
 import { ProfileThemeBackdrop } from "../components/supporter/ProfileThemeBackdrop";
 import { useAuth } from "../lib/auth-context";
@@ -23,7 +24,7 @@ import { useBodyScrollLock } from "../lib/use-body-scroll-lock";
 
 /* Themes supporters chose to share: stills in a grid, one playing live at a
    time when opened, to wear, remix or report. */
-export const Route = createFileRoute("/supporter_/themes/gallery")({
+export const Route = createFileRoute("/workshop/themes/gallery")({
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return { meta: [{ title: i18n._(msg`Theme gallery`) }, { name: "description", content: i18n._(msg`Profile themes made by supporters.`) }] };
@@ -52,9 +53,9 @@ function ThemeGalleryPage() {
   return (
     <div className="min-h-[80vh] bg-osu-b5">
       <PageHeader
-        iconSrc="/images/icons/supporter-heart.svg"
-        title={t`theme gallery`}
-        right={<Link to="/supporter/themes" className="text-[12px] font-semibold text-osu-f1 hover:text-white">{t`Your themes`}</Link>}
+        iconSrc="/images/icons/workshop.svg"
+        title={<WorkshopTitle>{t`theme gallery`}</WorkshopTitle>}
+        right={<Link to="/workshop/themes" className="text-[12px] font-semibold text-osu-f1 hover:text-white">{t`Your themes`}</Link>}
       />
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-5">
         <div className="mb-4 flex items-center gap-1.5">
@@ -177,7 +178,7 @@ function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; 
             ) : null}
             {theme ? (
               <Link
-                to="/supporter/themes/$themeId"
+                to="/workshop/themes/$themeId"
                 params={{ themeId: "new" }}
                 search={{ remix: summary.id }}
                 className="inline-flex h-9 items-center rounded-full bg-osu-b4 px-4 text-[12.5px] font-semibold text-white transition-colors hover:bg-osu-b3"

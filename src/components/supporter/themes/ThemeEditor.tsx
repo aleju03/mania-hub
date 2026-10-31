@@ -12,6 +12,9 @@ import { useAuth } from "../../../lib/auth-context";
 import {
   bakeRow,
   canvasBlob,
+  flashReport,
+  FLASH_FPS,
+  FLASH_LIMIT,
   frameBrightness,
   suggestLook,
   ThemeEditorGl,
@@ -20,7 +23,7 @@ import {
   type RowFraming,
 } from "../../../lib/custom-theme-editor-gl";
 import { customThemeSpec, CUSTOM_THEME_STARTER } from "../../../lib/custom-theme-spec";
-import { layerAssets, LAYER_GENERATOR_VERSION, LAYERS_MAX, layersToGlsl, newLayer, parseLayerDoc, starterLayerDoc, type Layer, type LayerDoc } from "../../../lib/custom-theme-layers";
+import { layerAssets, LAYER_GENERATOR_VERSION, LAYERS_MAX, layersToGlsl, emptyLayerDoc, newLayer, parseLayerDoc, type Layer, type LayerDoc } from "../../../lib/custom-theme-layers";
 import { PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_SHADERS } from "../../../lib/profile-theme-shaders";
 import {
   fetchGalleryCustomTheme,
@@ -43,7 +46,7 @@ import { duplicateLayer, LayerInspector, LayersList, moveLayer, patchLayer, useL
 import { StartPicker } from "./StartPicker";
 import { ThemeCodeEditor, type ThemeCodeEditorHandle } from "./ThemeCodeEditor";
 
-/* The code theme editor (/supporter/themes/$themeId): the author's GLSL on
+/* The code theme editor (/workshop/themes/$themeId): the author's GLSL on
    the left, checked as they type by the same checker the backend runs on
    save; a live preview on the right, timed against the heaviest built-in;
    then the details a save needs (name, tint, images, the still's moment and
@@ -119,7 +122,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
 
   const { names: layerNames } = useLayerNames();
   const [mode, setMode] = useState<"code" | "layers">(start.themeId === null && start.remix === undefined && !start.from && start.mode !== "code" ? "layers" : "code");
-  const [doc, setDoc] = useState<LayerDoc | null>(() => (mode === "layers" ? starterLayerDoc(layerNames) : null));
+  const [doc, setDoc] = useState<LayerDoc | null>(() => (mode === "layers" ? emptyLayerDoc() : null));
   const [selectedLayer, setSelectedLayer] = useState<string | null>(null);
   const [toCode, setToCode] = useState(false);
   const liveGlsl = useRef<string | null>(null);
@@ -145,6 +148,8 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   const [glEpoch, setGlEpoch] = useState(0);
   const [cost, setCost] = useState<number | null>(null);
   const [brightness, setBrightness] = useState<number | null>(null);
+  /* The most flashes in any one second over the loop, and when; null until measured. */
+  const [flash, setFlash] = useState<{ flashes: number; at: number } | null>(null);
   const [fps, setFps] = useState<number | null>(null);
 
   const [phone, setPhone] = useState(false);
@@ -252,8 +257,14 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
        check read it as too heavy. Remade a moment later on a fresh canvas,
        once the GPU is back. */
     let remake: ReturnType<typeof setTimeout> | undefined;
+    // hidden until it has drawn, and while lost: Chrome paints a lost canvas as a
+    // white box with a broken-image icon, which flashed on opening the editor
+    canvas.style.visibility = "hidden";
+    let shown = false;
     const onLost = (event: Event) => {
       event.preventDefault();
+      canvas.style.visibility = "hidden";
+      shown = false;
       clearTimeout(remake);
       remake = setTimeout(() => setGlEpoch((epoch) => epoch + 1), 500);
     };
@@ -285,6 +296,10 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       }
       pointer.current = [pointer.current[0] + (pointerTarget.current[0] - pointer.current[0]) * 0.08, pointer.current[1] + (pointerTarget.current[1] - pointer.current[1]) * 0.08];
       gl.draw({ time, pointer: pointer.current, scroll: scrolled });
+      if (!shown) {
+        shown = true;
+        canvas.style.visibility = "visible";
+      }
       frames += 1;
       if (now - since >= 1000) {
         setFps(Math.round((frames * 1000) / (now - since)));
@@ -413,6 +428,32 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
     return () => clearTimeout(timer);
   }, [compiledOk, code, moment, framing]);
 
+  /* Flashing, over the whole loop: tiny frames at FLASH_FPS, measured a chunk
+     at a time so the editor stays responsive. Refuses to save past the limit. */
+  useEffect(() => {
+    setFlash(null);
+    if (!compiledOk) return;
+    let cancelled = false;
+    const width = 16, height = 10, total = Math.round(MOMENT_MAX * FLASH_FPS);
+    const frames: Uint8ClampedArray[] = [];
+    const step = () => {
+      const gl = glRef.current;
+      if (cancelled || !gl?.ready || live.current.tooHeavyLive) return;
+      for (let chunk = 0; chunk < 45 && frames.length < total; chunk++) {
+        const pixels = gl.pixels(width, height, { time: frames.length / FLASH_FPS, pointer: CENTRE, scroll: 0 });
+        if (!pixels) return;
+        frames.push(pixels);
+      }
+      if (frames.length < total) timer = setTimeout(step, 0);
+      else setFlash(flashReport(frames, width, height));
+    };
+    let timer = setTimeout(step, COST_DELAY_MS + 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [compiledOk, code, glEpoch]);
+
   /* Small frames along the moment's track, so picking one is picking a picture. */
   useEffect(() => {
     if (!compiledOk) return;
@@ -508,6 +549,24 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
     setSelectedLayer(layer.id);
   };
 
+  /* Ctrl+V with a picture on the clipboard adds it as a layer, like dropping
+     it on the stage; a paste into a text field or the code stays a paste. */
+  const pasteImage = useRef(addImageLayer);
+  pasteImage.current = addImageLayer;
+  useEffect(() => {
+    if (mode !== "layers") return;
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true'], .cm-editor")) return;
+      const file = [...(event.clipboardData?.items ?? [])].find((item) => item.kind === "file" && item.type.startsWith("image/"))?.getAsFile();
+      if (!file) return;
+      event.preventDefault();
+      void pasteImage.current(file);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [mode]);
+
   const blockers: string[] = [];
   if (supporter === false) blockers.push(t`Only supporters can save themes. Everything here works as a preview.`);
   if (disabled) blockers.push(t`Custom themes are switched off for now, so saving is too.`);
@@ -516,6 +575,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   if (!name.trim()) blockers.push(nameBlocker);
   if (!compiledOk) blockers.push(t`Fix the code's errors first.`);
   if (cost !== null && cost > 1) blockers.push(t`It's heavier than the limit.`);
+  if (flash && flash.flashes > FLASH_LIMIT) blockers.push(t`It flashes ${flash.flashes} times a second around ${clock(flash.at)}. Fast flashing can set off seizures: keep it to ${FLASH_LIMIT} a second or fewer, or make the change gentler.`);
   if (!rights) blockers.push(rightsBlocker);
 
   const save = async (): Promise<boolean> => {
@@ -551,7 +611,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       if (themeId === null) {
         setThemeId(result.theme.id);
         onCreated?.(result.theme.id);
-        void navigate({ to: "/supporter/themes/$themeId", params: { themeId: String(result.theme.id) }, replace: true });
+        void navigate({ to: "/workshop/themes/$themeId", params: { themeId: String(result.theme.id) }, replace: true });
       }
       return true;
     } catch (cause) {
@@ -703,10 +763,10 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
 
   if (loadError) {
     return (
-      <div className="grid h-[calc(100dvh-60px)] place-items-center bg-[#100d13] px-4 text-center text-[13px] text-osu-l2">
+      <div className="grid h-[calc(100dvh-60px)] place-items-center bg-[color-mix(in_srgb,var(--color-osu-b6)_70%,black)] px-4 text-center text-[13px] text-osu-l2">
         <p>
           {loadError}{" "}
-          <Link to="/supporter/themes" className="font-semibold text-osu-pink-light hover:underline">{t`Back to your themes`}</Link>
+          <Link to="/workshop/themes" className="font-semibold text-osu-pink-light hover:underline">{t`Back to your themes`}</Link>
         </p>
       </div>
     );
@@ -813,10 +873,10 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   );
 
   return (
-    <div className="flex h-[calc(100dvh-60px)] flex-col bg-[#100d13] text-osu-l2">
+    <div className="flex h-[calc(100dvh-60px)] flex-col bg-[color-mix(in_srgb,var(--color-osu-b6)_70%,black)] text-osu-l2">
       {/* Toolbar */}
-      <header className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-white/[0.07] bg-[#17131b] px-3">
-        <Link to="/supporter/themes" className="flex h-8 items-center gap-1 rounded-md px-2 text-[12px] font-semibold text-osu-f1 transition-colors hover:bg-white/[0.06] hover:text-white">
+      <header className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-white/[0.07] bg-osu-b6 px-3">
+        <Link to="/workshop/themes" className="flex h-8 items-center gap-1 rounded-md px-2 text-[12px] font-semibold text-osu-f1 transition-colors hover:bg-white/[0.06] hover:text-white">
           <ChevronLeft size={16} />
           <span className="hidden md:inline">{t`Themes`}</span>
         </Link>
@@ -851,8 +911,8 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         <MoreMenu
           items={[
             ...(mode === "layers" ? [{ label: t`Open as code`, onClick: () => setToCode(true) }] : [{ label: copied === "spec" ? t`Copied` : t`Copy the theme spec`, onClick: () => copy(customThemeSpec(), "spec") }]),
-            { label: t`Theme spec`, href: "/supporter/themes/spec" },
-            { label: t`Gallery`, href: "/supporter/themes/gallery" },
+            { label: t`Theme spec`, href: "/workshop/themes/spec" },
+            { label: t`Gallery`, href: "/workshop/themes/gallery" },
           ]}
         />
         <button
@@ -868,7 +928,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       <div className={`flex min-h-0 flex-1 ${narrow ? "flex-col" : ""}`}>
         {/* Left: layers, or the code */}
         <aside
-          className={`relative min-h-0 flex-col bg-[#15111a] ${narrow ? (phonePanel === "edit" ? "flex flex-1" : "hidden") : "flex shrink-0 border-r border-white/[0.07]"}`}
+          className={`relative min-h-0 flex-col bg-[color-mix(in_srgb,var(--color-osu-b6)_88%,black)] ${narrow ? (phonePanel === "edit" ? "flex flex-1" : "hidden") : "flex shrink-0 border-r border-white/[0.07]"}`}
           style={narrow ? undefined : { width: mode === "layers" ? leftPanel.width : codePanel.width }}
         >
           {narrow ? null : <ResizeHandle side="right" {...(mode === "layers" ? leftPanel.handle : codePanel.handle)} />}
@@ -888,7 +948,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
                 <StartPicker themes={STARTABLE_BUILTINS} onPick={pickStart} />
                 <span className="truncate text-[11px] text-osu-f1">{t`or paste a Shadertoy shader as it is`}</span>
               </div>
-              <div className="min-h-0 flex-1 bg-[#130f17]">
+              <div className="min-h-0 flex-1 bg-[color-mix(in_srgb,var(--color-osu-b6)_80%,black)]">
                 {loading ? <div className="p-4 text-[12px] text-osu-f1">{t`Loading...`}</div> : <ThemeCodeEditor ref={editorRef} value={code} onChange={onCode} marks={marks} className="h-full" />}
               </div>
               <div className={`shrink-0 border-t border-white/[0.07] ${problemsOpen && problems.length ? "max-h-48" : ""}`}>
@@ -932,7 +992,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         {/* Stage */}
         <main
           className={`relative min-w-0 overflow-hidden ${narrow ? "order-first h-[34dvh] min-h-[190px] shrink-0" : "flex-1"}`}
-          style={{ backgroundColor: "#0c0a0f", backgroundImage: "radial-gradient(rgba(255,255,255,0.055) 1px, transparent 1px)", backgroundSize: "18px 18px" }}
+          style={{ backgroundColor: "color-mix(in srgb, var(--color-osu-b6) 55%, black)", backgroundImage: "radial-gradient(rgba(255,255,255,0.055) 1px, transparent 1px)", backgroundSize: "18px 18px" }}
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) setSelectedLayer(null);
           }}
@@ -983,7 +1043,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
           ) : null}
           <div className="absolute bottom-3 left-3 hidden items-center gap-2 rounded-md bg-black/50 px-2 py-1 text-[10.5px] text-osu-f1 backdrop-blur md:flex">
             {phone ? t`Phone` : t`Desktop`}
-            {mode === "layers" ? <><span aria-hidden className="h-3 w-px bg-white/15" />{t`Drop pictures here`}</> : null}
+            {mode === "layers" ? <><span aria-hidden className="h-3 w-px bg-white/15" />{t`Drop or paste pictures here`}</> : null}
           </div>
           <div className="absolute bottom-2 right-2 flex w-40 items-center gap-2 md:bottom-3 md:right-3 md:w-48 rounded-md bg-black/50 px-2.5 py-1 text-[10.5px] text-osu-f1 backdrop-blur">
             {t`Scroll`}
@@ -993,7 +1053,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
 
         {/* On a phone: which panel sits under the preview */}
         {narrow ? (
-          <div className="order-first flex h-10 shrink-0 items-end gap-1 border-y border-white/[0.07] bg-[#17131b] px-2">
+          <div className="order-first flex h-10 shrink-0 items-end gap-1 border-y border-white/[0.07] bg-osu-b6 px-2">
             {([
               { id: "edit", label: mode === "layers" ? t`Layers` : t`Code` },
               ...(mode === "layers" ? [{ id: "layer", label: t`Layer` }] : []),
@@ -1023,7 +1083,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
 
         {/* Inspector */}
         <aside
-          className={`relative flex-col bg-[#15111a] ${narrow ? (phonePanel === "inspect" ? "flex min-h-0 flex-1" : "hidden") : "flex shrink-0 border-l border-white/[0.07]"}`}
+          className={`relative flex-col bg-[color-mix(in_srgb,var(--color-osu-b6)_88%,black)] ${narrow ? (phonePanel === "inspect" ? "flex min-h-0 flex-1" : "hidden") : "flex shrink-0 border-l border-white/[0.07]"}`}
           style={narrow ? undefined : { width: rightPanel.width }}
         >
           {narrow ? null : <ResizeHandle side="left" {...rightPanel.handle} />}
@@ -1048,7 +1108,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       </div>
 
       {/* Timeline */}
-      <div className="flex h-16 shrink-0 items-center gap-2.5 border-t border-white/[0.07] bg-[#17131b] px-2.5 md:h-[74px] md:gap-3 md:px-3">
+      <div className="flex h-16 shrink-0 items-center gap-2.5 border-t border-white/[0.07] bg-osu-b6 px-2.5 md:h-[74px] md:gap-3 md:px-3">
         <button
           type="button"
           onClick={togglePlay}
@@ -1067,7 +1127,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       </div>
 
       {/* Status */}
-      <footer className="flex h-8 shrink-0 items-center gap-4 overflow-x-auto whitespace-nowrap border-t border-white/[0.07] bg-[#120f15] px-3 text-[11.5px] text-osu-f1 [scrollbar-width:none] md:px-4">
+      <footer className="flex h-8 shrink-0 items-center gap-4 overflow-x-auto whitespace-nowrap border-t border-white/[0.07] bg-[color-mix(in_srgb,var(--color-osu-b6)_80%,black)] px-3 text-[11.5px] text-osu-f1 [scrollbar-width:none] md:px-4">
         {mode === "code" ? (
           <>
             <button
@@ -1089,6 +1149,10 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         <span aria-hidden className="h-3 w-px bg-white/10" />
         <span className="flex items-center gap-1.5" title={t`Built-in themes sit around 0.05 to 0.15. Above 0.30, white text gets hard to read.`}>
           {t`Brightness`} <Meter value={brightness} warn={0.22} bad={BRIGHT_WARN} label={t`Brightness`} /> <span className={brightness !== null && brightness > BRIGHT_WARN ? "text-amber-300" : "text-osu-l2"}>{brightness === null ? "-" : brightness.toFixed(2)}</span>
+        </span>
+        <span aria-hidden className="h-3 w-px bg-white/10" />
+        <span className="flex items-center gap-1.5" title={t`The most flashes in any one second of the loop. Saving needs ${FLASH_LIMIT} or fewer.`}>
+          {t`Flashing`} <span className={flash && flash.flashes > FLASH_LIMIT ? "text-rose-300" : "text-osu-l2"}>{!compiledOk || !flash ? "-" : t`${flash.flashes}/s`}</span>
         </span>
         {mode === "layers" && doc ? (
           <>
@@ -1397,7 +1461,7 @@ function SaveDialog({ name, onName, visibility, onVisibility, credits, onCredits
   const ready = name.trim() && rights && issues.length === 0;
   return createPortal(
     <div className="fixed inset-0 z-[140] grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label={t`Save theme`} onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="w-full max-w-[420px] overflow-hidden rounded-xl border border-white/[0.08] bg-[#1a151e] shadow-[0_24px_80px_rgba(0,0,0,0.7)]">
+      <div className="w-full max-w-[420px] overflow-hidden rounded-xl border border-white/[0.08] bg-[color-mix(in_srgb,var(--color-osu-b5)_50%,var(--color-osu-b6))] shadow-[0_24px_80px_rgba(0,0,0,0.7)]">
         <div className="border-b border-white/[0.07] px-5 py-4">
           <h2 className="text-[15px] font-bold text-white">{t`Save theme`}</h2>
           <p className="mt-0.5 text-[12px] text-osu-f1">{t`It goes live as soon as it's saved.`}</p>

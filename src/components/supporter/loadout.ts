@@ -32,6 +32,29 @@ export const SLOT_IDS: readonly SlotId[] = ["theme", "frame", "nameStyle", "name
 /* The slots that dress the viewer's packs, drawn as their own group. */
 export const PACK_SLOT_IDS: readonly SlotId[] = ["sleeve", "binder", "wrapper", "blade"];
 
+/* What the supporter page's sidebar opens: a loadout slot, or one of the
+   page's other sections. Kept in the URL (?s=), so each can be linked to. */
+export type SupporterSection = SlotId | "companion" | "stats" | "you" | "perks";
+
+export const PROFILE_SECTIONS: readonly SupporterSection[] = ["theme", "frame", "nameStyle", "nameFont", "companion", "stats"];
+export const PACK_SECTIONS: readonly SupporterSection[] = ["foil", "motif", "sleeve", "binder", "wrapper", "blade"];
+const SECTION_IDS: readonly SupporterSection[] = [...PROFILE_SECTIONS, ...PACK_SECTIONS, "you", "perks"];
+
+export function isSupporterSection(value: unknown): value is SupporterSection {
+  return typeof value === "string" && (SECTION_IDS as readonly string[]).includes(value);
+}
+
+export function isSlotSection(section: SupporterSection): section is SlotId {
+  return (SLOT_IDS as readonly string[]).includes(section);
+}
+
+export const SECTION_LABELS: Record<Exclude<SupporterSection, SlotId>, MessageDescriptor> = {
+  companion: msg`Companion`,
+  stats: msg`Profile stats`,
+  you: msg`Rank and gifts`,
+  perks: msg`What supporting gets you`,
+};
+
 export const SLOT_LABELS: Record<SlotId, MessageDescriptor> = {
   theme: msg`Profile theme`,
   frame: msg`Avatar frame`,

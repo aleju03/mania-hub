@@ -2,7 +2,7 @@ import { CUSTOM_THEME_LOOP_BUDGET, CUSTOM_THEME_SOURCE_MAX_BYTES, CUSTOM_THEME_T
 import { PROFILE_THEME_PRELUDE } from "./profile-theme-shaders";
 
 /* The theme spec as one plain-text page, to copy from the editor or read at
-   /supporter/themes/spec. The helpers' list is read out of the
+   /workshop/themes/spec. The helpers' list is read out of the
    prelude itself, so it can't drift from what the shader really gets. */
 
 export interface PreludeHelper {
@@ -101,7 +101,8 @@ HELPERS (already defined; don't redefine them)
 ${helpers}
 
 LIMITS
-- At most ${CUSTOM_THEME_SOURCE_MAX_BYTES / 1024} KB of code, plain ASCII only.
+- At most ${CUSTOM_THEME_SOURCE_MAX_BYTES / 1024} KB of code. Outside comments, only basic keyboard
+  characters: no curly quotes, accented letters, emoji or other alphabets.
 - No uniform, in, out or layout declarations, no main(), and no #version,
   #extension, #pragma or #line. #define and #if work.
 - Names starting with u_, gl_ or _cg_ belong to the site (reading

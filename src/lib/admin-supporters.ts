@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 import { parseSubmittedCompanion, type SubmittedCompanion } from "./supporter-companions";
+import { parseSubmittedFrames } from "./workshop-frames";
 
 /* /admin/players?tab=supporters, backed by backend features/supporters.ts:
    every donation with who gave and how it was linked to an osu! account, the
@@ -155,6 +156,41 @@ export const deleteAdminCompanion = createServerFn({ method: "POST" })
     return { id };
   })
   .handler(({ data }) => adminRequest<{ ok: true; deleted: boolean }>("/api/admin/supporters/delete-companion", data));
+
+/* Every workshop frame, listed or waiting for review. */
+export const loadAdminFrames = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { frames } = await adminRequest<{ frames: unknown[] }>("/api/admin/supporters/frames", {});
+    return parseSubmittedFrames(frames);
+  });
+
+/* Puts a workshop frame on everyone's list, or takes it off (and off everyone
+   wearing it but its maker). */
+export const setAdminFrameListed = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; listed?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a frame.");
+    return { id, listed: data?.listed === true };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; updated: boolean }>("/api/admin/supporters/list-frame", data));
+
+/* Marks a workshop frame as looked at, so the review list leads with new ones. */
+export const setAdminFrameReviewed = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a frame.");
+    return { id };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; updated: boolean }>("/api/admin/supporters/review-frame", data));
+
+/* Takes a workshop frame off the list and off everyone wearing it. */
+export const deleteAdminFrame = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a frame.");
+    return { id };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; deleted: boolean }>("/api/admin/supporters/delete-frame", data));
 
 /* Publisher Center's contributor export: confirms Google claims, adds unclaimed
    orders, revokes claims it does not list. */

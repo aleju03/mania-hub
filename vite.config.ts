@@ -100,7 +100,10 @@ const config = defineConfig({
   },
   // Dev only: the dependency pre-bundler would otherwise try to bundle resvg's
   // .node binary and stop the dev server; Node loads both packages as-is.
-  optimizeDeps: { exclude: NATIVE_IMAGE_PACKAGES },
+  // The theme editor's GLSL parser is only imported once the editor opens; found
+  // that late, Vite re-bundles mid-session and the reload runs two Reacts
+  // ("reading 'useContext'" of null) until a manual refresh.
+  optimizeDeps: { exclude: NATIVE_IMAGE_PACKAGES, include: ["@shaderfrog/glsl-parser", "@shaderfrog/glsl-parser/preprocessor"] },
   ssr: { external: NATIVE_IMAGE_PACKAGES, optimizeDeps: { exclude: NATIVE_IMAGE_PACKAGES } },
   build: {
     chunkSizeWarningLimit: 1500,

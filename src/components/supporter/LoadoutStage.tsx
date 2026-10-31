@@ -46,7 +46,7 @@ const ROOM_PADDING = `${room(ROOM[0])} ${room(ROOM[1])} ${room(ROOM[2])}`;
 
 const NAME_CLASS = "min-w-0 max-w-full truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[22px] font-black leading-none text-white sm:text-[40px]";
 
-export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, card, focus, pop, spinning, footer }: {
+export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, card, focus, pop, spinning, footer, tall = false }: {
   shown: Loadout;
   /** The viewer's replay skin notes, for the Note highway. */
   notes: HighwayNotes | null;
@@ -61,6 +61,9 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
   pop: number;
   spinning: boolean;
   footer: ReactNode;
+  /** Fill the height it is given from lg up (the scene grows, the footer stays at the bottom),
+      so a sticky stage beside a long drawer is a big preview rather than a gap under a small one. */
+  tall?: boolean;
 }) {
   const { t } = useLingui();
   const reduced = useReducedMotion();
@@ -71,10 +74,10 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
   const landing = reduced ? undefined : { initial: { scale: 0.9, y: 6 }, animate: { scale: 1, y: 0 }, transition: { type: "spring" as const, stiffness: 520, damping: 17 } };
 
   return (
-    <div className="relative isolate overflow-hidden rounded-2xl bg-osu-b6">
+    <div className={`relative isolate overflow-hidden rounded-2xl bg-osu-b6 ${tall ? "lg:flex lg:h-full lg:flex-col" : ""}`}>
       {/* The profile theme plays behind the whole stage, as it will behind the profile. */}
       {theme && <ProfileThemeBackdrop theme={theme} notes={notes} chart={chart} maxPixels={500_000} className="absolute inset-0 -z-10" />}
-      <div className="flex flex-col lg:flex-row lg:items-stretch">
+      <div className={`flex flex-col lg:flex-row lg:items-stretch ${tall ? "lg:min-h-0 lg:flex-1" : ""}`}>
         {focus === "binder" ? (
           <div className="min-w-0 flex-1 px-3">
             <TestBinder binder={shown.pack.binder} />
@@ -103,7 +106,7 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
           </motion.div>
         </div>
         )}
-        <div className={`${focus !== "card" ? "max-lg:hidden" : ""} ${focus === "binder" ? "lg:hidden" : ""} border-white/[0.07] px-4 max-lg:border-t lg:w-[300px] lg:shrink-0 lg:border-l lg:px-3 ${theme ? "bg-black/25" : ""}`}>
+        <div className={`${focus !== "card" ? "max-lg:hidden" : ""} ${focus === "binder" ? "lg:hidden" : ""} border-white/[0.07] px-4 max-lg:border-t lg:w-[300px] lg:shrink-0 lg:border-l lg:px-3 ${tall ? "lg:flex lg:flex-col lg:justify-center" : ""} ${theme ? "bg-black/25" : ""}`}>
           <div className="mx-auto w-full max-w-[270px]">
             {card ? (
               <ManiaCardPanel user={card.user} scores={card.scores} loading={card.loading} isOwnProfile supporterLookOverride={cardLook} showTierProgress={false} sleeve={shown.pack.sleeve} />

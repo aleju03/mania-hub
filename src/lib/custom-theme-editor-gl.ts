@@ -1,5 +1,5 @@
 import { CUSTOM_THEME_INPUTS, CUSTOM_THEME_TEXTURES } from "#custom-themes/inputs";
-import { PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
+import { COST_REFERENCE_SHADER, PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
 import type { SupporterProfileThemeId } from "./supporter-profile-themes";
 
 /* The theme editor's own WebGL: one canvas that previews the author's theme,
@@ -281,7 +281,7 @@ export class ThemeEditorGl {
   measureCost(): number | null {
     if (!this.current) return null;
     if (!this.probe()) return Number.POSITIVE_INFINITY;
-    this.reference ??= this.link(PROFILE_THEME_SHADERS[COST_REFERENCE]).program;
+    this.reference ??= this.link(COST_REFERENCE_SHADER).program;
     if (!this.reference) return null;
     const { width, height } = COST_SIZE;
     // first draws compile lazily on some drivers: one of each before timing
@@ -294,6 +294,18 @@ export class ThemeEditorGl {
       theirs = Math.min(theirs, this.timeFrames(this.current, width, height, COST_FRAMES));
     }
     return ours > 0 ? theirs / ours : null;
+  }
+
+  /* A frame's raw pixels at any size (bottom row first), for measuring. */
+  pixels(width: number, height: number, inputs: FrameInputs): Uint8ClampedArray | null {
+    if (!this.current) return null;
+    const { gl } = this;
+    this.bindTarget(width, height);
+    this.drawWith(this.current, width, height, inputs);
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return pixels;
   }
 
   /* A frame at any size, read back right way up into a 2D canvas. */
@@ -427,4 +439,77 @@ export function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not render the image."))), "image/webp", 0.92);
   });
+}
+
+/* --- Flashing ------------------------------------------------------------ */
+
+/* A theme plays behind someone's whole profile, so it must not strobe: the
+   flash rule of WCAG 2.3.1, more than three flashes in any one second over a
+   quarter of the screen or more, where a flash is a pair of opposite swings
+   of at least a tenth of the brightest relative luminance, the darker side
+   under 0.8. The editor samples the loop at FLASH_FPS and refuses to save a
+   theme past FLASH_LIMIT. */
+export const FLASH_FPS = 30;
+export const FLASH_LIMIT = 3;
+const FLASH_SWING = 0.1;
+const FLASH_DARK = 0.8;
+
+const linear = (channel: number) => {
+  const c = channel / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+
+/* Relative luminance of the whole frame and of each quarter. */
+function regionLuminance(pixels: Uint8ClampedArray, width: number, height: number): number[] {
+  const sums = [0, 0, 0, 0, 0];
+  const counts = [0, 0, 0, 0, 0];
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = (y * width + x) * 4;
+      const value = 0.2126 * linear(pixels[at]) + 0.7152 * linear(pixels[at + 1]) + 0.0722 * linear(pixels[at + 2]);
+      const quarter = 1 + (x < width / 2 ? 0 : 1) + (y < height / 2 ? 0 : 2);
+      sums[0] += value;
+      counts[0] += 1;
+      sums[quarter] += value;
+      counts[quarter] += 1;
+    }
+  }
+  return sums.map((sum, index) => (counts[index] ? sum / counts[index] : 0));
+}
+
+/* The frames at which one luminance series swings the other way by a flash's worth. */
+function swings(series: number[]): number[] {
+  const out: number[] = [];
+  let low = series[0] ?? 0;
+  let high = low;
+  let direction = 0;
+  series.forEach((value, index) => {
+    if (direction >= 0 && value > high) high = value;
+    if (direction <= 0 && value < low) low = value;
+    if (direction >= 0 && high - value >= FLASH_SWING && Math.min(value, high) < FLASH_DARK && (direction > 0 || high - value >= FLASH_SWING)) {
+      out.push(index);
+      direction = -1;
+      low = value;
+    } else if (direction <= 0 && value - low >= FLASH_SWING && Math.min(value, low) < FLASH_DARK) {
+      out.push(index);
+      direction = 1;
+      high = value;
+    }
+  });
+  return out;
+}
+
+/* The most flashes in any one second over any region, and when (seconds). */
+export function flashReport(frames: readonly Uint8ClampedArray[], width: number, height: number, fps = FLASH_FPS): { flashes: number; at: number } {
+  const regions = frames.map((pixels) => regionLuminance(pixels, width, height));
+  let worst = { flashes: 0, at: 0 };
+  for (let region = 0; region < 5; region++) {
+    const marks = swings(regions.map((values) => values[region]));
+    for (let first = 0, last = 0; last < marks.length; last++) {
+      while (marks[last] - marks[first] >= fps) first++;
+      const flashes = Math.floor((last - first + 1) / 2);
+      if (flashes > worst.flashes) worst = { flashes, at: marks[first] / fps };
+    }
+  }
+  return worst;
 }

@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 
 import { bridgeAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
-import { isSupporterAvatarFrame, parseFrameDan, type FrameDan, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
+import { isSupporterAvatarFrame, isWorkshopFrameId, parseFrameDan, parseWorkshopFrameArt, type FrameDan, type SupporterAvatarFrameId, type WorkshopFrameArt } from "./supporter-avatar-frames";
+import { FRAME_NAME_MAX, parseSubmittedFrames, type SubmittedFrame } from "./workshop-frames";
 import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
 import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
 import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
@@ -40,6 +41,8 @@ export interface SupporterLookState {
   packStyle: SupporterPackStyle;
   /** Who gave them their current time, when it is a gift code's trial. */
   giftFrom?: string | null;
+  /* The art of a workshop frame among these, which the page registers to draw it. */
+  frameArt?: Record<string, WorkshopFrameArt>;
 }
 
 const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
@@ -54,7 +57,7 @@ export async function requireViewer(): Promise<{ userId: number; username: strin
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown; frameArt?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
@@ -70,6 +73,7 @@ function readState(body: unknown): SupporterLookState {
     profileThemeOptions: parseProfileThemeOptions(raw.profileThemeOptions),
     packStyle: parsePackStyle(raw.packStyle),
     giftFrom: typeof raw.giftFrom === "string" ? raw.giftFrom : null,
+    frameArt: parseWorkshopFrameArt(raw.frameArt),
   };
 }
 
@@ -524,4 +528,66 @@ export const claimGoogleContribution = createServerFn({ method: "POST" })
     const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; expiresAt?: unknown } | null;
     if (!response.ok || body?.ok !== true) throw new Error(GOOGLE_CLAIM_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
     return { expiresAt: typeof body.expiresAt === "number" ? body.expiresAt : null };
+  });
+
+const FRAME_ERRORS: Record<string, string> = {
+  not_supporter: "Your supporter time has run out.",
+  too_many_submissions: "That's five frames today; try again tomorrow.",
+  invalid_frame: "That frame isn't complete; upload its picture again.",
+};
+
+/* The viewer's own workshop frames, listed or waiting for review. */
+export const fetchOwnWorkshopFrames = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SubmittedFrame[]> => {
+    const viewer = await requireViewer();
+    if (!viewer) return [];
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const response = await fetch(`${viewer.base}/api/supporters/self/frames?userId=${viewer.userId}`, { headers: bridgeAuthHeaders() });
+    if (!response.ok) return [];
+    const body = await response.json().catch(() => null) as { frames?: unknown } | null;
+    return parseSubmittedFrames(body?.frames);
+  },
+);
+
+/* Adds a frame made from uploads (/api/supporter-frame), straight into everyone's picker. */
+export const submitWorkshopFrame = createServerFn({ method: "POST" })
+  .validator((data: { name?: unknown; still?: unknown; video?: unknown; round?: unknown; overhang?: unknown }) => {
+    const name = typeof data?.name === "string" ? data.name.replace(/\s+/g, " ").trim().slice(0, FRAME_NAME_MAX) : "";
+    if (!name) throw new Error("Give it a name.");
+    if (typeof data?.still !== "string") throw new Error("Upload its picture first.");
+    const overhang = Array.isArray(data?.overhang) && data.overhang.length === 4 ? data.overhang.map(Number) : null;
+    if (!overhang || overhang.some((n) => !Number.isFinite(n))) throw new Error("Upload its picture first.");
+    return { name, still: data.still, video: typeof data?.video === "string" ? data.video : null, round: typeof data?.round === "string" ? data.round : null, overhang };
+  })
+  .handler(async ({ data }): Promise<{ frame: SubmittedFrame }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/frames`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, ...data }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown; frame?: unknown } | null;
+    const frame = parseSubmittedFrames(body?.frame ? [body.frame] : [])[0];
+    if (!response.ok || !frame) throw new Error(FRAME_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
+    return { frame };
+  });
+
+/* Takes down one of the viewer's own frames, off everyone wearing it. */
+export const deleteOwnWorkshopFrame = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => {
+    if (!isWorkshopFrameId(data?.id)) throw new Error("Pick a frame.");
+    return { id: data.id };
+  })
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/frames/delete`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, id: data.id }),
+    });
+    if (!response.ok) throw new Error(`Server ${response.status}`);
+    return { ok: true };
   });

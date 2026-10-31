@@ -97,14 +97,7 @@ function TermsPage() {
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
-            To report a theme, use Report under the profile wearing it, or email{' '}
-            <a
-              href="mailto:contact@mania-tracker.com"
-              className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
-            >
-              contact@mania-tracker.com
-            </a>
-            . A theme or image that infringes someone's rights or breaks these terms is taken
+            To report a theme, use Report under the profile wearing it. A theme or image that infringes someone's rights or breaks these terms is taken
             down, and a supporter who keeps uploading such content loses the ability to make
             themes.
           </Trans>

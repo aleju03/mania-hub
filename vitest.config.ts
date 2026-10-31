@@ -29,7 +29,7 @@ export default defineConfig({
   test: {
     include: ["{src,scripts}/**/*.{test,spec}.?(c|m)[jt]s?(x)"],
     // A route whose URL ends in /spec (the theme spec page), not a test.
-    exclude: [...configDefaults.exclude, "src/routes/supporter_.themes.spec.tsx"],
+    exclude: [...configDefaults.exclude, "src/routes/workshop.themes.spec.tsx"],
   },
   plugins: [viteReact({ babel: { plugins: ["@lingui/babel-plugin-lingui-macro"] } })],
   resolve: {

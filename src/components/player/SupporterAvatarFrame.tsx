@@ -5,7 +5,7 @@ import { useLingui } from "@lingui/react";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
 import { fetchLiveSupporterProfileLook } from "../../lib/live-backend";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
-import { supporterFrameGeometry, supporterFrameSrc, type FrameDan, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
+import { isDrawableFrame, subscribeWorkshopFrames, supporterFrameGeometry, supporterFrameSrc, workshopFramesVersion, type FrameDan, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 
 /* The frame art over a supporter's avatar. Place it inside a relative box the
    exact size of the avatar; it reaches past that box by the frame's overhang
@@ -63,6 +63,9 @@ export function SupporterAvatarFrame({ frame, still: holdStill = false, round = 
   useEffect(() => setAnimate(canPlayAlphaVideo()), []);
   const dan = useFrameDan(frame, userId);
   const { i18n } = useLingui();
+  // a workshop frame draws once its art has arrived with some payload
+  useSyncExternalStore(subscribeWorkshopFrames, workshopFramesVersion, () => 0);
+  if (!isDrawableFrame(frame)) return null;
 
   const geometry = supporterFrameGeometry(frame);
   const [left, top, width, height] = geometry.box;

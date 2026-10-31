@@ -950,7 +950,7 @@ function HomePage() {
                   <Avatar url={s.user.avatar_url} size={26} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <div className="text-xs truncate">
+                      <div className="glow-room text-xs truncate">
                         <Trans>
                           <UsernameText
                             username={s.user.username}

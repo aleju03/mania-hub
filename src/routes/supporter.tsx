@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { LoadoutStage } from "../components/supporter/LoadoutStage";
-import { LoadoutDrawer, LoadoutSlots, type CustomMotif } from "../components/supporter/LoadoutSlots";
+import { LoadoutDrawer, SlotLock, SupporterNav, type CustomMotif } from "../components/supporter/LoadoutSlots";
 import { CustomArtDialog, type CustomArtDraft } from "#/components/supporter/CustomArtDialog";
 import { DiceIcon } from "../components/supporter/LoadoutIcons";
 import { GiftCodePanel, RedeemGiftCode } from "../components/supporter/GiftCodePanel";
@@ -18,7 +18,10 @@ import {
   DEFAULT_LOOK,
   LOADOUT_COMBINATIONS,
   isRolledSlot,
+  isSlotSection,
+  isSupporterSection,
   randomSlotValue,
+  SLOT_LABELS,
   sameLook,
   SLOT_IDS,
   slotValue,
@@ -26,6 +29,7 @@ import {
   type Loadout,
   type SlotId,
   type SlotValue,
+  type SupporterSection,
 } from "../components/supporter/loadout";
 import { avatarImageSrc } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
@@ -42,6 +46,7 @@ import {
 } from "../lib/live-backend";
 import type { SupporterLook } from "../lib/supporter-card-looks";
 import { parseProfileThemeOptions, profileThemeStyle } from "../lib/supporter-profile-themes";
+import { registerWorkshopFrames } from "../lib/supporter-avatar-frames";
 import { rememberViewerSupporter } from "../lib/viewer-supporter";
 import { CompanionSection, ProfileStatsSection, SupporterPerks } from "../components/supporter/SupporterExtras";
 import { NO_PACK_STYLE } from "../lib/supporter-pack-style";
@@ -113,6 +118,7 @@ export const Route = createFileRoute("/supporter")({
       ],
     };
   },
+  validateSearch: (search: Record<string, unknown>): { s?: SupporterSection } => (isSupporterSection(search.s) && search.s !== "theme" ? { s: search.s } : {}),
   component: SupporterPage,
 });
 
@@ -133,7 +139,13 @@ function SupporterPage() {
   const [hover, setHover] = useState<{ slot: SlotId; value: SlotValue } | null>(null);
   /* The reels while a roll spins: what each spinning slot shows this tick. */
   const [reel, setReel] = useState<Loadout | null>(null);
-  const [open, setOpen] = useState<SlotId>("theme");
+  /* The open section, from the URL: a slot's items, or one of the page's other sections. */
+  const section: SupporterSection = Route.useSearch().s ?? "theme";
+  const navigate = useNavigate({ from: "/supporter" });
+  const openSection = useCallback((next: SupporterSection) => {
+    void navigate({ search: next === "theme" ? {} : { s: next }, replace: true, resetScroll: false });
+  }, [navigate]);
+  const open: SlotId | null = isSlotSection(section) ? section : null;
   const [locks, setLocks] = useState<ReadonlySet<SlotId>>(() => new Set());
   const [pop, setPop] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -154,6 +166,7 @@ function SupporterPage() {
     fetchSupporterLookState()
       .then((next) => {
         if (!alive) return;
+        registerWorkshopFrames(next.frameArt ?? {});
         setState(next);
         rememberViewerSupporter(viewer.id, next.supporter ? next.expiresAt : null);
         saved.current = loadoutOf(next);
@@ -476,7 +489,7 @@ function SupporterPage() {
     <div className="flex-1">
       <PageHeader iconSrc="/images/icons/supporter-heart.svg" title={t`supporter`} right={status} />
       <div className="min-h-[80vh] bg-osu-b5" style={profileThemeStyle(shown?.theme ?? null, highwayNotes)}>
-        <div className="mx-auto max-w-[1200px] px-3 py-6 sm:px-5 sm:py-8">
+        <div className="mx-auto max-w-[1200px] px-3 py-6 sm:px-5 sm:py-8 xl:max-w-[1440px]">
           {!viewer ? (
             <p className="py-10 text-center text-[13px] text-osu-f1">
               <a href={`/api/auth/osu?next=${encodeURIComponent("/supporter")}`} className="font-semibold text-osu-pink-light hover:underline">
@@ -486,21 +499,8 @@ function SupporterPage() {
             </p>
           ) : (
             <>
-              {state?.supporter && giftFrom ? (
-                <div className="mb-6">
-                  <p className="text-[22px] font-semibold text-white">{t`Enjoy your supporter week, ${viewer.username}.`}</p>
-                  <p className="mt-1 text-[13px] text-osu-l2">{t`${giftFrom} gave you a week of supporter.`}</p>
-                </div>
-              ) : state?.supporter ? (
-                <div className="mb-6">
-                  <p className="text-[22px] font-semibold text-white">{t`Thank you for supporting, ${viewer.username}.`}</p>
-                  <p className="mt-1 text-[13px] text-osu-l2">
-                    {t`Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks.`}
-                  </p>
-                  {state.runStartedAt != null ? <SupporterRankLadder runStartedAt={state.runStartedAt} /> : null}
-                  <GiftCodePanel viewerId={viewer.id} />
-                </div>
-              ) : state ? (
+              {/* Only someone browsing in preview needs telling up front; a supporter's thanks, rank and gift code have their own section. */}
+              {state && !state.supporter ? (
                 <div className="mb-6">
                   {state.expiresAt ? (
                     <p className="text-[22px] font-semibold text-white">{t`Thank you for supporting before, ${viewer.username}.`}</p>
@@ -512,9 +512,30 @@ function SupporterPage() {
                 </div>
               ) : null}
 
-              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
+              {/* From lg up the three columns fill the window between the page header and
+                  the footer, each scrolling on its own, so the page itself holds still. */}
+              <div className="grid items-start gap-6 lg:h-[calc(100dvh-214px)] lg:min-h-[520px] lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-stretch xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,440px)]">
+                <aside className="scroll-slim min-h-0 overflow-y-auto pb-4 pr-1 max-xl:hidden">
+                  {shown && (
+                    <SupporterNav
+                      layout="column"
+                      shown={shown}
+                      section={section}
+                      onSection={openSection}
+                      locks={locks}
+                      spinning={spinning}
+                      trying={hover && !spinning ? hover.slot : null}
+                      avatar={avatar}
+                      supporter={supporter}
+                    />
+                  )}
+                  <p className="mt-4 px-2 text-[11px] text-osu-f1">
+                    <span className="font-semibold tabular-nums text-osu-l2">{formatNumber(LOADOUT_COMBINATIONS)}</span> {t`possible combinations`}
+                  </p>
+                </aside>
+
                 {/* Below lg only the avatar and name stay in view; the card is too tall to. */}
-                <div className={`z-20 lg:sticky lg:top-[76px] ${open === "motif" || open === "foil" || open === "sleeve" ? "" : "max-lg:sticky max-lg:top-[60px]"}`}>
+                <div className={`z-20 lg:min-h-0 ${open === "motif" || open === "foil" || open === "sleeve" ? "" : "max-lg:sticky max-lg:top-[60px]"}`}>
                   {shown && held ? (
                     <LoadoutStage
                       shown={shown}
@@ -528,28 +549,35 @@ function SupporterPage() {
                       pop={pop}
                       spinning={spinning}
                       footer={footer}
+                      tall
                     />
                   ) : (
-                    <div className="h-[280px] animate-pulse rounded-2xl bg-osu-b6" />
+                    <div className="h-[280px] animate-pulse rounded-2xl bg-osu-b6 lg:h-full" />
                   )}
                 </div>
 
-                {shown && held && (
-                  <div className="min-w-0">
-                    <p className="mb-2 text-right text-[12px] text-osu-f1">
-                      <span className="font-semibold tabular-nums text-osu-l2">{formatNumber(LOADOUT_COMBINATIONS)}</span> {t`possible combinations`}
-                    </p>
-                    <LoadoutSlots
-                      shown={shown}
-                      open={open}
-                      onOpen={setOpen}
-                      locks={locks}
-                      onToggleLock={toggleLock}
-                      spinning={spinning}
-                      trying={hover && !spinning ? hover.slot : null}
-                      avatar={avatar}
-                    />
-                    <div className="mt-4 border-t border-white/[0.07] pt-4">
+                <div className="scroll-slim min-w-0 lg:-mx-2 lg:-mt-2 lg:min-h-0 lg:overflow-y-auto lg:px-2 lg:pt-2">
+                  {shown && (
+                    <div className="mb-4 xl:hidden">
+                      <SupporterNav
+                        layout="row"
+                        shown={shown}
+                        section={section}
+                        onSection={openSection}
+                        locks={locks}
+                        spinning={spinning}
+                        trying={null}
+                        avatar={avatar}
+                        supporter={supporter}
+                      />
+                    </div>
+                  )}
+                  {open && shown && held ? (
+                    <>
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <h2 className="text-[15px] font-semibold text-white">{i18n._(SLOT_LABELS[open])}</h2>
+                        {isRolledSlot(open) && <SlotLock locked={locks.has(open)} onToggle={() => toggleLock(open)} />}
+                      </div>
                       <LoadoutDrawer
                         slot={open}
                         current={held}
@@ -580,17 +608,33 @@ function SupporterPage() {
                         />
                       )}
                       </AnimatePresence>
+                    </>
+                  ) : section === "companion" ? (
+                    <CompanionSection viewerId={viewer.id} supporter={supporter} />
+                  ) : section === "stats" ? (
+                    <ProfileStatsSection viewerId={viewer.id} supporter={supporter} />
+                  ) : section === "perks" ? (
+                    <SupporterPerks avatar={avatar} />
+                  ) : section === "you" && state?.supporter ? (
+                    <div>
+                      {giftFrom ? (
+                        <>
+                          <p className="text-[18px] font-semibold text-white">{t`Enjoy your supporter week, ${viewer.username}.`}</p>
+                          <p className="mt-1 text-[13px] text-osu-l2">{t`${giftFrom} gave you a week of supporter.`}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[18px] font-semibold text-white">{t`Thank you for supporting, ${viewer.username}.`}</p>
+                          <p className="mt-1 text-[13px] text-osu-l2">
+                            {t`Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks.`}
+                          </p>
+                          {state.runStartedAt != null ? <SupporterRankLadder runStartedAt={state.runStartedAt} /> : null}
+                          <GiftCodePanel viewerId={viewer.id} />
+                        </>
+                      )}
                     </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-10 grid gap-8 border-t border-white/[0.07] pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="flex flex-col gap-8">
-                  <ProfileStatsSection viewerId={viewer.id} supporter={supporter} />
-                  <CompanionSection viewerId={viewer.id} supporter={supporter} />
+                  ) : null}
                 </div>
-                <SupporterPerks avatar={avatar} />
               </div>
             </>
           )}

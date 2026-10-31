@@ -10,6 +10,7 @@ import {
   FRAMED_AVATAR_RADIUS,
   framedAvatarStyle,
   supporterFrameGeometry,
+  workshopFrameName,
   type SupporterAvatarFrameId,
 } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
@@ -18,8 +19,9 @@ import { SupporterStyledName } from "./SupporterNameStyle";
 import { announceFrameDanPicked, frameDanName, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
-import { fetchFrameDanChoices, saveFrameDanChoice, type FrameDanChoices } from "../../lib/supporter-look-settings";
-import { forgetLiveSupporterLook } from "../../lib/live-backend";
+import { fetchFrameDanChoices, fetchOwnWorkshopFrames, saveFrameDanChoice, type FrameDanChoices } from "../../lib/supporter-look-settings";
+import { fetchLiveWorkshopFrames, forgetLiveSupporterLook } from "../../lib/live-backend";
+import { registerSubmittedFrames, type SubmittedFrame } from "../../lib/workshop-frames";
 import { avatarUrlUserId } from "../ui/Avatar";
 import { CheckBadge, LockIcon, PasteIcon, UploadIcon } from "./LoadoutIcons";
 import { FoilPreview } from "./FoilPreview";
@@ -49,12 +51,14 @@ import {
   FRAME_NAMES,
   NAME_FONT_GROUPS,
   NAME_STYLE_GROUPS,
-  SLOT_IDS,
-  PACK_SLOT_IDS,
-  isRolledSlot,
+  PACK_SECTIONS,
+  PROFILE_SECTIONS,
+  SECTION_LABELS,
   SLOT_LABELS,
+  isSlotSection,
   slotValue,
   type FrameEntry,
+  type SupporterSection,
   type Loadout,
   type SlotId,
   type SlotValue,
@@ -108,6 +112,8 @@ function useSlotName() {
     if (slot === "theme") return value ? i18n._(SUPPORTER_PROFILE_THEME_LABELS[value as SupporterProfileThemeId]) : t`Site colours`;
     if (slot === "frame") {
       if (!value) return t`No frame`;
+      const made = workshopFrameName(value as SupporterAvatarFrameId);
+      if (made) return made;
       const name = FRAME_NAMES.get(value as SupporterAvatarFrameId);
       return name ? `${i18n._(name.label)}${name.variant ? ` ${name.variant}` : ""}` : value;
     }
@@ -216,81 +222,187 @@ export function wrapperThumb(wrapper: SupporterWrapperId | null): string {
   return url;
 }
 
-export function LoadoutSlots({ shown, open, onOpen, locks, onToggleLock, spinning, trying, avatar }: {
-  /** What the stage shows, so the slots read the same as it, reels included. */
+/* The supporter page's sidebar: every section in one list, grouped like a
+   store's categories, each loadout slot showing what it holds (the reels
+   included), so the list doubles as the overview of the loadout. Below xl it
+   folds into one scrolling row of chips. */
+export function SupporterNav({ shown, section, onSection, locks, spinning, trying, avatar, supporter, layout }: {
+  /** What the stage shows, so the rows read the same as it. */
   shown: Loadout;
-  open: SlotId;
-  onOpen: (slot: SlotId) => void;
+  section: SupporterSection;
+  onSection: (section: SupporterSection) => void;
   locks: ReadonlySet<SlotId>;
-  onToggleLock: (slot: SlotId) => void;
   spinning: boolean;
   /** The slot an item is being tried on in, so its name reads as a preview. */
   trying: SlotId | null;
   avatar: string | undefined;
+  supporter: boolean;
+  layout: "column" | "row";
 }) {
   const { t, i18n } = useLingui();
   const slotName = useSlotName();
   const reduced = useReducedMotion();
+  const label = (id: SupporterSection) => i18n._(isSlotSection(id) ? SLOT_LABELS[id] : SECTION_LABELS[id]);
+  const groups: { title: string; ids: readonly SupporterSection[] }[] = [
+    { title: t`Profile`, ids: PROFILE_SECTIONS },
+    { title: t`Packs`, ids: PACK_SECTIONS },
+  ];
+  const you: SupporterSection[] = ["you", "perks"];
+  const workshop = [
+    { to: "/workshop" as const, label: t`Overview` },
+    { to: "/workshop/frames" as const, label: t`Make a frame` },
+    { to: "/workshop/themes/$themeId" as const, params: { themeId: "new" }, label: t`Make a theme` },
+    { to: "/workshop/themes" as const, label: t`Your themes` },
+  ];
+
+  if (layout === "row") {
+    const chip = (id: SupporterSection) => (
+      <button
+        key={id}
+        type="button"
+        onClick={() => onSection(id)}
+        aria-current={section === id ? "page" : undefined}
+        className={`shrink-0 cursor-pointer rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors ${section === id ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-white"}`}
+      >
+        {label(id)}
+      </button>
+    );
+    return (
+      <nav aria-label={t`Supporter sections`} className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:-mx-5 sm:px-5 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
+        {[...PROFILE_SECTIONS, ...PACK_SECTIONS].map(chip)}
+        <Link to="/workshop" className="shrink-0 rounded-full bg-osu-b4 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white">{t`Workshop`}</Link>
+        {chip(supporter ? "you" : "perks")}
+      </nav>
+    );
+  }
+
+  const heading = (text: string) => <div className="px-2 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-osu-f1 first:pt-0">{text}</div>;
+  const plainRow = (id: SupporterSection) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => onSection(id)}
+      aria-current={section === id ? "page" : undefined}
+      className={`flex w-full cursor-pointer items-center rounded-lg px-2 py-1.5 text-left text-[13px] font-semibold transition-colors ${section === id ? "bg-osu-b4 text-white" : "text-osu-l2 hover:bg-osu-b4/60 hover:text-white"}`}
+    >
+      {label(id)}
+    </button>
+  );
+  // the profile's two non-slot rows sit among slot rows, so they get a drawn tile too
+  const iconRow = (id: SupporterSection, icon: ReactNode) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => onSection(id)}
+      aria-current={section === id ? "page" : undefined}
+      className={`flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1 text-left transition-colors ${section === id ? "bg-osu-b4" : "hover:bg-osu-b4/60"}`}
+    >
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-md bg-osu-b6 text-osu-l2 ${section === id ? "ring-1 ring-osu-pink" : ""}`}>{icon}</span>
+      <span className={`truncate text-[13px] font-semibold ${section === id ? "text-white" : "text-osu-l2"}`}>{label(id)}</span>
+    </button>
+  );
 
   return (
-    <div className="space-y-1">
-      {SLOT_IDS.map((slot) => {
-        const value = slotValue(shown, slot);
-        const locked = locks.has(slot);
-        const active = open === slot;
-        return (
-          <Fragment key={slot}>
-          {slot === PACK_SLOT_IDS[0] && (
-            <div className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">{t`Packs`}</div>
-          )}
-          <div className={`flex items-stretch rounded-xl transition-colors ${active ? "bg-osu-b4" : "hover:bg-osu-b4/60"}`}>
-            <button
-              type="button"
-              onClick={() => onOpen(slot)}
-              aria-expanded={active}
-              className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-2 pl-2 pr-1 text-left"
-            >
-              <span className={`relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-osu-b6 ${active ? "ring-1 ring-osu-pink" : ""}`}>
-                <SlotThumb slot={slot} loadout={shown} avatar={avatar} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-osu-f1">{i18n._(SLOT_LABELS[slot])}</span>
-                <span className="relative block h-[20px] overflow-hidden">
-                  <AnimatePresence initial={false} mode="popLayout">
-                    <motion.span
-                      key={String(value)}
-                      initial={reduced ? false : { y: spinning ? -18 : -10, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={reduced ? undefined : { y: spinning ? 18 : 10, opacity: 0 }}
-                      transition={{ duration: spinning ? 0.07 : 0.16, ease: "easeOut" }}
-                      className={`block truncate text-[15px] font-semibold leading-[20px] ${trying === slot ? "text-osu-pink-light" : "text-white"}`}
-                    >
-                      {slotName(slot, value)}
-                    </motion.span>
-                  </AnimatePresence>
-                </span>
-              </span>
-              <svg viewBox="0 0 16 16" className={`h-4 w-4 shrink-0 text-osu-f1 transition-transform ${active ? "rotate-90 text-white" : ""}`} aria-hidden>
-                <path d="m6 3.5 4.5 4.5L6 12.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            {isRolledSlot(slot) ? (
+    <nav aria-label={t`Supporter sections`}>
+      {groups.map((group) => (
+        <Fragment key={group.title}>
+          {heading(group.title)}
+          {group.ids.map((id) => {
+            if (id === "companion") return iconRow(id, <CompanionGlyph className="h-5 w-5" />);
+            if (id === "stats") return iconRow(id, <StatsGlyph className="h-5 w-5" />);
+            if (!isSlotSection(id)) return plainRow(id);
+            const value = slotValue(shown, id);
+            const active = section === id;
+            return (
               <button
+                key={id}
                 type="button"
-                onClick={() => onToggleLock(slot)}
-                aria-pressed={locked}
-                aria-label={locked ? t`Unlock for rolls` : t`Lock for rolls`}
-                title={locked ? t`Unlock for rolls` : t`Lock for rolls`}
-                className={`grid w-10 shrink-0 cursor-pointer place-items-center rounded-r-xl transition-colors ${locked ? "text-osu-pink" : "text-osu-f1/60 hover:text-white"}`}
+                onClick={() => onSection(id)}
+                aria-current={active ? "page" : undefined}
+                className={`flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1 text-left transition-colors ${active ? "bg-osu-b4" : "hover:bg-osu-b4/60"}`}
               >
-                <LockIcon locked={locked} className="h-[18px] w-[18px]" />
+                <span className={`relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-osu-b6 [&>*]:scale-[0.78] ${active ? "ring-1 ring-osu-pink" : ""}`}>
+                  <SlotThumb slot={id} loadout={shown} avatar={avatar} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11px] font-semibold text-osu-f1">{label(id)}</span>
+                  <span className="relative block h-[18px] overflow-hidden">
+                    <AnimatePresence initial={false} mode="popLayout">
+                      <motion.span
+                        key={String(value)}
+                        initial={reduced ? false : { y: spinning ? -16 : -8, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={reduced ? undefined : { y: spinning ? 16 : 8, opacity: 0 }}
+                        transition={{ duration: spinning ? 0.07 : 0.16, ease: "easeOut" }}
+                        className={`block truncate text-[13px] font-semibold leading-[18px] ${trying === id ? "text-osu-pink-light" : "text-white"}`}
+                      >
+                        {slotName(id, value)}
+                      </motion.span>
+                    </AnimatePresence>
+                  </span>
+                </span>
+                {locks.has(id) && <LockIcon locked className="h-3.5 w-3.5 shrink-0 text-osu-pink" />}
               </button>
-            ) : <span aria-hidden className="w-10 shrink-0" />}
-          </div>
-          </Fragment>
-        );
-      })}
-    </div>
+            );
+          })}
+        </Fragment>
+      ))}
+      {heading(t`Workshop`)}
+      {workshop.map((item) => (
+        <Link
+          key={item.label}
+          to={item.to}
+          params={"params" in item ? item.params : undefined}
+          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-[13px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4/60 hover:text-white"
+        >
+          {item.label}
+          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-osu-f1" aria-hidden>
+            <path d="m6 3.5 4.5 4.5L6 12.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Link>
+      ))}
+      {heading(t`You`)}
+      {you.filter((id) => supporter || id !== "you").map(plainRow)}
+    </nav>
+  );
+}
+
+/* A little figure standing on a base, for the companion row. */
+function CompanionGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden className={className}>
+      <circle cx="10" cy="5.6" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M6.2 15V12a3.8 3.8 0 0 1 7.6 0v3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M4 16.4h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/* Four stat cards in a grid, for the profile stats row. */
+function StatsGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden className={className}>
+      {[[3, 3], [11, 3], [3, 11], [11, 11]].map(([x, y]) => (
+        <rect key={`${x}-${y}`} x={x} y={y} width="6" height="6" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      ))}
+    </svg>
+  );
+}
+
+/* The lock beside a slot's heading on the page: a locked slot holds still when the dice roll. */
+export function SlotLock({ locked, onToggle }: { locked: boolean; onToggle: () => void }) {
+  const { t } = useLingui();
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={locked}
+      title={locked ? t`Unlock for rolls` : t`Lock for rolls`}
+      className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition-colors ${locked ? "bg-osu-pink/15 text-osu-pink-light" : "text-osu-f1 hover:bg-osu-b4 hover:text-white"}`}
+    >
+      <LockIcon locked={locked} className="h-4 w-4" />
+      {locked ? t`Locked` : t`Lock for rolls`}
+    </button>
   );
 }
 
@@ -438,11 +550,36 @@ function useColumns(min: number, gap: number) {
 }
 
 /* Every frame, three rows at a time; the theme chips narrow it down. */
+const WORKSHOP_FRAMES = "workshop";
+
+/* The workshop's frames this viewer may wear: the shared list and their own,
+   as picker entries named by their makers. */
+function useWorkshopFrameEntries(): FrameEntry[] {
+  const [made, setMade] = useState<SubmittedFrame[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void Promise.all([fetchLiveWorkshopFrames().catch(() => []), fetchOwnWorkshopFrames().catch(() => [])]).then(([shared, own]) => {
+      if (!alive) return;
+      const seen = new Set<string>();
+      registerSubmittedFrames(own);
+      setMade([...own, ...shared].filter((entry) => !seen.has(entry.id) && !!seen.add(entry.id)));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // a maker's name is not a catalog string, so it rides as its own message
+  return made.map((entry) => ({ id: entry.id, label: { id: `workshop-frame:${entry.id}`, message: entry.name } }));
+}
+
 function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) {
   const { t, i18n } = useLingui();
   const frame = current.frame;
   const [tab, setTab] = useState(ALL_FRAMES);
-  const entries = tab === ALL_FRAMES ? FRAME_GROUPS.flatMap((g) => g.entries) : (FRAME_GROUPS.find((g) => g.key === tab) ?? FRAME_GROUPS[0]).entries;
+  const made = useWorkshopFrameEntries();
+  const entries = tab === ALL_FRAMES ? [...FRAME_GROUPS.flatMap((g) => g.entries), ...made]
+    : tab === WORKSHOP_FRAMES ? made
+    : (FRAME_GROUPS.find((g) => g.key === tab) ?? FRAME_GROUPS[0]).entries;
   const activeSet = entries.find((entry) => "set" in entry && holds(entry, frame));
   const tryOn = (value: SupporterAvatarFrameId | null) => (on: boolean) => onTry("frame", on ? value : undefined);
   const [gridRef, columns] = useColumns(FRAME_TILE_MIN, FRAME_GAP);
@@ -484,8 +621,9 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
       <Chips
         value={tab}
         options={[
-          { value: ALL_FRAMES, label: t`All`, count: FRAME_GROUPS.reduce((sum, g) => sum + g.entries.length, 0) },
+          { value: ALL_FRAMES, label: t`All`, count: FRAME_GROUPS.reduce((sum, g) => sum + g.entries.length, 0) + made.length },
           ...FRAME_GROUPS.map((g) => ({ value: g.key, label: i18n._(g.title), count: g.entries.length })),
+          ...(made.length > 0 ? [{ value: WORKSHOP_FRAMES, label: t`Workshop`, count: made.length }] : []),
         ]}
         onChange={pick}
         scroll
@@ -997,7 +1135,7 @@ function ThemeDrawer({ current, disabled, avatar, username, onTry, onPick, onThe
             <span className="w-full truncate text-center">{i18n._(SUPPORTER_PROFILE_THEME_LABELS[id])}</span>
           </Item>
         ))}
-        <Link to="/supporter/themes" className={`${tile(false)} items-stretch`}>
+        <Link to="/workshop/themes" className={`${tile(false)} items-stretch`}>
           <span className="grid aspect-[16/10] w-full place-items-center rounded-md border border-dashed border-white/15 bg-osu-b6">
             <OwnThemeIcon className="h-7 w-7 text-osu-pink-light" />
           </span>

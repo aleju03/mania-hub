@@ -5,7 +5,8 @@ import { parseProfilePlays, type ProfilePlays } from "./profile-plays";
 import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
-import { isSupporterAvatarFrame, parseFrameDan, type FrameDan, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
+import { isSupporterAvatarFrame, parseFrameDan, parseWorkshopFrameArt, registerWorkshopFrames, type FrameDan, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
+import { parseSubmittedFrames, type SubmittedFrame } from "./workshop-frames";
 import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
 import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
@@ -4717,6 +4718,8 @@ export function fetchLiveSupporterProfileLook(userId: number): Promise<Supporter
 /* The backend's answer for one player's look, checked field by field. */
 export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
   const body = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  // a workshop frame comes with its art, which every frame on the page draws from
+  registerWorkshopFrames(parseWorkshopFrameArt(body.frameArt));
   return {
     look: parseSupporterLook(body.look ?? null),
     runStartedAt: typeof body.runStartedAt === "number" && Number.isFinite(body.runStartedAt) ? body.runStartedAt : null,
@@ -4818,6 +4821,12 @@ export async function fetchLiveSubmittedCompanions(): Promise<SubmittedCompanion
   return Array.isArray(body?.companions) ? body.companions.map(parseSubmittedCompanion).filter((entry): entry is SubmittedCompanion => entry !== null) : [];
 }
 
+/* Every workshop frame on the shared list, newest first. */
+export async function fetchLiveWorkshopFrames(): Promise<SubmittedFrame[]> {
+  const body = await fetchLiveJson<{ frames?: unknown }>("/api/supporters/frames", { cache: "no-store" });
+  return parseSubmittedFrames(body?.frames);
+}
+
 export function peekLiveSupporterPackStyle(userId: number): SupporterPackStyle | undefined {
   return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.packStyle;
 }
@@ -4893,8 +4902,9 @@ export function ensureSupporterNameStyles(): void {
   nameStyleMapInflight = true;
   const reload = nameStyleMapReload;
   nameStyleMapReload = false;
-  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown>; customRows?: Record<string, unknown> }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
+  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown>; customRows?: Record<string, unknown>; frameArt?: unknown }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
     .then((body) => {
+      registerWorkshopFrames(parseWorkshopFrameArt(body?.frameArt));
       const styles = new Map<number, SupporterNameStyleId>();
       for (const [id, style] of Object.entries(body?.styles ?? {})) if (isSupporterNameStyle(style)) styles.set(Number(id), style);
       const fonts = new Map<number, SupporterNameFontId>();

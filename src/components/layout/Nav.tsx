@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { BarChart3, Bug, ChevronDown, Globe, Heart, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
+import { BarChart3, Brush, Bug, ChevronDown, Globe, Heart, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { GuestAvatar } from "../ui/GuestAvatar";
 import { Avatar } from "../ui/Avatar";
@@ -972,6 +972,15 @@ export function Nav() {
                         <Heart className={`h-3.5 w-3.5 ${viewerIsSupporter ? "" : "fill-osu-pink text-osu-pink"}`} />
                         {viewerIsSupporter ? <Trans>Supporter</Trans> : <Trans>Supporter perks</Trans>}
                       </Link>
+                      <Link
+                        to="/workshop"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        <Brush className="h-3.5 w-3.5" />
+                        <Trans>Workshop</Trans>
+                      </Link>
                       {/* Logout is a POST (the route rejects GET), so it needs a
                           form; `contents` keeps the button laid out as if it
                           were still a direct child of the menu. */}
@@ -1279,6 +1288,17 @@ export function Nav() {
                         >
                           <Heart className={`h-3.5 w-3.5 shrink-0 ${viewerIsSupporter ? "opacity-75" : "fill-osu-pink text-osu-pink"}`} />
                           {viewerIsSupporter ? <Trans>Supporter</Trans> : <Trans>Supporter perks</Trans>}
+                        </Link>
+                        <Link
+                          to="/workshop"
+                          onClick={() => {
+                            setMobileAccountOpen(false);
+                            setMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                        >
+                          <Brush className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                          <Trans>Workshop</Trans>
                         </Link>
                         <form method="post" action={logoutHref} className="contents">
                           <button

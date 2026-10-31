@@ -4,6 +4,7 @@ import { useLingui } from "@lingui/react/macro";
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "../components/layout/PageHeader";
+import { WorkshopTitle } from "../components/supporter/WorkshopTitle";
 import { Popover } from "../components/supporter/themes/EditorControls";
 import { LayerIcon } from "../components/supporter/themes/LayerIcons";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
@@ -21,7 +22,7 @@ import {
 
 /* A supporter's own profile themes: make one, edit, wear, share in the
    gallery or take out of it, and delete. */
-export const Route = createFileRoute("/supporter_/themes/")({
+export const Route = createFileRoute("/workshop/themes/")({
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return { meta: [{ title: i18n._(msg`Your themes`) }, { name: "robots", content: "noindex, nofollow" }] };
@@ -57,12 +58,12 @@ function OwnThemesPage() {
 
   const header = (
     <PageHeader
-      iconSrc="/images/icons/supporter-heart.svg"
-      title={t`your themes`}
+      iconSrc="/images/icons/workshop.svg"
+      title={<WorkshopTitle>{t`your themes`}</WorkshopTitle>}
       right={
         <span className="flex items-center gap-3">
-          <Link to="/supporter/themes/gallery" className="text-[12px] font-semibold text-osu-f1 hover:text-white">{t`Gallery`}</Link>
-          <Link to="/supporter/themes/spec" className="text-[12px] font-semibold text-osu-f1 hover:text-white">{t`Spec`}</Link>
+          <Link to="/workshop/themes/gallery" className="text-[12px] font-semibold text-osu-f1 hover:text-white">{t`Gallery`}</Link>
+          <Link to="/workshop/themes/spec" className="text-[12px] font-semibold text-osu-f1 hover:text-white">{t`Spec`}</Link>
           <NewThemeButton />
         </span>
       }
@@ -74,7 +75,7 @@ function OwnThemesPage() {
       <div className="min-h-[80vh] bg-osu-b5">
         {header}
         <p className="py-16 text-center text-[13px] text-osu-l2">
-          <a href={`/api/auth/osu?next=${encodeURIComponent("/supporter/themes")}`} className="font-semibold text-osu-pink-light hover:underline">{t`Sign in`}</a>{" "}
+          <a href={`/api/auth/osu?next=${encodeURIComponent("/workshop/themes")}`} className="font-semibold text-osu-pink-light hover:underline">{t`Sign in`}</a>{" "}
           {t`to make your own profile themes.`}
         </p>
       </div>
@@ -99,9 +100,9 @@ function OwnThemesPage() {
           <div className="py-12 text-center">
             <p className="text-[13px] text-osu-l2">{t`No themes yet.`}</p>
             <p className="mt-1 text-[12px] text-osu-f1">
-              <Link to="/supporter/themes/$themeId" params={{ themeId: "new" }} search={{ mode: "layers" }} className="font-semibold text-osu-pink-light hover:underline">{t`Start one`}</Link>
+              <Link to="/workshop/themes/$themeId" params={{ themeId: "new" }} search={{ mode: "layers" }} className="font-semibold text-osu-pink-light hover:underline">{t`Start one`}</Link>
               {" "}{t`or`}{" "}
-              <Link to="/supporter/themes/gallery" className="font-semibold text-osu-pink-light hover:underline">{t`remix one from the gallery`}</Link>
+              <Link to="/workshop/themes/gallery" className="font-semibold text-osu-pink-light hover:underline">{t`remix one from the gallery`}</Link>
             </p>
           </div>
         ) : (
@@ -125,7 +126,7 @@ function OwnThemesPage() {
                     ) : null}
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
                       {!taken ? (
-                        <Link to="/supporter/themes/$themeId" params={{ themeId: String(theme.id) }} className={BUTTON}>{t`Edit`}</Link>
+                        <Link to="/workshop/themes/$themeId" params={{ themeId: String(theme.id) }} className={BUTTON}>{t`Edit`}</Link>
                       ) : null}
                       {!taken && theme.state === "live" ? (
                         wearing ? (
@@ -208,7 +209,7 @@ function NewThemeButton() {
         {choices.map((choice) => (
           <Link
             key={choice.mode}
-            to="/supporter/themes/$themeId"
+            to="/workshop/themes/$themeId"
             params={{ themeId: "new" }}
             search={{ mode: choice.mode }}
             onClick={() => setOpen(false)}

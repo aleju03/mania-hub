@@ -8,7 +8,7 @@ import { getI18n } from "../lib/i18n";
 /* The theme editor: `new` for a new theme (mode=layers or code; from=<built-in
    id> to start code from one, remix=<gallery id> to remix one), or one of the
    viewer's own. */
-export const Route = createFileRoute("/supporter_/themes/$themeId")({
+export const Route = createFileRoute("/workshop/themes/$themeId")({
   validateSearch: (search: Record<string, unknown>): { from?: string; remix?: number; mode?: "code" | "layers" } => {
     const remix = Number(search.remix);
     return {
