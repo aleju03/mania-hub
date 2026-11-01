@@ -579,7 +579,7 @@ msgstr "{0} 归你所有"
 #. placeholder {0}: likeCount.toLocaleString("en-US")
 #: src/routes/skins_.$id.tsx
 msgid "{0} likes"
-msgstr ""
+msgstr "{0} 个赞"
 
 #. placeholder {0}: communitySkinContext.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -1479,7 +1479,7 @@ msgstr "还差 {left}%"
 
 #: src/components/skins/SkinCard.tsx
 msgid "{likeCountLabel} likes"
-msgstr ""
+msgstr "{likeCountLabel} 个赞"
 
 #: src/components/skins/SkinCard.tsx
 #~ msgid "{likeCountLabel} likes, including yours"
@@ -2652,6 +2652,10 @@ msgstr "一张可以自定义的图片，放在你的 osu! 个人资料里，还
 #~ msgid "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
 #~ msgstr "有少数通过不计入平均：一项技能中最多三个，且比你在该技能最好的五个通过的平均低五个以上段位。这通常是你为了精度去打的简单图，而不是能衡量你水平的成绩。它们仍会出现在段位窗口中，标记为<0>不计入</0>。最多三个，并且绝不会让一项技能少于所需的四个通过，所以真正跨度很大的成绩仍会完整计入平均。"
 
+#: src/routes/hashi.tsx
+msgid "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
+msgstr "Hashi 中一局已完成游玩的分析，被做成在 osu! 中打开的练习谱面"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
 msgstr "正在根据最新成绩重新计算评分，这些数字稍后可能会变动"
@@ -2775,6 +2779,10 @@ msgstr "低于所属段位表最低 OD 的成绩不计分：常规谱面为 5.5�
 #~ msgstr ""
 
 #: src/routes/hashi.tsx
+msgid "A practice map's analysis, with its repeats and earlier tries"
+msgstr "练习谱面的分析，包含各次重复和之前的尝试"
+
+#: src/routes/hashi.tsx
 msgid "A profile showing the map its player is playing"
 msgstr "显示玩家正在游玩谱面的个人资料"
 
@@ -2884,7 +2892,7 @@ msgstr "账号"
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Account activity"
-msgstr ""
+msgstr "账号活动"
 
 #: src/components/layout/Nav.tsx
 msgid "Account menu"
@@ -2953,6 +2961,10 @@ msgstr "准确率低于技能评分范围，因此此成绩在任何技能组中
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 94% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "准度决定档次，不只是过没过。在课题要求 96% 的段位系统里，delta 课题上刚好 96% 的通过读作 <0>delta</0>，97.5% 读作 <1>delta+</1>，98% 及以上读作 <2>delta++</2>，而 94% 差一点没过仍然读作 <3>delta--</3>，因为差一点通关也比什么都没有强。再低就完全不算。要求别的准度的段位系统，整条刻度也跟着平移。"
+
+#: src/routes/hashi.tsx
+msgid "Accuracy for each key and each hand, with the timing chart"
+msgstr "每个按键和每只手的准确率，以及判定时间图"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Accuracy or unstable rate for every column, one cell per finger."
@@ -3199,6 +3211,10 @@ msgstr "管理员：用假抽卡刷满侧栏以预览动画"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Advanced"
 msgstr "高级"
+
+#: src/routes/hashi.tsx
+msgid "After each play"
+msgstr "每局之后"
 
 #: src/components/player/BestScoresControls.tsx
 #~ msgid "Age"
@@ -3546,7 +3562,7 @@ msgstr "不限地区"
 
 #: src/routes/companella.tsx
 msgid "API docs"
-msgstr ""
+msgstr "API 文档"
 
 #: src/components/settings/settings-tabs.ts
 msgid "appearance"
@@ -4602,7 +4618,7 @@ msgstr "谱面"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Chart (.osu)"
-msgstr ""
+msgstr "谱面（.osu）"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "chart changed on osu!, waiting for a fresh check"
@@ -4965,6 +4981,14 @@ msgstr "请先点击一张图片。Imagemap 会把这张图片变成可点击的
 #~ msgid "Click here to read how dans are estimated"
 #~ msgstr "点击这里了解段位是如何估算的"
 
+#: src/routes/hashi.tsx
+#~ msgid "Click the chart icon on a play to see how it went. Hashi reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
+#~ msgstr "点一局成绩上的图表图标，就能看这局打得怎么样。Hashi 在你的电脑上读取回放，显示你每个键位和每只手的击打时机、长条怎么放手的，以及在谱面哪里掉了。它还会指出值得改的地方，比如偏移没调好，或者多押被你按成了楼梯，并把这局和你在这张谱面上的上一次尝试做对比。"
+
+#: src/routes/hashi.tsx
+msgid "Click the chart icon on a play to see how it went. It reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
+msgstr "点一局成绩上的图表图标，就能看这局打得怎么样。它会在你的电脑上读取回放，显示你每个键位和每只手的击打时机、长条怎么放手的，以及在谱面哪里掉了。它还会指出值得改的地方，比如偏移没调好，或者多押被你按成了楼梯，并把这局和你在这张谱面上的上一次尝试做对比。"
+
 #: src/routes/dan-estimates.tsx
 msgid "Click to group the numbered levels"
 msgstr "点击收起数字段位"
@@ -4984,7 +5008,7 @@ msgstr "点击展开数字段位"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Click to require {grade}"
-msgstr ""
+msgstr "点击以只要 {grade}"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Click to require {label}"
@@ -5320,7 +5344,7 @@ msgstr "连接应用"
 
 #: src/routes/companella.tsx
 msgid "Connect Companella to Mania Tracker and review the plays it imported."
-msgstr ""
+msgstr "把 Companella 连接到 Mania Tracker，并查看它导入的成绩。"
 
 #: src/routes/hashi.tsx
 msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
@@ -5332,12 +5356,12 @@ msgstr "请先关联你的 Discord 账号。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected"
-msgstr ""
+msgstr "已连接"
 
 #. placeholder {0}: result.username
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected as {0}."
-msgstr ""
+msgstr "已以 {0} 的身份连接。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "connected to Discord"
@@ -5362,7 +5386,7 @@ msgstr "连接"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connection"
-msgstr ""
+msgstr "连接"
 
 #. placeholder {0}: index + 1
 #: src/components/settings/CompanellaGroup.tsx
@@ -5671,7 +5695,7 @@ msgstr "提交失败，请重试。"
 #. placeholder {0}: created.error ?? "unknown"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Could not start an authorization request ({0})."
-msgstr ""
+msgstr "无法发起授权请求（{0}）。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not submit that. Try again."
@@ -6049,7 +6073,7 @@ msgstr "创建卡组来整理你的卡片。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Create test connection"
-msgstr ""
+msgstr "创建测试连接"
 
 #: src/components/companella/TestClientPanel.tsx
 #~ msgid "Create test installation"
@@ -6066,7 +6090,7 @@ msgstr "创建于 <0>{createdValue}</0>"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Creating"
-msgstr ""
+msgstr "正在创建"
 
 #: src/routes/dan-estimates.tsx
 msgid "Credit"
@@ -6412,7 +6436,7 @@ msgstr "删除皮肤"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
-msgstr ""
+msgstr "删除这条导入的成绩？它的回放会被移除，预览会重新计算。"
 
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/replay_.uploads.tsx
@@ -6700,7 +6724,7 @@ msgstr "下载 {name} 版"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Download replay"
-msgstr ""
+msgstr "下载回放"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Download started"
@@ -6897,6 +6921,10 @@ msgstr "每位玩家的第 200 个最佳成绩，仅限有 200 个最佳成绩�
 #: src/routes/top-plays.tsx
 msgid "Each player's best play"
 msgstr "每位玩家的最佳成绩"
+
+#: src/routes/hashi.tsx
+msgid "Each practice map comes with a goal to match the acc you got on the rest of the map, at full speed. Every try shows up on the goal until you get it."
+msgstr "每张练习谱面都带一个目标，要在原速下打到你在谱面其余部分的准确率。每次尝试都会显示在目标上，直到你达成为止。"
 
 #: src/components/prism/ReleaseFigure.tsx
 msgid "Each release in a passage, labelled with the share of its v25 cost it keeps in v26"
@@ -7189,6 +7217,10 @@ msgstr "你已经贴出去的图片都会失效。"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. A <0/> play that drops the OD under its ladder's minimum earns no dan credit, and <1/> earns none anywhere, because it widens every hit window."
 #~ msgstr "每个段位系统还有最低 OD 要求：常规谱面 5.5，4K LN 是 7，7K LN 是 5。用 <0/> 把 OD 降到该系统的最低值以下，这个成绩就得不到段位认定；<1/> 在任何地方都得不到，因为它会放宽所有判定窗。"
+
+#: src/routes/hashi.tsx
+msgid "Every mania play you finish on stable or lazer goes to your profile with its replay. Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
+msgstr "你在 stable 或 lazer 上打完的每一局 mania 都会连同回放一起发到你的个人资料。打开 <0>{shareSetting}</0> 后，你的个人资料和排行榜会显示你在 osu! 里正在做什么。"
 
 #: src/routes/recommendations.tsx
 msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
@@ -7712,7 +7744,7 @@ msgstr "{0}% 的按键时有其他手指按住长条"
 
 #: src/routes/companella_.test-callback.tsx
 msgid "Finishing the connection..."
-msgstr ""
+msgstr "正在完成连接……"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Finishing the file"
@@ -7720,7 +7752,7 @@ msgstr "正在收尾文件"
 
 #: src/routes/companella_.test-callback.tsx
 msgid "Finishing the test client connection."
-msgstr ""
+msgstr "正在完成测试客户端的连接。"
 
 #: src/routes/recommendations.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
@@ -7903,7 +7935,7 @@ msgstr "针对被封禁或已删除的账号"
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "For review"
-msgstr ""
+msgstr "待审核"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "For screenshots that have nothing to do with the skin."
@@ -7992,6 +8024,10 @@ msgstr "好友"
 #: src/components/me/GoalsPanel.tsx
 msgid "from {0} now, that's +{1} to climb"
 msgstr "当前 {0}，还差 {1}"
+
+#: src/routes/hashi.tsx
+#~ msgid "From an analysis you can pick the stretch that went worst. Hashi cuts that part of the song into a difficulty of its own that plays it a few times in a row, slower at first and then at full speed, and opens it in osu!. Plays of practice maps stay in Hashi and are never sent to Mania Tracker."
+#~ msgstr "在分析中，你可以选出打得最差的一段。Hashi 会把歌曲的这一部分剪成一个单独的难度，连续重复几次，先放慢再恢复原速，然后在 osu! 中打开。练习谱面的成绩只留在 Hashi 里，不会发送到 Mania Tracker。"
 
 #: src/components/replay/ReplayInfo.tsx
 msgid "From the real play (not simulated)"
@@ -8218,6 +8254,7 @@ msgstr "目标"
 #: src/components/me/MyDataPanel.tsx
 #: src/lib/signature-shared.ts
 #: src/routes/goals.tsx
+#: src/routes/hashi.tsx
 msgid "Goals"
 msgstr "目标"
 
@@ -8358,8 +8395,8 @@ msgid "Has its own backdrop"
 msgstr "自带背景"
 
 #: src/routes/hashi.tsx
-msgid "Hashi before connecting to Mania Tracker"
-msgstr "连接 Mania Tracker 之前的 Hashi"
+#~ msgid "Hashi before connecting to Mania Tracker"
+#~ msgstr "连接 Mania Tracker 之前的 Hashi"
 
 #: src/routes/bridge.tsx
 #~ msgid "Hashi reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
@@ -8394,12 +8431,16 @@ msgid "Hashi showing a map's leaderboard for Double Time"
 msgstr "Hashi 显示一张谱面在 Double Time 下的排行榜"
 
 #: src/routes/hashi.tsx
+#~ msgid "Hashi works out each play from its replay, on your computer. It shows how early or late you hit and let go of long notes, the accuracy of each key and each hand, and how the play went over the course of the map. Fingers can be reassigned per column. Tips point out what stands out and how much fixing it would have been worth on that play, like an offset that's off, chords that roll between two fingers of one hand, or presses on columns with no notes. It also compares the play with your last one on the same map."
+#~ msgstr "Hashi 在你的电脑上根据回放分析每一局。它会显示你按下和松开长条时偏早还是偏晚、每个按键和每只手的准确率，以及整张谱面过程中这一局的表现。每一列对应的手指可以重新分配。提示会指出最突出的问题，以及在这一局里改掉它能值多少，比如偏移不对、同一只手两根手指之间滚压的和弦，或在没有音符的列上按键。它还会把这一局和你在同一谱面上的上一局作比较。"
+
+#: src/routes/hashi.tsx
 msgid "Hashi's main window with the last plays it sent"
 msgstr "Hashi 主窗口，显示最近发送的成绩"
 
 #: src/routes/hashi.tsx
-msgid "Hashi's settings"
-msgstr "Hashi 的设置"
+#~ msgid "Hashi's settings"
+#~ msgstr "Hashi 的设置"
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -8538,7 +8579,7 @@ msgstr "隐藏没有技能评分的成绩"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Hiding {grade}"
-msgstr ""
+msgstr "隐藏 {grade}"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Hiding {label}"
@@ -8871,6 +8912,14 @@ msgstr "如果你觉得某张谱面的评分不对，可以通过<0>问题与建
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating still gets you banned from Mania Tracker."
 #~ msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，并用与 osu! 相同的算法根据其中 ranked 图的成绩计算你的 pp，所以你仍会出现在排行榜上。作弊仍会让你被 Mania Tracker 封禁。"
 
+#: src/routes/hashi.tsx
+#~ msgid "If part of a map went badly, Hashi can turn just that part into its own difficulty. It repeats it a few times, slower first and then at full speed, and opens it in osu! for you. Practice maps never get sent to Mania Tracker."
+#~ msgstr "如果谱面某一段没打好，Hashi 可以只把那一段做成一个单独的难度。它会重复几遍，先慢速再原速，并帮你在 osu! 里打开。练习谱面永远不会发送到 Mania Tracker。"
+
+#: src/routes/hashi.tsx
+msgid "If part of a map went badly, you can turn just that part into its own difficulty. It repeats it a few times, slower first and then at full speed, and opens it in osu! for you. Practice maps never get sent to Mania Tracker."
+msgstr "如果谱面某一段没打好，你可以只把那一段做成一个单独的难度。它会重复几遍，先慢速再原速，并帮你在 osu! 里打开。练习谱面永远不会发送到 Mania Tracker。"
+
 #: src/routes/__root.tsx
 msgid "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
 msgstr "如果这个网站对你有帮助，欢迎支持一下。捐赠用于支付服务器费用，并让开发得以继续。"
@@ -8906,6 +8955,10 @@ msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
 #~ msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
+
+#: src/routes/hashi.tsx
+#~ msgid "If your acc on a map came from mashing, Hashi gives you a goal to get it clean. Practice maps get a goal to pass them at full speed. Every try shows up on the goal until you get it."
+#~ msgstr "如果你在一张谱面上的准确率是靠乱拍蒙出来的，Hashi 会给你定一个干净打出来的目标。练习谱面会有一个原速通过的目标。每次尝试都会显示在目标上，直到你达成为止。"
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "If your osu! account is restricted, imported plays show on your Mania Tracker profile."
@@ -8988,7 +9041,7 @@ msgstr "导入的音符图片高度缩放。"
 
 #: src/components/companella/SubmissionList.tsx
 msgid "Imported plays"
-msgstr ""
+msgstr "导入的成绩"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Imported plays that pass the checks show on the tracker and your Mania Tracker profile."
@@ -9110,7 +9163,7 @@ msgstr "在这个平均值中的影响；段位贡献不变"
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Info"
-msgstr ""
+msgstr "信息"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
@@ -9193,6 +9246,10 @@ msgstr "{hidden} 最早的最佳成绩比 {shown} 更早还是更晚？"
 #~ msgid "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
 #~ msgstr "它还只能看到本站手上有的成绩。你的 osu! bp 一定包含在内。排在它们下面的成绩只有在本站追踪你的时候才会算进去，也就是你在本国前 100 里，或者你自己打开了追踪，而且只从那天起算。几年前就退坑的玩家只能靠 top 200 来判断，所以估算结果会偏低。"
 
+#: src/routes/hashi.tsx
+#~ msgid "It analyzes the plays it sends, so it needs a connected account with <0>{sendSetting}</0> turned on."
+#~ msgstr "它只分析它发送的成绩，所以需要连接账号并打开 <0>{sendSetting}</0>。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 #~ msgstr "它只能根据本站掌握的成绩来判断。你的 osu! 最佳成绩一定在内，但低于它们的成绩只有在本站追踪你时才存在，也就是要进入你所在国家/地区的前 100，或自己开启追踪，而且只从开启那天算起。几年前就不玩了的人只能按其前 200 个最佳成绩来评，因此读出来会偏低。"
@@ -9234,8 +9291,12 @@ msgid "It reads osu! through tosu, so tosu has to be running. You can download i
 msgstr "它通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
 
 #: src/routes/hashi.tsx
-msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
-msgstr "它常驻在系统托盘，几乎不占 CPU，在 Windows 上大约只用 3 MB 内存。"
+#~ msgid "It sits in the tray and uses almost no CPU and about 3 MB of memory on Windows."
+#~ msgstr ""
+
+#: src/routes/hashi.tsx
+#~ msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
+#~ msgstr "它常驻在系统托盘，几乎不占 CPU，在 Windows 上大约只用 3 MB 内存。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
@@ -9345,7 +9406,7 @@ msgstr "已判定"
 #. placeholder {1}: timing.fileOd
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Judged at OD {0}, the original map's, instead of this file's OD {1}."
-msgstr ""
+msgstr "按原谱面的 OD {0} 判定，而不是这个文件的 OD {1}。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Judgement set"
@@ -9724,6 +9785,10 @@ msgstr "队长"
 msgid "Leaderboard"
 msgstr "排行榜"
 
+#: src/routes/hashi.tsx
+msgid "Leaderboards and your profile"
+msgstr "排行榜和你的个人资料"
+
 #: src/components/communities/CommunityEditModal.tsx
 msgid "leave empty to keep the current one"
 msgstr "留空则保留当前链接"
@@ -9818,7 +9883,7 @@ msgstr "灯光"
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Like"
-msgstr ""
+msgstr "点赞"
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
@@ -9835,7 +9900,7 @@ msgstr "你赞过的"
 
 #: src/routes/skins.tsx
 msgid "likes"
-msgstr ""
+msgstr "赞"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "lime"
@@ -12312,7 +12377,7 @@ msgstr "不是有效的战队 ID。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not analyzed yet."
-msgstr ""
+msgstr "尚未分析。"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not available for this account yet."
@@ -12332,7 +12397,7 @@ msgstr "暂不可用。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Not connected"
-msgstr ""
+msgstr "未连接"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not connected. Connect from inside {appName}."
@@ -12407,7 +12472,7 @@ msgstr "未评级"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not rated."
-msgstr ""
+msgstr "未评分。"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not reachable right now."
@@ -12499,7 +12564,7 @@ msgstr "没有叫这个名字的。"
 
 #: src/components/companella/SubmissionList.tsx
 msgid "Nothing has been submitted yet."
-msgstr ""
+msgstr "还没有提交任何内容。"
 
 #: src/routes/recommendations.tsx
 msgid "Nothing here would move your total"
@@ -12568,7 +12633,7 @@ msgstr "没有略高于你 {axisLabel} 评分且你还没玩过的 ranked 谱面
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Nothing recorded yet."
-msgstr ""
+msgstr "还没有任何记录。"
 
 #: src/components/player/bbcode/BBCodePreview.tsx
 msgid "Nothing to preview yet."
@@ -13404,7 +13469,7 @@ msgstr "已开卡包"
 #. placeholder {0}: page + 1
 #: src/components/companella/SubmissionList.tsx
 msgid "Page {0}"
-msgstr ""
+msgstr "第 {0} 页"
 
 #. placeholder {0}: page + 1
 #. placeholder {1}: lastPage + 1
@@ -13665,7 +13730,7 @@ msgstr "换一个文件"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Pick both a .osr and the .osu it was played on."
-msgstr ""
+msgstr "请同时选择 .osr 和它所游玩的 .osu。"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Pick five cards of the same rarity."
@@ -14143,6 +14208,10 @@ msgstr "pp 排名"
 #: src/components/discord/CommandShowcase.tsx
 msgid "PP-gain map recommendations tuned to a player."
 msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
+
+#: src/routes/hashi.tsx
+msgid "Practice"
+msgstr "练习"
 
 #. placeholder {0}: formatDan(credential.label)
 #: src/components/player/DanEvidenceModal.tsx
@@ -14855,7 +14924,7 @@ msgstr "重建中…"
 
 #: src/components/companella/SubmissionList.tsx
 msgid "Received"
-msgstr ""
+msgstr "已接收"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Received as a gift {timesText} times, from {sendersText}"
@@ -15363,7 +15432,7 @@ msgstr "回放"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Replay (.osr)"
-msgstr ""
+msgstr "回放（.osr）"
 
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Replay again"
@@ -15494,7 +15563,7 @@ msgstr "重置大小"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Reset test key"
-msgstr ""
+msgstr "重置测试密钥"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Reset to {defaultValue}"
@@ -15621,7 +15690,7 @@ msgstr "撤销此连接？"
 
 #: src/routes/companella.tsx
 msgid "Revoke this connection? It stops submitting right away."
-msgstr ""
+msgstr "撤销这个连接？它会立即停止提交。"
 
 #: src/routes/companella.tsx
 #~ msgid "Revoke this installation? It stops submitting right away."
@@ -15900,7 +15969,7 @@ msgstr "缩放皮肤的打击特效图。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Scopes"
-msgstr ""
+msgstr "权限范围"
 
 #: src/components/player/ScoreRows.tsx
 msgid "score"
@@ -16358,6 +16427,14 @@ msgid "Sending…"
 msgstr "正在发送…"
 
 #: src/routes/hashi.tsx
+msgid "Sends your mania plays to your profile, shows leaderboards for any mods even on graveyard maps, and helps you practice what went wrong."
+msgstr "把你的 mania 成绩发送到你的个人资料，显示任意模组的排行榜，坟场谱面也可以，并帮你练习打得不好的地方。"
+
+#: src/routes/hashi.tsx
+#~ msgid "Sends your mania plays to your profile, shows leaderboards for graveyard maps and any mods, and helps you practice what went wrong."
+#~ msgstr "把你的 mania 成绩发送到你的个人资料，显示坟场谱面和任意模组的排行榜，并帮你练习打得不好的地方。"
+
+#: src/routes/hashi.tsx
 #~ msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
 #~ msgstr "将你在 lazer 或 osu!stable 上的 osu!mania 成绩发送到 Mania Tracker，并在你的个人资料和排行榜上显示你正在玩什么。"
 
@@ -16549,7 +16626,6 @@ msgstr "设置"
 
 #: src/components/layout/Nav.tsx
 #: src/components/layout/SettingsDrawer.tsx
-#: src/routes/hashi.tsx
 #: src/routes/news_.companella.tsx
 msgid "Settings"
 msgstr "设置"
@@ -16561,7 +16637,7 @@ msgstr "{0} 的设置"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Settings that differ from that file:"
-msgstr ""
+msgstr "与该文件不同的设置："
 
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Shaded: the 300 window around each press"
@@ -16863,7 +16939,7 @@ msgstr "正在显示 FC（0 miss）- 左键切换为 FC 断连，右键清除"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Showing only {grade}"
-msgstr ""
+msgstr "只显示 {grade}"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Showing only {label}"
@@ -16885,8 +16961,8 @@ msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "有新更新时在更新日志链接上显示一个圆点"
 
 #: src/routes/hashi.tsx
-msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
-msgstr "按你当前的模组显示排行榜，并把你的 mania 成绩发送到你的个人资料，资料页还能显示你正在玩什么。"
+#~ msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
+#~ msgstr "按你当前的模组显示排行榜，并把你的 mania 成绩发送到你的个人资料，资料页还能显示你正在玩什么。"
 
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
@@ -16899,6 +16975,14 @@ msgstr "在最近成绩中显示每个成绩的 MSD 和段位"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the MSD of each play in Recent Plays"
 msgstr "在最近成绩中显示每个成绩的 MSD"
+
+#: src/routes/hashi.tsx
+#~ msgid "Shows what went wrong in each mania play you finish and turns the worst part into a practice map. It also shows leaderboards for the mods you have on and sends your plays to your profile."
+#~ msgstr "显示你完成的每一局 mania 哪里出了问题，并把最差的部分做成练习谱面。它还会显示你当前模组下的排行榜，并把你的成绩发送到你的个人资料。"
+
+#: src/routes/hashi.tsx
+#~ msgid "Shows what went wrong in each play and turns the worst part into a practice map."
+#~ msgstr "显示每一局哪里出了问题，并把最差的部分做成练习谱面。"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows your cards with a quick fade instead of the full reveal"
@@ -16997,7 +17081,7 @@ msgstr "请先用 osu! 登录，再关联 Discord。"
 
 #: src/routes/companella.tsx
 msgid "Sign in with osu! to connect Companella and see the plays it imported."
-msgstr ""
+msgstr "用 osu! 登录以连接 Companella，并查看它导入的成绩。"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Sign in with osu! to connect it."
@@ -17028,12 +17112,12 @@ msgstr "当前登录为 {0}"
 #. placeholder {0}: auth.viewer.username
 #: src/routes/companella.tsx
 msgid "Signed in as {0}. {activeInstallations} connected."
-msgstr ""
+msgstr "已以 {0} 登录。已连接 {activeInstallations} 个。"
 
 #. placeholder {0}: auth.viewer.username
 #: src/routes/companella.tsx
 msgid "Signed in as {0}. Nothing is connected yet."
-msgstr ""
+msgstr "已以 {0} 登录。还没有连接任何内容。"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 #~ msgid "Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
@@ -17239,6 +17323,10 @@ msgstr "皮肤与布局"
 msgid "Skin description"
 msgstr "皮肤简介"
 
+#: src/routes/hashi.tsx
+msgid "Skin editor"
+msgstr "皮肤编辑器"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Skin files"
 msgstr "皮肤文件"
@@ -17281,7 +17369,7 @@ msgstr "皮肤列表暂时不可用"
 
 #: src/routes/skins.tsx
 msgid "Skins you like show up here."
-msgstr ""
+msgstr "你点赞的皮肤会显示在这里。"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Skip animations"
@@ -17834,7 +17922,7 @@ msgstr "正在停止…"
 
 #: src/routes/companella.tsx
 msgid "Storage is not configured, so uploads will fail until it is."
-msgstr ""
+msgstr "存储尚未配置，配置好之前上传都会失败。"
 
 #: src/components/companella/SubmissionList.tsx
 #~ msgid "Stored, but not rated:"
@@ -17909,7 +17997,7 @@ msgstr "样式"
 #. placeholder {0}: result.submissionId ?? ""
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submission {0} finished."
-msgstr ""
+msgstr "提交 {0} 已完成。"
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Submission detail"
@@ -17918,7 +18006,7 @@ msgstr ""
 #. placeholder {0}: result.error ?? "unknown"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submission refused: {0}"
-msgstr ""
+msgstr "提交被拒绝：{0}"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Submission sent"
@@ -17930,7 +18018,7 @@ msgstr "提交"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submit play"
-msgstr ""
+msgstr "提交成绩"
 
 #: src/routes/news_.companella.tsx
 msgid "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
@@ -18208,15 +18296,15 @@ msgstr "服务条款"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Test"
-msgstr ""
+msgstr "测试"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Test client"
-msgstr ""
+msgstr "测试客户端"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Test key cleared."
-msgstr ""
+msgstr "测试密钥已清除。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Text"
@@ -18581,11 +18669,11 @@ msgstr "浏览器无法保存该文件。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "The calculation could not run; it will be retried."
-msgstr ""
+msgstr "计算未能运行，稍后会重试。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "The callback did not match this browser's transaction; connect again."
-msgstr ""
+msgstr "回调与此浏览器的请求不匹配，请重新连接。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The card cover could not be changed. Try again."
@@ -18900,9 +18988,17 @@ msgstr "谱面段位 +1.37"
 msgid "the chart's level +1.5"
 msgstr "谱面段位 +1.5"
 
+#: src/routes/hashi.tsx
+msgid "The chord trainer running"
+msgstr "正在运行的和弦练习器"
+
+#: src/routes/hashi.tsx
+#~ msgid "The chord trainer takes two keys of one hand and shows how far apart they go down, with a metronome that can speed up as you go. The tip about rolled chords opens it on the columns it was about."
+#~ msgstr "和弦练习器取同一只手的两个按键，显示它们按下的时间相差多少，并配有可以逐渐加速的节拍器。关于滚压和弦的提示会在它所指的列上打开它。"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "The code exchange was refused."
-msgstr ""
+msgstr "授权码交换被拒绝。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "The code isn't on that userpage yet."
@@ -18910,7 +19006,7 @@ msgstr "该个人页面上还没有这段代码。"
 
 #: src/routes/companella.tsx
 msgid "The Companella beta is not switched on for this site yet."
-msgstr ""
+msgstr "本站尚未开启 Companella 测试版。"
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "The comparison budget ran out; this is still being checked."
@@ -19042,6 +19138,10 @@ msgstr "第一个上传的皮肤会出现在这里。"
 #~ msgid "The forge is not available right now."
 #~ msgstr "熔铸暂时不可用。"
 
+#: src/routes/hashi.tsx
+msgid "The goals page"
+msgstr "目标页面"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
 msgstr "图片已上传，但浏览器拦截了剪贴板。请再点一次复制 BBCode。"
@@ -19052,7 +19152,7 @@ msgstr "安装程序没有签名，因为微软对代码签名收费，所以 Wi
 
 #: src/routes/companella.tsx
 msgid "The integration backend is not reachable right now."
-msgstr ""
+msgstr "集成后端暂时无法访问。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "The judgement counts for this play are gone, so there is no accuracy to check it against."
@@ -19060,7 +19160,7 @@ msgstr "该成绩的判定数据已丢失，无法据此核对准确率。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "The judgements saved in this replay don't match its key presses, so it's held for review."
-msgstr ""
+msgstr "这个回放里保存的判定和它的按键对不上，所以已暂扣待审核。"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The link and the .osk filename stay as published."
@@ -19415,7 +19515,11 @@ msgstr "此浏览器无法解码该音频文件。请关闭音频导出，或选
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
-msgstr ""
+msgstr "测试客户端把签名密钥保存在这个浏览器里，令牌只保存在内存中，所以刷新页面后需要重新连接。它提交的所有内容都会标记为测试数据，并在一周后自动删除。"
+
+#: src/routes/hashi.tsx
+msgid "The top of a play's analysis, with its score and tips"
+msgstr "一局分析的顶部，包含分数和提示"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -19488,6 +19592,10 @@ msgstr "主题饱和度"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "There is no card left to forge into at that tier."
 #~ msgstr "该等级已没有可熔铸出的卡片。"
+
+#: src/routes/hashi.tsx
+msgid "There's also a chord trainer for two keys on the same hand. It shows how far apart you press them and has a metronome that can speed up."
+msgstr "还有一个多押练习器，练同一只手上的两个键。它会显示你按下这两个键相差多少，还带一个可以逐渐加速的节拍器。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "These are the packs checked, matched by beatmap. A pass has to be on one of these exact difficulties. Clearing the same courses from a different upload is still a clear, but that upload is not currently checked. More packs can be added."
@@ -19565,7 +19673,7 @@ msgstr "无法读取这个 .osk。"
 
 #: src/routes/companella.tsx
 msgid "This account is not in the Companella beta."
-msgstr ""
+msgstr "这个账号不在 Companella 测试版中。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
@@ -19941,6 +20049,10 @@ msgstr "本周"
 #: src/components/companella/AuthorizePage.tsx
 msgid "This will allow {appNameInline} to"
 msgstr "这将允许 {appNameInline}："
+
+#: src/routes/hashi.tsx
+msgid "This works with <0>{sendSetting}</0> turned off too."
+msgstr "关闭 <0>{sendSetting}</0> 时也能用。"
 
 #: src/routes/report.tsx
 msgid "Those images are no longer available."
@@ -20529,7 +20641,7 @@ msgstr "未知玩家"
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Unlike"
-msgstr ""
+msgstr "取消点赞"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "Unlink"
@@ -21099,8 +21211,8 @@ msgid "View the images and sounds in this skin without downloading it."
 msgstr "无需下载即可查看这个皮肤里的图片和音效。"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "view the score"
-msgstr "查看成绩"
+#~ msgid "view the score"
+#~ msgstr "查看成绩"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View the skin page"
@@ -21362,8 +21474,8 @@ msgid "What is it for"
 msgstr "这个服务器是做什么的"
 
 #: src/routes/hashi.tsx
-msgid "What it does"
-msgstr "功能"
+#~ msgid "What it does"
+#~ msgstr "功能"
 
 #: src/routes/communities_.$id.tsx
 msgid "What it is for"
@@ -21417,6 +21529,10 @@ msgstr "更新内容"
 #~ msgid "When {name} found their first card, and every rarity after it."
 #~ msgstr "{name} 找到首张卡片的时间，以及之后每个稀有度的首张。"
 
+#: src/routes/hashi.tsx
+#~ msgid "When a play gets its accuracy by pressing keys where there are no notes, Hashi sets a goal of a clean run on that map. Each practice map gets a goal at full speed. Every try is a dot on the goal's track until you reach it, and goals have their own page."
+#~ msgstr "当一局的准确率是靠在没有音符的地方按键得来的，Hashi 会为该谱面设一个干净通关的目标。每张练习谱面都有一个原速目标。在达成之前，每次尝试都会是目标轨迹上的一个点，目标有自己的页面。"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "When each card first joined your collection"
 msgstr "每张卡片最初加入你收藏册的时间"
@@ -21462,8 +21578,20 @@ msgid "while tracked"
 msgstr "追踪期间"
 
 #: src/routes/hashi.tsx
-msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
-msgstr "选歌时，Hashi 会显示该谱面在你当前模组下的排行榜，包括 osu! 不保存的榜，比如任意倍速的 DT 或 HT、Invert 或 No Release。你在 osu!stable 或 lazer 上完成的每张 mania 谱面都会连同回放发送到你的个人资料，应用会显示它在该谱面排行榜上的名次。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你在 osu! 里做什么，比如游玩、选择或编辑谱面，或观看回放。"
+#~ msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
+#~ msgstr "选歌时，Hashi 会显示你当前所开模组下这张谱面的排行榜，包括任意倍速的 DT 或 HT、Invert 或 No Release，坟场谱面也有。你可以切换到你的国家、地区或好友，也可以搜索某个玩家。"
+
+#: src/routes/hashi.tsx
+#~ msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
+#~ msgstr "选歌时，Hashi 会显示该谱面在你当前模组下的排行榜，包括 osu! 不保存的榜，比如任意倍速的 DT 或 HT、Invert 或 No Release。你在 osu!stable 或 lazer 上完成的每张 mania 谱面都会连同回放发送到你的个人资料，应用会显示它在该谱面排行榜上的名次。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你在 osu! 里做什么，比如游玩、选择或编辑谱面，或观看回放。"
+
+#: src/routes/hashi.tsx
+#~ msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "选歌时，Hashi 会显示该谱面在你当前模组下的排行榜，包括 osu! 不保存的榜，比如任意倍速的 DT 或 HT、Invert 或 No Release。你在 osu!stable 或 lazer 上完成的每张 mania 谱面都会连同回放发送到你的个人资料。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你在 osu! 里做什么。"
+
+#: src/routes/hashi.tsx
+msgid "While you pick a song, you see the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
+msgstr "选歌时，你能看到当前所开模组下这张谱面的排行榜，包括任意倍速的 DT 或 HT、Invert 或 No Release，坟场谱面也有。你可以切换到你的国家、地区或好友，也可以搜索某个玩家。"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/communities/CommunityEditModal.tsx
@@ -21688,6 +21816,10 @@ msgstr "你的收藏夹数量已达上限。"
 msgid "You are cutting through the cards"
 msgstr "你正在划开卡片"
 
+#: src/routes/hashi.tsx
+msgid "You can also open it in a window the size of osu!'s and play the map there with its song, or watch autoplay."
+msgstr "你也可以在一个和 osu! 一样大的窗口里打开它，带着歌曲在里面打这张谱面，或者看自动演示。"
+
 #: src/routes/news_.companella.tsx
 msgid "You can also submit ScoreV2 and Hard Rock plays this way."
 msgstr "你也可以用这种方式上传使用 ScoreV2 和 Hard Rock 的成绩。"
@@ -21712,6 +21844,18 @@ msgstr "每周可以更改一次名字。"
 #: src/routes/integrations_.companella.tsx
 #~ msgid "You can disconnect Companella from <0>Integrations</0> in the user menu. It stops sending plays right away."
 #~ msgstr ""
+
+#: src/routes/hashi.tsx
+msgid "You can edit your skin and see it on the map you have selected. Change column colors, make each part's art narrower or wider, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+msgstr "你可以编辑皮肤，并在当前选中的谱面上直接看到效果。可以改轨道颜色、把各部分的图片调窄或调宽，移动判定线位置、轨道、判定和连击数。修改会直接保存到你的皮肤里，stable 和 lazer 都可以。"
+
+#: src/routes/hashi.tsx
+#~ msgid "You can edit your skin in Hashi and see it on the map you have selected. Change column colors, make each part's art narrower or wider, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+#~ msgstr "你可以在 Hashi 里编辑皮肤，并在当前选中的谱面上直接看到效果。可以改轨道颜色、把各部分的图片调窄或调宽，移动判定线位置、轨道、判定和连击数。修改会直接保存到你的皮肤里，stable 和 lazer 都可以。"
+
+#: src/routes/hashi.tsx
+#~ msgid "You can edit your skin in Hashi and see it on the map you have selected. Change column colors, resize things, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+#~ msgstr "你可以在 Hashi 里编辑皮肤，并在当前选中的谱面上直接看到效果。可以改轨道颜色、调整元素大小，移动判定线位置、轨道、判定和连击数。修改会直接保存到你的皮肤里，stable 和 lazer 都可以。"
 
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
@@ -21775,7 +21919,7 @@ msgstr "你有成绩，但附近玩家的分数更高。"
 
 #: src/routes/skins.tsx
 msgid "You have not liked a skin yet"
-msgstr ""
+msgstr "你还没有点赞过皮肤"
 
 #: src/routes/skins.tsx
 msgid "You have not published a skin yet"

@@ -2663,6 +2663,10 @@ msgstr "A customizable picture for your osu! profile that keeps itself updated."
 #~ msgid "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
 #~ msgstr "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
 
+#: src/routes/hashi.tsx
+msgid "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
+msgstr "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
 msgstr "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
@@ -2784,6 +2788,10 @@ msgstr "A play under its ladder's minimum OD earns nothing: 5.5 on regular chart
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "A play with a mod only lazer has (DA, IN, HO, NR and others) now counts as a lazer play when the site can't tell which client it was set on, so its LN accuracy is read the way lazer judges holds."
 #~ msgstr "A play with a mod only lazer has (DA, IN, HO, NR and others) now counts as a lazer play when the site can't tell which client it was set on, so its LN accuracy is read the way lazer judges holds."
+
+#: src/routes/hashi.tsx
+msgid "A practice map's analysis, with its repeats and earlier tries"
+msgstr "A practice map's analysis, with its repeats and earlier tries"
 
 #: src/routes/hashi.tsx
 msgid "A profile showing the map its player is playing"
@@ -2968,6 +2976,10 @@ msgstr "Accuracy below skill rating range, so this play has no MSD rating on any
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 94% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 94% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
+
+#: src/routes/hashi.tsx
+msgid "Accuracy for each key and each hand, with the timing chart"
+msgstr "Accuracy for each key and each hand, with the timing chart"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Accuracy or unstable rate for every column, one cell per finger."
@@ -3214,6 +3226,10 @@ msgstr "Admin: flood the rail with fake pulls to preview the animation"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Advanced"
 msgstr "Advanced"
+
+#: src/routes/hashi.tsx
+msgid "After each play"
+msgstr "After each play"
 
 #: src/components/player/BestScoresControls.tsx
 #~ msgid "Age"
@@ -4979,6 +4995,14 @@ msgstr "Click an image first. Imagemap turns that image into clickable areas."
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #~ msgid "Click here to read how dans are estimated"
 #~ msgstr "Click here to read how dans are estimated"
+
+#: src/routes/hashi.tsx
+#~ msgid "Click the chart icon on a play to see how it went. Hashi reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
+#~ msgstr "Click the chart icon on a play to see how it went. Hashi reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
+
+#: src/routes/hashi.tsx
+msgid "Click the chart icon on a play to see how it went. It reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
+msgstr "Click the chart icon on a play to see how it went. It reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
 
 #: src/routes/dan-estimates.tsx
 msgid "Click to group the numbered levels"
@@ -6913,6 +6937,10 @@ msgstr "Each player's 200th best play, for players with 200 top plays"
 msgid "Each player's best play"
 msgstr "Each player's best play"
 
+#: src/routes/hashi.tsx
+msgid "Each practice map comes with a goal to match the acc you got on the rest of the map, at full speed. Every try shows up on the goal until you get it."
+msgstr "Each practice map comes with a goal to match the acc you got on the rest of the map, at full speed. Every try shows up on the goal until you get it."
+
 #: src/components/prism/ReleaseFigure.tsx
 msgid "Each release in a passage, labelled with the share of its v25 cost it keeps in v26"
 msgstr "Each release in a passage, labelled with the share of its v25 cost it keeps in v26"
@@ -7208,6 +7236,10 @@ msgstr "Every image you have already pasted will stop working."
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. A <0/> play that drops the OD under its ladder's minimum earns no dan credit, and <1/> earns none anywhere, because it widens every hit window."
 #~ msgstr "Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. A <0/> play that drops the OD under its ladder's minimum earns no dan credit, and <1/> earns none anywhere, because it widens every hit window."
+
+#: src/routes/hashi.tsx
+msgid "Every mania play you finish on stable or lazer goes to your profile with its replay. Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
+msgstr "Every mania play you finish on stable or lazer goes to your profile with its replay. Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
 
 #: src/routes/recommendations.tsx
 msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
@@ -8012,6 +8044,10 @@ msgstr "Friends"
 msgid "from {0} now, that's +{1} to climb"
 msgstr "from {0} now, that's +{1} to climb"
 
+#: src/routes/hashi.tsx
+#~ msgid "From an analysis you can pick the stretch that went worst. Hashi cuts that part of the song into a difficulty of its own that plays it a few times in a row, slower at first and then at full speed, and opens it in osu!. Plays of practice maps stay in Hashi and are never sent to Mania Tracker."
+#~ msgstr "From an analysis you can pick the stretch that went worst. Hashi cuts that part of the song into a difficulty of its own that plays it a few times in a row, slower at first and then at full speed, and opens it in osu!. Plays of practice maps stay in Hashi and are never sent to Mania Tracker."
+
 #: src/components/replay/ReplayInfo.tsx
 msgid "From the real play (not simulated)"
 msgstr "From the real play (not simulated)"
@@ -8237,6 +8273,7 @@ msgstr "goals"
 #: src/components/me/MyDataPanel.tsx
 #: src/lib/signature-shared.ts
 #: src/routes/goals.tsx
+#: src/routes/hashi.tsx
 msgid "Goals"
 msgstr "Goals"
 
@@ -8377,8 +8414,8 @@ msgid "Has its own backdrop"
 msgstr "Has its own backdrop"
 
 #: src/routes/hashi.tsx
-msgid "Hashi before connecting to Mania Tracker"
-msgstr "Hashi before connecting to Mania Tracker"
+#~ msgid "Hashi before connecting to Mania Tracker"
+#~ msgstr "Hashi before connecting to Mania Tracker"
 
 #: src/routes/bridge.tsx
 #~ msgid "Hashi reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
@@ -8413,12 +8450,16 @@ msgid "Hashi showing a map's leaderboard for Double Time"
 msgstr "Hashi showing a map's leaderboard for Double Time"
 
 #: src/routes/hashi.tsx
+#~ msgid "Hashi works out each play from its replay, on your computer. It shows how early or late you hit and let go of long notes, the accuracy of each key and each hand, and how the play went over the course of the map. Fingers can be reassigned per column. Tips point out what stands out and how much fixing it would have been worth on that play, like an offset that's off, chords that roll between two fingers of one hand, or presses on columns with no notes. It also compares the play with your last one on the same map."
+#~ msgstr "Hashi works out each play from its replay, on your computer. It shows how early or late you hit and let go of long notes, the accuracy of each key and each hand, and how the play went over the course of the map. Fingers can be reassigned per column. Tips point out what stands out and how much fixing it would have been worth on that play, like an offset that's off, chords that roll between two fingers of one hand, or presses on columns with no notes. It also compares the play with your last one on the same map."
+
+#: src/routes/hashi.tsx
 msgid "Hashi's main window with the last plays it sent"
 msgstr "Hashi's main window with the last plays it sent"
 
 #: src/routes/hashi.tsx
-msgid "Hashi's settings"
-msgstr "Hashi's settings"
+#~ msgid "Hashi's settings"
+#~ msgstr "Hashi's settings"
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -8898,6 +8939,14 @@ msgstr "If a chart's rating looks wrong to you, send it through <0>Bugs and feed
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating still gets you banned from Mania Tracker."
 #~ msgstr "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating still gets you banned from Mania Tracker."
 
+#: src/routes/hashi.tsx
+#~ msgid "If part of a map went badly, Hashi can turn just that part into its own difficulty. It repeats it a few times, slower first and then at full speed, and opens it in osu! for you. Practice maps never get sent to Mania Tracker."
+#~ msgstr "If part of a map went badly, Hashi can turn just that part into its own difficulty. It repeats it a few times, slower first and then at full speed, and opens it in osu! for you. Practice maps never get sent to Mania Tracker."
+
+#: src/routes/hashi.tsx
+msgid "If part of a map went badly, you can turn just that part into its own difficulty. It repeats it a few times, slower first and then at full speed, and opens it in osu! for you. Practice maps never get sent to Mania Tracker."
+msgstr "If part of a map went badly, you can turn just that part into its own difficulty. It repeats it a few times, slower first and then at full speed, and opens it in osu! for you. Practice maps never get sent to Mania Tracker."
+
 #: src/routes/__root.tsx
 msgid "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
 msgstr "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
@@ -8933,6 +8982,10 @@ msgstr "If you sign in with osu!, the site receives the osu! account details all
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
 #~ msgstr "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+
+#: src/routes/hashi.tsx
+#~ msgid "If your acc on a map came from mashing, Hashi gives you a goal to get it clean. Practice maps get a goal to pass them at full speed. Every try shows up on the goal until you get it."
+#~ msgstr "If your acc on a map came from mashing, Hashi gives you a goal to get it clean. Practice maps get a goal to pass them at full speed. Every try shows up on the goal until you get it."
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "If your osu! account is restricted, imported plays show on your Mania Tracker profile."
@@ -9220,6 +9273,10 @@ msgstr "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 #~ msgid "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
 #~ msgstr "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
 
+#: src/routes/hashi.tsx
+#~ msgid "It analyzes the plays it sends, so it needs a connected account with <0>{sendSetting}</0> turned on."
+#~ msgstr "It analyzes the plays it sends, so it needs a connected account with <0>{sendSetting}</0> turned on."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 #~ msgstr "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
@@ -9261,8 +9318,12 @@ msgid "It reads osu! through tosu, so tosu has to be running. You can download i
 msgstr "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
 
 #: src/routes/hashi.tsx
-msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
-msgstr "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
+#~ msgid "It sits in the tray and uses almost no CPU and about 3 MB of memory on Windows."
+#~ msgstr "It sits in the tray and uses almost no CPU and about 3 MB of memory on Windows."
+
+#: src/routes/hashi.tsx
+#~ msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
+#~ msgstr "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
@@ -9750,6 +9811,10 @@ msgstr "Leader"
 #: src/routes/snipes.tsx
 msgid "Leaderboard"
 msgstr "Leaderboard"
+
+#: src/routes/hashi.tsx
+msgid "Leaderboards and your profile"
+msgstr "Leaderboards and your profile"
 
 #: src/components/communities/CommunityEditModal.tsx
 msgid "leave empty to keep the current one"
@@ -14171,6 +14236,10 @@ msgstr "pp rank"
 msgid "PP-gain map recommendations tuned to a player."
 msgstr "PP-gain map recommendations tuned to a player."
 
+#: src/routes/hashi.tsx
+msgid "Practice"
+msgstr "Practice"
+
 #. placeholder {0}: formatDan(credential.label)
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Practice chart for this skillset: clearing it grants {0} outright, and a higher estimate is kept"
@@ -16385,6 +16454,14 @@ msgid "Sending…"
 msgstr "Sending…"
 
 #: src/routes/hashi.tsx
+msgid "Sends your mania plays to your profile, shows leaderboards for any mods even on graveyard maps, and helps you practice what went wrong."
+msgstr "Sends your mania plays to your profile, shows leaderboards for any mods even on graveyard maps, and helps you practice what went wrong."
+
+#: src/routes/hashi.tsx
+#~ msgid "Sends your mania plays to your profile, shows leaderboards for graveyard maps and any mods, and helps you practice what went wrong."
+#~ msgstr "Sends your mania plays to your profile, shows leaderboards for graveyard maps and any mods, and helps you practice what went wrong."
+
+#: src/routes/hashi.tsx
 #~ msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
 #~ msgstr "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
 
@@ -16576,7 +16653,6 @@ msgstr "settings"
 
 #: src/components/layout/Nav.tsx
 #: src/components/layout/SettingsDrawer.tsx
-#: src/routes/hashi.tsx
 #: src/routes/news_.companella.tsx
 msgid "Settings"
 msgstr "Settings"
@@ -16916,8 +16992,8 @@ msgstr "Shows a dot on the changelog link when there are new updates"
 #~ msgstr "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!."
 
 #: src/routes/hashi.tsx
-msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
-msgstr "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
+#~ msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
+#~ msgstr "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
 
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
@@ -16934,6 +17010,14 @@ msgstr "Shows the MSD and dan of each play in Recent Plays"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the MSD of each play in Recent Plays"
 msgstr "Shows the MSD of each play in Recent Plays"
+
+#: src/routes/hashi.tsx
+#~ msgid "Shows what went wrong in each mania play you finish and turns the worst part into a practice map. It also shows leaderboards for the mods you have on and sends your plays to your profile."
+#~ msgstr "Shows what went wrong in each mania play you finish and turns the worst part into a practice map. It also shows leaderboards for the mods you have on and sends your plays to your profile."
+
+#: src/routes/hashi.tsx
+#~ msgid "Shows what went wrong in each play and turns the worst part into a practice map."
+#~ msgstr "Shows what went wrong in each play and turns the worst part into a practice map."
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows your cards with a quick fade instead of the full reveal"
@@ -17273,6 +17357,10 @@ msgstr "skin & layout"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Skin description"
 msgstr "Skin description"
+
+#: src/routes/hashi.tsx
+msgid "Skin editor"
+msgstr "Skin editor"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Skin files"
@@ -18935,6 +19023,14 @@ msgstr "the chart's level +1.37"
 msgid "the chart's level +1.5"
 msgstr "the chart's level +1.5"
 
+#: src/routes/hashi.tsx
+msgid "The chord trainer running"
+msgstr "The chord trainer running"
+
+#: src/routes/hashi.tsx
+#~ msgid "The chord trainer takes two keys of one hand and shows how far apart they go down, with a metronome that can speed up as you go. The tip about rolled chords opens it on the columns it was about."
+#~ msgstr "The chord trainer takes two keys of one hand and shows how far apart they go down, with a metronome that can speed up as you go. The tip about rolled chords opens it on the columns it was about."
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "The code exchange was refused."
 msgstr "The code exchange was refused."
@@ -19076,6 +19172,10 @@ msgstr "The first uploaded skin lands here."
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "The forge is not available right now."
 #~ msgstr "The forge is not available right now."
+
+#: src/routes/hashi.tsx
+msgid "The goals page"
+msgstr "The goals page"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
@@ -19460,6 +19560,10 @@ msgstr "The song file can't be decoded here. Export without audio, or pick a sho
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
 msgstr "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
 
+#: src/routes/hashi.tsx
+msgid "The top of a play's analysis, with its score and tips"
+msgstr "The top of a play's analysis, with its score and tips"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
 msgstr "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -19531,6 +19635,10 @@ msgstr "Theme saturation"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "There is no card left to forge into at that tier."
 #~ msgstr "There is no card left to forge into at that tier."
+
+#: src/routes/hashi.tsx
+msgid "There's also a chord trainer for two keys on the same hand. It shows how far apart you press them and has a metronome that can speed up."
+msgstr "There's also a chord trainer for two keys on the same hand. It shows how far apart you press them and has a metronome that can speed up."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "These are the packs checked, matched by beatmap. A pass has to be on one of these exact difficulties. Clearing the same courses from a different upload is still a clear, but that upload is not currently checked. More packs can be added."
@@ -19984,6 +20092,10 @@ msgstr "This week"
 #: src/components/companella/AuthorizePage.tsx
 msgid "This will allow {appNameInline} to"
 msgstr "This will allow {appNameInline} to"
+
+#: src/routes/hashi.tsx
+msgid "This works with <0>{sendSetting}</0> turned off too."
+msgstr "This works with <0>{sendSetting}</0> turned off too."
 
 #: src/routes/report.tsx
 msgid "Those images are no longer available."
@@ -21142,8 +21254,8 @@ msgid "View the images and sounds in this skin without downloading it."
 msgstr "View the images and sounds in this skin without downloading it."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "view the score"
-msgstr "view the score"
+#~ msgid "view the score"
+#~ msgstr "view the score"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View the skin page"
@@ -21405,8 +21517,8 @@ msgid "What is it for"
 msgstr "What is it for"
 
 #: src/routes/hashi.tsx
-msgid "What it does"
-msgstr "What it does"
+#~ msgid "What it does"
+#~ msgstr "What it does"
 
 #: src/routes/communities_.$id.tsx
 msgid "What it is for"
@@ -21460,6 +21572,10 @@ msgstr "What's new"
 #~ msgid "When {name} found their first card, and every rarity after it."
 #~ msgstr "When {name} found their first card, and every rarity after it."
 
+#: src/routes/hashi.tsx
+#~ msgid "When a play gets its accuracy by pressing keys where there are no notes, Hashi sets a goal of a clean run on that map. Each practice map gets a goal at full speed. Every try is a dot on the goal's track until you reach it, and goals have their own page."
+#~ msgstr "When a play gets its accuracy by pressing keys where there are no notes, Hashi sets a goal of a clean run on that map. Each practice map gets a goal at full speed. Every try is a dot on the goal's track until you reach it, and goals have their own page."
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "When each card first joined your collection"
 msgstr "When each card first joined your collection"
@@ -21505,8 +21621,20 @@ msgid "while tracked"
 msgstr "while tracked"
 
 #: src/routes/hashi.tsx
-msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
-msgstr "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
+#~ msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
+#~ msgstr "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
+
+#: src/routes/hashi.tsx
+#~ msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
+#~ msgstr "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
+
+#: src/routes/hashi.tsx
+#~ msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+
+#: src/routes/hashi.tsx
+msgid "While you pick a song, you see the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
+msgstr "While you pick a song, you see the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/communities/CommunityEditModal.tsx
@@ -21731,6 +21859,10 @@ msgstr "You already have the maximum number of collections."
 msgid "You are cutting through the cards"
 msgstr "You are cutting through the cards"
 
+#: src/routes/hashi.tsx
+msgid "You can also open it in a window the size of osu!'s and play the map there with its song, or watch autoplay."
+msgstr "You can also open it in a window the size of osu!'s and play the map there with its song, or watch autoplay."
+
 #: src/routes/news_.companella.tsx
 msgid "You can also submit ScoreV2 and Hard Rock plays this way."
 msgstr "You can also submit ScoreV2 and Hard Rock plays this way."
@@ -21755,6 +21887,18 @@ msgstr "You can change your name once a week."
 #: src/routes/integrations_.companella.tsx
 #~ msgid "You can disconnect Companella from <0>Integrations</0> in the user menu. It stops sending plays right away."
 #~ msgstr "You can disconnect Companella from <0>Integrations</0> in the user menu. It stops sending plays right away."
+
+#: src/routes/hashi.tsx
+msgid "You can edit your skin and see it on the map you have selected. Change column colors, make each part's art narrower or wider, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+msgstr "You can edit your skin and see it on the map you have selected. Change column colors, make each part's art narrower or wider, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+
+#: src/routes/hashi.tsx
+#~ msgid "You can edit your skin in Hashi and see it on the map you have selected. Change column colors, make each part's art narrower or wider, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+#~ msgstr "You can edit your skin in Hashi and see it on the map you have selected. Change column colors, make each part's art narrower or wider, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+
+#: src/routes/hashi.tsx
+#~ msgid "You can edit your skin in Hashi and see it on the map you have selected. Change column colors, resize things, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+#~ msgstr "You can edit your skin in Hashi and see it on the map you have selected. Change column colors, resize things, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
 
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."

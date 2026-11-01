@@ -46,6 +46,23 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  {
+    date: "2026-11-01",
+    text: "Major update to Hashi. This is another one of my projects and it's related to Mania Tracker, so might as well put it here since it's a lot of cool new things.",
+    bold: "Hashi",
+    kind: "new",
+    to: "/hashi",
+    more: [
+      { text: "Added play analysis that gives you stats about your plays after you finish them.", image: { src: "/images/changelog/2026-11-01-hashi-analysis.webp", alt: "Hashi's analysis of a play, with each key's timing and the long note releases", width: 660, height: 448 } },
+      { text: "Sometimes it also recommends a section of the map to practice.", image: { src: "/images/changelog/2026-11-01-hashi-practice-tip.webp", alt: "A practice tip in Hashi's analysis", width: 447, height: 110 } },
+      { text: "From there you can make a practice map, a new difficulty with only that section in it a few times in a row, slower first. It opens in osu! with a goal for a full-speed repeat, and its plays aren't sent to Mania Tracker.", image: { src: "/images/changelog/2026-11-01-hashi-practice-map.webp", alt: "Hashi's practice map maker", width: 500, height: 417 } },
+      { text: "The look of your skin, whether that be column width, colors or LN length, can drastically improve or worsen how you perform. That's why I added a whole new skin editor to try out different tweaks faster, compatible with stable and lazer. You can color columns, outline parts, make each part's art narrower or wider, and move HitPosition, ColumnStart, ColumnWidth, ColumnSpacing, the judgement line, judgements, combo and StageBottom, with undo and redo. It previews your skin on generated notes, long notes or the selected map, and can open it in a window the size of your game to play the map with its song or watch autoplay.", image: { src: "/images/changelog/2026-11-01-hashi-skin-editor.webp", alt: "Hashi's skin editor on the long notes tab", width: 660, height: 431 } },
+      { text: "Tweaking a lazer skin usually means opening the skin layout editor, clicking File, Edit externally, finding the skin.ini in a temp folder that changes every time, changing a value, applying, and going through all of it again each time a value doesn't feel right. Lazer keeps a skin's files in its own file store under their hashes, and its database lists which file goes where, which is why it needs \"Edit externally\" in the first place. Hashi puts the edited files in that store and updates the list itself, using the .NET and Realm that come with your lazer, so you can apply all the edits directly without having to \"Edit externally\". But since lazer doesn't have Ctrl+Shift+Alt+S to reload, you have to switch to another skin and then back to see the results.", image: { src: "/images/changelog/2026-11-01-hashi-skin-editor-layout.webp", alt: "Hashi's skin editor with the column and combo settings", width: 660, height: 501 } },
+      { text: "Among many other things, a Percy editor is included, where you can edit the length of the LN body or try out the Fade style. If your lazer skin is broken because of TIFF format LN images, there's a one click fix for that too.", image: { src: "/images/changelog/2026-11-01-hashi-percy-editor.webp", alt: "Hashi's Percy editor with Fade on", width: 660, height: 279 } },
+    ],
+  },
+  { date: "2026-11-01", text: "Added country, continent, subregion and friends filters and player search to Hashi's leaderboards.", to: "/hashi" },
+  { date: "2026-11-01", text: "Previously you could only turn off either Send my plays or Share my live status in Hashi, because with both off, what even was the point of having the app? Now you can turn off both, and the plays you finish are still analyzed, or turn off Analysis too if you only care about the skin editor.", to: "/hashi" },
   { date: "2026-10-31", text: "Added a Download .osr button to the replay viewer.", to: "/replay" },
   { date: "2026-10-31", text: "Shifted dan numbers up by 0.5 so the whole number is the dan. For example Alpha covers 11 to 12 instead of 10.5 to 11.5.", to: "/dan-estimates" },
   { date: "2026-10-31", text: "Added continents and subregions to the country filter on map leaderboards.", to: "/maps" },
