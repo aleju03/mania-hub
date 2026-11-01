@@ -11,6 +11,7 @@
 
 import { isLocalDevAccessGranted } from "./auth-local-dev";
 import { readViewerFromRequest } from "./auth-server";
+import { buildAttachmentContentDisposition } from "./content-disposition";
 import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
 import { invalidateCommunityUploads } from "./uploaded-replay-community-server";
 import { persistUploadedReplayDescription } from "./uploaded-replay-describe";
@@ -378,10 +379,6 @@ export async function handleReplayUploadGet(request: Request): Promise<Response>
   }
 
   const filename = stored.originalFilename || `${id}.osr`;
-  const encodedFilename = encodeURIComponent(filename).replace(
-    /['()*]/g,
-    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
   return new Response(stored.buffer as unknown as BodyInit, {
     status: 200,
     headers: {
@@ -389,7 +386,7 @@ export async function handleReplayUploadGet(request: Request): Promise<Response>
       "Content-Length": String(stored.buffer.length),
       // Direct navigation downloads the file; the viewer's fetch() path reads
       // the body and never sees the disposition.
-      "Content-Disposition": `attachment; filename="${filename.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodedFilename}`,
+      "Content-Disposition": buildAttachmentContentDisposition(filename),
       "X-Content-Type-Options": "nosniff",
       ...(stored.originalFilename ? { "X-Replay-Filename": encodeURIComponent(stored.originalFilename) } : {}),
       "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",

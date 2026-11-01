@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { buildAttachmentContentDisposition } from "#/lib/content-disposition";
 import { sanitizeReplayFilename } from "#/lib/replay-share";
 import { REPLAY_FILE_MISSING_ERROR } from "#/lib/replay-score-availability";
 
@@ -13,7 +14,7 @@ function osrResponse(buffer: Buffer, filename: string): Response {
     headers: {
       "Content-Type": "application/octet-stream",
       "Content-Length": String(buffer.byteLength),
-      "Content-Disposition": `attachment; filename="${filename.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      "Content-Disposition": buildAttachmentContentDisposition(filename),
       // Private: an owner takedown deletes the cached copy, and a shared
       // cache would keep handing it out.
       "Cache-Control": "private, max-age=3600",
