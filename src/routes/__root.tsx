@@ -59,8 +59,12 @@ import { BackendOfflineScreen } from "../components/BackendOfflineScreen";
 import { seedCountryTierCache } from "../lib/use-country-warming";
 import { isWindowActive, subscribeWindowActivity } from "../lib/window-activity";
 import { UI_SCALE_BOOT_SCRIPT } from "../lib/ui-scale";
+import { installWebGlHygiene } from "../lib/webgl-hygiene";
 import { reapplyThemeToDom, useChangelogNotify } from "../store";
 import appCss from "../styles.css?url";
+
+// before any component makes a WebGL context (lib/webgl-hygiene.ts)
+installWebGlHygiene();
 
 /* Origin is resolved through a configured canonical URL first, then through
    allowlisted request hosts. That keeps SEO URLs stable without trusting

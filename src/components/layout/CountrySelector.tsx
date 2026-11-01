@@ -301,7 +301,7 @@ export function CountrySelector({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.12 }}
-            className="absolute top-full left-0 right-0 mt-1 min-w-[13rem] bg-osu-b5 border border-osu-b3/50 rounded-lg overflow-hidden z-[65] shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
+            className="absolute top-full right-0 mt-1 min-w-[max(13rem,100%)] bg-osu-b5 border border-osu-b3/50 rounded-lg overflow-hidden z-[65] shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
           >
             {/* Search, plus the scope switch when the live backend is answering */}
             <div className="p-2 border-b border-osu-b3/30 space-y-1.5">

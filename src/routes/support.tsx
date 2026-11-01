@@ -194,7 +194,10 @@ function SupportPage() {
   return (
     <div className="flex-1">
       <PageHeader iconSrc="/images/icons/supporter-heart.svg" title={t`support`} />
-      <div className="bg-osu-b5">
+      {/* clip, not hidden: the gift ticket's canvas reaches past its box
+          and must not widen the page on phones, yet still overlap rows above
+          and below it; the section nav stays sticky */}
+      <div className="overflow-x-clip bg-osu-b5">
         <div className="mx-auto grid max-w-[1200px] gap-8 px-3 py-6 sm:px-5 sm:py-8 lg:grid-cols-[180px_minmax(0,1fr)]">
           <SectionNav />
 
@@ -203,7 +206,7 @@ function SupportPage() {
               <motion.div variants={HERO_TEXT} initial={reduced ? false : "hidden"} animate="shown">
                 <motion.h1 variants={HERO_LINE} className="text-[30px] font-black leading-tight text-white sm:text-[36px]">{t`Become a supporter`}</motion.h1>
                 <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">
-                  {t`The site is made and paid for by one person. Supporting covers the servers and gives me time to keep building it. As thanks, supporters get everything on this page.`}
+                  {t`Supporting keeps the servers running and new features coming. As thanks, supporters get everything on this page.`}
                 </motion.p>
                 <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">{t`$3 buys a month of supporter, and every tip adds more time.`}</motion.p>
                 <motion.div variants={HERO_LINE} className="mt-5 flex flex-wrap items-center gap-2">
@@ -296,7 +299,7 @@ function SupportPage() {
               id="gift"
               title={t`A week for a friend`}
               count={t`One code per $3`}
-              body={t`Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter.`}
+              body={t`Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month.`}
             >
               <GiftShowcase />
             </Perk>
@@ -305,7 +308,7 @@ function SupportPage() {
               id="ranks"
               title={t`Supporter ranks`}
               count={<Trans><CountUp value={SUPPORTER_RANKS.length} /> ranks</Trans>}
-              body={t`A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo.`}
+              body={t`A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it catches fire.`}
             >
               <SupporterRankShowcase />
             </Perk>

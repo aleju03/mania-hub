@@ -9,6 +9,7 @@ import { avatarUrlUserId } from "../ui/Avatar";
 import { framedAvatarStyle, SUPPORTER_AVATAR_FRAMES, supporterFrameGeometry } from "../../lib/supporter-avatar-frames";
 import type { SupporterLook } from "../../lib/supporter-card-looks";
 import { SupporterStyledName } from "./SupporterNameStyle";
+import { useFittedName } from "./useFittedName";
 import { ProfileThemeBackdrop } from "./ProfileThemeBackdrop";
 import type { HighwayChart, HighwayNotes } from "../../lib/supporter-profile-themes";
 import type { Loadout } from "./loadout";
@@ -44,7 +45,8 @@ const ROOM = SUPPORTER_AVATAR_FRAMES.reduce(
 const room = (share: number) => `calc(var(--stage-avatar) * min(${share}, var(--stage-room-cap)))`;
 const ROOM_PADDING = `${room(ROOM[0])} ${room(ROOM[1])} ${room(ROOM[2])}`;
 
-const NAME_CLASS = "min-w-0 max-w-full truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[22px] font-black leading-none text-white sm:text-[40px]";
+// --name-scale (useFittedName) shrinks a name too wide for its column before it would truncate
+const NAME_CLASS = "min-w-0 max-w-full truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[length:calc(22px*var(--name-scale,1))] font-black leading-none text-white sm:text-[length:calc(40px*var(--name-scale,1))]";
 
 export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, card, focus, pop, spinning, footer, tall = false }: {
   shown: Loadout;
@@ -71,6 +73,7 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
   // While the pointer sweeps a drawer the frame shows its still and the name its CSS look.
   const frameSettled = useIsSettled(frame ?? "", 350);
   const nameSettled = useIsSettled(`${nameStyle}|${nameFont}`, 300);
+  const nameBoxRef = useFittedName([username, nameStyle, nameFont, pop, focus]);
   const landing = reduced ? undefined : { initial: { scale: 0.9, y: 6 }, animate: { scale: 1, y: 0 }, transition: { type: "spring" as const, stiffness: 520, damping: 17 } };
 
   return (
@@ -97,12 +100,14 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
           </div>
           {/* Shrinks to its text as in the hero's h1, so a style's gradient
               and plate size to the name. */}
-          <motion.div key={`name-${pop}`} {...landing} className="flex min-w-0 flex-1 justify-start sm:mt-2 sm:w-full sm:flex-none sm:justify-center">
+          <motion.div key={`name-${pop}`} {...landing} className="flex min-w-0 flex-1 sm:mt-2 sm:w-full sm:flex-none">
+            <div ref={nameBoxRef} className="flex w-full min-w-0 justify-start sm:justify-center">
               {nameStyle || nameFont ? (
                 <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} name={username} className={NAME_CLASS} live={!spinning && nameSettled} />
               ) : (
                 <span className={NAME_CLASS}>{username}</span>
               )}
+            </div>
           </motion.div>
         </div>
         )}

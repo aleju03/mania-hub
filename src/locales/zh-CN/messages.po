@@ -1492,8 +1492,8 @@ msgid "{files} files in {groupCount} groups"
 msgstr "{groupCount} 组共 {files} 个文件"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "{filling} goal"
-msgstr "{filling}目标"
+#~ msgid "{filling} goal"
+#~ msgstr "{filling}目标"
 
 #: src/components/layout/SupportGoalBar.tsx
 #~ msgid "{filling} hosting"
@@ -1906,8 +1906,8 @@ msgstr "{progressCounts} 张卡牌"
 #~ msgstr "{progressCounts} 个战队"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "{raised} of {target}"
-msgstr "{raised} / {target}"
+#~ msgid "{raised} of {target}"
+#~ msgstr "{raised} / {target}"
 
 #: src/routes/maps.tsx
 msgid "{randomPickCount, plural, one {# pick} other {# possible picks}}"
@@ -3080,8 +3080,16 @@ msgid "A 4K chart is LN when holds make up at least 45% of its notes and those h
 msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速下这些长条仍需要真正的放手时，这张谱面算作 LN。短到可以当普通键点掉的长条会让它算作常规谱面。7K 的界线是 37.5%。"
 
 #: src/routes/support.tsx
-msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
-msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从琥珀一路升到镭射。"
+#~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
+#~ msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从琥珀一路升到镭射。"
+
+#: src/routes/support.tsx
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it catches fire."
+msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从琥珀一路升到镭射。按月订阅的话，徽章会燃起火焰。"
+
+#: src/routes/support.tsx
+#~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it wears a renew mark."
+#~ msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从琥珀一路升到镭射。按月订阅的话，徽章会带上续订标记。"
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.scatteredBreakMultiplier
 #: src/lib/chain-run.ts
@@ -7616,8 +7624,8 @@ msgid "Cover"
 msgstr "Cover"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "Covered"
-msgstr "已覆盖"
+#~ msgid "Covered"
+#~ msgstr "已覆盖"
 
 #: src/components/layout/SupportGoalBar.tsx
 #~ msgid "Covered through {covered}"
@@ -9084,8 +9092,12 @@ msgid "Every +combo is halved."
 msgstr "所有 +连击 减半。"
 
 #: src/routes/support.tsx
-msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
-msgstr "你每支持 $3（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。"
+#~ msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
+#~ msgstr "你每支持 $3（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。"
+
+#: src/routes/support.tsx
+msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+msgstr "你每支持 $3（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。按月订阅每满三个月还会额外送一个兑换码。"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "every card"
@@ -11919,6 +11931,10 @@ msgstr "{hidden} 最早的最佳成绩比 {shown} 更早还是更晚？"
 #: src/routes/dan-estimates.tsx
 #~ msgid "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
 #~ msgstr "它还只能看到本站手上有的成绩。你的 osu! bp 一定包含在内。排在它们下面的成绩只有在本站追踪你的时候才会算进去，也就是你在本国前 100 里，或者你自己打开了追踪，而且只从那天起算。几年前就退坑的玩家只能靠 top 200 来判断，所以估算结果会偏低。"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+#~ msgid "It burns in the rank's own colours for as long as the subscription keeps renewing."
+#~ msgstr "只要订阅持续续订，它就会以该段位自己的颜色燃烧。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
@@ -16862,8 +16878,12 @@ msgid "or pick someone else"
 msgstr "或选择其他玩家"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Or send in your own 3D model or image from your supporter page."
-msgstr "也可以在你的支持者页面上传自己的 3D 模型或图片。"
+msgid "Or send in your own (can be 3D model or image) from your supporter page."
+msgstr "也可以在你的支持者页面上传自己的（3D 模型或图片都行）。"
+
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "Or send in your own 3D model or image from your supporter page."
+#~ msgstr "也可以在你的支持者页面上传自己的 3D 模型或图片。"
 
 #: src/routes/recommendations.tsx
 msgid "or someone else"
@@ -19708,6 +19728,10 @@ msgstr "渲染中"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Rendering the {selectedKeymode}K playfield..."
 msgstr "正在渲染 {selectedKeymode}K 游玩区域…"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Renews every month"
+msgstr "每月自动续订"
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Repeat preview"
@@ -23155,6 +23179,10 @@ msgstr "提交中..."
 msgid "Subregions"
 msgstr "子区域"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+#~ msgid "Subscribe monthly and your rank catches fire"
+#~ msgstr "按月订阅，你的段位会燃起火焰"
+
 #: src/lib/pack-run.ts
 msgid "Sudden Death"
 msgstr "Sudden Death"
@@ -23254,6 +23282,10 @@ msgstr "支持者可以上传图片并制作自己的个人资料主题，包括
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Supporters submit frames to everyone's picker, with their name on them, and wear them on their profile."
 msgstr "支持者可以把头像框提交到所有人的选择器并署名，还能在主页上佩戴。"
+
+#: src/routes/support.tsx
+msgid "Supporting keeps the servers running and new features coming. As thanks, supporters get everything on this page."
+msgstr "你的支持让服务器持续运行，也让新功能不断上线。作为感谢，支持者可获得本页上的所有内容。"
 
 #: src/routes/support.tsx
 msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
@@ -24914,8 +24946,8 @@ msgstr "本站会缓存、排队并复用数据，以避免反复向 osu! 请求
 #~ msgstr ""
 
 #: src/routes/support.tsx
-msgid "The site is made and paid for by one person. Supporting covers the servers and gives me time to keep building it. As thanks, supporters get everything on this page."
-msgstr "这个网站由一个人制作并承担费用。你的支持用于支付服务器，也让我有时间继续开发。作为感谢，支持者可获得本页上的所有内容。"
+#~ msgid "The site is made and paid for by one person. Supporting covers the servers and gives me time to keep building it. As thanks, supporters get everything on this page."
+#~ msgstr "这个网站由一个人制作并承担费用。你的支持用于支付服务器，也让我有时间继续开发。作为感谢，支持者可获得本页上的所有内容。"
 
 #: src/routes/dan-estimates.tsx
 msgid "The site notices you are playing from osu!'s feed of new scores, which only lists charts with a leaderboard. Once it sees one, it checks your recent plays every few minutes, unranked charts included, until 30 minutes pass without a new play. <0>If you only play unranked charts, nothing is recorded automatically.</0>"

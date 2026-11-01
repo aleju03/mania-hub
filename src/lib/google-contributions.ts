@@ -5,7 +5,7 @@
    Publisher Center export). Off until the publication id is set. */
 
 /* From Publisher Center, Reader Revenue Manager. Public: it is in the page. */
-export const GOOGLE_RRM_PUBLICATION_ID = "";
+export const GOOGLE_RRM_PUBLICATION_ID = "CAowhP_hCw";
 
 const SWG_BASIC_SRC = "https://news.google.com/swg/js/v1/swg-basic.js";
 

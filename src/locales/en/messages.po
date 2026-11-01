@@ -1503,8 +1503,8 @@ msgid "{files} files in {groupCount} groups"
 msgstr "{files} files in {groupCount} groups"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "{filling} goal"
-msgstr "{filling} goal"
+#~ msgid "{filling} goal"
+#~ msgstr "{filling} goal"
 
 #: src/components/layout/SupportGoalBar.tsx
 #~ msgid "{filling} hosting"
@@ -1917,8 +1917,8 @@ msgstr "{progressCounts} cards"
 #~ msgstr "{progressCounts} teams"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "{raised} of {target}"
-msgstr "{raised} of {target}"
+#~ msgid "{raised} of {target}"
+#~ msgstr "{raised} of {target}"
 
 #: src/routes/maps.tsx
 msgid "{randomPickCount, plural, one {# pick} other {# possible picks}}"
@@ -3091,8 +3091,16 @@ msgid "A 4K chart is LN when holds make up at least 45% of its notes and those h
 msgstr "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 
 #: src/routes/support.tsx
-msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
-msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
+#~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
+#~ msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
+
+#: src/routes/support.tsx
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it catches fire."
+msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it catches fire."
+
+#: src/routes/support.tsx
+#~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it wears a renew mark."
+#~ msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it wears a renew mark."
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.scatteredBreakMultiplier
 #: src/lib/chain-run.ts
@@ -7631,8 +7639,8 @@ msgid "Cover"
 msgstr "Cover"
 
 #: src/components/layout/SupportGoalBar.tsx
-msgid "Covered"
-msgstr "Covered"
+#~ msgid "Covered"
+#~ msgstr "Covered"
 
 #: src/components/layout/SupportGoalBar.tsx
 #~ msgid "Covered through {covered}"
@@ -9099,8 +9107,12 @@ msgid "Every +combo is halved."
 msgstr "Every +combo is halved."
 
 #: src/routes/support.tsx
-msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
-msgstr "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
+#~ msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
+#~ msgstr "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
+
+#: src/routes/support.tsx
+msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+msgstr "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "every card"
@@ -11946,6 +11958,10 @@ msgstr "Is {hidden}'s oldest top play older or newer than {shown}'s?"
 #: src/routes/dan-estimates.tsx
 #~ msgid "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
 #~ msgstr "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
+
+#: src/components/supporter/SupporterRankBadge.tsx
+#~ msgid "It burns in the rank's own colours for as long as the subscription keeps renewing."
+#~ msgstr "It burns in the rank's own colours for as long as the subscription keeps renewing."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It can only judge the plays the site has. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
@@ -16889,8 +16905,12 @@ msgid "or pick someone else"
 msgstr "or pick someone else"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Or send in your own 3D model or image from your supporter page."
-msgstr "Or send in your own 3D model or image from your supporter page."
+msgid "Or send in your own (can be 3D model or image) from your supporter page."
+msgstr "Or send in your own (can be 3D model or image) from your supporter page."
+
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "Or send in your own 3D model or image from your supporter page."
+#~ msgstr "Or send in your own 3D model or image from your supporter page."
 
 #: src/routes/recommendations.tsx
 msgid "or someone else"
@@ -19735,6 +19755,10 @@ msgstr "Rendering"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Rendering the {selectedKeymode}K playfield..."
 msgstr "Rendering the {selectedKeymode}K playfield..."
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Renews every month"
+msgstr "Renews every month"
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Repeat preview"
@@ -23190,6 +23214,10 @@ msgstr "Submitting..."
 msgid "Subregions"
 msgstr "Subregions"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+#~ msgid "Subscribe monthly and your rank catches fire"
+#~ msgstr "Subscribe monthly and your rank catches fire"
+
 #: src/lib/pack-run.ts
 msgid "Sudden Death"
 msgstr "Sudden Death"
@@ -23289,6 +23317,10 @@ msgstr "Supporters can upload images and make their own profile themes, includin
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Supporters submit frames to everyone's picker, with their name on them, and wear them on their profile."
 msgstr "Supporters submit frames to everyone's picker, with their name on them, and wear them on their profile."
+
+#: src/routes/support.tsx
+msgid "Supporting keeps the servers running and new features coming. As thanks, supporters get everything on this page."
+msgstr "Supporting keeps the servers running and new features coming. As thanks, supporters get everything on this page."
 
 #: src/routes/support.tsx
 msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
@@ -24957,8 +24989,8 @@ msgstr "The site caches, queues, and reuses data to avoid repeatedly requesting 
 #~ msgstr "The site has no matching chart indexed. That does not mean this chart is new, only that nothing here matched it."
 
 #: src/routes/support.tsx
-msgid "The site is made and paid for by one person. Supporting covers the servers and gives me time to keep building it. As thanks, supporters get everything on this page."
-msgstr "The site is made and paid for by one person. Supporting covers the servers and gives me time to keep building it. As thanks, supporters get everything on this page."
+#~ msgid "The site is made and paid for by one person. Supporting covers the servers and gives me time to keep building it. As thanks, supporters get everything on this page."
+#~ msgstr "The site is made and paid for by one person. Supporting covers the servers and gives me time to keep building it. As thanks, supporters get everything on this page."
 
 #: src/routes/dan-estimates.tsx
 msgid "The site notices you are playing from osu!'s feed of new scores, which only lists charts with a leaderboard. Once it sees one, it checks your recent plays every few minutes, unranked charts included, until 30 minutes pass without a new play. <0>If you only play unranked charts, nothing is recorded automatically.</0>"

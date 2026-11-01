@@ -4,7 +4,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { ExternalLink } from "lucide-react";
 
-import { SupportGoalBar } from "../layout/SupportGoalBar";
 import { useAuth } from "../../lib/auth-context";
 import { track } from "../../lib/analytics";
 import { readEdgeCountry } from "../../lib/country-cookie";
@@ -12,9 +11,9 @@ import { GOOGLE_RRM_PUBLICATION_ID, startGoogleContributions } from "../../lib/g
 import { claimGoogleContribution } from "../../lib/supporter-look-settings";
 import { useNearView } from "./SupportMotion";
 
-/* Where a visitor pays, at the end of /support: the month's hosting bar, the
-   Ko-fi panel, lava.top for the countries Ko-fi cannot take a card from, and
-   Google's checkout once its publication id is set. */
+/* Where a visitor pays, at the end of /support: the Ko-fi panel, lava.top
+   for the countries Ko-fi cannot take a card from, and Google's checkout
+   (admins only for now). */
 
 export const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 const LAVA_TIP_URL = "https://app.lava.top/mania-tracker?tabId=donate";
@@ -107,7 +106,8 @@ function GoogleContribution({ viewerId }: { viewerId: number | null | undefined 
 
 export function SupportCheckout() {
   const { t } = useLingui();
-  const viewerId = useAuth().viewer?.id;
+  const auth = useAuth();
+  const viewerId = auth.viewer?.id;
   // null until the server answers; Ko-fi shows meanwhile only if it says no.
   const [useLava, setUseLava] = useState<boolean | null>(null);
   // once loaded it stays, so scrolling away and back never reloads it
@@ -128,7 +128,6 @@ export function SupportCheckout() {
 
   return (
     <div className="overflow-hidden rounded-xl bg-osu-b4">
-      <SupportGoalBar />
       {useLava === true ? (
         <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3">
           <p className="text-[12px] text-osu-f1">{t`Can't pay with Ko-fi? You can tip through lava.top.`}</p>
@@ -144,7 +143,10 @@ export function SupportCheckout() {
           </a>
         </div>
       ) : null}
-      {GOOGLE_RRM_PUBLICATION_ID ? <GoogleContribution viewerId={viewerId} /> : null}
+      {/* Admins only until a real payment has gone through it: Google's
+          checkout refuses every host but mania-tracker.com, so it can only
+          be tried live. */}
+      {GOOGLE_RRM_PUBLICATION_ID && auth.isAdmin ? <GoogleContribution viewerId={viewerId} /> : null}
       {/* Ko-fi's page is heavy to start, so it loads once the visitor has
           paused near it rather than mid-scroll on the way down */}
       <div ref={frameRef}>

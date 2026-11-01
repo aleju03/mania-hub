@@ -628,7 +628,7 @@ function SupporterPage() {
                           <p className="mt-1 text-[13px] text-osu-l2">
                             {t`Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks.`}
                           </p>
-                          {state.runStartedAt != null ? <SupporterRankLadder runStartedAt={state.runStartedAt} /> : null}
+                          {state.runStartedAt != null ? <SupporterRankLadder runStartedAt={state.runStartedAt} renewing={state.renewing} /> : null}
                           <GiftCodePanel viewerId={viewer.id} />
                         </>
                       )}

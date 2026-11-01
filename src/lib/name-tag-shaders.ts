@@ -6,6 +6,7 @@ import {
   ShaderMount,
   toProcessedLiquidMetal,
 } from "@paper-design/shaders";
+import { mirrorShaderMount } from "./gl-mirror";
 
 import type { ShaderNameStyle } from "./supporter-name-styles";
 import { queueGpuWork } from "./gpu-queue";
@@ -565,6 +566,7 @@ async function buildStyle(style: ShaderNameStyle, mask: { url: string; aspect: n
    calls `onReady` once it draws. Returns the cleanup. */
 export function mountNameShader(span: HTMLElement, host: HTMLElement, style: ShaderNameStyle, onReady: () => void): () => void {
   let mount: ShaderMount | null = null;
+  let unmirror: (() => void) | undefined;
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let unqueue: (() => void) | undefined;
@@ -589,6 +591,8 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
     unqueue = queueGpuWork(() => {
       if (disposed || mount) return;
       mount = new ShaderMount(host, built.shader, uniforms, { premultipliedAlpha: true }, still ? 0 : 1, 3, 2, undefined, built.mipmaps);
+      // drawn off the page, shown as a 2D copy that never flashes a lost context's white box
+      unmirror = mirrorShaderMount(mount);
       onReady();
     });
   };
@@ -619,6 +623,7 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
     // dispose() leaves the context to the garbage collector, and a page that
     // swaps names fast runs into the browser's cap of live contexts first
     const gl = mount?.canvasElement.getContext("webgl2");
+    unmirror?.();
     mount?.dispose();
     gl?.getExtension("WEBGL_lose_context")?.loseContext();
   };

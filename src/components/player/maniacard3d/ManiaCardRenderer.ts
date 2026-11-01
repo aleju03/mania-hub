@@ -26,6 +26,7 @@ import {
 import { CARD_ASPECT, clamp, resolveQualityProfile, type QualityProfile } from "./layout";
 import type { ManiaCardReadyData } from "./types";
 import { supporterFoilIndex, type SupporterFoilId } from "#/lib/supporter-foils";
+import { mirrorGlCanvas, type GlMirror } from "#/lib/gl-mirror";
 import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
 import { buildCardSleeve, sleeveFit, sleeveReach, type CardSleeveMeshes } from "./cardSleeve";
 import { CARD_WORLD_HEIGHT } from "./cardGeometry";
@@ -116,6 +117,8 @@ function easeOutBackSoft(t: number) {
 export class ManiaCardRenderer {
   private readonly host: HTMLElement;
   private readonly renderer: WebGLRenderer;
+  /* The renderer draws off the page; this 2D copy is what shows (gl-mirror.ts). */
+  private readonly mirror: GlMirror;
   private readonly gyroEnabled: boolean;
   private readonly onReady?: () => void;
   private readonly onError?: (error: unknown) => void;
@@ -183,12 +186,14 @@ export class ManiaCardRenderer {
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(this.quality.pixelRatio);
+    // drawn off the page, shown as a 2D copy that never flashes a lost context's white box
+    this.mirror = mirrorGlCanvas(this.renderer.domElement);
     this.applyCanvasSize();
     // The canvas is larger than the host so the card can rotate past the host's
     // bounds without getting clipped (mirrors how the CSS card overflows its
     // container when tilted). We keep the host's size for layout and position
     // the canvas absolutely, centered, larger by CANVAS_OVERSCAN on each axis.
-    const canvas = this.renderer.domElement;
+    const canvas = this.mirror.canvas;
     canvas.style.display = "block";
     canvas.style.position = "absolute";
     canvas.style.left = "50%";
@@ -447,6 +452,8 @@ export class ManiaCardRenderer {
     const canvasHeight = Math.max(1, Math.round(hostHeight * this.overscan));
     const canvasWidth = this.clampCanvasWidth(Math.round(hostWidth * this.overscan));
     this.renderer.setSize(canvasWidth, canvasHeight);
+    this.mirror.canvas.style.width = `${canvasWidth}px`;
+    this.mirror.canvas.style.height = `${canvasHeight}px`;
     this.camera.aspect = canvasWidth / canvasHeight;
     this.camera.updateProjectionMatrix();
   }
@@ -494,9 +501,10 @@ export class ManiaCardRenderer {
     const sleeveMeshes = this.sleeveMeshes;
     this.sleeveMeshes = null;
     const renderer = this.renderer;
-    const canvas = this.renderer.domElement;
+    const canvas = this.mirror.canvas;
     this.textures = null;
     this.backOverrideTexture = null;
+    this.mirror.dispose();
     canvas.remove();
 
     releaseRendererResources(() => {
@@ -591,6 +599,7 @@ export class ManiaCardRenderer {
     }
 
     this.renderer.render(this.scene, this.camera);
+    this.mirror.copy();
     if (this.textures && !this.readyEmitted && this.readyTextureRequestId === this.dataRequestId) {
       this.readyEmitted = true;
       this.onReady?.();

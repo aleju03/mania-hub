@@ -1032,7 +1032,7 @@ export function Nav() {
               )}
             </div>
           ) : null}
-          <CountrySelector className="w-36 xl:w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
+          <CountrySelector className="max-w-36 xl:max-w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
           <SearchInput
             className="w-32 xl:w-52"
             placeholder={t`find player...`}

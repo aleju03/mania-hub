@@ -8,6 +8,7 @@ import { avatarUrlUserId } from "../ui/Avatar";
 import { LnSplitCard, PercentileCard, RatioCard, SessionCard, StreakCard } from "../player/ProfileStatCards";
 import { ProfileThemeBackdrop, ProfileThemeSwatch } from "./ProfileThemeBackdrop";
 import { SupporterStyledName } from "./SupporterNameStyle";
+import { useFittedName } from "./useFittedName";
 import { FoilPreview } from "./FoilPreview";
 import { GiftTicket3D } from "./GiftTicket3D";
 import { CompanionFigure, CompanionThumb } from "./Companion";
@@ -185,6 +186,7 @@ export function HeroStage() {
   const [ref, near] = useNearView<HTMLDivElement>();
   const [index, pick] = useCycle(HERO_LOOKS.length, 4200, near);
   const look = HERO_LOOKS[index];
+  const nameBoxRef = useFittedName([you.name, look.nameStyle, look.nameFont]);
   const frameName = FRAME_NAMES.get(look.frame);
   const fade = reduced ? undefined : { initial: { opacity: 0, scale: 0.94 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0 }, transition: { duration: 0.35 } };
   const size = 112;
@@ -205,14 +207,16 @@ export function HeroStage() {
           </AnimatePresence>
         </div>
         <AnimatePresence mode="wait">
-          <motion.div key={`${look.nameStyle}|${look.nameFont}`} {...fade} className="mt-2 flex max-w-full justify-center">
-            <SupporterStyledName
-              nameStyle={look.nameStyle}
-              nameFont={look.nameFont}
-              name={you.name}
-              live={near}
-              className="max-w-full truncate px-2 py-[0.3em] -my-[0.3em] text-[34px] font-black leading-none text-white sm:text-[44px]"
-            />
+          <motion.div key={`${look.nameStyle}|${look.nameFont}`} {...fade} className="mt-2 w-full max-w-full">
+            <div ref={nameBoxRef} className="flex w-full justify-center">
+              <SupporterStyledName
+                nameStyle={look.nameStyle}
+                nameFont={look.nameFont}
+                name={you.name}
+                live={near}
+                className="max-w-full truncate px-2 py-[0.3em] -my-[0.3em] text-[length:calc(34px*var(--name-scale,1))] font-black leading-none text-white sm:text-[length:calc(44px*var(--name-scale,1))]"
+              />
+            </div>
           </motion.div>
         </AnimatePresence>
       </button>
@@ -455,7 +459,7 @@ export function CompanionsShowcase() {
             </button>
           ))}
         </div>
-        <p className="mt-3 text-[12px] text-osu-f1">{t`Or send in your own 3D model or image from your supporter page.`}</p>
+        <p className="mt-3 text-[12px] text-osu-f1">{t`Or send in your own (can be 3D model or image) from your supporter page.`}</p>
       </div>
     </div>
   );

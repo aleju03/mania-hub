@@ -1,5 +1,6 @@
 import { CUSTOM_THEME_INPUTS, CUSTOM_THEME_TEXTURES } from "#custom-themes/inputs";
 import { customThemeKey, reportCustomThemeCrash, type CustomTheme } from "./custom-themes";
+import { mirrorGlCanvas } from "./gl-mirror";
 import { createSakuraPetals, type ThemeOverlay } from "./profile-theme-petals";
 import { PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
 import { HIGHWAY_MAX_LANES, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "./supporter-profile-themes";
@@ -531,12 +532,15 @@ export function mountProfileBackdrop(
     onFallback?: (theme: CustomTheme) => void;
   } = {},
 ): ProfileBackdrop | null {
+  // drawn off the page; the page shows a 2D copy (gl-mirror.ts), which never paints a lost context's white box
   const canvas = document.createElement("canvas");
-  canvas.setAttribute("aria-hidden", "true");
-  canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity .6s ease";
   const gl = webgl2(canvas);
   if (!gl) return null;
-  host.appendChild(canvas);
+  const mirror = mirrorGlCanvas(canvas);
+  const shownCanvas = mirror.canvas;
+  shownCanvas.setAttribute("aria-hidden", "true");
+  shownCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity .6s ease";
+  host.appendChild(shownCanvas);
   const context = new ThemeContext(gl);
   const still = reducedMotion();
   const start = performance.now();
@@ -561,7 +565,7 @@ export function mountProfileBackdrop(
     gaveUp = true;
     cancelAnimationFrame(frame);
     frame = 0;
-    canvas.style.opacity = "0";
+    shownCanvas.style.opacity = "0";
     onFallback?.(custom);
   };
 
@@ -623,9 +627,11 @@ export function mountProfileBackdrop(
       giveUp(theme);
       return;
     }
-    if (context.draw(theme, canvas.width, canvas.height, time, pointer, scrolled, notes, chart) && !shown) {
+    const drew = context.draw(theme, canvas.width, canvas.height, time, pointer, scrolled, notes, chart);
+    mirror.copy();
+    if (drew && !shown) {
       shown = true;
-      canvas.style.opacity = "1";
+      shownCanvas.style.opacity = "1";
     }
   };
   /* A still frame, tried again each frame while the theme's program compiles. */
@@ -703,7 +709,7 @@ export function mountProfileBackdrop(
         governor = new ResolutionGovernor();
         gaveUp = false;
         shown = false;
-        canvas.style.opacity = "0";
+        shownCanvas.style.opacity = "0";
       }
       if (still && !stillFrame) renderStill();
       else if (!still && !frame && !disposed) frame = requestAnimationFrame(loop);
@@ -726,8 +732,9 @@ export function mountProfileBackdrop(
       watcher.disconnect();
       window.removeEventListener("pointermove", onPointer);
       canvas.removeEventListener("webglcontextlost", onLost);
+      mirror.dispose();
+      shownCanvas.remove();
       gl.getExtension("WEBGL_lose_context")?.loseContext();
-      canvas.remove();
     },
   };
 }

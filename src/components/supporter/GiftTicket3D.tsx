@@ -3,6 +3,7 @@ import { useLingui } from "@lingui/react/macro";
 
 import { mountFoilSource } from "./FoilPreview";
 import { useWebGlSlot } from "../../lib/gl-budget";
+import { mirrorGlCanvas } from "../../lib/gl-mirror";
 import { queueGpuWork } from "../../lib/gpu-queue";
 
 /* The gift ticket on /support as a real object: a thick ticket in 3D with its
@@ -36,6 +37,10 @@ const SETTLE_SPEED = 2.2;
 /* How far it tips forward or back (radians). It spins freely side to side,
    but tipping over the long edge would land it upside down. */
 const MAX_TILT = 0.55;
+/* How far the canvas reaches past its box on each side, as a share of the
+   box: enough for the near end of a ticket spun edge-on toward the viewer. */
+const BLEED_X = 0.2;
+const BLEED_Y = 0.8;
 
 const VERTEX = `
 uniform vec2 uSize;
@@ -242,12 +247,17 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
       }
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      const canvas = renderer.domElement;
-      canvas.style.cssText = "display:block;width:100%;height:100%";
+      // drawn off the page, shown as a 2D copy that never flashes a lost context's white box
+      const mirror = mirrorGlCanvas(renderer.domElement);
+      const canvas = mirror.canvas;
+      // Bigger than its box and laid over the page around it, so a swung ticket
+      // is never cut at the box edge; the box alone still takes the pointer.
+      canvas.style.cssText = `position:absolute;left:${-BLEED_X * 100}%;top:${-BLEED_Y * 100}%;width:${(1 + 2 * BLEED_X) * 100}%;height:${(1 + 2 * BLEED_Y) * 100}%;pointer-events:none`;
       host.appendChild(canvas);
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+      // A 30° view of the box, widened to take in the bleed above and below it.
+      const camera = new THREE.PerspectiveCamera((2 * Math.atan(Math.tan((15 * Math.PI) / 180) * (1 + 2 * BLEED_Y)) * 180) / Math.PI, 1, 0.1, 50);
 
       const face = document.createElement("canvas");
       face.width = FACE_W;
@@ -346,10 +356,13 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
       const resize = () => {
         const width = host.clientWidth, height = host.clientHeight;
         if (!width || !height) return;
-        renderer.setSize(width, height, false);
-        camera.aspect = width / height;
-        // Far enough back that the ticket, with room to sway, fits the box.
-        camera.position.set(0, 0, Math.max((W * 1.22) / camera.aspect, H * 1.5) / (2 * Math.tan((15 * Math.PI) / 180)));
+        const spanX = 1 + 2 * BLEED_X, spanY = 1 + 2 * BLEED_Y;
+        renderer.setSize(width * spanX, height * spanY, false);
+        camera.aspect = (width * spanX) / (height * spanY);
+        // Far enough back that the ticket, with room to sway, fits the box;
+        // the wider view only adds the bleed around it.
+        const half = Math.tan((15 * Math.PI) / 180);
+        camera.position.set(0, 0, Math.max((W * 1.22) / (width / height), H * 1.5) / (2 * half));
         camera.updateProjectionMatrix();
       };
       const resizer = new ResizeObserver(resize);
@@ -512,6 +525,7 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
           foilTexture.needsUpdate = true;
         }
         renderer.render(scene, camera);
+        mirror.copy();
         queue();
       };
 
@@ -533,9 +547,11 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
         faceTexture.dispose();
         backTexture.dispose();
         foilTexture.dispose();
+        // off the page first, so the lost context never paints its white box
+        mirror.dispose();
+        canvas.remove();
         renderer.dispose();
         renderer.forceContextLoss();
-        canvas.remove();
       };
     };
     return () => {
@@ -546,5 +562,5 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
   }, [glSlot]);
 
   if (failed) return <>{fallback}</>;
-  return <div ref={hostRef} className="mx-auto aspect-[2.25/1] w-full max-w-[640px] cursor-grab touch-pan-y select-none" role="img" aria-label={`${labels.title}: ${CODE.slice(0, 4)}-${CODE.slice(4)}`} />;
+  return <div ref={hostRef} className="relative z-10 mx-auto aspect-[2.25/1] w-full max-w-[640px] cursor-grab touch-pan-y select-none" role="img" aria-label={`${labels.title}: ${CODE.slice(0, 4)}-${CODE.slice(4)}`} />;
 }

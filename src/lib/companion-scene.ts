@@ -131,9 +131,31 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
   renderer.setPixelRatio(Math.min((window.devicePixelRatio || 1) * 2, 3));
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = NeutralToneMapping;
-  const canvas = renderer.domElement;
+  // The WebGL canvas stays off the page; each frame is copied onto a plain 2D
+  // one that is. A lost WebGL canvas on the page paints as a white box (a
+  // reload, a GPU reset), a 2D one just keeps its last frame or nothing.
+  const glCanvas = renderer.domElement;
+  const canvas = document.createElement("canvas");
   canvas.style.cssText = "display:block;width:100%;height:100%;touch-action:pan-y;cursor:grab;opacity:0;transition:opacity .4s ease";
   host.appendChild(canvas);
+  const view = canvas.getContext("2d")!;
+  const draw = () => {
+    renderer.render(scene, camera);
+    if (canvas.width !== glCanvas.width || canvas.height !== glCanvas.height) {
+      canvas.width = glCanvas.width;
+      canvas.height = glCanvas.height;
+    }
+    view.clearRect(0, 0, canvas.width, canvas.height);
+    view.drawImage(glCanvas, 0, 0);
+  };
+  // a loss hides it and tells the companion's gl-budget slot (which listens
+  // on the page) so it can rebuild
+  const onLost = () => {
+    canvas.style.transition = "none";
+    canvas.style.opacity = "0";
+    canvas.dispatchEvent(new Event("webglcontextlost"));
+  };
+  glCanvas.addEventListener("webglcontextlost", onLost);
 
   const scene = new Scene();
   lights(scene);
@@ -179,7 +201,7 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
     }
     turntable.rotation.y = yaw;
     if (motion && !still) motion((now - start) / 1000);
-    renderer.render(scene, camera);
+    draw();
     if (visible && (!still || dragging || Math.abs(velocity) > 0.001)) raf = requestAnimationFrame(tick);
   };
   const wake = () => {
@@ -215,7 +237,7 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
 
   const resizer = new ResizeObserver(() => {
     resize();
-    if (model) renderer.render(scene, camera);
+    if (model) draw();
   });
   resizer.observe(host);
   const watcher = new IntersectionObserver(([entry]) => {
@@ -245,7 +267,7 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
       velocity = 0;
       onShow?.();
       resize();
-      renderer.render(scene, camera);
+      draw();
       canvas.style.opacity = "1";
       onReady?.();
       wake();
@@ -267,9 +289,10 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
       canvas.removeEventListener("pointerup", onUp);
       canvas.removeEventListener("pointercancel", onUp);
       if (model) dispose(model);
+      glCanvas.removeEventListener("webglcontextlost", onLost);
+      canvas.remove();
       renderer.dispose();
       renderer.forceContextLoss();
-      canvas.remove();
     },
   };
 }
