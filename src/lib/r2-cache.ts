@@ -10,6 +10,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { buildAttachmentContentDisposition } from "./content-disposition";
 import {
   getPublicBucketBaseUrl,
   getPublicBucketClient,
@@ -1344,6 +1345,17 @@ export async function deleteSignatureImages(cacheKeys: string[]): Promise<number
   return deleted;
 }
 
+// return correct filename
+function readUploadedReplayFilename(metadata: Record<string, string> | undefined): string | undefined {
+  let filename = metadata?.originalfilename;
+  if (metadata?.originalfilenameutf8) {
+    try {
+      filename = decodeURIComponent(metadata.originalfilenameutf8);   // convert percent-encoded back to the original name
+    } catch {}
+  }
+  return filename && /^\.osr$/i.test(filename) ? "replay.osr" : filename;
+}
+
 export async function getUploadedReplay(id: string): Promise<UploadedReplay | null> {
   const r2 = getClient();
   if (!r2) return null;
@@ -1365,7 +1377,7 @@ export async function getUploadedReplay(id: string): Promise<UploadedReplay | nu
       sizeBytes: object.ContentLength ?? buffer.length,
       mimeType: object.ContentType ?? "application/octet-stream",
       buffer,
-      originalFilename: object.Metadata?.originalfilename,
+      originalFilename: readUploadedReplayFilename(object.Metadata),
     };
   } catch {
     return null;
@@ -1465,6 +1477,15 @@ export async function putUploadedReplay(id: string, buffer: Buffer, metadata: Up
   assertReplayCacheKey(storageKey);
   const mimeType = "application/octet-stream";
   const { originalFilename, uploaderId, uploadedAt } = metadata;
+  const objectMetadata: Record<string, string> = {
+    ...(originalFilename ? {
+      originalfilename: sanitizeFilename(originalFilename),
+      originalfilenameutf8: encodeURIComponent(originalFilename),
+    } : {}),
+    ...(uploaderId != null && Number.isFinite(uploaderId) ? { uploaderid: String(uploaderId) } : {}),
+    uploadedat: uploadedAt ?? new Date().toISOString(),
+  };
+  const filename = readUploadedReplayFilename(objectMetadata);
 
   await r2.send(new PutObjectCommand({
     Bucket: REPLAY_CACHE_BUCKET,
@@ -1472,12 +1493,8 @@ export async function putUploadedReplay(id: string, buffer: Buffer, metadata: Up
     Body: buffer,
     ContentType: mimeType,
     CacheControl: "private, max-age=31536000, immutable",
-    ContentDisposition: `attachment; filename="${sanitizeFilename(originalFilename || `${id}.osr`)}"`,
-    Metadata: {
-      ...(originalFilename ? { originalfilename: sanitizeFilename(originalFilename) } : {}),
-      ...(uploaderId != null && Number.isFinite(uploaderId) ? { uploaderid: String(uploaderId) } : {}),
-      uploadedat: uploadedAt ?? new Date().toISOString(),
-    },
+    ContentDisposition: buildAttachmentContentDisposition(filename || `${id}.osr`),
+    Metadata: objectMetadata,
   }));
 
   return {
@@ -1486,7 +1503,7 @@ export async function putUploadedReplay(id: string, buffer: Buffer, metadata: Up
     sizeBytes: buffer.length,
     mimeType,
     buffer,
-    originalFilename: originalFilename ? sanitizeFilename(originalFilename) : undefined,
+    originalFilename: filename,
   };
 }
 
@@ -1514,7 +1531,7 @@ export async function headUploadedReplayOwner(id: string): Promise<UploadedRepla
     const uploaderId = Number(head.Metadata?.uploaderid);
     return {
       uploaderId: Number.isSafeInteger(uploaderId) && uploaderId > 0 ? uploaderId : null,
-      originalFilename: head.Metadata?.originalfilename ?? null,
+      originalFilename: readUploadedReplayFilename(head.Metadata) ?? null,
       uploadedAt: head.Metadata?.uploadedat ?? head.LastModified?.toISOString() ?? null,
     };
   } catch {

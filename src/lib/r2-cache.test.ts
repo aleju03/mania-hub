@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import type { PutObjectCommand } from "@aws-sdk/client-s3";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildAttachmentContentDisposition } from "./content-disposition";
 import {
   getBeatmapAssetBlobKey,
   getPointerBlobKey,
@@ -7,6 +9,13 @@ import {
   normalizeR2AdminObjectKey,
   normalizeR2AdminPrefix,
 } from "./r2-cache";
+
+const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn<(command: unknown) => Promise<unknown>>() }));
+
+vi.mock("@aws-sdk/client-s3", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@aws-sdk/client-s3")>()),
+  S3Client: class { send = sendMock; },
+}));
 
 describe("R2 admin key normalization", () => {
   it("defaults to each bucket's first root prefix", () => {
@@ -100,5 +109,70 @@ describe("content-addressed beatmap asset blobs", () => {
     expect(getPointerBlobKey("background", { blobkey: "replay-cache/replays/1.osr" })).toBeNull();
     expect(getPointerBlobKey("background", {})).toBeNull();
     expect(getPointerBlobKey("background", undefined)).toBeNull();
+  });
+});
+
+describe("uploaded replay filenames", () => {
+  const replayBytes = Buffer.from("stored replay bytes");
+  const uploadId = "abcdefghijklmnopqrst";
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("R2_ENDPOINT", "https://storage.example.invalid");
+    vi.stubEnv("R2_BUCKET", "mania-hub-replay-cache");
+    vi.stubEnv("R2_ACCESS_KEY_ID", "test-key");
+    vi.stubEnv("R2_SECRET_ACCESS_KEY", "test-secret");
+    sendMock.mockReset();
+    sendMock.mockRejectedValue(new Error("Unexpected storage command."));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("preserves Unicode and emoji filenames through storage", async () => {
+    const { putUploadedReplay, getUploadedReplay, headUploadedReplayOwner } = await import("./r2-cache");
+
+    for (const filename of ["你好.osr", "💀.osr"]) {
+      sendMock.mockResolvedValueOnce({});
+      const uploaded = await putUploadedReplay(uploadId, replayBytes, { originalFilename: filename });
+      const command = sendMock.mock.calls.at(-1)![0] as PutObjectCommand;
+      expect(uploaded?.originalFilename).toBe(filename);
+      expect(command.input.Metadata?.originalfilenameutf8).toBe(encodeURIComponent(filename));
+      expect(command.input.ContentDisposition).toBe(buildAttachmentContentDisposition(filename));
+
+      sendMock.mockResolvedValueOnce({
+        Body: { transformToByteArray: async () => command.input.Body },
+        Metadata: command.input.Metadata,
+      });
+      const replay = await getUploadedReplay(uploadId);
+      expect(replay?.originalFilename).toBe(filename);
+      expect(replay?.buffer).toEqual(replayBytes);
+
+      sendMock.mockResolvedValueOnce({ Metadata: command.input.Metadata });
+      expect((await headUploadedReplayOwner(uploadId))?.originalFilename).toBe(filename);
+    }
+  });
+
+  it("keeps filenames from older uploads readable", async () => {
+    const { getUploadedReplay } = await import("./r2-cache");
+    sendMock.mockResolvedValueOnce({
+      Body: { transformToByteArray: async () => replayBytes },
+      Metadata: { originalfilename: "cool_.osr" },
+    });
+    expect((await getUploadedReplay(uploadId))?.originalFilename).toBe("cool_.osr");
+  });
+
+  it("supplies a basename when an older upload only kept the extension", async () => {
+    const { getUploadedReplay, headUploadedReplayOwner } = await import("./r2-cache");
+    const metadata = { originalfilename: ".osr" };
+    sendMock.mockResolvedValueOnce({
+      Body: { transformToByteArray: async () => replayBytes },
+      Metadata: metadata,
+    });
+    expect((await getUploadedReplay(uploadId))?.originalFilename).toBe("replay.osr");
+    sendMock.mockResolvedValueOnce({ Metadata: metadata });
+    expect((await headUploadedReplayOwner(uploadId))?.originalFilename).toBe("replay.osr");
   });
 });
