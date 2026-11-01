@@ -1040,7 +1040,7 @@ msgstr "{0}% 的物件"
 
 #. placeholder {0}: top.pct
 #. placeholder {1}: mode.keyCount
-#. placeholder {2}: patternLabel(top.id)
+#. placeholder {2}: rowLabel(top)
 #: src/components/me/MyStatsInsights.tsx
 msgid "{0}% of your analyzed {1}K plays are {2}."
 msgstr "你已分析的 {1}K 成绩中有 {0}% 是{2}。"

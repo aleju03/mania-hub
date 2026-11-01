@@ -6,13 +6,14 @@
 import { useLingui } from "@lingui/react/macro";
 
 import type {
+  MyDataDietTag,
   MyDataInsights,
   MyDataJudgement,
   MyDataSessionShape,
   MyDataSkillMode,
 } from "../../lib/my-data";
 import { PATTERN_COLOR, usePatternLabel } from "../../lib/pattern-labels";
-import { skillModeEntries } from "../../lib/skill-axes";
+import { DAN_SKILLSET_META, skillModeEntries } from "../../lib/skill-axes";
 
 export const KEY_LABEL: Record<number, string> = { 1: "1K", 2: "2K", 3: "3K", 4: "4K", 5: "5K", 6: "6K", 7: "7K", 8: "8K", 9: "9K", 10: "10K" };
 export function InsightCard({ title, children, right, accent = "#e173a6" }: { title: string; children: React.ReactNode; right?: React.ReactNode; accent?: string }) {
@@ -48,11 +49,12 @@ export function StatColumn({ label, value, sub }: { label: string; value: string
 }
 
 /**
- * What the player actually plays, next to what they rate on. The diet is the
- * share of their analyzed plays whose chart carries each chart-analysis
- * pattern tag, and the number beside it is the rating aggregated from the
- * same tag, so the two columns are the same charts read two ways. Tags
- * overlap (a chart can be jack and tech), so the shares don't sum to 100.
+ * What the player actually plays, next to how they rate on it. Where the
+ * keymode has dan skill tiles, each row is the share of their analyzed plays
+ * that file under a tile by the same rules their dans do, with the play count
+ * beside it. Elsewhere the rows are chart-analysis pattern
+ * tags with the rating aggregated from the same tag. A shared chart sits in
+ * two tiles and tags overlap, so the shares don't sum to 100.
  */
 export function PlayDietCard({ insights, mode }: { insights: MyDataInsights; mode: MyDataSkillMode | null }) {
   const { t, i18n } = useLingui();
@@ -65,35 +67,47 @@ export function PlayDietCard({ insights, mode }: { insights: MyDataInsights; mod
   const top = rows[0];
   const axes = skillModeEntries(mode);
   const weakest = axes.length >= 3 ? axes[axes.length - 1] : null;
+  // LN tiles carry the LN prefix (pattern labels), so "Speed" on the rice
+  // side and "LN Speed" never read as the same row.
+  const rowLabel = (tag: MyDataDietTag): string => {
+    const meta = DAN_SKILLSET_META[tag.id];
+    return diet.tiles && tag.side === "rc" && meta ? i18n._(meta.labelMsg) : patternLabel(tag.id);
+  };
+  const rowColor = (tag: MyDataDietTag): string =>
+    (diet.tiles ? DAN_SKILLSET_META[tag.id]?.color : undefined) ?? PATTERN_COLOR[tag.id] ?? "#5ab2f2";
 
   return (
     <InsightCard
       title={t`What you play`}
-      accent={PATTERN_COLOR[top.id] ?? "#5ab2f2"}
+      accent={rowColor(top)}
       right={t`${compact(diet.analyzed)} analyzed`}
     >
       <div className="space-y-2">
         {rows.map((tag) => {
           const rating = ratings.get(tag.id);
           return (
-            <div key={tag.id} className="flex items-center gap-2">
-              <span className="w-[68px] shrink-0 truncate text-[11px] font-semibold text-osu-l2">{patternLabel(tag.id)}</span>
+            <div key={`${tag.side ?? ""}:${tag.id}`} className="flex items-center gap-2">
+              <span className="w-[76px] shrink-0 truncate text-[11px] font-semibold text-osu-l2">{rowLabel(tag)}</span>
               <span className="h-1.5 min-w-0 flex-1 rounded-full bg-osu-b3/35">
                 <span
                   className="block h-full rounded-full"
-                  style={{ width: `${Math.max(4, (tag.pct / top.pct) * 100)}%`, backgroundColor: PATTERN_COLOR[tag.id] ?? "#5ab2f2" }}
+                  style={{ width: `${Math.max(4, (tag.pct / top.pct) * 100)}%`, backgroundColor: rowColor(tag) }}
                 />
               </span>
               <span className="w-[30px] shrink-0 text-right text-[11px] text-osu-l2 tabular-nums">{tag.pct}%</span>
-              <span className="w-[38px] shrink-0 text-right text-[11px] text-osu-f1 tabular-nums">
-                {rating != null && rating >= 1 ? rating.toFixed(2) : "-"}
-              </span>
+              {diet.tiles ? (
+                <span className="w-[38px] shrink-0 text-right text-[11px] text-osu-f1 tabular-nums">{compact(tag.plays)}</span>
+              ) : (
+                <span className="w-[38px] shrink-0 text-right text-[11px] text-osu-f1 tabular-nums">
+                  {rating != null && rating >= 1 ? rating.toFixed(2) : "-"}
+                </span>
+              )}
             </div>
           );
         })}
       </div>
       <div className="mt-2.5 text-[11px] text-osu-l2">
-        {t`${top.pct}% of your analyzed ${mode.keyCount}K plays are ${patternLabel(top.id)}.`}
+        {t`${top.pct}% of your analyzed ${mode.keyCount}K plays are ${rowLabel(top)}.`}
         {weakest ? ` ${t`Your lowest rating is ${i18n._(weakest.labelMsg)}.`}` : null}
       </div>
     </InsightCard>

@@ -1028,7 +1028,7 @@ msgstr "{0}% de las notas"
 
 #. placeholder {0}: top.pct
 #. placeholder {1}: mode.keyCount
-#. placeholder {2}: patternLabel(top.id)
+#. placeholder {2}: rowLabel(top)
 #: src/components/me/MyStatsInsights.tsx
 msgid "{0}% of your analyzed {1}K plays are {2}."
 msgstr "El {0}% de tus plays analizados de {1}K son {2}."
