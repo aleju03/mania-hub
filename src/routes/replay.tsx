@@ -12,7 +12,8 @@ import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { loadReplayRenderer, preloadReplayRenderer } from "../lib/replay-renderer-loader";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getModDisplayList, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring, beatmapStatusAwardsPp } from "../lib/score";
-import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry } from "../store";
+import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry, useWholeDans } from "../store";
+import { useMapDanLabel } from "../lib/use-map-dan-label";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { exitNativeFullscreen, getNativeFullscreenElement, requestNativeFullscreen } from "../lib/fullscreen";
@@ -3416,7 +3417,10 @@ function ReplayViewer({
   const noDans = useNoDans();
   const danBeatmapId = scoreInfo?.beatmap?.id ?? null;
   const mapInfoDanOn = !noDans && overlaySettings.mapInfo.enabled && overlaySettings.mapInfo.mapInfo?.dan !== false;
-  const danKey = mapInfoDanOn && danBeatmapId ? `${danBeatmapId}:${Math.round(modRate * 100)}:${replay.keyCount}` : null;
+  const shownDanLabel = useMapDanLabel();
+  const wholeDans = useWholeDans();
+  // The preference rides the key so flipping it re-labels the card.
+  const danKey = mapInfoDanOn && danBeatmapId ? `${danBeatmapId}:${Math.round(modRate * 100)}:${replay.keyCount}:${wholeDans ? "whole" : "tier"}` : null;
   const [mapDan, setMapDan] = useState<{ key: string; dan: ReplayMapDan | null } | null>(null);
   const mapDanKey = mapDan?.key;
   useEffect(() => {
@@ -3427,15 +3431,16 @@ function ReplayViewer({
       const verdict = ratePercent === 100
         ? await fetchLiveChartAnalysis(beatmapId).then((detail) => (detail?.status === "ready" ? detail.primaryDan ?? null : null))
         : await fetchLiveRateChartAnalysis(beatmapId, ratePercent / 100).then((result) => result?.dan ?? null);
-      const src = verdict ? getDanTierImageSrc(verdict.label, verdict.family === "ln" ? "ln" : undefined, keyCount) : null;
+      const label = verdict ? shownDanLabel(verdict.label, keyCount, verdict.family) : null;
+      const src = verdict && label ? getDanTierImageSrc(label, verdict.family === "ln" ? "ln" : undefined, keyCount) : null;
       const imageUrl = src ? await rasterizeDanBadge(src) : null;
       if (cancelled) return;
-      setMapDan({ key: danKey, dan: verdict ? { label: verdict.label, family: verdict.family, ...(imageUrl ? { imageUrl } : {}) } : null });
+      setMapDan({ key: danKey, dan: verdict && label ? { label, family: verdict.family, ...(imageUrl ? { imageUrl } : {}) } : null });
     })();
     return () => {
       cancelled = true;
     };
-  }, [danKey, mapDanKey]);
+  }, [danKey, mapDanKey, shownDanLabel]);
   const shownMapDan = danKey && mapDan?.key === danKey ? mapDan.dan : null;
 
   // The cover fallback is cross-origin; the card reads it through the proxy.

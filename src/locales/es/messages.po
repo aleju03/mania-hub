@@ -1892,7 +1892,7 @@ msgstr "mínimo {USER_COLLECTION_MIN_ITEMS} mapas"
 msgid "{username} is <0>{0}</0>"
 msgstr "{username} es <0>{0}</0>"
 
-#. placeholder {0}: danTierName(danLabel, formatDan)
+#. placeholder {0}: wholeDans ? formatDan(danLabel) : danTierName(danLabel, formatDan)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{username} is around <0>{0}</0>"
 msgstr "{username} está alrededor de <0>{0}</0>"
@@ -3385,6 +3385,10 @@ msgstr "ya sugerido"
 #: src/components/player/AddScoreModal.tsx
 msgid "already tracked"
 msgstr "ya registrado"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Also on map dans"
+msgstr "También en dans de mapas"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Also remove the {allTrackedCount, plural, one {# play} other {# plays}} recorded so far?"
@@ -5051,6 +5055,7 @@ msgstr "Cliente"
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinReportModal.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -6660,6 +6665,7 @@ msgstr "suficiente"
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
 #: src/components/settings/CompanellaGroup.tsx
+#: src/components/skins/SkinReportModal.tsx
 msgid "Done"
 msgstr "Listo"
 
@@ -15481,7 +15487,9 @@ msgid "Replays play with their player's published skin. Turn off to always use y
 msgstr "Los replays se reproducen con el skin publicado de su jugador. Desactívalo para usar siempre el tuyo."
 
 #. placeholder {0}: community.name
+#. placeholder {0}: skin.name
 #: src/components/communities/CommunityReportModal.tsx
+#: src/components/skins/SkinReportModal.tsx
 msgid "Report {0}"
 msgstr "Reportar {0}"
 
@@ -15502,6 +15510,14 @@ msgstr "Reportar una traducción"
 #: src/routes/report.tsx
 msgid "Report sent"
 msgstr "Reporte enviado"
+
+#: src/components/skins/SkinReportModal.tsx
+msgid "Report sent."
+msgstr "Reporte enviado."
+
+#: src/routes/skins_.$id.tsx
+msgid "Report skin"
+msgstr "Reportar skin"
 
 #: src/routes/report.tsx
 msgid "Report something else"
@@ -16380,6 +16396,7 @@ msgstr "Enviar sugerencia"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
+#: src/components/skins/SkinReportModal.tsx
 #: src/routes/report.tsx
 msgid "Send report"
 msgstr "Enviar reporte"
@@ -16411,6 +16428,7 @@ msgid "Sending..."
 msgstr "Enviando..."
 
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/skins/SkinReportModal.tsx
 msgid "Sending…"
 msgstr "Enviando…"
 
@@ -16951,6 +16969,10 @@ msgstr "Muestra un punto en el enlace de novedades cuando hay algo nuevo"
 #: src/routes/hashi.tsx
 #~ msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
 #~ msgstr "Muestra leaderboards con los mods que tienes puestos y manda tus plays de mania a tu perfil, donde también puede mostrar lo que estás jugando."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows player dans without low, mid or high, and counts a low dan as the one below it"
+msgstr "Muestra los dans de los jugadores sin low, mid o high, y cuenta un dan low como el anterior"
 
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
@@ -19329,6 +19351,10 @@ msgstr "El renderizador del replay se detuvo durante la exportación."
 msgid "The replays you have uploaded to Mania Tracker, with their share links and deletes."
 msgstr "Los replays que has subido a Mania Tracker, con sus enlaces para compartir y opciones de borrado."
 
+#: src/components/skins/SkinReportModal.tsx
+msgid "The report could not be sent. Try again."
+msgstr "No se pudo enviar el reporte. Intenta de nuevo."
+
 #: src/routes/report.tsx
 msgid "The report was sent, but at least one image did not upload."
 msgstr "El reporte se envió, pero al menos una imagen no se subió."
@@ -21513,6 +21539,10 @@ msgstr "lo que estás viendo"
 msgid "What's new"
 msgstr "Novedades"
 
+#: src/components/skins/SkinReportModal.tsx
+msgid "What's wrong with this skin?"
+msgstr "¿Qué problema tiene esta skin?"
+
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "When {name} found their first card, and every rarity after it."
 #~ msgstr "Cuándo encontró {name} su primera carta, y cada rareza después."
@@ -21606,6 +21636,10 @@ msgstr "Para quién es el servidor, qué pasa en él, cuándo está activo. Los 
 #: src/routes/recommendations.tsx
 msgid "who you're compared to"
 msgstr "con quién te comparamos"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Whole dans"
+msgstr "Dans enteros"
 
 #: src/lib/packs.ts
 msgid "Whole pool, new cards first"
@@ -21916,6 +21950,10 @@ msgstr "Todavía no has publicado una skin"
 #: src/components/settings/SettingsPanel.tsx
 msgid "You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more."
 msgstr "Llegaste al límite de {HIDDEN_USERS_LIMIT} jugadores ocultos. Quita a alguien para agregar más."
+
+#: src/components/skins/SkinReportModal.tsx
+msgid "You have sent too many reports today. Try again tomorrow."
+msgstr "Enviaste demasiados reportes hoy. Intenta mañana."
 
 #: src/routes/recommendations.tsx
 msgid "you have too many active marks, clear some first"

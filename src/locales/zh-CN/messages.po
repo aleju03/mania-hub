@@ -1904,7 +1904,7 @@ msgstr "至少 {USER_COLLECTION_MIN_ITEMS} 张谱面"
 msgid "{username} is <0>{0}</0>"
 msgstr "{username} 是 <0>{0}</0>"
 
-#. placeholder {0}: danTierName(danLabel, formatDan)
+#. placeholder {0}: wholeDans ? formatDan(danLabel) : danTierName(danLabel, formatDan)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{username} is around <0>{0}</0>"
 msgstr "{username} 大约在 <0>{0}</0>"
@@ -3397,6 +3397,10 @@ msgstr "已有人建议"
 #: src/components/player/AddScoreModal.tsx
 msgid "already tracked"
 msgstr "已记录"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Also on map dans"
+msgstr "地图段位也一样"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Also remove the {allTrackedCount, plural, one {# play} other {# plays}} recorded so far?"
@@ -5063,6 +5067,7 @@ msgstr "客户端"
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinReportModal.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -6672,6 +6677,7 @@ msgstr "刷够"
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/GiftSpareDialog.tsx
 #: src/components/settings/CompanellaGroup.tsx
+#: src/components/skins/SkinReportModal.tsx
 msgid "Done"
 msgstr "完成"
 
@@ -15493,7 +15499,9 @@ msgid "Replays play with their player's published skin. Turn off to always use y
 msgstr "回放默认使用玩家发布的皮肤。关闭后始终使用你自己的。"
 
 #. placeholder {0}: community.name
+#. placeholder {0}: skin.name
 #: src/components/communities/CommunityReportModal.tsx
+#: src/components/skins/SkinReportModal.tsx
 msgid "Report {0}"
 msgstr "举报 {0}"
 
@@ -15514,6 +15522,14 @@ msgstr "反馈翻译问题"
 #: src/routes/report.tsx
 msgid "Report sent"
 msgstr "举报已发送"
+
+#: src/components/skins/SkinReportModal.tsx
+msgid "Report sent."
+msgstr "举报已发送。"
+
+#: src/routes/skins_.$id.tsx
+msgid "Report skin"
+msgstr "举报皮肤"
 
 #: src/routes/report.tsx
 msgid "Report something else"
@@ -16392,6 +16408,7 @@ msgstr "发送建议"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
+#: src/components/skins/SkinReportModal.tsx
 #: src/routes/report.tsx
 msgid "Send report"
 msgstr "提交反馈"
@@ -16423,6 +16440,7 @@ msgid "Sending..."
 msgstr "正在发送..."
 
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/skins/SkinReportModal.tsx
 msgid "Sending…"
 msgstr "正在发送…"
 
@@ -16963,6 +16981,10 @@ msgstr "有新更新时在更新日志链接上显示一个圆点"
 #: src/routes/hashi.tsx
 #~ msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
 #~ msgstr "按你当前的模组显示排行榜，并把你的 mania 成绩发送到你的个人资料，资料页还能显示你正在玩什么。"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows player dans without low, mid or high, and counts a low dan as the one below it"
+msgstr "玩家段位不显示 low、mid、high，low 段位按低一级的段位显示"
 
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
@@ -19341,6 +19363,10 @@ msgstr "回放渲染器在导出过程中停止了。"
 msgid "The replays you have uploaded to Mania Tracker, with their share links and deletes."
 msgstr "你上传到 Mania Tracker 的回放，附带分享链接和删除操作。"
 
+#: src/components/skins/SkinReportModal.tsx
+msgid "The report could not be sent. Try again."
+msgstr "举报发送失败，请重试。"
+
 #: src/routes/report.tsx
 msgid "The report was sent, but at least one image did not upload."
 msgstr "反馈已提交，但至少有一张图片没能上传。"
@@ -21525,6 +21551,10 @@ msgstr "你在浏览的内容"
 msgid "What's new"
 msgstr "更新内容"
 
+#: src/components/skins/SkinReportModal.tsx
+msgid "What's wrong with this skin?"
+msgstr "这个皮肤有什么问题？"
+
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "When {name} found their first card, and every rarity after it."
 #~ msgstr "{name} 找到首张卡片的时间，以及之后每个稀有度的首张。"
@@ -21618,6 +21648,10 @@ msgstr "服务器面向哪些人、里面在做什么、什么时候热闹。换
 #: src/routes/recommendations.tsx
 msgid "who you're compared to"
 msgstr "你在和谁比较"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Whole dans"
+msgstr "整段位显示"
 
 #: src/lib/packs.ts
 msgid "Whole pool, new cards first"
@@ -21928,6 +21962,10 @@ msgstr "你还没有发布过皮肤"
 #: src/components/settings/SettingsPanel.tsx
 msgid "You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more."
 msgstr "已达到 {HIDDEN_USERS_LIMIT} 名隐藏玩家的上限。移除一些后才能继续添加。"
+
+#: src/components/skins/SkinReportModal.tsx
+msgid "You have sent too many reports today. Try again tomorrow."
+msgstr "你今天发送的举报太多了，请明天再试。"
 
 #: src/routes/recommendations.tsx
 msgid "you have too many active marks, clear some first"

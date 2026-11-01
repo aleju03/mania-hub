@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { danScaleLabel, danTierName, getDanImageSrc, getDanTierImageSrc, type DanScaleContext } from "./dan-images";
+import { danScaleLabel, danTierName, danWholeLabel, getDanImageSrc, getDanTierImageSrc, type DanScaleContext } from "./dan-images";
 
 describe("danTierName", () => {
   it("names each suffix with LeoBlack's tier words", () => {
@@ -67,5 +67,27 @@ describe("getDanTierImageSrc", () => {
       }
     }
     expect(missing).toEqual([]);
+  });
+});
+
+describe("danWholeLabel", () => {
+  it("reads the low and mid/low tiers as the level below and the rest as their own level", () => {
+    expect(danWholeLabel("delta--", 4, "rc")).toBe("gamma");
+    expect(danWholeLabel("delta-", 4, "rc")).toBe("gamma");
+    expect(danWholeLabel("delta+", 4, "rc")).toBe("delta");
+    expect(danWholeLabel("epsilon-", 4, "rc")).toBe("delta");
+    expect(danWholeLabel("delta", 4, "rc")).toBe("delta");
+    expect(danWholeLabel("delta++", 4, "rc")).toBe("delta");
+    expect(danWholeLabel("epsilon--", 4, "rc")).toBe("delta");
+    expect(danWholeLabel("alpha--", 4, "rc")).toBe("10");
+    expect(danWholeLabel("8--", 4, "ln")).toBe("7");
+    expect(danWholeLabel("gamma--", 7, "rc")).toBe("10");
+    expect(danWholeLabel("terra--", 6, "ln")).toBe("9");
+  });
+
+  it("keeps the first level of a ladder", () => {
+    expect(danWholeLabel("1--", 4, "rc")).toBe("1");
+    expect(danWholeLabel("1-", 4, "rc")).toBe("1");
+    expect(danWholeLabel("0--", 7, "rc")).toBe("0");
   });
 });

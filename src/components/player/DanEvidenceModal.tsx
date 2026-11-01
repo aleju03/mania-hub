@@ -18,7 +18,7 @@ import {
   type LivePlayerSkillPlay,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatTimeAgo } from "../../lib/format";
-import { danBareLabel, danScaleContextFor, danTierName, danTierSuffix, formatDanValue, getDanTierImageSrc } from "../../lib/dan-images";
+import { danBareLabel, danScaleContextFor, danTierName, danTierSuffix, danWholeLabel, formatDanValue, getDanTierImageSrc } from "../../lib/dan-images";
 import { DanStepRail } from "./DanStepRail";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
@@ -27,6 +27,7 @@ import { PlayModBadges, rateModFor, stubEntry } from "./SkillPlaysModal";
 import type { MapDetailPlayContext } from "../maps/MapDetailModal";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
+import { useWholeDans } from "../../store";
 
 // The dan chip's accent per side; decorative only, identity stays on the text.
 const SIDE_COLOR: Record<"rc" | "ln", string> = { rc: "#e0b04c", ln: "#f07474" };
@@ -223,7 +224,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
     if (status !== "loved" && status !== "ranked" && status !== "approved" && status !== "qualified") return null;
     return `https://osu.ppy.sh/scores/${courseClear.soloScoreId}`;
   })();
-  const danLabel = dan ? (beyond ? danBareLabel(dan.label) : dan.label) : "";
+  const wholeDans = useWholeDans();
+  const danLabel = dan ? (beyond ? danBareLabel(dan.label) : wholeDans ? danWholeLabel(dan.label, keyCount, side) : dan.label) : "";
   // Clearing a course puts the player at that level's mid, so a headline sitting
   // there (or under it) on the course they cleared just names the level.
   const atClearedLevel = dan != null && !beyond && courseClear != null && !courseUnderBar
@@ -447,7 +449,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                       ) : dan && atClearedLevel ? (
                         <Trans>{username} is <span style={{ color }}>{formatDan(danBareLabel(danLabel))}</span></Trans>
                       ) : dan ? (
-                        <Trans>{username} is around <span style={{ color }}>{danTierName(danLabel, formatDan)}</span></Trans>
+                        <Trans>{username} is around <span style={{ color }}>{wholeDans ? formatDan(danLabel) : danTierName(danLabel, formatDan)}</span></Trans>
                       ) : (
                         <Trans>{username}'s {sideLabel} dan estimate</Trans>
                       )}
@@ -657,8 +659,9 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                             const open = openSection === section.id;
                             const sectionBeyond = section.id === "all" && beyond;
                             const bare = section.dan ? danBareLabel(section.dan.label) : null;
-                            const sectionLabel = section.dan ? formatDan(sectionBeyond ? bare! : section.dan.label) : null;
-                            const sectionImage = section.dan ? getDanTierImageSrc(sectionBeyond ? bare! : section.dan.label, side === "ln" ? "ln" : undefined, keyCount) : null;
+                            const shownLabel = section.dan ? (sectionBeyond ? bare! : wholeDans ? danWholeLabel(section.dan.label, keyCount, side) : section.dan.label) : null;
+                            const sectionLabel = shownLabel ? formatDan(shownLabel) : null;
+                            const sectionImage = shownLabel ? getDanTierImageSrc(shownLabel, side === "ln" ? "ln" : undefined, keyCount) : null;
                             return (
                               <button
                                 key={section.id}

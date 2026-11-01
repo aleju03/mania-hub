@@ -47,6 +47,8 @@ export const BUG_REPORT_BODY_MAX = 4000;
 export const BUG_REPORT_MESSAGE_MAX = 4000;
 /** Matches the backend cap; the form refuses a fourth image before uploading it. */
 export const BUG_REPORT_MAX_SCREENSHOTS = 3;
+/** Opens the body of a report filed from a skin page's flag; the admin board keys on it. */
+export const SKIN_REPORT_PREFIX = "Skin report: ";
 
 export interface BugReportContext {
   [key: string]: string | number | boolean | null;

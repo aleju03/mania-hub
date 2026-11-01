@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Check, Download, Heart, Lock, MonitorPlay, Settings } from "lucide-react";
+import { ArrowLeft, Check, Download, Flag, Heart, Lock, MonitorPlay, Settings } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -10,6 +10,7 @@ import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
 import { SimilarSkins } from "../components/skins/SimilarSkins";
 import { SkinPreviewEditorModal } from "../components/skins/SkinPreviewEditorModal";
 import { SkinSettingsModal } from "../components/skins/SkinSettingsModal";
+import { SkinReportModal } from "../components/skins/SkinReportModal";
 import { SkinUpdateModal } from "../components/skins/SkinUpdateModal";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
@@ -107,6 +108,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
   const navigate = useNavigate();
   const historyIndex = useRouterState({ select: (state) => state.location.state.__TSR_index });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [editingPreviews, setEditingPreviews] = useState(false);
   const [updatingFile, setUpdatingFile] = useState(false);
 
@@ -233,6 +235,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
 
   const isOwner = skin != null && auth.viewer?.id === skin.ownerUserId;
   const isPrivate = skin?.visibility === "private";
+  const canReport = skin != null && !isOwner && skin.status === "published" && !isPrivate;
   // Only a skin everyone can see can be liked.
   const likeable = skin?.status === "published" && !isPrivate;
   // Older cached/backend summaries only carry the primary shape, so keep that
@@ -364,8 +367,19 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                 </div>
 
                 <div className="flex min-w-0 flex-col gap-4">
-                  <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-4">
-                    <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-4">
+                    {canReport && (
+                      <button
+                        type="button"
+                        onClick={() => setReportOpen(true)}
+                        title={t`Report skin`}
+                        aria-label={t`Report skin`}
+                        className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full text-osu-f1/70 transition-colors cursor-pointer hover:bg-osu-b3/50 hover:text-white"
+                      >
+                        <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    )}
+                    <div className={`flex flex-wrap items-center gap-2 ${canReport ? "pr-7" : ""}`}>
                       {/* Skin names run long and often carry no spaces, so the
                           heading breaks mid-word rather than spilling out of
                           the 320px column. */}
@@ -546,6 +560,8 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                       </FactRow>
                     )}
                   </dl>
+
+                  {canReport && <SkinReportModal skin={skin} open={reportOpen} onClose={() => setReportOpen(false)} />}
 
                   {(isOwner || auth.isAdmin || isKeymodeModerator) && (
                     <>

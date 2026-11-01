@@ -4,10 +4,10 @@ import type { I18n, MessageDescriptor } from "@lingui/core";
 import { msg, plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { MyDataSkillBreakdown, MyDataSkillMode, MyDataSkillQueue } from "../../lib/my-data";
-import { danBareLabel, danTierName } from "../../lib/dan-images";
+import { danBareLabel, danTierName, danWholeLabel } from "../../lib/dan-images";
 import { formatAccuracy, formatNumber } from "../../lib/format";
 import { useLocale } from "../../lib/locale-context";
-import { useNoDans } from "../../store";
+import { useNoDans, useWholeDans } from "../../store";
 import { DanLevelBadge } from "./DanLevelBadge";
 import { SkillHistoryButton } from "./SkillHistoryButton";
 import { OverallMethodToggle, RollingOverall } from "./OverallMethodToggle";
@@ -101,6 +101,7 @@ function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode, i18n: I18
 function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side: "rc" | "ln") => void }) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
+  const wholeDans = useWholeDans();
   const dan = mode.dan;
   if (noDans || !dan) return null;
   // A numbered course reads as a level, not a name, so it needs the word;
@@ -137,7 +138,11 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
         const beyond = entry.side!.beyondTable === true;
         const label = beyond ? danBareLabel(entry.side!.label) : entry.side!.label;
         const sideLabel = i18n._(entry.label);
-        const chip = beyond ? formatDanChip(label) : danTierName(label, formatDanChip);
+        const chip = beyond
+          ? formatDanChip(label)
+          : wholeDans
+            ? formatDanChip(danWholeLabel(label, mode.keyCount, entry.id))
+            : danTierName(label, formatDanChip);
         const clears = entry.side!.clears;
         // A course clear can floor the estimate above every rated pass the
         // player has, which leaves `clears` at 0 - true, and unreadable next

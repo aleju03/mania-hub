@@ -21,7 +21,7 @@ vi.mock("../../lib/analytics", () => ({ track: vi.fn() }));
 vi.mock("../../lib/auth-context", () => ({ useAuth: () => ({ canUseAdminFeatures: false }) }));
 vi.mock("../../lib/locale-context", () => ({ useLocale: () => "en" }));
 vi.mock("../../lib/leaderboard-import", () => ({}));
-vi.mock("../../store", () => ({ useNoDans: () => false }));
+vi.mock("../../store", () => ({ useNoDans: () => false, useWholeDans: () => false, useWholeMapDans: () => false }));
 vi.mock("./recent-play-ratings", async (importOriginal) => ({
   ...await importOriginal<typeof import("./recent-play-ratings")>(),
   useRecentPlayRatingLookup: vi.fn(() => new Map()),

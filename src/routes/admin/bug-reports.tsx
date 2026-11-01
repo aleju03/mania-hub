@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Clock,
   Copy,
+  Flag,
   ImagePlus,
   Inbox,
   Layers,
@@ -41,6 +42,7 @@ import { publishBugReportAlert } from "../../lib/bug-report-alert";
 import {
   BUG_REPORT_MAX_SCREENSHOTS,
   BUG_REPORT_MESSAGE_MAX,
+  SKIN_REPORT_PREFIX,
   bugReportHasUnreadReporterActivity,
   bugReportSeenReceipt,
   bugReportThreadMessages,
@@ -331,6 +333,13 @@ function Screenshots({
 /* One line instead of the raw key/value dump: the browser, the window it was
    in, and the build. The exact user agent is one hover away rather than four
    wrapped lines on every row. */
+// Filed from a skin page's flag: feedback on the skin's page with the header
+// line SkinReportModal writes. Feedback carries no context, so the header is
+// the mark.
+function isSkinReport(report: BugReport): boolean {
+  return report.kind === "feedback" && (report.pagePath?.startsWith("/skins/") ?? false) && report.body.startsWith(SKIN_REPORT_PREFIX);
+}
+
 function ContextLine({ context }: { context: BugReport["context"] }) {
   if (!context) return null;
   const userAgent = typeof context.userAgent === "string" ? context.userAgent : undefined;
@@ -719,10 +728,22 @@ function ReportCard({
             )}
             <span className="text-[11px] text-osu-f1">{formatWhen(report.createdAt)}</span>
             {report.pagePath ? (
-              <span className="rounded bg-osu-b4/60 px-1.5 py-0.5 text-[10.5px] text-osu-l2">{report.pagePath}</span>
+              <a
+                href={report.pagePath}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded bg-osu-b4/60 px-1.5 py-0.5 text-[10.5px] text-osu-l2 transition-colors hover:text-white"
+              >
+                {report.pagePath}
+              </a>
             ) : null}
             <span className={`rounded-md border px-1.5 py-0.5 text-[10.5px] ${meta.pill}`}>{meta.label}</span>
-            {report.kind === "feedback" ? (
+            {isSkinReport(report) ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-400/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300">
+                <Flag className="h-3 w-3" />
+                Skin report
+              </span>
+            ) : report.kind === "feedback" ? (
               <span className="inline-flex items-center gap-1 text-[11px] text-sky-200">
                 <Lightbulb className="h-3 w-3" />
                 Feedback

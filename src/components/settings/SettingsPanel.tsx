@@ -93,7 +93,7 @@ import {
   writeCursorSettings,
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
-import { useAppStore, useChangelogNotify, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings } from "../../store";
+import { useAppStore, useChangelogNotify, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings, useWholeDans, useWholeMapDans } from "../../store";
 import { markChangelogSeen } from "../../lib/changelog";
 import { Switch } from "../ui/Switch";
 import { SETTINGS_TABS as TABS, type SettingsTabId } from "./settings-tabs";
@@ -1030,6 +1030,10 @@ function PreferencesPanel() {
   const { t } = useLingui();
   const noDans = useNoDans();
   const setNoDans = useAppStore((state) => state.setNoDans);
+  const wholeDans = useWholeDans();
+  const setWholeDans = useAppStore((state) => state.setWholeDans);
+  const wholeMapDans = useWholeMapDans();
+  const setWholeMapDans = useAppStore((state) => state.setWholeMapDans);
   const packsSkipAnimations = usePacksSkipAnimations();
   const setPacksSkipAnimations = useAppStore((state) => state.setPacksSkipAnimations);
   const packsRevealAll = usePacksRevealAll();
@@ -1101,6 +1105,23 @@ function PreferencesPanel() {
           </div>
           <Switch checked={noDans} onChange={setNoDans} label={t`No Dans`} />
         </div>
+        {noDans ? null : (
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[12px] font-semibold text-osu-l1"><Trans>Whole dans</Trans></div>
+              <div className="text-[11px] text-osu-f1">
+                <Trans>Shows player dans without low, mid or high, and counts a low dan as the one below it</Trans>
+              </div>
+            </div>
+            <Switch checked={wholeDans} onChange={setWholeDans} label={t`Whole dans`} />
+          </div>
+        )}
+        {!noDans && wholeDans ? (
+          <div className="flex items-center justify-between gap-3 pl-4">
+            <div className="text-[12px] font-semibold text-osu-l1"><Trans>Also on map dans</Trans></div>
+            <Switch checked={wholeMapDans} onChange={setWholeMapDans} label={t`Also on map dans`} />
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-3">
           <div>
             {/* No Dans hides the dan half, so the row names only what it still shows. */}
