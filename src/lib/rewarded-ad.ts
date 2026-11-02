@@ -47,8 +47,12 @@ function loadAdApi(): Promise<boolean> {
   return loading;
 }
 
+/* Off everywhere, the dev stand-in too, until AdSense approves H5 Games Ads
+   for the site; then flip this and set VITE_ADSENSE_CLIENT. */
+const REWARDED_ADS_ON = false;
+
 export function rewardedAdsEnabled(): boolean {
-  return Boolean(CLIENT) || DEV_STAND_IN;
+  return REWARDED_ADS_ON && (Boolean(CLIENT) || DEV_STAND_IN);
 }
 
 /* Asks for an ad; resolves with one ready to show, or null when there is

@@ -168,64 +168,9 @@ export function GameDoodle({ kind, best, width, onOpen }: { kind: GameKind; best
   );
 }
 
-/* The column's heading, lettered by hand in the doodles' pen: one stroke per
-   letter, the same ink, offset second stroke and roughen filter. Each
-   language gets its own lettering; one without falls back to plain text. */
-const LETTERING: Record<string, { width: number; height: number; paths: string[] }> = {
-  en: {
-    width: 68,
-    height: 24,
-    paths: [
-      "M 14.2 6.2 C 12.6 3.6 10 2.7 7.4 3.1 C 3.6 3.8 1.8 8.6 2.1 13.4 C 2.4 18.6 5.6 21.9 9.6 21.6 C 13 21.3 14.8 18.9 14.9 15.4 L 14.8 13.2 L 10.2 13.4",
-      "M 27 12.4 C 25.6 10.4 22.4 10 20.6 11.8 C 18.4 14 18.3 18.6 20.4 20.6 C 22.6 22.4 25.8 21 26.8 17.6 M 27.1 10.6 L 27.4 21.6",
-      "M 31.2 21.5 L 31 10.6 M 31.1 13.6 C 32 10.9 34.8 10.2 36.4 11.4 C 37.6 12.4 37.5 15.2 37.6 21.4 M 37.6 13.6 C 38.6 10.9 41.4 10.2 42.9 11.4 C 44.1 12.4 44 15.2 44.2 21.5",
-      "M 47.6 16.1 L 56 15.7 C 56.1 12.6 54.2 10.4 51.6 10.5 C 48.6 10.7 47 13.4 47.2 16.6 C 47.4 19.8 49.6 21.7 52.4 21.5 C 54.2 21.4 55.4 20.6 56.3 19.4",
-      "M 65.8 12.2 C 64.9 10.7 63 10.2 61.6 10.6 C 59.6 11.2 59.4 13.8 61.4 14.8 L 63.9 15.9 C 66.3 17 66.2 20.5 63.8 21.3 C 61.8 21.9 59.8 21.2 58.8 19.8",
-    ],
-  },
-  es: {
-    width: 70,
-    height: 30,
-    paths: [
-      "M 3 3.2 L 11.2 2.9 M 8 3.1 L 8.1 17 C 8.2 20.4 6.2 21.8 4.2 21.5 C 2.7 21.2 1.9 20.1 1.6 18.6",
-      "M 14 10.6 L 14.1 17 C 14.1 20 15.6 21.6 17.8 21.5 C 20 21.4 21.4 19.5 21.6 17 M 21.6 10.5 L 21.8 21.5",
-      "M 25.6 16.1 L 34 15.7 C 34.1 12.6 32.2 10.4 29.6 10.5 C 26.6 10.7 25 13.4 25.2 16.6 C 25.4 19.8 27.6 21.7 30.4 21.5 C 32.2 21.4 33.4 20.6 34.3 19.4",
-      "M 45 12.2 C 43.8 10.4 41.4 10 39.8 11.2 C 37.6 12.8 37.3 17 38.9 19.1 C 40.6 21.1 43.6 20.6 45 17.8 M 45.2 10.5 L 45.3 23.2 C 45.3 27 42.6 28.5 40 28.1 C 38.5 27.8 37.5 26.9 37 25.8",
-      "M 53 10.5 C 50 10.6 48.5 13.5 48.6 16.3 C 48.7 19.3 50.5 21.6 53.2 21.5 C 56 21.4 57.6 18.8 57.5 15.8 C 57.4 12.8 55.8 10.4 52.4 10.9",
-      "M 67.8 12.2 C 66.9 10.7 65 10.2 63.6 10.6 C 61.6 11.2 61.4 13.8 63.4 14.8 L 65.9 15.9 C 68.3 17 68.2 20.5 65.8 21.3 C 63.8 21.9 61.8 21.2 60.8 19.8",
-    ],
-  },
-};
-
-function GamesHeading({ label, locale }: { label: string; locale: string }) {
-  const lettering = LETTERING[locale.split("-")[0]];
-  if (!lettering) return <div className="-mb-3 text-center text-[15px] font-black opacity-75" style={{ color: INK }}>{label}</div>;
-  const scale = 1.15;
-  return (
-    <div className="-mb-3 flex justify-center">
-      <svg
-        viewBox={`0 0 ${lettering.width} ${lettering.height}`}
-        width={lettering.width * scale}
-        height={lettering.height * scale}
-        role="img"
-        aria-label={label}
-        fill="none"
-        stroke={INK}
-        strokeWidth={1.8 / scale}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="-rotate-2 overflow-visible opacity-75"
-      >
-        <g filter={`url(#${ROUGH})`}>
-          <Sketch>
-            {lettering.paths.map((d) => (
-              <path key={d} d={d} />
-            ))}
-          </Sketch>
-        </g>
-      </svg>
-    </div>
-  );
+/* The column's heading, in the game names' font and the doodles' ink. */
+function GamesHeading({ label }: { label: string }) {
+  return <div className="-mb-3 text-center text-[20px] font-black opacity-75" style={{ color: INK }}>{label}</div>;
 }
 
 /* The two game doodles for one layout. `side` stacks them in a column right
@@ -246,7 +191,7 @@ export function GamePacks({
   onChain: () => void;
   className?: string;
 }) {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const bestStreak = useBestStreak();
   const width = layout === "side" ? 230 : "fluid";
   const doodles = (
@@ -269,7 +214,7 @@ export function GamePacks({
   return (
     <div className={`pointer-events-none absolute inset-x-0 top-0 ${className}`}>
       <div className="pointer-events-auto absolute flex h-[450px] flex-col justify-center gap-7" style={{ left: "calc(50% + max(220px, 23vw))" }}>
-        <GamesHeading label={t`Games`} locale={i18n.locale} />
+        <GamesHeading label={t`Extra`} />
         {doodles}
       </div>
     </div>

@@ -9508,6 +9508,10 @@ msgstr "Extended statistics are only available after watching a replay!"
 msgid "External application"
 msgstr "External application"
 
+#: src/components/packs/GamePacks.tsx
+msgid "Extra"
+msgstr "Extra"
+
 #: src/lib/pack-run.ts
 msgid "Extra Key"
 msgstr "Extra Key"
@@ -10528,8 +10532,8 @@ msgid "Game and tech"
 msgstr "Game and tech"
 
 #: src/components/packs/GamePacks.tsx
-msgid "Games"
-msgstr "Games"
+#~ msgid "Games"
+#~ msgstr "Games"
 
 #: src/lib/skill-axes.ts
 msgid "General"
@@ -18133,6 +18137,10 @@ msgstr "Playing"
 #: src/components/player/LivePresence.tsx
 msgid "Playing {mode}"
 msgstr "Playing {mode}"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Playing as a guest: runs stay in this browser and off the board. Sign in with osu! to save them."
+msgstr "Playing as a guest: runs stay in this browser and off the board. Sign in with osu! to save them."
 
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Playing it as written scores higher, so Prism rates it as written."
@@ -28229,6 +28237,7 @@ msgid "you"
 msgstr "you"
 
 #: src/components/discord/CommandShowcase.tsx
+#: src/components/packs/run/chain/useGuestChainRun.ts
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/components/supporter/LoadoutSlots.tsx

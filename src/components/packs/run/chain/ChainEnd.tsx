@@ -288,6 +288,7 @@ export function ChainStart({
   loadBoard,
   loadSheet,
   onNewRun,
+  guest = false,
 }: {
   best: ChainBoardEntry | null;
   busy: boolean;
@@ -297,6 +298,8 @@ export function ChainStart({
   loadBoard: LoadBoard;
   loadSheet: LoadSheet;
   onNewRun: () => void;
+  /* Signed out: the run is played and kept in this browser only. */
+  guest?: boolean;
 }) {
   const { t, i18n } = useLingui();
   const height = narrow ? 150 : 230;
@@ -348,6 +351,11 @@ export function ChainStart({
               },
             ]}
           />
+          {guest && (
+            <p className="mt-3 max-w-[300px] text-center text-[13px] leading-snug text-[#f3e9d8]/60">
+              <Trans>Playing as a guest: runs stay in this browser and off the board. Sign in with osu! to save them.</Trans>
+            </p>
+          )}
         </motion.div>
         <div className="w-full max-w-[460px]">
           <BoardPanel loadBoard={loadBoard} loadSheet={loadSheet} mine={best} refreshKey={0} />

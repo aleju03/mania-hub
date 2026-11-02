@@ -26,6 +26,7 @@ import { PackStage } from "../components/packs/PackStage";
 import { StreakGame } from "../components/packs/StreakGame";
 import { PackSummary } from "../components/packs/PackSummary";
 import { ChainTable } from "../components/packs/run/chain/ChainTable";
+import { useGuestChainRun } from "../components/packs/run/chain/useGuestChainRun";
 import { useChainRun } from "../components/packs/run/chain/useChainRun";
 import { usePackRun } from "../components/packs/run/usePackRun";
 import type { PackRunOpenPayload } from "../lib/pack-run";
@@ -670,8 +671,11 @@ function PacksPage() {
      the view stays null otherwise and nothing of it renders. */
   const runApi = usePackRun(wishlistEnabled, walletApi.applyServerWallet);
   /* The chain run (?view=run), for a signed-in viewer the backend has
-     released it to. */
-  const chainApi = useChainRun(Boolean(auth.viewer) && isLiveBackendConfigured());
+     released it to; a signed-out visitor plays a guest run in the browser
+     once it is released to everyone. */
+  const ownChainApi = useChainRun(Boolean(auth.viewer) && isLiveBackendConfigured());
+  const guestChainApi = useGuestChainRun(!auth.viewer && isLiveBackendConfigured());
+  const chainApi = auth.viewer ? ownChainApi : guestChainApi;
   /* The run's side of the pack on screen: the tally the summary plays. */
   const [packRun, setPackRun] = useState<PackRunOpenPayload | null>(null);
   const [collectionPanelReady, setCollectionPanelReady] = useState(!streakOpen);
@@ -1235,6 +1239,7 @@ function PacksPage() {
           best={chainApi.best}
           busy={chainApi.busy}
           act={chainApi.act}
+          guest={!auth.viewer}
           reducedMotion={reducedMotion}
           packThumbs={packThumbs}
           loadBoard={loadChainBoard}

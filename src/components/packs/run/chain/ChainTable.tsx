@@ -79,6 +79,8 @@ export interface ChainTableProps {
   act: (action: ChainAction) => Promise<ChainActOutcome>;
   reducedMotion: boolean;
   packThumbs: Partial<Record<PackTypeId, string>>;
+  /* A signed-out guest run (useGuestChainRun). */
+  guest?: boolean;
   loadBoard: LoadBoard;
   loadSheet: LoadSheet;
   onExit: () => void;
@@ -149,7 +151,7 @@ function useBoardBox() {
    owns the run; this replays what it answers and keeps only the row being
    arranged. */
 export function ChainTable(props: ChainTableProps) {
-  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, loadSheet, onExit, script } = props;
+  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, loadSheet, onExit, script, guest = false } = props;
   const { i18n, t } = useLingui();
   const [boxRef, box] = useBoardBox();
   const narrow = box.width > 0 ? box.width < 700 : typeof window !== "undefined" && window.innerWidth < 700;
@@ -1318,6 +1320,7 @@ export function ChainTable(props: ChainTableProps) {
                 loadBoard={loadBoard}
                 loadSheet={loadSheet}
                 onNewRun={() => void doAct({ kind: "start" })}
+                guest={guest}
               />
             )}
 
