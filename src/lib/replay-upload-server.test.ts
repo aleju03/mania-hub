@@ -329,6 +329,73 @@ describe("replay upload POST", () => {
     expect(Buffer.from(await read.arrayBuffer()).equals(buildOsr())).toBe(true);
   });
 
+  it("downloads a replay with a Chinese filename", async () => {
+    const response = await handleReplayUploadPost(postRequest(buildOsr(), {
+      cookie: await authCookie(nextViewerId++),
+      filenameHeader: encodeURIComponent("你好.osr"),
+    }));
+    expect(response.status).toBe(200);
+    const { id } = await response.json() as { id: string };
+
+    const read = await handleReplayUploadGet(new Request(`${ORIGIN}/api/replay-upload?id=${id}`));
+    expect(read.status).toBe(200);
+    expect(read.headers.get("content-disposition")).toContain('filename="__.osr"');
+    expect(read.headers.get("content-disposition")).toContain("filename*=UTF-8''%E4%BD%A0%E5%A5%BD.osr");
+    expect(read.headers.get("x-replay-filename")).toBe(encodeURIComponent("你好.osr"));
+    expect(Buffer.from(await read.arrayBuffer()).equals(buildOsr())).toBe(true);
+  });
+
+  it("downloads a replay with an emoji filename", async () => {
+    const response = await handleReplayUploadPost(postRequest(buildOsr(), {
+      cookie: await authCookie(nextViewerId++),
+      filenameHeader: encodeURIComponent("emoji 💀.osr"),
+    }));
+    expect(response.status).toBe(200);
+    const { id } = await response.json() as { id: string };
+
+    const read = await handleReplayUploadGet(new Request(`${ORIGIN}/api/replay-upload?id=${id}`));
+    expect(read.status).toBe(200);
+    expect(read.headers.get("content-disposition")).toContain('filename="emoji __.osr"');
+    expect(read.headers.get("content-disposition")).toContain("filename*=UTF-8''emoji%20%F0%9F%92%80.osr");
+    expect(read.headers.get("x-replay-filename")).toBe(encodeURIComponent("emoji 💀.osr"));
+    expect(Buffer.from(await read.arrayBuffer()).equals(buildOsr())).toBe(true);
+  });
+
+  it("downloads a replay with spaces in its filename", async () => {
+    const response = await handleReplayUploadPost(postRequest(buildOsr(), {
+      cookie: await authCookie(nextViewerId++),
+      filenameHeader: encodeURIComponent("good replay.osr"),
+    }));
+    expect(response.status).toBe(200);
+    const { id } = await response.json() as { id: string };
+
+    const read = await handleReplayUploadGet(new Request(`${ORIGIN}/api/replay-upload?id=${id}`));
+    expect(read.status).toBe(200);
+    expect(read.headers.get("content-disposition")).toContain('filename="good replay.osr"');
+    expect(read.headers.get("content-disposition")).toContain("filename*=UTF-8''good%20replay.osr");
+    expect(read.headers.get("x-replay-filename")).toBe(encodeURIComponent("good replay.osr"));
+    expect(Buffer.from(await read.arrayBuffer()).equals(buildOsr())).toBe(true);
+  });
+
+  it("percent-encodes special characters in filename", async () => {
+    const filename = "你好's (replay)*.osr";
+    const replay = buildOsr();
+    const response = await handleReplayUploadPost(postRequest(replay, {
+      cookie: await authCookie(nextViewerId++),
+      filenameHeader: encodeURIComponent(filename),
+    }));
+    expect(response.status).toBe(200);
+    const { id } = await response.json() as { id: string };
+
+    const read = await handleReplayUploadGet(new Request(`${ORIGIN}/api/replay-upload?id=${id}`));
+    expect(read.status).toBe(200);
+    expect(read.headers.get("content-disposition")).toBe(
+      "attachment; filename=\"__'s (replay)*.osr\"; filename*=UTF-8''%E4%BD%A0%E5%A5%BD%27s%20%28replay%29%2A.osr",
+    );
+    expect(read.headers.get("x-replay-filename")).toBe(encodeURIComponent(filename));
+    expect(Buffer.from(await read.arrayBuffer()).equals(replay)).toBe(true);
+  });
+
   it("rejects empty and oversized uploads", async () => {
     const cookie = await authCookie(nextViewerId++);
     const empty = await handleReplayUploadPost(postRequest(Buffer.alloc(0), { cookie }));
