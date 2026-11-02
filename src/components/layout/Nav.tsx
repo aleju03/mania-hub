@@ -27,6 +27,13 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
 import { useLocale } from "../../lib/locale-context";
 
+// The crest arrow shows the flag mirrored, except where that reads as another
+// country (IE/CI, ML/GN) or reverses writing on the flag.
+const UNMIRRORED_CREST_FLAGS = new Set([
+  "IE", "CI", "ML", "GN",
+  "SA", "IQ", "AF", "IR", "BR",
+]);
+
 // Leaf destinations. Kept `as const` (not typed) so each `to` stays a literal
 // route path; TanStack Router's Link types reject a widened `string`.
 const NAV_LEAVES = {
@@ -338,6 +345,7 @@ export function Nav() {
   // than osu!'s set, whose missing PNGs would leave the nav crest blank.
   const flagBackground = getCountryFlagGradient(selectedCountry)
     ?? `url(${getCountryFlagLargeUrl(selectedCountry)}) center/cover no-repeat`;
+  const unmirrorFlag = UNMIRRORED_CREST_FLAGS.has(selectedCountry);
 
   useDynamicFavicon(selectedCountry);
 
@@ -703,7 +711,7 @@ export function Nav() {
                     <div
                       className="absolute inset-0"
                       style={{
-                        background: flagBackground,
+                        background: unmirrorFlag ? undefined : flagBackground,
                         maskImage: "url(/images/notes/arrow-left-pink.png)",
                         WebkitMaskImage: "url(/images/notes/arrow-left-pink.png)",
                         maskSize: "62%",
@@ -723,7 +731,14 @@ export function Nav() {
                           "drop-shadow(0 0 4px rgba(255,255,255,0.45))",
                         ].join(" "),
                       }}
-                    />
+                    >
+                      {unmirrorFlag && (
+                        <div
+                          className="absolute inset-0"
+                          style={{ background: flagBackground, transform: "scaleX(-1)" }}
+                        />
+                      )}
+                    </div>
                   </>
                 )}
               </div>
