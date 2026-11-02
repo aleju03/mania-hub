@@ -28,7 +28,7 @@ import type { VibroAnalysis } from "#dan/vibro-sections";
 import { hasLnAxis } from "#dan/ln-axis-keymodes";
 import { usesPrism } from "#dan/prism/switch";
 import { useNoDans } from "../../store";
-import { msdSkillsetMeta } from "../../lib/skill-axes";
+import { DAN_SKILLSET_META, msdSkillsetMeta } from "../../lib/skill-axes";
 import {
   FamilyPatternChip,
   PATTERN_COLOR,
@@ -40,6 +40,8 @@ import {
   oszDownloadUrl,
   patternLabel,
   subPatternTags,
+  isLnSkillsetTag,
+  lnSkillTiles,
   skillTiles,
 } from "./SearchCard";
 import { HoverTip } from "../ui/HoverTip";
@@ -847,7 +849,7 @@ export function MapDetailModal({
   // than as zeroes. "missing"/"error": that fetch is done and brought nothing.
   status?: "ready" | "pending" | "missing" | "error";
 }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const intlLocale = intlLocaleTag(useLocale());
   const compactPlays = (n: number) => new Intl.NumberFormat(intlLocale, { notation: "compact", maximumFractionDigits: 1 }).format(Math.max(0, n));
   // Which diff of the set is in focus; defaults to the entry's representative.
@@ -920,10 +922,17 @@ export function MapDetailModal({
   // with its number, so secondary chips here would say it twice.
   // A stub has no pattern, which would leave an empty chip.
   const familyTags = useMemo(() => (active?.primaryPattern ? [active.primaryPattern] : []), [active]);
-  const subTags = useMemo(
+  const allSubTags = useMemo(
     () => (active ? subPatternTags([active], familyTags, Infinity) : []),
     [active, familyTags],
   );
+  // An LN chart's LN skillsets join its LN chip as one ("LN Tech/Release")
+  // rather than trailing it as separate outlined tags.
+  const lnSkillTags = familyTags[0] === "ln" ? allSubTags.filter(isLnSkillsetTag) : [];
+  const subTags = lnSkillTags.length > 0 ? allSubTags.filter((tag) => !isLnSkillsetTag(tag)) : allSubTags;
+  const primaryChipText = lnSkillTags.length > 0
+    ? `${i18n._(DAN_SKILLSET_META.ln.labelMsg)} ${lnSkillTags.map((tag) => i18n._(DAN_SKILLSET_META[tag].labelMsg)).join("/")}`
+    : undefined;
 
   // Chart-analysis detail per diff, fetched lazily so the modal can show the
   // LeoBlack cluster readout (the chart's own keymode vocabulary). Keyed by
@@ -1098,7 +1107,8 @@ export function MapDetailModal({
   // Share copies the score's link from either tab.
   const shareScore = play != null && (shownTab === "score" || local);
 
-  const headerTiles = active ? skillTiles([active]).slice(0, 2) : [];
+  const riceTiles = active ? skillTiles([active]) : [];
+  const headerTiles = active ? (riceTiles.length > 0 ? riceTiles : lnSkillTiles(active)).slice(0, 2) : [];
   // What the rating panel rates, shared with the header's big number so the
   // two always read the same Overall.
   const shownMsdSource = active ? {
@@ -1280,7 +1290,7 @@ export function MapDetailModal({
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
                     <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`Tags`}</span>
                     {familyTags.map((pattern, index) => (
-                      <FamilyPatternChip key={pattern} pattern={pattern} primary={index === 0} />
+                      <FamilyPatternChip key={pattern} pattern={pattern} primary={index === 0} text={index === 0 ? primaryChipText : undefined} />
                     ))}
                     {subTags.map((pattern) => (
                       <SubPatternChip key={pattern} pattern={pattern} />

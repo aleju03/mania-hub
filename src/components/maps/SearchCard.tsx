@@ -84,7 +84,7 @@ export function familyPatternTags(entry: LiveMapSearchEntry): string[] {
 
 // Filled family chip: the primary reads as the chart's identity, the rest as
 // families it also carries. Outlined SubPatternChip is for attributes.
-export function FamilyPatternChip({ pattern, primary }: { pattern: string; primary: boolean }) {
+export function FamilyPatternChip({ pattern, primary, text }: { pattern: string; primary: boolean; text?: string }) {
   const label = usePatternLabel();
   return (
     <span
@@ -94,7 +94,7 @@ export function FamilyPatternChip({ pattern, primary }: { pattern: string; prima
           : "px-2 py-1 rounded bg-osu-b3/50 text-osu-f1 text-[10px] leading-none"
       }
     >
-      {label(pattern)}
+      {text ?? label(pattern)}
     </span>
   );
 }
@@ -163,6 +163,20 @@ export function skillTiles(diffs: LiveMapSearchEntry[]): string[] {
   }
   return [...counts.keys()].sort((a, b) =>
     (leads.get(b) ?? 0) - (leads.get(a) ?? 0) || (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
+}
+
+// The LN skillsets an LN chart files under, from its detected tags (strongest
+// first): 4K's course stages, 7K's General/Release/Inverse/Tech. LN charts
+// carry no rice tiles, so these stand in their place.
+const LN_SKILLSET_TAGS = new Set(["lnhybrid", "lntechnical", "lnwalls", "lnspeed", "lngeneral", "lnrelease", "lninverse", "lntech"]);
+
+export function isLnSkillsetTag(tag: string): boolean {
+  return LN_SKILLSET_TAGS.has(tag);
+}
+
+export function lnSkillTiles(entry: LiveMapSearchEntry): string[] {
+  if (entry.dan?.family !== "ln") return [];
+  return (entry.patternTags ?? []).filter(isLnSkillsetTag);
 }
 
 // osu! diff names often lead with their keymode ("[4K] Hard", "7K Another");

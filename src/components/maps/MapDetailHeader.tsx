@@ -45,15 +45,21 @@ function CloseButton({ onClose }: { onClose: () => void }) {
   );
 }
 
+// LN skillsets share one "LN" in front ("LN Tech / Release"), all in LN's
+// colour, so they read as one label and never as the rice tile of that name.
+const isLnSkillset = (tile: string) => tile.startsWith("ln") && tile !== "ln";
+
 function Tiles({ tiles }: { tiles: string[] }) {
   const { i18n } = useLingui();
   if (tiles.length === 0) return null;
+  const ln = tiles.every(isLnSkillset);
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5 font-bold">
+      {ln ? <span style={{ color: DAN_SKILLSET_META.ln.color }}>{i18n._(DAN_SKILLSET_META.ln.labelMsg)}</span> : null}
       {tiles.map((tile, index) => (
         <Fragment key={tile}>
           {index > 0 ? <span className="font-normal text-white/35">/</span> : null}
-          <span style={{ color: DAN_SKILLSET_META[tile].color }}>{i18n._(DAN_SKILLSET_META[tile].labelMsg)}</span>
+          <span style={{ color: ln ? DAN_SKILLSET_META.ln.color : DAN_SKILLSET_META[tile].color }}>{i18n._(DAN_SKILLSET_META[tile].labelMsg)}</span>
         </Fragment>
       ))}
     </span>
