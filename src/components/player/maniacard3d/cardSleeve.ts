@@ -3,6 +3,7 @@ import {
   CircleGeometry,
   Color,
   CylinderGeometry,
+  DataTexture,
   DoubleSide,
   ExtrudeGeometry,
   FrontSide,
@@ -13,6 +14,7 @@ import {
   NormalBlending,
   Path,
   PlaneGeometry,
+  RGBAFormat,
   ShaderMaterial,
   Shape,
   SRGBColorSpace,
@@ -122,6 +124,7 @@ const shellFragment = /* glsl */ `
   uniform float uTime;
   uniform vec2 uSize;
   uniform float uSoft;
+  uniform sampler2D uCrinkle;
   uniform float uHaze;
   uniform float uEdge;
   uniform vec3 uTint;
@@ -136,11 +139,6 @@ const shellFragment = /* glsl */ `
     vec2 u = f * f * (3.0 - 2.0 * f);
     return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
   }
-  float fbm(vec2 p) {
-    float v = 0.0, a = 0.5;
-    for (int i = 0; i < 4; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; }
-    return v;
-  }
 
   void main() {
     vec3 n = normalize(vWorldNormal);
@@ -152,7 +150,7 @@ const shellFragment = /* glsl */ `
 
     vec2 uv = vLocal.xy / uSize + 0.5;
     // Soft plastic crinkles: the highlight bends through it.
-    float crinkle = (fbm(uv * vec2(5.0, 7.0)) - 0.5) * uSoft;
+    float crinkle = (texture2D(uCrinkle, uv).r - 0.5) * uSoft;
 
     // A broad sheen and a tight streak, both sliding with the light and the tilt.
     vec2 dir = normalize(vec2(0.82, 0.57));
@@ -183,6 +181,48 @@ const shellFragment = /* glsl */ `
   }
 `;
 
+/* The case's soft crinkles never move, so the four-octave noise behind them
+   is worked out once here rather than for every pixel of every frame: the
+   same fbm over uv * (5, 7) the shader used to run, as a texture all cases
+   share. */
+let crinkle: DataTexture | null = null;
+function crinkleTexture(): DataTexture {
+  if (crinkle) return crinkle;
+  const width = 256, height = 320;
+  const hash = (x: number, y: number) => {
+    const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const noise = (x: number, y: number) => {
+    const ix = Math.floor(x), iy = Math.floor(y);
+    const fx = x - ix, fy = y - iy;
+    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+    const a = hash(ix, iy), b = hash(ix + 1, iy), c = hash(ix, iy + 1), d = hash(ix + 1, iy + 1);
+    return (a + (b - a) * ux) + ((c + (d - c) * ux) - (a + (b - a) * ux)) * uy;
+  };
+  const data = new Uint8Array(width * height * 4);
+  for (let j = 0; j < height; j++) {
+    for (let i = 0; i < width; i++) {
+      let x = ((i + 0.5) / width) * 5, y = ((j + 0.5) / height) * 7;
+      let value = 0, amp = 0.5;
+      for (let o = 0; o < 4; o++) {
+        value += amp * noise(x, y);
+        x *= 2.03;
+        y *= 2.03;
+        amp *= 0.5;
+      }
+      const at = (j * width + i) * 4;
+      data[at] = data[at + 1] = data[at + 2] = Math.round(Math.min(1, value) * 255);
+      data[at + 3] = 255;
+    }
+  }
+  crinkle = new DataTexture(data, width, height, RGBAFormat);
+  crinkle.minFilter = LinearFilter;
+  crinkle.magFilter = LinearFilter;
+  crinkle.needsUpdate = true;
+  return crinkle;
+}
+
 function createShellMaterial(spec: SleeveSpec, lip: number, size?: { width: number; height: number }): ShaderMaterial {
   return new ShaderMaterial({
     vertexShader: shellVertex,
@@ -196,6 +236,7 @@ function createShellMaterial(spec: SleeveSpec, lip: number, size?: { width: numb
       uTime: { value: 0 },
       uSize: { value: new Vector2(size?.width ?? spec.width, size?.height ?? spec.height) },
       uSoft: { value: spec.soft },
+      uCrinkle: { value: crinkleTexture() },
       uHaze: { value: spec.haze },
       uEdge: { value: spec.edge },
       uTint: { value: new Color(...spec.tint) },

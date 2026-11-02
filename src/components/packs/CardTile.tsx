@@ -49,8 +49,19 @@ function useHydrated(): boolean {
 
 let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
-export async function throttleRender<T>(task: () => Promise<T>): Promise<T> {
+/* Thrown for a queued render whose page was left before its turn came. */
+export class RenderSkipped extends Error {}
+
+export async function throttleRender<T>(task: () => Promise<T>, isCancelled?: () => boolean): Promise<T> {
   if (activeRenders >= 2) await new Promise<void>((resolve) => renderQueue.push(resolve));
+  /* Paging fast through a big collection queued every page passed through,
+     ahead of the one being looked at: a render whose page is gone gives its
+     turn straight to the next. */
+  if (isCancelled?.()) {
+    const next = renderQueue.shift();
+    if (next) window.setTimeout(next, 0);
+    throw new RenderSkipped();
+  }
   activeRenders += 1;
   try {
     return await task();
@@ -81,11 +92,11 @@ export function cardUserForRender(card: CollectedCard) {
   };
 }
 
-export async function renderCollectionThumbnail(card: CollectedCard): Promise<{ key: string; url: string } | null> {
+export async function renderCollectionThumbnail(card: CollectedCard, isCancelled?: () => boolean): Promise<{ key: string; url: string } | null> {
   if (!card.skills) return null;
   const data = collectedCardRenderData(card, card.skills);
   const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
-  const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
+  const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH), isCancelled);
   return { key, url: await rememberCardThumbnailBlob(key, blob) };
 }
 

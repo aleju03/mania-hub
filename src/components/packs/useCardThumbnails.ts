@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CollectedCard } from "#/lib/pack-collection";
 import { pageSignature, renderCollectionThumbnail } from "./CardTile";
 import {
@@ -28,6 +28,17 @@ export function useCardThumbnails(cards: CollectedCard[]): {
   // host reads the faces back out of the cache while it does.
   const [, setRevision] = useState(0);
   const signature = pageSignature(cards);
+  /* A page's faces land one by one; the host re-renders once a frame for all
+     that landed in it, not once per face. */
+  const frameRef = useRef(0);
+  const bump = useCallback(() => {
+    if (frameRef.current) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = 0;
+      setRevision((current) => current + 1);
+    });
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
 
   /* A tile's remote thumbnail 404ed (pool URLs carry no existence check, so a
      lifecycle-expired object surfaces here): evict the dead URL so the tile
@@ -38,13 +49,13 @@ export function useCardThumbnails(cards: CollectedCard[]): {
     const key = cardThumbnailKeyForCollectionCard(card);
     if (!key || !claimCardThumbnailErrorFallback(key)) return;
     forgetRemoteCardThumbnail(key);
-    setRevision((current) => current + 1);
+    bump();
     void renderCollectionThumbnail(card)
       .then((thumbnail) => {
-        if (thumbnail) setRevision((current) => current + 1);
+        if (thumbnail) bump();
       })
       .catch(() => {});
-  }, []);
+  }, [bump]);
 
   useEffect(() => {
     if (!signature) return;
@@ -62,7 +73,7 @@ export function useCardThumbnails(cards: CollectedCard[]): {
       await Promise.all(missing.map(async ({ card, key }) => {
         const cached = await loadPersistedCardThumbnail(key);
         if (cancelled) return;
-        if (cached) setRevision((current) => current + 1);
+        if (cached) bump();
         else remoteCandidates.push({ card, key });
       }));
       if (cancelled || remoteCandidates.length === 0) return;
@@ -76,7 +87,7 @@ export function useCardThumbnails(cards: CollectedCard[]): {
           // the visitor has its faces in the browser's cache when its tiles
           // mount rather than forty downloads to start then.
           preloadRemoteCardThumbnail(remoteUrls[key]);
-          setRevision((current) => current + 1);
+          bump();
           return false;
         })
         .map(({ card }) => card);
@@ -84,9 +95,9 @@ export function useCardThumbnails(cards: CollectedCard[]): {
 
       await Promise.all(toRender.map(async (card) => {
         try {
-          const thumbnail = await renderCollectionThumbnail(card);
+          const thumbnail = await renderCollectionThumbnail(card, () => cancelled);
           if (cancelled || !thumbnail) return;
-          setRevision((current) => current + 1);
+          bump();
         } catch {
           // The DOM fallback remains for this card.
         }

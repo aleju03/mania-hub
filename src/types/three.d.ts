@@ -205,6 +205,9 @@ declare module "three" {
     setPixelRatio(...args: any[]): void;
     render(...args: any[]): void;
     compile(...args: any[]): void;
+    compileAsync(...args: any[]): Promise<unknown>;
+    initTexture(texture: unknown): void;
+    getContext(): WebGLRenderingContext | WebGL2RenderingContext;
     dispose(): void;
     forceContextLoss(): void;
   }

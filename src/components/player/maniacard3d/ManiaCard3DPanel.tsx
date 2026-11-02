@@ -237,6 +237,7 @@ export function ManiaCard3DPanel({
           mobile: isMobileViewport(),
           reducedMotion,
           devicePixelRatio: getDevicePixelRatio(),
+          lazyBack: true,
           onReady: () => {
             if (active) setReadySignature(pendingSignatureRef.current);
           },

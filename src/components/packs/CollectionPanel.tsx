@@ -604,7 +604,6 @@ export function CollectionPanel({
      face fallback while a thumbnail renders); "page" holds the placeholder
      grid a pending page shows, which locally loads too fast to look at. */
   const [skeletonSim, setSkeletonSim] = useState<"off" | "cards" | "page">("off");
-  const collectionControlsRef = useRef<HTMLDivElement | null>(null);
   const [serverPage, setServerPage] = useState<LoadedServerCollectionPage | null>(() => {
     const initialRequest = {
       page: 0,
@@ -1447,7 +1446,6 @@ export function CollectionPanel({
       {(collectionTotal > 0 || missingOpen || useServerCollection) && (
         <>
         <div
-          ref={collectionControlsRef}
           className="mt-4 flex scroll-mt-[76px] flex-wrap items-center gap-x-3 gap-y-2"
           data-select-keep=""
         >
@@ -1856,10 +1854,7 @@ export function CollectionPanel({
                 pageEnd={missingPageEnd}
                 total={missingTotal}
                 noun="players"
-                onPageChange={(page) => {
-                  setMissingPageIndex(page);
-                  collectionControlsRef.current?.scrollIntoView({ block: "start" });
-                }}
+                onPageChange={setMissingPageIndex}
               />
             </div>
           )
@@ -1871,12 +1866,9 @@ export function CollectionPanel({
                 pageStart={pageStart}
                 pageEnd={pageEnd}
                 total={filteredTotal}
-                onPageChange={(page) => {
-                  setCollectionPage(page);
-                  // A binder turns its page in place and keeps its size, so
-                  // the reader stays by the pager to turn the next one.
-                  if (!binder) collectionControlsRef.current?.scrollIntoView({ block: "start" });
-                }}
+                // The page turns in place: the reader stays by this pager to
+                // turn the next one rather than being sent back up to the top.
+                onPageChange={setCollectionPage}
               />
             </div>
           )}

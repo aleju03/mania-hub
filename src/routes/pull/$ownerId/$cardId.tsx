@@ -157,14 +157,22 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
           motifOverride: shared.card.motif,
           supporterLook: shared.card.supporterLook,
         });
+    // The copy's number, printed on its back like everywhere else a pulled
+    // copy is shown.
+    const serial = typeof shared.serial === "number" && shared.serial > 0 ? { number: shared.serial, total: shared.mintedTotal > 0 ? shared.mintedTotal : null } : null;
+    if (serial && data.status === "ready") Object.assign(data, { serial });
     let cancelled = false;
-    // The 2D front renders first so something card-shaped is visible while
-    // the WebGL pipeline warms up (and stays if it fails).
-    void renderCardThumbnail(data, 600)
-      .then((url) => {
-        if (!cancelled && url) setStaticImage(url);
-      })
-      .catch(() => {});
+    // A sketch in the card's colours holds its place while the 3D card warms
+    // up. The full 2D front is painted only if WebGL fails: painting it
+    // alongside the 3D card built the same card twice.
+    setStaticImage(renderCardSkeletonThumbnail(tier, 600, team ? null : effectiveCardLook(shared.card.motif, shared.card.supporterLook).motif, Boolean(team)));
+    const paintFallback = () => {
+      void renderCardThumbnail(data, 600)
+        .then((url) => {
+          if (!cancelled && url) setStaticImage(url);
+        })
+        .catch(() => {});
+    };
     const timer = window.setTimeout(() => {
       const host = hostRef.current;
       if (!host || cancelled) return;
@@ -176,17 +184,20 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
           reducedMotion: prefersReducedMotion(),
           devicePixelRatio: window.devicePixelRatio || 1,
           gyro: false,
+          lazyBack: true,
           onReady: () => {
             if (!cancelled) setCanvasReady(true);
           },
           onError: () => {
             rendererRef.current?.dispose();
             rendererRef.current = null;
+            if (!cancelled) paintFallback();
           },
         });
         rendererRef.current.resize();
       } catch {
         rendererRef.current = null;
+        paintFallback();
       }
     }, 300);
     return () => {

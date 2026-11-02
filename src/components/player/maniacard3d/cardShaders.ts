@@ -352,23 +352,31 @@ void main() {
      around every copy of the emblem rather than as dust behind it. */
   float patternGain = (1.0 - uMotifOn) * uTierLayer;
 
+  /* A card shows triangles or stars, never both, and neither under a motif:
+     the branches are uniform across the draw, so the hidden layer is skipped
+     rather than computed and multiplied by zero. */
+  bool showTriangles = patternGain > 0.0 && uStarfield < 0.5;
+  bool showStars = patternGain > 0.0 && uStarfield >= 0.5;
+  float triangles = 0.0;
+  float stars = 0.0;
 #if MC_MEDIUM
-  float triangles = triangleWave(vUv, vec2(6.0, 8.0), uTime * 0.07) * (1.0 - uStarfield) * patternGain;
-  float stars = starLayer(vUv, vec2(6.0, 8.0), uTime * 0.065, uTime) * uStarfield * patternGain;
+  if (showTriangles) triangles = triangleWave(vUv, vec2(6.0, 8.0), uTime * 0.07) * (1.0 - uStarfield) * patternGain;
+  if (showStars) stars = starLayer(vUv, vec2(6.0, 8.0), uTime * 0.065, uTime) * uStarfield * patternGain;
 #else
   // Twinkling sparkle layer (drifts slowly upward).
-  float triangles = (triangleWave(vUv, vec2(7.0, 9.0), uTime * 0.09) * 0.58
-                  + triangleWave(vUv + vec2(0.19, 0.11), vec2(5.0, 7.0), uTime * 0.052) * 0.42)
-                  * (1.0 - uStarfield);
+  if (showTriangles) {
+    triangles = (triangleWave(vUv, vec2(7.0, 9.0), uTime * 0.09) * 0.58
+              + triangleWave(vUv + vec2(0.19, 0.11), vec2(5.0, 7.0), uTime * 0.052) * 0.42)
+              * (1.0 - uStarfield) * patternGain;
+  }
 
   // Two star depths: the larger near layer drifts faster than the finer far
   // layer for a slow parallax.
-  float stars = (starLayer(vUv, vec2(6.0, 8.0), uTime * 0.085, uTime)
-              + starLayer(vUv + vec2(0.37, 0.21), vec2(10.0, 14.0), uTime * 0.04, uTime) * 0.65)
-              * uStarfield;
-
-  triangles *= patternGain;
-  stars *= patternGain;
+  if (showStars) {
+    stars = (starLayer(vUv, vec2(6.0, 8.0), uTime * 0.085, uTime)
+          + starLayer(vUv + vec2(0.37, 0.21), vec2(10.0, 14.0), uTime * 0.04, uTime) * 0.65)
+          * uStarfield * patternGain;
+  }
 #endif
 
   /* Drifts upward at the triangles' own pace on a coarser grid, because one

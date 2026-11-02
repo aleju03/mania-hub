@@ -72,7 +72,7 @@ export function CardBoard({ at }: { at?: string }) {
   const [tool, setTool] = useState<BoardTool>("move");
   const [brushTier, setBrushTier] = useState<string | null>(null);
   const [brushScale, setBrushScale] = useState(0.7);
-  const [follow, setFollow] = useState(true);
+  const [follow, setFollow] = useState(false);
   const [selection, setSelection] = useState<BoardCard[]>([]);
   const [history, setHistory] = useState({ undo: false, redo: false });
   const [saveState, setSaveState] = useState<SaveState>("saved");

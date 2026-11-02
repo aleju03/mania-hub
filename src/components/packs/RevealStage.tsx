@@ -777,6 +777,9 @@ export function RevealStage({
           reducedMotion,
           devicePixelRatio: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
           startFaceDown: true,
+          // Its back is the stack's (setBackOverride), so the card's own is
+          // painted only once the browser is idle.
+          lazyBack: true,
           // Pack reveals want a steady card; tilting the phone should not
           // swing it around (touch drag still works).
           gyro: false,
@@ -824,6 +827,20 @@ export function RevealStage({
       position === cardIndex ? { ...entry, thumbnail } : entry,
     );
     setRevealed(revealedRef.current);
+  };
+
+  /* Paints the next card while this one is being looked at, from the scores
+     the pack already prefetched, so "Next card" only has to swap it in. */
+  const prepareAhead = (position: number) => {
+    const next = cards[position];
+    if (!next || !rendererRef.current) return;
+    void Promise.resolve(next.scoresPromise)
+      .catch(() => null)
+      .then((scores) => {
+        if (cancelledRef.current || (scores === null && !next.player.eternal)) return;
+        const nextData = buildPackCardRenderData(next.player, scores ?? []);
+        if (nextData.status === "ready") rendererRef.current?.prepare(nextData);
+      });
   };
 
   const reveal = async (position: number) => {
@@ -875,7 +892,7 @@ export function RevealStage({
     try {
       await ensureRendererReady(data);
       if (cancelledRef.current) return;
-      // PNG encoding is synchronous. Snapshot while the UI is still in its
+      // Encoding is synchronous. Snapshot while the UI is still in its
       // preparing beat so the reveal flip and tier landing stay animation-only.
       const thumbnail = rendererRef.current?.snapshotFrontCanvas(COLLECTION_CARD_THUMB_WIDTH) ?? null;
       setActiveData(data);
@@ -899,6 +916,7 @@ export function RevealStage({
         void rememberCardThumbnailDataUrl(data, thumbnail, COLLECTION_CARD_THUMB_WIDTH);
       }
       setPhase("shown");
+      prepareAhead(position + 1);
       if (!reducedMotion) {
         setBurst({
           key: position,

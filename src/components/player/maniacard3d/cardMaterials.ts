@@ -2,7 +2,6 @@ import {
   Color,
   DataTexture,
   MeshBasicMaterial,
-  MeshStandardMaterial,
   RGBAFormat,
   ShaderMaterial,
   Vector2,
@@ -27,12 +26,19 @@ function textureRectUv(rect: Rect): Vector4 {
   );
 }
 
+/* The card's thin edge. The scene has only an ambient light, under which a
+   lit material comes out as its colour times light / pi times (1 - metalness):
+   a flat shade. The unlit material paints that shade straight, without
+   compiling the heaviest built-in program for a sliver of the card. */
+const EDGE_SHADE = (1.4 / Math.PI) * (1 - 0.18);
+
 export function createEdgeMaterial(data: ManiaCardReadyData) {
-  return new MeshStandardMaterial({
-    color: new Color(data.edgeColor.r / 255, data.edgeColor.g / 255, data.edgeColor.b / 255),
-    roughness: 0.36,
-    metalness: 0.18,
-  });
+  // The numbers are taken as linear values, the same ones the lighting scaled.
+  const color = new Color(data.edgeColor.r / 255, data.edgeColor.g / 255, data.edgeColor.b / 255) as Color & { r: number; g: number; b: number };
+  color.r *= EDGE_SHADE;
+  color.g *= EDGE_SHADE;
+  color.b *= EDGE_SHADE;
+  return new MeshBasicMaterial({ color });
 }
 
 /* Bound to uMotif on every card that has no motif of its own. A sampler must

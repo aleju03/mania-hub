@@ -356,7 +356,7 @@ const TURN_REACH = 22;
 export class BoardEngine {
   tool: BoardTool = "move";
   /* The brush; its tint also colours cards laid from the tray. */
-  brush = { scale: 0.7, follow: true, tint: 0 };
+  brush = { scale: 0.7, follow: false, tint: 0 };
   cam = { x: 0, y: 0, z: 0.5 };
 
   private regions = new Map<number, Region>();

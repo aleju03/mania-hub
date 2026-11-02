@@ -71,6 +71,8 @@ export interface CardTextureSet {
   backTexture: CanvasTexture;
   /** The front as one still picture, for thumbnails taken off a live card. */
   composeFront: () => HTMLCanvasElement;
+  /** Resolves once the back is painted (later than the rest with lazyBack). */
+  backReady: Promise<void>;
   /** A missing portrait may be displayed temporarily, but must never be cached. */
   avatarLoaded: boolean;
   /** Set only when this card floats a motif and its image actually loaded. */
@@ -149,22 +151,27 @@ export async function createCardTextures(
      painted copies.
 
      shaderFoil is the same arrangement for a supporter's foil: the overlay
-     shader draws it moving, so the front leaves out the still one. */
-  options: { textureScale?: number; frontOnly?: boolean; driftingMotif?: boolean; shaderFoil?: boolean } = {},
+     shader draws it moving, so the front leaves out the still one.
+
+     lazyBack paints the back once the browser is idle instead of before the
+     card can show: a card opened face up is seen from behind only if someone
+     turns it, and the back is half the paint. */
+  options: { textureScale?: number; frontOnly?: boolean; driftingMotif?: boolean; shaderFoil?: boolean; lazyBack?: boolean } = {},
 ): Promise<CardTextureSet> {
   // Before measuring, not just before drawing: the username is auto-sized from
   // its measured width, so Arial metrics would size it wrong even if the font
   // landed in time for the draw.
   await loadCardFonts();
-  if (!options.frontOnly && data.serial) await loadMarkerFont();
+  if (!options.frontOnly && !options.lazyBack && data.serial) await loadMarkerFont();
   const textureScale = Math.max(0.5, Math.min(1, options.textureScale ?? 1));
   const frontCanvas = createCanvas(textureScale);
-  const backCanvas = createCanvas(textureScale);
+  // A thumbnail never shows the back: a pixel stands in for it.
+  const backCanvas = options.frontOnly ? createBlankCanvas() : createCanvas(textureScale);
   const front = getContext(frontCanvas);
   const back = getContext(backCanvas);
   if (textureScale !== 1) {
     front.scale(textureScale, textureScale);
-    back.scale(textureScale, textureScale);
+    if (!options.frontOnly) back.scale(textureScale, textureScale);
   }
   const measure = (text: string, size: number, family: string, weight: number) => {
     front.font = `${weight} ${size}px ${family}`;
@@ -172,16 +179,19 @@ export async function createCardTextures(
   };
   const layout = buildFaceLayout(data, measure);
   const bakeFoil = data.supporterFoil !== undefined && options.shaderFoil !== true;
+  // The laurel is drawn on every back and on the fronts of tiers with a
+  // laurel watermark; a thumbnail of any other card never needs it.
+  const needsLaurel = !options.frontOnly || Boolean(cosmicPaletteFor(data.tier, data.motif)?.laurelWatermark);
   const [avatar, laurel, motif, teamCover, foil] = await Promise.all([
     data.avatarUrl ? loadImage(data.avatarUrl).catch(() => loadImage(data.avatarUrl)).catch(() => null) : Promise.resolve(null),
-    loadImage("/images/maniacard/laurel-wreath.svg").catch(() => null),
+    needsLaurel ? loadLaurel() : Promise.resolve(null),
     // A motif that will not load is simply not drawn: the card falls back to
     // the flecks or starfield its tier already had, which is a card that looks
     // ordinary rather than one that looks broken.
     data.motif ? loadImage(cardMotifImageSrc(data.motif)).catch(() => null) : Promise.resolve(null),
     data.team?.coverUrl ? loadImage(data.team.coverUrl).catch(() => null) : Promise.resolve(null),
     // Inline SVG, so this never waits on the network.
-    bakeFoil ? loadImage(supporterFoilDataUrl()).catch(() => null) : Promise.resolve(null),
+    bakeFoil ? loadSupporterFoilRaster() : Promise.resolve(null),
   ]);
 
   /* A supporter's painted picture cannot drift in the overlay: that layer is
@@ -203,10 +213,29 @@ export async function createCardTextures(
   } else {
     drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true, teamCover, foil);
   }
-  if (!options.frontOnly) drawBack(back, data, layout, laurel);
-
   const frontTexture = toTexture(frontCanvas);
   const backTexture = toTexture(backCanvas);
+  let disposed = false;
+  let backReady: Promise<void> = Promise.resolve();
+  if (!options.frontOnly) {
+    const paintBack = () => {
+      if (disposed) return;
+      drawBack(back, data, layout, laurel);
+      backTexture.needsUpdate = true;
+    };
+    if (options.lazyBack) {
+      backReady = new Promise<void>((resolve) => {
+        whenIdle(() => {
+          void (data.serial ? loadMarkerFont() : Promise.resolve()).then(() => {
+            paintBack();
+            resolve();
+          });
+        });
+      });
+    } else {
+      paintBack();
+    }
+  }
   /* The same image the front just painted, handed to the shader rather than
      loaded twice. Null whenever the front fell back to its tier's own pattern,
      which is what tells the shader to keep drifting triangles or stars. */
@@ -231,10 +260,12 @@ export async function createCardTextures(
       context.drawImage(contentCanvas, 0, 0);
       return flat;
     },
+    backReady,
     avatarLoaded: avatar !== null,
     motif: preparedMotif,
     layout,
     dispose: () => {
+      disposed = true;
       frontTexture.dispose();
       contentTexture?.dispose();
       backTexture.dispose();
@@ -248,6 +279,49 @@ function createCanvas(textureScale: number) {
   canvas.width = Math.round(CARD_TEXTURE_WIDTH * textureScale);
   canvas.height = Math.round(CARD_TEXTURE_HEIGHT * textureScale);
   return canvas;
+}
+
+function createBlankCanvas() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  return canvas;
+}
+
+function whenIdle(task: () => void) {
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(task, { timeout: 600 });
+  else window.setTimeout(task, 120);
+}
+
+/* Shared by every card: the browser caches the file, but each card used to
+   load and decode its own copy. */
+let laurelLoad: Promise<HTMLImageElement | null> | null = null;
+function loadLaurel(): Promise<HTMLImageElement | null> {
+  laurelLoad ??= loadImage("/images/maniacard/laurel-wreath.svg").catch(() => {
+    laurelLoad = null;
+    return null;
+  });
+  return laurelLoad;
+}
+
+/* The supporter foil is an SVG; drawing an SVG image rasterizes it again on
+   every drawImage, and a foil front draws it twice. Rasterized once here, at
+   the face's full size, and drawn from the bitmap after that. */
+let foilRaster: Promise<HTMLCanvasElement | null> | null = null;
+function loadSupporterFoilRaster(): Promise<HTMLCanvasElement | null> {
+  foilRaster ??= loadImage(supporterFoilDataUrl())
+    .then((image) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = CARD_TEXTURE_WIDTH;
+      canvas.height = CARD_TEXTURE_HEIGHT;
+      canvas.getContext("2d")?.drawImage(image, 0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+      return canvas;
+    })
+    .catch(() => {
+      foilRaster = null;
+      return null;
+    });
+  return foilRaster;
 }
 
 function getContext(canvas: HTMLCanvasElement) {
@@ -288,7 +362,7 @@ function drawFront(
   driftingMotif = false,
   teamCover: HTMLImageElement | null = null,
   /* The still supporter foil, loaded only when this front should bake it. */
-  foil: HTMLImageElement | null = null,
+  foil: CanvasImageSource | null = null,
   /* "background" stops before anything printed on the card, "content" draws
      only that, on a clear canvas; see createCardTextures. */
   part: "all" | "background" | "content" = "all",
@@ -317,7 +391,7 @@ function drawFrontBackground(
   motif: HTMLImageElement | null,
   withMotif: boolean,
   driftingMotif: boolean,
-  foil: HTMLImageElement | null,
+  foil: CanvasImageSource | null,
 ) {
   drawTierBackground(context, data, { starfield: !withMotif || motifKeepsStarfield(data.tier, data.motif) });
   // Cosmic tiers skip the triangle flecks entirely - their front is a clean
@@ -1382,7 +1456,7 @@ function drawMotifPattern(context: CanvasRenderingContext2D, motif: CardMotif, i
 /* The still supporter foil (lib/supporter-foil-art.ts): screened over the
    card so it lightens without greying the tier's colours, then overlaid once
    more so it still shows on the pale tiers screening cannot lighten. */
-function drawSupporterFoil(context: CanvasRenderingContext2D, foil: HTMLImageElement) {
+function drawSupporterFoil(context: CanvasRenderingContext2D, foil: CanvasImageSource) {
   context.save();
   context.globalCompositeOperation = "screen";
   context.globalAlpha = SUPPORTER_FOIL_OPACITY;

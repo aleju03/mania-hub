@@ -15,11 +15,12 @@ import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
 import { sleeveReach } from "../player/maniacard3d/cardSleeve";
+import { cardHaloLook } from "../player/maniacard3d/cardHalo";
 import { CountryFlag } from "../ui/CountryFlag";
 import { renderCardSkeletonThumbnail, renderCardThumbnail } from "./cardSnapshot";
 import { collectedCardRenderData } from "./cardThumbnailCache";
 import { EditionSheen } from "./run/EditionSheen";
-import type { RunEdition } from "#/lib/pack-run";
+import { masteryLevel, type RunEdition } from "#/lib/pack-run";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { rememberTeamName } from "../../lib/analytics-teams";
 import { effectiveCardLook } from "../../lib/supporter-card-looks";
@@ -262,14 +263,21 @@ export function CardSpotlight({
           // Touch drag still tilts it, but the modal does not follow the gyro.
           gyro: false,
           sleeveGrows: true,
+          lazyBack: true,
           onReady: () => {
-            if (!cancelled) setCanvasReady(true);
+            if (cancelled) return;
+            setCanvasReady(true);
+            // The canvas was sized while the card was still flying in; its
+            // width is capped by the distance to the screen's edge, so a card
+            // opened from the edge came out cropped. Measure it again here.
+            rendererRef.current?.resize();
           },
           onError: () => {
             if (!cancelled) fallbackTo2d();
           },
         });
         rendererRef.current.setSleeve(ownerSleeveRef.current);
+        rendererRef.current.setHalo(cardHaloLook(masteryLevel(card.copies + (card.recycledCopies ?? 0))));
         rendererRef.current.resize();
       } catch {
         if (!cancelled) fallbackTo2d();
