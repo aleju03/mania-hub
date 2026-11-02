@@ -233,8 +233,10 @@ function picksDanAxis(skill: string | undefined): boolean {
   return isDanAxis(skill?.replace(/^[47]k:/, ""));
 }
 
-function farmSkillAxisMeta(axis: string): { labelMsg: MessageDescriptor; color: string } | null {
-  return isDanAxis(axis) ? DAN_SKILLSET_META[axis.slice(DAN_AXIS_PREFIX.length)] ?? null : skillAxisMeta(axis);
+// The keymode decides the name: 7K's Prism files Chordstream, Bracket, Jack
+// and Delay under MinaCalc's Jumpstream, Handstream, Chordjack and Speed.
+function farmSkillAxisMeta(axis: string, keyCount: number | null | undefined): { labelMsg: MessageDescriptor; color: string } | null {
+  return isDanAxis(axis) ? DAN_SKILLSET_META[axis.slice(DAN_AXIS_PREFIX.length)] ?? null : skillAxisMeta(axis, keyCount);
 }
 
 // A rice dan level as the course logo in its tier's art ("delta--"), or its
@@ -1049,6 +1051,7 @@ function FarmHelperPage() {
                   <SkillBoardSection
                     board={skillBoard}
                     recsAxis={(visibleSnapshot ?? skillsHeld)?.skills?.axis ?? null}
+                    recsKeyCount={(visibleSnapshot ?? skillsHeld)?.skills?.keyCount ?? null}
                     pending={skillsPending}
                     loading={!skillBoard && !error}
                     failed={!!error && !visibleSnapshot}
@@ -1369,7 +1372,7 @@ function SubjectBar({
   // Maps under 1pp are listed but stay out of the headline, as on the server.
   const mapCount = visibleSnapshot?.view === "gain" ? boardRecs.filter((rec) => rec.estimatedPpGain >= MIN_VISIBLE_GAIN_PP).length : boardRecs.length;
   const biggest = maxGain(boardRecs);
-  const skillHeadline = skillBoard?.axis ? farmSkillAxisMeta(skillBoard.axis) : null;
+  const skillHeadline = skillBoard?.axis ? farmSkillAxisMeta(skillBoard.axis, skillBoard.keyCount) : null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-osu-b3/25 bg-osu-b4">
@@ -1836,11 +1839,13 @@ function SkillBoardSection({
   onSkill,
   pending = false,
   recsAxis = null,
+  recsKeyCount = null,
 }: {
   board: LiveFarmHelperSkillBoard | null;
   // The axis the listed charts were picked for, which trails `board.axis`
   // while a new pick loads.
   recsAxis?: string | null;
+  recsKeyCount?: number | null;
   // The board on screen is the previous one while a new pick loads.
   pending?: boolean;
   loading: boolean;
@@ -1881,7 +1886,8 @@ function SkillBoardSection({
   }
   const multiMode = modeGroups.length > 1;
   const listAxis = recsAxis ?? board.axis;
-  const axisLabel = listAxis ? i18n._(farmSkillAxisMeta(listAxis)?.labelMsg ?? msg`skill`) : "";
+  const listKeyCount = recsAxis ? recsKeyCount : board.keyCount;
+  const axisLabel = listAxis ? i18n._(farmSkillAxisMeta(listAxis, listKeyCount)?.labelMsg ?? msg`skill`) : "";
   const pageCount = Math.ceil(board.recs.length / PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
   const pageRecs = board.recs.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
@@ -1897,7 +1903,7 @@ function SkillBoardSection({
               <span className="w-8 shrink-0 pl-1 text-[11px] font-bold tabular-nums text-osu-f1">{group.keyCount}K</span>
             ) : null}
             {group.axes.map((entry, index) => {
-              const meta = farmSkillAxisMeta(entry.axis);
+              const meta = farmSkillAxisMeta(entry.axis, entry.keyCount);
               const active = entry.axis === board.axis && entry.keyCount === board.keyCount;
               const dan = isDanAxis(entry.axis);
               // The dan skillsets take their own line under the keymode's
@@ -1945,7 +1951,7 @@ function SkillBoardSection({
                 rec={rec}
                 rank={safePage * PAGE_SIZE + index + 1}
                 axisLabel={axisLabel}
-                color={listAxis ? farmSkillAxisMeta(listAxis)?.color ?? null : null}
+                color={listAxis ? farmSkillAxisMeta(listAxis, listKeyCount)?.color ?? null : null}
                 dan={isDanAxis(listAxis)}
                 onOpen={() => detail.open(rec)}
               />
