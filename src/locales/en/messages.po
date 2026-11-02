@@ -176,8 +176,8 @@ msgstr "{0, plural, one {# copy} other {# copies}}"
 
 #. placeholder {0}: model.diffs.length
 #: src/components/maps/SearchCard.tsx
-msgid "{0, plural, one {# diff} other {# diffs}}"
-msgstr "{0, plural, one {# diff} other {# diffs}}"
+#~ msgid "{0, plural, one {# diff} other {# diffs}}"
+#~ msgstr "{0, plural, one {# diff} other {# diffs}}"
 
 #. placeholder {0}: friendSync.count
 #: src/components/maps/MapScoresBoard.tsx
@@ -891,6 +891,7 @@ msgstr "{0} players with a clear"
 #. placeholder {0}: compact(insights.grind.mostPlayed.plays)
 #. placeholder {0}: compact(judgement.plays)
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
+#: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -1362,6 +1363,10 @@ msgstr "{count} cards in the deck"
 #: src/components/layout/ChangelogModal.tsx
 #~ msgid "{count} changed"
 #~ msgstr "{count} changed"
+
+#: src/components/maps/SearchCard.tsx
+msgid "{count} diffs"
+msgstr "{count} diffs"
 
 #: src/lib/streak-game.ts
 msgid "{count} DT top plays"
@@ -2692,6 +2697,10 @@ msgstr "0h"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "1 clear"
 #~ msgstr "1 clear"
+
+#: src/components/maps/SearchCard.tsx
+msgid "1 diff"
+msgstr "1 diff"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "1 error in the code"
@@ -5370,8 +5379,8 @@ msgstr "Bring to front"
 
 #. Short label under a skillset bar: Bracket (6K-8K)
 #: src/components/maps/SearchCard.tsx
-msgid "BRK"
-msgstr "BRK"
+#~ msgid "BRK"
+#~ msgstr "BRK"
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
@@ -6221,9 +6230,7 @@ msgstr "Circles"
 msgid "Cirno fumo"
 msgstr "Cirno fumo"
 
-#. Short label under a skillset bar: Chordjack
 #: src/components/maps/PatternRadar.tsx
-#: src/components/maps/SearchCard.tsx
 msgid "CJ"
 msgstr "CJ"
 
@@ -7838,8 +7845,8 @@ msgstr "Crystal wings"
 
 #. Short label under a skillset bar: Chordstream (6K-8K)
 #: src/components/maps/SearchCard.tsx
-msgid "CS"
-msgstr "CS"
+#~ msgid "CS"
+#~ msgstr "CS"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
@@ -8413,8 +8420,8 @@ msgstr "Dither"
 
 #. Short label under a skillset bar: Delay (6K-8K)
 #: src/components/maps/SearchCard.tsx
-msgid "DLY"
-msgstr "DLY"
+#~ msgid "DLY"
+#~ msgstr "DLY"
 
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
@@ -11592,9 +11599,7 @@ msgstr "HP bar fill"
 msgid "HP bar marker"
 msgstr "HP bar marker"
 
-#. Short label under a skillset bar: Handstream
 #: src/components/maps/PatternRadar.tsx
-#: src/components/maps/SearchCard.tsx
 msgid "HS"
 msgstr "HS"
 
@@ -12237,8 +12242,8 @@ msgstr "Jersey"
 
 #. Short label under a skillset bar: Jack (6K-8K)
 #: src/components/maps/SearchCard.tsx
-msgid "JK"
-msgstr "JK"
+#~ msgid "JK"
+#~ msgstr "JK"
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Join"
@@ -12273,16 +12278,14 @@ msgstr "Joke charts"
 #~ msgid "Journal"
 #~ msgstr "Journal"
 
-#. Short label under a skillset bar: Jumpstream
 #: src/components/maps/PatternRadar.tsx
-#: src/components/maps/SearchCard.tsx
 msgid "JS"
 msgstr "JS"
 
 #. Short label under a skillset bar: Jackspeed
 #: src/components/maps/SearchCard.tsx
-msgid "JSP"
-msgstr "JSP"
+#~ msgid "JSP"
+#~ msgstr "JSP"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Judged"
@@ -22886,8 +22889,8 @@ msgstr "SSR card"
 
 #. Short label under a skillset bar: Stamina
 #: src/components/maps/SearchCard.tsx
-msgid "STA"
-msgstr "STA"
+#~ msgid "STA"
+#~ msgstr "STA"
 
 #: src/routes/skins.tsx
 msgid "stable"
@@ -23269,8 +23272,8 @@ msgstr "Storyboard…"
 
 #. Short label under a skillset bar: Stream
 #: src/components/maps/SearchCard.tsx
-msgid "STR"
-msgstr "STR"
+#~ msgid "STR"
+#~ msgstr "STR"
 
 #: src/components/packs/StreakGame.tsx
 msgid "streak"
@@ -23779,8 +23782,8 @@ msgstr "Tear open booster packs of maniacards: random osu!mania players minted a
 
 #. Short label under a skillset bar: Technical
 #: src/components/maps/SearchCard.tsx
-msgid "TEC"
-msgstr "TEC"
+#~ msgid "TEC"
+#~ msgstr "TEC"
 
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts

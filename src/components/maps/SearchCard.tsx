@@ -1,20 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
-import type { MessageDescriptor } from "@lingui/core";
-import { msg } from "@lingui/core/macro";
-import { usesPrism } from "#dan/prism/switch";
-import { HoverTip } from "../ui/HoverTip";
-import { resolveShownMsd } from "../../lib/shown-msd";
 import { ensureMapPlaceholderFont } from "../../lib/replay-fonts";
-import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
 import { oszDownloadUrl } from "../../lib/beatmap-mirrors";
-import { formatDuration } from "../../lib/format";
+import { formatCompactCount, formatDuration } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { BeatmapStatusBadge } from "../ui/BeatmapStatusBadge";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { MapPreviewButton, type MapPreviewAudio, type MapPreviewTrack } from "./MapPreviewAudio";
 import { starRatingColor, starSpectrumGradient, starTextColor, StarRatingBadge } from "../ui/StarRating";
-import { DAN_SKILLSET_META, msdSkillsetMeta } from "../../lib/skill-axes";
+import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 
 // Shared presentation for a single chart-analyzed map across the global Search
 // results and inside Collection detail. Country-agnostic: no player avatars,
@@ -195,12 +190,38 @@ function useCardModel(entry: LiveMapSearchEntry, rate?: "ht" | "dt" | "", starSc
   const byStars = [...diffs].sort((a, b) => starsOf(a) - starsOf(b));
   const starLo = starsOf(byStars[0]);
   const starHi = starsOf(byStars[byStars.length - 1]);
-  // Two tiles at most: a third starts reading as noise.
-  const tiles = skillTiles(diffs).slice(0, 2);
-  const familyTags = (multi ? setPatterns(diffs) : familyPatternTags(entry)).filter((pattern) => !tiles.includes(pattern));
-  const subTags = subPatternTags(diffs, familyTags, 1);
+  const hardest = byStars[byStars.length - 1];
   const vibro = diffs.some((diff) => diff.vibro) || entry.vibro === true;
-  return { diffs, byStars, multi, starLo, starHi, tiles, familyTags, subTags, vibro, hardest: byStars[byStars.length - 1] };
+  return { diffs, byStars, multi, starsOf, starLo, starHi, vibro, hardest, mix: patternMix(hardest) };
+}
+
+const MIX_FAMILIES = ["stream", "jumpstream", "handstream", "stamina", "jack", "chordjack", "tech"];
+
+/* What a chart is made of, as shares that add up to one, for the card's
+   pattern bar. The analyzer scores each family against the chart's strongest
+   (1 is the strongest); below 0.6 a family is background, so the scores are
+   cut there and squared apart until the bar reads like a mix rather than
+   seven equal slices. Holds join as LN once they are 15% of the notes. The
+   primary pattern always leads, so the bar never disagrees with the chips
+   and filters that name the chart. */
+export function patternMix(entry: LiveMapSearchEntry): Array<{ pattern: string; share: number }> {
+  const weights = new Map<string, number>();
+  for (const family of MIX_FAMILIES) {
+    const weight = Math.max(0, ((entry.patterns?.[family] ?? 0) - 0.6) / 0.4) ** 2.2;
+    if (weight > 0.03) weights.set(family, weight);
+  }
+  const lnShare = entry.lnShare ?? 0;
+  if (lnShare >= 0.15) weights.set("ln", lnShare * 1.2);
+  const primary = entry.primaryPattern;
+  if (PATTERN_LABEL[primary]) {
+    const top = Math.max(0, ...weights.values());
+    weights.set(primary, Math.max(weights.get(primary) ?? 0, top || 1));
+  }
+  const total = [...weights.values()].reduce((sum, weight) => sum + weight, 0);
+  if (total <= 0) return [];
+  return [...weights.entries()]
+    .map(([pattern, weight]) => ({ pattern, share: weight / total }))
+    .sort((a, b) => b.share - a.share || (a.pattern === primary ? -1 : b.pattern === primary ? 1 : 0));
 }
 
 type CardModel = ReturnType<typeof useCardModel>;
@@ -235,24 +256,21 @@ function CoverImage({ src }: { src: string }) {
   );
 }
 
-// "Tech / Speed" in each tile's colour, then one pattern word in plain text.
-function SkillLine({ model, className = "" }: { model: CardModel; className?: string }) {
-  const { i18n, t } = useLingui();
+// The mix's three biggest patterns by name and share, the lead one bold.
+function MixLine({ model }: { model: CardModel }) {
+  const { t } = useLingui();
   const label = usePatternLabel();
-  const extra = model.tiles.length > 0 ? [...model.familyTags, ...model.subTags][0] : model.subTags[0];
   return (
-    <span className={`flex min-w-0 items-center gap-1.5 truncate text-[12px] font-bold leading-none ${className}`}>
-      {model.tiles.length > 0
-        ? model.tiles.map((tile, index) => (
-          <span key={tile} className="inline-flex items-center gap-1.5">
-            {index > 0 && <span className="font-normal text-white/35">/</span>}
-            <span style={{ color: DAN_SKILLSET_META[tile].color }}>{i18n._(DAN_SKILLSET_META[tile].labelMsg)}</span>
+    <span className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[12.5px] font-semibold leading-none">
+      {model.mix.slice(0, 3).map(({ pattern, share }, index) => (
+        <span key={pattern} className="inline-flex items-center gap-2">
+          {index > 0 ? <Hairline /> : null}
+          <span className={`inline-flex items-baseline gap-1 ${index === 0 ? "font-extrabold" : ""}`}>
+            <span style={{ color: PATTERN_COLOR[pattern] ?? "#cfcfe6" }}>{label(pattern)}</span>
+            <span className="text-[11px] font-semibold tabular-nums text-osu-f1/80">{Math.round(share * 100)}%</span>
           </span>
-        ))
-        : model.familyTags.slice(0, 1).map((pattern) => (
-          <span key={pattern} style={{ color: PATTERN_COLOR[pattern] ?? "#cfcfe6" }}>{label(pattern)}</span>
-        ))}
-      {extra ? <span className="truncate font-medium text-osu-l2/80">{label(extra)}</span> : null}
+        </span>
+      ))}
       {model.vibro ? (
         <span
           className="rounded bg-[#ffb02e]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#ffcf70]"
@@ -261,6 +279,41 @@ function SkillLine({ model, className = "" }: { model: CardModel; className?: st
           {t`Vibro`}
         </span>
       ) : null}
+    </span>
+  );
+}
+
+// The mix as the line where the cover ends.
+function MixSeam({ model }: { model: CardModel }) {
+  return (
+    <div aria-hidden="true" className="flex h-1">
+      {model.mix.map(({ pattern, share }) => (
+        <span key={pattern} style={{ flex: share, background: PATTERN_COLOR[pattern] ?? "#cfcfe6" }} />
+      ))}
+    </div>
+  );
+}
+
+// Play counts run into the tens of millions, where "12835k" stops reading.
+function formatPlays(count: number): string {
+  if (count < 1_000_000) return formatCompactCount(count);
+  return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
+}
+
+// One capsule cut into a segment per diff in its star colour, easiest first,
+// then the count. It grows 12px a diff up to 84px, so a big set packs its
+// segments thinner instead of running into the length beside it.
+function DiffCapsule({ model }: { model: CardModel }) {
+  const { t } = useLingui();
+  const count = model.byStars.length;
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5" title={count === 1 ? t`1 diff` : t`${count} diffs`}>
+      <span className="flex h-2 gap-[1.5px] overflow-hidden rounded-full" style={{ width: Math.min(84, 12 * count) }}>
+        {model.byStars.map((diff) => (
+          <span key={diff.beatmapId} className="flex-1" style={{ background: starTextColor(model.starsOf(diff)) }} />
+        ))}
+      </span>
+      <span className="font-bold tabular-nums text-osu-l1">{count}</span>
     </span>
   );
 }
@@ -320,90 +373,13 @@ type CardProps = {
   preview?: MapPreviewAudio;
 };
 
-// Short names under the bars, by axis key. Prism (6K-8K) files its skillsets in
-// MinaCalc's slots under other names, so the same key reads differently there.
-const SKILLSET_ABBR: Record<string, MessageDescriptor> = {
-  Stream: msg({ message: "STR", comment: "Short label under a skillset bar: Stream" }),
-  Jumpstream: msg({ message: "JS", comment: "Short label under a skillset bar: Jumpstream" }),
-  Handstream: msg({ message: "HS", comment: "Short label under a skillset bar: Handstream" }),
-  Stamina: msg({ message: "STA", comment: "Short label under a skillset bar: Stamina" }),
-  JackSpeed: msg({ message: "JSP", comment: "Short label under a skillset bar: Jackspeed" }),
-  Chordjack: msg({ message: "CJ", comment: "Short label under a skillset bar: Chordjack" }),
-  Technical: msg({ message: "TEC", comment: "Short label under a skillset bar: Technical" }),
-};
-const PRISM_SKILLSET_ABBR: Record<string, MessageDescriptor> = {
-  Jumpstream: msg({ message: "CS", comment: "Short label under a skillset bar: Chordstream (6K-8K)" }),
-  Handstream: msg({ message: "BRK", comment: "Short label under a skillset bar: Bracket (6K-8K)" }),
-  Chordjack: msg({ message: "JK", comment: "Short label under a skillset bar: Jack (6K-8K)" }),
-  Speed: msg({ message: "DLY", comment: "Short label under a skillset bar: Delay (6K-8K)" }),
-};
-
-function SkillsetBars({ diff }: { diff: LiveMapSearchEntry }) {
-  const { i18n } = useLingui();
-  const msd = diff.msdLn ?? diff.msd;
-  const prism = usesPrism(diff.keyCount);
-  const bars = msd
-    ? msdSkillsetMeta(diff.keyCount)
-      .map((meta) => ({ meta, value: Number(msd[meta.key] ?? 0) }))
-      .filter(({ value }) => value >= 1)
-    : [];
-  if (bars.length === 0) return null;
-  const max = Math.max(...bars.map((bar) => bar.value));
-  // The big number is the chart's Overall, the same value the map modal's
-  // rating panel headlines; the bars stay the skillset breakdown.
-  const overall = resolveShownMsd({ entry: diff }).overall;
-  const floor = Math.min(...bars.map((bar) => bar.value)) * 0.7;
-  const top = bars.reduce((best, bar) => (bar.value > best.value ? bar : best), bars[0]);
-  return (
-    <div className="flex items-end gap-3">
-      <span className="shrink-0 pb-[14px] text-[22px] font-extrabold leading-none tabular-nums text-white">{(overall ?? max).toFixed(1)}</span>
-      <div className="flex flex-1 gap-[3px]">
-        {bars.map(({ meta, value }) => {
-          const isTop = meta.key === top.meta.key;
-          const abbr = (prism ? PRISM_SKILLSET_ABBR[meta.key] : undefined) ?? SKILLSET_ABBR[meta.key];
-          return (
-            <HoverTip
-              key={meta.key}
-              className="flex min-w-0 flex-1 flex-col items-stretch gap-[3px]"
-              tip={(
-                <span className="whitespace-nowrap">
-                  <span className="font-semibold" style={{ color: meta.color }}>{i18n._(meta.labelMsg)}</span>
-                  <span className="ml-2 font-bold tabular-nums text-white">{value.toFixed(2)}</span>
-                </span>
-              )}
-            >
-              <span className="flex h-[30px] items-end" aria-label={`${i18n._(meta.labelMsg)} ${value.toFixed(2)}`}>
-                <span
-                  className="w-full rounded-t-[3px]"
-                  style={{
-                    height: `${Math.max(10, ((value - floor) / (max - floor || 1)) * 100)}%`,
-                    background: meta.color,
-                    // The main skillset reads first: full and a touch brighter, the rest dimmed.
-                    opacity: isTop ? 1 : 0.4,
-                    filter: isTop ? "brightness(1.15) saturate(1.1)" : undefined,
-                  }}
-                />
-              </span>
-              <span
-                aria-hidden="true"
-                className={`truncate text-center text-[9px] font-bold uppercase leading-none tracking-[0.06em] ${isTop ? "text-osu-l1" : "text-osu-f1/60"}`}
-              >
-                {abbr ? i18n._(abbr) : meta.label.slice(0, 3)}
-              </span>
-            </HoverTip>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// The map card: cover with the key count and status, the hardest diff's
-// skillset ratings as a bar strip, the skill tiles, then the set's star range
-// and actions. Country-agnostic, so the same card serves search and collections.
+// The map card: cover with the key count, status, title and star range, the
+// hardest diff's pattern mix as the seam under it and by name, then the diffs,
+// length, plays and actions. Country-agnostic, so the same card serves search
+// and collections.
 export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProps) {
   const model = useCardModel(entry, rate, starScale);
-  const hasBars = !!(model.hardest.msdLn ?? model.hardest.msd);
+  const { t } = useLingui();
   return (
     <MapCardFrame
       coverUrl={mapCoverUrl(entry)}
@@ -411,6 +387,8 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
       status={entry.status}
       title={entry.title}
       artist={entry.artist}
+      titleAside={<StarRatingBadge stars={model.starHi} range={[model.starLo, model.starHi]} className="shrink-0" />}
+      seam={model.mix.length > 0 ? <MixSeam model={model} /> : undefined}
       // Opens on the diff the card summarises (its hardest), so the modal's
       // header and rating panel start on the number the card shows.
       onOpen={onOpen ? () => onOpen(model.hardest === entry || !entry.diffs?.length ? entry : {
@@ -420,17 +398,16 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
         diffs: entry.diffs,
       }) : undefined}
     >
-      {hasBars ? <SkillsetBars diff={model.hardest} /> : null}
-      <SkillLine model={model} />
+      {model.mix.length > 0 || model.vibro ? <MixLine model={model} /> : null}
       <MapCardFooter>
-        <span className="flex min-w-0 flex-1 items-center gap-2.5 text-[11.5px] text-osu-l2/75">
-          <StarRatingBadge stars={model.starHi} range={[model.starLo, model.starHi]} large className="shrink-0" />
-          <Hairline />
-          <span className="truncate"><Plural value={model.diffs.length} one="# diff" other="# diffs" /></span>
+        {preview ? <MapPreviewButton beatmapsetId={entry.beatmapsetId} preview={preview} /> : null}
+        <span className="flex min-w-0 flex-1 items-center gap-2 text-[11.5px] text-osu-l2/75">
+          <DiffCapsule model={model} />
           <Hairline />
           <span className="tabular-nums">{formatDuration(entry.length)}</span>
+          <Hairline />
+          <span className="truncate tabular-nums">{t`${formatPlays(entry.playCount)} plays`}</span>
         </span>
-        {preview ? <MapPreviewButton beatmapsetId={entry.beatmapsetId} preview={preview} /> : null}
         <OsuDirectButton beatmapsetId={entry.beatmapsetId} />
         <OszButton beatmapsetId={entry.beatmapsetId} />
       </MapCardFooter>
@@ -448,6 +425,8 @@ export function MapCardFrame({
   title,
   artist,
   coverOverlay,
+  titleAside,
+  seam,
   onOpen,
   children,
 }: {
@@ -458,6 +437,10 @@ export function MapCardFrame({
   artist: string;
   /** Drawn over the art, under the corner badges (the farmed tab's mod glyph). */
   coverOverlay?: ReactNode;
+  /** Beside the title on the art, bottom right (the search card's star range). */
+  titleAside?: ReactNode;
+  /** A strip along the cover's bottom edge; the art then ends there instead of dissolving into the body. */
+  seam?: ReactNode;
   onOpen?: () => void;
   children: ReactNode;
 }) {
@@ -475,13 +458,21 @@ export function MapCardFrame({
       } : undefined}
       title={clickable ? t`View details` : undefined}
     >
-      <div className="relative h-[118px] shrink-0">
-        {/* The cover dissolves into the body. The title's shade sits inside the
-            mask too, so it fades with the art and the box edge never shows. */}
-        <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_40%,transparent)]">
-          <CoverImage src={coverUrl} />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-black/15" />
-        </div>
+      <div className={`relative shrink-0 ${seam ? "h-[124px]" : "h-[118px]"}`}>
+        {seam ? (
+          // A hard edge with the seam under it, the title on a shade.
+          <div className="absolute inset-0">
+            <CoverImage src={coverUrl} />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-black/20" />
+          </div>
+        ) : (
+          // The cover dissolves into the body. The title's shade sits inside the
+          // mask too, so it fades with the art and the box edge never shows.
+          <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_40%,transparent)]">
+            <CoverImage src={coverUrl} />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-black/15" />
+          </div>
+        )}
         {coverOverlay}
         <div className="absolute left-3 right-3 top-2.5 flex items-center justify-between gap-2">
           {keyLabel ? (
@@ -491,11 +482,15 @@ export function MapCardFrame({
           ) : <span />}
           {status ? <BeatmapStatusBadge status={status} /> : null}
         </div>
-        <div className="absolute bottom-1 left-3.5 right-3.5">
-          <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{title}</div>
-          <div className="truncate text-[12px] leading-tight text-white/70">{artist}</div>
+        <div className={`absolute left-3.5 right-3.5 flex items-end gap-2.5 ${seam ? "bottom-2.5" : "bottom-1"}`}>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{title}</div>
+            <div className="truncate text-[12px] leading-tight text-white/70">{artist}</div>
+          </div>
+          {titleAside}
         </div>
       </div>
+      {seam}
       <div className="flex flex-1 flex-col gap-3 px-3.5 pb-3 pt-2.5">{children}</div>
     </div>
   );
@@ -534,18 +529,13 @@ export function SearchCardGrid({
 function SearchCardSkeleton() {
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl bg-osu-b4 ring-1 ring-white/5">
-      <Skeleton className="h-[118px] w-full rounded-none" />
+      <Skeleton className="h-[128px] w-full rounded-none" />
       <div className="flex flex-col gap-3 px-3.5 pb-3 pt-2.5">
-        <div className="flex items-end gap-3">
-          <Skeleton className="h-5 w-10" />
-          <Skeleton className="h-[38px] flex-1 rounded" />
-        </div>
-        <Skeleton className="h-3 w-2/5" />
+        <Skeleton className="h-3 w-3/5" />
         <div className="flex items-center gap-2 border-t border-white/5 pt-2.5">
-          <Skeleton className="h-5 w-20 rounded-full" />
-          <Skeleton className="h-3 w-16" />
-          <span className="flex-1" />
           <Skeleton className="h-8 w-8 rounded-lg" />
+          <Skeleton className="h-3 w-32" />
+          <span className="flex-1" />
           <Skeleton className="h-8 w-8 rounded-lg" />
           <Skeleton className="h-8 w-8 rounded-lg" />
         </div>

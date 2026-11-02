@@ -188,8 +188,8 @@ msgstr "{0, plural, other {# 张}}"
 
 #. placeholder {0}: model.diffs.length
 #: src/components/maps/SearchCard.tsx
-msgid "{0, plural, one {# diff} other {# diffs}}"
-msgstr "{0, plural, other {# 个难度}}"
+#~ msgid "{0, plural, one {# diff} other {# diffs}}"
+#~ msgstr "{0, plural, other {# 个难度}}"
 
 #. placeholder {0}: friendSync.count
 #: src/components/maps/MapScoresBoard.tsx
@@ -885,6 +885,7 @@ msgstr "{0} 名玩家已通过"
 #. placeholder {0}: compact(insights.grind.mostPlayed.plays)
 #. placeholder {0}: compact(judgement.plays)
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
+#: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -1351,6 +1352,10 @@ msgstr "牌组共 {count} 张卡片"
 #: src/components/layout/ChangelogModal.tsx
 #~ msgid "{count} changed"
 #~ msgstr "{count} 项改动"
+
+#: src/components/maps/SearchCard.tsx
+msgid "{count} diffs"
+msgstr "{count} 个难度"
 
 #: src/lib/streak-game.ts
 msgid "{count} DT top plays"
@@ -2681,6 +2686,10 @@ msgstr "0 小时"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "1 clear"
 #~ msgstr "1 次通过"
+
+#: src/components/maps/SearchCard.tsx
+msgid "1 diff"
+msgstr "1 个难度"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "1 error in the code"
@@ -5355,8 +5364,8 @@ msgstr "置于顶层"
 
 #. Short label under a skillset bar: Bracket (6K-8K)
 #: src/components/maps/SearchCard.tsx
-msgid "BRK"
-msgstr "BRK"
+#~ msgid "BRK"
+#~ msgstr "BRK"
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
@@ -6206,9 +6215,7 @@ msgstr "圆形"
 msgid "Cirno fumo"
 msgstr "琪露诺 fumo"
 
-#. Short label under a skillset bar: Chordjack
 #: src/components/maps/PatternRadar.tsx
-#: src/components/maps/SearchCard.tsx
 msgid "CJ"
 msgstr "CJ"
 
@@ -7823,8 +7830,8 @@ msgstr "水晶翅膀"
 
 #. Short label under a skillset bar: Chordstream (6K-8K)
 #: src/components/maps/SearchCard.tsx
-msgid "CS"
-msgstr "CS"
+#~ msgid "CS"
+#~ msgstr "CS"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
@@ -8398,8 +8405,8 @@ msgstr "抖动"
 
 #. Short label under a skillset bar: Delay (6K-8K)
 #: src/components/maps/SearchCard.tsx
-msgid "DLY"
-msgstr "DLY"
+#~ msgid "DLY"
+#~ msgstr "DLY"
 
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
@@ -11569,9 +11576,7 @@ msgstr "血条填充"
 msgid "HP bar marker"
 msgstr "血条标记"
 
-#. Short label under a skillset bar: Handstream
 #: src/components/maps/PatternRadar.tsx
-#: src/components/maps/SearchCard.tsx
 msgid "HS"
 msgstr "HS"
 
@@ -12210,8 +12215,8 @@ msgstr ""
 
 #. Short label under a skillset bar: Jack (6K-8K)
 #: src/components/maps/SearchCard.tsx
-msgid "JK"
-msgstr "JK"
+#~ msgid "JK"
+#~ msgstr "JK"
 
 #: src/components/communities/CommunityCard.tsx
 msgid "Join"
@@ -12246,16 +12251,14 @@ msgstr "整活谱"
 #~ msgid "Journal"
 #~ msgstr "日志"
 
-#. Short label under a skillset bar: Jumpstream
 #: src/components/maps/PatternRadar.tsx
-#: src/components/maps/SearchCard.tsx
 msgid "JS"
 msgstr "JS"
 
 #. Short label under a skillset bar: Jackspeed
 #: src/components/maps/SearchCard.tsx
-msgid "JSP"
-msgstr "JSP"
+#~ msgid "JSP"
+#~ msgstr "JSP"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Judged"
@@ -22851,8 +22854,8 @@ msgstr "SSR 卡"
 
 #. Short label under a skillset bar: Stamina
 #: src/components/maps/SearchCard.tsx
-msgid "STA"
-msgstr "STA"
+#~ msgid "STA"
+#~ msgstr "STA"
 
 #: src/routes/skins.tsx
 msgid "stable"
@@ -23234,8 +23237,8 @@ msgstr "故事板…"
 
 #. Short label under a skillset bar: Stream
 #: src/components/maps/SearchCard.tsx
-msgid "STR"
-msgstr "STR"
+#~ msgid "STR"
+#~ msgstr "STR"
 
 #: src/components/packs/StreakGame.tsx
 msgid "streak"
@@ -23744,8 +23747,8 @@ msgstr "撕开 maniacard 补充包：随机的 osu!mania 玩家被制成收藏�
 
 #. Short label under a skillset bar: Technical
 #: src/components/maps/SearchCard.tsx
-msgid "TEC"
-msgstr "TEC"
+#~ msgid "TEC"
+#~ msgstr "TEC"
 
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
