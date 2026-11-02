@@ -15,7 +15,7 @@ import {
   type ChainRunState,
   type ChainRunView,
 } from "#/lib/chain-run";
-import { fetchLiveChainGuestOpen, fetchLiveChainGuestPool } from "#/lib/live-backend";
+import { fetchLiveChainGuestPool } from "#/lib/live-backend";
 import type { ChainActOutcome, ChainRunApi } from "./useChainRun";
 
 /* A signed-out visitor's run: the same engine the backend runs, played in
@@ -78,7 +78,7 @@ function randomSeed(): number {
 /* Same shape as useChainRun, so the table plays a guest run unchanged. */
 export function useGuestChainRun(enabled: boolean): ChainRunApi {
   const { i18n } = useLingui();
-  const [available, setAvailable] = useState<boolean | null>(enabled ? null : false);
+  const [available, setAvailable] = useState<boolean>(enabled);
   const [view, setView] = useState<ChainRunView | null>(null);
   const [savedBest, setSavedBest] = useState<Saved["best"]>(null);
   const [busy, setBusy] = useState(false);
@@ -101,13 +101,7 @@ export function useGuestChainRun(enabled: boolean): ChainRunApi {
       setView(saved.state ? chainRunView(saved.state) : null);
       setSavedBest(saved.best);
     }
-    let cancelled = false;
-    void fetchLiveChainGuestOpen().then((open) => {
-      if (!cancelled) setAvailable(open);
-    });
-    return () => {
-      cancelled = true;
-    };
+    setAvailable(true);
   }, [enabled]);
 
   const loadSlice = useCallback((): Promise<ChainPool | null> => {

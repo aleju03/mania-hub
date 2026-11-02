@@ -39,7 +39,6 @@ import {
 import { ShuffleStage } from "../components/packs/ShuffleStage";
 import { usePackWallet } from "../components/packs/usePackWallet";
 import { useAuth } from "../lib/auth-context";
-import { canUseAdminFeatures } from "../lib/auth-shared";
 import {
   MAX_PACK_CHARGES,
   msUntilNextCharge,
@@ -670,9 +669,8 @@ function PacksPage() {
   /* The pack run, for a synced collection the backend has released runs to;
      the view stays null otherwise and nothing of it renders. */
   const runApi = usePackRun(wishlistEnabled, walletApi.applyServerWallet);
-  /* The chain run (?view=run), for a signed-in viewer the backend has
-     released it to; a signed-out visitor plays a guest run in the browser
-     once it is released to everyone. */
+  /* The chain run (?view=run): a signed-in viewer's lives on the server, a
+     signed-out visitor plays a guest run in the browser. */
   const ownChainApi = useChainRun(Boolean(auth.viewer) && isLiveBackendConfigured());
   const guestChainApi = useGuestChainRun(!auth.viewer && isLiveBackendConfigured());
   const chainApi = auth.viewer ? ownChainApi : guestChainApi;
@@ -1208,15 +1206,10 @@ function PacksPage() {
      resumed from an earlier visit still reveals on the stage first. */
   const runTableActive = runOpen && !streakOpen && chainApi.available === true && phase === "pack";
   const runFixtureMoment = useRunFixtureMoment(view);
-  /* The run's pack, for a viewer the backend has released the run to (it is
-     admin-only while it is played in, CHAIN_RUNS in the backend's
-     chain-run.ts), with their best round if they have one. An admin sees it
+  /* The run's pack, with the viewer's best round if they have one. It shows
      while the run is still loading, so it lands with Higher or lower instead
      of a beat later; the best round fills in when it arrives. */
-  const chainEntry =
-    chainApi.available === true || (chainApi.available === null && canUseAdminFeatures(auth))
-      ? { best: chainApi.best?.round ?? null }
-      : null;
+  const chainEntry = chainApi.available !== false ? { best: chainApi.best?.round ?? null } : null;
 
   if (import.meta.env.DEV && RunFixtureHost && runFixtureMoment) {
     return (

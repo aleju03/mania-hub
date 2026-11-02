@@ -4177,16 +4177,6 @@ export async function fetchLiveChainRunBoard(
   return { entries: Array.isArray(body.entries) ? body.entries : [], mine: body.mine ?? null };
 }
 
-/* Whether a signed-out visitor may play a guest chain run. */
-export async function fetchLiveChainGuestOpen(): Promise<boolean> {
-  try {
-    const body = await fetchLiveJson<{ open?: boolean }>("/api/chain-run/guest-pool?probe=1");
-    return body.open === true;
-  } catch {
-    return false;
-  }
-}
-
 /* The cards a guest chain run plays on: a slice of the pool plus the GOATs
    (see the backend's getChainGuestPool). */
 export async function fetchLiveChainGuestPool<Card>(): Promise<{ cards: Card[]; goats: Card[] } | null> {

@@ -175,8 +175,8 @@ function GamesHeading({ label }: { label: string }) {
 
 /* The two game doodles for one layout. `side` stacks them in a column right
    of the pack stage (the caller positions the box around the 270 x 450
-   pack); `row` puts them side by side under it. The run's only appears for
-   a viewer the backend has released it to. */
+   pack); `row` puts them side by side under it. The run's is left out
+   when there is no backend to play it on. */
 export function GamePacks({
   layout,
   chain,

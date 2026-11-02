@@ -18,7 +18,7 @@ export type ChainActOutcome =
 
 export interface ChainRunApi {
   /* null while the first read is in flight; false when chain runs are not
-     open to this viewer (logged out, no backend, or gated). */
+     open to this viewer (logged out or no backend). */
   available: boolean | null;
   view: ChainRunView | null;
   best: ChainBoardEntry | null;

@@ -84,9 +84,8 @@ export type ChainActionResponse =
   | { status: "ok"; result: ChainActionResult; run: ChainRunView | null; rev: number; best: ChainBoardEntry | null }
   | { status: "refused"; error: string; run: ChainRunView | null; rev: number; best: ChainBoardEntry | null };
 
-async function chainTarget(): Promise<{ url: string; headers: HeadersInit; isAdmin: boolean; country: string } | null> {
+async function chainTarget(): Promise<{ url: string; headers: HeadersInit; country: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
-  const { canUseAdminFeatures } = await import("./auth-shared");
   const auth = await readCurrentAuth();
   if (!auth.viewer) return null;
   const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
@@ -94,17 +93,17 @@ async function chainTarget(): Promise<{ url: string; headers: HeadersInit; isAdm
   const headers: HeadersInit = { "content-type": "application/json" };
   const bridgeToken = liveBridgeToken();
   if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
-  return { url: `${base}/api/chain-run/${auth.viewer.id}`, headers, isAdmin: canUseAdminFeatures(auth), country: auth.viewer.countryCode ?? "" };
+  return { url: `${base}/api/chain-run/${auth.viewer.id}`, headers, country: auth.viewer.countryCode ?? "" };
 }
 
-/* Null when the viewer cannot play: logged out, no backend, or chain runs
-   not released to them. `run` is null for a viewer who never started one. */
+/* Null when the viewer cannot play: logged out or no backend. `run` is null
+   for a viewer who never started one. */
 export const fetchOwnChainRun = createServerFn({ method: "GET" }).handler(async (): Promise<ChainRunResponse | null> => {
   const { setResponseHeader } = await import("@tanstack/react-start/server");
   setResponseHeader("Cache-Control", "private, no-store");
   const target = await chainTarget();
   if (!target) return null;
-  const response = await fetch(`${target.url}${target.isAdmin ? "?admin=1" : ""}`, { headers: target.headers });
+  const response = await fetch(target.url, { headers: target.headers });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Chain run fetch failed (${response.status}).`);
   return (await response.json()) as ChainRunResponse;
@@ -173,7 +172,7 @@ export const actOnOwnChainRun = createServerFn({ method: "POST" })
       method: "POST",
       headers: target.headers,
       // The country only puts a flag beside the player's name on the boards.
-      body: JSON.stringify({ action: kind, ...rest, viewerIsAdmin: target.isAdmin, viewerCountry: target.country }),
+      body: JSON.stringify({ action: kind, ...rest, viewerCountry: target.country }),
     });
     if (response.status === 404) return null;
     if (response.status === 409 || response.status === 503) {
