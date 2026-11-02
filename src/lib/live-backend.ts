@@ -1196,6 +1196,64 @@ export interface LiveBackendMapDownloads {
 // songs no mirror served and the .osu download lane. Admin-gated; the token is
 // injected server-side, mirroring fetchLiveBackendHonoraryPulls. Returns null
 // when the backend predates the endpoint.
+export interface LiveBackendPartnerUsageDay {
+  day: string;
+  requests: number;
+  notFound: number;
+  rateLimited: number;
+}
+
+export interface LiveBackendPartnerUsage {
+  partner: string;
+  configured: boolean;
+  lastSeenAt: number | null;
+  lastPath: string | null;
+  today: number;
+  last7Days: number;
+  last30Days: number;
+  total: number;
+  days: LiveBackendPartnerUsageDay[];
+}
+
+export interface LiveBackendPartnerUsageReport {
+  ratePerMinute: number;
+  partners: LiveBackendPartnerUsage[];
+  capturedAt: number;
+}
+
+// Partner API use per key, for the admin card. Admin-gated, token injected
+// server-side. Returns null when the backend predates the endpoint.
+export const fetchLiveBackendPartnerUsage = createServerFn({ method: "GET" })
+  .handler(async (): Promise<LiveBackendPartnerUsageReport | null> => {
+    await requireAdminAccess("Server partner usage");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${base}/api/admin/partner-usage`, { headers, signal: controller.signal });
+    } catch (err) {
+      if (isAbortError(err)) throw new Error("Partner usage timed out.");
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (response.status === 404) return null;
+    const body = await response.json() as LiveBackendPartnerUsageReport & { error?: unknown };
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Server ${response.status} for /api/admin/partner-usage`;
+      throw new Error(message);
+    }
+    return { ...body, partners: Array.isArray(body.partners) ? body.partners : [] };
+  });
+
 export const fetchLiveBackendMapDownloads = createServerFn({ method: "GET" })
   .handler(async (): Promise<LiveBackendMapDownloads | null> => {
     await requireAdminAccess("Server map downloads");
