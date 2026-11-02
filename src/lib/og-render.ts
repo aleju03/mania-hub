@@ -45,7 +45,7 @@ export function getFont(request: Request, fileName: string): Promise<ArrayBuffer
 export async function loadOgFonts(request: Request): Promise<[ArrayBuffer, ArrayBuffer]> {
   return Promise.all([
     getFont(request, "TrackerRound-Regular.ttf"),
-    getFont(request, "TrackerRound-Heavy.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
   ]);
 }
 

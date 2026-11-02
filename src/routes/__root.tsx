@@ -428,7 +428,7 @@ export const Route = createRootRoute({
       },
       {
         rel: "preload",
-        href: "/fonts/TrackerRound-Heavy.woff2",
+        href: "/fonts/TrackerRound-Heavy-v2.woff2",
         as: "font",
         type: "font/woff2",
         crossOrigin: "anonymous",

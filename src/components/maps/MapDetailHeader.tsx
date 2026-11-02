@@ -189,7 +189,7 @@ export function DiffTabs({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           {/* The whole keymode as one column, full names, a short scroll with
               the bottom edge fading out. */}
-          <div className="max-h-[188px] overflow-y-auto overscroll-contain pb-3 [mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)] [scrollbar-width:thin]">
+          <div className="scroll-slim max-h-[188px] overflow-y-auto overscroll-contain pb-3 [mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)]">
             {byStars.map((diff) => {
               const isActive = diff.beatmapId === activeId;
               return (

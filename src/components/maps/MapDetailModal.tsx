@@ -1230,7 +1230,7 @@ export function MapDetailModal({
                 </div>
               ) : null}
 
-              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3.5">
+              <div className="scroll-slim flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3.5">
                 {play && (shownTab === "score" || !showTabs) ? (
                   <PlayContextBlock play={play} entry={playDiff} />
                 ) : shownTab === "scores" ? (
@@ -1342,7 +1342,6 @@ export function MapDetailModal({
                     // rate), which is what NC sounds like.
                     playbackRate={playRate}
                     inverse={playedInverse}
-                    stars={shownStars}
                     preservePitch={playRate !== playedRate ? true : playRate !== 1 && play?.rateMod ? !play.rateMod.pitched : undefined}
                     className="h-[300px] rounded-lg"
                     flatBackdrop

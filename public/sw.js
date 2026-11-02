@@ -3,9 +3,9 @@ const CACHE_NAME = "static-v9";
 const PRECACHE_URLS = [
   // Fonts
   "/fonts/TrackerRound-Regular.woff2",
-  "/fonts/TrackerRound-Heavy.woff2",
+  "/fonts/TrackerRound-Heavy-v2.woff2",
   "/fonts/TrackerRound-SemiBold.woff2",
-  "/fonts/TrackerRound-Bold.woff2",
+  "/fonts/TrackerRound-Bold-v2.woff2",
   "/fonts/TrackerRound-Light.woff2",
   "/fonts/TrackerRound-Thin.woff2",
   "/fonts/Venera-500.woff2",

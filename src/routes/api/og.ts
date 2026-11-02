@@ -1317,7 +1317,7 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
   const username = rawUsername.trim().slice(0, 64);
   const [regularFont, heavyFont, user] = await Promise.all([
     getFont(request, "TrackerRound-Regular.ttf"),
-    getFont(request, "TrackerRound-Heavy.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     resolveOgPlayer(request, username),
   ]);
 
@@ -2188,7 +2188,7 @@ function sticker(props: StickerProps) {
 async function renderHomeOg(request: Request, country: string): Promise<Response> {
   const [regularFont, heavyFont, rankings] = await Promise.all([
     getFont(request, "TrackerRound-Regular.ttf"),
-    getFont(request, "TrackerRound-Heavy.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     getRankings({ data: { type: "performance", page: 1, country } }),
   ]);
 
@@ -2310,7 +2310,7 @@ async function renderRankingsOg(
 ): Promise<Response> {
   const [regularFont, heavyFont, rankings] = await Promise.all([
     getFont(request, "TrackerRound-Regular.ttf"),
-    getFont(request, "TrackerRound-Heavy.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     getRankings({ data: { type: "performance", page: 1, country } }),
   ]);
 
@@ -2477,7 +2477,7 @@ function pickSnipesOgHero(events: SnipeEvent[]): SnipeEvent | null {
 async function renderSnipesOg(request: Request, scope: string): Promise<Response> {
   const [regularFont, heavyFont, events] = await Promise.all([
     getFont(request, "TrackerRound-Regular.ttf"),
-    getFont(request, "TrackerRound-Heavy.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     fetchSnipesOgEvents(scope),
   ]);
   const hero = pickSnipesOgHero(events);
@@ -2690,7 +2690,7 @@ async function renderCountryOg(
 ): Promise<Response> {
   const [regularFont, heavyFont, rankings] = await Promise.all([
     getFont(request, "TrackerRound-Regular.ttf"),
-    getFont(request, "TrackerRound-Heavy.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     getRankings({ data: { type: "performance", page: 1, country } }),
   ]);
 

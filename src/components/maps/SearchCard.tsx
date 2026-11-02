@@ -314,20 +314,14 @@ function formatPlays(count: number): string {
   return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
 }
 
-// One capsule cut into a segment per diff in its star colour, easiest first,
-// then the count. It grows 12px a diff up to 84px, so a big set packs its
-// segments thinner instead of running into the length beside it.
-function DiffCapsule({ model }: { model: CardModel }) {
+// The set's star range on the spectrum, then how many diffs it holds.
+function DiffStarPill({ model }: { model: CardModel }) {
   const { t } = useLingui();
   const count = model.byStars.length;
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5" title={count === 1 ? t`1 diff` : t`${count} diffs`}>
-      <span className="flex h-2 gap-[1.5px] overflow-hidden rounded-full" style={{ width: Math.min(84, 12 * count) }}>
-        {model.byStars.map((diff) => (
-          <span key={diff.beatmapId} className="flex-1" style={{ background: starTextColor(model.starsOf(diff)) }} />
-        ))}
-      </span>
-      <span className="font-bold tabular-nums text-osu-l1">{count}</span>
+      <StarRatingBadge stars={model.starHi} range={[model.starLo, model.starHi]} />
+      {count > 1 ? <span className="font-bold tabular-nums text-osu-l1">{count}</span> : null}
     </span>
   );
 }
@@ -387,9 +381,9 @@ type CardProps = {
   preview?: MapPreviewAudio;
 };
 
-// The map card: cover with the key count, status, title and star range, the
-// hardest diff's pattern mix as the seam under it and by name, then the diffs,
-// length, plays and actions. Country-agnostic, so the same card serves search
+// The map card: cover with the key count, status and title, the hardest
+// diff's pattern mix as the seam under it and by name, then the star range
+// with the diff count, length, plays and actions. Country-agnostic, so the same card serves search
 // and collections.
 export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProps) {
   const model = useCardModel(entry, rate, starScale);
@@ -401,7 +395,6 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
       status={entry.status}
       title={entry.title}
       artist={entry.artist}
-      titleAside={<StarRatingBadge stars={model.starHi} range={[model.starLo, model.starHi]} className="shrink-0" />}
       seam={model.mix.length > 0 ? <MixSeam model={model} /> : undefined}
       // Opens on the diff the card summarises (its hardest), so the modal's
       // header and rating panel start on the number the card shows.
@@ -416,7 +409,7 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
       <MapCardFooter>
         {preview ? <MapPreviewButton beatmapsetId={entry.beatmapsetId} preview={preview} /> : null}
         <span className="flex min-w-0 flex-1 items-center gap-2 text-[11.5px] text-osu-l2/75">
-          <DiffCapsule model={model} />
+          <DiffStarPill model={model} />
           <Hairline />
           <span className="tabular-nums">{formatDuration(entry.length)}</span>
           <Hairline />
@@ -439,7 +432,6 @@ export function MapCardFrame({
   title,
   artist,
   coverOverlay,
-  titleAside,
   seam,
   onOpen,
   children,
@@ -451,8 +443,6 @@ export function MapCardFrame({
   artist: string;
   /** Drawn over the art, under the corner badges (the farmed tab's mod glyph). */
   coverOverlay?: ReactNode;
-  /** Beside the title on the art, bottom right (the search card's star range). */
-  titleAside?: ReactNode;
   /** A strip along the cover's bottom edge; the art then ends there instead of dissolving into the body. */
   seam?: ReactNode;
   onOpen?: () => void;
@@ -496,12 +486,9 @@ export function MapCardFrame({
           ) : <span />}
           {status ? <BeatmapStatusBadge status={status} /> : null}
         </div>
-        <div className={`absolute left-3.5 right-3.5 flex items-end gap-2.5 ${seam ? "bottom-2.5" : "bottom-1"}`}>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{title}</div>
-            <div className="truncate text-[12px] leading-tight text-white/70">{artist}</div>
-          </div>
-          {titleAside}
+        <div className={`absolute left-3.5 right-3.5 ${seam ? "bottom-2.5" : "bottom-1"}`}>
+          <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{title}</div>
+          <div className="truncate text-[12px] leading-tight text-white/70">{artist}</div>
         </div>
       </div>
       {seam}
