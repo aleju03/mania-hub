@@ -245,10 +245,10 @@ const REPLAY_PLAYER_BEST_FALLBACK_LIMIT = 50;
 const REPLAY_PLAYER_RECENT_LIMIT = 25;
 const REPLAY_PLAYER_PINNED_LIMIT = 25;
 const REPLAY_PLAYER_FIRSTS_LIMIT = 50;
-const REPLAY_LANDING_SEO_TITLE = msg`osu!mania replay watcher`;
+const REPLAY_LANDING_SEO_TITLE = msg`osu!mania replay viewer`;
 // The English original of the title above: the landing card's R2 key is
 // derived from it, so every locale shares the one English card.
-const REPLAY_LANDING_OG_TITLE = "osu!mania replay watcher";
+const REPLAY_LANDING_OG_TITLE = "osu!mania replay viewer";
 const REPLAY_LANDING_SEO_DESCRIPTION =
   msg`Watch osu!mania replays in your browser.`;
 const REPLAY_END_AUDIO_FADE_MS = 1500;

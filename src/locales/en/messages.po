@@ -7273,8 +7273,8 @@ msgid "Every osu!mania lookup as a slash command. Link your account once with <0
 msgstr "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
 
 #: src/routes/replay_.community.tsx
-msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay watcher."
-msgstr "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay watcher."
+msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay viewer."
+msgstr "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay viewer."
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Every pack is a random sample of its difficulty bucket"
@@ -13338,8 +13338,8 @@ msgid "osu!mania rankings & live score tracker"
 msgstr "osu!mania rankings & live score tracker"
 
 #: src/routes/replay.tsx
-msgid "osu!mania replay watcher"
-msgstr "osu!mania replay watcher"
+msgid "osu!mania replay viewer"
+msgstr "osu!mania replay viewer"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "osu!mania replays only"
