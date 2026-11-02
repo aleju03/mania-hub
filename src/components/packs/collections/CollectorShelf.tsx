@@ -353,7 +353,7 @@ export function CollectorShelf({ collector, tab }: {
   collector: string;
   /* Which tab this shelf was opened from, so leaving it goes back there
      instead of to the default one. */
-  tab?: "showcase" | "stats" | "collectors";
+  tab?: "showcase" | "stats" | "board" | "collectors";
 }) {
   const { t } = useLingui();
   const [profile, setProfile] = useState<LivePackCollectorProfile | null>(null);
@@ -811,7 +811,7 @@ function ShowcasedBinders({ userId }: { userId: number }) {
   );
 }
 
-function BackLink({ tab }: { tab?: "showcase" | "stats" | "collectors" }) {
+function BackLink({ tab }: { tab?: "showcase" | "stats" | "board" | "collectors" }) {
   const { t } = useLingui();
   return (
     <Link

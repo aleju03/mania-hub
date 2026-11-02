@@ -396,6 +396,63 @@ export const saveOwnPackShowcase = createServerFn({ method: "POST" })
       : [];
   });
 
+/* Sends the viewer's edits to the shared card board (backend
+   features/pack-boards.ts). The backend checks every add against the viewer's
+   holdings and cap and only ever touches their own cards. */
+export interface PackBoardSaveResult {
+  ok: boolean;
+  count: number;
+  cap: number;
+  z: (number | null)[];
+  removed: number[];
+  /* Edits refused because the region they went into is full. */
+  full: number;
+  /* ...because they would cover another player's day-old-or-newer cards. */
+  protected: number;
+  /* ...because the player went faster than the per-minute allowance. */
+  slow: number;
+  /* Cards the save took off for forming a forbidden shape. */
+  forbidden: number;
+  regions: [number, number][];
+}
+
+export const sendPackBoardOps = createServerFn({ method: "POST" })
+  .validator((input: { ops?: unknown }) => ({
+    ops: Array.isArray(input?.ops) ? input.ops.slice(0, 2500) : [],
+  }))
+  .handler(async ({ data }): Promise<PackBoardSaveResult | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return null;
+    const url = target.url.replace(/\/api\/pack-wallet\/(\d+)$/, "/api/pack-collection/$1/board");
+    const response = await fetch(url, { method: "POST", headers: target.headers, body: JSON.stringify(data) });
+    if (!response.ok) throw new Error(`Pack board save failed (${response.status}).`);
+    return (await response.json()) as PackBoardSaveResult;
+  });
+
+/* Moderation: takes one card (n) or every card of a collector off the board.
+   True-admin only, server-side like every admin call. */
+export const removePackBoardCards = createServerFn({ method: "POST" })
+  .validator((input: { ownerUserId: number; n?: number | null }) => ({
+    ownerUserId: Math.floor(Number(input?.ownerUserId) || 0),
+    n: input?.n == null ? null : Math.floor(Number(input.n) || 0),
+  }))
+  .handler(async ({ data }): Promise<boolean> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const { requireTrueAdminAccess } = await import("./auth-server");
+    await requireTrueAdminAccess("Remove cards from the card board");
+    const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
+    if (!base || data.ownerUserId <= 0) return false;
+    const response = await fetch(`${base}/api/admin/pack-board/remove`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(process.env.LIVE_ADMIN_TOKEN ? { authorization: `Bearer ${process.env.LIVE_ADMIN_TOKEN}` } : {}) },
+      body: JSON.stringify(data),
+    });
+    return response.ok;
+  });
+
 /* A shelf also takes a team card, "team:<id>", which no wallet holds. */
 function sanitizeShowcaseKey(value: string): string | null {
   const team = /^team:(\d{1,12})(:eternal)?$/.exec(value.trim());

@@ -131,6 +131,11 @@ msgstr "(uploaded by {0})"
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
 msgstr "{0, plural, one {{1} play} other {{2} plays}}"
 
+#. placeholder {0}: ownSelection.length
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{0, plural, one {# card selected} other {# cards selected}}"
+msgstr "{0, plural, one {# card selected} other {# cards selected}}"
+
 #. placeholder {0}: onCharts.charts
 #. placeholder {0}: skillBoard?.recs.length ?? 0
 #: src/components/player/SkillBreakdown.tsx
@@ -312,6 +317,11 @@ msgstr "{0, plural, one {Claim # shard} other {Claim # shards}}"
 msgid "{0, plural, one {collector} other {collectors}}"
 msgstr "{0, plural, one {collector} other {collectors}}"
 
+#. placeholder {0}: stats.owners
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{0, plural, one {from # collector} other {from # collectors}}"
+msgstr "{0, plural, one {from # collector} other {from # collectors}}"
+
 #. placeholder {0}: snapshot.activeMembers
 #. placeholder {1}: snapshot.memberCount
 #. placeholder {2}: snapshot.memberCount
@@ -449,7 +459,9 @@ msgid "{0} card"
 msgstr "{0} card"
 
 #. placeholder {0}: cardCount.toLocaleString("en-US")
+#. placeholder {0}: formatNumber(stats.total)
 #. placeholder {0}: rung.at.toLocaleString("en-US")
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/run/HandScore.tsx
 msgid "{0} cards"
@@ -771,6 +783,12 @@ msgstr "{0} of {1} plays analyzed"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "{0} of {1} today"
 #~ msgstr "{0} of {1} today"
+
+#. placeholder {0}: formatNumber(count)
+#. placeholder {1}: formatNumber(cap)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{0} of {1} yours"
+msgstr "{0} of {1} yours"
 
 #. placeholder {0}: maps.length
 #: src/components/player/ActivityPanel.tsx
@@ -2606,6 +2624,10 @@ msgstr "<0>First time loading {countryName} maps.</0> Scanning its top players' 
 #~ msgid "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 #~ msgstr "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "<0>Log in with osu!</0> to lay your own cards down."
+msgstr "<0>Log in with osu!</0> to lay your own cards down."
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "<0>Log in with osu!</0> to put your own cards up here."
 msgstr "<0>Log in with osu!</0> to put your own cards up here."
@@ -3966,6 +3988,7 @@ msgid "all"
 msgstr "all"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -4269,6 +4292,7 @@ msgstr "any"
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -4278,6 +4302,10 @@ msgstr "Any"
 #: src/routes/support.tsx
 msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
 msgstr "Any amount works and is counted to the day. Every tip adds to the time you have left."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Any card"
+msgstr "Any card"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -4765,6 +4793,10 @@ msgstr "back to skins"
 #~ msgid "back to teams"
 #~ msgstr "back to teams"
 
+#: src/components/packs/collections/board/BoardGlobe.tsx
+#~ msgid "Back to the board"
+#~ msgstr "Back to the board"
+
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "Back to the collection"
 #~ msgstr "Back to the collection"
@@ -5114,6 +5146,10 @@ msgstr "Big play"
 msgid "Big Stack"
 msgstr "Big Stack"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Bigger"
+#~ msgstr "Bigger"
+
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Biggest"
 msgstr "Biggest"
@@ -5202,6 +5238,14 @@ msgstr "Blue fairy"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
 msgstr "Blur"
+
+#: src/routes/packs_.collections.tsx
+msgid "Board"
+msgstr "Board"
+
+#: src/components/packs/collections/board/BoardMinimap.tsx
+msgid "Board map"
+msgstr "Board map"
 
 #. placeholder {0}: event.boardRank
 #: src/routes/snipes.tsx
@@ -5382,6 +5426,10 @@ msgstr "Browser preferences and local caches stay on your device until they expi
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Browser test client"
 #~ msgstr "Browser test client"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Brush"
+msgstr "Brush"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Bubble"
@@ -5568,6 +5616,10 @@ msgstr "Card albums"
 msgid "Card art"
 msgstr "Card art"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Card board"
+msgstr "Card board"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "Card collection"
 msgstr "Card collection"
@@ -5641,6 +5693,10 @@ msgstr "Cards a mod stops from scoring give +{0} combo."
 msgid "Cards also link two back."
 msgstr "Cards also link two back."
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Cards are laid down in this colour"
+msgstr "Cards are laid down in this colour"
+
 #: src/lib/chain-run.ts
 msgid "Cards can't be dealt right now. Try again in a moment."
 msgstr "Cards can't be dealt right now. Try again in a moment."
@@ -5685,6 +5741,10 @@ msgstr "Cards in the global top {0} give x{1} combo."
 #: src/lib/pack-run.ts
 msgid "Cards in the global top 1,000 give +{0} notes."
 msgstr "Cards in the global top 1,000 give +{0} notes."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Cards keep their tier colour"
+msgstr "Cards keep their tier colour"
 
 #: src/lib/pack-run.ts
 msgid "Cards score only once."
@@ -6434,6 +6494,7 @@ msgstr "Clip not found"
 #: src/components/me/RemovePlaysSheet.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/CardSpotlight.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/GoatPollVoters.tsx
 #: src/components/packs/PackDialog.tsx
@@ -6631,6 +6692,7 @@ msgstr "Color of the LN body. Always global (no per-column override)."
 msgid "Colors"
 msgstr "Colors"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Colour"
 msgstr "Colour"
@@ -6943,6 +7005,10 @@ msgstr "Control"
 msgid "Convert hits to notes"
 msgstr "Convert hits to notes"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Coordinates"
+msgstr "Coordinates"
+
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/packs/CardSpotlight.tsx
@@ -7000,6 +7066,10 @@ msgstr "copy #{0} of {1}"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "Copy #{0} of {1}"
 msgstr "Copy #{0} of {1}"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Copy a link to this spot"
+msgstr "Copy a link to this spot"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Copy all"
@@ -8574,6 +8644,14 @@ msgstr "Drag a page or swipe to flip"
 msgid "Drag an .osr here, or click to browse"
 msgstr "Drag an .osr here, or click to browse"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Drag cards from the tray, or switch to the brush and draw with them."
+#~ msgstr "Drag cards from the tray, or switch to the brush and draw with them."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
+msgstr "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag the map's .osz here, or click to browse"
 msgstr "Drag the map's .osz here, or click to browse"
@@ -8591,6 +8669,10 @@ msgstr "Drag to resize"
 #: src/routes/bbcode.tsx
 msgid "Drag to resize, double-click to reset"
 msgstr "Drag to resize, double-click to reset"
+
+#: src/components/packs/collections/board/BoardGlobe.tsx
+#~ msgid "Drag to spin, scroll to zoom, click a spot to go there."
+#~ msgstr "Drag to spin, scroll to zoom, click a spot to go there."
 
 #: src/lib/pack-run.ts
 msgid "Drain Time"
@@ -8640,6 +8722,10 @@ msgstr "Drawing player..."
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Drawing..."
 msgstr "Drawing..."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drawings are protected from other players for their first day."
+msgstr "Drawings are protected from other players for their first day."
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Drop an .osk here, or click to browse"
@@ -9284,6 +9370,10 @@ msgstr "Every stat"
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
 #~ msgstr "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Every tier"
+msgstr "Every tier"
+
 #: src/lib/packs.ts
 msgid "Every tracked player, same odds"
 msgstr "Every tracked player, same odds"
@@ -9790,6 +9880,7 @@ msgstr "find a missing card..."
 #~ msgid "find a missing player..."
 #~ msgstr "find a missing player..."
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Find a player"
 msgstr "Find a player"
@@ -10625,6 +10716,10 @@ msgstr "go back"
 #: src/routes/__root.tsx
 msgid "Go home"
 msgstr "Go home"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Go to your cards"
+msgstr "Go to your cards"
 
 #: src/lib/goal-format.ts
 msgid "Goal"
@@ -12476,6 +12571,11 @@ msgstr "Label as a plain {keys}K layout"
 msgid "Ladder"
 msgstr "Ladder"
 
+#. placeholder {0}: card.ownerName
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Laid down by {0}"
+msgstr "Laid down by {0}"
+
 #: src/lib/goal-format.ts
 msgid "Land a {pp}pp play"
 msgstr "Land a {pp}pp play"
@@ -12888,6 +12988,10 @@ msgstr "Link copied"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Link copied!"
 msgstr "Link copied!"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Link copied."
+msgstr "Link copied."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "link text"
@@ -13340,6 +13444,10 @@ msgstr "Loading skins…"
 #~ msgid "Loading teams..."
 #~ msgstr "Loading teams..."
 
+#: src/components/packs/collections/board/BoardGlobe.tsx
+#~ msgid "Loading the globe"
+#~ msgstr "Loading the globe"
+
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Loading the rest..."
 #~ msgstr "Loading the rest..."
@@ -13351,6 +13459,10 @@ msgstr "Loading the skin…"
 #: src/routes/top-plays.tsx
 msgid "Loading top plays..."
 msgstr "Loading top plays..."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Loading your cards"
+msgstr "Loading your cards"
 
 #: src/routes/packs.tsx
 msgid "Loading your collection..."
@@ -14504,6 +14616,10 @@ msgstr "Most worn"
 msgid "Motion"
 msgstr "Motion"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Move"
+msgstr "Move"
+
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Move {name} left"
 msgstr "Move {name} left"
@@ -15037,6 +15153,11 @@ msgstr "NM is included in mod usage"
 msgid "no"
 msgstr "no"
 
+#. placeholder {0}: tierLabel(state.tier)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "No {0} cards left to lay down."
+msgstr "No {0} cards left to lay down."
+
 #. placeholder {0}: i18n._(REASON_META[reasonFilter].label)
 #: src/routes/recommendations.tsx
 msgid "No {0} maps right now"
@@ -15106,6 +15227,14 @@ msgstr "No card on the wall wears this yet."
 #: src/components/packs/CollectionPanel.tsx
 msgid "No cards"
 msgstr "No cards"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "No cards left here."
+msgstr "No cards left here."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "No cards left to lay down."
+msgstr "No cards left to lay down."
 
 #. placeholder {0}: activeQuery.trim()
 #: src/components/packs/CollectionPanel.tsx
@@ -17663,6 +17792,10 @@ msgstr "Pick both a .osr and the .osu it was played on."
 #~ msgid "Pick five cards of the same rarity. They leave your collection and you get one card of the rarity above."
 #~ msgstr "Pick five cards of the same rarity. They leave your collection and you get one card of the rarity above."
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Pick it back up"
+msgstr "Pick it back up"
+
 #: src/lib/pack-run.ts
 msgid "Pick one of two common charms."
 msgstr "Pick one of two common charms."
@@ -17686,6 +17819,10 @@ msgstr "pick the active one again to flip direction"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Pick the server you want to post."
 msgstr "Pick the server you want to post."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Pick them back up"
+msgstr "Pick them back up"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Pick two scores"
@@ -19415,6 +19552,7 @@ msgstr "Red tree"
 msgid "Redeem"
 msgstr "Redeem"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Redo"
 msgstr "Redo"
@@ -20069,6 +20207,10 @@ msgstr "Retro script"
 msgid "Retry"
 msgstr "Retry"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Retrying"
+msgstr "Retrying"
+
 #: src/components/packs/RevealStage.tsx
 msgid "reveal all"
 msgstr "reveal all"
@@ -20459,6 +20601,7 @@ msgstr "Save your osu! account so every other command knows who you are."
 msgid "saved"
 msgstr "saved"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Saved"
@@ -20487,6 +20630,10 @@ msgstr "Saved. It's live, and in the gallery."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saves the current draft as-is; everyone watching your replays sees it"
 msgstr "Saves the current draft as-is; everyone watching your replays sees it"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Saving"
+msgstr "Saving"
 
 #: src/routes/maps.tsx
 msgid "Saving maps..."
@@ -20969,9 +21116,17 @@ msgstr "See all {0}"
 msgid "See every command"
 msgstr "See every command"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "See the board as a globe"
+#~ msgstr "See the board as a globe"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See the score"
 msgstr "See the score"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "See the whole board"
+msgstr "See the whole board"
 
 #: src/components/replay/ReplayInfo.tsx
 msgid "See this play judged with {otherLabel} windows and LN rules"
@@ -22044,6 +22199,7 @@ msgstr "Site colours"
 msgid "size"
 msgstr "size"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/supporter/CustomArtDialog.tsx
@@ -22303,6 +22459,10 @@ msgstr "Slot {0}"
 msgid "Slovak"
 msgstr "Slovak"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Slow down a little."
+msgstr "Slow down a little."
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Slower export with more CPU use."
 msgstr "Slower export with more CPU use."
@@ -22330,6 +22490,10 @@ msgstr "Slows the song down to 0.75x."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "Small"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Smaller"
+#~ msgstr "Smaller"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Smaller file"
@@ -22406,6 +22570,10 @@ msgstr "Softness"
 #: src/lib/signature-style.ts
 msgid "Solid"
 msgstr "Solid"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Some cards could not be laid down."
+msgstr "Some cards could not be laid down."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
@@ -23432,6 +23600,10 @@ msgstr "tags"
 msgid "Tags"
 msgstr "Tags"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Take all their cards off"
+msgstr "Take all their cards off"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
 #~ msgstr "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
@@ -23452,6 +23624,10 @@ msgstr "Take off the list"
 #: src/routes/workshop.themes.index.tsx
 msgid "Take out of the gallery"
 msgstr "Take out of the gallery"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Take this card off"
+msgstr "Take this card off"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the best 20 eligible clears. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -23484,6 +23660,10 @@ msgstr "Taken down"
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
 msgstr "Taken down by a moderator."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Taken off the board."
+msgstr "Taken off the board."
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Taken off the list"
@@ -23756,6 +23936,10 @@ msgstr "That copy is already promised to someone or no longer yours. Pick anothe
 msgid "That copy is no longer yours. Nothing changed."
 msgstr "That copy is no longer yours. Nothing changed."
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "That did not go through."
+msgstr "That did not go through."
+
 #: src/components/packs/run/RunCharmRail.tsx
 #: src/components/packs/run/RunShop.tsx
 msgid "That did not go through. Please try again."
@@ -23873,6 +24057,10 @@ msgstr "That Mamestagram account is linked to another osu! account."
 msgid "That Mamestagram account isn't linked to an osu! account here."
 msgstr "That Mamestagram account isn't linked to an osu! account here."
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "That part of the board is full."
+msgstr "That part of the board is full."
+
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "That picture is empty."
 msgstr "That picture is empty."
@@ -23928,6 +24116,10 @@ msgstr "That server is already listed."
 #: src/routes/communities_.$id.tsx
 msgid "That server is not listed"
 msgstr "That server is not listed"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "That shape isn't allowed on the board."
+msgstr "That shape isn't allowed on the board."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "That share code could not be imported"
@@ -24080,6 +24272,14 @@ msgstr "the average of your skills"
 #: src/routes/dan-estimates.tsx
 #~ msgid "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 #~ msgstr "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
+
+#: src/components/packs/collections/board/BoardsTab.tsx
+msgid "the board"
+msgstr "the board"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "The board could not be loaded."
+msgstr "The board could not be loaded."
 
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "The board is not answering right now."
@@ -25817,6 +26017,10 @@ msgstr "Tier"
 msgid "Tier changed to {tierLabel}"
 msgstr "Tier changed to {tierLabel}"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Tier colour"
+msgstr "Tier colour"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Time"
 msgstr "Time"
@@ -26321,9 +26525,21 @@ msgstr "Turn"
 msgid "Turn a feed on for the current channel (needs Manage Server)."
 msgstr "Turn a feed on for the current channel (needs Manage Server)."
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn left"
+msgstr "Turn left"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
 msgstr "Turn off"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn right"
+msgstr "Turn right"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn with the stroke"
+msgstr "Turn with the stroke"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Turn your phone sideways to watch."
@@ -26481,6 +26697,7 @@ msgid "Underline"
 msgstr "Underline"
 
 #: src/components/me/GoalToasts.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
 msgid "Undo"
@@ -28181,6 +28398,10 @@ msgstr "You have a few reports waiting to be read already. Give a moderator a ch
 msgid "You have a score, but players near you score higher on it."
 msgstr "You have a score, but players near you score higher on it."
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "You have laid down as many cards as you can."
+msgstr "You have laid down as many cards as you can."
+
 #: src/routes/skins.tsx
 msgid "You have not liked a skin yet"
 msgstr "You have not liked a skin yet"
@@ -28390,6 +28611,12 @@ msgstr "Your card is not ready yet."
 #: src/components/packs/ReleaseCopyDialog.tsx
 msgid "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
 msgstr "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
+
+#. placeholder {0}: (nextPlace.current - 1) % places.length + 1
+#. placeholder {1}: places.length
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Your cards: place {0} of {1}. Press again for the next."
+msgstr "Your cards: place {0} of {1}. Press again for the next."
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your collection as binder pages, three by three in plastic pockets, for you and anyone visiting your shelf."
@@ -28774,6 +29001,7 @@ msgstr "Your whole profile takes on the theme: its colours, and a living backdro
 msgid "Your wishlist"
 msgstr "Your wishlist"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/workshop.index.tsx
 msgid "Yours"
 msgstr "Yours"
@@ -28799,3 +29027,7 @@ msgstr "Zoom"
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Zoom {value}"
 #~ msgstr "Zoom {value}"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Zoom in to lay cards down."
+msgstr "Zoom in to lay cards down."

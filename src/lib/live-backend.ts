@@ -294,6 +294,7 @@ export const LIVE_EVENT_NAMES = [
   "pack_pull",
   "goat_poll",
   "donation_goal",
+  "pack_board",
   "job_status",
 ] as const;
 
@@ -4388,6 +4389,85 @@ export async function fetchLivePackShowcaseCards(userId: number, options: { fres
     `/api/packs/community/showcase?${query.toString()}`,
   );
   return Array.isArray(body.cards) ? body.cards : [];
+}
+
+/* The shared card board (backend features/pack-boards.ts). The table is cut
+   into regions; the overview lists the ones with cards and their versions. */
+export interface LivePackBoardOverview {
+  regions: [id: number, cards: number, version: number][];
+  total: number;
+  owners: number;
+  /* Stacking numbers from here up are under a day old: protected from other
+     players' cards. */
+  freshFrom: number;
+}
+
+export async function fetchLivePackBoardOverview(): Promise<LivePackBoardOverview> {
+  const body = await fetchLiveJson<Partial<LivePackBoardOverview>>("/api/packs/board/overview");
+  return {
+    regions: Array.isArray(body.regions) ? body.regions : [],
+    total: Number(body.total) || 0,
+    owners: Number(body.owners) || 0,
+    freshFrom: Number(body.freshFrom) || 0,
+  };
+}
+
+/* Regions' zoomed-out colour grids (backend regionPreview): one byte per
+   half-card cell, the tier of the top card there (1-based, 0 for bare table),
+   64 cells a side plus a 2-cell margin. Sent deflated and base64'd. */
+export async function fetchLivePackBoardPreviews(ids: number[]): Promise<[id: number, version: number, cells: Uint8Array][]> {
+  const body = await fetchLiveJson<{ previews?: [number, number, string][] }>(`/api/packs/board/previews?ids=${ids.join(",")}`);
+  const previews = Array.isArray(body.previews) ? body.previews : [];
+  return Promise.all(previews.map(async ([id, version, packed]): Promise<[number, number, Uint8Array]> => {
+    const raw = Uint8Array.from(atob(packed), (char) => char.charCodeAt(0));
+    const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return [id, version, new Uint8Array(await new Response(stream).arrayBuffer())];
+  }));
+}
+
+/* The full held cards behind board placements, for drawing their real faces
+   up close: [owner, key, card] for each "owner:key" asked for that is still
+   held. At most 60 a call. */
+export async function fetchLivePackBoardFaces(pairs: string[]): Promise<[number, string, ServerPackCollectionCard][]> {
+  const body = await fetchLiveJson<{ cards?: [number, string, ServerPackCollectionCard][] }>(
+    `/api/packs/board/faces?c=${encodeURIComponent(pairs.join(","))}`,
+  );
+  return Array.isArray(body.cards) ? body.cards : [];
+}
+
+/* Regions' cards, each as eight numbers in a flat list (z, owner index,
+   owner's card number, face index, x, y, turn, size), with the faces (key,
+   tier, player name) and owners (id, name) they point at. */
+export interface LivePackBoardRegions {
+  regions: { id: number; version: number; cards: number[] }[];
+  faces: [string, string | null, string][];
+  owners: [number, string][];
+}
+
+export async function fetchLivePackBoardRegions(ids: number[]): Promise<LivePackBoardRegions> {
+  const body = await fetchLiveJson<Partial<LivePackBoardRegions>>(`/api/packs/board/regions?ids=${ids.join(",")}`);
+  return {
+    regions: Array.isArray(body.regions) ? body.regions : [],
+    faces: Array.isArray(body.faces) ? body.faces : [],
+    owners: Array.isArray(body.owners) ? body.owners : [],
+  };
+}
+
+/* One collector's cards on the table (card number, region, key), their cap,
+   and every card they could lay down (key, tier, copies, player name). */
+export interface LivePackBoardOwner {
+  cards: [n: number, region: number, key: string][];
+  cap: number;
+  inventory: [key: string, tier: string | null, copies: number, name: string][];
+}
+
+export async function fetchLivePackBoardOwner(userId: number): Promise<LivePackBoardOwner> {
+  const body = await fetchLiveJson<Partial<LivePackBoardOwner>>(`/api/packs/board/owner/${userId}`);
+  return {
+    cards: Array.isArray(body.cards) ? body.cards : [],
+    cap: Number(body.cap) || 0,
+    inventory: Array.isArray(body.inventory) ? body.inventory : [],
+  };
 }
 
 /* The shared wall pages over cards and whole sets. Owners are shown only

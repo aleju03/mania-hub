@@ -17,6 +17,7 @@ import {
 } from "../components/packs/collections/CommunityStatsHeader";
 import { RecordBoards, RecordBoardsSkeleton } from "../components/packs/collections/RecordBoards";
 import { ShowcaseTab } from "../components/packs/collections/ShowcaseTab";
+import { BoardsTab } from "../components/packs/collections/board/BoardsTab";
 import {
   fetchLivePackCommunityStats,
   fetchLivePackRecentPulls,
@@ -58,6 +59,7 @@ const readShowcaseSlots = createIsomorphicFn()
 const TABS = [
   { id: "showcase" as const, label: msg`Showcase` },
   { id: "stats" as const, label: msg`Stats` },
+  { id: "board" as const, label: msg`Board` },
   { id: "collectors" as const, label: msg`Collectors` },
 ];
 
@@ -68,14 +70,18 @@ export const Route = createFileRoute("/packs_/collections")({
     const userId = context.auth?.viewer?.id ?? 0;
     return { showcaseSlots: userId > 0 ? readShowcaseSlots(userId) : 0 };
   },
-  validateSearch: (search: Record<string, unknown>): { collector?: string; tab?: CollectionsTab } => {
+  validateSearch: (search: Record<string, unknown>): { collector?: string; tab?: CollectionsTab; at?: string } => {
     /* An osu! username or id. Trimmed and length-capped here so the value that
        reaches the backend (which looks it up in two tables) is already the
        shape a name has; anything longer was not a name. */
     const collector = typeof search.collector === "string" ? search.collector.trim().slice(0, 60) : "";
     const tab = TABS.find((item) => item.id === search.tab)?.id;
+    /* A spot on the card board, "x,y" in card widths and an optional zoom in
+       percent, from a shared link. */
+    const at = typeof search.at === "string" && /^-?\d{1,4},-?\d{1,4}(,\d{1,3})?$/.test(search.at) ? search.at : "";
     return {
       ...(collector ? { collector } : {}),
+      ...(at && tab === "board" ? { at } : {}),
       // The default tab is not written to the URL, so the plain path stays the
       // link people share.
       ...(tab && tab !== "showcase" ? { tab } : {}),
@@ -98,7 +104,7 @@ export const Route = createFileRoute("/packs_/collections")({
 
 function CollectionsPage() {
   const { t, i18n } = useLingui();
-  const { collector, tab } = Route.useSearch();
+  const { collector, tab, at } = Route.useSearch();
   const { showcaseSlots } = Route.useRouteContext();
   const navigate = useNavigate();
   const scrollRestoreRef = useScrollRestoreRef();
@@ -161,6 +167,8 @@ function CollectionsPage() {
                 <ShowcaseTab shelfSlots={showcaseSlots} />
               ) : id === "stats" ? (
                 <StatsTab active={!collector && activeTab === "stats"} />
+              ) : id === "board" ? (
+                <BoardsTab at={at} />
               ) : (
                 <CollectorDirectory />
               )}

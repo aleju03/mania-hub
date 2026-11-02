@@ -143,6 +143,11 @@ msgstr "(由 {0} 上传)"
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
 msgstr "{0, plural, other {{2} 次游玩}}"
 
+#. placeholder {0}: ownSelection.length
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{0, plural, one {# card selected} other {# cards selected}}"
+msgstr "{0, plural, other {已选中 # 张卡牌}}"
+
 #. placeholder {0}: onCharts.charts
 #. placeholder {0}: skillBoard?.recs.length ?? 0
 #: src/components/player/SkillBreakdown.tsx
@@ -324,6 +329,11 @@ msgstr "{0, plural, other {领取 # 个碎片}}"
 msgid "{0, plural, one {collector} other {collectors}}"
 msgstr "{0, plural, other {收藏者}}"
 
+#. placeholder {0}: stats.owners
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{0, plural, one {from # collector} other {from # collectors}}"
+msgstr "{0, plural, other {来自 # 位收藏者}}"
+
 #. placeholder {0}: snapshot.activeMembers
 #. placeholder {1}: snapshot.memberCount
 #. placeholder {2}: snapshot.memberCount
@@ -461,7 +471,9 @@ msgid "{0} card"
 msgstr "{0} 张卡片"
 
 #. placeholder {0}: cardCount.toLocaleString("en-US")
+#. placeholder {0}: formatNumber(stats.total)
 #. placeholder {0}: rung.at.toLocaleString("en-US")
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/run/HandScore.tsx
 msgid "{0} cards"
@@ -783,6 +795,12 @@ msgstr "已分析 {1} 次游玩中的 {0} 次"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "{0} of {1} today"
 #~ msgstr "今日 {0}/{1}"
+
+#. placeholder {0}: formatNumber(count)
+#. placeholder {1}: formatNumber(cap)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{0} of {1} yours"
+msgstr "你的：{0} / {1}"
 
 #. placeholder {0}: maps.length
 #: src/components/player/ActivityPanel.tsx
@@ -2595,6 +2613,10 @@ msgstr "<0>首次加载 {countryName} 的谱面。</0>正在扫描该地区顶�
 #~ msgid "<0>It only sees the plays the site has.</0> Your osu! top plays are always in. Anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 #~ msgstr "<0>它只看得到本站有的成绩。</0> 你的 osu! 最佳成绩一定在内。排在这些之外的成绩，只有在本站追踪你的时候才存在，也就是你在所在国家/地区的前 100 名，或者你自己开了追踪，而且只从开始追踪那天算起。多年前就不玩了的玩家只能靠 top 200 来判断，显示出来自然偏低。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "<0>Log in with osu!</0> to lay your own cards down."
+msgstr "<0>使用 osu! 登录</0>即可放下你自己的卡牌。"
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "<0>Log in with osu!</0> to put your own cards up here."
 msgstr "<0>用 osu! 登录</0>，把你自己的卡片摆在这里。"
@@ -3951,6 +3973,7 @@ msgid "all"
 msgstr "全部"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -4254,6 +4277,7 @@ msgstr "不限"
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -4263,6 +4287,10 @@ msgstr "不限"
 #: src/routes/support.tsx
 msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
 msgstr "任何金额都可以，按天折算。每次打赏都会加到你剩余的时长上。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Any card"
+msgstr "任意卡牌"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -4750,6 +4778,10 @@ msgstr "返回皮肤"
 #~ msgid "back to teams"
 #~ msgstr "返回战队"
 
+#: src/components/packs/collections/board/BoardGlobe.tsx
+#~ msgid "Back to the board"
+#~ msgstr "返回展板"
+
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "Back to the collection"
 #~ msgstr "返回收藏册"
@@ -5099,6 +5131,10 @@ msgstr "大分"
 msgid "Big Stack"
 msgstr "大堆"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Bigger"
+#~ msgstr "放大"
+
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Biggest"
 msgstr "谱面最多"
@@ -5187,6 +5223,14 @@ msgstr "蓝色妖精"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
 msgstr "模糊"
+
+#: src/routes/packs_.collections.tsx
+msgid "Board"
+msgstr "展板"
+
+#: src/components/packs/collections/board/BoardMinimap.tsx
+msgid "Board map"
+msgstr "展板地图"
 
 #. placeholder {0}: event.boardRank
 #: src/routes/snipes.tsx
@@ -5367,6 +5411,10 @@ msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Browser test client"
 #~ msgstr ""
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Brush"
+msgstr "画笔"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Bubble"
@@ -5553,6 +5601,10 @@ msgstr "卡册"
 msgid "Card art"
 msgstr "卡牌图案"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Card board"
+msgstr "卡牌展板"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "Card collection"
 msgstr "卡片收藏册"
@@ -5626,6 +5678,10 @@ msgstr "被 Mod 阻止计分的卡片 +{0} 连击。"
 msgid "Cards also link two back."
 msgstr "卡片还会与往前第 2 张连线。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Cards are laid down in this colour"
+msgstr "卡牌将以此颜色放下"
+
 #: src/lib/chain-run.ts
 msgid "Cards can't be dealt right now. Try again in a moment."
 msgstr "暂时无法发牌，请稍后再试。"
@@ -5670,6 +5726,10 @@ msgstr "全球前 {0} 名的卡片 x{1} 连击。"
 #: src/lib/pack-run.ts
 msgid "Cards in the global top 1,000 give +{0} notes."
 msgstr "全球前 1,000 名的卡片 +{0} 音符。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Cards keep their tier colour"
+msgstr "卡牌保留其稀有度颜色"
 
 #: src/lib/pack-run.ts
 msgid "Cards score only once."
@@ -6419,6 +6479,7 @@ msgstr "找不到片段"
 #: src/components/me/RemovePlaysSheet.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/CardSpotlight.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/GoatPollVoters.tsx
 #: src/components/packs/PackDialog.tsx
@@ -6616,9 +6677,10 @@ msgstr "长条主体的颜色。始终全局生效（不能按列单独设置）
 msgid "Colors"
 msgstr "颜色"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Colour"
-msgstr ""
+msgstr "颜色"
 
 #. placeholder {0}: column + 1
 #. placeholder {0}: primarySelected + 1
@@ -6928,6 +6990,10 @@ msgstr "控制"
 msgid "Convert hits to notes"
 msgstr "把打击转成音符"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Coordinates"
+msgstr "坐标"
+
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/packs/CardSpotlight.tsx
@@ -6985,6 +7051,10 @@ msgstr "第 #{0} 份（共 {1} 份）"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "Copy #{0} of {1}"
 msgstr "第 #{0} 份（共 {1} 份）"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Copy a link to this spot"
+msgstr "复制此位置的链接"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Copy all"
@@ -8559,6 +8629,14 @@ msgstr "拖动书页或滑动来翻页"
 msgid "Drag an .osr here, or click to browse"
 msgstr "把 .osr 拖到这里，或点击选择文件"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Drag cards from the tray, or switch to the brush and draw with them."
+#~ msgstr "从卡盘拖出卡牌，或切换到画笔用卡牌作画。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
+msgstr "从卡盘拖出卡牌。在展板上拖动可框选你的卡牌，按住右键拖动可移动视图。"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag the map's .osz here, or click to browse"
 msgstr "把谱面的 .osz 拖到这里，或点击选择文件"
@@ -8576,6 +8654,10 @@ msgstr "拖动调整大小"
 #: src/routes/bbcode.tsx
 msgid "Drag to resize, double-click to reset"
 msgstr "拖动调整大小，双击恢复"
+
+#: src/components/packs/collections/board/BoardGlobe.tsx
+#~ msgid "Drag to spin, scroll to zoom, click a spot to go there."
+#~ msgstr "拖动旋转，滚轮缩放，点击某处即可前往。"
 
 #: src/lib/pack-run.ts
 msgid "Drain Time"
@@ -8625,6 +8707,10 @@ msgstr "正在抽取玩家…"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Drawing..."
 msgstr "绘制中…"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drawings are protected from other players for their first day."
+msgstr "画作在第一天内受保护，其他玩家无法覆盖。"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Drop an .osk here, or click to browse"
@@ -9265,6 +9351,10 @@ msgstr "全部数据"
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
 #~ msgstr "上面每一步都是本站在猜。通过一个段位课题不是猜：有一条及格线，而你过了。所以只要本站看到这么一次，你在那一侧的估算<0>就不会低于你通过的那个课题</0>，不管技能平均下来是多少。打过 EXTRA-EPSILON，你就读作 epsilon，哪怕你的技能平均下来只到 delta。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Every tier"
+msgstr "所有稀有度"
+
 #: src/lib/packs.ts
 msgid "Every tracked player, same odds"
 msgstr "所有已追踪玩家，概率相同"
@@ -9771,6 +9861,7 @@ msgstr "查找缺少的卡牌..."
 #~ msgid "find a missing player..."
 #~ msgstr "查找缺失的玩家…"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Find a player"
 msgstr "查找玩家"
@@ -10606,6 +10697,10 @@ msgstr "返回"
 #: src/routes/__root.tsx
 msgid "Go home"
 msgstr "回到首页"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Go to your cards"
+msgstr "前往你的卡牌"
 
 #: src/lib/goal-format.ts
 msgid "Goal"
@@ -12449,6 +12544,11 @@ msgstr "标记为普通 {keys}K 布局"
 msgid "Ladder"
 msgstr "段位表"
 
+#. placeholder {0}: card.ownerName
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Laid down by {0}"
+msgstr "由 {0} 放下"
+
 #: src/lib/goal-format.ts
 msgid "Land a {pp}pp play"
 msgstr "打出一个 {pp}pp 的成绩"
@@ -12861,6 +12961,10 @@ msgstr "链接已复制"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Link copied!"
 msgstr "链接已复制！"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Link copied."
+msgstr "链接已复制。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "link text"
@@ -13313,6 +13417,10 @@ msgstr "正在加载皮肤…"
 #~ msgid "Loading teams..."
 #~ msgstr "正在加载战队..."
 
+#: src/components/packs/collections/board/BoardGlobe.tsx
+#~ msgid "Loading the globe"
+#~ msgstr "正在加载地球仪"
+
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Loading the rest..."
 #~ msgstr "正在加载其余通过…"
@@ -13324,6 +13432,10 @@ msgstr "正在加载皮肤…"
 #: src/routes/top-plays.tsx
 msgid "Loading top plays..."
 msgstr "正在加载最佳成绩..."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Loading your cards"
+msgstr "正在加载你的卡牌"
 
 #: src/routes/packs.tsx
 msgid "Loading your collection..."
@@ -14477,6 +14589,10 @@ msgstr ""
 msgid "Motion"
 msgstr ""
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Move"
+msgstr "移动"
+
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Move {name} left"
 msgstr "将 {name} 向左移动"
@@ -15010,6 +15126,11 @@ msgstr "模组使用统计包含 NM"
 msgid "no"
 msgstr "否"
 
+#. placeholder {0}: tierLabel(state.tier)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "No {0} cards left to lay down."
+msgstr "没有可放下的 {0} 卡牌了。"
+
 #. placeholder {0}: i18n._(REASON_META[reasonFilter].label)
 #: src/routes/recommendations.tsx
 msgid "No {0} maps right now"
@@ -15079,6 +15200,14 @@ msgstr "墙上还没有卡片带有这个标记。"
 #: src/components/packs/CollectionPanel.tsx
 msgid "No cards"
 msgstr "没有卡片"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "No cards left here."
+msgstr "这里没有剩余的卡牌。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "No cards left to lay down."
+msgstr "没有可放下的卡牌了。"
 
 #. placeholder {0}: activeQuery.trim()
 #: src/components/packs/CollectionPanel.tsx
@@ -17636,6 +17765,10 @@ msgstr "请同时选择 .osr 文件和对应游玩的 .osu 文件。"
 #~ msgid "Pick five cards of the same rarity. They leave your collection and you get one card of the rarity above."
 #~ msgstr "选择五张同一稀有度的卡。它们会离开你的收藏册，换来一张高一级稀有度的卡。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Pick it back up"
+msgstr "收回"
+
 #: src/lib/pack-run.ts
 msgid "Pick one of two common charms."
 msgstr "从两个普通护符中选一个。"
@@ -17659,6 +17792,10 @@ msgstr "再次点击当前选项可切换排序方向"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Pick the server you want to post."
 msgstr "选择你要发布的服务器。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Pick them back up"
+msgstr "全部收回"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Pick two scores"
@@ -19388,9 +19525,10 @@ msgstr "红叶树"
 msgid "Redeem"
 msgstr "兑换"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Redo"
-msgstr ""
+msgstr "重做"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Redo (Ctrl+Shift+Z)"
@@ -20042,6 +20180,10 @@ msgstr ""
 msgid "Retry"
 msgstr "重试"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Retrying"
+msgstr "正在重试"
+
 #: src/components/packs/RevealStage.tsx
 msgid "reveal all"
 msgstr "全部揭晓"
@@ -20432,6 +20574,7 @@ msgstr "保存你的 osu! 账号，其他命令就都知道你是谁了。"
 msgid "saved"
 msgstr "已保存"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Saved"
@@ -20460,6 +20603,10 @@ msgstr ""
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saves the current draft as-is; everyone watching your replays sees it"
 msgstr "原样保存当前草稿；看你回放的人都会看到"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Saving"
+msgstr "正在保存"
 
 #: src/routes/maps.tsx
 msgid "Saving maps..."
@@ -20942,9 +21089,17 @@ msgstr "查看全部 {0} 个"
 msgid "See every command"
 msgstr "查看所有命令"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "See the board as a globe"
+#~ msgstr "以地球仪查看展板"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See the score"
 msgstr "查看这次成绩"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "See the whole board"
+msgstr "查看整个展板"
 
 #: src/components/replay/ReplayInfo.tsx
 msgid "See this play judged with {otherLabel} windows and LN rules"
@@ -22009,6 +22164,7 @@ msgstr "站点配色"
 msgid "size"
 msgstr "大小"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/supporter/CustomArtDialog.tsx
@@ -22268,6 +22424,10 @@ msgstr "第 {0} 格"
 msgid "Slovak"
 msgstr "斯洛伐克语"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Slow down a little."
+msgstr "请放慢一点。"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Slower export with more CPU use."
 msgstr "导出较慢，CPU 占用更高。"
@@ -22295,6 +22455,10 @@ msgstr "把歌曲放慢到 0.75倍速。"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "小"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Smaller"
+#~ msgstr "缩小"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Smaller file"
@@ -22371,6 +22535,10 @@ msgstr ""
 #: src/lib/signature-style.ts
 msgid "Solid"
 msgstr "纯色"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Some cards could not be laid down."
+msgstr "部分卡牌未能放下。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
@@ -23397,6 +23565,10 @@ msgstr "标签"
 msgid "Tags"
 msgstr "标签"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Take all their cards off"
+msgstr "移除其全部卡牌"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
 #~ msgstr "把某个键数某一侧的所有达标通过拿出来，按谱面的段位排好，然后看第四个。那就是你的段位。上面不会再加任何东西，排在它之上的任何一次通过也拉不高它。"
@@ -23417,6 +23589,10 @@ msgstr "移出列表"
 #: src/routes/workshop.themes.index.tsx
 msgid "Take out of the gallery"
 msgstr ""
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Take this card off"
+msgstr "移除这张卡牌"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the best 20 eligible clears. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -23449,6 +23625,10 @@ msgstr ""
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
 msgstr "已被管理员下架。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Taken off the board."
+msgstr "已从展板移除。"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Taken off the list"
@@ -23721,6 +23901,10 @@ msgstr "这份已经许给别人，或已不在你手上。请换一份。"
 msgid "That copy is no longer yours. Nothing changed."
 msgstr "这份副本已经不属于你。没有任何改动。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "That did not go through."
+msgstr "操作未成功。"
+
 #: src/components/packs/run/RunCharmRail.tsx
 #: src/components/packs/run/RunShop.tsx
 msgid "That did not go through. Please try again."
@@ -23838,6 +24022,10 @@ msgstr "这个 Mamestagram 账号已绑定到另一个 osu! 账号。"
 msgid "That Mamestagram account isn't linked to an osu! account here."
 msgstr "这个 Mamestagram 账号尚未在这里绑定 osu! 账号。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "That part of the board is full."
+msgstr "展板的这一块已经满了。"
+
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "That picture is empty."
 msgstr "这张图片是空的。"
@@ -23893,6 +24081,10 @@ msgstr "这个服务器已经在列表里了。"
 #: src/routes/communities_.$id.tsx
 msgid "That server is not listed"
 msgstr "这个服务器没有被收录"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "That shape isn't allowed on the board."
+msgstr "展板上不允许这个图形。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "That share code could not be imported"
@@ -24045,6 +24237,14 @@ msgstr "各技能的平均"
 #: src/routes/dan-estimates.tsx
 #~ msgid "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 #~ msgstr "更大的限制是只有本站手上有的成绩才算数。你的 osu! bp 一定在内，但排在它们下面的成绩只有在本站追踪你的时候才存在，也就是你在本国前 100 里，或者你自己打开了追踪，而且只从那天开始算。几年前就不玩的人只能靠 top 200 来判断，所以看起来偏低。"
+
+#: src/components/packs/collections/board/BoardsTab.tsx
+msgid "the board"
+msgstr "展板"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "The board could not be loaded."
+msgstr "无法加载展板。"
 
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "The board is not answering right now."
@@ -25774,6 +25974,10 @@ msgstr "等级"
 msgid "Tier changed to {tierLabel}"
 msgstr "等级变更为 {tierLabel}"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Tier colour"
+msgstr "稀有度颜色"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Time"
 msgstr ""
@@ -26278,9 +26482,21 @@ msgstr ""
 msgid "Turn a feed on for the current channel (needs Manage Server)."
 msgstr "为当前频道开启一个 feed(需要「管理服务器」权限)。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn left"
+msgstr "向左旋转"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
 msgstr "关闭"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn right"
+msgstr "向右旋转"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn with the stroke"
+msgstr "随笔画旋转"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Turn your phone sideways to watch."
@@ -26438,6 +26654,7 @@ msgid "Underline"
 msgstr "下划线"
 
 #: src/components/me/GoalToasts.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
 msgid "Undo"
@@ -28138,6 +28355,10 @@ msgstr "你已经有几条举报还没被处理。给管理员一点时间。"
 msgid "You have a score, but players near you score higher on it."
 msgstr "你有成绩，但附近玩家的分数更高。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "You have laid down as many cards as you can."
+msgstr "你已放下可放置的全部卡牌。"
+
 #: src/routes/skins.tsx
 msgid "You have not liked a skin yet"
 msgstr "你还没有喜欢过任何皮肤"
@@ -28347,6 +28568,12 @@ msgstr "你的卡片还没准备好。"
 #: src/components/packs/ReleaseCopyDialog.tsx
 msgid "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
 msgstr "你的卡牌等级会随它一起转移。拿到这个编号的人会获得 {carriedLevel} 级，你会降到 {levelLeft} 级。"
+
+#. placeholder {0}: (nextPlace.current - 1) % places.length + 1
+#. placeholder {1}: places.length
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Your cards: place {0} of {1}. Press again for the next."
+msgstr "你的卡牌：第 {0} 处，共 {1} 处。再按一次前往下一处。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Your collection as binder pages, three by three in plastic pockets, for you and anyone visiting your shelf."
@@ -28731,6 +28958,7 @@ msgstr "整个个人资料都会采用这个主题：配色，以及页面背后
 msgid "Your wishlist"
 msgstr "你的心愿单"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/workshop.index.tsx
 msgid "Yours"
 msgstr "你的"
@@ -28756,3 +28984,7 @@ msgstr ""
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Zoom {value}"
 #~ msgstr ""
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Zoom in to lay cards down."
+msgstr "放大后才能放下卡牌。"
