@@ -1180,6 +1180,10 @@ msgstr "{count} 个追踪成绩"
 msgid "{count} 7K top plays"
 msgstr "{count} 个 7K 最佳成绩"
 
+#: src/routes/report.tsx
+msgid "{count} attachments"
+msgstr "{count} 个附件"
+
 #: src/components/layout/ChangelogModal.tsx
 #~ msgid "{count} changed"
 #~ msgstr "{count} 项改动"
@@ -1213,8 +1217,8 @@ msgid "{count} replays"
 msgstr "{count} 个回放"
 
 #: src/routes/report.tsx
-msgid "{count} screenshots"
-msgstr "{count} 张截图"
+#~ msgid "{count} screenshots"
+#~ msgstr "{count} 张截图"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "{count} skillsets"
@@ -2238,6 +2242,10 @@ msgstr "▶ 观看"
 msgid "0h"
 msgstr "0 小时"
 
+#: src/routes/report.tsx
+msgid "1 attachment"
+msgstr "1 个附件"
+
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "1 clear"
 #~ msgstr "1 次通过"
@@ -2259,8 +2267,8 @@ msgid "1 rate per chart"
 msgstr "每张谱面 1 个倍速"
 
 #: src/routes/report.tsx
-msgid "1 screenshot"
-msgstr "1 张截图"
+#~ msgid "1 screenshot"
+#~ msgstr "1 张截图"
 
 #: src/routes/news_.prism.tsx
 msgid "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
@@ -3088,14 +3096,18 @@ msgstr "添加缺失的成绩"
 msgid "Add a screenshot"
 msgstr "添加截图"
 
+#: src/routes/report.tsx
+msgid "Add a screenshot or file"
+msgstr "添加截图或文件"
+
 #. placeholder {0}: diffs.length
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Add all {0}"
 msgstr "全部添加（{0}）"
 
 #: src/routes/report.tsx
-msgid "Add an image"
-msgstr "添加图片"
+#~ msgid "Add an image"
+#~ msgstr "添加图片"
 
 #: src/components/communities/TagInput.tsx
 msgid "add another"
@@ -5461,6 +5473,7 @@ msgstr "流通中的卡片"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/ui/MessageText.tsx
 msgid "Copy"
 msgstr "复制"
 
@@ -7601,6 +7614,10 @@ msgstr "文件大小"
 msgid "File updated"
 msgstr "文件已更新"
 
+#: src/lib/bug-report-screenshots.ts
+msgid "Files have to be under 5MB."
+msgstr "文件需小于 5MB。"
+
 #: src/components/communities/field-options.tsx
 msgid "Filipino"
 msgstr "菲律宾语"
@@ -9017,8 +9034,8 @@ msgid "Images from {sourceName}"
 msgstr "来自 {sourceName} 的图片"
 
 #: src/lib/bug-report-screenshots.ts
-msgid "Images have to be under 5MB."
-msgstr "图片需小于 5MB。"
+#~ msgid "Images have to be under 5MB."
+#~ msgstr "图片需小于 5MB。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Import"
@@ -13055,6 +13072,7 @@ msgstr "在 osu! 上打开谱面"
 msgid "Open beatmap page on osu!"
 msgstr "在 osu! 上打开谱面页面"
 
+#: src/components/ui/BugReportAttachmentTiles.tsx
 #: src/components/ui/MessageText.tsx
 #: src/routes/report.tsx
 msgid "Open image"
@@ -13579,8 +13597,12 @@ msgid "Paste share code"
 msgstr "粘贴分享码"
 
 #: src/routes/report.tsx
-msgid "Paste, drop or pick a screenshot."
-msgstr "可以粘贴、拖入或选择截图。"
+msgid "Paste, drop or pick a screenshot or any file under 5MB."
+msgstr "可以粘贴、拖入或选择截图，或任何小于 5MB 的文件。"
+
+#: src/routes/report.tsx
+#~ msgid "Paste, drop or pick a screenshot."
+#~ msgstr "可以粘贴、拖入或选择截图。"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "pattern"
@@ -15294,6 +15316,7 @@ msgid "Remove color"
 msgstr "移除颜色"
 
 #: src/components/replay/ReplayCustomMediaControls.tsx
+#: src/routes/report.tsx
 msgid "Remove file"
 msgstr "移除文件"
 
@@ -15302,7 +15325,6 @@ msgid "Remove from the collection"
 msgstr "从收藏夹中移除"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
-#: src/routes/report.tsx
 msgid "Remove image"
 msgstr "移除图片"
 
@@ -18412,8 +18434,12 @@ msgid "That doesn't look like an osu! score link."
 msgstr "这看起来不像 osu! 成绩链接。"
 
 #: src/lib/bug-report-screenshots.ts
-msgid "That file is not an image."
-msgstr "该文件不是图片。"
+msgid "That file is empty."
+msgstr "该文件是空的。"
+
+#: src/lib/bug-report-screenshots.ts
+#~ msgid "That file is not an image."
+#~ msgstr "该文件不是图片。"
 
 #: src/components/replay/ReplayCustomMediaControls.tsx
 msgid "That file is over 200 MB."
@@ -19368,8 +19394,12 @@ msgid "The report could not be sent. Try again."
 msgstr "举报发送失败，请重试。"
 
 #: src/routes/report.tsx
-msgid "The report was sent, but at least one image did not upload."
-msgstr "反馈已提交，但至少有一张图片没能上传。"
+msgid "The report was sent, but at least one file did not upload."
+msgstr "反馈已提交，但至少有一个文件没能上传。"
+
+#: src/routes/report.tsx
+#~ msgid "The report was sent, but at least one image did not upload."
+#~ msgstr "反馈已提交，但至少有一张图片没能上传。"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
@@ -20081,8 +20111,12 @@ msgid "This works with <0>{sendSetting}</0> turned off too."
 msgstr "关闭 <0>{sendSetting}</0> 时也能用。"
 
 #: src/routes/report.tsx
-msgid "Those images are no longer available."
-msgstr "这些图片已无法查看。"
+msgid "Those files are no longer available."
+msgstr "这些文件已无法查看。"
+
+#: src/routes/report.tsx
+#~ msgid "Those images are no longer available."
+#~ msgstr "这些图片已无法查看。"
 
 #: src/routes/integrations_.companella.tsx
 #~ msgid "Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
@@ -20780,8 +20814,12 @@ msgstr "未上传"
 #~ msgstr "无标题谱面"
 
 #: src/lib/bug-report-screenshots.ts
-msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
-msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
+msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} files."
+msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 个文件。"
+
+#: src/lib/bug-report-screenshots.ts
+#~ msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
+#~ msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
 
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -22193,8 +22231,12 @@ msgstr "你的动态渲染图已被关闭。"
 #~ msgstr "你的估算是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
 
 #: src/routes/report.tsx
-msgid "Your feedback was sent, but at least one image did not upload."
-msgstr "建议已发送，但至少有一张图片没能上传。"
+msgid "Your feedback was sent, but at least one file did not upload."
+msgstr "建议已发送，但至少有一个文件没能上传。"
+
+#: src/routes/report.tsx
+#~ msgid "Your feedback was sent, but at least one image did not upload."
+#~ msgstr "建议已发送，但至少有一张图片没能上传。"
 
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Your first {rarity}"
@@ -22323,8 +22365,12 @@ msgid "Your Replay Uploads"
 msgstr "你上传的回放"
 
 #: src/routes/report.tsx
-msgid "Your reply was sent, but at least one image did not upload."
-msgstr "回复已发送，但至少有一张图片没能上传。"
+msgid "Your reply was sent, but at least one file did not upload."
+msgstr "回复已发送，但至少有一个文件没能上传。"
+
+#: src/routes/report.tsx
+#~ msgid "Your reply was sent, but at least one image did not upload."
+#~ msgstr "回复已发送，但至少有一张图片没能上传。"
 
 #: src/routes/report.tsx
 #~ msgid "Your reports"

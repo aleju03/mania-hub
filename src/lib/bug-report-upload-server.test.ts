@@ -78,6 +78,29 @@ describe("bug report screenshot upload", () => {
     }
   });
 
+  it("stores any other file under its reduced name as opaque bytes, and a video as a video", async () => {
+    for (const [name, stored, type] of [
+      ["my replay (1).osr", "my_replay_1_.osr", "application/octet-stream"],
+      ["../../clip.mp4", "clip.mp4", "video/mp4"],
+    ] as const) {
+      const id = `report-${requestId += 1}`;
+      const key = `bug-reports/${id}/1/${stored}`;
+      const fetchFn = vi.fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json({ ok: true, alreadyAttached: false }))
+        .mockResolvedValueOnce(Response.json({ ok: true, screenshotKeys: [key] }));
+      const testSeams = seams(fetchFn);
+      const bytes = Buffer.from("osu! replay bytes");
+      const request = new Request(
+        `${ORIGIN}/api/bug-report-upload?id=${id}&token=ticket&index=1&name=${encodeURIComponent(name)}`,
+        { method: "POST", headers: { "content-type": "text/html", "sec-fetch-site": "same-origin" }, body: bytes as unknown as BodyInit },
+      );
+      const response = await handleBugReportUploadPost(request, testSeams);
+
+      expect(response.status).toBe(200);
+      expect(testSeams.putScreenshot).toHaveBeenCalledWith(key, bytes, type);
+    }
+  });
+
   it("treats a replayed logical index as success without replacing its object", async () => {
     const fetchFn = vi.fn<typeof fetch>(async () => Response.json({ ok: true, alreadyAttached: true }));
     const testSeams = seams(fetchFn);

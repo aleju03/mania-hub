@@ -15,6 +15,11 @@ import {
   getPublicBucketClient,
   PUBLIC_IMAGE_BUCKET,
 } from "./public-image-store";
+import {
+  bugReportVideoMime,
+  describeBugReportAttachmentKey,
+  safeBugReportAttachmentName,
+} from "./bug-report-attachments";
 
 // Cache growth is bounded by R2 lifecycle rules configured per prefix (Cloudflare
 // dashboard or the S3 lifecycle API). As of 2026-09-17 the rules are: parsed/ 90d,
@@ -574,7 +579,7 @@ export type BugReportScreenshotPutResult = "stored" | "exists" | "unavailable";
 export function getBugReportScreenshotKey(
   reportId: string,
   index: number,
-  ext: BugReportImageExt,
+  ext: BugReportImageExt | { name: string },
   messageId?: string | null,
 ): string {
   const id = reportId.replace(/[^A-Za-z0-9-]/g, "");
@@ -585,7 +590,10 @@ export function getBugReportScreenshotKey(
     if (!message) throw new Error("Bug report message id is required for a message screenshot key");
     folder += `/m/${message}`;
   }
-  return `${folder}/${Math.max(0, Math.floor(index))}.${ext}`;
+  const slot = Math.max(0, Math.floor(index));
+  // Any other file keeps its (already reduced) name one folder down.
+  if (typeof ext === "object") return `${folder}/${slot}/${safeBugReportAttachmentName(ext.name)}`;
+  return `${folder}/${slot}.${ext}`;
 }
 
 export async function putBugReportScreenshot(
@@ -617,12 +625,20 @@ export async function putBugReportScreenshot(
   }
 }
 
-/** A signed, short-lived read. Callers must have proved admin or reporter first. */
+/**
+ * A signed, short-lived read. Callers must have proved admin or reporter first.
+ * Anything that is not an image or a playable video is signed as a download,
+ * so a stranger's file never renders in the browser.
+ */
 export async function getBugReportScreenshotUrl(storageKey: string): Promise<string | null> {
   const r2 = getClient();
   if (!r2) return null;
   if (!storageKey.startsWith(BUG_REPORTS_PREFIX)) return null;
-  return signGetUrl(storageKey);
+  const attachment = describeBugReportAttachmentKey(storageKey);
+  if (!attachment) return null;
+  if (attachment.kind === "image") return signGetUrl(storageKey);
+  if (attachment.kind === "video") return signGetUrl(storageKey, bugReportVideoMime(attachment.name) ?? undefined);
+  return signGetUrl(storageKey, "application/octet-stream", attachment.name);
 }
 
 /**

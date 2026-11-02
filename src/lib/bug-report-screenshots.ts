@@ -4,11 +4,12 @@ import { useLingui } from "@lingui/react/macro";
 import { BUG_REPORT_MAX_SCREENSHOTS } from "./bug-reports";
 import { MAX_IMAGE_UPLOAD_BYTES, isUploadableImage } from "./catbox-upload";
 
-/* The browser half of a bug report's images, shared by the reporter's form and
+/* The browser half of a bug report's attachments (images, or any other file
+   under the same cap), shared by the reporter's form and
    thread on /report and by the owner's reply on /admin/bug-reports.
 
    All three write the same way: the words are stored first, the row that stored
-   them hands back an upload ticket, and the images follow one at a time against
+   them hands back an upload ticket, and the files follow one at a time against
    it. Only the rules and the plumbing live here; each surface renders its own
    strip of thumbnails, because a picker inside a bubble and a picker inside an
    admin field are not the same control. */
@@ -16,9 +17,10 @@ import { MAX_IMAGE_UPLOAD_BYTES, isUploadableImage } from "./catbox-upload";
 export type BugReportUploadStatus = "waiting" | "uploading" | "done" | "failed";
 
 /**
- * The images waiting to go with what is being written. Every surface refuses
- * the same things (three at a time, images only, under the shared size cap) and
- * every one wants a local preview, so none of them owns the rules.
+ * The files waiting to go with what is being written. Every surface refuses
+ * the same things (three at a time, under the shared size cap) and every one
+ * wants a local preview of its images, so none of them owns the rules.
+ * `previews` lines up with `files`; a file that is not an image has "".
  */
 export function useBugReportScreenshots() {
   const { t } = useLingui();
@@ -27,9 +29,9 @@ export function useBugReportScreenshots() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const urls = files.map((file) => URL.createObjectURL(file));
+    const urls = files.map((file) => (isUploadableImage(file) ? URL.createObjectURL(file) : ""));
     setPreviews(urls);
-    return () => { urls.forEach((url) => URL.revokeObjectURL(url)); };
+    return () => { urls.forEach((url) => { if (url) URL.revokeObjectURL(url); }); };
   }, [files]);
 
   const add = useCallback((picked: FileList | File[] | null) => {
@@ -41,15 +43,15 @@ export function useBugReportScreenshots() {
       const next = [...current];
       for (const file of incoming) {
         if (next.length >= BUG_REPORT_MAX_SCREENSHOTS) {
-          setError(t`Up to ${BUG_REPORT_MAX_SCREENSHOTS} images.`);
+          setError(t`Up to ${BUG_REPORT_MAX_SCREENSHOTS} files.`);
           break;
         }
-        if (!isUploadableImage(file)) {
-          setError(t`That file is not an image.`);
+        if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+          setError(t`Files have to be under 5MB.`);
           continue;
         }
-        if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-          setError(t`Images have to be under 5MB.`);
+        if (file.size === 0) {
+          setError(t`That file is empty.`);
           continue;
         }
         next.push(file);
@@ -70,10 +72,10 @@ export function useBugReportScreenshots() {
   return { files, previews, error, setError, add, removeAt, clear };
 }
 
-/** The images on a clipboard paste, if that is what was pasted. */
-export function imagesFromClipboard(event: React.ClipboardEvent): File[] {
+/** The files on a clipboard paste, if that is what was pasted. */
+export function filesFromClipboard(event: React.ClipboardEvent): File[] {
   return Array.from(event.clipboardData?.items ?? [])
-    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .filter((item) => item.kind === "file")
     .map((item) => item.getAsFile())
     .filter((file): file is File => Boolean(file));
 }
@@ -98,8 +100,8 @@ export async function uploadBugReportScreenshots(
     onProgress(index, "uploading");
     try {
       const response = await fetch(
-        `/api/bug-report-upload?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&index=${index}${message}`,
-        { method: "POST", headers: { "content-type": file.type || "image/png" }, body: file },
+        `/api/bug-report-upload?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&index=${index}${message}&name=${encodeURIComponent(file.name)}`,
+        { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file },
       );
       if (response.ok) {
         uploaded += 1;

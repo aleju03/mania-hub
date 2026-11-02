@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Check, Copy } from "lucide-react";
 import { useLingui } from "@lingui/react/macro";
 
 import { ImageLightbox } from "./ImageLightbox";
+import { splitCode } from "../../lib/code-fences";
 import { linkify } from "../../lib/linkify";
 import { messageImageEmbeds } from "../../lib/message-embeds";
 
@@ -19,8 +21,12 @@ import { messageImageEmbeds } from "../../lib/message-embeds";
  * no cookies and no size promise: they are capped here and a dead one removes
  * itself rather than leaving a broken tile.
  *
- * Everything it renders is inline-level, so it drops into the paragraph or
- * bubble a caller already has.
+ * ```Fenced``` code renders as a block and `backticks` as inline code, both
+ * left unlinked, so a request or a payload can be pasted and copied back out
+ * exactly.
+ *
+ * Everything it renders is inline-level (a code block is a block-display
+ * span), so it drops into the paragraph or bubble a caller already has.
  */
 export function MessageText({
   text,
@@ -35,26 +41,38 @@ export function MessageText({
   const [zoom, setZoom] = useState<number | null>(null);
   const [dead, setDead] = useState<string[]>([]);
 
-  const embeds = messageImageEmbeds(text).filter((url) => !dead.includes(url));
+  const parts = splitCode(text);
+  const prose = parts.map((part) => (part.kind === "text" ? part.text : " ")).join("");
+  const embeds = messageImageEmbeds(prose).filter((url) => !dead.includes(url));
 
   return (
     <>
-      {linkify(text).map((segment, index) => (
-        segment.kind === "link" ? (
-          <a
-            key={index}
-            href={segment.href}
-            target="_blank"
-            rel="noopener noreferrer nofollow ugc"
-            referrerPolicy="no-referrer"
-            className={linkClassName}
-          >
-            {segment.text}
-          </a>
-        ) : (
-          <span key={index}>{segment.text}</span>
-        )
-      ))}
+      {parts.map((part, partIndex) => {
+        if (part.kind === "block") return <CodeBlock key={partIndex} code={part.code} />;
+        if (part.kind === "inline") {
+          return (
+            <code key={partIndex} className="rounded bg-black/25 px-1 py-px font-mono text-[0.9em]">
+              {part.code}
+            </code>
+          );
+        }
+        return linkify(part.text).map((segment, index) => (
+          segment.kind === "link" ? (
+            <a
+              key={`${partIndex}-${index}`}
+              href={segment.href}
+              target="_blank"
+              rel="noopener noreferrer nofollow ugc"
+              referrerPolicy="no-referrer"
+              className={linkClassName}
+            >
+              {segment.text}
+            </a>
+          ) : (
+            <span key={`${partIndex}-${index}`}>{segment.text}</span>
+          )
+        ));
+      })}
       {embeds.length ? (
         <span className={`flex flex-wrap gap-2 ${embedClassName}`}>
           {embeds.map((url, index) => (
@@ -87,5 +105,31 @@ export function MessageText({
         />
       ) : null}
     </>
+  );
+}
+
+function CodeBlock({ code }: { code: string }) {
+  const { t } = useLingui();
+  const [copied, setCopied] = useState(false);
+  return (
+    <span className="my-1.5 flex items-start rounded-lg bg-black/30">
+      <code className="block min-w-0 flex-1 overflow-x-auto whitespace-pre py-2.5 pl-3 pr-1 font-mono text-[12px] leading-relaxed text-osu-l1">
+        {code}
+      </code>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard?.writeText(code).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1200);
+          });
+        }}
+        aria-label={t`Copy`}
+        title={t`Copy`}
+        className="m-1.5 flex-shrink-0 cursor-pointer rounded-md p-1 text-osu-f1 transition-colors duration-[120ms] hover:bg-white/10 hover:text-white"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </span>
   );
 }

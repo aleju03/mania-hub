@@ -1168,6 +1168,10 @@ msgstr "{count, plural, one {# jugada trackeada} other {# jugadas trackeadas}}"
 msgid "{count} 7K top plays"
 msgstr "{count} top plays de 7K"
 
+#: src/routes/report.tsx
+msgid "{count} attachments"
+msgstr "{count} archivos"
+
 #: src/components/layout/ChangelogModal.tsx
 #~ msgid "{count} changed"
 #~ msgstr "{count} cambiados"
@@ -1201,8 +1205,8 @@ msgid "{count} replays"
 msgstr "{count} repeticiones"
 
 #: src/routes/report.tsx
-msgid "{count} screenshots"
-msgstr "{count} capturas"
+#~ msgid "{count} screenshots"
+#~ msgstr "{count} capturas"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "{count} skillsets"
@@ -2226,6 +2230,10 @@ msgstr "▶ Ver"
 msgid "0h"
 msgstr "0h"
 
+#: src/routes/report.tsx
+msgid "1 attachment"
+msgstr "1 archivo"
+
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "1 clear"
 #~ msgstr "1 clear"
@@ -2247,8 +2255,8 @@ msgid "1 rate per chart"
 msgstr "1 velocidad por mapa"
 
 #: src/routes/report.tsx
-msgid "1 screenshot"
-msgstr "1 captura"
+#~ msgid "1 screenshot"
+#~ msgstr "1 captura"
 
 #: src/routes/news_.prism.tsx
 msgid "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
@@ -3076,14 +3084,18 @@ msgstr "Agregar un score faltante"
 msgid "Add a screenshot"
 msgstr "Agrega una captura"
 
+#: src/routes/report.tsx
+msgid "Add a screenshot or file"
+msgstr "Agregar una captura o archivo"
+
 #. placeholder {0}: diffs.length
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Add all {0}"
 msgstr "Añadir las {0}"
 
 #: src/routes/report.tsx
-msgid "Add an image"
-msgstr "Agregar una imagen"
+#~ msgid "Add an image"
+#~ msgstr "Agregar una imagen"
 
 #: src/components/communities/TagInput.tsx
 msgid "add another"
@@ -5449,6 +5461,7 @@ msgstr "copias en circulación"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/ui/MessageText.tsx
 msgid "Copy"
 msgstr "Copiar"
 
@@ -7589,6 +7602,10 @@ msgstr "Tamaño del archivo"
 msgid "File updated"
 msgstr "Archivo actualizado"
 
+#: src/lib/bug-report-screenshots.ts
+msgid "Files have to be under 5MB."
+msgstr "Los archivos tienen que pesar menos de 5MB."
+
 #: src/components/communities/field-options.tsx
 msgid "Filipino"
 msgstr "Filipino"
@@ -9005,8 +9022,8 @@ msgid "Images from {sourceName}"
 msgstr "Imágenes de {sourceName}"
 
 #: src/lib/bug-report-screenshots.ts
-msgid "Images have to be under 5MB."
-msgstr "Las imágenes tienen que pesar menos de 5MB."
+#~ msgid "Images have to be under 5MB."
+#~ msgstr "Las imágenes tienen que pesar menos de 5MB."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Import"
@@ -13043,6 +13060,7 @@ msgstr "Abrir beatmap en osu!"
 msgid "Open beatmap page on osu!"
 msgstr "Abrir la página del beatmap en osu!"
 
+#: src/components/ui/BugReportAttachmentTiles.tsx
 #: src/components/ui/MessageText.tsx
 #: src/routes/report.tsx
 msgid "Open image"
@@ -13567,8 +13585,12 @@ msgid "Paste share code"
 msgstr "Pegar código para compartir"
 
 #: src/routes/report.tsx
-msgid "Paste, drop or pick a screenshot."
-msgstr "Pega, arrastra o elige una captura."
+msgid "Paste, drop or pick a screenshot or any file under 5MB."
+msgstr "Pega, arrastra o elige una captura o cualquier archivo de menos de 5MB."
+
+#: src/routes/report.tsx
+#~ msgid "Paste, drop or pick a screenshot."
+#~ msgstr "Pega, arrastra o elige una captura."
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "pattern"
@@ -15282,6 +15304,7 @@ msgid "Remove color"
 msgstr "Quitar color"
 
 #: src/components/replay/ReplayCustomMediaControls.tsx
+#: src/routes/report.tsx
 msgid "Remove file"
 msgstr "Quitar archivo"
 
@@ -15290,7 +15313,6 @@ msgid "Remove from the collection"
 msgstr "Quitar de la colección"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
-#: src/routes/report.tsx
 msgid "Remove image"
 msgstr "Quitar imagen"
 
@@ -18400,8 +18422,12 @@ msgid "That doesn't look like an osu! score link."
 msgstr "Eso no parece un enlace a un score de osu!."
 
 #: src/lib/bug-report-screenshots.ts
-msgid "That file is not an image."
-msgstr "Ese archivo no es una imagen."
+msgid "That file is empty."
+msgstr "Ese archivo está vacío."
+
+#: src/lib/bug-report-screenshots.ts
+#~ msgid "That file is not an image."
+#~ msgstr "Ese archivo no es una imagen."
 
 #: src/components/replay/ReplayCustomMediaControls.tsx
 msgid "That file is over 200 MB."
@@ -19356,8 +19382,12 @@ msgid "The report could not be sent. Try again."
 msgstr "No se pudo enviar el reporte. Intenta de nuevo."
 
 #: src/routes/report.tsx
-msgid "The report was sent, but at least one image did not upload."
-msgstr "El reporte se envió, pero al menos una imagen no se subió."
+msgid "The report was sent, but at least one file did not upload."
+msgstr "El reporte se envió, pero al menos un archivo no se subió."
+
+#: src/routes/report.tsx
+#~ msgid "The report was sent, but at least one image did not upload."
+#~ msgstr "El reporte se envió, pero al menos una imagen no se subió."
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
@@ -20069,8 +20099,12 @@ msgid "This works with <0>{sendSetting}</0> turned off too."
 msgstr "Esto también funciona con <0>{sendSetting}</0> desactivado."
 
 #: src/routes/report.tsx
-msgid "Those images are no longer available."
-msgstr "Esas imágenes ya no están disponibles."
+msgid "Those files are no longer available."
+msgstr "Esos archivos ya no están disponibles."
+
+#: src/routes/report.tsx
+#~ msgid "Those images are no longer available."
+#~ msgstr "Esas imágenes ya no están disponibles."
 
 #: src/routes/integrations_.companella.tsx
 #~ msgid "Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
@@ -20768,8 +20802,12 @@ msgstr "no subidos"
 #~ msgstr "Chart sin título"
 
 #: src/lib/bug-report-screenshots.ts
-msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
-msgstr "Hasta {BUG_REPORT_MAX_SCREENSHOTS} imágenes."
+msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} files."
+msgstr "Hasta {BUG_REPORT_MAX_SCREENSHOTS} archivos."
+
+#: src/lib/bug-report-screenshots.ts
+#~ msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
+#~ msgstr "Hasta {BUG_REPORT_MAX_SCREENSHOTS} imágenes."
 
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -22181,8 +22219,12 @@ msgstr "Se desactivaron tus renders dinámicos."
 #~ msgstr "Tu estimación es alpha++, la cuarta. El pase de gamma no te hace gamma: un chart puede ser una racha con suerte, un chart que te viene bien, o el intento entre cincuenta que se quedó por encima del mínimo de precisión. Pedir cuatro es lo que evita que un solo buen día fije tu nivel."
 
 #: src/routes/report.tsx
-msgid "Your feedback was sent, but at least one image did not upload."
-msgstr "Tu sugerencia se envió, pero al menos una imagen no se subió."
+msgid "Your feedback was sent, but at least one file did not upload."
+msgstr "Tu sugerencia se envió, pero al menos un archivo no se subió."
+
+#: src/routes/report.tsx
+#~ msgid "Your feedback was sent, but at least one image did not upload."
+#~ msgstr "Tu sugerencia se envió, pero al menos una imagen no se subió."
 
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Your first {rarity}"
@@ -22311,8 +22353,12 @@ msgid "Your Replay Uploads"
 msgstr "Tus replays subidos"
 
 #: src/routes/report.tsx
-msgid "Your reply was sent, but at least one image did not upload."
-msgstr "Tu respuesta se envió, pero al menos una imagen no se subió."
+msgid "Your reply was sent, but at least one file did not upload."
+msgstr "Tu respuesta se envió, pero al menos un archivo no se subió."
+
+#: src/routes/report.tsx
+#~ msgid "Your reply was sent, but at least one image did not upload."
+#~ msgstr "Tu respuesta se envió, pero al menos una imagen no se subió."
 
 #: src/routes/report.tsx
 #~ msgid "Your reports"
