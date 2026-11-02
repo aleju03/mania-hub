@@ -1375,17 +1375,20 @@ function SubjectBar({
     <div className="overflow-hidden rounded-2xl border border-osu-b3/25 bg-osu-b4">
       <div className="relative">
         {snapshot.coverUrl ? (
-          <>
-            <div
-              className="absolute inset-0 bg-cover bg-center"
-              style={{ backgroundImage: `url(${snapshot.coverUrl})` }}
-              aria-hidden="true"
-            />
-            {/* The gain block sits at the right end, so the scrim only thins to
-                88%: at 70% the cover washed out the "7K pp" unit and the map
-                count under it. */}
-            <div className="absolute inset-0 bg-gradient-to-r from-osu-b4 via-osu-b4/92 to-osu-b4/88" aria-hidden="true" />
-          </>
+          // The gain block sits at the right end, so the scrim only thins to
+          // 88%: at 70% the cover washed out the "7K pp" unit and the map count
+          // under it. The cover fades in through a mask over the card's own
+          // fill rather than under a scrim: Chrome anti-aliases the rounded
+          // clip per layer, so a bright cover edge leaked past a scrim's
+          // corner as a light arc.
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage: `url(${snapshot.coverUrl})`,
+              maskImage: "linear-gradient(to right, transparent, rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.12))",
+            }}
+            aria-hidden="true"
+          />
         ) : null}
 
         {/* Stacked on mobile: side by side, the gain block squeezes the name
