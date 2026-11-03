@@ -1,5 +1,5 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { Brush, Hand, Link2, LocateFixed, Maximize2, Minus, Plus, Redo2, RotateCcw, RotateCw, Trash2, Undo2 } from "lucide-react";
+import { Brush, Grid3x3, Hand, Link2, LocateFixed, Maximize2, Minus, Plus, Redo2, RotateCcw, RotateCw, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "#/lib/auth-context";
 import { DEFAULT_COUNTRY_CODE } from "#/lib/country";
@@ -73,6 +73,11 @@ export function CardBoard({ at }: { at?: string }) {
   const [brushTier, setBrushTier] = useState<string | null>(null);
   const [brushScale, setBrushScale] = useState(0.7);
   const [follow, setFollow] = useState(false);
+  const [grid, setGrid] = useState(false);
+  /* The cards under a spot (Alt-click, or a long press), listed top first,
+     and the view they were listed in: moving the view closes the list. */
+  const [stack, setStack] = useState<{ cards: BoardCard[]; x: number; y: number; reach: number; w: number; h: number } | null>(null);
+  const stackCam = useRef<string | null>(null);
   const [selection, setSelection] = useState<BoardCard[]>([]);
   const [history, setHistory] = useState({ undo: false, redo: false });
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -204,7 +209,7 @@ export function CardBoard({ at }: { at?: string }) {
       setCap(result.cap);
       publishUsage();
       if (result.forbidden) setNotice(t`That shape isn't allowed on the board.`);
-      else if (result.full) setNotice(t`That part of the board is full.`);
+      else if (result.full) setNotice(t`This part of the board is full. Try further out.`);
       else if (result.protected) setNotice(t`Drawings are protected from other players for their first day.`);
       else if (result.slow) setNotice(t`Slow down a little.`);
       else if (refused) setNotice(t`Some cards could not be laid down.`);
@@ -330,10 +335,15 @@ export function CardBoard({ at }: { at?: string }) {
       face: (card) => faces.get(card.owner, card.key),
       onView: () => {
         handlers.current.redrawMap();
+        if (stackCam.current && engine && stackCam.current !== `${engine.cam.x},${engine.cam.y},${engine.cam.z}`) {
+          stackCam.current = null;
+          engine.peekCard(null);
+          setStack(null);
+        }
         // with the pointer off the board, the label follows the view's middle
         if (!pointerOn.current && engine) showCoords(engine.cam.x, engine.cam.y);
       },
-      onRefused: (why) => setNotice(why === "protected" ? t`Drawings are protected from other players for their first day.` : t`Slow down a little.`),
+      onRefused: (why) => setNotice(why === "full" ? t`This part of the board is full. Try further out.` : why === "protected" ? t`Drawings are protected from other players for their first day.` : t`Slow down a little.`),
       // written straight to the label: this fires on every mouse move
       onPointerAt: (point) => {
         pointerOn.current = point !== null;
@@ -349,6 +359,17 @@ export function CardBoard({ at }: { at?: string }) {
       isPending: (n) => pending.current.has(n),
       onSelect: setSelection,
       onHistory: (undo, redo) => setHistory({ undo, redo }),
+      onStack: (cards, x, y) => {
+        const box = tip.current?.parentElement?.getBoundingClientRect();
+        if (!box || !engine) return;
+        const cam = `${engine.cam.x},${engine.cam.y},${engine.cam.z}`;
+        stackCam.current = cards.length ? cam : null;
+        // how far the pile reaches from the spot on screen, so the list opens
+        // beside it rather than over the card being looked at
+        const [wx, wy] = engine.toWorld(x, y);
+        const reach = Math.max(...cards.map((card) => Math.hypot(card.x - wx, card.y - wy) + 55 * card.sc)) * engine.cam.z;
+        setStack(cards.length ? { cards, x: x - box.left, y: y - box.top, reach, w: box.width, h: box.height } : null);
+      },
       onHover: (card, x, y) => {
         const node = tip.current;
         if (!node) return;
@@ -455,7 +476,9 @@ export function CardBoard({ at }: { at?: string }) {
     engine.brush.scale = brushScale;
     engine.brush.follow = follow;
     engine.brush.tint = tint;
-  }, [engine, tool, brushScale, follow, tint]);
+    engine.brush.grid = grid;
+    engine.repaint();
+  }, [engine, tool, brushScale, follow, tint, grid]);
 
   // whatever is still unsent goes out when the page is left
   useEffect(() => {
@@ -559,6 +582,11 @@ export function CardBoard({ at }: { at?: string }) {
           </div>
         ) : null}
         {editing ? (
+          <div className="flex rounded-lg bg-black/20 p-0.5">
+            <ToolButton active={grid} onClick={() => setGrid((on) => !on)} label={t`Snap to grid`}><Grid3x3 size={15} /></ToolButton>
+          </div>
+        ) : null}
+        {editing ? (
           <button
             type="button"
             onClick={() => setPicking((open) => !open)}
@@ -651,7 +679,7 @@ export function CardBoard({ at }: { at?: string }) {
             <button type="button" onClick={() => void moderate(true)} className="rounded-md bg-red-500/15 px-2 py-1 font-semibold text-red-200 hover:bg-red-500/25">{t`Take all their cards off`}</button>
           </div>
         ) : (
-          <span className="text-xs text-osu-f1"><Trans>Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around.</Trans></span>
+          <span className="text-xs text-osu-f1"><Trans>Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it.</Trans></span>
         )}
       </div>
         <div className="flex shrink-0 items-center gap-1 border-l border-osu-b3/20 px-3">
@@ -688,6 +716,24 @@ export function CardBoard({ at }: { at?: string }) {
                 engine?.tintSelected(next);
               }}
               onClose={() => setPicking(false)}
+            />
+          ) : null}
+          {stack ? (
+            <StackList
+              stack={stack}
+              me={me}
+              onPeek={(card) => engine?.peekCard(card)}
+              onPick={(card) => {
+                engine?.peekCard(null);
+                engine?.pickCard(card);
+                stackCam.current = null;
+                setStack(null);
+              }}
+              onClose={() => {
+                engine?.peekCard(null);
+                stackCam.current = null;
+                setStack(null);
+              }}
             />
           ) : null}
           <div ref={tip} className="pointer-events-none absolute left-0 top-0 hidden rounded-md bg-black/85 px-2 py-1 text-xs text-white">
@@ -855,5 +901,83 @@ function TierChip({ active, onClick, title, children }: { active: boolean; onCli
     >
       {children}
     </button>
+  );
+}
+
+const STACK_ROW = 34;
+
+/* The cards under one spot, top first, with who laid each. Hovering a row
+   lifts that card above the pile on the board; clicking picks it. */
+function StackList({
+  stack,
+  me,
+  onPeek,
+  onPick,
+  onClose,
+}: {
+  stack: { cards: BoardCard[]; x: number; y: number; reach: number; w: number; h: number };
+  me: number | null;
+  onPeek: (card: BoardCard | null) => void;
+  onPick: (card: BoardCard) => void;
+  onClose: () => void;
+}) {
+  const { t } = useLingui();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const down = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("keydown", key);
+    };
+  }, [onClose]);
+  const width = 240;
+  const height = Math.min(stack.h - 16, 340, 34 + stack.cards.length * STACK_ROW);
+  // right of the pile, or left of it when there is no room
+  const gap = Math.min(stack.reach, 260) + 10;
+  const right = stack.x + gap;
+  const left = right + width <= stack.w - 8 ? right : Math.max(8, stack.x - gap - width);
+  const top = Math.max(8, Math.min(stack.y - height / 2, stack.h - height - 8));
+  const count = stack.cards.length;
+  return (
+    <div
+      ref={ref}
+      className="absolute z-20 flex flex-col overflow-hidden rounded-lg border border-white/15 bg-[#121116]/95 shadow-xl backdrop-blur"
+      style={{ left, top, width, maxHeight: height }}
+      onMouseLeave={() => onPeek(null)}
+    >
+      <div className="flex shrink-0 items-center justify-between px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">
+        <Plural value={count} one="# card here" other="# cards here" />
+        <button type="button" onClick={onClose} className="rounded px-1 text-sm leading-none text-osu-f1 hover:text-white" aria-label={t`Close`}>×</button>
+      </div>
+      <div className="scroll-slim min-h-0 overflow-y-auto px-1 pb-1">
+        {stack.cards.map((card) => {
+          const paint = cardPaint(card);
+          return (
+            <button
+              key={`${card.owner}:${card.n}`}
+              type="button"
+              onMouseEnter={() => onPeek(card)}
+              onFocus={() => onPeek(card)}
+              onClick={() => onPick(card)}
+              className="flex w-full items-center gap-2.5 rounded-md px-2 text-left hover:bg-white/[0.07] focus-visible:bg-white/[0.07] focus-visible:outline-none"
+              style={{ height: STACK_ROW }}
+            >
+              <span className="h-5 w-3.5 shrink-0 rounded-[3px] border border-white/30" style={{ background: `linear-gradient(150deg, ${paint.light}, ${paint.mid} 55%, ${paint.dark})` }} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold text-white">{card.name || card.key}</span>
+                <span className="block truncate text-[11px] text-osu-f1">{card.owner === me ? t`Yours` : card.ownerName}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

@@ -8629,8 +8629,8 @@ msgstr "Arrastra un .osr aquí o haz clic para explorar"
 #~ msgstr "Arrastra cartas desde la bandeja, o cambia al pincel y dibuja con ellas."
 
 #: src/components/packs/collections/board/CardBoard.tsx
-msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
-msgstr "Arrastra cartas desde la bandeja. Arrastra sobre el tablero para seleccionar tus cartas, clic derecho y arrastra para moverte."
+msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
+msgstr "Arrastra cartas desde la bandeja. Arrastra sobre el tablero para seleccionar tus cartas, clic derecho y arrastra para moverte. Alt+clic en una pila para ver todas sus cartas."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag the map's .osz here, or click to browse"
@@ -28988,3 +28988,15 @@ msgstr ""
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Zoom in to lay cards down."
 msgstr "Acércate para poner cartas."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{count, plural, one {# card here} other {# cards here}}"
+msgstr "{count, plural, one {# carta aquí} other {# cartas aquí}}"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Snap to grid"
+msgstr "Ajustar a la cuadrícula"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "This part of the board is full. Try further out."
+msgstr "Esta parte del tablero está llena. Prueba más lejos."

@@ -48,6 +48,8 @@ const PREVIEW_CELL = REGION / PREVIEW_CELLS;
 /* Tier order of the grid's values, 1-based (backend TIERS). */
 const PREVIEW_TIERS = ["common", "rare", "elite", "superRare", "ultraRare", "legendary", "mythic", "ascendant", "worldClass", "goat", "eternal"];
 const REGION_LIMIT = 260;
+/* Most cards a region holds (backend PACK_BOARD_REGION_CAP). */
+const REGION_CAP = 1500;
 
 export const angleOf = (r: number) => (r / 256) * TURN;
 export const scaleOf = (s: number) => 2 ** ((s - 128) / 64);
@@ -66,6 +68,11 @@ export function regionOrigin(region: number): [number, number] {
 
 export const EXTENT = HALF * REGION;
 const clampCoord = (value: number) => Math.min(EXTENT - 1, Math.max(-EXTENT, Math.round(value)));
+/* The snap grid's square cells for cards of a size byte: a card's width, so
+   cards sit edge to edge across and a row overlaps the one above it a little,
+   which keeps the cells square for drawing from pixel art. */
+export const gridPitch = (s: number) => Math.max(8, Math.round(CARD_W * 2 ** ((s - 128) / 64)));
+const snapTo = (value: number, pitch: number) => clampCoord(Math.round(value / pitch) * pitch);
 
 export interface BoardCardFace {
   key: string;
@@ -306,10 +313,12 @@ export interface BoardEngineOptions {
      somebody else's single card. */
   onSelect?: (cards: BoardCard[]) => void;
   onHover?: (card: BoardCard | null, clientX: number, clientY: number) => void;
+  /* Every card under a spot, top first: an Alt-click, or a long press on touch. */
+  onStack?: (cards: BoardCard[], clientX: number, clientY: number) => void;
   onHistory?: (canUndo: boolean, canRedo: boolean) => void;
   /* A card the brush or tray did not lay down, and why: it would cover
      someone's day-old drawing, or the viewer is going faster than allowed. */
-  onRefused?: (why: "protected" | "slow") => void;
+  onRefused?: (why: "protected" | "slow" | "full") => void;
   /* The view moved or zoomed. */
   onView?: () => void;
   /* Where on the board the pointer is, in board units, as it moves; null
@@ -327,6 +336,8 @@ export interface BoardEngineOptions {
 const FACE_FROM = 44;
 const FACE_FULL = 76;
 const FACE_FADE_MS = 260;
+/* Most cards in view that still get faces (under boardFaces' FACE_LIMIT). */
+const FACE_VIEW_LIMIT = 320;
 const ease = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 interface Region {
@@ -337,10 +348,11 @@ interface Region {
   tileDirty: boolean;
 }
 
-type Brush = { kind: "brush"; lastX: number; lastY: number; carry: number; changes: Change[] };
+/* cells: on the grid, the cells this stroke has dealt into */
+type Brush = { kind: "brush"; lastX: number; lastY: number; carry: number; changes: Change[]; cells: Set<string> };
 type Gesture =
   | { kind: "pan"; startX: number; startY: number; camX: number; camY: number }
-  | { kind: "drag"; cards: { card: BoardCard; before: CardState }[]; lastX: number; lastY: number; moved: boolean }
+  | { kind: "drag"; cards: { card: BoardCard; before: CardState }[]; lastX: number; lastY: number; moved: boolean; lead: BoardCard; startX: number; startY: number }
   | { kind: "marquee"; additive: boolean }
   | { kind: "turn"; card: BoardCard; before: CardState; startAngle: number; startR: number }
   | { kind: "size"; card: BoardCard; before: CardState; startDist: number; startS: number }
@@ -348,6 +360,10 @@ type Gesture =
   | { kind: "pinch"; dist: number; midX: number; midY: number; camX: number; camY: number; z: number };
 
 const HISTORY_LIMIT = 60;
+/* How long a finger rests on a spot to list the cards under it, and how far
+   it may drift meanwhile (CSS pixels). */
+const PRESS_MS = 500;
+const PRESS_SLOP = 8;
 /* Cards a minute (backend PACK_BOARD_RATE). */
 const RATE = 300;
 const HANDLE = 7;
@@ -355,8 +371,9 @@ const TURN_REACH = 22;
 
 export class BoardEngine {
   tool: BoardTool = "move";
-  /* The brush; its tint also colours cards laid from the tray. */
-  brush = { scale: 0.7, follow: false, tint: 0 };
+  /* The brush; its tint also colours cards laid from the tray, and with grid
+     on, every card laid or moved lands upright in a cell of the snap grid. */
+  brush = { scale: 0.7, follow: false, tint: 0, grid: false };
   cam = { x: 0, y: 0, z: 0.5 };
 
   private regions = new Map<number, Region>();
@@ -380,9 +397,29 @@ export class BoardEngine {
 
   private readonly canvas: HTMLCanvasElement;
   private readonly g: CanvasRenderingContext2D;
-  private readonly layer = document.createElement("canvas");
-  private readonly lg: CanvasRenderingContext2D;
+  private layer = document.createElement("canvas");
+  private lg: CanvasRenderingContext2D;
   private layerDirty = true;
+  /* Panning slides the painted layer instead of painting it again: the layer
+     remembers the view it was painted for (its top-left in board units, the
+     zoom, the cards), a pan copies it across by whole pixels and paints only
+     the strips that came into view. Anything else (a zoom, a card changing, a
+     face arriving) sets layerStale and the next paint starts over. */
+  private spare = document.createElement("canvas");
+  private layerAt = { left: 0, top: 0, z: 0, dpr: 0, generation: -1, w: 0, h: 0 };
+  private layerStale = true;
+  /* A zoom on a board that is slow to paint stretches the painted layer while
+     the wheel turns and paints it sharp once it rests (or once it has been
+     stretched too far): how long the last whole paint took decides. */
+  private paintMs = 0;
+  /* A card from a stack list being looked at: drawn above everything. */
+  private peek: BoardCard | null = null;
+  private press: { timer: number; x: number; y: number } | null = null;
+  /* Whether cards in view get their faces: not when more are in view than
+     the face cache holds, which would load faces only to drop them. */
+  private facesOn = true;
+  private settleTimer = 0;
+  private paintedZ = 0;
   /* The cards in view, sorted by stacking order, and what they were for. */
   private drawList: BoardCard[] = [];
   private drawListFor = "";
@@ -447,6 +484,8 @@ export class BoardEngine {
   }
 
   dispose() {
+    window.clearTimeout(this.settleTimer);
+    this.cancelPress();
     cancelAnimationFrame(this.frame);
     window.clearTimeout(this.loadTimer);
     for (const run of this.cleanup) run();
@@ -513,11 +552,12 @@ export class BoardEngine {
     }
     g.putImageData(pixels, 0, 0);
     this.previews.set(id, { version, image });
-    if (this.cam.z < TILE_ZOOM) this.invalidate();
+    if (this.cam.z < TILE_ZOOM) this.repaint();
   }
 
   /* Repaints everything, for a face that just loaded. */
   repaint() {
+    this.layerStale = true;
     this.invalidate();
   }
 
@@ -601,6 +641,12 @@ export class BoardEngine {
 
   /* Whether a card laid here would cover another player's fresh cards, judged
      on the loaded regions round it (the backend has the final say). */
+  /* Whether the region a card centred here would go in has no room left
+     (the backend refuses it, so the board does not lay it down at all). */
+  private regionFull(x: number, y: number): boolean {
+    return (this.regions.get(regionOf(x, y))?.cards.length ?? 0) >= REGION_CAP;
+  }
+
   private coversFresh(x: number, y: number, r: number, s: number): boolean {
     if (this.freshFrom === Infinity) return false;
     const probe = { x, y, r, s };
@@ -705,7 +751,11 @@ export class BoardEngine {
       ? [this.cam.x + ((Math.random() - 0.5) * 40) / this.cam.z, this.cam.y + ((Math.random() - 0.5) * 40) / this.cam.z]
       : this.toWorld(clientX, clientY);
     if (Math.abs(x) >= EXTENT || Math.abs(y) >= EXTENT) return;
-    const after = { face, x: clampCoord(x), y: clampCoord(y), r: rotByte((Math.random() - 0.5) * 0.2), s: 128, tint: this.brush.tint };
+    const s = this.brush.grid ? scaleByte(this.brush.scale) : 128;
+    const after = this.brush.grid
+      ? { face, x: snapTo(x, gridPitch(s)), y: snapTo(y, gridPitch(s)), r: 0, s, tint: this.brush.tint }
+      : { face, x: clampCoord(x), y: clampCoord(y), r: rotByte((Math.random() - 0.5) * 0.2), s, tint: this.brush.tint };
+    if (this.regionFull(after.x, after.y)) return this.options.onRefused?.("full");
     if (this.coversFresh(after.x, after.y, after.r, after.s)) return this.options.onRefused?.("protected");
     if (!this.takeToken()) return this.options.onRefused?.("slow");
     const n = this.nextN++;
@@ -724,10 +774,33 @@ export class BoardEngine {
 
   /* Turns or resizes each selected card in place by a step (keyboard and
      buttons). */
+  /* Turns (in 256ths of a turn) and resizes the viewer's selected cards; a
+     group turns round its middle as one piece, so a drawing keeps its shape. */
   nudgeSelected(turn: number, grow: number) {
-    this.commit(this.ownSelection().map((card) => {
+    const cards = this.ownSelection();
+    let cx = 0, cy = 0;
+    for (const card of cards) {
+      cx += card.x;
+      cy += card.y;
+    }
+    cx /= cards.length || 1;
+    cy /= cards.length || 1;
+    const angle = (turn / 256) * TURN;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const group = cards.length > 1 && turn !== 0;
+    this.commit(cards.map((card) => {
       const before = stateOf(card);
-      return { n: card.n, before, after: { ...before, r: (before.r + turn + 256) % 256, s: Math.min(255, Math.max(0, before.s + grow)) } };
+      const dx = before.x - cx, dy = before.y - cy;
+      return {
+        n: card.n,
+        before,
+        after: {
+          ...before,
+          ...(group ? { x: clampCoord(cx + dx * cos - dy * sin), y: clampCoord(cy + dx * sin + dy * cos) } : {}),
+          r: (before.r + turn + 256) % 256,
+          s: Math.min(255, Math.max(0, before.s + grow)),
+        },
+      };
     }));
   }
 
@@ -1038,9 +1111,24 @@ export class BoardEngine {
     const g = this.g;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    g.drawImage(this.layer, 0, 0);
+    // the layer where its view sits under the camera's: in place after a
+    // slide (to within half a pixel), stretched mid-zoom
+    const at = this.layerAt;
+    const stretch = this.cam.z / at.z;
+    if (stretch === 1) {
+      g.drawImage(this.layer, 0, 0);
+    } else {
+      const left = this.cam.x - this.width / 2 / this.cam.z, top = this.cam.y - this.height / 2 / this.cam.z;
+      const scale = this.cam.z * this.dpr;
+      g.drawImage(this.layer, (at.left - left) * scale, (at.top - top) * scale, this.layer.width * stretch, this.layer.height * stretch);
+    }
     for (const card of this.active) this.drawCardAt(g, card, this.cam.z * this.dpr, ...this.devicePoint(card), true);
+    this.drawFull(g);
     this.drawSelections(g);
+    if (this.peek) {
+      this.drawCardAt(g, this.peek, this.cam.z * this.dpr, ...this.devicePoint(this.peek), true);
+      this.drawSelection(g, this.peek, false, "#ffd166");
+    }
     if (this.marquee) {
       const [x0, y0] = this.toDevice(Math.min(this.marquee.x0, this.marquee.x1), Math.min(this.marquee.y0, this.marquee.y1));
       const [x1, y1] = this.toDevice(Math.max(this.marquee.x0, this.marquee.x1), Math.max(this.marquee.y0, this.marquee.y1));
@@ -1052,7 +1140,27 @@ export class BoardEngine {
       g.strokeRect(x0, y0, x1 - x0, y1 - y0);
     }
     // a face still fading in needs the next frame too
-    if (this.fading) this.invalidate();
+    if (this.fading) this.repaint();
+  }
+
+  /* While drawing, the parts of the board with no room left are hatched over,
+     so a stroke is not started where it cannot go down. */
+  private drawFull(g: CanvasRenderingContext2D) {
+    if (this.options.me == null || this.cam.z < TILE_ZOOM || (this.tool !== "brush" && this.gesture?.kind !== "drag")) return;
+    for (const id of this.visibleRegions(0)) {
+      if ((this.regions.get(id)?.cards.length ?? 0) < REGION_CAP) continue;
+      const [ox, oy] = regionOrigin(id);
+      const [x0, y0] = this.toDevice(ox, oy);
+      const size = REGION * this.cam.z * this.dpr;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.fillStyle = fullPattern(g, this.dpr);
+      g.fillRect(x0, y0, size, size);
+      g.strokeStyle = "rgba(255,255,255,0.35)";
+      g.lineWidth = Math.max(1, this.dpr * 1.5);
+      g.setLineDash([8 * this.dpr, 6 * this.dpr]);
+      g.strokeRect(x0, y0, size, size);
+      g.setLineDash([]);
+    }
   }
 
   private toDevice(x: number, y: number): [number, number] {
@@ -1091,24 +1199,100 @@ export class BoardEngine {
 
   private paintLayer() {
     this.layerDirty = false;
-    const g = this.lg;
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.clearRect(0, 0, this.layer.width, this.layer.height);
-    this.drawGrid(g);
-    if (this.cam.z < TILE_ZOOM) {
-      this.paintTiles(g);
+    const { z } = this.cam;
+    const scale = z * this.dpr;
+    const W = this.layer.width, H = this.layer.height;
+    const left = this.cam.x - this.width / 2 / z, top = this.cam.y - this.height / 2 / z;
+    // only when cards are drawn big enough for faces is the count worth taking
+    let facesOn = true;
+    if (z >= TILE_ZOOM && CARD_W * scale * 2 >= FACE_FROM) {
+      const right = left + this.width / z, bottom = top + this.height / z;
+      let inView = 0;
+      for (const card of this.cardsInView()) {
+        const reach = 56 * card.sc;
+        if (card.x + reach >= left && card.x - reach <= right && card.y + reach >= top && card.y - reach <= bottom && ++inView > FACE_VIEW_LIMIT) {
+          facesOn = false;
+          break;
+        }
+      }
+    }
+    if (facesOn !== this.facesOn) {
+      this.facesOn = facesOn;
+      this.layerStale = true;
+    }
+    const at = this.layerAt;
+    // a zoom: stretch what is painted for now, if painting it all is slow
+    // (only while the zoom is moving: a pan would slide in blank strips)
+    const zooming = z !== this.paintedZ;
+    this.paintedZ = z;
+    const stretch = z / at.z;
+    if (zooming && !this.layerStale && at.z !== z && this.paintMs > 6 && stretch > 0.85 && stretch < 1.6 && at.dpr === this.dpr && at.generation === this.generation && at.w === W && at.h === H) {
+      window.clearTimeout(this.settleTimer);
+      this.settleTimer = window.setTimeout(() => this.repaint(), 140);
       return;
     }
-    const halfW = this.width / 2 / this.cam.z;
-    const halfH = this.height / 2 / this.cam.z;
-    const left = this.cam.x - halfW, right = this.cam.x + halfW;
-    const top = this.cam.y - halfH, bottom = this.cam.y + halfH;
-    const u = this.cam.z * this.dpr;
-    for (const card of this.cardsInView()) {
-      const reach = 56 * card.sc;
-      if (card.x + reach < left || card.x - reach > right || card.y + reach < top || card.y - reach > bottom) continue;
-      this.drawCardAt(g, card, u, ...this.devicePoint(card), true);
+    if (!this.layerStale && at.z === z && at.dpr === this.dpr && at.generation === this.generation && at.w === W && at.h === H) {
+      const sx = Math.round((left - at.left) * scale), sy = Math.round((top - at.top) * scale);
+      if (sx === 0 && sy === 0) return;
+      if (Math.abs(sx) < W / 2 && Math.abs(sy) < H / 2) {
+        if (this.spare.width !== W || this.spare.height !== H) {
+          this.spare.width = W;
+          this.spare.height = H;
+        }
+        // the two canvases trade places, so the slide is a single copy
+        const g = this.spare.getContext("2d")!;
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.clearRect(0, 0, W, H);
+        g.drawImage(this.layer, -sx, -sy);
+        [this.layer, this.spare] = [this.spare, this.layer];
+        this.lg = g;
+        // the layer's own view moves by exactly those pixels, so what is
+        // painted next lines up with what was copied
+        at.left += sx / scale;
+        at.top += sy / scale;
+        if (sx) this.paintLayerRect(sx > 0 ? W - sx : 0, 0, Math.abs(sx), H);
+        if (sy) this.paintLayerRect(0, sy > 0 ? H - sy : 0, W, Math.abs(sy));
+        return;
+      }
     }
+    Object.assign(at, { left, top, z, dpr: this.dpr, generation: this.generation, w: W, h: H });
+    this.layerStale = false;
+    window.clearTimeout(this.settleTimer);
+    const started = performance.now();
+    this.paintLayerRect(0, 0, W, H);
+    this.paintMs = performance.now() - started;
+  }
+
+  /* Paints one rectangle of the layer (device pixels), for the view the
+     layer is at, which a pan leaves up to half a pixel off the camera's. */
+  private paintLayerRect(px: number, py: number, pw: number, ph: number) {
+    const camera = this.cam;
+    const { z } = camera;
+    const scale = z * this.dpr;
+    this.cam = { x: this.layerAt.left + this.width / 2 / z, y: this.layerAt.top + this.height / 2 / z, z };
+    const g = this.lg;
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.beginPath();
+    g.rect(px, py, pw, ph);
+    g.clip();
+    g.clearRect(px, py, pw, ph);
+    this.drawGrid(g, [px, py, px + pw, py + ph]);
+    if (z < TILE_ZOOM) {
+      this.paintTiles(g);
+    } else {
+      const left = this.layerAt.left + px / scale, right = this.layerAt.left + (px + pw) / scale;
+      const top = this.layerAt.top + py / scale, bottom = this.layerAt.top + (py + ph) / scale;
+      for (const card of this.cardsInView()) {
+        // half the card's diagonal plus its sprite's shadow, or a strip
+        // edge cuts off the shadow of a card just outside it
+        const reach = 66 * card.sc;
+        if (card.x + reach < left || card.x - reach > right || card.y + reach < top || card.y - reach > bottom) continue;
+        this.drawCardAt(g, card, scale, ...this.devicePoint(card), this.facesOn);
+      }
+    }
+    g.restore();
+    this.cam = camera;
   }
 
   /* Every card in the regions under the view, in stacking order. Rebuilt only
@@ -1172,18 +1356,21 @@ export class BoardEngine {
 
   /* A card that lands on top needs no repaint of anything under it. */
   private paintOnLayer(card: BoardCard) {
-    if (!this.layerDirty) this.drawCardAt(this.lg, card, this.cam.z * this.dpr, ...this.devicePoint(card), this.cam.z >= TILE_ZOOM);
+    if (!this.layerDirty) this.drawCardAt(this.lg, card, this.cam.z * this.dpr, ...this.devicePoint(card), this.cam.z >= TILE_ZOOM && this.facesOn);
     this.request();
   }
 
   /* The table itself: dots to read distance and movement by, faint region
      lines further out, and past the edge a shaded margin with a border, so it
      is always plain where the board ends. */
-  private drawGrid(g: CanvasRenderingContext2D) {
+  private drawGrid(g: CanvasRenderingContext2D, within?: [number, number, number, number]) {
     const W = this.layer.width, H = this.layer.height;
     const [left, top] = this.toDevice(-EXTENT, -EXTENT);
     const [right, bottom] = this.toDevice(EXTENT, EXTENT);
-    const x0 = Math.max(0, left), y0 = Math.max(0, top), x1 = Math.min(W, right), y1 = Math.min(H, bottom);
+    // only the part being painted (the clip trims the rest), a few pixels
+    // over so a dot or line just outside still lands its edge inside
+    const [cx0, cy0, cx1, cy1] = within ? [within[0] - 4, within[1] - 4, within[2] + 4, within[3] + 4] : [0, 0, W, H];
+    const x0 = Math.max(cx0, left), y0 = Math.max(cy0, top), x1 = Math.min(cx1, right), y1 = Math.min(cy1, bottom);
 
     const step = this.cam.z > 0.5 ? 64 : this.cam.z > 0.12 ? 256 : REGION;
     const spacing = step * this.cam.z * this.dpr;
@@ -1194,6 +1381,27 @@ export class BoardEngine {
       const startY = top + Math.ceil((y0 - top) / spacing) * spacing;
       for (let x = startX; x <= x1; x += spacing) {
         for (let y = startY; y <= y1; y += spacing) g.fillRect(x - size / 2, y - size / 2, size, size);
+      }
+    }
+    // the snap grid's cell edges, while it is on
+    if (this.brush.grid && this.options.me != null) {
+      const pitch = gridPitch(scaleByte(this.brush.scale));
+      const cellSpacing = pitch * this.cam.z * this.dpr;
+      if (cellSpacing >= 6) {
+        g.strokeStyle = "rgba(255,255,255,0.09)";
+        g.lineWidth = Math.max(1, this.dpr);
+        g.beginPath();
+        // edges halfway between cell centres, which sit on multiples of the pitch
+        const [edgeX, edgeY] = this.toDevice(pitch / 2, pitch / 2);
+        for (let x = edgeX + Math.ceil((x0 - edgeX) / cellSpacing) * cellSpacing; x <= x1; x += cellSpacing) {
+          g.moveTo(Math.round(x) + 0.5, y0);
+          g.lineTo(Math.round(x) + 0.5, y1);
+        }
+        for (let y = edgeY + Math.ceil((y0 - edgeY) / cellSpacing) * cellSpacing; y <= y1; y += cellSpacing) {
+          g.moveTo(x0, Math.round(y) + 0.5);
+          g.lineTo(x1, Math.round(y) + 0.5);
+        }
+        g.stroke();
       }
     }
     // region lines once the dots are too far apart to read the scale by
@@ -1259,7 +1467,7 @@ export class BoardEngine {
     }
   }
 
-  private drawSelection(g: CanvasRenderingContext2D, card: BoardCard, handles: boolean) {
+  private drawSelection(g: CanvasRenderingContext2D, card: BoardCard, handles: boolean, colour?: string) {
     const u = card.sc * this.cam.z * this.dpr;
     // handles bigger than the card would hide it: only the outline then
     if (CARD_W * u < 18 * this.dpr) handles = false;
@@ -1268,7 +1476,7 @@ export class BoardEngine {
     const w = CARD_W * u + 6 * this.dpr;
     const h = CARD_H * u + 6 * this.dpr;
     const mine = card.owner === this.options.me;
-    g.strokeStyle = mine ? "#ff66ab" : "#ffd166";
+    g.strokeStyle = colour ?? (mine ? "#ff66ab" : "#ffd166");
     g.lineWidth = 2 * this.dpr;
     g.beginPath();
     g.roundRect(-w / 2, -h / 2, w, h, 6 * this.dpr);
@@ -1371,6 +1579,24 @@ export class BoardEngine {
       return;
     }
     if (this.pointers.size > 2) return;
+    // Alt-click lists the cards under the pointer, for anyone looking
+    if (e.altKey && e.button === 0 && this.cam.z >= TILE_ZOOM) {
+      this.pointers.delete(e.pointerId);
+      this.openStack(e.clientX, e.clientY);
+      return;
+    }
+    if (e.pointerType === "touch" && this.tool !== "brush" && this.cam.z >= TILE_ZOOM) {
+      const { clientX, clientY } = e;
+      this.press = {
+        x: clientX,
+        y: clientY,
+        timer: window.setTimeout(() => {
+          this.press = null;
+          this.finishGesture();
+          this.openStack(clientX, clientY);
+        }, PRESS_MS),
+      };
+    }
     const pan = () => {
       this.gesture = { kind: "pan", startX: e.clientX, startY: e.clientY, camX: this.cam.x, camY: this.cam.y };
     };
@@ -1390,7 +1616,7 @@ export class BoardEngine {
     }
     if (this.tool === "brush") {
       this.setSelection([]);
-      this.gesture = { kind: "brush", lastX: x, lastY: y, carry: Infinity, changes: [] };
+      this.gesture = { kind: "brush", lastX: x, lastY: y, carry: Infinity, changes: [], cells: new Set() };
       this.deal(x, y, x, y + 1);
       return;
     }
@@ -1418,11 +1644,12 @@ export class BoardEngine {
     // grabbing one of a selection moves all of it
     const cards = this.ownSelection().map((held) => ({ card: held, before: stateOf(held) }));
     this.lift(cards.map((held) => held.card));
-    this.gesture = { kind: "drag", cards, lastX: x, lastY: y, moved: false };
+    this.gesture = { kind: "drag", cards, lastX: x, lastY: y, moved: false, lead: card, startX: x, startY: y };
   }
 
   private move(e: PointerEvent) {
     if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.press && (this.pointers.size > 1 || Math.hypot(e.clientX - this.press.x, e.clientY - this.press.y) > PRESS_SLOP)) this.cancelPress();
     if (e.pointerType === "mouse") this.options.onPointerAt?.(this.toWorld(e.clientX, e.clientY));
     const gesture = this.gesture;
     if (!gesture) {
@@ -1453,8 +1680,15 @@ export class BoardEngine {
         return;
       }
       case "drag": {
-        const dx = Math.round(x - gesture.lastX);
-        const dy = Math.round(y - gesture.lastY);
+        let dx = Math.round(x - gesture.lastX);
+        let dy = Math.round(y - gesture.lastY);
+        if (this.brush.grid) {
+          // the grabbed card goes from cell to cell, the rest with it
+          const lead = gesture.cards.find(({ card }) => card === gesture.lead)?.before ?? stateOf(gesture.lead);
+          const pitch = gridPitch(gesture.lead.s);
+          dx = snapTo(lead.x + x - gesture.startX, pitch) - gesture.lead.x;
+          dy = snapTo(lead.y + y - gesture.startY, pitch) - gesture.lead.y;
+        }
         if (!dx && !dy) return;
         for (const { card } of gesture.cards) {
           card.x = clampCoord(card.x + dx);
@@ -1493,6 +1727,7 @@ export class BoardEngine {
 
   private up(e: PointerEvent) {
     this.pointers.delete(e.pointerId);
+    this.cancelPress();
     if (this.gesture?.kind === "pinch") {
       // the finger left behind carries on as a pan, not a jump
       const rest = [...this.pointers.values()][0];
@@ -1509,15 +1744,22 @@ export class BoardEngine {
     if (gesture.kind === "drag" || gesture.kind === "turn" || gesture.kind === "size") {
       const held = gesture.kind === "drag" ? gesture.cards : [{ card: gesture.card, before: gesture.before }];
       // each set back down where it was, then moved through commit like any edit
+      let full = false;
       const changes: Change[] = held.map(({ card, before }) => {
-        const after = stateOf(card);
+        let after = stateOf(card);
+        // a card moved into a full part of the board stays where it was
+        if (regionOf(after.x, after.y) !== regionOf(before.x, before.y) && this.regionFull(after.x, after.y)) {
+          after = before;
+          full = true;
+        }
         Object.assign(card, { x: before.x, y: before.y, r: before.r, s: before.s });
         refresh(card);
         this.attach(card);
         return { n: card.n, before, after };
       });
       this.active = [];
-      if (gesture.kind !== "drag" || gesture.moved) this.commit(changes);
+      if (full) this.options.onRefused?.("full");
+      if (gesture.kind !== "drag" || gesture.moved) this.commit(changes.filter((change) => change.after !== change.before));
       else this.touch();
     } else if (gesture.kind === "marquee") {
       this.endMarquee(gesture.additive);
@@ -1550,6 +1792,7 @@ export class BoardEngine {
   private deal(fromX: number, fromY: number, toX: number, toY: number) {
     const gesture = this.gesture;
     if (gesture?.kind !== "brush" || !this.options.takeCard) return;
+    if (this.brush.grid) return this.dealOnGrid(gesture, fromX, fromY, toX, toY);
     const spacing = CARD_H * 0.42 * this.brush.scale;
     const dx = toX - fromX, dy = toY - fromY;
     const length = Math.hypot(dx, dy);
@@ -1567,8 +1810,12 @@ export class BoardEngine {
       // nothing is dealt past the board's edge
       if (Math.abs(at[0]) >= EXTENT || Math.abs(at[1]) >= EXTENT) continue;
       const turn = rotByte(this.brush.follow ? direction + Math.PI / 2 : 0);
-      // the stroke leaves a gap over someone's fresh drawing, and while the
-      // viewer is out of allowance, rather than ending
+      // the stroke leaves a gap over a full part of the board, someone's
+      // fresh drawing, and while the viewer is out of allowance, rather than ending
+      if (this.regionFull(at[0], at[1])) {
+        this.options.onRefused?.("full");
+        continue;
+      }
       if (this.coversFresh(at[0], at[1], turn, scaleByte(this.brush.scale))) {
         this.options.onRefused?.("protected");
         continue;
@@ -1599,6 +1846,57 @@ export class BoardEngine {
     if (dealt && gesture.changes.filter((change) => !change.sent).length >= 40) this.flushStroke(gesture);
   }
 
+  /* The brush on the grid: one upright card in each cell the stroke passes
+     through, none in a cell that already has one of the viewer's cards of
+     this size in it, so going over a cell again does not stack cards. */
+  private dealOnGrid(gesture: Brush, fromX: number, fromY: number, toX: number, toY: number) {
+    const s = scaleByte(this.brush.scale);
+    const pitch = gridPitch(s);
+    const length = Math.hypot(toX - fromX, toY - fromY);
+    // a third of a cell at a time, so a stroke never skips a cell
+    const steps = Math.max(1, Math.ceil(length / (pitch / 3)));
+    let dealt = 0;
+    for (let i = 0; i <= steps; i++) {
+      const x = snapTo(fromX + ((toX - fromX) * i) / steps, pitch), y = snapTo(fromY + ((toY - fromY) * i) / steps, pitch);
+      const cell = `${x},${y}`;
+      if (gesture.cells.has(cell)) continue;
+      gesture.cells.add(cell);
+      if (Math.abs(x) >= EXTENT || Math.abs(y) >= EXTENT) continue;
+      const there = this.cardAt(x, y, true);
+      if (there && there.x === x && there.y === y && there.s === s) continue;
+      if (this.regionFull(x, y)) {
+        this.options.onRefused?.("full");
+        continue;
+      }
+      if (this.coversFresh(x, y, 0, s)) {
+        this.options.onRefused?.("protected");
+        continue;
+      }
+      if (!this.takeToken()) {
+        // left for a later pass over it once there is allowance again
+        gesture.cells.delete(cell);
+        this.options.onRefused?.("slow");
+        continue;
+      }
+      const face = this.options.takeCard!();
+      if (!face) {
+        this.gesture = null;
+        this.endStroke(gesture);
+        return;
+      }
+      const n = this.nextN++;
+      const card = makeCard({ ...face, owner: this.options.me!, ownerName: "", n, z: ++this.topZ, x, y, r: 0, s, tint: this.brush.tint });
+      this.own.set(n, card);
+      this.attach(card);
+      gesture.changes.push({ n, before: null, after: stateOf(card) });
+      this.paintOnLayer(card);
+      dealt++;
+    }
+    gesture.lastX = toX;
+    gesture.lastY = toY;
+    if (dealt && gesture.changes.filter((change) => !change.sent).length >= 40) this.flushStroke(gesture);
+  }
+
   private wheel(e: WheelEvent) {
     e.preventDefault();
     this.pristine = false;
@@ -1610,6 +1908,9 @@ export class BoardEngine {
     this.cam.x = x - (x - this.cam.x) * (this.cam.z / z);
     this.cam.y = y - (y - this.cam.y) * (this.cam.z / z);
     this.cam.z = z;
+    // a pan held through the zoom carries on from here, or its next move
+    // would put the view back where the pan started
+    if (this.gesture?.kind === "pan") Object.assign(this.gesture, { startX: e.clientX, startY: e.clientY, camX: this.cam.x, camY: this.cam.y });
     this.invalidate();
     this.scheduleLoad();
   }
@@ -1677,6 +1978,50 @@ export class BoardEngine {
 
   private select(card: BoardCard | null) {
     this.setSelection(card ? [card] : []);
+  }
+
+  private cancelPress() {
+    if (!this.press) return;
+    window.clearTimeout(this.press.timer);
+    this.press = null;
+  }
+
+  private openStack(clientX: number, clientY: number) {
+    const [x, y] = this.toWorld(clientX, clientY);
+    this.options.onStack?.(this.cardsAt(x, y), clientX, clientY);
+  }
+
+  /* Every card covering a board point, top first. */
+  cardsAt(x: number, y: number): BoardCard[] {
+    const found: BoardCard[] = [];
+    const rx = Math.floor(x / REGION) + HALF;
+    const ry = Math.floor(y / REGION) + HALF;
+    for (let ix = rx - 1; ix <= rx + 1; ix++) {
+      for (let iy = ry - 1; iy <= ry + 1; iy++) {
+        const region = this.regions.get(ix * REGIONS_PER_SIDE + iy);
+        if (!region) continue;
+        for (const card of region.cards) {
+          const dx = x - card.x, dy = y - card.y;
+          const lx = dx * card.cos + dy * card.sin;
+          const ly = -dx * card.sin + dy * card.cos;
+          if (Math.abs(lx) <= (CARD_W / 2) * card.sc && Math.abs(ly) <= (CARD_H / 2) * card.sc) found.push(card);
+        }
+      }
+    }
+    return found.sort((a, b) => b.z - a.z);
+  }
+
+  /* Lifts a card above the pile to look at it, or puts it back (null). */
+  peekCard(card: BoardCard | null) {
+    if (card === this.peek) return;
+    this.peek = card;
+    this.request();
+  }
+
+  /* Selects a card picked from a stack list: the viewer's own, or anyone's
+     for a moderator. */
+  pickCard(card: BoardCard) {
+    if (card.owner === this.options.me || this.options.canModerate) this.select(card);
   }
 
   private setSelection(cards: Iterable<BoardCard>) {
@@ -1756,6 +2101,29 @@ function tintedFace(image: CanvasImageSource, tint: number, team: boolean): HTML
 
 /* Whether two turned card rectangles overlap (separating axis test), the
    same test the backend refuses covering edits with. */
+/* Dark diagonal stripes over a full region: the cards still show through. */
+let fullStripes: { pattern: CanvasPattern; dpr: number } | null = null;
+function fullPattern(g: CanvasRenderingContext2D, dpr: number): CanvasPattern {
+  if (fullStripes?.dpr === dpr) return fullStripes.pattern;
+  const size = Math.round(14 * dpr);
+  const tile = document.createElement("canvas");
+  tile.width = size;
+  tile.height = size;
+  const t = tile.getContext("2d")!;
+  t.fillStyle = "rgba(10,10,14,0.38)";
+  t.fillRect(0, 0, size, size);
+  t.strokeStyle = "rgba(10,10,14,0.55)";
+  t.lineWidth = size * 0.3;
+  t.beginPath();
+  for (const k of [-1, 0, 1]) {
+    t.moveTo(k * size, size);
+    t.lineTo(k * size + size, 0);
+  }
+  t.stroke();
+  fullStripes = { pattern: g.createPattern(tile, "repeat")!, dpr };
+  return fullStripes.pattern;
+}
+
 function overlaps(a: { x: number; y: number; r: number; s: number }, b: { x: number; y: number; r: number; s: number }): boolean {
   const shape = (card: typeof a) => {
     const scale = scaleOf(card.s);

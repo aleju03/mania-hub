@@ -8641,8 +8641,8 @@ msgstr "把 .osr 拖到这里，或点击选择文件"
 #~ msgstr "从卡盘拖出卡牌，或切换到画笔用卡牌作画。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
-msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
-msgstr "从卡盘拖出卡牌。在展板上拖动可框选你的卡牌，按住右键拖动可移动视图。"
+msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
+msgstr "从卡盘拖出卡牌。在展板上拖动可框选你的卡牌，按住右键拖动可移动视图。按住 Alt 点击一叠卡牌可查看其中每一张。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag the map's .osz here, or click to browse"
@@ -29000,3 +29000,15 @@ msgstr ""
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Zoom in to lay cards down."
 msgstr "放大后才能放下卡牌。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{count, plural, one {# card here} other {# cards here}}"
+msgstr "{count, plural, other {此处 # 张卡牌}}"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Snap to grid"
+msgstr "对齐网格"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "This part of the board is full. Try further out."
+msgstr "这片区域已满，试试更远的地方。"

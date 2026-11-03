@@ -3,9 +3,12 @@ import type { CollectedCard } from "#/lib/pack-collection";
 import { renderCollectionThumbnail } from "../../CardTile";
 import {
   cardThumbnailKeyForCollectionCard,
+  claimCardThumbnailErrorFallback,
+  forgetRemoteCardThumbnail,
   getMemoryCardThumbnail,
   loadPersistedCardThumbnail,
   loadR2CardThumbnails,
+  noteCardThumbnailStored,
 } from "../../cardThumbnailCache";
 
 /* The real card faces for the board's close-up view.
@@ -13,14 +16,18 @@ import {
    A face is the same thumbnail the collection grid shows, found the same way
    and in the same order of cost: this tab's memory, this browser's stored
    faces, the shared renders on R2, and only then a render here (which is then
-   shared for the next viewer). The board asks for a face only while a card is
+   shared for the next viewer). A shared render that is not there (never
+   made, or aged out of the pool) is drawn here instead and shared, as the
+   collection grid does, so the next viewer finds it. The board asks for a face only while a card is
    drawn big enough to read it, so a zoomed-out board never loads one, and a
    close view loads the few dozen on screen.
 
    Faces are per placement owner, since two collectors' copies of a player
    carry different frozen snapshots. */
 
-const FACE_LIMIT = 400;
+/* Faces kept at once; the board shows faces only while fewer cards than this
+   are in view (BoardEngine), or showing them would push out ones on screen. */
+export const FACE_LIMIT = 400;
 const BATCH = 60;
 
 type Face = { image: HTMLImageElement; at: number } | "loading" | "none";
@@ -43,7 +50,12 @@ export class BoardFaces {
   get(owner: number, key: string): { image: HTMLImageElement; at: number } | null {
     const id = `${owner}:${key}`;
     const face = this.faces.get(id);
-    if (typeof face === "object") return face.at ? face : null;
+    if (typeof face === "object") {
+      // in use: kept the longest
+      this.faces.delete(id);
+      this.faces.set(id, face);
+      return face.at ? face : null;
+    }
     if (face === undefined) {
       this.faces.set(id, "loading");
       this.queue.add(id);
@@ -77,30 +89,45 @@ export class BoardFaces {
     await Promise.all(keyed.map(async (entry) => {
       if (!entry.thumb) return this.faces.set(entry.id, "none");
       const url = getMemoryCardThumbnail(entry.thumb) ?? (await loadPersistedCardThumbnail(entry.thumb));
-      if (url) this.show(entry.id, url);
+      if (url) this.show(entry.id, url, entry.card, entry.thumb);
       else remote.push(entry);
     }));
     if (remote.length === 0) return;
     const urls = await loadR2CardThumbnails(remote.map((entry) => entry.thumb!)).catch(() => ({} as Record<string, string>));
     await Promise.all(remote.map(async (entry) => {
       const url = urls[entry.thumb!];
-      if (url) return this.show(entry.id, url);
-      const rendered = await renderCollectionThumbnail(entry.card).catch(() => null);
-      if (rendered) this.show(entry.id, rendered.url);
-      else this.faces.set(entry.id, "none");
+      if (url) return this.show(entry.id, url, entry.card, entry.thumb);
+      await this.render(entry.id, entry.card);
     }));
   }
 
-  private show(id: string, url: string) {
+  /* Draws a face here; the render is kept in this browser and shared. */
+  private async render(id: string, card: CollectedCard) {
+    const rendered = await renderCollectionThumbnail(card).catch(() => null);
+    if (rendered) this.show(id, rendered.url);
+    else this.faces.set(id, "none");
+  }
+
+  private show(id: string, url: string, card?: CollectedCard, thumb?: string | null) {
     const image = new Image();
     const face = { image, at: 0 };
+    const shared = /^https?:/.test(url);
     image.decoding = "async";
     image.onload = () => {
       // stamped on arrival, which is when its fade-in starts
       face.at = performance.now();
+      if (shared && card) noteCardThumbnailStored(card, url);
       this.wake();
     };
-    image.onerror = () => this.faces.set(id, "none");
+    image.onerror = () => {
+      // only a shared render can be missing (local ones are blob URLs); one
+      // render per card a session, so a failing render cannot loop
+      if (shared && card && thumb) {
+        forgetRemoteCardThumbnail(thumb);
+        if (claimCardThumbnailErrorFallback(thumb)) return void this.render(id, card);
+      }
+      this.faces.set(id, "none");
+    };
     image.src = url;
     this.faces.delete(id);
     this.faces.set(id, face);
