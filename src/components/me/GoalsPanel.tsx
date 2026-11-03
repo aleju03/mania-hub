@@ -10,10 +10,29 @@ import { DriftTriangles } from "../ui/DriftTriangles";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
 import { OsuLogo } from "../ui/OsuLogo";
+import { SelectMenu } from "../ui/SelectMenu";
 import { useAuth } from "../../lib/auth-context";
 import { getBeatmapsetForBeatmap, searchBeatmaps } from "../../lib/osu";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
-import { describeGoal, goalAgeLabel, goalDurationLabel, GOAL_SPEED_LABELS, goalSpeedBucket, nf, trimZeros } from "../../lib/goal-format";
+import {
+  danGoalLadderLabel,
+  danGoalLevelLabel,
+  danGoalSkillLabel,
+  danGoalTargetGrade,
+  describeGoal,
+  formatRatingTarget,
+  goalAgeLabel,
+  goalDurationLabel,
+  GOAL_SPEED_LABELS,
+  goalSpeedBucket,
+  nf,
+  parseDanGoalTarget,
+  ratingGoalAxisLabel,
+  trimZeros,
+} from "../../lib/goal-format";
+import { danLadderBounds, danScaleContextFor, danScaleImage } from "../../lib/dan-images";
+import { fetchMyDataSkills, type MyDataSkillBreakdown, type MyDataSkillMode } from "../../lib/my-data";
+import { modeOverall, msdSkillsetMeta, publishesTechnical, qualifyingSkillModes, skillModeEntries } from "../../lib/skill-axes";
 import { isGoalDeleted, queueGoalDelete, subscribeGoalsChanged } from "../../lib/goal-toasts";
 import { playGoalDeletedSound } from "../../lib/ui-sounds";
 import {
@@ -36,6 +55,7 @@ import { scaledPx } from "#/lib/ui-scale-values";
 const ICONS = {
   beatmapsets: "/images/icons/beatmapsets.svg",
   contests: "/images/icons/contests.svg",
+  prism: "/images/icons/prism.svg",
   rankings: "/images/icons/rankings.svg",
   search: "/images/icons/search.svg",
   tournaments: "/images/icons/tournaments.svg",
@@ -65,8 +85,8 @@ function PageShell({ children }: { children: ReactNode }) {
   );
 }
 
-type GoalScope = "pp" | "pp-count" | "rank" | "map-acc" | "map" | "map-grade" | "map-fc";
-type GoalGroup = "profile" | "map";
+type GoalScope = "pp" | "pp-count" | "rank" | "dan" | "rating" | "map-acc" | "map" | "map-grade" | "map-fc";
+type GoalGroup = "profile" | "skill" | "map";
 type RankScope = "global" | "country";
 
 const GOAL_SPEED_OPTIONS: GoalSpeedBucket[] = ["normal", "ht", "dt"];
@@ -131,6 +151,28 @@ const GOAL_TYPES: GoalTypeMeta[] = [
     placeholder: "500",
   },
   {
+    kind: "reach_dan",
+    label: msg`Dan`,
+    hint: "dan level",
+    description: "Reach a dan level, overall or in one skillset.",
+    group: "skill",
+    scope: "dan",
+    accent: "#e0b45c",
+    iconSrc: ICONS.tournaments,
+    placeholder: "10",
+  },
+  {
+    kind: "reach_rating",
+    label: msg`Rating`,
+    hint: "skill rating",
+    description: "Reach a skill rating, overall or in one skillset.",
+    group: "skill",
+    scope: "rating",
+    accent: "#9b8cf0",
+    iconSrc: ICONS.prism,
+    placeholder: "30",
+  },
+  {
     kind: "pass",
     label: msg`Pass`,
     hint: "clear a map",
@@ -177,6 +219,58 @@ const GOAL_TYPES: GoalTypeMeta[] = [
 ];
 
 const GRADES = ["A", "S", "SS"] as const;
+
+// The keymodes with a dan ladder (the dan leaderboards' keymodes).
+const DAN_GOAL_KEY_COUNTS = [4, 6, 7] as const;
+type DanSide = "rc" | "ln";
+
+interface ChoiceOption {
+  value: string;
+  label: string;
+}
+
+function skillModeFor(skills: MyDataSkillBreakdown | null, keyCount: number): MyDataSkillMode | null {
+  return skills?.modes.find((mode) => mode.keyCount === keyCount) ?? null;
+}
+
+/** Every level on a keymode's ladder, lowest first. */
+function danLevelOptions(keyCount: number, side: DanSide): ChoiceOption[] {
+  const { min, max } = danLadderBounds(danScaleContextFor(keyCount, side));
+  const options: ChoiceOption[] = [];
+  for (let level = min; level <= max; level++) options.push({ value: String(level), label: danGoalLevelLabel(level, keyCount, side) });
+  return options;
+}
+
+/** The player's dan on one ladder right now (overall, or one skillset's), from their skill card. */
+function currentDan(skills: MyDataSkillBreakdown | null, keyCount: number, side: DanSide, skillset: string): { rawDan: number; label: string } | null {
+  const danSide = skillModeFor(skills, keyCount)?.dan?.[side];
+  if (!danSide) return null;
+  const verdict = skillset ? danSide.skillsets?.[skillset] : danSide.skillsetsOnly ? null : danSide;
+  return verdict && Number.isFinite(verdict.rawDan) ? { rawDan: verdict.rawDan, label: verdict.label } : null;
+}
+
+/** The level after the player's current one, as the default dan target. */
+function nextDanLevel(skills: MyDataSkillBreakdown | null, keyCount: number, side: DanSide, skillset: string): number {
+  const { min, max } = danLadderBounds(danScaleContextFor(keyCount, side));
+  const now = currentDan(skills, keyCount, side, skillset);
+  return now ? Math.min(max, Math.max(min, Math.round(now.rawDan) + 1)) : min;
+}
+
+/** The rating axes the skill card shows for a keymode, Overall first. */
+function ratingAxisKeys(skills: MyDataSkillBreakdown | null, keyCount: number): string[] {
+  const mode = skillModeFor(skills, keyCount);
+  const axes = mode
+    ? skillModeEntries(mode).map((entry) => entry.axis)
+    : msdSkillsetMeta(keyCount).filter((meta) => meta.key !== "Technical" || publishesTechnical(keyCount)).map((meta) => meta.key);
+  return ["Overall", ...axes];
+}
+
+function currentRating(skills: MyDataSkillBreakdown | null, keyCount: number, axis: string): number | null {
+  const mode = skillModeFor(skills, keyCount);
+  if (!mode) return null;
+  const value = axis === "Overall" ? modeOverall(mode, "etterna").value : skillModeEntries(mode).find((entry) => entry.axis === axis)?.value;
+  return value != null && value > 0 ? value : null;
+}
 
 interface GoalSuggestionLabels {
   reachPpPlaceholder: string;
@@ -299,6 +393,16 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
   const [speedBucket, setSpeedBucket] = useState<GoalSpeedBucket>("normal");
   const [rankScope, setRankScope] = useState<RankScope>("global");
   const [rankTarget, setRankTarget] = useState("");
+  const [skillKeys, setSkillKeys] = useState(4);
+  const [danSide, setDanSide] = useState<DanSide>("rc");
+  const [danSkill, setDanSkill] = useState("");
+  const [danLevel, setDanLevel] = useState<number | null>(null);
+  const [ratingAxis, setRatingAxis] = useState("Overall");
+  const [ratingTarget, setRatingTarget] = useState("");
+  // The viewer's skill card, fetched the first time a dan or rating goal is picked: it lists the
+  // keymodes, skillsets and current standings the composer offers.
+  const [skills, setSkills] = useState<MyDataSkillBreakdown | null>(null);
+  const [skillsRequested, setSkillsRequested] = useState(false);
 
   const [mapQuery, setMapQuery] = useState("");
   const [results, setResults] = useState<OsuBeatmapset[]>([]);
@@ -346,6 +450,19 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       cancelled = true;
     };
   }, [viewer]);
+
+  useEffect(() => {
+    if (!viewer || skillsRequested || (scope !== "dan" && scope !== "rating")) return;
+    setSkillsRequested(true);
+    void fetchMyDataSkills()
+      .then((result) => {
+        setSkills(result);
+        // Start on the keymode the player plays most.
+        const main = qualifyingSkillModes(result)[0]?.keyCount;
+        if (main != null && danLevel == null && ratingTarget === "") setSkillKeys(main);
+      })
+      .catch(() => {});
+  }, [viewer, skillsRequested, scope, danLevel, ratingTarget]);
 
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -493,6 +610,18 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     } else if (goal.kind === "reach_rank") {
       setRankScope(goal.targetGrade === "country" ? "country" : "global");
       if (goal.targetValue != null) setRankTarget(String(Math.round(goal.targetValue)));
+    } else if (goal.kind === "reach_dan") {
+      const target = parseDanGoalTarget(goal.targetGrade);
+      const keyCount = goal.targetCount ?? 4;
+      const { max } = danLadderBounds(danScaleContextFor(keyCount, target.side));
+      setSkillKeys(keyCount);
+      setDanSide(target.side);
+      setDanSkill(target.skillset ?? "");
+      setDanLevel(Math.min(max, (goal.targetValue ?? 0) + 1));
+    } else if (goal.kind === "reach_rating") {
+      setSkillKeys(goal.targetCount ?? 4);
+      setRatingAxis(goal.targetGrade ?? "Overall");
+      setRatingTarget(formatRatingTarget((goal.targetValue ?? 0) + 1));
     } else if (goal.beatmapId && goal.beatmapsetId) {
       setResolved({ id: goal.beatmapId, beatmapsetId: goal.beatmapsetId, label: goal.beatmapLabel ?? `map #${goal.beatmapId}`, cover: coverUrl(goal.beatmapsetId) ?? "" });
       if (goal.kind === "accuracy" && goal.targetValue != null) setAccPct(String(Math.round(goal.targetValue * 100)));
@@ -501,11 +630,19 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // An untouched level defaults to the one after the player's current dan; a stale axis (from
+  // another keymode) falls back to Overall.
+  const danLevelValue = danLevel ?? nextDanLevel(skills, skillKeys, danSide, danSkill);
+  const ratingAxes = ratingAxisKeys(skills, skillKeys);
+  const ratingAxisValue = ratingAxes.includes(ratingAxis) ? ratingAxis : "Overall";
+
   const canSubmit = (() => {
     if (creating) return false;
     if (scope === "pp") return Number(ppTarget) > 0;
     if (scope === "pp-count") return Number(ppTarget) > 0 && Number.isInteger(Number(ppCountTarget)) && Number(ppCountTarget) > 0;
     if (scope === "rank") return Number(rankTarget) > 0;
+    if (scope === "dan") return true;
+    if (scope === "rating") return Number(ratingTarget) > 0 && Number(ratingTarget) <= 100;
     if (!resolved) return false;
     if (scope === "map-acc") return Number(accPct) > 0 && Number(accPct) <= 100;
     return true;
@@ -523,6 +660,14 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     } else if (scope === "rank") {
       input.targetValue = Number(rankTarget);
       input.targetGrade = rankScope;
+    } else if (scope === "dan") {
+      input.targetValue = danLevelValue;
+      input.targetCount = skillKeys;
+      input.targetGrade = danGoalTargetGrade({ side: danSide, skillset: danSkill || null });
+    } else if (scope === "rating") {
+      input.targetValue = Number(ratingTarget);
+      input.targetCount = skillKeys;
+      input.targetGrade = ratingAxisValue;
     } else if (resolved) {
       input.beatmapId = resolved.id;
       input.beatmapsetId = resolved.beatmapsetId;
@@ -541,6 +686,8 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       setPpCountTarget("");
       setAccPct("");
       setRankTarget("");
+      setDanLevel(null);
+      setRatingTarget("");
       setSpeedBucket("normal");
       resetMapPicker();
       setComposerOpen(false);
@@ -550,7 +697,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     } finally {
       setCreating(false);
     }
-  }, [canSubmit, kind, scope, ppTarget, ppCountTarget, accPct, rankTarget, rankScope, grade, speedBucket, resolved, load, resetMapPicker, t]);
+  }, [canSubmit, kind, scope, ppTarget, ppCountTarget, accPct, rankTarget, rankScope, danLevelValue, skillKeys, danSide, danSkill, ratingTarget, ratingAxisValue, grade, speedBucket, resolved, load, resetMapPicker, t]);
 
   // Hide the card and hand the delete to the goal-toasts store: it waits out the undo window (the
   // window keeps counting across navigation, with the undo bar rendered from the root layout) and
@@ -588,7 +735,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
               <div className="text-[10.5px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">{t`goal tracker`}</div>
               <div className="mt-2 text-[16px] font-bold leading-snug text-white">{t`Log in with osu! to set goals.`}</div>
               <div className="mt-1.5 max-w-md text-[12.5px] leading-5 text-osu-f1">
-                <Trans>Targets track themselves from your mania plays: a pp number, a play worth, a play count, an accuracy, a clear, or a grade.</Trans>
+                <Trans>Targets track themselves from your mania plays: a pp number, a play worth, a play count, a rank, a dan, a rating, an accuracy, a clear, or a grade.</Trans>
               </div>
               <div className="mt-4 flex flex-wrap gap-1.5">
                 {GOAL_TYPES.map((type) => (
@@ -624,7 +771,45 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     } else if (cur != null) {
       hint = t`you're sitting at ${nf(cur)} right now`;
     }
+  } else if (kind === "reach_dan" && skills) {
+    const now = currentDan(skills, skillKeys, danSide, danSkill)?.label;
+    hint = now ? t`you're at ${now} right now` : t`no dan here yet`;
+  } else if (kind === "reach_rating" && skills) {
+    const value = currentRating(skills, skillKeys, ratingAxisValue);
+    const now = value != null ? value.toFixed(2) : null;
+    hint = now ? t`you're at ${now} right now` : t`no rating here yet`;
   }
+
+  const danKeyOptions: ChoiceOption[] = DAN_GOAL_KEY_COUNTS.map((keyCount) => ({ value: String(keyCount), label: `${keyCount}K` }));
+  const danSideOptions: ChoiceOption[] = [
+    { value: "rc", label: t`Regular` },
+    { value: "ln", label: t`LN` },
+  ];
+  const danSkillOptions: ChoiceOption[] = [
+    { value: "", label: danGoalSkillLabel(null, i18n) },
+    ...Object.keys(skillModeFor(skills, skillKeys)?.dan?.[danSide]?.skillsets ?? {}).map((id) => ({ value: id, label: danGoalSkillLabel(id, i18n) })),
+  ];
+  if (danSkill && !danSkillOptions.some((option) => option.value === danSkill)) danSkillOptions.push({ value: danSkill, label: danGoalSkillLabel(danSkill, i18n) });
+  const ratingKeyCounts = [...new Set([...qualifyingSkillModes(skills).map((mode) => mode.keyCount), skillKeys])].sort((a, b) => a - b);
+  const ratingKeyOptions: ChoiceOption[] = ratingKeyCounts.map((keyCount) => ({ value: String(keyCount), label: `${keyCount}K` }));
+  const ratingAxisOptions: ChoiceOption[] = ratingAxes.map((axis) => ({ value: axis, label: ratingGoalAxisLabel(axis, skillKeys, i18n) }));
+  const ratingNow = currentRating(skills, skillKeys, ratingAxisValue);
+  const ratingPlaceholder = ratingNow != null ? String(Math.ceil(ratingNow + 0.5)) : active.placeholder;
+  // A different keymode, side or skill is a different ladder: the level re-defaults to the next one.
+  const pickDanKeys = (value: string) => {
+    setSkillKeys(Number(value));
+    setDanSkill("");
+    setDanLevel(null);
+  };
+  const pickDanSide = (value: string) => {
+    setDanSide(value === "ln" ? "ln" : "rc");
+    setDanSkill("");
+    setDanLevel(null);
+  };
+  const pickDanSkill = (value: string) => {
+    setDanSkill(value);
+    setDanLevel(null);
+  };
 
   const mapSlot = resolved ? (
     <MapChip resolved={resolved} accent={accent} onReset={resetMapPicker} />
@@ -663,6 +848,22 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
         <Trans>
           Reach{" "}
           <RankScopeToggle value={rankScope} onChange={setRankScope} accent={accent} /> <NumberToken value={rankTarget} onChange={setRankTarget} placeholder={active.placeholder} prefix="#" accent={accent} width="5rem" ariaLabel={t`Target rank`} /> rank
+        </Trans>
+      ) : null}
+
+      {scope === "dan" ? (
+        <Trans>
+          Reach <ChoiceToken value={danSkill} options={danSkillOptions} onChange={pickDanSkill} accent={accent} ariaLabel={t`Skillset`} /> dan{" "}
+          <ChoiceToken value={String(danLevelValue)} options={danLevelOptions(skillKeys, danSide)} onChange={(value) => setDanLevel(Number(value))} accent={accent} ariaLabel={t`Dan level`} /> on{" "}
+          <SegmentToken value={String(skillKeys)} options={danKeyOptions} onChange={pickDanKeys} accent={accent} /> <SegmentToken value={danSide} options={danSideOptions} onChange={pickDanSide} accent={accent} />
+        </Trans>
+      ) : null}
+
+      {scope === "rating" ? (
+        <Trans>
+          Reach a <NumberToken value={ratingTarget} onChange={setRatingTarget} placeholder={ratingPlaceholder} accent={accent} width="4.5rem" decimal ariaLabel={t`Target rating`} />{" "}
+          <ChoiceToken value={ratingAxisValue} options={ratingAxisOptions} onChange={setRatingAxis} accent={accent} ariaLabel={t`Skillset`} /> rating on{" "}
+          <ChoiceToken value={String(skillKeys)} options={ratingKeyOptions} onChange={(value) => setSkillKeys(Number(value))} accent={accent} ariaLabel={t`Keymode`} />
         </Trans>
       ) : null}
 
@@ -717,6 +918,9 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       <section className="relative rounded-2xl bg-osu-b4">
         <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
           <DriftTriangles calm />
+        </div>
+        <div className="relative px-5 pt-5 sm:px-7 sm:pt-7">
+          <h2 className="text-[17px] font-bold text-white">{t`Track measurable goals automatically`}</h2>
         </div>
         <div className="relative flex flex-wrap items-end gap-x-6 gap-y-5 p-5 sm:gap-x-10 sm:p-7">
           <BigStat value={currentPpLabel} label={t`total pp`} accent="#ff8ec4" />
@@ -774,8 +978,8 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
 
 // --- board pieces ---------------------------------------------------------
 
-/* The eight goal types as one borderless row, profile climbs then map
-   challenges, split by a hairline rather than two labelled boxes. */
+/* The goal types as one borderless row, profile climbs, then skill
+   climbs, then map challenges, split by hairlines rather than labelled boxes. */
 function TypeRow({ kind, onSwitch }: { kind: GoalKind; onSwitch: (next: GoalKind) => void }) {
   const { i18n } = useLingui();
   return (
@@ -863,6 +1067,10 @@ function completedValueLabel(goal: UserGoal, i18n: I18n): string | null {
     }
     case "reach_rank":
       return `#${nf(value)}`;
+    case "reach_dan":
+      return danGoalLevelLabel(Math.round(value), goal.targetCount ?? 4, parseDanGoalTarget(goal.targetGrade).side);
+    case "reach_rating":
+      return value.toFixed(2);
     default:
       return null;
   }
@@ -929,7 +1137,7 @@ function ClearedRow({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: () 
   const { i18n, t } = useLingui();
   const took = goalDurationLabel(goal, i18n);
   const value = completedValueLabel(goal, i18n);
-  const movesToNextMilestone = goal.kind === "reach_pp" || goal.kind === "play_pp_count";
+  const movesToNextMilestone = goal.kind === "reach_pp" || goal.kind === "play_pp_count" || goal.kind === "reach_dan" || goal.kind === "reach_rating";
   return (
     <article className="group flex items-center gap-3.5 py-3">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-osu-green/15">
@@ -1104,6 +1312,44 @@ function RankScopeToggle({ value, onChange, accent }: { value: RankScope; onChan
             style={selected ? { backgroundColor: `${accent}26` } : undefined}
           >
             {option === "global" ? t`global` : t`country`}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
+// A pick from a list, drawn like the number tokens so the sentence reads as one line; the menu is
+// the site's own SelectMenu, not the browser's.
+function ChoiceToken({ value, options, onChange, accent, ariaLabel }: { value: string; options: ChoiceOption[]; onChange: (value: string) => void; accent: string; ariaLabel: string }) {
+  return (
+    <SelectMenu
+      value={value}
+      options={options}
+      onChange={onChange}
+      ariaLabel={ariaLabel}
+      className="inline-block align-middle"
+      triggerClassName="inline-flex cursor-pointer items-center gap-1 rounded-md bg-osu-b5/55 py-1 pl-2 pr-1.5 text-[16px] font-extrabold text-white transition-colors hover:bg-osu-b5/80"
+      triggerStyle={{ boxShadow: `inset 0 -2px 0 ${accent}` }}
+    />
+  );
+}
+
+function SegmentToken({ value, options, onChange, accent }: { value: string; options: ChoiceOption[]; onChange: (value: string) => void; accent: string }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded-lg border border-osu-b3/45 bg-osu-b5/55 p-0.5 align-middle text-[12.5px] font-bold">
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            aria-pressed={selected}
+            className={`rounded-md px-2 py-1 transition-colors ${selected ? "text-white" : "text-osu-l2 hover:text-white"}`}
+            style={selected ? { backgroundColor: `${accent}26` } : undefined}
+          >
+            {option.label}
           </button>
         );
       })}
@@ -1444,6 +1690,16 @@ function GoalReadout({ goal }: { goal: UserGoal }) {
     }
     case "grade":
       return <GradeProgress current={bestGradeOf(goal.progress)} />;
+    case "reach_dan": {
+      const now = goal.progress?.currentLabel;
+      return now ? <StatLine main={t`now ${now}`} /> : <Muted>{t`no dan here yet`}</Muted>;
+    }
+    case "reach_rating": {
+      if (current == null || target == null) return <Muted>{t`no rating here yet`}</Muted>;
+      const now = current.toFixed(2);
+      const left = (target - current).toFixed(2);
+      return <StatLine main={t`now ${now}`} sub={target - current > 0 ? t`+${left} to go` : null} />;
+    }
     default:
       return <Muted>{goal.progress?.detail ?? t`Tracking your plays`}</Muted>;
   }
@@ -1457,7 +1713,24 @@ function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; hre
   const meta = goalMeta(goal.kind);
   const cover = coverUrl(goal.beatmapsetId);
 
-  if (goal.kind === "reach_pp" || goal.kind === "reach_rank" || goal.kind === "play_pp_count") {
+  if (goal.kind === "reach_dan") {
+    const pct = progressPct(goal);
+    const target = parseDanGoalTarget(goal.targetGrade);
+    const keyCount = goal.targetCount ?? 4;
+    const level = goal.targetValue ?? 0;
+    const badge = danScaleImage(level, danScaleContextFor(keyCount, target.side));
+    return (
+      <GoalRing pct={pct} accent={accent} size={84} stroke={6}>
+        {badge ? (
+          <img src={badge} alt={danGoalLevelLabel(level, keyCount, target.side)} className="h-9 w-auto" loading="lazy" />
+        ) : (
+          <span className="text-[17px] font-extrabold text-white">{danGoalLevelLabel(level, keyCount, target.side)}</span>
+        )}
+      </GoalRing>
+    );
+  }
+
+  if (goal.kind === "reach_pp" || goal.kind === "reach_rank" || goal.kind === "play_pp_count" || goal.kind === "reach_rating") {
     const pct = progressPct(goal);
     return (
       <GoalRing pct={pct} accent={accent} size={84} stroke={6}>
@@ -1535,6 +1808,7 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
   const [value, setValue] = useState<string>(() => {
     if (goal.targetValue == null) return "";
     if (goal.kind === "accuracy") return trimZeros((goal.targetValue * 100).toFixed(2));
+    if (goal.kind === "reach_rating") return formatRatingTarget(goal.targetValue);
     return String(Math.round(goal.targetValue));
   });
   const [count, setCount] = useState<string>(goal.targetCount != null ? String(goal.targetCount) : "");
@@ -1543,6 +1817,8 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
   );
   const [speed, setSpeed] = useState<GoalSpeedBucket>(goalSpeedBucket(goal));
   const [rankScope, setRankScope] = useState<RankScope>(goal.targetGrade === "country" ? "country" : "global");
+  const danTarget = parseDanGoalTarget(goal.targetGrade);
+  const keyCount = goal.targetCount ?? 4;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
 
@@ -1556,7 +1832,10 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
       case "play_pp_count":
         return Number(value) > 0 && Number.isInteger(Number(count)) && Number(count) > 0;
       case "accuracy":
+      case "reach_rating":
         return Number(value) > 0 && Number(value) <= 100;
+      case "reach_dan":
+        return value !== "";
       default:
         return true;
     }
@@ -1583,6 +1862,13 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
       case "accuracy":
         input.targetValue = Number(value) / 100;
         input.speedBucket = speed;
+        break;
+      // The keymode and what the goal measures stay; only the target moves.
+      case "reach_dan":
+      case "reach_rating":
+        input.targetValue = Number(value);
+        input.targetCount = goal.targetCount;
+        input.targetGrade = goal.targetGrade;
         break;
       case "grade":
         input.targetGrade = grade;
@@ -1634,6 +1920,17 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
           <Trans>
             Hit{" "}
             <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="%" accent={accent} width="4rem" decimal ariaLabel={t`Target accuracy`} /> <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
+          </Trans>
+        ) : null}
+        {goal.kind === "reach_dan" ? (
+          <Trans>
+            Reach {danGoalSkillLabel(danTarget.skillset, i18n)} dan{" "}
+            <ChoiceToken value={value} options={danLevelOptions(keyCount, danTarget.side)} onChange={setValue} accent={accent} ariaLabel={t`Dan level`} /> on {danGoalLadderLabel(keyCount, danTarget.side, i18n)}
+          </Trans>
+        ) : null}
+        {goal.kind === "reach_rating" ? (
+          <Trans>
+            Reach a <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} accent={accent} width="4.5rem" decimal ariaLabel={t`Target rating`} /> {ratingGoalAxisLabel(goal.targetGrade, keyCount, i18n)} rating on {keyCount}K
           </Trans>
         ) : null}
         {goal.kind === "grade" ? (

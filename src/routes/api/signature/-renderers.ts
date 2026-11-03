@@ -576,6 +576,12 @@ function goalReadout(goal: UserGoal): string {
     case "grade":
       if (goal.progress?.currentGrade) return `best ${goal.progress.currentGrade}`;
       break;
+    case "reach_dan":
+      if (goal.progress?.currentLabel) return `now ${goal.progress.currentLabel}`;
+      break;
+    case "reach_rating":
+      if (current == null) break;
+      return `now ${current.toFixed(2)}`;
     default:
       break;
   }

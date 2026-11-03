@@ -1,8 +1,10 @@
 import type { I18n, MessageDescriptor } from "@lingui/core";
 import { msg, plural } from "@lingui/core/macro";
 
+import { danScaleContextFor, danScaleLabel } from "./dan-images";
 import { getI18n } from "./i18n";
 import { DEFAULT_LOCALE } from "./locale";
+import { DAN_SKILLSET_META, OVERALL_AXIS_META, skillAxisMeta } from "./skill-axes";
 import type { GoalKind, GoalSpeedBucket, UserGoal } from "./goals";
 
 // Goal display formatting shared by the goals page (GoalsPanel) and the root-mounted goal toasts.
@@ -73,6 +75,47 @@ export function goalDurationLabel(goal: Pick<UserGoal, "createdAt" | "completedA
   return i18n._(msg`took ${span}`);
 }
 
+// Dan and rating goals carry their keymode in targetCount and what they measure in targetGrade
+// (the backend's goals.ts): "rc" / "ln" for a side's dan, "rc:jack" for one skillset's, and for a
+// rating the skill card's axis ("Overall", a skillset name, "pattern:ln").
+export interface DanGoalTarget {
+  side: "rc" | "ln";
+  skillset: string | null;
+}
+
+export function parseDanGoalTarget(targetGrade: string | null | undefined): DanGoalTarget {
+  const match = /^(rc|ln)(?::([a-z]{2,24}))?$/.exec(targetGrade ?? "");
+  return match ? { side: match[1] as "rc" | "ln", skillset: match[2] ?? null } : { side: "rc", skillset: null };
+}
+
+export function danGoalTargetGrade(target: DanGoalTarget): string {
+  return target.skillset ? `${target.side}:${target.skillset}` : target.side;
+}
+
+/** A dan level on its keymode's ladder: "10", "Alpha", "Gamma", "Terra". */
+export function danGoalLevelLabel(level: number, keyCount: number, side: "rc" | "ln"): string {
+  return danScaleLabel(level, danScaleContextFor(keyCount, side));
+}
+
+export function danGoalLadderLabel(keyCount: number, side: "rc" | "ln", i18n: I18n): string {
+  return side === "ln" ? i18n._(msg`${keyCount}K LN`) : i18n._(msg`${keyCount}K regular`);
+}
+
+export function danGoalSkillLabel(skillset: string | null, i18n: I18n): string {
+  if (!skillset) return i18n._(OVERALL_AXIS_META.labelMsg);
+  const meta = DAN_SKILLSET_META[skillset];
+  return meta ? i18n._(meta.labelMsg) : skillset;
+}
+
+export function ratingGoalAxisLabel(axis: string | null | undefined, keyCount: number, i18n: I18n): string {
+  const meta = skillAxisMeta(axis ?? "Overall", keyCount);
+  return meta ? i18n._(meta.labelMsg) : (axis ?? "");
+}
+
+export function formatRatingTarget(value: number): string {
+  return trimZeros(value.toFixed(2));
+}
+
 export function describeGoal(goal: UserGoal, i18n: I18n): string {
   const map = goal.beatmapLabel ?? (goal.beatmapId ? i18n._(msg`map #${goal.beatmapId}`) : i18n._(msg`a map`));
   const speed = goalSpeedLabel(goal, i18n);
@@ -110,6 +153,21 @@ export function describeGoal(goal: UserGoal, i18n: I18n): string {
     case "grade": {
       const grade = goal.targetGrade ?? "S";
       return i18n._(msg`Get ${grade} ${speed} on ${map}`);
+    }
+    case "reach_dan": {
+      const target = parseDanGoalTarget(goal.targetGrade);
+      const keyCount = goal.targetCount ?? 4;
+      const level = danGoalLevelLabel(goal.targetValue ?? 0, keyCount, target.side);
+      const ladder = danGoalLadderLabel(keyCount, target.side, i18n);
+      if (!target.skillset) return i18n._(msg`Reach dan ${level} on ${ladder}`);
+      const skill = danGoalSkillLabel(target.skillset, i18n);
+      return i18n._(msg`Reach ${skill} dan ${level} on ${ladder}`);
+    }
+    case "reach_rating": {
+      const keyCount = goal.targetCount ?? 4;
+      const rating = formatRatingTarget(goal.targetValue ?? 0);
+      const skill = ratingGoalAxisLabel(goal.targetGrade, keyCount, i18n);
+      return i18n._(msg`Reach a ${rating} ${skill} rating on ${keyCount}K`);
     }
     default:
       return i18n._(msg`Goal`);

@@ -40,6 +40,10 @@ interface SelectMenuProps<T extends string> {
   // solid fill would sit on it as a grey box.
   translucent?: boolean;
   disabled?: boolean;
+  // Replaces the trigger button's own look, for a select drawn inline in a
+  // sentence (the goal builder) where the toolbar chip would sit too small.
+  triggerClassName?: string;
+  triggerStyle?: CSSProperties;
 }
 
 // The popover scrolls past this rather than growing, and flips above the button
@@ -59,6 +63,8 @@ export function SelectMenu<T extends string>({
   block = false,
   translucent = false,
   disabled = false,
+  triggerClassName,
+  triggerStyle,
 }: SelectMenuProps<T>) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
@@ -169,7 +175,8 @@ export function SelectMenu<T extends string>({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold text-osu-l2 transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50 ${
+        style={triggerStyle}
+        className={triggerClassName ?? `inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold text-osu-l2 transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50 ${
           translucent ? "border-white/[0.06] bg-white/[0.06] hover:bg-white/[0.1]" : "border-osu-b3/50 bg-osu-b4 hover:border-osu-b3 hover:bg-osu-b4/80"
         } ${
           block ? "w-full justify-between" : ""

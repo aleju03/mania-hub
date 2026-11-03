@@ -70,8 +70,9 @@ The board for plays the skill ratings leave out (`/rankings?tab=unrated`) and th
 
 ## Goals
 
-Logged-in players set targets in `user_goals` (`reach_pp`, `play_pp`, `play_pp_count`, `accuracy`, `pass`, `grade`, `fc`, `reach_rank`), always owned by the osu!-verified viewer id.
+Logged-in players set targets in `user_goals` (`reach_pp`, `play_pp`, `play_pp_count`, `accuracy`, `pass`, `grade`, `fc`, `reach_rank`, `reach_dan`, `reach_rating`), always owned by the osu!-verified viewer id.
 
 - Play-shaped goals complete when ingest sees a matching play (`evaluateScoreGoals`, guarded so a goals bug cannot drop a score). Total-pp goals settle on top-play confirmation (`evaluatePpGoals`) and reconcile on read; profile refresh jobs also reconcile PP/rank goals.
+- Dan and rating goals keep the keymode in `target_count` and what they measure in `target_grade` (`rc`, `ln`, `rc:jack`; a rating axis such as `Overall`, `Stream`, `pattern:ln`). They read the skills job's own row (`readOfficialSkillModes`, never the Companella merge): a dan level counts once the label names it (low tier included), a rating once it reads as the target at two decimals, after the same display shrink the skill card applies. They settle after each skills compute (Node and native follow-up) and on read.
 - A `live_meta` marker (`user_goals_changed_at`) plus a negative cache keep the ingest hot path cheap.
 - Completion emits SSE `goal_completed`. Endpoints `/api/goals`, `/api/goals/create`, `/api/goals/delete`; route `/goals`.
