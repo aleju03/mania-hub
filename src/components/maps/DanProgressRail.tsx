@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
+import { danVariantForOffset } from "#dan/dan-estimator/labels";
 import {
   danLadderBounds,
   danScaleImage,
@@ -36,6 +37,14 @@ export function danRailWindow(context: DanScaleContext, values: number[]): DanRa
   return { lo, hi };
 }
 
+/** The hovered value as a verdict would name it: the level plus its tier ("10++"). */
+function danHoverLabel(value: number, context: DanScaleContext): string {
+  const { min, max } = danLadderBounds(context);
+  const level = Math.min(max, Math.max(min, Math.round(value)));
+  const offset = Math.max(-0.5, Math.min(0.5, value - level));
+  return `${danScaleLabel(level, context)}${danVariantForOffset(offset) ?? ""}`;
+}
+
 /** "beta+" is the backend's own label; the rail titles it like a course name. */
 function danDisplayLabel(label: string | null | undefined): string | null {
   if (!label) return null;
@@ -51,6 +60,7 @@ export function DanProgressRail({
   landed,
   landedLabel,
   rejected = false,
+  formatLabel,
 }: {
   context: DanScaleContext;
   chart: number | null;
@@ -59,6 +69,8 @@ export function DanProgressRail({
   landedLabel?: string | null;
   /** The clear credits nothing, so there is no landed level to draw. */
   rejected?: boolean;
+  /** Applies the reader's label preference (whole dans) to the hover readout. */
+  formatLabel?: (label: string) => string;
 }) {
   const { t } = useLingui();
   const [hover, setHover] = useState<number | null>(null);
@@ -80,7 +92,13 @@ export function DanProgressRail({
     <div className="flex h-full min-h-[260px] flex-col gap-3">
       <div className="flex h-4 items-baseline justify-between gap-1">
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Dan credit</Trans></span>
-        {hover != null && <span className="text-[10px] tabular-nums text-osu-f1/70">{danScaleLabel(hover, context)} · {formatDanValue(hover)}</span>}
+        {hover != null && (
+          <span className="flex items-center gap-1.5 text-[10px] tabular-nums text-osu-f1/70">
+            {danDisplayLabel(formatLabel ? formatLabel(danHoverLabel(hover, context)) : danHoverLabel(hover, context))}
+            <span className="h-2.5 w-px bg-white/15" aria-hidden="true" />
+            {formatDanValue(hover)}
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)] items-center gap-2">
         <div className="flex min-w-0 flex-col gap-1.5">

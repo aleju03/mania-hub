@@ -219,6 +219,7 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
               landed={play.dan.creditedRating ?? null}
               landedLabel={play.dan.creditedLabel ? shownDanLabel(play.dan.creditedLabel, entry?.keyCount ?? 4, play.dan.family) : null}
               rejected={rejected}
+              formatLabel={(label) => shownDanLabel(label, entry?.keyCount ?? 4, play.dan?.family)}
             />
           </div>
         ) : showSkills ? <PlaySkillRatings play={play} keyCount={entry?.keyCount} /> : null}
