@@ -7,6 +7,9 @@ describe("history Overall", () => {
     expect(historyOverall(ratings, 4, false)).toBe(20);
     expect(historyOverall(ratings, 4, true)).toBeGreaterThan(19);
     expect(historyOverall({ Overall: 31 }, 7, true)).toBe(31);
+    // A Prism keymode averages its five skillsets and LN, best four.
+    const prism = { Overall: 24.55, Stream: 20.5, Jumpstream: 24.29, Handstream: 21.7, JackSpeed: 21.47, Chordjack: 23.16, Technical: 23.21, Speed: 23.06, "pattern:ln": 23.76 };
+    expect(historyOverall(prism, 7, true)).toBe(23.6);
   });
 });
 
