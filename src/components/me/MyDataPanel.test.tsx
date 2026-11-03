@@ -35,7 +35,15 @@ vi.mock("../../lib/my-data", () => ({
   MY_DATA_PAGE_SIZE: 50,
 }));
 vi.mock("../../lib/roster-self-track", () => ({ removeSelfFromRoster: mocks.stopTracking }));
-vi.mock("../../lib/live-backend", () => ({ openLiveEventSource: () => null }));
+vi.mock("../../lib/live-backend", () => ({
+  openLiveEventSource: () => null,
+  fetchLiveSupporterProfileLook: () => Promise.resolve({ frame: null, nameStyle: null, nameFont: null, profileTheme: null, customTheme: null }),
+  peekLiveSupporterCustomTheme: () => undefined,
+  peekLiveSupporterFrame: () => undefined,
+  peekLiveSupporterNameFont: () => undefined,
+  peekLiveSupporterNameStyle: () => undefined,
+  peekLiveSupporterProfileTheme: () => undefined,
+}));
 vi.mock("../layout/PageHeader", () => ({ PageHeader: () => null }));
 vi.mock("../ui/Avatar", () => ({ Avatar: () => null }));
 vi.mock("../ui/CountryFlag", () => ({ CountryFlag: () => null }));

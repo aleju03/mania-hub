@@ -28,6 +28,10 @@ export default defineConfig({
   // Restrict discovery so gitignored investigation copies never run as tests.
   test: {
     include: ["{src,scripts}/**/*.{test,spec}.?(c|m)[jt]s?(x)"],
+    // A full run otherwise starts a worker per CPU thread and holds the whole
+    // machine flat out (84C on the 16-thread dev PC); VITEST_MAX_WORKERS
+    // raises or lowers it for one run.
+    maxWorkers: Number(process.env.VITEST_MAX_WORKERS) || 6,
     // A route whose URL ends in /spec (the theme spec page), not a test.
     exclude: [...configDefaults.exclude, "src/routes/workshop.themes.spec.tsx"],
   },
