@@ -102,19 +102,17 @@ function DiscordToolPage() {
 function Hero({ info }: { info: DiscordPublicInfo }) {
   return (
     <section className="relative -mx-4 sm:mx-0">
-      {/* The art fades out on every side through a mask on the image itself, so
-          it melts into the page. No rounded clip or scrim on top: Chrome
-          anti-aliases a rounded clip per layer, and a bright edge leaked past
-          the scrim as a light line in the corner. */}
+      {/* The art fades into the page at the bottom only, through a mask on
+          the image itself. No scrim layered on top: Chrome anti-aliases a
+          rounded clip per layer, and a bright edge leaked past a scrim as a
+          light line in the corner. */}
       <img
         src="/images/discord/maniabot-hero-bg.webp"
         alt=""
-        className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-[50%_50%] opacity-90"
+        className="pointer-events-none absolute inset-0 h-full w-full select-none rounded-t-2xl object-cover object-[50%_35%] opacity-90"
         style={{
-          maskImage: "linear-gradient(to right, transparent 0%, #000 16%, #000 84%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 14%, #000 45%, transparent 100%)",
-          maskComposite: "intersect",
-          WebkitMaskImage: "linear-gradient(to right, transparent 0%, #000 16%, #000 84%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 14%, #000 45%, transparent 100%)",
-          WebkitMaskComposite: "source-in",
+          maskImage: "linear-gradient(to bottom, #000 45%, transparent 100%)",
+          WebkitMaskImage: "linear-gradient(to bottom, #000 45%, transparent 100%)",
         }}
       />
       {HERO_ART_SOURCE ? (
