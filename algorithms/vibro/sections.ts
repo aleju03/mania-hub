@@ -25,7 +25,8 @@ export type VibroReason =
   | "jumptrill"
   | "stacked_heads"
   | "flam_chords"
-  | "sustained_density";
+  | "sustained_density"
+  | "mash";
 
 export interface VibroSection {
   startTime: number;
@@ -47,7 +48,7 @@ export interface VibroAnalysis {
   reasonShares: Partial<Record<VibroReason, number>>;
 }
 
-const UNRATEABLE_REASONS: ReadonlySet<string> = new Set<VibroReason>(["jumptrill", "stacked_heads", "flam_chords"]);
+const UNRATEABLE_REASONS: ReadonlySet<string> = new Set<VibroReason>(["jumptrill", "stacked_heads", "flam_chords", "mash"]);
 
 export function isUnrateableExclusion(analysis: Pick<VibroAnalysis, "status" | "reasonShares"> | null | undefined): boolean {
   if (analysis?.status !== "excluded") return false;

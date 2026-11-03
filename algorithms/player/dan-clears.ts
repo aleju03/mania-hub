@@ -142,6 +142,7 @@ export interface DanClearEvidence {
   currency: "stable" | "v2";
   credential?: { level: string; courseName: string };
   hybridSecondary?: boolean;
+  tileValues?: Record<string, number>;
 }
 
 export function creditSkillsetPracticeClears(
@@ -173,7 +174,7 @@ export function creditSkillsetPracticeClears(
   });
 }
 
-export type RateVerdictMap = Map<string, { rawDan: number; side: "rc" | "ln"; displayName?: string | null; stale?: boolean } | null>;
+export type RateVerdictMap = Map<string, { rawDan: number; side: "rc" | "ln"; displayName?: string | null; stale?: boolean; msdValues?: Record<string, number> | null } | null>;
 
 function clearRatePercent(rate: number): number | null {
   if (!Number.isFinite(rate) || rate <= 0 || rate === 1) return null;
@@ -215,6 +216,10 @@ export function danMinOdFor(keyCount: number, side: "rc" | "ln" | null): number 
   return DAN_MIN_OD;
 }
 
+export function danOdFloorFor(floor: number, chart: Pick<ChartSkillInfo, "od" | "odRanked"> | undefined): number {
+  return chart?.odRanked === true && chart.od != null ? Math.min(floor, chart.od) : floor;
+}
+
 export type DanClearRejectReason =
   | "chart_unanalyzed"
   | "chart_ineligible"
@@ -239,6 +244,7 @@ export interface DanClearReject {
   minAccuracy: number | null;
   currency: "stable" | "v2" | null;
   od: number | null;
+  tileValues?: Record<string, number>;
 }
 
 export interface DanClearTarget {
@@ -303,9 +309,10 @@ export function collectDanClears(
       continue;
     }
     const target = danClearTargetFor(play, info, keyCount, rateVerdicts);
+    const tileValues = tileValuesForPlay(play, info, rateVerdicts);
     const aimed = target
-      ? { side: target.side, chartDan: target.rawDan, chartDanLabel: target.label }
-      : {};
+      ? { side: target.side, chartDan: target.rawDan, chartDanLabel: target.label, tileValues }
+      : { tileValues };
     if (!info.danEligible) {
       reject(play, "chart_ineligible", aimed);
       continue;
@@ -321,8 +328,8 @@ export function collectDanClears(
     const hybridRice = hybridRiceCreditFor(play, info, keyCount, target);
     const hybridLn = hybridRice ? null : hybridLnCreditFor(play, info, keyCount, target);
     const hybridOther = hybridRice ? { ...hybridRice, side: "rc" as const } : hybridLn ? { ...hybridLn, side: "ln" as const } : null;
-    const otherFloorMet = hybridOther != null && (playOd == null || playOd >= danMinOdFor(keyCount, hybridOther.side));
-    const primaryFloorMet = playOd == null || playOd >= danMinOdFor(keyCount, floorSide);
+    const otherFloorMet = hybridOther != null && (playOd == null || playOd >= danOdFloorFor(danMinOdFor(keyCount, hybridOther.side), info));
+    const primaryFloorMet = playOd == null || playOd >= danOdFloorFor(danMinOdFor(keyCount, floorSide), info);
     if (!primaryFloorMet) reject(play, "low_od", { ...aimed, od: playOd });
     if (!primaryFloorMet && !otherFloorMet) continue;
     const score = scoresByIdentity.get(play.identity);
@@ -364,15 +371,15 @@ export function collectDanClears(
       }
       if (play.vibroAdjustment) accuracy = conservativeVibroAccuracy(accuracy, play.vibroAdjustment.judgementShare);
       const primaryTile = side === "rc" && keyCount === 4
-        ? danSkillsetBucketsForPlay(danSkillsetBuckets(keyCount, side), play, info)[0]?.id ?? null
+        ? danSkillsetBucketsForPlay(danSkillsetBuckets(keyCount, side), play, info, tileValues)[0]?.id ?? null
         : null;
       const creditedDan = creditedDanFor(rawDan, accuracy, threshold, side, keyCount, { primaryTile });
       if (creditedDan == null) {
         const floor = Math.round((threshold - danCreditBelowBarWindowFor(side, keyCount)) * 1000) / 1000;
-        reject(play, "below_bar", { side, chartDan: rawDan, chartDanLabel, accuracy, bar: threshold, minAccuracy: floor, currency });
+        reject(play, "below_bar", { side, chartDan: rawDan, chartDanLabel, accuracy, bar: threshold, minAccuracy: floor, currency, tileValues });
         return;
       }
-      clears.push({ play, side, chartDan: rawDan, chartDanLabel, creditedDan, accuracy, bar: threshold, currency, ...(hybridSecondary ? { hybridSecondary } : {}) });
+      clears.push({ play, side, chartDan: rawDan, chartDanLabel, creditedDan, accuracy, bar: threshold, currency, tileValues, ...(hybridSecondary ? { hybridSecondary } : {}) });
     };
     if (!primaryFloorMet) {
     } else if (target) {
@@ -388,7 +395,7 @@ export function collectDanClears(
     if (clear.hybridSecondary) return false;
     reject(clear.play, "chart_repeat_limit", {
       side: clear.side, chartDan: clear.chartDan, chartDanLabel: clear.chartDanLabel,
-      accuracy: clear.accuracy, bar: clear.bar, currency: clear.currency,
+      accuracy: clear.accuracy, bar: clear.bar, currency: clear.currency, tileValues: clear.tileValues,
     });
     return false;
   });
@@ -569,6 +576,8 @@ export function danSideFromClears(
           rawDan: clear.rawDan, label: danLabelFor(clear.rawDan, side, keyCount),
           skillsetClear: danCourseCredit(clear),
         };
+      } else if (current && !current.skillsetClear && current.rawDan < Math.round(clear.rawDan)) {
+        skillsets[clear.skillset] = { ...current, skillsetClear: danCourseCredit(clear) };
       }
       continue;
     }
@@ -746,7 +755,7 @@ function bucketsForClear(
         : topSkillset)
       : chart.techCategory === true
         ? jumpstreamRunnerUp(values, contaminated)
-        : contaminated ? topSkillset : "Stamina";
+        : contaminated ? jumpstreamRunnerUp(values, contaminated) : "Stamina";
   const riceTiles = chart?.riceTiles;
   const filed = riceTiles != null && riceTiles.some((id) => buckets.some((bucket) => bucket.id === id))
     ? riceTiles.flatMap((id) => buckets.filter((bucket) => bucket.id === id && bucket.skillsets == null))
@@ -804,6 +813,7 @@ export function danSkillsetBucketsForPlay(
   buckets: DanSkillsetBucket[],
   play: StoredPlaySsr,
   storedChart: ChartSkillInfo | undefined,
+  values: Record<string, number> | undefined = tileValuesForPlay(play, storedChart),
 ): DanSkillsetBucket[] {
   if (play.keyCount === 4 && buckets.some(bucket => bucket.id === "lnhybrid")) {
     const skillsets = playLnSkillsets(play.lnSkill, play.rate, play.inverse ? undefined : storedChart);
@@ -812,7 +822,6 @@ export function danSkillsetBucketsForPlay(
     }
   }
   const chart = play.inverse ? inverseModChartInfo(storedChart) : storedChart;
-  const values = tileValuesForPlay(play, chart);
   const topSkillset = bucketingSkillset(
     values,
     chart?.lengthSeconds ?? null,
@@ -825,9 +834,30 @@ export function danSkillsetBucketsForPlay(
   return bucketsForClear(buckets, topSkillset, chart, values, play.rate);
 }
 
-function tileValuesForPlay(play: StoredPlaySsr, chart: ChartSkillInfo | undefined): Record<string, number> | undefined {
+export function tileValuesForPlay(
+  play: StoredPlaySsr,
+  storedChart: ChartSkillInfo | undefined,
+  rateVerdicts?: RateVerdictMap,
+): Record<string, number> | undefined {
+  const chartValues = chartTileValuesForPlay(play, storedChart, rateVerdicts);
+  if (chartValues) return chartValues;
   if (dominantSkillset(play.values) != null) return play.values;
-  return chart?.msdValues ?? play.values;
+  return (play.inverse ? null : storedChart?.msdValues) ?? play.values;
+}
+
+function chartTileValuesForPlay(
+  play: StoredPlaySsr,
+  chart: ChartSkillInfo | undefined,
+  rateVerdicts: RateVerdictMap | undefined,
+): Record<string, number> | null {
+  if (play.keyCount !== 4 || chart == null) return null;
+  if (!play.inverse && !play.vibroAdjustment) {
+    const stored = play.rate === 1 ? chart.msdValues : play.rate === 1.5 ? chart.dtMsdValues : play.rate === 0.75 ? chart.htMsdValues : null;
+    if (stored && dominantSkillset(stored) != null) return stored;
+  }
+  const pair = rateVerdictPairFor(play);
+  const verdict = pair ? rateVerdicts?.get(rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant, pair.odFlag)) : null;
+  return verdict?.side === "rc" && verdict.msdValues && dominantSkillset(verdict.msdValues) != null ? verdict.msdValues : null;
 }
 
 function groupDanClearsBySkillset(

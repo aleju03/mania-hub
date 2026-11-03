@@ -1,6 +1,7 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "../chart/beatmap";
 import { analyzeCollapsedNotes, analyzeStackedHeads, analyzeVibroSections, analyzeWideJumptrill, prepareVibroChart, usesSectionVibro, type VibroAnalysis } from "../vibro/sections";
 import { detectLnVibro, detectRiceVibro } from "../vibro/detection";
+import { analyzePrismMash } from "../msd/prism";
 import type { DanEstimate, DanEstimateInput, DanSkillFamily, ManiaPatternAnalysis } from "../dan-estimator/types";
 import { analyzeManiaPatterns } from "../dan-estimator/patterns";
 import { extractDanFeatures } from "../dan-estimator/features";
@@ -65,6 +66,7 @@ export interface ClassifyChartInput extends DanEstimateInput {
   companella?: CompanellaEstimate | null;
   marathonMsdValues?: Record<string, number> | null;
   rcFloor?: { text: string; numeric: number } | null;
+  fileSpeed?: number;
   mixedCacheId?: string;
 }
 
@@ -325,7 +327,7 @@ function analyzeChart(map: ManiaBeatmap, osuText: string, input: ClassifyChartIn
   const sectionVibro = usesSectionVibro(map);
   const prepared = input.adjustVibro ? prepareVibroChart(osuText, rate, map) : null;
   const vibroAnalysis = sectionVibro ? prepared?.analysis ?? analyzeVibroSections(map, rate)
-    : analyzeStackedHeads(map, rate) ?? analyzeWideJumptrill(map, rate) ?? analyzeCollapsedNotes(map, rate) ?? undefined;
+    : analyzeStackedHeads(map, rate) ?? analyzeWideJumptrill(map, rate) ?? analyzeCollapsedNotes(map, rate) ?? analyzePrismMash(map, rate) ?? undefined;
   if (prepared?.analysis.status === "adjusted") {
     osuText = prepared.osuText;
     map = { ...parseManiaBeatmap(osuText), totalLength: map.totalLength };
@@ -374,8 +376,10 @@ function resolveMixedVerdict(
   let mixed: LeoBlackReworkResult | null = null;
   let companellaApplied = false;
   try {
+    const fileSpeed = input.fileSpeed != null && Number.isFinite(input.fileSpeed) && input.fileSpeed > 1 ? input.fileSpeed : 1;
     const rawMixed = runMixedOnce(osuText, {
       speedRate: rate,
+      ...(fileSpeed > 1 ? { polarisRate: rate * fileSpeed } : {}),
       odFlag: input.odFlag,
       marathonCorrection: isMarathonCorrectionCandidate(map) && input.marathonMsdValues
         ? { durationS: chartNoteSpanSeconds(map), ettValues: input.marathonMsdValues }
