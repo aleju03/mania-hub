@@ -644,7 +644,7 @@ export function SkillModePanel({
           </div>
           <OverallStanding mode={mode} method={overallMethod} className="mt-1" />
         </div>
-        <div className="ml-auto flex items-center gap-3 pr-10 sm:pr-0">
+        <div className="ml-auto flex w-full items-center justify-end gap-3 sm:w-auto">
           <DanChips mode={mode} onSelect={onSelectDan ? (side) => onSelectDan(side, mode) : undefined} />
           {userId ? (
             <span className="absolute right-0 top-2 sm:static">
