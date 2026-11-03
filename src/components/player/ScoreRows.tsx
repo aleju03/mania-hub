@@ -14,9 +14,11 @@ import {
   formatPP,
 } from "../../lib/format";
 import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
+import { KEYMODE_TEXT_COLORS } from "./ProfileParts";
 import {
   getBeatmapUrl,
   getBeatmapKeymodeLabel,
+  getBeatmapKeyCount,
   getModDisplayList,
   getScoreDisplayVersion,
   getScoreModDisplayList,
@@ -192,7 +194,7 @@ export function TrackedScoreRow({
             <span className="text-sm font-medium text-white truncate">{play.title || t`Unknown`}</span>
             <span className="text-[11px] text-osu-f1 truncate hidden sm:inline">[{play.version}]</span>
             {play.keyCount > 0 && (
-              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+              <span className={`px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 ${keymodeTextColor(play.keyCount)} flex-shrink-0`}>
                 {play.keyCount}K
               </span>
             )}
@@ -346,7 +348,7 @@ export function ScoreRow({
             [{getScoreDisplayVersion(score)}]
           </span>
           {keymodeLabel && (
-            <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+            <span className={`px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 ${keymodeTextColor(getBeatmapKeyCount(score.beatmap))} flex-shrink-0`}>
               {keymodeLabel}
             </span>
           )}
@@ -600,7 +602,7 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
                     </span>
                   )}
                   {keymodeLabel && (
-                    <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+                    <span className={`px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 ${keymodeTextColor(getBeatmapKeyCount(score.beatmap))} flex-shrink-0`}>
                       {keymodeLabel}
                     </span>
                   )}
@@ -749,4 +751,8 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
       </motion.div>
     </motion.div>
   );
+}
+
+function keymodeTextColor(keyCount: number | null | undefined): string {
+  return (keyCount != null && KEYMODE_TEXT_COLORS[keyCount]) || "text-osu-f1";
 }
