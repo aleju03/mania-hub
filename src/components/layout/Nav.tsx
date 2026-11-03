@@ -53,8 +53,9 @@ const NAV_LEAVES = {
   "farm-helper": { id: "farm-helper", to: "/recommendations", label: "recommended maps" },
   replay: { id: "replay", to: "/replay", label: "watch replays" },
   bbcode: { id: "bbcode", to: "/bbcode", label: "BBCode editor" },
-  discord: { id: "discord", to: "/discord", label: "Discord bot" },
-  communities: { id: "communities", to: "/communities", label: "Discord servers" },
+  // One entry for both Discord pages (the server directory and the bot); the
+  // pages switch between each other with tabs. `also` marks the bot page active.
+  discord: { id: "discord", to: "/communities", label: "Discord", also: "/discord" },
 } as const;
 
 type NavLeafId = keyof typeof NAV_LEAVES;
@@ -77,7 +78,7 @@ const NAV_TOP: NavTop[] = [
      editor are tools, but the Discord bot page is a pitch and the server
      directory is a place. A deliberately broad label so the next thing added
      here does not restart the argument. */
-  { kind: "group", id: "more", label: "more", items: ["farm-helper", "replay", "bbcode", "discord", "communities"] },
+  { kind: "group", id: "more", label: "more", items: ["farm-helper", "replay", "bbcode", "discord"] },
 ];
 
 /* The `label` fields above are the English source and double as stable ids in
@@ -98,8 +99,13 @@ const NAV_LABELS: Record<NavLeafId, ReturnType<typeof msg>> = {
   "farm-helper": msg`recommended maps`,
   replay: msg`watch replays`,
   bbcode: msg`BBCode editor`,
-  discord: msg`Discord bot`,
-  communities: msg`Discord servers`,
+  discord: msg`Discord servers`,
+};
+
+// Those who can see the bot page (still a dev preview) get the merged entry's
+// short name, since it opens both pages; everyone else only has the directory.
+const DEV_NAV_LABELS: Partial<Record<NavLeafId, ReturnType<typeof msg>>> = {
+  discord: msg`Discord`,
 };
 
 // "packs" names both the group and its opener leaf with different labels, so
@@ -256,10 +262,8 @@ export function Nav() {
     || isGlobalScope(selectedCountry)
     || selectedCountryFeatureTier === "live"
     || selectedCountryFeatureTier === "snipes";
+  const navLabel = (id: NavLeafId) => (devMode && DEV_NAV_LABELS[id]) || NAV_LABELS[id];
   const isLeafVisible = (leaf: NavLeaf) => {
-    // Discord bot is dev-gated for now: visible in local dev and on the dev
-    // preview host, hidden in production.
-    if (leaf.id === "discord") return devMode;
     if (leaf.id === "snipes") return showSnipesLink;
     return true;
   };
@@ -270,7 +274,9 @@ export function Nav() {
   const topPlaysRangeForLink = hydrated && topPlaysRange !== "7d" ? topPlaysRange : "7d";
   const snipesFiltersForLink = hydrated ? snipesFilters : DEFAULT_SNIPES_FILTERS;
   const settingsActive = location.pathname.startsWith("/settings");
-  const current = visibleLeaves.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
+  const leafMatches = (l: NavLeaf) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)
+    || ("also" in l && location.pathname.startsWith(l.also));
+  const current = visibleLeaves.find(leafMatches) ||
     (location.pathname === "/" ? NAV_LEAVES.home : location.pathname.startsWith("/player") || location.pathname.startsWith("/team/") || settingsActive || (location.pathname === "/snipes" && !showSnipesLink) ? null : visibleLeaves[0]);
   // The active page's top-level item; the indicator bar sits under this.
   const activeTopId = current ? (LEAF_TO_TOP[current.id] ?? null) : null;
@@ -541,7 +547,7 @@ export function Nav() {
           : "border-transparent text-osu-pink-light hover:bg-osu-b4/50 hover:text-white"
       }`}
     >
-      {opts?.label ?? i18n._(NAV_LABELS[leaf.id])}
+      {opts?.label ?? i18n._(navLabel(leaf.id))}
     </Link>
   );
 
@@ -752,7 +758,7 @@ export function Nav() {
               if (top.kind === "link") {
                 const leaf = NAV_LEAVES[top.id];
                 if (!isLeafVisible(leaf)) return null;
-                return renderTopLink(top.id, leaf, i18n._(NAV_LABELS[leaf.id]));
+                return renderTopLink(top.id, leaf, i18n._(navLabel(leaf.id)));
               }
 
               const groupItems = top.items.map((id) => NAV_LEAVES[id]).filter(isLeafVisible);
@@ -808,7 +814,7 @@ export function Nav() {
                                 : "text-osu-pink-light before:opacity-0 hover:text-white hover:before:opacity-100"
                             }`}
                           >
-                            {i18n._(NAV_LABELS[leaf.id])}
+                            {i18n._(navLabel(leaf.id))}
                           </Link>
                         );
                       })}

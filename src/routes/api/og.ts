@@ -1,4 +1,5 @@
 import { ImageResponse } from "../../lib/og-image-response";
+import { getDanImageSrc } from "../../lib/dan-images";
 import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
 import type { ReactNode } from "react";
@@ -1712,67 +1713,38 @@ async function renderPulledCardOg(
 // directly by the bot and never reach here.)
 // ---------------------------------------------------------------------------
 
-const DAN_FAMILY_ACCENT: Record<string, string> = {
-  stream: "#7dd3fc",
-  jack: "#fca5a5",
-  handstream: "#c4b5fd",
-  stamina: "#6ee7b7",
-  chordjack: "#fcd34d",
-  tech: "#f0abfc",
-  ln: "#5eead4",
-  dan: "#fdba74",
-};
-
-function danEmblemAssetPath(label: string, family: string): string | null {
-  if (family === "ln" && /^(1[0-6]|[1-9])$/.test(label)) return `/images/dans/ln/${label}.svg`;
-  if (/^([1-9]|10)$/.test(label)) return `/images/dans/reform/${label}.svg`;
-  return null;
+// The emblem a keymode's ladder uses, from the same rules as the site's badges
+// (4K Reform and 4K LN, 6K and 7K sets; no art for the other keymodes).
+function danEmblemAssetPath(label: string, family: string, keyCount: number | null): string | null {
+  return getDanImageSrc(label, family === "ln" ? "ln" : family, keyCount ?? undefined);
 }
 
-async function renderDanEmblemOg(request: Request, label: string, family: string): Promise<Response> {
-  const assetPath = danEmblemAssetPath(label, family);
-  if (!assetPath) throw new OgFallbackError(`no svg dan emblem for ${family}/${label}`);
-
+// Rasterizes the emblem for Discord, which shows no SVG. Transparent, sized to
+// the artwork's own proportions, so it sits on the message like the badge does
+// on the site. Raster emblems (the 4K greek tiers) are served as they are.
+async function renderDanEmblemOg(request: Request, label: string, family: string, keyCount: number | null): Promise<Response> {
+  const assetPath = danEmblemAssetPath(label, family, keyCount);
+  if (!assetPath) throw new OgFallbackError(`no dan emblem for ${keyCount ?? 4}K ${family}/${label}`);
   const assetUrl = new URL(assetPath, getAssetOrigin(request)).toString();
+  if (!assetPath.endsWith(".svg")) {
+    return new Response(null, { status: 302, headers: { Location: assetUrl, "Cache-Control": OG_CACHE_HEADER } });
+  }
   const assetResponse = await fetch(assetUrl);
   if (!assetResponse.ok) throw new OgFallbackError(`dan emblem ${assetResponse.status}`);
-  const data = Buffer.from(await assetResponse.arrayBuffer()).toString("base64");
-  const dataUrl = `data:image/svg+xml;base64,${data}`;
-  const accent = DAN_FAMILY_ACCENT[family] ?? "#ff66aa";
-
+  const svg = await assetResponse.text();
+  const viewBox = /viewBox\s*=\s*"[\d.\-]+[\s,]+[\d.\-]+[\s,]+([\d.]+)[\s,]+([\d.]+)"/.exec(svg);
+  const aspect = viewBox && Number(viewBox[2]) > 0 ? Math.min(3, Math.max(0.33, Number(viewBox[1]) / Number(viewBox[2]))) : 1;
+  const height = 256;
+  const width = Math.round(height * aspect);
+  const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
   const response = new ImageResponse(
     h(
       "div",
-      {
-        style: {
-          width: "100%",
-          height: "100%",
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "linear-gradient(135deg, #140f12 0%, #241019 100%)",
-        },
-      },
-      [
-        h("div", {
-          key: "glow",
-          style: {
-            position: "absolute",
-            inset: "0",
-            background: `radial-gradient(circle at 50% 46%, ${accent}40 0%, rgba(0,0,0,0) 62%)`,
-          },
-        }),
-        h("img", {
-          key: "emblem",
-          src: dataUrl,
-          style: { width: "384px", height: "384px", objectFit: "contain" },
-        }),
-      ],
+      { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" } },
+      [h("img", { key: "emblem", src: dataUrl, style: { width: `${width}px`, height: `${height}px`, objectFit: "contain" } })],
     ),
-    { width: 512, height: 512 },
+    { width, height },
   );
-
   response.headers.set("Cache-Control", OG_CACHE_HEADER);
   return response;
 }
@@ -5252,14 +5224,16 @@ export const Route = createFileRoute("/api/og")({
 
         // Dan emblem thumbnail for the /dan command (rasterizes an svg emblem).
         if (kind === "dan-emblem") {
-          const label = (url.searchParams.get("label") ?? "").trim().toLowerCase().slice(0, 8);
+          const label = (url.searchParams.get("label") ?? "").trim().toLowerCase().replace(/[+-]+$/, "").slice(0, 12);
           const family = (url.searchParams.get("family") ?? "").trim().toLowerCase().slice(0, 16);
+          const rawKeys = Number(url.searchParams.get("keys"));
+          const keyCount = Number.isInteger(rawKeys) && rawKeys > 0 && rawKeys <= 18 ? rawKeys : null;
           if (label) {
             try {
               return await serveOg(
                 request,
-                `dan-emblem:${family}:${label}:v${version}`,
-                () => renderDanEmblemOg(request, label, family),
+                `dan-emblem:${keyCount ?? 4}k:${family}:${label}:clear:v${version}`,
+                () => renderDanEmblemOg(request, label, family, keyCount),
               );
             } catch (err) {
               if (!isOgFallbackError(err)) console.warn("[og] dan-emblem render failed, falling back", err);

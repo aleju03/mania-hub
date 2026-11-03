@@ -178,6 +178,7 @@ function DiscordAdminPage() {
           <h2 className="text-[13px] font-medium text-osu-c2 sm:text-[15px]">Discord</h2>
           <span className="rounded bg-osu-yellow/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-osu-yellow">admin</span>
           <div className="ml-auto flex items-center gap-2">
+            <Link to="/admin/discord-playground" className="text-[11px] font-semibold text-osu-pink-light hover:text-white">Playground</Link>
             <Link to="/discord" className="text-[11px] font-semibold text-osu-pink-light hover:text-white">Tool page</Link>
             <button
               type="button"

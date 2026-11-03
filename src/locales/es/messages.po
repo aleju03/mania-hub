@@ -1329,6 +1329,10 @@ msgstr "{dupeCount, plural, one {duplicada} other {duplicadas}}"
 msgid "{error}. Press Enter or click to try replay #{scoreId}."
 msgstr "{error}. Presiona Enter o haz clic para intentar con el replay #{scoreId}."
 
+#: src/routes/discord.tsx
+msgid "{feedCount} feeds"
+msgstr "{feedCount} feeds"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{files} files in {groupCount} groups"
 msgstr "{files} archivos en {groupCount} grupos"
@@ -1983,6 +1987,26 @@ msgstr "{years}y"
 msgid "{years}y ago"
 msgstr "hace {years}y"
 
+#: src/routes/discord.tsx
+msgid "/challenge"
+msgstr "/challenge"
+
+#: src/routes/discord.tsx
+msgid "/help"
+msgstr "/help"
+
+#: src/routes/discord.tsx
+msgid "/map"
+msgstr "/map"
+
+#: src/routes/discord.tsx
+msgid "/profile"
+msgstr "/profile"
+
+#: src/routes/discord.tsx
+msgid "/skills"
+msgstr "/skills"
+
 #. placeholder {0}: formatNumber(variant.country_rank)
 #: src/routes/player/$username.tsx
 msgid "#{0} country"
@@ -2114,8 +2138,8 @@ msgid "<0>{username} isn't tracked</0>, so only their ranked plays are rated her
 msgstr "<0>{username} no está trackeado</0>, así que aquí solo se califican sus jugadas en mapas ranked. Las jugadas en mapas loved y abandonados solo llegan a este sitio por el tracking, o cuando alguien las agrega con Agregar un score faltante."
 
 #: src/routes/discord.tsx
-msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
-msgstr "<0>/subscribe feed:Top plays country:{country}</0> publica cada nuevo top play de {country} en el canal donde se use. Los demás feeds son snipes y nuevos mapas de farm, y <1>min_pp</1> omite los scores por debajo de un umbral. <2>/subscriptions</2> lista los feeds activos de un servidor y <3>/unsubscribe</3> detiene uno. Para suscribirte se necesita el permiso Administrar servidor."
+#~ msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
+#~ msgstr "<0>/subscribe feed:Top plays country:{country}</0> publica cada nuevo top play de {country} en el canal donde se use. Los demás feeds son snipes y nuevos mapas de farm, y <1>min_pp</1> omite los scores por debajo de un umbral. <2>/subscriptions</2> lista los feeds activos de un servidor y <3>/unsubscribe</3> detiene uno. Para suscribirte se necesita el permiso Administrar servidor."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>#{global}</0> global"
@@ -2575,6 +2599,10 @@ msgstr "Un + significa «al menos»: osu! no entrega más de tus 200 mejores jug
 msgid "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the page when there are new updates."
 msgstr "Aparece un <0><1>punto</1></0> junto a <2>novedades</2> al final de la página cuando hay algo nuevo."
 
+#: src/routes/discord.tsx
+msgid "A 2-letter code, or GLOBAL for every country."
+msgstr "Un código de 2 letras, o GLOBAL para todos los países."
+
 #: src/routes/dan-estimates.tsx
 msgid "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 msgstr "Un chart de 4K es LN cuando los holds son al menos el 45% de sus notas y esos holds todavía piden soltar de verdad a la velocidad que jugaste. Si los holds son tan cortos que se tocan como notas normales, el chart es regular. En 7K la línea está en 37.5%."
@@ -2820,8 +2848,8 @@ msgid "A set holds either players or teams."
 msgstr "Un set tiene solo jugadores o solo equipos."
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
-msgstr "Una carta de nivel de habilidad para compartir: control, velocidad y acc bajo un distintivo de nivel, con rating de estrellas."
+#~ msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
+#~ msgstr "Una carta de nivel de habilidad para compartir: control, velocidad y acc bajo un distintivo de nivel, con rating de estrellas."
 
 #: src/routes/snipes.tsx
 #~ msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
@@ -3157,6 +3185,10 @@ msgstr "Agregar score"
 msgid "Add the {label} run"
 msgstr "Agregar la jugada de {label}"
 
+#: src/routes/discord.tsx
+msgid "Add the bot"
+msgstr "Agregar el bot"
+
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Add the text that reads wrong."
 msgstr "Agrega el texto que se lee mal."
@@ -3257,6 +3289,11 @@ msgstr "todos"
 msgid "All"
 msgstr "Todos"
 
+#. placeholder {0}: server.channels.length
+#: src/routes/discord.tsx
+msgid "All {0} channels"
+msgstr "Los {0} canales"
+
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "all 10"
 msgstr "los 10"
@@ -3293,6 +3330,7 @@ msgstr "Todos los modos de teclas"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/routes/discord.tsx
 msgid "All keys"
 msgstr "Todos los modos"
 
@@ -3437,6 +3475,10 @@ msgstr "Un PB viejo que probablemente podrías superar."
 #: src/routes/recommendations.tsx
 msgid "an old score you could probably beat"
 msgstr "un puntaje viejo que probablemente podrías superar"
+
+#: src/routes/discord.tsx
+msgid "An osu!mania bot for Discord."
+msgstr "Un bot de osu!mania para Discord."
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "analysis"
@@ -3667,6 +3709,10 @@ msgstr "flechas"
 msgid "Arrows"
 msgstr "Flechas"
 
+#: src/routes/discord.tsx
+msgid "Art source"
+msgstr "Fuente del arte"
+
 #: src/routes/news_.prism.tsx
 msgid "Article"
 msgstr "Artículo"
@@ -3779,8 +3825,8 @@ msgid "Authorize {appNameInline}"
 msgstr "Autorizar {appNameInline}"
 
 #: src/routes/discord.tsx
-msgid "Authorize. The bot needs to send messages and embed links."
-msgstr "Autoriza. El bot necesita enviar mensajes e insertar enlaces."
+#~ msgid "Authorize. The bot needs to send messages and embed links."
+#~ msgstr "Autoriza. El bot necesita enviar mensajes e insertar enlaces."
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
@@ -4025,12 +4071,12 @@ msgid "Beatmap by {0}"
 msgstr "Beatmap de {0}"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Beatmap card: stars, keys, status, BPM and length."
-msgstr "Tarjeta del beatmap: estrellas, teclas, estado, BPM y duración."
+#~ msgid "Beatmap card: stars, keys, status, BPM and length."
+#~ msgstr "Tarjeta del beatmap: estrellas, teclas, estado, BPM y duración."
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Beatmap card: stars, keys, status, BPM, length and dan."
-msgstr "Tarjeta de beatmap: estrellas, teclas, estado, BPM, duración y dan."
+#~ msgid "Beatmap card: stars, keys, status, BPM, length and dan."
+#~ msgstr "Tarjeta de beatmap: estrellas, teclas, estado, BPM, duración y dan."
 
 #: src/components/replay/CommunityReplayCard.tsx
 msgid "Beatmap difficulty"
@@ -4062,8 +4108,8 @@ msgid "Beatmap page"
 msgstr "Página del beatmap"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Beatmaps"
-msgstr "Beatmaps"
+#~ msgid "Beatmaps"
+#~ msgstr "Beatmaps"
 
 #. placeholder {0}: beatmapResults.length
 #: src/components/replay/ReplayBrowseView.tsx
@@ -4236,6 +4282,10 @@ msgstr "Aquí no se cuentan los pp de bonificación por número de jugadas, así
 msgid "boosts"
 msgstr "impulsos"
 
+#: src/components/discord/DiscordTabs.tsx
+msgid "Bot"
+msgstr "Bot"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bottom"
 msgstr "Abajo"
@@ -4301,8 +4351,8 @@ msgid "Bring to front"
 msgstr "Traer al frente"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Browse"
-msgstr "Explorar"
+#~ msgid "Browse"
+#~ msgstr "Explorar"
 
 #: src/routes/communities_.$id.tsx
 msgid "browse all"
@@ -4613,6 +4663,10 @@ msgstr "No se pudo cambiar la etiqueta del modo de teclas. Inténtalo de nuevo."
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "No se pudo cambiar quién puede ver esta skin. Inténtalo de nuevo."
+
+#: src/routes/discord.tsx
+msgid "Channel"
+msgstr "Canal"
 
 #: src/components/companella/SubmissionDetail.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
@@ -4966,8 +5020,8 @@ msgid "Click a sound to preview it. Each note plays the sample its map assigns, 
 msgstr "Haz clic en un sonido para previsualizarlo. Cada nota reproduce el sample que le asigna su mapa, así que todos se pueden escuchar en un replay."
 
 #: src/routes/discord.tsx
-msgid "Click Add to Discord and pick a server where you have Manage Server."
-msgstr "Haz clic en Agregar a Discord y elige un servidor donde tengas el permiso Administrar servidor."
+#~ msgid "Click Add to Discord and pick a server where you have Manage Server."
+#~ msgstr "Haz clic en Agregar a Discord y elige un servidor donde tengas el permiso Administrar servidor."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Click again to clear"
@@ -5073,6 +5127,7 @@ msgstr "Cliente"
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/routes/__root.tsx
+#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/skins.tsx
 msgid "Close"
@@ -5259,6 +5314,10 @@ msgstr "ComboPosition"
 msgid "Comma after each one. Up to {COMMUNITY_MAX_TAGS}, and they become filters people browse by, so use words someone would actually search for."
 msgstr "Separados por comas. Hasta {COMMUNITY_MAX_TAGS}, y se convierten en filtros por los que la gente navega, así que usa palabras que alguien de verdad buscaría."
 
+#: src/routes/discord.tsx
+msgid "Commands"
+msgstr "Comandos"
+
 #: src/routes/recommendations.tsx
 msgid "common pick"
 msgstr "elección común"
@@ -5351,6 +5410,14 @@ msgstr "Conectar una app"
 msgid "Connect Companella to Mania Tracker and review the plays it imported."
 msgstr "Conecta Companella a Mania Tracker y revisa las plays que importó."
 
+#: src/routes/discord.tsx
+msgid "Connect Discord"
+msgstr "Conectar Discord"
+
+#: src/routes/discord.tsx
+msgid "Connect Discord to set up feeds in servers where you have Manage Server."
+msgstr "Conecta Discord para configurar los feeds en los servidores donde tienes Gestionar servidor."
+
 #: src/routes/hashi.tsx
 msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
 msgstr "Conéctala a tu cuenta desde la app. Puedes revocar la conexión en <0>Ajustes</0>, en Preferencias."
@@ -5358,6 +5425,10 @@ msgstr "Conéctala a tu cuenta desde la app. Puedes revocar la conexión en <0>A
 #: src/components/communities/field-options.tsx
 msgid "Connect your Discord account first."
 msgstr "Primero conecta tu cuenta de Discord."
+
+#: src/routes/discord.tsx
+msgid "Connect your Discord account to link it."
+msgstr "Conecta tu cuenta de Discord para vincularla."
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected"
@@ -5367,6 +5438,11 @@ msgstr "Conectado"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected as {0}."
 msgstr "Conectado como {0}."
+
+#. placeholder {0}: account.connection.discordUsername
+#: src/routes/discord.tsx
+msgid "Connected as <0>{0}</0>. Link it to use commands without typing your name."
+msgstr "Conectado como <0>{0}</0>. Vincúlalo para usar los comandos sin escribir tu nombre."
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "connected to Discord"
@@ -5998,8 +6074,12 @@ msgid "Country"
 msgstr "País"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Country (or global) leaderboard, top players by pp."
-msgstr "Leaderboard por país (o global), jugadores top por pp."
+#~ msgid "Country (or global) leaderboard, top players by pp."
+#~ msgstr "Leaderboard por país (o global), jugadores top por pp."
+
+#: src/routes/discord.tsx
+msgid "Country for top plays"
+msgstr "País para los top plays"
 
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
@@ -6308,6 +6388,14 @@ msgstr "Estimación de dan: {0} ({1})"
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 #~ msgstr "Los dans de aquí se estiman a partir de los mapas que cada jugador ha pasado, no de clears reales de dans. Tómalo como un orden aproximado, no como un ranking."
 
+#: src/routes/discord.tsx
+msgid "Dan on score posts"
+msgstr "Dan en los scores"
+
+#: src/routes/discord.tsx
+msgid "Dan on score posts in every channel"
+msgstr "Dan en los scores en todos los canales"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Dan plays"
 msgstr "Jugadas de dan"
@@ -6551,8 +6639,12 @@ msgstr "desconectar"
 #~ msgstr ""
 
 #: src/components/layout/Nav.tsx
-msgid "Discord bot"
-msgstr "Bot de Discord"
+msgid "Discord"
+msgstr "Discord"
+
+#: src/components/layout/Nav.tsx
+#~ msgid "Discord bot"
+#~ msgstr "Bot de Discord"
 
 #: src/routes/communities.tsx
 msgid "Discord did not finish connecting. Try again."
@@ -7133,8 +7225,8 @@ msgid "Error: {0}ms - {1}ms avg"
 msgstr "Error: {0}ms - {1}ms prom."
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Estimate a chart's dan level, with its dan emblem."
-msgstr "Estima el nivel de dan de un chart, con su emblema de dan."
+#~ msgid "Estimate a chart's dan level, with its dan emblem."
+#~ msgstr "Estima el nivel de dan de un chart, con su emblema de dan."
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "Estimated by adding each new top play in order. Gains depend on the rest of the card's top plays."
@@ -7234,12 +7326,12 @@ msgid "Every map here is a skillboost suggestion. They're hidden by default unti
 msgstr "Cada mapa aquí es una sugerencia de skillboost. Están ocultos por defecto hasta que consigues alguno de sus scores."
 
 #: src/routes/discord.tsx
-msgid "Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel."
-msgstr "Todas las búsquedas de osu!mania como comando de barra, además de feeds en vivo que publican nuevos top plays, snipes y mapas de farm en cualquier canal."
+#~ msgid "Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel."
+#~ msgstr "Todas las búsquedas de osu!mania como comando de barra, además de feeds en vivo que publican nuevos top plays, snipes y mapas de farm en cualquier canal."
 
 #: src/routes/discord.tsx
-msgid "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
-msgstr "Todas las búsquedas de osu!mania como comando de barra. Vincula tu cuenta una vez con <0>/link</0> y comandos como <1>/recent</1> funcionan sin nombre de usuario. Los feeds en vivo publican automáticamente nuevos top plays, snipes y mapas de farm directamente en cualquier canal."
+#~ msgid "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
+#~ msgstr "Todas las búsquedas de osu!mania como comando de barra. Vincula tu cuenta una vez con <0>/link</0> y comandos como <1>/recent</1> funcionan sin nombre de usuario. Los feeds en vivo publican automáticamente nuevos top plays, snipes y mapas de farm directamente en cualquier canal."
 
 #: src/routes/replay_.community.tsx
 msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay viewer."
@@ -7441,8 +7533,8 @@ msgstr "Notas que caen"
 #~ msgstr "Farm Helper necesita el servidor"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Farm map alert"
-msgstr "Alerta de mapa de farm"
+#~ msgid "Farm map alert"
+#~ msgstr "Alerta de mapa de farm"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Farm map detail"
@@ -7534,12 +7626,12 @@ msgid "Feedback sent"
 msgstr "Sugerencia enviada"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Feeds"
-msgstr "Feeds"
+#~ msgid "Feeds"
+#~ msgstr "Feeds"
 
 #: src/routes/discord.tsx
-msgid "Feeds are currently disabled on the backend."
-msgstr "Los feeds están desactivados en el backend por ahora."
+#~ msgid "Feeds are currently disabled on the backend."
+#~ msgstr "Los feeds están desactivados en el backend por ahora."
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
@@ -8078,8 +8170,8 @@ msgid "Full play"
 msgstr "Play completa"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Full profile card with ranks, pp and top plays. The username is optional once you link."
-msgstr "Carta de perfil completa con ranks, pp y top plays. El nombre de usuario es opcional una vez que vinculas tu cuenta."
+#~ msgid "Full profile card with ranks, pp and top plays. The username is optional once you link."
+#~ msgstr "Carta de perfil completa con ranks, pp y top plays. El nombre de usuario es opcional una vez que vinculas tu cuenta."
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Full width"
@@ -8191,6 +8283,7 @@ msgid "global"
 msgstr "global"
 
 #: src/components/team/TeamProfilePage.tsx
+#: src/routes/discord.tsx
 #: src/routes/index.tsx
 #: src/routes/player/$username.tsx
 msgid "Global"
@@ -9321,6 +9414,10 @@ msgstr "Lee osu! a través de tosu, así que tosu tiene que estar abierto. Puede
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
 #~ msgstr "Antes era el 4º mejor pase entre todos tus skills a la vez, y en la práctica eso era simplemente aquello en lo que te especializas. Medido sobre las 12,974 estimaciones de 4K regular del sitio, el número viejo quedaba una mediana de 0.14 niveles por encima del skill más fuerte del jugador, y el 84% de los jugadores estaba a menos de medio nivel del suyo. Medía tu mejor patrón y a eso le decía tu dan. Un dan de verdad no funciona así: te hace pasar una mezcla de una sentada. Promediar hace esa misma pregunta."
 
+#: src/routes/discord.tsx
+msgid "It was linked by typing a username. Connect Discord here to confirm it is you."
+msgstr "Se vinculó escribiendo un nombre de usuario. Conecta Discord aquí para confirmar que eres tú."
+
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
 msgstr "Ya está en tu colección."
@@ -9542,6 +9639,7 @@ msgstr "Distribución de modos"
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/dan-estimates.tsx
+#: src/routes/discord.tsx
 msgid "Keymode"
 msgstr "Modo de teclas"
 
@@ -9723,8 +9821,8 @@ msgid "Latest"
 msgstr "Última"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next."
-msgstr "El play más reciente completo (rank, mods, judgements, pp), con los anteriores debajo. Se pagina con Prev y Next."
+#~ msgid "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next."
+#~ msgstr "El play más reciente completo (rank, mods, judgements, pp), con los anteriores debajo. Se pagina con Prev y Next."
 
 #: src/components/communities/field-options.tsx
 msgid "Latvian"
@@ -9943,6 +10041,10 @@ msgstr "¡Enlace copiado!"
 msgid "link text"
 msgstr "texto del enlace"
 
+#: src/routes/discord.tsx
+msgid "Link this account"
+msgstr "Vincular esta cuenta"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Link URL (optional)"
 msgstr "URL del enlace (opcional)"
@@ -9976,8 +10078,8 @@ msgid "Live feed reconnecting"
 msgstr "Reconectando el feed en vivo"
 
 #: src/routes/discord.tsx
-msgid "Live feeds"
-msgstr "Feeds en vivo"
+#~ msgid "Live feeds"
+#~ msgstr "Feeds en vivo"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Live performance points."
@@ -11475,9 +11577,13 @@ msgstr "nueva colección"
 msgid "New collection"
 msgstr "Nueva colección"
 
+#: src/routes/discord.tsx
+msgid "New farm maps"
+msgstr "Mapas nuevos para farmear"
+
 #: src/components/discord/CommandShowcase.tsx
-msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
-msgstr "Nuevos mapas de farm, publicados automáticamente en cualquier canal que haya usado /subscribe feed:new maps."
+#~ msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
+#~ msgstr "Nuevos mapas de farm, publicados automáticamente en cualquier canal que haya usado /subscribe feed:new maps."
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "New folder"
@@ -11718,6 +11824,10 @@ msgstr "Aún no tienes cartas. Abre un pack para empezar tu colección."
 msgid "No change in the last 7 days"
 msgstr "Sin cambios en los últimos 7 días"
 
+#: src/routes/discord.tsx
+msgid "No channel has a feed yet."
+msgstr "Ningún canal tiene feeds todavía."
+
 #: src/routes/recommendations.tsx
 msgid "no charts"
 msgstr "sin charts"
@@ -11765,6 +11875,10 @@ msgstr "No se encontraron favoritos de ningún jugador del top 50."
 #: src/routes/maps.tsx
 msgid "No favourites match your filters. Try loosening them."
 msgstr "Ningún favorito coincide con tus filtros. Intenta relajarlos."
+
+#: src/routes/discord.tsx
+msgid "No feeds yet"
+msgstr "Sin feeds todavía"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "No folders yet. Make one to group your cards however you like, then show it on your shelf if you want."
@@ -12913,6 +13027,10 @@ msgstr "En línea"
 msgid "Only approve a request you started yourself. If someone sent you this link, close it."
 msgstr "Aprueba solo una solicitud que hayas iniciado tú. Si alguien te mandó este link, ciérralo."
 
+#: src/routes/discord.tsx
+msgid "Only channels with something on"
+msgstr "Solo los canales con algo activado"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "Solo yo"
@@ -12970,6 +13088,10 @@ msgstr "solo tú puedes abrirlas"
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Only you can open this. It is not listed anywhere and has no share link."
 #~ msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Only you see the bot's replies to your commands, unless you set hidden to false."
+msgstr "Solo tú ves las respuestas del bot a tus comandos, a menos que pongas hidden en false."
 
 #: src/routes/dan-estimates.tsx
 msgid "Only your best rate play on the same chart counts per ladder, rate reuploads included."
@@ -13132,8 +13254,8 @@ msgid "Open the day modal with simulated busy-day data"
 msgstr "Abre el modal del día con datos simulados de un día ocupado"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Open the in-browser replay viewer for a score."
-msgstr "Abre el visor de replays en el navegador para un score."
+#~ msgid "Open the in-browser replay viewer for a score."
+#~ msgstr "Abre el visor de replays en el navegador para un score."
 
 #: src/routes/recommendations.tsx
 msgid "open their profile"
@@ -13834,8 +13956,8 @@ msgid "Play from {0}"
 msgstr "Reproducir desde {0}"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
-msgstr "Hábitos de juego y desglose del estilo de juego: días activos, sesiones y mezcla de habilidades."
+#~ msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
+#~ msgstr "Hábitos de juego y desglose del estilo de juego: días activos, sesiones y mezcla de habilidades."
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Play preview"
@@ -13948,7 +14070,6 @@ msgstr "Skin del jugador"
 msgid "players"
 msgstr "jugadores"
 
-#: src/components/discord/CommandShowcase.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/SetsView.tsx
@@ -14222,8 +14343,8 @@ msgid "pp rank"
 msgstr "rango pp"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "PP-gain map recommendations tuned to a player."
-msgstr "Recomendaciones de mapas por ganancia de pp adaptadas a un jugador."
+#~ msgid "PP-gain map recommendations tuned to a player."
+#~ msgstr "Recomendaciones de mapas por ganancia de pp adaptadas a un jugador."
 
 #: src/routes/hashi.tsx
 msgid "Practice"
@@ -14314,6 +14435,7 @@ msgid "Preview volume"
 msgstr "Volumen de la vista previa"
 
 #: src/components/skins/SkinUpdateModal.tsx
+#: src/routes/discord.tsx
 msgid "Previews"
 msgstr "Vistas previas"
 
@@ -14429,6 +14551,10 @@ msgstr "privado"
 #: src/components/settings/SettingsPanel.tsx
 msgid "private · updated {updatedAtLabel}"
 msgstr "privado · actualizado {updatedAtLabel}"
+
+#: src/routes/discord.tsx
+msgid "Private replies"
+msgstr "Respuestas privadas"
 
 #: src/components/BackendOfflineScreen.tsx
 #~ msgid "Probably restarting or under maintenance. Try again in a bit."
@@ -14965,8 +15091,8 @@ msgid "recent global pulls"
 msgstr "cartas sacadas recientemente"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Recent notable top plays across a country."
-msgstr "Top plays destacados recientes de un país."
+#~ msgid "Recent notable top plays across a country."
+#~ msgstr "Top plays destacados recientes de un país."
 
 #: src/components/packs/RecentOpens.tsx
 #~ msgid "Recent opens"
@@ -15751,6 +15877,10 @@ msgstr "Derecha"
 msgid "Right thumb"
 msgstr "Pulgar derecho"
 
+#: src/routes/discord.tsx
+msgid "Right-click a message or a user, then Apps:"
+msgstr "Clic derecho en un mensaje o un usuario, luego Apps:"
+
 #: src/routes/replay.tsx
 msgid "Right-click to add media"
 msgstr "Clic derecho para agregar media"
@@ -15773,12 +15903,12 @@ msgstr "Anillos"
 #~ msgstr "Camino a los {target} packs"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
-msgstr "Saca un mapa favorito al azar, del mismo pool que la pestaña aleatoria de Maps. Filtra por teclas, estado, patrón o rango de estrellas, y vuelve a tirar para sacar otro."
+#~ msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
+#~ msgstr "Saca un mapa favorito al azar, del mismo pool que la pestaña aleatoria de Maps. Filtra por teclas, estado, patrón o rango de estrellas, y vuelve a tirar para sacar otro."
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another."
-msgstr "Saca un mapa de farm popular al azar. Por defecto usa el board global de farm; filtra por teclas, estado, rango de estrellas o pp mínimo. Vuelve a tirar para sacar otro."
+#~ msgid "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another."
+#~ msgstr "Saca un mapa de farm popular al azar. Por defecto usa el board global de farm; filtra por teclas, estado, rango de estrellas o pp mínimo. Vuelve a tirar para sacar otro."
 
 #: src/routes/news_.prism.tsx
 msgid "Rolls this fast get played as chords, and Prism rates them as chords."
@@ -15846,6 +15976,7 @@ msgstr "sábados"
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/discord.tsx
 msgid "Save"
 msgstr "Guardar"
 
@@ -15887,8 +16018,8 @@ msgid "Save to profile"
 msgstr "Guardar en el perfil"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Save your osu! account so every other command knows who you are."
-msgstr "Guarda tu cuenta de osu! para que los demás comandos sepan quién eres."
+#~ msgid "Save your osu! account so every other command knows who you are."
+#~ msgstr "Guarda tu cuenta de osu! para que los demás comandos sepan quién eres."
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "saved"
@@ -16310,8 +16441,8 @@ msgstr "Segundo en sacar esta carta"
 #~ msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "See every command"
-msgstr "Ver todos los comandos"
+#~ msgid "See every command"
+#~ msgstr "Ver todos los comandos"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See the score"
@@ -16513,6 +16644,14 @@ msgstr "Serbio"
 msgid "server made"
 msgstr "servidor creado"
 
+#: src/routes/discord.tsx
+msgid "Server settings aren't available right now."
+msgstr "Los ajustes del servidor no están disponibles ahora."
+
+#: src/components/discord/DiscordTabs.tsx
+msgid "Servers"
+msgstr "Servidores"
+
 #: src/routes/communities.tsx
 msgid "Servers are unavailable right now"
 msgstr "Los servidores no están disponibles por ahora"
@@ -16618,6 +16757,10 @@ msgstr "Fijar la siguiente meta"
 #: src/components/me/GoalsPanel.tsx
 msgid "Set this goal again"
 msgstr "Repetir esta meta"
+
+#: src/routes/discord.tsx
+msgid "Set up"
+msgstr "Configurar"
 
 #: src/components/packs/collections/CommunitySets.tsx
 #~ msgid "sets"
@@ -17104,6 +17247,7 @@ msgid "Sign in with Discord so we can check the server is yours to post. Discord
 msgstr "Inicia sesión con Discord para comprobar que el servidor es tuyo y puedas publicarlo. Discord compartirá:"
 
 #: src/components/companella/AuthorizePage.tsx
+#: src/routes/discord.tsx
 msgid "Sign in with osu!"
 msgstr "Iniciar sesión con osu!"
 
@@ -17118,6 +17262,10 @@ msgstr "Inicia sesión con osu! para conectar Companella y ver las plays que imp
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Sign in with osu! to connect it."
 msgstr "Inicia sesión con osu! para conectarla."
+
+#: src/routes/discord.tsx
+msgid "Sign in with osu! to link your Discord account, so commands work without typing your name."
+msgstr "Inicia sesión con osu! para vincular tu cuenta de Discord, así los comandos funcionan sin escribir tu nombre."
 
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in with osu! to play blitz."
@@ -17207,6 +17355,10 @@ msgstr "Jacks de una nota"
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Single-note streams {singleText}, chordstreams {chordText}"
 #~ msgstr "Streams de una nota {singleText}, chordstreams {chordText}"
+
+#: src/routes/discord.tsx
+msgid "Site updates"
+msgstr "Novedades del sitio"
 
 #: src/routes/skins.tsx
 msgid "size"
@@ -17453,8 +17605,8 @@ msgid "Smaller file"
 msgstr "Archivo más pequeño"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Snipe feed"
-msgstr "Feed de snipes"
+#~ msgid "Snipe feed"
+#~ msgstr "Feed de snipes"
 
 #: src/routes/snipes.tsx
 msgid "Snipe rules"
@@ -18216,8 +18368,8 @@ msgid "Tap a keymode to toggle its label."
 msgstr "Toca un keymode para alternar su etiqueta."
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "tap one to preview its reply"
-msgstr "toca uno para previsualizar su respuesta"
+#~ msgid "tap one to preview its reply"
+#~ msgstr "toca uno para previsualizar su respuesta"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Tap the stack or drag the top card to draw"
@@ -18307,8 +18459,8 @@ msgid "Technical"
 msgstr "Technical"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
-msgstr "Dile al bot quién eres una sola vez con <0>/link</0>. Después, consultas como <1>/recent</1> usan tu cuenta automáticamente, sin necesidad de usuario."
+#~ msgid "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
+#~ msgstr "Dile al bot quién eres una sola vez con <0>/link</0>. Después, consultas como <1>/recent</1> usan tu cuenta automáticamente, sin necesidad de usuario."
 
 #: src/components/BackendOfflineScreen.tsx
 msgid "Temporarily offline"
@@ -18407,6 +18559,10 @@ msgstr "No se pudo completar. Inténtalo de nuevo."
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/SetsView.tsx
 msgid "That did not save. Try again."
+msgstr "No se guardó. Inténtalo de nuevo."
+
+#: src/routes/discord.tsx
+msgid "That didn't save. Try again."
 msgstr "No se guardó. Inténtalo de nuevo."
 
 #: src/components/communities/field-options.tsx
@@ -18690,6 +18846,10 @@ msgstr "el promedio de tus skills"
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "The board is not answering right now."
 msgstr "El leaderboard no responde en este momento."
+
+#: src/routes/discord.tsx
+msgid "The bot isn't in this server"
+msgstr "El bot no está en este servidor"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The browser blocked the clipboard. Try Copy BBCode again."
@@ -19207,16 +19367,16 @@ msgid "The live feed is connected. New plays will start showing up as players su
 msgstr "El feed en vivo está conectado. Los plays nuevos irán apareciendo a medida que los jugadores los envíen."
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "The live score feed for a country, newest first."
-msgstr "El feed de scores en vivo de un país, los más recientes primero."
+#~ msgid "The live score feed for a country, newest first."
+#~ msgstr "El feed de scores en vivo de un país, los más recientes primero."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The map's own samples and keysounds, when it has them."
 msgstr "Los samples y keysounds del propio mapa, cuando los tiene."
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "The most farmed maps in a country, ranked by activity."
-msgstr "Los mapas con más farm de un país, ordenados por actividad."
+#~ msgid "The most farmed maps in a country, ranked by activity."
+#~ msgstr "Los mapas con más farm de un país, ordenados por actividad."
 
 #. placeholder {0}: droppedKeymodes.map((keys) => `${keys}K`).join(", ")
 #: src/components/skins/SkinUpdateModal.tsx
@@ -19985,6 +20145,10 @@ msgstr "La carta de este jugador no se dejó acuñar. No hay suficientes datos d
 msgid "This player's country isn't tracked yet."
 msgstr "El país de este jugador aún no está trackeado."
 
+#: src/routes/discord.tsx
+msgid "This preview isn't available right now."
+msgstr "Esta vista previa no está disponible ahora."
+
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "This pull is gone"
 msgstr "Este pull ya no existe"
@@ -20338,6 +20502,7 @@ msgid "top plays"
 msgstr "top plays"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/routes/discord.tsx
 msgid "Top plays"
 msgstr "Top plays"
 
@@ -20351,8 +20516,8 @@ msgid "top pp"
 msgstr "top pp"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Top-play feed"
-msgstr "Feed de top plays"
+#~ msgid "Top-play feed"
+#~ msgstr "Feed de top plays"
 
 #: src/routes/maps.tsx
 msgid "total plays"
@@ -20377,8 +20542,8 @@ msgid "Track my plays"
 msgstr "Seguir mis plays"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Track pp and accuracy goals and how close each one is."
-msgstr "Sigue tus metas de pp y acc y qué tan cerca estás de cada una."
+#~ msgid "Track pp and accuracy goals and how close each one is."
+#~ msgstr "Sigue tus metas de pp y acc y qué tan cerca estás de cada una."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Tracked"
@@ -20504,8 +20669,8 @@ msgid "Turkish"
 msgstr "Turco"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Turn a feed on for the current channel (needs Manage Server)."
-msgstr "Activa un feed para el canal actual (requiere Administrar servidor)."
+#~ msgid "Turn a feed on for the current channel (needs Manage Server)."
+#~ msgstr "Activa un feed para el canal actual (requiere Administrar servidor)."
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
@@ -20544,12 +20709,12 @@ msgstr "Convierte las notas en hold notes que llenan los espacios entre ellas."
 #~ msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
-msgstr "Dos jugadores lado a lado: pp con rank, mejor play y el desglose 4K/7K, y cierra con la diferencia de pp. Deja fuera el primer nombre para comparar desde tu cuenta vinculada."
+#~ msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
+#~ msgstr "Dos jugadores lado a lado: pp con rank, mejor play y el desglose 4K/7K, y cierra con la diferencia de pp. Deja fuera el primer nombre para comparar desde tu cuenta vinculada."
 
 #: src/routes/discord.tsx
-msgid "Type <0>/help</0> for a guided tour, or <1>/</1> to see every command."
-msgstr "Escribe <0>/help</0> para una visita guiada, o <1>/</1> para ver todos los comandos."
+#~ msgid "Type <0>/help</0> for a guided tour, or <1>/</1> to see every command."
+#~ msgstr "Escribe <0>/help</0> para una visita guiada, o <1>/</1> para ver todos los comandos."
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "Type a range: 170-200, 220+, <150"
@@ -20692,6 +20857,7 @@ msgid "Unlike"
 msgstr "Ya no me gusta"
 
 #: src/components/player/AddScoreModal.tsx
+#: src/routes/discord.tsx
 msgid "Unlink"
 msgstr "Desvincular"
 
@@ -21012,6 +21178,10 @@ msgstr "Usar la captura {0} como portada de la carta"
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Use this screenshot as the card cover"
 msgstr "Usar esta captura como portada de la carta"
+
+#: src/routes/discord.tsx
+msgid "Used by /skills and /farm when you don't pick one."
+msgstr "Lo usan /skills y /farm cuando no eliges uno."
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Used when a replay or map preview opens."
@@ -21598,12 +21768,12 @@ msgstr "Cuándo entró cada carta a tu colección"
 #~ msgstr "Cuando osu! tiene la misma partida, tus ratings de skill leen tu timing desde el replay en vez de estimarlo a partir de tus judgements."
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
-msgstr "Cuando alguien consigue un nuevo top play, llega a tu canal automáticamente, con todo el detalle."
+#~ msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
+#~ msgstr "Cuando alguien consigue un nuevo top play, llega a tu canal automáticamente, con todo el detalle."
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "When someone overtakes a country leaderboard score, the snipe lands in your channel."
-msgstr "Cuando alguien supera un score del leaderboard de un país, el snipe llega a tu canal."
+#~ msgid "When someone overtakes a country leaderboard score, the snipe lands in your channel."
+#~ msgstr "Cuando alguien supera un score del leaderboard de un país, el snipe llega a tu canal."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "When you play"
@@ -21821,7 +21991,6 @@ msgstr "ayer"
 msgid "you"
 msgstr "tú"
 
-#: src/components/discord/CommandShowcase.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "You"
@@ -21960,6 +22129,10 @@ msgstr "ganancia potencial"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "You do not have five duplicate copies of that tier."
 #~ msgstr "No tienes cinco copias duplicadas de ese nivel."
+
+#: src/routes/discord.tsx
+msgid "You don't manage any Discord servers."
+msgstr "No administras ningún servidor de Discord."
 
 #: src/components/packs/StreakGame.tsx
 msgid "You got {streak} right, a new best."
@@ -22118,6 +22291,10 @@ msgstr "Tu score de {yourPp}pp tiene {age} de antigüedad. El 25% superior de lo
 msgid "Your 6K, 7K and 8K skill ratings are being recalculated with Prism. Until a player's are, they don't show on those keymodes' leaderboards."
 msgstr "Tus ratings de skillset de 6K, 7K y 8K se están recalculando con Prism. Hasta que los de un jugador terminen, no aparece en los leaderboards de esos keymodes."
 
+#: src/routes/discord.tsx
+msgid "Your account"
+msgstr "Tu cuenta"
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "Your account is not on the list for this beta."
 msgstr "Tu cuenta no está en la lista de esta beta."
@@ -22148,8 +22325,8 @@ msgid "your best plays"
 msgstr "tus mejores plays"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
-msgstr "Tu mejor score en el último mapa que alguien mostró en el canal (de /recent, /map, ...). También /c y /compare. Pasa un nombre para buscar a otra persona."
+#~ msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
+#~ msgstr "Tu mejor score en el último mapa que alguien mostró en el canal (de /recent, /map, ...). También /c y /compare. Pasa un nombre para buscar a otra persona."
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your collection changed. Nothing was sent. Refresh and try again."
@@ -22201,6 +22378,11 @@ msgstr "Tu dan"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your description shows up here."
 msgstr "Tu descripción se verá aquí."
+
+#. placeholder {0}: linked.osuUsername
+#: src/routes/discord.tsx
+msgid "Your Discord account is linked to <0>{0}</0>."
+msgstr "Tu cuenta de Discord está vinculada a <0>{0}</0>."
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Your dynamic renders were turned off."
@@ -22292,8 +22474,8 @@ msgid "Your pass"
 msgstr "Tu pase"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
-msgstr "Tu panel personal: ranks, pp, totales de actividad y progreso de metas."
+#~ msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
+#~ msgstr "Tu panel personal: ranks, pp, totales de actividad y progreso de metas."
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Your plays"
@@ -22371,6 +22553,10 @@ msgstr "tu score"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your server shows up here once it is approved. Until then you can see it, and edit it, in your own listings above."
 msgstr "Tu servidor aparecerá aquí cuando sea aprobado. Hasta entonces puedes verlo y editarlo en tus propios listados de arriba."
+
+#: src/routes/discord.tsx
+msgid "Your servers"
+msgstr "Tus servidores"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Your session ended. Sign in again, then approve."
