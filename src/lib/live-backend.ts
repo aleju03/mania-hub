@@ -1504,6 +1504,9 @@ export interface DiscordPublicInfo {
   inviteUrl: string | null;
   feedsEnabled: boolean;
   commands: Array<{ name: string; description: string }>;
+  // Set when the backend did not answer (a deploy restart, an outage), so the
+  // page can say so instead of showing the setup steps for an unconfigured bot.
+  unreachable?: boolean;
 }
 
 // Public Discord info (no secrets) for the /discord tool page. Proxies the
@@ -1512,16 +1515,17 @@ export interface DiscordPublicInfo {
 export const fetchDiscordPublicInfo = createServerFn({ method: "GET" })
   .handler(async (): Promise<DiscordPublicInfo> => {
     const offline: DiscordPublicInfo = { configured: false, applicationId: null, inviteUrl: null, feedsEnabled: false, commands: [] };
+    const unreachable: DiscordPublicInfo = { ...offline, unreachable: true };
     const base = getServerLiveBackendUrl();
     if (!base) return offline;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
       const response = await fetch(`${base}/api/discord/info`, { signal: controller.signal });
-      if (!response.ok) return offline;
+      if (!response.ok) return unreachable;
       return await response.json() as DiscordPublicInfo;
     } catch {
-      return offline;
+      return unreachable;
     } finally {
       clearTimeout(timeout);
     }

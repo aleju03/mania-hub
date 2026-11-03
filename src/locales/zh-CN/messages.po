@@ -4473,6 +4473,10 @@ msgstr "正在计算技能…"
 msgid "Can't pay with Ko-fi? You can tip through lava.top."
 msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
 
+#: src/routes/discord.tsx
+msgid "Can't reach the bot right now. Refresh in a moment."
+msgstr "暂时无法连接机器人，请稍后刷新。"
+
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/UserCollectionEditor.tsx
@@ -7644,6 +7648,10 @@ msgstr "建议已发送"
 #: src/routes/discord.tsx
 #~ msgid "Feeds are currently disabled on the backend."
 #~ msgstr "后端当前已关闭 feed。"
+
+#: src/routes/discord.tsx
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>新的刷分图</1>和<2>网站更新</2>（每条新的更新日志都会发出）。用 <3>/setup</3> 或在上方的你的服务器中开启。"
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"

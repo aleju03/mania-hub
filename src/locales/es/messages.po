@@ -4461,6 +4461,10 @@ msgstr "Calculando habilidades..."
 msgid "Can't pay with Ko-fi? You can tip through lava.top."
 msgstr "¿No puedes pagar con Ko-fi? Puedes dejar una propina por lava.top."
 
+#: src/routes/discord.tsx
+msgid "Can't reach the bot right now. Refresh in a moment."
+msgstr "No se puede conectar con el bot ahora. Recarga en un momento."
+
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/UserCollectionEditor.tsx
@@ -7632,6 +7636,10 @@ msgstr "Sugerencia enviada"
 #: src/routes/discord.tsx
 #~ msgid "Feeds are currently disabled on the backend."
 #~ msgstr "Los feeds están desactivados en el backend por ahora."
+
+#: src/routes/discord.tsx
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Mapas nuevos para farmear</1> y <2>Novedades del sitio</2>, que publica cada línea nueva del changelog. Actívalos con <3>/setup</3> o en Tus servidores arriba."
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"

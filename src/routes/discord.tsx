@@ -149,7 +149,7 @@ function Hero({ info }: { info: DiscordPublicInfo }) {
           </a>
         ) : null}
       </div>
-      {!info.configured ? <SetupNote /> : null}
+      {info.unreachable ? <UnreachableNote /> : !info.configured ? <SetupNote /> : null}
     </section>
   );
 }
@@ -577,7 +577,20 @@ function CommandsPanel({ commands }: { commands: DiscordPublicInfo["commands"] }
           ))}
         </p>
       ) : null}
+      <p className="mt-2 text-[13px] text-osu-f1">
+        <Trans>
+          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Site updates</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
+        </Trans>
+      </p>
     </Panel>
+  );
+}
+
+function UnreachableNote() {
+  return (
+    <div className="relative border-t border-white/[0.07] p-5 sm:p-6">
+      <p className="text-[14px] text-osu-l2"><Trans>Can't reach the bot right now. Refresh in a moment.</Trans></p>
+    </div>
   );
 }
 
