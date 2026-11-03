@@ -9,6 +9,7 @@ import { SCENE_ART_ID } from "./ChainHud";
 import { ChainButtons, KIT, MARKER, SceneMedallion } from "./chainKit";
 import { shareChainRun } from "./chainShare";
 import { BoardPanel, type LoadBoard, type LoadSheet } from "./ChainBoardPanel";
+import { chainHowToSeen } from "./ChainHowTo";
 import { prepareRewardedAd, type RewardedAd } from "#/lib/rewarded-ad";
 
 /* A card lifting out of the table with an arrow: the share button's mark. */
@@ -311,6 +312,7 @@ export function ChainStart({
   daily = false,
   onDaily,
   onBack,
+  onHowTo,
 }: {
   best: ChainBoardEntry | null;
   busy: boolean;
@@ -327,8 +329,16 @@ export function ChainStart({
   daily?: boolean;
   onDaily?: () => void;
   onBack?: () => void;
+  /* Opens how to play (and does so by itself the first time). */
+  onHowTo?: () => void;
 }) {
   const { t, i18n } = useLingui();
+  // A first visit opens how to play by itself.
+  useEffect(() => {
+    if (onHowTo && !chainHowToSeen()) onHowTo();
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const height = narrow ? 150 : 230;
   const width = Math.round(height * PACK_ASPECT);
   return (
@@ -392,6 +402,18 @@ export function ChainStart({
                 : []),
             ]}
           />
+          {onHowTo && (
+            <button
+              type="button"
+              onClick={() => {
+                runSound.uiTap();
+                onHowTo();
+              }}
+              className="mx-auto mt-3 block text-[14px] font-bold text-[#f3e9d8]/70 underline decoration-[#f3e9d8]/30 underline-offset-4 transition hover:text-white"
+            >
+              <Trans>How to play</Trans>
+            </button>
+          )}
           {guest && (
             <p className="mt-3 max-w-[300px] text-center text-[13px] leading-snug text-[#f3e9d8]/60">
               <Trans>Playing as a guest: runs stay in this browser and off the board. Sign in with osu! to save them.</Trans>

@@ -238,16 +238,45 @@ export interface ChainTopBarProps {
   boss?: ChainBossId | null;
   /* The daily run: a tag says so. */
   daily?: boolean;
+  /* Opens how to play. */
+  onHelp?: () => void;
+  /* Signed in: switches between the player's own run and the daily run
+     (both stay saved). */
+  onSwitchMode?: () => void;
+  /* The table is showing the daily run (the switch then goes back). */
+  inDaily?: boolean;
 }
 
 /* Across the top: the round in its medallion (rows and redraws left as its
    rings), the score bridge to the target (the flame lives under it), and
    the run's shards. */
 export function ChainTopBar(props: ChainTopBarProps) {
-  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false, boss = null, daily = false } = props;
+  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false, boss = null, daily = false, onHelp, onSwitchMode, inDaily = false } = props;
   const { t } = useLingui();
   const shownShards = useTicker(shards, reducedMotion);
   const stamp = (on: ChainWysiField) => (wysi?.on.includes(on) ? <WysiStamp key={`wysi-${wysi.id}-${on}`} reducedMotion={reducedMotion} /> : null);
+  const switchMode = onSwitchMode ? (
+    <button
+      type="button"
+      onClick={onSwitchMode}
+      className="shrink-0 rounded-full border-2 px-2.5 py-1 leading-none transition hover:brightness-125"
+      style={{ fontFamily: MARKER, fontSize: narrow ? 13 : 15, color: KIT.gold, borderColor: `${KIT.gold}99`, background: KIT.dark }}
+    >
+      {inDaily ? <Trans>Your run</Trans> : <Trans>Daily</Trans>}
+    </button>
+  ) : null;
+  const help = onHelp ? (
+    <button
+      type="button"
+      onClick={onHelp}
+      title={t`How to play`}
+      aria-label={t`How to play`}
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-[#f3e9d8]/40 leading-none text-[#f3e9d8]/80 transition hover:border-[#f3e9d8] hover:text-white"
+      style={{ fontFamily: MARKER, fontSize: 16 }}
+    >
+      ?
+    </button>
+  ) : null;
   const exit = (
     <button
       type="button"
@@ -307,6 +336,8 @@ export function ChainTopBar(props: ChainTopBarProps) {
           {showMeter ? <div className="min-w-0 flex-1">{objective(Math.max(160, window.innerWidth - 24 - 120))}</div> : where}
           <span className="ml-auto" />
           {shardsBox}
+          {switchMode}
+          {help}
           {exit}
         </div>
         <div className="flex items-center gap-3">
@@ -331,6 +362,8 @@ export function ChainTopBar(props: ChainTopBarProps) {
       </div>
       <div className="flex items-center justify-end gap-4">
         {shardsBox}
+        {switchMode}
+        {help}
         {exit}
       </div>
     </div>

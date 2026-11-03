@@ -3381,6 +3381,11 @@ msgid "a map"
 msgstr "某张谱面"
 
 #. placeholder {0}: CHAIN_CHART.played
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "A map card links fully with any player who has it in their top plays, and those players score x{0} in its row (they wear its cover). An Eternal never leaves your hand and doubles every time it plays. GOATs link on every trait. Hover or hold any card to read what it does."
+msgstr "谱面卡与最佳成绩里有它的玩家完全相连，这些玩家在它所在的行中得分 x{0}（会戴上它的封面）。Eternal 永远不会离开你的手牌，每次打出都会翻倍。GOAT 在所有特征上相连。悬停或长按任意卡牌即可查看效果。"
+
+#. placeholder {0}: CHAIN_CHART.played
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "A map. Players who have it in their top plays link to it on every trait, and score x{0} in any row it is in."
 msgstr "一张谱面。最佳成绩里有它的玩家与它在所有特征上相连，并且在有它的行中得分 x{0}。"
@@ -4879,6 +4884,7 @@ msgstr "返回"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -5497,6 +5503,10 @@ msgstr "衩必须回到起点"
 msgid "break"
 msgstr "断连"
 
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Break"
+msgstr "断开"
+
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "BREAK"
 msgstr "断连"
@@ -5622,6 +5632,10 @@ msgstr "问题与建议"
 #: src/routes/workshop.themes.index.tsx
 msgid "Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it."
 msgstr ""
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Build the combo"
+msgstr "叠加连击"
 
 #: src/routes/maps.tsx
 msgid "Building maps for the first time..."
@@ -5916,6 +5930,10 @@ msgstr "卡片只计分一次。"
 #: src/lib/pack-run.ts
 msgid "Cards that share no country with another card score nothing."
 msgstr "与其他卡片没有相同国家/地区的卡片不计分。"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Cards to look for"
+msgstr "值得留意的卡牌"
 
 #. placeholder {0}: N.gallery.mult
 #: src/lib/pack-run.ts
@@ -6507,6 +6525,10 @@ msgstr "清除{label}的成绩"
 #: src/routes/skins.tsx
 msgid "Clear the filters, or upload the skin yourself."
 msgstr "清除筛选，或者自己上传这个皮肤。"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Clear the round"
+msgstr "通过回合"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the search"
@@ -7866,6 +7888,7 @@ msgstr "国内"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/maps/MapScoresBoard.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/lib/chain-run.ts
 #: src/routes/player/$username.tsx
@@ -9601,6 +9624,10 @@ msgstr "你打出的每一行都有 6 张卡。"
 msgid "Every row you play makes the rows after it score x{0} more. It stacks for the rest of the run."
 msgstr "你每打一排，之后的排得分再 x{0}。本局一直叠加。"
 
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Every shared trait raises the combo, more for each extra trait in the same link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
+msgstr "每个共享特征都会提高连击，同一连线中每多一个特征加得更多。连线走到每张卡时，它的分数是卡上的数字乘以连击。什么都不共享的两张卡会断开，连击回到起点。"
+
 #. placeholder {0}: N.quickRetry.packs
 #: src/lib/pack-run.ts
 msgid "Every song from the next one on gets +{0} pack."
@@ -11094,9 +11121,9 @@ msgstr "黄金时刻"
 msgid "Gone in {hoursLeft}h"
 msgstr "{hoursLeft} 小时后删除"
 
-#: src/components/packs/GiftInbox.tsx
-#~ msgid "Got it"
-#~ msgstr "知道了"
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Got it"
+msgstr "知道了"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Gothic"
@@ -11850,6 +11877,18 @@ msgstr "推荐是如何生成的"
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "抽取方式"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "How to play"
+msgstr "玩法说明"
+
+#. placeholder {0}: page + 1
+#. placeholder {1}: pages.length
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "How to play {0} of {1}"
+msgstr "玩法说明 {0}/{1}"
 
 #: src/routes/workshop.themes.spec.tsx
 msgid "How to write the code for your own profile theme."
@@ -13300,6 +13339,10 @@ msgstr "链接"
 #: src/components/player/ServerLinks.tsx
 msgid "Link a private server profile"
 msgstr "关联私服个人资料"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Link a row"
+msgstr "连成一行"
 
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/supporter/GiftCodePanel.tsx
@@ -15356,6 +15399,7 @@ msgstr "最新的最佳成绩"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/GiftInbox.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next"
@@ -16804,6 +16848,10 @@ msgstr "共 {0} 位可抽"
 #: src/components/packs/StreakGame.tsx
 msgid "of {0} shards left today"
 msgstr "/ 今日共 {0} 个碎片"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "of 6,390"
+msgstr "/ 6,390"
 
 #: src/routes/recommendations.tsx
 msgid "of players near you"
@@ -18414,6 +18462,7 @@ msgstr "由 {0} 游玩。"
 msgid "Played by {playerName}"
 msgstr "由 {playerName} 游玩"
 
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "Played it"
 msgstr "玩过"
@@ -19239,6 +19288,11 @@ msgstr "放到我的主页"
 msgid "Put this code on your Mamestagram userpage, then press Verify."
 msgstr "把这段代码放到你的 Mamestagram 个人页面上，然后点击验证。"
 
+#. placeholder {0}: CHAIN_RULES.rowMax
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
+msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家、稀有度或 skillset 时就会相连。键数也算，但只能和其他相同特征一起算。"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
 msgstr "px"
@@ -19446,6 +19500,7 @@ msgstr "状态正佳"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/lib/chain-run.ts
 msgid "Rarity"
 msgstr "稀有度"
@@ -19726,6 +19781,12 @@ msgstr "总 pp"
 #: src/lib/pack-run.ts
 msgid "Reach stage {0}."
 msgstr "到达第 {0} 关。"
+
+#. placeholder {0}: CHAIN_RULES.rows
+#. placeholder {1}: CHAIN_RULES.interestPer
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Spend them in the shop on packs, scene cards, practice and mods. Every third round is a boss round with a twist, shown in the shop before it."
+msgstr "在 {0} 行内达到回合目标。通关会给碎片：剩余的行、大幅超出目标都会多给，已持有的每 {1} 个碎片再给 1 个。在商店里用它们买卡包、场景卡、练习和 mod。每第三回合是 Boss 回合，规则变化会提前在商店显示。"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Reached round {round} in Overjoy, best row {best}. {link}"
@@ -20905,6 +20966,10 @@ msgstr "第 {round} 轮再加 {0} 行继续。每局一次。"
 #: src/lib/chain-run.ts
 msgid "Round {round} pack"
 msgstr "第 {round} 回合卡包"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Round cleared"
+msgstr "回合通过"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Rounded"
@@ -22846,6 +22911,7 @@ msgstr "通过少于四次的技能不参与平均，而不是按零计算。到
 
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/lib/chain-run.ts
 msgid "Skillset"
 msgstr "技能组"
@@ -29615,6 +29681,10 @@ msgstr "回复已发送，但至少有一个文件没能上传。"
 #: src/routes/report.tsx
 #~ msgid "Your reports"
 #~ msgstr "我的反馈"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Your run"
+msgstr "你的对局"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "your score"

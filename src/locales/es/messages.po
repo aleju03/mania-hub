@@ -3369,6 +3369,11 @@ msgid "a map"
 msgstr "un mapa"
 
 #. placeholder {0}: CHAIN_CHART.played
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "A map card links fully with any player who has it in their top plays, and those players score x{0} in its row (they wear its cover). An Eternal never leaves your hand and doubles every time it plays. GOATs link on every trait. Hover or hold any card to read what it does."
+msgstr "Un mapa se enlaza del todo con cualquier jugador que lo tenga en sus top plays, y esos jugadores puntúan x{0} en su fila (llevan su portada). Una Eternal nunca sale de tu mano y se duplica cada vez que juega. Los GOAT se enlazan en todos los rasgos. Pasa el cursor o mantén presionada cualquier carta para ver qué hace."
+
+#. placeholder {0}: CHAIN_CHART.played
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "A map. Players who have it in their top plays link to it on every trait, and score x{0} in any row it is in."
 msgstr "Un mapa. Los jugadores que lo tienen en sus top plays se enlazan con él en todos los rasgos y puntúan x{0} en cualquier fila donde esté."
@@ -4867,6 +4872,7 @@ msgstr "atrás"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -5485,6 +5491,10 @@ msgstr "Los brackets tienen que volver"
 msgid "break"
 msgstr "break"
 
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Break"
+msgstr "Rompe"
+
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "BREAK"
 msgstr "BREAK"
@@ -5610,6 +5620,10 @@ msgstr "Bugs y sugerencias"
 #: src/routes/workshop.themes.index.tsx
 msgid "Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it."
 msgstr ""
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Build the combo"
+msgstr "Sube el combo"
 
 #: src/routes/maps.tsx
 msgid "Building maps for the first time..."
@@ -5904,6 +5918,10 @@ msgstr "Las cartas puntúan una sola vez."
 #: src/lib/pack-run.ts
 msgid "Cards that share no country with another card score nothing."
 msgstr "Las cartas que no comparten país con otra carta no puntúan."
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Cards to look for"
+msgstr "Cartas a buscar"
 
 #. placeholder {0}: N.gallery.mult
 #: src/lib/pack-run.ts
@@ -6495,6 +6513,10 @@ msgstr "Quitar el score de {label}"
 #: src/routes/skins.tsx
 msgid "Clear the filters, or upload the skin yourself."
 msgstr "Limpia los filtros o sube la skin tú mismo."
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Clear the round"
+msgstr "Supera la ronda"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the search"
@@ -7854,6 +7876,7 @@ msgstr "país"
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/maps/MapScoresBoard.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/lib/chain-run.ts
 #: src/routes/player/$username.tsx
@@ -9589,6 +9612,10 @@ msgstr "Cada fila que juegues tiene 6 cartas."
 msgid "Every row you play makes the rows after it score x{0} more. It stacks for the rest of the run."
 msgstr "Cada fila que juegas hace que las siguientes puntúen x{0} más. Se acumula por el resto de la partida."
 
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Every shared trait raises the combo, more for each extra trait in the same link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
+msgstr "Cada rasgo compartido sube el combo, y más por cada rasgo extra en el mismo enlace. Cada carta puntúa su número por el combo cuando la cadena llega a ella. Un par que no comparte nada rompe el combo y lo devuelve al inicio."
+
 #. placeholder {0}: N.quickRetry.packs
 #: src/lib/pack-run.ts
 msgid "Every song from the next one on gets +{0} pack."
@@ -11082,9 +11109,9 @@ msgstr "Hora dorada"
 msgid "Gone in {hoursLeft}h"
 msgstr "Desaparece en {hoursLeft} h"
 
-#: src/components/packs/GiftInbox.tsx
-#~ msgid "Got it"
-#~ msgstr "¡Listo!"
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Got it"
+msgstr "¡Listo!"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Gothic"
@@ -11838,6 +11865,18 @@ msgstr "Cómo funcionan las recomendaciones"
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "Cómo elegir"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "How to play"
+msgstr "Cómo jugar"
+
+#. placeholder {0}: page + 1
+#. placeholder {1}: pages.length
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "How to play {0} of {1}"
+msgstr "Cómo jugar {0} de {1}"
 
 #: src/routes/workshop.themes.spec.tsx
 msgid "How to write the code for your own profile theme."
@@ -13288,6 +13327,10 @@ msgstr "Enlace"
 #: src/components/player/ServerLinks.tsx
 msgid "Link a private server profile"
 msgstr "Enlazar un perfil de servidor privado"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Link a row"
+msgstr "Enlaza una fila"
 
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/supporter/GiftCodePanel.tsx
@@ -15344,6 +15387,7 @@ msgstr "Top play más reciente"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/GiftInbox.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next"
@@ -16792,6 +16836,10 @@ msgstr "de {0} sacables"
 #: src/components/packs/StreakGame.tsx
 msgid "of {0} shards left today"
 msgstr "de {0} fragmentos restantes hoy"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "of 6,390"
+msgstr "de 6,390"
 
 #: src/routes/recommendations.tsx
 msgid "of players near you"
@@ -18402,6 +18450,7 @@ msgstr "Jugado por {0}."
 msgid "Played by {playerName}"
 msgstr "Jugado por {playerName}"
 
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "Played it"
 msgstr "Lo jugó"
@@ -19227,6 +19276,11 @@ msgstr "Ponerlo en mi perfil"
 msgid "Put this code on your Mamestagram userpage, then press Verify."
 msgstr "Pon este código en tu userpage de Mamestagram y luego presiona Verificar."
 
+#. placeholder {0}: CHAIN_RULES.rowMax
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
+msgstr "Pon hasta {0} cartas en una fila. Dos cartas juntas se enlazan si comparten país, rareza o skillset. El keymode también cuenta, pero solo junto con otra coincidencia."
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
 msgstr "px"
@@ -19434,6 +19488,7 @@ msgstr "En forma"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/lib/chain-run.ts
 msgid "Rarity"
 msgstr "Rareza"
@@ -19714,6 +19769,12 @@ msgstr "Alcanzar pp"
 #: src/lib/pack-run.ts
 msgid "Reach stage {0}."
 msgstr "Llega a la etapa {0}."
+
+#. placeholder {0}: CHAIN_RULES.rows
+#. placeholder {1}: CHAIN_RULES.interestPer
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Spend them in the shop on packs, scene cards, practice and mods. Every third round is a boss round with a twist, shown in the shop before it."
+msgstr "Llega al objetivo de la ronda en {0} filas o menos. Superarla paga shards: más por las filas que sobren, por pasarte mucho, y 1 por cada {1} que ya tengas. Gástalos en la tienda en packs, cartas de escena, práctica y mods. Cada tercera ronda es de jefe, con un giro que se muestra en la tienda antes."
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Reached round {round} in Overjoy, best row {best}. {link}"
@@ -20893,6 +20954,10 @@ msgstr "La ronda {round} sigue con {0} filas más. Una vez por partida."
 #: src/lib/chain-run.ts
 msgid "Round {round} pack"
 msgstr "Pack de la ronda {round}"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Round cleared"
+msgstr "Ronda superada"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Rounded"
@@ -22834,6 +22899,7 @@ msgstr "Los skills con menos de cuatro pases quedan fuera en vez de contar como 
 
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/lib/chain-run.ts
 msgid "Skillset"
 msgstr "Skillset"
@@ -29603,6 +29669,10 @@ msgstr "Tu respuesta se envió, pero al menos un archivo no se subió."
 #: src/routes/report.tsx
 #~ msgid "Your reports"
 #~ msgstr "Tus reportes"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Your run"
+msgstr "Tu partida"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "your score"

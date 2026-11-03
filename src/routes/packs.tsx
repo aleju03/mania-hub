@@ -1230,6 +1230,9 @@ function PacksPage() {
         // The game lays itself out at fixed sizes, so UI Scaling leaves it at 1x.
         <div className="ui-scale-fixed contents">
         <ChainTable
+          // The own run and the daily run are separate tables: switching
+          // starts the other one fresh, with nothing of this one on screen.
+          key={auth.viewer ? chainMode : "guest"}
           view={chainApi.view}
           best={chainApi.best}
           busy={chainApi.busy}

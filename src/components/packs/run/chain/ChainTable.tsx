@@ -48,6 +48,7 @@ import { ChainOver, ChainStart } from "./ChainEnd";
 import { BoardPanel, type LoadBoard, type LoadSheet } from "./ChainBoardPanel";
 import { CHAIN_FEEL } from "./chainFeel";
 import { ChainScenes, ChainTopBar, HudDeck } from "./ChainHud";
+import { ChainHowTo } from "./ChainHowTo";
 import { setWysiRunKey } from "./wysiSeen";
 import { boardLayout, type BoardLayout } from "./chainLayout";
 import { ChainPackStage, chainPackType, DeckPile, type PackKeepOutcome, type StageName } from "./ChainPackStage";
@@ -211,6 +212,8 @@ export function ChainTable(props: ChainTableProps) {
   const [scoreOverride, setScoreOverride] = useState<number | null>(null);
   const [shardOverride, setShardOverride] = useState<number | null>(null);
   const [aftermath, setAftermath] = useState<Aftermath | null>(null);
+  /* How to play: opens by itself on a first visit to the start screen. */
+  const [howTo, setHowTo] = useState(false);
   /* "+N base" rising off Stamina cards an unbroken 6 just grew. */
   const [growPops, setGrowPops] = useState<Array<{ id: string; x: number; y: number; add: number }>>([]);
   const [dealt, setDealt] = useState<string | null>(() => (script?.dealt && view ? roundKey(view) : typeof window === "undefined" ? null : readDealt()));
@@ -1110,6 +1113,9 @@ export function ChainTable(props: ChainTableProps) {
             wysi={hudWysi}
             boss={shown?.phase === "play" ? shown.boss : null}
             daily={daily && Boolean(shown)}
+            onHelp={() => setHowTo(true)}
+            onSwitchMode={onMode && !guest && !play ? () => onMode(daily ? "normal" : "daily") : undefined}
+            inDaily={daily}
             deck={
               narrow && shown && !overNow ? (
                 <HudDeck count={shown.phase === "play" ? shown.drawPileCount : shown.deck.length} backUrl={backUrl} />
@@ -1118,6 +1124,7 @@ export function ChainTable(props: ChainTableProps) {
           />
 
           <div ref={boxRef} className="relative min-h-0 flex-1">
+            <ChainHowTo open={howTo} narrow={narrow} onClose={() => setHowTo(false)} />
             <AnimatePresence>
               {growPops.map((pop) => (
                 <motion.div
@@ -1380,6 +1387,7 @@ export function ChainTable(props: ChainTableProps) {
                 guest={guest}
                 daily={daily}
                 onDaily={onMode && !guest ? () => onMode("daily") : undefined}
+                onHowTo={() => setHowTo(true)}
                 onBack={onMode ? () => onMode("normal") : undefined}
               />
             )}
