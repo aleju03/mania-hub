@@ -44,7 +44,7 @@ import type { SupporterBinderId } from "#/lib/supporter-pack-style";
 import { BINDER_PAGE_SIZE, BinderPages } from "./BinderPages";
 import { rememberTeamName } from "../../lib/analytics-teams";
 import { UsernameText } from "../ui/UsernameText";
-import { fetchLivePackEditions } from "#/lib/live-backend";
+import { fetchLivePackBoardOwner, fetchLivePackEditions } from "#/lib/live-backend";
 import type { RunEdition } from "#/lib/pack-run";
 
 export type { CardMint };
@@ -493,6 +493,27 @@ export function CollectionPanel({
   const { t, i18n } = useLingui();
   // Only for the self chip's badge, which wears the collector's own face.
   const viewer = useAuth().viewer;
+  // How many of each card the viewer has down on the board: a recycle that
+  // leaves fewer copies takes the rest off, so the buttons say so first.
+  const [boardRead, setBoardRead] = useState(0);
+  const [onBoard, setOnBoard] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (!viewer?.id) return;
+    let live = true;
+    fetchLivePackBoardOwner(viewer.id, true)
+      .then((owner) => {
+        if (!live) return;
+        const counts = new Map<string, number>();
+        for (const [, , key] of owner.cards) counts.set(key, (counts.get(key) ?? 0) + 1);
+        setOnBoard(counts);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [viewer?.id, boardRead]);
+  // placements that come off when only `keep` copies stay
+  const offBoard = (cardKey: string, keep: number) => Math.max(0, (onBoard.get(cardKey) ?? 0) - keep);
   // A supporter's own collection reads as their binder: two 3x3 pages a spread.
   const binder = useSupporterPackStyle(viewer?.id).binder;
   const collectionPageSize = binder ? BINDER_PAGE_SIZE : COLLECTION_PAGE_SIZE;
@@ -677,6 +698,7 @@ export function CollectionPanel({
     void Promise.resolve(action()).then((gained) => {
       celebrateRecycle(gained, anchor);
       if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
+      if (gained > 0) setBoardRead((read) => read + 1);
     });
   };
   const clearRecycleAllHold = () => {
@@ -1399,7 +1421,11 @@ export function CollectionPanel({
                   <Trans>Recycle duplicates +{recyclable}</Trans>
                 </span>
                 <span className="col-start-1 row-start-1">
-                  {recycleAllHint ? t`hold to recycle` : t`Recycle duplicates +${recyclable}`}
+                  {recycleAllHint
+                    ? [...onBoard.keys()].some((key) => offBoard(key, 1) > 0)
+                      ? t`hold to recycle (${[...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0)} come off the board)`
+                      : t`hold to recycle`
+                    : t`Recycle duplicates +${recyclable}`}
                 </span>
               </span>
             </button>
@@ -1808,15 +1834,23 @@ export function CollectionPanel({
                 {selecting || binder || card.recyclable === false ? null : card.copies > 1 ? (
                   <button
                     type="button"
-                    onClick={(event) => runRecycle(() => onRecycleCard(cardKey), event.currentTarget)}
-                    className="mx-auto mt-1.5 flex items-center gap-1 text-[10px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
+                    onClick={(event) => {
+                      // cards of it on the board coming off: ask once first
+                      if (offBoard(cardKey, 1) > 0 && !confirming) {
+                        setConfirmCardKey(cardKey);
+                        return;
+                      }
+                      setConfirmCardKey(null);
+                      runRecycle(() => onRecycleCard(cardKey), event.currentTarget);
+                    }}
+                    className={`mx-auto mt-1.5 flex items-center gap-1 text-[10px] transition-colors hover:text-white cursor-pointer ${confirming ? "font-bold text-osu-pink-light" : "text-osu-f1"}`}
                     title={t`Recycle ${plural(card.copies - 1, {
                       one: "# duplicate copy",
                       other: "# duplicate copies",
                     })}`}
                   >
                     <Recycle className="h-3 w-3" />
-                    +{dupValue}
+                    {confirming ? t`sure? ${offBoard(cardKey, 1)} off the board` : `+${dupValue}`}
                   </button>
                 ) : (
                   <button
@@ -1835,7 +1869,7 @@ export function CollectionPanel({
                     title={t`Recycle this card (removes it from your collection)`}
                   >
                     <Recycle className="h-3 w-3" />
-                    {confirming ? t`sure? +${lastCopyValue}` : `+${lastCopyValue}`}
+                    {confirming ? (offBoard(cardKey, 0) > 0 ? t`sure? ${offBoard(cardKey, 0)} off the board` : t`sure? +${lastCopyValue}`) : `+${lastCopyValue}`}
                   </button>
                 )}
               </div>
@@ -1938,6 +1972,7 @@ export function CollectionPanel({
                       : await onRecycleWholeMany(Array.from(selected));
                     celebrateRecycle(gained, anchor);
                     if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
+                    if (gained > 0) setBoardRead((read) => read + 1);
                     exitSelecting();
                   } finally {
                     setBulkBusy(false);
@@ -1951,7 +1986,9 @@ export function CollectionPanel({
               <Recycle className={`h-3.5 w-3.5 ${bulkBusy ? "animate-spin" : ""}`} />
               {bulkBusy
                 ? t`Recycling...`
-                : confirmBulk
+                : confirmBulk && selectionScope !== "all" && [...selected].some((key) => offBoard(key, 0) > 0)
+                  ? t`Sure? This also takes ${[...selected].reduce((sum, key) => sum + offBoard(key, 0), 0)} cards off the board`
+                  : confirmBulk
                   ? t`Sure? ${plural(selectedCount, {
                       one: "# card leaves the collection",
                       other: "# cards leave the collection",
@@ -2102,6 +2139,9 @@ export function CollectionPanel({
               >
                 <Recycle className="h-3 w-3" />
                 <Trans>Recycle duplicates +{duplicateShardValue(menu.card)}</Trans>
+                {offBoard(packCardKeyOf(menu.card), 1) > 0 ? (
+                  <span className="ml-auto pl-2 text-[10px] text-osu-pink-light">{t`${offBoard(packCardKeyOf(menu.card), 1)} off the board`}</span>
+                ) : null}
               </button>
             )}
             {menu.card.recyclable !== false && (
@@ -2122,7 +2162,9 @@ export function CollectionPanel({
               >
                 <Recycle className="h-3 w-3" />
                 {menuConfirm
-                  ? t`Sure? The card leaves the collection`
+                  ? offBoard(packCardKeyOf(menu.card), 0) > 0
+                    ? t`Sure? It leaves the collection and the board`
+                    : t`Sure? The card leaves the collection`
                   : menu.card.copies > 1
                     ? t`Recycle all copies +${wholeCardShardValue(menu.card)}`
                     : t`Recycle card +${wholeCardShardValue(menu.card)}`}

@@ -29000,3 +29000,48 @@ msgstr "Ajustar a la cuadrícula"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "This part of the board is full. Try further out."
 msgstr "Esta parte del tablero está llena. Prueba más lejos."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Reported. An admin will take a look."
+msgstr "Reportado. Un admin lo revisará."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "The report could not be sent. Try again in a bit."
+msgstr "No se pudo enviar el reporte. Inténtalo de nuevo en un rato."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Reported"
+msgstr "Reportado"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Report this card to the admins"
+msgstr "Reportar esta carta a los admins"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "You have as many cards in this part of the board as one player can. Try somewhere else."
+msgstr "Ya tienes tantas cartas en esta parte del tablero como puede tener un jugador. Prueba en otro lugar."
+
+#. placeholder {0}: offBoard(packCardKeyOf(menu.card), 1)
+#: src/components/packs/CollectionPanel.tsx
+msgid "{0} off the board"
+msgstr "{0} salen del tablero"
+
+#. placeholder {0}: [...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0)
+#: src/components/packs/CollectionPanel.tsx
+msgid "hold to recycle ({0} come off the board)"
+msgstr "mantén para reciclar ({0} salen del tablero)"
+
+#. placeholder {0}: offBoard(cardKey, 0)
+#. placeholder {0}: offBoard(cardKey, 1)
+#: src/components/packs/CollectionPanel.tsx
+msgid "sure? {0} off the board"
+msgstr "¿seguro? {0} salen del tablero"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Sure? It leaves the collection and the board"
+msgstr "¿Seguro? Sale de la colección y del tablero"
+
+#. placeholder {0}: [...selected].reduce((sum, key) => sum + offBoard(key, 0), 0)
+#: src/components/packs/CollectionPanel.tsx
+msgid "Sure? This also takes {0} cards off the board"
+msgstr "¿Seguro? También saca {0} cartas del tablero"

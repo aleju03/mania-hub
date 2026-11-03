@@ -1,5 +1,5 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { Brush, Grid3x3, Hand, Link2, LocateFixed, Maximize2, Minus, Plus, Redo2, RotateCcw, RotateCw, Trash2, Undo2 } from "lucide-react";
+import { Brush, Flag, Grid3x3, Hand, Link2, LocateFixed, Maximize2, Minus, Plus, Redo2, RotateCcw, RotateCw, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "#/lib/auth-context";
 import { DEFAULT_COUNTRY_CODE } from "#/lib/country";
@@ -12,8 +12,9 @@ import {
   openLiveEventSource,
   type LivePackBoardOwner,
 } from "#/lib/live-backend";
+import { submitBugReport } from "#/lib/bug-reports";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
-import { removePackBoardCards, sendPackBoardOps } from "#/lib/pack-wallet-sync";
+import { fetchPackBoardFriendOf, removePackBoardCards, sendPackBoardOps } from "#/lib/pack-wallet-sync";
 import { BoardFaces } from "./boardFaces";
 import { BoardMinimap, type BoardMinimapHandle } from "./BoardMinimap";
 import { BoardEngine, TINTS, cardPaint, makeCard, regionOf, tierPaint, type BoardCard, type BoardCardFace, type BoardOp, type BoardTool } from "./boardEngine";
@@ -78,6 +79,8 @@ export function CardBoard({ at }: { at?: string }) {
      and the view they were listed in: moving the view closes the list. */
   const [stack, setStack] = useState<{ cards: BoardCard[]; x: number; y: number; reach: number; w: number; h: number } | null>(null);
   const stackCam = useRef<string | null>(null);
+  /* Cards this viewer reported this visit, by owner:number. */
+  const [reported, setReported] = useState<Set<string>>(new Set());
   const [selection, setSelection] = useState<BoardCard[]>([]);
   const [history, setHistory] = useState({ undo: false, redo: false });
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -281,6 +284,7 @@ export function CardBoard({ at }: { at?: string }) {
         .then((read) => {
           const engine = engineRef.current;
           if (!engine) return;
+          for (const [owner, , laidSince] of read.owners) engine.noteLaid(owner, laidSince ?? Infinity);
           for (const region of read.regions) {
             const cards: BoardCard[] = [];
             const flat = region.cards;
@@ -343,7 +347,7 @@ export function CardBoard({ at }: { at?: string }) {
         // with the pointer off the board, the label follows the view's middle
         if (!pointerOn.current && engine) showCoords(engine.cam.x, engine.cam.y);
       },
-      onRefused: (why) => setNotice(why === "full" ? t`This part of the board is full. Try further out.` : why === "protected" ? t`Drawings are protected from other players for their first day.` : t`Slow down a little.`),
+      onRefused: (why) => setNotice(why === "full" ? t`This part of the board is full. Try further out.` : why === "share" ? t`You have as many cards in this part of the board as one player can. Try somewhere else.` : why === "protected" ? t`Drawings are protected from other players for their first day.` : t`Slow down a little.`),
       // written straight to the label: this fires on every mouse move
       onPointerAt: (point) => {
         pointerOn.current = point !== null;
@@ -427,6 +431,8 @@ export function CardBoard({ at }: { at?: string }) {
             state.regions.set(n, region);
           }
           engine.setNextN(owner.cards.reduce((max, [n]) => Math.max(max, n), 0) + 1);
+          // whose fresh drawings this viewer may add to (their osu! friends' lists)
+          void fetchPackBoardFriendOf().then((owners) => live && engine.setFriendOf(owners)).catch(() => {});
           setCap(owner.cap);
           setInventory(owner.inventory);
           publishUsage();
@@ -565,6 +571,33 @@ export function CardBoard({ at }: { at?: string }) {
   };
 
   const editing = me != null;
+  /* Sends another player's card to the admins, the same way as a bug report:
+     the board spot, the card and who laid it. */
+  const report = async (card: BoardCard) => {
+    const id = `${card.owner}:${card.n}`;
+    if (reported.has(id)) return;
+    setReported((was) => new Set(was).add(id));
+    const at = `${Math.round(card.x / COORD_UNIT)},${Math.round(card.y / COORD_UNIT)},120`;
+    const result = await submitBugReport({
+      data: {
+        kind: "bug",
+        body: `Board report: "${card.name || card.key}" laid down by ${card.ownerName || "?"} (osu! id ${card.owner}), card ${card.n}, at ${at}.`,
+        pagePath: `/packs/collections?tab=board&at=${at}`,
+        context: { boardOwner: card.owner, boardCard: card.n, boardKey: card.key, boardX: card.x, boardY: card.y },
+      },
+    }).catch(() => ({ ok: false as const }));
+    if (result.ok) {
+      setNotice(t`Reported. An admin will take a look.`);
+    } else {
+      setReported((was) => {
+        const next = new Set(was);
+        next.delete(id);
+        return next;
+      });
+      setNotice(t`The report could not be sent. Try again in a bit.`);
+    }
+  };
+
   const ownSelection = selection.filter((card) => card.owner === me);
   const otherSelected = selection.length === 1 && selection[0].owner !== me ? selection[0] : null;
 
@@ -722,6 +755,8 @@ export function CardBoard({ at }: { at?: string }) {
             <StackList
               stack={stack}
               me={me}
+              reported={reported}
+              onReport={(card) => void report(card)}
               onPeek={(card) => engine?.peekCard(card)}
               onPick={(card) => {
                 engine?.peekCard(null);
@@ -911,12 +946,16 @@ const STACK_ROW = 34;
 function StackList({
   stack,
   me,
+  reported,
+  onReport,
   onPeek,
   onPick,
   onClose,
 }: {
   stack: { cards: BoardCard[]; x: number; y: number; reach: number; w: number; h: number };
   me: number | null;
+  reported: ReadonlySet<string>;
+  onReport: (card: BoardCard) => void;
   onPeek: (card: BoardCard | null) => void;
   onPick: (card: BoardCard) => void;
   onClose: () => void;
@@ -959,22 +998,41 @@ function StackList({
       <div className="scroll-slim min-h-0 overflow-y-auto px-1 pb-1">
         {stack.cards.map((card) => {
           const paint = cardPaint(card);
+          const id = `${card.owner}:${card.n}`;
+          // anyone signed in can send someone else's card to the admins
+          const reportable = me != null && card.owner !== me;
           return (
-            <button
-              key={`${card.owner}:${card.n}`}
-              type="button"
-              onMouseEnter={() => onPeek(card)}
-              onFocus={() => onPeek(card)}
-              onClick={() => onPick(card)}
-              className="flex w-full items-center gap-2.5 rounded-md px-2 text-left hover:bg-white/[0.07] focus-visible:bg-white/[0.07] focus-visible:outline-none"
-              style={{ height: STACK_ROW }}
-            >
-              <span className="h-5 w-3.5 shrink-0 rounded-[3px] border border-white/30" style={{ background: `linear-gradient(150deg, ${paint.light}, ${paint.mid} 55%, ${paint.dark})` }} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-semibold text-white">{card.name || card.key}</span>
-                <span className="block truncate text-[11px] text-osu-f1">{card.owner === me ? t`Yours` : card.ownerName}</span>
-              </span>
-            </button>
+            <div key={id} className="group flex items-center rounded-md hover:bg-white/[0.07]" onMouseEnter={() => onPeek(card)} style={{ height: STACK_ROW }}>
+              <button
+                type="button"
+                onFocus={() => onPeek(card)}
+                onClick={() => onPick(card)}
+                className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 text-left focus-visible:bg-white/[0.07] focus-visible:outline-none"
+              >
+                <span className="h-5 w-3.5 shrink-0 rounded-[3px] border border-white/30" style={{ background: `linear-gradient(150deg, ${paint.light}, ${paint.mid} 55%, ${paint.dark})` }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-semibold text-white">{card.name || card.key}</span>
+                  <span className="block truncate text-[11px] text-osu-f1">{card.owner === me ? t`Yours` : card.ownerName}</span>
+                </span>
+              </button>
+              {reportable ? (
+                reported.has(id) ? (
+                  <span className="shrink-0 px-2 text-[11px] text-osu-f1">{t`Reported`}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onReport(card)}
+                    onFocus={() => onPeek(card)}
+                    title={t`Report this card to the admins`}
+                    aria-label={t`Report this card to the admins`}
+                    className="mr-1 flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] text-osu-f1 opacity-60 transition-opacity hover:bg-white/10 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
+                  >
+                    <Flag size={12} aria-hidden />
+                    {t`Report`}
+                  </button>
+                )
+              ) : null}
+            </div>
           );
         })}
       </div>

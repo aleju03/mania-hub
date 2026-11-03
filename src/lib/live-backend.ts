@@ -4448,11 +4448,12 @@ export async function fetchLivePackBoardFaces(pairs: string[]): Promise<[number,
 
 /* Regions' cards, each as eight numbers in a flat list (z, owner index,
    owner's card number, face index, x, y, turn, size), with the faces (key,
-   tier, player name) and owners (id, name) they point at. */
+   tier, player name) and owners (id, name, the lowest card number they laid
+   in the last day or null) they point at. */
 export interface LivePackBoardRegions {
   regions: { id: number; version: number; cards: number[] }[];
   faces: [string, string | null, string][];
-  owners: [number, string][];
+  owners: [number, string, (number | null)?][];
 }
 
 export async function fetchLivePackBoardRegions(ids: number[]): Promise<LivePackBoardRegions> {
@@ -4472,8 +4473,9 @@ export interface LivePackBoardOwner {
   inventory: [key: string, tier: string | null, copies: number, name: string][];
 }
 
-export async function fetchLivePackBoardOwner(userId: number): Promise<LivePackBoardOwner> {
-  const body = await fetchLiveJson<Partial<LivePackBoardOwner>>(`/api/packs/board/owner/${userId}`);
+/* `cardsOnly` skips the inventory, for counting what is down. */
+export async function fetchLivePackBoardOwner(userId: number, cardsOnly = false): Promise<LivePackBoardOwner> {
+  const body = await fetchLiveJson<Partial<LivePackBoardOwner>>(`/api/packs/board/owner/${userId}${cardsOnly ? "?only=cards" : ""}`);
   return {
     cards: Array.isArray(body.cards) ? body.cards : [],
     cap: Number(body.cap) || 0,

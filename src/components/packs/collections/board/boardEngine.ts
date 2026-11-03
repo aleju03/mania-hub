@@ -1,4 +1,5 @@
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
+import { footprints, onHeldGround } from "../../../../../backend/src/shared/board-footprint";
 
 /* The shared card board's drawing and input, kept out of React: the table can
    hold hundreds of thousands of cards and a brush stroke adds dozens a
@@ -48,8 +49,10 @@ const PREVIEW_CELL = REGION / PREVIEW_CELLS;
 /* Tier order of the grid's values, 1-based (backend TIERS). */
 const PREVIEW_TIERS = ["common", "rare", "elite", "superRare", "ultraRare", "legendary", "mythic", "ascendant", "worldClass", "goat", "eternal"];
 const REGION_LIMIT = 260;
-/* Most cards a region holds (backend PACK_BOARD_REGION_CAP). */
+/* Most cards a region holds, and of them one player (backend
+   PACK_BOARD_REGION_CAP, PACK_BOARD_REGION_OWNER_CAP). */
 const REGION_CAP = 1500;
+const REGION_OWNER_CAP = 500;
 
 export const angleOf = (r: number) => (r / 256) * TURN;
 export const scaleOf = (s: number) => 2 ** ((s - 128) / 64);
@@ -318,7 +321,7 @@ export interface BoardEngineOptions {
   onHistory?: (canUndo: boolean, canRedo: boolean) => void;
   /* A card the brush or tray did not lay down, and why: it would cover
      someone's day-old drawing, or the viewer is going faster than allowed. */
-  onRefused?: (why: "protected" | "slow" | "full") => void;
+  onRefused?: (why: "protected" | "slow" | "full" | "share") => void;
   /* The view moved or zoomed. */
   onView?: () => void;
   /* Where on the board the pointer is, in board units, as it moves; null
@@ -567,6 +570,7 @@ export class BoardEngine {
   }
 
   setRegion(id: number, version: number, cards: BoardCard[]) {
+    this.held.clear();
     this.requested.delete(id);
     const held = this.regions.get(id);
     if (held && held.version > version) return;
@@ -636,15 +640,71 @@ export class BoardEngine {
   }
 
   setFreshFrom(z: number) {
+    this.held.clear();
     this.freshFrom = z;
   }
 
   /* Whether a card laid here would cover another player's fresh cards, judged
      on the loaded regions round it (the backend has the final say). */
-  /* Whether the region a card centred here would go in has no room left
-     (the backend refuses it, so the board does not lay it down at all). */
+  /* Why the region a card centred here would go in has no room for the
+     viewer's card, if it has none: full, or the viewer already holds their
+     share of it (the backend refuses either, so the board lays nothing). */
+  private noRoom(x: number, y: number): "full" | "share" | null {
+    const cards = this.regions.get(regionOf(x, y))?.cards ?? [];
+    if (cards.length >= REGION_CAP) return "full";
+    let mine = 0;
+    for (const card of cards) if (card.owner === this.options.me && ++mine >= REGION_OWNER_CAP) return "share";
+    return null;
+  }
+
   private regionFull(x: number, y: number): boolean {
-    return (this.regions.get(regionOf(x, y))?.cards.length ?? 0) >= REGION_CAP;
+    const why = this.noRoom(x, y);
+    if (why) this.refusedFor = why;
+    return why !== null;
+  }
+  /* What the last regionFull refused for, so callers can say which. */
+  private refusedFor: "full" | "share" = "full";
+
+  /* Collectors who have the viewer among their osu! friends: their fresh
+     drawings take the viewer's cards. */
+  private friendOf = new Set<number>();
+
+  setFriendOf(owners: Iterable<number>) {
+    this.friendOf = new Set(owners);
+    this.held.clear();
+  }
+
+  /* The ground other players' fresh drawings hold round each region, worked
+     out when a card first needs it and dropped when cards or the clock move. */
+  private held = new Map<number, Map<number, number>>();
+  /* Per owner, the lowest card number they laid in the last day: their cards
+     from it up were laid (not just moved) within it, and only those hold
+     ground. */
+  private laidSince = new Map<number, number>();
+
+  noteLaid(owner: number, since: number) {
+    if (this.laidSince.get(owner) === since) return;
+    this.laidSince.set(owner, since);
+    this.held.clear();
+  }
+
+  private heldAround(id: number): Map<number, number> {
+    let held = this.held.get(id);
+    if (held) return held;
+    const fresh: BoardCard[] = [];
+    const all: BoardCard[] = [];
+    const rx = Math.floor(id / REGIONS_PER_SIDE), ry = id % REGIONS_PER_SIDE;
+    for (let ix = rx - 1; ix <= rx + 1; ix++) {
+      for (let iy = ry - 1; iy <= ry + 1; iy++) {
+        for (const card of this.regions.get(ix * REGIONS_PER_SIDE + iy)?.cards ?? []) {
+          all.push(card);
+          if (card.owner !== this.options.me && !this.friendOf.has(card.owner) && card.z >= this.freshFrom && card.n >= (this.laidSince.get(card.owner) ?? Infinity)) fresh.push(card);
+        }
+      }
+    }
+    held = footprints(fresh, all);
+    this.held.set(id, held);
+    return held;
   }
 
   private coversFresh(x: number, y: number, r: number, s: number): boolean {
@@ -656,11 +716,12 @@ export class BoardEngine {
         const region = this.regions.get(ix * REGIONS_PER_SIDE + iy);
         if (!region) continue;
         for (const card of region.cards) {
-          if (card.owner !== this.options.me && card.z >= this.freshFrom && overlaps(probe, card)) return true;
+          if (card.owner !== this.options.me && !this.friendOf.has(card.owner) && card.z >= this.freshFrom && overlaps(probe, card)) return true;
         }
       }
     }
-    return false;
+    // the inside of someone's fresh drawing, and the margin round it
+    return onHeldGround({ ...probe, owner: this.options.me ?? 0 }, this.options.me ?? 0, this.heldAround(regionOf(x, y)));
   }
 
   private takeToken(): boolean {
@@ -755,7 +816,7 @@ export class BoardEngine {
     const after = this.brush.grid
       ? { face, x: snapTo(x, gridPitch(s)), y: snapTo(y, gridPitch(s)), r: 0, s, tint: this.brush.tint }
       : { face, x: clampCoord(x), y: clampCoord(y), r: rotByte((Math.random() - 0.5) * 0.2), s, tint: this.brush.tint };
-    if (this.regionFull(after.x, after.y)) return this.options.onRefused?.("full");
+    if (this.regionFull(after.x, after.y)) return this.options.onRefused?.(this.refusedFor);
     if (this.coversFresh(after.x, after.y, after.r, after.s)) return this.options.onRefused?.("protected");
     if (!this.takeToken()) return this.options.onRefused?.("slow");
     const n = this.nextN++;
@@ -902,10 +963,13 @@ export class BoardEngine {
     for (const { n, after } of changes) {
       const card = this.own.get(n);
       if (!after) {
-        if (!card) continue;
-        this.own.delete(n);
-        this.detach(card);
-        this.unselect(card);
+        // the delete goes out even for a card no longer held here (a region
+        // read can have replaced it), or an undone stroke could stay saved
+        if (card) {
+          this.own.delete(n);
+          this.detach(card);
+          this.unselect(card);
+        }
         ops.push(["d", n]);
         continue;
       }
@@ -970,6 +1034,7 @@ export class BoardEngine {
   }
 
   private dropRegion(id: number) {
+    this.held.clear();
     const region = this.regions.get(id);
     if (!region) return;
     for (const card of region.cards) {
@@ -1148,8 +1213,9 @@ export class BoardEngine {
   private drawFull(g: CanvasRenderingContext2D) {
     if (this.options.me == null || this.cam.z < TILE_ZOOM || (this.tool !== "brush" && this.gesture?.kind !== "drag")) return;
     for (const id of this.visibleRegions(0)) {
-      if ((this.regions.get(id)?.cards.length ?? 0) < REGION_CAP) continue;
       const [ox, oy] = regionOrigin(id);
+      // full, or already holding the viewer's share
+      if (!this.noRoom(ox + 1, oy + 1)) continue;
       const [x0, y0] = this.toDevice(ox, oy);
       const size = REGION * this.cam.z * this.dpr;
       g.setTransform(1, 0, 0, 1, 0, 0);
@@ -1758,7 +1824,7 @@ export class BoardEngine {
         return { n: card.n, before, after };
       });
       this.active = [];
-      if (full) this.options.onRefused?.("full");
+      if (full) this.options.onRefused?.(this.refusedFor);
       if (gesture.kind !== "drag" || gesture.moved) this.commit(changes.filter((change) => change.after !== change.before));
       else this.touch();
     } else if (gesture.kind === "marquee") {
@@ -1813,7 +1879,7 @@ export class BoardEngine {
       // the stroke leaves a gap over a full part of the board, someone's
       // fresh drawing, and while the viewer is out of allowance, rather than ending
       if (this.regionFull(at[0], at[1])) {
-        this.options.onRefused?.("full");
+        this.options.onRefused?.(this.refusedFor);
         continue;
       }
       if (this.coversFresh(at[0], at[1], turn, scaleByte(this.brush.scale))) {
@@ -1865,7 +1931,7 @@ export class BoardEngine {
       const there = this.cardAt(x, y, true);
       if (there && there.x === x && there.y === y && there.s === s) continue;
       if (this.regionFull(x, y)) {
-        this.options.onRefused?.("full");
+        this.options.onRefused?.(this.refusedFor);
         continue;
       }
       if (this.coversFresh(x, y, 0, s)) {

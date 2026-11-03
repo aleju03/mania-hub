@@ -431,6 +431,20 @@ export const sendPackBoardOps = createServerFn({ method: "POST" })
     return (await response.json()) as PackBoardSaveResult;
   });
 
+/* The collectors with drawings fresh today who have the viewer among their
+   osu! friends, and so let them add to those drawings. */
+export const fetchPackBoardFriendOf = createServerFn({ method: "GET" }).handler(async (): Promise<number[]> => {
+  const { setResponseHeader } = await import("@tanstack/react-start/server");
+  setResponseHeader("Cache-Control", "private, no-store");
+  const target = await getSyncTarget();
+  if (!target) return [];
+  const url = target.url.replace(/\/api\/pack-wallet\/(\d+)$/, "/api/pack-collection/$1/board");
+  const response = await fetch(url, { headers: target.headers }).catch(() => null);
+  if (!response?.ok) return [];
+  const body = (await response.json().catch(() => ({}))) as { owners?: unknown };
+  return Array.isArray(body.owners) ? body.owners.filter((id): id is number => Number.isInteger(id)) : [];
+});
+
 /* Moderation: takes one card (n) or every card of a collector off the board.
    True-admin only, server-side like every admin call. */
 export const removePackBoardCards = createServerFn({ method: "POST" })

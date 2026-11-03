@@ -29055,3 +29055,48 @@ msgstr "Snap to grid"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "This part of the board is full. Try further out."
 msgstr "This part of the board is full. Try further out."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Reported. An admin will take a look."
+msgstr "Reported. An admin will take a look."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "The report could not be sent. Try again in a bit."
+msgstr "The report could not be sent. Try again in a bit."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Reported"
+msgstr "Reported"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Report this card to the admins"
+msgstr "Report this card to the admins"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "You have as many cards in this part of the board as one player can. Try somewhere else."
+msgstr "You have as many cards in this part of the board as one player can. Try somewhere else."
+
+#. placeholder {0}: offBoard(packCardKeyOf(menu.card), 1)
+#: src/components/packs/CollectionPanel.tsx
+msgid "{0} off the board"
+msgstr "{0} off the board"
+
+#. placeholder {0}: [...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0)
+#: src/components/packs/CollectionPanel.tsx
+msgid "hold to recycle ({0} come off the board)"
+msgstr "hold to recycle ({0} come off the board)"
+
+#. placeholder {0}: offBoard(cardKey, 0)
+#. placeholder {0}: offBoard(cardKey, 1)
+#: src/components/packs/CollectionPanel.tsx
+msgid "sure? {0} off the board"
+msgstr "sure? {0} off the board"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Sure? It leaves the collection and the board"
+msgstr "Sure? It leaves the collection and the board"
+
+#. placeholder {0}: [...selected].reduce((sum, key) => sum + offBoard(key, 0), 0)
+#: src/components/packs/CollectionPanel.tsx
+msgid "Sure? This also takes {0} cards off the board"
+msgstr "Sure? This also takes {0} cards off the board"
