@@ -10,6 +10,7 @@ pub mod motion_features;
 pub mod note_bpm;
 pub mod patterns;
 pub mod rice_shape;
+pub mod star_rating;
 pub mod rate_vibro;
 pub mod types;
 pub mod vibro_detection;

@@ -119,7 +119,7 @@ fn rate_ln(map: &LnMap, options: &LnSkillOptions, chart: bool) -> Option<LnSkill
             map.key_count,
             map.od,
             &PrismOptions { rate: Some(rate), od: Some(od), goal: Some(score_goal), overall_only: true },
-            if whole { None } else { Some(&spans) },
+            None,
         )
         .unwrap_or(0.0)
     } else {

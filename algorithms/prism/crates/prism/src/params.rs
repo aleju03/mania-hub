@@ -1,4 +1,4 @@
-pub const PRISM_CALC_VERSION: u32 = 25;
+pub const PRISM_CALC_VERSION: u32 = 26;
 
 pub const PRISM_ENABLED: bool = true;
 
@@ -36,7 +36,10 @@ pub struct PrismModel {
     pub release_long_full_ms: f64,
     pub release_repress_ms: f64,
     pub release_repress_discount: f64,
+    pub release_busy_ms: f64,
+    pub release_busy_power: f64,
     pub jack_after_hold_units: Option<f64>,
+    pub hand_jack_ms: f64,
     pub od_power: f64,
     pub flam_units: f64,
     pub jack_chord_share: f64,
@@ -76,6 +79,8 @@ pub const PRESS: PrismModel = PrismModel {
     release_long_full_ms: 1000.0,
     release_repress_ms: 0.0,
     release_repress_discount: 0.0,
+    release_busy_ms: 0.0,
+    release_busy_power: 0.0,
     od_power: 0.2,
     flam_units: 1.0,
     half_life_ms: 248.0,
@@ -85,6 +90,7 @@ pub const PRESS: PrismModel = PrismModel {
     stamina_weight: 0.14,
     hand_share: 0.2083,
     goal_exponent: 4.114,
+    hand_jack_ms: 250.0,
     speed_full_ms: 60.0,
     speed_none_ms: 140.0,
     hand_repeat: 1.0,
@@ -94,14 +100,16 @@ pub const PRESS: PrismModel = PrismModel {
 pub const LN: PrismModel = PrismModel {
     jack_units: 6.533,
     jack_chord_share: 0.0,
-    release_units: 0.0564,
-    independence_units: 0.5454,
+    release_units: 0.0653,
+    independence_units: 0.7636,
     independence_held_power: 1.25,
     held_body_full_ms: 435.0,
-    release_long_units: 3.293,
+    release_long_units: 2.352,
     release_long_full_ms: 714.0,
     release_repress_ms: 168.0,
     release_repress_discount: 0.4,
+    release_busy_ms: 385.1,
+    release_busy_power: 2.033,
     od_power: 0.4,
     flam_units: 1.167,
     sustain_weight: 0.19,
@@ -123,11 +131,11 @@ pub const SCALE_6K: PrismScale = PrismScale {
     rating: [2.716, 5.316, 10.49, 13.68, 16.02, 17.91, 19.82, 21.29, 22.65, 24.23, 25.46, 27.09, 29.16, 33.98, 37.35],
 };
 pub const LN_SCALE_7K: PrismScale = PrismScale {
-    strain: [2.079, 3.783, 5.305, 6.591, 7.534, 8.225, 8.881, 9.563, 10.18, 10.96, 11.56, 12.89, 14.13, 16.74, 20.07],
+    strain: [2.162, 3.935, 5.518, 6.856, 7.836, 8.555, 9.237, 9.947, 10.59, 11.4, 12.02, 13.41, 14.7, 17.41, 20.88],
     rating: [3.994, 9.566, 15.8, 21.12, 24.54, 26.71, 28.21, 29.45, 30.59, 32.27, 33.45, 35.17, 36.72, 39.58, 43.01],
 };
 pub const LN_SCALE_6K: PrismScale = PrismScale {
-    strain: [1.859, 2.604, 4.697, 5.59, 6.051, 6.663, 6.881, 7.164, 7.523, 7.713, 8.027, 8.748, 9.888, 12.88, 15.73],
+    strain: [1.796, 2.516, 4.539, 5.401, 5.847, 6.439, 6.649, 6.922, 7.269, 7.453, 7.756, 8.453, 9.554, 12.45, 15.2],
     rating: [4.237, 6.534, 14.97, 19.43, 20.77, 22.63, 22.85, 24.14, 25.06, 26.74, 27.52, 28.23, 31.15, 35.44, 38.8],
 };
 
@@ -136,7 +144,7 @@ pub fn scale_8k() -> PrismScale {
 }
 pub fn ln_scale_8k() -> PrismScale {
     let press = scale_8k();
-    PrismScale { strain: press.strain.map(|strain| strain * 1.599), rating: press.rating }
+    PrismScale { strain: press.strain.map(|strain| strain * 1.505), rating: press.rating }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

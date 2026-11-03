@@ -1,4 +1,6 @@
 pub mod ln_lead;
+pub mod mash;
+pub mod mash_exclusion;
 pub mod ln_sections;
 pub mod params;
 pub mod workload;
@@ -187,8 +189,141 @@ pub struct PrismPrepared {
     pub weight: Vec<f64>,
     pub overall: Vec<f64>,
     pub skillsets: Option<Vec<Option<Vec<f64>>>>,
+    pub routes: Vec<(Vec<f64>, Vec<f64>)>,
     model: PrismModel,
     scale: PrismScale,
+}
+
+pub fn prism_mash_taken(chart: &PrismChart, centre_hand: u8, sections: &[PrismSection], model: &PrismModel, hand_strike: bool) -> Vec<bool> {
+    mash_taken_by(sections, model, &mash_routes_of(chart, centre_hand, sections, model, hand_strike))
+}
+
+pub(crate) fn mash_taken_by(sections: &[PrismSection], model: &PrismModel, routes: &[(Vec<f64>, Vec<f64>)]) -> Vec<bool> {
+    if routes.is_empty() {
+        return vec![false; sections.len()];
+    }
+    let ge = model.goal_exponent;
+    let skill = prism_strain_at_goal(&demands_of(sections), &weights_of(sections), PRISM_BASE_GOAL, ge);
+    let log_base = log(PRISM_BASE_GOAL);
+    let score_at = |demand: f64| if demand > 0.0 && skill > 0.0 { exp(log_base * pow(demand / skill, ge)) } else { 1.0 };
+    sections
+        .iter()
+        .enumerate()
+        .map(|(i, section)| {
+            let written = score_at(section.demand);
+            routes.iter().any(|(accuracy, demand)| {
+                let acc = accuracy[i];
+                acc > 0.0 && acc * score_at(if demand[i] > 0.0 { demand[i] } else { 0.0 }) > written
+            })
+        })
+        .collect()
+}
+
+fn mash_routes_of(chart: &PrismChart, centre_hand: u8, sections: &[PrismSection], model: &PrismModel, hand_strike: bool) -> Vec<(Vec<f64>, Vec<f64>)> {
+    let mut out = Vec::new();
+    let ge = model.goal_exponent;
+    let skill = prism_strain_at_goal(&demands_of(sections), &weights_of(sections), PRISM_BASE_GOAL, ge);
+    let log_base = log(PRISM_BASE_GOAL);
+    let loss: Vec<(f64, f64)> = sections
+        .iter()
+        .map(|s| (s.time_ms, s.work * if s.demand > 0.0 { 1.0 - exp(log_base * pow(s.demand / skill, ge)) } else { 0.0 }))
+        .collect();
+    let routes = if hand_strike { mash::prism_hand_strike_route(chart, centre_hand).into_iter().collect() } else { mash::prism_mash_routes(chart, centre_hand, &loss, false) };
+    for route in routes {
+        let mashed_sections = prism_sections(&route.chart, centre_hand, model);
+        let mut mashed = vec![f64::NAN; route.accuracy.len()];
+        for s in &mashed_sections {
+            let slot = mash::slot_of(s.time_ms);
+            if slot < mashed.len() {
+                mashed[slot] = s.demand;
+            }
+        }
+        let mut accuracy = vec![f64::NAN; sections.len()];
+        let mut demand = vec![f64::NAN; sections.len()];
+        let mut any = false;
+        for (i, s) in sections.iter().enumerate() {
+            let slot = mash::slot_of(s.time_ms);
+            if slot >= route.accuracy.len() {
+                continue;
+            }
+            let (acc, m) = (route.accuracy[slot], mashed[slot]);
+            if !(acc > 0.0) || !(m * mash::MASH_ROUTE_EASIER <= s.demand) {
+                continue;
+            }
+            accuracy[i] = acc;
+            demand[i] = m;
+            any = true;
+        }
+        if any {
+            out.push((accuracy, demand));
+        }
+    }
+    out
+}
+
+fn routed_strain_at_goal(demand: &[f64], weight: &[f64], routes: &[(Vec<f64>, Vec<f64>)], goal: f64, goal_exponent: f64) -> f64 {
+    let mut total = 0.0;
+    let mut peak = 0.0;
+    for i in 0..demand.len() {
+        total += weight[i];
+        if demand[i] > peak {
+            peak = demand[i];
+        }
+    }
+    if !(goal > 0.0) || !(total > 0.0) || !(peak > 0.0) {
+        return 0.0;
+    }
+    let log_base = log(PRISM_BASE_GOAL);
+    let mut lo = 0.0;
+    let mut hi = peak * 8.0;
+    let mut skill = peak;
+    for _ in 0..60 {
+        let mut score = 0.0;
+        let mut slope = 0.0;
+        for j in 0..demand.len() {
+            let mut best = 1.0;
+            let mut best_slope = 0.0;
+            if demand[j] > 0.0 {
+                let t = pow(demand[j] / skill, goal_exponent);
+                let f = exp(log_base * t);
+                best = f;
+                best_slope = -f * log_base * goal_exponent * t / skill;
+            }
+            for (acc, mashed) in routes {
+                let acc = acc[j];
+                if !(acc > 0.0) {
+                    continue;
+                }
+                if !(mashed[j] > 0.0) {
+                    if acc > best {
+                        best = acc;
+                        best_slope = 0.0;
+                    }
+                    continue;
+                }
+                let t = pow(mashed[j] / skill, goal_exponent);
+                let f = acc * exp(log_base * t);
+                if f > best {
+                    best = f;
+                    best_slope = -f * log_base * goal_exponent * t / skill;
+                }
+            }
+            score += weight[j] * best;
+            slope += weight[j] * best_slope;
+        }
+        let miss = score / total - goal;
+        if miss < 0.0 {
+            lo = skill;
+        } else {
+            hi = skill;
+        }
+        if miss.abs() < 1e-12 || hi - lo < 1e-10 * hi {
+            break;
+        }
+        let next = if slope > 0.0 { skill - miss * total / slope } else { f64::NAN };
+        skill = if next > lo && next < hi { next } else { (lo + hi) / 2.0 };
+    }
+    skill
 }
 
 pub fn prism_rate(rate: Option<f64>) -> f64 {
@@ -216,9 +351,11 @@ impl PrismPrepared {
         model: &PrismModel,
         scale: &PrismScale,
         with_skillsets: bool,
+        with_routes: bool,
     ) -> PrismPrepared {
         let chart = build_prism_chart(notes, key_count, rate, Some(od));
         let (centre_hand, sections) = pick_prism_hands(&chart, model);
+        let routes = if with_routes { mash_routes_of(&chart, centre_hand, &sections, model, false) } else { Vec::new() };
         PrismPrepared {
             key_count,
             rate,
@@ -232,6 +369,7 @@ impl PrismPrepared {
             } else {
                 None
             },
+            routes,
             model: *model,
             scale: *scale,
         }
@@ -258,6 +396,7 @@ impl PrismPrepared {
             weight: keep.iter().map(|&i| self.weight[i]).collect(),
             overall: keep.iter().map(|&i| self.overall[i]).collect(),
             skillsets: None,
+            routes: Vec::new(),
             model: self.model,
             scale: self.scale,
         }
@@ -265,7 +404,12 @@ impl PrismPrepared {
 
     fn values_at(&self, goal: f64) -> Vec<(&'static str, f64)> {
         let ge = self.model.goal_exponent;
-        let overall = prism_rating_of_strain(prism_strain_at_goal(&self.overall, &self.weight, goal, ge), &self.scale);
+        let strain = if self.routes.is_empty() {
+            prism_strain_at_goal(&self.overall, &self.weight, goal, ge)
+        } else {
+            routed_strain_at_goal(&self.overall, &self.weight, &self.routes, goal, ge)
+        };
+        let overall = prism_rating_of_strain(strain, &self.scale);
         let mut values = vec![("Overall", overall)];
         if let Some(skillsets) = &self.skillsets {
             let raw: Vec<f64> = skillsets
@@ -327,7 +471,7 @@ impl PrismPrepared {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ModelSlot {
+pub(crate) enum ModelSlot {
     Press = 0,
     Ln = 1,
 }
@@ -367,7 +511,7 @@ fn notes_key(notes: &[ManiaNote], key_count: i32, rate: f64, od: f64) -> PrepKey
     PrepKey { key_count, rate: number_key(rate), od: number_key(od), len: notes.len(), a, b: b as u32 }
 }
 
-const PREPARED_KEPT: usize = 32;
+const PREPARED_KEPT: usize = 2000;
 
 thread_local! {
     static PREPARED: std::cell::RefCell<[Vec<(PrepKey, std::rc::Rc<PrismPrepared>)>; 2]> =
@@ -382,7 +526,7 @@ pub fn clear_prism_cache() {
     });
 }
 
-fn prepare_cached(
+pub(crate) fn prepare_cached(
     notes: &[ManiaNote],
     key_count: i32,
     rate: f64,
@@ -409,7 +553,7 @@ fn prepare_cached(
     if let Some(ready) = hit {
         return ready;
     }
-    let ready = std::rc::Rc::new(PrismPrepared::new(notes, key_count, rate, od, model, scale, with_skillsets));
+    let ready = std::rc::Rc::new(PrismPrepared::new(notes, key_count, rate, od, model, scale, with_skillsets, slot == ModelSlot::Press));
     PREPARED.with(|p| {
         let mut p = p.borrow_mut();
         let kept = &mut p[slot as usize];
@@ -471,7 +615,7 @@ pub fn prepare_prism(
 ) -> Option<PrismPrepared> {
     let model = prism_models(key_count)?;
     let (m, s) = if ln { (model.ln, model.ln_scale) } else { (model.press, model.scale) };
-    Some(PrismPrepared::new(notes, key_count, prism_rate(rate), prism_od(od, map_od), &m, &s, with_skillsets && !ln))
+    Some(PrismPrepared::new(notes, key_count, prism_rate(rate), prism_od(od, map_od), &m, &s, with_skillsets && !ln, !ln))
 }
 
 pub fn prism_engine_version() -> String {

@@ -12,7 +12,8 @@ The code that rates charts and players on [mania-tracker.com](https://mania-trac
 | `dan-estimator/` | Chart features, pattern analysis, dan labels, LN identity and the in-house LN estimator |
 | `ln/` | The LN model: hold timeline, required-action workload, the 4K LN rating and its four skillsets |
 | `msd/` | How a chart's MSD is computed: MinaCalc, or Prism on 6K-8K |
-| `prism/` | Prism 0.25, the MSD calculator for 6K, 7K and 8K, in Rust |
+| `prism/` | Prism 0.26, the MSD calculator for 6K, 7K and 8K, in Rust |
+| `dan-calc/` | The dan calculator in Rust: a chart's dan at any rate, as the site shows it |
 | `leoblack/` | The wrapper around LeoBlack's estimators and the Companella refinement |
 | `player/` | Accuracy to Wife3 goal, per-play SSRs, skill ratings, dan clears, dan courses |
 | `replay-judge/` | Reading `.osr` replay frames and judging each key press against the chart, for stable and lazer |
@@ -27,7 +28,7 @@ A play goes through `player/skill-ratings.ts`: its accuracy becomes a Wife3 goal
 
 ## Prism
 
-Prism 0.25 rates 6K, 7K and 8K charts, the keymodes MinaCalc was never built for. Its numbers are on the MSD scale and in MinaCalc's skillset slots.
+Prism 0.26 rates 6K, 7K and 8K charts, the keymodes MinaCalc was never built for. Its numbers are on the MSD scale and in MinaCalc's skillset slots.
 
 It is a Cargo workspace (`cargo build --release` in `prism/`):
 
@@ -41,10 +42,33 @@ The TypeScript calls it through the declarations in `msd/prism.ts`.
 
 Goals are ScoreV2 accuracy, with no Wife3 conversion.
 
+## Dan calculator
+
+`dan-calc/` is the chart side of the site in Rust: the same dan estimate the site shows for a 4K, 6K or 7K chart, at any rate and played OD. Other keymodes come back with `supported: false` and no dan. It is a Cargo workspace (`cargo build --release` in `dan-calc/`) that reads the shared crates in `prism/crates`.
+
+```toml
+[dependencies]
+dan-calc = { git = "https://github.com/aleju03/mania-hub", branch = "main" }
+```
+
+```rust
+let osu = std::fs::read_to_string("chart.osu")?;
+let result = dan_calc::estimate(&osu, &dan_calc::Options { rate: 1.2, ..Default::default() })?;
+if let Some(dan) = result.primary {
+    println!("{} {:.2}", dan.display_name, dan.raw_dan);
+}
+```
+
+`estimate` returns the headline dan (`primary`), the rice and LN dans when the chart has both, and the chart's MSD at that rate. `Options::od` takes `PlayedOd::Hr`, `PlayedOd::Ez` or an OD value, and `star_rating` defaults to the chart's osu! star rating computed from the file. `cargo run --release --example estimate -- chart.osu 1.2` prints the result for one chart.
+
+- `crates/leoblack-*` are LeoBlack's estimators ported to Rust: the parser, Sunny, Daniel, Azusa, Roxy, Mixed, Polaris, the Companella model, the pattern clustering and Interlude's star rating. `leoblack-ett` runs the MinaCalc builds LeoBlack uses as wasm under wasmtime.
+- `crates/chart-pipeline` picks the engine per keymode, applies vibro detection, LN identity and the rate floor, and builds the verdict.
+- `crates/dan-calc` is the entry point above.
+
 ## External code
 
-- **LeoBlack** ([LeoBlackMT/osumania_map_analyser](https://github.com/LeoBlackMT/osumania_map_analyser), MIT): the Mixed, Sunny and LN estimators. Imported here as `leoblack/...`.
-- **MinaCalc** ([Etterna](https://github.com/etternagame/etterna)): the MSD calculator, compiled to wasm. `msd/minacalc.ts` only declares the calls the rest of the code makes.
+- **LeoBlack** ([LeoBlackMT/osumania_map_analyser](https://github.com/LeoBlackMT/osumania_map_analyser), MIT): the Mixed, Sunny and LN estimators. Imported here as `leoblack/...`, and ported to Rust in `dan-calc/crates/leoblack-*` (license in `dan-calc/LICENSE-LEOBLACK`).
+- **MinaCalc** ([Etterna](https://github.com/etternagame/etterna)): the MSD calculator, compiled to wasm. `msd/minacalc.ts` only declares the calls the rest of the code makes. `dan-calc/crates/leoblack-ett/minacalc` holds the wasm builds LeoBlack's estimators read.
 
 ## License
 

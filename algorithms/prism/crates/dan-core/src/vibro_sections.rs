@@ -27,6 +27,7 @@ pub enum VibroReason {
     StackedHeads,
     FlamChords,
     SustainedDensity,
+    Mash,
 }
 
 impl VibroReason {
@@ -50,6 +51,7 @@ impl VibroReason {
             Self::StackedHeads => "stacked_heads",
             Self::FlamChords => "flam_chords",
             Self::SustainedDensity => "sustained_density",
+            Self::Mash => "mash",
         }
     }
 }
@@ -99,7 +101,7 @@ impl VibroAnalysis {
     }
 }
 
-pub const UNRATEABLE_REASONS: [&str; 3] = ["jumptrill", "stacked_heads", "flam_chords"];
+pub const UNRATEABLE_REASONS: [&str; 4] = ["jumptrill", "stacked_heads", "flam_chords", "mash"];
 
 pub fn is_unrateable_exclusion(analysis: Option<&VibroAnalysis>) -> bool {
     match analysis {
