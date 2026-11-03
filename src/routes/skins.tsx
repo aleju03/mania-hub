@@ -717,7 +717,7 @@ function SkinsPage() {
   const scrollRestoreRef = useScrollRestoreRef();
 
   return (
-    <div ref={scrollRestoreRef} className="relative flex min-h-screen flex-col">
+    <div ref={scrollRestoreRef} className="relative flex min-h-screen flex-col [&_.bg-osu-b4]:bg-[color-mix(in_srgb,var(--color-osu-b3)_80%,var(--color-osu-b5))]">
       <div className="relative z-10 flex flex-1 flex-col overflow-clip">
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/skins.svg" title={t`osu!mania skins`} right={headerAction} />

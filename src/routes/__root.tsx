@@ -8,7 +8,6 @@ import { MascotLayer } from "../components/mascot/MascotLayer";
 import { CustomCursor } from "../components/layout/CustomCursor";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { Nav } from "../components/layout/Nav";
-import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { StaleBuildNotice } from "../components/layout/StaleBuildNotice";
 import { GoalToasts } from "../components/me/GoalToasts";
@@ -673,7 +672,9 @@ function RootLayout() {
 // either page is torn down when navigating between them. Keep one canvas in
 // the root shell for the whole skins route family instead. Its parent follows
 // the outlet's height, letting ManiaRain preserve and rescale the same notes
-// when the browse and detail pages have different lengths.
+// when the browse and detail pages have different lengths. The surface is the
+// collections page's flat veiled b5 rather than OsuTriangleBackdrop, whose wash
+// darkens a page as long as the skins list the further down it goes.
 function SkinsBackdrop() {
   const active = useRouterState({
     select: (state) => /^\/skins(?:\/|$)/.test(state.location.pathname),
@@ -683,7 +684,7 @@ function SkinsBackdrop() {
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden bg-osu-b5" aria-hidden="true">
-      <OsuTriangleBackdrop />
+      <div className="absolute inset-0 bg-white/[0.05]" />
       <ManiaRain />
     </div>
   );
