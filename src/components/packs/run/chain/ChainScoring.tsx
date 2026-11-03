@@ -23,10 +23,11 @@ import {
   type ChainRowEvent,
   type ChainRowResult,
   type ChainSceneId,
+  CHAIN_CHART,
 } from "#/lib/chain-run";
 import { SceneArt } from "../sceneArt";
 import { flameLevel } from "../RunFlame";
-import { InkFlame } from "./InkFlame";
+import { ChainFire } from "./ChainFire";
 import { SceneMedallion } from "./chainKit";
 import { SCENE_ART_ID } from "./ChainHud";
 import { RUN_FEEL } from "../runFeel";
@@ -60,6 +61,8 @@ const TRAIT_INK: Record<string, string> = { cc: "#7fd3ff", key: "#ffd36b", skill
 const msgBreak = msg`BREAK`;
 const msgHand = msg`HAND`;
 const msgHalf = msg`HALF`;
+const msgPlayed = msg`Played it x${CHAIN_CHART.played}`;
+const msgPlayedLink = msg`Played it`;
 const msgWarmup = msg`Warm-up`;
 const msgReplay = msg`REPLAY`;
 const SKILL_INK = "#8ff2b7";
@@ -507,8 +510,12 @@ export function ChainScoring(props: ChainScoringProps) {
             return { ...current, [key]: { state: "lit", value: from + event.add, pulse: entry.pulse + 1 } };
           });
           const badge = rectOf(`[data-chain-link="${key}"]`);
-          popAt(badge, `link-${key}`, traitText(event.trait, event.value, event.scene), traitFill(event.trait, event.value, event.scene), "trait", holdMs, event.skip ? "below" : "center");
-          say(traitText(event.trait, event.value, event.scene), traitFill(event.trait, event.value, event.scene));
+          // A trait shared because the player played the chart beside them
+          // reads as that, in gold.
+          const linkText = event.played ? i18n._(msgPlayedLink) : traitText(event.trait, event.value, event.scene);
+          const linkFill = event.played ? "#ffd36b" : traitFill(event.trait, event.value, event.scene);
+          popAt(badge, `link-${key}`, linkText, linkFill, "trait", holdMs, event.skip ? "below" : "center");
+          say(linkText, linkFill);
           if (event.trait !== "scene") {
             flashTrait(event.from, event.trait);
             flashTrait(event.to, event.trait);
@@ -549,7 +556,12 @@ export function ChainScoring(props: ChainScoringProps) {
           fx.onCardCombo(event.index, event.combo);
           popAt(card, `card-${event.index}`, `+${formatChainScore(event.points)}`, POINTS, "points", holdMs);
           say(p().names[event.index] ?? "", POINTS);
-          if (event.halved) popAt(card, `half-${event.index}`, i18n._(msgHalf), CHAIN_SCENE_INK.makiba, "trait", holdMs, "below");
+          // A player who played a chart in the row says so, in gold, in place
+          // of their skillset's word (its x is in theirs).
+          if (event.played && !event.halved && !event.silver) {
+            popAt(card, `played-${event.index}`, i18n._(msgPlayed), "#ffd36b", "trait", holdMs, "below");
+            if (card && !reducedMotion) juice(card.element, { amount: 0.2, rotateRad: 0.08 });
+          } else if (event.halved) popAt(card, `half-${event.index}`, i18n._(msgHalf), CHAIN_SCENE_INK.makiba, "trait", holdMs, "below");
           else if (event.silver) popAt(card, `silver-${event.index}`, `SS x${formatChainX(event.silver)}`, CHAIN_VARIANT_COPY.silver.ink, "trait", holdMs, "below");
           else {
             // The card's skillset at work, under it: one word for what it did.
@@ -879,6 +891,8 @@ export function ChainScoring(props: ChainScoringProps) {
   const comboText = `x${formatChainScore(running.combo)}`;
   const size = readout ? Math.round(readout.size * (1 + Math.min(0.45, running.combo / 260))) : 0;
   const totalAnimate = fly ? { x: fly.x, y: fly.y, scale: fly.scale, opacity: [1, 1, 0] } : { x: 0, y: 0, scale: 1, opacity: 1 };
+  const totalText = formatChainScore(running.total);
+  const totalStroke = Math.max(6, Math.round(size * 0.12));
   const burn = target > 0 ? flameLevel(roundBefore + running.total, target) : 0;
   const flameW = Math.max(size * 2.4, totalW * 1.25);
   const ratio = target > 0 ? (roundBefore + running.total) / target : 0;
@@ -923,29 +937,21 @@ export function ChainScoring(props: ChainScoringProps) {
             {burn > 0 && stage !== "fly" && readout.narrow && (
               <motion.div
                 key="flame"
-                className="absolute left-0 -translate-x-1/2 -translate-y-full"
-                style={{
-                  top: Math.round(size * 0.46),
-                  transformOrigin: "50% 100%",
-                  opacity: readout.narrow ? 0.9 : 1,
-                  // A box twice the flame's width and as tall as the room it
-                  // has, its top fading out: the tongues dissolve under the
-                  // HUD instead of being cut, and the sides stay free.
-                  ...(flameRoom !== null
-                    ? {
-                        width: flameW * 2,
-                        height: flameRoom,
-                        WebkitMaskImage: "linear-gradient(to top, black 55%, transparent)",
-                        maskImage: "linear-gradient(to top, black 55%, transparent)",
-                      }
-                    : {}),
-                }}
+                className="absolute left-0 top-0"
+                style={{ transformOrigin: "50% 0%" }}
                 initial={false}
-                exit={{ scaleY: 0, opacity: 0, transition: { duration: 0.15 } }}
+                exit={{ opacity: 0, transition: { duration: 0.15 } }}
               >
-                <div className={flameRoom !== null ? "absolute bottom-0 left-1/2 -translate-x-1/2" : undefined}>
-                  <InkFlame level={burn} ratio={ratio} width={flameW} reducedMotion={reducedMotion} />
-                </div>
+                <ChainFire
+                  text={totalText}
+                  size={size}
+                  stroke={totalStroke}
+                  width={flameW}
+                  reach={Math.max(size * 0.6, Math.min(flameRoom ?? size * 1.6, size * (0.9 + burn * 0.5)) - size * 0.5)}
+                  level={burn}
+                  ratio={ratio}
+                  reducedMotion={reducedMotion}
+                />
               </motion.div>
             )}
           </AnimatePresence>
@@ -963,9 +969,9 @@ export function ChainScoring(props: ChainScoringProps) {
             <div
               ref={totalRef}
               className="absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-black leading-none text-white tabular-nums"
-              style={{ fontSize: size, WebkitTextStroke: `${Math.max(6, Math.round(size * 0.12))}px #120f1a`, paintOrder: "stroke fill" }}
+              style={{ fontSize: size, WebkitTextStroke: `${totalStroke}px #120f1a`, paintOrder: "stroke fill" }}
             >
-              <WysiDigits text={stage === "fly" ? `+${formatChainScore(running.total)}` : formatChainScore(running.total)} />
+              <WysiDigits text={stage === "fly" ? `+${totalText}` : totalText} />
             </div>
           </motion.div>
           {reason && stage === "steps" && (
@@ -1046,12 +1052,21 @@ export function ChainScoring(props: ChainScoringProps) {
             {burn > 0 && stage !== "fly" && stage !== "landed" && (
               <motion.div
                 key="flame-desk"
-                className="absolute -translate-x-1/2 -translate-y-full"
-                style={{ left: readout.x - flameLayer.getBoundingClientRect().left, top: flameBase, transformOrigin: "50% 100%" }}
+                className="absolute"
+                style={{ left: readout.x - flameLayer.getBoundingClientRect().left, top: readout.y - flameLayer.getBoundingClientRect().top }}
                 initial={false}
-                exit={{ scaleY: 0, opacity: 0, transition: { duration: 0.15 } }}
+                exit={{ opacity: 0, transition: { duration: 0.15 } }}
               >
-                <InkFlame level={burn} ratio={ratio} width={flameW} height={tallFlame} reducedMotion={reducedMotion} />
+                <ChainFire
+                  text={totalText}
+                  size={size}
+                  stroke={totalStroke}
+                  width={flameW}
+                  reach={Math.max(size * 0.8, flameW * 0.6 * tallFlame - size * 0.5)}
+                  level={burn}
+                  ratio={ratio}
+                  reducedMotion={reducedMotion}
+                />
               </motion.div>
             )}
           </AnimatePresence>,

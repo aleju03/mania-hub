@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useIsPresent, useMotionValue, useSpring, useTransform, type MotionValue } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
@@ -12,6 +12,7 @@ import {
   type ChainCardInstance,
   type ChainLink,
   type ChainRowResult,
+  chainPlayed,
 } from "#/lib/chain-run";
 import { swayStyle } from "../RunCard";
 import { RUN_FEEL } from "../runFeel";
@@ -60,6 +61,8 @@ function handInk(trait: string, value: string): string {
 }
 
 interface BoardCardProps {
+  /* A chart on the table this player played: its cover, for the badge. */
+  playedCover?: string | null;
   entry: ChainCardInstance;
   layout: BoardLayout;
   place: CardPlace;
@@ -128,6 +131,7 @@ const BoardCard = memo(function BoardCard({
   leaveTo = null,
   grey = false,
   selectedOrder = 0,
+  playedCover = null,
 }: BoardCardProps) {
   const { t } = useLingui();
   const [hovered, setHovered] = useState(false);
@@ -274,7 +278,7 @@ const BoardCard = memo(function BoardCard({
                   className="absolute inset-0 transition-[opacity,filter] duration-200"
                   style={{ backfaceVisibility: "hidden", opacity: dim ? 0.5 : dragging ? 0.9 : 1, filter: grey ? "grayscale(1) brightness(0.55)" : undefined }}
                 >
-                  <ChainCardFace card={entry.card} width={target.width} lit={lit} />
+                  <ChainCardFace card={entry.card} width={target.width} lit={lit} playedCover={playedCover} />
                 </div>
                 {hasBack && (
                   <div
@@ -404,6 +408,18 @@ export function ChainBoard(props: ChainBoardProps) {
     onClearSelection,
   } = props;
   const boardRef = useRef<HTMLDivElement>(null);
+  /* Players who played a chart in the hand or row wear its cover. */
+  const playedCovers = useMemo(() => {
+    const map = new Map<number, string>();
+    const charts = hand.filter((entry) => entry.card.chart);
+    if (!charts.length) return map;
+    for (const entry of hand) {
+      if (entry.card.chart) continue;
+      const chart = charts.find((other) => chainPlayed(entry.card, other.card));
+      if (chart) map.set(entry.uid, chart.card.avatarUrl);
+    }
+    return map;
+  }, [hand]);
   /* `group`: every card moving, in selection order (the held one among
      them); the others stack behind the pointer. */
   /* `handFrom`: where in the hand a hand card was lifted from, held open
@@ -724,6 +740,7 @@ export function ChainBoard(props: ChainBoardProps) {
             <BoardCard
               key={`${entry.uid}:${dealGen[entry.uid] ?? 0}`}
               entry={entry}
+              playedCover={playedCovers.get(entry.uid) ?? null}
               layout={layout}
               place={drag && dragging ? drag.base : stacked ?? own}
               leaveTo={leaving ? deckPlace : null}
@@ -761,6 +778,7 @@ export function ChainBoard(props: ChainBoardProps) {
           <BoardCard
             key={`${entry.uid}:${dealGen[entry.uid] ?? 0}`}
             entry={entry}
+            playedCover={playedCovers.get(entry.uid) ?? null}
             layout={layout}
             place={drag && dragging ? drag.base : stacked ?? own}
             leaveTo={leaving ? deckPlace : null}

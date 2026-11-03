@@ -48,7 +48,7 @@ import {
   type PackWallet,
 } from "../lib/pack-collection";
 import { fetchLiveChainRunBoard, fetchLiveChainRunSheet, isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
-import type { ChainBoardPeriod, ChainRunSnapshot } from "../lib/chain-run";
+import type { ChainBoardPeriod, ChainRunMode, ChainRunSnapshot } from "../lib/chain-run";
 import type { PackDamage } from "../lib/pack-damage";
 import {
   clearPendingPack,
@@ -671,7 +671,9 @@ function PacksPage() {
   const runApi = usePackRun(wishlistEnabled, walletApi.applyServerWallet);
   /* The chain run (?view=run): a signed-in viewer's lives on the server, a
      signed-out visitor plays a guest run in the browser. */
-  const ownChainApi = useChainRun(Boolean(auth.viewer) && isLiveBackendConfigured());
+  /* The player's own run, or the daily run (same cards for everyone that day). */
+  const [chainMode, setChainMode] = useState<ChainRunMode>("normal");
+  const ownChainApi = useChainRun(Boolean(auth.viewer) && isLiveBackendConfigured(), chainMode);
   const guestChainApi = useGuestChainRun(!auth.viewer && isLiveBackendConfigured());
   const chainApi = auth.viewer ? ownChainApi : guestChainApi;
   /* The run's side of the pack on screen: the tally the summary plays. */
@@ -1237,7 +1239,12 @@ function PacksPage() {
           packThumbs={packThumbs}
           loadBoard={loadChainBoard}
           loadSheet={loadChainSheet}
-          onExit={() => showRunView(false)}
+          onExit={() => {
+            setChainMode("normal");
+            showRunView(false);
+          }}
+          mode={auth.viewer ? chainMode : "normal"}
+          onMode={auth.viewer ? setChainMode : undefined}
         />
         </div>
       )}

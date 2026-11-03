@@ -108,6 +108,15 @@ const GLINTS: Array<[number, number, number, number]> = [
   [21.4, 81.4, 0.044, 0.6],
 ];
 
+/* A small five-point star for a chart's stars, in the key ink. */
+function StarGlyph({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" aria-hidden="true" className="shrink-0">
+      <path d="M10 1.5 L12.6 7 L18.5 7.6 L14 11.6 L15.3 17.6 L10 14.5 L4.7 17.6 L6 11.6 L1.5 7.6 L7.4 7 Z" fill={KEY_INK} />
+    </svg>
+  );
+}
+
 /* A player as a chain card: the portrait edge to edge across the top under
    the name, and a panel in the tier's deep tone holding the three trait marks
    (what links are made of), the number and the rarity pill, all inside a
@@ -126,11 +135,14 @@ export const ChainCardFace = memo(function ChainCardFace({
   width,
   dim = false,
   lit = null,
+  playedCover = null,
 }: {
   card: ChainCard;
   width: number;
   dim?: boolean;
   lit?: ReadonlySet<string> | null;
+  /* The cover of a chart on the table this player played: worn as a badge. */
+  playedCover?: string | null;
 }) {
   const { i18n } = useLingui();
   const id = useId();
@@ -269,10 +281,11 @@ export const ChainCardFace = memo(function ChainCardFace({
         draggable={false}
         loading="lazy"
         className="absolute left-0 top-0 block object-cover"
-        style={{ width: w, height: artH, objectPosition: "50% 30%", background: color.deep, transform: card.variant === "mirror" ? "scaleX(-1)" : undefined }}
+        style={{ width: w, height: artH, objectPosition: card.chart ? "50% 50%" : "50% 30%", background: color.deep, transform: card.variant === "mirror" ? "scaleX(-1)" : undefined }}
         onError={(event) => {
           const img = event.currentTarget;
-          if (!img.src.endsWith("/avatar-guest.png")) img.src = "https://osu.ppy.sh/images/layout/avatar-guest.png";
+          if (card.chart) img.style.visibility = "hidden";
+          else if (!img.src.endsWith("/avatar-guest.png")) img.src = "https://osu.ppy.sh/images/layout/avatar-guest.png";
         }}
       />
       {card.variant === "mirror" && (
@@ -312,11 +325,20 @@ export const ChainCardFace = memo(function ChainCardFace({
       )}
     </div>
   );
-  /* The variant's badge, top right over the portrait. */
+  /* The variant's badge, top right over the portrait (a chart's says so). */
   const badgeFont = Math.max(11, Math.round(10 * (w / 130)));
-  const badgeW = variant ? Math.ceil(wordWidth11(variant.badge) * 1.25 * (badgeFont / 11)) + 8 : 0;
+  const chartBadge = card.chart ? { badge: "MAP", fill: "linear-gradient(135deg, #fff6e0 0%, #ffd36b 100%)" } : null;
+  const shownBadge = variant ?? chartBadge;
+  const badgeW = shownBadge ? Math.ceil(wordWidth11(shownBadge.badge) * 1.25 * (badgeFont / 11)) + 8 : 0;
   const badge = (pad: number) =>
-    variant ? (
+    !variant && chartBadge ? (
+      <div
+        className="absolute whitespace-nowrap font-black italic leading-none tracking-[0.04em]"
+        style={{ right: pad, top: pad - 1, fontSize: badgeFont, padding: "2px 4px", borderRadius: 4, background: chartBadge.fill, color: "#3b2500", boxShadow: "0 1px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.7)" }}
+      >
+        {chartBadge.badge}
+      </div>
+    ) : variant ? (
       <div
         className="absolute whitespace-nowrap font-black italic leading-none tracking-[0.04em]"
         style={{
@@ -371,9 +393,16 @@ export const ChainCardFace = memo(function ChainCardFace({
           className="absolute flex items-stretch whitespace-nowrap font-bold leading-none text-white"
           style={{ left: pad - 4 * s, top: panelTop + 6 * s, height: traitH, fontSize: traitSize, textShadow: TEXT_SHADOW }}
         >
-          <span data-trait="cc" className="flex items-center rounded-[4px]" style={{ ...cell, ...markStyle("cc") }}>
-            <CountryFlag code={card.cc} size="xs" decorative className="!h-[1.05em] !w-[1.55em]" />
-          </span>
+          {card.chart ? (
+            <span className="flex items-center gap-[2px] rounded-[4px]" style={cell}>
+              <StarGlyph size={traitSize * 0.9} />
+              {card.chart.stars.toFixed(1)}
+            </span>
+          ) : (
+            <span data-trait="cc" className="flex items-center rounded-[4px]" style={{ ...cell, ...markStyle("cc") }}>
+              <CountryFlag code={card.cc} size="xs" decorative className="!h-[1.05em] !w-[1.55em]" />
+            </span>
+          )}
           <span className="h-3/5 w-px self-center bg-white/25" />
           <span data-trait="key" className="flex items-center rounded-[4px]" style={{ ...cell, ...markStyle("key") }}>
             {card.key}K
@@ -440,9 +469,16 @@ export const ChainCardFace = memo(function ChainCardFace({
           className="absolute flex items-stretch whitespace-nowrap text-[11px] font-bold leading-none text-white"
           style={{ left: pad - (mode === "full" ? 2.5 : 1.5), top: panelTop + 3, height: stripH, textShadow: TEXT_SHADOW }}
         >
-          <span data-trait="cc" className={`flex items-center rounded-[3px] ${mode === "full" ? chip : "px-[0.5px]"}`} style={markStyle("cc")}>
-            <CountryFlag code={card.cc} size="xs" decorative className={mode === "full" ? "!h-[11px] !w-[16px]" : "!h-[8.5px] !w-[12px]"} />
-          </span>
+          {card.chart ? (
+            <span className={`flex items-center gap-[1px] rounded-[3px] ${mode === "full" ? chip : "px-[0.5px]"}`}>
+              <StarGlyph size={9} />
+              {mode === "full" ? card.chart.stars.toFixed(1) : Math.floor(card.chart.stars)}
+            </span>
+          ) : (
+            <span data-trait="cc" className={`flex items-center rounded-[3px] ${mode === "full" ? chip : "px-[0.5px]"}`} style={markStyle("cc")}>
+              <CountryFlag code={card.cc} size="xs" decorative className={mode === "full" ? "!h-[11px] !w-[16px]" : "!h-[8.5px] !w-[12px]"} />
+            </span>
+          )}
           <span className="h-1/2 w-px self-center bg-white/25" />
           <span data-trait="key" className={`flex items-center rounded-[3px] ${chip}`} style={markStyle("key")}>
             {card.key}K
@@ -489,6 +525,24 @@ export const ChainCardFace = memo(function ChainCardFace({
     );
   }
 
+  /* A player who played a chart on the table wears its cover, ringed in gold. */
+  const playedBadge =
+    playedCover && !card.chart && layout !== "micro" ? (
+      <div
+        className="absolute overflow-hidden rounded-full"
+        style={{
+          right: Math.max(3, w * 0.05),
+          top: Math.round(h * (layout === "full" ? 0.5 : 0.42)) - Math.round(w * 0.11),
+          width: Math.round(w * 0.22),
+          height: Math.round(w * 0.22),
+          boxShadow: "0 0 0 2px #ffd36b, 0 2px 6px rgba(0,0,0,0.6)",
+          background: "#120f1a",
+        }}
+        data-played=""
+      >
+        <img src={playedCover} alt="" draggable={false} className="h-full w-full object-cover" />
+      </div>
+    ) : null;
   const rimW = layout === "full" ? Math.max(1.5, 2 * (w / 130)) : 1.25;
   /* A variant inks the rim in its own colour; MAX's is a rainbow ring. */
   const rimInk = variant && card.variant !== "max" ? variant.ink : color.ink;
@@ -506,6 +560,7 @@ export const ChainCardFace = memo(function ChainCardFace({
         {glints}
       </div>
       {content}
+      {playedBadge}
       {card.variant === "max" && !tierLit && (
         <div
           className="pointer-events-none absolute inset-0"

@@ -5,6 +5,7 @@ import {
   type ChainAction,
   type ChainActionResult,
   type ChainBoardEntry,
+  type ChainRunMode,
   type ChainRunView,
 } from "#/lib/chain-run";
 
@@ -30,7 +31,7 @@ export interface ChainRunApi {
 /* The signed-in player's chain run, held once on /packs. The server owns it:
    every action carries the rev of the last answer and comes back with the
    whole run, which replaces the one held here. */
-export function useChainRun(enabled: boolean): ChainRunApi {
+export function useChainRun(enabled: boolean, mode: ChainRunMode = "normal"): ChainRunApi {
   const [available, setAvailable] = useState<boolean | null>(enabled ? null : false);
   const [view, setView] = useState<ChainRunView | null>(null);
   const [best, setBest] = useState<ChainBoardEntry | null>(null);
@@ -43,6 +44,8 @@ export function useChainRun(enabled: boolean): ChainRunApi {
      back, so two quick taps never race each other into a stale refusal. */
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
   const busyCountRef = useRef(0);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   useEffect(() => {
     if (!enabled) {
@@ -52,7 +55,9 @@ export function useChainRun(enabled: boolean): ChainRunApi {
     }
     let cancelled = false;
     const sequence = ++sequenceRef.current;
-    void fetchOwnChainRun()
+    // Switching between the own and the daily run shows nothing stale.
+    setView(null);
+    void fetchOwnChainRun({ data: mode })
       .then((response) => {
         if (cancelled || sequence !== sequenceRef.current) return;
         if (!response) {
@@ -71,7 +76,7 @@ export function useChainRun(enabled: boolean): ChainRunApi {
     return () => {
       cancelled = true;
     };
-  }, [enabled, refreshKey]);
+  }, [enabled, refreshKey, mode]);
 
   const act = useCallback((action: ChainAction): Promise<ChainActOutcome> => {
     // Signing a contract is shown at once by the shop and holds nothing else
@@ -96,7 +101,7 @@ export function useChainRun(enabled: boolean): ChainRunApi {
   const sendAction = async (action: ChainAction): Promise<ChainActOutcome> => {
     const sequence = ++sequenceRef.current;
     try {
-      const response = await actOnOwnChainRun({ data: { ...action, rev: revRef.current } });
+      const response = await actOnOwnChainRun({ data: { ...action, rev: revRef.current, mode: modeRef.current } });
       if (!response) return { ok: false, error: "unavailable", view: null };
       if (sequence === sequenceRef.current) {
         revRef.current = response.rev;

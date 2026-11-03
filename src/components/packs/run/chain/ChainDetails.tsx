@@ -22,6 +22,7 @@ import {
   type ChainLink,
   type ChainLinkTrait,
   type ChainSceneHeld,
+  CHAIN_CHART,
 } from "#/lib/chain-run";
 import { CHAIN_FEEL } from "./chainFeel";
 import { ChainCardFace } from "./ChainCardFace";
@@ -203,9 +204,24 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
     </div>
     <div className="w-[200px] py-0.5">
       <div className="truncate text-[16px] font-black">{card.name}</div>
+      {card.chart && (
+        <div className="truncate text-[12px] font-bold text-white/80">
+          [{card.chart.version}]{card.chart.artist ? <span className="text-white/50"> {card.chart.artist}</span> : null}
+        </div>
+      )}
       <div className="text-[12px] font-bold" style={{ color: color.ink }}>
         {chainCardRarityLabel(card, i18n)}
       </div>
+      {card.chart && (
+        <div className="mt-1 text-[12px] text-osu-f1">
+          <Trans>A map. Players who have it in their top plays link to it on every trait, and score x{CHAIN_CHART.played} in any row it is in.</Trans>
+        </div>
+      )}
+      {!card.chart && (entry.card.played?.length ?? 0) > 0 && (
+        <div className="mt-1 text-[12px] font-bold text-[#ffd36b]">
+          <Trans>{entry.card.played!.length} of the game's maps in their top plays.</Trans>
+        </div>
+      )}
       {card.goat && (
         <div className="mt-1 text-[12px] text-osu-f1">
           <Trans>Links to the cards next to it on every trait. The first GOAT in a row doubles the combo.</Trans>
@@ -233,22 +249,27 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
         </div>
       )}
       <div className="mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[12px]">
+        {card.chart && <Row label={<Trans>Stars</Trans>}>{card.chart.stars.toFixed(2)}</Row>}
+        {!card.chart && (
         <Row label={<Trans>Country</Trans>}>
           <span className="inline-flex items-center gap-1.5">
             <CountryFlag code={card.cc} size="xs" decorative />
             <WysiDigits text={stats.countryRank} />
           </span>
         </Row>
+        )}
         {stats.rank !== null && (
           <Row label={<Trans>Global</Trans>}>
             <WysiDigits text={stats.rank} />
           </Row>
         )}
         <Row label={<Trans>Keymode</Trans>}>{card.key}K</Row>
-        <Row label={<Trans>Top skillset</Trans>}>{card.skill}</Row>
-        <Row label="pp">
-          <WysiDigits text={stats.pp} />
-        </Row>
+        <Row label={card.chart ? <Trans>Skillset</Trans> : <Trans>Top skillset</Trans>}>{card.skill}</Row>
+        {!card.chart && (
+          <Row label="pp">
+            <WysiDigits text={stats.pp} />
+          </Row>
+        )}
         {stats.plays !== null && (
           <Row label={<Trans>Plays</Trans>}>
             <WysiDigits text={stats.plays} />
@@ -257,7 +278,11 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
         {card.acc !== null && <Row label={<Trans>Accuracy</Trans>}>{card.acc.toLocaleString("en-US", { maximumFractionDigits: 2 })}%</Row>}
         <Row label={<Trans>Base</Trans>}>
           <WysiDigits text={stats.base} />
-          {card.grown ? <span className="ml-1 text-[11px] font-bold text-[#8ff2b7]">(+{card.grown})</span> : null}
+          {card.grown ? (
+            <span className="ml-1 text-[11px] font-bold text-[#8ff2b7]">
+              <Trans>+{card.grown} grown this run</Trans>
+            </span>
+          ) : null}
         </Row>
       </div>
       {skillEffect && (

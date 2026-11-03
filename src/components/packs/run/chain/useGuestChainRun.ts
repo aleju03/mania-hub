@@ -31,6 +31,8 @@ interface Saved {
      reload plays on even after the server's slice has been resampled. */
   cards: ChainCard[];
   goats: ChainCard[];
+  /* The chart cards (who played each comes from the cards above). */
+  charts?: ChainCard[];
   best: { runNo: number; round: number; bestRow: number; rows: number; finished: boolean; updatedAt: number } | null;
   lastRunNo: number;
 }
@@ -44,6 +46,7 @@ function readSaved(): Saved | null {
       state: parsed.state ? normalizeChainRunState(parsed.state) : null,
       cards: Array.isArray(parsed.cards) ? parsed.cards : [],
       goats: Array.isArray(parsed.goats) ? parsed.goats : [],
+      charts: Array.isArray(parsed.charts) ? parsed.charts : [],
       best: parsed.best ?? null,
       lastRunNo: Number(parsed.lastRunNo) || 0,
     };
@@ -97,7 +100,7 @@ export function useGuestChainRun(enabled: boolean): ChainRunApi {
     const saved = readSaved();
     if (saved) {
       savedRef.current = saved;
-      if (saved.state && saved.cards.length) poolRef.current = buildChainPool(saved.cards, saved.goats);
+      if (saved.state && saved.cards.length) poolRef.current = buildChainPool(saved.cards, saved.goats, saved.charts ?? []);
       setView(saved.state ? chainRunView(saved.state) : null);
       setSavedBest(saved.best);
     }
@@ -111,7 +114,7 @@ export function useGuestChainRun(enabled: boolean): ChainRunApi {
           slicePromiseRef.current = null;
           return null;
         }
-        return buildChainPool(slice.cards, slice.goats);
+        return buildChainPool(slice.cards, slice.goats, slice.charts);
       });
     }
     return slicePromiseRef.current;
@@ -133,7 +136,7 @@ export function useGuestChainRun(enabled: boolean): ChainRunApi {
     if (!applied.ok) return { ok: false, error: applied.error, view: saved.state ? chainRunView(saved.state) : null };
     const state = applied.state;
     if (action.kind === "start" && pool) {
-      poolRef.current = buildChainPool(rosterOf(state, pool), [...pool.goats]);
+      poolRef.current = buildChainPool(rosterOf(state, pool), [...pool.goats], [...pool.charts]);
     }
     const standing = chainRunStanding(state);
     let best = saved.best;
@@ -147,6 +150,7 @@ export function useGuestChainRun(enabled: boolean): ChainRunApi {
       state,
       cards: poolRef.current ? [...poolRef.current.cards] : saved.cards,
       goats: poolRef.current ? [...poolRef.current.goats] : saved.goats,
+      charts: poolRef.current ? [...poolRef.current.charts] : saved.charts ?? [],
       best,
       lastRunNo: Math.max(saved.lastRunNo, state.runNo),
     };

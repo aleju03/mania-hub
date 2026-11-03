@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   CHAIN_RULES,
+  chainInterestFor,
   CHAIN_SCENE_COPY,
   CHAIN_SCENE_INK,
   CHAIN_SCENE_NAMES,
@@ -28,6 +29,7 @@ import { useShardFloats, useShudder } from "../shopMotion";
 import { Shards } from "../Shards";
 import { ChainCardFace } from "./ChainCardFace";
 import { ShopContracts } from "./ChainContracts";
+import { NextBossNotice } from "./ChainBoss";
 import { ModChip } from "./ModPin";
 import { SCENE_ART_ID } from "./ChainHud";
 import type { BoardLayout } from "./chainLayout";
@@ -195,6 +197,16 @@ function PackOffer({ offer, thumb: fallback, height, reducedMotion }: { offer: C
       {/* The pouch is cut to its own shape, so its shadow follows it. */}
       <div className="run-pack-bob absolute inset-0" style={{ filter: "drop-shadow(3px 8px 6px rgba(0,0,0,0.55))" }}>
         {thumb && <img src={thumb} alt="" draggable={false} className="h-full w-full object-contain" />}
+        {/* A chart pack wears its map's cover on the front. */}
+        {offer.kind === "chart" && offer.chartCover && (
+          <img
+            src={offer.chartCover}
+            alt=""
+            draggable={false}
+            className="absolute left-1/2 top-[34%] -translate-x-1/2 rounded-[6px] object-cover"
+            style={{ width: width * 0.62, height: width * 0.62, boxShadow: "0 0 0 2px #ffd36b, 0 4px 10px rgba(0,0,0,0.5)" }}
+          />
+        )}
       </div>
       {offer.keep > 1 && (
         <span className="absolute -right-2 -top-2 rounded-full bg-[#ffd36b] px-2 py-0.5 text-[11px] font-black text-[#120f1a]">
@@ -507,6 +519,24 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                   </span>
                 </span>
               ))}
+            </div>
+          )}
+
+          {/* Interest at the next clear, and the next round's boss. */}
+          <div className="mt-4 text-[13px] font-bold text-[#f3e9d8]/80">
+            {chainInterestFor(view.shards) > 0 ? (
+              <Trans>
+                Interest at the next clear: <span style={{ color: KIT.gold }}>+{chainInterestFor(view.shards)}</span> (1 per {CHAIN_RULES.interestPer} held, up to {CHAIN_RULES.interestMax})
+              </Trans>
+            ) : (
+              <Trans>
+                Hold {CHAIN_RULES.interestPer} shards to earn interest at the next clear.
+              </Trans>
+            )}
+          </div>
+          {view.nextBoss && (
+            <div className="mt-4">
+              <NextBossNotice boss={view.nextBoss} narrow={narrow} />
             </div>
           )}
 

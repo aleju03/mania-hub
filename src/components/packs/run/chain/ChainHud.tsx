@@ -16,7 +16,9 @@ import {
   type ChainSceneHeld,
   type ChainSceneId,
   type ChainWysiField,
+  type ChainBossId,
 } from "#/lib/chain-run";
+import { BossTag } from "./ChainBoss";
 import { punch } from "../runJuice";
 import { runSound } from "../runSound";
 import { SceneArt, type SceneId } from "../sceneArt";
@@ -232,13 +234,17 @@ export interface ChainTopBarProps {
   deck?: React.ReactNode;
   /* A 727 on the table: which numbers get the stamp, keyed by `id`. */
   wysi?: { id: number; on: ChainWysiField[] } | null;
+  /* The boss twist of the round being played. */
+  boss?: ChainBossId | null;
+  /* The daily run: a tag says so. */
+  daily?: boolean;
 }
 
 /* Across the top: the round in its medallion (rows and redraws left as its
    rings), the score bridge to the target (the flame lives under it), and
    the run's shards. */
 export function ChainTopBar(props: ChainTopBarProps) {
-  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false } = props;
+  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false, boss = null, daily = false } = props;
   const { t } = useLingui();
   const shownShards = useTicker(shards, reducedMotion);
   const stamp = (on: ChainWysiField) => (wysi?.on.includes(on) ? <WysiStamp key={`wysi-${wysi.id}-${on}`} reducedMotion={reducedMotion} /> : null);
@@ -288,6 +294,12 @@ export function ChainTopBar(props: ChainTopBarProps) {
     </div>
   ) : null;
 
+  const dailyTag = (
+    <span className="shrink-0 rounded-full border-[2.5px] px-2.5 py-1 leading-none" style={{ fontFamily: MARKER, fontSize: narrow ? 14 : 17, color: KIT.gold, borderColor: KIT.gold, background: KIT.dark }}>
+      <Trans>Daily</Trans>
+    </span>
+  );
+
   if (narrow) {
     return (
       <div className="relative z-[3] flex flex-col gap-1 px-3 pb-1 pt-3">
@@ -298,6 +310,8 @@ export function ChainTopBar(props: ChainTopBarProps) {
           {exit}
         </div>
         <div className="flex items-center gap-3">
+          {daily && dailyTag}
+          {boss && showMeter && <BossTag boss={boss} compact />}
           <span className="ml-auto" />
           {scenes}
           {deck}
@@ -308,7 +322,10 @@ export function ChainTopBar(props: ChainTopBarProps) {
 
   return (
     <div className="relative z-[3] grid grid-cols-[1fr_auto_1fr] items-start gap-6 px-6 pb-2 pt-6">
-      <div className="flex items-center gap-4">{showMeter ? null : where}</div>
+      <div className="flex min-w-0 items-center gap-4">
+        {daily && dailyTag}
+        {showMeter ? boss ? <BossTag boss={boss} /> : null : where}
+      </div>
       <div className="flex flex-col items-center">
         <Fade show={showMeter}>{objective(560)}</Fade>
       </div>

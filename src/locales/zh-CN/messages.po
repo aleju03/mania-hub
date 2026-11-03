@@ -822,6 +822,11 @@ msgstr "已选 {0}/{maxCards}"
 msgid "{0} of {usageSampleSize}"
 msgstr "{usageSampleSize} 次中的 {0} 次"
 
+#. placeholder {0}: entry.card.played!.length
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "{0} of the game's maps in their top plays."
+msgstr "其最佳成绩中有 {0} 张游戏里的谱面。"
+
 #. placeholder {0}: onCharts.revisions
 #: src/components/player/SkillBreakdown.tsx
 msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, behind {backlog} other charts."
@@ -1629,9 +1634,17 @@ msgstr "{key}K 卡包"
 msgid "{keyCount}K {sideLabel} dan"
 msgstr "{keyCount}K {sideLabel}段位"
 
+#: src/lib/goal-format.ts
+msgid "{keyCount}K LN"
+msgstr "{keyCount}K LN"
+
 #: src/components/player/SkillHistoryGraph.tsx
 msgid "{keyCount}K Overall over time"
 msgstr "{keyCount}K 总体随时间变化"
+
+#: src/lib/goal-format.ts
+msgid "{keyCount}K regular"
+msgstr "{keyCount}K 常规"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgid "{keyCount}K skill history"
@@ -1792,6 +1805,10 @@ msgstr "{name} 不在其中。"
 #: src/lib/streak-game.ts
 msgid "{name} joined in {month}."
 msgstr "{name} 于 {month} 加入。"
+
+#: src/lib/chain-run.ts
+msgid "{name} pack"
+msgstr "{name} 卡包"
 
 #. placeholder {0}: rank.months
 #: src/components/supporter/SupporterRankBadge.tsx
@@ -2303,6 +2320,11 @@ msgstr "已追踪的 {1} 名玩家中第 #{0}"
 msgid "#{0} this month"
 msgstr "本月第 {0}"
 
+#. placeholder {0}: head.rank
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "#{0} today"
+msgstr "今日第 {0} 名"
+
 #: src/lib/format.ts
 msgid "#{grouped}"
 msgstr "第 {grouped}"
@@ -2324,11 +2346,21 @@ msgstr "#{serialText}（共 {0}）"
 #~ msgid "+ bpm & length"
 #~ msgstr "+ BPM 与时长"
 
+#. placeholder {0}: pop.add
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "+{0} base"
+msgstr "+{0} 基础分"
+
 #. placeholder {0}: E.jumpstream[band]
 #. placeholder {1}: E.jumpstreamCap
 #: src/lib/chain-run.ts
 msgid "+{0} base for each Jumpstream in your deck (up to {1})."
 msgstr "牌组中每有一张 Jumpstream，基础分 +{0}（最多 {1}）。"
+
+#. placeholder {0}: aftermath.boss
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "+{0} boss"
+msgstr "+{0} Boss"
 
 #. placeholder {0}: N.extraKey.slots
 #: src/lib/pack-run.ts
@@ -2430,6 +2462,16 @@ msgstr "曲目的第一个卡包 +{0} 连击。"
 msgid "+{0} combo per collector level."
 msgstr "每个收藏家等级 +{0} 连击。"
 
+#. placeholder {0}: card.grown
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "+{0} grown this run"
+msgstr "本局已成长 +{0}"
+
+#. placeholder {0}: aftermath.interest
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "+{0} interest"
+msgstr "+{0} 利息"
+
 #. placeholder {0}: formatNumber(hidden)
 #. placeholder {1}: formatNumber(ownersPerCard)
 #: src/components/packs/GoatHoldersButton.tsx
@@ -2484,6 +2526,10 @@ msgstr "还差 {gap}pp"
 #: src/routes/communities.tsx
 msgid "+{hidden} more"
 msgstr "还有 {hidden} 个"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "+{left} to go"
+msgstr "还差 {left}"
 
 #: src/components/player/InsightModals.tsx
 msgid "+{stacks} stacked"
@@ -2901,6 +2947,10 @@ msgstr "4K"
 msgid "4K cards give +{0} notes."
 msgstr "4K 卡片 +{0} 音符。"
 
+#: src/lib/chain-run.ts
+msgid "4K cards score half."
+msgstr "4K 卡牌只得一半分。"
+
 #: src/routes/dan-estimates.tsx
 msgid "4K jack"
 msgstr "4K 叠键"
@@ -3079,6 +3129,10 @@ msgstr "7K 轨道"
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
 msgstr "7K 常规"
+
+#: src/lib/chain-run.ts
+#~ msgid "7K tower"
+#~ msgstr "7K 高塔"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "95-96.25% (the bar)"
@@ -3325,6 +3379,11 @@ msgstr "从补充包中抽到的 maniacard。打开你自己的卡包，建立�
 #: src/lib/goal-format.ts
 msgid "a map"
 msgstr "某张谱面"
+
+#. placeholder {0}: CHAIN_CHART.played
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "A map. Players who have it in their top plays link to it on every trait, and score x{0} in any row it is in."
+msgstr "一张谱面。最佳成绩里有它的玩家与它在所有特征上相连，并且在有它的行中得分 x{0}。"
 
 #: src/routes/hashi.tsx
 msgid "A map's leaderboard in Hashi"
@@ -4161,6 +4220,10 @@ msgstr "全部时间"
 msgid "All uploads"
 msgstr "全部上传"
 
+#: src/lib/chain-run.ts
+#~ msgid "All-7K starting packs, with Ascension to Heaven held."
+#~ msgstr "起始卡包全是 7K，并持有 Ascension to Heaven。"
+
 #: src/lib/skill-axes.ts
 msgid "All-round"
 msgstr "全能"
@@ -4292,8 +4355,8 @@ msgstr "一个用于 Discord 的 osu!mania 机器人。"
 
 #. placeholder {0}: E.stamina[band]
 #: src/lib/chain-run.ts
-msgid "An unbroken row of 6 trains every Stamina in your deck +{0} base."
-msgstr "没有断连的 6 张一排，牌组中每张 Stamina 基础分 +{0}。"
+#~ msgid "An unbroken row of 6 trains every Stamina in your deck +{0} base."
+#~ msgstr "没有断连的 6 张一排，牌组中每张 Stamina 基础分 +{0}。"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "analysis"
@@ -4815,6 +4878,7 @@ msgid "back"
 msgstr "返回"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -4889,6 +4953,10 @@ msgstr "返回选择界面"
 #: src/components/player/ProfileStatCards.tsx
 msgid "Back to the usual four"
 msgstr "恢复默认四项"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Back to your runs"
+msgstr "返回你的对局"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Back to your themes"
@@ -5362,6 +5430,12 @@ msgstr "启动框"
 #: src/lib/chain-run.ts
 msgid "BORROW"
 msgstr "借用"
+
+#. placeholder {0}: CHAIN_BOSS_COPY[boss].name
+#. placeholder {1}: i18n._(CHAIN_BOSS_COPY[boss].rule)
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Boss round: {0}. {1}"
+msgstr "Boss 回合：{0}。{1}"
 
 #: src/components/discord/DiscordTabs.tsx
 msgid "Bot"
@@ -6482,6 +6556,11 @@ msgstr "以 {courseAccuracy} 通过了 {courseName}。"
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "cleared {date} · #{rank}"
 #~ msgstr "完成于 {date} · 第 {rank} 名"
+
+#. placeholder {0}: CHAIN_BOSS.shards
+#: src/components/packs/run/chain/ChainBoss.tsx
+msgid "Clearing it pays {0} more shards."
+msgstr "通过后多得 {0} 碎片。"
 
 #: src/routes/rankings.tsx
 msgid "Clears"
@@ -7801,6 +7880,10 @@ msgstr "国家/地区"
 msgid "Country for top plays"
 msgstr "最佳成绩推送的国家"
 
+#: src/lib/chain-run.ts
+msgid "Country links don't count."
+msgstr "国家连线不计。"
+
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
 msgstr "国家/地区 mania 排行榜"
@@ -8096,12 +8179,22 @@ msgstr "青色"
 msgid "Czech"
 msgstr "捷克语"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Daily"
+msgstr "每日"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Daily run"
+msgstr "每日对局"
+
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "dan"
 msgstr "段位"
 
 #: src/components/companella/SubmissionDetail.tsx
+#: src/components/me/GoalsPanel.tsx
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -8164,6 +8257,10 @@ msgstr "段位估计：{0}（{1}）"
 #: src/components/maps/DanProgressRail.tsx
 #~ msgid "Dan ladder"
 #~ msgstr "段位阶梯"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "Dan level"
+msgstr "段位等级"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
@@ -8793,6 +8890,10 @@ msgstr "把 .osr 拖到这里，或点击选择文件"
 #: src/components/packs/collections/board/CardBoard.tsx
 #~ msgid "Drag cards from the tray, or switch to the brush and draw with them."
 #~ msgstr "从卡盘拖出卡牌，或切换到画笔用卡牌作画。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
+#~ msgstr "从卡盘拖出卡牌。在展板上拖动可框选你的卡牌，按住右键拖动可移动视图。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
@@ -9437,6 +9538,10 @@ msgstr "这里的每张谱面都是提升技能的推荐。默认隐藏，直到
 msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay viewer."
 msgstr "所有上传到 Mania Tracker 的 osu!mania 回放，按最新排序。可在回放播放器中打开任意一个。"
 
+#: src/routes/replay_.community.tsx
+#~ msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay watcher."
+#~ msgstr "所有上传到 Mania Tracker 的 osu!mania 回放，按最新排序。可在回放播放器中打开任意一个。"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Every pack is a random sample of its difficulty bucket"
 msgstr "每个卡包都是对应难度区间里的随机抽样"
@@ -9533,6 +9638,10 @@ msgstr "所有已追踪玩家，概率相同"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Everyone"
 msgstr "所有人"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Everyone plays the same cards today, on the standard deck. One try, no revive."
+msgstr "今天所有人都用同样的卡牌和标准牌组。只有一次机会，不能复活。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
@@ -11548,6 +11657,11 @@ msgstr "打击音效与界面音效"
 msgid "Hoarder"
 msgstr "囤积者"
 
+#. placeholder {0}: CHAIN_RULES.interestPer
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Hold {0} shards to earn interest at the next clear."
+msgstr "持有 {0} 碎片，下次通关时就能获得利息。"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
 msgstr "按住 <0>C</0> 并移动光标即可画出烟雾，就像在 osu! 游戏中画图一样。它会自行消散。"
@@ -11630,6 +11744,10 @@ msgstr "镭射网格"
 #: src/components/layout/Nav.tsx
 msgid "home"
 msgstr "首页"
+
+#: src/lib/chain-run.ts
+#~ msgid "Home country"
+#~ msgstr "本国"
 
 #: src/lib/pack-run.ts
 msgid "Home Country"
@@ -12183,6 +12301,13 @@ msgstr "查看 {0} 的 maniacard"
 msgid "Integrations"
 msgstr "集成"
 
+#. placeholder {0}: chainInterestFor(view.shards)
+#. placeholder {1}: CHAIN_RULES.interestPer
+#. placeholder {2}: CHAIN_RULES.interestMax
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Interest at the next clear: <0>+{0}</0> (1 per {1} held, up to {2})"
+msgstr "下次通关的利息：<0>+{0}</0>（每持有 {1} 个得 1，最多 {2}）"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
 msgstr "界面语言"
@@ -12669,6 +12794,7 @@ msgstr ""
 msgid "Key Split"
 msgstr "键数分布"
 
+#: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -13285,6 +13411,7 @@ msgstr "实时更新已开启"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternRadar.tsx
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/me/GoalsPanel.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/ProfileStatCards.tsx
@@ -15311,6 +15438,11 @@ msgstr "下一回合多 {0} 次重抽。"
 msgid "Next round has {0} more row."
 msgstr "下一回合多 {0} 排。"
 
+#. placeholder {0}: copy.name
+#: src/components/packs/run/chain/ChainBoss.tsx
+msgid "Next round is a boss: {0}"
+msgstr "下一回合是 Boss：{0}"
+
 #: src/lib/chain-run.ts
 msgid "Next round's first row can't break."
 msgstr "下一回合第一排不会断链。"
@@ -15500,9 +15632,17 @@ msgstr "无小伙伴"
 msgid "No countries found"
 msgstr "未找到国家/地区"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "No daily runs today yet."
+msgstr "今天还没有每日对局。"
+
 #: src/components/maps/DanProgressRail.tsx
 msgid "No dan credit"
 msgstr "无段位贡献"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "no dan here yet"
+msgstr "这里还没有段位"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "No Dans"
@@ -15817,6 +15957,10 @@ msgstr "暂无已评分的键数。"
 msgid "No rated players here yet."
 msgstr "这里还没有已评分的玩家。"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "no rating here yet"
+msgstr "这里还没有评分"
+
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "No rating is available, and no analysis is currently scheduled."
 msgstr "暂无评级，目前也未安排分析。"
@@ -15848,6 +15992,10 @@ msgstr "不重抽"
 #: src/lib/chain-run.ts
 msgid "No redraws left this round."
 msgstr "本回合没有剩余重抽次数。"
+
+#: src/lib/chain-run.ts
+msgid "No redraws this round."
+msgstr "本回合不能重抽。"
 
 #: src/routes/maps.tsx
 #~ msgid "No region board for this tab yet"
@@ -16587,6 +16735,10 @@ msgstr "当前"
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "Now"
 #~ msgstr ""
+
+#: src/components/me/GoalsPanel.tsx
+msgid "now {now}"
+msgstr "当前 {now}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "now #{nowRank}"
@@ -17371,6 +17523,10 @@ msgstr "osu!mania 排行榜与实时成绩追踪"
 #: src/routes/replay.tsx
 msgid "osu!mania replay viewer"
 msgstr "osu!mania 回放播放器"
+
+#: src/routes/replay.tsx
+#~ msgid "osu!mania replay watcher"
+#~ msgstr "osu!mania 回放播放器"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "osu!mania replays only"
@@ -18187,6 +18343,11 @@ msgstr "从 {0} 开始播放"
 #~ msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
 #~ msgstr "游玩习惯与打法分析：活跃天数、游玩场次和技能构成。"
 
+#. placeholder {0}: E.stamina[band]
+#: src/lib/chain-run.ts
+msgid "Play it in a row of 6 with no breaks and every Stamina card in your deck gains +{0} base for the run."
+msgstr "把它放进一行 6 张且不断的连线里，牌组中每张 Stamina 卡本局基础分 +{0}。"
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Play my top plays"
 msgstr "播放我的最佳成绩"
@@ -18252,6 +18413,15 @@ msgstr "由 {0} 游玩。"
 #: src/components/replay/CommunityReplayCard.tsx
 msgid "Played by {playerName}"
 msgstr "由 {playerName} 游玩"
+
+#: src/components/packs/run/chain/ChainScoring.tsx
+msgid "Played it"
+msgstr "玩过"
+
+#. placeholder {0}: CHAIN_CHART.played
+#: src/components/packs/run/chain/ChainScoring.tsx
+msgid "Played it x{0}"
+msgstr "玩过 x{0}"
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Played on {playedOn}"
@@ -19280,6 +19450,10 @@ msgstr "状态正佳"
 msgid "Rarity"
 msgstr "稀有度"
 
+#: src/lib/chain-run.ts
+msgid "Rarity links don't count."
+msgstr "稀有度连线不计。"
+
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Rate"
@@ -19388,6 +19562,7 @@ msgstr "评分"
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/me/GoalsPanel.tsx
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillHistoryModal.tsx
@@ -19485,6 +19660,12 @@ msgstr "重新渲染游玩区域预览、给截图命名，或更换卡片封面
 msgid "Re-rendered, not saved yet"
 msgstr "已重新渲染，尚未保存"
 
+#. placeholder {0}: danGoalSkillLabel(danTarget.skillset, i18n)
+#. placeholder {1}: danGoalLadderLabel(keyCount, danTarget.side, i18n)
+#: src/components/me/GoalsPanel.tsx
+msgid "Reach {0} dan <0/> on {1}"
+msgstr "在 {1} 达到 {0} 段位 <0/>"
+
 #. placeholder {0}: LOADOUT_UNLOCKS.stream.distinct.toLocaleString("en-US")
 #: src/lib/pack-run.ts
 msgid "Reach {0} on the collection ladder."
@@ -19494,17 +19675,42 @@ msgstr "在收藏榜上达到 {0}。"
 msgid "Reach {pp} total pp"
 msgstr "总 pp 达到 {pp}"
 
+#: src/lib/goal-format.ts
+msgid "Reach {skill} dan {level} on {ladder}"
+msgstr "在 {ladder} 达到 {skill} 段位 {level}"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Reach <0/> <1/> rank"
 msgstr "排名达到 <0/> <1/>"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "Reach <0/> dan <1/> on <2/> <3/>"
+msgstr "在 <2/> <3/> 达到 <0/> 段位 <1/>"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Reach <0/> total pp"
 msgstr "总 pp 达到 <0/>"
 
 #: src/lib/goal-format.ts
+msgid "Reach a {rating} {skill} rating on {keyCount}K"
+msgstr "在 {keyCount}K 达到 {skill} 评分 {rating}"
+
+#. placeholder {0}: ratingGoalAxisLabel(goal.targetGrade, keyCount, i18n)
+#: src/components/me/GoalsPanel.tsx
+msgid "Reach a <0/> {0} rating on {keyCount}K"
+msgstr "在 {keyCount}K 达到 {0} 评分 <0/>"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "Reach a <0/> <1/> rating on <2/>"
+msgstr "在 <2/> 达到 <1/> 评分 <0/>"
+
+#: src/lib/goal-format.ts
 msgid "Reach country rank #{rank}"
 msgstr "国内排名达到第 {rank} 名"
+
+#: src/lib/goal-format.ts
+msgid "Reach dan {level} on {ladder}"
+msgstr "在 {ladder} 达到段位 {level}"
 
 #: src/lib/goal-format.ts
 msgid "Reach global rank #{rank}"
@@ -19847,6 +20053,7 @@ msgid "Regions"
 msgstr "区域"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/me/GoalsPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -20711,6 +20918,11 @@ msgstr "排"
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Rows"
 msgstr "排数"
+
+#. placeholder {0}: CHAIN_BOSS.shortRow
+#: src/lib/chain-run.ts
+msgid "Rows of {0} cards at most."
+msgstr "每行最多 {0} 张卡。"
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.moonGateCards
 #. placeholder {1}: CHAIN_SCENE_NUMBERS.moonGateMultiplier
@@ -21679,6 +21891,10 @@ msgstr "{span}前打出"
 msgid "Set a play {0}"
 msgstr "{0}打了一次"
 
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "Set a target for pp, rank, dan, rating or a map. Progress follows your plays, and the goal clears itself once you reach it."
+#~ msgstr "给 pp、排名、段位、评分或某张图设一个目标。进度跟着你的成绩走，达成时目标会自动完成。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Set as my replay skin"
 msgstr "设为我的回放皮肤"
@@ -22628,6 +22844,8 @@ msgstr "通过少于四次的技能不参与平均，而不是按零计算。到
 #~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Players with fewer than two rated skills are read off the same average over their 20 best passes overall."
 #~ msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。评出的技能不到两个的玩家按同样的平均来读，取全部通过里最好的 20 次。"
 
+#: src/components/me/GoalsPanel.tsx
+#: src/components/packs/run/chain/ChainDetails.tsx
 #: src/lib/chain-run.ts
 msgid "Skillset"
 msgstr "技能组"
@@ -22656,6 +22874,10 @@ msgstr "技能雷达"
 #: src/routes/news_.prism.tsx
 msgid "Skillsets"
 msgstr "技能组"
+
+#: src/lib/chain-run.ts
+msgid "Skillsets do nothing this round."
+msgstr "本回合 skillset 不生效。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -23300,8 +23522,8 @@ msgid "Stamina"
 msgstr "耐力"
 
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "Stamina trained: {cards} cards +{trained} base"
-msgstr "耐力训练：{cards} 张卡片 +{trained} 基础分"
+#~ msgid "Stamina trained: {cards} cards +{trained} base"
+#~ msgstr "耐力训练：{cards} 张卡片 +{trained} 基础分"
 
 #: src/lib/pack-run.ts
 #: src/lib/packs.ts
@@ -23337,6 +23559,7 @@ msgid "stars"
 msgstr "星级"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/maps.tsx
@@ -23384,6 +23607,10 @@ msgstr ""
 msgid "Start the connection again from the app."
 msgstr "请从应用中重新发起连接。"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Start today's run"
+msgstr "开始今天的对局"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 msgid "Start tracking your plays"
@@ -23400,6 +23627,14 @@ msgstr ""
 #: src/lib/chain-run.ts
 msgid "Starting pack {index} of 3"
 msgstr "起始卡包 {index}/3"
+
+#: src/lib/chain-run.ts
+#~ msgid "Starting packs from one country, and country links practised once."
+#~ msgstr "起始卡包来自同一个国家，国家连线已练习一次。"
+
+#: src/lib/chain-run.ts
+#~ msgid "Starting packs of every rarity, with Purple Palace held."
+#~ msgstr "起始卡包包含各种稀有度，并持有 Purple Palace。"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 #~ msgid "Starting playback…"
@@ -24038,6 +24273,10 @@ msgstr "目标成绩数"
 msgid "Target rank"
 msgstr "目标排名"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "Target rating"
+msgstr "目标评分"
+
 #: src/routes/recommendations.tsx
 msgid "target score"
 msgstr "目标分数"
@@ -24056,8 +24295,12 @@ msgid "targets on this chart will aim higher until you set the score"
 msgstr "在你打出成绩之前，这张谱面的目标会定得更高"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "Targets track themselves from your mania plays: a pp number, a play worth, a play count, an accuracy, a clear, or a grade."
-msgstr "目标会从你的 mania 成绩里自动追踪：总 pp、单个成绩、成绩数量、准确率、通关或评级。"
+msgid "Targets track themselves from your mania plays: a pp number, a play worth, a play count, a rank, a dan, a rating, an accuracy, a clear, or a grade."
+msgstr "目标会从你的 mania 成绩里自动追踪：总 pp、单个成绩、成绩数量、排名、段位、评分、准确率、通关或评级。"
+
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "Targets track themselves from your mania plays: a pp number, a play worth, a play count, an accuracy, a clear, or a grade."
+#~ msgstr "目标会从你的 mania 成绩里自动追踪：总 pp、单个成绩、成绩数量、准确率、通关或评级。"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "teal"
@@ -26365,6 +26608,10 @@ msgstr "三张来自一个国家/地区，两张来自另一个。"
 msgid "Three Keys"
 msgstr "三键"
 
+#: src/lib/chain-run.ts
+#~ msgid "Three starting packs, anything goes."
+#~ msgstr "三个起始卡包，什么都可能有。"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Thu"
 msgstr "四"
@@ -26724,6 +26971,10 @@ msgstr "比赛"
 msgid "tournaments, mapping, casual"
 msgstr "比赛、制谱、休闲"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "Track measurable goals automatically"
+msgstr "自动追踪可衡量的目标"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
@@ -27043,6 +27294,10 @@ msgstr "不可用"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Unavailable"
 msgstr "不可用"
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Unbroken 6: Stamina cards +{trained} base"
+msgstr "6 张不断：Stamina 卡 +{trained} 基础分"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "Uncollected GOAT"
@@ -28933,6 +29188,10 @@ msgstr "你已经是支持者了，把它留给朋友吧。"
 msgid "you're already past {0}"
 msgstr "你已经超过 {0} 了"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "you're at {now} right now"
+msgstr "你现在是 {now}"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 msgid "You're being tracked now"
@@ -28971,6 +29230,10 @@ msgstr "你最强的是 <0>{0}</0>"
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "You've already had a supporter week from a gift."
 msgstr "你已经领取过一次赠送的支持者周。"
+
+#: src/lib/chain-run.ts
+msgid "You've played today's daily run. A new one starts at midnight UTC."
+msgstr "你已经玩过今天的每日对局了。新的一局在 UTC 零点开始。"
 
 #: src/lib/supporter-companions.ts
 msgid "Youmu fumo"

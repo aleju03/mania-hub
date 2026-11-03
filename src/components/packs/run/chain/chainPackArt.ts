@@ -160,6 +160,7 @@ function plainStyle(art: ChainPackArt): PackArtStyle {
     return baseStyle(key, accentOf("7k"), `${key} PLAYERS ONLY`, 2, offer.key === 4 ? "lanes4" : "lanes7");
   }
   if (offer.kind === "big") return baseStyle("BIG", accentOf("legend"), `KEEP ${offer.keep ?? 2}`, 3, "burst");
+  if (offer.kind === "chart") return baseStyle("MAP", accentOf("legend"), "MAP + WHO PLAYED IT", 2, "triangles");
   return baseStyle("PACK", accentOf("standard"), "KEEP 1", 1, "triangles");
 }
 

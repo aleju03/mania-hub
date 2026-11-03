@@ -4251,7 +4251,7 @@ export interface LiveChainRunBoardEntry {
   updatedAt: number;
 }
 
-export type LiveChainBoardPeriod = "all" | "month";
+export type LiveChainBoardPeriod = "all" | "month" | "day";
 
 /* The chain run's board for a period (all time, or this UTC month): each
    player's best run, by round reached then best row, plus `user`'s own entry
@@ -4269,10 +4269,12 @@ export async function fetchLiveChainRunBoard(
 
 /* The cards a guest chain run plays on: a slice of the pool plus the GOATs
    (see the backend's getChainGuestPool). */
-export async function fetchLiveChainGuestPool<Card>(): Promise<{ cards: Card[]; goats: Card[] } | null> {
+export async function fetchLiveChainGuestPool<Card>(): Promise<{ cards: Card[]; goats: Card[]; charts: Card[] } | null> {
   try {
-    const body = await fetchLiveJson<{ cards?: Card[]; goats?: Card[] }>("/api/chain-run/guest-pool");
-    return Array.isArray(body.cards) ? { cards: body.cards, goats: Array.isArray(body.goats) ? body.goats : [] } : null;
+    const body = await fetchLiveJson<{ cards?: Card[]; goats?: Card[]; charts?: Card[] }>("/api/chain-run/guest-pool");
+    return Array.isArray(body.cards)
+      ? { cards: body.cards, goats: Array.isArray(body.goats) ? body.goats : [], charts: Array.isArray(body.charts) ? body.charts : [] }
+      : null;
   } catch {
     return null;
   }

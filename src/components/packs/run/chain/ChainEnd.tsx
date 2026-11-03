@@ -120,6 +120,7 @@ export function ChainOver({
   onRevive,
   onExit,
   onShake,
+  daily = false,
 }: {
   view: ChainRunView;
   best: ChainBoardEntry | null;
@@ -134,6 +135,9 @@ export function ChainOver({
   onRevive: () => Promise<boolean>;
   onExit: () => void;
   onShake: (amount: number) => void;
+  /* The daily run ended: one try a day, so the button goes back to the
+     player's own runs, and the board opens on today's. */
+  daily?: boolean;
 }) {
   const { t } = useLingui();
   const animate = fresh && !reducedMotion;
@@ -186,7 +190,7 @@ export function ChainOver({
             </Trans>
           </motion.div>
         )}
-        {over?.reason === "failed" && over.round === view.round && !view.revived && <ReviveOffer round={round} narrow={narrow} onRevive={onRevive} />}
+        {!daily && over?.reason === "failed" && over.round === view.round && !view.revived && <ReviveOffer round={round} narrow={narrow} onRevive={onRevive} />}
         <div className={`flex items-end justify-center ${narrow ? "mt-4 gap-7" : "mt-5 gap-12"}`}>
           {stat(<Trans>Round</Trans>, String(round), KIT.cream, 0.15)}
           {stat(<Trans>Best row</Trans>, formatChainScore(view.bestRow), KIT.gold, 0.22)}
@@ -210,7 +214,7 @@ export function ChainOver({
           </div>
         )}
         <div className={`w-full ${narrow ? "mt-4" : "mt-5"}`}>
-          <BoardPanel loadBoard={loadBoard} loadSheet={loadSheet} mine={mine} mineName={mine.username || <Trans>This run</Trans>} refreshKey={view.runNo} animate={animate} />
+          <BoardPanel loadBoard={loadBoard} loadSheet={loadSheet} mine={mine} mineName={mine.username || <Trans>This run</Trans>} refreshKey={view.runNo} animate={animate} initialPeriod={daily ? "day" : "all"} />
         </div>
         <motion.div
           className="mt-6"
@@ -262,8 +266,8 @@ export function ChainOver({
               {
                 key: "again",
                 primary: true,
-                title: t`Play again`,
-                label: <Trans>Play again</Trans>,
+                title: daily ? t`Back to your runs` : t`Play again`,
+                label: daily ? <Trans>Back to your runs</Trans> : <Trans>Play again</Trans>,
                 disabled: busy,
                 onClick: () => {
                   runSound.uiTap();
@@ -278,7 +282,22 @@ export function ChainOver({
   );
 }
 
-/* Before the first run: three sealed packs and Start a run, with the board. */
+/* A day on a tear-off calendar, for the daily run. */
+function IconDaily() {
+  return (
+    <svg width={26} height={26} viewBox="0 0 32 32" aria-hidden="true" className="shrink-0 overflow-visible">
+      <g strokeLinejoin="round" strokeLinecap="round">
+        <rect x={5} y={7} width={22} height={21} rx={3} fill={KIT.dark} stroke={KIT.gold} strokeWidth={2.4} />
+        <path d="M5 13 H27" stroke={KIT.gold} strokeWidth={2.4} />
+        <path d="M11 4 V9 M21 4 V9" stroke={KIT.gold} strokeWidth={2.4} />
+        <path d="M13 18 L16 16 V25" fill="none" stroke={KIT.cream} strokeWidth={2.4} />
+      </g>
+    </svg>
+  );
+}
+
+/* Before the first run: three sealed packs and Start a run, with the board
+   (or the daily run's start). */
 export function ChainStart({
   best,
   busy,
@@ -289,6 +308,9 @@ export function ChainStart({
   loadSheet,
   onNewRun,
   guest = false,
+  daily = false,
+  onDaily,
+  onBack,
 }: {
   best: ChainBoardEntry | null;
   busy: boolean;
@@ -300,6 +322,11 @@ export function ChainStart({
   onNewRun: () => void;
   /* Signed out: the run is played and kept in this browser only. */
   guest?: boolean;
+  /* The daily run's start (everyone on the same cards today, one try), and
+     the way to it from the player's own start, and back. */
+  daily?: boolean;
+  onDaily?: () => void;
+  onBack?: () => void;
 }) {
   const { t, i18n } = useLingui();
   const height = narrow ? 150 : 230;
@@ -316,6 +343,16 @@ export function ChainStart({
         >
           {i18n._(CHAIN_RUN_NAME)}
         </motion.h2>
+        {daily && (
+          <div className="-mt-4 flex flex-col items-center gap-1 text-center">
+            <div className="leading-none" style={{ fontFamily: MARKER, fontSize: narrow ? 22 : 30, color: KIT.gold }}>
+              <Trans>Daily run</Trans> {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
+            </div>
+            <div className="max-w-[380px] text-[13px] font-bold leading-snug text-[#f3e9d8]/75">
+              <Trans>Everyone plays the same cards today, on the standard deck. One try, no revive.</Trans>
+            </div>
+          </div>
+        )}
         <div className="relative" style={{ width: width * 2.1, height: height + 20 }}>
           {[-1, 0, 1].map((offset, index) => (
             <motion.div
@@ -338,10 +375,11 @@ export function ChainStart({
           <ChainButtons
             big={!narrow}
             items={[
+              ...(daily && onBack ? [{ key: "back", label: <Trans>Back</Trans>, title: t`Back`, onClick: onBack }] : []),
               {
                 key: "start",
-                label: <Trans>Start a run</Trans>,
-                title: t`Start a run`,
+                label: daily ? <Trans>Start today's run</Trans> : <Trans>Start a run</Trans>,
+                title: daily ? t`Start today's run` : t`Start a run`,
                 primary: true,
                 disabled: busy,
                 onClick: () => {
@@ -349,6 +387,9 @@ export function ChainStart({
                   onNewRun();
                 },
               },
+              ...(!daily && onDaily
+                ? [{ key: "daily", label: <Trans>Daily run</Trans>, title: t`Daily run`, icon: <IconDaily />, tone: KIT.gold, onClick: onDaily }]
+                : []),
             ]}
           />
           {guest && (
@@ -358,7 +399,7 @@ export function ChainStart({
           )}
         </motion.div>
         <div className="w-full max-w-[460px]">
-          <BoardPanel loadBoard={loadBoard} loadSheet={loadSheet} mine={best} refreshKey={0} />
+          <BoardPanel key={daily ? "day" : "all"} loadBoard={loadBoard} loadSheet={loadSheet} mine={daily ? null : best} refreshKey={daily ? 1 : 0} initialPeriod={daily ? "day" : "all"} />
         </div>
       </div>
     </div>

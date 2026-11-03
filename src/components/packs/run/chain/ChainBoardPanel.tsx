@@ -161,7 +161,7 @@ export function BoardRows({
   );
 }
 
-/* All time | This month, as two marker words with a hairline between. */
+/* All time | This month | Daily, as marker words with hairlines between. */
 function PeriodTabs({ period, onChange, compact }: { period: ChainBoardPeriod; onChange: (period: ChainBoardPeriod) => void; compact: boolean }) {
   const tab = (id: ChainBoardPeriod, label: ReactNode) => (
     <button
@@ -171,8 +171,8 @@ function PeriodTabs({ period, onChange, compact }: { period: ChainBoardPeriod; o
         runSound.uiTap();
         onChange(id);
       }}
-      className="relative px-1 pb-1 leading-none transition-colors"
-      style={{ fontFamily: MARKER, fontSize: compact ? 15 : 19, color: id === period ? KIT.cream : "rgba(243,233,216,0.4)" }}
+      className="relative whitespace-nowrap px-1 pb-1 leading-none transition-colors"
+      style={{ fontFamily: MARKER, fontSize: compact ? 14 : 19, color: id === period ? KIT.cream : "rgba(243,233,216,0.4)" }}
       aria-pressed={id === period}
     >
       {label}
@@ -180,10 +180,12 @@ function PeriodTabs({ period, onChange, compact }: { period: ChainBoardPeriod; o
     </button>
   );
   return (
-    <div className={`flex items-center justify-center ${compact ? "gap-3 pb-2" : "gap-5 pb-3"}`}>
+    <div className={`flex items-center justify-center ${compact ? "gap-2 pb-2" : "gap-5 pb-3"}`}>
       {tab("all", <Trans>All time</Trans>)}
       <span className="h-4 w-px bg-[#f3e9d8]/25" />
       {tab("month", <Trans>This month</Trans>)}
+      <span className="h-4 w-px bg-[#f3e9d8]/25" />
+      {tab("day", <Trans>Daily</Trans>)}
     </div>
   );
 }
@@ -200,6 +202,7 @@ export function BoardPanel({
   compact = false,
   animate = false,
   minHeight,
+  initialPeriod = "all",
 }: {
   loadBoard: LoadBoard;
   loadSheet: LoadSheet;
@@ -209,8 +212,10 @@ export function BoardPanel({
   compact?: boolean;
   animate?: boolean;
   minHeight?: number;
+  /* The tab it opens on (the daily run's end opens on today's). */
+  initialPeriod?: ChainBoardPeriod;
 }) {
-  const [period, setPeriod] = useState<ChainBoardPeriod>("all");
+  const [period, setPeriod] = useState<ChainBoardPeriod>(initialPeriod);
   const user = mine && mine.userId > 0 ? mine.userId : null;
   const page = useBoard(loadBoard, period, user, refreshKey);
   const [open, setOpen] = useState<ChainBoardEntry | null>(null);
@@ -238,7 +243,7 @@ export function BoardPanel({
             <BoardRows entries={page.entries} mine={shownMine} compact={compact} animate={animate && period === "all"} mineName={mineName} onPick={setOpen} />
           ) : (
             <div className="py-6 text-center text-[13px] font-bold text-[#f3e9d8]/45">
-              {period === "month" ? <Trans>No runs this month yet.</Trans> : <Trans>No runs yet.</Trans>}
+              {period === "month" ? <Trans>No runs this month yet.</Trans> : period === "day" ? <Trans>No daily runs today yet.</Trans> : <Trans>No runs yet.</Trans>}
             </div>
           )
         ) : (
@@ -318,7 +323,7 @@ function RunSheet({ entry, period, loadSheet, onClose }: { entry: ChainBoardEntr
               </svg>
             </button>
             <div className="text-[12px] font-black uppercase tracking-[0.22em] text-[#f3e9d8]/50">
-              {period === "all" ? <Trans>#{head.rank} all time</Trans> : <Trans>#{head.rank} this month</Trans>}
+              {period === "all" ? <Trans>#{head.rank} all time</Trans> : period === "day" ? <Trans>#{head.rank} today</Trans> : <Trans>#{head.rank} this month</Trans>}
             </div>
             <div className="mt-2 flex max-w-full items-center gap-3">
               <RunFlag cc={head.cc} height={narrow ? 22 : 28} />

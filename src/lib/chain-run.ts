@@ -31,6 +31,9 @@ import {
   CHAIN_SCENE_NUMBERS,
   chainScoreText,
   chainEternalBase,
+  isChainStartDeck,
+  CHAIN_BOSS,
+  type ChainBossId,
 } from "../../backend/src/shared/chain-run";
 import { honoraryPlayerById } from "./honorary-players";
 import { liveBridgeToken } from "./live-backend-tokens";
@@ -57,7 +60,7 @@ export interface ChainBoardEntry {
 }
 
 /* The board's periods: every run, and runs played this UTC month. */
-export type ChainBoardPeriod = "all" | "month";
+export type ChainBoardPeriod = "all" | "month" | "day";
 
 /* A board page, and the viewer's own entry when it was asked for. */
 export interface ChainBoardPage {
@@ -84,7 +87,11 @@ export type ChainActionResponse =
   | { status: "ok"; result: ChainActionResult; run: ChainRunView | null; rev: number; best: ChainBoardEntry | null }
   | { status: "refused"; error: string; run: ChainRunView | null; rev: number; best: ChainBoardEntry | null };
 
-async function chainTarget(): Promise<{ url: string; headers: HeadersInit; country: string } | null> {
+/* A player's own run, or the daily run (everyone on the same cards that UTC day, one try). */
+export type ChainRunMode = "normal" | "daily";
+const cleanMode = (mode: unknown): ChainRunMode => (mode === "daily" ? "daily" : "normal");
+
+async function chainTarget(mode: ChainRunMode = "normal"): Promise<{ url: string; headers: HeadersInit; country: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
   const auth = await readCurrentAuth();
   if (!auth.viewer) return null;
@@ -93,15 +100,17 @@ async function chainTarget(): Promise<{ url: string; headers: HeadersInit; count
   const headers: HeadersInit = { "content-type": "application/json" };
   const bridgeToken = liveBridgeToken();
   if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
-  return { url: `${base}/api/chain-run/${auth.viewer.id}`, headers, country: auth.viewer.countryCode ?? "" };
+  return { url: `${base}/api/chain-run/${auth.viewer.id}${mode === "daily" ? "?mode=daily" : ""}`, headers, country: auth.viewer.countryCode ?? "" };
 }
 
 /* Null when the viewer cannot play: logged out or no backend. `run` is null
    for a viewer who never started one. */
-export const fetchOwnChainRun = createServerFn({ method: "GET" }).handler(async (): Promise<ChainRunResponse | null> => {
+export const fetchOwnChainRun = createServerFn({ method: "GET" })
+  .validator((mode: ChainRunMode | undefined) => cleanMode(mode))
+  .handler(async ({ data: mode }): Promise<ChainRunResponse | null> => {
   const { setResponseHeader } = await import("@tanstack/react-start/server");
   setResponseHeader("Cache-Control", "private, no-store");
-  const target = await chainTarget();
+  const target = await chainTarget(mode);
   if (!target) return null;
   const response = await fetch(target.url, { headers: target.headers });
   if (response.status === 404) return null;
@@ -109,16 +118,23 @@ export const fetchOwnChainRun = createServerFn({ method: "GET" }).handler(async 
   return (await response.json()) as ChainRunResponse;
 });
 
-export type ChainActionInput = ChainAction & { rev: number };
+export type ChainActionInput = ChainAction & { rev: number; mode?: ChainRunMode };
 
 function cleanAction(input: ChainActionInput): ChainActionInput {
+  const rev = Math.floor(Number(input?.rev));
+  if (!Number.isSafeInteger(rev) || rev < 0) throw new Error("Invalid chain action.");
+  const mode = cleanMode(input?.mode);
+  const clean = cleanActionBody(input, rev);
+  return mode === "daily" ? { ...clean, mode } : clean;
+}
+
+function cleanActionBody(input: ChainActionInput, rev: number): ChainActionInput {
   const int = (value: unknown) => Math.floor(Number(value));
   const ints = (value: unknown, max: number) =>
     Array.isArray(value) && value.length <= max && value.every((entry) => Number.isSafeInteger(int(entry))) ? value.map(int) : null;
-  const rev = int(input?.rev);
-  if (!Number.isSafeInteger(rev) || rev < 0) throw new Error("Invalid chain action.");
   switch (input?.kind) {
     case "start":
+      return isChainStartDeck(input.deck) ? { kind: "start", deck: input.deck, rev } : { kind: "start", rev };
     case "openPack":
     case "reroll":
     case "nextRound":
@@ -165,9 +181,9 @@ export const actOnOwnChainRun = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<ChainActionResponse | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
-    const target = await chainTarget();
+    const { kind, mode, ...rest } = data;
+    const target = await chainTarget(cleanMode(mode));
     if (!target) return null;
-    const { kind, ...rest } = data;
     const response = await fetch(target.url, {
       method: "POST",
       headers: target.headers,
@@ -419,7 +435,7 @@ export function chainSkillEffectText(card: Pick<ChainCard, "skill" | "goat" | "t
     case "Handstream":
       return i18n._(msg`Linked on both sides: it and both neighbours score x${E.handstream[band]}.`);
     case "Stamina":
-      return i18n._(msg`An unbroken row of 6 trains every Stamina in your deck +${E.stamina[band]} base.`);
+      return i18n._(msg`Play it in a row of 6 with no breaks and every Stamina card in your deck gains +${E.stamina[band]} base for the run.`);
     case "Jack":
       return band === 2
         ? i18n._(msg`Hits twice.`)
@@ -563,6 +579,17 @@ const REFUSALS: Record<string, MessageDescriptor> = {
   no_target: msg`GOATs can't take mods.`,
   no_revive: msg`This run already used its revive.`,
   eternal: msg`An Eternal never leaves.`,
+  daily_done: msg`You've played today's daily run. A new one starts at midnight UTC.`,
+};
+
+/* Boss twists: an osu! mod's name (never translated) and the rule. */
+export const CHAIN_BOSS_COPY: Record<ChainBossId, { name: string; rule: MessageDescriptor }> = {
+  noCountry: { name: "Global", rule: msg`Country links don't count.` },
+  noRarity: { name: "Unranked", rule: msg`Rarity links don't count.` },
+  short: { name: "Half Time", rule: msg`Rows of ${CHAIN_BOSS.shortRow} cards at most.` },
+  halfFourK: { name: "Key Lock", rule: msg`4K cards score half.` },
+  noRedraws: { name: "Sudden Death", rule: msg`No redraws this round.` },
+  muted: { name: "Hidden", rule: msg`Skillsets do nothing this round.` },
 };
 
 /* The shop's contracts: a name and the rule, short. */
@@ -611,8 +638,12 @@ export function chainPackName(pack: Pick<ChainPackView, "reason" | "startIndex" 
   return pack.offer ? chainOfferName(pack.offer, i18n) : i18n._(msg`Pack`);
 }
 
-export function chainOfferName(offer: { kind: string; cc?: string; skill?: string; key?: number }, i18n: I18n): string {
+export function chainOfferName(offer: { kind: string; cc?: string; skill?: string; key?: number; chartName?: string }, i18n: I18n): string {
   switch (offer.kind) {
+    case "chart": {
+      const name = offer.chartName ?? "";
+      return i18n._(msg`${name} pack`);
+    }
     case "country": {
       const cc = offer.cc ?? "";
       return i18n._(msg`${cc} pack`);

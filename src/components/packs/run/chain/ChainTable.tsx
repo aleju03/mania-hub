@@ -27,6 +27,9 @@ import {
   type ChainRunView,
   type ChainSceneId,
   chainModLook,
+  chainRowMax,
+  CHAIN_BOSS_COPY,
+  type ChainRunMode,
 } from "#/lib/chain-run";
 import type { PackTypeId } from "#/lib/packs";
 import { getCachedCardBackDataUrl } from "../../packArt";
@@ -85,6 +88,9 @@ export interface ChainTableProps {
   loadSheet: LoadSheet;
   onExit: () => void;
   script?: ChainTableScript;
+  /* Signed in: the player's own run or the daily run, and the switch. */
+  mode?: ChainRunMode;
+  onMode?: (mode: ChainRunMode) => void;
 }
 
 interface PlayState {
@@ -103,7 +109,7 @@ interface PlayState {
 }
 
 type Aftermath =
-  | { kind: "clear"; round: number; total: number }
+  | { kind: "clear"; round: number; total: number; interest: number; boss: number }
   | { kind: "banner"; text: string; tone: "red" | "gold" | "green" };
 
 const DEALT_KEY = "chain-run-dealt";
@@ -151,7 +157,8 @@ function useBoardBox() {
    owns the run; this replays what it answers and keeps only the row being
    arranged. */
 export function ChainTable(props: ChainTableProps) {
-  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, loadSheet, onExit, script, guest = false } = props;
+  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, loadSheet, onExit, script, guest = false, mode = "normal", onMode } = props;
+  const daily = mode === "daily";
   const { i18n, t } = useLingui();
   const [boxRef, box] = useBoardBox();
   const narrow = box.width > 0 ? box.width < 700 : typeof window !== "undefined" && window.innerWidth < 700;
@@ -204,6 +211,8 @@ export function ChainTable(props: ChainTableProps) {
   const [scoreOverride, setScoreOverride] = useState<number | null>(null);
   const [shardOverride, setShardOverride] = useState<number | null>(null);
   const [aftermath, setAftermath] = useState<Aftermath | null>(null);
+  /* "+N base" rising off Stamina cards an unbroken 6 just grew. */
+  const [growPops, setGrowPops] = useState<Array<{ id: string; x: number; y: number; add: number }>>([]);
   const [dealt, setDealt] = useState<string | null>(() => (script?.dealt && view ? roundKey(view) : typeof window === "undefined" ? null : readDealt()));
   const [enters, setEnters] = useState<Map<number, CardEnter>>(new Map());
   const [overFresh, setOverFresh] = useState(Boolean(script?.fresh));
@@ -404,7 +413,7 @@ export function ChainTable(props: ChainTableProps) {
   const { wouldLink, breakers } = useMemo(() => {
     const map = new Map<number, { level: number; traits: Set<string> }>();
     const breaks = new Set<number>();
-    if (!shown || !rowEntries.length || rowEntries.length >= CHAIN_RULES.rowMax) return { wouldLink: map, breakers: breaks };
+    if (!shown || !rowEntries.length || rowEntries.length >= chainRowMax(shown ?? {})) return { wouldLink: map, breakers: breaks };
     const last = rowEntries[rowEntries.length - 1];
     for (const entry of handEntries) {
       if (arrangedUids.includes(entry.uid)) continue;
@@ -434,7 +443,7 @@ export function ChainTable(props: ChainTableProps) {
       hideChainDetails();
       setRowUids((current) => {
         if (current.includes(uid)) return current;
-        if (current.length >= CHAIN_RULES.rowMax) {
+        if (current.length >= chainRowMax(shown ?? {})) {
           runSound.refuse();
           return current;
         }
@@ -565,7 +574,7 @@ export function ChainTable(props: ChainTableProps) {
       runSound.uiTap();
       return;
     }
-    const room = Math.max(0, CHAIN_RULES.rowMax - row.length);
+    const room = Math.max(0, chainRowMax(shown ?? {}) - row.length);
     const going = group.slice(0, room);
     const left = group.slice(room);
     if (going.length) {
@@ -709,14 +718,30 @@ export function ChainTable(props: ChainTableProps) {
     // The round score (or round and target) lands now; shards with the pay.
     if (wysi) stampWysi(wysi, (on) => on !== "shards" || outcome !== "cleared");
     const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, reducedMotion ? Math.min(ms, 200) : ms));
-    // An unbroken row of 6 trained the deck's Stamina cards.
+    // An unbroken row of 6 grew the deck's Stamina cards: each one on the
+    // table pops its "+N base" and its number pulses; the banner says why.
     if (row.growth?.length) {
       const trained = row.growth.reduce((most, grow) => Math.max(most, grow.add), 0);
-      const cards = row.growth.length;
-      setAftermath({ kind: "banner", text: t`Stamina trained: ${cards} cards +${trained} base`, tone: "green" });
+      const origin = boxRef.current?.getBoundingClientRect();
+      const pops: Array<{ id: string; x: number; y: number; add: number }> = [];
+      for (const grow of row.growth) {
+        const element = document.querySelector<HTMLElement>(`[data-chain-card="${grow.uid}"]`);
+        if (!element || !origin) continue;
+        const rect = element.getBoundingClientRect();
+        pops.push({ id: `${grow.uid}-${Date.now()}`, x: rect.left - origin.left + rect.width / 2, y: rect.top - origin.top, add: grow.add });
+        if (!reducedMotion) {
+          element.querySelector<HTMLElement>("[data-chain-base]")?.animate(
+            [{ transform: "scale(1)", color: "#ffffff" }, { transform: "scale(1.35)", color: "#8ff2b7" }, { transform: "scale(1)", color: "#ffffff" }],
+            { duration: 700, easing: "ease-out" },
+          );
+        }
+      }
+      setGrowPops(pops);
+      setAftermath({ kind: "banner", text: t`Unbroken 6: Stamina cards +${trained} base`, tone: "green" });
       runSound.charmFire(3);
-      await wait(1100);
+      await wait(1300);
       setAftermath(null);
+      setGrowPops([]);
     }
     if (forgotten === "gone") {
       setAftermath({ kind: "banner", text: t`Over ${CHAIN_SCENE_NUMBERS.starTimesTarget}x the target. Once Forgotten left.`, tone: "red" });
@@ -752,7 +777,8 @@ export function ChainTable(props: ChainTableProps) {
       // One shard total for the round, no itemised lines.
       const total = pay.reduce((sum, line) => sum + line.amount, 0);
       setShardOverride(before.shards + total);
-      setAftermath({ kind: "clear", round: before.round, total });
+      const part = (kind: "interest" | "boss") => pay.filter((line) => line.kind === kind).reduce((sum, line) => sum + line.amount, 0);
+      setAftermath({ kind: "clear", round: before.round, total, interest: part("interest"), boss: part("boss") });
       runSound.tallyTotal();
       if (wysi) stampWysi(wysi, (on) => on === "shards");
       await wait(CHAIN_FEEL.pay.bannerMs + CHAIN_FEEL.pay.afterMs);
@@ -895,6 +921,15 @@ export function ChainTable(props: ChainTableProps) {
       const deckCards = shown.hand.filter((entry) => !entry.pack).map((entry) => entry.uid);
       window.setTimeout(() => enterFromDeck(deckCards, 0), reducedMotion ? 0 : roundPackCards.length * CHAIN_FEEL.pack.joinStaggerMs + 120);
       window.setTimeout(() => signal("round:dealt"), reducedMotion ? 0 : 1400);
+      // A boss round says its twist once the hand is in.
+      const boss = shown.boss;
+      if (boss) {
+        window.setTimeout(() => {
+          runSound.refuse();
+          setAftermath({ kind: "banner", text: t`Boss round: ${CHAIN_BOSS_COPY[boss].name}. ${i18n._(CHAIN_BOSS_COPY[boss].rule)}`, tone: "red" });
+          window.setTimeout(() => setAftermath((current) => (current?.kind === "banner" && current.tone === "red" ? null : current)), 2200);
+        }, reducedMotion ? 0 : 1500);
+      }
     },
     [boxRef, enterFromDeck, layout, reducedMotion, roundPackCards, shown, signal],
   );
@@ -959,7 +994,9 @@ export function ChainTable(props: ChainTableProps) {
   }, [entering]);
   /* Room beside the row for the board: wide tables, not at the run's end
      (which has its own). */
-  const showSideBoard = Boolean(!narrow && box.width >= 1380 && view && !overNow && view.phase !== "over");
+  /* Only beside a round being played: the shop, the pack picks and the
+     round's pack use the whole width, and the board would sit on them. */
+  const showSideBoard = Boolean(!narrow && box.width >= 1380 && view && !overNow && view.phase === "play" && !needsRoundPack);
   /* The room only brightens with heat: more, faster, lighter triangles. */
   const roomHeat = entering ? 1 : overNow ? 0 : fire ? 1 : play && heat === "fire" ? 0.85 : play && heat === "mod" ? 0.45 : 0;
   const shards = shardOverride ?? shown?.shards ?? 0;
@@ -1071,6 +1108,8 @@ export function ChainTable(props: ChainTableProps) {
               ) : null
             }
             wysi={hudWysi}
+            boss={shown?.phase === "play" ? shown.boss : null}
+            daily={daily && Boolean(shown)}
             deck={
               narrow && shown && !overNow ? (
                 <HudDeck count={shown.phase === "play" ? shown.drawPileCount : shown.deck.length} backUrl={backUrl} />
@@ -1079,6 +1118,21 @@ export function ChainTable(props: ChainTableProps) {
           />
 
           <div ref={boxRef} className="relative min-h-0 flex-1">
+            <AnimatePresence>
+              {growPops.map((pop) => (
+                <motion.div
+                  key={pop.id}
+                  className="pointer-events-none absolute z-[60] whitespace-nowrap leading-none"
+                  style={{ left: pop.x, top: pop.y, x: "-50%", fontFamily: MARKER, fontSize: narrow ? 18 : 24, color: "#8ff2b7", WebkitTextStroke: "5px #120f1a", paintOrder: "stroke fill" }}
+                  initial={reducedMotion ? false : { y: 10, opacity: 0, scale: 0.6 }}
+                  animate={{ y: -18, opacity: 1, scale: 1 }}
+                  exit={{ y: -34, opacity: 0, transition: { duration: 0.25 } }}
+                  transition={{ type: "spring", stiffness: 520, damping: 18 }}
+                >
+                  <Trans>+{pop.add} base</Trans>
+                </motion.div>
+              ))}
+            </AnimatePresence>
             {layout && shown && showBoard && !needsRoundPack && (
               <>
                 {/* The row's total as it stands, quiet until it plays. */}
@@ -1294,8 +1348,11 @@ export function ChainTable(props: ChainTableProps) {
                 loadSheet={loadSheet}
                 onNewRun={() => {
                   setOverFresh(false);
-                  void doAct({ kind: "start" });
+                  // The daily run is one try: its end goes back to the player's own runs.
+                  if (daily) onMode?.("normal");
+                  else void doAct({ kind: "start" });
                 }}
+                daily={daily}
                 onRevive={async () => {
                   const outcome = await doAct({ kind: "revive" });
                   if (!outcome.ok) return false;
@@ -1321,6 +1378,9 @@ export function ChainTable(props: ChainTableProps) {
                 loadSheet={loadSheet}
                 onNewRun={() => void doAct({ kind: "start" })}
                 guest={guest}
+                daily={daily}
+                onDaily={onMode && !guest ? () => onMode("daily") : undefined}
+                onBack={onMode ? () => onMode("normal") : undefined}
               />
             )}
 
@@ -1363,6 +1423,13 @@ export function ChainTable(props: ChainTableProps) {
                         <Trans>Round {aftermath.round} cleared</Trans>
                       </span>
                       <Shards value={aftermath.total} sign className={`not-italic text-osu-pink-light ${narrow ? "text-[18px]" : "text-[24px]"}`} />
+                      {(aftermath.interest > 0 || aftermath.boss > 0) && (
+                        <span className={`flex items-center gap-2 not-italic normal-case text-[#f3e9d8]/75 ${narrow ? "text-[12px]" : "text-[14px]"}`}>
+                          {aftermath.boss > 0 && <Trans>+{aftermath.boss} boss</Trans>}
+                          {aftermath.boss > 0 && aftermath.interest > 0 && <span aria-hidden="true" className="h-3 w-px bg-[#f3e9d8]/30" />}
+                          {aftermath.interest > 0 && <Trans>+{aftermath.interest} interest</Trans>}
+                        </span>
+                      )}
                     </motion.div>
                   ) : (
                     <motion.div
@@ -1407,7 +1474,7 @@ export function ChainTable(props: ChainTableProps) {
               <div className="mb-2 px-2.5 leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: 22 }}>
                 <Trans>Leaderboard</Trans>
               </div>
-              <BoardPanel compact loadBoard={loadBoard} loadSheet={loadSheet} mine={best} mineName={best?.username} refreshKey={`${view?.runNo ?? 0}:${shown?.round ?? 0}`} />
+              <BoardPanel key={mode} compact loadBoard={loadBoard} loadSheet={loadSheet} mine={daily ? null : best} mineName={best?.username} refreshKey={`${view?.runNo ?? 0}:${shown?.round ?? 0}`} initialPeriod={daily ? "day" : "all"} />
             </div>
           )}
 

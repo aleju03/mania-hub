@@ -42,6 +42,7 @@ import {
   chainRunView,
   makeFixturePool,
   chainRandom,
+  makeChainChartCard,
   CHAIN_GOAT,
   CHAIN_ETERNAL,
   makeFixtureRun,
@@ -64,7 +65,7 @@ import { getCachedPackFrontCanvas, PACK_ASPECT, packArtStyleFor } from "../../pa
 import { ChainTable, type ChainTableScript } from "../chain/ChainTable";
 import type { ChainActOutcome } from "../chain/useChainRun";
 
-export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "eternal", "variants", "contract", "skills", "endless", "won"] as const;
+export const CHAIN_FIXTURE_MOMENTS = ["start", "arrange", "play", "chain", "clear", "shop", "over", "fail", "wysi", "goat", "eternal", "maps", "variants", "contract", "skills", "endless", "won"] as const;
 export type ChainFixtureMoment = (typeof CHAIN_FIXTURE_MOMENTS)[number];
 
 /* Real osu! ids, used only for avatars on the synthetic players. */
@@ -73,10 +74,23 @@ const AVATAR_IDS = [
   28391442, 38502410, 162860, 15406985, 16081867, 29152268, 23028806, 12743135, 18438885, 3215366, 9821346, 12118687, 3337688, 30608692, 11585213,
 ];
 
+/* Real popular charts (their covers load from osu!), for the chart cards. */
+const FIXTURE_CHARTS = [
+  { beatmapId: 767046, setId: 347650, title: "Triumph & Regret", version: "[4K] Regret", stars: 5.48, key: 4, skill: "Stamina" },
+  { beatmapId: 992512, setId: 400078, title: "Galaxy Collapse", version: "[4K] Cataclysmic Hypernova", stars: 6.54, key: 4, skill: "Jumpstream" },
+  { beatmapId: 689769, setId: 303998, title: "C18H27NO3(extend)", version: "4K Capsaicin", stars: 5.13, key: 4, skill: "Tech" },
+  { beatmapId: 3616430, setId: 1766740, title: "End Time", version: "[4K] Every END is a new BEGINNING", stars: 6.18, key: 4, skill: "Jumpstream" },
+  { beatmapId: 3976253, setId: 1925721, title: "Fallen Symphony", version: "[4K] Incomprehensible Musicality", stars: 7.57, key: 4, skill: "Handstream" },
+  { beatmapId: 4294726, setId: 2055332, title: "HALL", version: "[4K] NULL", stars: 8.02, key: 4, skill: "Stream" },
+].map((chart) => makeChainChartCard({ ...chart, coverUrl: `https://assets.ppy.sh/beatmaps/${chart.setId}/covers/list@2x.jpg` })!);
+
 function fixturePool(seed: number): ChainPool {
   const base = makeFixturePool(seed);
   const avatar = <T extends { id: number }>(card: T) => ({ ...card, avatarUrl: `https://a.ppy.sh/${AVATAR_IDS[card.id % AVATAR_IDS.length]}` });
-  return buildChainPool(base.cards.map(avatar), base.goats.map(avatar));
+  // Every third player has one of the charts in their top plays.
+  const played = <T extends { id: number }>(card: T) =>
+    card.id % 3 === 0 ? { ...card, played: [FIXTURE_CHARTS[Math.floor(card.id / 3) % FIXTURE_CHARTS.length].chart!.beatmapId] } : card;
+  return buildChainPool(base.cards.map(avatar).map(played), base.goats.map(avatar), FIXTURE_CHARTS);
 }
 
 function packThumbFor(id: PackTypeId): string | null {
@@ -214,6 +228,28 @@ function scenarioFor(moment: ChainFixtureMoment): Scenario {
       }
     }
     return { state, pool, script: { row, dealt: true, autoPlay: true, autoPack: true }, best: null };
+  }
+  if (moment === "maps") {
+    const pool = fixturePool(5);
+    const f = makeFixtureRun(5, { round: 3, phase: "arranged", pool });
+    const state = f.state;
+    const row = f.row ?? [];
+    // A chart in the middle of the row, with players who played it either side.
+    const chart = FIXTURE_CHARTS[1];
+    const fans = pool.cards.filter((card) => chart.chart && card.played?.includes(chart.chart.beatmapId));
+    const at = Math.min(2, row.length - 1);
+    for (const entry of [...state.hand, ...state.deck]) {
+      if (entry.uid === row[at]) entry.card = chart;
+      const k = row.indexOf(entry.uid);
+      if (k >= 0 && k !== at && k < 4 && fans[k]) entry.card = fans[k];
+    }
+    // One more chart and a fan in the hand, off the row.
+    const spare = state.hand.find((entry) => !row.includes(entry.uid));
+    if (spare) spare.card = FIXTURE_CHARTS[0];
+    const total = scoreChainRowFor(state, row)?.total ?? 0;
+    if (total > 0) state.roundScore = Math.max(0, state.target - Math.floor(total * 0.6));
+    state.rowsLeft = 2;
+    return { state, pool, script: { row, dealt: true, autoPlay: true }, best: null };
   }
   if (moment === "variants") {
     const pool = fixturePool(3);
@@ -369,7 +405,7 @@ export default function ChainFixtureHost({ moment: rawMoment, reducedMotion }: {
       } else if (moment === "fail") {
         if (name === "play:start") ready();
         if (name === "over:shown") done(1800);
-      } else if (moment === "play" || moment === "chain" || moment === "clear" || moment === "wysi" || moment === "variants" || moment === "endless" || moment === "won") {
+      } else if (moment === "play" || moment === "maps" || moment === "chain" || moment === "clear" || moment === "wysi" || moment === "variants" || moment === "endless" || moment === "won") {
         if (name === "play:start") ready();
         if (moment === "clear") {
           if (name === "shop") done(900);

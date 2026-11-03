@@ -810,6 +810,11 @@ msgstr "{0} de {maxCards} elegidas"
 msgid "{0} of {usageSampleSize}"
 msgstr "{0} de {usageSampleSize}"
 
+#. placeholder {0}: entry.card.played!.length
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "{0} of the game's maps in their top plays."
+msgstr "{0} de los mapas del juego en sus top plays."
+
 #. placeholder {0}: onCharts.revisions
 #: src/components/player/SkillBreakdown.tsx
 msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, behind {backlog} other charts."
@@ -1617,9 +1622,17 @@ msgstr "Pack {key}K"
 msgid "{keyCount}K {sideLabel} dan"
 msgstr "Dan {sideLabel} de {keyCount}K"
 
+#: src/lib/goal-format.ts
+msgid "{keyCount}K LN"
+msgstr "{keyCount}K LN"
+
 #: src/components/player/SkillHistoryGraph.tsx
 msgid "{keyCount}K Overall over time"
 msgstr "Overall {keyCount}K en el tiempo"
+
+#: src/lib/goal-format.ts
+msgid "{keyCount}K regular"
+msgstr "{keyCount}K regular"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgid "{keyCount}K skill history"
@@ -1780,6 +1793,10 @@ msgstr "{name} no está entre ellos."
 #: src/lib/streak-game.ts
 msgid "{name} joined in {month}."
 msgstr "{name} se unió en {month}."
+
+#: src/lib/chain-run.ts
+msgid "{name} pack"
+msgstr "Pack de {name}"
 
 #. placeholder {0}: rank.months
 #: src/components/supporter/SupporterRankBadge.tsx
@@ -2291,6 +2308,11 @@ msgstr "#{0} de {1} jugadores registrados"
 msgid "#{0} this month"
 msgstr "#{0} este mes"
 
+#. placeholder {0}: head.rank
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "#{0} today"
+msgstr "#{0} hoy"
+
 #: src/lib/format.ts
 msgid "#{grouped}"
 msgstr "#{grouped}"
@@ -2312,11 +2334,21 @@ msgstr "#{serialText} de {0}"
 #~ msgid "+ bpm & length"
 #~ msgstr "+ bpm y duración"
 
+#. placeholder {0}: pop.add
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "+{0} base"
+msgstr "+{0} de base"
+
 #. placeholder {0}: E.jumpstream[band]
 #. placeholder {1}: E.jumpstreamCap
 #: src/lib/chain-run.ts
 msgid "+{0} base for each Jumpstream in your deck (up to {1})."
 msgstr "+{0} de base por cada Jumpstream en tu mazo (hasta {1})."
+
+#. placeholder {0}: aftermath.boss
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "+{0} boss"
+msgstr "+{0} jefe"
 
 #. placeholder {0}: N.extraKey.slots
 #: src/lib/pack-run.ts
@@ -2418,6 +2450,16 @@ msgstr "+{0} combo en el primer pack de una canción."
 msgid "+{0} combo per collector level."
 msgstr "+{0} combo por nivel de coleccionista."
 
+#. placeholder {0}: card.grown
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "+{0} grown this run"
+msgstr "+{0} ganado en esta partida"
+
+#. placeholder {0}: aftermath.interest
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "+{0} interest"
+msgstr "+{0} de interés"
+
 #. placeholder {0}: formatNumber(hidden)
 #. placeholder {1}: formatNumber(ownersPerCard)
 #: src/components/packs/GoatHoldersButton.tsx
@@ -2472,6 +2514,10 @@ msgstr "faltan +{gap}pp"
 #: src/routes/communities.tsx
 msgid "+{hidden} more"
 msgstr "+{hidden} más"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "+{left} to go"
+msgstr "faltan {left}"
 
 #: src/components/player/InsightModals.tsx
 msgid "+{stacks} stacked"
@@ -2889,6 +2935,10 @@ msgstr "4K"
 msgid "4K cards give +{0} notes."
 msgstr "Las cartas 4K dan +{0} notas."
 
+#: src/lib/chain-run.ts
+msgid "4K cards score half."
+msgstr "Las cartas 4K puntúan la mitad."
+
 #: src/routes/dan-estimates.tsx
 msgid "4K jack"
 msgstr "4K jack"
@@ -3067,6 +3117,10 @@ msgstr "Órbita 7K"
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
 msgstr "7K regular"
+
+#: src/lib/chain-run.ts
+#~ msgid "7K tower"
+#~ msgstr "Torre 7K"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "95-96.25% (the bar)"
@@ -3313,6 +3367,11 @@ msgstr "Una maniacard sacada de un pack booster. Abre tus propios packs y arma u
 #: src/lib/goal-format.ts
 msgid "a map"
 msgstr "un mapa"
+
+#. placeholder {0}: CHAIN_CHART.played
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "A map. Players who have it in their top plays link to it on every trait, and score x{0} in any row it is in."
+msgstr "Un mapa. Los jugadores que lo tienen en sus top plays se enlazan con él en todos los rasgos y puntúan x{0} en cualquier fila donde esté."
 
 #: src/routes/hashi.tsx
 msgid "A map's leaderboard in Hashi"
@@ -4149,6 +4208,10 @@ msgstr "Todo el tiempo"
 msgid "All uploads"
 msgstr "Todas las subidas"
 
+#: src/lib/chain-run.ts
+#~ msgid "All-7K starting packs, with Ascension to Heaven held."
+#~ msgstr "Packs iniciales solo de 7K, con Ascension to Heaven en mano."
+
 #: src/lib/skill-axes.ts
 msgid "All-round"
 msgstr "All-round"
@@ -4280,8 +4343,8 @@ msgstr "Un bot de osu!mania para Discord."
 
 #. placeholder {0}: E.stamina[band]
 #: src/lib/chain-run.ts
-msgid "An unbroken row of 6 trains every Stamina in your deck +{0} base."
-msgstr "Una fila de 6 sin break entrena a cada Stamina de tu mazo +{0} de base."
+#~ msgid "An unbroken row of 6 trains every Stamina in your deck +{0} base."
+#~ msgstr "Una fila de 6 sin break entrena a cada Stamina de tu mazo +{0} de base."
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "analysis"
@@ -4803,6 +4866,7 @@ msgid "back"
 msgstr "atrás"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -4877,6 +4941,10 @@ msgstr "Volver al selector"
 #: src/components/player/ProfileStatCards.tsx
 msgid "Back to the usual four"
 msgstr "Volver a las cuatro de siempre"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Back to your runs"
+msgstr "Volver a tus partidas"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Back to your themes"
@@ -5350,6 +5418,12 @@ msgstr "Caja de arranque"
 #: src/lib/chain-run.ts
 msgid "BORROW"
 msgstr "PRESTADO"
+
+#. placeholder {0}: CHAIN_BOSS_COPY[boss].name
+#. placeholder {1}: i18n._(CHAIN_BOSS_COPY[boss].rule)
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Boss round: {0}. {1}"
+msgstr "Ronda de jefe: {0}. {1}"
 
 #: src/components/discord/DiscordTabs.tsx
 msgid "Bot"
@@ -6470,6 +6544,11 @@ msgstr "Superó {courseName} con {courseAccuracy}."
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "cleared {date} · #{rank}"
 #~ msgstr "completado {date} · #{rank}"
+
+#. placeholder {0}: CHAIN_BOSS.shards
+#: src/components/packs/run/chain/ChainBoss.tsx
+msgid "Clearing it pays {0} more shards."
+msgstr "Superarla paga {0} shards más."
 
 #: src/routes/rankings.tsx
 msgid "Clears"
@@ -7789,6 +7868,10 @@ msgstr "País"
 msgid "Country for top plays"
 msgstr "País para los top plays"
 
+#: src/lib/chain-run.ts
+msgid "Country links don't count."
+msgstr "Los enlaces por país no cuentan."
+
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
 msgstr "Rankings de mania por país"
@@ -8084,12 +8167,22 @@ msgstr "Cian"
 msgid "Czech"
 msgstr "Checo"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Daily"
+msgstr "Diaria"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Daily run"
+msgstr "Partida diaria"
+
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "dan"
 msgstr "dan"
 
 #: src/components/companella/SubmissionDetail.tsx
+#: src/components/me/GoalsPanel.tsx
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -8152,6 +8245,10 @@ msgstr "Estimación de dan: {0} ({1})"
 #: src/components/maps/DanProgressRail.tsx
 #~ msgid "Dan ladder"
 #~ msgstr "Escalera de dan"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "Dan level"
+msgstr "Nivel de dan"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
@@ -8781,6 +8878,10 @@ msgstr "Arrastra un .osr aquí o haz clic para explorar"
 #: src/components/packs/collections/board/CardBoard.tsx
 #~ msgid "Drag cards from the tray, or switch to the brush and draw with them."
 #~ msgstr "Arrastra cartas desde la bandeja, o cambia al pincel y dibuja con ellas."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
+#~ msgstr "Arrastra cartas desde la bandeja. Arrastra sobre el tablero para seleccionar tus cartas, clic derecho y arrastra para moverte."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
@@ -9425,6 +9526,10 @@ msgstr "Cada mapa aquí es una sugerencia de skillboost. Están ocultos por defe
 msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay viewer."
 msgstr "Todos los replays de osu!mania subidos a Mania Tracker, del más reciente al más antiguo. Abre cualquiera en el visor de replays."
 
+#: src/routes/replay_.community.tsx
+#~ msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay watcher."
+#~ msgstr "Todos los replays de osu!mania subidos a Mania Tracker, del más reciente al más antiguo. Abre cualquiera en el visor de replays."
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Every pack is a random sample of its difficulty bucket"
 msgstr "Cada pack es una muestra aleatoria de su categoría de dificultad"
@@ -9521,6 +9626,10 @@ msgstr "Todos los jugadores con seguimiento, misma probabilidad"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Everyone"
 msgstr "Todos"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Everyone plays the same cards today, on the standard deck. One try, no revive."
+msgstr "Hoy todos juegan con las mismas cartas, con el mazo estándar. Un intento, sin revivir."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
@@ -11536,6 +11645,11 @@ msgstr "hitsounds y sonidos de interfaz"
 msgid "Hoarder"
 msgstr "Acaparador"
 
+#. placeholder {0}: CHAIN_RULES.interestPer
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Hold {0} shards to earn interest at the next clear."
+msgstr "Guarda {0} shards para ganar interés en la próxima ronda superada."
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
 msgstr "Mantén presionada <0>C</0> y mueve el cursor para dibujar humo, igual que al dibujar a mitad de una play en osu!. Se desvanece solo."
@@ -11618,6 +11732,10 @@ msgstr "Retícula holo"
 #: src/components/layout/Nav.tsx
 msgid "home"
 msgstr "inicio"
+
+#: src/lib/chain-run.ts
+#~ msgid "Home country"
+#~ msgstr "País propio"
 
 #: src/lib/pack-run.ts
 msgid "Home Country"
@@ -12171,6 +12289,13 @@ msgstr "Inspeccionar el maniacard de {0}"
 msgid "Integrations"
 msgstr "Integraciones"
 
+#. placeholder {0}: chainInterestFor(view.shards)
+#. placeholder {1}: CHAIN_RULES.interestPer
+#. placeholder {2}: CHAIN_RULES.interestMax
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "Interest at the next clear: <0>+{0}</0> (1 per {1} held, up to {2})"
+msgstr "Interés en la próxima ronda superada: <0>+{0}</0> (1 por cada {1} guardados, hasta {2})"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
 msgstr "Idioma de la interfaz"
@@ -12657,6 +12782,7 @@ msgstr ""
 msgid "Key Split"
 msgstr "Distribución de modos"
 
+#: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -13273,6 +13399,7 @@ msgstr "Actualizaciones en vivo activas"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternRadar.tsx
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/me/GoalsPanel.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/ProfileStatCards.tsx
@@ -15299,6 +15426,11 @@ msgstr "La próxima ronda tiene {0} cambios más."
 msgid "Next round has {0} more row."
 msgstr "La próxima ronda tiene {0} fila más."
 
+#. placeholder {0}: copy.name
+#: src/components/packs/run/chain/ChainBoss.tsx
+msgid "Next round is a boss: {0}"
+msgstr "La próxima ronda es de jefe: {0}"
+
 #: src/lib/chain-run.ts
 msgid "Next round's first row can't break."
 msgstr "La primera fila de la próxima ronda no se puede romper."
@@ -15488,9 +15620,17 @@ msgstr "Sin compañero"
 msgid "No countries found"
 msgstr "No se encontraron países"
 
+#: src/components/packs/run/chain/ChainBoardPanel.tsx
+msgid "No daily runs today yet."
+msgstr "Todavía no hay partidas diarias hoy."
+
 #: src/components/maps/DanProgressRail.tsx
 msgid "No dan credit"
 msgstr "Sin crédito de dan"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "no dan here yet"
+msgstr "todavía no tienes dan aquí"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "No Dans"
@@ -15805,6 +15945,10 @@ msgstr "Todavía no hay ningún key mode puntuado."
 msgid "No rated players here yet."
 msgstr "Todavía no hay jugadores con rating aquí."
 
+#: src/components/me/GoalsPanel.tsx
+msgid "no rating here yet"
+msgstr "todavía no tienes rating aquí"
+
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "No rating is available, and no analysis is currently scheduled."
 msgstr "No hay una valoración disponible ni un análisis programado."
@@ -15836,6 +15980,10 @@ msgstr "Sin cambios"
 #: src/lib/chain-run.ts
 msgid "No redraws left this round."
 msgstr "No quedan cambios esta ronda."
+
+#: src/lib/chain-run.ts
+msgid "No redraws this round."
+msgstr "Sin redraws esta ronda."
 
 #: src/routes/maps.tsx
 #~ msgid "No region board for this tab yet"
@@ -16575,6 +16723,10 @@ msgstr "ahora"
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "Now"
 #~ msgstr ""
+
+#: src/components/me/GoalsPanel.tsx
+msgid "now {now}"
+msgstr "ahora {now}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "now #{nowRank}"
@@ -17359,6 +17511,10 @@ msgstr "clasificación de osu!mania y tracker de scores en vivo"
 #: src/routes/replay.tsx
 msgid "osu!mania replay viewer"
 msgstr "Visor de replays de osu!mania"
+
+#: src/routes/replay.tsx
+#~ msgid "osu!mania replay watcher"
+#~ msgstr "Visor de replays de osu!mania"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "osu!mania replays only"
@@ -18175,6 +18331,11 @@ msgstr "Reproducir desde {0}"
 #~ msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
 #~ msgstr "Hábitos de juego y desglose del estilo de juego: días activos, sesiones y mezcla de habilidades."
 
+#. placeholder {0}: E.stamina[band]
+#: src/lib/chain-run.ts
+msgid "Play it in a row of 6 with no breaks and every Stamina card in your deck gains +{0} base for the run."
+msgstr "Juégala en una fila de 6 sin romper y cada carta Stamina de tu mazo gana +{0} de base por el resto de la partida."
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Play my top plays"
 msgstr "Reproducir mis top plays"
@@ -18240,6 +18401,15 @@ msgstr "Jugado por {0}."
 #: src/components/replay/CommunityReplayCard.tsx
 msgid "Played by {playerName}"
 msgstr "Jugado por {playerName}"
+
+#: src/components/packs/run/chain/ChainScoring.tsx
+msgid "Played it"
+msgstr "Lo jugó"
+
+#. placeholder {0}: CHAIN_CHART.played
+#: src/components/packs/run/chain/ChainScoring.tsx
+msgid "Played it x{0}"
+msgstr "Lo jugó x{0}"
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Played on {playedOn}"
@@ -19268,6 +19438,10 @@ msgstr "En forma"
 msgid "Rarity"
 msgstr "Rareza"
 
+#: src/lib/chain-run.ts
+msgid "Rarity links don't count."
+msgstr "Los enlaces por rareza no cuentan."
+
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Rate"
@@ -19376,6 +19550,7 @@ msgstr "rating"
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/me/GoalsPanel.tsx
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillHistoryModal.tsx
@@ -19473,6 +19648,12 @@ msgstr "Vuelve a renderizar las vistas previas del playfield, nombra las captura
 msgid "Re-rendered, not saved yet"
 msgstr "Re-renderizado, aún sin guardar"
 
+#. placeholder {0}: danGoalSkillLabel(danTarget.skillset, i18n)
+#. placeholder {1}: danGoalLadderLabel(keyCount, danTarget.side, i18n)
+#: src/components/me/GoalsPanel.tsx
+msgid "Reach {0} dan <0/> on {1}"
+msgstr "Llega a {0} dan <0/> en {1}"
+
 #. placeholder {0}: LOADOUT_UNLOCKS.stream.distinct.toLocaleString("en-US")
 #: src/lib/pack-run.ts
 msgid "Reach {0} on the collection ladder."
@@ -19482,17 +19663,42 @@ msgstr "Llega a {0} en la escalera de colección."
 msgid "Reach {pp} total pp"
 msgstr "Llega a {pp} pp en total"
 
+#: src/lib/goal-format.ts
+msgid "Reach {skill} dan {level} on {ladder}"
+msgstr "Llega a {skill} dan {level} en {ladder}"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Reach <0/> <1/> rank"
 msgstr "Llega a rank <0/> <1/>"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "Reach <0/> dan <1/> on <2/> <3/>"
+msgstr "Llega a <0/> dan <1/> en <2/> <3/>"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Reach <0/> total pp"
 msgstr "Llega a <0/> pp totales"
 
 #: src/lib/goal-format.ts
+msgid "Reach a {rating} {skill} rating on {keyCount}K"
+msgstr "Llega a {rating} de rating {skill} en {keyCount}K"
+
+#. placeholder {0}: ratingGoalAxisLabel(goal.targetGrade, keyCount, i18n)
+#: src/components/me/GoalsPanel.tsx
+msgid "Reach a <0/> {0} rating on {keyCount}K"
+msgstr "Llega a <0/> de rating {0} en {keyCount}K"
+
+#: src/components/me/GoalsPanel.tsx
+msgid "Reach a <0/> <1/> rating on <2/>"
+msgstr "Llega a <0/> de rating <1/> en <2/>"
+
+#: src/lib/goal-format.ts
 msgid "Reach country rank #{rank}"
 msgstr "Llega al puesto #{rank} del país"
+
+#: src/lib/goal-format.ts
+msgid "Reach dan {level} on {ladder}"
+msgstr "Llega a dan {level} en {ladder}"
 
 #: src/lib/goal-format.ts
 msgid "Reach global rank #{rank}"
@@ -19835,6 +20041,7 @@ msgid "Regions"
 msgstr "Regiones"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/me/GoalsPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -20699,6 +20906,11 @@ msgstr "Fila"
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Rows"
 msgstr "Filas"
+
+#. placeholder {0}: CHAIN_BOSS.shortRow
+#: src/lib/chain-run.ts
+msgid "Rows of {0} cards at most."
+msgstr "Filas de {0} cartas como máximo."
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.moonGateCards
 #. placeholder {1}: CHAIN_SCENE_NUMBERS.moonGateMultiplier
@@ -21667,6 +21879,10 @@ msgstr "creado hace {span}"
 msgid "Set a play {0}"
 msgstr "Jugó por última vez {0}"
 
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "Set a target for pp, rank, dan, rating or a map. Progress follows your plays, and the goal clears itself once you reach it."
+#~ msgstr "Ponte una meta de pp, rank, dan, rating o en un mapa. El progreso sigue tus plays y la meta se cumple sola cuando llegas."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Set as my replay skin"
 msgstr "Usar como mi skin de replay"
@@ -22616,6 +22832,8 @@ msgstr "Los skills con menos de cuatro pases quedan fuera en vez de contar como 
 #~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Players with fewer than two rated skills are read off the same average over their 20 best passes overall."
 #~ msgstr "Los skills en los que no tengas cuatro pases quedan fuera del promedio en vez de contar como cero, porque un skill que falta casi siempre significa pocas plays y no un hueco en cómo juegas. Los jugadores con menos de dos skills con rating se leen con el mismo promedio: sus 20 mejores pases en general."
 
+#: src/components/me/GoalsPanel.tsx
+#: src/components/packs/run/chain/ChainDetails.tsx
 #: src/lib/chain-run.ts
 msgid "Skillset"
 msgstr "Skillset"
@@ -22644,6 +22862,10 @@ msgstr "Radar de skillsets"
 #: src/routes/news_.prism.tsx
 msgid "Skillsets"
 msgstr "Skillsets"
+
+#: src/lib/chain-run.ts
+msgid "Skillsets do nothing this round."
+msgstr "Los skillsets no hacen nada esta ronda."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -23288,8 +23510,8 @@ msgid "Stamina"
 msgstr "Stamina"
 
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "Stamina trained: {cards} cards +{trained} base"
-msgstr "Stamina entrenada: {cards} cartas +{trained} de base"
+#~ msgid "Stamina trained: {cards} cards +{trained} base"
+#~ msgstr "Stamina entrenada: {cards} cartas +{trained} de base"
 
 #: src/lib/pack-run.ts
 #: src/lib/packs.ts
@@ -23325,6 +23547,7 @@ msgid "stars"
 msgstr "estrellas"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/maps.tsx
@@ -23372,6 +23595,10 @@ msgstr ""
 msgid "Start the connection again from the app."
 msgstr "Vuelve a iniciar la conexión desde la app."
 
+#: src/components/packs/run/chain/ChainEnd.tsx
+msgid "Start today's run"
+msgstr "Empezar la partida de hoy"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 msgid "Start tracking your plays"
@@ -23388,6 +23615,14 @@ msgstr ""
 #: src/lib/chain-run.ts
 msgid "Starting pack {index} of 3"
 msgstr "Pack inicial {index} de 3"
+
+#: src/lib/chain-run.ts
+#~ msgid "Starting packs from one country, and country links practised once."
+#~ msgstr "Packs iniciales de un solo país, y los enlaces por país con una práctica."
+
+#: src/lib/chain-run.ts
+#~ msgid "Starting packs of every rarity, with Purple Palace held."
+#~ msgstr "Packs iniciales con todas las rarezas, con Purple Palace en mano."
 
 #: src/components/maps/ChartPreviewPanel.tsx
 #~ msgid "Starting playback…"
@@ -24026,6 +24261,10 @@ msgstr "Meta de plays"
 msgid "Target rank"
 msgstr "Meta de rank"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "Target rating"
+msgstr "Meta de rating"
+
 #: src/routes/recommendations.tsx
 msgid "target score"
 msgstr "puntaje objetivo"
@@ -24044,8 +24283,12 @@ msgid "targets on this chart will aim higher until you set the score"
 msgstr "los objetivos en este chart apuntarán más alto hasta que pongas el puntaje"
 
 #: src/components/me/GoalsPanel.tsx
-msgid "Targets track themselves from your mania plays: a pp number, a play worth, a play count, an accuracy, a clear, or a grade."
-msgstr "Las metas se siguen solas con tus plays de mania: una cifra de pp, el valor de un play, la cantidad de plays, la acc, pasar un mapa o un rank."
+msgid "Targets track themselves from your mania plays: a pp number, a play worth, a play count, a rank, a dan, a rating, an accuracy, a clear, or a grade."
+msgstr "Las metas se siguen solas con tus plays de mania: una cifra de pp, el valor de un play, la cantidad de plays, un puesto, un dan, un rating, la acc, pasar un mapa o un rank."
+
+#: src/components/me/GoalsPanel.tsx
+#~ msgid "Targets track themselves from your mania plays: a pp number, a play worth, a play count, an accuracy, a clear, or a grade."
+#~ msgstr "Las metas se siguen solas con tus plays de mania: una cifra de pp, el valor de un play, la cantidad de plays, la acc, pasar un mapa o un rank."
 
 #: src/components/layout/ThemePicker.tsx
 msgid "teal"
@@ -26353,6 +26596,10 @@ msgstr "Tres de un país y dos de otro."
 msgid "Three Keys"
 msgstr "Three Keys"
 
+#: src/lib/chain-run.ts
+#~ msgid "Three starting packs, anything goes."
+#~ msgstr "Tres packs iniciales, cualquier cosa."
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Thu"
 msgstr "jue"
@@ -26712,6 +26959,10 @@ msgstr "Torneo"
 msgid "tournaments, mapping, casual"
 msgstr "torneos, mapping, casual"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "Track measurable goals automatically"
+msgstr "Sigue metas medibles automáticamente"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
@@ -27031,6 +27282,10 @@ msgstr "no disponible"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Unavailable"
 msgstr "No disponible"
+
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "Unbroken 6: Stamina cards +{trained} base"
+msgstr "6 sin romper: cartas Stamina +{trained} de base"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "Uncollected GOAT"
@@ -28921,6 +29176,10 @@ msgstr "Ya eres supporter, así que mejor dáselo a un amigo."
 msgid "you're already past {0}"
 msgstr "ya pasaste de {0}"
 
+#: src/components/me/GoalsPanel.tsx
+msgid "you're at {now} right now"
+msgstr "ahora mismo estás en {now}"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 msgid "You're being tracked now"
@@ -28959,6 +29218,10 @@ msgstr "Eres más fuerte en <0>{0}</0>"
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "You've already had a supporter week from a gift."
 msgstr "Ya tuviste una semana de supporter de regalo."
+
+#: src/lib/chain-run.ts
+msgid "You've played today's daily run. A new one starts at midnight UTC."
+msgstr "Ya jugaste la partida diaria de hoy. La próxima empieza a medianoche UTC."
 
 #: src/lib/supporter-companions.ts
 msgid "Youmu fumo"
