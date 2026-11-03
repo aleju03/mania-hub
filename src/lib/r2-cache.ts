@@ -10,11 +10,17 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { buildAttachmentContentDisposition } from "./content-disposition";
 import {
   getPublicBucketBaseUrl,
   getPublicBucketClient,
   PUBLIC_IMAGE_BUCKET,
 } from "./public-image-store";
+import {
+  bugReportVideoMime,
+  describeBugReportAttachmentKey,
+  safeBugReportAttachmentName,
+} from "./bug-report-attachments";
 
 // Cache growth is bounded by R2 lifecycle rules configured per prefix (Cloudflare
 // dashboard or the S3 lifecycle API). As of 2026-09-17 the rules are: parsed/ 90d,
@@ -577,7 +583,7 @@ export type BugReportScreenshotPutResult = "stored" | "exists" | "unavailable";
 export function getBugReportScreenshotKey(
   reportId: string,
   index: number,
-  ext: BugReportImageExt,
+  ext: BugReportImageExt | { name: string },
   messageId?: string | null,
 ): string {
   const id = reportId.replace(/[^A-Za-z0-9-]/g, "");
@@ -588,7 +594,10 @@ export function getBugReportScreenshotKey(
     if (!message) throw new Error("Bug report message id is required for a message screenshot key");
     folder += `/m/${message}`;
   }
-  return `${folder}/${Math.max(0, Math.floor(index))}.${ext}`;
+  const slot = Math.max(0, Math.floor(index));
+  // Any other file keeps its (already reduced) name one folder down.
+  if (typeof ext === "object") return `${folder}/${slot}/${safeBugReportAttachmentName(ext.name)}`;
+  return `${folder}/${slot}.${ext}`;
 }
 
 export async function putBugReportScreenshot(
@@ -620,12 +629,20 @@ export async function putBugReportScreenshot(
   }
 }
 
-/** A signed, short-lived read. Callers must have proved admin or reporter first. */
+/**
+ * A signed, short-lived read. Callers must have proved admin or reporter first.
+ * Anything that is not an image or a playable video is signed as a download,
+ * so a stranger's file never renders in the browser.
+ */
 export async function getBugReportScreenshotUrl(storageKey: string): Promise<string | null> {
   const r2 = getClient();
   if (!r2) return null;
   if (!storageKey.startsWith(BUG_REPORTS_PREFIX)) return null;
-  return signGetUrl(storageKey);
+  const attachment = describeBugReportAttachmentKey(storageKey);
+  if (!attachment) return null;
+  if (attachment.kind === "image") return signGetUrl(storageKey);
+  if (attachment.kind === "video") return signGetUrl(storageKey, bugReportVideoMime(attachment.name) ?? undefined);
+  return signGetUrl(storageKey, "application/octet-stream", attachment.name);
 }
 
 /**
@@ -1361,6 +1378,17 @@ export async function deleteSignatureImages(cacheKeys: string[]): Promise<number
   return deleted;
 }
 
+// return correct filename
+function readUploadedReplayFilename(metadata: Record<string, string> | undefined): string | undefined {
+  let filename = metadata?.originalfilename;
+  if (metadata?.originalfilenameutf8) {
+    try {
+      filename = decodeURIComponent(metadata.originalfilenameutf8);   // convert percent-encoded back to the original name
+    } catch {}
+  }
+  return filename && /^\.osr$/i.test(filename) ? "replay.osr" : filename;
+}
+
 export async function getUploadedReplay(id: string): Promise<UploadedReplay | null> {
   const r2 = getClient();
   if (!r2) return null;
@@ -1382,7 +1410,7 @@ export async function getUploadedReplay(id: string): Promise<UploadedReplay | nu
       sizeBytes: object.ContentLength ?? buffer.length,
       mimeType: object.ContentType ?? "application/octet-stream",
       buffer,
-      originalFilename: object.Metadata?.originalfilename,
+      originalFilename: readUploadedReplayFilename(object.Metadata),
     };
   } catch {
     return null;
@@ -1482,6 +1510,15 @@ export async function putUploadedReplay(id: string, buffer: Buffer, metadata: Up
   assertReplayCacheKey(storageKey);
   const mimeType = "application/octet-stream";
   const { originalFilename, uploaderId, uploadedAt } = metadata;
+  const objectMetadata: Record<string, string> = {
+    ...(originalFilename ? {
+      originalfilename: sanitizeFilename(originalFilename),
+      originalfilenameutf8: encodeURIComponent(originalFilename),
+    } : {}),
+    ...(uploaderId != null && Number.isFinite(uploaderId) ? { uploaderid: String(uploaderId) } : {}),
+    uploadedat: uploadedAt ?? new Date().toISOString(),
+  };
+  const filename = readUploadedReplayFilename(objectMetadata);
 
   await r2.send(new PutObjectCommand({
     Bucket: REPLAY_CACHE_BUCKET,
@@ -1489,12 +1526,8 @@ export async function putUploadedReplay(id: string, buffer: Buffer, metadata: Up
     Body: buffer,
     ContentType: mimeType,
     CacheControl: "private, max-age=31536000, immutable",
-    ContentDisposition: `attachment; filename="${sanitizeFilename(originalFilename || `${id}.osr`)}"`,
-    Metadata: {
-      ...(originalFilename ? { originalfilename: sanitizeFilename(originalFilename) } : {}),
-      ...(uploaderId != null && Number.isFinite(uploaderId) ? { uploaderid: String(uploaderId) } : {}),
-      uploadedat: uploadedAt ?? new Date().toISOString(),
-    },
+    ContentDisposition: buildAttachmentContentDisposition(filename || `${id}.osr`),
+    Metadata: objectMetadata,
   }));
 
   return {
@@ -1503,7 +1536,7 @@ export async function putUploadedReplay(id: string, buffer: Buffer, metadata: Up
     sizeBytes: buffer.length,
     mimeType,
     buffer,
-    originalFilename: originalFilename ? sanitizeFilename(originalFilename) : undefined,
+    originalFilename: filename,
   };
 }
 
@@ -1531,7 +1564,7 @@ export async function headUploadedReplayOwner(id: string): Promise<UploadedRepla
     const uploaderId = Number(head.Metadata?.uploaderid);
     return {
       uploaderId: Number.isSafeInteger(uploaderId) && uploaderId > 0 ? uploaderId : null,
-      originalFilename: head.Metadata?.originalfilename ?? null,
+      originalFilename: readUploadedReplayFilename(head.Metadata) ?? null,
       uploadedAt: head.Metadata?.uploadedat ?? head.LastModified?.toISOString() ?? null,
     };
   } catch {

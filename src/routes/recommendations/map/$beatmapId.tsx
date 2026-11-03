@@ -16,6 +16,7 @@ import { fetchLiveMapSearchEntry, type LiveFarmHelperKeyMode, type LiveFarmHelpe
 import { getDanTierImageSrc } from "../../../lib/dan-images";
 import { pageSeo } from "../../../lib/seo";
 import { useNoDans } from "../../../store";
+import { useMapDanLabel, type MapDanLabel } from "../../../lib/use-map-dan-label";
 import { msdHeadline } from "#dan/msd-headline";
 
 type FarmMapContext = {
@@ -137,6 +138,7 @@ export const Route = createFileRoute("/recommendations/map/$beatmapId")({
 function FarmMapDetailPage() {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
+  const shownDanLabel = useMapDanLabel();
   const { beatmapId: beatmapIdRaw } = Route.useParams();
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -215,8 +217,8 @@ function FarmMapDetailPage() {
   }, [selectedBeatmap]);
 
   const metrics = useMemo(
-    () => buildMapMetrics(selectedBeatmap, analysisState.status === "ready" ? analysisState.entry : null, i18n, farmRate),
-    [analysisState, farmRate, i18n, selectedBeatmap],
+    () => buildMapMetrics(selectedBeatmap, analysisState.status === "ready" ? analysisState.entry : null, i18n, farmRate, shownDanLabel),
+    [analysisState, farmRate, i18n, shownDanLabel, selectedBeatmap],
   );
   const radarReady = analysisState.status === "ready" && metrics.radar.some((axis) => axis.value > 0);
   const osuUrl = selectedBeatmap?.url ?? (beatmapset ? `https://osu.ppy.sh/beatmapsets/${beatmapset.id}#mania/${selectedBeatmapId ?? beatmapId}` : `https://osu.ppy.sh/beatmaps/${beatmapId}`);
@@ -533,7 +535,7 @@ const RADAR_AXES: Array<{ id: string; label: MessageDescriptor }> = [
 
 const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
 
-function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEntry | null, i18n: I18n, rate = 1) {
+function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEntry | null, i18n: I18n, rate = 1, shownDanLabel: MapDanLabel = (label) => label) {
   const normalizedRate = Math.max(0.1, rate);
   const lengthSec = Math.max(1, (selected?.totalLength ?? 0) / normalizedRate);
   const objects = (selected?.countCircles ?? 0) + (selected?.countSliders ?? 0);
@@ -545,7 +547,8 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
   // what the skill-rating engine credits a play here. No LN x DT cross-sweep
   // exists, so the DT context stays on the DT values.
   const msd = (preferDt && entry?.msdDt ? entry.msdDt : entry?.msdLn ?? entry?.msd) ?? null;
-  const dan = (preferDt && entry?.danDt ? entry.danDt : entry?.dan) ?? null;
+  const servedDan = (preferDt && entry?.danDt ? entry.danDt : entry?.dan) ?? null;
+  const dan = servedDan ? { ...servedDan, label: shownDanLabel(servedDan.label, entry?.keyCount ?? 4, servedDan.family) } : null;
   // Same LN identity guard as the /maps modal: the DT pair answers for itself,
   // the 1.0x pair follows the stored chart verdict.
   const lnIdentity = preferDt && entry?.msdDt

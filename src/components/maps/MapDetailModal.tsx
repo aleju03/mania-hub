@@ -28,6 +28,7 @@ import type { VibroAnalysis } from "#dan/vibro-sections";
 import { hasLnAxis } from "#dan/ln-axis-keymodes";
 import { usesPrism } from "#dan/prism/switch";
 import { useNoDans } from "../../store";
+import { useMapDanLabel } from "../../lib/use-map-dan-label";
 import { DAN_SKILLSET_META, msdSkillsetMeta } from "../../lib/skill-axes";
 import {
   FamilyPatternChip,
@@ -204,6 +205,7 @@ export function PlayModRow({ play }: { play: MapDetailPlayContext }) {
 // switching tabs must not fetch osu! or insert another row after first paint.
 export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; entry?: LiveMapSearchEntry | null }) {
   const noDans = useNoDans();
+  const shownDanLabel = useMapDanLabel();
   const showRail = !noDans && play.dan != null && play.dan.chartRating != null;
   const rejected = play.dan?.rejection != null;
   const showSkills = !play.dan && play.rating != null;
@@ -217,10 +219,11 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
             <DanProgressRail
               context={danScaleContextFor(entry?.keyCount, play.dan.family)}
               chart={play.dan.chartRating}
-              chartLabel={play.dan.chartLabel}
+              chartLabel={play.dan.chartLabel ? shownDanLabel(play.dan.chartLabel, entry?.keyCount ?? 4, play.dan.family) : null}
               landed={play.dan.creditedRating ?? null}
-              landedLabel={play.dan.creditedLabel ?? null}
+              landedLabel={play.dan.creditedLabel ? shownDanLabel(play.dan.creditedLabel, entry?.keyCount ?? 4, play.dan.family) : null}
               rejected={rejected}
+              formatLabel={(label) => shownDanLabel(label, entry?.keyCount ?? 4, play.dan?.family)}
             />
           </div>
         ) : showSkills ? <PlaySkillRatings play={play} keyCount={entry?.keyCount} /> : null}
@@ -529,8 +532,11 @@ function isUnrateableExclusion(analysis: VibroAnalysis): boolean {
 // side identity filed it on at full size, the other side riding top-right,
 // small, the way an exponent does. Nothing overlaps
 // the big glyph.
-function DanEstimateBadge({ dan, other = null, keyCount }: { dan: DanBadgeVerdict; other?: DanBadgeVerdict | null; keyCount: number }) {
+function DanEstimateBadge({ dan: rawDan, other: rawOther = null, keyCount }: { dan: DanBadgeVerdict; other?: DanBadgeVerdict | null; keyCount: number }) {
   const { t } = useLingui();
+  const shownDanLabel = useMapDanLabel();
+  const dan = { ...rawDan, label: shownDanLabel(rawDan.label, keyCount, rawDan.family) };
+  const other = rawOther ? { ...rawOther, label: shownDanLabel(rawOther.label, keyCount, rawOther.family) } : null;
   const image = getDanTierImageSrc(dan.label, dan.family === "ln" ? "ln" : undefined, keyCount);
   const otherImage = other ? getDanTierImageSrc(other.label, other.family === "ln" ? "ln" : undefined, keyCount) : null;
   const sideName = (verdict: DanBadgeVerdict) => verdict.family === "ln" ? t`LN ${verdict.label}` : t`regular ${verdict.label}`;

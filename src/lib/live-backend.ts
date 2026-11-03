@@ -1126,6 +1126,64 @@ export interface LiveBackendMapDownloads {
 // songs no mirror served and the .osu download lane. Admin-gated; the token is
 // injected server-side, mirroring fetchLiveBackendSweeps. Returns null
 // when the backend predates the endpoint.
+export interface LiveBackendPartnerUsageDay {
+  day: string;
+  requests: number;
+  notFound: number;
+  rateLimited: number;
+}
+
+export interface LiveBackendPartnerUsage {
+  partner: string;
+  configured: boolean;
+  lastSeenAt: number | null;
+  lastPath: string | null;
+  today: number;
+  last7Days: number;
+  last30Days: number;
+  total: number;
+  days: LiveBackendPartnerUsageDay[];
+}
+
+export interface LiveBackendPartnerUsageReport {
+  ratePerMinute: number;
+  partners: LiveBackendPartnerUsage[];
+  capturedAt: number;
+}
+
+// Partner API use per key, for the admin card. Admin-gated, token injected
+// server-side. Returns null when the backend predates the endpoint.
+export const fetchLiveBackendPartnerUsage = createServerFn({ method: "GET" })
+  .handler(async (): Promise<LiveBackendPartnerUsageReport | null> => {
+    await requireAdminAccess("Server partner usage");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${base}/api/admin/partner-usage`, { headers, signal: controller.signal });
+    } catch (err) {
+      if (isAbortError(err)) throw new Error("Partner usage timed out.");
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (response.status === 404) return null;
+    const body = await response.json() as LiveBackendPartnerUsageReport & { error?: unknown };
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Server ${response.status} for /api/admin/partner-usage`;
+      throw new Error(message);
+    }
+    return { ...body, partners: Array.isArray(body.partners) ? body.partners : [] };
+  });
+
 export const fetchLiveBackendMapDownloads = createServerFn({ method: "GET" })
   .handler(async (): Promise<LiveBackendMapDownloads | null> => {
     await requireAdminAccess("Server map downloads");
@@ -1376,6 +1434,9 @@ export interface DiscordPublicInfo {
   inviteUrl: string | null;
   feedsEnabled: boolean;
   commands: Array<{ name: string; description: string }>;
+  // Set when the backend did not answer (a deploy restart, an outage), so the
+  // page can say so instead of showing the setup steps for an unconfigured bot.
+  unreachable?: boolean;
 }
 
 // Public Discord info (no secrets) for the /discord tool page. Proxies the
@@ -1384,16 +1445,17 @@ export interface DiscordPublicInfo {
 export const fetchDiscordPublicInfo = createServerFn({ method: "GET" })
   .handler(async (): Promise<DiscordPublicInfo> => {
     const offline: DiscordPublicInfo = { configured: false, applicationId: null, inviteUrl: null, feedsEnabled: false, commands: [] };
+    const unreachable: DiscordPublicInfo = { ...offline, unreachable: true };
     const base = getServerLiveBackendUrl();
     if (!base) return offline;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
       const response = await fetch(`${base}/api/discord/info`, { signal: controller.signal });
-      if (!response.ok) return offline;
+      if (!response.ok) return unreachable;
       return await response.json() as DiscordPublicInfo;
     } catch {
-      return offline;
+      return unreachable;
     } finally {
       clearTimeout(timeout);
     }
@@ -1458,6 +1520,34 @@ export const fetchDiscordGuilds = createServerFn({ method: "GET" })
     } finally {
       clearTimeout(timeout);
     }
+  });
+
+// Admin-only bot playground (local backends only): runs a fake interaction or
+// feed post through the bot's real handlers and returns the reply body.
+export const runDiscordPlayground = createServerFn({ method: "POST" })
+  .validator((data: { action?: unknown; body?: unknown }) => ({
+    action: data?.action === "interaction" || data?.action === "feed" ? data.action : "info",
+    body: data?.body && typeof data.body === "object" ? data.body : {},
+  }))
+  .handler(async ({ data }): Promise<any> => {
+    await requireAdminAccess("Discord playground");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const path = data.action === "info" ? "/api/admin/discord/playground" : `/api/admin/discord/playground/${data.action}`;
+    const response = await fetch(`${base}${path}`, {
+      method: data.action === "info" ? "GET" : "POST",
+      headers,
+      body: data.action === "info" ? undefined : JSON.stringify(data.body),
+    });
+    const body = await response.json().catch(() => null) as any;
+    if (!response.ok) {
+      throw new Error(body && typeof body === "object" && "error" in body ? String(body.error) : `Server ${response.status} for ${path}`);
+    }
+    return body;
   });
 
 export type LiveBackendStatus = "ok" | "offline";
@@ -5184,223 +5274,3 @@ async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-// ---------------------------------------------------------------------------
-// Discord command showcase (real-data backing for the /discord preview page)
-// ---------------------------------------------------------------------------
-// These mirror backend/src/discord/showcase.ts. The payload is
-// presentation-ready (numbers + formatted strings) so the showcase renders it
-// directly, and every section is nullable: a missing one falls back to the
-// page's synthetic mock rather than breaking the preview.
-
-export interface DiscordShowcaseScoreHits {
-  max: number;
-  n300: number;
-  n200: number;
-  n100: number;
-  n50: number;
-  miss: number;
-}
-
-export interface DiscordShowcaseScore {
-  grade: string;
-  title: string;
-  version: string;
-  keys: string;
-  mods: string[];
-  acc: string;
-  pp: string;
-  gain?: string;
-  combo?: string;
-  score?: string;
-  stars?: string;
-  hits?: DiscordShowcaseScoreHits;
-  cover?: string;
-}
-
-export interface DiscordShowcaseSnipe {
-  sniper: string;
-  sniperId: number;
-  victim: string;
-  fromRank: number | null;
-  title: string;
-  grade: string;
-  mods: string[];
-  acc: string;
-  pp: string;
-  score: string;
-  victimScore: string | null;
-  keys: string;
-  stars: string;
-  cover: string | null;
-}
-
-export interface DiscordShowcasePlayer {
-  id: number;
-  username: string;
-  countryCode: string;
-  globalRank: number | null;
-  countryRank: number | null;
-  pp: number | null;
-  accuracy: number | null;
-  playCount: number | null;
-  level: number | null;
-  ssCount?: number | null;
-  sCount?: number | null;
-  aCount?: number | null;
-  topMod?: string | null;
-}
-
-export interface DiscordShowcaseRankRow {
-  rank: number;
-  username: string;
-  userId: number;
-  countryCode: string;
-  pp: string;
-}
-
-export interface DiscordShowcaseTopRow {
-  username: string;
-  userId: number;
-  grade: string;
-  title: string;
-  mods: string[];
-  pp: string;
-  gain?: string;
-}
-
-export interface DiscordShowcaseTrackerRow {
-  grade: string;
-  username: string;
-  userId: number;
-  title: string;
-  mods: string[];
-  acc: string;
-  pp: string;
-}
-
-export interface DiscordShowcaseFarmedRow {
-  rank: number;
-  title: string;
-  stars: string;
-  avg: string;
-  players: string;
-}
-
-export interface DiscordShowcaseMe {
-  globalRank: number | null;
-  countryRank: number | null;
-  countryCode: string;
-  pp: number | null;
-  activeDays: number;
-  sessions: number;
-  topPlayCount: number;
-  biggestDay: string | null;
-  longestStreak: string | null;
-  ppGained: string | null;
-  goalsLine: string;
-}
-
-export interface DiscordShowcaseActivity {
-  activeDays: number;
-  totalPlays: number;
-  sessions: number;
-  playsPerSession: number;
-  currentStreak: number;
-  year: number;
-  patterns: Array<{ label: string; pct: number }>;
-}
-
-export interface DiscordShowcaseVsRow {
-  label: string;
-  a: string;
-  b: string;
-}
-
-export interface DiscordShowcaseBeatmap {
-  title: string;
-  stars: string;
-  keys: string;
-  status: string;
-  bpm: string;
-  length: string;
-  dan: string;
-  cover: string | null;
-}
-
-export interface DiscordShowcaseRandomFarm {
-  title: string;
-  stars: string;
-  keys: string;
-  bpm: string;
-  status: string;
-  avgPp: string;
-  maxPp: string;
-  players: number;
-  dominantMod: string | null;
-  cover: string | null;
-}
-
-export interface DiscordShowcaseRandomFav {
-  title: string;
-  stars: string;
-  keys: string;
-  status: string;
-  bpm: string;
-  globalFavs: string;
-  patterns: string;
-  pickedBy: string;
-  others: number;
-  cover: string | null;
-}
-
-export interface DiscordShowcase {
-  country: string;
-  isGlobal: boolean;
-  generatedAt: number;
-  // Distinct top players, one per player-centric command (see the backend's
-  // index assignment in backend/src/discord/showcase.ts).
-  players: DiscordShowcasePlayer[];
-  topPlays: DiscordShowcaseScore[];
-  recent: DiscordShowcaseScore[];
-  pb: (DiscordShowcaseScore & { mapTitle: string; combo: string }) | null;
-  me: DiscordShowcaseMe | null;
-  activity: DiscordShowcaseActivity | null;
-  vs: { title: string; rows: DiscordShowcaseVsRow[]; gap: string | null } | null;
-  rankings: DiscordShowcaseRankRow[];
-  topList: DiscordShowcaseTopRow[];
-  tracker: DiscordShowcaseTrackerRow[];
-  mapsFarmed: DiscordShowcaseFarmedRow[];
-  randomFarm: DiscordShowcaseRandomFarm | null;
-  randomFav: DiscordShowcaseRandomFav | null;
-  map: DiscordShowcaseBeatmap | null;
-  dan: { displayName: string; family: string; confidence: string; label: string; familyKey: string } | null;
-  feedTopPlay:
-    | {
-      username: string;
-      userId: number;
-      title: string;
-      grade: string;
-      mods: string[];
-      keys: string;
-      acc: string;
-      pp: string;
-      gain: string;
-      combo: string | null;
-      score: string | null;
-      stars: string | null;
-      hits: DiscordShowcaseScoreHits | null;
-      cover: string | null;
-    }
-    | null;
-  feedSnipe: DiscordShowcaseSnipe | null;
-  feedNewMap: { title: string; keys: string; stars: string; cover: string | null } | null;
-}
-
-export async function fetchDiscordShowcase(
-  country: string,
-  options?: { fresh?: boolean },
-): Promise<DiscordShowcase> {
-  const query = new URLSearchParams({ country: country.trim().toUpperCase() });
-  if (options?.fresh) query.set("fresh", "1");
-  return fetchLiveJson<DiscordShowcase>(`/api/discord/showcase?${query.toString()}`);
-}

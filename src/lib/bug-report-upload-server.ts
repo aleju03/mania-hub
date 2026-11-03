@@ -1,22 +1,24 @@
 // Server handler for /api/bug-report-upload, kept out of the route file so it
 // can be tested with plain Request objects (no TanStack server context).
 //
-// A screenshot attached to a bug report goes browser -> here -> R2, then the
+// An attachment (a screenshot, or any other file under the same cap) goes
+// browser -> here -> R2, then the
 // key is recorded in the live backend, on the report or on the follow-up
 // message it was sent with. The credential is the upload ticket minted when
 // that row was created, not a login: the whole point of /report is that a
 // signed-out visitor can file one, and the ticket already names exactly one row
 // and expires in minutes.
 //
-// The bytes are checked before they are stored: capped at the shared image
+// The bytes are checked before they are stored: capped at the shared 5MB
 // limit, and typed by magic bytes rather than by whatever Content-Type the
 // browser claimed. The key is built here from (report id, index, sniffed
-// extension), and the backend refuses to record anything that does not match
+// extension or reduced file name), and the backend refuses to record anything that does not match
 // that shape, so a ticket holder cannot point a report at some other object in
 // the private bucket.
 
 import { getAppRateLimitClientIp } from "./app-client-ip";
-import { MAX_IMAGE_UPLOAD_BYTES, TOO_LARGE_MESSAGE } from "./catbox-upload";
+import { bugReportVideoMime, safeBugReportAttachmentName } from "./bug-report-attachments";
+import { MAX_IMAGE_UPLOAD_BYTES } from "./catbox-upload";
 import { imageMimeExtension, sniffImageMime } from "./image-sniff";
 import { getServerLiveBackendUrl } from "./live-backend";
 import { bridgeAuthHeaders } from "./live-backend-tokens";
@@ -72,10 +74,16 @@ export async function handleBugReportUploadPost(
   }
 
   const buffer = await readCappedBody(request, MAX_IMAGE_UPLOAD_BYTES);
-  if (!buffer) return Response.json({ error: TOO_LARGE_MESSAGE }, { status: 413 });
+  if (!buffer) return Response.json({ error: "Files have to be under 5MB." }, { status: 413 });
 
+  if (!buffer.length) return Response.json({ error: "That file is empty." }, { status: 400 });
+
+  // An image is typed by its bytes and stored under its real extension. Any
+  // other file keeps its name and is stored as opaque bytes; reads sign it as a
+  // download (or a video), so its claimed type never matters.
   const mime = sniffImageMime(buffer);
-  if (!mime) return Response.json({ error: "That file is not an image." }, { status: 415 });
+  const fileName = mime ? null : safeBugReportAttachmentName(url.searchParams.get("name") ?? "");
+  const contentType = mime ?? bugReportVideoMime(fileName!) ?? "application/octet-stream";
 
   const base = seams.backendUrl ?? getServerLiveBackendUrl();
   if (!base) return Response.json({ error: "Uploads are unavailable right now." }, { status: 503 });
@@ -83,7 +91,9 @@ export async function handleBugReportUploadPost(
   const putScreenshot = seams.putScreenshot ?? putBugReportScreenshot;
   const deleteScreenshots = seams.deleteScreenshots ?? deleteBugReportScreenshots;
 
-  const key = getBugReportScreenshotKey(id, index, imageMimeExtension(mime) as BugReportImageExt, messageId);
+  const key = mime
+    ? getBugReportScreenshotKey(id, index, imageMimeExtension(mime) as BugReportImageExt, messageId)
+    : getBugReportScreenshotKey(id, index, { name: fileName! }, messageId);
   // Check the ticket before R2 sees a write. The report id is not treated as a
   // secret, and a stale request must not be able to overwrite/delete an object
   // merely because it knows the deterministic index key.
@@ -103,19 +113,19 @@ export async function handleBugReportUploadPost(
     // Treat it as success without touching the existing object.
     if (authorization.alreadyAttached) return Response.json({ ok: true });
   } catch {
-    return Response.json({ error: "Could not authorize that image." }, { status: 503 });
+    return Response.json({ error: "Could not authorize that file." }, { status: 503 });
   }
 
   let stored: "stored" | "exists" | "unavailable" = "unavailable";
   try {
-    stored = await putScreenshot(key, buffer, mime);
+    stored = await putScreenshot(key, buffer, contentType);
   } catch {
     stored = "unavailable";
   }
   if (stored === "exists") {
-    return Response.json({ error: "That image index is already being uploaded. Try again." }, { status: 409 });
+    return Response.json({ error: "That file is already being uploaded. Try again." }, { status: 409 });
   }
-  if (stored !== "stored") return Response.json({ error: "Could not store that image." }, { status: 503 });
+  if (stored !== "stored") return Response.json({ error: "Could not store that file." }, { status: 503 });
 
   // Record last: an object nobody has a link to is a smaller problem than a
   // report pointing at one that never arrived. A definite rejection removes
@@ -142,7 +152,7 @@ export async function handleBugReportUploadPost(
     // The attach request may have committed before its response connection
     // failed. Keep the object: at worst it is an unreachable orphan covered by
     // the lifecycle rule; deleting it could strand a row that did commit.
-    return Response.json({ error: "Could not attach that image." }, { status: 503 });
+    return Response.json({ error: "Could not attach that file." }, { status: 503 });
   }
 
   return Response.json({ ok: true });

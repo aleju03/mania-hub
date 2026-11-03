@@ -27,6 +27,14 @@ function drawFrame(time: number) {
   act(() => pending.forEach((callback) => callback(time)));
 }
 
+/* The effects lead a moving pointer for two frames after its last move, then
+   the loop goes idle. */
+function settle() {
+  const now = performance.now() + 100;
+  vi.spyOn(performance, "now").mockReturnValue(now);
+  drawFrame(now);
+}
+
 function movePointer(clientX = 120, clientY = 80, target: Window | Element = window) {
   const event = new MouseEvent("pointermove", { clientX, clientY, bubbles: true });
   Object.defineProperty(event, "pointerType", { value: "mouse" });
@@ -76,6 +84,7 @@ it("uses a native cursor without waiting for frames and never paints a second cu
   movePointer();
   drawFrame(16);
   expect(context.drawImage).not.toHaveBeenCalled();
+  settle();
   expect(frames.size).toBe(0);
 });
 
@@ -87,6 +96,7 @@ it("paints the glow on the canvas under the native orb, which stays within the e
   drawFrame(16);
   expect(cursor()).toMatch(/^url\(/);
   expect(context.drawImage).toHaveBeenCalledOnce();
+  settle();
   expect(frames.size).toBe(0);
 
   context.drawImage.mockClear();
@@ -123,18 +133,58 @@ it("draws a large orb itself where the browser would drop the native image at th
   render(<CustomCursor />);
   const native = cursor();
   movePointer(window.innerWidth - 4, 300);
-  // Swapped in the frame that paints the orb, never before it.
+  // The native image stays until the drawn orb has painted once.
   expect(cursor()).toBe(native);
   drawFrame(16);
-  expect(cursor()).toBe("none");
+  expect(cursor()).toBe(native);
   expect(context.drawImage).toHaveBeenCalledOnce();
+  drawFrame(32);
+  expect(cursor()).toBe("none");
 
   movePointer(300, 300);
   expect(cursor()).toBe("none");
   context.drawImage.mockClear();
-  drawFrame(32);
+  drawFrame(48);
   expect(cursor()).toBe(native);
   expect(context.drawImage).not.toHaveBeenCalled();
+});
+
+it("hides the glow while typing until the mouse moves again", () => {
+  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, trail: false, glow: 50 });
+  render(<CustomCursor />);
+  const input = document.createElement("input");
+  document.body.appendChild(input);
+  movePointer();
+  drawFrame(16);
+  expect(context.drawImage).toHaveBeenCalledOnce();
+
+  context.drawImage.mockClear();
+  fireEvent.keyDown(input, { key: "a", code: "KeyA" });
+  drawFrame(32);
+  expect(context.drawImage).not.toHaveBeenCalled();
+
+  movePointer(124, 80);
+  drawFrame(48);
+  expect(context.drawImage).toHaveBeenCalledOnce();
+  input.remove();
+});
+
+it("keeps a drawn orb at the edge while typing", () => {
+  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, trail: false, glow: 0, size: 200 });
+  render(<CustomCursor />);
+  const input = document.createElement("input");
+  document.body.appendChild(input);
+  movePointer(300, 4);
+  drawFrame(16);
+  drawFrame(32);
+  expect(cursor()).toBe("none");
+
+  context.drawImage.mockClear();
+  fireEvent.keyDown(input, { key: "a", code: "KeyA" });
+  drawFrame(48);
+  expect(context.drawImage).toHaveBeenCalledOnce();
+  expect(cursor()).toBe("none");
+  input.remove();
 });
 
 it("draws the orb itself over CSS-zoomed content, which would rescale the native image", () => {
@@ -144,12 +194,13 @@ it("draws the orb itself over CSS-zoomed content, which would rescale the native
   document.body.appendChild(zoomedNode);
   movePointer(300, 300, zoomedNode);
   drawFrame(16);
-  expect(cursor()).toBe("none");
   expect(context.drawImage).toHaveBeenCalledOnce();
+  drawFrame(32);
+  expect(cursor()).toBe("none");
 
   context.drawImage.mockClear();
   fireEvent.mouseLeave(root);
-  drawFrame(32);
+  drawFrame(48);
   expect(context.drawImage).not.toHaveBeenCalled();
   zoomedNode.remove();
 });
@@ -181,4 +232,24 @@ it("leaves the browser cursor available if canvas initialization fails", () => {
   render(<CustomCursor />);
   expect(root.dataset.customCursor).toBeUndefined();
   expect(cursor()).toBe("");
+});
+
+it("draws the glow ahead of a moving pointer and back on it once it stops", () => {
+  let now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  writeCursorSettings({ ...DEFAULT_CURSOR_SETTINGS, enabled: true, trail: false, glow: 50 });
+  render(<CustomCursor />);
+  const glowCenter = () => {
+    const [, x, , size] = context.drawImage.mock.calls.at(-1) as unknown as [unknown, number, number, number];
+    return x + size / 2;
+  };
+  movePointer(100, 80);
+  now = 8;
+  movePointer(120, 80);
+  drawFrame(8);
+  expect(glowCenter()).toBeGreaterThan(120);
+
+  now = 200;
+  drawFrame(200);
+  expect(glowCenter()).toBeCloseTo(120);
 });

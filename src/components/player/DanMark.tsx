@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { getDanTierImageSrc } from "#/lib/dan-images";
+import { useMapDanLabel } from "#/lib/use-map-dan-label";
 
 /**
  * A chart's dan as a play row prints it: the ladder image with its tier
@@ -10,7 +11,7 @@ import { getDanTierImageSrc } from "#/lib/dan-images";
  * chart level looks the same wherever a play carries it.
  */
 export function DanMark({
-  label,
+  label: rawLabel,
   keyCount,
   side,
   dimmed = false,
@@ -24,6 +25,7 @@ export function DanMark({
   compact?: boolean;
 }) {
   const { t } = useLingui();
+  const label = useMapDanLabel()(rawLabel, keyCount, side);
   // A numeric label reads as "7 dan"; a named one already reads as itself.
   const text = /^\d/.test(label) ? t`${label} dan` : label;
   const image = getDanTierImageSrc(label, side === "ln" ? "ln" : undefined, keyCount);

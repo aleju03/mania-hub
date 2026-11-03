@@ -310,6 +310,8 @@ interface AppState {
   themeSaturation: number;
   showDanEstimates: boolean;
   noDans: boolean;
+  wholeDans: boolean;
+  wholeMapDans: boolean;
   packsSkipAnimations: boolean;
   packsRevealAll: boolean;
   recentPlayRatings: boolean;
@@ -337,6 +339,8 @@ interface AppState {
   setThemeSaturation: (sat: number) => void;
   setShowDanEstimates: (show: boolean) => void;
   setNoDans: (hidden: boolean) => void;
+  setWholeDans: (whole: boolean) => void;
+  setWholeMapDans: (whole: boolean) => void;
   setPacksSkipAnimations: (skip: boolean) => void;
   setPacksRevealAll: (revealAll: boolean) => void;
   setRecentPlayRatings: (show: boolean) => void;
@@ -597,6 +601,8 @@ export const useAppStore = create<AppState>()(
       themeSaturation: initialClientThemeSat ?? DEFAULT_THEME_SAT,
       showDanEstimates: false,
       noDans: false,
+      wholeDans: false,
+      wholeMapDans: false,
       packsSkipAnimations: false,
       packsRevealAll: false,
       recentPlayRatings: false,
@@ -638,6 +644,8 @@ export const useAppStore = create<AppState>()(
       },
       setShowDanEstimates: (show) => set({ showDanEstimates: show }),
       setNoDans: (hidden) => set({ noDans: hidden }),
+      setWholeDans: (whole) => set({ wholeDans: whole }),
+      setWholeMapDans: (whole) => set({ wholeMapDans: whole }),
       setPacksSkipAnimations: (skip) => set({ packsSkipAnimations: skip }),
       setPacksRevealAll: (revealAll) => set({ packsRevealAll: revealAll }),
       setRecentPlayRatings: (show) => set({ recentPlayRatings: show }),
@@ -1006,6 +1014,12 @@ export const useAppStore = create<AppState>()(
           noDans: typeof nextState.noDans === "boolean"
             ? nextState.noDans
             : currentState.noDans,
+          wholeDans: typeof nextState.wholeDans === "boolean"
+            ? nextState.wholeDans
+            : currentState.wholeDans,
+          wholeMapDans: typeof nextState.wholeMapDans === "boolean"
+            ? nextState.wholeMapDans
+            : currentState.wholeMapDans,
           packsSkipAnimations: typeof nextState.packsSkipAnimations === "boolean"
             ? nextState.packsSkipAnimations
             : currentState.packsSkipAnimations,
@@ -1076,6 +1090,8 @@ export const useAppStore = create<AppState>()(
         selectedCountry: state.selectedCountry,
         showDanEstimates: state.showDanEstimates,
         noDans: state.noDans,
+        wholeDans: state.wholeDans,
+        wholeMapDans: state.wholeMapDans,
         packsSkipAnimations: state.packsSkipAnimations,
         packsRevealAll: state.packsRevealAll,
         recentPlayRatings: state.recentPlayRatings,
@@ -1188,6 +1204,22 @@ export function useNoDans(): boolean {
   const noDans = useAppStore((state) => state.noDans);
   const hydrated = useHasHydrated();
   return hydrated && noDans;
+}
+
+// Shows dans as whole levels, the low and mid/low tiers read as the level below
+// ("delta--" -> "gamma"). Same hydration rule as useNoDans.
+export function useWholeDans(): boolean {
+  const whole = useAppStore((state) => state.wholeDans);
+  const hydrated = useHasHydrated();
+  return hydrated && whole;
+}
+
+// The same rewrite on map dans, an option under Whole dans that only counts
+// while Whole dans is on.
+export function useWholeMapDans(): boolean {
+  const whole = useAppStore((state) => state.wholeDans && state.wholeMapDans);
+  const hydrated = useHasHydrated();
+  return hydrated && whole;
 }
 
 // Pack preferences, same hydration rule as useNoDans: the pack surface renders

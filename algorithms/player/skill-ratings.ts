@@ -1,4 +1,4 @@
-import { DAN_MIN_OD_7K_LN, danMinOdFor, type DanClearTarget, danOdFlagForPlay, DAN_SKILLSET_AVERAGE_MIN_BUCKETS, type DanSkillsetBucket, type DanClearEvidence, danSkillsetBucketsForPlay, INVERSE_MOD_VARIANT } from "./dan-clears";
+import { DAN_MIN_OD_7K_LN, danMinOdFor, danOdFloorFor, type DanClearTarget, danOdFlagForPlay, DAN_SKILLSET_AVERAGE_MIN_BUCKETS, type DanSkillsetBucket, type DanClearEvidence, danSkillsetBucketsForPlay, tileValuesForPlay, INVERSE_MOD_VARIANT } from "./dan-clears";
 import { analyzeLnSsrOnThread, checkRateVibroOnThread } from "../msd/inline";
 import { checkRateVibro, type RateVibroCheck } from "../vibro/rate";
 import { SSR_CALC_GOAL_CAP, SSR_EXTRAPOLATION_MAX_SLOPE, ssrGoalAnchors } from "../ln/ssr";
@@ -11,7 +11,7 @@ import { PRISM_GOAL_FLOOR, prismLnLeadValues } from "../msd/prism";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, isMsdSupportedKeyCount, msdChartErrorFallback, usesPrism } from "../msd/msd";
 import { hybridLnSectionsCredit, isHybridChart } from "../classification/chart-analysis";
 import { invertManiaOsuText } from "../chart/invert";
-import { calculateScoreV2Accuracy, isLazerScore, type OscScore, type OsuMod, type OsuScoreStatistics } from "../chart/score";
+import { calculateScoreV2Accuracy, getModAcronyms, isLazerScore, type OscScore, type OsuMod, type OsuScoreStatistics } from "../chart/score";
 import { danTableFloorFor } from "../classification/chart-classifier";
 import { parseManiaBeatmap } from "../chart/beatmap";
 import { isUnrateableExclusion, type VibroAnalysis } from "../vibro/sections";
@@ -376,10 +376,14 @@ export interface SsrChartFacts {
   rate: number;
 }
 
+const LAZER_ONLY_MODS = new Set(["DA", "IN", "CS", "HO", "NR", "WU", "WD", "AS", "MU"]);
+
 function wifeScoringFor(score: SsrGoalScore): "stable" | "lazer" | "unknown" {
-  if (score.wifeScoring != null) return score.wifeScoring;
-  if (score.type == null && score.legacy_score_id == null && !(Number(score.legacy_total_score) > 0)) return "unknown";
-  return isLazerScore(score as OscScore) ? "lazer" : "stable";
+  const recorded = score.wifeScoring != null ? score.wifeScoring
+    : score.type == null && score.legacy_score_id == null && !(Number(score.legacy_total_score) > 0) ? "unknown"
+    : isLazerScore(score as OscScore) ? "lazer" : "stable";
+  if (recorded === "unknown" && getModAcronyms(score.mods as OscScore["mods"], false).some((mod) => LAZER_ONLY_MODS.has(mod))) return "lazer";
+  return recorded;
 }
 
 const EZ_WINDOW_SCALE = 1.4;
@@ -625,6 +629,8 @@ export interface ChartSkillInfo {
   jumpstreamCluster: boolean | null;
   handstreamEndurance?: boolean;
   msdValues?: Record<string, number> | null;
+  dtMsdValues?: Record<string, number> | null;
+  htMsdValues?: Record<string, number> | null;
   lnSkillsets?: LnFamilyVector | null;
   techScore: number;
   chordjackScore: number;
@@ -660,6 +666,7 @@ export interface ChartSkillInfo {
   htHybridRice?: { rawDan: number; label: string | null } | null;
   lengthSeconds: number | null;
   od: number | null;
+  odRanked?: boolean;
   keyCount?: number | null;
 }
 
@@ -757,9 +764,19 @@ const RICE_TILE_DELAY_JACK_SHARE = 0.3;
 
 const RICE_TILE_DENSE_CATEGORY = /dense chordstream/i;
 
+const RICE_TILE_STREAM_CATEGORY = /chordstream/i;
+const RICE_TILE_LIGHT_MAX_TECH_SECTIONS = 0.25;
+const RICE_TILE_LIGHT_TECH_MIXED_SHARE = 0.45;
+const RICE_TILE_LIGHT_JACK_SHARE = 0.15;
+const RICE_TILE_LIGHT_JACK_SCORE = 0.5;
+
 const RICE_TILE_SPEED_PEAK = 0.2;
 
 const RICE_TILE_ROLL_SECTIONS = 2;
+
+const RICE_TILE_ROLL_PEAK = 0.75;
+
+const RICE_TILE_JACK_HEADLINE_SCORE = 0.9;
 const RICE_TILE_STREAM_TWO_BACK = 0.3;
 const RICE_TILE_STREAM_JACK_SHARE = 0.2;
 
@@ -772,8 +789,11 @@ const RICE_TILE_CHORDSTREAM_SHARE = 0.85;
 const RICE_TILE_DENSE_TECH_TWO_BACK = 0.2;
 const RICE_TILE_DENSE_TECH_SECTIONS = 0.5;
 
-function riceTiles7k(keyCount: number | null, parsed: LeanClassificationJson | null, delayScore: number, bracketScore: number): string[] | null {
-  const tiles = riceShapeTiles7k(keyCount, parsed, delayScore, bracketScore);
+const RICE_TILE_BURST_SHARE = 0.25;
+const RICE_TILE_BURST_JACK_SHARE = 0.1;
+
+function riceTiles7k(keyCount: number | null, parsed: LeanClassificationJson | null, delayScore: number, bracketScore: number, jackScore: number): string[] | null {
+  const tiles = riceShapeTiles7k(keyCount, parsed, delayScore, bracketScore, jackScore);
   if (tiles == null || tiles.length !== 1) return tiles;
   const speedPeak = parsed?.riceShape?.speedPeak;
   if (tiles[0] === "stream" && typeof speedPeak === "number" && speedPeak >= RICE_TILE_SPEED_PEAK) return ["stream", "speed"];
@@ -782,7 +802,7 @@ function riceTiles7k(keyCount: number | null, parsed: LeanClassificationJson | n
   return tiles;
 }
 
-function riceShapeTiles7k(keyCount: number | null, parsed: LeanClassificationJson | null, delayScore: number, bracketScore: number): string[] | null {
+function riceShapeTiles7k(keyCount: number | null, parsed: LeanClassificationJson | null, delayScore: number, bracketScore: number, jackScore: number): string[] | null {
   if (keyCount !== 7) return null;
   const category = typeof parsed?.clusterCategory === "string" ? parsed.clusterCategory.trim() : "";
   const all = Array.isArray(parsed?.clusters) ? parsed.clusters : [];
@@ -823,8 +843,17 @@ function riceShapeTiles7k(keyCount: number | null, parsed: LeanClassificationJso
   const techSections = typeof shape?.techSections === "number" && Number.isFinite(shape.techSections) ? shape.techSections : null;
   const motifRepeat = typeof shape?.motifRepeat === "number" && Number.isFinite(shape.motifRepeat) ? shape.motifRepeat : null;
   const delay = delayScore >= RICE_TILE_DELAY_SCORE;
-  const jackHeadline = JACK_CLUSTERS.test(category) && (!TECH_CLUSTER_CATEGORY.test(category) || jack >= RICE_TILE_HYBRID_JACK_SHARE);
-  if (jackHeadline || jack >= RICE_TILE_JACK_SHARE) return ["jack"];
+  const jackHeadline = JACK_CLUSTERS.test(category)
+    && (!TECH_CLUSTER_CATEGORY.test(category) || jack >= RICE_TILE_HYBRID_JACK_SHARE || jackScore >= RICE_TILE_JACK_HEADLINE_SCORE);
+  if (jackHeadline || jack >= RICE_TILE_JACK_SHARE) {
+    const speedPeak = typeof shape?.speedPeak === "number" && Number.isFinite(shape.speedPeak) ? shape.speedPeak : 0;
+    const rollSections = typeof shape?.rollSections === "number" && Number.isFinite(shape.rollSections) ? shape.rollSections : 0;
+    if (delay && speedPeak >= RICE_TILE_ROLL_PEAK) {
+      if (rollSections >= RICE_TILE_ROLL_SECTIONS) return ["speed"];
+      if (TECH_CLUSTER_CATEGORY.test(category)) return ["tech"];
+    }
+    return ["jack"];
+  }
   if (twoBack == null) {
     if (delay || singleStream >= RICE_TILE_SINGLE_STREAM_SHARE) return ["speed"];
   } else {
@@ -834,9 +863,14 @@ function riceShapeTiles7k(keyCount: number | null, parsed: LeanClassificationJso
     if (delay && twoBack < RICE_TILE_DELAY_SHARED_TWO_BACK) return ["tech", "speed"];
   }
   if (delayScore >= RICE_TILE_DELAY_JACK_SCORE && jack >= RICE_TILE_DELAY_JACK_SHARE) return ["speed", "jack"];
-  if (jack < RICE_TILE_HYBRID_JACK_SHARE && !TECH_CLUSTER_CATEGORY.test(category) && RICE_TILE_DENSE_CATEGORY.test(category)
+  const denseHeadline = RICE_TILE_DENSE_CATEGORY.test(category);
+  const lightHeadline = !denseHeadline && RICE_TILE_STREAM_CATEGORY.test(category) && (techSections ?? 0) < RICE_TILE_LIGHT_MAX_TECH_SECTIONS;
+  if (jack < RICE_TILE_HYBRID_JACK_SHARE && !TECH_CLUSTER_CATEGORY.test(category) && (denseHeadline || lightHeadline)
     && mixed >= RICE_TILE_MIXED_SHARE && dense < RICE_TILE_MIXED_MAX_DENSE && twoBack != null && twoBack >= RICE_TILE_STREAM_TWO_BACK) {
-    return jack >= RICE_TILE_STREAM_JACK_SHARE ? ["stream", "jack"] : ["stream"];
+    if (lightHeadline && mixed >= RICE_TILE_LIGHT_TECH_MIXED_SHARE) return ["tech", "stream"];
+    const jacked = jack >= RICE_TILE_STREAM_JACK_SHARE
+      || (lightHeadline && jack >= RICE_TILE_LIGHT_JACK_SHARE && jackScore >= RICE_TILE_LIGHT_JACK_SCORE);
+    return jacked ? ["stream", "jack"] : ["stream"];
   }
   if (jack >= RICE_TILE_HYBRID_JACK_SHARE) return ["tech"];
   if (TECH_CLUSTER_CATEGORY.test(category) && dense < RICE_TILE_TECH_LABEL_MAX_DENSE) return ["tech"];
@@ -844,6 +878,7 @@ function riceShapeTiles7k(keyCount: number | null, parsed: LeanClassificationJso
   const denseChart = dense >= RICE_TILE_DENSE_SHARE || chordstream >= RICE_TILE_CHORDSTREAM_SHARE;
   if (twoBack != null && twoBack < (denseChart ? RICE_TILE_DENSE_TECH_TWO_BACK : RICE_TILE_TECH_TWO_BACK)) return ["tech"];
   if (techSections != null && techSections >= (denseChart ? RICE_TILE_DENSE_TECH_SECTIONS : RICE_TILE_TECH_SECTIONS)) return ["tech"];
+  if (mixed >= RICE_TILE_MIXED_SHARE && singleStream >= RICE_TILE_BURST_SHARE && jack >= RICE_TILE_BURST_JACK_SHARE) return ["tech"];
   if (chordstream >= CLUSTER_SHARE_MIN || bracketScore >= PATTERN_TAG_MIN_SCORE) return ["stream"];
   return ["tech"];
 }
@@ -883,6 +918,11 @@ interface StoredRateVerdict {
   lnEffectiveRatio?: unknown;
   lnRatingIdentity?: unknown;
   secondary?: { label?: unknown; family?: unknown; rawDan?: unknown };
+}
+
+function readRateMsdValues(cell: unknown): Record<string, number> | null {
+  const values = readChartJson<{ values?: Record<string, number> } | null>(cell, null)?.values;
+  return values && typeof values === "object" ? values : null;
 }
 
 function rateHybridRice(verdict: StoredRateVerdict | null): { rawDan: number; label: string | null } | null {
@@ -937,7 +977,7 @@ export function chartSkillInfoFromAnalysisRow(row: Record<string, unknown>): Cha
     jackShare,
     streamShare: clusterShare(parsed, STREAM_CLUSTERS),
     techCategory,
-    riceTiles: riceTiles7k(keyCount, parsed, patternScores.get("delay") ?? 0, patternScores.get("bracket") ?? 0),
+    riceTiles: riceTiles7k(keyCount, parsed, patternScores.get("delay") ?? 0, patternScores.get("bracket") ?? 0, patternScores.get("jack") ?? 0),
     clusterTrill: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
       ? TRILL_CLUSTER_CATEGORY.test(parsed.clusterCategory)
       : null,
@@ -949,10 +989,11 @@ export function chartSkillInfoFromAnalysisRow(row: Record<string, unknown>): Cha
       : null,
     handstreamEndurance: keyCount === 4 && !chartReadsLn
       && hasHandstreamEndurance(chartMsd?.values),
-    // Always null: `!chartIsLn` negates the function, not a boolean.
-    msdValues: keyCount === 4 && !chartIsLn && chartMsd?.values && typeof chartMsd.values === "object"
+    msdValues: keyCount === 4 && !chartReadsLn && chartMsd?.values && typeof chartMsd.values === "object"
       ? chartMsd.values
       : null,
+    dtMsdValues: keyCount === 4 && dtRawDan != null && danDt?.primaryFamily !== "ln" ? readRateMsdValues(row.msd_dt_json) : null,
+    htMsdValues: keyCount === 4 && htRawDan != null && danHt?.primaryFamily !== "ln" ? readRateMsdValues(row.msd_ht_json) : null,
     lnSkillsets: chartMsd?.lnSkill?.version === LN_SKILL_VERSION ? chartMsd.lnSkill.skillsets ?? null : null,
     techScore: vetoesTech ? 0 : (patternScores.get("tech") ?? 0),
     chordjackScore: chordjackScore,
@@ -988,6 +1029,7 @@ export function chartSkillInfoFromAnalysisRow(row: Record<string, unknown>): Cha
     htHybridRice: rateHybridRice(danHt),
     lengthSeconds: readLengthSeconds(row.total_length),
     od: readStoredOd(row.od),
+    odRanked: ["ranked", "approved"].includes(String(row.beatmap_status ?? "")),
     keyCount,
   };
 }
@@ -1086,9 +1128,9 @@ function danAttemptMeetsOdFloor(
   od: number | null | undefined,
   keyCount: number | null | undefined,
   inverse: boolean | undefined,
-  info: Pick<ChartSkillInfo, "lnRatio" | "lnEffectiveRatio"> | undefined,
+  info: Pick<ChartSkillInfo, "lnRatio" | "lnEffectiveRatio" | "od" | "odRanked"> | undefined,
 ): boolean {
-  return od == null || od >= daRatingOdFloorFor(keyCount, inverse, { lnRatio: info?.lnRatio, lnEffectiveRatio: info?.lnEffectiveRatio });
+  return od == null || od >= danOdFloorFor(daRatingOdFloorFor(keyCount, inverse, { lnRatio: info?.lnRatio, lnEffectiveRatio: info?.lnEffectiveRatio }), info);
 }
 
 function danAttemptPlay(kept: StoredPlaySsr, attempt: DanAttemptEntry): StoredPlaySsr {
@@ -1107,7 +1149,7 @@ export function danSkillsetBucketsForClear(
   clear: DanClearEvidence,
   chart: ChartSkillInfo | undefined,
 ): DanSkillsetBucket[] {
-  const filed = danSkillsetBucketsForPlay(buckets, clear.play, chart);
+  const filed = danSkillsetBucketsForPlay(buckets, clear.play, chart, clear.tileValues ?? tileValuesForPlay(clear.play, chart));
   return clear.hybridSecondary ? filed.filter((bucket, index) => index === 0 || bucket.id !== "speed") : filed;
 }
 
@@ -1307,7 +1349,7 @@ export function noteDanAttempt(best: DanAttemptSlotBest, attempt: DanAttemptEntr
 export function pickDanAttempts(
   kept: StoredPlaySsr,
   best: DanAttemptSlotBest | undefined,
-  chart: (Pick<ChartSkillInfo, "lnRatio" | "lnEffectiveRatio"> & { od?: number | null }) | undefined,
+  chart: Pick<ChartSkillInfo, "lnRatio" | "lnEffectiveRatio" | "od" | "odRanked"> | undefined,
   refusedIdentities: ReadonlySet<string> = new Set(),
 ): StoredPlaySsr[] {
   if (!best || kept.neverRated) return [];

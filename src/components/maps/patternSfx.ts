@@ -20,7 +20,6 @@ function ensureAudio(): AudioContext | null {
     master.gain.value = 0.4;
     master.connect(context.destination);
   }
-  if (context.state === "suspended") void context.resume();
   return master ? context : null;
 }
 
@@ -37,7 +36,18 @@ function getNoise(ctx: AudioContext): AudioBuffer {
 // Selecting is a brighter, higher hit than deselecting, so on vs off feel distinct.
 export function playPatternHit(selected: boolean): void {
   const ctx = ensureAudio();
-  if (!ctx || !master) return;
+  if (!ctx) return;
+  // Firefox starts a new context suspended; a hit scheduled before it runs can
+  // play its first slice at full gain, so wait for it.
+  if (ctx.state === "running") {
+    renderPatternHit(ctx, selected);
+  } else {
+    ctx.resume().then(() => renderPatternHit(ctx, selected), () => {});
+  }
+}
+
+function renderPatternHit(ctx: AudioContext, selected: boolean): void {
+  if (!master) return;
   const t = ctx.currentTime;
 
   const source = ctx.createBufferSource();
@@ -49,6 +59,7 @@ export function playPatternHit(selected: boolean): void {
   filter.frequency.value = selected ? 1750 : 1200;
   filter.Q.value = 1.1;
   const noiseGain = ctx.createGain();
+  noiseGain.gain.value = 0.0001;
   noiseGain.gain.setValueAtTime(0.0001, t);
   noiseGain.gain.exponentialRampToValueAtTime(0.16, t + 0.005);
   noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
@@ -62,6 +73,7 @@ export function playPatternHit(selected: boolean): void {
   osc.frequency.setValueAtTime(freq, t);
   osc.frequency.exponentialRampToValueAtTime(freq * (selected ? 1.25 : 0.8), t + 0.06);
   const toneGain = ctx.createGain();
+  toneGain.gain.value = 0.0001;
   toneGain.gain.setValueAtTime(0.0001, t);
   toneGain.gain.exponentialRampToValueAtTime(0.09, t + 0.006);
   toneGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);

@@ -6,6 +6,7 @@ import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
+import { DiscordTabs } from "../components/discord/DiscordTabs";
 import { CommunityCard } from "../components/communities/CommunityCard";
 import { CommunityEditModal } from "../components/communities/CommunityEditModal";
 import { CommunitySubmitModal } from "../components/communities/CommunitySubmitModal";
@@ -489,6 +490,7 @@ function CommunitiesPage() {
         <OsuTriangleBackdrop />
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/chat.svg" title={t`osu!mania Discord servers`} right={headerAction} />
+          <DiscordTabs />
 
           <div className="border-b border-osu-b3/30">
             <div className="mx-auto w-full max-w-[1200px] px-4 py-3.5 sm:px-5">

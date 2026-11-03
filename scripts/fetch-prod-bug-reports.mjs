@@ -4,6 +4,21 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
 
+// An image is `<index>.<ext>`; any other file is `<index>/<name>` (see
+// isBugReportScreenshotKey in backend/src/features/bug-reports.ts).
+const ATTACHMENT_SUFFIX = /^[0-2](?:\.(png|jpg|gif|webp|bmp|avif)|\/[A-Za-z0-9][A-Za-z0-9._-]{0,99})$/;
+const IMAGE_EXT = /\.(png|jpg|gif|webp|bmp|avif)$/;
+
+/** Local paths use our own counters; a file keeps only its extension. */
+function localAttachmentName(key, counter) {
+  const image = /\/[0-2]\.(png|jpg|gif|webp|bmp|avif)$/.exec(key);
+  if (image) return `image-${counter}.${image[1]}`;
+  const file = /\/[0-2]\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.exec(key);
+  if (!file) return null;
+  const ext = /\.([A-Za-z0-9]{1,10})$/.exec(key)?.[1]?.toLowerCase() ?? "bin";
+  return `file-${counter}.${ext}`;
+}
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const STATUSES = ["all", "open", "new", "investigating", "pending", "fixed", "wontfix", "duplicate", "notabug"];
 
@@ -71,7 +86,7 @@ async function remoteExport(options) {
       for (const item of [report, ...report.messages]) {
         for (const key of item.screenshotKeys) {
           const prefix = `bug-reports/${report.id}/${item === report ? "" : `m/${item.id}/`}`;
-          if (!key.startsWith(prefix) || !/^[0-2]\.(png|jpg|gif|webp|bmp|avif)$/.test(key.slice(prefix.length))) {
+          if (!key.startsWith(prefix) || !ATTACHMENT_SUFFIX.test(key.slice(prefix.length))) {
             throw new Error("Unexpected bug report screenshot key.");
           }
           payload.attachments[key] = await getSignedUrl(client, new GetObjectCommand({
@@ -129,7 +144,10 @@ export function renderReport(report) {
     lines.push("", "### Images", "");
     if (!item.images.length) lines.push("None submitted.");
     for (const image of item.images) {
-      lines.push(image.path ? `![Submitted image](${image.path})` : `Image unavailable: ${escape(image.error || "Download skipped")}`, "");
+      const isImage = image.path && IMAGE_EXT.test(image.path);
+      lines.push(image.path
+        ? (isImage ? `![Submitted image](${image.path})` : `Submitted file: [${image.path}](${image.path})`)
+        : `Attachment unavailable: ${escape(image.error || "Download skipped")}`, "");
     }
   };
   images(report);
@@ -165,10 +183,10 @@ export async function saveExport(payload, output, download = fetch) {
         try {
           const response = await download(url, { signal: AbortSignal.timeout(30_000), redirect: "error" });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const ext = key.split(".").at(-1);
-          if (!/^(png|jpg|gif|webp|bmp|avif)$/.test(ext)) throw new Error("Unsupported image extension");
+          const local = localAttachmentName(key, ++imageIndex);
+          if (!local) throw new Error("Unsupported attachment key");
           const bytes = Buffer.from(await response.arrayBuffer());
-          const filename = `image-${++imageIndex}.${ext}`;
+          const filename = local;
           await writeFile(join(output, folder, filename), bytes, { mode: 0o600 });
           entry.path = filename;
         } catch (error) {

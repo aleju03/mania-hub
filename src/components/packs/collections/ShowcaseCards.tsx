@@ -7,7 +7,7 @@ import { CollectionCardTile } from "../CardTile";
 import { CardMarks } from "./CardMarks";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";
-import { SHOWCASE_ROW_CLASS, SHOWCASE_SLOT_CLASS } from "./chrome";
+import { SHOWCASE_ROW_CLASS, SHOWCASE_SET_GRID_CLASS, SHOWCASE_SLOT_CLASS } from "./chrome";
 import { useState } from "react";
 
 /* A row of chosen cards, drawn bigger than a collection tile because this is
@@ -30,6 +30,7 @@ export function ShowcaseCards({
   onCardOpen,
   onCardClose,
   thumbnails,
+  grid = false,
 }: {
   cards: ServerPackCollectionCard[];
   /* Whose showcase this is, so the spotlight can say how many collections
@@ -47,6 +48,9 @@ export function ShowcaseCards({
      their faces are resolved in one request instead of one per row. A row on
      its own loads its own. */
   thumbnails?: ReturnType<typeof useCardThumbnails>;
+  /* Five fluid columns instead of fixed-width cards, so a full set of ten
+     sits in two rows. */
+  grid?: boolean;
 }) {
   const { t } = useLingui();
   const collected = cards as CollectedCard[];
@@ -61,7 +65,7 @@ export function ShowcaseCards({
 
   return (
     <>
-      <div className={SHOWCASE_ROW_CLASS}>
+      <div className={grid ? SHOWCASE_SET_GRID_CLASS : SHOWCASE_ROW_CLASS}>
         {collected.map((card) => {
           const cardKey = packCardKeyOf(card);
           const thumbnail = getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card));
@@ -81,7 +85,7 @@ export function ShowcaseCards({
                 onCardOpen?.(card);
               }}
               style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
-              className={`${SHOWCASE_SLOT_CLASS} relative cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1`}
+              className={`${grid ? "" : SHOWCASE_SLOT_CLASS} relative cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1`}
               title={card.serial ? `${card.username}, serial #${card.serial}` : card.username}
             >
               <CollectionCardTile
@@ -100,7 +104,7 @@ export function ShowcaseCards({
             key={`slot-${index}`}
             type="button"
             onClick={onEmptySlotClick}
-            className={`${SHOWCASE_SLOT_CLASS} cursor-pointer rounded-[10px] border border-dashed border-osu-b3/60 text-[20px] font-light text-osu-f1 transition-colors hover:border-osu-pink/50 hover:text-osu-pink-light`}
+            className={`${grid ? "" : SHOWCASE_SLOT_CLASS} cursor-pointer rounded-[10px] border border-dashed border-osu-b3/60 text-[20px] font-light text-osu-f1 transition-colors hover:border-osu-pink/50 hover:text-osu-pink-light`}
             style={{ aspectRatio: "5 / 7" }}
             aria-label={t`Add a card to your showcase`}
           >

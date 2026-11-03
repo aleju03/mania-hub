@@ -10,12 +10,13 @@ import {
   ChevronRight,
   Clock,
   Copy,
-  ImagePlus,
+  Flag,
   Inbox,
   Layers,
   Lightbulb,
   ListPlus,
   MessageSquare,
+  Paperclip,
   Pencil,
   RefreshCw,
   Search,
@@ -27,20 +28,23 @@ import {
 
 import { Avatar } from "../../components/ui/Avatar";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
+import { BugReportAttachmentTiles, PendingFileTile } from "../../components/ui/BugReportAttachmentTiles";
 import { ImageLightbox } from "../../components/ui/ImageLightbox";
 import { MessageText } from "../../components/ui/MessageText";
 import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { describeBrowser } from "../../lib/bug-report-context";
 import {
-  imagesFromClipboard,
+  filesFromClipboard,
   uploadBugReportScreenshots,
   useBugReportScreenshots,
 } from "../../lib/bug-report-screenshots";
+import type { BugReportAttachmentLink } from "../../lib/bug-report-attachments";
 import { publishBugReportAlert } from "../../lib/bug-report-alert";
 import {
   BUG_REPORT_MAX_SCREENSHOTS,
   BUG_REPORT_MESSAGE_MAX,
+  SKIN_REPORT_PREFIX,
   bugReportHasUnreadReporterActivity,
   bugReportSeenReceipt,
   bugReportThreadMessages,
@@ -261,8 +265,9 @@ function Screenshots({
   className?: string;
   size?: string;
 }) {
-  const [urls, setUrls] = useState<string[] | null>(null);
+  const [urls, setUrls] = useState<BugReportAttachmentLink[] | null>(null);
   const [visible, setVisible] = useState(false);
+  const [zoomUrls, setZoomUrls] = useState<string[]>([]);
   const [zoom, setZoom] = useState<number | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
 
@@ -306,23 +311,19 @@ function Screenshots({
           ))}
         </div>
       ) : !urls.length ? (
-        <p className="text-[11px] text-osu-f1">Those images are gone.</p>
+        <p className="text-[11px] text-osu-f1">Those files are gone.</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {urls.map((url, index) => (
-            <button key={url} type="button" onClick={() => setZoom(index)} className="cursor-zoom-in">
-              <img
-                src={url}
-                alt=""
-                loading="lazy"
-                className={`${size} rounded-lg border border-osu-b3/30 object-cover transition-opacity duration-[120ms] hover:opacity-80`}
-              />
-            </button>
-          ))}
-        </div>
+        <BugReportAttachmentTiles
+          links={urls}
+          imageClassName={size}
+          onOpenImage={(imageUrls, index) => {
+            setZoomUrls(imageUrls);
+            setZoom(index);
+          }}
+        />
       )}
-      {zoom != null && urls?.length ? (
-        <ImageLightbox urls={urls} index={zoom} onIndex={setZoom} onClose={() => setZoom(null)} />
+      {zoom != null && zoomUrls.length ? (
+        <ImageLightbox urls={zoomUrls} index={zoom} onIndex={setZoom} onClose={() => setZoom(null)} />
       ) : null}
     </div>
   );
@@ -331,6 +332,13 @@ function Screenshots({
 /* One line instead of the raw key/value dump: the browser, the window it was
    in, and the build. The exact user agent is one hover away rather than four
    wrapped lines on every row. */
+// Filed from a skin page's flag: feedback on the skin's page with the header
+// line SkinReportModal writes. Feedback carries no context, so the header is
+// the mark.
+function isSkinReport(report: BugReport): boolean {
+  return report.kind === "feedback" && (report.pagePath?.startsWith("/skins/") ?? false) && report.body.startsWith(SKIN_REPORT_PREFIX);
+}
+
 function ContextLine({ context }: { context: BugReport["context"] }) {
   if (!context) return null;
   const userAgent = typeof context.userAgent === "string" ? context.userAgent : undefined;
@@ -547,7 +555,7 @@ function Editor({
         onChange={(event) => setDraft(event.target.value)}
         onPaste={(event) => {
           if (!attachments) return;
-          const pasted = imagesFromClipboard(event);
+          const pasted = filesFromClipboard(event);
           if (!pasted.length) return;
           event.preventDefault();
           images.add(pasted);
@@ -573,16 +581,20 @@ function Editor({
         <div className="flex flex-wrap gap-2">
           {files.map((file, index) => (
             <div key={`${file.name}-${index}`} className="relative">
-              <img
-                src={images.previews[index]}
-                alt=""
-                className="h-16 w-24 rounded-lg border border-osu-b3/30 object-cover"
-              />
+              {images.previews[index] ? (
+                <img
+                  src={images.previews[index]}
+                  alt=""
+                  className="h-16 w-24 rounded-lg border border-osu-b3/30 object-cover"
+                />
+              ) : (
+                <PendingFileTile name={file.name} className="h-16 w-24 rounded-lg" />
+              )}
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => images.removeAt(index)}
-                aria-label="Remove image"
+                aria-label="Remove file"
                 className="absolute -right-1.5 -top-1.5 cursor-pointer rounded-full border border-osu-b3/50 bg-osu-b5 p-0.5 text-osu-l2 transition-colors duration-[120ms] hover:text-white disabled:opacity-40"
               >
                 <X className="h-3 w-3" />
@@ -606,16 +618,15 @@ function Editor({
               type="button"
               disabled={busy || files.length >= BUG_REPORT_MAX_SCREENSHOTS}
               onClick={() => fileRef.current?.click()}
-              title="Add an image"
+              title="Attach an image or any file under 5MB"
               className={ACTION_CLASS}
             >
-              <ImagePlus className="h-3.5 w-3.5" />
-              Image
+              <Paperclip className="h-3.5 w-3.5" />
+              File
             </button>
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
               multiple
               className="hidden"
               onChange={(event) => {
@@ -719,10 +730,22 @@ function ReportCard({
             )}
             <span className="text-[11px] text-osu-f1">{formatWhen(report.createdAt)}</span>
             {report.pagePath ? (
-              <span className="rounded bg-osu-b4/60 px-1.5 py-0.5 text-[10.5px] text-osu-l2">{report.pagePath}</span>
+              <a
+                href={report.pagePath}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded bg-osu-b4/60 px-1.5 py-0.5 text-[10.5px] text-osu-l2 transition-colors hover:text-white"
+              >
+                {report.pagePath}
+              </a>
             ) : null}
             <span className={`rounded-md border px-1.5 py-0.5 text-[10.5px] ${meta.pill}`}>{meta.label}</span>
-            {report.kind === "feedback" ? (
+            {isSkinReport(report) ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-400/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300">
+                <Flag className="h-3 w-3" />
+                Skin report
+              </span>
+            ) : report.kind === "feedback" ? (
               <span className="inline-flex items-center gap-1 text-[11px] text-sky-200">
                 <Lightbulb className="h-3 w-3" />
                 Feedback
@@ -977,7 +1000,7 @@ function BugReportsAdminPage() {
       const uploaded = result.uploadToken && result.messageId
         ? await uploadBugReportScreenshots(id, result.uploadToken, files, () => {}, result.messageId)
         : 0;
-      if (uploaded < files.length) warning = "The reply was sent, but at least one image did not upload.";
+      if (uploaded < files.length) warning = "The reply was sent, but at least one file did not upload.";
     });
     if (warning) setError(warning);
   }, [act, reports]);

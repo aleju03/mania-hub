@@ -55,6 +55,7 @@ import { Route as AdminCompanellaPlayersRouteImport } from './routes/admin/compa
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as AdminDisabledChartsRouteImport } from './routes/admin/disabled-charts'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
+import { Route as AdminDiscordPlaygroundRouteImport } from './routes/admin/discord-playground'
 import { Route as AdminDynamicRendersRouteImport } from './routes/admin/dynamic-renders'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
 import { Route as AdminMascotRouteImport } from './routes/admin/mascot'
@@ -71,11 +72,13 @@ import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiBugReportUploadRouteImport } from './routes/api/bug-report-upload'
 import { Route as ApiCardMotifRouteImport } from './routes/api/card-motif'
 import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
+import { Route as ApiChangelogRouteImport } from './routes/api/changelog'
 import { Route as ApiCommunityBeatmapAssetRouteImport } from './routes/api/community-beatmap-asset'
 import { Route as ApiCommunityImageRouteImport } from './routes/api/community-image'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiOszRouteImport } from './routes/api/osz'
+import { Route as ApiReplayFileRouteImport } from './routes/api/replay-file'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
 import { Route as ApiSupporterCompanionRouteImport } from './routes/api/supporter-companion'
@@ -379,6 +382,11 @@ const AdminDiscordRoute = AdminDiscordRouteImport.update({
   path: '/admin/discord',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDiscordPlaygroundRoute = AdminDiscordPlaygroundRouteImport.update({
+  id: '/admin/discord-playground',
+  path: '/admin/discord-playground',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminDynamicRendersRoute = AdminDynamicRendersRouteImport.update({
   id: '/admin/dynamic-renders',
   path: '/admin/dynamic-renders',
@@ -459,6 +467,11 @@ const ApiCatboxUploadRoute = ApiCatboxUploadRouteImport.update({
   path: '/api/catbox-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiChangelogRoute = ApiChangelogRouteImport.update({
+  id: '/api/changelog',
+  path: '/api/changelog',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCommunityBeatmapAssetRoute =
   ApiCommunityBeatmapAssetRouteImport.update({
     id: '/api/community-beatmap-asset',
@@ -483,6 +496,11 @@ const ApiOgRoute = ApiOgRouteImport.update({
 const ApiOszRoute = ApiOszRouteImport.update({
   id: '/api/osz',
   path: '/api/osz',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiReplayFileRoute = ApiReplayFileRouteImport.update({
+  id: '/api/replay-file',
+  path: '/api/replay-file',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiReplayUploadRoute = ApiReplayUploadRouteImport.update({
@@ -910,6 +928,7 @@ export interface FileRoutesByFullPath {
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/disabled-charts': typeof AdminDisabledChartsRoute
   '/admin/discord': typeof AdminDiscordRoute
+  '/admin/discord-playground': typeof AdminDiscordPlaygroundRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/mascot': typeof AdminMascotRoute
@@ -926,11 +945,13 @@ export interface FileRoutesByFullPath {
   '/api/bug-report-upload': typeof ApiBugReportUploadRoute
   '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
+  '/api/changelog': typeof ApiChangelogRoute
   '/api/community-beatmap-asset': typeof ApiCommunityBeatmapAssetRoute
   '/api/community-image': typeof ApiCommunityImageRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/osz': typeof ApiOszRoute
+  '/api/replay-file': typeof ApiReplayFileRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/supporter-companion': typeof ApiSupporterCompanionRoute
@@ -1051,6 +1072,7 @@ export interface FileRoutesByTo {
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/disabled-charts': typeof AdminDisabledChartsRoute
   '/admin/discord': typeof AdminDiscordRoute
+  '/admin/discord-playground': typeof AdminDiscordPlaygroundRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/mascot': typeof AdminMascotRoute
@@ -1067,11 +1089,13 @@ export interface FileRoutesByTo {
   '/api/bug-report-upload': typeof ApiBugReportUploadRoute
   '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
+  '/api/changelog': typeof ApiChangelogRoute
   '/api/community-beatmap-asset': typeof ApiCommunityBeatmapAssetRoute
   '/api/community-image': typeof ApiCommunityImageRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/osz': typeof ApiOszRoute
+  '/api/replay-file': typeof ApiReplayFileRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/supporter-companion': typeof ApiSupporterCompanionRoute
@@ -1193,6 +1217,7 @@ export interface FileRoutesById {
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/disabled-charts': typeof AdminDisabledChartsRoute
   '/admin/discord': typeof AdminDiscordRoute
+  '/admin/discord-playground': typeof AdminDiscordPlaygroundRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/mascot': typeof AdminMascotRoute
@@ -1209,11 +1234,13 @@ export interface FileRoutesById {
   '/api/bug-report-upload': typeof ApiBugReportUploadRoute
   '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
+  '/api/changelog': typeof ApiChangelogRoute
   '/api/community-beatmap-asset': typeof ApiCommunityBeatmapAssetRoute
   '/api/community-image': typeof ApiCommunityImageRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/osz': typeof ApiOszRoute
+  '/api/replay-file': typeof ApiReplayFileRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/supporter-companion': typeof ApiSupporterCompanionRoute
@@ -1336,6 +1363,7 @@ export interface FileRouteTypes {
     | '/admin/dan-classifier'
     | '/admin/disabled-charts'
     | '/admin/discord'
+    | '/admin/discord-playground'
     | '/admin/dynamic-renders'
     | '/admin/live-backend'
     | '/admin/mascot'
@@ -1352,11 +1380,13 @@ export interface FileRouteTypes {
     | '/api/bug-report-upload'
     | '/api/card-motif'
     | '/api/catbox-upload'
+    | '/api/changelog'
     | '/api/community-beatmap-asset'
     | '/api/community-image'
     | '/api/favicon'
     | '/api/og'
     | '/api/osz'
+    | '/api/replay-file'
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/supporter-companion'
@@ -1477,6 +1507,7 @@ export interface FileRouteTypes {
     | '/admin/dan-classifier'
     | '/admin/disabled-charts'
     | '/admin/discord'
+    | '/admin/discord-playground'
     | '/admin/dynamic-renders'
     | '/admin/live-backend'
     | '/admin/mascot'
@@ -1493,11 +1524,13 @@ export interface FileRouteTypes {
     | '/api/bug-report-upload'
     | '/api/card-motif'
     | '/api/catbox-upload'
+    | '/api/changelog'
     | '/api/community-beatmap-asset'
     | '/api/community-image'
     | '/api/favicon'
     | '/api/og'
     | '/api/osz'
+    | '/api/replay-file'
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/supporter-companion'
@@ -1618,6 +1651,7 @@ export interface FileRouteTypes {
     | '/admin/dan-classifier'
     | '/admin/disabled-charts'
     | '/admin/discord'
+    | '/admin/discord-playground'
     | '/admin/dynamic-renders'
     | '/admin/live-backend'
     | '/admin/mascot'
@@ -1634,11 +1668,13 @@ export interface FileRouteTypes {
     | '/api/bug-report-upload'
     | '/api/card-motif'
     | '/api/catbox-upload'
+    | '/api/changelog'
     | '/api/community-beatmap-asset'
     | '/api/community-image'
     | '/api/favicon'
     | '/api/og'
     | '/api/osz'
+    | '/api/replay-file'
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/supporter-companion'
@@ -1760,6 +1796,7 @@ export interface RootRouteChildren {
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDisabledChartsRoute: typeof AdminDisabledChartsRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
+  AdminDiscordPlaygroundRoute: typeof AdminDiscordPlaygroundRoute
   AdminDynamicRendersRoute: typeof AdminDynamicRendersRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
   AdminMascotRoute: typeof AdminMascotRoute
@@ -1776,11 +1813,13 @@ export interface RootRouteChildren {
   ApiBugReportUploadRoute: typeof ApiBugReportUploadRoute
   ApiCardMotifRoute: typeof ApiCardMotifRoute
   ApiCatboxUploadRoute: typeof ApiCatboxUploadRoute
+  ApiChangelogRoute: typeof ApiChangelogRoute
   ApiCommunityBeatmapAssetRoute: typeof ApiCommunityBeatmapAssetRoute
   ApiCommunityImageRoute: typeof ApiCommunityImageRoute
   ApiFaviconRoute: typeof ApiFaviconRoute
   ApiOgRoute: typeof ApiOgRoute
   ApiOszRoute: typeof ApiOszRoute
+  ApiReplayFileRoute: typeof ApiReplayFileRoute
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
   ApiSupporterCompanionRoute: typeof ApiSupporterCompanionRoute
@@ -2164,6 +2203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDiscordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/discord-playground': {
+      id: '/admin/discord-playground'
+      path: '/admin/discord-playground'
+      fullPath: '/admin/discord-playground'
+      preLoaderRoute: typeof AdminDiscordPlaygroundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/dynamic-renders': {
       id: '/admin/dynamic-renders'
       path: '/admin/dynamic-renders'
@@ -2276,6 +2322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCatboxUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/changelog': {
+      id: '/api/changelog'
+      path: '/api/changelog'
+      fullPath: '/api/changelog'
+      preLoaderRoute: typeof ApiChangelogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/community-beatmap-asset': {
       id: '/api/community-beatmap-asset'
       path: '/api/community-beatmap-asset'
@@ -2309,6 +2362,13 @@ declare module '@tanstack/react-router' {
       path: '/api/osz'
       fullPath: '/api/osz'
       preLoaderRoute: typeof ApiOszRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/replay-file': {
+      id: '/api/replay-file'
+      path: '/api/replay-file'
+      fullPath: '/api/replay-file'
+      preLoaderRoute: typeof ApiReplayFileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/replay-upload': {
@@ -2999,6 +3059,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDisabledChartsRoute: AdminDisabledChartsRoute,
   AdminDiscordRoute: AdminDiscordRoute,
+  AdminDiscordPlaygroundRoute: AdminDiscordPlaygroundRoute,
   AdminDynamicRendersRoute: AdminDynamicRendersRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,
   AdminMascotRoute: AdminMascotRoute,
@@ -3015,11 +3076,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBugReportUploadRoute: ApiBugReportUploadRoute,
   ApiCardMotifRoute: ApiCardMotifRoute,
   ApiCatboxUploadRoute: ApiCatboxUploadRoute,
+  ApiChangelogRoute: ApiChangelogRoute,
   ApiCommunityBeatmapAssetRoute: ApiCommunityBeatmapAssetRoute,
   ApiCommunityImageRoute: ApiCommunityImageRoute,
   ApiFaviconRoute: ApiFaviconRoute,
   ApiOgRoute: ApiOgRoute,
   ApiOszRoute: ApiOszRoute,
+  ApiReplayFileRoute: ApiReplayFileRoute,
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
   ApiSupporterCompanionRoute: ApiSupporterCompanionRoute,

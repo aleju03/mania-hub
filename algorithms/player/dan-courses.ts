@@ -10,6 +10,9 @@ export interface DanCourse {
   skillset?: string;
   referenceBeatmapId?: number;
   checksum?: string;
+  od?: number;
+  fileOd?: number | null;
+  fileHp?: number | null;
   beatmapId: number;
   keyCount: number;
   side: DanCourseSide;
@@ -273,7 +276,8 @@ function creditPass(pass: CoursePass, options: DanCourseCreditOptions, statusByB
     : danCourseCreditOffset(accuracy, threshold, allowBelowBar, course);
   if (offset == null) return null;
   return {
-    ...(course.skillset ? { skillset: course.skillset, referenceBeatmapId: course.referenceBeatmapId } : {}),
+    ...(course.skillset ? { skillset: course.skillset } : {}),
+    ...(course.referenceBeatmapId != null ? { referenceBeatmapId: course.referenceBeatmapId } : {}),
     keyCount: course.keyCount,
     side: course.side,
     beatmapId: course.beatmapId,
@@ -293,18 +297,44 @@ function bestPerCourse(clears: DanCourseClear[]): DanCourseClear[] {
   const best = new Map<number, DanCourseClear>();
   for (const clear of clears) {
     const current = best.get(clear.beatmapId);
-    if (!current || clear.rawDan > current.rawDan) best.set(clear.beatmapId, clear);
+    if (!current || clear.rawDan > current.rawDan || (clear.rawDan === current.rawDan && clear.accuracy > current.accuracy)) {
+      best.set(clear.beatmapId, clear);
+    }
   }
   return [...best.values()].sort((a, b) => b.rawDan - a.rawDan);
 }
 
 const SKILLSET_ALLOWED_MODS = new Set(["NM", "MR", "HD", "FI", "FL", "SD", "PF", "DT", "NC", "CL", "V2", "SV2"]);
 
+const DIFFICULTY_ADJUST_SETTINGS = new Set(["overall_difficulty", "drain_rate", "extended_limits"]);
+
+function modAcronym(mod: OsuMod): string {
+  return (typeof mod === "string" ? mod : String(mod?.acronym ?? "")).toUpperCase();
+}
+
 function registeredModsAllowed(course: DanCourse, mods: OsuMod[] | null | undefined): boolean {
-  if (!danCourseModsAllowed(mods)) return false;
-  return !course.skillset || mods!.every((mod) => SKILLSET_ALLOWED_MODS.has(
-    (typeof mod === "string" ? mod : String(mod.acronym)).toUpperCase(),
-  ));
+  if (!course.skillset) return danCourseModsAllowed(mods);
+  if (!Array.isArray(mods)) return false;
+  const adjust = mods.filter((mod) => modAcronym(mod) === "DA");
+  const rest = mods.filter((mod) => modAcronym(mod) !== "DA");
+  if (adjust.length > 1 || !danCourseModsAllowed(rest) || !rest.every((mod) => SKILLSET_ALLOWED_MODS.has(modAcronym(mod)))) return false;
+  if (!adjust.length) return course.fileOd == null || course.od == null || Math.abs(course.fileOd - course.od) < 1e-9;
+  return practiceDifficultyAdjustAllowed(course, adjust[0]);
+}
+
+function practiceDifficultyAdjustAllowed(course: DanCourse, mod: OsuMod): boolean {
+  const settings = typeof mod === "string" ? null : (mod.settings ?? null) as Record<string, unknown> | null;
+  if (!settings || course.od == null) return false;
+  if (Object.keys(settings).some((key) => !DIFFICULTY_ADJUST_SETTINGS.has(key))) return false;
+  const od = Number(settings.overall_difficulty);
+  if (!(settings.overall_difficulty != null && Math.abs(od - course.od) < 1e-9)) return false;
+  if (settings.drain_rate == null) return true;
+  return course.fileHp != null && Number(settings.drain_rate) + 1e-9 >= course.fileHp;
+}
+
+export function danCourseCopy(course: DanCourse, beatmapId: number, checksum: string): DanCourse {
+  const { added: _added, ...rest } = course;
+  return { ...rest, beatmapId, referenceBeatmapId: course.beatmapId, checksum };
 }
 
 export interface DanCoursePass {

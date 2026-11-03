@@ -110,6 +110,23 @@ export function danTierName(displayName: string, formatLevel: (level: string) =>
   return `${formatLevel(level)} ${DAN_TIER_WORDS[danTierSuffix(displayName)] ?? DAN_TIER_WORDS[""]}`;
 }
 
+/**
+ * A dan verdict as a whole level, for the "whole dans" preference: the low
+ * and mid/low tiers read as the level below ("delta--" and "delta-" ->
+ * "gamma"), mid and above as their own level ("delta+" -> "delta"). The
+ * ladder's first level stays put.
+ */
+export function danWholeLabel(displayName: string, keyCount: number, side: string | null | undefined): string {
+  const bare = danBareLabel(displayName);
+  if (!danTierSuffix(displayName).startsWith("-")) return bare;
+  const context = danScaleContextFor(keyCount, side === "ln" ? "ln" : null);
+  const { min, max } = danLadderBounds(context);
+  for (let level = min + 1; level <= max; level++) {
+    if (danScaleLabel(level, context).toLowerCase() === bare) return danScaleLabel(level - 1, context).toLowerCase();
+  }
+  return bare;
+}
+
 // Where inside its level a verdict sits. The sign picks the hue - below the
 // level's middle reads cool, above it reads warm - and doubling the marker
 // pushes that hue further out, so "-" and "--" never read as two unrelated
@@ -123,6 +140,15 @@ const DAN_TIER_COLORS: Record<string, string> = {
 
 export function danTierColor(suffix: string): string | null {
   return DAN_TIER_COLORS[suffix] ?? null;
+}
+
+// rawDan centres each level on its integer (14 spans 13.5-14.5). Shown numbers
+// are lifted half a level so the whole part names the dan (14.0-15.0 is 14),
+// the way other dan estimators print them. Storage and math stay centred.
+export const DAN_DISPLAY_OFFSET = 0.5;
+
+export function formatDanValue(rawDan: number, digits = 2): string {
+  return (rawDan + DAN_DISPLAY_OFFSET).toFixed(digits);
 }
 
 // ── Dan picker scale ─────────────────────────────────────────────────────────

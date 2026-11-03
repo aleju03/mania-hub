@@ -10,6 +10,7 @@ import { DanLevelBadge } from "../player/DanLevelBadge";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { loadDanBoard, peekDanBoard } from "../../lib/skill-leaderboard-cache";
 import { formatNumber } from "../../lib/format";
+import { formatDanValue } from "../../lib/dan-images";
 import { useHiddenUserIds } from "../../store";
 import {
   DEFAULT_DAN_SKILLSET,
@@ -107,7 +108,7 @@ export function DanLeaderboardBoard({
         user: entry.user,
         value: (
           <span className="inline-flex items-center justify-end gap-2">
-            <span className="text-[11px] tabular-nums text-osu-f1">{entry.rawDan.toFixed(2)}</span>
+            <span className="text-[11px] tabular-nums text-osu-f1">{formatDanValue(entry.rawDan)}</span>
             <DanLevelBadge
               label={entry.label}
               keyCount={servedKeys}

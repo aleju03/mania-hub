@@ -61,8 +61,8 @@ interface RouteRule {
   /** OAuth endpoints answer in the OAuth error shape, not the envelope. */
   oauth: boolean;
   timeoutMs: number;
-  /** Query parameters carried to the backend, by name; every other one is dropped. */
-  query?: readonly string[];
+  /** Query parameters carried to the backend, by name with the values each takes; every other one is dropped. */
+  query?: Readonly<Record<string, RegExp>>;
 }
 
 const ROUTE_RULES: Record<NativeRouteId, RouteRule> = {
@@ -78,7 +78,16 @@ const ROUTE_RULES: Record<NativeRouteId, RouteRule> = {
   submissionBeatmapPart: { maxBodyBytes: PART_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
   submissionComplete: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
   presence: { maxBodyBytes: JSON_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
-  chartLeaderboard: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS, query: ["speed", "mods"] },
+  chartLeaderboard: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS, query: {
+    // Loose but inert: the backend answers a malformed value with a 400
+    // instead of the board it would get if the value were dropped here.
+    speed: /^[A-Za-z,]{0,32}$/,
+    mods: /^[A-Za-z,]{0,32}$/,
+    offset: /^[0-9]{0,9}$/,
+    country: /^[A-Za-z]{0,8}$/,
+    q: /^[^\p{Cc}]{0,64}$/u,
+    friends: /^[A-Za-z0-9]{0,8}$/,
+  } },
 };
 
 function backendBase(): string | null {
@@ -105,14 +114,14 @@ function resolveSubpath(route: NativeRouteId, params: Record<string, string>): s
   return resolved.includes(":") ? null : resolved;
 }
 
-/** The route's own query parameters, short letters and commas only; nothing else is carried. */
+/** The route's own query parameters, each only with a value its pattern takes; nothing else is carried. */
 function forwardedQuery(request: Request, rule: RouteRule): string {
-  if (!rule.query?.length) return "";
+  if (!rule.query) return "";
   const incoming = new URL(request.url).searchParams;
   const out = new URLSearchParams();
-  for (const name of rule.query) {
+  for (const [name, pattern] of Object.entries(rule.query)) {
     const value = incoming.get(name);
-    if (value != null && /^[A-Za-z,]{0,32}$/.test(value)) out.set(name, value);
+    if (value != null && pattern.test(value)) out.set(name, value);
   }
   const text = out.toString();
   return text ? `?${text}` : "";

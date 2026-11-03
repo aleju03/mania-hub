@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronRight, ImagePlus, Loader2, MessageSquare, X } from "lucide-react";
+import { Check, ChevronRight, Loader2, MessageSquare, Paperclip, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 
 import { Avatar } from "../components/ui/Avatar";
+import { BugReportAttachmentTiles, PendingFileTile } from "../components/ui/BugReportAttachmentTiles";
 import { ImageLightbox } from "../components/ui/ImageLightbox";
 import { MessageText } from "../components/ui/MessageText";
 import { OsuLogo } from "../components/ui/OsuLogo";
@@ -30,11 +31,12 @@ import {
   normalizeBugReportSourcePath,
 } from "../lib/bug-report-context";
 import {
-  imagesFromClipboard,
+  filesFromClipboard,
   uploadBugReportScreenshots,
   useBugReportScreenshots,
   type BugReportUploadStatus,
 } from "../lib/bug-report-screenshots";
+import type { BugReportAttachmentLink } from "../lib/bug-report-attachments";
 import { track } from "../lib/analytics";
 import { publishReplyAlert, refreshReplyAlert } from "../lib/reply-alert";
 import { formatTimeAgo } from "../lib/format";
@@ -309,7 +311,7 @@ function ReportPage() {
                 autoFocus
                 onChange={(event) => setBody(event.target.value.slice(0, BUG_REPORT_BODY_MAX))}
                 onPaste={(event) => {
-                  const pasted = imagesFromClipboard(event);
+                  const pasted = filesFromClipboard(event);
                   if (!pasted.length) return;
                   event.preventDefault();
                   addFiles(pasted);
@@ -333,7 +335,7 @@ function ReportPage() {
                 uploads={uploads}
                 busy={busy}
                 className="px-4 pb-1 pt-1"
-                onOpen={(index) => setLightbox({ urls: images.previews, index })}
+                onOpen={(urls, index) => setLightbox({ urls, index })}
                 onRemove={images.removeAt}
               />
 
@@ -342,16 +344,15 @@ function ReportPage() {
                   type="button"
                   disabled={busy || images.files.length >= BUG_REPORT_MAX_SCREENSHOTS}
                   onClick={() => fileInputRef.current?.click()}
-                  title={t`Add an image`}
-                  aria-label={t`Add an image`}
+                  title={t`Add a screenshot or file`}
+                  aria-label={t`Add a screenshot or file`}
                   className="inline-flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md text-osu-f1 transition-colors duration-[120ms] hover:bg-osu-b4/70 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <ImagePlus className="h-4 w-4" />
+                  <Paperclip className="h-4 w-4" />
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
                   multiple
                   className="hidden"
                   onChange={(event) => addFiles(event.target.files)}
@@ -359,7 +360,7 @@ function ReportPage() {
                 <span className="min-w-0 truncate text-[11px] text-osu-f1">
                   {trimmedLength > 0 && trimmedLength < BODY_MIN
                     ? tooShort
-                    : t`Paste, drop or pick a screenshot.`}
+                    : t`Paste, drop or pick a screenshot or any file under 5MB.`}
                 </span>
                 <div className="ml-auto flex flex-shrink-0 items-center gap-2.5">
                   {body.length >= COUNTER_FROM ? (
@@ -498,8 +499,8 @@ function SentPanel({
       {uploadWarning ? (
         <p className="mt-1.5 text-[12px] text-osu-pink-light">
           {kind === "feedback"
-            ? <Trans>Your feedback was sent, but at least one image did not upload.</Trans>
-            : <Trans>The report was sent, but at least one image did not upload.</Trans>}
+            ? <Trans>Your feedback was sent, but at least one file did not upload.</Trans>
+            : <Trans>The report was sent, but at least one file did not upload.</Trans>}
         </p>
       ) : null}
       <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -554,7 +555,7 @@ function UploadBadge({ status }: { status: BugReportUploadStatus }) {
   );
 }
 
-/** The picked-but-not-yet-sent images under whatever is being written. */
+/** The picked-but-not-yet-sent files under whatever is being written. */
 function PendingScreenshots({
   files,
   previews,
@@ -569,29 +570,35 @@ function PendingScreenshots({
   uploads: BugReportUploadStatus[];
   busy: boolean;
   className?: string;
-  onOpen: (index: number) => void;
+  /** Image previews only, and the index among them. */
+  onOpen: (urls: string[], index: number) => void;
   onRemove: (index: number) => void;
 }) {
   const { t } = useLingui();
   if (!files.length) return null;
+  const imageUrls = previews.filter(Boolean);
   return (
     <ul className={`flex flex-wrap gap-2 ${className}`}>
       {files.map((file, index) => (
         <li key={`${file.name}-${index}`} className="relative">
-          <button
-            type="button"
-            onClick={() => onOpen(index)}
-            aria-label={t`Open image`}
-            className="block cursor-zoom-in"
-          >
-            <ScreenshotThumb url={previews[index]} />
-          </button>
+          {previews[index] === "" ? (
+            <PendingFileTile name={file.name} className="h-14 w-20" />
+          ) : (
+            <button
+              type="button"
+              onClick={() => onOpen(imageUrls, imageUrls.indexOf(previews[index]!))}
+              aria-label={t`Open image`}
+              className="block cursor-zoom-in"
+            >
+              <ScreenshotThumb url={previews[index]} />
+            </button>
+          )}
           {uploads[index] ? <UploadBadge status={uploads[index]!} /> : null}
           {!busy ? (
             <button
               type="button"
               onClick={() => onRemove(index)}
-              aria-label={t`Remove image`}
+              aria-label={t`Remove file`}
               className="absolute -right-1.5 -top-1.5 cursor-pointer rounded-full border border-osu-b3/50 bg-osu-b5 p-0.5 text-osu-l2 transition-colors duration-[120ms] hover:text-white"
             >
               <X className="h-3 w-3" />
@@ -625,8 +632,7 @@ function ReporterScreenshots({
   onOpen: (urls: string[], index: number) => void;
   align: "start" | "end";
 }) {
-  const { t } = useLingui();
-  const [urls, setUrls] = useState<string[] | null>(null);
+  const [urls, setUrls] = useState<BugReportAttachmentLink[] | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -646,31 +652,24 @@ function ReporterScreenshots({
         onClick={() => setOpen(true)}
         className="inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-pink-light"
       >
-        <ImagePlus className="h-3.5 w-3.5" />
+        <Paperclip className="h-3.5 w-3.5" />
         {count === 1
-          ? <Trans>1 screenshot</Trans>
-          : <Trans>{count} screenshots</Trans>}
+          ? <Trans>1 attachment</Trans>
+          : <Trans>{count} attachments</Trans>}
       </button>
     );
   }
   if (!urls) return <Loader2 className="h-3.5 w-3.5 animate-spin text-osu-f1" />;
   if (!urls.length) {
-    return <p className="text-[11.5px] text-osu-f1"><Trans>Those images are no longer available.</Trans></p>;
+    return <p className="text-[11.5px] text-osu-f1"><Trans>Those files are no longer available.</Trans></p>;
   }
   return (
-    <div className={`flex flex-wrap gap-2 ${align === "end" ? "justify-end" : ""}`}>
-      {urls.map((url, index) => (
-        <button
-          key={url}
-          type="button"
-          onClick={() => onOpen(urls, index)}
-          aria-label={t`Open image`}
-          className="cursor-zoom-in"
-        >
-          <img src={url} alt="" className="h-20 rounded-xl border border-osu-b3/30 object-cover transition-opacity duration-[120ms] hover:opacity-80" />
-        </button>
-      ))}
-    </div>
+    <BugReportAttachmentTiles
+      links={urls}
+      imageClassName="h-20 rounded-xl"
+      className={align === "end" ? "justify-end" : ""}
+      onOpenImage={onOpen}
+    />
   );
 }
 
@@ -885,7 +884,7 @@ function ReporterReplyComposer({
           rows={2}
           onChange={(event) => setDraft(event.target.value)}
           onPaste={(event) => {
-            const pasted = imagesFromClipboard(event);
+            const pasted = filesFromClipboard(event);
             if (!pasted.length) return;
             event.preventDefault();
             images.add(pasted);
@@ -906,7 +905,7 @@ function ReporterReplyComposer({
           uploads={uploads}
           busy={busy}
           className="pt-2"
-          onOpen={(index) => onOpenImage(images.previews, index)}
+          onOpen={onOpenImage}
           onRemove={images.removeAt}
         />
         <div className="mt-2 flex items-center gap-3">
@@ -914,16 +913,15 @@ function ReporterReplyComposer({
             type="button"
             disabled={busy || images.files.length >= BUG_REPORT_MAX_SCREENSHOTS}
             onClick={() => fileInputRef.current?.click()}
-            title={t`Add an image`}
-            aria-label={t`Add an image`}
+            title={t`Add a screenshot or file`}
+            aria-label={t`Add a screenshot or file`}
             className="inline-flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md text-osu-f1 transition-colors duration-[120ms] hover:bg-osu-b4/70 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <ImagePlus className="h-4 w-4" />
+            <Paperclip className="h-4 w-4" />
           </button>
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
             multiple
             className="hidden"
             onChange={(event) => {
@@ -988,7 +986,7 @@ function ReporterReply({
     <>
       {uploadWarning ? (
         <p className={`mt-2 text-[11.5px] text-osu-pink-light ${conversation ? "text-right" : ""}`}>
-          <Trans>Your reply was sent, but at least one image did not upload.</Trans>
+          <Trans>Your reply was sent, but at least one file did not upload.</Trans>
         </p>
       ) : null}
       <div className={`mt-3 flex ${conversation ? "justify-end" : ""}`}>

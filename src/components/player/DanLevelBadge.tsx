@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 
-import { danBareLabel, getDanTierImageSrc } from "../../lib/dan-images";
+import { danBareLabel, danWholeLabel, getDanTierImageSrc } from "../../lib/dan-images";
+import { useWholeDans } from "../../store";
 
 // One player dan level, drawn once so the profile's dan chips and the /rankings
 // dan board can never render the same estimate two different ways.
@@ -103,7 +104,10 @@ export function DanLevelBadge({
   approximate?: boolean;
 }) {
   const { t } = useLingui();
-  const shown = beyondTable ? danBareLabel(label) : label;
+  const wholeDans = useWholeDans();
+  // The whole-dans preference only rewrites estimates; a course level or a
+  // count of players at a level is already whole.
+  const shown = beyondTable ? danBareLabel(label) : approximate && wholeDans ? danWholeLabel(label, keyCount, side) : label;
   const image = getDanTierImageSrc(shown, side === "ln" ? "ln" : undefined, keyCount);
   const approx = beyondTable ? ">" : "~";
 

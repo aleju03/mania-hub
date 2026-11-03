@@ -175,6 +175,7 @@ export function ShowcaseWallSkeleton({ cards }: { cards: number }) {
    Shared with ShowcaseCards, which draws the real thing. */
 export const SHOWCASE_ROW_CLASS = "flex flex-wrap gap-2.5 sm:gap-3";
 export const SHOWCASE_SLOT_CLASS = "w-[92px] sm:w-[116px]";
+export const SHOWCASE_SET_GRID_CLASS = "grid grid-cols-3 gap-2.5 sm:grid-cols-5 sm:gap-3";
 
 /* The shelf while it loads, at the count the caller last saw on it. */
 export function ShowcaseRowSkeleton({ cards }: { cards: number }) {

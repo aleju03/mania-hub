@@ -30,10 +30,10 @@ it("names the credited level and the chart estimate", () => {
     <DanProgressRail context="reform" chart={12.23} chartLabel="beta+" landed={12.38} landedLabel="beta++" />
   </I18nProvider>);
   expect(screen.getByText("Beta++")).toBeTruthy();
-  expect(screen.getByText("12.38")).toBeTruthy();
+  expect(screen.getByText("12.88")).toBeTruthy();
   expect(screen.getByText("Your credit")).toBeTruthy();
   expect(screen.getByText("Beta+")).toBeTruthy();
-  expect(screen.getByText("12.23")).toBeTruthy();
+  expect(screen.getByText("12.73")).toBeTruthy();
   expect(screen.getByText("Chart estimate")).toBeTruthy();
 });
 
@@ -42,7 +42,7 @@ it("says a rejected clear credits nothing and draws no landed mark", () => {
     <DanProgressRail context="reform" chart={12.23} chartLabel="beta+" landed={12.38} landedLabel="beta++" rejected />
   </I18nProvider>);
   expect(screen.getByText("No dan credit")).toBeTruthy();
-  expect(screen.queryByText("12.38")).toBeNull();
+  expect(screen.queryByText("12.88")).toBeNull();
   expect(screen.queryByTestId("dan-credit-connector")).toBeNull();
 });
 
@@ -54,7 +54,7 @@ it("puts Beta-- above the Alpha/Beta boundary", () => {
   const boundary = (11.5 - range.lo) / (range.hi - range.lo) * 100;
   expect(parseFloat(screen.getByTestId("dan-credit-marker").style.bottom)).toBeGreaterThan(boundary);
   expect(parseFloat(screen.getByTestId("dan-chart-marker").style.bottom)).toBeLessThan(boundary);
-  expect(screen.getByText("11.5–12.5")).toBeTruthy();
+  expect(screen.getByText("12.0–13.0")).toBeTruthy();
   expect(screen.getByText("Beta--")).toBeTruthy();
 });
 

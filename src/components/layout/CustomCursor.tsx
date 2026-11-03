@@ -16,6 +16,14 @@ const SMOKE_MAX_POINTS = 4000;
    the edge of the page (it could pass for browser UI) and show the fallback
    arrow instead. */
 const NATIVE_CURSOR_EDGE_LIMIT = 32;
+/* The native image hides a frame after the drawn orb first paints, so the
+   swap starts this far before the image would reach the edge. */
+const DRAWN_ORB_LEAD = 16;
+/* The canvas reaches the screen about this many frames after the native
+   cursor moves, so the glow and trail are drawn that far ahead along the
+   pointer's velocity. */
+const PRESENT_LAG_FRAMES = 1.5;
+const MAX_LEAD_PX = 64;
 
 interface TrailPoint {
   x: number;
@@ -176,7 +184,7 @@ function CursorOverlay() {
     if (!canvas) return;
 
     let settings: CursorSettings = readCursorSettings();
-    const pointer = { x: -100, y: -100, pressed: false, inside: false };
+    const pointer = { x: -100, y: -100, pressed: false, inside: false, typing: false };
     let pressScale = 1;
     let smoking = false;
     let smokeStartsStroke = true;
@@ -184,6 +192,10 @@ function CursorOverlay() {
     const smoke: SmokePoint[] = [];
     let rafId: number | null = null;
     let lastFrameAt: number | null = null;
+    // Pointer velocity in px/ms and when it was last measured, for drawing the
+    // effects where the native cursor will be when this frame is shown.
+    const motion = { vx: 0, vy: 0, at: 0 };
+    let frameMs = 1000 / 60;
 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     /* No `desynchronized`: on Windows it puts the canvas on a low-latency swap
@@ -198,11 +210,15 @@ function CursorOverlay() {
     // Where the browser would drop or rescale the native image, hide it and
     // draw the orb on the canvas instead.
     let drawnOrb = false;
+    // Firefox hides the native image before the canvas frame that replaces it
+    // reaches the screen, so the orb blinks out for a frame. Keep the native
+    // image until the drawn orb has painted once.
+    let orbPainted = false;
     let appliedCursor = "";
     let zoomTarget: EventTarget | null = null;
     let zoomed = false;
     const updateNativeCursor = () => {
-      const next = drawnOrb ? "none" : (pointer.pressed ? pressedCursor : normalCursor).css;
+      const next = drawnOrb && orbPainted ? "none" : (pointer.pressed ? pressedCursor : normalCursor).css;
       if (next === appliedCursor) return;
       appliedCursor = next;
       root.style.setProperty("--custom-cursor", next);
@@ -215,7 +231,7 @@ function CursorOverlay() {
       if (zoomed) return true;
       const size = Math.max(normalCursor.size, pressedCursor.size);
       if (size <= NATIVE_CURSOR_EDGE_LIMIT) return false;
-      const half = size / 2 + 1;
+      const half = size / 2 + 1 + DRAWN_ORB_LEAD;
       const width = root.clientWidth || window.innerWidth;
       const height = root.clientHeight || window.innerHeight;
       return pointer.x < half || pointer.y < half || pointer.x > width - half || pointer.y > height - half;
@@ -244,15 +260,28 @@ function CursorOverlay() {
       rafId = null;
 
       const dt = lastFrameAt == null ? 0.016 : Math.min(0.05, (time - lastFrameAt) / 1000);
+      if (lastFrameAt != null && time - lastFrameAt < 50) frameMs += (time - lastFrameAt - frameMs) * 0.1;
       lastFrameAt = time;
 
-      // Switch between the native and drawn orb in the frame that paints the
-      // canvas, so neither shows a frame without the other.
       updateNativeCursor();
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
       const now = performance.now();
+      /* Lead the pointer by the time since its last event plus the canvas's
+         own lag. Moves arrive about once a frame, so two frames without one
+         means it stopped, and the lead eases back to nothing. */
+      const sinceMove = now - motion.at;
+      const fade = Math.max(0, 1 - sinceMove / (frameMs * 2));
+      let leadX = motion.vx * (sinceMove + PRESENT_LAG_FRAMES * frameMs) * fade;
+      let leadY = motion.vy * (sinceMove + PRESENT_LAG_FRAMES * frameMs) * fade;
+      const leadLength = Math.hypot(leadX, leadY);
+      if (leadLength > MAX_LEAD_PX) {
+        leadX *= MAX_LEAD_PX / leadLength;
+        leadY *= MAX_LEAD_PX / leadLength;
+      }
+      const headX = pointer.x + leadX;
+      const headY = pointer.y + leadY;
       while (smoke.length > 0 && now - smoke[0].at >= SMOKE_LIFETIME_MS) smoke.shift();
       while (trail.length > 0 && now - trail[0].at >= TRAIL_LIFETIME_MS) trail.shift();
 
@@ -285,17 +314,32 @@ function CursorOverlay() {
           context.globalAlpha = life * 0.8;
           context.drawImage(trailSprite.canvas, point.x - size / 2, point.y - size / 2, size, size);
         }
+        // Close the gap from the newest point up to the led head.
+        const last = trail[trail.length - 1];
+        if (last && pointer.inside && !pointer.typing) {
+          const gap = Math.hypot(headX - last.x, headY - last.y);
+          const size = trailSprite.size * pressScale;
+          context.globalAlpha = 0.8;
+          for (let step = TRAIL_MIN_DISTANCE; step < gap; step += TRAIL_MIN_DISTANCE) {
+            const x = last.x + ((headX - last.x) * step) / gap;
+            const y = last.y + ((headY - last.y) * step) / gap;
+            context.drawImage(trailSprite.canvas, x - size / 2, y - size / 2, size, size);
+          }
+        }
         context.globalAlpha = 1;
       }
 
-      if (glowSprite && pointer.inside) {
+      if (glowSprite && pointer.inside && !pointer.typing) {
         const size = glowSprite.size * pressScale;
-        context.drawImage(glowSprite.canvas, pointer.x - size / 2, pointer.y - size / 2, size, size);
+        context.drawImage(glowSprite.canvas, headX - size / 2, headY - size / 2, size, size);
       }
 
       if (drawnOrb && pointer.inside && normalCursor.image) {
         const size = normalCursor.size * pressScale;
-        context.drawImage(normalCursor.image, pointer.x - size / 2, pointer.y - size / 2, size, size);
+        context.drawImage(normalCursor.image, headX - size / 2, headY - size / 2, size, size);
+        orbPainted = true;
+      } else {
+        orbPainted = false;
       }
 
       const targetScale = pointer.pressed ? 1.25 : 1;
@@ -304,7 +348,9 @@ function CursorOverlay() {
       const idle =
         smoke.length === 0 &&
         trail.length === 0 &&
-        Math.abs(pressScale - targetScale) < 0.01;
+        Math.abs(pressScale - targetScale) < 0.01 &&
+        fade === 0 &&
+        !(orbPainted && appliedCursor !== "none");
       if (!idle && isPageVisible()) {
         rafId = requestAnimationFrame(draw);
       } else {
@@ -321,9 +367,19 @@ function CursorOverlay() {
     const handlePointerMove = (event: PointerEvent) => {
       if (event.pointerType === "touch") return;
       const now = performance.now();
+      const elapsed = now - motion.at;
+      if (pointer.inside && elapsed > 0 && elapsed < 100) {
+        motion.vx += ((event.clientX - pointer.x) / elapsed - motion.vx) * 0.6;
+        motion.vy += ((event.clientY - pointer.y) / elapsed - motion.vy) * 0.6;
+      } else {
+        motion.vx = 0;
+        motion.vy = 0;
+      }
+      motion.at = now;
       pointer.x = event.clientX;
       pointer.y = event.clientY;
       pointer.inside = true;
+      pointer.typing = false;
       drawnOrb = needsDrawnOrb(event.target);
 
       if (settings.trail) {
@@ -364,8 +420,19 @@ function CursorOverlay() {
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== "KeyC" || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (isEditableTarget(event.target)) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isEditableTarget(event.target)) {
+        // The system hides the pointer while typing; hide the glow and trail
+        // with it until the mouse moves again. A drawn orb stays, since it is
+        // the only cursor there is near the edges.
+        if (event.key.length === 1 || event.key === "Backspace" || event.key === "Delete" || event.key === "Enter") {
+          pointer.typing = true;
+          trail.length = 0;
+          ensureRunning();
+        }
+        return;
+      }
+      if (event.code !== "KeyC") return;
       if (!smoking) {
         smoking = true;
         smokeStartsStroke = true;

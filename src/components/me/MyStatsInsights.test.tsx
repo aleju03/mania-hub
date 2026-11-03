@@ -62,6 +62,39 @@ it("shows a dash rather than a rating for a tag with too few plays to rate", () 
   expect(container.textContent).toContain("-");
 });
 
+it("names dan tiles by their dan labels, puts each tile's play count beside it, and prefixes LN tiles", () => {
+  const fourKey: MyDataSkillMode = {
+    keyCount: 4,
+    analyzedPlays: 400,
+    ratings: { Overall: 30 },
+    patterns: [{ id: "tech", rating: 30.87, plays: 280 }],
+    dan: {
+      rc: { rawDan: 9.7, label: "10-", clears: 40, skillsets: { stamina: { rawDan: 10.3, label: "10+", clears: 7 } } },
+      ln: null,
+    },
+  };
+  const tiled: MyDataInsights = {
+    ...insights,
+    diet: [{
+      keyCount: 4,
+      analyzed: 400,
+      untagged: 0,
+      tiles: true,
+      tags: [
+        { id: "stamina", plays: 160, pct: 40, side: "rc" },
+        { id: "lnspeed", plays: 40, pct: 10, side: "ln" },
+      ],
+    }],
+  };
+  const { container } = render(<PlayDietCard insights={tiled} mode={fourKey} />);
+  const text = container.textContent ?? "";
+  expect(text).toContain("40% of your analyzed 4K plays are Stamina.");
+  expect(text).toContain("LN Speed");
+  // The tile's play count, not the old per-tag MSD rating.
+  expect(text).not.toContain("30.87");
+  expect(text).toContain("160");
+});
+
 it("renders nothing for a keymode with no diet or too few analyzed plays", () => {
   const fourKey: MyDataSkillMode = { ...mode, keyCount: 4 };
   expect(render(<PlayDietCard insights={insights} mode={fourKey} />).container.textContent).toBe("");

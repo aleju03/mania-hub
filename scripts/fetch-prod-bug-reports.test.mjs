@@ -76,7 +76,7 @@ test("exports original and reply images, preserves failed downloads, and never s
   expect(markdown).toContain("osu! ID 123");
   expect(markdown).toContain("![Submitted image](image-2.webp)");
   expect(markdown).not.toContain("<script>");
-  expect(markdown).toContain("Image unavailable: Image download failed");
+  expect(markdown).toContain("Attachment unavailable: Image download failed");
 });
 
 test("quotes shell metacharacters as literal path contents", () => {

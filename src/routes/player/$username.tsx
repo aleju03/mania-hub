@@ -2283,7 +2283,7 @@ export function PlayerProfilePage({
   // The join date is a static profile fact, not live status, so it sits on
   // the stat rail with the other facts instead of trailing the name
   // alongside a link and a presence readout.
-  const joinedValue = !profileStatsProjectedOnly && hasValidDate(user.join_date) ? formatDate(user.join_date) : null;
+  const joinedValue = !profileStatsProjectedOnly && hasValidDate(user.join_date) ? formatDate(user.join_date, "UTC", locale) : null;
 
   /* A supporter's profile theme: the page takes its colours, and its bands
      turn see-through over the theme's backdrop, which stays pinned behind
@@ -2649,7 +2649,7 @@ export function PlayerProfilePage({
               label={t`Peak`}
               value={awaitingPeak ? heroValueSkeleton : peakRank ? `#${formatNumber(peakRank)}` : "-"}
               valueClassName={peakRank ? getRankTierClass(peakRank) || "text-white" : "text-white"}
-              sub={peakRank && peakRankDate ? t`achieved ${formatDate(peakRankDate)}` : null}
+              sub={peakRank && peakRankDate ? t`achieved ${formatDate(peakRankDate, "UTC", locale)}` : null}
             />
             <HeroStat
               label={t`Performance`}

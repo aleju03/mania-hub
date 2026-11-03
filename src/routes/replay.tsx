@@ -12,7 +12,8 @@ import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { loadReplayRenderer, preloadReplayRenderer } from "../lib/replay-renderer-loader";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getModDisplayList, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring, beatmapStatusAwardsPp } from "../lib/score";
-import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry } from "../store";
+import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry, useWholeDans } from "../store";
+import { useMapDanLabel } from "../lib/use-map-dan-label";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { exitNativeFullscreen, getNativeFullscreenElement, requestNativeFullscreen } from "../lib/fullscreen";
@@ -42,7 +43,7 @@ import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability, isReplayFileMissingError, replayFileMissingMessage } from "../lib/replay-score-availability";
 import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
-import { buildReplayShareUrl } from "../lib/replay-share";
+import { buildReplayDownloadUrl, buildReplayShareUrl, replayDownloadFilename } from "../lib/replay-share";
 import { getBeatmapAudioUrl, getBeatmapAudioWaveUrl, getBeatmapHitsoundsUrl, getInlineBackgroundUrl } from "../lib/audio-url";
 import { readReplayAudioClock } from "../lib/replay-audio-clock";
 import { ReplayHitsoundPlayer } from "../lib/replay-hitsounds";
@@ -244,10 +245,10 @@ const REPLAY_PLAYER_BEST_FALLBACK_LIMIT = 50;
 const REPLAY_PLAYER_RECENT_LIMIT = 25;
 const REPLAY_PLAYER_PINNED_LIMIT = 25;
 const REPLAY_PLAYER_FIRSTS_LIMIT = 50;
-const REPLAY_LANDING_SEO_TITLE = msg`osu!mania replay watcher`;
+const REPLAY_LANDING_SEO_TITLE = msg`osu!mania replay viewer`;
 // The English original of the title above: the landing card's R2 key is
 // derived from it, so every locale shares the one English card.
-const REPLAY_LANDING_OG_TITLE = "osu!mania replay watcher";
+const REPLAY_LANDING_OG_TITLE = "osu!mania replay viewer";
 const REPLAY_LANDING_SEO_DESCRIPTION =
   msg`Watch osu!mania replays in your browser.`;
 const REPLAY_END_AUDIO_FADE_MS = 1500;
@@ -2020,6 +2021,22 @@ function ReplayPage() {
     });
   }, [replay, loadedUploadId, uploadId, importId, uploadedReplayShareUrl, scoreId]);
 
+  // The .osr behind the footer's Download button, named the way osu!
+  // names its own exports. Imports and unsaved local files have none.
+  const replayDownloadUrl = useMemo(() => {
+    if (!replay || importId != null) return null;
+    const filename = replayDownloadFilename({
+      playerName: replay.header.playerName,
+      artist: scoreInfo?.beatmapset?.artist ?? beatmap?.artist,
+      title: scoreInfo?.beatmapset?.title ?? beatmap?.title,
+      version: scoreInfo?.beatmap?.version ?? beatmap?.version,
+      playedAt: scoreInfo?.ended_at ?? scoreInfo?.created_at,
+    });
+    if (loadedUploadId != null) return buildReplayDownloadUrl({ uploadId: loadedUploadId, filename });
+    if (uploadId != null) return null;
+    return buildReplayDownloadUrl({ scoreId, filename });
+  }, [replay, importId, loadedUploadId, uploadId, scoreId, scoreInfo, beatmap]);
+
   // For uploaded files, uploader identity wins even when the embedded score id
   // happens to resolve to a different osu! player. Ordinary score replays keep
   // using the player returned by the score API.
@@ -2041,6 +2058,7 @@ function ReplayPage() {
       mods={starMods}
       fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId}
       shareUrl={replayShareUrl ?? undefined}
+      downloadUrl={replayDownloadUrl}
       onDeleteUpload={canDeleteLoadedUpload ? handleDeleteLoadedUpload : undefined}
       deletingUpload={deletingUpload}
       playerProfile={playerProfile}
@@ -3399,7 +3417,10 @@ function ReplayViewer({
   const noDans = useNoDans();
   const danBeatmapId = scoreInfo?.beatmap?.id ?? null;
   const mapInfoDanOn = !noDans && overlaySettings.mapInfo.enabled && overlaySettings.mapInfo.mapInfo?.dan !== false;
-  const danKey = mapInfoDanOn && danBeatmapId ? `${danBeatmapId}:${Math.round(modRate * 100)}:${replay.keyCount}` : null;
+  const shownDanLabel = useMapDanLabel();
+  const wholeDans = useWholeDans();
+  // The preference rides the key so flipping it re-labels the card.
+  const danKey = mapInfoDanOn && danBeatmapId ? `${danBeatmapId}:${Math.round(modRate * 100)}:${replay.keyCount}:${wholeDans ? "whole" : "tier"}` : null;
   const [mapDan, setMapDan] = useState<{ key: string; dan: ReplayMapDan | null } | null>(null);
   const mapDanKey = mapDan?.key;
   useEffect(() => {
@@ -3410,15 +3431,16 @@ function ReplayViewer({
       const verdict = ratePercent === 100
         ? await fetchLiveChartAnalysis(beatmapId).then((detail) => (detail?.status === "ready" ? detail.primaryDan ?? null : null))
         : await fetchLiveRateChartAnalysis(beatmapId, ratePercent / 100).then((result) => result?.dan ?? null);
-      const src = verdict ? getDanTierImageSrc(verdict.label, verdict.family === "ln" ? "ln" : undefined, keyCount) : null;
+      const label = verdict ? shownDanLabel(verdict.label, keyCount, verdict.family) : null;
+      const src = verdict && label ? getDanTierImageSrc(label, verdict.family === "ln" ? "ln" : undefined, keyCount) : null;
       const imageUrl = src ? await rasterizeDanBadge(src) : null;
       if (cancelled) return;
-      setMapDan({ key: danKey, dan: verdict ? { label: verdict.label, family: verdict.family, ...(imageUrl ? { imageUrl } : {}) } : null });
+      setMapDan({ key: danKey, dan: verdict && label ? { label, family: verdict.family, ...(imageUrl ? { imageUrl } : {}) } : null });
     })();
     return () => {
       cancelled = true;
     };
-  }, [danKey, mapDanKey]);
+  }, [danKey, mapDanKey, shownDanLabel]);
   const shownMapDan = danKey && mapDan?.key === danKey ? mapDan.dan : null;
 
   // The cover fallback is cross-origin; the card reads it through the proxy.

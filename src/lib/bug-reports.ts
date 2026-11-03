@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
+import { describeBugReportAttachmentKey, type BugReportAttachmentLink } from "./bug-report-attachments";
 import { adminAuthHeaders, bridgeAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 import { reporterKeyFor } from "./reporter-key";
@@ -47,6 +48,8 @@ export const BUG_REPORT_BODY_MAX = 4000;
 export const BUG_REPORT_MESSAGE_MAX = 4000;
 /** Matches the backend cap; the form refuses a fourth image before uploading it. */
 export const BUG_REPORT_MAX_SCREENSHOTS = 3;
+/** Opens the body of a report filed from a skin page's flag; the admin board keys on it. */
+export const SKIN_REPORT_PREFIX = "Skin report: ";
 
 export interface BugReportContext {
   [key: string]: string | number | boolean | null;
@@ -616,7 +619,7 @@ export const promoteBugReportToTodo = createServerFn({ method: "POST" })
   });
 
 /**
- * Signed, short-lived URLs for one report's screenshots. Admins get any
+ * Signed, short-lived URLs for one report's attachments. Admins get any
  * report's; a signed-in reporter gets their own. Nobody else gets a URL at all,
  * and no screenshot ever has a public one.
  */
@@ -625,7 +628,7 @@ export const getBugReportScreenshotUrls = createServerFn({ method: "GET" })
     id: String(data?.id ?? ""),
     messageId: data?.messageId ? String(data.messageId) : null,
   }))
-  .handler(async ({ data }): Promise<string[]> => {
+  .handler(async ({ data }): Promise<BugReportAttachmentLink[]> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const base = getServerLiveBackendUrl();
@@ -639,8 +642,12 @@ export const getBugReportScreenshotUrls = createServerFn({ method: "GET" })
     if (!keys.length) return [];
 
     const { getBugReportScreenshotUrl } = await import("./r2-cache");
-    const urls = await Promise.all(keys.map((key) => getBugReportScreenshotUrl(key)));
-    return urls.filter((url): url is string => Boolean(url));
+    const links = await Promise.all(keys.map(async (key): Promise<BugReportAttachmentLink | null> => {
+      const attachment = describeBugReportAttachmentKey(key);
+      const url = attachment ? await getBugReportScreenshotUrl(key) : null;
+      return attachment && url ? { url, ...attachment } : null;
+    }));
+    return links.filter((link): link is BugReportAttachmentLink => link != null);
   });
 
 async function adminScreenshotKeys(id: string, messageId: string | null): Promise<string[]> {

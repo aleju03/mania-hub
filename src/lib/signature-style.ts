@@ -20,7 +20,7 @@ import type { MessageDescriptor } from "@lingui/core";
 // A style change moves that type's data version instead, which supersedes the
 // stored render exactly the way a new score does.
 
-import { SIGNATURE_TYPES, type SignatureType } from "./signature-shared";
+import { SIGNATURE_TYPES, type SignatureDesign, type SignatureType } from "./signature-shared";
 
 export type SignatureBackgroundArt = "triangles" | "notes";
 
@@ -52,6 +52,8 @@ export interface SignatureBackgroundOption {
    new caller must use that path rather than fetch(). */
 export const SIGNATURE_BACKGROUNDS: SignatureBackgroundOption[] = [
   { id: "none", label: msg`None`, swatch: "#1a1320" },
+  /* The ManiaCard's own rarity colours, drawn from the player's tier. */
+  { id: "tier", label: msg`Card tier`, types: ["maniacard"], swatch: "linear-gradient(135deg,#92400e,#fbbf24)" },
   { id: "solid", label: msg`Solid`, painted: true },
   { id: "gradient", label: msg`Gradient`, painted: true },
   /* The site's own two backdrops, in the player's colour. Both are drawn
@@ -174,6 +176,27 @@ export interface SignatureStyle {
   /* Which ladder the dan skillsets layout draws. Its keymode is keyCount for
      regular and lnKeyCount for LN, the same fields the other dan layouts use. */
   skillsetSide: "rc" | "ln";
+  /** How large the card front is drawn. See SIGNATURE_CARD_SIZES. */
+  cardSize: SignatureCardSize;
+}
+
+/* The card front's sizes, all at the card's 5:7. Large is the design's own
+   size; the smaller ones fit next to other images on a profile. */
+export const SIGNATURE_CARD_SIZES = {
+  large: { width: 480, height: 672 },
+  medium: { width: 360, height: 504 },
+  small: { width: 240, height: 336 },
+} as const;
+export type SignatureCardSize = keyof typeof SIGNATURE_CARD_SIZES;
+
+function normalizeSignatureCardSize(raw: unknown): SignatureCardSize {
+  return raw === "medium" || raw === "small" ? raw : "large";
+}
+
+/** The pixel size a layout renders at for this style. Only the card front
+    has a size choice; every other layout is its declared size. */
+export function signatureRenderSize(spec: SignatureDesign, style: SignatureStyle): { width: number; height: number } {
+  return spec.ownArt ? SIGNATURE_CARD_SIZES[style.cardSize] : { width: spec.width, height: spec.height };
 }
 
 export const SIGNATURE_OPACITY_RANGE = { min: 10, max: 100 } as const;
@@ -203,6 +226,7 @@ export const DEFAULT_SIGNATURE_STYLE: SignatureStyle = {
   lnKeyCount: null,
   watermark: true,
   skillsetSide: "rc",
+  cardSize: "large",
 };
 
 /* https only, and no embedded credentials. The transport in
@@ -253,6 +277,7 @@ export function normalizeSignatureStyle(raw: unknown, type?: SignatureType): Sig
     // Absent means a style stored before the toggle existed, which is on.
     watermark: input.watermark !== false,
     skillsetSide: input.skillsetSide === "ln" ? "ln" : "rc",
+    cardSize: normalizeSignatureCardSize(input.cardSize),
   };
 }
 
@@ -317,6 +342,7 @@ export function serializeSignatureStyleMap(map: SignatureStyleMap): string {
       lnKeyCount: style.lnKeyCount,
       watermark: style.watermark,
       skillsetSide: style.skillsetSide,
+      cardSize: style.cardSize,
     };
   }
   return JSON.stringify(ordered);

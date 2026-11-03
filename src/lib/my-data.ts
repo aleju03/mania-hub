@@ -530,13 +530,17 @@ export interface MyDataDietTag {
   id: string;
   plays: number;
   pct: number;
+  /** The dan side a tile belongs to; absent on a pattern tag. */
+  side?: "rc" | "ln";
 }
 
 export interface MyDataDietMode {
   keyCount: number;
   analyzed: number;
-  /** Analyzed plays whose chart carries no pattern tag. */
+  /** Analyzed plays filed under no tile (or tag). */
   untagged: number;
+  /** The rows are the dan skill tiles each play files under, not pattern tags. */
+  tiles?: true;
   tags: MyDataDietTag[];
 }
 

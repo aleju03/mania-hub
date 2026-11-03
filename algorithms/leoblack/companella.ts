@@ -54,6 +54,17 @@ export async function computeCompanellaEstimate(
 export const COMPANELLA_RATE_FLOOR_STEPS = [0.05, 0.1] as const;
 const COMPANELLA_RATE_FLOOR_MIN_RATE = 0.5;
 
+let fileSpeedResolver: ((map: ManiaBeatmap) => Promise<number>) | null = null;
+
+export function setFileSpeedResolver(resolver: ((map: ManiaBeatmap) => Promise<number>) | null): void {
+  fileSpeedResolver = resolver;
+}
+
+export async function fileSpeedFor(map: ManiaBeatmap): Promise<number> {
+  if (map.keyCount !== 7 || !fileSpeedResolver) return 1;
+  return fileSpeedResolver(map).catch(() => 1);
+}
+
 export async function classifyChartWithCompanella(
   map: ManiaBeatmap,
   osuText: string,
@@ -61,6 +72,7 @@ export async function classifyChartWithCompanella(
   options: { msdValues?: Record<string, number> | null; skipCompanella?: boolean; rateFloor?: boolean } = {},
 ): Promise<ChartClassificationData> {
   input = { ...input, mixedCacheId: crypto.randomUUID() };
+  if (input.fileSpeed == null) input.fileSpeed = await fileSpeedFor(map);
   const resolved = await resolveCompanella(map, osuText, input, classifyChartOnThread, {
     ...options, needsNativeMsd: (first) => lnRatingIdentityUndecided(first.keyCount, first),
   });

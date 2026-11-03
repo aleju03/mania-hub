@@ -292,6 +292,23 @@ pub fn prism_sections(chart: &PrismChart, centre_hand: u8, p: &PrismModel) -> Ve
         lo < xs.len() && xs[lo] - t <= release_repress_ms
     };
     let hands = prism_hands(key_count, centre_hand);
+    let release_busy_ms = p.release_busy_ms;
+    let release_busy_power = p.release_busy_power;
+    let mut next_event: [Vec<f64>; 2] = [Vec::new(), Vec::new()];
+    if release_busy_ms > 0.0 {
+        for h in 0..2 {
+            let mut next = vec![0.0f64; time.len()];
+            let mut at = f64::INFINITY;
+            for r in (0..time.len()).rev() {
+                next[r] = at;
+                if ((chart.press[r] | chart.release[r]) as i32) & hands[h] != 0 {
+                    at = time[r];
+                }
+            }
+            next_event[h] = next;
+        }
+    }
+    let mut last_event = [f64::NEG_INFINITY; 2];
     let centre_bit = if key_count % 2 == 1 { bit(key_count.div_euclid(2)) } else { 0 };
     let mut last_press = vec![f64::NEG_INFINITY; lanes];
     let mut released_since = vec![false; lanes];
@@ -323,6 +340,8 @@ pub fn prism_sections(chart: &PrismChart, centre_hand: u8, p: &PrismModel) -> Ve
     let mut row1: i32 = 0;
     let mut row2: i32 = 0;
     let mut row1_at = f64::NEG_INFINITY;
+    let mut hand_row = [0i32; 2];
+    let mut hand_row_at = [f64::NEG_INFINITY; 2];
     let mut gap_ring = [-1i32; RHYTHM_ROWS];
     let mut gap_count = [0u32; RHYTHM_BUCKETS];
     let mut gap_filled: u32 = 0;
@@ -366,7 +385,21 @@ pub fn prism_sections(chart: &PrismChart, centre_hand: u8, p: &PrismModel) -> Ve
         }
         if row != 0 {
             let close = t - row1_at <= MOTION_MAX_GAP_MS;
-            if close && (row & row1) != 0 {
+            let mut hand_jack = false;
+            if p.hand_jack_ms > 0.0 {
+                for h in 0..2 {
+                    let part = row & hands[h];
+                    if part == 0 {
+                        continue;
+                    }
+                    if t - hand_row_at[h] <= p.hand_jack_ms && part == hand_row[h] && bits(part) >= 2 {
+                        hand_jack = true;
+                    }
+                    hand_row[h] = part;
+                    hand_row_at[h] = t;
+                }
+            }
+            if (close && (row & row1) != 0) || hand_jack {
                 pattern = if chord_row { CHORDJACK } else { JACK };
             } else if close
                 && chord_row
@@ -374,6 +407,7 @@ pub fn prism_sections(chart: &PrismChart, centre_hand: u8, p: &PrismModel) -> Ve
                 && bits(row2) >= 2
                 && (row2 & row1) == 0
                 && (row1 & row) == 0
+                && (row2 & row) != 0
                 && !rolls_past(row2, row1)
                 && !rolls_past(row1, row)
             {
@@ -570,9 +604,17 @@ pub fn prism_sections(chart: &PrismChart, centre_hand: u8, p: &PrismModel) -> Ve
                         releases += share * release_long_units * min(1.0, (t - last_press[lane]) / release_long_full_ms);
                     }
                 }
+                if release_busy_ms > 0.0 {
+                    let before = if chart.press[i] as i32 & mask != 0 { 0.0 } else { t - last_event[h] };
+                    let gap = min(before, next_event[h][i] - t);
+                    if gap > release_busy_ms {
+                        releases *= pow(release_busy_ms / gap, release_busy_power);
+                    }
+                }
                 mix[LN] += releases;
                 units += releases;
             }
+            last_event[h] = t;
             fast[h] += units;
             sustain[h] += units / p.sustain_ratio;
             stamina[h] += units * (p.half_life_ms / p.stamina_half_life_ms);

@@ -186,7 +186,7 @@ msgstr "{0, plural, other {有 # 个转谱成绩未计入，osu! 自己的键数
 msgid "{0, plural, one {# copy} other {# copies}}"
 msgstr "{0, plural, other {# 张}}"
 
-#. placeholder {0}: model.diffs.length
+#. placeholder {0}: diffs.length
 #: src/components/maps/SearchCard.tsx
 #~ msgid "{0, plural, one {# diff} other {# diffs}}"
 #~ msgstr "{0, plural, other {# 个难度}}"
@@ -832,6 +832,11 @@ msgstr "其中 {0} 个成绩所在的 {charts} 在 osu! 上有改动，正在等
 msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
 msgstr "其中 {0} 个成绩所在的 {charts} 在 osu! 上有改动，正在等待重新检查。"
 
+#. placeholder {0}: offBoard(packCardKeyOf(menu.card), 1)
+#: src/components/packs/CollectionPanel.tsx
+msgid "{0} off the board"
+msgstr "{0} 张离开展板"
+
 #. placeholder {0}: pendingRevoke.appName
 #: src/components/settings/CompanellaGroup.tsx
 msgid "{0} on that computer stops sending plays right away."
@@ -1192,7 +1197,7 @@ msgstr "超出已通过曲目目标的分数，有 {0}% 会带入下一首曲目
 
 #. placeholder {0}: top.pct
 #. placeholder {1}: mode.keyCount
-#. placeholder {2}: patternLabel(top.id)
+#. placeholder {2}: rowLabel(top)
 #: src/components/me/MyStatsInsights.tsx
 msgid "{0}% of your analyzed {1}K plays are {2}."
 msgstr "你已分析的 {1}K 成绩中有 {0}% 是{2}。"
@@ -1328,6 +1333,10 @@ msgstr "已获得 {copies} 张，下一级需要 {next} 张"
 #~ msgid "{copiesText} of your copies were gifts, from {sendersText}"
 #~ msgstr "你的 {copiesText} 张副本是赠送的，来自 {sendersText}"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{count, plural, one {# card here} other {# cards here}}"
+msgstr "{count, plural, other {此处 # 张卡牌}}"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "{count, plural, one {# card} other {# cards}}"
 msgstr "{count, plural, other {# 张卡片}}"
@@ -1343,6 +1352,10 @@ msgstr "{count} 个追踪成绩"
 #: src/lib/streak-game.ts
 msgid "{count} 7K top plays"
 msgstr "{count} 个 7K 最佳成绩"
+
+#: src/routes/report.tsx
+msgid "{count} attachments"
+msgstr "{count} 个附件"
 
 #: src/components/packs/run/chain/ChainHud.tsx
 #: src/components/packs/run/chain/ChainPackStage.tsx
@@ -1386,8 +1399,8 @@ msgid "{count} replays"
 msgstr "{count} 个回放"
 
 #: src/routes/report.tsx
-msgid "{count} screenshots"
-msgstr "{count} 张截图"
+#~ msgid "{count} screenshots"
+#~ msgstr "{count} 张截图"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "{count} skillsets"
@@ -1509,6 +1522,10 @@ msgstr "{dupeCount, plural, other {重复}}"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{error}. Press Enter or click to try replay #{scoreId}."
 msgstr "{error}。按回车或点击重试回放 #{scoreId}。"
+
+#: src/routes/discord.tsx
+msgid "{feedCount} feeds"
+msgstr "{feedCount} 个推送"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{files} files in {groupCount} groups"
@@ -2127,7 +2144,7 @@ msgstr "至少 {USER_COLLECTION_MIN_ITEMS} 张谱面"
 msgid "{username} is <0>{0}</0>"
 msgstr "{username} 是 <0>{0}</0>"
 
-#. placeholder {0}: danTierName(danLabel, formatDan)
+#. placeholder {0}: wholeDans ? formatDan(danLabel) : danTierName(danLabel, formatDan)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{username} is around <0>{0}</0>"
 msgstr "{username} 大约在 <0>{0}</0>"
@@ -2221,6 +2238,26 @@ msgstr "{years} 年"
 #: src/lib/format.ts
 msgid "{years}y ago"
 msgstr "{years} 年前"
+
+#: src/routes/discord.tsx
+msgid "/challenge"
+msgstr "/challenge"
+
+#: src/routes/discord.tsx
+msgid "/help"
+msgstr "/help"
+
+#: src/routes/discord.tsx
+msgid "/map"
+msgstr "/map"
+
+#: src/routes/discord.tsx
+msgid "/profile"
+msgstr "/profile"
+
+#: src/routes/discord.tsx
+msgid "/skills"
+msgstr "/skills"
 
 #. placeholder {0}: head.rank
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
@@ -2555,8 +2592,8 @@ msgid "<0>{username} isn't tracked</0>, so only their ranked plays are rated her
 msgstr "<0>{username} 未被追踪</0>，所以这里只对该玩家上架谱面的成绩评分。社区喜爱和坟场谱面的成绩只有通过追踪，或者有人用「添加缺失的成绩」添加后，才会出现在本站。"
 
 #: src/routes/discord.tsx
-msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
-msgstr "<0>/subscribe feed:Top plays country:{country}</0> 会把每个新的 {country} 最佳成绩发到运行该命令的频道里。其他 feed 还有狙击和新刷分谱面，<1>min_pp</1> 可以跳过低于阈值的成绩。<2>/subscriptions</2> 列出服务器已启用的 feed，<3>/unsubscribe</3> 停止其中一个。订阅需要「管理服务器」权限。"
+#~ msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
+#~ msgstr "<0>/subscribe feed:Top plays country:{country}</0> 会把每个新的 {country} 最佳成绩发到运行该命令的频道里。其他 feed 还有狙击和新刷分谱面，<1>min_pp</1> 可以跳过低于阈值的成绩。<2>/subscriptions</2> 列出服务器已启用的 feed，<3>/unsubscribe</3> 停止其中一个。订阅需要「管理服务器」权限。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>#{global}</0> global"
@@ -2683,6 +2720,10 @@ msgstr "$3 即一个月"
 msgid "0h"
 msgstr "0 小时"
 
+#: src/routes/report.tsx
+msgid "1 attachment"
+msgstr "1 个附件"
+
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "1 clear"
 #~ msgstr "1 次通过"
@@ -2716,8 +2757,8 @@ msgid "1 rate per chart"
 msgstr "每张谱面 1 个倍速"
 
 #: src/routes/report.tsx
-msgid "1 screenshot"
-msgstr "1 张截图"
+#~ msgid "1 screenshot"
+#~ msgstr "1 张截图"
 
 #: src/routes/workshop.index.tsx
 #: src/routes/workshop.themes.gallery.tsx
@@ -3106,6 +3147,10 @@ msgstr "+ 表示「至少」：osu! 最多只给出前 200 个最佳成绩，低
 msgid "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the page when there are new updates."
 msgstr "有新更新时，页面底部的<2>更新日志</2>旁会出现一个<0><1>圆点</1></0>。"
 
+#: src/routes/discord.tsx
+msgid "A 2-letter code, or GLOBAL for every country."
+msgstr "两个字母的国家代码，或填 GLOBAL 表示所有国家。"
+
 #: src/routes/dan-estimates.tsx
 msgid "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
 msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速下这些长条仍需要真正的放手时，这张谱面算作 LN。短到可以当普通键点掉的长条会让它算作常规谱面。7K 的界线是 37.5%。"
@@ -3219,6 +3264,10 @@ msgstr "站在你个人资料数据旁的小伙伴。拖动 3D 的可以转动�
 #: src/components/supporter/SupporterExtras.tsx
 msgid "A figure that stands beside your profile's numbers. Pick one from the list, or submit your own."
 msgstr "站在你个人资料数据旁的小伙伴。从列表里挑一个，或者提交你自己的。"
+
+#: src/routes/hashi.tsx
+msgid "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
+msgstr "Hashi 中一局已完成游玩的分析，被做成在 osu! 中打开的练习谱面"
 
 #: src/lib/pack-run.ts
 msgid "A fourth charm slot"
@@ -3383,6 +3432,10 @@ msgid "A PNG or WebP with transparency. It's also what lists, Safari and reduced
 msgstr "带透明通道的 PNG 或 WebP。列表、Safari 和减少动态效果时也会显示它。"
 
 #: src/routes/hashi.tsx
+msgid "A practice map's analysis, with its repeats and earlier tries"
+msgstr "练习谱面的分析，包含各次重复和之前的尝试"
+
+#: src/routes/hashi.tsx
 msgid "A profile showing the map its player is playing"
 msgstr "显示玩家正在游玩谱面的个人资料"
 
@@ -3443,8 +3496,8 @@ msgid "A set holds either players or teams."
 msgstr "一个卡组只能放玩家或只能放战队。"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
-msgstr "一张可分享的技能等级卡：等级徽章下方是控制、速度和精度，并附带星级。"
+#~ msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
+#~ msgstr "一张可分享的技能等级卡：等级徽章下方是控制、速度和精度，并附带星级。"
 
 #: src/lib/pack-run.ts
 msgid "A sixth charm slot"
@@ -3555,7 +3608,7 @@ msgstr "账号"
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Account activity"
-msgstr "账号动态"
+msgstr "账号活动"
 
 #: src/components/layout/Nav.tsx
 msgid "Account menu"
@@ -3632,6 +3685,10 @@ msgstr "准确率低于技能评级范围，因此此成绩在任何技能类别
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 94% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "准度决定档次，不只是过没过。在课题要求 96% 的段位系统里，delta 课题上刚好 96% 的通过读作 <0>delta</0>，97.5% 读作 <1>delta+</1>，98% 及以上读作 <2>delta++</2>，而 94% 差一点没过仍然读作 <3>delta--</3>，因为差一点通关也比什么都没有强。再低就完全不算。要求别的准度的段位系统，整条刻度也跟着平移。"
 
+#: src/routes/hashi.tsx
+msgid "Accuracy for each key and each hand, with the timing chart"
+msgstr "每个按键和每只手的准确率，以及判定时间图"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Accuracy or unstable rate for every column, one cell per finger."
 msgstr "每列的准确率或 UR，每根手指一格。"
@@ -3649,7 +3706,7 @@ msgstr "这次通过所依据的准确率，按该段位表自己的计分方式
 msgid "Accuracy:"
 msgstr "准确率："
 
-#. placeholder {0}: formatDate(peakRankDate)
+#. placeholder {0}: formatDate(peakRankDate, "UTC", locale)
 #: src/routes/player/$username.tsx
 msgid "achieved {0}"
 msgstr "达成于 {0}"
@@ -3770,14 +3827,18 @@ msgstr "添加圆形版本（可选）"
 msgid "Add a screenshot"
 msgstr "添加截图"
 
+#: src/routes/report.tsx
+msgid "Add a screenshot or file"
+msgstr "添加截图或文件"
+
 #. placeholder {0}: diffs.length
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Add all {0}"
 msgstr "全部添加（{0}）"
 
 #: src/routes/report.tsx
-msgid "Add an image"
-msgstr "添加图片"
+#~ msgid "Add an image"
+#~ msgstr "添加图片"
 
 #: src/components/communities/TagInput.tsx
 msgid "add another"
@@ -3850,6 +3911,10 @@ msgstr "添加成绩"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Add the {label} run"
 msgstr "添加{label}的成绩"
+
+#: src/routes/discord.tsx
+msgid "Add the bot"
+msgstr "添加机器人"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Add the picture"
@@ -3931,6 +3996,10 @@ msgstr "Aero 窗口"
 msgid "After a row scores, it plays again from the first card and keeps its combo."
 msgstr "一排计分后会从第一张卡再打一遍，连击保留。"
 
+#: src/routes/hashi.tsx
+msgid "After each play"
+msgstr "每局之后"
+
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
 msgid "After exporting a replay video, get a link that plays it right in Discord chat."
@@ -3992,6 +4061,11 @@ msgstr "全部"
 msgid "All"
 msgstr "全部"
 
+#. placeholder {0}: server.channels.length
+#: src/routes/discord.tsx
+msgid "All {0} channels"
+msgstr "全部 {0} 个频道"
+
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "all 10"
 msgstr "全部 10 名"
@@ -4028,6 +4102,7 @@ msgstr "全部键数"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/routes/discord.tsx
 msgid "All keys"
 msgstr "全部键数"
 
@@ -4151,6 +4226,10 @@ msgstr "已有人建议"
 msgid "already tracked"
 msgstr "已记录"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Also on map dans"
+msgstr "地图段位也一样"
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Also remove the {allTrackedCount, plural, one {# play} other {# plays}} recorded so far?"
 #~ msgstr "同时移除目前已记录的 {allTrackedCount} 个成绩吗？"
@@ -4206,6 +4285,10 @@ msgstr "一个你多半能超过的旧 PB。"
 #: src/routes/recommendations.tsx
 msgid "an old score you could probably beat"
 msgstr "一个你多半能超过的旧成绩"
+
+#: src/routes/discord.tsx
+msgid "An osu!mania bot for Discord."
+msgstr "一个用于 Discord 的 osu!mania 机器人。"
 
 #. placeholder {0}: E.stamina[band]
 #: src/lib/chain-run.ts
@@ -4483,6 +4566,10 @@ msgstr "箭头"
 msgid "Art deco"
 msgstr ""
 
+#: src/routes/discord.tsx
+msgid "Art source"
+msgstr "插画来源"
+
 #: src/routes/news_.prism.tsx
 msgid "Article"
 msgstr "文章"
@@ -4627,8 +4714,8 @@ msgid "Authorize {appNameInline}"
 msgstr "授权 {appNameInline}"
 
 #: src/routes/discord.tsx
-msgid "Authorize. The bot needs to send messages and embed links."
-msgstr "授权。机器人需要发送消息和嵌入链接的权限。"
+#~ msgid "Authorize. The bot needs to send messages and embed links."
+#~ msgstr "授权。机器人需要发送消息和嵌入链接的权限。"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
@@ -4947,12 +5034,12 @@ msgid "Beatmap by {0}"
 msgstr "谱师：{0}"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Beatmap card: stars, keys, status, BPM and length."
-msgstr "谱面卡片：星级、键数、状态、BPM 和长度。"
+#~ msgid "Beatmap card: stars, keys, status, BPM and length."
+#~ msgstr "谱面卡片：星级、键数、状态、BPM 和长度。"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Beatmap card: stars, keys, status, BPM, length and dan."
-msgstr "谱面卡片：星级、键数、状态、BPM、时长和段位。"
+#~ msgid "Beatmap card: stars, keys, status, BPM, length and dan."
+#~ msgstr "谱面卡片：星级、键数、状态、BPM、时长和段位。"
 
 #: src/components/replay/CommunityReplayCard.tsx
 msgid "Beatmap difficulty"
@@ -4988,8 +5075,8 @@ msgid "Beatmap page"
 msgstr "谱面页面"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Beatmaps"
-msgstr "谱面"
+#~ msgid "Beatmaps"
+#~ msgstr "谱面"
 
 #. placeholder {0}: beatmapResults.length
 #: src/components/replay/ReplayBrowseView.tsx
@@ -5276,6 +5363,10 @@ msgstr "启动框"
 msgid "BORROW"
 msgstr "借用"
 
+#: src/components/discord/DiscordTabs.tsx
+msgid "Bot"
+msgstr "机器人"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bottom"
 msgstr "底部"
@@ -5377,8 +5468,8 @@ msgid "Bronze laurel"
 msgstr "青铜桂冠"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Browse"
-msgstr "浏览"
+#~ msgid "Browse"
+#~ msgstr "浏览"
 
 #: src/routes/communities_.$id.tsx
 msgid "browse all"
@@ -5542,6 +5633,10 @@ msgstr ""
 msgid "Can't pay with Ko-fi? You can tip through lava.top."
 msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
 
+#: src/routes/discord.tsx
+msgid "Can't reach the bot right now. Refresh in a moment."
+msgstr "暂时无法连接机器人，请稍后刷新。"
+
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/UserCollectionEditor.tsx
@@ -5667,8 +5762,8 @@ msgid "Card sleeve"
 msgstr "卡套"
 
 #: src/lib/signature-style.ts
-#~ msgid "Card tier"
-#~ msgstr "卡片稀有度"
+msgid "Card tier"
+msgstr "卡片稀有度"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "cards"
@@ -5934,6 +6029,10 @@ msgstr "修改键数标签失败。请重试。"
 msgid "Changing who can see this skin failed. Try again."
 msgstr "修改皮肤可见范围失败。请重试。"
 
+#: src/routes/discord.tsx
+msgid "Channel"
+msgstr "频道"
+
 #. placeholder {0}: index + 1
 #: src/components/packs/run/RunCharmRail.tsx
 msgid "Charm {0} of {count}"
@@ -5971,7 +6070,7 @@ msgstr "谱面"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Chart (.osu)"
-msgstr "谱面 (.osu)"
+msgstr "谱面（.osu）"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "chart changed on osu!, waiting for a fresh check"
@@ -5998,7 +6097,7 @@ msgstr "谱面在此成绩之后被修改"
 msgid "Chart estimate"
 msgstr "谱面估计"
 
-#. placeholder {0}: chart.toFixed(2)
+#. placeholder {0}: formatDanValue(chart)
 #: src/components/maps/DanProgressRail.tsx
 msgid "Chart estimate: {0}"
 msgstr "谱面估计值：{0}"
@@ -6397,8 +6496,8 @@ msgid "Click a sound to preview it. Each note plays the sample its map assigns, 
 msgstr "点击音效即可试听。每个音符会播放谱面指定的采样，所以这些音效在回放里都能听到。"
 
 #: src/routes/discord.tsx
-msgid "Click Add to Discord and pick a server where you have Manage Server."
-msgstr "点击「添加到 Discord」，选择一个你拥有「管理服务器」权限的服务器。"
+#~ msgid "Click Add to Discord and pick a server where you have Manage Server."
+#~ msgstr "点击「添加到 Discord」，选择一个你拥有「管理服务器」权限的服务器。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Click again to clear"
@@ -6415,6 +6514,14 @@ msgstr "请先点击一张图片。Imagemap 会把这张图片变成可点击的
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #~ msgid "Click here to read how dans are estimated"
 #~ msgstr "点击这里了解段位是如何估算的"
+
+#: src/routes/hashi.tsx
+#~ msgid "Click the chart icon on a play to see how it went. Hashi reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
+#~ msgstr "点一局成绩上的图表图标，就能看这局打得怎么样。Hashi 在你的电脑上读取回放，显示你每个键位和每只手的击打时机、长条怎么放手的，以及在谱面哪里掉了。它还会指出值得改的地方，比如偏移没调好，或者多押被你按成了楼梯，并把这局和你在这张谱面上的上一次尝试做对比。"
+
+#: src/routes/hashi.tsx
+msgid "Click the chart icon on a play to see how it went. It reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
+msgstr "点一局成绩上的图表图标，就能看这局打得怎么样。它会在你的电脑上读取回放，显示你每个键位和每只手的击打时机、长条怎么放手的，以及在谱面哪里掉了。它还会指出值得改的地方，比如偏移没调好，或者多押被你按成了楼梯，并把这局和你在这张谱面上的上一次尝试做对比。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Click to group the numbered levels"
@@ -6435,7 +6542,7 @@ msgstr "点击展开数字段位"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Click to require {grade}"
-msgstr ""
+msgstr "点击以只要 {grade}"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Click to require {label}"
@@ -6504,10 +6611,12 @@ msgstr "找不到片段"
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinReportModal.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/ui/ImageLightbox.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/skins.tsx
@@ -6770,6 +6879,10 @@ msgstr "漫画"
 msgid "Comma after each one. Up to {COMMUNITY_MAX_TAGS}, and they become filters people browse by, so use words someone would actually search for."
 msgstr "每个标签后面加逗号。最多 {COMMUNITY_MAX_TAGS} 个，它们会变成别人浏览时的筛选项，所以请用别人真的会搜的词。"
 
+#: src/routes/discord.tsx
+msgid "Commands"
+msgstr "指令"
+
 #: src/lib/chain-run.ts
 msgid "Common"
 msgstr "Common"
@@ -6890,7 +7003,15 @@ msgstr "连接应用"
 
 #: src/routes/companella.tsx
 msgid "Connect Companella to Mania Tracker and review the plays it imported."
-msgstr "把 Companella 连接到本站，查看它导入的成绩。"
+msgstr "把 Companella 连接到 Mania Tracker，并查看它导入的成绩。"
+
+#: src/routes/discord.tsx
+msgid "Connect Discord"
+msgstr "连接 Discord"
+
+#: src/routes/discord.tsx
+msgid "Connect Discord to set up feeds in servers where you have Manage Server."
+msgstr "连接 Discord 后，可以为你拥有管理服务器权限的服务器设置推送。"
 
 #: src/routes/hashi.tsx
 msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
@@ -6900,6 +7021,10 @@ msgstr "在应用内将它连接到你的账号。你可以在<0>设置</0>的�
 msgid "Connect your Discord account first."
 msgstr "请先关联你的 Discord 账号。"
 
+#: src/routes/discord.tsx
+msgid "Connect your Discord account to link it."
+msgstr "连接你的 Discord 账号来绑定。"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected"
 msgstr "已连接"
@@ -6907,7 +7032,12 @@ msgstr "已连接"
 #. placeholder {0}: result.username
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected as {0}."
-msgstr "已连接为 {0}。"
+msgstr "已以 {0} 的身份连接。"
+
+#. placeholder {0}: account.connection.discordUsername
+#: src/routes/discord.tsx
+msgid "Connected as <0>{0}</0>. Link it to use commands without typing your name."
+msgstr "已连接为 <0>{0}</0>。绑定后使用指令无需输入用户名。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "connected to Discord"
@@ -6965,6 +7095,7 @@ msgid "Content"
 msgstr "内容"
 
 #: src/components/layout/CountrySelector.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Continents"
 msgstr "大洲"
 
@@ -7034,6 +7165,7 @@ msgstr ""
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/replay/ShareClipButton.tsx
+#: src/components/ui/MessageText.tsx
 msgid "Copy"
 msgstr "复制"
 
@@ -7643,6 +7775,7 @@ msgstr "正在统计符合要求的成绩"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/layout/CountrySelector.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Countries"
 msgstr "国家/地区"
 
@@ -7661,8 +7794,12 @@ msgid "Country"
 msgstr "国家/地区"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Country (or global) leaderboard, top players by pp."
-msgstr "国家/地区(或全球)排行榜，按 pp 排列的顶尖玩家。"
+#~ msgid "Country (or global) leaderboard, top players by pp."
+#~ msgstr "国家/地区(或全球)排行榜，按 pp 排列的顶尖玩家。"
+
+#: src/routes/discord.tsx
+msgid "Country for top plays"
+msgstr "最佳成绩推送的国家"
 
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
@@ -7775,7 +7912,7 @@ msgstr "创建于 <0>{createdValue}</0>"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Creating"
-msgstr "创建中"
+msgstr "正在创建"
 
 #: src/routes/dan-estimates.tsx
 msgid "Credit"
@@ -8035,6 +8172,14 @@ msgstr "段位估计：{0}（{1}）"
 #: src/components/supporter/loadout.ts
 msgid "Dan license"
 msgstr "段位证"
+
+#: src/routes/discord.tsx
+msgid "Dan on score posts"
+msgstr "成绩消息段位回复"
+
+#: src/routes/discord.tsx
+msgid "Dan on score posts in every channel"
+msgstr "所有频道的成绩消息段位回复"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Dan plays"
@@ -8360,8 +8505,12 @@ msgstr "断开连接"
 #~ msgstr ""
 
 #: src/components/layout/Nav.tsx
-msgid "Discord bot"
-msgstr "Discord 机器人"
+msgid "Discord"
+msgstr "Discord"
+
+#: src/components/layout/Nav.tsx
+#~ msgid "Discord bot"
+#~ msgstr "Discord 机器人"
 
 #: src/routes/communities.tsx
 msgid "Discord did not finish connecting. Try again."
@@ -8502,6 +8651,7 @@ msgstr "刷够"
 #: src/components/packs/ReleaseCopyDialog.tsx
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/CompanellaGroup.tsx
+#: src/components/skins/SkinReportModal.tsx
 msgid "Done"
 msgstr "完成"
 
@@ -8554,6 +8704,10 @@ msgstr "下载"
 #: src/routes/skins_.$id.tsx
 msgid "Download .osk"
 msgstr "下载 .osk"
+
+#: src/components/replay/ReplayInfo.tsx
+msgid "Download .osr"
+msgstr "下载 .osr"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/SearchCard.tsx
@@ -8870,6 +9024,10 @@ msgstr "每位玩家的第 200 个最佳成绩，仅限有 200 个最佳成绩�
 msgid "Each player's best play"
 msgstr "每位玩家的最佳成绩"
 
+#: src/routes/hashi.tsx
+msgid "Each practice map comes with a goal to match the acc you got on the rest of the map, at full speed. Every try shows up on the goal until you get it."
+msgstr "每张练习谱面都带一个目标，要在原速下打到你在谱面其余部分的准确率。每次尝试都会显示在目标上，直到你达成为止。"
+
 #: src/components/prism/ReleaseFigure.tsx
 msgid "Each release in a passage, labelled with the share of its v25 cost it keeps in v26"
 msgstr "一段中的每次放手，标注其在 v26 中保留的 v25 难度比例"
@@ -9116,8 +9274,8 @@ msgid "Error: {0}ms - {1}ms avg"
 msgstr "误差：{0}ms - {1}ms 平均"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Estimate a chart's dan level, with its dan emblem."
-msgstr "估算谱面的段位等级，并附上段位徽章。"
+#~ msgid "Estimate a chart's dan level, with its dan emblem."
+#~ msgstr "估算谱面的段位等级，并附上段位徽章。"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "Estimated by adding each new top play in order. Gains depend on the rest of the card's top plays."
@@ -9259,20 +9417,24 @@ msgstr "你已经贴出去的图片都会失效。"
 #~ msgid "Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. A <0/> play that drops the OD under its ladder's minimum earns no dan credit, and <1/> earns none anywhere, because it widens every hit window."
 #~ msgstr "每个段位系统还有最低 OD 要求：常规谱面 5.5，4K LN 是 7，7K LN 是 5。用 <0/> 把 OD 降到该系统的最低值以下，这个成绩就得不到段位认定；<1/> 在任何地方都得不到，因为它会放宽所有判定窗。"
 
+#: src/routes/hashi.tsx
+msgid "Every mania play you finish on stable or lazer goes to your profile with its replay. Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
+msgstr "你在 stable 或 lazer 上打完的每一局 mania 都会连同回放一起发到你的个人资料。打开 <0>{shareSetting}</0> 后，你的个人资料和排行榜会显示你在 osu! 里正在做什么。"
+
 #: src/routes/recommendations.tsx
 msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
 msgstr "这里的每张谱面都是提升技能的推荐。默认隐藏，直到你打出其中一个成绩。"
 
 #: src/routes/discord.tsx
-msgid "Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel."
-msgstr "所有 osu!mania 查询都做成了斜杠命令，还有实时 feed 把新的最佳成绩、狙击和刷分谱面发到任意频道。"
+#~ msgid "Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel."
+#~ msgstr "所有 osu!mania 查询都做成了斜杠命令，还有实时 feed 把新的最佳成绩、狙击和刷分谱面发到任意频道。"
 
 #: src/routes/discord.tsx
-msgid "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
-msgstr "所有 osu!mania 查询都做成了斜杠命令。用 <0>/link</0> 关联一次账号，<1>/recent</1> 这类命令就不用再输用户名。实时 feed 会把新的最佳成绩、狙击和刷分谱面自动发到任意频道。"
+#~ msgid "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
+#~ msgstr "所有 osu!mania 查询都做成了斜杠命令。用 <0>/link</0> 关联一次账号，<1>/recent</1> 这类命令就不用再输用户名。实时 feed 会把新的最佳成绩、狙击和刷分谱面自动发到任意频道。"
 
 #: src/routes/replay_.community.tsx
-msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay watcher."
+msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay viewer."
 msgstr "所有上传到 Mania Tracker 的 osu!mania 回放，按最新排序。可在回放播放器中打开任意一个。"
 
 #: src/components/maps/MapCollectionsSection.tsx
@@ -9396,7 +9558,7 @@ msgstr "压缩包里的其他所有文件"
 msgid "Everything here is a preview until you support. Use your osu! username as your Ko-fi name so it counts for you."
 msgstr "在你支持之前，这里的一切都只是预览。请把 Ko-fi 名称设为你的 osu! 用户名，这样才会记到你名下。"
 
-#. placeholder {0}: dan.rawDan.toFixed(2)
+#. placeholder {0}: formatDanValue(dan.rawDan)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Exact estimate: {0}"
 msgstr "精确估计：{0}"
@@ -9596,8 +9758,8 @@ msgstr ""
 #~ msgstr "刷图助手需要服务器"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Farm map alert"
-msgstr "刷分谱面提醒"
+#~ msgid "Farm map alert"
+#~ msgstr "刷分谱面提醒"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Farm map detail"
@@ -9713,12 +9875,16 @@ msgid "Feedback sent"
 msgstr "建议已发送"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Feeds"
-msgstr "Feed"
+#~ msgid "Feeds"
+#~ msgstr "Feed"
 
 #: src/routes/discord.tsx
-msgid "Feeds are currently disabled on the backend."
-msgstr "后端当前已关闭 feed。"
+#~ msgid "Feeds are currently disabled on the backend."
+#~ msgstr "后端当前已关闭 feed。"
+
+#: src/routes/discord.tsx
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>新的刷分图</1>和<2>网站更新</2>（每条新的更新日志都会发出）。用 <3>/setup</3> 或在上方的你的服务器中开启。"
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
@@ -9784,6 +9950,10 @@ msgstr "文件大小"
 #: src/routes/skins_.$id.tsx
 msgid "File updated"
 msgstr "文件已更新"
+
+#: src/lib/bug-report-screenshots.ts
+msgid "Files have to be under 5MB."
+msgstr "文件需小于 5MB。"
 
 #: src/components/communities/field-options.tsx
 msgid "Filipino"
@@ -9969,7 +10139,7 @@ msgstr "卡面出现几率翻倍。"
 
 #: src/routes/companella_.test-callback.tsx
 msgid "Finishing the connection..."
-msgstr "正在完成连接…"
+msgstr "正在完成连接……"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Finishing the file"
@@ -9977,7 +10147,7 @@ msgstr "正在收尾文件"
 
 #: src/routes/companella_.test-callback.tsx
 msgid "Finishing the test client connection."
-msgstr "正在完成测试客户端连接。"
+msgstr "正在完成测试客户端的连接。"
 
 #: src/routes/recommendations.tsx
 #: src/routes/recommendations/map/$beatmapId.tsx
@@ -10225,7 +10395,7 @@ msgstr "针对被封禁或已删除的账号"
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "For review"
-msgstr "待审查"
+msgstr "待审核"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "For screenshots that have nothing to do with the skin."
@@ -10357,6 +10527,10 @@ msgstr ""
 msgid "from {0} now, that's +{1} to climb"
 msgstr "当前 {0}，还差 {1}"
 
+#: src/routes/hashi.tsx
+#~ msgid "From an analysis you can pick the stretch that went worst. Hashi cuts that part of the song into a difficulty of its own that plays it a few times in a row, slower at first and then at full speed, and opens it in osu!. Plays of practice maps stay in Hashi and are never sent to Mania Tracker."
+#~ msgstr "在分析中，你可以选出打得最差的一段。Hashi 会把歌曲的这一部分剪成一个单独的难度，连续重复几次，先放慢再恢复原速，然后在 osu! 中打开。练习谱面的成绩只留在 Hashi 里，不会发送到 Mania Tracker。"
+
 #: src/components/replay/ReplayInfo.tsx
 msgid "From the real play (not simulated)"
 msgstr "来自真实成绩（非模拟）"
@@ -10416,8 +10590,8 @@ msgid "Full play"
 msgstr "完整成绩"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Full profile card with ranks, pp and top plays. The username is optional once you link."
-msgstr "完整的个人资料卡，包含排名、pp 和最佳成绩。关联账号后用户名可以省略。"
+#~ msgid "Full profile card with ranks, pp and top plays. The username is optional once you link."
+#~ msgstr "完整的个人资料卡，包含排名、pp 和最佳成绩。关联账号后用户名可以省略。"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Full width"
@@ -10646,6 +10820,7 @@ msgstr "全球"
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
+#: src/routes/discord.tsx
 #: src/routes/index.tsx
 #: src/routes/player/$username.tsx
 msgid "Global"
@@ -10737,6 +10912,7 @@ msgstr "目标"
 #: src/components/me/MyDataPanel.tsx
 #: src/lib/signature-shared.ts
 #: src/routes/goals.tsx
+#: src/routes/hashi.tsx
 msgid "Goals"
 msgstr "目标"
 
@@ -10994,8 +11170,8 @@ msgid "Has its own backdrop"
 msgstr "自带背景"
 
 #: src/routes/hashi.tsx
-msgid "Hashi before connecting to Mania Tracker"
-msgstr "连接 Mania Tracker 之前的 Hashi"
+#~ msgid "Hashi before connecting to Mania Tracker"
+#~ msgstr "连接 Mania Tracker 之前的 Hashi"
 
 #: src/routes/bridge.tsx
 #~ msgid "Hashi reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
@@ -11030,12 +11206,16 @@ msgid "Hashi showing a map's leaderboard for Double Time"
 msgstr "Hashi 显示一张谱面在 Double Time 下的排行榜"
 
 #: src/routes/hashi.tsx
+#~ msgid "Hashi works out each play from its replay, on your computer. It shows how early or late you hit and let go of long notes, the accuracy of each key and each hand, and how the play went over the course of the map. Fingers can be reassigned per column. Tips point out what stands out and how much fixing it would have been worth on that play, like an offset that's off, chords that roll between two fingers of one hand, or presses on columns with no notes. It also compares the play with your last one on the same map."
+#~ msgstr "Hashi 在你的电脑上根据回放分析每一局。它会显示你按下和松开长条时偏早还是偏晚、每个按键和每只手的准确率，以及整张谱面过程中这一局的表现。每一列对应的手指可以重新分配。提示会指出最突出的问题，以及在这一局里改掉它能值多少，比如偏移不对、同一只手两根手指之间滚压的和弦，或在没有音符的列上按键。它还会把这一局和你在同一谱面上的上一局作比较。"
+
+#: src/routes/hashi.tsx
 msgid "Hashi's main window with the last plays it sent"
 msgstr "Hashi 主窗口，显示最近发送的成绩"
 
 #: src/routes/hashi.tsx
-msgid "Hashi's settings"
-msgstr "Hashi 的设置"
+#~ msgid "Hashi's settings"
+#~ msgstr "Hashi 的设置"
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -11204,7 +11384,7 @@ msgstr "隐藏没有技能评分的成绩"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Hiding {grade}"
-msgstr ""
+msgstr "隐藏 {grade}"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Hiding {label}"
@@ -11399,6 +11579,11 @@ msgstr "长按以删除这个收藏夹"
 #: src/components/packs/CollectionPanel.tsx
 msgid "hold to recycle"
 msgstr "长按回收"
+
+#. placeholder {0}: [...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0)
+#: src/components/packs/CollectionPanel.tsx
+msgid "hold to recycle ({0} come off the board)"
+msgstr "按住回收（{0} 张离开展板）"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"
@@ -11646,6 +11831,14 @@ msgstr "如果你觉得某张谱面的评分不对，可以通过<0>问题与建
 #~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating still gets you banned from Mania Tracker."
 #~ msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，并用与 osu! 相同的算法根据其中 ranked 图的成绩计算你的 pp，所以你仍会出现在排行榜上。作弊仍会让你被 Mania Tracker 封禁。"
 
+#: src/routes/hashi.tsx
+#~ msgid "If part of a map went badly, Hashi can turn just that part into its own difficulty. It repeats it a few times, slower first and then at full speed, and opens it in osu! for you. Practice maps never get sent to Mania Tracker."
+#~ msgstr "如果谱面某一段没打好，Hashi 可以只把那一段做成一个单独的难度。它会重复几遍，先慢速再原速，并帮你在 osu! 里打开。练习谱面永远不会发送到 Mania Tracker。"
+
+#: src/routes/hashi.tsx
+msgid "If part of a map went badly, you can turn just that part into its own difficulty. It repeats it a few times, slower first and then at full speed, and opens it in osu! for you. Practice maps never get sent to Mania Tracker."
+msgstr "如果谱面某一段没打好，你可以只把那一段做成一个单独的难度。它会重复几遍，先慢速再原速，并帮你在 osu! 里打开。练习谱面永远不会发送到 Mania Tracker。"
+
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.freedomTraits
 #: src/lib/chain-run.ts
 msgid "If the link into a card shares {0} or more traits, the card plays twice."
@@ -11690,6 +11883,10 @@ msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
 #~ msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
+
+#: src/routes/hashi.tsx
+#~ msgid "If your acc on a map came from mashing, Hashi gives you a goal to get it clean. Practice maps get a goal to pass them at full speed. Every try shows up on the goal until you get it."
+#~ msgstr "如果你在一张谱面上的准确率是靠乱拍蒙出来的，Hashi 会给你定一个干净打出来的目标。练习谱面会有一个原速通过的目标。每次尝试都会显示在目标上，直到你达成为止。"
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "If your osu! account is restricted, imported plays show on your Mania Tracker profile."
@@ -11747,8 +11944,8 @@ msgid "Images from {sourceName}"
 msgstr "来自 {sourceName} 的图片"
 
 #: src/lib/bug-report-screenshots.ts
-msgid "Images have to be under 5MB."
-msgstr "图片需小于 5MB。"
+#~ msgid "Images have to be under 5MB."
+#~ msgstr "图片需小于 5MB。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Import"
@@ -12036,6 +12233,10 @@ msgstr "{hidden} 最早的最佳成绩比 {shown} 更早还是更晚？"
 #~ msgid "It also only sees the plays the site has. Your osu! top plays are always included. Anything below them is included only if the site tracks you, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
 #~ msgstr "它还只能看到本站手上有的成绩。你的 osu! bp 一定包含在内。排在它们下面的成绩只有在本站追踪你的时候才会算进去，也就是你在本国前 100 里，或者你自己打开了追踪，而且只从那天起算。几年前就退坑的玩家只能靠 top 200 来判断，所以估算结果会偏低。"
 
+#: src/routes/hashi.tsx
+#~ msgid "It analyzes the plays it sends, so it needs a connected account with <0>{sendSetting}</0> turned on."
+#~ msgstr "它只分析它发送的成绩，所以需要连接账号并打开 <0>{sendSetting}</0>。"
+
 #: src/components/supporter/SupporterRankBadge.tsx
 #~ msgid "It burns in the rank's own colours for as long as the subscription keeps renewing."
 #~ msgstr "只要订阅持续续订，它就会以该段位自己的颜色燃烧。"
@@ -12111,8 +12312,12 @@ msgid "It shows something that shouldn't be here"
 msgstr "内容不应出现在这里"
 
 #: src/routes/hashi.tsx
-msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
-msgstr "它常驻在系统托盘，几乎不占 CPU，在 Windows 上大约只用 3 MB 内存。"
+#~ msgid "It sits in the tray and uses almost no CPU and about 3 MB of memory on Windows."
+#~ msgstr ""
+
+#: src/routes/hashi.tsx
+#~ msgid "It sits in the tray and uses next to no CPU and about 3 MB of memory on Windows."
+#~ msgstr "它常驻在系统托盘，几乎不占 CPU，在 Windows 上大约只用 3 MB 内存。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
@@ -12129,6 +12334,10 @@ msgstr "它常驻在系统托盘，几乎不占 CPU，在 Windows 上大约只�
 #: src/components/supporter/CustomThemeCredit.tsx
 msgid "It uses my work without permission"
 msgstr "未经许可使用了我的作品"
+
+#: src/routes/discord.tsx
+msgid "It was linked by typing a username. Connect Discord here to confirm it is you."
+msgstr "该绑定是通过输入用户名完成的。在这里连接 Discord 以确认是你本人。"
 
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
@@ -12268,7 +12477,7 @@ msgstr "已判定"
 #. placeholder {1}: timing.fileOd
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Judged at OD {0}, the original map's, instead of this file's OD {1}."
-msgstr "按原谱面的 OD {0} 判定，而非该文件的 OD {1}。"
+msgstr "按原谱面的 OD {0} 判定，而不是这个文件的 OD {1}。"
 
 #: src/components/supporter/loadout.ts
 msgid "Judgement line"
@@ -12465,6 +12674,7 @@ msgstr "键数分布"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/chain-run.ts
 #: src/routes/dan-estimates.tsx
+#: src/routes/discord.tsx
 msgid "Keymode"
 msgstr "键数"
 
@@ -12592,6 +12802,7 @@ msgstr "语言"
 msgid "Language"
 msgstr "语言"
 
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Large"
 msgstr "大"
@@ -12688,8 +12899,8 @@ msgid "Latest"
 msgstr "最新"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next."
-msgstr "完整显示最近一次成绩(评级、模组、判定、pp)，下方是更早的成绩。用 Prev 和 Next 翻页。"
+#~ msgid "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next."
+#~ msgstr "完整显示最近一次成绩(评级、模组、判定、pp)，下方是更早的成绩。用 Prev 和 Next 翻页。"
 
 #: src/components/communities/field-options.tsx
 msgid "Latvian"
@@ -12780,6 +12991,10 @@ msgstr "队长"
 #: src/routes/snipes.tsx
 msgid "Leaderboard"
 msgstr "排行榜"
+
+#: src/routes/hashi.tsx
+msgid "Leaderboards and your profile"
+msgstr "排行榜和你的个人资料"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Leather"
@@ -12928,11 +13143,11 @@ msgstr "已喜欢"
 
 #: src/routes/skins.tsx
 msgid "liked by you"
-msgstr "你已点赞"
+msgstr "你赞过的"
 
 #: src/routes/skins.tsx
 msgid "likes"
-msgstr "点赞"
+msgstr "赞"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "lime"
@@ -12976,6 +13191,10 @@ msgstr "链接已复制。"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "link text"
 msgstr "链接文字"
+
+#: src/routes/discord.tsx
+msgid "Link this account"
+msgstr "绑定此账号"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Link URL (optional)"
@@ -13036,8 +13255,8 @@ msgid "Live feed reconnecting"
 msgstr "实时信息流正在重连"
 
 #: src/routes/discord.tsx
-msgid "Live feeds"
-msgstr "实时 feed"
+#~ msgid "Live feeds"
+#~ msgstr "实时 feed"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Live performance points."
@@ -14204,6 +14423,10 @@ msgstr "BPM 中位数"
 msgid "Median by Keymode"
 msgstr "各键数中位数"
 
+#: src/components/me/dynamic-renders/controls.tsx
+msgid "Medium"
+msgstr "中"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Meeting the target gives full credit for the chart's level. The next percentage point is also a normal clear. Bonus credit starts above that, stays small until 99%, then rises faster. Scores below the target get partial credit down to the cutoff: 4 points below for regular, 1 point for 6K/7K LN, and 94.5% for 4K LN. The lowest credit is 1.25 levels below the chart, or 1.5 for 4K LN. The 4K LN bonus maxes out at 99.7%:"
 #~ msgstr ""
@@ -14893,9 +15116,13 @@ msgstr "新建收藏夹"
 msgid "New collection"
 msgstr "新建收藏夹"
 
+#: src/routes/discord.tsx
+msgid "New farm maps"
+msgstr "新的刷分图"
+
 #: src/components/discord/CommandShowcase.tsx
-msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
-msgstr "新的刷分谱面，会自动发到运行过 /subscribe feed:new maps 的频道。"
+#~ msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
+#~ msgstr "新的刷分谱面，会自动发到运行过 /subscribe feed:new maps 的频道。"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "New folder"
@@ -15002,7 +15229,6 @@ msgstr "最新的最佳成绩"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/GiftInbox.tsx
-#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next"
@@ -15242,6 +15468,10 @@ msgstr "最近 7 天无变化"
 msgid "No changes."
 msgstr "没有变化。"
 
+#: src/routes/discord.tsx
+msgid "No channel has a feed yet."
+msgstr "还没有频道开启推送。"
+
 #: src/routes/recommendations.tsx
 msgid "no charts"
 msgstr "没有谱面"
@@ -15297,6 +15527,10 @@ msgstr "前 50 名玩家中没有找到任何收藏。"
 #: src/routes/maps.tsx
 msgid "No favourites match your filters. Try loosening them."
 msgstr "没有符合筛选条件的收藏。试着放宽一些。"
+
+#: src/routes/discord.tsx
+msgid "No feeds yet"
+msgstr "暂无推送"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "No foil"
@@ -16319,7 +16553,7 @@ msgstr "没有略高于你 {axisLabel} 评分且你还没玩过的 ranked 谱面
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Nothing recorded yet."
-msgstr "暂无记录。"
+msgstr "还没有任何记录。"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Nothing submitted."
@@ -16662,6 +16896,10 @@ msgstr "仅管理员可见"
 msgid "Only approve a request you started yourself. If someone sent you this link, close it."
 msgstr "只批准你自己发起的请求。如果这个链接是别人发给你的，请关闭它。"
 
+#: src/routes/discord.tsx
+msgid "Only channels with something on"
+msgstr "只显示已开启功能的频道"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "仅自己"
@@ -16740,6 +16978,10 @@ msgstr "只有你能打开这些"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Only you can wear it."
 msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Only you see the bot's replies to your commands, unless you set hidden to false."
+msgstr "机器人对你指令的回复仅你可见，除非你把 hidden 设为 false。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Only your best rate play on the same chart counts per ladder, rate reuploads included."
@@ -16835,6 +17077,7 @@ msgstr "在 osu! 上打开谱面"
 msgid "Open beatmap page on osu!"
 msgstr "在 osu! 上打开谱面页面"
 
+#: src/components/ui/BugReportAttachmentTiles.tsx
 #: src/components/ui/MessageText.tsx
 #: src/routes/report.tsx
 msgid "Open image"
@@ -16906,8 +17149,8 @@ msgid "Open the day modal with simulated busy-day data"
 msgstr "用模拟的高强度数据打开当天弹窗"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Open the in-browser replay viewer for a score."
-msgstr "在浏览器里打开某个成绩的回放播放器。"
+#~ msgid "Open the in-browser replay viewer for a score."
+#~ msgstr "在浏览器里打开某个成绩的回放播放器。"
 
 #: src/components/packs/run/chain/ChainPack.tsx
 #: src/components/packs/run/RunTable.tsx
@@ -17126,7 +17369,7 @@ msgid "osu!mania rankings & live score tracker"
 msgstr "osu!mania 排行榜与实时成绩追踪"
 
 #: src/routes/replay.tsx
-msgid "osu!mania replay watcher"
+msgid "osu!mania replay viewer"
 msgstr "osu!mania 回放播放器"
 
 #: src/components/replay/ReplayBrowseView.tsx
@@ -17528,8 +17771,12 @@ msgid "Paste share code"
 msgstr "粘贴分享码"
 
 #: src/routes/report.tsx
-msgid "Paste, drop or pick a screenshot."
-msgstr "可以粘贴、拖入或选择截图。"
+msgid "Paste, drop or pick a screenshot or any file under 5MB."
+msgstr "可以粘贴、拖入或选择截图，或任何小于 5MB 的文件。"
+
+#: src/routes/report.tsx
+#~ msgid "Paste, drop or pick a screenshot."
+#~ msgstr "可以粘贴、拖入或选择截图。"
 
 #: src/lib/pack-run.ts
 msgid "Patriot"
@@ -17762,7 +18009,7 @@ msgstr "换一个文件"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Pick both a .osr and the .osu it was played on."
-msgstr "请同时选择 .osr 文件和对应游玩的 .osu 文件。"
+msgstr "请同时选择 .osr 和它所游玩的 .osu。"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Pick five cards of the same rarity."
@@ -17937,8 +18184,8 @@ msgid "Play from {0}"
 msgstr "从 {0} 开始播放"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
-msgstr "游玩习惯与打法分析：活跃天数、游玩场次和技能构成。"
+#~ msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
+#~ msgstr "游玩习惯与打法分析：活跃天数、游玩场次和技能构成。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Play my top plays"
@@ -18068,7 +18315,6 @@ msgstr "玩家的皮肤"
 msgid "players"
 msgstr "玩家"
 
-#: src/components/discord/CommandShowcase.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
@@ -18368,11 +18614,12 @@ msgid "pp rank"
 msgstr "pp 排名"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "PP-gain map recommendations tuned to a player."
-msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
+#~ msgid "PP-gain map recommendations tuned to a player."
+#~ msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 
 #: src/components/packs/run/chain/ChainShop.tsx
 #: src/lib/pack-run.ts
+#: src/routes/hashi.tsx
 msgid "Practice"
 msgstr "练习"
 
@@ -18471,6 +18718,7 @@ msgid "Preview volume"
 msgstr "试听音量"
 
 #: src/components/skins/SkinUpdateModal.tsx
+#: src/routes/discord.tsx
 msgid "Previews"
 msgstr "预览图"
 
@@ -18484,7 +18732,6 @@ msgstr "预览图已上传。"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/GiftInbox.tsx
-#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Previous"
@@ -18598,6 +18845,10 @@ msgstr "私有"
 #: src/components/settings/SettingsPanel.tsx
 msgid "private · updated {updatedAtLabel}"
 msgstr "私有 · 更新于 {updatedAtLabel}"
+
+#: src/routes/discord.tsx
+msgid "Private replies"
+msgstr "私密回复"
 
 #: src/components/BackendOfflineScreen.tsx
 #~ msgid "Probably restarting or under maintenance. Try again in a bit."
@@ -19364,8 +19615,8 @@ msgid "recent global pulls"
 msgstr "最近的全球抽卡"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Recent notable top plays across a country."
-msgstr "某个国家/地区最近值得关注的最佳成绩。"
+#~ msgid "Recent notable top plays across a country."
+#~ msgstr "某个国家/地区最近值得关注的最佳成绩。"
 
 #: src/components/packs/RecentOpens.tsx
 #~ msgid "Recent opens"
@@ -19774,6 +20025,7 @@ msgid "Remove color"
 msgstr "移除颜色"
 
 #: src/components/replay/ReplayCustomMediaControls.tsx
+#: src/routes/report.tsx
 msgid "Remove file"
 msgstr "移除文件"
 
@@ -19782,7 +20034,6 @@ msgid "Remove from the collection"
 msgstr "从收藏夹中移除"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
-#: src/routes/report.tsx
 msgid "Remove image"
 msgstr "移除图片"
 
@@ -19948,7 +20199,7 @@ msgstr "重放"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Replay (.osr)"
-msgstr "回放 (.osr)"
+msgstr "回放（.osr）"
 
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Replay again"
@@ -20013,13 +20264,16 @@ msgstr "目前找到的可用回放"
 msgid "Replays play with their player's published skin. Turn off to always use yours."
 msgstr "回放默认使用玩家发布的皮肤。关闭后始终使用你自己的。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/supporter/CustomThemeCredit.tsx
 #: src/routes/workshop.themes.gallery.tsx
 msgid "Report"
 msgstr "举报"
 
 #. placeholder {0}: community.name
+#. placeholder {0}: skin.name
 #: src/components/communities/CommunityReportModal.tsx
+#: src/components/skins/SkinReportModal.tsx
 msgid "Report {0}"
 msgstr "举报 {0}"
 
@@ -20041,9 +20295,21 @@ msgstr "反馈翻译问题"
 msgid "Report sent"
 msgstr "举报已发送"
 
+#: src/components/skins/SkinReportModal.tsx
+msgid "Report sent."
+msgstr "举报已发送。"
+
+#: src/routes/skins_.$id.tsx
+msgid "Report skin"
+msgstr "举报皮肤"
+
 #: src/routes/report.tsx
 msgid "Report something else"
 msgstr "再反馈一个问题"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Report this card to the admins"
+msgstr "向管理员举报这张卡牌"
 
 #: src/routes/communities_.$id.tsx
 msgid "report this server"
@@ -20052,6 +20318,14 @@ msgstr "举报这个服务器"
 #: src/components/supporter/CustomThemeCredit.tsx
 msgid "Report this theme"
 msgstr "举报此主题"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Reported"
+msgstr "已举报"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Reported. An admin will take a look."
+msgstr "已举报，管理员会查看。"
 
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "Representative intervals are shown for each detected pattern."
@@ -20261,7 +20535,7 @@ msgstr "撤销此连接？"
 
 #: src/routes/companella.tsx
 msgid "Revoke this connection? It stops submitting right away."
-msgstr "撤销这个连接？它会立即停止上传。"
+msgstr "撤销这个连接？它会立即停止提交。"
 
 #: src/routes/companella.tsx
 #~ msgid "Revoke this installation? It stops submitting right away."
@@ -20305,6 +20579,10 @@ msgstr "右"
 msgid "Right thumb"
 msgstr "右手拇指"
 
+#: src/routes/discord.tsx
+msgid "Right-click a message or a user, then Apps:"
+msgstr "右键点击消息或用户，然后选择 Apps："
+
 #: src/routes/replay.tsx
 msgid "Right-click to add media"
 msgstr "右键添加媒体"
@@ -20335,12 +20613,12 @@ msgid "Roll"
 msgstr "随机"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
-msgstr "随机抽一张被收藏的谱面，卡池与「谱面」的随机标签页相同。可按键数、状态、键型或星级区间筛选，也可以再抽一次。"
+#~ msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."
+#~ msgstr "随机抽一张被收藏的谱面，卡池与「谱面」的随机标签页相同。可按键数、状态、键型或星级区间筛选，也可以再抽一次。"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another."
-msgstr "随机抽一张热门刷分谱面。默认使用全球刷分榜，可按键数、状态、星级区间或最低 pp 筛选。也可以再抽一次。"
+#~ msgid "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another."
+#~ msgstr "随机抽一张热门刷分谱面。默认使用全球刷分榜，可按键数、状态、星级区间或最低 pp 筛选。也可以再抽一次。"
 
 #: src/routes/supporter.tsx
 msgid "Roll again"
@@ -20525,6 +20803,7 @@ msgstr "周六"
 #: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/discord.tsx
 msgid "Save"
 msgstr "保存"
 
@@ -20578,8 +20857,8 @@ msgid "Save to profile"
 msgstr "保存到个人资料"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Save your osu! account so every other command knows who you are."
-msgstr "保存你的 osu! 账号，其他命令就都知道你是谁了。"
+#~ msgid "Save your osu! account so every other command knows who you are."
+#~ msgstr "保存你的 osu! 账号，其他命令就都知道你是谁了。"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "saved"
@@ -21097,8 +21376,8 @@ msgid "See all {0}"
 msgstr "查看全部 {0} 个"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "See every command"
-msgstr "查看所有命令"
+#~ msgid "See every command"
+#~ msgstr "查看所有命令"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 #~ msgid "See the board as a globe"
@@ -21230,6 +21509,7 @@ msgstr "发送建议"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
+#: src/components/skins/SkinReportModal.tsx
 #: src/components/supporter/CustomThemeCredit.tsx
 #: src/routes/report.tsx
 msgid "Send report"
@@ -21263,8 +21543,17 @@ msgid "Sending..."
 msgstr "正在发送..."
 
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/skins/SkinReportModal.tsx
 msgid "Sending…"
 msgstr "正在发送…"
+
+#: src/routes/hashi.tsx
+msgid "Sends your mania plays to your profile, shows leaderboards for any mods even on graveyard maps, and helps you practice what went wrong."
+msgstr "把你的 mania 成绩发送到你的个人资料，显示任意模组的排行榜，坟场谱面也可以，并帮你练习打得不好的地方。"
+
+#: src/routes/hashi.tsx
+#~ msgid "Sends your mania plays to your profile, shows leaderboards for graveyard maps and any mods, and helps you practice what went wrong."
+#~ msgstr "把你的 mania 成绩发送到你的个人资料，显示坟场谱面和任意模组的排行榜，并帮你练习打得不好的地方。"
 
 #: src/routes/hashi.tsx
 #~ msgid "Sends your osu!mania plays from lazer or osu!stable to Mania Tracker and shows what you're playing on your profile and the rankings."
@@ -21331,6 +21620,14 @@ msgstr "衬线体"
 #: src/routes/communities_.$id.tsx
 msgid "server made"
 msgstr "服务器创建于"
+
+#: src/routes/discord.tsx
+msgid "Server settings aren't available right now."
+msgstr "服务器设置暂时不可用。"
+
+#: src/components/discord/DiscordTabs.tsx
+msgid "Servers"
+msgstr "服务器"
 
 #: src/routes/communities.tsx
 msgid "Servers are unavailable right now"
@@ -21442,6 +21739,10 @@ msgstr "设定下一个里程碑"
 msgid "Set this goal again"
 msgstr "再次设定这个目标"
 
+#: src/routes/discord.tsx
+msgid "Set up"
+msgstr "设置"
+
 #: src/routes/gift.$code.tsx
 msgid "Set up your look"
 msgstr "设置你的外观"
@@ -21486,7 +21787,6 @@ msgstr "设置"
 
 #: src/components/layout/Nav.tsx
 #: src/components/layout/SettingsDrawer.tsx
-#: src/routes/hashi.tsx
 #: src/routes/news_.companella.tsx
 msgid "Settings"
 msgstr "设置"
@@ -21875,7 +22175,7 @@ msgstr "正在显示 FC（0 miss）- 左键切换为 FC 断连，右键清除"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Showing only {grade}"
-msgstr ""
+msgstr "只显示 {grade}"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "Showing only {label}"
@@ -21897,8 +22197,12 @@ msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "有新更新时在更新日志链接上显示一个圆点"
 
 #: src/routes/hashi.tsx
-msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
-msgstr "按你当前的模组显示排行榜，并把你的 mania 成绩发送到你的个人资料，资料页还能显示你正在玩什么。"
+#~ msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
+#~ msgstr "按你当前的模组显示排行榜，并把你的 mania 成绩发送到你的个人资料，资料页还能显示你正在玩什么。"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows player dans without low, mid or high, and counts a low dan as the one below it"
+msgstr "玩家段位不显示 low、mid、high，low 段位按低一级的段位显示"
 
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
@@ -21919,6 +22223,14 @@ msgstr "在最近成绩中显示每个成绩的评分和段位"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the rating of each play in Recent Plays"
 msgstr "在最近成绩中显示每个成绩的评分"
+
+#: src/routes/hashi.tsx
+#~ msgid "Shows what went wrong in each mania play you finish and turns the worst part into a practice map. It also shows leaderboards for the mods you have on and sends your plays to your profile."
+#~ msgstr "显示你完成的每一局 mania 哪里出了问题，并把最差的部分做成练习谱面。它还会显示你当前模组下的排行榜，并把你的成绩发送到你的个人资料。"
+
+#: src/routes/hashi.tsx
+#~ msgid "Shows what went wrong in each play and turns the worst part into a practice map."
+#~ msgstr "显示每一局哪里出了问题，并把最差的部分做成练习谱面。"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows your cards with a quick fade instead of the full reveal"
@@ -22041,6 +22353,7 @@ msgid "Sign in with Discord so we can check the server is yours to post. Discord
 msgstr "用 Discord 登录，好让我们确认这个服务器由你来发布。Discord 会提供："
 
 #: src/components/companella/AuthorizePage.tsx
+#: src/routes/discord.tsx
 msgid "Sign in with osu!"
 msgstr "使用 osu! 登录"
 
@@ -22050,11 +22363,15 @@ msgstr "请先用 osu! 登录，再关联 Discord。"
 
 #: src/routes/companella.tsx
 msgid "Sign in with osu! to connect Companella and see the plays it imported."
-msgstr "使用 osu! 登录以连接 Companella，并查看它导入的成绩。"
+msgstr "用 osu! 登录以连接 Companella，并查看它导入的成绩。"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Sign in with osu! to connect it."
 msgstr "使用 osu! 登录后即可连接。"
+
+#: src/routes/discord.tsx
+msgid "Sign in with osu! to link your Discord account, so commands work without typing your name."
+msgstr "使用 osu! 登录以绑定你的 Discord 账号，之后使用指令无需输入用户名。"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in with osu! to play blitz."
@@ -22089,12 +22406,12 @@ msgstr "当前登录为 {0}"
 #. placeholder {0}: auth.viewer.username
 #: src/routes/companella.tsx
 msgid "Signed in as {0}. {activeInstallations} connected."
-msgstr "当前登录为 {0}，已连接 {activeInstallations} 个。"
+msgstr "已以 {0} 登录。已连接 {activeInstallations} 个。"
 
 #. placeholder {0}: auth.viewer.username
 #: src/routes/companella.tsx
 msgid "Signed in as {0}. Nothing is connected yet."
-msgstr "当前登录为 {0}，尚未连接任何设备。"
+msgstr "已以 {0} 登录。还没有连接任何内容。"
 
 #: src/components/packs/run/chain/ChainContracts.tsx
 msgid "Signed: tap to unsign"
@@ -22171,10 +22488,15 @@ msgstr "单点叠键"
 msgid "Site colours"
 msgstr "站点配色"
 
+#: src/routes/discord.tsx
+msgid "Site updates"
+msgstr "网站更新"
+
 #: src/routes/skins.tsx
 msgid "size"
 msgstr "大小"
 
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -22348,6 +22670,10 @@ msgstr "皮肤与布局"
 msgid "Skin description"
 msgstr "皮肤简介"
 
+#: src/routes/hashi.tsx
+msgid "Skin editor"
+msgstr "皮肤编辑器"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Skin files"
 msgstr "皮肤文件"
@@ -22390,7 +22716,7 @@ msgstr "皮肤列表暂时不可用"
 
 #: src/routes/skins.tsx
 msgid "Skins you like show up here."
-msgstr "你喜欢的皮肤会显示在这里。"
+msgstr "你点赞的皮肤会显示在这里。"
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/supporter/loadout.ts
@@ -22463,6 +22789,7 @@ msgstr "把歌曲放慢到 0.75倍速并降低音调。"
 msgid "Slows the song down to 0.75x."
 msgstr "把歌曲放慢到 0.75倍速。"
 
+#: src/components/me/dynamic-renders/controls.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "小"
@@ -22475,9 +22802,13 @@ msgstr "小"
 msgid "Smaller file"
 msgstr "更小文件"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Snap to grid"
+msgstr "对齐网格"
+
 #: src/components/discord/CommandShowcase.tsx
-msgid "Snipe feed"
-msgstr "狙击 feed"
+#~ msgid "Snipe feed"
+#~ msgstr "狙击 feed"
 
 #: src/routes/snipes.tsx
 msgid "Snipe rules"
@@ -23215,7 +23546,7 @@ msgstr "正在停止…"
 
 #: src/routes/companella.tsx
 msgid "Storage is not configured, so uploads will fail until it is."
-msgstr "尚未配置存储，在配置完成前上传都会失败。"
+msgstr "存储尚未配置，配置好之前上传都会失败。"
 
 #: src/components/companella/SubmissionList.tsx
 #~ msgid "Stored, but not rated:"
@@ -23336,7 +23667,7 @@ msgstr "提交"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submit play"
-msgstr "上传成绩"
+msgstr "提交成绩"
 
 #: src/routes/news_.companella.tsx
 msgid "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
@@ -23355,6 +23686,7 @@ msgid "Submitting..."
 msgstr "提交中..."
 
 #: src/components/layout/CountrySelector.tsx
+#: src/components/maps/MapScoresBoard.tsx
 msgid "Subregions"
 msgstr "子区域"
 
@@ -23479,6 +23811,12 @@ msgstr "支持用于支付服务器费用。支持者可获得个人资料主题
 msgid "Sure?"
 msgstr "确定？"
 
+#. placeholder {0}: offBoard(cardKey, 0)
+#. placeholder {0}: offBoard(cardKey, 1)
+#: src/components/packs/CollectionPanel.tsx
+msgid "sure? {0} off the board"
+msgstr "确定？{0} 张离开展板"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Sure? {selectedCount, plural, one {# card leaves the collection} other {# cards leave the collection}}"
 msgstr "{selectedCount, plural, other {确定？# 张卡片将离开收藏册}}"
@@ -23488,6 +23826,10 @@ msgid "sure? +{lastCopyValue}"
 msgstr "确定？+{lastCopyValue}"
 
 #: src/components/packs/CollectionPanel.tsx
+msgid "Sure? It leaves the collection and the board"
+msgstr "确定？它会离开收藏和展板"
+
+#: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 msgid "Sure? The card leaves the collection"
 msgstr "确定？这张卡片将离开收藏册"
@@ -23495,6 +23837,11 @@ msgstr "确定？这张卡片将离开收藏册"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Sure? The five cards are used up"
 #~ msgstr "确定？这五张卡会被用掉"
+
+#. placeholder {0}: [...selected].reduce((sum, key) => sum + offBoard(key, 0), 0)
+#: src/components/packs/CollectionPanel.tsx
+msgid "Sure? This also takes {0} cards off the board"
+msgstr "确定？这也会让 {0} 张卡牌离开展板"
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
@@ -23655,8 +24002,8 @@ msgid "Tap a keymode to toggle its label."
 msgstr "点击键数即可切换它的标签。"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "tap one to preview its reply"
-msgstr "点击任意一个即可预览它的回复"
+#~ msgid "tap one to preview its reply"
+#~ msgstr "点击任意一个即可预览它的回复"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Tap the stack or drag the top card to draw"
@@ -23774,8 +24121,8 @@ msgid "Tektur"
 msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
-msgstr "用 <0>/link</0> 告诉机器人你是谁，只需一次。之后 <1>/recent</1> 这类查询会默认使用你的账号，不用再输用户名。"
+#~ msgid "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
+#~ msgstr "用 <0>/link</0> 告诉机器人你是谁，只需一次。之后 <1>/recent</1> 这类查询会默认使用你的账号，不用再输用户名。"
 
 #: src/components/BackendOfflineScreen.tsx
 msgid "Temporarily offline"
@@ -23936,8 +24283,9 @@ msgstr "没有成功，请重试。"
 
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/supporter/SupporterExtras.tsx
+#: src/routes/discord.tsx
 msgid "That didn't save. Try again."
-msgstr "保存失败，请重试。"
+msgstr "未能保存，请重试。"
 
 #: src/components/communities/field-options.tsx
 msgid "That does not look like a Discord invite link."
@@ -23952,8 +24300,12 @@ msgid "That doesn't look like an osu! score link."
 msgstr "这看起来不像 osu! 成绩链接。"
 
 #: src/lib/bug-report-screenshots.ts
-msgid "That file is not an image."
-msgstr "该文件不是图片。"
+msgid "That file is empty."
+msgstr "该文件是空的。"
+
+#: src/lib/bug-report-screenshots.ts
+#~ msgid "That file is not an image."
+#~ msgstr "该文件不是图片。"
 
 #: src/components/replay/ReplayCustomMediaControls.tsx
 msgid "That file is over 200 MB."
@@ -24034,8 +24386,8 @@ msgid "That Mamestagram account isn't linked to an osu! account here."
 msgstr "这个 Mamestagram 账号尚未在这里绑定 osu! 账号。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
-msgid "That part of the board is full."
-msgstr "展板的这一块已经满了。"
+#~ msgid "That part of the board is full."
+#~ msgstr "展板的这一块已经满了。"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "That picture is empty."
@@ -24261,6 +24613,10 @@ msgstr "无法加载展板。"
 msgid "The board is not answering right now."
 msgstr "排行榜暂时没有响应。"
 
+#: src/routes/discord.tsx
+msgid "The bot isn't in this server"
+msgstr "机器人不在此服务器中"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The browser blocked the clipboard. Try Copy BBCode again."
 msgstr "浏览器拦截了剪贴板。请再次点击复制 BBCode。"
@@ -24279,7 +24635,7 @@ msgstr "计算未能运行，稍后会重试。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "The callback did not match this browser's transaction; connect again."
-msgstr "回调与此浏览器的事务不匹配，请重新连接。"
+msgstr "回调与此浏览器的请求不匹配，请重新连接。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The card cover could not be changed. Try again."
@@ -24615,13 +24971,21 @@ msgstr "谱面段位 +1.37"
 msgid "the chart's level +1.5"
 msgstr "谱面段位 +1.5"
 
+#: src/routes/hashi.tsx
+msgid "The chord trainer running"
+msgstr "正在运行的和弦练习器"
+
+#: src/routes/hashi.tsx
+#~ msgid "The chord trainer takes two keys of one hand and shows how far apart they go down, with a metronome that can speed up as you go. The tip about rolled chords opens it on the columns it was about."
+#~ msgstr "和弦练习器取同一只手的两个按键，显示它们按下的时间相差多少，并配有可以逐渐加速的节拍器。关于滚压和弦的提示会在它所指的列上打开它。"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "The code didn't pass the check. The errors are listed under it."
 msgstr ""
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "The code exchange was refused."
-msgstr "授权码兑换被拒绝。"
+msgstr "授权码交换被拒绝。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "The code isn't on that userpage yet."
@@ -24629,7 +24993,7 @@ msgstr "该个人页面上还没有这段代码。"
 
 #: src/routes/companella.tsx
 msgid "The Companella beta is not switched on for this site yet."
-msgstr "本站尚未开启 Companella 测试。"
+msgstr "本站尚未开启 Companella 测试版。"
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "The comparison budget ran out; this is still being checked."
@@ -24799,6 +25163,10 @@ msgstr "头像框遮挡了太多头像；请让中间保持透明。"
 msgid "The frame has to be square, like the template."
 msgstr "头像框必须是正方形，和模板一样。"
 
+#: src/routes/hashi.tsx
+msgid "The goals page"
+msgstr "目标页面"
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway plays the notes of your replay skin and takes their colour. Off, it keeps its own notes and blue."
 msgstr ""
@@ -24817,7 +25185,7 @@ msgstr "安装程序没有签名，因为微软对代码签名收费，所以 Wi
 
 #: src/routes/companella.tsx
 msgid "The integration backend is not reachable right now."
-msgstr "暂时无法连接集成后端。"
+msgstr "集成后端暂时无法访问。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "The judgement counts for this play are gone, so there is no accuracy to check it against."
@@ -24825,7 +25193,7 @@ msgstr "该成绩的判定数据已丢失，无法据此核对准确率。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "The judgements saved in this replay don't match its key presses, so it's held for review."
-msgstr "此回放中保存的判定与按键记录不一致，已转入人工审核。"
+msgstr "这个回放里保存的判定和它的按键对不上，所以已暂扣待审核。"
 
 #: src/lib/chain-run.ts
 msgid "The last 3 cards always link."
@@ -24860,8 +25228,8 @@ msgid "The live feed is connected. New plays will start showing up as players su
 msgstr "实时信息流已连接。玩家提交新成绩后就会显示在这里。"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "The live score feed for a country, newest first."
-msgstr "某个国家/地区的实时成绩 feed，最新的在前。"
+#~ msgid "The live score feed for a country, newest first."
+#~ msgstr "某个国家/地区的实时成绩 feed，最新的在前。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The map's own samples and keysounds, when it has them."
@@ -24873,8 +25241,8 @@ msgid "The middle card gives x{0} combo."
 msgstr "中间的卡片 x{0} 连击。"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "The most farmed maps in a country, ranked by activity."
-msgstr "某个国家/地区最常被刷的谱面，按活跃度排序。"
+#~ msgid "The most farmed maps in a country, ranked by activity."
+#~ msgstr "某个国家/地区最常被刷的谱面，按活跃度排序。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "The most flashes in any one second of the loop. Saving needs {FLASH_LIMIT} or fewer."
@@ -25052,9 +25420,21 @@ msgstr "回放渲染器在导出过程中停止了。"
 msgid "The replays you have uploaded to Mania Tracker, with their share links and deletes."
 msgstr "你上传到 Mania Tracker 的回放，附带分享链接和删除操作。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "The report could not be sent. Try again in a bit."
+msgstr "举报未能发送，请稍后再试。"
+
+#: src/components/skins/SkinReportModal.tsx
+msgid "The report could not be sent. Try again."
+msgstr "举报发送失败，请重试。"
+
 #: src/routes/report.tsx
-msgid "The report was sent, but at least one image did not upload."
-msgstr "反馈已提交，但至少有一张图片没能上传。"
+msgid "The report was sent, but at least one file did not upload."
+msgstr "反馈已提交，但至少有一个文件没能上传。"
+
+#: src/routes/report.tsx
+#~ msgid "The report was sent, but at least one image did not upload."
+#~ msgstr "反馈已提交，但至少有一张图片没能上传。"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
@@ -25270,7 +25650,7 @@ msgstr "每开一包，目标提高 {0}%。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
-msgstr "测试客户端把签名密钥保存在此浏览器中，令牌只存在内存里，所以刷新页面后需要重新连接。它提交的所有内容都会标记为测试数据，一周后自动删除。"
+msgstr "测试客户端把签名密钥保存在这个浏览器里，令牌只保存在内存中，所以刷新页面后需要重新连接。它提交的所有内容都会标记为测试数据，并在一周后自动删除。"
 
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The third copy ever pulled"
@@ -25279,6 +25659,10 @@ msgstr "史上第三份被抽到的"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "The tint the rest of the profile takes while the theme is on."
 msgstr ""
+
+#: src/routes/hashi.tsx
+msgid "The top of a play's analysis, with its score and tips"
+msgstr "一局分析的顶部，包含分数和提示"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -25415,6 +25799,10 @@ msgstr "主题"
 msgid "There is no reward to pick."
 msgstr "没有可选的奖励。"
 
+#: src/routes/hashi.tsx
+msgid "There's also a chord trainer for two keys on the same hand. It shows how far apart you press them and has a metronome that can speed up."
+msgstr "还有一个多押练习器，练同一只手上的两个键。它会显示你按下这两个键相差多少，还带一个可以逐渐加速的节拍器。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "These are the packs checked, matched by beatmap. A pass has to be on one of these exact difficulties. Clearing the same courses from a different upload is still a clear, but that upload is not currently checked. More packs can be added."
 #~ msgstr "这些是目前会核对的图包，按谱面匹配。通过必须发生在这些具体难度之一。即使你通过的是其它上传里的同一套课题，也仍然算通过，只是目前不会核对那份上传。以后可以加入更多图包。"
@@ -25499,7 +25887,7 @@ msgstr "无法读取这个 .osk。"
 
 #: src/routes/companella.tsx
 msgid "This account is not in the Companella beta."
-msgstr "此账号不在 Companella 测试名单中。"
+msgstr "这个账号不在 Companella 测试版中。"
 
 #: src/components/player/RecentPlayRatingCells.tsx
 #~ msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
@@ -25750,6 +26138,10 @@ msgstr "此页面不存在。"
 msgid "This page will load automatically once {name} is ready."
 msgstr "{name} 就绪后，此页面会自动加载。"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "This part of the board is full. Try further out."
+msgstr "这片区域已满，试试更远的地方。"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play counts for nothing on the dan estimate."
 msgstr "这次成绩不计入段位估算。"
@@ -25806,6 +26198,10 @@ msgstr "这名玩家的卡片无法生成。ranked 成绩数据不足。"
 #: src/components/player/AddScoreModal.tsx
 msgid "This player's country isn't tracked yet."
 msgstr "这名玩家的国家/地区尚未被追踪。"
+
+#: src/routes/discord.tsx
+msgid "This preview isn't available right now."
+msgstr "此预览暂时不可用。"
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "This pull is gone"
@@ -25941,9 +26337,17 @@ msgstr "本周"
 msgid "This will allow {appNameInline} to"
 msgstr "这将允许 {appNameInline}："
 
+#: src/routes/hashi.tsx
+msgid "This works with <0>{sendSetting}</0> turned off too."
+msgstr "关闭 <0>{sendSetting}</0> 时也能用。"
+
 #: src/routes/report.tsx
-msgid "Those images are no longer available."
-msgstr "这些图片已无法查看。"
+msgid "Those files are no longer available."
+msgstr "这些文件已无法查看。"
+
+#: src/routes/report.tsx
+#~ msgid "Those images are no longer available."
+#~ msgstr "这些图片已无法查看。"
 
 #: src/routes/integrations_.companella.tsx
 #~ msgid "Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
@@ -26266,6 +26670,7 @@ msgid "top plays"
 msgstr "最佳成绩"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/routes/discord.tsx
 msgid "Top plays"
 msgstr "最佳成绩"
 
@@ -26287,8 +26692,8 @@ msgid "Top Thousand"
 msgstr "千强"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Top-play feed"
-msgstr "最佳成绩 feed"
+#~ msgid "Top-play feed"
+#~ msgstr "最佳成绩 feed"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Toploader"
@@ -26326,8 +26731,8 @@ msgid "Track my plays"
 msgstr "追踪我的成绩"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Track pp and accuracy goals and how close each one is."
-msgstr "追踪 pp 和准确率目标，以及各自还差多少。"
+#~ msgid "Track pp and accuracy goals and how close each one is."
+#~ msgstr "追踪 pp 和准确率目标，以及各自还差多少。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Tracked"
@@ -26490,8 +26895,8 @@ msgid "Turn"
 msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Turn a feed on for the current channel (needs Manage Server)."
-msgstr "为当前频道开启一个 feed(需要「管理服务器」权限)。"
+#~ msgid "Turn a feed on for the current channel (needs Manage Server)."
+#~ msgstr "为当前频道开启一个 feed(需要「管理服务器」权限)。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn left"
@@ -26570,16 +26975,16 @@ msgstr "两个国家/地区各两张卡片。"
 #~ msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
-msgstr "两名玩家并排对比：pp 与排名、最好成绩以及 4K/7K 构成，最后是 pp 差距。省略第一个用户名就用你关联的账号来对比。"
+#~ msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
+#~ msgstr "两名玩家并排对比：pp 与排名、最好成绩以及 4K/7K 构成，最后是 pp 差距。省略第一个用户名就用你关联的账号来对比。"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Type"
 msgstr ""
 
 #: src/routes/discord.tsx
-msgid "Type <0>/help</0> for a guided tour, or <1>/</1> to see every command."
-msgstr "输入 <0>/help</0> 看引导教程，或输入 <1>/</1> 查看所有命令。"
+#~ msgid "Type <0>/help</0> for a guided tour, or <1>/</1> to see every command."
+#~ msgstr "输入 <0>/help</0> 看引导教程，或输入 <1>/</1> 查看所有命令。"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "Type a range: 170-200, 220+, <150"
@@ -26738,9 +27143,10 @@ msgstr "未知玩家"
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Unlike"
-msgstr "取消喜欢"
+msgstr "取消点赞"
 
 #: src/components/player/AddScoreModal.tsx
+#: src/routes/discord.tsx
 msgid "Unlink"
 msgstr "解除绑定"
 
@@ -26876,8 +27282,12 @@ msgid "Untitled theme"
 msgstr ""
 
 #: src/lib/bug-report-screenshots.ts
-msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
-msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
+msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} files."
+msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 个文件。"
+
+#: src/lib/bug-report-screenshots.ts
+#~ msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
+#~ msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
 
 #: src/routes/support.tsx
 msgid "Up to 200 MB"
@@ -27126,6 +27536,10 @@ msgstr "把这张截图设为卡片封面"
 #: src/routes/support.tsx
 msgid "Use your osu! username as your name there, so the time lands on your account."
 msgstr "请用你的 osu! 用户名作为名字，这样时长会加到你的账号上。"
+
+#: src/routes/discord.tsx
+msgid "Used by /skills and /farm when you don't pick one."
+msgstr "在 /skills 和 /farm 未指定键数时使用。"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Used when a replay or map preview opens."
@@ -27386,8 +27800,8 @@ msgid "View the images and sounds in this skin without downloading it."
 msgstr "无需下载即可查看这个皮肤里的图片和音效。"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "view the score"
-msgstr "查看成绩"
+#~ msgid "view the score"
+#~ msgstr "查看成绩"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View the skin page"
@@ -27709,8 +28123,8 @@ msgid "What is it for"
 msgstr "这个服务器是做什么的"
 
 #: src/routes/hashi.tsx
-msgid "What it does"
-msgstr "功能"
+#~ msgid "What it does"
+#~ msgstr "功能"
 
 #: src/routes/communities_.$id.tsx
 msgid "What it is for"
@@ -27781,9 +28195,17 @@ msgstr "更新内容"
 msgid "What's wrong with it? (optional)"
 msgstr "有什么问题？（可选）"
 
+#: src/components/skins/SkinReportModal.tsx
+msgid "What's wrong with this skin?"
+msgstr "这个皮肤有什么问题？"
+
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "When {name} found their first card, and every rarity after it."
 #~ msgstr "{name} 找到首张卡片的时间，以及之后每个稀有度的首张。"
+
+#: src/routes/hashi.tsx
+#~ msgid "When a play gets its accuracy by pressing keys where there are no notes, Hashi sets a goal of a clean run on that map. Each practice map gets a goal at full speed. Every try is a dot on the goal's track until you reach it, and goals have their own page."
+#~ msgstr "当一局的准确率是靠在没有音符的地方按键得来的，Hashi 会为该谱面设一个干净通关的目标。每张练习谱面都有一个原速目标。在达成之前，每次尝试都会是目标轨迹上的一个点，目标有自己的页面。"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "When each card first joined your collection"
@@ -27794,12 +28216,12 @@ msgstr "每张卡片最初加入你收藏册的时间"
 #~ msgstr "当 osu! 也有同一局成绩时，你的技能评分会直接读取回放中的击打时机，而不是根据判定数量来估算。"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
-msgstr "有人打出新的最佳成绩时，会自动发到你的频道，附带完整信息。"
+#~ msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
+#~ msgstr "有人打出新的最佳成绩时，会自动发到你的频道，附带完整信息。"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "When someone overtakes a country leaderboard score, the snipe lands in your channel."
-msgstr "有人超越国家/地区排行榜上的成绩时，这次狙击会发到你的频道。"
+#~ msgid "When someone overtakes a country leaderboard score, the snipe lands in your channel."
+#~ msgstr "有人超越国家/地区排行榜上的成绩时，这次狙击会发到你的频道。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "When you play"
@@ -27838,8 +28260,20 @@ msgid "while tracked"
 msgstr "追踪期间"
 
 #: src/routes/hashi.tsx
-msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
-msgstr "选歌时，Hashi 会显示该谱面在你当前模组下的排行榜，包括 osu! 不保存的榜，比如任意倍速的 DT 或 HT、Invert 或 No Release。你在 osu!stable 或 lazer 上完成的每张 mania 谱面都会连同回放发送到你的个人资料，应用会显示它在该谱面排行榜上的名次。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你在 osu! 里做什么，比如游玩、选择或编辑谱面，或观看回放。"
+#~ msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
+#~ msgstr "选歌时，Hashi 会显示你当前所开模组下这张谱面的排行榜，包括任意倍速的 DT 或 HT、Invert 或 No Release，坟场谱面也有。你可以切换到你的国家、地区或好友，也可以搜索某个玩家。"
+
+#: src/routes/hashi.tsx
+#~ msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay, and the app shows its place on the map's leaderboard. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!, like playing, picking or editing a map, or watching a replay."
+#~ msgstr "选歌时，Hashi 会显示该谱面在你当前模组下的排行榜，包括 osu! 不保存的榜，比如任意倍速的 DT 或 HT、Invert 或 No Release。你在 osu!stable 或 lazer 上完成的每张 mania 谱面都会连同回放发送到你的个人资料，应用会显示它在该谱面排行榜上的名次。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你在 osu! 里做什么，比如游玩、选择或编辑谱面，或观看回放。"
+
+#: src/routes/hashi.tsx
+#~ msgid "While you pick a song, Hashi shows the map's leaderboard for the mods you have on, including boards osu! doesn't keep, like DT or HT at any rate, Invert or No Release. Every mania map you finish on osu!stable or lazer goes to your profile with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "选歌时，Hashi 会显示该谱面在你当前模组下的排行榜，包括 osu! 不保存的榜，比如任意倍速的 DT 或 HT、Invert 或 No Release。你在 osu!stable 或 lazer 上完成的每张 mania 谱面都会连同回放发送到你的个人资料。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你在 osu! 里做什么。"
+
+#: src/routes/hashi.tsx
+msgid "While you pick a song, you see the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
+msgstr "选歌时，你能看到当前所开模组下这张谱面的排行榜，包括任意倍速的 DT 或 HT、Invert 或 No Release，坟场谱面也有。你可以切换到你的国家、地区或好友，也可以搜索某个玩家。"
 
 #: src/lib/supporter-companions.ts
 msgid "White fairy"
@@ -27878,6 +28312,10 @@ msgstr "服务器面向哪些人、里面在做什么、什么时候热闹。换
 #: src/routes/recommendations.tsx
 msgid "who you're compared to"
 msgstr "你在和谁比较"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Whole dans"
+msgstr "整段位显示"
 
 #: src/lib/packs.ts
 msgid "Whole pool, new cards first"
@@ -28196,7 +28634,6 @@ msgstr "阴阳玉"
 msgid "you"
 msgstr "你"
 
-#: src/components/discord/CommandShowcase.tsx
 #: src/components/packs/run/chain/useGuestChainRun.ts
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -28254,6 +28691,10 @@ msgstr "你的收藏夹数量已达上限。"
 msgid "You are cutting through the cards"
 msgstr "你正在划开卡片"
 
+#: src/routes/hashi.tsx
+msgid "You can also open it in a window the size of osu!'s and play the map there with its song, or watch autoplay."
+msgstr "你也可以在一个和 osu! 一样大的窗口里打开它，带着歌曲在里面打这张谱面，或者看自动演示。"
+
 #: src/routes/news_.companella.tsx
 msgid "You can also submit ScoreV2 and Hard Rock plays this way."
 msgstr "你也可以用这种方式上传使用 ScoreV2 和 Hard Rock 的成绩。"
@@ -28278,6 +28719,18 @@ msgstr "每周可以更改一次名字。"
 #: src/routes/integrations_.companella.tsx
 #~ msgid "You can disconnect Companella from <0>Integrations</0> in the user menu. It stops sending plays right away."
 #~ msgstr ""
+
+#: src/routes/hashi.tsx
+msgid "You can edit your skin and see it on the map you have selected. Change column colors, make each part's art narrower or wider, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+msgstr "你可以编辑皮肤，并在当前选中的谱面上直接看到效果。可以改轨道颜色、把各部分的图片调窄或调宽，移动判定线位置、轨道、判定和连击数。修改会直接保存到你的皮肤里，stable 和 lazer 都可以。"
+
+#: src/routes/hashi.tsx
+#~ msgid "You can edit your skin in Hashi and see it on the map you have selected. Change column colors, make each part's art narrower or wider, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+#~ msgstr "你可以在 Hashi 里编辑皮肤，并在当前选中的谱面上直接看到效果。可以改轨道颜色、把各部分的图片调窄或调宽，移动判定线位置、轨道、判定和连击数。修改会直接保存到你的皮肤里，stable 和 lazer 都可以。"
+
+#: src/routes/hashi.tsx
+#~ msgid "You can edit your skin in Hashi and see it on the map you have selected. Change column colors, resize things, and move the hit position, columns, judgements and combo around. Edits save straight to your skin, on stable or lazer."
+#~ msgstr "你可以在 Hashi 里编辑皮肤，并在当前选中的谱面上直接看到效果。可以改轨道颜色、调整元素大小，移动判定线位置、轨道、判定和连击数。修改会直接保存到你的皮肤里，stable 和 lazer 都可以。"
 
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
@@ -28331,6 +28784,10 @@ msgstr "潜在收益"
 #~ msgid "You do not have five duplicate copies of that tier."
 #~ msgstr "你没有该等级的五张重复卡。"
 
+#: src/routes/discord.tsx
+msgid "You don't manage any Discord servers."
+msgstr "你没有管理任何 Discord 服务器。"
+
 #. placeholder {0}: number(serial)
 #: src/components/packs/ReleaseCopyDialog.tsx
 msgid "You give back #{0} and keep {remaining}."
@@ -28368,12 +28825,16 @@ msgid "You have a score, but players near you score higher on it."
 msgstr "你有成绩，但附近玩家的分数更高。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
+msgid "You have as many cards in this part of the board as one player can. Try somewhere else."
+msgstr "你在这片区域的卡牌已达单人上限，换个地方试试。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
 msgid "You have laid down as many cards as you can."
 msgstr "你已放下可放置的全部卡牌。"
 
 #: src/routes/skins.tsx
 msgid "You have not liked a skin yet"
-msgstr "你还没有喜欢过任何皮肤"
+msgstr "你还没有点赞过皮肤"
 
 #: src/routes/skins.tsx
 msgid "You have not published a skin yet"
@@ -28382,6 +28843,10 @@ msgstr "你还没有发布过皮肤"
 #: src/components/settings/SettingsPanel.tsx
 msgid "You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more."
 msgstr "已达到 {HIDDEN_USERS_LIMIT} 名隐藏玩家的上限。移除一些后才能继续添加。"
+
+#: src/components/skins/SkinReportModal.tsx
+msgid "You have sent too many reports today. Try again tomorrow."
+msgstr "你今天发送的举报太多了，请明天再试。"
 
 #: src/routes/recommendations.tsx
 msgid "you have too many active marks, clear some first"
@@ -28536,6 +29001,10 @@ msgstr "你这个 {yourPp}pp 的成绩已经过去 {age}。水平相近的玩家
 msgid "Your 6K, 7K and 8K skill ratings are being recalculated with Prism. Until a player's are, they don't show on those keymodes' leaderboards."
 msgstr "你的 6K、7K 和 8K 技能评分正在用 Prism 重新计算。在某位玩家的评分算完之前，该玩家不会出现在这些键数的排行榜上。"
 
+#: src/routes/discord.tsx
+msgid "Your account"
+msgstr "你的账号"
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "Your account is not on the list for this beta."
 msgstr "你的账号不在这次测试的名单中。"
@@ -28566,8 +29035,8 @@ msgid "your best plays"
 msgstr "你的最佳成绩"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
-msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
+#~ msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
+#~ msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
 
 #: src/routes/support.tsx
 msgid "Your card"
@@ -28621,7 +29090,7 @@ msgstr "你的国家/地区还没有被追踪，所以没有地方记录你的�
 msgid "Your credit"
 msgstr "你的计入值"
 
-#. placeholder {0}: landedValue.toFixed(2)
+#. placeholder {0}: formatDanValue(landedValue)
 #: src/components/maps/DanProgressRail.tsx
 msgid "Your credit: {0}"
 msgstr "你的计入值：{0}"
@@ -28650,6 +29119,11 @@ msgstr "牌组不能少于 4 张卡片。"
 msgid "Your description shows up here."
 msgstr "你的描述会显示在这里。"
 
+#. placeholder {0}: linked.osuUsername
+#: src/routes/discord.tsx
+msgid "Your Discord account is linked to <0>{0}</0>."
+msgstr "你的 Discord 账号已绑定到 <0>{0}</0>。"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Your dynamic renders were turned off."
 msgstr "你的动态渲染图已被关闭。"
@@ -28667,8 +29141,12 @@ msgstr "你的动态渲染图已被关闭。"
 #~ msgstr "你的估算是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
 
 #: src/routes/report.tsx
-msgid "Your feedback was sent, but at least one image did not upload."
-msgstr "建议已发送，但至少有一张图片没能上传。"
+msgid "Your feedback was sent, but at least one file did not upload."
+msgstr "建议已发送，但至少有一个文件没能上传。"
+
+#: src/routes/report.tsx
+#~ msgid "Your feedback was sent, but at least one image did not upload."
+#~ msgstr "建议已发送，但至少有一张图片没能上传。"
 
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Your first {rarity}"
@@ -28799,8 +29277,8 @@ msgid "Your pass"
 msgstr "你的通过"
 
 #: src/components/discord/CommandShowcase.tsx
-msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
-msgstr "你的个人面板：排名、pp、活跃统计和目标进度。"
+#~ msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
+#~ msgstr "你的个人面板：排名、pp、活跃统计和目标进度。"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Your plays"
@@ -28864,8 +29342,12 @@ msgid "Your Replay Uploads"
 msgstr "你上传的回放"
 
 #: src/routes/report.tsx
-msgid "Your reply was sent, but at least one image did not upload."
-msgstr "回复已发送，但至少有一张图片没能上传。"
+msgid "Your reply was sent, but at least one file did not upload."
+msgstr "回复已发送，但至少有一个文件没能上传。"
+
+#: src/routes/report.tsx
+#~ msgid "Your reply was sent, but at least one image did not upload."
+#~ msgstr "回复已发送，但至少有一张图片没能上传。"
 
 #: src/routes/report.tsx
 #~ msgid "Your reports"
@@ -28878,6 +29360,10 @@ msgstr "你的成绩"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your server shows up here once it is approved. Until then you can see it, and edit it, in your own listings above."
 msgstr "审核通过后你的服务器就会出现在这里。在那之前，你可以在上面自己的收录里看到并修改它。"
+
+#: src/routes/discord.tsx
+msgid "Your servers"
+msgstr "你的服务器"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Your session ended. Sign in again, then approve."
@@ -29000,60 +29486,3 @@ msgstr ""
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Zoom in to lay cards down."
 msgstr "放大后才能放下卡牌。"
-
-#: src/components/packs/collections/board/CardBoard.tsx
-msgid "{count, plural, one {# card here} other {# cards here}}"
-msgstr "{count, plural, other {此处 # 张卡牌}}"
-
-#: src/components/packs/collections/board/CardBoard.tsx
-msgid "Snap to grid"
-msgstr "对齐网格"
-
-#: src/components/packs/collections/board/CardBoard.tsx
-msgid "This part of the board is full. Try further out."
-msgstr "这片区域已满，试试更远的地方。"
-
-#: src/components/packs/collections/board/CardBoard.tsx
-msgid "Reported. An admin will take a look."
-msgstr "已举报，管理员会查看。"
-
-#: src/components/packs/collections/board/CardBoard.tsx
-msgid "The report could not be sent. Try again in a bit."
-msgstr "举报未能发送，请稍后再试。"
-
-#: src/components/packs/collections/board/CardBoard.tsx
-msgid "Reported"
-msgstr "已举报"
-
-#: src/components/packs/collections/board/CardBoard.tsx
-msgid "Report this card to the admins"
-msgstr "向管理员举报这张卡牌"
-
-#: src/components/packs/collections/board/CardBoard.tsx
-msgid "You have as many cards in this part of the board as one player can. Try somewhere else."
-msgstr "你在这片区域的卡牌已达单人上限，换个地方试试。"
-
-#. placeholder {0}: offBoard(packCardKeyOf(menu.card), 1)
-#: src/components/packs/CollectionPanel.tsx
-msgid "{0} off the board"
-msgstr "{0} 张离开展板"
-
-#. placeholder {0}: [...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0)
-#: src/components/packs/CollectionPanel.tsx
-msgid "hold to recycle ({0} come off the board)"
-msgstr "按住回收（{0} 张离开展板）"
-
-#. placeholder {0}: offBoard(cardKey, 0)
-#. placeholder {0}: offBoard(cardKey, 1)
-#: src/components/packs/CollectionPanel.tsx
-msgid "sure? {0} off the board"
-msgstr "确定？{0} 张离开展板"
-
-#: src/components/packs/CollectionPanel.tsx
-msgid "Sure? It leaves the collection and the board"
-msgstr "确定？它会离开收藏和展板"
-
-#. placeholder {0}: [...selected].reduce((sum, key) => sum + offBoard(key, 0), 0)
-#: src/components/packs/CollectionPanel.tsx
-msgid "Sure? This also takes {0} cards off the board"
-msgstr "确定？这也会让 {0} 张卡牌离开展板"
