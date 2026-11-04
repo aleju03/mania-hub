@@ -145,6 +145,8 @@ interface OwnFarmHelperRequest {
   view?: string;
   skill?: string;
   skillMods?: string;
+  featuredArtist?: boolean;
+  showBelowGainFloor?: boolean;
   limit?: number;
 }
 
@@ -158,6 +160,8 @@ function ownFarmHelperSnapshotUrl(backend: FeedbackBackend, data: OwnFarmHelperR
   if (data.view) query.set("view", data.view);
   if (data.skill) query.set("skill", data.skill);
   if (data.skillMods) query.set("mods", data.skillMods);
+  if (data.featuredArtist) query.set("fa", "1");
+  if (data.showBelowGainFloor) query.set("low", "1");
   if (data.limit != null) query.set("limit", String(data.limit));
   return `${backend.base}/api/snapshots/farm-helper?${query.toString()}`;
 }

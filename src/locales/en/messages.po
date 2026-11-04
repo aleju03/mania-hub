@@ -5478,6 +5478,7 @@ msgstr "BORROW"
 #~ msgstr "Boss round: {0}. {1}"
 
 #: src/components/discord/DiscordTabs.tsx
+#: src/components/layout/Nav.tsx
 msgid "Bot"
 msgstr "Bot"
 
@@ -6495,6 +6496,10 @@ msgctxt "a dan course pass"
 msgid "Clear"
 msgstr "Clear"
 
+#: src/routes/recommendations.tsx
+msgid "clear all"
+msgstr "clear all"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 #: src/routes/supporter.tsx
@@ -6509,6 +6514,10 @@ msgstr "clear attempt"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Clear editor"
 msgstr "Clear editor"
+
+#: src/routes/recommendations.tsx
+msgid "clear filters"
+msgstr "clear filters"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/snipes.tsx
@@ -8669,8 +8678,8 @@ msgid "Discord"
 msgstr "Discord"
 
 #: src/components/layout/Nav.tsx
-#~ msgid "Discord bot"
-#~ msgstr "Discord bot"
+msgid "Discord bot"
+msgstr "Discord bot"
 
 #: src/routes/communities.tsx
 msgid "Discord did not finish connecting. Try again."
@@ -10047,6 +10056,14 @@ msgstr "Feather wings"
 msgid "Featured"
 msgstr "Featured"
 
+#: src/routes/recommendations.tsx
+msgid "Featured Artist"
+msgstr "Featured Artist"
+
+#: src/routes/recommendations.tsx
+#~ msgid "Featured Artist songs only"
+#~ msgstr "Featured Artist songs only"
+
 #: src/routes/workshop.index.tsx
 msgid "Featured frame"
 msgstr "Featured frame"
@@ -10072,8 +10089,12 @@ msgstr "Feedback sent"
 #~ msgstr "Feeds are currently disabled on the backend."
 
 #: src/routes/discord.tsx
-msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
-msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+#~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+#~ msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+
+#: src/routes/discord.tsx
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
@@ -10186,6 +10207,7 @@ msgstr "filter maps..."
 msgid "filtered out"
 msgstr "filtered out"
 
+#: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "filters"
 msgstr "filters"
@@ -10193,6 +10215,7 @@ msgstr "filters"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/snipes.tsx
 msgid "Filters"
 msgstr "Filters"
@@ -11502,6 +11525,10 @@ msgstr "hidden from your recs until you clear it or set a score on it"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hidden list ({0})"
 msgstr "Hidden list ({0})"
+
+#: src/routes/recommendations.tsx
+msgid "hide"
+msgstr "hide"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -14492,6 +14519,10 @@ msgid "Maps ready."
 msgstr "Maps ready."
 
 #: src/routes/recommendations.tsx
+msgid "Maps under 1pp"
+msgstr "Maps under 1pp"
+
+#: src/routes/recommendations.tsx
 #~ msgid "maps worth farming"
 #~ msgstr "maps worth farming"
 
@@ -14858,8 +14889,8 @@ msgid "moderation"
 msgstr "moderation"
 
 #: src/routes/recommendations.tsx
-msgid "mods"
-msgstr "mods"
+#~ msgid "mods"
+#~ msgstr "mods"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
@@ -15889,6 +15920,10 @@ msgstr "No Maniacard history has been recorded yet."
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "no maps match"
 msgstr "no maps match"
+
+#: src/routes/recommendations.tsx
+msgid "No maps match these filters"
+msgstr "No maps match these filters"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "No maps match these filters."
@@ -22009,6 +22044,7 @@ msgid "Server settings aren't available right now."
 msgstr "Server settings aren't available right now."
 
 #: src/components/discord/DiscordTabs.tsx
+#: src/components/layout/Nav.tsx
 msgid "Servers"
 msgstr "Servers"
 
@@ -22340,6 +22376,10 @@ msgstr "Short rows score x3."
 msgid "Shot {0}"
 msgstr "Shot {0}"
 
+#: src/routes/recommendations.tsx
+msgid "show"
+msgstr "show"
+
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Show"
@@ -22512,6 +22552,10 @@ msgstr "Show the map's storyboard behind (and over) the playfield"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Show the site name on the render"
 msgstr "Show the site name on the render"
+
+#: src/routes/recommendations.tsx
+msgid "show them"
+msgstr "show them"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Show what you are doing in osu! on your profile and the rankings"
@@ -22884,8 +22928,8 @@ msgid "Site colours"
 msgstr "Site colours"
 
 #: src/routes/discord.tsx
-msgid "Site updates"
-msgstr "Site updates"
+#~ msgid "Site updates"
+#~ msgstr "Site updates"
 
 #: src/routes/skins.tsx
 msgid "size"
@@ -23391,6 +23435,14 @@ msgstr "Song, artist or mapper"
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Song, artist, mapper, or a beatmap link"
 msgstr "Song, artist, mapper, or a beatmap link"
+
+#: src/routes/recommendations.tsx
+#~ msgid "songs"
+#~ msgstr "songs"
+
+#: src/routes/recommendations.tsx
+msgid "Songs"
+msgstr "Songs"
 
 #: src/lib/pack-run.ts
 msgid "Songs cleared"
@@ -27296,6 +27348,10 @@ msgstr "Try again"
 msgid "Try again in a bit."
 msgstr "Try again in a bit."
 
+#: src/routes/recommendations.tsx
+msgid "Try fewer filters or a different key mode."
+msgstr "Try fewer filters or a different key mode."
+
 #: src/routes/support.tsx
 msgid "Try it all on"
 msgstr "Try it all on"
@@ -28551,6 +28607,10 @@ msgstr "Wearing a theme from the gallery is for supporters. Anyone can remix one
 #: src/components/packs/GoatPoll.tsx
 msgid "web.archive.org link to their osu! profile"
 msgstr "web.archive.org link to their osu! profile"
+
+#: src/routes/discord.tsx
+msgid "Website changelog"
+msgstr "Website changelog"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Wed"

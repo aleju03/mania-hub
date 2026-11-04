@@ -3,7 +3,7 @@ import { UPDATES, type ChangelogUpdate } from "../../data/changelog";
 import { changelogKind } from "../../lib/changelog";
 import { getCanonicalOrigin } from "../../lib/origin";
 
-// The newest changelog lines as JSON, for the Discord bot's Site updates feed.
+// The newest changelog lines as JSON, for the Discord bot's Website changelog feed.
 // Each line gets a key that survives edits to its text: its date plus its place
 // among that day's lines counted from the oldest, so fixing a typo or folding a
 // fix into an existing line never reposts it, and a new line on the same day

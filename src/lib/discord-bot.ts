@@ -94,12 +94,22 @@ async function post<T>(path: string, body: Record<string, unknown>): Promise<T |
   }
 }
 
-async function readAccount(viewerId: number, signedIn: boolean): Promise<BotAccount> {
+async function readAccount(viewerId: number, signedIn: boolean, viewerUsername?: string, countryCode?: string | null): Promise<BotAccount> {
   const { isDiscordOAuthConfigured } = await import("./discord-auth-server");
   const link = signedIn ? await connection(viewerId) : null;
-  const account = signedIn
+  let account = signedIn
     ? await post<{ links?: BotAccount["links"]; settings?: BotPreferences | null }>("/api/discord/account", { viewerId })
     : null;
+  // A link typed in /link for the Discord account just connected here is now
+  // proven, so it is confirmed without another click.
+  if (link && viewerUsername && account?.links?.some((entry) => entry.discordUserId === link.discordUserId && !entry.verified)) {
+    account = await post<{ links?: BotAccount["links"]; settings?: BotPreferences | null }>("/api/discord/account/link", {
+      viewerId,
+      viewerUsername,
+      countryCode: countryCode ?? null,
+      discordUserId: link.discordUserId,
+    }) ?? account;
+  }
   return {
     signedIn,
     oauthConfigured: isDiscordOAuthConfigured(),
@@ -112,7 +122,7 @@ async function readAccount(viewerId: number, signedIn: boolean): Promise<BotAcco
 export const fetchBotAccount = createServerFn({ method: "GET" }).handler(async (): Promise<BotAccount> => {
   await noStore();
   const me = await viewer();
-  return readAccount(me?.id ?? 0, Boolean(me));
+  return readAccount(me?.id ?? 0, Boolean(me), me?.username, me?.countryCode);
 });
 
 /** Links the Discord account connected in this browser to the signed-in osu! account. */
@@ -174,7 +184,14 @@ export const fetchBotServers = createServerFn({ method: "GET" }).handler(async (
   const me = await viewer();
   if (!me) return { ok: false, error: "signin", ...EMPTY_SERVERS };
   const guilds = await manageableGuilds(me.id);
-  if (!guilds) return { ok: false, error: "no_discord", ...EMPTY_SERVERS };
+  if (!guilds) {
+    // No Discord connection in this browser: a verified link still shows the
+    // servers with the bot where that Discord account can manage the server.
+    const linked = await post<Omit<BotServers, "ok"> & { ok?: boolean; error?: string }>("/api/discord/servers", { viewerId: me.id, fromLinks: true });
+    if (!linked) return { ok: false, error: "unavailable", ...EMPTY_SERVERS };
+    if (linked.ok === false) return { ok: false, error: "no_discord", ...EMPTY_SERVERS };
+    return { ...EMPTY_SERVERS, ...linked, ok: true, error: undefined };
+  }
   const result = await post<Omit<BotServers, "ok">>("/api/discord/servers", {
     viewerId: me.id,
     guilds: guilds.map((guild) => ({ id: guild.id, name: guild.name, iconUrl: guild.iconUrl })),
@@ -192,20 +209,25 @@ export const updateBotServer = createServerFn({ method: "POST" })
     await noStore();
     const me = await viewer();
     if (!me) return { ok: false, error: "signin" };
-    // Re-checked on every change rather than trusted from the page.
-    const guild = (await manageableGuilds(me.id))?.find((candidate) => candidate.id === data.guildId);
-    if (!guild) return { ok: false, error: "no_access" };
+    // Re-checked on every change rather than trusted from the page: through the
+    // Discord connection in this browser if there is one, otherwise the
+    // backend checks the viewer's verified link with the bot's own token.
+    const oauthGuilds = await manageableGuilds(me.id);
+    const guild = oauthGuilds?.find((candidate) => candidate.id === data.guildId);
+    if (oauthGuilds && !guild) return { ok: false, error: "no_access" };
     const base = getServerLiveBackendUrl();
     if (!base) return { ok: false, error: "unavailable" };
     const response = await fetch(`${base}/api/discord/servers/update`, {
       method: "POST",
       headers: headers(),
-      body: JSON.stringify({ viewerId: me.id, guildId: guild.id, guildName: guild.name, change: data.change }),
+      body: JSON.stringify(guild
+        ? { viewerId: me.id, guildId: guild.id, guildName: guild.name, change: data.change }
+        : { viewerId: me.id, guildId: data.guildId, fromLinks: true, change: data.change }),
     }).catch(() => null);
     const body = await response?.json().catch(() => null) as { error?: string; servers?: BotServer[] } | null;
     if (!response?.ok) return { ok: false, error: body?.error ?? "failed" };
     const server = body?.servers?.[0];
-    return { ok: true, server: server ? { ...server, name: guild.name, iconUrl: guild.iconUrl } : undefined };
+    return { ok: true, server: server ? { ...server, name: guild?.name ?? server.name, iconUrl: guild?.iconUrl ?? server.iconUrl } : undefined };
   });
 
 export const fetchBotPreview = createServerFn({ method: "GET" })
