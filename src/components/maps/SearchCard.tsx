@@ -320,8 +320,8 @@ function DiffStarPill({ model }: { model: CardModel }) {
   const count = model.byStars.length;
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5" title={count === 1 ? t`1 diff` : t`${count} diffs`}>
-      <StarRatingBadge stars={model.starHi} range={[model.starLo, model.starHi]} />
-      {count > 1 ? <span className="font-bold tabular-nums text-osu-l1">{count}</span> : null}
+      <StarRatingBadge stars={model.starHi} range={[model.starLo, model.starHi]} large />
+      {count > 1 ? <span className="whitespace-nowrap tabular-nums"><Trans><span className="font-bold text-osu-l1">{count}</span> diffs</Trans></span> : null}
     </span>
   );
 }

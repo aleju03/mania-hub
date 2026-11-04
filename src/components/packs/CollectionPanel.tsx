@@ -1530,7 +1530,7 @@ export function CollectionPanel({
                   type="button"
                   onClick={() => setTierFilter(selected ? "all" : (value as CollectionTierFilter))}
                   disabled={count === 0 && !selected}
-                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors disabled:cursor-default disabled:opacity-35 ${
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-extrabold transition-colors disabled:cursor-default disabled:opacity-35 ${
                     rgb
                       ? selected
                         ? ""
