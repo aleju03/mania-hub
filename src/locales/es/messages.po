@@ -4283,6 +4283,7 @@ msgid "boosts"
 msgstr "impulsos"
 
 #: src/components/discord/DiscordTabs.tsx
+#: src/components/layout/Nav.tsx
 msgid "Bot"
 msgstr "Bot"
 
@@ -6647,8 +6648,8 @@ msgid "Discord"
 msgstr "Discord"
 
 #: src/components/layout/Nav.tsx
-#~ msgid "Discord bot"
-#~ msgstr "Bot de Discord"
+msgid "Discord bot"
+msgstr "Bot de Discord"
 
 #: src/routes/communities.tsx
 msgid "Discord did not finish connecting. Try again."
@@ -16657,6 +16658,7 @@ msgid "Server settings aren't available right now."
 msgstr "Los ajustes del servidor no están disponibles ahora."
 
 #: src/components/discord/DiscordTabs.tsx
+#: src/components/layout/Nav.tsx
 msgid "Servers"
 msgstr "Servidores"
 

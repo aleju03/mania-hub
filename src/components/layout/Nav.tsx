@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { BarChart3, Bug, ChevronDown, Globe, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
+import { BarChart3, Bug, ChevronDown, ChevronRight, Globe, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { GuestAvatar } from "../ui/GuestAvatar";
 import { Avatar } from "../ui/Avatar";
@@ -107,6 +107,21 @@ const NAV_LABELS: Record<NavLeafId, ReturnType<typeof msg>> = {
 const DEV_NAV_LABELS: Partial<Record<NavLeafId, ReturnType<typeof msg>>> = {
   discord: msg`Discord`,
 };
+
+// The Discord entry branches into its two pages: a flyout on desktop, two rows
+// in the mobile menu. Only for those who can see the bot page.
+const DISCORD_BRANCHES = [
+  { to: "/discord" as const, label: msg`Bot`, mobileLabel: msg`Discord bot` },
+  { to: "/communities" as const, label: msg`Servers`, mobileLabel: msg`Discord servers` },
+];
+
+function dropdownItemClass(active: boolean): string {
+  return `relative py-2 pl-4 pr-3 text-[13px] font-semibold capitalize [text-shadow:0_1px_5px_rgba(0,0,0,0.95)] transition-colors before:absolute before:left-1 before:top-1/2 before:h-[15px] before:w-[3px] before:-translate-y-1/2 before:rounded-full before:bg-osu-yellow before:transition-opacity ${
+    active
+      ? "text-white before:opacity-100"
+      : "text-osu-pink-light before:opacity-0 hover:text-white hover:before:opacity-100"
+  }`;
+}
 
 // "packs" names both the group and its opener leaf with different labels, so
 // group labels get their own map instead of sharing the leaf one.
@@ -217,6 +232,10 @@ export function Nav() {
   const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
   const [mobileCountryOpen, setMobileCountryOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [discordBranchOpen, setDiscordBranchOpen] = useState(false);
+  useEffect(() => {
+    if (!openGroup) setDiscordBranchOpen(false);
+  }, [openGroup]);
   const [mobileOpenGroups, setMobileOpenGroups] = useState<Set<string>>(() => new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fallbackCountry = useSelectedCountry();
@@ -799,6 +818,49 @@ export function Nav() {
                     >
                       {groupItems.map((leaf) => {
                         const itemActive = current?.id === leaf.id;
+                        if (leaf.id === "discord" && devMode) {
+                          return (
+                            <div
+                              key={leaf.id}
+                              className="flex flex-col items-start"
+                              onMouseEnter={() => setDiscordBranchOpen(true)}
+                              onMouseLeave={() => setDiscordBranchOpen(false)}
+                              onFocus={() => setDiscordBranchOpen(true)}
+                            >
+                              <Link
+                                to={leaf.to}
+                                onClick={() => setOpenGroup(null)}
+                                draggable={false}
+                                role="menuitem"
+                                aria-haspopup="menu"
+                                className={`${dropdownItemClass(itemActive)} flex items-center gap-1.5`}
+                              >
+                                {i18n._(navLabel(leaf.id))}
+                                <ChevronRight className="h-3.5 w-3.5 opacity-70" strokeWidth={2.5} />
+                              </Link>
+                              {/* Bot and Servers branch off past the menu's right edge
+                                  (the menu is the positioned parent), ending on this
+                                  row so they stay inside the dimmed band. The row is
+                                  full width so the pointer can cross to them. */}
+                              {discordBranchOpen ? (
+                              <div className="absolute bottom-2 left-full flex flex-col" role="menu">
+                                {DISCORD_BRANCHES.map((branch) => (
+                                  <Link
+                                    key={branch.to}
+                                    to={branch.to}
+                                    onClick={() => setOpenGroup(null)}
+                                    draggable={false}
+                                    role="menuitem"
+                                    className={dropdownItemClass(location.pathname.startsWith(branch.to))}
+                                  >
+                                    {i18n._(branch.label)}
+                                  </Link>
+                                ))}
+                              </div>
+                              ) : null}
+                            </div>
+                          );
+                        }
                         return (
                           <Link
                             key={leaf.id}
@@ -808,11 +870,7 @@ export function Nav() {
                             onClick={() => setOpenGroup(null)}
                             draggable={false}
                             role="menuitem"
-                            className={`relative py-2 pl-4 pr-3 text-[13px] font-semibold capitalize [text-shadow:0_1px_5px_rgba(0,0,0,0.95)] transition-colors before:absolute before:left-1 before:top-1/2 before:h-[15px] before:w-[3px] before:-translate-y-1/2 before:rounded-full before:bg-osu-yellow before:transition-opacity ${
-                              itemActive
-                                ? "text-white before:opacity-100"
-                                : "text-osu-pink-light before:opacity-0 hover:text-white hover:before:opacity-100"
-                            }`}
+                            className={dropdownItemClass(itemActive)}
                           >
                             {i18n._(navLabel(leaf.id))}
                           </Link>
@@ -1137,7 +1195,23 @@ export function Nav() {
                             transition={{ duration: 0.2, ease: "easeOut" }}
                             className="overflow-hidden bg-osu-b6/40"
                           >
-                            {groupItems.map((leaf) => renderMobileLink(leaf, { nested: true }))}
+                            {groupItems.map((leaf) => leaf.id === "discord" && devMode
+                              ? DISCORD_BRANCHES.map((branch) => (
+                                <Link
+                                  key={branch.to}
+                                  to={branch.to}
+                                  onClick={() => setMenuOpen(false)}
+                                  draggable={false}
+                                  className={`flex items-center gap-3 border-l-3 py-3 pl-9 pr-5 text-[13px] font-medium transition-colors duration-[120ms] ${
+                                    location.pathname.startsWith(branch.to)
+                                      ? "border-osu-yellow bg-osu-pink/10 text-white"
+                                      : "border-transparent text-osu-pink-light hover:bg-osu-b4/50 hover:text-white"
+                                  }`}
+                                >
+                                  {i18n._(branch.mobileLabel)}
+                                </Link>
+                              ))
+                              : renderMobileLink(leaf, { nested: true }))}
                           </motion.div>
                         ) : null}
                       </AnimatePresence>

@@ -730,6 +730,7 @@ function normalizeAdminPath(input: unknown): string {
     "/api/admin/osu-file-backfill/cancel",
     "/api/admin/discord/register-commands",
     "/api/admin/discord/register-emojis",
+    "/api/admin/discord/register-emojis?force=1",
     "/api/admin/rebuild-collections",
   ]);
   if (exact.has(path)) return path;

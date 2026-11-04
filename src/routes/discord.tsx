@@ -106,15 +106,20 @@ function Hero({ info }: { info: DiscordPublicInfo }) {
           the image itself. No scrim layered on top: Chrome anti-aliases a
           rounded clip per layer, and a bright edge leaked past a scrim as a
           light line in the corner. */}
-      <img
-        src="/images/discord/maniabot-hero-bg.webp"
-        alt=""
-        className="pointer-events-none absolute inset-0 h-full w-full select-none rounded-t-2xl object-cover object-[50%_35%] opacity-90"
-        style={{
-          maskImage: "linear-gradient(to bottom, #000 45%, transparent 100%)",
-          WebkitMaskImage: "linear-gradient(to bottom, #000 45%, transparent 100%)",
-        }}
-      />
+      {/* Phones get their own taller crop; the wide banner zoomed into a
+          narrow box shows a blurry slice. */}
+      <picture>
+        <source media="(max-width: 639px)" srcSet="/images/discord/maniabot-hero-bg-mobile.webp" />
+        <img
+          src="/images/discord/maniabot-hero-bg.webp"
+          alt=""
+          className="pointer-events-none absolute inset-0 h-full w-full select-none rounded-t-2xl object-cover object-[50%_35%] opacity-90 max-sm:object-[50%_20%]"
+          style={{
+            maskImage: "linear-gradient(to bottom, #000 45%, transparent 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, #000 45%, transparent 100%)",
+          }}
+        />
+      </picture>
       {HERO_ART_SOURCE ? (
         <a
           href={HERO_ART_SOURCE}
@@ -210,7 +215,7 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
             <Trans>Link this account</Trans>
           </button>
         ) : null}
-        {!account.connection ? (
+        {!account.connection && !linked?.verified ? (
           <a href={connectHref()} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold text-white hover:brightness-110" style={{ backgroundColor: BLURPLE }}>
             <DiscordLogo className="h-4 w-4" />
             <Trans>Connect Discord</Trans>
@@ -290,7 +295,8 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
 
 function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; inviteUrl: string | null }) {
   const [data, setData] = useState<BotServers | null>(null);
-  const connected = Boolean(account?.connection);
+  // A verified link stands in for a Discord connection in this browser.
+  const connected = Boolean(account?.connection || account?.links.some((link) => link.verified));
 
   useEffect(() => {
     if (!connected) return;
