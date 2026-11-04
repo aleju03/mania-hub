@@ -2,9 +2,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { CHAIN_CHART, CHAIN_RULES, makeChainCard, makeChainChartCard, type ChainCard } from "#/lib/chain-run";
+import { CHAIN_CHART, CHAIN_LINK_RULES, CHAIN_ROUND_CHART, CHAIN_RULES, makeChainCard, makeChainChartCard, type ChainCard } from "#/lib/chain-run";
 import { runSound } from "../runSound";
 import { ChainCardFace } from "./ChainCardFace";
+import { RoundChartTag } from "./ChainRoundChart";
 import { ChainButtons, KIT, MARKER } from "./chainKit";
 
 /* How to play: four short pages, each with real card faces doing what the
@@ -33,8 +34,8 @@ function markSeen(): void {
 const demo = (id: number, avatar: number, spec: { cc: string; tier: string; key: 4 | 7; skill: string; power: number; name: string }): ChainCard =>
   makeChainCard({ id, name: spec.name, avatarUrl: `https://a.ppy.sh/${avatar}`, cc: spec.cc, tier: spec.tier, power: spec.power, key: spec.key, skill: spec.skill, pp: 9000, rank: 900 })!;
 const CARD_A = demo(1, 7296977, { name: "Rorari", cc: "US", tier: "rare", key: 4, skill: "Stream", power: 150 });
-const CARD_B = demo(2, 37538073, { name: "Lumi", cc: "US", tier: "rare", key: 4, skill: "Jack", power: 260 });
-const CARD_C = demo(3, 16438713, { name: "Yoko", cc: "KR", tier: "elite", key: 4, skill: "Jack", power: 380 });
+const CARD_B = { ...demo(2, 37538073, { name: "Lumi", cc: "US", tier: "rare", key: 4, skill: "Jack", power: 260 }), dan: "10" };
+const CARD_C = { ...demo(3, 16438713, { name: "Yoko", cc: "KR", tier: "elite", key: 4, skill: "Jack", power: 380 }), dan: "10" };
 const CARD_D = demo(4, 38355633, { name: "Moka", cc: "JP", tier: "mythic", key: 7, skill: "Tech", power: 700 });
 const MAP = makeChainChartCard({ beatmapId: 767046, setId: 347650, title: "Triumph & Regret", version: "[4K] Regret", stars: 5.48, key: 4, skill: "Stamina", coverUrl: "https://assets.ppy.sh/beatmaps/347650/covers/list@2x.jpg" })!;
 const FAN = { ...demo(5, 5580057, { name: "Kaneka", cc: "CR", tier: "elite", key: 4, skill: "Jack", power: 400 }), played: [767046] };
@@ -89,17 +90,17 @@ export function ChainHowTo({ open, narrow, onClose }: { open: boolean; narrow: b
       title: <Trans>Link a row</Trans>,
       body: (
         <Trans>
-          Put up to {CHAIN_RULES.rowMax} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts
-          too, but only on top of another match.
+          Put up to {CHAIN_RULES.rowMax} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a
+          skillset (a second skillset only matches another second skillset). Keymode counts too, but only on top of another match.
         </Trans>
       ),
       art: (
         <Cards>
           <Face card={CARD_A} width={w} lit={["cc", "tier", "key"]} />
           <LinkChips traits={[t`Country`, t`Rarity`, "4K"]} />
-          <Face card={CARD_B} width={w} lit={["cc", "tier", "key", "skill"]} />
-          <LinkChips traits={[t`Skillset`, "4K"]} />
-          <Face card={CARD_C} width={w} lit={["key", "skill"]} />
+          <Face card={CARD_B} width={w} lit={["cc", "tier", "dan", "key", "skill"]} />
+          <LinkChips traits={[t`Dan`, "4K", t`Skillset`]} />
+          <Face card={CARD_C} width={w} lit={["dan", "key", "skill"]} />
         </Cards>
       ),
     },
@@ -107,15 +108,15 @@ export function ChainHowTo({ open, narrow, onClose }: { open: boolean; narrow: b
       title: <Trans>Build the combo</Trans>,
       body: (
         <Trans>
-          Every shared trait raises the combo, more for each extra trait in the same link. Each card scores its number times the combo when the chain
+          Every shared trait raises the combo, more for each extra trait in the same link, up to {CHAIN_LINK_RULES.maxTraits} per link. Each card scores its number times the combo when the chain
           reaches it. A pair that shares nothing breaks the combo back to the start.
         </Trans>
       ),
       art: (
         <Cards>
-          <Face card={CARD_B} width={w} lit={["key", "skill"]} />
-          <LinkChips traits={[t`Skillset`, "4K"]} />
-          <Face card={CARD_C} width={w} lit={["key", "skill"]} />
+          <Face card={CARD_B} width={w} lit={["dan", "key", "skill"]} />
+          <LinkChips traits={[t`Dan`, "4K", t`Skillset`]} />
+          <Face card={CARD_C} width={w} lit={["dan", "key", "skill"]} />
           <LinkChips traits={[]} broken />
           <Face card={CARD_D} width={w} />
         </Cards>
@@ -126,12 +127,15 @@ export function ChainHowTo({ open, narrow, onClose }: { open: boolean; narrow: b
       body: (
         <Trans>
           Reach the round's target within {CHAIN_RULES.rows} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every{" "}
-          {CHAIN_RULES.interestPer} you already hold. Spend them in the shop on packs, scene cards, practice and mods. Every third round is a boss round
-          with a twist, shown in the shop before it.
+          {CHAIN_RULES.interestPer} you already hold. Now and then a round is set on a real map: cards of its keymode and skillset score x
+          {CHAIN_ROUND_CHART.skill}, and harder maps pay more. Spend shards in the shop on packs, scene cards, practice and mods.
         </Trans>
       ),
       art: (
         <div className="flex flex-col items-center gap-1 leading-none">
+          <div className="mb-3">
+            <RoundChartTag chart={MAP} compact={narrow} />
+          </div>
           <span style={{ fontFamily: MARKER, fontSize: narrow ? 40 : 56, color: KIT.cream }}>
             6,390{" "}
             <span style={{ color: KIT.gold, fontSize: "0.6em" }}>

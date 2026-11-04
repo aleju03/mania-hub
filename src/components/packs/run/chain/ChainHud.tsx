@@ -16,9 +16,9 @@ import {
   type ChainSceneHeld,
   type ChainSceneId,
   type ChainWysiField,
-  type ChainBossId,
+  type ChainCard,
 } from "#/lib/chain-run";
-import { BossTag } from "./ChainBoss";
+import { RoundChartTag } from "./ChainRoundChart";
 import { punch } from "../runJuice";
 import { runSound } from "../runSound";
 import { SceneArt, type SceneId } from "../sceneArt";
@@ -234,8 +234,8 @@ export interface ChainTopBarProps {
   deck?: React.ReactNode;
   /* A 727 on the table: which numbers get the stamp, keyed by `id`. */
   wysi?: { id: number; on: ChainWysiField[] } | null;
-  /* The boss twist of the round being played. */
-  boss?: ChainBossId | null;
+  /* The chart the round being played is set on. */
+  roundChart?: ChainCard | null;
   /* The daily run: a tag says so. */
   daily?: boolean;
   /* Opens how to play. */
@@ -251,7 +251,7 @@ export interface ChainTopBarProps {
    rings), the score bridge to the target (the flame lives under it), and
    the run's shards. */
 export function ChainTopBar(props: ChainTopBarProps) {
-  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false, boss = null, daily = false, onHelp, onSwitchMode, inDaily = false } = props;
+  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false, roundChart = null, daily = false, onHelp, onSwitchMode, inDaily = false } = props;
   const { t } = useLingui();
   const shownShards = useTicker(shards, reducedMotion);
   const stamp = (on: ChainWysiField) => (wysi?.on.includes(on) ? <WysiStamp key={`wysi-${wysi.id}-${on}`} reducedMotion={reducedMotion} /> : null);
@@ -342,7 +342,7 @@ export function ChainTopBar(props: ChainTopBarProps) {
         </div>
         <div className="flex items-center gap-3">
           {daily && dailyTag}
-          {boss && showMeter && <BossTag boss={boss} compact />}
+          {roundChart && showMeter && <RoundChartTag chart={roundChart} compact />}
           <span className="ml-auto" />
           {scenes}
           {deck}
@@ -355,7 +355,7 @@ export function ChainTopBar(props: ChainTopBarProps) {
     <div className="relative z-[3] grid grid-cols-[1fr_auto_1fr] items-start gap-6 px-6 pb-2 pt-6">
       <div className="flex min-w-0 items-center gap-4">
         {daily && dailyTag}
-        {showMeter ? boss ? <BossTag boss={boss} /> : null : where}
+        {showMeter ? roundChart ? <RoundChartTag chart={roundChart} /> : null : where}
       </div>
       <div className="flex flex-col items-center">
         <Fade show={showMeter}>{objective(560)}</Fade>

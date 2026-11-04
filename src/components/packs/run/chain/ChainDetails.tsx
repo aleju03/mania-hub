@@ -7,7 +7,9 @@ import {
   CHAIN_SCENE_INK,
   CHAIN_SCENE_NAMES,
   CHAIN_TIER_COLOR,
-  CHAIN_TIER_LABEL,
+  chainTraitValueText,
+  chainDanName,
+  chainRegionOf,
   CHAIN_VARIANT_COPY,
   chainCardColor,
   chainCardFace,
@@ -70,9 +72,9 @@ function subscribe(listener: () => void) {
 }
 
 /* Pointer handlers that raise `content` over the element: once a mouse has
-   rested on it for a beat (moving restarts the wait), after a long-press on
-   touch (which also swallows the tap that would follow). `disabled` stops
-   both. */
+   rested on it for a beat (moving restarts the wait), and after a press held
+   still, by touch or a held click (which also swallows the tap or click that
+   would follow). `disabled` stops both. */
 export function useChainDetailsTrigger(content: () => ChainDetailsContent | null, disabled = false) {
   const timer = useRef(0);
   const pressed = useRef(false);
@@ -123,10 +125,8 @@ export function useChainDetailsTrigger(content: () => ChainDetailsContent | null
       pressed.current = false;
       rest.current = null;
       window.clearTimeout(timer.current);
-      if (disabled || event.pointerType !== "touch") {
-        hideChainDetails();
-        return;
-      }
+      if (event.pointerType !== "touch") hideChainDetails();
+      if (disabled || event.button !== 0) return;
       const element = event.currentTarget;
       timer.current = window.setTimeout(() => {
         pressed.current = true;
@@ -163,7 +163,7 @@ function TraitChip({ trait }: { trait: ChainLinkTrait }) {
       </span>
     );
   }
-  const label = trait.trait === "tier" && isChainTier(trait.value) ? i18n._(CHAIN_TIER_LABEL[trait.value]) : trait.value;
+  const label = chainTraitValueText(trait.trait, trait.value, i18n);
   const fill = trait.trait === "tier" && isChainTier(trait.value) ? CHAIN_TIER_COLOR[trait.value].ink : "#e9eef7";
   return (
     <span className="inline-flex items-center gap-1 rounded bg-white/10 px-1.5 py-0.5 text-[12px] font-black" style={{ color: fill }}>
@@ -212,6 +212,25 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
       <div className="text-[12px] font-bold" style={{ color: color.ink }}>
         {chainCardRarityLabel(card, i18n)}
       </div>
+      {!card.chart && !card.goat && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] font-bold text-white/75">
+          {chainRegionOf(entry.card) && <span>{chainRegionOf(entry.card)}</span>}
+          {entry.card.dan && (
+            <>
+              <span aria-hidden="true" className="h-3 w-px bg-white/25" />
+              <span style={{ color: "#ffb38a" }}>{chainDanName(entry.card.dan)}</span>
+            </>
+          )}
+          {entry.card.skill2 && (
+            <>
+              <span aria-hidden="true" className="h-3 w-px bg-white/25" />
+              <span style={{ color: "#8ff2b7" }}>
+                <Trans>Also {entry.card.skill2}</Trans>
+              </span>
+            </>
+          )}
+        </div>
+      )}
       {card.chart && (
         <div className="mt-1 text-[12px] text-osu-f1">
           <Trans>A map. Players who have it in their top plays link to it on every trait, and score x{CHAIN_CHART.played} in any row it is in.</Trans>

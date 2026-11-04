@@ -27,8 +27,6 @@ import {
   type ChainRunView,
   type ChainSceneId,
   chainModLook,
-  chainRowMax,
-  CHAIN_BOSS_COPY,
   type ChainRunMode,
 } from "#/lib/chain-run";
 import type { PackTypeId } from "#/lib/packs";
@@ -40,6 +38,7 @@ import { HeldMods } from "./ChainMods";
 import { RUN_FEEL } from "../runFeel";
 import { juice } from "../runJuice";
 import { runSound } from "../runSound";
+import { playMapPreview, stopMapPreview } from "./chainMapPreview";
 import { useShudder } from "../shopMotion";
 import { Shards } from "../Shards";
 import { ChainBoard, type CardEnter, type LinkFx } from "./ChainBoard";
@@ -110,7 +109,7 @@ interface PlayState {
 }
 
 type Aftermath =
-  | { kind: "clear"; round: number; total: number; interest: number; boss: number }
+  | { kind: "clear"; round: number; total: number; interest: number; chart: number }
   | { kind: "banner"; text: string; tone: "red" | "gold" | "green" };
 
 const DEALT_KEY = "chain-run-dealt";
@@ -350,6 +349,23 @@ export function ChainTable(props: ChainTableProps) {
   }, [dealt, play, shown]);
   const needsRoundPack = Boolean(shown && shown.phase === "play" && !play && dealt !== roundKey(shown));
 
+  /* The round's chart: its song, once per round, as the round opens. */
+  const previewedRef = useRef<string | null>(null);
+  const previewSet = shown?.phase === "play" ? (shown.roundChart?.chart?.setId ?? 0) : 0;
+  const previewKey = shown && previewSet ? `${roundKey(shown)}:${previewSet}` : null;
+  useEffect(
+    () => () => {
+      previewedRef.current = null;
+      stopMapPreview(0);
+    },
+    [],
+  );
+  useEffect(() => {
+    if (!previewKey || previewedRef.current === previewKey) return;
+    previewedRef.current = previewKey;
+    playMapPreview(previewSet);
+  }, [previewKey, previewSet]);
+
   /* ------------------------------------------------------------ arranging */
 
   const handEntries = useMemo(() => {
@@ -416,7 +432,7 @@ export function ChainTable(props: ChainTableProps) {
   const { wouldLink, breakers } = useMemo(() => {
     const map = new Map<number, { level: number; traits: Set<string> }>();
     const breaks = new Set<number>();
-    if (!shown || !rowEntries.length || rowEntries.length >= chainRowMax(shown ?? {})) return { wouldLink: map, breakers: breaks };
+    if (!shown || !rowEntries.length || rowEntries.length >= CHAIN_RULES.rowMax) return { wouldLink: map, breakers: breaks };
     const last = rowEntries[rowEntries.length - 1];
     for (const entry of handEntries) {
       if (arrangedUids.includes(entry.uid)) continue;
@@ -446,7 +462,7 @@ export function ChainTable(props: ChainTableProps) {
       hideChainDetails();
       setRowUids((current) => {
         if (current.includes(uid)) return current;
-        if (current.length >= chainRowMax(shown ?? {})) {
+        if (current.length >= CHAIN_RULES.rowMax) {
           runSound.refuse();
           return current;
         }
@@ -546,11 +562,10 @@ export function ChainTable(props: ChainTableProps) {
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
-  /* A picked mod goes on the hand card tapped next. */
+  /* A picked mod goes on the card tapped next, in the hand or the row. */
   const applyModTo = useCallback(
     async (uid: number) => {
       if (modPick === null) return;
-      if (rowUidsRef.current.includes(uid)) return;
       hideChainDetails();
       const outcome = await doAct({ kind: "useMod", index: modPick, uid });
       setModPick(null);
@@ -577,7 +592,7 @@ export function ChainTable(props: ChainTableProps) {
       runSound.uiTap();
       return;
     }
-    const room = Math.max(0, chainRowMax(shown ?? {}) - row.length);
+    const room = Math.max(0, CHAIN_RULES.rowMax - row.length);
     const going = group.slice(0, room);
     const left = group.slice(room);
     if (going.length) {
@@ -780,9 +795,11 @@ export function ChainTable(props: ChainTableProps) {
       // One shard total for the round, no itemised lines.
       const total = pay.reduce((sum, line) => sum + line.amount, 0);
       setShardOverride(before.shards + total);
-      const part = (kind: "interest" | "boss") => pay.filter((line) => line.kind === kind).reduce((sum, line) => sum + line.amount, 0);
-      setAftermath({ kind: "clear", round: before.round, total, interest: part("interest"), boss: part("boss") });
+      const part = (kind: "interest" | "chart") => pay.filter((line) => line.kind === kind).reduce((sum, line) => sum + line.amount, 0);
+      setAftermath({ kind: "clear", round: before.round, total, interest: part("interest"), chart: part("chart") });
+      stopMapPreview(900);
       runSound.tallyTotal();
+      if (part("interest") > 0) window.setTimeout(() => runSound.interest(), reducedMotion ? 0 : 380);
       if (wysi) stampWysi(wysi, (on) => on === "shards");
       await wait(CHAIN_FEEL.pay.bannerMs + CHAIN_FEEL.pay.afterMs);
       runSound.fireLoopStop();
@@ -831,6 +848,7 @@ export function ChainTable(props: ChainTableProps) {
     // failed: the row greys out and the table holds on it a beat before
     // the board comes in.
     runSound.fireLoopStop();
+    stopMapPreview(600);
     setFailedRow(true);
     runSound.stepMiss();
     shake(0.6);
@@ -924,15 +942,6 @@ export function ChainTable(props: ChainTableProps) {
       const deckCards = shown.hand.filter((entry) => !entry.pack).map((entry) => entry.uid);
       window.setTimeout(() => enterFromDeck(deckCards, 0), reducedMotion ? 0 : roundPackCards.length * CHAIN_FEEL.pack.joinStaggerMs + 120);
       window.setTimeout(() => signal("round:dealt"), reducedMotion ? 0 : 1400);
-      // A boss round says its twist once the hand is in.
-      const boss = shown.boss;
-      if (boss) {
-        window.setTimeout(() => {
-          runSound.refuse();
-          setAftermath({ kind: "banner", text: t`Boss round: ${CHAIN_BOSS_COPY[boss].name}. ${i18n._(CHAIN_BOSS_COPY[boss].rule)}`, tone: "red" });
-          window.setTimeout(() => setAftermath((current) => (current?.kind === "banner" && current.tone === "red" ? null : current)), 2200);
-        }, reducedMotion ? 0 : 1500);
-      }
     },
     [boxRef, enterFromDeck, layout, reducedMotion, roundPackCards, shown, signal],
   );
@@ -1111,7 +1120,7 @@ export function ChainTable(props: ChainTableProps) {
               ) : null
             }
             wysi={hudWysi}
-            boss={shown?.phase === "play" ? shown.boss : null}
+            roundChart={shown?.phase === "play" ? shown.roundChart : null}
             daily={daily && Boolean(shown)}
             onHelp={() => setHowTo(true)}
             onSwitchMode={onMode && !guest && !play ? () => onMode(daily ? "normal" : "daily") : undefined}
@@ -1171,14 +1180,15 @@ export function ChainTable(props: ChainTableProps) {
                   onSelect={modPick !== null ? (uid) => void applyModTo(uid) : onSelect}
                   onSendGroup={onSendGroup}
                   onClearSelection={onClearSelection}
+                  roundChart={shown.roundChart}
                 />
                 {!needsRoundPack && !layout.narrow && <DeckPile layout={layout} count={shown.drawPileCount} backUrl={backUrl} bump={0} reducedMotion={reducedMotion} />}
                 {actionsVisible && modPick !== null && shown.mods[modPick] && (
                   <div
                     className="pointer-events-none absolute inset-x-0 z-[5] text-center font-black leading-none"
-                    style={{ top: layout.actionsY - (layout.narrow ? 22 : 30), fontFamily: MARKER, fontSize: layout.narrow ? 15 : 20, color: KIT.pink }}
+                    style={{ top: layout.slots[0].y - (layout.narrow ? 54 : 78), fontFamily: MARKER, fontSize: layout.narrow ? 15 : 20, color: KIT.pink }}
                   >
-                    <Trans>Tap a card in your hand for {chainModLook(shown.mods[modPick], i18n).name}</Trans>
+                    <Trans>Tap a card for {chainModLook(shown.mods[modPick], i18n).name}</Trans>
                   </div>
                 )}
                 {actionsVisible && (
@@ -1431,10 +1441,10 @@ export function ChainTable(props: ChainTableProps) {
                         <Trans>Round {aftermath.round} cleared</Trans>
                       </span>
                       <Shards value={aftermath.total} sign className={`not-italic text-osu-pink-light ${narrow ? "text-[18px]" : "text-[24px]"}`} />
-                      {(aftermath.interest > 0 || aftermath.boss > 0) && (
+                      {(aftermath.interest > 0 || aftermath.chart > 0) && (
                         <span className={`flex items-center gap-2 not-italic normal-case text-[#f3e9d8]/75 ${narrow ? "text-[12px]" : "text-[14px]"}`}>
-                          {aftermath.boss > 0 && <Trans>+{aftermath.boss} boss</Trans>}
-                          {aftermath.boss > 0 && aftermath.interest > 0 && <span aria-hidden="true" className="h-3 w-px bg-[#f3e9d8]/30" />}
+                          {aftermath.chart > 0 && <Trans>+{aftermath.chart} map</Trans>}
+                          {aftermath.chart > 0 && aftermath.interest > 0 && <span aria-hidden="true" className="h-3 w-px bg-[#f3e9d8]/30" />}
                           {aftermath.interest > 0 && <Trans>+{aftermath.interest} interest</Trans>}
                         </span>
                       )}

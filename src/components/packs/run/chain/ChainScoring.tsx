@@ -24,6 +24,8 @@ import {
   type ChainRowResult,
   type ChainSceneId,
   CHAIN_CHART,
+  CHAIN_ROUND_CHART,
+  chainTraitValueText,
 } from "#/lib/chain-run";
 import { SceneArt } from "../sceneArt";
 import { flameLevel } from "../RunFlame";
@@ -56,12 +58,13 @@ const MAX_INK = "linear-gradient(100deg, #ff9fd8 0%, #ffe07a 30%, #a5f3c4 55%, #
 const ECHO = "#8fe3ff";
 const RED = "#ff5a5a";
 const OUTLINE = "#120f1a";
-const TRAIT_INK: Record<string, string> = { cc: "#7fd3ff", key: "#ffd36b", skill: "#8ff2b7" };
+const TRAIT_INK: Record<string, string> = { cc: "#7fd3ff", region: "#c3b4ff", dan: "#ffb38a", key: "#ffd36b", skill: "#8ff2b7" };
 
 const msgBreak = msg`BREAK`;
 const msgHand = msg`HAND`;
 const msgHalf = msg`HALF`;
 const msgPlayed = msg`Played it x${CHAIN_CHART.played}`;
+const msgOnChart = msg`Fits the map x${CHAIN_ROUND_CHART.skill}`;
 const msgPlayedLink = msg`Played it`;
 const msgWarmup = msg`Warm-up`;
 const msgReplay = msg`REPLAY`;
@@ -376,8 +379,9 @@ export function ChainScoring(props: ChainScoringProps) {
     const traitText = (trait: string, value: string, scene?: string) => {
       if (trait === "scene" && scene && scene in CHAIN_SCENE_NAMES) return CHAIN_SCENE_NAMES[scene as keyof typeof CHAIN_SCENE_NAMES];
       if (trait === "tier" && isChainTier(value)) return i18n._(CHAIN_TIER_LABEL[value]);
-      if (trait === "skill" && isChainSkill(value)) return chainSkillShort(value);
-      return value;
+      const bare = trait === "skill" ? value.replace(/^~/, "") : value;
+      if (trait === "skill" && isChainSkill(bare)) return chainSkillShort(bare);
+      return chainTraitValueText(trait, value, i18n);
     };
     const traitFill = (trait: string, value: string, scene?: string) => {
       if (trait === "scene" && scene && scene in CHAIN_SCENE_INK) return CHAIN_SCENE_INK[scene as keyof typeof CHAIN_SCENE_INK];
@@ -560,7 +564,11 @@ export function ChainScoring(props: ChainScoringProps) {
           // of their skillset's word (its x is in theirs).
           if (event.played && !event.halved && !event.silver) {
             popAt(card, `played-${event.index}`, i18n._(msgPlayed), "#ffd36b", "trait", holdMs, "below");
+            runSound.played(event.index);
             if (card && !reducedMotion) juice(card.element, { amount: 0.2, rotateRad: 0.08 });
+          } else if (event.onChart && !event.halved && !event.silver) {
+            popAt(card, `chart-${event.index}`, i18n._(msgOnChart), "#ffd36b", "trait", holdMs, "below");
+            runSound.played(event.index);
           } else if (event.halved) popAt(card, `half-${event.index}`, i18n._(msgHalf), CHAIN_SCENE_INK.makiba, "trait", holdMs, "below");
           else if (event.silver) popAt(card, `silver-${event.index}`, `SS x${formatChainX(event.silver)}`, CHAIN_VARIANT_COPY.silver.ink, "trait", holdMs, "below");
           else {

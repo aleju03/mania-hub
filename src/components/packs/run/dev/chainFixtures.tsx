@@ -50,6 +50,7 @@ import {
   chainBestRow,
   chainTargetFor,
   CHAIN_RULES,
+  CHAIN_KEY_SKILLS,
   type ChainAction,
   type ChainBoardEntry,
   type ChainBoardPeriod,
@@ -90,7 +91,14 @@ function fixturePool(seed: number): ChainPool {
   // Every third player has one of the charts in their top plays.
   const played = <T extends { id: number }>(card: T) =>
     card.id % 3 === 0 ? { ...card, played: [FIXTURE_CHARTS[Math.floor(card.id / 3) % FIXTURE_CHARTS.length].chart!.beatmapId] } : card;
-  return buildChainPool(base.cards.map(avatar).map(played), base.goats.map(avatar), FIXTURE_CHARTS);
+  // A second skillset and a rice dan, as the live pool carries them.
+  const DANS = { 4: ["8", "9", "10", "alpha", "beta", "gamma"], 7: ["7", "8", "9", "10", "gamma"] } as const;
+  const keyed = <T extends ChainCard>(card: T): T => {
+    const skills = CHAIN_KEY_SKILLS[card.key].filter((skill) => skill !== card.skill);
+    const dans = DANS[card.key];
+    return { ...card, skill2: skills[card.id % skills.length], dan: dans[card.id % dans.length] };
+  };
+  return buildChainPool(base.cards.map(avatar).map(played).map(keyed), base.goats.map(avatar), FIXTURE_CHARTS);
 }
 
 function packThumbFor(id: PackTypeId): string | null {

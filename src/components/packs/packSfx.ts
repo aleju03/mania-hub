@@ -804,6 +804,9 @@ const RUN_CUES = {
   "ui-tap": { slot: 0.14, count: 2 },
   /* A 727 on the table: the owner's clip, not rendered by the script. */
   wysi: {},
+  /* Map cards and interest: scripts/audio/run-extra-sfx.sh. */
+  played: {},
+  interest: {},
 } satisfies Record<string, RunCueShape>;
 
 export type RunCueName = keyof typeof RUN_CUES;
@@ -813,7 +816,7 @@ export const RUN_CHAIN_TAKES = 4;
 
 /* Bumped whenever scripts/audio/pack-run-sfx.py re-renders the set, so a
    cached copy of the old file is never decoded. */
-const RUN_SAMPLES_VERSION = 7;
+const RUN_SAMPLES_VERSION = 8;
 
 const runSamples = new Map<RunCueName, SampleSlot>(
   (Object.keys(RUN_CUES) as RunCueName[]).map((name) => [

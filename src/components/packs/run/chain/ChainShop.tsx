@@ -29,7 +29,6 @@ import { useShardFloats, useShudder } from "../shopMotion";
 import { Shards } from "../Shards";
 import { ChainCardFace } from "./ChainCardFace";
 import { ShopContracts } from "./ChainContracts";
-import { NextBossNotice } from "./ChainBoss";
 import { ModChip } from "./ModPin";
 import { SCENE_ART_ID } from "./ChainHud";
 import type { BoardLayout } from "./chainLayout";
@@ -522,7 +521,7 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
             </div>
           )}
 
-          {/* Interest at the next clear, and the next round's boss. */}
+          {/* Interest at the next clear. */}
           <div className="mt-4 text-[13px] font-bold text-[#f3e9d8]/80">
             {chainInterestFor(view.shards) > 0 ? (
               <Trans>
@@ -534,11 +533,6 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
               </Trans>
             )}
           </div>
-          {view.nextBoss && (
-            <div className="mt-4">
-              <NextBossNotice boss={view.nextBoss} narrow={narrow} />
-            </div>
-          )}
 
           {/* Next round's contracts. */}
           <div className={narrow ? "mt-6 w-full" : "mt-5"}>

@@ -80,3 +80,18 @@ Unzip everything into one folder and pass it as `--kenney`.
 | `refuse.mp3` | an action refused | dull wood knock doubled a fourth down, muffled pizzicato |
 | `ui-tap.mp3` (2 takes) | a menu tap | card snap and wood block, dry |
 | `wysi.mp3` | 727 | clip supplied by the owner |
+
+## played, interest
+
+Rendered by `scripts/audio/run-extra-sfx.sh` with ffmpeg alone (trims, fades, reversing,
+pitch by resampling, delays, filters, a short room, a fixed gain into a limiter), from CC0
+instrument recordings:
+
+- **played** (a map card fires with a player who played it): two hand claps 110 ms apart over
+  a soft-mallet vibraphone E5. VCSL `Claps/Clap_rr2`, `Clap_rr4`,
+  `Vibraphone/Soft Mallets/Vibes_soft_E5_v2_rr1_Main`.
+- **interest** (shards earned on what you hold): a tambourine tap landing on a woodblock knock
+  pitched down, like a coin dropped in a wooden box, with a lighter bounce of the jingles after.
+  VCSL `Tambourine 1/Tamb1_Hit_v2_rr1_Mid`, `Woodblock/wood_click_f_rr1`.
+
+Source: [VCSL](https://github.com/sgossner/VCSL), CC0.

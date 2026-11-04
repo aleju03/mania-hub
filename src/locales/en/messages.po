@@ -2118,6 +2118,10 @@ msgstr "{speedLabel} speed"
 msgid "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 msgstr "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 
+#: src/components/packs/run/chain/ChainRoundChart.tsx
+msgid "{stars} stars"
+msgstr "{stars} stars"
+
 #. placeholder {0}: shared.creator
 #: src/routes/maps.tsx
 msgid "{stars}★ · mapped by {0}"
@@ -2370,8 +2374,8 @@ msgstr "+{0} base for each Jumpstream in your deck (up to {1})."
 
 #. placeholder {0}: aftermath.boss
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "+{0} boss"
-msgstr "+{0} boss"
+#~ msgid "+{0} boss"
+#~ msgstr "+{0} boss"
 
 #. placeholder {0}: N.extraKey.slots
 #: src/lib/pack-run.ts
@@ -2482,6 +2486,11 @@ msgstr "+{0} grown this run"
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "+{0} interest"
 msgstr "+{0} interest"
+
+#. placeholder {0}: aftermath.chart
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "+{0} map"
+msgstr "+{0} map"
 
 #. placeholder {0}: formatNumber(hidden)
 #. placeholder {1}: formatNumber(ownersPerCard)
@@ -2631,6 +2640,10 @@ msgstr "<0>{appName}</0> wants to access your Mania Tracker account"
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "<0>{collectorLabel}</0> has not opened a pack."
 msgstr "<0>{collectorLabel}</0> has not opened a pack."
+
+#: src/components/maps/SearchCard.tsx
+msgid "<0>{count}</0> diffs"
+msgstr "<0>{count}</0> diffs"
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "<0>{label}</0> has not opened a pack."
@@ -2959,8 +2972,8 @@ msgid "4K cards give +{0} notes."
 msgstr "4K cards give +{0} notes."
 
 #: src/lib/chain-run.ts
-msgid "4K cards score half."
-msgstr "4K cards score half."
+#~ msgid "4K cards score half."
+#~ msgstr "4K cards score half."
 
 #: src/routes/dan-estimates.tsx
 msgid "4K jack"
@@ -4309,6 +4322,11 @@ msgstr "already suggested"
 msgid "already tracked"
 msgstr "already tracked"
 
+#. placeholder {0}: entry.card.skill2
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "Also {0}"
+msgstr "Also {0}"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Also on map dans"
 msgstr "Also on map dans"
@@ -4823,6 +4841,7 @@ msgstr "Automatic tracking began on June 9, 2026. Older scores count if they are
 #~ msgstr "Automatic tracking only began on June 9, 2026. Older scores are included when they are still in your osu! top plays, and any missing passed mania score with an osu! score link can be added from your profile's Skills tab."
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Autumn maple"
 msgstr "Autumn maple"
 
@@ -5455,8 +5474,8 @@ msgstr "BORROW"
 #. placeholder {0}: CHAIN_BOSS_COPY[boss].name
 #. placeholder {1}: i18n._(CHAIN_BOSS_COPY[boss].rule)
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "Boss round: {0}. {1}"
-msgstr "Boss round: {0}. {1}"
+#~ msgid "Boss round: {0}. {1}"
+#~ msgstr "Boss round: {0}. {1}"
 
 #: src/components/discord/DiscordTabs.tsx
 msgid "Bot"
@@ -6596,8 +6615,8 @@ msgstr "Cleared {courseName} at {courseAccuracy}."
 
 #. placeholder {0}: CHAIN_BOSS.shards
 #: src/components/packs/run/chain/ChainBoss.tsx
-msgid "Clearing it pays {0} more shards."
-msgstr "Clearing it pays {0} more shards."
+#~ msgid "Clearing it pays {0} more shards."
+#~ msgstr "Clearing it pays {0} more shards."
 
 #: src/routes/rankings.tsx
 msgid "Clears"
@@ -7919,8 +7938,8 @@ msgid "Country for top plays"
 msgstr "Country for top plays"
 
 #: src/lib/chain-run.ts
-msgid "Country links don't count."
-msgstr "Country links don't count."
+#~ msgid "Country links don't count."
+#~ msgstr "Country links don't count."
 
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
@@ -8078,6 +8097,10 @@ msgstr "Crowns"
 msgid "CRT monitor"
 msgstr "CRT monitor"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Crystal cave"
+msgstr "Crystal cave"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Crystal facets and a rainbow foil rim."
 #~ msgstr "Crystal facets and a rainbow foil rim."
@@ -8233,12 +8256,14 @@ msgstr "dan"
 
 #: src/components/companella/SubmissionDetail.tsx
 #: src/components/me/GoalsPanel.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/supporter/LoadoutSlots.tsx
+#: src/lib/chain-run.ts
 #: src/lib/replay-overlays.ts
 #: src/routes/rankings.tsx
 msgid "Dan"
@@ -9643,9 +9668,14 @@ msgstr "Every row you play has 6 cards."
 msgid "Every row you play makes the rows after it score x{0} more. It stacks for the rest of the run."
 msgstr "Every row you play makes the rows after it score x{0} more. It stacks for the rest of the run."
 
+#. placeholder {0}: CHAIN_LINK_RULES.maxTraits
 #: src/components/packs/run/chain/ChainHowTo.tsx
-msgid "Every shared trait raises the combo, more for each extra trait in the same link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
-msgstr "Every shared trait raises the combo, more for each extra trait in the same link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
+msgid "Every shared trait raises the combo, more for each extra trait in the same link, up to {0} per link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
+msgstr "Every shared trait raises the combo, more for each extra trait in the same link, up to {0} per link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#~ msgid "Every shared trait raises the combo, more for each extra trait in the same link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
+#~ msgstr "Every shared trait raises the combo, more for each extra trait in the same link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
 
 #. placeholder {0}: N.quickRetry.packs
 #: src/lib/pack-run.ts
@@ -9686,8 +9716,12 @@ msgid "Everyone"
 msgstr "Everyone"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Everyone plays the same cards today, on the standard deck. One try, no revive."
-msgstr "Everyone plays the same cards today, on the standard deck. One try, no revive."
+msgid "Everyone gets the same cards today, and you only get one go at it."
+msgstr "Everyone gets the same cards today, and you only get one go at it."
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+#~ msgid "Everyone plays the same cards today, on the standard deck. One try, no revive."
+#~ msgstr "Everyone plays the same cards today, on the standard deck. One try, no revive."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
@@ -10313,6 +10347,10 @@ msgstr "Finishing this looks risky for you; treat it as a clear attempt, not a f
 msgid "Finnish"
 msgstr "Finnish"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Firefly forest"
+msgstr "Firefly forest"
+
 #. placeholder {0}: link.fires
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Fires {0} times in a hand."
@@ -10422,6 +10460,11 @@ msgstr "First Try"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Fit"
 msgstr "Fit"
+
+#. placeholder {0}: CHAIN_ROUND_CHART.skill
+#: src/components/packs/run/chain/ChainScoring.tsx
+msgid "Fits the map x{0}"
+msgstr "Fits the map x{0}"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Fits the overlays to a 16:9 frame."
@@ -13417,6 +13460,10 @@ msgstr "Links to each side with the traits of the card on its other side too."
 msgid "Links to the cards next to it on every trait. The first GOAT in a row doubles the combo."
 msgstr "Links to the cards next to it on every trait. The first GOAT in a row doubles the combo."
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Liquid chrome"
+msgstr "Liquid chrome"
+
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "List"
 msgstr "List"
@@ -13997,6 +14044,10 @@ msgstr "Logout"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "long notes"
 msgstr "long notes"
+
+#: src/lib/supporter-profile-themes.ts
+#~ msgid "Long notes"
+#~ msgstr "Long notes"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Long Notes"
@@ -15511,8 +15562,8 @@ msgstr "Next round has {0} more row."
 
 #. placeholder {0}: copy.name
 #: src/components/packs/run/chain/ChainBoss.tsx
-msgid "Next round is a boss: {0}"
-msgstr "Next round is a boss: {0}"
+#~ msgid "Next round is a boss: {0}"
+#~ msgstr "Next round is a boss: {0}"
 
 #: src/lib/chain-run.ts
 msgid "Next round's first row can't break."
@@ -16065,8 +16116,8 @@ msgid "No redraws left this round."
 msgstr "No redraws left this round."
 
 #: src/lib/chain-run.ts
-msgid "No redraws this round."
-msgstr "No redraws this round."
+#~ msgid "No redraws this round."
+#~ msgstr "No redraws this round."
 
 #: src/routes/maps.tsx
 #~ msgid "No region board for this tab yet"
@@ -19317,8 +19368,18 @@ msgstr "Put this code on your Mamestagram userpage, then press Verify."
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx
-msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
-msgstr "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
+msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (a second skillset only matches another second skillset). Keymode counts too, but only on top of another match."
+msgstr "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (a second skillset only matches another second skillset). Keymode counts too, but only on top of another match."
+
+#. placeholder {0}: CHAIN_RULES.rowMax
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (either of a player's two). Keymode counts too, but only on top of another match."
+#~ msgstr "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (either of a player's two). Keymode counts too, but only on top of another match."
+
+#. placeholder {0}: CHAIN_RULES.rowMax
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
+#~ msgstr "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
@@ -19533,8 +19594,8 @@ msgid "Rarity"
 msgstr "Rarity"
 
 #: src/lib/chain-run.ts
-msgid "Rarity links don't count."
-msgstr "Rarity links don't count."
+#~ msgid "Rarity links don't count."
+#~ msgstr "Rarity links don't count."
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -19811,9 +19872,23 @@ msgstr "Reach stage {0}."
 
 #. placeholder {0}: CHAIN_RULES.rows
 #. placeholder {1}: CHAIN_RULES.interestPer
+#. placeholder {2}: CHAIN_ROUND_CHART.skill
 #: src/components/packs/run/chain/ChainHowTo.tsx
-msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Spend them in the shop on packs, scene cards, practice and mods. Every third round is a boss round with a twist, shown in the shop before it."
-msgstr "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Spend them in the shop on packs, scene cards, practice and mods. Every third round is a boss round with a twist, shown in the shop before it."
+#~ msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Every round is set on a real map: cards of its keymode and skillset score x{2}, and harder maps pay more. Spend shards in the shop on packs, scene cards, practice and mods."
+#~ msgstr "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Every round is set on a real map: cards of its keymode and skillset score x{2}, and harder maps pay more. Spend shards in the shop on packs, scene cards, practice and mods."
+
+#. placeholder {0}: CHAIN_RULES.rows
+#. placeholder {1}: CHAIN_RULES.interestPer
+#. placeholder {2}: CHAIN_ROUND_CHART.skill
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Now and then a round is set on a real map: cards of its keymode and skillset score x{2}, and harder maps pay more. Spend shards in the shop on packs, scene cards, practice and mods."
+msgstr "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Now and then a round is set on a real map: cards of its keymode and skillset score x{2}, and harder maps pay more. Spend shards in the shop on packs, scene cards, practice and mods."
+
+#. placeholder {0}: CHAIN_RULES.rows
+#. placeholder {1}: CHAIN_RULES.interestPer
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#~ msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Spend them in the shop on packs, scene cards, practice and mods. Every third round is a boss round with a twist, shown in the shop before it."
+#~ msgstr "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Spend them in the shop on packs, scene cards, practice and mods. Every third round is a boss round with a twist, shown in the shop before it."
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Reached round {round} in Overjoy, best row {best}. {link}"
@@ -20134,6 +20209,10 @@ msgstr "Refreshing..."
 #: src/lib/pack-run.ts
 msgid "Refund"
 msgstr "Refund"
+
+#: src/lib/chain-run.ts
+msgid "Region"
+msgstr "Region"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/layout/CountrySelector.tsx
@@ -21013,8 +21092,8 @@ msgstr "Rows"
 
 #. placeholder {0}: CHAIN_BOSS.shortRow
 #: src/lib/chain-run.ts
-msgid "Rows of {0} cards at most."
-msgstr "Rows of {0} cards at most."
+#~ msgid "Rows of {0} cards at most."
+#~ msgstr "Rows of {0} cards at most."
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.moonGateCards
 #. placeholder {1}: CHAIN_SCENE_NUMBERS.moonGateMultiplier
@@ -22977,8 +23056,8 @@ msgid "Skillsets"
 msgstr "Skillsets"
 
 #: src/lib/chain-run.ts
-msgid "Skillsets do nothing this round."
-msgstr "Skillsets do nothing this round."
+#~ msgid "Skillsets do nothing this round."
+#~ msgstr "Skillsets do nothing this round."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -24330,8 +24409,13 @@ msgstr "Taken off the list"
 
 #. placeholder {0}: chainModLook(shown.mods[modPick], i18n).name
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "Tap a card in your hand for {0}"
-msgstr "Tap a card in your hand for {0}"
+msgid "Tap a card for {0}"
+msgstr "Tap a card for {0}"
+
+#. placeholder {0}: chainModLook(shown.mods[modPick], i18n).name
+#: src/components/packs/run/chain/ChainTable.tsx
+#~ msgid "Tap a card in your hand for {0}"
+#~ msgstr "Tap a card in your hand for {0}"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
@@ -26582,6 +26666,13 @@ msgstr "This request is not valid any more. Start the connection again from the 
 #: src/components/companella/AuthorizePage.tsx
 msgid "This request was already answered. Start the connection again from the app."
 msgstr "This request was already answered. Start the connection again from the app."
+
+#. placeholder {0}: chart.name
+#. placeholder {1}: info.version
+#. placeholder {2}: CHAIN_ROUND_CHART.skill
+#: src/components/packs/run/chain/ChainRoundChart.tsx
+msgid "This round is set on {0} [{1}]. {fits} cards score x{2}."
+msgstr "This round is set on {0} [{1}]. {fits} cards score x{2}."
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx

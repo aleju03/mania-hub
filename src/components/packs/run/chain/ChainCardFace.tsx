@@ -1,7 +1,8 @@
 import { memo, useId, type CSSProperties, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
 import { CountryFlag } from "#/components/ui/CountryFlag";
-import { CHAIN_VARIANT_COPY, chainCardBaseText, chainCardColor, chainCardFace, chainCardRarityLabel, chainSkillShort, type ChainCard } from "#/lib/chain-run";
+import { getDanImageSrc } from "#/lib/dan-images";
+import { CHAIN_ROUND_CHART, CHAIN_VARIANT_COPY, chainCardBaseText, chainDanName, chainCardColor, chainCardFace, chainCardRarityLabel, chainSkillShort, type ChainCard } from "#/lib/chain-run";
 import { MANIA_TIER_STYLES, maniaTriangleOverlaySvg } from "#/lib/maniacard";
 import { getCosmicTierPalette, type CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
@@ -14,7 +15,9 @@ export function chainAvatarSrc(card: Pick<ChainCard, "id" | "avatarUrl">): strin
 const KEY_INK = "#ffd36b";
 const SKILL_INK = "#8ff2b7";
 const FLAG_INK = "#7fd3ff";
-const LIT_INK: Record<"cc" | "key" | "skill", string> = { cc: FLAG_INK, key: KEY_INK, skill: SKILL_INK };
+const REGION_INK = "#c3b4ff";
+const DAN_INK = "#ffb38a";
+const LIT_INK: Record<"cc" | "region" | "key" | "skill", string> = { cc: FLAG_INK, region: REGION_INK, key: KEY_INK, skill: SKILL_INK };
 const TEXT_SHADOW = "0 1px 3px rgba(0,0,0,0.55)";
 
 /* Trait text widths at 11px Tracker Round Heavy (measured), for picking the widest
@@ -136,6 +139,7 @@ export const ChainCardFace = memo(function ChainCardFace({
   dim = false,
   lit = null,
   playedCover = null,
+  onChart = false,
 }: {
   card: ChainCard;
   width: number;
@@ -143,6 +147,8 @@ export const ChainCardFace = memo(function ChainCardFace({
   lit?: ReadonlySet<string> | null;
   /* The cover of a chart on the table this player played: worn as a badge. */
   playedCover?: string | null;
+  /* Has the round chart's keymode and skillset: a gold x tag. */
+  onChart?: boolean;
 }) {
   const { i18n } = useLingui();
   const id = useId();
@@ -270,8 +276,29 @@ export const ChainCardFace = memo(function ChainCardFace({
 
   // ---- the marks -----------------------------------------------------------
   const markStyle = (trait: "cc" | "key" | "skill"): CSSProperties | undefined =>
-    on(trait) ? { background: LIT_INK[trait], color: "#120f1a" } : undefined;
+    on(trait) ? { background: LIT_INK[trait], color: "#120f1a" } : trait === "cc" && on("region") ? { background: LIT_INK.region, color: "#120f1a" } : undefined;
   const skill = chainSkillShort(card.skill);
+  const skill2 = card.skill2 && !card.chart ? card.skill2 : null;
+  /* The rice dan, as its course badge over the portrait's lower left. */
+  const danSrc = card.dan && !card.chart ? getDanImageSrc(card.dan, "rc", card.key) : null;
+  const danBadge = (size: number, left: number, top: number) =>
+    danSrc ? (
+      <img
+        data-trait="dan"
+        src={danSrc}
+        alt=""
+        title={chainDanName(card.dan!)}
+        draggable={false}
+        className="absolute object-contain"
+        style={{
+          left,
+          top,
+          width: size,
+          height: size,
+          filter: on("dan") ? `drop-shadow(0 0 0 ${DAN_INK}) drop-shadow(0 0 2px ${DAN_INK}) drop-shadow(0 0 3px ${DAN_INK})` : "drop-shadow(0 1px 2px rgba(0,0,0,0.7))",
+        }}
+      />
+    ) : null;
   /* The portrait, edge to edge across the top, fading into the panel. */
   const art = (artH: number) => (
     <>
@@ -400,7 +427,7 @@ export const ChainCardFace = memo(function ChainCardFace({
             </span>
           ) : (
             <span data-trait="cc" className="flex items-center rounded-[4px]" style={{ ...cell, ...markStyle("cc") }}>
-              <CountryFlag code={card.cc} size="xs" decorative className="!h-[1.05em] !w-[1.55em]" />
+              <span data-trait="region" className="flex"><CountryFlag code={card.cc} size="xs" decorative className="!h-[1.05em] !w-[1.55em]" /></span>
             </span>
           )}
           <span className="h-3/5 w-px self-center bg-white/25" />
@@ -411,7 +438,16 @@ export const ChainCardFace = memo(function ChainCardFace({
           <span data-trait="skill" className="flex items-center rounded-[4px]" style={{ ...cell, ...markStyle("skill") }}>
             {skill}
           </span>
+          {skill2 && (
+            <>
+              <span className="h-3/5 w-px self-center bg-white/25" />
+              <span className="flex items-center rounded-[4px] opacity-90" style={{ ...cell, ...markStyle("skill") }}>
+                {SKILL_CODE[skill2][0]}
+              </span>
+            </>
+          )}
         </div>
+        {danBadge(Math.round(24 * s), pad - 2 * s, panelTop - Math.round(24 * s) - 3 * s)}
         <div
           data-chain-base=""
           className="absolute font-black leading-[0.82] tabular-nums tracking-[-0.03em] text-white"
@@ -454,9 +490,10 @@ export const ChainCardFace = memo(function ChainCardFace({
     // "4K"/"7K" stays text in every layout; the flag's padding and then the
     // skill code give way first.
     const keyW = 14.1;
-    const fullW = 16 + 14.1 + SKILL_TEXT_W[card.skill] + 3 * 5 + 2;
     const [code, codeW] = SKILL_CODE[card.skill];
-    const codeFits = 12 + keyW + codeW + 2 * 3 + 1 + 2 <= inner;
+    const code2W = skill2 ? SKILL_CODE[skill2][1] : 0;
+    const fullW = 16 + 14.1 + SKILL_TEXT_W[card.skill] + 3 * 5 + 2 + (skill2 ? code2W + 6 : 0);
+    const codeFits = 12 + keyW + codeW + 2 * 3 + 1 + 2 + (skill2 ? code2W + 4 : 0) <= inner;
     const mode = fullW <= inner ? "full" : codeFits ? "code" : "glyph";
     const chip = mode === "full" ? "px-[2.5px]" : "px-[1.5px]";
     content = (
@@ -476,7 +513,7 @@ export const ChainCardFace = memo(function ChainCardFace({
             </span>
           ) : (
             <span data-trait="cc" className={`flex items-center rounded-[3px] ${mode === "full" ? chip : "px-[0.5px]"}`} style={markStyle("cc")}>
-              <CountryFlag code={card.cc} size="xs" decorative className={mode === "full" ? "!h-[11px] !w-[16px]" : "!h-[8.5px] !w-[12px]"} />
+              <span data-trait="region" className="flex"><CountryFlag code={card.cc} size="xs" decorative className={mode === "full" ? "!h-[11px] !w-[16px]" : "!h-[8.5px] !w-[12px]"} /></span>
             </span>
           )}
           <span className="h-1/2 w-px self-center bg-white/25" />
@@ -487,7 +524,16 @@ export const ChainCardFace = memo(function ChainCardFace({
           <span data-trait="skill" className={`flex items-center rounded-[3px] ${chip}`} style={markStyle("skill")} title={card.skill}>
             {mode === "full" ? skill : mode === "code" ? code : <span className="block h-[5px] w-[5px] rotate-45 bg-current" />}
           </span>
+          {skill2 && mode !== "glyph" && (
+            <>
+              <span className="h-1/2 w-px self-center bg-white/25" />
+              <span className={`flex items-center rounded-[3px] opacity-90 ${chip}`} style={markStyle("skill")} title={skill2}>
+                {SKILL_CODE[skill2][0]}
+              </span>
+            </>
+          )}
         </div>
+        {danBadge(Math.max(14, Math.round(w * 0.22)), pad - 1, panelTop - Math.max(14, Math.round(w * 0.22)) - 2)}
         <div
           data-chain-base=""
           className="absolute font-black leading-[0.82] tabular-nums tracking-[-0.03em] text-white"
@@ -543,6 +589,25 @@ export const ChainCardFace = memo(function ChainCardFace({
         <img src={playedCover} alt="" draggable={false} className="h-full w-full object-cover" />
       </div>
     ) : null;
+  /* A card the round's chart favours says by how much, opposite that badge. */
+  const chartTag =
+    onChart && layout !== "micro" ? (
+      <div
+        className="absolute rounded-full font-black leading-none"
+        style={{
+          left: Math.max(3, w * 0.05),
+          top: Math.round(h * (layout === "full" ? 0.5 : 0.42)) - Math.round(w * 0.06),
+          padding: `${Math.max(1, Math.round(w * 0.015))}px ${Math.max(3, Math.round(w * 0.04))}px`,
+          fontSize: Math.max(9, Math.round(w * 0.1)),
+          background: "#ffd36b",
+          color: "#120c18",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.6)",
+        }}
+        data-on-chart=""
+      >
+        x{CHAIN_ROUND_CHART.skill}
+      </div>
+    ) : null;
   const rimW = layout === "full" ? Math.max(1.5, 2 * (w / 130)) : 1.25;
   /* A variant inks the rim in its own colour; MAX's is a rainbow ring. */
   const rimInk = variant && card.variant !== "max" ? variant.ink : color.ink;
@@ -561,6 +626,7 @@ export const ChainCardFace = memo(function ChainCardFace({
       </div>
       {content}
       {playedBadge}
+      {chartTag}
       {card.variant === "max" && !tierLit && (
         <div
           className="pointer-events-none absolute inset-0"

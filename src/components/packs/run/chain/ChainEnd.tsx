@@ -359,7 +359,7 @@ export function ChainStart({
               <Trans>Daily run</Trans> {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
             </div>
             <div className="max-w-[380px] text-[13px] font-bold leading-snug text-[#f3e9d8]/75">
-              <Trans>Everyone plays the same cards today, on the standard deck. One try, no revive.</Trans>
+              <Trans>Everyone gets the same cards today, and you only get one go at it.</Trans>
             </div>
           </div>
         )}

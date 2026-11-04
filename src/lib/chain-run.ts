@@ -22,6 +22,10 @@ import {
   CHAIN_REEL,
   CHAIN_SKILL_EFFECT,
   chainEffectSkill,
+  chainRegionName,
+  chainRegionCode,
+  CHAIN_SKILL2_MARK,
+  isChainTier,
   chainSkillBand,
   type ChainReelId,
   type ChainReelPrize,
@@ -32,8 +36,6 @@ import {
   chainScoreText,
   chainEternalBase,
   isChainStartDeck,
-  CHAIN_BOSS,
-  type ChainBossId,
 } from "../../backend/src/shared/chain-run";
 import { honoraryPlayerById } from "./honorary-players";
 import { liveBridgeToken } from "./live-backend-tokens";
@@ -364,10 +366,33 @@ export function chainModLook(id: ChainModId, i18n: I18n): { name: string; badge:
    (EZ, DT, NF) and 727 stay as they are in every language. */
 export const CHAIN_TRAIT_WORD: Record<ChainTrait, MessageDescriptor> = {
   cc: msg`Country`,
+  region: msg`Region`,
   tier: msg`Rarity`,
+  dan: msg`Dan`,
   key: msg`Keymode`,
   skill: msg`Skillset`,
 };
+
+/* A card's region by name, from its country ("South America"). */
+export function chainRegionOf(card: Pick<ChainCard, "cc" | "chart">): string | null {
+  const code = card.chart || !card.cc ? null : chainRegionCode(card.cc);
+  return code ? chainRegionName(code) : null;
+}
+
+/* A dan's bare label as people say it: "Dan 10", "Gamma". */
+export function chainDanName(dan: string): string {
+  return /^\d+$/.test(dan) ? `Dan ${dan}` : dan.charAt(0).toUpperCase() + dan.slice(1);
+}
+
+/* A link trait's value in words: a region's name, a dan without its
+   keymode, a rarity's label; anything else as it is. */
+export function chainTraitValueText(trait: string, value: string, i18n: I18n): string {
+  if (trait === "region") return chainRegionName(value);
+  if (trait === "dan") return chainDanName(value.replace(/^\d+K /, ""));
+  if (trait === "tier" && isChainTier(value)) return i18n._(CHAIN_TIER_LABEL[value]);
+  if (trait === "skill" && value.startsWith(CHAIN_SKILL2_MARK)) return value.slice(CHAIN_SKILL2_MARK.length);
+  return value;
+}
 
 export const CHAIN_REEL_INK: Record<ChainReelId, string> = {
   shards: "#9fb3cf",
@@ -580,16 +605,6 @@ const REFUSALS: Record<string, MessageDescriptor> = {
   no_revive: msg`This run already used its revive.`,
   eternal: msg`An Eternal never leaves.`,
   daily_done: msg`You've played today's daily run. A new one starts at midnight UTC.`,
-};
-
-/* Boss twists: an osu! mod's name (never translated) and the rule. */
-export const CHAIN_BOSS_COPY: Record<ChainBossId, { name: string; rule: MessageDescriptor }> = {
-  noCountry: { name: "Global", rule: msg`Country links don't count.` },
-  noRarity: { name: "Unranked", rule: msg`Rarity links don't count.` },
-  short: { name: "Half Time", rule: msg`Rows of ${CHAIN_BOSS.shortRow} cards at most.` },
-  halfFourK: { name: "Key Lock", rule: msg`4K cards score half.` },
-  noRedraws: { name: "Sudden Death", rule: msg`No redraws this round.` },
-  muted: { name: "Hidden", rule: msg`Skillsets do nothing this round.` },
 };
 
 /* The shop's contracts: a name and the rule, short. */

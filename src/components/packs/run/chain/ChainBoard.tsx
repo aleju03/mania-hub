@@ -13,6 +13,8 @@ import {
   type ChainLink,
   type ChainRowResult,
   chainPlayed,
+  chainOnRoundChart,
+  type ChainCard,
 } from "#/lib/chain-run";
 import { swayStyle } from "../RunCard";
 import { RUN_FEEL } from "../runFeel";
@@ -53,7 +55,7 @@ export type BoardMode = "arrange" | "locked";
 
 const PINK = "#ff66aa";
 const BREAK_RED = "#ff5a5a";
-const HAND_TRAIT_INK: Record<string, string> = { cc: "#7fd3ff", key: "#ffd36b", skill: "#8ff2b7" };
+const HAND_TRAIT_INK: Record<string, string> = { cc: "#7fd3ff", region: "#c3b4ff", dan: "#ffb38a", key: "#ffd36b", skill: "#8ff2b7" };
 
 function handInk(trait: string, value: string): string {
   if (trait === "tier" && isChainTier(value)) return CHAIN_TIER_COLOR[value].ink;
@@ -61,8 +63,10 @@ function handInk(trait: string, value: string): string {
 }
 
 interface BoardCardProps {
-  /* A chart on the table this player played: its cover, for the badge. */
+  /* A chart on the table (or the round's) this player played: its cover, for the badge. */
   playedCover?: string | null;
+  /* Has the round chart's keymode and skillset. */
+  onChart?: boolean;
   entry: ChainCardInstance;
   layout: BoardLayout;
   place: CardPlace;
@@ -132,6 +136,7 @@ const BoardCard = memo(function BoardCard({
   grey = false,
   selectedOrder = 0,
   playedCover = null,
+  onChart = false,
 }: BoardCardProps) {
   const { t } = useLingui();
   const [hovered, setHovered] = useState(false);
@@ -278,7 +283,7 @@ const BoardCard = memo(function BoardCard({
                   className="absolute inset-0 transition-[opacity,filter] duration-200"
                   style={{ backfaceVisibility: "hidden", opacity: dim ? 0.5 : dragging ? 0.9 : 1, filter: grey ? "grayscale(1) brightness(0.55)" : undefined }}
                 >
-                  <ChainCardFace card={entry.card} width={target.width} lit={lit} playedCover={playedCover} />
+                  <ChainCardFace card={entry.card} width={target.width} lit={lit} playedCover={playedCover} onChart={onChart} />
                 </div>
                 {hasBack && (
                   <div
@@ -370,6 +375,8 @@ interface ChainBoardProps {
   onClearSelection: () => void;
   /* The run failed on this row: it greys out. */
   failed?: boolean;
+  /* The chart the round is set on. */
+  roundChart?: ChainCard | null;
 }
 
 /* The row (6 slots, link lines between placed neighbours with only their
@@ -406,20 +413,22 @@ export function ChainBoard(props: ChainBoardProps) {
     onSelect,
     onSendGroup,
     onClearSelection,
+    roundChart = null,
   } = props;
   const boardRef = useRef<HTMLDivElement>(null);
-  /* Players who played a chart in the hand or row wear its cover. */
+  /* Players who played a chart in the hand or row, or the round's, wear its cover. */
   const playedCovers = useMemo(() => {
     const map = new Map<number, string>();
-    const charts = hand.filter((entry) => entry.card.chart);
+    const charts = hand.filter((entry) => entry.card.chart).map((entry) => entry.card);
+    if (roundChart) charts.push(roundChart);
     if (!charts.length) return map;
     for (const entry of hand) {
       if (entry.card.chart) continue;
-      const chart = charts.find((other) => chainPlayed(entry.card, other.card));
-      if (chart) map.set(entry.uid, chart.card.avatarUrl);
+      const chart = charts.find((other) => chainPlayed(entry.card, other));
+      if (chart) map.set(entry.uid, chart.avatarUrl);
     }
     return map;
-  }, [hand]);
+  }, [hand, roundChart]);
   /* `group`: every card moving, in selection order (the held one among
      them); the others stack behind the pointer. */
   /* `handFrom`: where in the hand a hand card was lifted from, held open
@@ -741,6 +750,7 @@ export function ChainBoard(props: ChainBoardProps) {
               key={`${entry.uid}:${dealGen[entry.uid] ?? 0}`}
               entry={entry}
               playedCover={playedCovers.get(entry.uid) ?? null}
+              onChart={chainOnRoundChart(entry.card, roundChart)}
               layout={layout}
               place={drag && dragging ? drag.base : stacked ?? own}
               leaveTo={leaving ? deckPlace : null}
@@ -779,6 +789,7 @@ export function ChainBoard(props: ChainBoardProps) {
             key={`${entry.uid}:${dealGen[entry.uid] ?? 0}`}
             entry={entry}
             playedCover={playedCovers.get(entry.uid) ?? null}
+            onChart={chainOnRoundChart(entry.card, roundChart)}
             layout={layout}
             place={drag && dragging ? drag.base : stacked ?? own}
             leaveTo={leaving ? deckPlace : null}

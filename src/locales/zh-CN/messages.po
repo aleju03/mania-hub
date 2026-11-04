@@ -2107,6 +2107,10 @@ msgstr "{speedLabel} 速度"
 msgid "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 msgstr "有 {stacks} 次额外的模组使用来自叠加模组的成绩（例如 DT+MR）。扇形大小按模组使用次数计算，百分比按成绩数计算。"
 
+#: src/components/packs/run/chain/ChainRoundChart.tsx
+msgid "{stars} stars"
+msgstr "{stars} 星"
+
 #. placeholder {0}: shared.creator
 #: src/routes/maps.tsx
 msgid "{stars}★ · mapped by {0}"
@@ -2359,8 +2363,8 @@ msgstr "牌组中每有一张 Jumpstream，基础分 +{0}（最多 {1}）。"
 
 #. placeholder {0}: aftermath.boss
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "+{0} boss"
-msgstr "+{0} Boss"
+#~ msgid "+{0} boss"
+#~ msgstr "+{0} Boss"
 
 #. placeholder {0}: N.extraKey.slots
 #: src/lib/pack-run.ts
@@ -2471,6 +2475,11 @@ msgstr "本局已成长 +{0}"
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "+{0} interest"
 msgstr "+{0} 利息"
+
+#. placeholder {0}: aftermath.chart
+#: src/components/packs/run/chain/ChainTable.tsx
+msgid "+{0} map"
+msgstr "+{0} 谱面"
 
 #. placeholder {0}: formatNumber(hidden)
 #. placeholder {1}: formatNumber(ownersPerCard)
@@ -2620,6 +2629,10 @@ msgstr "<0>{appName}</0> 请求访问你的 Mania Tracker 账号"
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "<0>{collectorLabel}</0> has not opened a pack."
 msgstr "<0>{collectorLabel}</0> 还没有开过卡包。"
+
+#: src/components/maps/SearchCard.tsx
+msgid "<0>{count}</0> diffs"
+msgstr "<0>{count}</0> 个难度"
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "<0>{label}</0> has not opened a pack."
@@ -2948,8 +2961,8 @@ msgid "4K cards give +{0} notes."
 msgstr "4K 卡片 +{0} 音符。"
 
 #: src/lib/chain-run.ts
-msgid "4K cards score half."
-msgstr "4K 卡牌只得一半分。"
+#~ msgid "4K cards score half."
+#~ msgstr "4K 卡牌只得一半分。"
 
 #: src/routes/dan-estimates.tsx
 msgid "4K jack"
@@ -4294,6 +4307,11 @@ msgstr "已有人建议"
 msgid "already tracked"
 msgstr "已记录"
 
+#. placeholder {0}: entry.card.skill2
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "Also {0}"
+msgstr "也擅长 {0}"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Also on map dans"
 msgstr "地图段位也一样"
@@ -4808,6 +4826,7 @@ msgstr "自动追踪从 2026 年 6 月 9 日开始。更早的成绩只要还在
 #~ msgstr "自动追踪直到 2026 年 6 月 9 日才开始。更早的成绩如果仍在你的 osu! 最佳成绩中就会被计入；任何缺失且有 osu! 成绩链接的 mania 通过成绩，都可以在个人主页的“技能”标签页中添加。"
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Autumn maple"
 msgstr "秋枫"
 
@@ -5440,8 +5459,8 @@ msgstr "借用"
 #. placeholder {0}: CHAIN_BOSS_COPY[boss].name
 #. placeholder {1}: i18n._(CHAIN_BOSS_COPY[boss].rule)
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "Boss round: {0}. {1}"
-msgstr "Boss 回合：{0}。{1}"
+#~ msgid "Boss round: {0}. {1}"
+#~ msgstr "Boss 回合：{0}。{1}"
 
 #: src/components/discord/DiscordTabs.tsx
 msgid "Bot"
@@ -6581,8 +6600,8 @@ msgstr "以 {courseAccuracy} 通过了 {courseName}。"
 
 #. placeholder {0}: CHAIN_BOSS.shards
 #: src/components/packs/run/chain/ChainBoss.tsx
-msgid "Clearing it pays {0} more shards."
-msgstr "通过后多得 {0} 碎片。"
+#~ msgid "Clearing it pays {0} more shards."
+#~ msgstr "通过后多得 {0} 碎片。"
 
 #: src/routes/rankings.tsx
 msgid "Clears"
@@ -7904,8 +7923,8 @@ msgid "Country for top plays"
 msgstr "最佳成绩推送的国家"
 
 #: src/lib/chain-run.ts
-msgid "Country links don't count."
-msgstr "国家连线不计。"
+#~ msgid "Country links don't count."
+#~ msgstr "国家连线不计。"
 
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
@@ -8063,6 +8082,10 @@ msgstr "王冠"
 msgid "CRT monitor"
 msgstr "CRT 显示器"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Crystal cave"
+msgstr "水晶洞窟"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Crystal facets and a rainbow foil rim."
 #~ msgstr "水晶切面与彩虹镭射边框。"
@@ -8218,12 +8241,14 @@ msgstr "段位"
 
 #: src/components/companella/SubmissionDetail.tsx
 #: src/components/me/GoalsPanel.tsx
+#: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/supporter/LoadoutSlots.tsx
+#: src/lib/chain-run.ts
 #: src/lib/replay-overlays.ts
 #: src/routes/rankings.tsx
 msgid "Dan"
@@ -9624,9 +9649,14 @@ msgstr "你打出的每一行都有 6 张卡。"
 msgid "Every row you play makes the rows after it score x{0} more. It stacks for the rest of the run."
 msgstr "你每打一排，之后的排得分再 x{0}。本局一直叠加。"
 
+#. placeholder {0}: CHAIN_LINK_RULES.maxTraits
 #: src/components/packs/run/chain/ChainHowTo.tsx
-msgid "Every shared trait raises the combo, more for each extra trait in the same link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
-msgstr "每个共享特征都会提高连击，同一连线中每多一个特征加得更多。连线走到每张卡时，它的分数是卡上的数字乘以连击。什么都不共享的两张卡会断开，连击回到起点。"
+msgid "Every shared trait raises the combo, more for each extra trait in the same link, up to {0} per link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
+msgstr "每个共享特征都会提高连击，同一连线中每多一个特征加得更多，每条连线最多算 {0} 个。连线走到每张卡时，它的分数是卡上的数字乘以连击。什么都不共享的两张卡会断开，连击回到起点。"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#~ msgid "Every shared trait raises the combo, more for each extra trait in the same link. Each card scores its number times the combo when the chain reaches it. A pair that shares nothing breaks the combo back to the start."
+#~ msgstr "每个共享特征都会提高连击，同一连线中每多一个特征加得更多。连线走到每张卡时，它的分数是卡上的数字乘以连击。什么都不共享的两张卡会断开，连击回到起点。"
 
 #. placeholder {0}: N.quickRetry.packs
 #: src/lib/pack-run.ts
@@ -9667,8 +9697,12 @@ msgid "Everyone"
 msgstr "所有人"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Everyone plays the same cards today, on the standard deck. One try, no revive."
-msgstr "今天所有人都用同样的卡牌和标准牌组。只有一次机会，不能复活。"
+msgid "Everyone gets the same cards today, and you only get one go at it."
+msgstr "今天所有人用的是同一套卡，你只有一次机会。"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+#~ msgid "Everyone plays the same cards today, on the standard deck. One try, no revive."
+#~ msgstr "今天所有人都用同样的卡牌和标准牌组。只有一次机会，不能复活。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
@@ -10294,6 +10328,10 @@ msgstr "以你的水平打完这张有风险，把它当作通关尝试而不是
 msgid "Finnish"
 msgstr "芬兰语"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Firefly forest"
+msgstr "萤火森林"
+
 #. placeholder {0}: link.fires
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Fires {0} times in a hand."
@@ -10403,6 +10441,11 @@ msgstr "一次成功"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Fit"
 msgstr "适应宽度"
+
+#. placeholder {0}: CHAIN_ROUND_CHART.skill
+#: src/components/packs/run/chain/ChainScoring.tsx
+msgid "Fits the map x{0}"
+msgstr "契合谱面 x{0}"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Fits the overlays to a 16:9 frame."
@@ -13390,6 +13433,10 @@ msgstr "与两侧的卡片连线时，也带上另一侧卡片的特征。"
 msgid "Links to the cards next to it on every trait. The first GOAT in a row doubles the combo."
 msgstr "在所有特征上都与相邻卡片连线。一排中的第一张 GOAT 让连击翻倍。"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Liquid chrome"
+msgstr "液态铬"
+
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "List"
 msgstr "上架"
@@ -13970,6 +14017,10 @@ msgstr "退出登录"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "long notes"
 msgstr "长条占比"
+
+#: src/lib/supporter-profile-themes.ts
+#~ msgid "Long notes"
+#~ msgstr "长条"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Long Notes"
@@ -15484,8 +15535,8 @@ msgstr "下一回合多 {0} 排。"
 
 #. placeholder {0}: copy.name
 #: src/components/packs/run/chain/ChainBoss.tsx
-msgid "Next round is a boss: {0}"
-msgstr "下一回合是 Boss：{0}"
+#~ msgid "Next round is a boss: {0}"
+#~ msgstr "下一回合是 Boss：{0}"
 
 #: src/lib/chain-run.ts
 msgid "Next round's first row can't break."
@@ -16038,8 +16089,8 @@ msgid "No redraws left this round."
 msgstr "本回合没有剩余重抽次数。"
 
 #: src/lib/chain-run.ts
-msgid "No redraws this round."
-msgstr "本回合不能重抽。"
+#~ msgid "No redraws this round."
+#~ msgstr "本回合不能重抽。"
 
 #: src/routes/maps.tsx
 #~ msgid "No region board for this tab yet"
@@ -19290,8 +19341,18 @@ msgstr "把这段代码放到你的 Mamestagram 个人页面上，然后点击�
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx
-msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
-msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家、稀有度或 skillset 时就会相连。键数也算，但只能和其他相同特征一起算。"
+msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (a second skillset only matches another second skillset). Keymode counts too, but only on top of another match."
+msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家（或地区）、稀有度、段位或 skillset（第二 skillset 只和另一个第二 skillset 相配）时就会相连。键数也算，但只能和其他相同特征一起算。"
+
+#. placeholder {0}: CHAIN_RULES.rowMax
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (either of a player's two). Keymode counts too, but only on top of another match."
+#~ msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家（或地区）、稀有度、段位或 skillset（玩家两个 skillset 中任一个）时就会相连。键数也算，但只能和其他相同特征一起算。"
+
+#. placeholder {0}: CHAIN_RULES.rowMax
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
+#~ msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家、稀有度或 skillset 时就会相连。键数也算，但只能和其他相同特征一起算。"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
@@ -19506,8 +19567,8 @@ msgid "Rarity"
 msgstr "稀有度"
 
 #: src/lib/chain-run.ts
-msgid "Rarity links don't count."
-msgstr "稀有度连线不计。"
+#~ msgid "Rarity links don't count."
+#~ msgstr "稀有度连线不计。"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -19784,9 +19845,23 @@ msgstr "到达第 {0} 关。"
 
 #. placeholder {0}: CHAIN_RULES.rows
 #. placeholder {1}: CHAIN_RULES.interestPer
+#. placeholder {2}: CHAIN_ROUND_CHART.skill
 #: src/components/packs/run/chain/ChainHowTo.tsx
-msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Spend them in the shop on packs, scene cards, practice and mods. Every third round is a boss round with a twist, shown in the shop before it."
-msgstr "在 {0} 行内达到回合目标。通关会给碎片：剩余的行、大幅超出目标都会多给，已持有的每 {1} 个碎片再给 1 个。在商店里用它们买卡包、场景卡、练习和 mod。每第三回合是 Boss 回合，规则变化会提前在商店显示。"
+#~ msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Every round is set on a real map: cards of its keymode and skillset score x{2}, and harder maps pay more. Spend shards in the shop on packs, scene cards, practice and mods."
+#~ msgstr "在 {0} 行内达到回合目标。通关会给碎片：剩余的行、大幅超出目标都会多给，已持有的每 {1} 个碎片再给 1 个。每回合都以一张真实谱面为主题：与它键数和 skillset 相同的卡得分 x{2}，越难的谱面给得越多。在商店里用碎片买卡包、场景卡、练习和 mod。"
+
+#. placeholder {0}: CHAIN_RULES.rows
+#. placeholder {1}: CHAIN_RULES.interestPer
+#. placeholder {2}: CHAIN_ROUND_CHART.skill
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Now and then a round is set on a real map: cards of its keymode and skillset score x{2}, and harder maps pay more. Spend shards in the shop on packs, scene cards, practice and mods."
+msgstr "在 {0} 行内达到回合目标。通关会给碎片：剩余的行、大幅超出目标都会多给，已持有的每 {1} 个碎片再给 1 个。有时某个回合会以一张真实谱面为主题：与它键数和 skillset 相同的卡得分 x{2}，越难的谱面给得越多。在商店里用碎片买卡包、场景卡、练习和 mod。"
+
+#. placeholder {0}: CHAIN_RULES.rows
+#. placeholder {1}: CHAIN_RULES.interestPer
+#: src/components/packs/run/chain/ChainHowTo.tsx
+#~ msgid "Reach the round's target within {0} rows. A clear pays shards: more for rows left over, a big overshoot, and 1 for every {1} you already hold. Spend them in the shop on packs, scene cards, practice and mods. Every third round is a boss round with a twist, shown in the shop before it."
+#~ msgstr "在 {0} 行内达到回合目标。通关会给碎片：剩余的行、大幅超出目标都会多给，已持有的每 {1} 个碎片再给 1 个。在商店里用它们买卡包、场景卡、练习和 mod。每第三回合是 Boss 回合，规则变化会提前在商店显示。"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Reached round {round} in Overjoy, best row {best}. {link}"
@@ -20107,6 +20182,10 @@ msgstr "刷新中..."
 #: src/lib/pack-run.ts
 msgid "Refund"
 msgstr "退款"
+
+#: src/lib/chain-run.ts
+msgid "Region"
+msgstr "地区"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/layout/CountrySelector.tsx
@@ -20986,8 +21065,8 @@ msgstr "排数"
 
 #. placeholder {0}: CHAIN_BOSS.shortRow
 #: src/lib/chain-run.ts
-msgid "Rows of {0} cards at most."
-msgstr "每行最多 {0} 张卡。"
+#~ msgid "Rows of {0} cards at most."
+#~ msgstr "每行最多 {0} 张卡。"
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.moonGateCards
 #. placeholder {1}: CHAIN_SCENE_NUMBERS.moonGateMultiplier
@@ -22942,8 +23021,8 @@ msgid "Skillsets"
 msgstr "技能组"
 
 #: src/lib/chain-run.ts
-msgid "Skillsets do nothing this round."
-msgstr "本回合 skillset 不生效。"
+#~ msgid "Skillsets do nothing this round."
+#~ msgstr "本回合 skillset 不生效。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -24295,8 +24374,13 @@ msgstr "已下架"
 
 #. placeholder {0}: chainModLook(shown.mods[modPick], i18n).name
 #: src/components/packs/run/chain/ChainTable.tsx
-msgid "Tap a card in your hand for {0}"
-msgstr "点一张手牌来用 {0}"
+msgid "Tap a card for {0}"
+msgstr "点一张卡来用 {0}"
+
+#. placeholder {0}: chainModLook(shown.mods[modPick], i18n).name
+#: src/components/packs/run/chain/ChainTable.tsx
+#~ msgid "Tap a card in your hand for {0}"
+#~ msgstr "点一张手牌来用 {0}"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
@@ -26539,6 +26623,13 @@ msgstr "这个请求已失效，请从应用中重新发起连接。"
 #: src/components/companella/AuthorizePage.tsx
 msgid "This request was already answered. Start the connection again from the app."
 msgstr "这个请求已经处理过了，请从应用中重新发起连接。"
+
+#. placeholder {0}: chart.name
+#. placeholder {1}: info.version
+#. placeholder {2}: CHAIN_ROUND_CHART.skill
+#: src/components/packs/run/chain/ChainRoundChart.tsx
+msgid "This round is set on {0} [{1}]. {fits} cards score x{2}."
+msgstr "本回合的谱面是 {0} [{1}]。{fits} 卡得分 x{2}。"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx

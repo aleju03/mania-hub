@@ -108,6 +108,11 @@ export const runSound = {
   sell: () => playRunCue("sell", { rate: jitter(0.01), gain: 0.6 }),
   charmMove: () => playRunCue("charm-move", { slot: Math.floor(Math.random() * 2), rate: jitter(0.03), gain: 0.55 }),
   refuse: () => playRunCue("refuse", { gain: 0.75 }),
+  /* A map card with a player who played it: claps over a vibraphone note,
+     a touch higher for each one in the row. */
+  played: (index: number) => playRunCue("played", { rate: Math.min(1.2, 1 + 0.04 * index) * jitter(0.015), gain: 0.7 }),
+  /* Interest on a clear: seeds poured into a jar. */
+  interest: () => playRunCue("interest", { rate: jitter(0.02), gain: 0.75 }),
   /* Menus */
   uiTap: () => playRunCue("ui-tap", { slot: Math.floor(Math.random() * 2), rate: jitter(0.03), gain: 0.5 }),
 };
