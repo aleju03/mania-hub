@@ -16,6 +16,7 @@ export const SUPPORTER_PROFILE_THEMES = [
   "inferno", "frost", "highway", "storm", "noir", "sunset",
   "judgements", "koi", "hanabi", "vaporwave", "blackhole", "singularity",
   "knight", "knightfight", "sketch", "redtree",
+  "fireflies", "crystal", "maple", "chrome",
 ] as const;
 
 export type SupporterProfileThemeId = (typeof SUPPORTER_PROFILE_THEMES)[number];
@@ -59,6 +60,10 @@ export const PROFILE_THEME_LOOKS: Record<SupporterProfileThemeId, ProfileThemeLo
   sketch: { hue: 40, sat: 0.06, base: "#0c0b0f", swatch: "linear-gradient(160deg,#16151a 0%,#0c0b0f 60%,#08070a 100%)", cover: 0.2 },
   redtree: { hue: 348, sat: 0.62, base: "#0b0614", swatch: "radial-gradient(40% 35% at 66% 38%,#e8233e 0%,#7a1240 45%,transparent 70%),linear-gradient(180deg,#08051a 0%,#1c0a26 62%,#2a1036 66%,#120818 100%)", cover: 0.2 },
   sunset: { hue: 22, sat: 0.85, base: "#120610", swatch: "linear-gradient(180deg,#2a0f3a 0%,#8a2f4a 45%,#f08a3c 70%,#3a1222 100%)", cover: 0.22 },
+  fireflies: { hue: 96, sat: 0.6, base: "#020805", swatch: "radial-gradient(70% 60% at 62% 48%,#1d4a39 0%,#0a2018 45%,#020805 100%)", cover: 0.2 },
+  crystal: { hue: 280, sat: 0.7, base: "#050208", swatch: "radial-gradient(70% 70% at 72% 62%,#5a2a8a 0%,#22103a 45%,#050208 100%)", cover: 0.18 },
+  maple: { hue: 28, sat: 0.85, base: "#1c1008", swatch: "radial-gradient(60% 70% at 52% 30%,#c08a3a 0%,#7a3a14 45%,#2a160a 100%)", cover: 0.15 },
+  chrome: { hue: 230, sat: 0.15, base: "#020203", swatch: "linear-gradient(160deg,#020203 0%,#020203 40%,#9a9aa6 46%,#101014 52%,#020203 70%,#5a5a64 78%,#020203 84%)", cover: 0.2 },
 };
 
 export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, MessageDescriptor> = {
@@ -84,6 +89,10 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
   knightfight: msg`Bullet hell`,
   sketch: msg`Sketchbook`,
   redtree: msg`Red tree`,
+  fireflies: msg`Firefly forest`,
+  crystal: msg`Crystal cave`,
+  maple: msg`Autumn maple`,
+  chrome: msg`Liquid chrome`,
 };
 
 /* A theme's own switches, saved with the pick (the backend keeps the same

@@ -2,6 +2,7 @@ import { CUSTOM_THEME_INPUTS, CUSTOM_THEME_TEXTURES } from "#custom-themes/input
 import { customThemeKey, reportCustomThemeCrash, type CustomTheme } from "./custom-themes";
 import { mirrorGlCanvas } from "./gl-mirror";
 import { createSakuraPetals, type ThemeOverlay } from "./profile-theme-petals";
+import { createMapleLeaves } from "./profile-theme-maple";
 import { PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
 import { HIGHWAY_MAX_LANES, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { takeGpuSlot } from "./gpu-queue";
@@ -72,11 +73,14 @@ const THEME_SPRITES: Partial<Record<SupporterProfileThemeId, string>> = {
   koi: "/images/profile-themes/koi-pads.png",
   vaporwave: "/images/profile-themes/palm.png",
   redtree: "/images/profile-themes/red-tree.webp",
+  maple: "/images/profile-themes/maple-built.webp",
+  fireflies: "/images/profile-themes/firefly-built.webp",
 };
 
 /* Geometry a theme draws over its shader, in the same canvas. */
 const THEME_OVERLAYS: Partial<Record<SupporterProfileThemeId, (gl: WebGL2RenderingContext) => ThemeOverlay | null>> = {
   sakura: createSakuraPetals,
+  maple: createMapleLeaves,
 };
 
 const STILL_TIME = 6.5;
@@ -144,7 +148,9 @@ class ThemeContext {
       this.sprites.set(theme, null);
       const image = new Image();
       image.decoding = "async";
-      image.onload = () => {
+      // decoded off the main thread first: an undecoded image is decoded
+      // inside texImage2D, a long stall for the photo-sized sprites
+      image.onload = () => void image.decode().catch(() => {}).then(() => {
         const texture = gl.createTexture();
         gl.activeTexture(gl.TEXTURE4);
         gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -157,7 +163,7 @@ class ThemeContext {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.activeTexture(gl.TEXTURE0);
         this.sprites.set(theme, texture);
-      };
+      });
       image.src = url;
     }
     gl.activeTexture(gl.TEXTURE4);
@@ -369,6 +375,14 @@ class ThemeContext {
     return !this.programs.has(themeKey(theme));
   }
 
+  /* Whether a theme's art is still on its way: a still frame drawn now would
+     show the blank in its place and never be redrawn. */
+  loading(theme: BackdropTheme): boolean {
+    if (typeof theme !== "string") return false;
+    if (THEME_SPRITES[theme] && !this.sprites.get(theme)) return true;
+    return this.overlays.get(theme)?.ready?.() === false;
+  }
+
   /* Whether the theme can't be drawn at all: it failed to compile, or only shows its still. */
   failed(theme: BackdropTheme): boolean {
     const key = themeKey(theme);
@@ -503,6 +517,21 @@ export class ResolutionGovernor {
   }
 }
 
+/* Built-in themes heavy enough to have their first frames timed too, so a
+   weak GPU starts at a pixel count it can carry instead of stuttering at full
+   size for the seconds the governor takes to come down (the Universe Shifter
+   ray marches its orb). Theirs are drawn at the governor's floor share of the
+   pixels: big enough that the timing is the shader's, not the draw call's, so
+   it scales to full size. */
+const HEAVY_THEMES: ReadonlySet<string> = new Set<SupporterProfileThemeId>(["singularity"]);
+
+function heavyTheme(theme: BackdropTheme): boolean {
+  return typeof theme === "string" && HEAVY_THEMES.has(theme);
+}
+
+/* At the floor and still too slow, a built-in theme draws at most this often, ms. */
+const STARVED_FRAME_MS = 31;
+
 /* A custom theme's first frames are drawn this small and timed. */
 const PROBE_WIDTH = 96;
 const PROBE_HEIGHT = 54;
@@ -556,8 +585,9 @@ export function mountProfileBackdrop(
   let target: [number, number] = [0.5, 0.65];
   let client: [number, number] | null = null;
   let governor = new ResolutionGovernor();
-  /* A custom theme's timed first frames: how many drawn so far, and the slowest. */
-  let probe: { frames: number; worst: number } | null = typeof initial === "string" ? null : { frames: 0, worst: 0 };
+  /* A custom or heavy theme's timed first frames: how many drawn so far, and the slowest. */
+  const probing = (next: BackdropTheme) => (typeof next !== "string" || (heavyTheme(next) && !still) ? { frames: 0, worst: 0 } : null);
+  let probe: { frames: number; worst: number } | null = probing(initial);
   let gaveUp = false;
 
   const giveUp = (custom: CustomTheme) => {
@@ -569,18 +599,26 @@ export function mountProfileBackdrop(
     onFallback?.(custom);
   };
 
-  /* Draws a custom theme's first frames tiny and waits for the GPU each time:
-     too slow even so and it gives up; otherwise the governor starts at the
-     share of the pixel budget its timing says it can carry. */
-  const runProbe = (custom: CustomTheme, time: number): boolean => {
+  /* Draws a custom theme's first frames tiny (a heavy built-in's at the
+     floor's share) and waits for the GPU each time: a custom theme too slow
+     even so gives up; otherwise the governor starts at the share of the pixel
+     budget the timing says it can carry. The page keeps showing the last
+     frame meanwhile: only a full-size draw is copied to it. */
+  const runProbe = (probed: BackdropTheme, time: number): boolean => {
     if (!probe) return true;
-    if (canvas.width !== PROBE_WIDTH || canvas.height !== PROBE_HEIGHT) {
-      canvas.width = PROBE_WIDTH;
-      canvas.height = PROBE_HEIGHT;
+    const custom = typeof probed === "string" ? null : probed;
+    const full = Math.min(maxPixels, host.clientWidth * host.clientHeight * (window.devicePixelRatio || 1) ** 2);
+    const share = custom ? 0 : Math.sqrt((full * MIN_PIXEL_SCALE) / Math.max(1, host.clientWidth * host.clientHeight));
+    const width = custom ? PROBE_WIDTH : Math.max(1, Math.round(host.clientWidth * share));
+    const height = custom ? PROBE_HEIGHT : Math.max(1, Math.round(host.clientHeight * share));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
     }
     const startedAt = performance.now();
-    if (!context.draw(custom, PROBE_WIDTH, PROBE_HEIGHT, time, pointer, 0)) {
-      if (context.failed(custom)) giveUp(custom);
+    if (!context.draw(probed, width, height, time, pointer, 0)) {
+      if (custom && context.failed(custom)) giveUp(custom);
+      if (!custom && context.failed(probed)) probe = null;
       return false;
     }
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
@@ -589,13 +627,14 @@ export function mountProfileBackdrop(
     // the first one also pays for the driver's warm-up
     if (probe.frames > 1) probe.worst = Math.max(probe.worst, took);
     if (probe.frames <= PROBE_FRAMES) return false;
-    if (probe.worst > PROBE_GIVE_UP_MS) {
+    if (custom && probe.worst > PROBE_GIVE_UP_MS) {
       giveUp(custom);
       return false;
     }
-    const full = Math.min(maxPixels, host.clientWidth * host.clientHeight * (window.devicePixelRatio || 1) ** 2);
-    const estimate = probe.worst * (full / (PROBE_WIDTH * PROBE_HEIGHT));
+    const estimate = probe.worst * (full / (width * height));
     if (estimate > PROBE_TARGET_MS) governor.start(PROBE_TARGET_MS / estimate);
+    // a built-in too slow even at the floor draws at half rate from the start
+    if (!custom && probe.worst > SLOW_FRAME_MS) governor.starved = true;
     probe = null;
     return true;
   };
@@ -621,7 +660,7 @@ export function mountProfileBackdrop(
     pointer[0] += (target[0] - pointer[0]) * 0.06;
     pointer[1] += (target[1] - pointer[1]) * 0.06;
     const time = still ? STILL_TIME : (now - start) / 1000;
-    if (typeof theme !== "string" && (gaveUp || !runProbe(theme, time) || !size())) return;
+    if ((typeof theme !== "string" || probe) && (gaveUp || !runProbe(theme, time) || !size())) return;
     const scrolled = scroll ? window.scrollY / Math.max(window.innerHeight, 1) : 0;
     if (typeof theme !== "string" && context.failed(theme)) {
       giveUp(theme);
@@ -640,7 +679,7 @@ export function mountProfileBackdrop(
     stillFrame = 0;
     if (disposed) return;
     render(performance.now());
-    if (context.compiling(theme) || (probe && !gaveUp)) stillFrame = requestAnimationFrame(renderStill);
+    if (context.compiling(theme) || context.loading(theme) || (probe && !gaveUp)) stillFrame = requestAnimationFrame(renderStill);
   };
 
   let drawnScroll = -1;
@@ -659,8 +698,10 @@ export function mountProfileBackdrop(
     // the page scrolls it draws every frame, or whatever the shader ties to
     // the page (the hero's sun, the black hole) trails the content and steps,
     // plainly so on a 240Hz screen.
+    // A built-in theme too slow even at the governor's floor (a weak phone)
+    // draws at ~30fps instead, so the page around it keeps its frames.
     const scrolling = scroll && window.scrollY !== drawnScroll;
-    if (visible && (scrolling || now - last >= 15)) {
+    if (visible && (scrolling || now - last >= (governor.starved ? STARVED_FRAME_MS : 15))) {
       last = now;
       drawnScroll = window.scrollY;
       render(now);
@@ -701,11 +742,17 @@ export function mountProfileBackdrop(
   return {
     setTheme(next) {
       if (themeKey(next) === themeKey(theme)) return;
+      // a heavy theme times itself again, and the next one starts from full
+      // rather than from the heavy one's share
+      if (typeof next === "string" && !gaveUp && (heavyTheme(next) || heavyTheme(theme))) {
+        probe = probing(next);
+        governor = new ResolutionGovernor();
+      }
       theme = next;
       // a custom theme proves itself from the start, out of sight while its
       // tiny first frames draw; built-ins swap programs under the old frame
       if (typeof next !== "string" || gaveUp) {
-        probe = typeof next === "string" ? null : { frames: 0, worst: 0 };
+        probe = probing(next);
         governor = new ResolutionGovernor();
         gaveUp = false;
         shown = false;
@@ -778,7 +825,7 @@ function drawSwatch(swatch: Swatch, time: number): boolean {
   if (!context.context.draw(swatch.theme, width, height, time, [0.5, 0.6], 0)) return !context.context.compiling(swatch.theme);
   swatch.target ??= swatch.canvas.getContext("2d");
   swatch.target?.drawImage(context.canvas, 0, 0);
-  return true;
+  return !context.context.loading(swatch.theme);
 }
 
 function swatchLoop(now: number) {

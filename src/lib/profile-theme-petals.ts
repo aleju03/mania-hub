@@ -194,6 +194,8 @@ function wrap(value: number, span: number): number {
 
 export interface ThemeOverlay {
   draw(width: number, height: number, time: number, pointer: [number, number], scroll: number): void;
+  /* False while the overlay's own images are still loading, so a still frame waits for them. */
+  ready?(): boolean;
 }
 
 export function createSakuraPetals(gl: WebGL2RenderingContext): ThemeOverlay | null {

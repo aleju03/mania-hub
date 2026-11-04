@@ -1115,9 +1115,19 @@ function ThemeDrawer({ current, disabled, avatar, username, onTry, onPick, onThe
      live swatch is a full shader pass plus a copy off the GPU each frame, and
      twenty of them at once is what made this page crawl. */
   const [moving, setMoving] = useState<SupporterProfileThemeId | null>(null);
+  /* A theme goes live only once the pointer rests on it: each one compiles its
+     shader and uploads its art twice (the swatch and the stage), and sweeping
+     across a row started all of that for every tile passed. */
+  const hoverTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+  /* Leaving waits too, so moving from one tile to the next goes straight
+     to the next theme instead of flashing the picked one in between. */
   const tryOn = (value: SupporterProfileThemeId | null) => (on: boolean) => {
-    setMoving(on ? value : null);
-    onTry("theme", on ? value : undefined);
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => {
+      setMoving(on ? value : null);
+      onTry("theme", on ? value : undefined);
+    }, on ? 120 : 160);
   };
   return (
     <div>

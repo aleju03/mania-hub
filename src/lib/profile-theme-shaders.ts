@@ -1802,6 +1802,8 @@ const vec3 SG_B2 = cross(SG_AX, SG_B1);
 const float SG_YAW = .3;
 // The key light: the glare off to the right.
 const vec3 SG_KEY = vec3(.72, .3, .62);
+// The march's step budget.
+const int SG_STEPS = 80;
 
 // Light rushing out past the orb, in direction ca at log-distance lr.
 float sgStreaks(vec2 ca, float lr, float t) {
@@ -1841,13 +1843,18 @@ vec3 sgPool(vec2 d, float t) {
 }
 
 // Where a point sits in the whirlpool: x = along the spiral (its fraction is
-// across a strip), y = angle from the axis.
-vec2 sgSwirl(vec3 p, float t) {
-  vec3 pn = normalize(p);
-  float th = acos(clamp(dot(pn, SG_AX), -1., 1.));
+// across a strip), y = angle from the axis. Given the point's direction and
+// that angle.
+vec2 sgSwirlAt(vec3 pn, float th, float t) {
   float ph = atan(dot(pn, SG_B2), dot(pn, SG_B1));
   // (clamped short of the far pole, where tan blows up and the march would NaN)
   return vec2(ph * 2. / SG_TAU + log(clamp(tan(min(th, 2.9) * .5), 1e-3, 1e3)) * .55 - t * .05, th);
+}
+
+// The same, from the point alone.
+vec2 sgSwirl(vec3 p, float t) {
+  vec3 pn = normalize(p);
+  return sgSwirlAt(pn, acos(clamp(dot(pn, SG_AX), -1., 1.)), t);
 }
 
 // The skin's radius at angle th from the axis: the ball's, falling in toward
@@ -1914,38 +1921,64 @@ float sgInk(vec3 p, float t) {
 
 // The scene in ball radii: x = distance, y = what was hit (0 skin, 1 a
 // strip's cut edge, 2 the core, 3 the drip, 4 the ink).
+// The drip: a neck from the underside thinning to a strand, a drop swelling
+// at its end until it lets go and falls; then the strand springs back up and
+// a new drop beads, ending the cycle where it began. Its shape this frame,
+// worked out once a pixel (sgDripAt) rather than at every step of the march.
+const vec3 SG_DRIP_A = vec3(.06, -.93, .2);
+vec3 sgDripB;
+float sgDripBead, sgDropY;
+
+void sgDripAt(float t) {
+  float ph = fract(t / 6.);
+  float swell = smoothstep(0., .8, ph) * (1. - smoothstep(.85, 1., ph));
+  sgDripBead = ph < .85 ? .04 + .035 * smoothstep(0., .8, ph) : .04 * smoothstep(.85, 1., ph);
+  sgDripB = SG_DRIP_A + vec3(.02, -.26 - .22 * swell, 0.);
+  // the drop that let go, falling clear of the picture before the next
+  // (none while the drop still hangs)
+  float fall = max(ph - .85, 0.) / .15;
+  sgDropY = fall > 0. ? -1.44 - fall * fall * 3.2 : 1e3;
+}
+
+// How far the march may step from the last point sgMap looked at: its
+// distance, but measured truly over the ball's plain outside, where sgMap's
+// own (halved, for the funnel) would crawl. The shading keeps sgMap's.
+float sgStep;
+
 vec2 sgMap(vec3 p, float t) {
   float r = length(p);
-  vec2 sw = sgSwirl(p, t);
-  float th = sw.y;
   // the skin, a shell sinking into the funnel at the front
+  vec3 pn = p / r;
+  float th = acos(clamp(dot(pn, SG_AX), -1., 1.));
   float shell = (abs(r - sgFunnel(th)) - .09) * .5;
   // cut into three strips spiralling down the funnel; the gaps close up over
   // the back so the hollow inside stays dark
   // (the gaps taper out to a sliver: closing them short leaves a blunt end)
-  float w = mix(.6, 1.05, smoothstep(.75, 1.75, th));
-  float q = fract(sw.x);
-  float gd = q > w ? min(q - w, 1. - q) : -min(q, w - q);
-  float cut = gd * r * max(sin(th), .05) / .64 * .6;
-  // the strips' edges rounded like liquid, not cut like blocks; open at the
-  // throat onto the core
-  float strips = -sgSmin(-shell, -cut, .035);
-  strips = max(strips, (.52 - th) * r);
+  // (well clear of the skin the strips are never nearer than it, so the march
+  // steps by the skin alone there and skips the spiral's sums)
+  float strips = shell, cut = -1.;
+  // (outside the ball over its back and sides the skin is a plain sphere)
+  float outside = r > 1.09 && th > 1.25 ? 2. : 1.;
+  float stripsStep = shell * outside;
+  if (shell < .3) {
+    vec2 sw = sgSwirlAt(pn, th, t);
+    float w = mix(.6, 1.05, smoothstep(.75, 1.75, th));
+    float q = fract(sw.x);
+    float gd = q > w ? min(q - w, 1. - q) : -min(q, w - q);
+    cut = gd * r * max(sin(th), .05) / .64 * .6;
+    // the strips' edges rounded like liquid, not cut like blocks; open at the
+    // throat onto the core
+    strips = max(-sgSmin(-shell, -cut, .035), (.52 - th) * r);
+    stripsStep = max(-sgSmin(-stripsStep, -cut, .035), (.52 - th) * r);
+  }
   float core = length(p - SG_CORE) - .23;
-  // the drip: a neck from the underside thinning to a strand, a drop swelling
-  // at its end until it lets go and falls; then the strand springs back up
-  // and a new drop beads, ending the cycle where it began
-  float ph = fract(t / 6.);
-  float swell = smoothstep(0., .8, ph) * (1. - smoothstep(.85, 1., ph));
-  float bead = ph < .85 ? .04 + .035 * smoothstep(0., .8, ph) : .04 * smoothstep(.85, 1., ph);
-  vec3 a = vec3(.06, -.93, .2);
-  vec3 b = a + vec3(.02, -.26 - .22 * swell, 0.);
-  float drip = sgSmin(sgRoundCone(p, a, b, .14, .03), length(p - b - vec3(0., -.03, 0.)) - bead, .05);
-  // the drop that let go, falling clear of the picture before the next
-  float fall = max(ph - .85, 0.) / .15;
-  if (fall > 0.) drip = min(drip, length(p - vec3(.08, -1.44 - fall * fall * 3.2, .2)) - .075);
+  // (the drip from afar: past its reach, the distance to a ball round it)
+  float drip = length(p - vec3(.07, -1.2, .2)) - .5;
+  if (drip < .2) drip = sgSmin(sgRoundCone(p, SG_DRIP_A, sgDripB, .14, .03), length(p - sgDripB - vec3(0., -.03, 0.)) - sgDripBead, .05);
+  drip = min(drip, length(p - vec3(.08, sgDropY, .2)) - .075);
   float ink = sgInk(p, t);
   float body = sgSmin(sgSmin(strips, drip, .06), ink, .12);
+  sgStep = min(sgSmin(sgSmin(stripsStep, drip, .06), ink, .12), core);
   float m = core < body ? 2. : ink < min(strips, drip) ? 4. : drip < strips ? 3. : cut > shell - .02 ? 1. : 0.;
   return vec2(min(body, core), m);
 }
@@ -1988,8 +2021,12 @@ vec4 sgOrb(vec2 d, float t) {
   // a ray that can reach nothing (clear of the ball, outside the ink's
   // sector and away from the drip) skips the march: its halo comes straight
   // from the ball's distance
+  // (the drip and its strand hang within .3 of the middle, down to 1.6 below
+  // it; past that only the falling drop, in its own band)
   float sa = sgAngle(s);
-  if (rs > 1.2 && (sa < 1.5 || sa > 4. || rs > 2.7) && (s.y > -.85 || abs(s.x) > .45)) {
+  sgDripAt(t);
+  bool dripRay = s.y < -.85 && abs(s.x) < .45 && (rs < 1.4 || abs(s.x - .01) < .3 && (s.y > -1.65 || abs(s.y - sgDropY) < .25));
+  if (rs > 1.2 && (sa < 1.5 || sa > 4. || rs > 2.7) && !dripRay) {
     return vec4(vec3(.5, .75, 1.) * exp(-(rs - 1.09) * .5 * 6.) * .55 * smoothstep(1.4, 1., rs), 0.);
   }
   vec3 ro = vec3(s, 3.), rd = vec3(0., 0., -1.);
@@ -1999,13 +2036,19 @@ vec4 sgOrb(vec2 d, float t) {
   ro.xz = yaw * ro.xz;
   rd.xz = yaw * rd.xz;
   vec3 V = -rd;
-  float z = 0., near = 1e3, zNear = 0., edge = PX * 1.5 / SG_R;
+  // March only through the space the scene fills: the ball inside 1.2 of
+  // its middle, the ink in a sheet from .4 in front of the middle to .45
+  // behind it, the drip from .5 in front
+  float pz = ro.z / -rd.z;
+  float z = min(pz - (dripRay ? .5 : .4) / -rd.z, rs < 1.2 ? 3. - sqrt(1.44 - rs * rs) : 1e3);
+  float zEnd = pz + (rs < 1.2 ? 1.15 : .45) / -rd.z;
+  float near = 1e3, zNear = z, edge = PX * 1.5 / SG_R;
   vec2 h = vec2(1e3, 0.), hNear = h;
-  for (int i = 0; i < 80; i++) {
+  for (int i = 0; i < SG_STEPS; i++) {
     h = sgMap(ro + rd * z, t);
     if (h.x < near) { near = h.x; zNear = z; hNear = h; }
-    if (h.x < .0008 || z > 6.) break;
-    z += h.x;
+    if (h.x < .0008 || z > zEnd) break;
+    z += sgStep;
   }
   // a ray that only grazed an edge is shaded where it came closest, not
   // where it gave up: that point lies on the surface's edge
@@ -2409,6 +2452,689 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   // a soft vignette keeps the corners quiet under the page
   return col * (1. - .3 * smoothstep(.55, 1.4, length(p * vec2(.75, 1.))));
 }`),
+  fireflies: shader(`
+// Firefly forest: a blue-hour clearing (our own Blender render) with old
+// mossy trees, ferns and grass, a stump and a log in warm pools of light,
+// low mist and a gap of sky. Fireflies rise from the grass at real depths,
+// hidden behind whatever stands nearer; the pools breathe with their swarms;
+// every 5 s a wave of light ripples across the field, then rests.
+// u_sprite (2048 x 1760): rows 0-1151 the render, 16:9; rows 1184-1759,
+// columns 0-1023 its depth pass at half size (white near, ~3 m; black far,
+// ~80 m and the sky; log scale).
+uniform sampler2D u_sprite;
+
+const float FF_IA = 16. / 9.;
+const vec3 FF_WARM = vec3(1., .86, .5);
+const vec3 FF_GLOW = vec3(.78, 1., .32);
+
+/* The render at f (0..1 across it, y up). */
+vec3 ffScene(vec2 f, float lod) {
+  f = clamp(f, vec2(.001), vec2(.999, .996));
+  return textureLod(u_sprite, vec2(f.x, (1. - f.y) * 1152. / 1760.), lod).rgb;
+}
+
+/* Its depth at f: 1 near, 0 far. */
+float ffDepth(vec2 f, float lod) {
+  f = clamp(f, vec2(.004), vec2(.996));
+  return textureLod(u_sprite, vec2(f.x * .5, (1184. + (1. - f.y) * 576.) / 1760.), lod).r;
+}
+
+/* The wave: 0 at rest, rising as it passes x (0..1 across the field). */
+float ffWave(float x, float t) {
+  float k = (fract((t - 5.3) / 5.) - x * .3) * 5.;
+  return step(0., k) * smoothstep(0., .25, k) * exp(-max(k - .25, 0.) * 1.1);
+}
+
+/* A swarm's breathing: slow, never quite out. */
+float ffSwarm(float ph, float t) {
+  return .5 + .3 * sin(t * .55 + ph) + .2 * sin(t * 1.3 + ph * 2.7);
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float aspect = u_res.x / u_res.y;
+  // cover-fit, a touch zoomed so it can drift; a phone keeps the stump, its
+  // glow and the gap of sky in view
+  float s = max(1., aspect / FF_IA) * 1.035;
+  float halfW = aspect / (2. * s * FF_IA);
+  vec2 sc = vec2(s * FF_IA, s);
+  vec2 ctr = vec2(clamp(.6, halfW + .012, 1. - halfW - .012), .5);
+  ctr += vec2(.005 * sin(t * .045), .003 * sin(t * .037 + 1.));
+  vec2 f0 = p / sc + ctr;
+  // parallax: near things shift more than far ones with the pointer and scroll
+  vec2 ptr = pointerP();
+  vec2 par = ptr * vec2(.005, .004) + vec2(0., min(u_scroll, 1.) * .005);
+  float dp = ffDepth(f0, 2.);
+  vec2 f = f0 + par * (dp - .4);
+
+  vec3 col = ffScene(f, 0.);
+  float dS = ffDepth(f, .5);
+
+  // the warm pools round the stump, the log and the grass on the left breathe
+  // with the swarms in them, and swell as the wave passes
+  float wave = ffWave(f.x, t);
+  vec3 c4 = ffScene(f, 4.);
+  float warm = smoothstep(.02, .14, c4.r - c4.b) * smoothstep(.12, .4, dot(c4, vec3(.3, .6, .1)));
+  vec2 kA = (f - vec2(.655, .4)) * vec2(1., 1.6), kB = (f - vec2(.77, .37)) * vec2(1., 1.6), kC = (f - vec2(.33, .33)) * vec2(1., 1.6);
+  float pulse = ffSwarm(0., t) * exp(-dot(kA, kA) * 60.) + ffSwarm(2.1, t) * exp(-dot(kB, kB) * 60.) + ffSwarm(4.4, t) * exp(-dot(kC, kC) * 60.);
+  col *= 1. + warm * (.32 * (pulse - .5) + .22 * wave);
+
+  // low mist drifting through the clearing, never over the near ferns, lit
+  // warm near the pools
+  float inClr = smoothstep(.12, .3, dS) * smoothstep(.78, .6, dS) * smoothstep(.26, .36, f.y) * smoothstep(.62, .46, f.y);
+  float m = .6 * inoise(vec2(f.x * 6. - t * .03, f.y * 16. + t * .008)) + .4 * inoise(vec2(f.x * 13. + t * .02, f.y * 34.));
+  vec3 c6 = ffScene(f, 6.);
+  vec3 mistCol = vec3(.05, .07, .09) + FF_WARM * max(c6.r - c6.b, 0.) * (1.2 + .8 * pulse);
+  col += mistCol * inClr * smoothstep(.38, .85, m) * .7;
+
+  // fireflies, each at its own depth, hidden where something stands nearer:
+  // swarms over the pools, others across the field, a few tiny far ones in
+  // the trees, and a few drifting right past the eye, out of focus
+  for (int i = 0; i < 52; i++) {
+    float fi = float(i);
+    float h1 = ihash(ivec2(i, 11)), h2 = ihash(ivec2(i, 12)), h3 = ihash(ivec2(i, 13)), h4 = ihash(ivec2(i, 14));
+    vec3 home;
+    if (i < 11) home = vec3(.655 + (h1 - .5) * .13, .4 + .045 * h2, .48 + .08 * h3);
+    else if (i < 17) home = vec3(.77 + (h1 - .5) * .11, .37 + .04 * h2, .53 + .06 * h3);
+    else if (i < 23) home = vec3(.33 + (h1 - .5) * .13, .335 + .045 * h2, .64 + .08 * h3);
+    else if (i < 38) home = vec3(.22 + .74 * h1, .34 + .17 * h2 * h2, .36 + .24 * h3);
+    // a few low among the ferns, close
+    else if (i < 42) home = vec3(.15 + .8 * h1, .14 + .14 * h2, .8 + .08 * h3);
+    else if (i < 48) home = vec3(.2 + .75 * h1, .47 + .13 * h2, .12 + .14 * h3);
+    else home = vec3(.35 + .6 * h1, .3 + .35 * h2, .97);
+    bool bokeh = i >= 48;
+    // rising slowly from the grass, fading in as it leaves and out up high
+    float life = bokeh ? .5 : fract(t / (14. + 10. * h4) + h2 * 3.);
+    float rise = bokeh ? 0. : life * (.05 + .07 * h3) * (1.1 - home.z);
+    float sp = bokeh ? .35 : 1.;
+    vec2 at = home.xy + vec2(.012 * sin(t * (.2 + .1 * h3) * sp + fi * 2.1) + .004 * sin(t * .9 * sp + fi * 5.),
+      rise + .006 * sin(t * (.25 + .1 * h4) * sp + fi * 1.3));
+    vec2 pos = (at - ctr - par * (home.z - .4)) * sc;
+    vec2 d = p - pos;
+    // size from the distance (log scale, 3 m to 80 m)
+    float meters = 3. * exp((1. - home.z) * 3.28);
+    float R = bokeh ? .03 + .015 * h1 : max(.045 / meters * (.75 + .5 * h2), PX * 1.2);
+    if (dot(d, d) > R * R * (bokeh ? 1.6 : 30.)) continue;
+    float dd = length(d);
+    float per = 2.5 + 3. * h4;
+    float k = fract(t / per + h1 * 7.) * per;
+    float own = smoothstep(0., .3, k) * exp(-max(k - .3, 0.) * 1.2);
+    float lb = max(max(own, ffWave(at.x, t)), .12) * smoothstep(0., .12, life) * smoothstep(1., .75, life);
+    if (bokeh) {
+      // a soft out-of-focus glow, its edge split a touch: warm out, green in
+      lb = .55 + .3 * sin(t * .3 + fi * 2.);
+      vec3 e = dd / (R * vec3(1.05, 1., .95));
+      col += mix(FF_GLOW, FF_WARM, .4) * exp(-e * e * 2.4) * lb * .22;
+      continue;
+    }
+    // hidden behind anything nearer than it, softly so leaf edges do not alias
+    float vis = smoothstep(-.06, -.01, home.z - dS);
+    float haze = mix(.45, 1., smoothstep(.1, .6, home.z));
+    col += vis * haze * lb * (vec3(.95, 1., .62) * smoothstep(R * .8, R * .1, dd) * 1.25 + FF_GLOW * exp(-dd / R * .9) * .45);
+  }
+
+  // quiet behind the name and avatar, up on the left
+  vec2 ul = (p - vec2(-aspect * .5 + .2, .36)) * vec2(.75, 1.);
+  col *= 1. - .35 * exp(-dot(ul, ul) * 4.);
+  return col;
+}
+`),
+  crystal: shader(`
+// Crystal cave: a composed wall. One big cluster of amethyst points in the
+// lower right, the brightest, a few medium ones, small ones receding up
+// toward the dark upper left, among rounded, fractured masses of stone and an
+// overhang; every cluster grows out of its own mass, and its light spills
+// violet over the rock around it. Each point is a hexagonal prism with a pyramid tip: flat
+// facets, a frosted smoky base clearing toward the tip, streaks and an
+// earlier tip inside, back edges seen through it. A key light drifts and a
+// few crystals breathe light; every 6.5 s a band of light crosses the wall,
+// catching the facets one after another and leaving glints on the tips.
+const float CC_SEG = 1.04719755; // a sixth of a turn: one prism face
+
+// The scene, back to front by z. A: where the root sits (across the screen,
+// -1..1 each way), size in canvas heights, the way the cluster grows. B: z,
+// the rock mass's width and height over the size, how much light the
+// cluster gives off (0: a bare rock mass). The first is the hero; the
+// last five are bare rock: an overhang, the floor, deep masses.
+const int CC_N = 14;
+const vec4 CC_A[14] = vec4[14](
+  vec4(.74, -.86, .56, 1.78),
+  vec4(.1, -.66, .3, 1.5),
+  vec4(.86, .04, .27, 2.05),
+  vec4(-.56, -.8, .26, 1.36),
+  vec4(.44, .3, .17, 1.82),
+  vec4(-.14, -.16, .15, 1.45),
+  vec4(-.78, -.34, .12, 1.25),
+  vec4(.1, .4, .1, 1.7),
+  vec4(-.4, .1, .085, 1.6),
+  vec4(.62, 1.06, .3, -1.75),
+  vec4(-1.02, -1., .5, 1.3),
+  vec4(.36, -.22, .36, 1.62),
+  vec4(-.72, .62, .42, 1.5),
+  vec4(-.18, .9, .36, -1.6));
+const vec4 CC_B[14] = vec4[14](
+  vec4(10., 1.2, .85, 1.),
+  vec4(8., 1.15, .9, .5),
+  vec4(7., 1.1, 1.1, .45),
+  vec4(7.5, 1.25, 1., .4),
+  vec4(5., 1.3, 1.1, .28),
+  vec4(5.5, 1.4, 1.2, .25),
+  vec4(4.5, 1.5, 1.3, .28),
+  vec4(4., 1.6, 1.4, .26),
+  vec4(3.5, 1.7, 1.4, .24),
+  vec4(6., 1.6, 1., 0.),
+  vec4(9., 1.3, 1.2, 0.),
+  vec4(3., 1.5, 1.1, 0.),
+  vec4(2., 1.5, 1.1, 0.),
+  vec4(2.5, 1.7, 1., 0.));
+
+// where the sweep has reached: 0 at the left edge, 1 at the right, leaning
+float ccSweepAt(vec2 x, float aspect) { return (x.x / aspect + .5) * .85 + (x.y + .5) * .15; }
+
+// how far from the dark upper left a point is: 0 there, 1 out at the rim
+float ccWall(vec2 x, float aspect) {
+  vec2 q = x / vec2(.5 * aspect, .5) - vec2(-.6, .52);
+  return smoothstep(.35, 1.75, length(q * vec2(1., 1.05)));
+}
+
+// smooth stone: three octaves of integer value noise, each turned its own
+// way so no grid shows, fine detail left out
+float ccStone(vec2 x) {
+  return inoise(x) * .55 + inoise(mat2(.8, -.6, .6, .8) * x * 2.1 + 3.1) * .3
+       + inoise(mat2(-.5, -.87, .87, -.5) * x * 4.4 + 7.3) * .15;
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float aspect = u_res.x / u_res.y;
+  vec2 x = p + vec2(0., u_scroll * .18);
+  float wallHere = ccWall(p, aspect);
+  // on a narrow screen everything is smaller, so the scene still fits across
+  float sz = mix(.62, 1., smoothstep(.5, 1.4, aspect));
+  vec2 qs = vec2(.5 * aspect - .02, .5);
+
+  // the key light drifts slowly over the upper right
+  float la = .85 + .5 * sin(t * .06) + .2 * sin(t * .023 + 1.);
+  vec3 L = normalize(vec3(cos(la) * .42, sin(la) * .42, .9));
+  // and a lower key from the same side shapes the facets, one lit, the next dark
+  vec3 K = normalize(vec3(cos(la - .25) * .85, sin(la - .25) * .85, .4));
+
+  // stone relief, shared by every mass and the far wall: a smooth height
+  // and its slope
+  vec2 sq = x * 2.6;
+  float r0 = ccStone(sq);
+  vec2 rg = vec2(ccStone(sq + vec2(.06, 0.)), ccStone(sq + vec2(0., .06))) - r0;
+  vec2 fq = mat2(.6, .8, -.8, .6) * x * 11. + 1.7;
+  float fine = inoise(fq);
+  vec2 fg = vec2(inoise(fq + vec2(.12, 0.)), inoise(fq + vec2(0., .12))) - fine;
+  vec2 rn = rg * 10. + fg * 3.4;
+
+  // the sweep: every 6.5 s a band of light crosses the wall, then rests
+  // phased so the reduced-motion still (t = 6.5) holds the band across the right of the wall
+  float ph = fract((t + 2.2) / 6.5);
+  float sweep = mix(-.3, 1.3, smoothstep(0., .55, ph));
+  float band = exp(-pow((sweep - ccSweepAt(p, aspect)) / .09, 2.));
+
+  // the pointer: crystals near it light up from within, as if a lamp passed by
+  vec2 hp = p - pointerP();
+  float hover = exp(-dot(hp, hp) / .07);
+
+  // walk the scene: the frontmost rock or crystal under x, the light the
+  // clusters throw on what is around them, the glints on their tips
+  float bestZ = -1., hitD = 9., spark = 0., spZ = 0., glow = 0.;
+  bool isRock = false;
+  float mD[14];
+  vec2 gdir = vec2(0.);
+  vec4 F = vec4(0.); // the front crystal's shape: both ends grown, broken, where and how slanted
+  vec4 A = vec4(0.), B = vec4(0.);
+  vec2 C = vec2(0.), back = vec2(9.), mO = vec2(0., 1.);
+  for (int i = 0; i < CC_N; i++) {
+    vec4 a = CC_A[i], b = CC_B[i];
+    vec2 root = a.xy * qs;
+    float size = a.z * sz;
+    vec2 md = vec2(cos(a.w), sin(a.w)), mp = vec2(-md.y, md.x);
+    vec2 dr = x - root;
+    glow += b.w * exp(-length(dr - md * size * .35) / (size * .9));
+
+    // its rock: a rounded, fractured mass under the root, the root buried
+    // a little in it; the stone's own relief bends its outline
+    float rxm = size * b.y, rym = size * b.z;
+    vec2 mq = dr + md * rym * .92;
+    vec2 lq = vec2(dot(mq, mp) / rxm, dot(mq, md) / rym);
+    float fi = float(i);
+    float an = atan(lq.y, lq.x);
+    float bl = length(lq) / (1. + .1 * sin(an * 3. + fi * 1.7) + .05 * sin(an * 5. + fi * 4.1));
+    float d = (bl - 1.) * rym + (r0 - .5) * min(rym, .25) * .4 + (abs(fine - .5) - .25) * min(rym, .25) * .32;
+    mD[i] = d;
+    // the crystals' light falls on the rock from where they stand
+    vec2 toC = root + md * size * .35 - x;
+    float gl = b.w * exp(-length(toC) / (size * .9));
+    gdir += toC / max(length(toC), .001) * gl;
+    if (d < PX && b.x + .5 > bestZ) {
+      bestZ = b.x + .5;
+      isRock = true;
+      hitD = d;
+      mO = (mp * lq.x * rym / rxm + md * lq.y) / max(bl, .001);
+      C = vec2(b.x, smoothstep(.45, 1., bl));
+    }
+
+    if (b.w == 0. || dot(dr, dr) > size * size * 1.15) continue;
+    // a real cluster: a leader, a second about 1.3x shorter, a couple
+    // leaning in across them, the rest fanning out, small ones at the foot;
+    // a few lie loose with both ends grown, a few have broken tips
+    int nk = i == 0 ? 9 : a.z > .2 ? 6 : 4;
+    for (int k = 0; k < 9; k++) {
+      if (k >= nk) break;
+      float hk = ihash(ivec2(i * 16 + k, 19));
+      float h2 = fract(hk * 17.3), h3 = fract(hk * 41.9), h4 = fract(hk * 7.9);
+      float id = fract(hk * 5.3 + fi * .37);
+      float side = h2 > .5 ? 1. : -1.;
+      float fk = float(k);
+      float len, ang, ro;
+      if (k == 0) { len = size; ang = a.w + (h2 - .5) * .12; ro = 0.; }
+      else if (k == 1) { len = size / 1.3; ang = a.w + side * (.22 + .12 * h4); ro = side * .1; }
+      else if (k < 4) { len = size * (.45 + .2 * h4); ang = a.w - side * (.18 + .14 * h4); ro = side * (.2 + .1 * h4); }
+      else { float sm = (fk - 4.) / max(float(nk) - 4., 1.); len = size * mix(.55, .2, sm) * (.8 + .4 * h4); ang = a.w + side * (.45 + .6 * sm + .25 * h3); ro = side * (.14 + .34 * h4); }
+      float dbl = k >= 4 && h3 > .8 ? 1. : 0.;
+      float cut = k >= 4 && dbl == 0. && fract(hk * 23.1) > .6 ? 1. : 0.;
+      if (dbl > 0.) { ang = a.w + side * (1. + .4 * h4); len = size * (.22 + .12 * h4); }
+      vec2 dir = vec2(cos(ang), sin(ang));
+      float w = len * (k == 0 ? .12 : .12 + .08 * h3);
+      // the roots spread along the rock; a loose one rests on it, lower tip showing
+      vec2 dd = dr + dir * len * (dbl > 0. ? -.08 : .06) + mp * ro * size - md * dbl * size * .02;
+      float u = dot(dd, dir), v = dot(dd, vec2(-dir.y, dir.x));
+      float tl = w * (1.2 + .7 * fract(id * 7.7)), ts = len - tl;
+      float wu = w * min(1., (len - u) / tl);
+      if (dbl > 0.) wu = min(wu, w * u / tl);
+      // a broken tip snaps off on a slant
+      float slant = (h3 > .5 ? 1. : -1.) * (.9 + .8 * h4);
+      float uc = cut > 0. ? ts - tl * .1 + v * slant : len;
+      float e = max(abs(v) - wu, max(-u, u - uc));
+      // the small ones at the foot stand nearest, the leaders further back
+      float z = b.x + (fract(hk * 91.7) + dbl * 1.2 + (k >= 4 ? 1.5 : k >= 2 ? .8 : 0.)) * .03;
+      // a glint on the tip, just after the sweep has passed it
+      float ds = sweep - ccSweepAt(x - dd + dir * len * .9, aspect);
+      if (h3 > .45 && cut == 0. && ds > 0. && ds < .3) {
+        float r = length(dd - dir * len * .9) / (PX * (2.2 + 4. * a.z));
+        float sp = smoothstep(0., .02, ds) * exp(-ds * 8.) * smoothstep(.3, .15, ds) * (smoothstep(1., .1, r) + exp(-r * .45) * .35) * b.w;
+        if (sp > spark) { spark = sp; spZ = z; }
+      }
+      if (e < 0. && z <= bestZ && !isRock) back.x = min(back.x, -e);
+      if (e < PX && z > bestZ) {
+        back.x = min(back.x, max(-hitD, 0.));
+        hitD = e;
+        isRock = false;
+        bestZ = z;
+        A = vec4(u, v, w, len);
+        B = vec4(dir, fract(hk * 63.1) * CC_SEG, id);
+        C = vec2(b.x, b.w);
+        F = vec4(dbl, cut, ts - tl * .1, slant);
+      }
+    }
+  }
+  glow = min(glow, 2.);
+  // whatever is under x sits in the shadow of the rock in front of it
+  float shade = 1.;
+  for (int i = 0; i < CC_N; i++) {
+    float ms = CC_A[i].z * sz;
+    if (CC_B[i].x + .5 > bestZ) shade *= mix(.3, 1., smoothstep(0., .02 * ms + 2. * PX, mD[i])) * mix(.6, 1., smoothstep(0., .16 * ms, mD[i]));
+  }
+
+  // a pool of light rests on the hero and wanders a little around it
+  vec2 pc = CC_A[0].xy * qs + vec2(-.12 + .06 * sin(t * .05), .16 + .05 * cos(t * .041));
+  float pool = exp(-length((p - pc) * vec2(.8, 1.)) * 1.8);
+  vec3 violet = vec3(.24, .07, .42);
+
+  // the far wall: faint rock everywhere, even in the dark upper left
+  vec2 gd2 = gdir / max(length(gdir), .001);
+  vec3 wn = normalize(vec3(rn, 1.));
+  float litW = max(dot(wn, normalize(K + vec3(0., .3, .5))), 0.);
+  vec3 col = vec3(.009, .007, .014) * (.55 + .9 * r0) + vec3(.03, .022, .04) * pow(litW, 4.) * r0;
+  col += violet * glow * .07 * (.4 + .6 * r0) * (.5 + .8 * max(dot(wn.xy, gd2), 0.));
+  col += vec3(.05, .016, .085) * exp(-length((p - vec2(.42 * aspect, -.38)) * vec2(.7, 1.)) * 2.2);
+
+  if (bestZ > -.5 && isRock) {
+    // a rock mass: rounded, turning away at its edge, smooth stone relief,
+    // lit mostly by the violet light of the crystals near it and a little
+    // by the key; a few druzy points glitter where that light is strong
+    vec3 bn = normalize(vec3(mO * C.y * 1.5 + rn, 1.));
+    float lit = max(dot(bn, normalize(K + vec3(0., .3, .5))), 0.);
+    float spill = .4 + .6 * max(dot(bn.xy, gd2), 0.);
+    float tone = .35 + 1.1 * r0 + .5 * (fine - .5);
+    vec3 rock = vec3(.014, .01, .02) * tone + vec3(.05, .04, .065) * pow(lit, 3.) * tone;
+    rock += violet * glow * pow(spill, 1.5) * .55 * tone;
+    rock *= mix(1., .45, smoothstep(.7, 1., C.y) * smoothstep(.2, -.6, mO.y));
+    rock += vec3(.62, .48, 1.) * stars(x + 5.1, 110., .12, t * .4) * min(glow, 1.) * spill * .8;
+    rock += vec3(.12, .26, .38) * smoothstep(-3. * PX, -.5 * PX, hitD) * smoothstep(.5, .95, mO.y) * pow(lit, 3.) * smoothstep(.45, .7, r0) * (.2 + 1.2 * band);
+    rock += vec3(.05, .025, .09) * band * tone * .5 * smoothstep(-.3, .5, mO.y);
+    rock *= mix(.55, 1., smoothstep(3., 10., C.x)) * mix(.75, 1.05, pool);
+    col = mix(col, rock, smoothstep(PX, -PX, hitD));
+  }
+
+  if (bestZ > -.5 && !isRock) {
+    float px = PX;
+    float cover = smoothstep(px, -px, hitD);
+    float u = A.x, v = A.y, w = A.z, len = A.w;
+    vec2 dir = B.xy;
+    float phi = B.z, id = B.w;
+    vec2 perp = vec2(-dir.y, dir.x);
+    float tl = w * (1.2 + .7 * fract(id * 7.7)), ts = len - tl;
+    bool tip = u > ts, foot = F.x > 0. && u < tl;
+    float wu = w * min(1., (len - u) / tl);
+    if (foot) wu = min(wu, w * u / tl);
+    float s = clamp(v / wu, -1., 1.);
+    float alpha = acos(s);
+    float fa = (alpha - phi) / CC_SEG;
+    float fi = floor(fa), fr = fa - fi;
+    float th = phi + (fi + .5) * CC_SEG;
+    vec3 nrm = normalize(vec3(perp * cos(th), max(sin(th), .05)));
+    float tb = w / tl;
+    if (tip) nrm = normalize(nrm * (.55 + .25 * tb) + vec3(dir, 0.) * .62);
+    if (foot) nrm = normalize(nrm * (.55 + .25 * tb) - vec3(dir, 0.) * .62);
+    // flat facets: lit as planes, a glint when one turns to the light
+    float lam = max(dot(nrm, K), 0.);
+    // facets are not quite flat mirrors: the reflection bends a little
+    // along each, so a glint slides over it as the light drifts
+    float along = u / len;
+    vec3 R = reflect(vec3(0., 0., -1.), nrm);
+    R = normalize(R + vec3(dir * (along - .6) * .5 + perp * s * .15, 0.));
+    float rr = max(dot(R, L), 0.);
+    float spec = pow(rr, 40.) + pow(rr, 6.) * .25;
+    float bounce = pow(max(dot(R, normalize(vec3(-.5, -.7, .5))), 0.), 5.);
+    float fres = pow(1. - nrm.z, 3.);
+
+    // most are amethyst, redder or bluer, richer or paler; one in twenty is teal ice
+    float teal = step(.95, id);
+    float hue = fract(id * 13.1), sat = .65 + .45 * fract(id * 29.7);
+    vec3 deep = mix(mix(vec3(.05, .01, .1), vec3(.032, .012, .11), hue), vec3(.012, .06, .09), teal);
+    vec3 mid = mix(mix(vec3(.55, .12, .76), vec3(.34, .16, .88), hue), vec3(.2, .66, .85), teal);
+    mid = mix(vec3(dot(mid, vec3(.33))), mid, sat);
+    vec3 pale = mix(vec3(.88, .76, 1.), vec3(.68, .96, 1.), teal);
+    float lum = (.55 + .65 * fract(id * 5.7)) * (1. + .5 * teal);
+
+    // translucency: smoky and dark at the base, clearing toward a bright tip;
+    // light let in by the lit side glows out of the middle, through veils
+    float thick = sqrt(1. - s * s);
+    float clear = smoothstep(.12, .95, along);
+    float lsd = dot(L.xy, perp);
+    // streaks run the length of the crystal, the way it grew
+    float veil = inoise(vec2(along * 3.4 + id * 17., s * 4.6 + along * 1.5 + id * 31.));
+    // the glowing core sways slowly from side to side, so light shifts inside
+    float sway = .3 * sin(t * .33 + id * 40.);
+    float inner = exp(-pow((s + lsd * .7 + sway) * 1.5, 2.)) * thick * (.35 + 1.3 * veil * veil);
+    float tipGlow = smoothstep(.5, 1., along) * (1. - .6 * abs(s));
+    vec3 smoke = vec3(.03, .022, .04);
+    vec3 cc = mix(smoke, deep, clear) * (.6 + .6 * thick) * (.7 + .6 * veil);
+    cc += mid * (inner * (.06 + .4 * clear) + tipGlow * .26) * lum;
+    // veils and a phantom: the outline of an earlier tip, grown over
+    cc += mix(mid, pale, .5) * smoothstep(.62, .85, veil) * thick * clear * .16 * lum;
+    float phl = len * (.1 + .12 * fract(id * 3.3));
+    float pw = w * (len - phl - u) / tl;
+    float phantom = smoothstep(1.4 * px, 0., abs(abs(v) - pw)) * step(ts - phl, u) * step(0., pw) * step(.5, fract(id * 9.1));
+    cc += mix(mid, pale, .5) * phantom * .1 * lum;
+    // facets reflect as flat planes, a glint when one turns to the light
+    cc += mix(mid, pale, .15) * pow(lam, 2.) * .5 * (.7 + .3 * lum) * (.5 + .5 * clear);
+    cc += pale * fres * .06 + pale * spec * 1.1;
+    cc += vec3(.1, .4, .5) * bounce * .12 * lum;
+    // a few breathe slowly, light swelling and ebbing inside them
+    float breathe = step(.65, fract(id * 21.3)) * pow(.5 + .5 * sin(t * .55 + id * 60.), 3.);
+    cc += mix(mid, pale, .2) * breathe * (.3 + .7 * thick) * clear * .36 * lum;
+    cc += mix(mid, pale, .4) * hover * (.45 + 2.2 * inner + 1.2 * tipGlow) * (.4 + .6 * clear) * (.5 + .5 * lum);
+    // the back edges, and any crystal behind, seen through it
+    float ink = 0.;
+    for (int k = 0; k < 6; k++) {
+      float g = phi + float(k) * CC_SEG;
+      if (sin(g) < 0.) ink += smoothstep(1.5 * px, 0., abs(s - cos(g)) * wu);
+    }
+    ink += smoothstep(1.6 * px, 0., abs(back.x - 1.5 * px)) * .8;
+    cc += mix(mid, pale, .3) * ink * .1 * (.3 + .7 * clear);
+    // facet edges catch the light; the seam where the tip begins
+    float ea = min(fr, 1. - fr) * CC_SEG * wu * max(thick, .12);
+    float edge = smoothstep(1.3 * px, 0., ea);
+    float uc = F.y > 0. ? F.z + v * F.w : len;
+    edge = max(edge, smoothstep(1.3 * px, 0., abs(u - ts)) * step(abs(s), .995) * step(u, uc));
+    if (F.x > 0.) edge = max(edge, smoothstep(1.3 * px, 0., abs(u - tl)) * step(abs(s), .995));
+    // a broken tip: a rough pale fracture across the end
+    float brk = smoothstep(2.5 * px, 0., uc - u) * F.y;
+    edge = max(edge, brk);
+    float sil = smoothstep(1.3 * px, 0., (wu - abs(v)) * .8);
+    // a glinting edge splits a little, rose to ice along its length
+    vec3 prism = mix(vec3(1., .62, .9), vec3(.62, .88, 1.), smoothstep(.2, .8, fract(along * 1.3 + id * 3.)));
+    cc += pale * prism * edge * (.015 + .8 * pow(lam, 4.) + 1.4 * spec) * .55 + mid * sil * .04;
+
+    // the sweep catches each facet in turn, and its light passes through
+    // the crystal as a soft glow
+    vec2 root = p - dir * u - perp * v;
+    vec2 fc = root + dir * (tip ? ts + tl * .3 : ts * .55) + perp * cos(th) * w * .7;
+    float sf = ccSweepAt(fc, aspect);
+    float face = max(dot(nrm, normalize(vec3(-.3, .3, .9))), 0.);
+    float catchL = exp(-pow((sweep - sf) / .06, 2.));
+    float through = exp(-pow((sweep - ccSweepAt(root + dir * len * .6, aspect)) / .1, 2.));
+    cc *= mix(.42, 1.05, pool);
+    cc += mid * through * (.15 + .4 * thick) * clear * lum + mix(mid, pale, .7) * catchL * face * face * 1.05;
+
+    // the root is frosted, rough and milky, clearing as it grows
+    float frost = inoise(vec2(u, v) / w * 7. + id * 50.);
+    float fAmt = smoothstep(min(.5 * len, 4. * w), .2 * w, u);
+    cc = mix(cc, vec3(.085, .07, .115) * (.55 + .9 * frost) * (.45 + .7 * lam) * mix(.42, 1.05, pool), fAmt * .6);
+    // it rises out of the rock's shadow; far clusters are dimmer, the hero brightest
+    cc *= .3 + .7 * smoothstep(0., min(.2 * len, 1.6 * w), u);
+    // each cluster glows from within by how much light it gives: the hero most
+    cc += mid * (inner * .8 + tipGlow * .45) * clear * C.y * C.y * lum;
+    cc *= mix(.75, 1., smoothstep(3., 10., C.x)) * (.85 + .2 * C.y);
+    col = mix(col, cc, cover);
+  }
+
+  col *= shade;
+  // a glint shows only if nothing stands in front of its tip
+  col += vec3(.92, .84, 1.) * min(spark, 1.4) * .8 * step(bestZ, spZ + .001);
+  // a faint violet haze in the air around the clusters
+  col += violet * glow * .035;
+  col += violet * hover * min(glow, 1.) * .14;
+
+  // the edges fall into shadow, the upper left stays darkest
+  vec2 e = (uv - .5) * 2.;
+  col *= 1. - .5 * pow(clamp(length(e) * .72, 0., 1.), 2.5);
+  col *= .4 + .6 * wallHere;
+  return col;
+}
+`),
+  maple: shader(`
+// Autumn maple: a forest path in peak autumn, sunbeams slanting in from the
+// upper right through warm haze. The forest is a scene built and rendered in
+// Blender (u_sprite, maple-built.webp: the 2048 x 1152 render on top, its
+// depth at half size below); the beams shimmer here, and the falling leaves
+// are real geometry, drawn over this by profile-theme-maple.ts.
+uniform sampler2D u_sprite;
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float aspect = u_res.x / u_res.y;
+  float sc = min(u_scroll, 3.);
+  float narrow = mix(.72, 1., smoothstep(.5, 1.3, aspect));
+
+  // the photo, cover-fitted a touch larger than the screen (a phone shows
+  // its middle, where the path glows); it drifts a little, and leans with
+  // the page and the pointer
+  float ph = max(1., aspect / 1.7778);
+  float hw = .5 * aspect / (1.7778 * ph) / 1.05;
+  float cx = clamp(.5, hw + .006, 1. - hw - .006);
+  vec2 drift = vec2(sin(t * .05) * .004, cos(t * .037) * .003) + vec2(0., sc * .005) + pointerP() * .006;
+  vec2 f = clamp(vec2(p.x / (1.7778 * ph), p.y / ph) / 1.05 + vec2(cx, .5) + drift, .001, .999);
+  // the render fills the top 1152 of the texture's 1760 rows
+  vec3 col = texture(u_sprite, vec2(f.x, (1. - f.y) * (1152. / 1760.))).rgb;
+  // graded gently golden
+  col = mix(vec3(dot(col, vec3(.3, .55, .15))), col, 1.06) * vec3(1.04, 1., .93);
+
+  // the sun above the frame, top right, its beams shimmering down through the haze
+  vec2 sun = (vec2(.64, 1.12) - vec2(cx, .5) - drift) * 1.05 * vec2(1.7778 * ph, ph);
+  vec2 sd = p - sun;
+  float r = length(sd);
+  float ray = inoise(sd / max(r, 1e-3) * 5. + vec2(t * .02, -t * .014));
+  float rays = smoothstep(.42, .9, ray) * exp(-r * .9) * smoothstep(.3, -.5, sd.y / max(r, 1e-3));
+  col += vec3(1., .8, .48) * rays * .12 * (.8 + .2 * sin(t * .31 - .45)) * (1. - col * .5);
+  col += vec3(.9, .68, .4) * (inoise(p * 1.3 + vec2(t * .016, t * .005)) - .45) * .05 * exp(-r * 1.2);
+
+  // shade behind the name and avatar, top left; a phone has the name across
+  // most of its top, so it is shaded there too
+  float ulz = smoothstep(.12, -.32, p.x / aspect) * smoothstep(-.22, .3, p.y);
+  col *= (1. - .55 * ulz) * .86;
+  col *= 1. - (1. - narrow * narrow) * .6 * smoothstep(.0, .42, p.y);
+  return col;
+}
+`),
+  chrome: shader(`
+// Liquid chrome: a sheet of mirror-black metal rolling in slow, heavy swells.
+// Long studio softboxes trace crisp lines along the crests, a thin film turns
+// oil-slick where the surface tips away, and every 5 s a drop lands off-centre
+// and one soft ring swells out, bending the reflections, before the sheet rests.
+// The lights hang over the lower right, so the upper left stays dark; the
+// lights lean after the pointer, and the sheet drifts as the page scrolls.
+// No noise lookups: the surface and its slope are a handful of analytic waves.
+
+// The swells: a few long waves with sharpened crests (exp of a sine), summed
+// with their slope worked out alongside, so no extra surface evaluations.
+vec3 lcSwell(vec2 q, vec2 k, float w, float ph, float a, float t) {
+  float th = dot(q, k) + w * t + ph;
+  float s = exp(sin(th) - 1.);
+  return vec3(s, s * cos(th) * k) * a;
+}
+
+// The swells run as long folds across the sheet, their ridges along LC_R.
+const vec2 LC_K = vec2(-.42, .91);
+const vec2 LC_R = vec2(.91, .42);
+
+// Height in x, slope in yz.
+vec3 lcSurface(vec2 p, float t) {
+  // a slow, smooth bend of the whole sheet, so the folds curve and never run straight
+  vec2 q = p;
+  q += .14 * LC_K * sin(dot(p, LC_R) * 2.6 + t * .1 + 1.3) + .05 * LC_R * sin(dot(p, LC_K) * 3.4 - t * .08);
+  q += .018 * vec2(sin(q.y * 5.3 - t * .15), sin(q.x * 4.7 + t * .12 + 2.));
+  vec3 h = lcSwell(q, rot(.07) * LC_K * 5.1, .3, 0., .18, t);
+  h += lcSwell(q, rot(-.06) * LC_K * 7.3, -.24, 1.7, .1, t);
+  h += lcSwell(q, rot(.12) * LC_K * 10.9, .37, 4.1, .017, t);
+  h += lcSwell(q, rot(-.14) * LC_K * 16.8, -.45, 2.6, .004, t);
+  return h;
+}
+
+// The drop: every 5 s one soft ring swells out from a point off-centre, gone before the next.
+vec2 lcRipple(vec2 p, float t) {
+  // timed so the still frame (t = 6.5) catches a late ring, wide and faint
+  float k = floor((t + 1.7) / 5.);
+  float tau = t + 1.7 - k * 5.;
+  float aspect = u_res.x / u_res.y;
+  vec2 c = vec2(mix(.1, .5, ihash(ivec2(int(k), 3))) * aspect, mix(-.38, -.05, ihash(ivec2(int(k), 21))));
+  vec2 o = p - c;
+  float r = length(o) + 1e-4;
+  float R = .05 + .17 * tau;
+  float d = r - R;
+  // one broad, low swell running outward as a ring, with a gentler trough
+  // behind it, quickly damped: so wide and soft that its curvature stays well
+  // under the folds', and a line it crosses bends smoothly, never kinks
+  float w = .18 + .04 * tau;
+  float amp = .032 * smoothstep(0., 1.2, tau) * exp(-tau * .5) * smoothstep(4.9, 3.2, tau) / sqrt(1. + r * 2.);
+  float x = d / w, y = x + 1.6;
+  float dh = amp / w * (-2. * x * exp(-x * x) + .7 * y * exp(-y * y));
+  // (and none at the very centre, where the ring's direction is undefined)
+  return dh * smoothstep(0., .15, r) * o / r;
+}
+
+// A strip of light across x, centred on c with half-width hw, box-filtered
+// over the pixel's footprint fw: crisp when it is wide, and a fine line
+// thinner than a pixel dims rather than breaking into steps.
+float lcStrip(float x, float c, float hw, float fw) {
+  return clamp((x - c + hw) / fw + .5, 0., 1.) - clamp((x - c - hw) / fw + .5, 0., 1.);
+}
+
+// The studio, seen in direction r from a point at p. x: the key softbox,
+// y: the room and a big dim panel, z: the two side strips and the far wall,
+// met at steeper angles, where the film shows, w: the glow round the lights.
+vec4 lcStudio(vec3 r, vec2 p, float hero) {
+  // where the ray meets the ceiling, the lights hung nearer over the lower
+  // right and leaning a little after the pointer
+  vec2 s = r.xy / max(r.z, .15) - p * .3 - vec2(0., .45) - pointerP() * .12;
+  // across and along the folds
+  vec2 sk = vec2(dot(s, LC_K), dot(s, LC_R));
+  // the pixel's footprint, widened: fwidth is shared by each 2x2 block of
+  // pixels, and a bare footprint leaves steps along the steepest edges
+  vec2 fw = fwidth(sk) * 1.75 + 1e-4;
+  // every light is laid along the folds and fades toward its ends
+  float len = smoothstep(1.8, .3, abs(sk.y - .2));
+  // the room: black straight overhead, so the flat crests and troughs stay mirror-dark
+  // the big soft light the folds' bodies catch: nothing facing straight up,
+  // rising across each flank toward the key, so every fold shows its curve
+  float body = smoothstep(-.32, .34, sk.x);
+  float room = .002 + .15 * body * body * smoothstep(1.05, .6, sk.x) * smoothstep(3., .2, abs(sk.y - .3));
+  // and on the far side a dimmer sheen rising toward the far strip, so its line sits on a body too
+  float far = smoothstep(-.22, -.79, sk.x);
+  room += .15 * far * far * smoothstep(-1.05, -.8, sk.x) * smoothstep(2.2, .4, abs(sk.y - .3));
+  // the key: a wide softbox, hot along its far edge and falling away across
+  // it, so each crest carries a broad sheet of light with one crisp bright
+  // edge; a thin strip beyond it and one on the other side put a fine line
+  // down the steeper flanks
+  // over the hero fold the key hangs lowest, so that fold catches its hot edge squarely
+  float kx = sk.x + .24 * hero;
+  float ka = clamp((kx - .32) / .5, 0., 1.);
+  float key = lcStrip(kx, .57, .25, fw.x + .008);
+  // the softbox's frame bars show as two crisp dark bands across the sheet
+  float bars = 1. - .85 * lcStrip(kx, .575, .012, fw.x + .004) - .6 * lcStrip(kx, .47, .008, fw.x + .004);
+  // (its near edge has a faint frame, so even a broad, magnified sheet of it keeps a clean outline)
+  float a = key * (.1 + .38 * ka * sqrt(ka)) * bars * (.75 + .5 * hero) + .5 * lcStrip(kx, .785, .035, fw.x + .012) + .07 * lcStrip(kx, .335, .01, fw.x + .004);
+  // the hot spot: where the hero fold meets the key's hot edge most squarely, a
+  // near-white glint and a small soft bloom round it
+  float hx = (kx - .79) / .05;
+  a += hero * hero * (2.2 * exp(-hx * hx) + .14 * exp(-abs(hx) * .5));
+  float b = lcStrip(sk.x, -.8, .028, fw.x + .005);
+  float c = lcStrip(sk.x, 1.22, .018, fw.x + .004);
+  // the glow just past each light and the key's dim side, where the film's colour shows
+  float halo = key * (.08 + .1 * hero) * (1. - ka) + .08 * exp(-abs(kx - .82) * 7.) + .07 * exp(-abs(sk.x - 1.22) * 11.) + .05 * exp(-abs(sk.x + .8) * 11.);
+  // and a short one across them, for the odd cross glint
+  float d = lcStrip(sk.y, 1.05, .03, fw.y + .005) * smoothstep(.6, .4, abs(sk.x - .1));
+  float wall = smoothstep(1.2, 2.2, abs(sk.x)) * smoothstep(4.5, 2.6, abs(sk.x)) * .05;
+  // the two side strips and the soft glow round them, met on the steep flanks, where the film shows
+  float steep = b * 2.6 + c * 2.4 + (.1 + .08 * hero) * exp(-abs(sk.x - 1.22) * (5. - 2. * hero)) + .06 * exp(-abs(sk.x + .8) * 6.);
+  return vec4((a * 6.5 + d * 2.5) * len, room, steep * len + wall, halo * len);
+}
+
+// The film's colour at thickness x: violet, teal and gold in turn.
+vec3 lcFilm(float x) {
+  vec3 w = .5 + .5 * cos(6.2832 * (x - vec3(0., .3333, .6667)));
+  w *= w;
+  return (vec3(.42, .26, .95) * w.x + vec3(.12, .78, .74) * w.y + vec3(1., .74, .3) * w.z) / (w.x + w.y + w.z);
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  // a portrait screen sees the sheet from further back, so it still gets two or three folds
+  float zoom = mix(1.55, 1., smoothstep(.6, 1.5, u_res.x / u_res.y));
+  vec2 P = p * zoom + vec2(0., u_scroll * .12);
+  vec3 h = lcSurface(P, t);
+  vec2 g = h.yz + lcRipple(P, t);
+  vec3 n = normalize(vec3(-g, 1.));
+  vec3 v = normalize(vec3(0., .22, -1.));
+  vec3 r = reflect(v, n);
+  float cosv = clamp(-dot(v, n), 0., 1.);
+  float graze = 1. - cosv;
+  // chrome: a high, slightly cool reflectance that climbs toward grazing
+  float F = .62 + .38 * pow(graze, 5.);
+  // the hero fold: the lights sit nearest over the lower right
+  float hero = exp(-dot((uv - vec2(.78, .3)) * vec2(1.3, 1.), (uv - vec2(.78, .3)) * vec2(1.3, 1.)) * 4.5);
+  vec4 env = lcStudio(r, P, hero);
+  // a thin film over the metal, its thickness drifting with the swells; its
+  // colour tints the glow round the lights, and the rest only where it tips away
+  vec3 irid = lcFilm(h.x * 4.5 + length(g) * 1.2 + dot(P, LC_R) * .45 + t * .015);
+  float sheen = smoothstep(.2, .65, length(g));
+  vec3 col = vec3(.95, .97, 1.) * env.x * F;
+  col += env.w * F * mix(vec3(.9), irid * 2., .45 + .55 * sheen);
+  col += env.y * F * mix(vec3(1.), irid * 1.7, sheen * .7);
+  col += env.z * F * mix(vec3(.95, .97, 1.), irid * 1.7, .14 + .46 * sheen);
+  // the troughs sit in their own shadow, so the folds read as folds
+  col *= mix(.4, 1., smoothstep(.045, .14, h.x));
+  // the light falls away from the upper left, where the name sits
+  float pool = smoothstep(.06, .95, dot(uv - vec2(.05, .95), normalize(vec2(1., -.8))));
+  // a soft shoulder, so the hot lines roll off rather than clip
+  col = 1. - exp(-col * 1.05);
+  col *= .05 + .95 * pool;
+  col *= 1. - .35 * dot(uv - .5, uv - .5);
+  return col;
+}
+`),
 };
 
 /* The custom theme editor's yardstick for cost (custom-theme-editor-gl.ts):
