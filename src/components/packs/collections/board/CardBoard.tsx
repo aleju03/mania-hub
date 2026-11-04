@@ -19,6 +19,9 @@ import { BoardFaces } from "./boardFaces";
 import { BoardMinimap, type BoardMinimapHandle } from "./BoardMinimap";
 import { BoardEngine, TINTS, cardPaint, makeCard, regionOf, tierPaint, type BoardCard, type BoardCardFace, type BoardOp, type BoardTool } from "./boardEngine";
 
+/* How many cards a supporter may lay down (backend features/pack-boards.ts, PACK_BOARD_SUPPORTER_CARD_CAP). */
+const SUPPORTER_CARD_CAP = 6000;
+
 /* The shared card board: one endless table every collector lays their cards
    on, moved, turned, resized, or dealt along a brush stroke to draw with.
 
@@ -243,10 +246,14 @@ export function CardBoard({ at }: { at?: string }) {
     sendTimer.current = window.setTimeout(() => void send(), outbox.current.length >= 400 ? 0 : SEND_DELAY_MS);
   }, [publishUsage, redrawMap, send, track]);
 
+  // below the supporter cap, the notice says supporters can lay down more
+  const fullNotice = useCallback((ownCap: number) => ownCap < SUPPORTER_CARD_CAP
+    ? t`You have laid down as many cards as you can. Supporters get 3x the cards on the board.`
+    : t`You have laid down as many cards as you can.`, [t]);
   const takeCard = useCallback((): BoardCardFace | null => {
     const state = mine.current;
     if (state.keys.size >= state.cap) {
-      setNotice(t`You have laid down as many cards as you can.`);
+      setNotice(fullNotice(state.cap));
       return null;
     }
     for (const [key, tier, copies, name] of state.inventory) {
@@ -260,7 +267,7 @@ export function CardBoard({ at }: { at?: string }) {
     }
     setNotice(state.tier ? t`No ${tierLabel(state.tier)} cards left to lay down.` : t`No cards left to lay down.`);
     return null;
-  }, [t]);
+  }, [t, fullNotice]);
 
   /* takeCard's provisional counts are replaced by onOps' real ones. */
   const onOpsFromEngine = useCallback((ops: BoardOp[]) => {
@@ -532,7 +539,7 @@ export function CardBoard({ at }: { at?: string }) {
       return;
     }
     if (count >= cap) {
-      setNotice(t`You have laid down as many cards as you can.`);
+      setNotice(fullNotice(cap));
       return;
     }
     engine.addCard({ key: row[0], tier: row[1], name: row[3] }, x, y);

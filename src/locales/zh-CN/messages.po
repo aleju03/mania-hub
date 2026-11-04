@@ -3224,8 +3224,8 @@ msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速�
 #~ msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从琥珀一路升到镭射。"
 
 #: src/routes/support.tsx
-msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it catches fire."
-msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从琥珀一路升到镭射。按月订阅的话，徽章会燃起火焰。"
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Monthly subscribers get their rank on fire."
+msgstr "名字旁的徽章：每连续当一个月支持者就升一个段位，从琥珀一路升到镭射。按月订阅的支持者，段位会燃起火焰。"
 
 #: src/routes/support.tsx
 #~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it wears a renew mark."
@@ -12836,8 +12836,12 @@ msgid "Keep one"
 msgstr "选一张保留"
 
 #: src/routes/support.tsx
-msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
-msgstr "把你拥有的卡片放进 3D 卡套，用卡册页面展示你的收藏，开启印着你专属包装的卡包，配上你自己的刀光、火花和声音。"
+#~ msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
+#~ msgstr "把你拥有的卡片放进 3D 卡套，用卡册页面展示你的收藏，开启印着你专属包装的卡包，配上你自己的刀光、火花和声音。"
+
+#: src/routes/support.tsx
+msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill the board with 3x the cards."
+msgstr "把你拥有的卡片放进 3D 卡套，用卡册页面展示你的收藏，开启印着你专属包装的卡包，配上你自己的刀光、火花和声音。还能在卡板上放下 3 倍的卡牌。"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
@@ -29320,6 +29324,10 @@ msgstr "你在这片区域的卡牌已达单人上限，换个地方试试。"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "You have laid down as many cards as you can."
 msgstr "你已放下可放置的全部卡牌。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "You have laid down as many cards as you can. Supporters get 3x the cards on the board."
+msgstr "你已放下可放置的全部卡牌。Supporter 可在卡板上放下 3 倍的卡牌。"
 
 #: src/routes/skins.tsx
 msgid "You have not liked a skin yet"

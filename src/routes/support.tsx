@@ -273,7 +273,7 @@ function SupportPage() {
               id="packs"
               title={t`Packs`}
               count={t`Cases, binders and wrappers`}
-              body={t`Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound.`}
+              body={t`Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill the board with 3x the cards.`}
             >
               <PacksShowcase />
             </Perk>
@@ -309,7 +309,7 @@ function SupportPage() {
               id="ranks"
               title={t`Supporter ranks`}
               count={<Trans><CountUp value={SUPPORTER_RANKS.length} /> ranks</Trans>}
-              body={t`A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it catches fire.`}
+              body={t`A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Monthly subscribers get their rank on fire.`}
             >
               <SupporterRankShowcase />
             </Perk>

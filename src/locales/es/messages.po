@@ -3212,8 +3212,8 @@ msgstr "Un chart de 4K es LN cuando los holds son al menos el 45% de sus notas y
 #~ msgstr "Una insignia junto a tu nombre que sube un rango por cada mes seguido que eres supporter, desde Ámbar hasta Holo."
 
 #: src/routes/support.tsx
-msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it catches fire."
-msgstr "Una insignia junto a tu nombre que sube un rango por cada mes seguido que eres supporter, desde Ámbar hasta Holo. Con una suscripción mensual, se prende en llamas."
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Monthly subscribers get their rank on fire."
+msgstr "Una insignia junto a tu nombre que sube un rango por cada mes seguido que eres supporter, desde Ámbar hasta Holo. Los suscriptores mensuales tienen su rango en llamas."
 
 #: src/routes/support.tsx
 #~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it wears a renew mark."
@@ -12824,8 +12824,12 @@ msgid "Keep one"
 msgstr "Quédate con una"
 
 #: src/routes/support.tsx
-msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
-msgstr "Guarda tus cartas en una funda 3D, muestra tu colección como páginas de carpeta y abre packs impresos en tu propio envoltorio, con tu propia hoja, chispas y sonido."
+#~ msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
+#~ msgstr "Guarda tus cartas en una funda 3D, muestra tu colección como páginas de carpeta y abre packs impresos en tu propio envoltorio, con tu propia hoja, chispas y sonido."
+
+#: src/routes/support.tsx
+msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill the board with 3x the cards."
+msgstr "Guarda tus cartas en una funda 3D, muestra tu colección como páginas de carpeta y abre packs impresos en tu propio envoltorio, con tu propia hoja, chispas y sonido. Y llena el tablero con 3x las cartas."
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
@@ -29308,6 +29312,10 @@ msgstr "Ya tienes tantas cartas en esta parte del tablero como puede tener un ju
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "You have laid down as many cards as you can."
 msgstr "Ya pusiste todas las cartas que puedes."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "You have laid down as many cards as you can. Supporters get 3x the cards on the board."
+msgstr "Ya pusiste todas las cartas que puedes. Los supporters tienen 3x las cartas en el tablero."
 
 #: src/routes/skins.tsx
 msgid "You have not liked a skin yet"

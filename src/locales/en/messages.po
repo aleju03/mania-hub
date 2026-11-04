@@ -3235,8 +3235,8 @@ msgstr "A 4K chart is LN when holds make up at least 45% of its notes and those 
 #~ msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo."
 
 #: src/routes/support.tsx
-msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it catches fire."
-msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it catches fire."
+msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Monthly subscribers get their rank on fire."
+msgstr "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Monthly subscribers get their rank on fire."
 
 #: src/routes/support.tsx
 #~ msgid "A badge beside your name that moves up a rank for every month in a row you're a supporter, from Amber all the way to Holo. Subscribe monthly and it wears a renew mark."
@@ -12863,8 +12863,12 @@ msgid "Keep one"
 msgstr "Keep one"
 
 #: src/routes/support.tsx
-msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
-msgstr "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
+#~ msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
+#~ msgstr "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
+
+#: src/routes/support.tsx
+msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill the board with 3x the cards."
+msgstr "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill the board with 3x the cards."
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
@@ -29363,6 +29367,10 @@ msgstr "You have as many cards in this part of the board as one player can. Try 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "You have laid down as many cards as you can."
 msgstr "You have laid down as many cards as you can."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "You have laid down as many cards as you can. Supporters get 3x the cards on the board."
+msgstr "You have laid down as many cards as you can. Supporters get 3x the cards on the board."
 
 #: src/routes/skins.tsx
 msgid "You have not liked a skin yet"
