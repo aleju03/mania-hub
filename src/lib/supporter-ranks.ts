@@ -8,8 +8,10 @@
 
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/* A month of supporter time, the same 30 days $3 buys. */
+/* A month of supporter time, the same 30 days $5 buys. */
 export const SUPPORTER_RANK_MONTH_MS = 30 * DAY_MS;
+/* $5 buys 30 days, prorated (backend features/supporters.ts, SUPPORTER_DAYS_PER_CENT). */
+export const SUPPORTER_DAYS_PER_DOLLAR = 6;
 
 export interface SupporterRankDef {
   id: string;

@@ -1482,6 +1482,7 @@ msgstr "{courseAccuracy} on {courseName}, under its {courseBar}."
 msgid "{date}: {rating} points"
 msgstr "{date}: {rating} points"
 
+#: src/components/supporter/SupportDaysPreview.tsx
 #: src/routes/snipes.tsx
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, one {# day} other {# days}}"
@@ -1774,8 +1775,8 @@ msgid "{name} added to queue, come back later :)"
 msgstr "{name} added to queue, come back later :)"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "{name} claimed your gift week. Every $3 you give brings a new code."
-msgstr "{name} claimed your gift week. Every $3 you give brings a new code."
+msgid "{name} claimed your gift week. Every $5 you give brings a new code."
+msgstr "{name} claimed your gift week. Every $5 you give brings a new code."
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -2779,12 +2780,12 @@ msgid "▶ Watch"
 msgstr "▶ Watch"
 
 #: src/routes/support.tsx
-msgid "$3 buys a month of supporter, and every tip adds more time."
-msgstr "$3 buys a month of supporter, and every tip adds more time."
+msgid "$5 buys a month of supporter, and every tip adds more time."
+msgstr "$5 buys a month of supporter, and every tip adds more time."
 
 #: src/routes/support.tsx
-msgid "$3 is a month"
-msgstr "$3 is a month"
+msgid "$5 is a month"
+msgstr "$5 is a month"
 
 #: src/lib/format.ts
 msgid "0h"
@@ -2949,10 +2950,6 @@ msgstr "38% 7K"
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "3D card preview is unavailable on this device."
 msgstr "3D card preview is unavailable on this device."
-
-#: src/routes/support.tsx
-msgid "4 more stats"
-msgstr "4 more stats"
 
 #: src/lib/chain-run.ts
 msgid "4-trait links double your combo."
@@ -4355,6 +4352,10 @@ msgstr "amber"
 msgid "Amount"
 msgstr "Amount"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "Amount in dollars"
+msgstr "Amount in dollars"
+
 #: src/lib/chain-run.ts
 msgid "An Eternal never leaves."
 msgstr "An Eternal never leaves."
@@ -4476,6 +4477,10 @@ msgstr "any"
 #: src/routes/tracker.tsx
 msgid "Any"
 msgstr "Any"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "Any amount counts, to the day, and adds to the time you have left."
+msgstr "Any amount counts, to the day, and adds to the time you have left."
 
 #: src/routes/support.tsx
 msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
@@ -9419,6 +9424,10 @@ msgstr "English"
 msgid "Enjoy your supporter week, {0}."
 msgstr "Enjoy your supporter week, {0}."
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "Enter an amount"
+msgstr "Enter an amount"
+
 #: src/components/replay/ReplayControls.tsx
 #: src/routes/replay.tsx
 msgid "Enter fullscreen"
@@ -9520,8 +9529,8 @@ msgstr "Every +combo is halved."
 #~ msgstr "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter."
 
 #: src/routes/support.tsx
-msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
-msgstr "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+msgid "Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+msgstr "Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "every card"
@@ -14994,6 +15003,10 @@ msgstr "More servers from {0}"
 msgid "More statistics available after watching a replay!"
 msgstr "More statistics available after watching a replay!"
 
+#: src/routes/support.tsx
+msgid "More stats"
+msgstr "More stats"
+
 #: src/lib/streak-game.ts
 msgid "More watched"
 msgstr "More watched"
@@ -16974,6 +16987,10 @@ msgstr "of players near you"
 msgid "of players near you farm this"
 msgstr "of players near you farm this"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "of supporter"
+msgstr "of supporter"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "off"
 msgstr "off"
@@ -17136,8 +17153,8 @@ msgid "Once you connect Companella to your account, it sends every mania play yo
 msgstr "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
 
 #: src/routes/support.tsx
-msgid "One code per $3"
-msgstr "One code per $3"
+msgid "One code per $5"
+msgstr "One code per $5"
 
 #. placeholder {0}: shown.toLocaleString("en-US")
 #: src/components/packs/GiftSpareDialog.tsx
@@ -29693,8 +29710,8 @@ msgid "Your frames"
 msgstr "Your frames"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "Your gift week was claimed. Every $3 you give brings a new code."
-msgstr "Your gift week was claimed. Every $3 you give brings a new code."
+msgid "Your gift week was claimed. Every $5 you give brings a new code."
+msgstr "Your gift week was claimed. Every $5 you give brings a new code."
 
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx

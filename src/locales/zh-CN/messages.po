@@ -1471,6 +1471,7 @@ msgstr "{courseName} 上 {courseAccuracy}，低于其 {courseBar}。"
 msgid "{date}: {rating} points"
 msgstr "{date}：{rating} 点"
 
+#: src/components/supporter/SupportDaysPreview.tsx
 #: src/routes/snipes.tsx
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, other {# 天}}"
@@ -1763,8 +1764,8 @@ msgid "{name} added to queue, come back later :)"
 msgstr "{name} 已加入队列，稍后再来看看吧 :)"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "{name} claimed your gift week. Every $3 you give brings a new code."
-msgstr "{name} 领取了你赠送的一周。你每支持 $3 就会获得一个新兑换码。"
+msgid "{name} claimed your gift week. Every $5 you give brings a new code."
+msgstr "{name} 领取了你赠送的一周。你每支持 $5 就会获得一个新兑换码。"
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -2768,12 +2769,12 @@ msgid "▶ Watch"
 msgstr "▶ 观看"
 
 #: src/routes/support.tsx
-msgid "$3 buys a month of supporter, and every tip adds more time."
-msgstr "$3 可购买一个月的支持者时长，每次打赏都会累加时间。"
+msgid "$5 buys a month of supporter, and every tip adds more time."
+msgstr "$5 可购买一个月的支持者时长，每次打赏都会累加时间。"
 
 #: src/routes/support.tsx
-msgid "$3 is a month"
-msgstr "$3 即一个月"
+msgid "$5 is a month"
+msgstr "$5 即一个月"
 
 #: src/lib/format.ts
 msgid "0h"
@@ -2938,10 +2939,6 @@ msgstr ""
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "3D card preview is unavailable on this device."
 msgstr "此设备无法显示 3D 卡片预览。"
-
-#: src/routes/support.tsx
-msgid "4 more stats"
-msgstr "多 4 项数据"
 
 #: src/lib/chain-run.ts
 msgid "4-trait links double your combo."
@@ -4340,6 +4337,10 @@ msgstr "琥珀"
 msgid "Amount"
 msgstr ""
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "Amount in dollars"
+msgstr "金额（美元）"
+
 #: src/lib/chain-run.ts
 msgid "An Eternal never leaves."
 msgstr "Eternal 永远不会离开。"
@@ -4461,6 +4462,10 @@ msgstr "不限"
 #: src/routes/tracker.tsx
 msgid "Any"
 msgstr "不限"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "Any amount counts, to the day, and adds to the time you have left."
+msgstr "任何金额都按天计算，并叠加到你的剩余时间上。"
 
 #: src/routes/support.tsx
 msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
@@ -9404,6 +9409,10 @@ msgstr "英语"
 msgid "Enjoy your supporter week, {0}."
 msgstr "好好享受你的支持者周，{0}。"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "Enter an amount"
+msgstr "输入金额"
+
 #: src/components/replay/ReplayControls.tsx
 #: src/routes/replay.tsx
 msgid "Enter fullscreen"
@@ -9505,8 +9514,8 @@ msgstr "所有 +连击 减半。"
 #~ msgstr "你每支持 $3（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。"
 
 #: src/routes/support.tsx
-msgid "Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
-msgstr "你每支持 $3（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。按月订阅每满三个月还会额外送一个兑换码。"
+msgid "Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+msgstr "你每支持 $5（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。按月订阅每满三个月还会额外送一个兑换码。"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "every card"
@@ -14967,6 +14976,10 @@ msgstr "更多来自{0}的服务器"
 msgid "More statistics available after watching a replay!"
 msgstr "观看回放后可查看更多统计！"
 
+#: src/routes/support.tsx
+msgid "More stats"
+msgstr "更多数据"
+
 #: src/lib/streak-game.ts
 msgid "More watched"
 msgstr "更多观看"
@@ -16947,6 +16960,10 @@ msgstr "占附近玩家比例"
 msgid "of players near you farm this"
 msgstr "与你水平相近的玩家刷这张"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "of supporter"
+msgstr "的 supporter"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "off"
 msgstr "关闭"
@@ -17109,8 +17126,8 @@ msgid "Once you connect Companella to your account, it sends every mania play yo
 msgstr "把 Companella 连接到你的账号后，它会上传你完成的每一局 mania 成绩，并附带回放。这些成绩会带着 Companella 图标显示在你个人资料的最近标签页和追踪器中。osu! 也收录的成绩只显示一次。"
 
 #: src/routes/support.tsx
-msgid "One code per $3"
-msgstr "每 $3 一个兑换码"
+msgid "One code per $5"
+msgstr "每 $5 一个兑换码"
 
 #. placeholder {0}: shown.toLocaleString("en-US")
 #: src/components/packs/GiftSpareDialog.tsx
@@ -29650,8 +29667,8 @@ msgid "Your frames"
 msgstr "你的头像框"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "Your gift week was claimed. Every $3 you give brings a new code."
-msgstr "你赠送的一周已被领取。你每支持 $3 就会获得一个新兑换码。"
+msgid "Your gift week was claimed. Every $5 you give brings a new code."
+msgstr "你赠送的一周已被领取。你每支持 $5 就会获得一个新兑换码。"
 
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx

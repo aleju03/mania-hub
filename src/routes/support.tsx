@@ -7,6 +7,7 @@ import type { MessageDescriptor } from "@lingui/core";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { SupportCheckout } from "../components/supporter/SupportCheckout";
+import { SupportDaysPreview } from "../components/supporter/SupportDaysPreview";
 import {
   CardShowcase,
   ClipShowcase,
@@ -187,7 +188,7 @@ function SupportPage() {
   const heroRef = useRef<HTMLDivElement>(null);
   const steps = [
     { title: t`Tip on Ko-fi`, body: t`Use your osu! username as your name there, so the time lands on your account.` },
-    { title: t`$3 is a month`, body: t`Any amount works and is counted to the day. Every tip adds to the time you have left.` },
+    { title: t`$5 is a month`, body: t`Any amount works and is counted to the day. Every tip adds to the time you have left.` },
     { title: t`Set it up`, body: t`Pick your look on the supporter page. It saves as you go.` },
   ];
 
@@ -208,7 +209,7 @@ function SupportPage() {
                 <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">
                   {t`Supporting keeps the servers running and new features coming. As thanks, supporters get everything on this page.`}
                 </motion.p>
-                <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">{t`$3 buys a month of supporter, and every tip adds more time.`}</motion.p>
+                <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">{t`$5 buys a month of supporter, and every tip adds more time.`}</motion.p>
                 <motion.div variants={HERO_LINE} className="mt-5 flex flex-wrap items-center gap-2">
                   <SupportButton />
                   <Link to="/supporter" className="inline-flex h-10 items-center rounded-full bg-osu-b4 px-5 text-[14px] font-semibold text-white transition-colors hover:bg-osu-b3">
@@ -280,7 +281,7 @@ function SupportPage() {
             <Perk
               id="stats"
               title={t`Profile stats`}
-              count={t`4 more stats`}
+              count={t`More stats`}
               body={t`Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak or percentile among tracked players.`}
             >
               <StatsShowcase />
@@ -298,8 +299,8 @@ function SupportPage() {
             <Perk
               id="gift"
               title={t`A week for a friend`}
-              count={t`One code per $3`}
-              body={t`Every $3 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month.`}
+              count={t`One code per $5`}
+              body={t`Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month.`}
             >
               <GiftShowcase />
             </Perk>
@@ -345,6 +346,7 @@ function SupportPage() {
                   <p className="mt-1.5 text-[14px] leading-relaxed text-osu-l2">
                     {t`Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you.`}
                   </p>
+                  <SupportDaysPreview />
                 </div>
                 <SupportCheckout />
               </Reveal>

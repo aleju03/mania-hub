@@ -8,7 +8,7 @@ import { requestSupporterWelcome } from "./SupporterWelcome";
 
 /* A paying supporter's one-time gift code, under the thank-you on /supporter:
    the code and a link that opens the claim page with it filled in. When the
-   last code was claimed, who took it and that every $3 given brings
+   last code was claimed, who took it and that every $5 given brings
    another. Nothing at all for a supporter whose time was never paid for. */
 
 export function formatGiftCode(code: string): string {
@@ -42,7 +42,7 @@ export function GiftCodePanel({ viewerId }: { viewerId: number }) {
     const name = gift.lastClaim?.username;
     return (
       <p className="mt-3 text-[12px] text-osu-f1">
-        {name ? t`${name} claimed your gift week. Every $3 you give brings a new code.` : t`Your gift week was claimed. Every $3 you give brings a new code.`}
+        {name ? t`${name} claimed your gift week. Every $5 you give brings a new code.` : t`Your gift week was claimed. Every $5 you give brings a new code.`}
       </p>
     );
   }
