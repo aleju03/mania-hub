@@ -4619,6 +4619,17 @@ export async function fetchLivePackCommunityStats(): Promise<LivePackCommunitySt
   return fetchLiveJson("/api/packs/community/stats");
 }
 
+export type LivePackCollectorBoard = "completion" | "mastery" | "packsOpened" | "biggestCollections" | "goatHolders" | "firstFinds" | "longestStanding";
+
+/* Where one collector stands on each record board they are on at all. */
+export interface LivePackCollectorStanding {
+  boards: Partial<Record<LivePackCollectorBoard, { rank: number; collector: LivePackCollector & { mastery?: number } }>>;
+}
+
+export async function fetchLivePackCollectorStanding(userId: number): Promise<LivePackCollectorStanding> {
+  return fetchLiveJson(`/api/packs/community/standing?userId=${Math.floor(userId)}`);
+}
+
 export async function fetchLivePackCollectors(options: {
   page?: number;
   pageSize?: number;

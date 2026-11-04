@@ -19,11 +19,13 @@ import { RecordBoards, RecordBoardsSkeleton } from "../components/packs/collecti
 import { ShowcaseTab } from "../components/packs/collections/ShowcaseTab";
 import { BoardsTab } from "../components/packs/collections/board/BoardsTab";
 import {
+  fetchLivePackCollectorStanding,
   fetchLivePackCommunityStats,
   fetchLivePackRecentPulls,
   isLiveBackendConfigured,
   openLiveEventSource,
   packCollectorLabel,
+  type LivePackCollectorStanding,
   type LivePackCommunityStats,
   type LivePackPullFeedEntry,
 } from "../lib/live-backend";
@@ -32,6 +34,7 @@ import { DEFAULT_COUNTRY_CODE } from "../lib/country";
 import { pageSeo } from "../lib/seo";
 import { useScrollRestoreRef } from "../lib/use-scroll-restore";
 import { track } from "../lib/analytics";
+import { useAuth } from "../lib/auth-context";
 
 /* The community side of /packs: the cards people put up, everybody else's
    shelves, and how the whole card game has gone.
@@ -256,6 +259,21 @@ export function mergePulls(
 
 export function StatsTab({ active }: { active: boolean }) {
   const [stats, setStats] = useState<LivePackCommunityStats | null>(null);
+  const viewerId = useAuth().viewer?.id ?? null;
+  /* The viewer's own place on each board, for a row under any board they are
+     not in the top ten of. Read again whenever the boards are. */
+  const [standing, setStanding] = useState<LivePackCollectorStanding | null>(null);
+  const computedAt = stats?.computedAt ?? null;
+  useEffect(() => {
+    if (!active || viewerId === null || computedAt === null) return;
+    let cancelled = false;
+    fetchLivePackCollectorStanding(viewerId)
+      .then((next) => !cancelled && setStanding(next))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [active, viewerId, computedAt]);
   const [pulls, setPulls] = useState<CountedPull[]>([]);
   const [failed, setFailed] = useState(false);
   /* When the snapshot was last asked for, so a tab being opened again knows
@@ -408,7 +426,7 @@ export function StatsTab({ active }: { active: boolean }) {
   return (
     <div className="space-y-10">
       <CommunityStatsHeader totals={live.totals} />
-      <RecordBoards stats={live} />
+      <RecordBoards stats={live} viewerId={viewerId} standing={viewerId === null ? null : standing} />
     </div>
   );
 }
