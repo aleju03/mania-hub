@@ -343,7 +343,7 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
 const FEED_NAMES: Record<string, ReturnType<typeof msg>> = {
   top_play: msg`Top plays`,
   new_map: msg`New farm maps`,
-  changelog: msg`Site updates`,
+  changelog: msg`Website changelog`,
 };
 
 function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, inviteUrl, onServer }: {
@@ -585,7 +585,7 @@ function CommandsPanel({ commands }: { commands: DiscordPublicInfo["commands"] }
       ) : null}
       <p className="mt-2 text-[13px] text-osu-f1">
         <Trans>
-          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Site updates</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
+          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
         </Trans>
       </p>
     </Panel>

@@ -7670,8 +7670,12 @@ msgstr "Feedback sent"
 #~ msgstr "Feeds are currently disabled on the backend."
 
 #: src/routes/discord.tsx
-msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
-msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+#~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+#~ msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+
+#: src/routes/discord.tsx
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
@@ -17414,8 +17418,8 @@ msgstr "Single-note jacks"
 #~ msgstr "Single-note streams {singleText}, chordstreams {chordText}"
 
 #: src/routes/discord.tsx
-msgid "Site updates"
-msgstr "Site updates"
+#~ msgid "Site updates"
+#~ msgstr "Site updates"
 
 #: src/routes/skins.tsx
 msgid "size"
@@ -21738,6 +21742,10 @@ msgstr "We have no run by {0} on this map. Paste a link to their score to use it
 #: src/components/packs/GoatPoll.tsx
 msgid "web.archive.org link to their osu! profile"
 msgstr "web.archive.org link to their osu! profile"
+
+#: src/routes/discord.tsx
+msgid "Website changelog"
+msgstr "Website changelog"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Wed"

@@ -7651,8 +7651,12 @@ msgstr "建议已发送"
 #~ msgstr "后端当前已关闭 feed。"
 
 #: src/routes/discord.tsx
-msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
-msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>新的刷分图</1>和<2>网站更新</2>（每条新的更新日志都会发出）。用 <3>/setup</3> 或在上方的你的服务器中开启。"
+#~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+#~ msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>新的刷分图</1>和<2>网站更新</2>（每条新的更新日志都会发出）。用 <3>/setup</3> 或在上方的你的服务器中开启。"
+
+#: src/routes/discord.tsx
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>新的刷分图</1>和<2>网站更新日志</2>（每条新的更新日志都会发出）。用 <3>/setup</3> 或在上方的你的服务器中开启。"
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
@@ -17379,8 +17383,8 @@ msgstr "单点叠键"
 #~ msgstr "单点切 {singleText}，大切 {chordText}"
 
 #: src/routes/discord.tsx
-msgid "Site updates"
-msgstr "网站更新"
+#~ msgid "Site updates"
+#~ msgstr "网站更新"
 
 #: src/routes/skins.tsx
 msgid "size"
@@ -21695,6 +21699,10 @@ msgstr "我们没有 {0} 在这张谱面上的成绩。粘贴其成绩链接就�
 #: src/components/packs/GoatPoll.tsx
 msgid "web.archive.org link to their osu! profile"
 msgstr "指向其 osu! 主页的 web.archive.org 链接"
+
+#: src/routes/discord.tsx
+msgid "Website changelog"
+msgstr "网站更新日志"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Wed"
