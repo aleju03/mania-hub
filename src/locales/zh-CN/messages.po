@@ -4924,6 +4924,10 @@ msgctxt "a dan course pass"
 msgid "Clear"
 msgstr "通过"
 
+#: src/routes/recommendations.tsx
+msgid "clear all"
+msgstr "全部清除"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Clear all"
@@ -4937,6 +4941,10 @@ msgstr "通关尝试"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Clear editor"
 msgstr "清空编辑器"
+
+#: src/routes/recommendations.tsx
+msgid "clear filters"
+msgstr "清除筛选"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/snipes.tsx
@@ -7634,6 +7642,14 @@ msgstr "在 {mapSlot} 上 FC（<0/>）"
 msgid "FC chokes only (1 miss)"
 msgstr "仅 FC 断连（1 miss）"
 
+#: src/routes/recommendations.tsx
+msgid "Featured Artist"
+msgstr "Featured Artist"
+
+#: src/routes/recommendations.tsx
+#~ msgid "Featured Artist songs only"
+#~ msgstr "仅显示 Featured Artist 歌曲"
+
 #: src/routes/report.tsx
 msgid "Feedback"
 msgstr "建议"
@@ -7761,6 +7777,7 @@ msgstr "筛选谱面…"
 msgid "filtered out"
 msgstr "已被筛掉"
 
+#: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "filters"
 msgstr "筛选"
@@ -7768,6 +7785,7 @@ msgstr "筛选"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/snipes.tsx
 msgid "Filters"
 msgstr "筛选"
@@ -8629,6 +8647,10 @@ msgstr "已从你的推荐中隐藏，直到你通关或在上面打出成绩"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hidden list ({0})"
 msgstr "隐藏列表（{0}）"
+
+#: src/routes/recommendations.tsx
+msgid "hide"
+msgstr "隐藏"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -10964,6 +10986,10 @@ msgid "Maps ready."
 msgstr "谱面数据已就绪。"
 
 #: src/routes/recommendations.tsx
+msgid "Maps under 1pp"
+msgstr "低于 1pp 的谱面"
+
+#: src/routes/recommendations.tsx
 #~ msgid "maps worth farming"
 #~ msgstr "值得刷的谱面"
 
@@ -11250,8 +11276,8 @@ msgid "moderation"
 msgstr "审核"
 
 #: src/routes/recommendations.tsx
-msgid "mods"
-msgstr "模组"
+#~ msgid "mods"
+#~ msgstr "模组"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
@@ -11980,6 +12006,10 @@ msgstr "暂无 Maniacard 历史记录。"
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "no maps match"
 msgstr "没有匹配的谱面"
+
+#: src/routes/recommendations.tsx
+msgid "No maps match these filters"
+msgstr "没有符合这些筛选条件的谱面"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "No maps match these filters."
@@ -16925,6 +16955,10 @@ msgstr "多变而不规则的键型，读谱不好就吃亏。"
 msgid "Shot {0}"
 msgstr "截图 {0}"
 
+#: src/routes/recommendations.tsx
+msgid "show"
+msgstr "显示"
+
 #. placeholder {0}: item.label
 #: src/routes/skins_.$id.tsx
 msgid "Show {0}"
@@ -17086,6 +17120,10 @@ msgstr "在游玩区域后面（和上面）显示谱面的故事板"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Show the site name on the render"
 msgstr "在渲染图上显示站点名称"
+
+#: src/routes/recommendations.tsx
+msgid "show them"
+msgstr "显示它们"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Show what you are doing in osu! on your profile and the rankings"
@@ -17757,6 +17795,14 @@ msgstr "歌曲、艺术家或谱师"
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Song, artist, mapper, or a beatmap link"
 msgstr "歌曲、艺术家、谱师或谱面链接"
+
+#: src/routes/recommendations.tsx
+#~ msgid "songs"
+#~ msgstr "歌曲"
+
+#: src/routes/recommendations.tsx
+msgid "Songs"
+msgstr "歌曲"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "soon"
@@ -20661,6 +20707,10 @@ msgstr "重试"
 #: src/components/LiveDataEmptyState.tsx
 msgid "Try again in a bit."
 msgstr "请稍后再试。"
+
+#: src/routes/recommendations.tsx
+msgid "Try fewer filters or a different key mode."
+msgstr "试试减少筛选条件或换一个键数。"
 
 #: src/routes/replay.tsx
 msgid "Try this again"

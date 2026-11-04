@@ -4939,6 +4939,10 @@ msgctxt "a dan course pass"
 msgid "Clear"
 msgstr "Clear"
 
+#: src/routes/recommendations.tsx
+msgid "clear all"
+msgstr "clear all"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Clear all"
@@ -4952,6 +4956,10 @@ msgstr "clear attempt"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Clear editor"
 msgstr "Clear editor"
+
+#: src/routes/recommendations.tsx
+msgid "clear filters"
+msgstr "clear filters"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/snipes.tsx
@@ -7653,6 +7661,14 @@ msgstr "FC <0/> on {mapSlot}"
 msgid "FC chokes only (1 miss)"
 msgstr "FC chokes only (1 miss)"
 
+#: src/routes/recommendations.tsx
+msgid "Featured Artist"
+msgstr "Featured Artist"
+
+#: src/routes/recommendations.tsx
+#~ msgid "Featured Artist songs only"
+#~ msgstr "Featured Artist songs only"
+
 #: src/routes/report.tsx
 msgid "Feedback"
 msgstr "Feedback"
@@ -7780,6 +7796,7 @@ msgstr "filter maps..."
 msgid "filtered out"
 msgstr "filtered out"
 
+#: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "filters"
 msgstr "filters"
@@ -7787,6 +7804,7 @@ msgstr "filters"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/snipes.tsx
 msgid "Filters"
 msgstr "Filters"
@@ -8648,6 +8666,10 @@ msgstr "hidden from your recs until you clear it or set a score on it"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hidden list ({0})"
 msgstr "Hidden list ({0})"
+
+#: src/routes/recommendations.tsx
+msgid "hide"
+msgstr "hide"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -10991,6 +11013,10 @@ msgid "Maps ready."
 msgstr "Maps ready."
 
 #: src/routes/recommendations.tsx
+msgid "Maps under 1pp"
+msgstr "Maps under 1pp"
+
+#: src/routes/recommendations.tsx
 #~ msgid "maps worth farming"
 #~ msgstr "maps worth farming"
 
@@ -11277,8 +11303,8 @@ msgid "moderation"
 msgstr "moderation"
 
 #: src/routes/recommendations.tsx
-msgid "mods"
-msgstr "mods"
+#~ msgid "mods"
+#~ msgstr "mods"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
@@ -12007,6 +12033,10 @@ msgstr "No Maniacard history has been recorded yet."
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "no maps match"
 msgstr "no maps match"
+
+#: src/routes/recommendations.tsx
+msgid "No maps match these filters"
+msgstr "No maps match these filters"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "No maps match these filters."
@@ -16952,6 +16982,10 @@ msgstr "Shifting, irregular patterns that punish bad reading."
 msgid "Shot {0}"
 msgstr "Shot {0}"
 
+#: src/routes/recommendations.tsx
+msgid "show"
+msgstr "show"
+
 #. placeholder {0}: item.label
 #: src/routes/skins_.$id.tsx
 msgid "Show {0}"
@@ -17113,6 +17147,10 @@ msgstr "Show the map's storyboard behind (and over) the playfield"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Show the site name on the render"
 msgstr "Show the site name on the render"
+
+#: src/routes/recommendations.tsx
+msgid "show them"
+msgstr "show them"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Show what you are doing in osu! on your profile and the rankings"
@@ -17792,6 +17830,14 @@ msgstr "Song, artist or mapper"
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Song, artist, mapper, or a beatmap link"
 msgstr "Song, artist, mapper, or a beatmap link"
+
+#: src/routes/recommendations.tsx
+#~ msgid "songs"
+#~ msgstr "songs"
+
+#: src/routes/recommendations.tsx
+msgid "Songs"
+msgstr "Songs"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "soon"
@@ -20704,6 +20750,10 @@ msgstr "Try again"
 #: src/components/LiveDataEmptyState.tsx
 msgid "Try again in a bit."
 msgstr "Try again in a bit."
+
+#: src/routes/recommendations.tsx
+msgid "Try fewer filters or a different key mode."
+msgstr "Try fewer filters or a different key mode."
 
 #: src/routes/replay.tsx
 msgid "Try this again"

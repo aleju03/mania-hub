@@ -4912,6 +4912,10 @@ msgctxt "a dan course pass"
 msgid "Clear"
 msgstr "Clear"
 
+#: src/routes/recommendations.tsx
+msgid "clear all"
+msgstr "quitar todo"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Clear all"
@@ -4925,6 +4929,10 @@ msgstr "intento de pasarlo"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Clear editor"
 msgstr "Limpiar editor"
+
+#: src/routes/recommendations.tsx
+msgid "clear filters"
+msgstr "quitar filtros"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/snipes.tsx
@@ -7622,6 +7630,14 @@ msgstr "FC <0/> en {mapSlot}"
 msgid "FC chokes only (1 miss)"
 msgstr "Solo chokes de FC (1 miss)"
 
+#: src/routes/recommendations.tsx
+msgid "Featured Artist"
+msgstr "Featured Artist"
+
+#: src/routes/recommendations.tsx
+#~ msgid "Featured Artist songs only"
+#~ msgstr "Solo canciones de Featured Artist"
+
 #: src/routes/report.tsx
 msgid "Feedback"
 msgstr "Sugerencia"
@@ -7749,6 +7765,7 @@ msgstr "filtrar mapas..."
 msgid "filtered out"
 msgstr "filtrados"
 
+#: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "filters"
 msgstr "filtros"
@@ -7756,6 +7773,7 @@ msgstr "filtros"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/snipes.tsx
 msgid "Filters"
 msgstr "Filtros"
@@ -8617,6 +8635,10 @@ msgstr "oculto de tus recs hasta que lo pases o pongas un puntaje en él"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hidden list ({0})"
 msgstr "Lista oculta ({0})"
+
+#: src/routes/recommendations.tsx
+msgid "hide"
+msgstr "ocultar"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -10952,6 +10974,10 @@ msgid "Maps ready."
 msgstr "Mapas listos."
 
 #: src/routes/recommendations.tsx
+msgid "Maps under 1pp"
+msgstr "Mapas de menos de 1pp"
+
+#: src/routes/recommendations.tsx
 #~ msgid "maps worth farming"
 #~ msgstr "mapas farmeables"
 
@@ -11238,8 +11264,8 @@ msgid "moderation"
 msgstr "moderación"
 
 #: src/routes/recommendations.tsx
-msgid "mods"
-msgstr "mods"
+#~ msgid "mods"
+#~ msgstr "mods"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
@@ -11968,6 +11994,10 @@ msgstr "Todavía no hay historial de Maniacard."
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "no maps match"
 msgstr "ningún mapa coincide"
+
+#: src/routes/recommendations.tsx
+msgid "No maps match these filters"
+msgstr "Ningún mapa coincide con estos filtros"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "No maps match these filters."
@@ -16913,6 +16943,10 @@ msgstr "Patrones cambiantes e irregulares que castigan la mala lectura."
 msgid "Shot {0}"
 msgstr "Captura {0}"
 
+#: src/routes/recommendations.tsx
+msgid "show"
+msgstr "mostrar"
+
 #. placeholder {0}: item.label
 #: src/routes/skins_.$id.tsx
 msgid "Show {0}"
@@ -17074,6 +17108,10 @@ msgstr "Mostrar el storyboard del mapa detrás (y encima) del playfield"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Show the site name on the render"
 msgstr "Mostrar el nombre del sitio en el render"
+
+#: src/routes/recommendations.tsx
+msgid "show them"
+msgstr "mostrarlos"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Show what you are doing in osu! on your profile and the rankings"
@@ -17745,6 +17783,14 @@ msgstr "Canción, artista o mapper"
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Song, artist, mapper, or a beatmap link"
 msgstr "Canción, artista, mapper o un link del beatmap"
+
+#: src/routes/recommendations.tsx
+#~ msgid "songs"
+#~ msgstr "canciones"
+
+#: src/routes/recommendations.tsx
+msgid "Songs"
+msgstr "Canciones"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "soon"
@@ -20649,6 +20695,10 @@ msgstr "Reintentar"
 #: src/components/LiveDataEmptyState.tsx
 msgid "Try again in a bit."
 msgstr "Inténtalo de nuevo en un rato."
+
+#: src/routes/recommendations.tsx
+msgid "Try fewer filters or a different key mode."
+msgstr "Prueba con menos filtros u otro modo de teclas."
 
 #: src/routes/replay.tsx
 msgid "Try this again"

@@ -20,6 +20,7 @@ import {
   Flame,
   Mountain,
   CircleHelp,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   isLiveBackendConfigured,
@@ -101,8 +102,12 @@ interface FarmHelperSearch {
   view?: LiveFarmHelperView;
   // Skills view only: the axis key (a MinaCalc skillset or `pattern:{id}`).
   skill?: string;
-  // Skills view only: "nm" or "dt" alone; absent means both.
-  mods?: LiveFarmHelperSkillMods;
+  // Every view: one speed lane (see ModsFilter); absent means all.
+  mods?: ModsFilter;
+  // Every view: only Featured Artist maps.
+  fa?: boolean;
+  // Gain view only: also list maps that would add under 1pp.
+  low?: boolean;
   reason?: ReasonFilter;
   sort?: SortMode;
   dir?: SortDirection;
@@ -117,8 +122,22 @@ function parseView(value: unknown): LiveFarmHelperView | undefined {
   return value === "popular" || value === "gain" || value === "skills" ? value : undefined;
 }
 
-function parseSkillMods(value: unknown): LiveFarmHelperSkillMods | undefined {
-  return value === "nm" || value === "dt" ? value : undefined;
+// The mods filter: on the skills view it picks the lanes the backend
+// recommends (NM or DT); on the other views it narrows the list by lane.
+type ModsFilter = "nm" | "dt" | "ht";
+
+function parseModsFilter(value: unknown): ModsFilter | undefined {
+  return value === "nm" || value === "dt" || value === "ht" ? value : undefined;
+}
+
+function skillLaneMods(mods: ModsFilter | undefined): LiveFarmHelperSkillMods | undefined {
+  return mods === "nm" || mods === "dt" ? mods : undefined;
+}
+
+const MODS_FILTER_BUCKET: Record<ModsFilter, LiveFarmHelperRec["speedBucket"]> = { nm: "normal", dt: "dt", ht: "ht" };
+
+function inStarRange(stars: number, range: { min: number; max: number }): boolean {
+  return (!range.min || stars >= range.min) && (!range.max || stars <= range.max);
 }
 
 function parseSkill(value: unknown): string | undefined {
@@ -156,6 +175,8 @@ function buildFarmHelperSearch({
   view,
   skill,
   mods,
+  fa,
+  low,
   reason,
   sort,
   dir,
@@ -165,7 +186,9 @@ function buildFarmHelperSearch({
   key?: LiveFarmHelperKeyMode;
   view?: LiveFarmHelperView;
   skill?: string;
-  mods?: LiveFarmHelperSkillMods;
+  mods?: ModsFilter;
+  fa?: boolean;
+  low?: boolean;
   reason?: ReasonFilter;
   sort?: SortMode;
   dir?: SortDirection;
@@ -178,7 +201,9 @@ function buildFarmHelperSearch({
     key: key && key !== "any" ? key : undefined,
     view: effectiveView !== "gain" ? effectiveView : undefined,
     skill: effectiveView === "skills" ? skill : undefined,
-    mods: effectiveView === "skills" ? mods : undefined,
+    mods,
+    fa: fa ? true : undefined,
+    low: effectiveView === "gain" && low ? true : undefined,
     reason: reason && reason !== "all" ? reason : undefined,
     sort: sort && sort !== defaultSort ? sort : undefined,
     dir: dir && dir !== "desc" ? dir : undefined,
@@ -197,9 +222,11 @@ function farmHelperRequestKey(
   view: LiveFarmHelperView,
   skill?: string,
   mods?: LiveFarmHelperSkillMods,
+  featuredArtist?: boolean,
+  showBelowGainFloor?: boolean,
 ): string {
   const skillPart = view === "skills" ? `${skill ? `:${skill}` : ""}${mods ? `+${mods}` : ""}` : "";
-  return `${subjectKey?.trim().toLowerCase() ?? ""}\u0000${keyMode}\u0000${view}${skillPart}`;
+  return `${subjectKey?.trim().toLowerCase() ?? ""}\u0000${keyMode}\u0000${view}${skillPart}${featuredArtist ? "+fa" : ""}${showBelowGainFloor ? "+low" : ""}`;
 }
 
 // The newest skills board held for this player and keymode, whatever its
@@ -304,13 +331,15 @@ export const Route = createFileRoute("/recommendations")({
     key: parseKeyMode(search.key),
     view: parseView(search.view),
     skill: parseSkill(search.skill),
-    mods: parseSkillMods(search.mods),
+    mods: parseModsFilter(search.mods),
+    fa: search.fa === true || search.fa === "1" || search.fa === 1,
+    low: search.low === true || search.low === "1" || search.low === 1,
     reason: parseReasonFilter(search.reason),
     sort: parseSortMode(search.sort),
     dir: parseSortDirection(search.dir),
     page: parsePage(search.page),
   }),
-  loaderDeps: ({ search }) => ({ user: search.user, key: search.key, view: search.view, skill: search.skill, mods: search.mods }),
+  loaderDeps: ({ search }) => ({ user: search.user, key: search.key, view: search.view, skill: search.skill, mods: search.mods, fa: search.fa, low: search.low }),
   // Starts the board's request before the page component mounts. On the
   // server, the player's own board starts building on the backend while the
   // page renders (warmOwnFarmHelperSnapshot says why only their own); in the
@@ -321,14 +350,16 @@ export const Route = createFileRoute("/recommendations")({
     const keyMode = deps.key ?? "any";
     const view = deps.view ?? "gain";
     const skill = view === "skills" ? deps.skill : undefined;
-    const skillMods = view === "skills" ? deps.mods : undefined;
+    const skillMods = view === "skills" ? skillLaneMods(deps.mods) : undefined;
+    const featuredArtist = deps.fa === true;
+    const showBelowGainFloor = view === "gain" && deps.low === true;
     const owner = isOwnSubjectKey(deps.user, context.auth?.viewer ?? null);
     if (typeof document === "undefined") {
-      if (owner) void warmOwnFarmHelperSnapshot({ data: { keyMode, view, skill, skillMods, limit: SNAPSHOT_LIMIT } }).catch(() => {});
+      if (owner) void warmOwnFarmHelperSnapshot({ data: { keyMode, view, skill, skillMods, featuredArtist, showBelowGainFloor, limit: SNAPSHOT_LIMIT } }).catch(() => {});
       return;
     }
     // Best effort, and it never throws: the component's own load still runs.
-    prefetchFarmHelperSnapshot({ subjectKey: deps.user, keyMode, view, skill, skillMods, limit: SNAPSHOT_LIMIT, owner });
+    prefetchFarmHelperSnapshot({ subjectKey: deps.user, keyMode, view, skill, skillMods, featuredArtist, showBelowGainFloor, limit: SNAPSHOT_LIMIT, owner });
   },
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
@@ -509,7 +540,10 @@ function FarmHelperPage() {
   const view: LiveFarmHelperView = search.view ?? "gain";
   // With dans hidden, a dan axis from the URL falls back to the default axis.
   const skill = view === "skills" && !(noDans && picksDanAxis(search.skill)) ? search.skill : undefined;
-  const skillMods = view === "skills" ? search.mods : undefined;
+  const skillMods = view === "skills" ? skillLaneMods(search.mods) : undefined;
+  const modsFilter = view === "skills" ? skillMods : search.mods;
+  const featuredArtist = search.fa === true;
+  const showBelowGainFloor = view === "gain" && search.low === true;
   const reasonFilter: ReasonFilter = view === "gain" ? (search.reason ?? "all") : "all";
   const sortMode: SortMode = search.sort ?? defaultSortForView(view);
   const sortDir: SortDirection = search.dir ?? "desc";
@@ -519,7 +553,7 @@ function FarmHelperPage() {
   // Popular-view star filter; 0 means unset, like the /maps pill.
   const [starRange, setStarRange] = useState<{ min: number; max: number }>({ min: 0, max: 0 });
   const isXl = useMediaQuery("(min-width: 1280px)");
-  const requestKey = farmHelperRequestKey(subjectKey, keyMode, view, skill, skillMods);
+  const requestKey = farmHelperRequestKey(subjectKey, keyMode, view, skill, skillMods, featuredArtist, showBelowGainFloor);
   // Their own board is the only one that comes back with their marks on it.
   const isOwnSubject = isOwnSubjectKey(subjectKey, auth.viewer);
   const subjectNorm = subjectKey?.trim().toLowerCase() ?? "";
@@ -544,9 +578,13 @@ function FarmHelperPage() {
   const waitingForCurrentSnapshot = liveEnabled && !!subjectKey && !visibleSnapshot && !error;
   const waitingForInitialSnapshot = waitingForCurrentSnapshot && !shellSnapshot;
   const skillsPending = skillsHeld != null && waitingForCurrentSnapshot;
-  const skillBoard = view === "skills"
+  const rawSkillBoard = view === "skills"
     ? visibleSnapshot?.skills ?? (skillsHeld?.skills && !(noDans && isDanAxis(skillsHeld.skills.axis)) ? withPickedSkill(skillsHeld.skills, skill) : null)
     : null;
+  const skillBoard = useMemo(() => {
+    if (!rawSkillBoard || (!starRange.min && !starRange.max)) return rawSkillBoard;
+    return { ...rawSkillBoard, recs: rawSkillBoard.recs.filter((rec) => inStarRange(rec.stars, starRange)) };
+  }, [rawSkillBoard, starRange]);
 
   const navigateFarmHelper = (
     patch: {
@@ -554,7 +592,9 @@ function FarmHelperPage() {
       key?: LiveFarmHelperKeyMode;
       view?: LiveFarmHelperView;
       skill?: string;
-      mods?: LiveFarmHelperSkillMods;
+      mods?: ModsFilter;
+      fa?: boolean;
+      low?: boolean;
       reason?: ReasonFilter;
       sort?: SortMode;
       dir?: SortDirection;
@@ -570,7 +610,9 @@ function FarmHelperPage() {
       key: keyMode,
       view: search.view,
       skill,
-      mods: skillMods,
+      mods: search.mods,
+      fa: featuredArtist,
+      low: showBelowGainFloor,
       reason: reasonFilter,
       sort: search.sort,
       dir: sortDir,
@@ -583,6 +625,12 @@ function FarmHelperPage() {
       replace,
       resetScroll: false,
     });
+  };
+
+  const clearFilters = () => {
+    setStarRange({ min: 0, max: 0 });
+    setSelectedKey(null);
+    navigateFarmHelper({ fa: false, mods: undefined, low: false, page: 0 });
   };
 
   const setSubject = (key: string | null) => {
@@ -600,7 +648,7 @@ function FarmHelperPage() {
   const setView = (next: LiveFarmHelperView) => {
     setSelectedKey(null);
     // Reset the sort so each mode lands on its natural default ordering.
-    navigateFarmHelper({ view: next, skill: undefined, mods: undefined, reason: undefined, sort: undefined, page: 0 });
+    navigateFarmHelper({ view: next, skill: undefined, reason: undefined, sort: undefined, page: 0 });
   };
 
   useEffect(() => {
@@ -621,6 +669,8 @@ function FarmHelperPage() {
       view,
       skill,
       skillMods,
+      featuredArtist,
+      showBelowGainFloor,
       limit: SNAPSHOT_LIMIT,
       owner: isOwnSubject,
       // Post-mark epoch (undefined until the owner mutates a mark): bypasses
@@ -648,7 +698,7 @@ function FarmHelperPage() {
     };
   // isOwnSubject is a dep: signing in on the page turns the same board into the
   // owner-scoped one, which is a different payload and a different cache entry.
-  }, [liveEnabled, subjectKey, keyMode, view, skill, skillMods, requestKey, isOwnSubject]);
+  }, [liveEnabled, subjectKey, keyMode, view, skill, skillMods, featuredArtist, showBelowGainFloor, requestKey, isOwnSubject]);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [retainedSelection, setRetainedSelection] = useState<{ requestKey: string; rec: LiveFarmHelperRec } | null>(null);
@@ -817,20 +867,19 @@ function FarmHelperPage() {
   const queryFilteredRecs = useMemo(() => {
     if (!visibleSnapshot) return [];
     const q = query.trim().toLowerCase();
-    const starMin = view === "popular" ? starRange.min : 0;
-    const starMax = view === "popular" ? starRange.max : 0;
-    if (!q && !starMin && !starMax) return visibleSnapshot.recs;
+    const bucket = view !== "skills" && modsFilter ? MODS_FILTER_BUCKET[modsFilter] : null;
+    if (!q && !starRange.min && !starRange.max && !bucket) return visibleSnapshot.recs;
     return visibleSnapshot.recs.filter(
       (rec) =>
-        (!starMin || rec.stars >= starMin)
-        && (!starMax || rec.stars <= starMax)
+        inStarRange(rec.stars, starRange)
+        && (!bucket || rec.speedBucket === bucket)
         && (!q
           || rec.title.toLowerCase().includes(q)
           || rec.artist.toLowerCase().includes(q)
           || rec.creator.toLowerCase().includes(q)
           || rec.version.toLowerCase().includes(q)),
     );
-  }, [visibleSnapshot, query, view, starRange]);
+  }, [visibleSnapshot, query, view, starRange, modsFilter]);
 
   // Skillboost rows are earned into the default view: until the player lands
   // (or nearly lands) one of the suggested targets, the backend reports
@@ -871,8 +920,9 @@ function FarmHelperPage() {
 
   // Only meaningful when no client-side filter narrows the list; then recs is
   // exactly the server's (possibly truncated) slice and "X of Y" is honest.
-  const isClientFiltered = reasonFilter !== "all" || query.trim().length > 0
-    || (view === "popular" && (starRange.min > 0 || starRange.max > 0));
+  // The client-side half of the filters menu (stars, and mods off the skills view).
+  const menuFiltered = starRange.min > 0 || starRange.max > 0 || (view !== "skills" && modsFilter != null);
+  const isClientFiltered = reasonFilter !== "all" || query.trim().length > 0 || menuFiltered;
   const totalQualifying = visibleSnapshot?.totalQualifying ?? 0;
   const serverTruncated = !isClientFiltered && totalQualifying > (visibleSnapshot?.recs.length ?? 0);
 
@@ -1039,10 +1089,29 @@ function FarmHelperPage() {
                 keyMode={keyMode}
                 skillBoard={skillBoard}
                 skillPending={skillsPending}
-                skillMods={skillMods}
+                modsFilter={modsFilter}
+                featuredArtist={featuredArtist}
+                starRange={starRange}
+                showBelowGainFloor={showBelowGainFloor}
                 onView={setView}
                 onKeyMode={setKeyMode}
-                onSkillMods={(next) => navigateFarmHelper({ mods: next, page: 0 })}
+                onMods={(next) => {
+                  setSelectedKey(null);
+                  navigateFarmHelper({ mods: next, page: 0 });
+                }}
+                onFeaturedArtist={(next) => {
+                  setSelectedKey(null);
+                  navigateFarmHelper({ fa: next, page: 0 });
+                }}
+                onStarRange={(min, max) => {
+                  setStarRange({ min, max });
+                  if (page !== 0) navigateFarmHelper({ page: 0 });
+                }}
+                onShowBelowGainFloor={(next) => {
+                  setSelectedKey(null);
+                  navigateFarmHelper({ low: next, page: 0 });
+                }}
+                onClearFilters={clearFilters}
                 onChangePlayer={() => setSubject(null)}
               />
 
@@ -1072,11 +1141,6 @@ function FarmHelperPage() {
                       if (page !== 0) navigateFarmHelper({ page: 0 });
                     }}
                     showReason={view === "gain"}
-                    starRange={view === "popular" ? starRange : null}
-                    onStarRange={(min, max) => {
-                      setStarRange({ min, max });
-                      if (page !== 0) navigateFarmHelper({ page: 0 });
-                    }}
                     reasonFilter={reasonFilter}
                     onReason={(next) => {
                       navigateFarmHelper({ reason: next, page: 0 });
@@ -1137,6 +1201,22 @@ function FarmHelperPage() {
                         eyebrow={t`no matches`}
                         title={t`No maps match your search`}
                         body={t`Try a different title, artist, or difficulty name.`}
+                      />
+                    ) : featuredArtist || (menuFiltered && visibleSnapshot.recs.length > 0) ? (
+                      // The filters menu narrowed the board to zero.
+                      <EmptyNotice
+                        eyebrow={t`filtered out`}
+                        title={t`No maps match these filters`}
+                        body={t`Try fewer filters or a different key mode.`}
+                        action={
+                          <button
+                            type="button"
+                            onClick={clearFilters}
+                            className="rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
+                          >
+                            <Trans>clear filters</Trans>
+                          </button>
+                        }
                       />
                     ) : reasonFilter !== "all" && queryFilteredRecs.length > 0 ? (
                       // The reason filter narrowed a non-empty board to zero:
@@ -1237,6 +1317,13 @@ function FarmHelperPage() {
                         one="# more map is hidden because it would add less than 1pp for you"
                         other="# more maps are hidden because they would add less than 1pp for you"
                       />
+                      <button
+                        type="button"
+                        onClick={() => navigateFarmHelper({ low: true, page: 0 })}
+                        className="ml-2 font-semibold text-osu-l2 transition-colors hover:text-osu-pink-light"
+                      >
+                        <Trans>show them</Trans>
+                      </button>
                     </p>
                   ) : null}
 
@@ -1336,10 +1423,17 @@ function SubjectBar({
   keyMode,
   skillBoard = null,
   skillPending = false,
-  skillMods,
+  modsFilter,
+  featuredArtist = false,
+  starRange,
+  showBelowGainFloor = false,
   onView,
   onKeyMode,
-  onSkillMods,
+  onMods,
+  onFeaturedArtist,
+  onStarRange,
+  onShowBelowGainFloor,
+  onClearFilters,
   onChangePlayer,
 }: {
   snapshot: LiveFarmHelperSnapshot;
@@ -1354,10 +1448,17 @@ function SubjectBar({
   // skill, while a new one loads) and whether it is still loading.
   skillBoard?: LiveFarmHelperSkillBoard | null;
   skillPending?: boolean;
-  skillMods?: LiveFarmHelperSkillMods;
+  modsFilter?: ModsFilter;
+  featuredArtist?: boolean;
+  starRange?: { min: number; max: number };
+  showBelowGainFloor?: boolean;
   onView: (next: LiveFarmHelperView) => void;
   onKeyMode: (next: LiveFarmHelperKeyMode) => void;
-  onSkillMods?: (next: LiveFarmHelperSkillMods | undefined) => void;
+  onMods?: (next: ModsFilter | undefined) => void;
+  onFeaturedArtist?: (next: boolean) => void;
+  onStarRange?: (min: number, max: number) => void;
+  onShowBelowGainFloor?: (next: boolean) => void;
+  onClearFilters?: () => void;
   onChangePlayer: () => void;
 }) {
   const { t, i18n } = useLingui();
@@ -1508,7 +1609,7 @@ function SubjectBar({
           ))}
         </div>
 
-        <div className="flex w-full items-center justify-between gap-3 sm:ml-auto sm:w-auto sm:justify-end sm:gap-4">
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:ml-auto sm:w-auto sm:justify-end sm:gap-x-4">
           <div className="flex items-center gap-2">
             <span className="text-[9px] font-bold uppercase tracking-wider text-osu-f1/70"><Trans>keys</Trans></span>
             <div className="flex overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label={t`Key mode`}>
@@ -1528,38 +1629,212 @@ function SubjectBar({
             </div>
           </div>
 
-          {view === "skills" && onSkillMods ? (
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-osu-f1/70"><Trans>mods</Trans></span>
-              <div className="flex overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label={t`Mods`}>
-                {([undefined, "nm", "dt"] as const).map((value) => {
-                  const active = skillMods === value;
-                  return (
-                    <button
-                      key={value ?? "any"}
-                      type="button"
-                      onClick={() => onSkillMods(value)}
-                      aria-pressed={active}
-                      aria-label={value === "nm" ? "NM" : value === "dt" ? "DT" : undefined}
-                      className={`flex items-center px-2.5 py-1 text-[11px] font-semibold uppercase transition-colors duration-[120ms] ${
-                        active ? "bg-osu-b3 text-osu-l2" : "bg-transparent text-osu-f1 hover:text-osu-l2"
-                      }`}
-                    >
-                      {value == null ? (
-                        t`any`
-                      ) : (
-                        <span className={`flex transition-opacity ${active ? "" : "opacity-60"}`}>
-                          <ModBadge mod={value === "nm" ? "NM" : "DT"} size={0.66} color={value === "nm" ? "#a8b2bf" : undefined} plain />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
+          <FiltersMenu
+            view={view}
+            mods={modsFilter}
+            onMods={onMods}
+            featuredArtist={featuredArtist}
+            onFeaturedArtist={onFeaturedArtist}
+            starRange={starRange}
+            onStarRange={onStarRange}
+            showBelowGainFloor={showBelowGainFloor}
+            onShowBelowGainFloor={onShowBelowGainFloor}
+            onClearAll={onClearFilters}
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+function FiltersMenu({
+  view,
+  mods,
+  onMods,
+  featuredArtist,
+  onFeaturedArtist,
+  starRange,
+  onStarRange,
+  showBelowGainFloor,
+  onShowBelowGainFloor,
+  onClearAll,
+}: {
+  view: LiveFarmHelperView;
+  mods?: ModsFilter;
+  onMods?: (next: ModsFilter | undefined) => void;
+  featuredArtist: boolean;
+  onFeaturedArtist?: (next: boolean) => void;
+  starRange?: { min: number; max: number };
+  onStarRange?: (min: number, max: number) => void;
+  showBelowGainFloor: boolean;
+  onShowBelowGainFloor?: (next: boolean) => void;
+  onClearAll?: () => void;
+}) {
+  const { t } = useLingui();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // The panel is portaled: the subject card clips its overflow for the cover.
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+  const showMods = onMods != null;
+  const showStars = starRange != null && onStarRange != null;
+  const showLow = view === "gain" && onShowBelowGainFloor != null;
+  const starsActive = showStars && (starRange.min > 0 || starRange.max > 0);
+  const activeCount = (featuredArtist ? 1 : 0) + (showMods && mods ? 1 : 0) + (starsActive ? 1 : 0) + (showLow && showBelowGainFloor ? 1 : 0);
+
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = ref.current?.getBoundingClientRect();
+      if (rect) setAnchor({ top: rect.bottom + 6, right: Math.max(8, window.innerWidth - rect.right) });
+    };
+    place();
+    const onPointer = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (ref.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+
+  const segment = (active: boolean) =>
+    `flex items-center px-2.5 py-1 text-[12px] font-semibold transition-colors duration-[120ms] ${
+      active ? "bg-osu-b3 text-osu-l2" : "bg-transparent text-osu-f1 hover:text-osu-l2"
+    }`;
+  const rows: ReactNode[] = [];
+  if (onFeaturedArtist) {
+    rows.push(
+      <div key="songs" className="flex items-center justify-between gap-3">
+        <span className="text-[12px] font-semibold text-osu-l2"><Trans>Songs</Trans></span>
+        <div className="flex overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label={t`Songs`}>
+          <button type="button" onClick={() => onFeaturedArtist(false)} aria-pressed={!featuredArtist} className={segment(!featuredArtist)}>
+            {t`any`}
+          </button>
+          <button type="button" onClick={() => onFeaturedArtist(true)} aria-pressed={featuredArtist} className={segment(featuredArtist)}>
+            {t`Featured Artist`}
+          </button>
+        </div>
+      </div>,
+    );
+  }
+  if (showMods) {
+    rows.push(
+      <div key="mods" className="flex items-center justify-between gap-3">
+        <span className="text-[12px] font-semibold text-osu-l2"><Trans>Mods</Trans></span>
+        <div className="flex overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label={t`Mods`}>
+          {/* The skills board recommends NM or DT lanes only. */}
+          {(view === "skills" ? [undefined, "nm", "dt"] as const : [undefined, "nm", "dt", "ht"] as const).map((value) => {
+            const active = mods === value;
+            const acronym = value?.toUpperCase();
+            return (
+              <button
+                key={value ?? "any"}
+                type="button"
+                onClick={() => onMods?.(value)}
+                aria-pressed={active}
+                aria-label={acronym}
+                className={segment(active)}
+              >
+                {value == null || acronym == null ? (
+                  t`any`
+                ) : (
+                  <span className={`flex transition-opacity ${active ? "" : "opacity-60"}`}>
+                    <ModBadge mod={acronym} size={0.66} color={value === "nm" ? "#a8b2bf" : undefined} plain />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>,
+    );
+  }
+  if (showStars) {
+    rows.push(
+      <div key="stars">
+        <div className="mb-2 text-[12px] font-semibold text-osu-l2"><Trans>Difficulty</Trans></div>
+        <StarRangePill
+          lo={0}
+          hi={15}
+          min={starRange.min}
+          max={starRange.max}
+          step={0.1}
+          ariaLabel={t`Star rating`}
+          onChange={onStarRange}
+        />
+      </div>,
+    );
+  }
+  if (showLow) {
+    rows.push(
+      <div key="low" className="flex items-center justify-between gap-3">
+        <span className="text-[12px] font-semibold text-osu-l2"><Trans>Maps under 1pp</Trans></span>
+        <div className="flex overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label={t`Maps under 1pp`}>
+          <button type="button" onClick={() => onShowBelowGainFloor(false)} aria-pressed={!showBelowGainFloor} className={segment(!showBelowGainFloor)}>
+            {t`hide`}
+          </button>
+          <button type="button" onClick={() => onShowBelowGainFloor(true)} aria-pressed={showBelowGainFloor} className={segment(showBelowGainFloor)}>
+            {t`show`}
+          </button>
+        </div>
+      </div>,
+    );
+  }
+  if (rows.length === 0) return null;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors duration-[120ms] ${
+          activeCount > 0 ? "border-osu-pink/40 text-osu-pink-light" : "border-osu-b3/30 text-osu-f1 hover:text-osu-l2"
+        }`}
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+        <Trans>filters</Trans>
+        {activeCount > 0 ? <span className="tabular-nums">{activeCount}</span> : null}
+      </button>
+
+      {open && anchor ? createPortal(
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-label={t`Filters`}
+          style={{ top: anchor.top, right: anchor.right }}
+          className="fixed z-50 w-72 max-w-[calc(100vw-16px)] rounded-xl border border-osu-b3/40 bg-osu-b5 p-3 shadow-2xl"
+        >
+          {rows.map((row, index) => (
+            <div key={index} className={index > 0 ? "mt-2.5 border-t border-white/[0.07] pt-2.5" : ""}>{row}</div>
+          ))}
+          {activeCount > 0 && onClearAll ? (
+            <div className="mt-2.5 flex justify-end border-t border-white/[0.07] pt-2.5">
+              <button
+                type="button"
+                onClick={onClearAll}
+                className="text-[12px] font-semibold text-osu-f1 transition-colors hover:text-osu-pink-light"
+              >
+                <Trans>clear all</Trans>
+              </button>
+            </div>
+          ) : null}
+        </div>,
+        document.body,
+      ) : null}
     </div>
   );
 }
@@ -1572,8 +1847,6 @@ function BoardToolbar({
   query,
   onQuery,
   showReason,
-  starRange,
-  onStarRange,
   reasonFilter,
   onReason,
   counts,
@@ -1586,9 +1859,6 @@ function BoardToolbar({
   query: string;
   onQuery: (next: string) => void;
   showReason: boolean;
-  // Null hides the difficulty pill (the gain board has no use for it).
-  starRange: { min: number; max: number } | null;
-  onStarRange: (min: number, max: number) => void;
   reasonFilter: ReasonFilter;
   onReason: (next: ReasonFilter) => void;
   counts: Record<ReasonFilter, number>;
@@ -1640,24 +1910,6 @@ function BoardToolbar({
           </div>
         )}
 
-        {starRange ? (
-          /* Shares the row with the search and sort from lg up; phones give
-             the pill its own row so the rail keeps a usable drag width. */
-          <div className="order-last flex w-full items-center gap-3 lg:order-none lg:w-auto">
-            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
-              <Trans>Difficulty</Trans>
-            </span>
-            <StarRangePill
-              lo={0}
-              hi={15}
-              min={starRange.min}
-              max={starRange.max}
-              step={0.1}
-              ariaLabel={t`Star rating`}
-              onChange={onStarRange}
-            />
-          </div>
-        ) : null}
         <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           {showReason && countLabel ? (
             <span className="hidden text-[11px] tabular-nums text-osu-f1 lg:inline">{countLabel}</span>

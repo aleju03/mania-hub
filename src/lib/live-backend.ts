@@ -2972,6 +2972,10 @@ export async function fetchLiveFarmHelperSnapshot(
     skill?: string;
     // Skills view lane filter: "nm" or "dt" alone; absent means both.
     skillMods?: LiveFarmHelperSkillMods;
+    // Only maps whose song is a Featured Artist track.
+    featuredArtist?: boolean;
+    // Gain view: also list maps that would add under 1pp.
+    showBelowGainFloor?: boolean;
     limit?: number;
     fresh?: boolean | number;
     signal?: AbortSignal;
@@ -2982,6 +2986,8 @@ export async function fetchLiveFarmHelperSnapshot(
   if (params?.view) query.set("view", params.view);
   if (params?.skill) query.set("skill", params.skill);
   if (params?.skillMods) query.set("mods", params.skillMods);
+  if (params?.featuredArtist) query.set("fa", "1");
+  if (params?.showBelowGainFloor) query.set("low", "1");
   if (params?.limit != null) query.set("limit", String(params.limit));
   // Cache-buster: the endpoint serves max-age=60, so fetches right after a
   // feedback mutation must skip the browser HTTP cache. Passing a number uses
