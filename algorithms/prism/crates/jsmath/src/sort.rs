@@ -450,7 +450,7 @@ impl<T: Clone, F: FnMut(&T, &T) -> f64> State<'_, T, F> {
         let (mut base_a, mut length_a) = self.runs[i];
         let (base_b, mut length_b) = self.runs[i + 1];
         self.runs[i].1 = length_a + length_b;
-        if i == stack_size - 3 {
+        if i + 3 == stack_size {
             self.runs[i + 1] = self.runs[i + 2];
         }
         self.runs.pop();
