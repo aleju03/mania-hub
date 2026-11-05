@@ -167,13 +167,15 @@ export function playPackRip() {
 
 /* A supporter's blade (packBlades.ts) sounds like itself as it cuts, under
    its recorded cut sounds (playBladeTick below): a fine steel tick for the
-   katana, a blip for neon, crackle for ember, and a buzz for lightning. Same
+   katana, crackle for ember and a buzz for lightning (the others have none). Same
    pacing and pitch climb as playSlashTick. */
+/* The blades with a synthesized stand-in (ticks, and a rip while the
+   recording loads). */
+const SYNTH_BLADES: ReadonlySet<SupporterBladeId> = new Set<SupporterBladeId>(["katana", "ember", "lightning"]);
+
 function synthBladeTick(ctx: AudioContext, blade: SupporterBladeId, progress: number) {
   if (blade === "katana") {
     playNoise(ctx, { duration: 0.028, gain: 0.34, startFreq: 5200 + progress * 2600 + Math.random() * 500, q: 14 });
-  } else if (blade === "neon") {
-    playTone(ctx, { freq: 520 + progress * 900, endFreq: 640 + progress * 1000, duration: 0.045, gain: 0.05, type: "square" });
   } else if (blade === "ember") {
     playNoise(ctx, { duration: 0.02, gain: 0.3, startFreq: 900 + Math.random() * 2200, q: 3 });
     if (Math.random() < 0.5) playNoise(ctx, { at: 0.012 + Math.random() * 0.02, duration: 0.014, gain: 0.22, startFreq: 2800 + Math.random() * 2000, q: 4 });
@@ -186,19 +188,14 @@ function synthBladeTick(ctx: AudioContext, blade: SupporterBladeId, progress: nu
 /* The pack giving, for a supporter's blade, while its recording is still
    loading. */
 function synthBladeRip(ctx: AudioContext, blade: SupporterBladeId) {
+  // the newer blades wait for their own sound: no synth stand-in for them
+  if (!SYNTH_BLADES.has(blade)) return;
   if (blade === "katana") {
     // the draw: a hiss rising to a ring that hangs in the air
     playNoise(ctx, { duration: 0.18, gain: 0.26, startFreq: 2400, endFreq: 9000, q: 1.4 });
     playTone(ctx, { at: 0.06, freq: 2637, duration: 0.9, gain: 0.05, type: "sine" });
     playTone(ctx, { at: 0.06, freq: 3951, duration: 0.6, gain: 0.025, type: "sine" });
     playTone(ctx, { freq: 140, endFreq: 50, duration: 0.18, gain: 0.2, type: "sine" });
-  } else if (blade === "neon") {
-    // an arcade arpeggio up, over a bass drop
-    [523.25, 659.25, 783.99, 1046.5].forEach((freq, index) => {
-      playTone(ctx, { at: index * 0.045, freq, duration: 0.12, gain: 0.06, type: "square" });
-    });
-    playTone(ctx, { freq: 220, endFreq: 55, duration: 0.35, gain: 0.16, type: "sawtooth", glideFraction: 0.6 });
-    playNoise(ctx, { duration: 0.2, gain: 0.12, startFreq: 1200, endFreq: 6000, q: 0.8 });
   } else if (blade === "ember") {
     // the whoomp of a catch, and a scatter of crackle
     playNoise(ctx, { duration: 0.42, gain: 0.3, startFreq: 260, endFreq: 1400, q: 0.7 });
@@ -714,9 +711,10 @@ export function playBladeCut(sound: { cut: string; rip: string } | undefined): v
 
 let lastBladeSampleTickAt = 0;
 
-/* Each stretch of foil the blade gets through. Neon and lightning repeat
-   their recorded cut, pitched up as the cut nears the end; steel and fire
-   keep a light synthesized tick under the stroke. */
+/* Each stretch of foil the blade gets through. Lightning repeats its
+   recorded cut, pitched up as the cut nears the end; steel and fire keep a
+   light synthesized tick under the stroke; frost, void, gale and ink are
+   quiet here (their cut plays once per stroke, from playBladeCut). */
 export function playBladeTick(blade: SupporterBladeId | null, progress: number, sound?: { cut: string; rip: string }) {
   if (!blade) {
     playSlashTick(progress);
@@ -724,13 +722,14 @@ export function playBladeTick(blade: SupporterBladeId | null, progress: number, 
   }
   const ctx = ensureAudio();
   if (!ctx) return;
+  if (!SYNTH_BLADES.has(blade)) return;
   const now = typeof performance !== "undefined" ? performance.now() : 0;
-  if ((blade === "neon" || blade === "lightning") && sound) {
+  if (blade === "lightning" && sound) {
     const buffer = bladeSamples.get(sound.cut)?.buffer;
     if (buffer) {
-      if (now - lastBladeSampleTickAt < (blade === "neon" ? 110 : 85)) return;
+      if (now - lastBladeSampleTickAt < 85) return;
       lastBladeSampleTickAt = now;
-      playBuffer(ctx, buffer, blade === "neon" ? 0.28 : 0.4, blade === "neon" ? 0.9 + progress * 0.6 : 0.85 + Math.random() * 0.4);
+      playBuffer(ctx, buffer, 0.4, 0.85 + Math.random() * 0.4);
       return;
     }
   }

@@ -20,7 +20,7 @@ import {
 } from "./packArt";
 import { createPackScene, type PackScene } from "./packScene";
 import { BladeFx, preloadSprites } from "./bladeFx";
-import { bladeLook, bladeTrailLife } from "./packBlades";
+import { bladeLook, bladeTrailLife, cutPath } from "./packBlades";
 import { createBladeRenderer, type BladeRenderer } from "./bladeGl";
 import { playBladeCut, playBladeRip, playBladeTick, playCardSlice, warmBladeSounds } from "./packSfx";
 
@@ -778,6 +778,19 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     ensureTrailLoop();
   };
 
+  /* Where the stroke went on screen while it cut: across which span and at
+     what height, so the burst lands on the cut the player made. */
+  const cutOnScreenRef = useRef<{ minX: number; maxX: number; sumY: number; count: number; points: { x: number; y: number }[] } | null>(null);
+  const noteCutOnScreen = (clientX: number, clientY: number) => {
+    const cut = cutOnScreenRef.current;
+    if (!cut || !slashRef.current) return;
+    cut.minX = Math.min(cut.minX, clientX);
+    cut.maxX = Math.max(cut.maxX, clientX);
+    cut.sumY += clientY;
+    cut.count += 1;
+    if (cut.points.length < 96) cut.points.push({ x: clientX, y: clientY });
+  };
+
   /* The pack giving: the blade's own burst along the cut, and a shake. The
      standard blade gives with the rip alone. */
   const spawnBurst = (cutY: number) => {
@@ -786,8 +799,19 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     const pack = packRef.current;
     const rect = pack?.getBoundingClientRect();
     if (!pack || !rect) return;
-    look.rip(fxRef.current, rect, rect.top + rect.height * cutY, 1);
-    bladeRendererRef.current?.renderer.impact(rect.left + rect.width / 2, rect.top + rect.height * cutY);
+    // on the stroke itself when it was seen; the pack's own band otherwise
+    const cut = cutOnScreenRef.current;
+    const y = cut && cut.count > 1 ? cut.sumY / cut.count : rect.top + rect.height * cutY;
+    const span = cut && cut.maxX - cut.minX > 24 ? { left: cut.minX, width: cut.maxX - cut.minX } : { left: rect.left, width: rect.width };
+    const box = { left: Math.max(rect.left, span.left), width: Math.min(rect.left + rect.width, span.left + span.width) - Math.max(rect.left, span.left), top: rect.top, height: rect.height };
+    if (box.width < 24) {
+      box.left = rect.left;
+      box.width = rect.width;
+    }
+    // the stroke's points over the pack, oldest first
+    const over = cut?.points.filter((point) => point.x >= rect.left && point.x <= rect.left + rect.width);
+    look.rip(fxRef.current, box, y, 1, cutPath(box, y, over && over.length > 1 ? over : undefined));
+    bladeRendererRef.current?.renderer.impact(box.left + box.width / 2, y);
     ensureTrailLoop();
     if (look.shake) {
       const k = look.shake;
@@ -818,6 +842,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
      scene; x is tracked in texture pixels. */
   const cutAtPoint = (clientX: number, clientY: number) => {
     if (rippingRef.current) return;
+    noteCutOnScreen(clientX, clientY);
     const point = sceneRef.current?.pointerToPack(clientX, clientY);
     if (!point) return;
     const ny = point.v;
@@ -833,6 +858,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
         ? clampNumber(ny, DEEP_CUT_MIN_Y, DEEP_CUT_MAX_Y)
         : clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
       slashRef.current = { lastX: x, lastYFrac: yFrac, lastSparkX: x, deep };
+      cutOnScreenRef.current = { minX: clientX, maxX: clientX, sumY: clientY, count: 1, points: [{ x: clientX, y: clientY }] };
       playBladeCut(bladeLook(bladeRef.current).sound);
       setCutSpan(x, yFrac, x, yFrac, deep);
       ensureLoop();

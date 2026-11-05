@@ -7,7 +7,7 @@ const SPRITE_ROOT = "/images/packs/fx/";
 
 export type SpriteId =
   | "slash-04" | "scratch-01" | "star-06" | "star-07" | "flare-01" | "circle-05" | "circle-02" | "magic-05" | "trace-07"
-  | "spark-01" | "spark-05" | "spark-06" | "spark-07" | "flame-05" | "fire-01" | "smoke-04";
+  | "spark-01" | "spark-05" | "spark-06" | "spark-07" | "flame-05" | "fire-01" | "smoke-04" | "dot-01" | "splat-01";
 
 const images = new Map<SpriteId, HTMLImageElement>();
 const tinted = new Map<string, HTMLCanvasElement>();

@@ -88,7 +88,7 @@ void main() {
 const RIBBON_FS = `#version 300 es
 precision highp float;
 in vec4 v_info;
-uniform int u_mode; // 0 blade, 1 neon, 2 fire, 3 bolt
+uniform int u_mode; // 0 blade, 1 frost, 2 fire, 3 bolt, 4 gale, 5 void rim, 6 ink rim, 7 void body, 8 ink body
 uniform vec3 u_glow;
 uniform vec3 u_mid;
 uniform vec3 u_core;
@@ -136,6 +136,26 @@ void main() {
   float along = v_info.w;
   if (fade <= 0.001) discard;
 
+  if (u_mode == 7) {
+    // Void's body, laid over normally: dark, its edge smoking as it goes.
+    float n = fbm(vec2(along * 0.03 - u_time * 1.5, d * 3.0 + u_time * 0.6));
+    float edge = 0.5 + (n - 0.5) * 0.36;
+    float a = smoothstep(edge, edge - 0.16, d) * smoothstep(0.0, 0.25, fade);
+    o_color = vec4(u_core * a, a);
+    return;
+  }
+  if (u_mode == 8) {
+    // Ink's body, laid over normally: bristle streaks along it, a wobbling
+    // edge, and dry-brush breaks as it fades.
+    float bristle = noise(vec2(d * 34.0, along * 0.015));
+    float dry = noise(vec2(along * 0.07, d * 18.0));
+    float edge = 0.74 + (noise(vec2(along * 0.04, 3.7)) - 0.5) * 0.16;
+    float a = smoothstep(edge, edge - 0.07, d) * (0.8 + 0.2 * bristle);
+    a *= smoothstep(0.0, 0.3, fade * 1.3 + dry * 0.4 - 0.25);
+    o_color = vec4(u_core * a, a);
+    return;
+  }
+
   if (u_mode == 2) {
     // Flames: heat falls off away from the blade, broken up by noise that
     // runs along it and up, so it flickers without ever forming blobs.
@@ -154,10 +174,30 @@ void main() {
   float glow = exp(-d * d * 3.5) * (1.0 - d);
   vec3 color;
   if (u_mode == 1) {
-    // Tube light: a steady hum along it, and the two hues separate at the edge.
-    float hum = 0.9 + 0.1 * sin(u_time * 110.0 + along * 0.08);
-    float tube = exp(-d * d * 16.0);
-    color = (u_glow * glow * 0.6 + u_mid * tube * 1.9 + u_core * core * 0.45) * hum;
+    // Frost: a white core in an icy body, and glints that catch and go out
+    // along it.
+    float body = exp(-d * d * 7.0);
+    float halo = exp(-d * d * 2.4) * (1.0 - d);
+    float hot = smoothstep(u_coreWidth * 1.2, u_coreWidth * 0.3, d);
+    vec2 cell = vec2(floor(along * 0.08), floor(u_time * 8.0));
+    float glint = step(0.84, hash(cell)) * exp(-d * d * 4.0) * (0.55 + 0.45 * sin(u_time * 36.0 + along * 0.3));
+    color = u_glow * halo * 0.5 + u_mid * body * 0.95 + u_core * hot * 2.3 + vec3(0.85, 0.96, 1.0) * glint * 2.2;
+  } else if (u_mode == 4) {
+    // Gale: thin pale streaks of wind running along it, never one solid band.
+    float n = noise(vec2(along * 0.012 - u_time * 2.2, d * 2.0));
+    float lines = pow(abs(sin((d * 4.5 + n * 1.6) * 3.14159)), 12.0) * exp(-d * d * 2.2);
+    float soft = exp(-d * d * 5.0) * 0.22;
+    float hot = smoothstep(u_coreWidth, u_coreWidth * 0.3, d);
+    color = u_mid * (lines * 1.15 + soft) + u_core * hot * 1.1;
+  } else if (u_mode == 5) {
+    // Void's rim: the light is at the edge of the dark body, not in it.
+    float rim = exp(-pow(d - 0.5, 2.0) * 40.0);
+    float halo = exp(-d * d * 1.5) * (1.0 - d) * 0.45;
+    color = u_glow * (rim * 1.3 + halo) + u_mid * rim * 0.5;
+  } else if (u_mode == 6) {
+    // Ink's sheen: a faint glow off the wet stroke.
+    float sheen = exp(-d * d * 3.0) * (1.0 - d);
+    color = u_mid * sheen * 0.18;
   } else if (u_mode == 3) {
     float bolt = exp(-d * d * 45.0);
     color = u_glow * glow * 1.2 + u_mid * bolt * 0.8 + u_core * core * 2.2;
@@ -248,6 +288,7 @@ uniform float u_bloomStrength;
 uniform float u_impact;
 uniform vec2 u_impactAt;
 uniform vec3 u_flash;
+uniform float u_aspect;
 out vec4 o_color;
 void main() {
   vec4 scene = texture(u_scene, v_uv);
@@ -266,12 +307,20 @@ void main() {
   float peak = max(light.r, max(light.g, light.b));
   vec3 color = light * ((1.0 - exp(-peak * 1.15)) / max(peak, 1e-4));
   color = mix(color, vec3(1.0 - exp(-peak * 1.15)), smoothstep(2.2, 7.0, peak) * 0.75);
-  color += u_flash;
+  // the flash lights the pack and round it, not the whole page
+  vec2 dv = (v_uv - u_impactAt) * vec2(u_aspect, 1.0);
+  color += u_flash * exp(-dot(dv, dv) * 14.0);
   float lum = max(color.r, max(color.g, color.b));
   // Mostly added to the page (rgb above alpha), with a little cover where it is
   // brightest so the core reads on light themes too.
   o_color = vec4(color, clamp(scene.a + lum * 0.18, 0.0, 1.0));
 }`;
+
+/* A brush stroke's width along it (0 the oldest end, 1 the tip): thin at
+   both ends, full a little behind the middle. */
+function brushProfile(u: number): number {
+  return 0.25 + 0.75 * Math.sin(Math.PI * Math.min(1, u * 0.92 + 0.04));
+}
 
 /* ---- GL plumbing -------------------------------------------------------- */
 
@@ -535,7 +584,9 @@ function createGlRenderer(canvas: HTMLCanvasElement): BladeRenderer | null {
     const outer = strokes[0];
     const core = strokes[strokes.length - 1];
     const middle = strokes.length > 2 ? strokes[1] : outer;
-    const mode = look.jitter ? 3 : look.style === "neon" ? 1 : look.style === "fire" ? 2 : 0;
+    const mode = look.jitter ? 3 : look.style === "frost" ? 1 : look.style === "fire" ? 2 : look.style === "gale" ? 4 : look.style === "void" ? 5 : look.style === "ink" ? 6 : 0;
+    // void and ink are dark: after their light, their body goes over normally
+    const darkMode = look.style === "void" ? 7 : look.style === "ink" ? 8 : 0;
     // The glow is the bloom's job now, so the strip only needs room for the
     // widest stroke (and the flames, which reach well past it).
     const reach = mode === 2 ? 2.4 : mode === 3 ? 1.3 : 1.15;
@@ -561,7 +612,7 @@ function createGlRenderer(canvas: HTMLCanvasElement): BladeRenderer | null {
       const n = path.length;
       pushStrip(
         path,
-        (u) => ((outer.width[0] + (outer.width[1] - outer.width[0]) * u) / 2) * scale * reach,
+        (u) => ((outer.width[0] + (outer.width[1] - outer.width[0]) * u) / 2) * scale * reach * (look.brush ? brushProfile(u) : 1),
         (i) => (i / (n - 1)) * Math.max(0, 1 - (now - path[i].t) / life),
       );
     }
@@ -580,6 +631,11 @@ function createGlRenderer(canvas: HTMLCanvasElement): BladeRenderer | null {
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, ribbonData, 0, count);
     gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE);
     for (const [first, vertices] of strips) gl.drawArrays(gl.TRIANGLE_STRIP, first, vertices);
+    if (darkMode) {
+      gl.uniform1i(loc(programs.ribbon, "u_mode"), darkMode);
+      gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      for (const [first, vertices] of strips) gl.drawArrays(gl.TRIANGLE_STRIP, first, vertices);
+    }
   };
 
   const drawSprites = (items: readonly FxItem[], width: number, height: number) => {
@@ -737,6 +793,7 @@ function createGlRenderer(canvas: HTMLCanvasElement): BladeRenderer | null {
       gl.uniform1f(loc(program, "u_impact"), impact);
       gl.uniform2f(loc(program, "u_impactAt"), impactAt.x / Math.max(1, width), 1 - impactAt.y / Math.max(1, height));
       gl.uniform3f(loc(program, "u_flash"), flash[0], flash[1], flash[2]);
+      gl.uniform1f(loc(program, "u_aspect"), width / Math.max(1, height));
       gl.bindVertexArray(quad);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.activeTexture(gl.TEXTURE0);

@@ -5,10 +5,9 @@ import { pick, rand, type BladeFx, type SpriteId } from "./bladeFx";
    (PackStage's trail canvas), what it throws off along the stroke and where it
    crosses the foil, and the burst when the pack gives. Null is the standard
    blade; the rest are a supporter's pick (lib/supporter-pack-style.ts). The
-   particles are bladeFx.ts sprites; the recorded sounds (Kenney's CC0 RPG,
-   Sci-fi and Impact packs and OpenGameArt CC0 fire and thunder, trimmed and
-   layered) are played from packSfx.ts. `scale` shrinks everything for the
-   small previews. */
+   particles are bladeFx.ts sprites; the recorded sounds (CC0, sources in
+   public/audio/packs/blades/README.md) are played from packSfx.ts. `scale`
+   shrinks everything for the small previews. */
 
 type Rgb = readonly [number, number, number];
 
@@ -17,6 +16,28 @@ interface Stroke {
   alpha: number;
   /* Line width at the tail and at the tip; the streak tapers between them. */
   width: readonly [number, number];
+}
+
+/* A point on the cut the player made, `t` from where it entered the pack (0)
+   to where it left (1); a straight line at the burst's height when the
+   stroke was not seen. */
+export type CutPath = (t: number) => { x: number; y: number };
+
+/* The cut as a CutPath: along the stroke's points by distance, or straight
+   across the box at `y` without them. */
+export function cutPath(box: PackBox, y: number, points?: readonly Point[]): CutPath {
+  if (!points || points.length < 2) return (t) => ({ x: box.left + t * box.width, y });
+  const lengths = [0];
+  for (let i = 1; i < points.length; i += 1) lengths.push(lengths[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+  const total = lengths[lengths.length - 1] || 1;
+  return (t) => {
+    const want = Math.min(1, Math.max(0, t)) * total;
+    let i = 1;
+    while (i < lengths.length - 1 && lengths[i] < want) i += 1;
+    const span = lengths[i] - lengths[i - 1] || 1;
+    const k = (want - lengths[i - 1]) / span;
+    return { x: points[i - 1].x + (points[i].x - points[i - 1].x) * k, y: points[i - 1].y + (points[i].y - points[i - 1].y) * k };
+  };
 }
 
 export interface PackBox {
@@ -28,9 +49,12 @@ export interface PackBox {
 
 export interface BladeLook {
   /* How the WebGL renderer (bladeGl.ts) shades the streak: a plain bright
-     blade, two-tone tube light, fire licking off it, or a bolt (with
-     `jitter`). The strokes give its colours and widths either way. */
-  style?: "neon" | "fire";
+     blade, ice with glints, fire licking off it, a bolt (with `jitter`),
+     streaks of wind, or a dark body (void, ink) laid over normally with its
+     light at the edge. The strokes give its colours and widths either way. */
+  style?: "frost" | "fire" | "gale" | "void" | "ink";
+  /* Thin at both ends and full in the middle, like a brush stroke (ink). */
+  brush?: boolean;
   /* How far its light spreads (bloom), 1 for the standard blade. */
   bloom?: number;
   /* Drawn under to over: the widest glow first, the bright core last. */
@@ -47,7 +71,7 @@ export interface BladeLook {
   /* Where the blade crosses the foil. */
   cut: (fx: BladeFx, x: number, y: number, scale: number) => void;
   /* The pack giving along the cut (y in px). */
-  rip?: (fx: BladeFx, box: PackBox, y: number, scale: number) => void;
+  rip?: (fx: BladeFx, box: PackBox, y: number, scale: number, at: CutPath) => void;
   /* How hard the pack shakes as it gives, in px. */
   shake?: number;
   sound?: { cut: string; rip: string };
@@ -57,6 +81,18 @@ const SOUNDS = "/audio/packs/blades/";
 
 /* Fire cooling as it rises: white-hot, yellow, orange, red, ember. */
 const FIRE = ["#fff4cc", "#ffd166", "#ffa12e", "#ff6a14", "#e0400f", "#a8260c", "#5c1408"] as const;
+
+/* A leaf on the wind (gale): the flame sprite in leaf colours, laid over
+   normally, spinning and swaying as it goes. vx, vy in px/s before scale. */
+function leaf(fx: BladeFx, x: number, y: number, scale: number, delay: number, vx: number, vy: number, life = rand(1.1, 1.7)) {
+  fx.emit({ sprite: "flame-05", color: pick(["#9be37a", "#e9c46a", "#f4a261", "#cfe8a9"]), normal: true, x, y, vx: vx * scale, vy: vy * scale, gravity: 140 * scale, drag: 0.7, wobble: rand(20, 40) * scale, size: rand(12, 20) * scale, endSize: rand(10, 16) * scale, rotation: rand(0, Math.PI * 2), spin: rand(-10, 10), life, alpha: 0.95, delay });
+}
+
+/* A drop of ink flung off the brush (ink): pale, now and then a red one. */
+function inkDrop(fx: BladeFx, x: number, y: number, scale: number, vx: number, vy: number, size: number, delay: number, red: boolean) {
+  const spec = { x, y, vx: vx * scale, vy: vy * scale, gravity: 700 * scale, drag: 0.6, life: rand(0.6, 0.9), delay };
+  fx.emit({ ...spec, sprite: "dot-01", color: red ? "#d6453d" : "#f0e4ce", normal: true, size: size * scale, endSize: size * 0.8 * scale, alpha: 1 });
+}
 
 /* Sparks flung up and out from a point. */
 function spray(fx: BladeFx, x: number, y: number, scale: number, count: number, opts: { sprite: SpriteId; colors: readonly string[]; speed: [number, number]; size: [number, number]; life: [number, number]; spread?: number; up?: number; gravity?: number; drag?: number; stretch?: number; flicker?: boolean }) {
@@ -124,75 +160,52 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
     shake: 4,
     sound: { cut: `${SOUNDS}katana-cut.mp3`, rip: `${SOUNDS}katana-rip.mp3` },
   },
-  /* Sign tubes: pink in a cyan haze and light left hanging in the air. When
-     the pack gives, the cut is a tube of its own that shorts: it stutters
-     on the way a sign does, crackles along its length, and breaks, its glass
-     falling away still lit. */
-  neon: {
-    style: "neon",
-    bloom: 1.25,
+  /* Frost: an icy edge that leaves frost along the stroke and chips ice
+     off the foil. When the pack gives, frost grows out over it from the cut
+     (crystals blooming along the stroke you made), it cracks, and it
+     shatters, the shards falling away. */
+  frost: {
+    style: "frost",
+    bloom: 1.15,
     strokes: [
-      { rgb: [40, 225, 255], alpha: 0.32, width: [6, 22] },
-      { rgb: [255, 64, 200], alpha: 0.62, width: [3, 11] },
-      { rgb: [255, 236, 250], alpha: 0.95, width: [1, 4.5] },
+      { rgb: [70, 180, 255], alpha: 0.4, width: [6, 24] },
+      { rgb: [170, 228, 255], alpha: 0.8, width: [3, 11] },
+      { rgb: [255, 255, 255], alpha: 1, width: [1.2, 4.5] },
     ],
-    life: 260,
-    tip: { glow: "rgba(255, 64, 200, 0.5)", core: "rgba(255, 236, 250, 1)", radius: 5 },
-    sprites: ["circle-05", "flare-01", "trace-07", "spark-07"],
+    life: 240,
+    tip: { glow: "rgba(140, 220, 255, 0.5)", core: "rgba(255, 255, 255, 1)", radius: 4.5 },
+    sprites: ["star-07", "trace-07", "circle-05", "spark-06"],
     trailEvery: 22,
     trail: (fx, x, y, _dx, _dy, scale) => {
-      fx.emit({ sprite: "circle-05", color: pick(["#ff4fd8", "#3ef0ff"]), x: x + rand(-6, 6) * scale, y: y + rand(-6, 6) * scale, vy: rand(-30, 30) * scale, vx: rand(-30, 30) * scale, size: rand(7, 12) * scale, endSize: 2 * scale, life: rand(0.5, 0.8), flicker: Math.random() < 0.3 });
+      fx.emit({ sprite: "star-07", color: pick(["#ffffff", "#dff6ff", "#bfe9ff"]), x: x + rand(-5, 5) * scale, y: y + rand(-4, 4) * scale, vy: rand(4, 18) * scale, size: rand(7, 12) * scale, endSize: 2 * scale, rotation: rand(0, Math.PI), spin: rand(-2, 2), life: rand(0.6, 0.95), alpha: 0.85 });
     },
     cut: (fx, x, y, scale) => {
-      spray(fx, x, y, scale, 3, { sprite: "flare-01", colors: ["#ff4fd8", "#3ef0ff"], speed: [160, 360], size: [30, 46], life: [0.35, 0.55], drag: 3, gravity: 60 });
-    },
-    rip: (fx, box, y, scale) => {
-      // The tube is a row of short lit lengths, each trace-07 (a soft upright
-      // bar) turned on its side and overlapping the next, so it reads as one
-      // tube and can break into its own pieces.
-      const pieces = 16;
-      const span = box.width * 1.15;
-      const left = box.left + (box.width - span) / 2;
-      const step = span / pieces;
-      const lit = (x: number, delay: number, life: number, flicker: boolean) => {
-        fx.emit({ sprite: "trace-07", color: "#36e8ff", x, y, size: step * 3.4, aspect: (120 * scale) / (step * 3.4), rotation: Math.PI / 2, life, alpha: 0.1, flicker, delay });
-        fx.emit({ sprite: "trace-07", color: "#ff3fc8", x, y, size: step * 3.2, aspect: (44 * scale) / (step * 3.2), rotation: Math.PI / 2, life, alpha: 0.5, flicker, delay });
-      };
-      for (let i = 0; i < pieces; i += 1) {
-        const x = left + step * (i + 0.5);
-        // on, off, on, off, then it holds until it breaks
-        lit(x, 0, 0.05, false);
-        lit(x, 0.1, 0.04, true);
-        lit(x, 0.19, 0.36, Math.random() < 0.25);
-        // and breaks: each length falls and turns, still lit
-        fx.emit({
-          sprite: "trace-07",
-          color: pick(["#ff3fc8", "#ff3fc8", "#ff7be0", "#36e8ff"]),
-          x: x + rand(-3, 3) * scale,
-          y,
-          vx: ((x - box.left) / box.width - 0.5) * rand(160, 420) * scale,
-          vy: rand(-220, -60) * scale,
-          gravity: 1500 * scale,
-          drag: 0.4,
-          size: step * rand(1.4, 2.2),
-          endSize: step * 1.1,
-          aspect: (34 * scale) / step,
-          rotation: Math.PI / 2 + rand(-0.2, 0.2),
-          spin: rand(-12, 12),
-          life: rand(0.55, 0.8),
-          alpha: 0.85,
-          flicker: Math.random() < 0.3,
-          delay: 0.52 + rand(0, 0.05),
-        });
-      }
-      // it crackles along its length while it holds
       for (let i = 0; i < 6; i += 1) {
-        fx.emit({ sprite: "spark-07", color: pick(["#ffb8ef", "#a8f6ff"]), x: box.left + rand(0.05, 0.95) * box.width, y: y + rand(-3, 3) * scale, size: rand(22, 34) * scale, aspect: rand(2.2, 3.4), rotation: rand(-0.15, 0.15), life: rand(0.06, 0.12), alpha: 0.7, flicker: true, delay: 0.19 + rand(0, 0.3) });
+        fx.emit({ sprite: "trace-07", color: pick(["#ffffff", "#d6f2ff", "#a8ddff"]), x, y, vx: rand(-260, 260) * scale, vy: rand(-320, -60) * scale, gravity: 900 * scale, drag: 1, size: rand(10, 16) * scale, endSize: 6 * scale, aspect: 0.35, rotation: rand(0, Math.PI), spin: rand(-10, 10), life: rand(0.35, 0.55) });
       }
-      fx.flash("#ff3fc8", 0.05, 0.08);
+      if (Math.random() < 0.4) fx.emit({ sprite: "star-07", color: "#eaf8ff", x, y, size: 30 * scale, endSize: 8 * scale, life: 0.2, rotation: rand(0, Math.PI) });
     },
-    shake: 3,
-    sound: { cut: `${SOUNDS}neon-cut.mp3`, rip: `${SOUNDS}neon-rip.mp3` },
+    rip: (fx, _box, _y, scale, at) => {
+      // frost blooming out along the cut, end to end
+      for (let i = 0; i < 26; i += 1) {
+        const t = i / 25;
+        const p = at(t);
+        fx.emit({ sprite: "star-07", color: pick(["#ffffff", "#e6f8ff", "#c4ecff"]), x: p.x + rand(-6, 6) * scale, y: p.y + rand(-16, 16) * scale, size: 3 * scale, endSize: rand(18, 30) * scale, rotation: rand(0, Math.PI), spin: rand(-1, 1), life: rand(0.45, 0.6), alpha: 0.9, delay: t * 0.12 });
+      }
+      // short cracks off it
+      for (let i = 0; i < 7; i += 1) {
+        const p = at(rand(0.1, 0.9));
+        fx.emit({ sprite: "spark-06", color: "#f0fbff", x: p.x, y: p.y + rand(-6, 6) * scale, size: rand(22, 34) * scale, endSize: rand(26, 38) * scale, aspect: 0.3, rotation: rand(-1.2, 1.2), life: 0.35, alpha: 0.8, delay: rand(0.1, 0.16) });
+      }
+      // and it shatters: shards falling away from all along the cut
+      for (let i = 0; i < 30; i += 1) {
+        const p = at(rand(0, 1));
+        fx.emit({ sprite: "trace-07", color: "#ffffff", ramp: ["#ffffff", "#d6f2ff", "#8fcfff", "#5aa8e6"], x: p.x, y: p.y + rand(-8, 8) * scale, vx: rand(-240, 240) * scale, vy: rand(-300, -40) * scale, gravity: 1100 * scale, drag: 0.6, size: rand(14, 26) * scale, endSize: 10 * scale, aspect: 0.32, rotation: rand(0, Math.PI), spin: rand(-12, 12), life: rand(0.7, 1.1), delay: rand(0.17, 0.24) });
+      }
+      fx.flash("#cfefff", 0.12, 0.12);
+    },
+    shake: 4,
+    sound: { cut: `${SOUNDS}frost-cut.mp3`, rip: `${SOUNDS}frost-rip.mp3` },
   },
   /* Fire: the stroke burns as it goes, and the pack catches along the cut.
      Built the way fire is in games: many small soft puffs, each cooling
@@ -294,6 +307,149 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
     },
     shake: 7,
     sound: { cut: `${SOUNDS}lightning-cut.mp3`, rip: `${SOUNDS}lightning-rip.mp3` },
+  },
+  /* Void: a dark blade with its light at the edge, smoking as it goes. When
+     the pack gives, light spirals into the cut, darkness wells out of it,
+     and dark tendrils lash out with sparks of the light thrown after them. */
+  void: {
+    style: "void",
+    bloom: 1.2,
+    strokes: [
+      { rgb: [140, 70, 255], alpha: 0.5, width: [10, 30] },
+      { rgb: [220, 150, 255], alpha: 0.8, width: [6, 18] },
+      { rgb: [8, 5, 14], alpha: 1, width: [8, 22] },
+    ],
+    life: 320,
+    tip: { glow: "rgba(150, 80, 255, 0.55)", core: "rgba(230, 212, 255, 1)", radius: 4 },
+    sprites: ["smoke-04", "magic-05", "circle-05"],
+    trailEvery: 16,
+    trail: (fx, x, y, _dx, _dy, scale) => {
+      fx.emit({ sprite: "smoke-04", color: "#1b1030", normal: true, x: x + rand(-4, 4) * scale, y: y + rand(-4, 4) * scale, vx: rand(-14, 14) * scale, vy: rand(-26, -6) * scale, size: rand(22, 34) * scale, endSize: rand(46, 64) * scale, rotation: rand(0, Math.PI * 2), spin: rand(-1, 1), life: rand(0.7, 1), alpha: 0.6 });
+      if (Math.random() < 0.35) fx.emit({ sprite: "magic-05", color: pick(["#b47bff", "#ff7ae0"]), x, y, vx: rand(-40, 40) * scale, vy: rand(-50, 0) * scale, size: rand(8, 14) * scale, endSize: 2 * scale, life: rand(0.4, 0.7) });
+    },
+    cut: (fx, x, y, scale) => {
+      spray(fx, x, y, scale, 5, { sprite: "magic-05", colors: ["#b47bff", "#e2c4ff", "#ff7ae0"], speed: [80, 220], size: [10, 18], life: [0.35, 0.6], drag: 2.5, spread: 3 });
+    },
+    rip: (fx, _box, _y, scale, at) => {
+      const mid = at(0.5);
+      // light spiralling in: each mote starts out round the cut and curls into it
+      for (let i = 0; i < 30; i += 1) {
+        const a = rand(0, Math.PI * 2);
+        const r = rand(70, 130) * scale;
+        const inward = r * 2.4;
+        const swirl = r * 3.2;
+        fx.emit({ sprite: "magic-05", color: pick(["#b47bff", "#e2c4ff", "#ff7ae0"]), x: mid.x + Math.cos(a) * r, y: mid.y + Math.sin(a) * r * 0.7, vx: -Math.cos(a) * inward - Math.sin(a) * swirl, vy: -Math.sin(a) * inward * 0.7 + Math.cos(a) * swirl * 0.7, drag: 3.5, size: rand(10, 16) * scale, endSize: 3 * scale, life: 0.38 });
+      }
+      // darkness welling out of the cut, along all of it
+      for (let i = 0; i < 12; i += 1) {
+        const p = at(i / 11);
+        fx.emit({ sprite: "smoke-04", color: "#160c28", normal: true, x: p.x, y: p.y + rand(-4, 4) * scale, vy: rand(-20, 20) * scale, size: 24 * scale, endSize: rand(64, 92) * scale, rotation: rand(0, Math.PI * 2), spin: rand(-0.8, 0.8), life: rand(1.1, 1.5), alpha: 0.85, delay: 0.3 + (i / 11) * 0.06 });
+      }
+      // tendrils lashing out, sparks of the light flung after them
+      for (let i = 0; i < 8; i += 1) {
+        const p = at(rand(0.1, 0.9));
+        const a = rand(0, Math.PI * 2);
+        const sp = rand(380, 620) * scale;
+        fx.emit({ sprite: "smoke-04", color: "#1d1133", normal: true, x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.75, drag: 3, stretch: 1.4, size: rand(18, 26) * scale, endSize: 8 * scale, life: 0.55, alpha: 0.95, delay: 0.36 });
+      }
+      for (let i = 0; i < 26; i += 1) {
+        const p = at(rand(0, 1));
+        const a = rand(0, Math.PI * 2);
+        const sp = rand(220, 520) * scale;
+        fx.emit({ sprite: "magic-05", color: pick(["#b47bff", "#ff7ae0", "#e2c4ff"]), x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.7, drag: 2.4, size: rand(10, 18) * scale, endSize: 2 * scale, life: rand(0.55, 0.85), delay: 0.38 });
+      }
+      fx.flash("#6a2cff", 0.1, 0.14);
+    },
+    shake: 5,
+    sound: { cut: `${SOUNDS}void-cut.mp3`, rip: `${SOUNDS}void-rip.mp3` },
+  },
+  /* Gale: pale streaks of wind off the stroke and wisps trailing it. When
+     the pack gives, the leaves caught in it whirl round the cut, and then
+     a gust throws them away across the stage. */
+  gale: {
+    style: "gale",
+    bloom: 0.8,
+    strokes: [
+      { rgb: [200, 255, 235], alpha: 0.25, width: [6, 26] },
+      { rgb: [225, 255, 245], alpha: 0.8, width: [3, 14] },
+      { rgb: [255, 255, 255], alpha: 1, width: [0.8, 2.5] },
+    ],
+    life: 300,
+    tip: { glow: "rgba(220, 255, 240, 0.35)", core: "rgba(255, 255, 255, 1)", radius: 3.5 },
+    sprites: ["trace-07", "flame-05"],
+    trailEvery: 26,
+    trail: (fx, x, y, dx, dy, scale) => {
+      // a wisp left curling off behind the stroke
+      const len = Math.hypot(dx, dy) || 1;
+      fx.emit({ sprite: "trace-07", color: "#eafff6", x: x + rand(-4, 4) * scale, y: y + rand(-8, 8) * scale, vx: (-dx / len) * rand(40, 90) * scale, vy: (-dy / len) * rand(40, 90) * scale + rand(-20, 20) * scale, size: rand(18, 28) * scale, endSize: rand(26, 40) * scale, aspect: 0.08, rotation: Math.atan2(dy, dx) + Math.PI / 2 + rand(-0.3, 0.3), spin: rand(-1.5, 1.5), life: rand(0.35, 0.5), alpha: 0.4 });
+    },
+    cut: (fx, x, y, scale) => {
+      for (let i = 0; i < 3; i += 1) {
+        fx.emit({ sprite: "trace-07", color: "#eafff6", x, y: y + rand(-14, 14) * scale, vx: rand(500, 900) * scale, size: rand(26, 40) * scale, aspect: 0.12, rotation: Math.PI / 2, life: 0.25, alpha: 0.6 });
+      }
+      if (Math.random() < 0.5) leaf(fx, x, y, scale, 0, rand(300, 700), rand(-220, 80));
+    },
+    rip: (fx, box, _y, scale, at) => {
+      const mid = at(0.5);
+      // the leaves whirl round the cut first
+      for (let i = 0; i < 16; i += 1) {
+        const a = (i / 16) * Math.PI * 2;
+        const r = rand(30, 60) * scale;
+        leaf(fx, mid.x + Math.cos(a) * r, mid.y + Math.sin(a) * r * 0.5, scale, 0, -Math.sin(a) * 520, Math.cos(a) * 260, 0.32);
+      }
+      // then the gust: streaks of wind across the whole stage, the leaves thrown with it
+      for (let i = 0; i < 14; i += 1) {
+        fx.emit({ sprite: "trace-07", color: "#eafff6", x: box.left - rand(20, 80) * scale, y: box.top + rand(0.05, 0.95) * box.height, vx: rand(1000, 1500) * scale, vy: rand(-120, -40) * scale, size: rand(50, 90) * scale, aspect: 0.06, rotation: Math.PI / 2 - 0.08, life: rand(0.3, 0.42), alpha: 0.45, delay: 0.28 + rand(0, 0.06) });
+      }
+      for (let i = 0; i < 22; i += 1) {
+        const p = at(rand(0, 1));
+        leaf(fx, p.x, p.y + rand(-10, 10) * scale, scale, 0.3 + rand(0, 0.06), rand(600, 1000), rand(-260, 40));
+      }
+      fx.flash("#e9fff6", 0.05, 0.1);
+    },
+    shake: 3,
+    sound: { cut: `${SOUNDS}gale-cut.mp3`, rip: `${SOUNDS}gale-rip.mp3` },
+  },
+  /* Ink brush: a calligraphy stroke in pale ink (white calligraphy on dark
+     paper, so it reads on the dark page), full in the middle and thin at the
+     ends, drying in breaks as it fades, flicking drops off. When the pack
+     gives, ink splashes out of the cut: splats along the stroke you made and
+     drops flung off them, a few red among them. */
+  ink: {
+    style: "ink",
+    brush: true,
+    bloom: 0.4,
+    strokes: [
+      { rgb: [20, 18, 24], alpha: 1, width: [14, 44] },
+      { rgb: [255, 240, 214], alpha: 1, width: [14, 44] },
+      { rgb: [240, 228, 206], alpha: 1, width: [14, 44] },
+    ],
+    life: 650,
+    tip: { glow: "rgba(243, 230, 207, 0.25)", core: "rgba(243, 230, 207, 0.9)", radius: 3 },
+    sprites: ["dot-01", "splat-01"],
+    trailEvery: 20,
+    trail: (fx, x, y, _dx, _dy, scale) => {
+      if (Math.random() < 0.5) inkDrop(fx, x, y, scale, rand(-90, 90), rand(-140, 20), rand(3, 5), 0, false);
+    },
+    cut: (fx, x, y, scale) => {
+      for (let i = 0; i < 5; i += 1) inkDrop(fx, x, y, scale, rand(-220, 220), rand(-260, 0), rand(3, 6), 0, false);
+    },
+    rip: (fx, _box, _y, scale, at) => {
+      for (let i = 0; i < 7; i += 1) {
+        const p = at(rand(0.08, 0.92));
+        const size = rand(30, 58) * scale;
+        const spec = { x: p.x + rand(-6, 6) * scale, y: p.y + rand(-6, 6) * scale, rotation: rand(0, Math.PI * 2), life: 1.5, delay: rand(0, 0.05) };
+        fx.emit({ ...spec, sprite: "splat-01", color: "#f0e4ce", normal: true, size: size * 0.27, endSize: size, alpha: 1 });
+      }
+      for (let i = 0; i < 34; i += 1) {
+        const p = at(rand(0, 1));
+        const a = rand(0, Math.PI * 2);
+        const sp = rand(160, 520);
+        inkDrop(fx, p.x, p.y, scale, Math.cos(a) * sp, Math.sin(a) * sp * 0.6 - 80, rand(3, 8), rand(0, 0.04), Math.random() < 0.18);
+      }
+    },
+    shake: 3,
+    sound: { cut: `${SOUNDS}ink-cut.mp3`, rip: `${SOUNDS}ink-rip.mp3` },
   },
 };
 

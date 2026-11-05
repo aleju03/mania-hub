@@ -7106,12 +7106,12 @@ msgstr "Companella 也会上传你在 osu! 上打出的成绩的回放，这样�
 
 #: src/components/supporter/loadout.ts
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Companion"
-msgstr "小伙伴"
+#~ msgid "Companion"
+#~ msgstr "小伙伴"
 
 #: src/routes/support.tsx
-msgid "Companions"
-msgstr "小伙伴"
+#~ msgid "Companions"
+#~ msgstr "小伙伴"
 
 #: src/routes/recommendations.tsx
 msgid "compared to {range} pp"
@@ -10763,6 +10763,7 @@ msgid "Fronts the browse card"
 msgstr "作为浏览卡片的封面"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Frost"
 msgstr "霜冻"
@@ -10896,6 +10897,10 @@ msgstr "每通过一首还剩余卡包的曲目获得 x{0} 连击，有曲目用
 #: src/lib/supporter-name-styles.ts
 msgid "Galaxy"
 msgstr "银河"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Gale"
+msgstr "疾风"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/lib/pack-run.ts
@@ -12375,6 +12380,10 @@ msgstr "信息"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
 msgstr "游戏内排行榜，实时显示名次变化。按 Tab 开关。"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Ink brush"
+msgstr "墨笔"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Ink marble"
@@ -14561,6 +14570,15 @@ msgstr "已标记太难"
 msgid "Marker"
 msgstr "马克笔"
 
+#: src/components/supporter/loadout.ts
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Mascot"
+msgstr "吉祥物"
+
+#: src/routes/support.tsx
+msgid "Mascots"
+msgstr "吉祥物"
+
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Mash accuracy"
 #~ msgstr ""
@@ -15319,7 +15337,6 @@ msgstr "需要一个指向其 osu! 主页的 web.archive.org 链接。"
 
 #: src/lib/pack-run.ts
 #: src/lib/supporter-name-styles.ts
-#: src/lib/supporter-pack-style.ts
 msgid "Neon"
 msgstr "霓虹"
 
@@ -15772,8 +15789,8 @@ msgid "No collector found. They need to open a pack first."
 msgstr "未找到收藏者。对方需要先打开一个卡包。"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "No companion"
-msgstr "无小伙伴"
+#~ msgid "No companion"
+#~ msgstr "无小伙伴"
 
 #: src/components/companella/InstallationList.tsx
 #~ msgid "No connection has been approved yet."
@@ -15934,6 +15951,10 @@ msgstr "没有符合筛选条件的谱面"
 #: src/routes/recommendations.tsx
 msgid "No maps match your search"
 msgstr "没有符合搜索条件的谱面"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "No mascot"
+msgstr "无吉祥物"
 
 #: src/routes/recommendations.tsx
 msgid "no matches"
@@ -22543,6 +22564,7 @@ msgstr "显示技能提升谱面"
 msgid "Show the {0} clears"
 msgstr "查看 {0} 的通过记录"
 
+#: src/components/supporter/SupporterRankBadge.tsx
 #: src/routes/supporter.tsx
 msgid "Show the fire on your rank"
 msgstr "在你的段位上显示火焰"
@@ -24264,8 +24286,12 @@ msgid "Supporting keeps the servers running and new features coming. As thanks, 
 msgstr "你的支持让服务器持续运行，也让新功能不断上线。作为感谢，支持者可获得本页上的所有内容。"
 
 #: src/routes/support.tsx
-msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
-msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、小伙伴、卡片闪膜、卡包外观、额外的个人资料数据和视频分享链接。"
+#~ msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
+#~ msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、小伙伴、卡片闪膜、卡包外观、额外的个人资料数据和视频分享链接。"
+
+#: src/routes/support.tsx
+msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats and video share links."
+msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、吉祥物、卡片闪膜、卡包外观、额外的个人资料数据和视频分享链接。"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
@@ -28375,6 +28401,10 @@ msgstr "可视化"
 #: src/routes/news_.prism.tsx
 msgid "Visualizer"
 msgstr "可视化"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Void"
+msgstr "虚空"
 
 #. placeholder {0}: nominee.username
 #: src/components/packs/GoatPoll.tsx

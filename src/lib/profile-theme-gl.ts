@@ -470,10 +470,23 @@ const GOVERNOR_WINDOW = 30;
 const SLOW_FRAME_MS = 24;
 const FAST_FRAME_MS = 18;
 const MIN_PIXEL_SCALE = 0.12;
+/* Frames not judged after it starts (~1.5s): a page still loading, hydrating
+   and decoding images says nothing about the GPU. */
+const WARMUP_FRAMES = 90;
+/* Fast windows (~0.5s each) before it climbs a step under its ceiling. */
+const CLIMB_WINDOWS = 8;
+/* Fast windows at its ceiling before it tries above it, doubling up to the
+   most each time a try runs slow again. */
+const RETRY_WINDOWS = 8;
+const MAX_RETRY_WINDOWS = 128;
 
 /* Lowers a backdrop's pixel budget while frames run slow (a weak GPU, a
    phone, a heavy theme), and raises it again once they have run fast for a
-   while, never back to a level that proved too slow. Fed the gap after each
+   while. A level that ran slow becomes a ceiling, but not for good: after a
+   stretch of fast frames under it, it tries above it again, so a busy patch
+   (another heavy tab, the page loading) does not leave it pixelated for the
+   rest of the visit. A try that runs slow goes straight back to where it
+   held and waits twice as long before the next. Fed the gap after each
    drawn frame to the next animation frame: a frame the GPU cannot finish in
    time pushes that gap past the display's refresh. */
 export class ResolutionGovernor {
@@ -484,9 +497,17 @@ export class ResolutionGovernor {
   private ceiling = 1;
   private gaps: number[] = [];
   private fastWindows = 0;
+  private warmup = WARMUP_FRAMES;
+  private retryWindows = RETRY_WINDOWS;
+  /* Where it held before trying above its ceiling, while the try is on. */
+  private beforeTry: number | null = null;
 
   /* Returns true when the scale changed. */
   frame(gapMs: number): boolean {
+    if (this.warmup > 0) {
+      this.warmup -= 1;
+      return false;
+    }
     // a hidden tab or a long hitch says nothing about the GPU
     if (gapMs > 250) {
       this.gaps.length = 0;
@@ -498,6 +519,12 @@ export class ResolutionGovernor {
     this.gaps.length = 0;
     if (median > SLOW_FRAME_MS) {
       this.fastWindows = 0;
+      if (this.beforeTry !== null) {
+        this.scale = this.ceiling = this.beforeTry;
+        this.beforeTry = null;
+        this.retryWindows = Math.min(MAX_RETRY_WINDOWS, this.retryWindows * 2);
+        return true;
+      }
       if (this.scale <= MIN_PIXEL_SCALE) {
         this.starved = true;
         return false;
@@ -506,9 +533,29 @@ export class ResolutionGovernor {
       this.scale = Math.max(MIN_PIXEL_SCALE, this.scale * 0.55);
       return true;
     }
-    if (median < FAST_FRAME_MS && ++this.fastWindows >= 8 && this.scale < this.ceiling) {
+    if (median >= FAST_FRAME_MS) return false;
+    this.fastWindows += 1;
+    if (this.beforeTry !== null) {
+      // the try held
+      if (this.fastWindows >= 2) {
+        this.beforeTry = null;
+        this.retryWindows = RETRY_WINDOWS;
+      }
+      return false;
+    }
+    if (this.scale < this.ceiling) {
+      if (this.fastWindows < CLIMB_WINDOWS) return false;
       this.fastWindows = 0;
+      this.starved = false;
       this.scale = Math.min(this.ceiling, this.scale * 1.25);
+      return true;
+    }
+    if (this.ceiling < 1 && this.fastWindows >= this.retryWindows) {
+      this.fastWindows = 0;
+      this.starved = false;
+      this.beforeTry = this.scale;
+      this.ceiling = Math.min(1, this.ceiling * 1.25);
+      this.scale = this.ceiling;
       return true;
     }
     return false;

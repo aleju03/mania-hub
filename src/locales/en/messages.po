@@ -7121,12 +7121,12 @@ msgstr "Companella also sends the replay of the plays you set on osu!, so your s
 
 #: src/components/supporter/loadout.ts
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Companion"
-msgstr "Companion"
+#~ msgid "Companion"
+#~ msgstr "Companion"
 
 #: src/routes/support.tsx
-msgid "Companions"
-msgstr "Companions"
+#~ msgid "Companions"
+#~ msgstr "Companions"
 
 #: src/routes/recommendations.tsx
 msgid "compared to {range} pp"
@@ -10782,6 +10782,7 @@ msgid "Fronts the browse card"
 msgstr "Fronts the browse card"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Frost"
 msgstr "Frost"
@@ -10915,6 +10916,10 @@ msgstr "Gains x{0} combo for every song cleared with a pack to spare and goes ba
 #: src/lib/supporter-name-styles.ts
 msgid "Galaxy"
 msgstr "Galaxy"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Gale"
+msgstr "Gale"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/lib/pack-run.ts
@@ -12402,6 +12407,10 @@ msgstr "Info"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
 msgstr "Ingame scoreboard with live rank climbing. Tab toggles it."
+
+#: src/lib/supporter-pack-style.ts
+msgid "Ink brush"
+msgstr "Ink brush"
 
 #: src/lib/supporter-name-styles.ts
 msgid "Ink marble"
@@ -14588,6 +14597,15 @@ msgstr "marked hard"
 msgid "Marker"
 msgstr "Marker"
 
+#: src/components/supporter/loadout.ts
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Mascot"
+msgstr "Mascot"
+
+#: src/routes/support.tsx
+msgid "Mascots"
+msgstr "Mascots"
+
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Mash accuracy"
 #~ msgstr "Mash accuracy"
@@ -15346,7 +15364,6 @@ msgstr "Needs a web.archive.org link to their osu! profile."
 
 #: src/lib/pack-run.ts
 #: src/lib/supporter-name-styles.ts
-#: src/lib/supporter-pack-style.ts
 msgid "Neon"
 msgstr "Neon"
 
@@ -15799,8 +15816,8 @@ msgid "No collector found. They need to open a pack first."
 msgstr "No collector found. They need to open a pack first."
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "No companion"
-msgstr "No companion"
+#~ msgid "No companion"
+#~ msgstr "No companion"
 
 #: src/components/companella/InstallationList.tsx
 #~ msgid "No connection has been approved yet."
@@ -15961,6 +15978,10 @@ msgstr "No maps match your filters"
 #: src/routes/recommendations.tsx
 msgid "No maps match your search"
 msgstr "No maps match your search"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "No mascot"
+msgstr "No mascot"
 
 #: src/routes/recommendations.tsx
 msgid "no matches"
@@ -22570,6 +22591,7 @@ msgstr "show skillboost"
 msgid "Show the {0} clears"
 msgstr "Show the {0} clears"
 
+#: src/components/supporter/SupporterRankBadge.tsx
 #: src/routes/supporter.tsx
 msgid "Show the fire on your rank"
 msgstr "Show the fire on your rank"
@@ -24299,8 +24321,12 @@ msgid "Supporting keeps the servers running and new features coming. As thanks, 
 msgstr "Supporting keeps the servers running and new features coming. As thanks, supporters get everything on this page."
 
 #: src/routes/support.tsx
-msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
-msgstr "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
+#~ msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
+#~ msgstr "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, companions, card foils, packs cosmetics, extra profile stats and video share links."
+
+#: src/routes/support.tsx
+msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats and video share links."
+msgstr "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats and video share links."
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
@@ -28418,6 +28444,10 @@ msgstr "Visual"
 #: src/routes/news_.prism.tsx
 msgid "Visualizer"
 msgstr "Visualizer"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Void"
+msgstr "Void"
 
 #. placeholder {0}: nominee.username
 #: src/components/packs/GoatPoll.tsx

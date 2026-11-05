@@ -27,6 +27,7 @@ import { CheckBadge, LockIcon, PasteIcon, UploadIcon } from "./LoadoutIcons";
 import { FoilPreview } from "./FoilPreview";
 import { DEFAULT_PACK_ART_STYLE, getCachedPackFrontCanvas } from "../packs/packArt";
 import { BladeSwatch } from "../packs/BladeSwatch";
+import { SectionArt } from "./SectionArt";
 import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
 import { bladeLook } from "../packs/packBlades";
 import {
@@ -262,15 +263,19 @@ export function SupporterNav({ shown, section, onSection, locks, spinning, tryin
         type="button"
         onClick={() => onSection(id)}
         aria-current={section === id ? "page" : undefined}
-        className={`shrink-0 cursor-pointer rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors ${section === id ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-white"}`}
+        className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full py-1 pl-1.5 pr-3 text-[12px] font-semibold transition-colors ${section === id ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-white"}`}
       >
+        <SectionArt section={id} className="h-[22px] w-[27px] shrink-0" />
         {label(id)}
       </button>
     );
     return (
       <nav aria-label={t`Supporter sections`} className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:-mx-5 sm:px-5 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
         {[...PROFILE_SECTIONS, ...PACK_SECTIONS].map(chip)}
-        <Link to="/workshop" className="shrink-0 rounded-full bg-osu-b4 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white">{t`Workshop`}</Link>
+        <Link to="/workshop" className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-osu-b4 py-1 pl-1.5 pr-3 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white">
+          <SectionArt section="workshop" className="h-[22px] w-[27px] shrink-0" />
+          {t`Workshop`}
+        </Link>
         {chip(supporter ? "you" : "perks")}
       </nav>
     );

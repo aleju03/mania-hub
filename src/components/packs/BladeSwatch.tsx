@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import type { SupporterBladeId } from "#/lib/supporter-pack-style";
 import { BladeFx, preloadSprites } from "./bladeFx";
 import { createBladeRenderer } from "./bladeGl";
-import { bladeLook, bladeTrailLife, drawBladeTrail, type TrailPoint } from "./packBlades";
+import { bladeLook, bladeTrailLife, cutPath, drawBladeTrail, type TrailPoint } from "./packBlades";
 import { queueGpuWork } from "../../lib/gpu-queue";
 import { useWebGlSlot } from "../../lib/gl-budget";
 
@@ -115,7 +115,7 @@ export function BladeSwatch({ blade, live: wantsLive = false, className = "" }: 
           }
         } else if (!ripped) {
           ripped = true;
-          look.rip?.(fx, box, box.top + box.height * 0.3, scale);
+          look.rip?.(fx, box, box.top + box.height * 0.3, scale, cutPath(box, box.top + box.height * 0.3));
           renderer.impact(box.left + box.width / 2, box.top + box.height * 0.3, 0.6);
         }
         while (points.length && now - points[0].t > life) points.shift();

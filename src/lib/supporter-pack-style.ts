@@ -22,7 +22,7 @@ export const SUPPORTER_WRAPPERS = ["holo", "playfield", "cassette", "envelope"] 
 export type SupporterWrapperId = (typeof SUPPORTER_WRAPPERS)[number];
 
 /* The blade a pack is opened with: its streak, sparks and sounds (packBlades.ts). */
-export const SUPPORTER_BLADES = ["katana", "neon", "ember", "lightning"] as const;
+export const SUPPORTER_BLADES = ["katana", "frost", "ember", "lightning", "void", "gale", "ink"] as const;
 export type SupporterBladeId = (typeof SUPPORTER_BLADES)[number];
 
 export interface SupporterPackStyle {
@@ -58,9 +58,12 @@ export const SUPPORTER_WRAPPER_LABELS: Record<SupporterWrapperId, MessageDescrip
 
 export const SUPPORTER_BLADE_LABELS: Record<SupporterBladeId, MessageDescriptor> = {
   katana: msg`Katana`,
-  neon: msg`Neon`,
+  frost: msg`Frost`,
   ember: msg`Ember`,
   lightning: msg`Lightning`,
+  void: msg`Void`,
+  gale: msg`Gale`,
+  ink: msg`Ink brush`,
 };
 
 export function isSupporterCardSleeve(value: unknown): value is SupporterCardSleeveId {

@@ -49,7 +49,7 @@ export function isSlotSection(section: SupporterSection): section is SlotId {
 }
 
 export const SECTION_LABELS: Record<Exclude<SupporterSection, SlotId>, MessageDescriptor> = {
-  companion: msg`Companion`,
+  companion: msg`Mascot`,
   stats: msg`Profile stats`,
   you: msg`Rank and gifts`,
   perks: msg`What supporting gets you`,

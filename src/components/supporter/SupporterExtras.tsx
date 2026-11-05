@@ -190,13 +190,13 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
   const credit = shown && "builtIn" in shown ? shown.builtIn.credit : null;
   const by = shown && "submitted" in shown ? shown.submitted.submittedBy : null;
   const unlisted = shown && "submitted" in shown && !shown.submitted.listed;
-  const shownName = !shown ? t`No companion` : "builtIn" in shown ? i18n._(shown.builtIn.name) : shown.submitted.name;
+  const shownName = !shown ? t`No mascot` : "builtIn" in shown ? i18n._(shown.builtIn.name) : shown.submitted.name;
   const tile = (active: boolean) =>
     `relative grid h-[58px] place-items-center overflow-hidden rounded-[10px] bg-osu-b6 transition-[box-shadow,background-color] ${active ? "ring-2 ring-osu-pink" : "ring-1 ring-inset ring-white/[0.06] hover:bg-osu-b4"} ${supporter ? "cursor-pointer" : "cursor-default"}`;
 
   return (
     <section>
-      <h2 className="text-[13px] font-semibold text-white">{t`Companion`}</h2>
+      <h2 className="text-[13px] font-semibold text-white">{t`Mascot`}</h2>
       <p className="mt-1 text-[12px] text-osu-f1">{t`A figure that stands beside your profile's numbers. Drag a 3D one to turn it.`}</p>
       {/* the preview keeps the last one pointed at, so it can be dragged */}
       <div className="mt-3 grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)]" onMouseLeave={() => setHovered(null)}>
@@ -240,7 +240,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
           <div className="grid grid-cols-[repeat(auto-fill,minmax(58px,1fr))] gap-1.5">
             <button
               type="button"
-              aria-label={t`No companion`}
+              aria-label={t`No mascot`}
               disabled={!supporter}
               onMouseEnter={() => setHovered(NONE)}
               onFocus={() => setHovered(NONE)}
@@ -325,7 +325,7 @@ const PERKS: { id: PerkId; title: MessageDescriptor; body: MessageDescriptor }[]
   { id: "packs", title: msg`Packs cosmetics`, body: msg`Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, print your packs on your own wrapper, and open them with your own blade.` },
   { id: "stats", title: msg`Profile stats`, body: msg`Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile.` },
   { id: "plays", title: msg`Your own plays`, body: msg`Put any play the site tracked of you under your profile stats, with a title of your own and its pp, rating or dan.` },
-  { id: "companion", title: msg`Companion`, body: msg`A figure that stands beside your profile's numbers. Pick one from the list, or submit your own.` },
+  { id: "companion", title: msg`Mascot`, body: msg`A figure that stands beside your profile's numbers. Pick one from the list, or submit your own.` },
   { id: "clips", title: msg`Video share links`, body: msg`After exporting a replay video, get a link that plays it right in Discord chat.` },
   { id: "gift", title: msg`A week for a friend`, body: msg`A one-time code that gives someone else a week of supporter.` },
 ];
