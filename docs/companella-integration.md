@@ -1055,7 +1055,15 @@ verdict at that rate. Families are drawn per player at read time: that
 player's local charts sharing a topology, head or tail key are one family,
 `local:<smallest sha>`, so a reupload with a few extra notes falls under the
 ordinary two-per-family MSD rule and the Dan family rule instead of filling
-new slots. An upload never joins an official family.
+new slots. A group whose charts are near copies of one official chart (any
+speed, at most the padding allowance of notes changed, moved, added or
+removed: `nearCopyFamily` in `rate-copy-speed.ts`) takes that chart's family
+key instead, so a play on an edit and a play on the official chart count once.
+The key is looked up when the chart is analysed and stored on its analysis row
+(`near_family_key` at `NEAR_FAMILY_VERSION`); the backfill's `near` phase
+fills it for charts analysed before, and queues the owners' merges when it
+moves. It only groups plays: the chart is still rated from its own analysis,
+and an upload never joins the official family index.
 
 The Skills plays list, Dan evidence and restricted profiles read the chart's
 own title, artist, creator and difficulty name, the art of the set the file
