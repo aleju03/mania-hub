@@ -29,6 +29,8 @@ dan-calc = { git = "https://github.com/aleju03/mania-hub", branch = "main", defa
 
 Both give the same results. With `aot` the build script compiles for the target as such, not for the CPU of the machine building it, so a binary built in CI runs on any CPU of that target.
 
+`legacy-builds` (default) keeps MinaCalc 0.68.0 and 0.70.0 in the binary. `estimate` never uses them (it runs 0.72.3, 0.74.0 and 0.75.0), so the example above, with `default-features = false`, leaves them out: about 1.3 MB less with `aot`, 0.4 MB with `jit`.
+
 ## Use
 
 ```rust
