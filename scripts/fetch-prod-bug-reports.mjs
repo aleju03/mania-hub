@@ -107,7 +107,7 @@ export function shellQuote(value) {
 function fetchRemote(remote, remoteDir, options) {
   if (remote.startsWith("-") || /[\s\0]/.test(remote)) throw new Error("Invalid SSH target.");
   const path = remoteDir.startsWith("~/") ? `"$HOME"/${shellQuote(remoteDir.slice(2))}` : shellQuote(remoteDir);
-  const source = `${collectReports.toString()}\n(${remoteExport.toString()})(${JSON.stringify(options)}).catch((error) => {
+  const source = `const ATTACHMENT_SUFFIX = ${ATTACHMENT_SUFFIX};\n${collectReports.toString()}\n(${remoteExport.toString()})(${JSON.stringify(options)}).catch((error) => {
     console.error(error.message); process.exitCode = 1;
   });`;
   return new Promise((done, reject) => {
