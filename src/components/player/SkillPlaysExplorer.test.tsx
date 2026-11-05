@@ -319,6 +319,37 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     await waitFor(() => expect(screen.queryByText("Best 2")).toBeNull());
   });
 
+  it("narrows the list to maps matching every word of the search", async () => {
+    fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {
+      const order = options.sort === "recent" ? "Recent" : "Best";
+      return Promise.resolve({
+        items: [
+          { ...play(1, order), artist: "Camellia", version: "Insane" },
+          { ...play(2, order), artist: "Camellia", version: "Hard" },
+          { ...play(3, order), artist: "Other", version: "Insane" },
+        ],
+        total: 3,
+        unfilteredTotal: 3,
+        limit: 200,
+        offset: 0,
+      });
+    });
+
+    render(
+      <I18nProvider i18n={getI18n("en")}>
+        <SkillPlaysExplorer userId={246810} username="player" modes={[mode]} view="msd" />
+      </I18nProvider>,
+    );
+
+    await screen.findByText("Best 1");
+    fireEvent.change(screen.getByRole("textbox", { name: "Search maps" }), { target: { value: "camellia insane" } });
+    await waitFor(() => expect(screen.queryByText("Best 2")).toBeNull());
+    expect(screen.getByText("Best 1")).toBeTruthy();
+    expect(screen.queryByText("Best 3")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(await screen.findByText("Best 3")).toBeTruthy();
+  });
+
   // Rendering and querying 60 rich rows can exceed 10s on a CPU-capped VPS.
   it("reveals 50 at a time and filters or swaps a prefetched order without another request", async () => {
     fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {

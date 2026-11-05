@@ -4959,6 +4959,7 @@ msgstr "Quitar filtro de jugador"
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/routes/maps.tsx
@@ -16411,6 +16412,7 @@ msgstr "Buscar idiomas"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Search maps"
 msgstr "Buscar mapas"
 
@@ -16423,6 +16425,7 @@ msgid "Search maps, players, uploaders or mods..."
 msgstr "Busca mapas, jugadores, usuarios o mods..."
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "search maps..."
 msgstr "buscar mapas..."
 
@@ -21050,9 +21053,9 @@ msgstr "Mapa no calificable. Este play no cuenta para el rating de skillsets ni 
 msgid "Unrated"
 msgstr "Sin clasificar"
 
-#: src/routes/player/$username.tsx
-#~ msgid "Unrated plays"
-#~ msgstr "Jugadas sin clasificar"
+#: src/components/me/MyDataPanel.tsx
+msgid "Unrated plays"
+msgstr "Jugadas sin clasificar"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"

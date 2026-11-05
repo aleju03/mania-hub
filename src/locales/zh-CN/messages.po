@@ -4971,6 +4971,7 @@ msgstr "清除玩家筛选"
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/routes/maps.tsx
@@ -16423,6 +16424,7 @@ msgstr "搜索语言"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Search maps"
 msgstr "搜索谱面"
 
@@ -16435,6 +16437,7 @@ msgid "Search maps, players, uploaders or mods..."
 msgstr "搜索谱面、玩家、上传者或模组..."
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "search maps..."
 msgstr "搜索谱面…"
 
@@ -21062,9 +21065,9 @@ msgstr "无法评分的谱面。此成绩不计入技能或段位评分。"
 msgid "Unrated"
 msgstr "未评分"
 
-#: src/routes/player/$username.tsx
-#~ msgid "Unrated plays"
-#~ msgstr "未评分成绩"
+#: src/components/me/MyDataPanel.tsx
+msgid "Unrated plays"
+msgstr "未评分成绩"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"

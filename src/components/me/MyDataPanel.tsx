@@ -175,7 +175,7 @@ export function MyDataPanel() {
   const viewer = auth.viewer;
   const noDans = useNoDans();
   // Keep the feed tab and its pagination intact while exploring skill plays.
-  const [skillPlaysView, setSkillPlaysView] = useState<"msd" | "dan" | null>(null);
+  const [skillPlaysView, setSkillPlaysView] = useState<"msd" | "dan" | "unrated" | null>(null);
 
   const [summary, setSummary] = useState<MyDataSummary | null>(null);
   const [feed, setFeed] = useState<MyDataTrackedPlay[]>([]);
@@ -634,6 +634,7 @@ export function MyDataPanel() {
                     <>
                       <FeedTab active={activeSkillPlaysView === "msd"} onClick={() => setSkillPlaysView("msd")}>{t`MSD plays`}</FeedTab>
                       {!noDans ? <FeedTab active={activeSkillPlaysView === "dan"} onClick={() => setSkillPlaysView("dan")}>{t`Dan plays`}</FeedTab> : null}
+                      <FeedTab active={activeSkillPlaysView === "unrated"} onClick={() => setSkillPlaysView("unrated")}>{t`Unrated plays`}</FeedTab>
                     </>
                   ) : null}
                   {canRemovePlays && !activeSkillPlaysView && feedTab === "tracked" && trackedTotal > 0 ? (
