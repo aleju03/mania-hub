@@ -56,6 +56,7 @@ import { ChainBoostChips } from "./ChainReel";
 import { ContractTracker } from "./ChainContracts";
 import { ChainShop, type ShopActResult } from "./ChainShop";
 import type { ChainActOutcome } from "./useChainRun";
+import { useHydrated } from "#/lib/use-hydrated";
 
 /* Dev fixture hooks (dev/chainFixtures.tsx). */
 export interface ChainTableScript {
@@ -114,8 +115,10 @@ type Aftermath =
 
 const DEALT_KEY = "chain-run-dealt";
 
-function roundKey(view: ChainRunView): string {
-  return `${view.runNo}:${view.round}:${view.rebirths}`;
+/* `scope` is the run's kind (own, daily or guest): their run numbers count
+   apart, so the run's start tells two runs with the same number apart. */
+function roundKey(view: ChainRunView, scope: string): string {
+  return `${scope}:${view.runNo}:${view.startedAt}:${view.round}:${view.rebirths}`;
 }
 
 function readDealt(): string | null {
@@ -161,7 +164,10 @@ export function ChainTable(props: ChainTableProps) {
   const daily = mode === "daily";
   const { i18n, t } = useLingui();
   const [boxRef, box] = useBoardBox();
-  const narrow = box.width > 0 ? box.width < 700 : typeof window !== "undefined" && window.innerWidth < 700;
+  // the server renders guests too: the hydration render can't read the window
+  const hydrated = useHydrated();
+  const narrow = box.width > 0 ? box.width < 700 : hydrated && window.innerWidth < 700;
+  const keyScope = guest ? "guest" : mode;
 
   const [hold, setHold] = useState<ChainRunView | null>(null);
   const shown = hold ?? view;
@@ -215,7 +221,7 @@ export function ChainTable(props: ChainTableProps) {
   const [howTo, setHowTo] = useState(false);
   /* "+N base" rising off Stamina cards an unbroken 6 just grew. */
   const [growPops, setGrowPops] = useState<Array<{ id: string; x: number; y: number; add: number }>>([]);
-  const [dealt, setDealt] = useState<string | null>(() => (script?.dealt && view ? roundKey(view) : typeof window === "undefined" ? null : readDealt()));
+  const [dealt, setDealt] = useState<string | null>(() => (script?.dealt && view ? roundKey(view, guest ? "guest" : mode) : typeof window === "undefined" ? null : readDealt()));
   const [enters, setEnters] = useState<Map<number, CardEnter>>(new Map());
   const [overFresh, setOverFresh] = useState(Boolean(script?.fresh));
   const [message, setMessage] = useState<string | null>(null);
@@ -340,19 +346,19 @@ export function ChainTable(props: ChainTableProps) {
      picked up mid-round skips it. */
   useEffect(() => {
     if (!shown || shown.phase !== "play" || play) return;
-    const key = roundKey(shown);
+    const key = roundKey(shown, keyScope);
     if (dealt === key) return;
     if (shown.rowsLeft < CHAIN_RULES.rows || shown.redrawsLeft < CHAIN_RULES.redraws || !shown.hand.some((entry) => entry.pack)) {
       setDealt(key);
       writeDealt(key);
     }
-  }, [dealt, play, shown]);
-  const needsRoundPack = Boolean(shown && shown.phase === "play" && !play && dealt !== roundKey(shown));
+  }, [dealt, keyScope, play, shown]);
+  const needsRoundPack = Boolean(shown && shown.phase === "play" && !play && dealt !== roundKey(shown, keyScope));
 
   /* The round's chart: its song, once per round, as the round opens. */
   const previewedRef = useRef<string | null>(null);
   const previewSet = shown?.phase === "play" ? (shown.roundChart?.chart?.setId ?? 0) : 0;
-  const previewKey = shown && previewSet ? `${roundKey(shown)}:${previewSet}` : null;
+  const previewKey = shown && previewSet ? `${roundKey(shown, keyScope)}:${previewSet}` : null;
   useEffect(
     () => () => {
       previewedRef.current = null;
@@ -704,6 +710,15 @@ export function ChainTable(props: ChainTableProps) {
 
   /* ------------------------------------------------------------ the row plays */
 
+  /* False once the table is gone: a row still playing out stops where it is. */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const finishPlay = useCallback((keepBanner = false) => {
     setPlay(null);
     setHeat(null);
@@ -725,6 +740,7 @@ export function ChainTable(props: ChainTableProps) {
     if (!play) return;
     // The chain ran on the local score; what the row did comes from the server.
     const settled = await playRequestRef.current;
+    if (!mountedRef.current) return;
     if (!settled || !settled.ok || settled.result.kind !== "playRow") return;
     const served = settled.result;
     const { before } = play;
@@ -735,7 +751,13 @@ export function ChainTable(props: ChainTableProps) {
     signal("play:slam");
     // The round score (or round and target) lands now; shards with the pay.
     if (wysi) stampWysi(wysi, (on) => on !== "shards" || outcome !== "cleared");
-    const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, reducedMotion ? Math.min(ms, 200) : ms));
+    // Left the table mid-way: the wait never ends, so no sound or state follows.
+    const wait = (ms: number) =>
+      new Promise<void>((resolve) =>
+        window.setTimeout(() => {
+          if (mountedRef.current) resolve();
+        }, reducedMotion ? Math.min(ms, 200) : ms),
+      );
     // An unbroken row of 6 grew the deck's Stamina cards: each one on the
     // table pops its "+N base" and its number pulses; the banner says why.
     if (row.growth?.length) {
@@ -775,7 +797,9 @@ export function ChainTable(props: ChainTableProps) {
       // the deck dealt straight back (they leave with the row and come back
       // face down from the deck as fresh cards).
       const kept = before.hand.filter((entry) => !row.uids.includes(entry.uid)).map((entry) => entry.uid);
-      const drawn = view?.hand.filter((entry) => !kept.includes(entry.uid)).map((entry) => entry.uid) ?? [];
+      // the run as the play left it, not the one held when the row went out
+      const after = settled.view ?? viewRef.current;
+      const drawn = after?.hand.filter((entry) => !kept.includes(entry.uid)).map((entry) => entry.uid) ?? [];
       setDealGen((current) => {
         const next = { ...current };
         for (const uid of drawn) next[uid] = (next[uid] ?? 0) + 1;
@@ -799,7 +823,7 @@ export function ChainTable(props: ChainTableProps) {
       setAftermath({ kind: "clear", round: before.round, total, interest: part("interest"), chart: part("chart") });
       stopMapPreview(900);
       runSound.tallyTotal();
-      if (part("interest") > 0) window.setTimeout(() => runSound.interest(), reducedMotion ? 0 : 380);
+      if (part("interest") > 0) window.setTimeout(() => mountedRef.current && runSound.interest(), reducedMotion ? 0 : 380);
       if (wysi) stampWysi(wysi, (on) => on === "shards");
       await wait(CHAIN_FEEL.pay.bannerMs + CHAIN_FEEL.pay.afterMs);
       runSound.fireLoopStop();
@@ -867,7 +891,7 @@ export function ChainTable(props: ChainTableProps) {
     await wait(travel * 0.45);
     finishPlay();
     signal("over");
-  }, [enterFromDeck, finishPlay, play, reducedMotion, shake, signal, stampWysi, t, view]);
+  }, [enterFromDeck, finishPlay, play, reducedMotion, shake, signal, stampWysi, t]);
 
   const readoutAt = useCallback(() => {
     const element = boxRef.current;
@@ -933,7 +957,7 @@ export function ChainTable(props: ChainTableProps) {
         next.set(entry.uid, { x: cx - layout.cardW / 2, y: cy - layout.cardH / 2, scale, rotate: 0, delayMs: index * CHAIN_FEEL.pack.joinStaggerMs });
       });
       setEnters(next);
-      const key = roundKey(shown);
+      const key = roundKey(shown, keyScope);
       setDealt(key);
       writeDealt(key);
       // The pack's cards already dealt with their sound out of the pack; the
@@ -943,7 +967,7 @@ export function ChainTable(props: ChainTableProps) {
       window.setTimeout(() => enterFromDeck(deckCards, 0), reducedMotion ? 0 : roundPackCards.length * CHAIN_FEEL.pack.joinStaggerMs + 120);
       window.setTimeout(() => signal("round:dealt"), reducedMotion ? 0 : 1400);
     },
-    [boxRef, enterFromDeck, layout, reducedMotion, roundPackCards, shown, signal],
+    [boxRef, enterFromDeck, keyScope, layout, reducedMotion, roundPackCards, shown, signal],
   );
 
   const onStage = useCallback((stage: StageName) => signal(`stage:${stage}`), [signal]);
@@ -1295,7 +1319,7 @@ export function ChainTable(props: ChainTableProps) {
 
             {layout && shown && needsRoundPack && (
               <ChainPackStage
-                key={`round-${roundKey(shown)}`}
+                key={`round-${roundKey(shown, keyScope)}`}
                 layout={layout}
                 title={chainPackName({ reason: "round" }, shown.round, i18n)}
                 packType="standard"

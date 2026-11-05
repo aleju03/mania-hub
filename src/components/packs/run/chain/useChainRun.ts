@@ -28,10 +28,14 @@ export interface ChainRunApi {
   refresh: () => void;
 }
 
+/* A failed first read tries again after these waits, ms (and on focus). */
+const RETRY_MS = [2_000, 5_000, 15_000, 30_000];
+
 /* The signed-in player's chain run, held once on /packs. The server owns it:
    every action carries the rev of the last answer and comes back with the
-   whole run, which replaces the one held here. */
-export function useChainRun(enabled: boolean, mode: ChainRunMode = "normal"): ChainRunApi {
+   whole run, which replaces the one held here. `onWalletPrize` runs when a
+   played row met a contract whose prize went to the pack wallet. */
+export function useChainRun(enabled: boolean, mode: ChainRunMode = "normal", onWalletPrize?: () => void): ChainRunApi {
   const [available, setAvailable] = useState<boolean | null>(enabled ? null : false);
   const [view, setView] = useState<ChainRunView | null>(null);
   const [best, setBest] = useState<ChainBoardEntry | null>(null);
@@ -46,35 +50,64 @@ export function useChainRun(enabled: boolean, mode: ChainRunMode = "normal"): Ch
   const busyCountRef = useRef(0);
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  /* The mode whose run the rev belongs to: none until its first read lands,
+     and actions wait for it, so a tap right after a switch never sends the
+     other run's rev. */
+  const loadedModeRef = useRef<ChainRunMode | null>(null);
+  const failuresRef = useRef(0);
+  const onWalletPrizeRef = useRef(onWalletPrize);
+  onWalletPrizeRef.current = onWalletPrize;
 
   useEffect(() => {
     if (!enabled) {
       setAvailable(false);
       setView(null);
+      loadedModeRef.current = null;
       return;
     }
     let cancelled = false;
+    let retry = 0;
     const sequence = ++sequenceRef.current;
-    // Switching between the own and the daily run shows nothing stale.
-    setView(null);
+    if (loadedModeRef.current !== mode) {
+      // Switching between the own and the daily run shows nothing stale.
+      loadedModeRef.current = null;
+      revRef.current = 0;
+      setView(null);
+    }
+    const retryLater = () => setRefreshKey((value) => value + 1);
     void fetchOwnChainRun({ data: mode })
       .then((response) => {
         if (cancelled || sequence !== sequenceRef.current) return;
+        failuresRef.current = 0;
         if (!response) {
           setAvailable(false);
           setView(null);
           return;
         }
         revRef.current = response.rev;
+        loadedModeRef.current = mode;
         setView(response.run);
         setBest(response.best);
         setAvailable(true);
       })
       .catch(() => {
-        if (!cancelled) setAvailable((current) => current ?? false);
+        if (cancelled) return;
+        setAvailable((current) => current ?? false);
+        // a blip, not a closed door: try again later, and when the tab comes back
+        const wait = RETRY_MS[Math.min(failuresRef.current, RETRY_MS.length - 1)];
+        failuresRef.current += 1;
+        retry = window.setTimeout(retryLater, wait);
+        window.addEventListener("focus", onFocus);
       });
+    function onFocus() {
+      window.clearTimeout(retry);
+      window.removeEventListener("focus", onFocus);
+      retryLater();
+    }
     return () => {
       cancelled = true;
+      window.clearTimeout(retry);
+      window.removeEventListener("focus", onFocus);
     };
   }, [enabled, refreshKey, mode]);
 
@@ -99,6 +132,8 @@ export function useChainRun(enabled: boolean, mode: ChainRunMode = "normal"): Ch
   }, []);
 
   const sendAction = async (action: ChainAction): Promise<ChainActOutcome> => {
+    // the run of this mode hasn't loaded yet (just switched): its rev is unknown
+    if (loadedModeRef.current !== modeRef.current) return { ok: false, error: "loading", view: null };
     const sequence = ++sequenceRef.current;
     try {
       const response = await actOnOwnChainRun({ data: { ...action, rev: revRef.current, mode: modeRef.current } });
@@ -109,7 +144,9 @@ export function useChainRun(enabled: boolean, mode: ChainRunMode = "normal"): Ch
         setBest(response.best);
       }
       if (response.status === "refused") return { ok: false, error: response.error, view: response.run };
-      return { ok: true, result: response.result, view: response.run };
+      const { result } = response;
+      if (result.kind === "playRow" && result.contract?.met && result.contract.contract.prize.id === "wallet") onWalletPrizeRef.current?.();
+      return { ok: true, result, view: response.run };
     } catch {
       return { ok: false, error: "failed", view: null };
     }

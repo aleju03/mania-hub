@@ -869,6 +869,9 @@ export interface LiveBackendStorageBreakdown {
   tableBytes: number;
   fileBytes: number | null;
   walBytes: number | null;
+  /** The .osu artifacts database and its WAL; absent from older backends. */
+  osuArtifactsBytes?: number | null;
+  osuArtifactsWalBytes?: number | null;
   maxBytes: number;
   capturedAt: string;
 }

@@ -673,7 +673,8 @@ function PacksPage() {
      signed-out visitor plays a guest run in the browser. */
   /* The player's own run, or the daily run (same cards for everyone that day). */
   const [chainMode, setChainMode] = useState<ChainRunMode>("normal");
-  const ownChainApi = useChainRun(Boolean(auth.viewer) && isLiveBackendConfigured(), chainMode);
+  // a met Wallet contract pays the pack wallet on the server
+  const ownChainApi = useChainRun(Boolean(auth.viewer) && isLiveBackendConfigured(), chainMode, walletApi.refreshServerWallet);
   const guestChainApi = useGuestChainRun(!auth.viewer && isLiveBackendConfigured());
   const chainApi = auth.viewer ? ownChainApi : guestChainApi;
   /* The run's side of the pack on screen: the tally the summary plays. */
@@ -1245,6 +1246,8 @@ function PacksPage() {
           onExit={() => {
             setChainMode("normal");
             showRunView(false);
+            // the run may have paid the pack wallet (a Wallet prize)
+            if (auth.viewer) walletApi.refreshServerWallet();
           }}
           mode={auth.viewer ? chainMode : "normal"}
           onMode={auth.viewer ? setChainMode : undefined}

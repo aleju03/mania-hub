@@ -107,6 +107,8 @@ Backend, all under `backend/src/integrations/companella/`:
 | `usage.ts` | Aggregate usage of the Companella app alone (its own client id, never Hashi or the test client) behind `GET /api/admin/companella/usage`, for `/companella/usage`. Names no player. |
 | `account-blocks.ts` | The admin block: an account caught cheating stops connecting and sending plays, and its connections are revoked. |
 | `skill-overlay.ts` | Public skill ratings (MSD, patterns, Dan) for active osu! accounts: checked imports combined with retained official evidence at read time. |
+| `skill-merge-store.ts` | How the saved merge is stored: the imports' overlay over the official pool, rebuilt on read. |
+| `slim-storage.ts` | The maintenance pass's rewrites of older rows into their smaller form (merges, accepted submissions, analyses, previews). |
 | `local-charts.ts`, `local-chart-id.ts` | Imports on charts osu! does not have: the eligibility rule, the 1.0x chart analysis job, per-player families, and the map card behind `GET /api/companella/local-charts/<id>`. |
 | `map-board.ts` | The imports on one map's own file for its Scores board, and the map a chart md5 is the current file of. |
 | `poll-hold.ts` | Holds a player's recent-score polls while Hashi's presence is live, and polls once when it ends. |
@@ -1011,6 +1013,16 @@ import removed folds at once instead. `companella_skill_merge_seed:<store versio
 queues a merge for every player with imports once at boot, again after either
 version moves.
 
+The saved row is the imports' overlay, not the whole merged view
+(`skill-merge-store.ts`): a play the fold took from the official pool is kept
+as its index in that pool plus the fields the fold changed, imports are kept
+whole, and chart facts and rate verdicts only where the database has none
+(readers load both first). A read rebuilds the view from the pool the row
+names by hash; when that pool has moved since, it folds again instead of
+serving the row stale. Every write is checked to rebuild exactly. Such rows
+carry `:overlay` after the store version; rows from before read as they are
+and the maintenance pass rewrites them a few at a time.
+
 `skill-overlay.ts` reads accepted, completed native imports with clear review
 state, while the integration admits that account. It shares import placement
 and analysis validation with `restricted-profile.ts`: an exact official file,
@@ -1382,6 +1394,7 @@ Mamestagram".
 | Accepted beta imports | kept until the owner deletes them |
 | Official-play timing rows | kept after the import is deleted; removed with a withdrawal or the account wipe |
 | Deleted score rows | hard-deleted 30 days after `deleted_at` |
+| Accepted submissions | collapsed after 3 days: replay and chart sha256 read from the score row, the manifest keeps only what no column holds |
 | Unreferenced replays and charts | collected 24 hours after their last write or the end of their last reference, whichever is later |
 | Security events | 30 days |
 | Proof ids / grants | pruned on the maintenance sweep |

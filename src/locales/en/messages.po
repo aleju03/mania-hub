@@ -2132,6 +2132,10 @@ msgstr "{stars}★ · mapped by {0}"
 #~ msgid "{target} packs opened"
 #~ msgstr "{target} packs opened"
 
+#: src/routes/player/$username.tsx
+msgid "{top} to {bottom}"
+msgstr "{top} to {bottom}"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{total, plural, one {# play} other {# plays}}"
 msgstr "{total, plural, one {# play} other {# plays}}"
@@ -11821,8 +11825,12 @@ msgstr "hold to recycle"
 
 #. placeholder {0}: [...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0)
 #: src/components/packs/CollectionPanel.tsx
-msgid "hold to recycle ({0} come off the board)"
-msgstr "hold to recycle ({0} come off the board)"
+#~ msgid "hold to recycle ({0} come off the board)"
+#~ msgstr "hold to recycle ({0} come off the board)"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "hold to recycle ({duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}})"
+msgstr "hold to recycle ({duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}})"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"
@@ -24306,6 +24314,10 @@ msgid "sure? {0} off the board"
 msgstr "sure? {0} off the board"
 
 #: src/components/packs/CollectionPanel.tsx
+msgid "Sure? {selectedCount, plural, one {# card leaves the collection, and off the board if it's there} other {# cards leave the collection, and any on the board come off it}}"
+msgstr "Sure? {selectedCount, plural, one {# card leaves the collection, and off the board if it's there} other {# cards leave the collection, and any on the board come off it}}"
+
+#: src/components/packs/CollectionPanel.tsx
 msgid "Sure? {selectedCount, plural, one {# card leaves the collection} other {# cards leave the collection}}"
 msgstr "Sure? {selectedCount, plural, one {# card leaves the collection} other {# cards leave the collection}}"
 
@@ -24328,8 +24340,12 @@ msgstr "Sure? The card leaves the collection"
 
 #. placeholder {0}: [...selected].reduce((sum, key) => sum + offBoard(key, 0), 0)
 #: src/components/packs/CollectionPanel.tsx
-msgid "Sure? This also takes {0} cards off the board"
-msgstr "Sure? This also takes {0} cards off the board"
+#~ msgid "Sure? This also takes {0} cards off the board"
+#~ msgstr "Sure? This also takes {0} cards off the board"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Sure? This also takes {selectedOffBoard, plural, one {# card off the board} other {# cards off the board}}"
+msgstr "Sure? This also takes {selectedOffBoard, plural, one {# card off the board} other {# cards off the board}}"
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
@@ -25471,6 +25487,10 @@ msgstr "the chart's level +1.37"
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.5"
 msgstr "the chart's level +1.5"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The checker is busy. Save again in a moment."
+msgstr "The checker is busy. Save again in a moment."
 
 #: src/routes/hashi.tsx
 msgid "The chord trainer running"
@@ -26824,6 +26844,10 @@ msgstr "This tab went to the background, which can pause the export."
 #: src/components/team/TeamProfilePage.tsx
 msgid "This team has no description."
 msgstr "This team has no description."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "This theme does too much work per pixel to run on most devices. Simplify its loops or calls."
+msgstr "This theme does too much work per pixel to run on most devices. Simplify its loops or calls."
 
 #: src/routes/workshop.themes.gallery.tsx
 msgid "This theme isn't in the gallery anymore."

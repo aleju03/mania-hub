@@ -224,6 +224,15 @@ const GRADES = ["A", "S", "SS"] as const;
 const DAN_GOAL_KEY_COUNTS = [4, 6, 7] as const;
 type DanSide = "rc" | "ln";
 
+function isDanGoalKeys(keyCount: number): boolean {
+  return (DAN_GOAL_KEY_COUNTS as readonly number[]).includes(keyCount);
+}
+
+/** The keymode with a dan ladder closest to `keyCount` (the lower one on a tie). */
+function nearestDanGoalKeys(keyCount: number): number {
+  return DAN_GOAL_KEY_COUNTS.reduce<number>((best, option) => (Math.abs(option - keyCount) < Math.abs(best - keyCount) ? option : best), DAN_GOAL_KEY_COUNTS[0]);
+}
+
 interface ChoiceOption {
   value: string;
   label: string;
@@ -464,6 +473,15 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       .catch(() => {});
   }, [viewer, skillsRequested, scope, danLevel, ratingTarget]);
 
+  // The keymode is shared with rating goals, which take any keymode (5K, 8K): a dan goal on one
+  // without a ladder could never complete, so it moves to the nearest one that has a ladder.
+  useEffect(() => {
+    if (scope !== "dan" || isDanGoalKeys(skillKeys)) return;
+    setSkillKeys(nearestDanGoalKeys(skillKeys));
+    setDanSkill("");
+    setDanLevel(null);
+  }, [scope, skillKeys]);
+
   const loadRef = useRef(load);
   loadRef.current = load;
   // Reload on window focus and whenever the root goal machinery reports a change: the viewer's
@@ -641,7 +659,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     if (scope === "pp") return Number(ppTarget) > 0;
     if (scope === "pp-count") return Number(ppTarget) > 0 && Number.isInteger(Number(ppCountTarget)) && Number(ppCountTarget) > 0;
     if (scope === "rank") return Number(rankTarget) > 0;
-    if (scope === "dan") return true;
+    if (scope === "dan") return isDanGoalKeys(skillKeys);
     if (scope === "rating") return Number(ratingTarget) > 0 && Number(ratingTarget) <= 100;
     if (!resolved) return false;
     if (scope === "map-acc") return Number(accPct) > 0 && Number(accPct) <= 100;

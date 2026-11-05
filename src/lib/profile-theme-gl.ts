@@ -24,8 +24,9 @@ import { takeGpuSlot } from "./gpu-queue";
      checked and guarded, with its images on units 5 to 8. A stranger wrote
      it, so it has to prove itself: its first frames are drawn tiny and timed
      before it goes full size, it gives up to its still (onFallback) if it is
-     too slow even at the governor's floor, and a lost context while it runs
-     is reported as its crash. */
+     too slow even at the governor's floor (remembered on the device and
+     reported, like a crash), and a context lost while it proves itself or
+     just after, with the tab in front, is reported as its crash. */
 
 /* A built-in theme by id, or a supporter's own. */
 export type BackdropTheme = SupporterProfileThemeId | CustomTheme;
@@ -112,6 +113,8 @@ class ThemeContext {
   private defaultJudgements: HTMLCanvasElement | null | undefined;
   /* Custom themes' images by URL once loaded, with their size; null while loading or if it failed. */
   private images = new Map<string, { texture: WebGLTexture; width: number; height: number } | null>();
+  /* Called once a custom theme's image has loaded, so a still drawn before it can be drawn again. */
+  onImageLoaded: (() => void) | null = null;
 
   constructor(readonly gl: WebGL2RenderingContext) {
     this.parallel = gl.getExtension("KHR_parallel_shader_compile");
@@ -197,6 +200,7 @@ class ThemeContext {
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
           gl.activeTexture(gl.TEXTURE0);
           this.images.set(url, { texture, width: image.naturalWidth, height: image.naturalHeight });
+          this.onImageLoaded?.();
         };
         image.src = url;
       }
@@ -540,6 +544,8 @@ const PROBE_FRAMES = 2;
 const PROBE_GIVE_UP_MS = 40;
 /* The frame time it should start at once full size, ms. */
 const PROBE_TARGET_MS = 12;
+/* A context lost this soon after a custom theme went full size counts as its crash, ms. */
+const LOSS_BLAME_MS = 10_000;
 
 export interface ProfileBackdrop {
   setTheme(theme: BackdropTheme): void;
@@ -589,10 +595,17 @@ export function mountProfileBackdrop(
   const probing = (next: BackdropTheme) => (typeof next !== "string" || (heavyTheme(next) && !still) ? { frames: 0, worst: 0 } : null);
   let probe: { frames: number; worst: number } | null = probing(initial);
   let gaveUp = false;
+  /* When the current custom theme first drew full size (0 until then, and for a built-in). */
+  let customShownAt = 0;
+  /* The context came back once after a loss: a later loss is the browser's, not the theme's. */
+  let restored = false;
 
-  const giveUp = (custom: CustomTheme) => {
+  /* `slow`: it froze the tab's frames, so it shows its still on this device
+     from now on (the bad-theme list) and is reported like a crash. */
+  const giveUp = (custom: CustomTheme, slow = false) => {
     if (gaveUp) return;
     gaveUp = true;
+    if (slow) reportCustomThemeCrash(custom);
     cancelAnimationFrame(frame);
     frame = 0;
     shownCanvas.style.opacity = "0";
@@ -628,7 +641,7 @@ export function mountProfileBackdrop(
     if (probe.frames > 1) probe.worst = Math.max(probe.worst, took);
     if (probe.frames <= PROBE_FRAMES) return false;
     if (custom && probe.worst > PROBE_GIVE_UP_MS) {
-      giveUp(custom);
+      giveUp(custom, true);
       return false;
     }
     const estimate = probe.worst * (full / (width * height));
@@ -671,6 +684,7 @@ export function mountProfileBackdrop(
     if (drew && !shown) {
       shown = true;
       shownCanvas.style.opacity = "1";
+      if (typeof theme !== "string") customShownAt = performance.now();
     }
   };
   /* A still frame, tried again each frame while the theme's program compiles. */
@@ -691,7 +705,7 @@ export function mountProfileBackdrop(
     drewAt = 0;
     // a stranger's theme that can't hold its frames even at the floor stops
     if (governor.starved && typeof theme !== "string") {
-      giveUp(theme);
+      giveUp(theme, true);
       return;
     }
     // ~60fps at most: a 120Hz or 144Hz screen draws every other frame. While
@@ -724,14 +738,33 @@ export function mountProfileBackdrop(
   const onLost = (event: Event) => {
     event.preventDefault();
     cancelAnimationFrame(frame);
+    cancelAnimationFrame(stillFrame);
     disposed = true;
-    // lost while a custom theme ran: most likely its doing
-    if (typeof theme !== "string") {
-      reportCustomThemeCrash(theme);
-      giveUp(theme);
-    }
+    if (typeof theme === "string") return;
+    // A context is also lost to a backgrounded tab, the browser evicting old
+    // contexts or a GPU reset. Only a loss while the theme was proving itself
+    // or just after it went full size, with the tab in front, is blamed on it.
+    const fresh = !!probe || (customShownAt > 0 && performance.now() - customShownAt < LOSS_BLAME_MS);
+    const blamed = fresh && !restored && !leaving && document.visibilityState === "visible";
+    if (blamed) reportCustomThemeCrash(theme);
+    giveUp(theme);
+  };
+  const onRestored = () => {
+    restored = true;
+  };
+  // webgl-hygiene.ts lets every context go on pagehide: not the theme's doing
+  let leaving = false;
+  const onPageHide = () => {
+    leaving = true;
   };
   canvas.addEventListener("webglcontextlost", onLost);
+  canvas.addEventListener("webglcontextrestored", onRestored);
+  window.addEventListener("pagehide", onPageHide);
+
+  // a still drawn before the theme's images arrived shows blanks in their place
+  context.onImageLoaded = () => {
+    if (still && !stillFrame && !disposed) renderStill();
+  };
 
   if (still) renderStill();
   else {
@@ -756,6 +789,7 @@ export function mountProfileBackdrop(
         governor = new ResolutionGovernor();
         gaveUp = false;
         shown = false;
+        customShownAt = 0;
         shownCanvas.style.opacity = "0";
       }
       if (still && !stillFrame) renderStill();
@@ -779,6 +813,9 @@ export function mountProfileBackdrop(
       watcher.disconnect();
       window.removeEventListener("pointermove", onPointer);
       canvas.removeEventListener("webglcontextlost", onLost);
+      canvas.removeEventListener("webglcontextrestored", onRestored);
+      window.removeEventListener("pagehide", onPageHide);
+      context.onImageLoaded = null;
       mirror.dispose();
       shownCanvas.remove();
       gl.getExtension("WEBGL_lose_context")?.loseContext();
@@ -801,15 +838,35 @@ interface Swatch {
 
 const swatches = new Set<Swatch>();
 let shared: { canvas: HTMLCanvasElement; context: ThemeContext } | null | undefined;
+/* Times the shared context was lost; past a few the swatches stop asking for a new one. */
+let sharedLosses = 0;
+const SHARED_MAX_LOSSES = 3;
 let swatchFrame = 0;
 let swatchLast = 0;
 const STILLS_PER_FRAME = 3;
 
+/* A lost context is dropped and the next draw makes a new one, on a new canvas
+   (a lost canvas only ever hands back its lost context). */
+function dropSharedContext() {
+  if (!shared) return;
+  sharedLosses += 1;
+  shared = sharedLosses >= SHARED_MAX_LOSSES ? null : undefined;
+}
+
 function sharedContext() {
+  if (shared?.context.gl.isContextLost()) dropSharedContext();
   if (shared !== undefined) return shared;
   const canvas = document.createElement("canvas");
   const gl = webgl2(canvas);
-  shared = gl ? { canvas, context: new ThemeContext(gl) } : null;
+  if (!gl) {
+    shared = null;
+    return shared;
+  }
+  const entry = { canvas, context: new ThemeContext(gl) };
+  canvas.addEventListener("webglcontextlost", () => {
+    if (shared === entry) dropSharedContext();
+  }, { once: true });
+  shared = entry;
   return shared;
 }
 
@@ -822,7 +879,11 @@ function drawSwatch(swatch: Swatch, time: number): boolean {
     context.canvas.width = width;
     context.canvas.height = height;
   }
-  if (!context.context.draw(swatch.theme, width, height, time, [0.5, 0.6], 0)) return !context.context.compiling(swatch.theme);
+  if (!context.context.draw(swatch.theme, width, height, time, [0.5, 0.6], 0)) {
+    // lost mid-draw: its programs read as failed, so try again on the next context
+    if (context.context.gl.isContextLost()) return false;
+    return !context.context.compiling(swatch.theme);
+  }
   swatch.target ??= swatch.canvas.getContext("2d");
   swatch.target?.drawImage(context.canvas, 0, 0);
   return !context.context.loading(swatch.theme);

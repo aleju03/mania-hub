@@ -1116,6 +1116,12 @@ export function CollectionPanel({
     : visibleCards.reduce((sum, card) => sum + wholeCardShardValue(card), 0);
   const selectedCount = selectionScope === "all" ? filteredTotal : selected.size;
   const bulkShardTotal = selectionScope === "all" ? filteredShardTotal : selectedShardTotal;
+  // Board copies a recycle would take: every board card past its last copy
+  // (duplicates), or all of a picked card's (whole).
+  const duplicatesOffBoard = [...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0);
+  const selectedOffBoard = [...selected].reduce((sum, key) => sum + offBoard(key, 0), 0);
+  // "Select all" recycles on the server's filter, so which board cards match isn't known here.
+  const boardHasCards = [...onBoard.values()].some((count) => count > 0);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 250);
@@ -1422,8 +1428,8 @@ export function CollectionPanel({
                 </span>
                 <span className="col-start-1 row-start-1">
                   {recycleAllHint
-                    ? [...onBoard.keys()].some((key) => offBoard(key, 1) > 0)
-                      ? t`hold to recycle (${[...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0)} come off the board)`
+                    ? duplicatesOffBoard > 0
+                      ? t`hold to recycle (${plural(duplicatesOffBoard, { one: "# comes off the board", other: "# come off the board" })})`
                       : t`hold to recycle`
                     : t`Recycle duplicates +${recyclable}`}
                 </span>
@@ -1986,8 +1992,13 @@ export function CollectionPanel({
               <Recycle className={`h-3.5 w-3.5 ${bulkBusy ? "animate-spin" : ""}`} />
               {bulkBusy
                 ? t`Recycling...`
-                : confirmBulk && selectionScope !== "all" && [...selected].some((key) => offBoard(key, 0) > 0)
-                  ? t`Sure? This also takes ${[...selected].reduce((sum, key) => sum + offBoard(key, 0), 0)} cards off the board`
+                : confirmBulk && selectionScope !== "all" && selectedOffBoard > 0
+                  ? t`Sure? This also takes ${plural(selectedOffBoard, { one: "# card off the board", other: "# cards off the board" })}`
+                  : confirmBulk && selectionScope === "all" && boardHasCards
+                  ? t`Sure? ${plural(selectedCount, {
+                      one: "# card leaves the collection, and off the board if it's there",
+                      other: "# cards leave the collection, and any on the board come off it",
+                    })}`
                   : confirmBulk
                   ? t`Sure? ${plural(selectedCount, {
                       one: "# card leaves the collection",

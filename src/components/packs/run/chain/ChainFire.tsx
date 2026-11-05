@@ -173,14 +173,22 @@ interface FireGl {
 function createFireGl(canvas: HTMLCanvasElement): FireGl | null {
   const gl = canvas.getContext("webgl", { antialias: false, alpha: true, premultipliedAlpha: true, depth: false, stencil: false });
   if (!gl) return null;
+  // Hands the context back now rather than when the page is collected.
+  const release = () => gl.getExtension("WEBGL_lose_context")?.loseContext();
   const vs = compile(gl, gl.VERTEX_SHADER, VERTEX);
   const fs = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT);
   const program = gl.createProgram();
-  if (!vs || !fs || !program) return null;
+  if (!vs || !fs || !program) {
+    release();
+    return null;
+  }
   gl.attachShader(program, vs);
   gl.attachShader(program, fs);
   gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    release();
+    return null;
+  }
   gl.useProgram(program);
   const buffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -239,6 +247,7 @@ function createFireGl(canvas: HTMLCanvasElement): FireGl | null {
       gl.deleteProgram(program);
       gl.deleteShader(vs);
       gl.deleteShader(fs);
+      release();
     },
   };
 }
@@ -268,7 +277,9 @@ export function ChainFire({
   ratio: number;
   reducedMotion: boolean;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  /* The canvas is the effect's own, made and dropped with it: a released
+     canvas only ever hands back its lost context, so each run takes a new one. */
+  const hostRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const redraw = useRef<(() => void) | null>(null);
   const look = inkFlameLook(ratio);
@@ -280,10 +291,14 @@ export function ChainFire({
   const on = level > 0;
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !on) return;
+    const host = hostRef.current;
+    if (!host || !on) return;
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated";
+    host.appendChild(canvas);
     const fire = createFireGl(canvas);
     if (!fire) {
+      canvas.remove();
       setFailed(true);
       return;
     }
@@ -387,6 +402,7 @@ export function ChainFire({
       canvas.removeEventListener("webglcontextlost", lost);
       redraw.current = null;
       fire.dispose();
+      canvas.remove();
     };
   }, [on, reducedMotion]);
   useEffect(() => {
@@ -402,11 +418,11 @@ export function ChainFire({
     );
   }
   return (
-    <canvas
-      ref={canvasRef}
+    <div
+      ref={hostRef}
       aria-hidden="true"
       className="pointer-events-none absolute"
-      style={{ left: -(cols * CELL) / 2, top: -top, width: cols * CELL, height: rows * CELL, imageRendering: "pixelated" }}
+      style={{ left: -(cols * CELL) / 2, top: -top, width: cols * CELL, height: rows * CELL }}
     />
   );
 }

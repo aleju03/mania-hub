@@ -523,6 +523,9 @@ export const claimGoogleContribution = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ expiresAt: number | null }> => {
     const viewer = await requireViewer();
     if (!viewer) throw new Error("Log in first.");
+    // admins only, as the checkout is (SupportCheckout.tsx), until a real payment has gone through it
+    const { requireTrueAdminAccess } = await import("./auth-server");
+    await requireTrueAdminAccess("Google contributions");
     const response = await fetch(`${viewer.base}/api/supporters/self/google-claim`, {
       method: "POST",
       headers: bridgeAuthHeaders(true),
@@ -537,6 +540,7 @@ const FRAME_ERRORS: Record<string, string> = {
   not_supporter: "Your supporter time has run out.",
   too_many_submissions: "That's five frames today; try again tomorrow.",
   invalid_frame: "That frame isn't complete; upload its picture again.",
+  taken_down: "That frame was taken down and can't be submitted again.",
 };
 
 /* The viewer's own workshop frames, listed or waiting for review. */

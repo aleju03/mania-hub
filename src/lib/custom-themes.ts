@@ -93,6 +93,17 @@ export function reportCustomThemeCrash(theme: CustomTheme): void {
   } catch {
     // storage full or off: the report still goes
   }
+  // A signed-in viewer's report goes through the bridge, where it counts
+  // toward hiding the theme; a signed-out one is only a hint for the admin.
+  void import("./custom-theme-reports")
+    .then(({ reportCustomThemeCrashSignedIn }) => reportCustomThemeCrashSignedIn({ data: { themeId: theme.themeId, rev: theme.rev } }))
+    .then((sent) => {
+      if (!sent) sendAnonymousCrash(theme);
+    })
+    .catch(() => sendAnonymousCrash(theme));
+}
+
+function sendAnonymousCrash(theme: CustomTheme): void {
   const base = getLiveBackendUrl();
   if (!base) return;
   const url = `${base}/api/supporters/themes/${theme.themeId}/crash`;

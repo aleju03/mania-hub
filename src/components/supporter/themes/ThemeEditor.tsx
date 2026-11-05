@@ -628,6 +628,8 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       case "blocked": return t`You can't make themes anymore.`;
       case "taken_down": return t`This theme, or code or an image in it, was taken down.`;
       case "too_many_saves": return t`That's a lot of saves in a minute. Wait a moment and save again.`;
+      case "busy": return t`The checker is busy. Save again in a moment.`;
+      case "too_costly": return t`This theme does too much work per pixel to run on most devices. Simplify its loops or calls.`;
       case "disabled": return t`Custom themes are switched off for now.`;
       case "source_rejected": return t`The code didn't pass the check. The errors are listed under it.`;
       case "rights_not_confirmed": return rightsBlocker;

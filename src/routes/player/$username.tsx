@@ -2743,7 +2743,11 @@ export function PlayerProfilePage({
                 keySplit: topKeys ? `${Math.round((topKeys.count / profileInsights.sampleSize) * 100)}% ${topKeys.keyCount}K` : null,
                 mostUsedMod: profileInsights.mostUsedMod?.label ?? null,
                 medianBpm: profileInsights.medianBpm != null ? `${Math.round(profileInsights.medianBpm)} BPM` : null,
-                ppRange: profileInsights.ppRange ? `${Math.round(profileInsights.ppRange.top)} to ${Math.round(profileInsights.ppRange.bottom)}` : null,
+                ppRange: profileInsights.ppRange ? (() => {
+                  const top = Math.round(profileInsights.ppRange.top);
+                  const bottom = Math.round(profileInsights.ppRange.bottom);
+                  return t`${top} to ${bottom}`;
+                })() : null,
                 ...extraStatPreviews,
               } : {};
               const renderStatCell = (stat: ProfileStatId): ReactNode => {

@@ -35,3 +35,24 @@ export const reportCustomTheme = createServerFn({ method: "POST" })
     }
     return { ok: true as const };
   });
+
+/* A custom theme that crashed or proved too slow on a signed-in viewer's
+   device: only these count toward hiding a theme, since an anonymous beacon
+   can come from anywhere. False when signed out, for the anonymous path. */
+export const reportCustomThemeCrashSignedIn = createServerFn({ method: "POST" })
+  .validator((data: { themeId?: unknown; rev?: unknown }) => {
+    const themeId = Number(data?.themeId);
+    const rev = Number(data?.rev);
+    if (!Number.isSafeInteger(themeId) || themeId <= 0 || !Number.isSafeInteger(rev) || rev <= 0) throw new Error("Pick a theme.");
+    return { themeId, rev };
+  })
+  .handler(async ({ data }): Promise<boolean> => {
+    const viewer = await requireViewer();
+    if (!viewer) return false;
+    await fetch(`${viewer.base}/api/supporters/self/themes/crash`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, ...data }),
+    }).catch(() => null);
+    return true;
+  });

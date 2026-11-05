@@ -480,7 +480,10 @@ export function CardBoard({ at }: { at?: string }) {
       }
     };
     source?.addEventListener("pack_board", onChange);
-    return () => source?.removeEventListener("pack_board", onChange);
+    return () => {
+      source?.removeEventListener("pack_board", onChange);
+      source?.close();
+    };
   }, [engine, refreshStats]);
 
   useEffect(() => {

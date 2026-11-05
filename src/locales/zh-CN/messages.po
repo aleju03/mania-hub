@@ -2121,6 +2121,10 @@ msgstr "{stars}★ · 谱师 {0}"
 #~ msgid "{target} packs opened"
 #~ msgstr "已开启 {target} 个卡包"
 
+#: src/routes/player/$username.tsx
+msgid "{top} to {bottom}"
+msgstr "{top} 至 {bottom}"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{total, plural, one {# play} other {# plays}}"
 msgstr "{total, plural, other {# 次游玩}}"
@@ -11802,8 +11806,12 @@ msgstr "长按回收"
 
 #. placeholder {0}: [...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0)
 #: src/components/packs/CollectionPanel.tsx
-msgid "hold to recycle ({0} come off the board)"
-msgstr "按住回收（{0} 张离开展板）"
+#~ msgid "hold to recycle ({0} come off the board)"
+#~ msgstr "按住回收（{0} 张离开展板）"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "hold to recycle ({duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}})"
+msgstr "按住回收（{duplicatesOffBoard, plural, other {# 张离开展板}}）"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"
@@ -24271,6 +24279,10 @@ msgid "sure? {0} off the board"
 msgstr "确定？{0} 张离开展板"
 
 #: src/components/packs/CollectionPanel.tsx
+msgid "Sure? {selectedCount, plural, one {# card leaves the collection, and off the board if it's there} other {# cards leave the collection, and any on the board come off it}}"
+msgstr "{selectedCount, plural, other {确定？# 张卡片将离开收藏册，展板上的也会离开展板}}"
+
+#: src/components/packs/CollectionPanel.tsx
 msgid "Sure? {selectedCount, plural, one {# card leaves the collection} other {# cards leave the collection}}"
 msgstr "{selectedCount, plural, other {确定？# 张卡片将离开收藏册}}"
 
@@ -24293,8 +24305,12 @@ msgstr "确定？这张卡片将离开收藏册"
 
 #. placeholder {0}: [...selected].reduce((sum, key) => sum + offBoard(key, 0), 0)
 #: src/components/packs/CollectionPanel.tsx
-msgid "Sure? This also takes {0} cards off the board"
-msgstr "确定？这也会让 {0} 张卡牌离开展板"
+#~ msgid "Sure? This also takes {0} cards off the board"
+#~ msgstr "确定？这也会让 {0} 张卡牌离开展板"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Sure? This also takes {selectedOffBoard, plural, one {# card off the board} other {# cards off the board}}"
+msgstr "确定？这也会让 {selectedOffBoard, plural, other {# 张卡牌离开展板}}"
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
@@ -25436,6 +25452,10 @@ msgstr "谱面段位 +1.37"
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.5"
 msgstr "谱面段位 +1.5"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The checker is busy. Save again in a moment."
+msgstr "检查器正忙，请稍后再保存。"
 
 #: src/routes/hashi.tsx
 msgid "The chord trainer running"
@@ -26781,6 +26801,10 @@ msgstr "此标签页已切到后台，导出可能会被暂停。"
 #: src/components/team/TeamProfilePage.tsx
 msgid "This team has no description."
 msgstr "这个战队没有简介。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "This theme does too much work per pixel to run on most devices. Simplify its loops or calls."
+msgstr "这个主题每个像素的计算量太大，多数设备无法运行。请简化它的循环或调用。"
 
 #: src/routes/workshop.themes.gallery.tsx
 msgid "This theme isn't in the gallery anymore."
