@@ -11,6 +11,7 @@ import { CustomArtDialog, type CustomArtDraft } from "#/components/supporter/Cus
 import { DiceIcon } from "../components/supporter/LoadoutIcons";
 import { GiftCodePanel, RedeemGiftCode } from "../components/supporter/GiftCodePanel";
 import { SupporterRankLadder } from "../components/supporter/SupporterRankBadge";
+import { Switch } from "../components/ui/Switch";
 import { useSettled } from "../components/supporter/use-settled";
 import { useHighwayNotes } from "../components/supporter/use-highway-notes";
 import { mainKeymode, useHighwayChart } from "../components/supporter/use-highway-chart";
@@ -58,6 +59,7 @@ import {
   saveSupporterNameStyleSetting,
   saveSupporterPackStyleSetting,
   saveSupporterProfileThemeSetting,
+  saveSupporterRankFireSetting,
   type SupporterLookState,
 } from "../lib/supporter-look-settings";
 
@@ -628,7 +630,10 @@ function SupporterPage() {
                           <p className="mt-1 text-[13px] text-osu-l2">
                             {t`Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks.`}
                           </p>
-                          {state.runStartedAt != null ? <SupporterRankLadder runStartedAt={state.runStartedAt} renewing={state.renewing} /> : null}
+                          {state.runStartedAt != null ? <SupporterRankLadder runStartedAt={state.runStartedAt} renewing={state.renewing} fire={state.rankFire} /> : null}
+                          {state.runStartedAt != null && state.renewing ? (
+                            <RankFireSwitch viewerId={viewer.id} on={state.rankFire} onChange={(rankFire) => setState((current) => (current ? { ...current, rankFire } : current))} />
+                          ) : null}
                           <GiftCodePanel viewerId={viewer.id} />
                         </>
                       )}
@@ -640,6 +645,31 @@ function SupporterPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* Whether a renewing supporter's rank burns, on their profile and here. */
+function RankFireSwitch({ viewerId, on, onChange }: { viewerId: number; on: boolean; onChange: (on: boolean) => void }) {
+  const { t } = useLingui();
+  const [error, setError] = useState(false);
+  const toggle = (next: boolean) => {
+    onChange(next);
+    setError(false);
+    saveSupporterRankFireSetting({ data: { rankFire: next } })
+      .then(() => forgetLiveSupporterLook(viewerId))
+      .catch(() => {
+        onChange(!next);
+        setError(true);
+      });
+  };
+  return (
+    <div className="mt-3">
+      <label className="inline-flex cursor-pointer items-center gap-2.5 text-[13px] text-osu-l2">
+        <Switch checked={on} onChange={toggle} label={t`Show the fire on your rank`} />
+        <span>{t`Show the fire on your rank`}</span>
+      </label>
+      {error ? <p className="mt-1 text-[12px] text-osu-red-light">{t`Could not save that.`}</p> : null}
     </div>
   );
 }

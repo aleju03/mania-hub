@@ -22531,6 +22531,10 @@ msgstr "mostrar skillboost"
 msgid "Show the {0} clears"
 msgstr "Ver los clears de {0}"
 
+#: src/routes/supporter.tsx
+msgid "Show the fire on your rank"
+msgstr "Mostrar el fuego en tu rango"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Show the image at its real pixel size"
 msgstr "Mostrar la imagen en su tamaño real en píxeles"

@@ -25,6 +25,7 @@ import {
   seedLiveSupporterLook,
   peekLiveSupporterCompanion,
   peekLiveSupporterRenewing,
+  peekLiveSupporterRankFire,
   peekLiveSupporterRunStartedAt,
   fetchRestrictedPpPlayerDirect,
   isLiveBackendConfigured,
@@ -92,7 +93,7 @@ import { ProfileThemeBackdrop } from "../../components/supporter/ProfileThemeBac
 import { CustomThemeCredit } from "../../components/supporter/CustomThemeCredit";
 import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "../../lib/profile-stats";
-import { saveSupporterProfilePlaysSetting, saveSupporterProfileStatsSetting } from "../../lib/supporter-look-settings";
+import { saveSupporterProfilePlaysSetting, saveSupporterProfileStatsSetting, saveSupporterRankFireSetting } from "../../lib/supporter-look-settings";
 import { profilePlayAsTrackedPlay, type ProfilePlayPick, type ProfilePlays } from "../../lib/profile-plays";
 import { FeaturedPlayCard, FeaturedPlayDialog, FeaturedPlayEditButton } from "../../components/player/FeaturedPlays";
 import { useViewerIsSupporter } from "../../lib/viewer-supporter";
@@ -1171,6 +1172,8 @@ export function PlayerProfilePage({
     runStartedAt: number | null;
     /* A monthly subscription renews them, marked on the rank. */
     renewing: boolean;
+    /* Whether that rank shows its fire; the supporter can turn it off. */
+    rankFire: boolean;
     /* Only an active supporter has a card look. */
     supporter: boolean;
   } | null>(() => {
@@ -1178,7 +1181,7 @@ export function PlayerProfilePage({
     const raw = loaderData?.cachedSupporterLook;
     if (!raw || !profileUserId) return null;
     const value = seedLiveSupporterLook(profileUserId, raw);
-    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, supporter: value.look !== null };
+    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, rankFire: value.rankFire, supporter: value.look !== null };
   });
   useEffect(() => {
     if (!profileUserId) return;
@@ -1199,11 +1202,12 @@ export function PlayerProfilePage({
         companion: peekLiveSupporterCompanion(profileUserId) ?? null,
         runStartedAt: peekLiveSupporterRunStartedAt(profileUserId) ?? null,
         renewing: peekLiveSupporterRenewing(profileUserId) ?? false,
+        rankFire: peekLiveSupporterRankFire(profileUserId) ?? true,
         supporter: peekLiveSupporterLook(profileUserId) != null,
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, supporter: value.look !== null });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, rankFire: value.rankFire, supporter: value.look !== null });
     });
     return () => {
       alive = false;
@@ -1217,6 +1221,7 @@ export function PlayerProfilePage({
   const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
   const heroRunStartedAt = supporterFrame?.userId === profileUserId ? supporterFrame.runStartedAt : null;
   const heroRenewing = supporterFrame?.userId === profileUserId && supporterFrame.renewing;
+  const heroRankFire = supporterFrame?.userId === profileUserId ? supporterFrame.rankFire : true;
   const profileTheme = supporterFrame?.userId === profileUserId ? supporterFrame.profileTheme : null;
   const customTheme = supporterFrame?.userId === profileUserId ? supporterFrame.customTheme : null;
   /* What the backdrop draws: a built-in theme, or their own. */
@@ -1249,6 +1254,15 @@ export function PlayerProfilePage({
           : current);
       })
       .catch(() => setStatsOverride(null));
+  };
+  /* The fire on their own renewing rank, switched from the rank's tip. */
+  const canSetRankFire = !!auth.viewer && auth.viewer.id === profileUserId && heroRenewing;
+  const setRankFire = (on: boolean) => {
+    const apply = (value: boolean) => setSupporterFrame((current) => current?.userId === profileUserId ? { ...current, rankFire: value } : current);
+    apply(on);
+    void saveSupporterRankFireSetting({ data: { rankFire: on } })
+      .then(() => forgetLiveSupporterLook(profileUserId))
+      .catch(() => apply(!on));
   };
   /* The two plays under the stats: the supporter's own picks, or the usual
      newest and oldest top play. Saved before they show, since the backend
@@ -2570,7 +2584,7 @@ export function PlayerProfilePage({
                 ) : (
                   <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
                 )}
-                <SupporterRankBadge runStartedAt={heroRunStartedAt} renewing={heroRenewing} className="h-6 w-6 sm:h-8 sm:w-8" />
+                <SupporterRankBadge runStartedAt={heroRunStartedAt} renewing={heroRenewing} fire={heroRankFire} onFireChange={canSetRankFire ? setRankFire : undefined} className="h-6 w-6 sm:h-8 sm:w-8" />
                 {showProfileCountryFlag ? (
                   <Link
                     to="/"

@@ -25,7 +25,7 @@ re-encoded as WebP at most 1024 px.
 | fumo-koishi.glb | 203Null | https://sketchfab.com/3d-models/37a56b489b5c4440bbabb7b7777036f6 |
 | fumo-marisa.glb | 203Null | https://sketchfab.com/3d-models/7dea820bf4884ecc8f2c31a085b07428 |
 | plush-miku.glb | revsworks | https://sketchfab.com/3d-models/22e25b5fbd444102a175c088e14eb541 |
-| plush-teto.glb | revsworks | https://sketchfab.com/3d-models/bd8157eb42a04161b2628e58dfd2a852 |
+| plush-teto.glb | certified birdbrain | https://sketchfab.com/3d-models/207990ca9c44482b8ff34140d8db3119 |
 | plush-black-cat.glb | dro | https://sketchfab.com/3d-models/0a81d050ac2c4f2c9adce8b640af1eeb |
 | maneki-neko.glb | Rice & Soy Sauce | https://sketchfab.com/3d-models/50b5d360717c442c971b3db0576606c4 |
 | cat-maxwell.glb | Zhuier | https://sketchfab.com/3d-models/4175776146ba4550a8dd643363b7b0aa |

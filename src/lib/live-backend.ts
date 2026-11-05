@@ -4865,6 +4865,8 @@ export interface SupporterProfileLook {
   runStartedAt: number | null;
   /* A monthly subscription keeps their time renewing. */
   renewing: boolean;
+  /* Whether that renewing rank shows its fire; the supporter can turn it off. */
+  rankFire: boolean;
   frame: SupporterAvatarFrameId | null;
   nameStyle: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
@@ -4884,7 +4886,7 @@ export interface SupporterProfileLook {
   /* The figure beside their profile's numbers, null for none. */
   companion: SupporterCompanion | null;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, rankFire: true, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4932,6 +4934,7 @@ export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
     look: parseSupporterLook(body.look ?? null),
     runStartedAt: typeof body.runStartedAt === "number" && Number.isFinite(body.runStartedAt) ? body.runStartedAt : null,
     renewing: body.renewing === true,
+    rankFire: body.rankFire !== false,
     frame: isSupporterAvatarFrame(body.frame) ? body.frame : null,
     nameStyle: isSupporterNameStyle(body.nameStyle) ? body.nameStyle : null,
     nameFont: isSupporterNameFont(body.nameFont) ? body.nameFont : null,
@@ -5022,6 +5025,10 @@ export function peekLiveSupporterRunStartedAt(userId: number): number | null | u
 
 export function peekLiveSupporterRenewing(userId: number): boolean | undefined {
   return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.renewing;
+}
+
+export function peekLiveSupporterRankFire(userId: number): boolean | undefined {
+  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.rankFire;
 }
 
 export function peekLiveSupporterCompanion(userId: number): SupporterCompanion | null | undefined {

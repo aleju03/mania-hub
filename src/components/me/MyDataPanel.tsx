@@ -114,7 +114,10 @@ function PageShell({ profileTheme = null, customTheme = null, children }: { prof
           <ProfileThemeBackdrop theme={themed} scroll className="absolute inset-x-0 top-0 h-screen" />
         </div>
       )}
-      <PageHeader iconSrc="/images/icons/profile.svg" title={t`my stats`} />
+      {/* positioned, or the backdrop above paints over the header */}
+      <div className={themed ? "relative" : undefined}>
+        <PageHeader iconSrc="/images/icons/profile.svg" title={t`my stats`} />
+      </div>
       <div className={`${themed ? "relative bg-osu-b5/[0.78]" : "bg-osu-b5"} min-h-[80vh]`}>
         <div className="mx-auto max-w-[1080px] px-3 py-5 sm:px-5 sm:py-7 space-y-5">{children}</div>
       </div>

@@ -22543,6 +22543,10 @@ msgstr "显示技能提升谱面"
 msgid "Show the {0} clears"
 msgstr "查看 {0} 的通过记录"
 
+#: src/routes/supporter.tsx
+msgid "Show the fire on your rank"
+msgstr "在你的段位上显示火焰"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Show the image at its real pixel size"
 msgstr "按图片真实像素尺寸显示"

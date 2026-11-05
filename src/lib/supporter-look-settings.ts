@@ -28,6 +28,8 @@ export interface SupporterLookState {
   runStartedAt: number | null;
   /** A monthly subscription keeps their time renewing. */
   renewing: boolean;
+  /** Whether their renewing rank shows its fire; they can turn it off. */
+  rankFire: boolean;
   look: SupporterLook | null;
   /** The last uploaded image, kept while a preset is picked so it can be picked again. */
   custom: { url: string; scale: number; opacity: number } | null;
@@ -47,7 +49,7 @@ export interface SupporterLookState {
   frameArt?: Record<string, WorkshopFrameArt>;
 }
 
-const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, renewing: false, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
+const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, renewing: false, rankFire: true, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
 
 export async function requireViewer(): Promise<{ userId: number; username: string; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
@@ -59,7 +61,7 @@ export async function requireViewer(): Promise<{ userId: number; username: strin
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; renewing?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown; frameArt?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; renewing?: unknown; rankFire?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown; frameArt?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
@@ -67,6 +69,7 @@ function readState(body: unknown): SupporterLookState {
     expiresAt: typeof raw.expiresAt === "number" && Number.isFinite(raw.expiresAt) ? raw.expiresAt : null,
     runStartedAt: raw.supporter === true && typeof raw.runStartedAt === "number" && Number.isFinite(raw.runStartedAt) ? raw.runStartedAt : null,
     renewing: raw.supporter === true && raw.renewing === true,
+    rankFire: raw.rankFire !== false,
     look: parseSupporterLook(raw.look),
     custom: custom?.motif === "custom" && custom.url ? { url: custom.url, scale: custom.scale ?? 1, opacity: custom.opacity ?? 0.85 } : null,
     frame: isSupporterAvatarFrame(raw.frame) ? raw.frame : null,
@@ -255,6 +258,27 @@ export const saveSupporterPackStyleSetting = createServerFn({ method: "POST" })
     if (response.status === 403) throw new Error("Your supporter time has run out.");
     if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
     return readState(body);
+  });
+
+/* Turns the fire on the viewer's renewing rank off or back on. Answers with
+   what was stored. */
+export const saveSupporterRankFireSetting = createServerFn({ method: "POST" })
+  .validator((data: { rankFire?: unknown }) => {
+    if (typeof data?.rankFire !== "boolean") throw new Error("Pick on or off.");
+    return { rankFire: data.rankFire };
+  })
+  .handler(async ({ data }): Promise<{ rankFire: boolean }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/rank-fire`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, rankFire: data.rankFire }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown; rankFire?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return { rankFire: body?.rankFire !== false };
   });
 
 /* Sets the supporter's four profile insight cards, or (null) puts the usual

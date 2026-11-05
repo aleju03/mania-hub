@@ -93,7 +93,7 @@ export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   licensed("fumo-marisa", msg`Marisa fumo`, "203Null", "7dea820bf4884ecc8f2c31a085b07428", 3.14, { size: 1.4 }),
   { id: "leek", name: msg`Leek`, kind: "model", url: "/models/companions/leek.glb", thumb: "/models/companions/thumbs/leek.webp" },
   licensed("plush-miku", msg`Miku plush`, "revsworks", "22e25b5fbd444102a175c088e14eb541", 0),
-  licensed("plush-teto", msg`Chubby Teto`, "revsworks", "bd8157eb42a04161b2628e58dfd2a852", 0),
+  licensed("plush-teto", msg`Chubby Teto`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0),
   { id: "fairy-white", name: msg`White fairy`, kind: "model", url: "/models/companions/fairy-white.glb", thumb: "/models/companions/thumbs/fairy-white.webp" },
   { id: "fairy-red", name: msg`Red fairy`, kind: "model", url: "/models/companions/fairy-red.glb", thumb: "/models/companions/thumbs/fairy-red.webp" },
   { id: "fairy-blue", name: msg`Blue fairy`, kind: "model", url: "/models/companions/fairy-blue.glb", thumb: "/models/companions/thumbs/fairy-blue.webp" },
