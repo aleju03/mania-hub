@@ -6991,8 +6991,12 @@ msgid "Duplicates"
 msgstr "重复"
 
 #: src/routes/privacy.tsx
-msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
-msgstr "持久的公开投影数据，例如排名、谱面、最佳成绩、狙击、缓存的个人资料数据和历史汇总，可能会保留更久，因为本站正是靠它们来提供这些功能。目标和卡包收藏会在你的账号使用相应功能期间保留。"
+#~ msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
+#~ msgstr "持久的公开投影数据，例如排名、谱面、最佳成绩、狙击、缓存的个人资料数据和历史汇总，可能会保留更久，因为本站正是靠它们来提供这些功能。目标和卡包收藏会在你的账号使用相应功能期间保留。"
+
+#: src/routes/privacy.tsx
+msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals, card pack collections, skins, collections, uploaded replays, and friends lists are kept until you delete them or ask for them to be deleted."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Dutch"
@@ -9100,8 +9104,20 @@ msgid "If you have the map, drop its .osz here and the replay plays from your co
 msgstr "如果你本地有这张谱面，把它的 .osz 拖进来，回放就用你的副本播放。"
 
 #: src/routes/privacy.tsx
-msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
-msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区，并记录你的账号何时登录过。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
+msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept. If you link your Discord account to the Discord bot, the site stores your Discord user ID with your osu! account and your bot settings. If you connect Companella, the site stores the scores and charts you choose to send and the device you approved."
+#~ msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+#~ msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区，并记录你的账号何时登录过。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
+
+#: src/routes/privacy.tsx
+msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps the first and last time your account signed in and its country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgstr ""
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -10779,8 +10795,16 @@ msgid "Mania Tracker"
 msgstr "Mania Tracker"
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
-msgstr "Mania Tracker 用自己的第一方分析来统计页面访问和功能使用情况，数据存在本站自己的服务器上。事件通过本站自己的接口发送，可能包含访问的路由、所选国家/地区、来源页、浏览器语言、屏幕尺寸，以及路由上下文，例如所查看的玩家、成绩、谱面集或谱面标签页。事件保留 90 天后删除。"
+msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
+#~ msgstr "Mania Tracker 用自己的第一方分析来统计页面访问和功能使用情况，数据存在本站自己的服务器上。事件通过本站自己的接口发送，可能包含访问的路由、所选国家/地区、来源页、浏览器语言、屏幕尺寸，以及路由上下文，例如所查看的玩家、成绩、谱面集或谱面标签页。事件保留 90 天后删除。"
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for up to 10 years."
+#~ msgstr ""
 
 #: src/routes/terms.tsx
 msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -10791,8 +10815,12 @@ msgstr "Mania Tracker 展示公开的元数据、缓存的投影数据和衍生�
 #~ msgstr "Mania Tracker 展示公开的元数据、缓存的投影数据和衍生的社区视图，供参考之用。要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如果本站展示的内容归你所有，且你有署名、下架或数据方面的问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
-msgstr "Mania Tracker 不出售个人数据。数据可能会由运营本站所用的服务提供商处理，包括托管、存储、分析、osu! API 服务和社区成绩数据服务。公开的 osu! 数据可能会被缓存并作为本站社区功能的一部分重新展示。"
+msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and beatmap download mirrors. Public osu! data may be cached and re-displayed as part of the site's community features."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
+#~ msgstr "Mania Tracker 不出售个人数据。数据可能会由运营本站所用的服务提供商处理，包括托管、存储、分析、osu! API 服务和社区成绩数据服务。公开的 osu! 数据可能会被缓存并作为本站社区功能的一部分重新展示。"
 
 #: src/routes/terms.tsx
 msgid "Mania Tracker is a community project built on external data sources, so rankings, score views, snipes, top plays, maps, farm-helper suggestions, replay views, dan estimates, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect. Features may change, break, or be removed."
@@ -10825,8 +10853,12 @@ msgid "Mania Tracker uses public and authenticated osu! API data, locally cached
 msgstr "Mania Tracker 使用公开和已授权的 osu! API 数据、本地缓存数据、服务器投影数据，以及 <0>osu! score cache</0> 等社区数据服务。"
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
-msgstr "Mania Tracker 使用公开的 osu! 个人资料、成绩、谱面、谱面集、排名和回放的元数据，以及 osu! score cache 等社区数据服务，来构建排名、追踪器视图、谱面、狙击、最佳成绩、刷图助手推荐、个人资料和回放视图。"
+msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+#~ msgstr "Mania Tracker 使用公开的 osu! 个人资料、成绩、谱面、谱面集、排名和回放的元数据，以及 osu! score cache 等社区数据服务，来构建排名、追踪器视图、谱面、狙击、最佳成绩、刷图助手推荐、个人资料和回放视图。"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "mania-note art not tied to a keymode block"
@@ -12836,6 +12868,10 @@ msgstr "通知我"
 msgid "Notifying"
 msgstr "已开启通知"
 
+#: src/routes/privacy.tsx
+msgid "November 5, 2026"
+msgstr ""
+
 #: src/components/player/ActivityPanel.tsx
 msgid "now"
 msgstr "当前"
@@ -12870,8 +12906,8 @@ msgid "Obtained on {dateText}"
 msgstr "获得于 {dateText}"
 
 #: src/routes/privacy.tsx
-msgid "October 9, 2026"
-msgstr "2026年10月9日"
+#~ msgid "October 9, 2026"
+#~ msgstr "2026年10月9日"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
@@ -17749,8 +17785,20 @@ msgstr "有些人可能已经知道 Companella，它是一款 osu! 桌面应用�
 #~ msgstr "有些人可能已经听说过 Companella。如果还没有：它是一款 osu! 桌面应用（<0>erdbee.re</0>），你的成绩就是通过它上传到这里的。它只支持 osu!stable，lazer 的成绩无法通过这种方式上传。"
 
 #: src/routes/privacy.tsx
-msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
-msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、指标、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽取时间），以及名册的加入或退出选择。My Stats 面板不会额外存储任何东西；它只是向你展示本站已经掌握的、关于你账号的数据。"
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、指标、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽取时间），以及名册的加入或退出选择。My Stats 面板不会额外存储任何东西；它只是向你展示本站已经掌握的、关于你账号的数据。"
+
+#: src/routes/privacy.tsx
+msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, the display name and about text a restricted account can set, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile settings such as your display name and about text, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Some skillset practice packs are checked the same way the courses are. Clearing one of their charts at its ladder's bar sets that skill's dan outright, without the four passes a skill normally needs. For example, clearing <0>Volcanic ~ Delta ~</0> sets your 4K speed dan to <1>delta</1>."
@@ -20417,8 +20465,12 @@ msgid "to {keyCount}K rating"
 msgstr "{keyCount}K 评分"
 
 #: src/routes/privacy.tsx
-msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
-msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"
+#~ msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+#~ msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"
+
+#: src/routes/privacy.tsx
+msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses to its database or logs. The server's request logs keep a shortened IP address with the last part removed and no user agent, for up to 90 days. Cloudflare, which sits in front of the site, keeps its own request logs. The server also records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+msgstr ""
 
 #: src/routes/privacy.tsx
 msgid "To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -21155,6 +21207,10 @@ msgstr "由 <0>{0}</0> 上传"
 #~ msgid "Uploaded by the Community ({total})"
 #~ msgstr "社区上传（{total}）"
 
+#: src/routes/privacy.tsx
+msgid "Uploaded replays are unlisted, not private: anyone with the link can watch them. Private skins are shown only to you. If you like a skin without signing in, the site stores a random browser ID and a salted hash of your network, not your IP address."
+msgstr ""
+
 #: src/routes/skins.tsx
 msgid "uploader"
 msgstr "上传者"
@@ -21858,6 +21914,10 @@ msgstr "每张卡片最初加入你收藏册的时间"
 #: src/components/me/MyDataPanel.tsx
 msgid "When you play"
 msgstr "你什么时候打图"
+
+#: src/routes/privacy.tsx
+msgid "When you send a bug report, feedback, or a translation report, the site stores your message, the page you were on, any screenshots, replies in the thread, and your osu! account if you are signed in. Bug reports also include your browser user agent, screen size, language, and country."
+msgstr ""
 
 #: src/routes/communities.tsx
 msgid "where"

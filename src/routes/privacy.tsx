@@ -19,7 +19,7 @@ export const Route = createFileRoute("/privacy")({
 function PrivacyPage() {
   const { t } = useLingui();
   return (
-    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`October 9, 2026`}>
+    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`November 5, 2026`}>
       <LegalSection title={t`Overview`}>
         <LegalParagraph>
           <Trans>
@@ -34,8 +34,7 @@ function PrivacyPage() {
         <LegalParagraph>
           <Trans>
             Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay
-            metadata, plus community data services such as osu! score cache, to build rankings,
-            tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay
+            metadata to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay
             views.
           </Trans>
         </LegalParagraph>
@@ -43,17 +42,42 @@ function PrivacyPage() {
           <Trans>
             If you sign in with osu!, the site receives the osu! account details allowed by the
             identify and public OAuth scopes, such as user ID, username, avatar URL, and country,
-            and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the
-            session is active.
+            and keeps the first and last time your account signed in and its country. The site
+            stores a signed HTTP-only session cookie so it can recognize you while the session is
+            active.
           </Trans>
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
             Some signed-in features store data on the server, tied to your osu! user ID: goals you
             create (goal type, target, progress, and status), your card pack wallet and collection
-            (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats
-            dashboard does not store anything extra; it only shows you data the site already holds
-            about your account.
+            (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and
+            like, map collections, replays you upload, profile links to other servers, GOAT poll
+            votes, and farm-helper feedback. The My Stats dashboard does
+            not store anything extra; it only shows you data the site already holds about your
+            account.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
+            Uploaded replays are unlisted, not private: anyone with the link can watch them.
+            Private skins are shown only to you. If you like a skin without signing in, the site
+            stores a random browser ID and a salted hash of your network, not your IP address.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
+            If you load your osu! friends, the site signs you in again with the friends.read
+            scope, reads your friends list once, and stores your friends' osu! user IDs. The
+            access token is not kept.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
+            When you send a bug report, feedback, or a translation report, the site stores your
+            message, the page you were on, any screenshots, replies in the thread, and your osu!
+            account if you are signed in. Bug reports also include your browser user agent, screen
+            size, language, and country.
           </Trans>
         </LegalParagraph>
         <LegalParagraph>
@@ -79,7 +103,6 @@ function PrivacyPage() {
             stored on the site's own server. Events are sent through the site's own endpoint and
             can include the visited route, selected country, referrer, browser language, screen
             size, and route context such as a viewed player, score, beatmapset, or maps tab.
-            Events are kept for 90 days and then deleted.
           </Trans>
         </LegalParagraph>
         <LegalParagraph>
@@ -95,9 +118,11 @@ function PrivacyPage() {
           <Trans>
             To prevent abuse, the server counts requests per IP address for rate limiting and caps
             concurrent live connections per IP. These counters live in memory only: the backend
-            does not write IP addresses or user agents to its database or logs. Hosting providers
-            keep standard request logs, and the server records operational details such as job
-            activity, upstream osu! API calls, and errors to monitor service health.
+            does not write IP addresses to its database or logs. The server's request logs keep
+            a shortened IP address with the last part removed and no user agent, for up to 90
+            days. Cloudflare, which sits in front of the site, keeps its own request logs. The
+            server also records operational details such as job activity, upstream osu! API
+            calls, and errors to monitor service health.
           </Trans>
         </LegalParagraph>
       </LegalSection>
@@ -106,8 +131,8 @@ function PrivacyPage() {
         <LegalParagraph>
           <Trans>
             Mania Tracker does not sell personal data. Data may be processed by service providers used
-            to run the site, including hosting, storage, analytics, osu! API services, and community
-            score-data services. Public osu! data may be cached and re-displayed as part of the
+            to run the site, including hosting, storage, analytics, osu! API services, and beatmap
+            download mirrors. Public osu! data may be cached and re-displayed as part of the
             site's community features.
           </Trans>
         </LegalParagraph>
@@ -133,8 +158,9 @@ function PrivacyPage() {
           <Trans>
             Durable public projections such as rankings, maps, top plays, snipes, cached profile
             data, and historical aggregates may be kept longer because they are what the site uses
-            to serve those features. Goals and card pack collections are kept while your account
-            uses those features.
+            to serve those features. Goals, card pack collections, skins, collections, uploaded
+            replays, and friends lists are kept until you delete them or ask for them to be
+            deleted.
           </Trans>
         </LegalParagraph>
         <LegalParagraph>
