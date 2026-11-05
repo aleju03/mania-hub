@@ -74,7 +74,15 @@ export interface BladeLook {
   rip?: (fx: BladeFx, box: PackBox, y: number, scale: number, at: CutPath) => void;
   /* How hard the pack shakes as it gives, in px. */
   shake?: number;
-  sound?: { cut: string; rip: string };
+  /* `loop`: a sound that runs the whole time the blade moves, its level
+     following the speed (ink's brush on paper). */
+  sound?: BladeSound;
+}
+
+export interface BladeSound {
+  cut: string;
+  rip: string;
+  loop?: string;
 }
 
 const SOUNDS = "/audio/packs/blades/";
@@ -92,6 +100,17 @@ function leaf(fx: BladeFx, x: number, y: number, scale: number, delay: number, v
 function inkDrop(fx: BladeFx, x: number, y: number, scale: number, vx: number, vy: number, size: number, delay: number, red: boolean) {
   const spec = { x, y, vx: vx * scale, vy: vy * scale, gravity: 700 * scale, drag: 0.6, life: rand(0.6, 0.9), delay };
   fx.emit({ ...spec, sprite: "dot-01", color: red ? "#d6453d" : "#f0e4ce", normal: true, size: size * scale, endSize: size * 0.8 * scale, alpha: 1 });
+}
+
+/* The cut's angle, from where it entered the pack to where it left, kept
+   within a quarter turn of level so a curved sprite never draws upside down. */
+function cutAngle(at: CutPath): number {
+  const a = at(0);
+  const b = at(1);
+  let angle = Math.atan2(b.y - a.y, b.x - a.x);
+  if (angle > Math.PI / 2) angle -= Math.PI;
+  if (angle < -Math.PI / 2) angle += Math.PI;
+  return angle;
 }
 
 /* Sparks flung up and out from a point. */
@@ -143,17 +162,25 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
       spray(fx, x, y, scale, 4, { sprite: "trace-07", colors: ["#ffffff", "#cfe4ff"], speed: [420, 900], size: [14, 22], life: [0.16, 0.28], spread: 2.6, drag: 5, stretch: 0.9 });
       if (Math.random() < 0.35) fx.emit({ sprite: "star-07", color: "#eaf4ff", x, y, size: 34 * scale, endSize: 8 * scale, life: 0.22, rotation: rand(0, Math.PI) });
     },
-    rip: (fx, box, y, scale) => {
-      const cx = box.left + box.width / 2;
+    rip: (fx, box, _y, scale, at) => {
+      // the crescent and its glint lie along the cut you made
+      const angle = cutAngle(at);
+      const mid = at(0.5);
+      const out = at(1);
       const w = box.width * 1.9;
-      fx.emit({ sprite: "slash-04", color: "#ffffff", x: cx, y: y + 6 * scale, size: w * 0.32, endSize: w * 0.36, aspect: 3.1, life: 0.38, alpha: 1 });
-      fx.emit({ sprite: "slash-04", color: "#8fc6ff", x: cx - 10 * scale, y: y + 14 * scale, size: w * 0.3, endSize: w * 0.38, aspect: 3.3, life: 0.5, alpha: 0.55, delay: 0.03 });
-      fx.emit({ sprite: "scratch-01", color: "#dbeaff", x: cx + box.width * 0.18, y, size: box.width * 0.5, endSize: box.width * 0.6, life: 0.3, alpha: 0.8, rotation: -0.35 });
-      fx.emit({ sprite: "star-06", color: "#ffffff", x: box.left + box.width * 1.05, y: y - 4 * scale, size: 150 * scale, endSize: 30 * scale, life: 0.42, spin: 2.4, delay: 0.06 });
-      fx.emit({ sprite: "flare-01", color: "#bfe0ff", x: box.left + box.width * 1.05, y: y - 4 * scale, size: 260 * scale, endSize: 120 * scale, life: 0.35, alpha: 0.9, delay: 0.06 });
+      const nx = -Math.sin(angle);
+      const ny = Math.cos(angle);
+      fx.emit({ sprite: "slash-04", color: "#ffffff", x: mid.x + nx * 6 * scale, y: mid.y + ny * 6 * scale, size: w * 0.32, endSize: w * 0.36, aspect: 3.1, rotation: angle, life: 0.38, alpha: 1 });
+      fx.emit({ sprite: "slash-04", color: "#8fc6ff", x: mid.x + nx * 14 * scale, y: mid.y + ny * 14 * scale, size: w * 0.3, endSize: w * 0.38, aspect: 3.3, rotation: angle, life: 0.5, alpha: 0.55, delay: 0.03 });
+      const scratch = at(0.68);
+      fx.emit({ sprite: "scratch-01", color: "#dbeaff", x: scratch.x, y: scratch.y, size: box.width * 0.5, endSize: box.width * 0.6, life: 0.3, alpha: 0.8, rotation: angle - 0.35 });
+      fx.emit({ sprite: "star-06", color: "#ffffff", x: out.x, y: out.y, size: 150 * scale, endSize: 30 * scale, life: 0.42, spin: 2.4, delay: 0.06 });
+      fx.emit({ sprite: "flare-01", color: "#bfe0ff", x: out.x, y: out.y, size: 260 * scale, endSize: 120 * scale, life: 0.35, alpha: 0.9, delay: 0.06 });
       for (let i = 0; i < 18; i += 1) {
         const side = i % 2 ? 1 : -1;
-        fx.emit({ sprite: "trace-07", color: pick(["#ffffff", "#d6e9ff", "#a9d2ff"]), x: box.left + rand(0.1, 0.9) * box.width, y: y + rand(-4, 4) * scale, vx: side * rand(500, 1300) * scale, vy: rand(-160, 60) * scale, drag: 4, size: rand(16, 26) * scale, endSize: 6 * scale, life: rand(0.22, 0.4), stretch: 1.1 });
+        const p = at(rand(0.1, 0.9));
+        const speed = rand(500, 1300) * scale;
+        fx.emit({ sprite: "trace-07", color: pick(["#ffffff", "#d6e9ff", "#a9d2ff"]), x: p.x, y: p.y + rand(-4, 4) * scale, vx: side * Math.cos(angle) * speed, vy: side * Math.sin(angle) * speed + rand(-160, 60) * scale, drag: 4, size: rand(16, 26) * scale, endSize: 6 * scale, life: rand(0.22, 0.4), stretch: 1.1 });
       }
       fx.flash("#dfeeff", 0.16, 0.12);
     },
@@ -231,19 +258,20 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
     cut: (fx, x, y, scale) => {
       spray(fx, x, y, scale, 4, { sprite: "circle-05", colors: ["#ffd76b", "#ff9a2e", "#ff5a1f"], speed: [60, 200], size: [5, 10], life: [0.7, 1.2], spread: 1.6, gravity: -90, drag: 1.2, flicker: true });
     },
-    rip: (fx, box, y, scale) => {
-      const cx = box.left + box.width / 2;
+    rip: (fx, box, _y, scale, at) => {
+      const mid = at(0.5);
       // the body of the fire: puffs released along the cut over half a
       // second, outward from the middle, so it catches and spreads
       for (let i = 0; i < 230; i += 1) {
         const u = rand(0, 1);
         const delay = Math.abs(u - 0.5) * 0.28 + rand(0, 0.45);
+        const p = at(u);
         fx.emit({
           sprite: Math.random() < 0.7 ? "fire-01" : "circle-05",
           color: FIRE[0],
           ramp: FIRE,
-          x: box.left + u * box.width,
-          y: y + rand(-4, 6) * scale,
+          x: p.x,
+          y: p.y + rand(-4, 6) * scale,
           vx: rand(-25, 25) * scale,
           vy: rand(-170, -80) * scale,
           gravity: -110 * scale,
@@ -261,10 +289,11 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
       }
       // smoke drifting off above the flames
       for (let i = 0; i < 5; i += 1) {
-        fx.emit({ sprite: "smoke-04", color: "#2a1d18", x: cx + rand(-0.4, 0.4) * box.width, y: y - 80 * scale, vy: rand(-60, -30) * scale, vx: rand(-15, 15) * scale, size: box.width * 0.3, endSize: box.width * 0.7, life: rand(1.1, 1.5), alpha: 0.18, fadeIn: 0.4, normal: true, spin: rand(-0.4, 0.4), delay: 0.3 + rand(0, 0.2) });
+        fx.emit({ sprite: "smoke-04", color: "#2a1d18", x: mid.x + rand(-0.4, 0.4) * box.width, y: mid.y - 80 * scale, vy: rand(-60, -30) * scale, vx: rand(-15, 15) * scale, size: box.width * 0.3, endSize: box.width * 0.7, life: rand(1.1, 1.5), alpha: 0.18, fadeIn: 0.4, normal: true, spin: rand(-0.4, 0.4), delay: 0.3 + rand(0, 0.2) });
       }
       for (let i = 0; i < 24; i += 1) {
-        fx.emit({ sprite: "circle-05", color: pick(["#ffe08a", "#ffb347", "#ff7a1f"]), x: box.left + rand(0, 1) * box.width, y, vx: rand(-110, 110) * scale, vy: rand(-360, -140) * scale, gravity: -30 * scale, drag: 1.3, wobble: 40 * scale, size: rand(3, 6) * scale, endSize: 1 * scale, life: rand(0.9, 1.6), alpha: 0.8, flicker: true, delay: rand(0.05, 0.5) });
+        const ember = at(rand(0, 1));
+        fx.emit({ sprite: "circle-05", color: pick(["#ffe08a", "#ffb347", "#ff7a1f"]), x: ember.x, y: ember.y, vx: rand(-110, 110) * scale, vy: rand(-360, -140) * scale, gravity: -30 * scale, drag: 1.3, wobble: 40 * scale, size: rand(3, 6) * scale, endSize: 1 * scale, life: rand(0.9, 1.6), alpha: 0.8, flicker: true, delay: rand(0.05, 0.5) });
       }
       fx.flash("#ff7a2a", 0.1, 0.35);
     },
@@ -291,17 +320,20 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
     cut: (fx, x, y, scale) => {
       spray(fx, x, y, scale, 3, { sprite: "flare-01", colors: ["#c6ecff", "#ffffff"], speed: [200, 480], size: [24, 36], life: [0.12, 0.22], drag: 6, flicker: true });
     },
-    rip: (fx, box, y, scale) => {
+    rip: (fx, box, _y, scale, at) => {
+      // three bolts striking down onto points along the cut you made
       for (let i = 0; i < 3; i += 1) {
-        const x = box.left + (0.2 + 0.3 * i + rand(-0.06, 0.06)) * box.width;
-        const tall = y + 40 * scale;
-        fx.emit({ sprite: pick(["spark-05", "spark-06"] as const), color: "#e6f6ff", x, y: tall / 2, size: tall, aspect: 0.45, life: 0.32, flicker: true, delay: i * 0.05 });
-        fx.emit({ sprite: pick(["spark-05", "spark-06"] as const), color: "#5aa8ff", x: x + 6 * scale, y: tall / 2, size: tall, aspect: 0.7, life: 0.38, alpha: 0.6, flicker: true, delay: i * 0.05 });
-        fx.emit({ sprite: "star-06", color: "#cfeaff", x, y, size: 150 * scale, endSize: 40 * scale, life: 0.3, delay: i * 0.05 });
+        const p = at(0.2 + 0.3 * i + rand(-0.06, 0.06));
+        const tall = p.y + 40 * scale;
+        fx.emit({ sprite: pick(["spark-05", "spark-06"] as const), color: "#e6f6ff", x: p.x, y: tall / 2, size: tall, aspect: 0.45, life: 0.32, flicker: true, delay: i * 0.05 });
+        fx.emit({ sprite: pick(["spark-05", "spark-06"] as const), color: "#5aa8ff", x: p.x + 6 * scale, y: tall / 2, size: tall, aspect: 0.7, life: 0.38, alpha: 0.6, flicker: true, delay: i * 0.05 });
+        fx.emit({ sprite: "star-06", color: "#cfeaff", x: p.x, y: p.y, size: 150 * scale, endSize: 40 * scale, life: 0.3, delay: i * 0.05 });
       }
-      fx.emit({ sprite: "spark-07", color: "#bfe6ff", x: box.left + box.width / 2, y, size: box.width * 0.5, aspect: 3, life: 0.35, flicker: true });
+      const mid = at(0.5);
+      fx.emit({ sprite: "spark-07", color: "#bfe6ff", x: mid.x, y: mid.y, size: box.width * 0.5, aspect: 3, rotation: cutAngle(at), life: 0.35, flicker: true });
       for (let i = 0; i < 7; i += 1) {
-        fx.emit({ sprite: "spark-01", color: "#9fd4ff", x: box.left + rand(0, 1) * box.width, y: y + rand(-14, 14) * scale, size: rand(70, 120) * scale, life: rand(0.18, 0.3), rotation: rand(0, Math.PI * 2), flicker: true, delay: rand(0, 0.2) });
+        const p = at(rand(0, 1));
+        fx.emit({ sprite: "spark-01", color: "#9fd4ff", x: p.x, y: p.y + rand(-14, 14) * scale, size: rand(70, 120) * scale, life: rand(0.18, 0.3), rotation: rand(0, Math.PI * 2), flicker: true, delay: rand(0, 0.2) });
       }
       fx.flash("#dff2ff", 0.45, 0.32, true);
     },
@@ -435,11 +467,15 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
       for (let i = 0; i < 5; i += 1) inkDrop(fx, x, y, scale, rand(-220, 220), rand(-260, 0), rand(3, 6), 0, false);
     },
     rip: (fx, _box, _y, scale, at) => {
-      for (let i = 0; i < 7; i += 1) {
-        const p = at(rand(0.08, 0.92));
-        const size = rand(30, 58) * scale;
-        const spec = { x: p.x + rand(-6, 6) * scale, y: p.y + rand(-6, 6) * scale, rotation: rand(0, Math.PI * 2), life: 1.5, delay: rand(0, 0.05) };
-        fx.emit({ ...spec, sprite: "splat-01", color: "#f0e4ce", normal: true, size: size * 0.27, endSize: size, alpha: 1 });
+      // a few flicks of ink along the cut, laid the way the stroke went
+      const head = at(1);
+      const tail = at(0);
+      const along = Math.atan2(head.y - tail.y, head.x - tail.x);
+      for (let i = 0; i < 4; i += 1) {
+        const p = at(0.15 + i * 0.23 + rand(-0.05, 0.05));
+        const size = rand(18, 30) * scale;
+        const spec = { x: p.x + rand(-4, 4) * scale, y: p.y + rand(-4, 4) * scale, rotation: along + rand(-0.25, 0.25), aspect: 1.9, life: 1.3, delay: rand(0, 0.05) };
+        fx.emit({ ...spec, sprite: "splat-01", color: i === 2 ? "#d6453d" : "#f0e4ce", normal: true, size: size * 0.3, endSize: size, alpha: 1 });
       }
       for (let i = 0; i < 34; i += 1) {
         const p = at(rand(0, 1));
@@ -449,7 +485,7 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
       }
     },
     shake: 3,
-    sound: { cut: `${SOUNDS}ink-cut.mp3`, rip: `${SOUNDS}ink-rip.mp3` },
+    sound: { cut: `${SOUNDS}ink-cut.mp3`, rip: `${SOUNDS}ink-rip.mp3`, loop: `${SOUNDS}ink-loop.mp3` },
   },
 };
 

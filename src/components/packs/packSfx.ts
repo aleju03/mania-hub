@@ -693,12 +693,60 @@ function playBuffer(ctx: AudioContext, buffer: AudioBuffer, gain: number, rate =
 
 /* Fetches and decodes a blade's two sounds ahead of the first cut. Safe
    before any gesture: a suspended context still decodes. */
-export function warmBladeSounds(sound: { cut: string; rip: string } | undefined): void {
+export function warmBladeSounds(sound: { cut: string; rip: string; loop?: string } | undefined): void {
   if (!sound) return;
   const ctx = ensureAudio();
   if (!ctx) return;
   void loadSample(ctx, bladeSlot(sound.cut));
   void loadSample(ctx, bladeSlot(sound.rip));
+  if (sound.loop) void loadSample(ctx, bladeSlot(sound.loop));
+}
+
+let bladeLoop: { url: string; source: AudioBufferSourceNode; level: GainNode } | null = null;
+
+/* A blade with a loop (ink's brush on paper) sounds the whole time it moves:
+   the loop runs while it is held, its level and pitch following the speed
+   (px/s), and it fades on its own when the pointer stops. */
+export function moveBladeLoop(sound: { loop?: string } | undefined, speed: number): void {
+  if (!sound?.loop) return;
+  const ctx = ensureAudio();
+  if (!ctx || !master) return;
+  const buffer = bladeSamples.get(sound.loop)?.buffer;
+  if (!buffer) return;
+  if (!bladeLoop || bladeLoop.url !== sound.loop) {
+    stopBladeLoop();
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const level = ctx.createGain();
+    level.gain.value = 0;
+    source.connect(level).connect(master);
+    source.start(0, Math.random() * buffer.duration);
+    bladeLoop = { url: sound.loop, source, level };
+  }
+  const now = ctx.currentTime;
+  const fast = Math.min(1, speed / 1600);
+  const gain = bladeLoop.level.gain;
+  gain.cancelScheduledValues(now);
+  gain.setTargetAtTime(fast * 0.6, now, 0.03);
+  // no more movement: it fades out
+  gain.setTargetAtTime(0, now + 0.09, 0.07);
+  bladeLoop.source.playbackRate.setTargetAtTime(0.9 + fast * 0.25, now, 0.05);
+}
+
+/* The blade let go: the loop fades and stops. */
+export function stopBladeLoop(): void {
+  const loop = bladeLoop;
+  if (!loop) return;
+  bladeLoop = null;
+  const ctx = ensureAudio();
+  if (!ctx) {
+    loop.source.stop();
+    return;
+  }
+  loop.level.gain.cancelScheduledValues(ctx.currentTime);
+  loop.level.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+  loop.source.stop(ctx.currentTime + 0.3);
 }
 
 /* The blade going into the foil, once per stroke. */

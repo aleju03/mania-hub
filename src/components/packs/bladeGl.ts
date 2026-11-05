@@ -827,9 +827,48 @@ function create2dRenderer(canvas: HTMLCanvasElement): BladeRenderer {
   };
 }
 
+/* The WebGL draws on a canvas kept off the page, and each frame is copied
+   onto `canvas` with a plain 2D draw (the gl-mirror.ts idea): a WebGL canvas
+   on the page whose context is dropped or not yet drawn can paint a blank
+   box for a frame, which over the full-viewport trail flashed the whole page
+   whenever a test pack was swapped for a fresh one. A 2D canvas never does.
+   A loss on the hidden canvas is raised on `canvas` too, for gl-budget.ts. */
+function mirrored(canvas: HTMLCanvasElement, hidden: HTMLCanvasElement, gl: BladeRenderer): BladeRenderer {
+  const view = canvas.getContext("2d");
+  const onLost = () => {
+    view?.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.dispatchEvent(new Event("webglcontextlost"));
+  };
+  hidden.addEventListener("webglcontextlost", onLost);
+  return {
+    webgl: true,
+    impact: (x, y, strength) => gl.impact(x, y, strength),
+    draw(input) {
+      if (hidden.width !== canvas.width || hidden.height !== canvas.height) {
+        hidden.width = canvas.width;
+        hidden.height = canvas.height;
+      }
+      gl.draw(input);
+      if (!view) return;
+      view.setTransform(1, 0, 0, 1, 0, 0);
+      view.clearRect(0, 0, canvas.width, canvas.height);
+      view.drawImage(hidden, 0, 0);
+    },
+    dispose() {
+      hidden.removeEventListener("webglcontextlost", onLost);
+      gl.dispose();
+      view?.clearRect(0, 0, canvas.width, canvas.height);
+    },
+  };
+}
+
 export function createBladeRenderer(canvas: HTMLCanvasElement): BladeRenderer {
   try {
-    return createGlRenderer(canvas) ?? create2dRenderer(canvas);
+    const hidden = document.createElement("canvas");
+    hidden.width = canvas.width;
+    hidden.height = canvas.height;
+    const gl = createGlRenderer(hidden);
+    return gl ? mirrored(canvas, hidden, gl) : create2dRenderer(canvas);
   } catch {
     return create2dRenderer(canvas);
   }

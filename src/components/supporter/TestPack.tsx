@@ -20,7 +20,7 @@ export function TestPack({ wrapper, blade }: { wrapper: SupporterWrapperId | nul
     if (timer.current !== null) window.clearTimeout(timer.current);
   }, []);
   return (
-    <div className="flex w-full flex-col items-center py-2">
+    <div className="flex w-full select-none flex-col items-center py-2">
       <Suspense fallback={<div className="aspect-[3/5] w-[min(220px,56vw)] animate-pulse rounded-xl bg-white/[0.04]" />}>
         <PackStage
           key={round}

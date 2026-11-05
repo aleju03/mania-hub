@@ -22,7 +22,7 @@ import { createPackScene, type PackScene } from "./packScene";
 import { BladeFx, preloadSprites } from "./bladeFx";
 import { bladeLook, bladeTrailLife, cutPath } from "./packBlades";
 import { createBladeRenderer, type BladeRenderer } from "./bladeGl";
-import { playBladeCut, playBladeRip, playBladeTick, playCardSlice, warmBladeSounds } from "./packSfx";
+import { moveBladeLoop, playBladeCut, playBladeRip, playBladeTick, playCardSlice, stopBladeLoop, warmBladeSounds } from "./packSfx";
 
 // The cut is tracked in vertical columns; each cut column remembers the y
 // (as a fraction of pack height) where the blade crossed it, so the tear
@@ -894,13 +894,23 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       bladeHeldRef.current = { pointerId: event.pointerId };
       cutAtPoint(event.clientX, event.clientY);
     };
+    // the blade's speed, for a sound that follows it (ink's brush)
+    let lastMove: { x: number; y: number; t: number } | null = null;
     const onMove = (event: PointerEvent) => {
       const held = bladeHeldRef.current;
       if (!held || held.pointerId !== event.pointerId) return;
+      const t = event.timeStamp;
+      if (lastMove && t > lastMove.t) {
+        const speed = (Math.hypot(event.clientX - lastMove.x, event.clientY - lastMove.y) / (t - lastMove.t)) * 1000;
+        moveBladeLoop(bladeLook(bladeRef.current).sound, speed);
+      }
+      lastMove = { x: event.clientX, y: event.clientY, t };
       cutAtPoint(event.clientX, event.clientY);
     };
     const onUp = (event: PointerEvent) => {
       if (bladeHeldRef.current?.pointerId !== event.pointerId) return;
+      lastMove = null;
+      stopBladeLoop();
       bladeHeldRef.current = null;
       slashRef.current = null;
       ensureLoop();
@@ -973,7 +983,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
           words, and the gesture is the whole instruction. The blade below the
           seam gets its own warning, because by then the line is no longer an
           instruction but the news. */}
-      <div className="h-5 text-center" aria-live="polite">
+      <div className="h-5 select-none text-center" aria-live="polite">
         <div className={`text-sm font-semibold ${slicing && !ripping ? "text-osu-pink-light" : "text-white"}`}>
           {ripping
             ? slicing
