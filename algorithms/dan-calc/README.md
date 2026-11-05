@@ -13,6 +13,22 @@ dan-calc = { git = "https://github.com/aleju03/mania-hub", branch = "main" }
 
 You only depend on `dan-calc`. The other crates in `crates/` and `../prism/crates` are the pieces it is built from, and Cargo fetches them for you. The first build takes about a minute because of wasmtime.
 
+### Features
+
+MinaCalc runs as wasm under wasmtime, and its builds have to be compiled to machine code before they run. The features pick when:
+
+| Feature | When | Trade-off |
+| --- | --- | --- |
+| `jit` (default) | The first time each build is used | The compiler (cranelift) is in your binary, and the first estimate waits for it (~0.5 s) |
+| `aot` | When the crate is built, for the target being built | No compiler in your binary (about 10 MB smaller) and no wait on first use |
+
+```toml
+[dependencies]
+dan-calc = { git = "https://github.com/aleju03/mania-hub", branch = "main", default-features = false, features = ["aot"] }
+```
+
+Both give the same results. With `aot` the build script compiles for the target as such, not for the CPU of the machine building it, so a binary built in CI runs on any CPU of that target.
+
 ## Use
 
 ```rust
