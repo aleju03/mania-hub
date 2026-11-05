@@ -778,7 +778,15 @@ function NameStyleDrawer({ current, disabled, username, onTry, onPick }: DrawerP
   const { nameStyle, nameFont } = current;
   const [tab, setTab] = useState(() => NAME_STYLE_GROUPS.find((g) => nameStyle && g.styles.includes(nameStyle))?.key ?? NAME_STYLE_GROUPS[0].key);
   const group = NAME_STYLE_GROUPS.find((g) => g.key === tab) ?? NAME_STYLE_GROUPS[0];
-  const tryOn = (value: SupporterNameStyleId | null) => (on: boolean) => onTry("nameStyle", on ? value : undefined);
+  // The tiles show a still of each style's real shader (a grid of live ones
+  // would blow the WebGL budget, gl-budget.ts); the one under the pointer, or
+  // else the one picked, runs live.
+  const [hovered, setHovered] = useState<SupporterNameStyleId | null | undefined>(undefined);
+  const tryOn = (value: SupporterNameStyleId | null) => (on: boolean) => {
+    setHovered((current) => (on ? value : current === value ? undefined : current));
+    onTry("nameStyle", on ? value : undefined);
+  };
+  const liveStyle = hovered !== undefined ? hovered : nameStyle;
 
   return (
     <div>
@@ -787,7 +795,7 @@ function NameStyleDrawer({ current, disabled, username, onTry, onPick }: DrawerP
         {[null, ...group.styles].map((id) => (
           <Item key={id ?? "plain"} active={nameStyle === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("nameStyle", id)} className="items-stretch">
             <span className="flex h-12 items-center justify-center overflow-hidden rounded-md bg-osu-b6 px-3">
-              <SupporterStyledName nameStyle={id} nameFont={nameFont} name={username} className={NAME_CLASS} />
+              <SupporterStyledName nameStyle={id} nameFont={nameFont} name={username} live={id !== null && id === liveStyle} still className={NAME_CLASS} />
             </span>
             {id ? i18n._(SUPPORTER_NAME_STYLE_LABELS[id]) : t`Plain`}
           </Item>

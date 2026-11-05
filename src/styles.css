@@ -1388,6 +1388,19 @@ html[data-custom-cursor="true"] * {
 .name-tag--hellfire.name-tag--live {
   filter: drop-shadow(0 -0.06em 0.3em rgba(110, 90, 255, 0.5)) !important;
 }
+/* A picker tile waiting for its first still of the real look (never shown
+   as the CSS stand-in): a faint pulsing outline of the name. */
+.name-tag--waiting {
+  color: rgba(255, 255, 255, 0.14) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.14) !important;
+  background: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+  animation: name-tag-waiting 1.4s ease-in-out infinite !important;
+}
+@keyframes name-tag-waiting {
+  50% { opacity: 0.45; }
+}
 .name-tag--live {
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;

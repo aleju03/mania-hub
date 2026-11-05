@@ -628,3 +628,160 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
     gl?.getExtension("WEBGL_lose_context")?.loseContext();
   };
 }
+
+/* Stills already taken, by style, name, font and box: going back from a
+   tile's live look to its still is then instant. A few dozen at most. They
+   are kept in localStorage too (small WebPs), so a reload shows them at once
+   instead of rendering every tile again; bump STILL_VERSION when a shader's
+   look changes. */
+const stills = new Map<string, HTMLCanvasElement>();
+const STILL_VERSION = 1;
+const STILL_PREFIX = `name-still:${STILL_VERSION}:`;
+
+function storedStill(key: string): Promise<HTMLCanvasElement | null> {
+  let url: string | null = null;
+  try {
+    url = localStorage.getItem(STILL_PREFIX + key);
+  } catch {
+    return Promise.resolve(null);
+  }
+  if (!url) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext("2d")?.drawImage(image, 0, 0);
+      resolve(canvas);
+    };
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}
+
+function storeStill(key: string, canvas: HTMLCanvasElement) {
+  try {
+    localStorage.setItem(STILL_PREFIX + key, canvas.toDataURL("image/webp", 0.9));
+  } catch {
+    // full: let the old stills go (this version's and any older ones) and move on
+    try {
+      for (const name of Object.keys(localStorage)) if (name.startsWith("name-still:")) localStorage.removeItem(name);
+    } catch {
+      // storage unavailable
+    }
+  }
+}
+
+function placeStill(host: HTMLElement, source: HTMLCanvasElement): HTMLCanvasElement {
+  const copy = document.createElement("canvas");
+  copy.width = source.width;
+  copy.height = source.height;
+  copy.getContext("2d")?.drawImage(source, 0, 0);
+  copy.style.cssText = "position:absolute;inset:0;width:100%;height:100%";
+  host.appendChild(copy);
+  return copy;
+}
+
+/* Moments a still is taken from, ms into the animation. */
+const STILL_FRAMES = [900, 2300, 3700, 5100, 6500, 7900, 9300, 10700];
+
+/* A still of the real look for a picker tile: the shader drawn once at a few
+   moments, the busiest kept (most colour and cover, so a glitch mid-burst
+   and fire at full height), copied onto a plain canvas in `host`, and the
+   WebGL context let go at once, so a grid of them costs no live contexts.
+   Calls `onReady` once the still is in place. Returns the cleanup. */
+export function stillNameShader(span: HTMLElement, host: HTMLElement, style: ShaderNameStyle, onReady: () => void): () => void {
+  let disposed = false;
+  let still: HTMLCanvasElement | null = null;
+  const computed = getComputedStyle(span);
+  const key = `${style}|${span.textContent}|${computed.fontFamily}|${computed.fontSize}|${span.clientWidth}x${span.clientHeight}`;
+  const cached = stills.get(key);
+  if (cached) {
+    still = placeStill(host, cached);
+    queueMicrotask(() => {
+      if (!disposed) onReady();
+    });
+    return () => {
+      disposed = true;
+      still?.remove();
+    };
+  }
+  let unqueue: () => void = () => {};
+  void storedStill(key).then((stored) => {
+    if (disposed) return;
+    if (stored) {
+      stills.set(key, stored);
+      still = placeStill(host, stored);
+      onReady();
+      return;
+    }
+    unqueue = queueGpuWork(render);
+  });
+  const render = () => {
+    void (async () => {
+      await document.fonts.ready;
+      if (disposed) return;
+      const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+      const mask = drawNameMask(span, scale);
+      if (!mask) return;
+      const built = await buildStyle(style, mask);
+      if (disposed) return;
+      const uniforms = { ...built.uniforms, ...SIZING } as ConstructorParameters<typeof ShaderMount>[2];
+      const mount = new ShaderMount(host, built.shader, uniforms, { premultipliedAlpha: true, preserveDrawingBuffer: true }, 0, STILL_FRAMES[0], 2, undefined, built.mipmaps);
+      const gl = mount.canvasElement;
+      gl.style.visibility = "hidden";
+      // let Paper size the canvas to the box before drawing
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (disposed || gl.width < 2 || gl.height < 2) {
+        mount.dispose();
+        return;
+      }
+      const best = document.createElement("canvas");
+      best.width = gl.width;
+      best.height = gl.height;
+      const scratch = document.createElement("canvas");
+      scratch.width = gl.width;
+      scratch.height = gl.height;
+      const scratchCtx = scratch.getContext("2d", { willReadFrequently: true });
+      const bestCtx = best.getContext("2d");
+      let bestScore = -1;
+      if (scratchCtx && bestCtx) {
+        for (const frame of STILL_FRAMES) {
+          mount.setFrame(frame);
+          scratchCtx.clearRect(0, 0, scratch.width, scratch.height);
+          scratchCtx.drawImage(gl, 0, 0);
+          const data = scratchCtx.getImageData(0, 0, scratch.width, scratch.height).data;
+          let score = 0;
+          for (let i = 0; i < data.length; i += 16) {
+            const a = data[i + 3];
+            if (a < 24) continue;
+            const hi = Math.max(data[i], data[i + 1], data[i + 2]);
+            const lo = Math.min(data[i], data[i + 1], data[i + 2]);
+            score += a * (1 + (hi - lo) / 128);
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            bestCtx.clearRect(0, 0, best.width, best.height);
+            bestCtx.drawImage(scratch, 0, 0);
+          }
+        }
+      }
+      mount.dispose();
+      gl.remove();
+      gl.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext();
+      if (bestScore < 0) return;
+      stills.set(key, best);
+      if (stills.size > 48) stills.delete(stills.keys().next().value!);
+      storeStill(key, best);
+      if (disposed) return;
+      still = placeStill(host, best);
+      onReady();
+    })().catch(() => {});
+  };
+  return () => {
+    disposed = true;
+    unqueue();
+    still?.remove();
+  };
+}

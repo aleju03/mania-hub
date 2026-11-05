@@ -17,17 +17,27 @@ import { useWebGlSlot } from "../../lib/gl-budget";
    before the real metal); then the text turns transparent but stays for layout, selection and
    truncation. */
 
-export function SupporterStyledName({ nameStyle, nameFont = null, name, className, live = false }: {
+export function SupporterStyledName({ nameStyle, nameFont = null, name, className, live = false, still = false }: {
   nameStyle: SupporterNameStyleId | null;
   nameFont?: SupporterNameFontId | null;
   name: string;
   className?: string;
   live?: boolean;
+  /* A still of the real shader look instead of the CSS one, for picker tiles
+     (name-tag-shaders.ts stillNameShader); with `live` too, the still shows
+     until the live shader draws. */
+  still?: boolean;
 }) {
-  const shaded = live && nameStyle !== null && isShaderNameStyle(nameStyle);
+  const isShader = nameStyle !== null && isShaderNameStyle(nameStyle);
+  const shaded = live && isShader;
   const spanRef = useRef<HTMLSpanElement>(null);
   const hostRef = useRef<HTMLSpanElement>(null);
-  const [ready, setReady] = useState(false);
+  const [liveReady, setLiveReady] = useState(false);
+  const [stillReady, setStillReady] = useState(false);
+  // the still stays up until the live shader has drawn, so a tile never drops
+  // to its CSS look on the way between them
+  const stilled = still && isShader && !liveReady;
+  const ready = liveReady || stillReady;
   // name tags give way to bigger pieces (gl-budget.ts) and keep their CSS look meanwhile
   const glSlot = useWebGlSlot(spanRef, { enabled: shaded, low: true });
 
@@ -38,19 +48,35 @@ export function SupporterStyledName({ nameStyle, nameFont = null, name, classNam
     let cancelled = false;
     void import("../../lib/name-tag-shaders").then(({ mountNameShader }) => {
       if (cancelled) return;
-      if (nameStyle && isShaderNameStyle(nameStyle)) cleanup = mountNameShader(span, host, nameStyle, () => setReady(true));
+      if (nameStyle && isShaderNameStyle(nameStyle)) cleanup = mountNameShader(span, host, nameStyle, () => setLiveReady(true));
     });
     return () => {
       cancelled = true;
       cleanup?.();
-      setReady(false);
+      setLiveReady(false);
     };
   }, [shaded, glSlot, nameStyle, nameFont, name]);
 
+  useEffect(() => {
+    const span = spanRef.current, host = hostRef.current;
+    if (!stilled || !span || !host) return;
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    void import("../../lib/name-tag-shaders").then(({ stillNameShader }) => {
+      if (cancelled) return;
+      if (nameStyle && isShaderNameStyle(nameStyle)) cleanup = stillNameShader(span, host, nameStyle, () => setStillReady(true));
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+      setStillReady(false);
+    };
+  }, [stilled, nameStyle, nameFont, name]);
+
   return (
-    <span ref={spanRef} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live ? " name-tag--hero" : ""}${shaded ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : ""}`}>
+    <span ref={spanRef} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live || (still && isShader) ? " name-tag--hero" : ""}${shaded || stilled ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : still && isShader ? " name-tag--waiting" : ""}`}>
       {name}
-      {shaded && <span ref={hostRef} aria-hidden className="name-tag-shader" />}
+      {(shaded || stilled) && <span ref={hostRef} aria-hidden className="name-tag-shader" />}
     </span>
   );
 }
