@@ -1,0 +1,90 @@
+name: dan-calc
+
+# The Rust side of algorithms/: dan-calc and the prism crates it is built
+# from. Tests run in debug, so overflow checks are on: the jsmath sort
+# underflow fixed in fdb619f only panicked there. dan-calc is tested with its
+# default features (`jit`) and with `aot`, which compiles MinaCalc in its
+# build script instead.
+#
+# Everything runs on Linux. Windows runs only the `aot` tests: that build
+# script compiles MinaCalc for the target being built, and Windows is another
+# target (executable format, calling convention) that Linux doesn't cover.
+#
+# No --locked: both workspaces ignore Cargo.lock, so each run resolves the
+# dependencies the way a crate depending on dan-calc by git would.
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'algorithms/dan-calc/**'
+      - 'algorithms/prism/**'
+      - '.github/workflows/dan-calc.yml'
+  pull_request:
+    paths:
+      - 'algorithms/dan-calc/**'
+      - 'algorithms/prism/**'
+      - '.github/workflows/dan-calc.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: dan-calc-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      # Both workspaces build wasmtime and cranelift, minutes from scratch.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            algorithms/dan-calc
+            algorithms/prism
+
+      - name: Test the prism crates
+        working-directory: algorithms/prism
+        run: cargo test
+
+      - name: Test dan-calc (jit, the default)
+        working-directory: algorithms/dan-calc
+        run: cargo test
+
+      - name: Test dan-calc (aot)
+        working-directory: algorithms/dan-calc
+        run: cargo test -p leoblack-ett -p chart-pipeline -p dan-calc --no-default-features --features aot
+
+      # Reported, not enforced: there are lints from before this workflow,
+      # among them an error (clippy::eq_op in leoblack-estimators' roxy.rs).
+      - name: Clippy
+        working-directory: algorithms/dan-calc
+        continue-on-error: true
+        run: cargo clippy --all-targets
+
+  test-windows:
+    # Most osu! players are on Windows, so most apps using dan-calc ship there
+    # too: checks that `aot` compiles MinaCalc for the Windows target and
+    # loads it. The rest is the same on every platform and runs on Linux.
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: algorithms/dan-calc
+
+      - name: Test dan-calc (aot)
+        working-directory: algorithms/dan-calc
+        run: cargo test -p leoblack-ett -p chart-pipeline -p dan-calc --no-default-features --features aot
