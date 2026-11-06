@@ -1794,6 +1794,10 @@ msgstr "{selectedKeymode}K 预览"
 msgid "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 msgstr "{sessionPlays, plural, other {{1} 次游玩}}"
 
+#: src/components/maps/DanProgressRail.tsx
+msgid "{shiftText} for accuracy"
+msgstr "准确率 {shiftText}"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, other {# 张截图}}"
@@ -4717,13 +4721,13 @@ msgid "Chart edited after this play"
 msgstr "谱面在此成绩之后被修改"
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate"
-msgstr "谱面估计"
+#~ msgid "Chart estimate"
+#~ msgstr "谱面估计"
 
 #. placeholder {0}: formatDanValue(chart)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate: {0}"
-msgstr "谱面估计值：{0}"
+#~ msgid "Chart estimate: {0}"
+#~ msgstr "谱面估计值：{0}"
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Chart file"
@@ -10908,6 +10912,7 @@ msgstr "MANIERA [7K] Masterpiece 的 1:29。紫色的行是衩，橙色的行是
 msgid "map"
 msgstr "谱面"
 
+#: src/components/maps/DanProgressRail.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Map"
@@ -10958,6 +10963,11 @@ msgstr "谱面构成"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "谱面不可用"
+
+#. placeholder {0}: formatDanValue(chart)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Map: {0}"
+msgstr "谱面：{0}"
 
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/replay.tsx
@@ -22494,13 +22504,13 @@ msgid "Your country isn't tracked yet, so there's nothing to record your plays a
 msgstr "你的国家/地区还没有被追踪，所以没有地方记录你的成绩。"
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit"
-msgstr "你的计入值"
+#~ msgid "Your credit"
+#~ msgstr "你的计入值"
 
 #. placeholder {0}: formatDanValue(landedValue)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit: {0}"
-msgstr "你的计入值：{0}"
+#~ msgid "Your credit: {0}"
+#~ msgstr "你的计入值：{0}"
 
 #: src/routes/recommendations.tsx
 msgid "your dan"
@@ -22619,6 +22629,15 @@ msgstr "你的通过"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
 #~ msgstr "你的个人面板：排名、pp、活跃统计和目标进度。"
+
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play"
+msgstr "你的成绩"
+
+#. placeholder {0}: formatDanValue(landedValue)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play: {0}"
+msgstr "你的成绩：{0}"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Your plays"

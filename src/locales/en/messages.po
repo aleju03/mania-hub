@@ -1805,6 +1805,10 @@ msgstr "{selectedKeymode}K preview"
 msgid "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 msgstr "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 
+#: src/components/maps/DanProgressRail.tsx
+msgid "{shiftText} for accuracy"
+msgstr "{shiftText} for accuracy"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, one {# screenshot} other {# screenshots}}"
@@ -4732,13 +4736,13 @@ msgid "Chart edited after this play"
 msgstr "Chart edited after this play"
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate"
-msgstr "Chart estimate"
+#~ msgid "Chart estimate"
+#~ msgstr "Chart estimate"
 
 #. placeholder {0}: formatDanValue(chart)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate: {0}"
-msgstr "Chart estimate: {0}"
+#~ msgid "Chart estimate: {0}"
+#~ msgstr "Chart estimate: {0}"
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Chart file"
@@ -10935,6 +10939,7 @@ msgstr "MANIERA [7K] Masterpiece at 1:29. Purple rows are Bracket, orange rows a
 msgid "map"
 msgstr "map"
 
+#: src/components/maps/DanProgressRail.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Map"
@@ -10985,6 +10990,11 @@ msgstr "Map shape"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "map unavailable"
+
+#. placeholder {0}: formatDanValue(chart)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Map: {0}"
+msgstr "Map: {0}"
 
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/replay.tsx
@@ -22537,13 +22547,13 @@ msgid "Your country isn't tracked yet, so there's nothing to record your plays a
 msgstr "Your country isn't tracked yet, so there's nothing to record your plays against."
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit"
-msgstr "Your credit"
+#~ msgid "Your credit"
+#~ msgstr "Your credit"
 
 #. placeholder {0}: formatDanValue(landedValue)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit: {0}"
-msgstr "Your credit: {0}"
+#~ msgid "Your credit: {0}"
+#~ msgstr "Your credit: {0}"
 
 #: src/routes/recommendations.tsx
 msgid "your dan"
@@ -22662,6 +22672,15 @@ msgstr "Your pass"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
 #~ msgstr "Your personal dashboard: ranks, pp, activity totals and goal progress."
+
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play"
+msgstr "Your play"
+
+#. placeholder {0}: formatDanValue(landedValue)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play: {0}"
+msgstr "Your play: {0}"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Your plays"

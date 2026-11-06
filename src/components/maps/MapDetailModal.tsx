@@ -115,6 +115,8 @@ export interface MapDetailPlayContext {
     chartLabel: string | null;
     creditedRating?: number;
     creditedLabel?: string;
+    /** A practice course set creditedRating, not the accuracy curve. */
+    courseCredit?: boolean;
     accuracy: number | null;
     /** The formula `accuracy` is written in, when it is not the one the score screen shows. */
     currency?: "stable" | "v2" | null;
@@ -219,6 +221,7 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
               landed={play.dan.creditedRating ?? null}
               landedLabel={play.dan.creditedLabel ? shownDanLabel(play.dan.creditedLabel, entry?.keyCount ?? 4, play.dan.family) : null}
               rejected={rejected}
+              courseCredit={play.dan.courseCredit}
               formatLabel={(label) => shownDanLabel(label, entry?.keyCount ?? 4, play.dan?.family)}
             />
           </div>

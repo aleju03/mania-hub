@@ -1245,6 +1245,7 @@ function DanPlaysList({
               chartLabel: row.clear.chartDanLabel,
               creditedRating: row.clear.creditedDan,
               creditedLabel: row.clear.creditedDanLabel,
+              courseCredit: row.clear.credential != null,
               accuracy: row.clear.clearAccuracy,
               currency: row.clear.currency,
               family: side,
