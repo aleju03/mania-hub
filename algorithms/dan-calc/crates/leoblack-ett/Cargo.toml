@@ -5,7 +5,21 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+default = ["jit"]
+# MinaCalc's wasm is compiled when it is first used: cranelift is in the binary.
+jit = ["wasmtime/cranelift"]
+# MinaCalc's wasm is compiled for the target when the crate is built, and only
+# loaded when it is used: no compiler in the binary and no wait on first use.
+# Takes over from `jit` when both are on.
+aot = ["dep:wasmtime"]
+
 [dependencies]
-wasmtime = { version = "49", default-features = false, features = ["cranelift", "runtime", "std"] }
+wasmtime = { version = "49", default-features = false, features = ["runtime", "std"] }
 jsmath = { path = "../../../prism/crates/jsmath" }
 leoblack-parser = { path = "../leoblack-parser" }
+
+[build-dependencies]
+# The same wasmtime, with its compiler, for the build script of `aot`. Its
+# features stay out of the binary's wasmtime (Cargo's resolver 2).
+wasmtime = { version = "49", default-features = false, features = ["cranelift", "std"], optional = true }

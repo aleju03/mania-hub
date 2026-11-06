@@ -5,21 +5,38 @@ use wasmtime::{Caller, Config, Engine, Instance as WasmInstance, Linker, Memory,
 
 use crate::versions::{EttVersion, ALL_VERSIONS};
 
-static WASM_BYTES: [&[u8]; 6] = [
-    include_bytes!("../minacalc/minaclac-68.0-unofficial.wasm"),
-    include_bytes!("../minacalc/minaclac-70.0.wasm"),
-    include_bytes!("../minacalc/minaclac-72.0.wasm"),
-    include_bytes!("../minacalc/minaclac-72.3.wasm"),
-    include_bytes!("../minacalc/minaclac-74.0.wasm"),
-    include_bytes!("../minacalc/minaclac-75.0.wasm"),
-];
+#[cfg(not(any(feature = "jit", feature = "aot")))]
+compile_error!("leoblack-ett needs the `jit` or the `aot` feature to run MinaCalc");
+
+/// The builds by [`EttVersion::index`], as wasm (`jit`) or compiled for the
+/// target by `build.rs` (`aot`).
+macro_rules! minacalc_builds {
+    ($ext:literal, $dir:expr) => {
+        [
+            include_bytes!(concat!($dir, "/minaclac-68.0-unofficial.", $ext)),
+            include_bytes!(concat!($dir, "/minaclac-70.0.", $ext)),
+            include_bytes!(concat!($dir, "/minaclac-72.0.", $ext)),
+            include_bytes!(concat!($dir, "/minaclac-72.3.", $ext)),
+            include_bytes!(concat!($dir, "/minaclac-74.0.", $ext)),
+            include_bytes!(concat!($dir, "/minaclac-75.0.", $ext)),
+        ]
+    };
+}
+
+#[cfg(feature = "aot")]
+static PRECOMPILED: [&[u8]; 6] = minacalc_builds!("cwasm", env!("OUT_DIR"));
+#[cfg(not(feature = "aot"))]
+static WASM_BYTES: [&[u8]; 6] = minacalc_builds!("wasm", "../minacalc");
 
 pub const OUT_COUNT: usize = 8;
 
 fn engine() -> &'static Engine {
     static ENGINE: OnceLock<Engine> = OnceLock::new();
     ENGINE.get_or_init(|| {
+        #[allow(unused_mut)]
         let mut config = Config::new();
+        // The same as `build.rs` compiles with, for `aot`.
+        #[cfg(not(feature = "aot"))]
         config.cranelift_opt_level(wasmtime::OptLevel::Speed);
         Engine::new(&config).expect("wasmtime engine")
     })
@@ -28,9 +45,19 @@ fn engine() -> &'static Engine {
 pub fn module(version: EttVersion) -> &'static Module {
     static MODULES: [OnceLock<Module>; 6] =
         [OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new()];
-    MODULES[version.index()].get_or_init(|| {
-        Module::new(engine(), WASM_BYTES[version.index()]).unwrap_or_else(|e| panic!("compile {}: {e}", version.key()))
-    })
+    MODULES[version.index()].get_or_init(|| load(version).unwrap_or_else(|e| panic!("load {}: {e}", version.key())))
+}
+
+#[cfg(feature = "aot")]
+fn load(version: EttVersion) -> wasmtime::Result<Module> {
+    // SAFETY: `build.rs` compiled these, with this same wasmtime, for this
+    // target; wasmtime checks both before loading them.
+    unsafe { Module::deserialize(engine(), PRECOMPILED[version.index()]) }
+}
+
+#[cfg(not(feature = "aot"))]
+fn load(version: EttVersion) -> wasmtime::Result<Module> {
+    Module::new(engine(), WASM_BYTES[version.index()])
 }
 
 pub fn precompile_all() {

@@ -538,7 +538,11 @@ export const Route = createFileRoute("/replay")({
     if (typeof deps.scoreId !== "number") return { seoScore: null, score: null, importScore: null };
 
     try {
-      const score = await getScore({ data: { scoreId: deps.scoreId } });
+      // Server renders read the score from cache only: anyone can request this
+      // page with a fresh id, and each uncached one would cost an osu! call.
+      // On a miss the page renders with a generic title and the browser fetches
+      // the score.
+      const score = await getScore({ data: { scoreId: deps.scoreId, cacheOnly: typeof document === "undefined" } });
       return {
         score,
         importScore: null,

@@ -5,11 +5,17 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+default = ["jit"]
+# How MinaCalc's wasm is compiled: see leoblack-ett.
+jit = ["leoblack-ett/jit"]
+aot = ["leoblack-ett/aot"]
+
 [dependencies]
 jsmath = { path = "../../../prism/crates/jsmath" }
 chart-parser = { path = "../../../prism/crates/chart-parser" }
 leoblack-parser = { path = "../leoblack-parser" }
-leoblack-ett = { path = "../leoblack-ett" }
+leoblack-ett = { path = "../leoblack-ett", default-features = false }
 leoblack-rework = { path = "../leoblack-rework" }
 leoblack-patterns = { path = "../leoblack-patterns" }
 leoblack-interlude = { path = "../leoblack-interlude" }
