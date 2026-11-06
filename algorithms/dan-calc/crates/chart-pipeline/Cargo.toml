@@ -6,10 +6,11 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-default = ["jit"]
+default = ["jit", "legacy-builds"]
 # How MinaCalc's wasm is compiled: see leoblack-ett.
 jit = ["leoblack-ett/jit"]
 aot = ["leoblack-ett/aot"]
+legacy-builds = ["leoblack-ett/legacy-builds"]
 
 [dependencies]
 jsmath = { path = "../../../prism/crates/jsmath" }

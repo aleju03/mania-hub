@@ -6,13 +6,16 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-default = ["jit"]
+default = ["jit", "legacy-builds"]
 # MinaCalc's wasm is compiled when it is first used: cranelift is in the binary.
 jit = ["wasmtime/cranelift"]
 # MinaCalc's wasm is compiled for the target when the crate is built, and only
 # loaded when it is used: no compiler in the binary and no wait on first use.
 # Takes over from `jit` when both are on.
 aot = ["dep:wasmtime"]
+# MinaCalc 0.68.0 and 0.70.0, which dan-calc's `estimate` never uses (it runs
+# 0.72.3, 0.74.0 and 0.75.0). Without them, asking for one is an error.
+legacy-builds = []
 
 [dependencies]
 wasmtime = { version = "49", default-features = false, features = ["runtime", "std"] }

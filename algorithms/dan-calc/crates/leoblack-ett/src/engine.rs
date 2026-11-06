@@ -8,25 +8,62 @@ use crate::versions::{EttVersion, ALL_VERSIONS};
 #[cfg(not(any(feature = "jit", feature = "aot")))]
 compile_error!("leoblack-ett needs the `jit` or the `aot` feature to run MinaCalc");
 
-/// The builds by [`EttVersion::index`], as wasm (`jit`) or compiled for the
-/// target by `build.rs` (`aot`).
+/// The MinaCalc builds, one per distinct wasm: 0.72.0 and 0.72.3 are the
+/// same build, byte for byte, so they share one (see [`build`]).
+const BUILDS: usize = 5;
+
+/// Which of the builds `version` runs.
+fn build(version: EttVersion) -> usize {
+    match version {
+        EttVersion::V0680Unofficial => 0,
+        EttVersion::V0700 => 1,
+        EttVersion::V0720 | EttVersion::V0723 => 2,
+        EttVersion::V0740 => 3,
+        EttVersion::V0750 => 4,
+    }
+}
+
+/// A build of the `legacy-builds` feature: left out, file and all, without it.
+#[cfg(feature = "legacy-builds")]
+macro_rules! legacy {
+    ($bytes:expr) => {
+        Some($bytes)
+    };
+}
+#[cfg(not(feature = "legacy-builds"))]
+macro_rules! legacy {
+    ($bytes:expr) => {
+        None
+    };
+}
+
+/// The builds by [`build`], as wasm (`jit`) or compiled for the target by
+/// `build.rs` (`aot`); `None` for the ones left out.
 macro_rules! minacalc_builds {
     ($ext:literal, $dir:expr) => {
         [
-            include_bytes!(concat!($dir, "/minaclac-68.0-unofficial.", $ext)),
-            include_bytes!(concat!($dir, "/minaclac-70.0.", $ext)),
-            include_bytes!(concat!($dir, "/minaclac-72.0.", $ext)),
-            include_bytes!(concat!($dir, "/minaclac-72.3.", $ext)),
-            include_bytes!(concat!($dir, "/minaclac-74.0.", $ext)),
-            include_bytes!(concat!($dir, "/minaclac-75.0.", $ext)),
+            legacy!(include_bytes!(concat!($dir, "/minaclac-68.0-unofficial.", $ext))),
+            legacy!(include_bytes!(concat!($dir, "/minaclac-70.0.", $ext))),
+            Some(include_bytes!(concat!($dir, "/minaclac-72.3.", $ext))),
+            Some(include_bytes!(concat!($dir, "/minaclac-74.0.", $ext))),
+            Some(include_bytes!(concat!($dir, "/minaclac-75.0.", $ext))),
         ]
     };
 }
 
 #[cfg(feature = "aot")]
-static PRECOMPILED: [&[u8]; 6] = minacalc_builds!("cwasm", env!("OUT_DIR"));
+static PRECOMPILED: [Option<&[u8]>; BUILDS] = minacalc_builds!("cwasm", env!("OUT_DIR"));
 #[cfg(not(feature = "aot"))]
-static WASM_BYTES: [&[u8]; 6] = minacalc_builds!("wasm", "../minacalc");
+static WASM_BYTES: [Option<&[u8]>; BUILDS] = minacalc_builds!("wasm", "../minacalc");
+
+/// Whether the build of `version` is in this binary (see `legacy-builds`).
+pub fn is_built_in(version: EttVersion) -> bool {
+    #[cfg(feature = "aot")]
+    let builds = &PRECOMPILED;
+    #[cfg(not(feature = "aot"))]
+    let builds = &WASM_BYTES;
+    builds[build(version)].is_some()
+}
 
 pub const OUT_COUNT: usize = 8;
 
@@ -42,26 +79,33 @@ fn engine() -> &'static Engine {
     })
 }
 
+/// The compiled build of `version`, shared by the versions of the same build.
+///
+/// # Panics
+///
+/// If it isn't built in (see [`is_built_in`]).
 pub fn module(version: EttVersion) -> &'static Module {
-    static MODULES: [OnceLock<Module>; 6] =
-        [OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new()];
-    MODULES[version.index()].get_or_init(|| load(version).unwrap_or_else(|e| panic!("load {}: {e}", version.key())))
+    static MODULES: [OnceLock<Module>; BUILDS] = [const { OnceLock::new() }; BUILDS];
+    MODULES[build(version)].get_or_init(|| load(build(version)).unwrap_or_else(|e| panic!("load {}: {e}", version.key())))
 }
 
 #[cfg(feature = "aot")]
-fn load(version: EttVersion) -> wasmtime::Result<Module> {
+fn load(build: usize) -> wasmtime::Result<Module> {
     // SAFETY: `build.rs` compiled these, with this same wasmtime, for this
     // target; wasmtime checks both before loading them.
-    unsafe { Module::deserialize(engine(), PRECOMPILED[version.index()]) }
+    let bytes = PRECOMPILED[build].ok_or_else(|| wasmtime::Error::msg("not built in"))?;
+    unsafe { Module::deserialize(engine(), bytes) }
 }
 
 #[cfg(not(feature = "aot"))]
-fn load(version: EttVersion) -> wasmtime::Result<Module> {
-    Module::new(engine(), WASM_BYTES[version.index()])
+fn load(build: usize) -> wasmtime::Result<Module> {
+    let bytes = WASM_BYTES[build].ok_or_else(|| wasmtime::Error::msg("not built in"))?;
+    Module::new(engine(), bytes)
 }
 
+/// Compiles (`jit`) or loads (`aot`) every build in this binary.
 pub fn precompile_all() {
-    for v in ALL_VERSIONS {
+    for v in ALL_VERSIONS.into_iter().filter(|&v| is_built_in(v)) {
         module(v);
     }
 }
@@ -485,6 +529,11 @@ pub struct EttInstance {
 
 impl EttInstance {
     pub fn new(version: EttVersion) -> Result<EttInstance, JsThrow> {
+        if !is_built_in(version) {
+            return Err(JsThrow {
+                message: format!("MinaCalc {} is not built in: it needs the `legacy-builds` feature", version.key()),
+            });
+        }
         let n = names(version);
         let module = module(version);
         let linker = build_linker(version);
@@ -613,4 +662,32 @@ pub fn evict(version: EttVersion) {
 
 pub fn import_calls(version: EttVersion) -> Option<ImportCalls> {
     INSTANCES.with(|cell| cell.borrow()[version.index()].as_ref().map(|i| i.import_calls()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_version_loads() {
+        precompile_all();
+    }
+
+    #[test]
+    fn legacy_builds_only_with_their_feature() {
+        for version in [EttVersion::V0680Unofficial, EttVersion::V0700] {
+            assert_eq!(is_built_in(version), cfg!(feature = "legacy-builds"));
+            assert_eq!(EttInstance::new(version).is_ok(), cfg!(feature = "legacy-builds"));
+        }
+        for version in [EttVersion::V0720, EttVersion::V0723, EttVersion::V0740, EttVersion::V0750] {
+            assert!(is_built_in(version));
+            assert!(EttInstance::new(version).is_ok());
+        }
+    }
+
+    #[test]
+    fn the_same_build_is_loaded_once() {
+        assert!(std::ptr::eq(module(EttVersion::V0720), module(EttVersion::V0723)));
+        assert!(!std::ptr::eq(module(EttVersion::V0723), module(EttVersion::V0740)));
+    }
 }

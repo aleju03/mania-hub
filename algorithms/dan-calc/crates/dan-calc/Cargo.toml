@@ -7,13 +7,16 @@ publish.workspace = true
 description = "Mania Tracker's osu!mania dan calculator: dan estimates for 4K, 6K and 7K charts at any rate"
 
 [features]
-default = ["jit"]
+default = ["jit", "legacy-builds"]
 # MinaCalc's wasm is compiled when it is first used (~0.5 s), with cranelift
 # in the binary.
 jit = ["chart-pipeline/jit"]
 # MinaCalc's wasm is compiled when the crate is built: no compiler in the
 # binary and no wait on first use. Use with `default-features = false`.
 aot = ["chart-pipeline/aot"]
+# MinaCalc 0.68.0 and 0.70.0, which `estimate` never uses: leave them out
+# (with `default-features = false`) for a smaller binary.
+legacy-builds = ["chart-pipeline/legacy-builds"]
 
 [dependencies]
 chart-pipeline = { path = "../chart-pipeline", default-features = false }
