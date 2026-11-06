@@ -44,7 +44,8 @@ impl EttVersion {
         match self {
             EttVersion::V0680Unofficial => "minaclac-68.0-unofficial.wasm",
             EttVersion::V0700 => "minaclac-70.0.wasm",
-            EttVersion::V0720 => "minaclac-72.0.wasm",
+            // The same build as 0.72.3, byte for byte: only that one is kept.
+            EttVersion::V0720 => "minaclac-72.3.wasm",
             EttVersion::V0723 => "minaclac-72.3.wasm",
             EttVersion::V0740 => "minaclac-74.0.wasm",
             EttVersion::V0750 => "minaclac-75.0.wasm",

@@ -29,6 +29,11 @@ mod aot {
             if path.extension().is_none_or(|e| e != "wasm") {
                 continue;
             }
+            // Not included without their feature (see `engine.rs`).
+            let legacy = ["minaclac-68.0-unofficial.wasm", "minaclac-70.0.wasm"];
+            if !cfg!(feature = "legacy-builds") && path.file_name().is_some_and(|n| legacy.iter().any(|l| n == *l)) {
+                continue;
+            }
             let wasm = fs::read(&path).expect("read wasm");
             let compiled = engine.precompile_module(&wasm).unwrap_or_else(|e| panic!("compile {path:?}: {e}"));
             let name = path.with_extension("cwasm");
