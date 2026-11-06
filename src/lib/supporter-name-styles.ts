@@ -38,6 +38,7 @@ export const SUPPORTER_NAME_STYLES = [
   "mesh",
   "inferno",
   "hellfire",
+  "aero",
 ] as const;
 
 export type SupporterNameStyleId = (typeof SUPPORTER_NAME_STYLES)[number];
@@ -71,6 +72,7 @@ export const SUPPORTER_NAME_STYLE_LABELS: Record<SupporterNameStyleId, MessageDe
   sticker: msg`Sticker`,
   rainbow: msg`Rainbow`,
   "hit-light": msg`Hit light`,
+  aero: msg`Aero`,
   "300g": msg`300g`,
   terminal: msg`Terminal`,
   plate: msg`Nameplate`,

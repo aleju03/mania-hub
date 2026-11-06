@@ -16,7 +16,7 @@ export const SUPPORTER_PROFILE_THEMES = [
   "inferno", "frost", "highway", "storm", "noir", "sunset",
   "judgements", "koi", "hanabi", "vaporwave", "blackhole", "singularity",
   "knight", "knightfight", "sketch", "redtree",
-  "fireflies", "crystal", "maple", "chrome",
+  "fireflies", "crystal", "maple", "chrome", "aero",
 ] as const;
 
 export type SupporterProfileThemeId = (typeof SUPPORTER_PROFILE_THEMES)[number];
@@ -64,6 +64,7 @@ export const PROFILE_THEME_LOOKS: Record<SupporterProfileThemeId, ProfileThemeLo
   crystal: { hue: 280, sat: 0.7, base: "#050208", swatch: "radial-gradient(70% 70% at 72% 62%,#5a2a8a 0%,#22103a 45%,#050208 100%)", cover: 0.18 },
   maple: { hue: 28, sat: 0.85, base: "#1c1008", swatch: "radial-gradient(60% 70% at 52% 30%,#c08a3a 0%,#7a3a14 45%,#2a160a 100%)", cover: 0.15 },
   chrome: { hue: 230, sat: 0.15, base: "#020203", swatch: "linear-gradient(160deg,#020203 0%,#020203 40%,#9a9aa6 46%,#101014 52%,#020203 70%,#5a5a64 78%,#020203 84%)", cover: 0.2 },
+  aero: { hue: 168, sat: 0.7, base: "#03161a", swatch: "radial-gradient(70% 40% at 55% 62%,#3f7a1c 0%,transparent 70%),linear-gradient(180deg,#0a3a40 0%,#06272c 60%,#03161a 100%)", cover: 0.25 },
 };
 
 export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, MessageDescriptor> = {
@@ -93,6 +94,7 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
   crystal: msg`Crystal cave`,
   maple: msg`Autumn maple`,
   chrome: msg`Liquid chrome`,
+  aero: msg`Aero`,
 };
 
 /* A theme's own switches, saved with the pick (the backend keeps the same

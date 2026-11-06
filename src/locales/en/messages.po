@@ -4081,6 +4081,15 @@ msgstr "Admin: flood the rail with fake pulls to preview the animation"
 msgid "Advanced"
 msgstr "Advanced"
 
+#: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-profile-themes.ts
+msgid "Aero"
+msgstr "Aero"
+
+#: src/components/supporter/loadout.ts
+msgid "Aero bubble"
+msgstr "Aero bubble"
+
 #: src/components/supporter/loadout.ts
 msgid "Aero window"
 msgstr "Aero window"
@@ -8819,6 +8828,10 @@ msgstr "does not count"
 #~ msgid "Does not count for dan."
 #~ msgstr "Does not count for dan."
 
+#: src/components/supporter/loadout.ts
+msgid "Dojo"
+msgstr "Dojo"
+
 #: src/lib/supporter-companions.ts
 msgid "Don-chan"
 msgstr "Don-chan"
@@ -11309,6 +11322,10 @@ msgstr "green"
 #: src/lib/signature-style.ts
 msgid "Green"
 msgstr "Green"
+
+#: src/components/supporter/loadout.ts
+msgid "Green hat"
+msgstr "Green hat"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/packs.tsx
@@ -29024,8 +29041,8 @@ msgid "Wisteria"
 msgstr "Wisteria"
 
 #: src/components/supporter/loadout.ts
-msgid "Witch hat"
-msgstr "Witch hat"
+#~ msgid "Witch hat"
+#~ msgstr "Witch hat"
 
 #: src/components/supporter/loadout.ts
 msgid "Witch hat and broom"

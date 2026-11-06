@@ -1,7 +1,10 @@
-import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react";
 
+import { LiveDfjkKeys } from "./LiveDfjkKeys";
+import { LiveSevenKey } from "./LiveSevenKey";
+import { startNoteHighway } from "./liveNoteHighway";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
 import { fetchLiveSupporterProfileLook } from "../../lib/live-backend";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
@@ -79,8 +82,11 @@ export function SupporterAvatarFrame({ frame, still: holdStill = false, round = 
   const still = supporterFrameSrc(frame, "still", { round });
 
   const playing = animate && !holdStill;
-  const fill = geometry.danWindow ? "absolute inset-0 h-full w-full" : className;
-  const fillStyle = geometry.danWindow ? undefined : style;
+  // the DFJK keycaps and the 7K board also answer the viewer's own keys (LiveDfjkKeys, LiveSevenKey)
+  const liveKeys = playing && (frame === "dfjk-keys" || frame === "seven-key");
+  const wrapped = Boolean(geometry.danWindow) || liveKeys;
+  const fill = wrapped ? "absolute inset-0 h-full w-full" : className;
+  const fillStyle = wrapped ? undefined : style;
   const art = playing && !geometry.stillOnly ? (
     <video
       key={frame}
@@ -98,6 +104,9 @@ export function SupporterAvatarFrame({ frame, still: holdStill = false, round = 
   ) : (
     <img key={frame} src={still} alt="" aria-hidden draggable={false} loading={holdStill ? "lazy" : undefined} className={fill} style={fillStyle} />
   );
+  if (liveKeys) return frame === "seven-key" ? <LiveSevenKey style={style}>{art}</LiveSevenKey> : <LiveDfjkKeys style={style}>{art}</LiveDfjkKeys>;
+  // Note highway plays live, so its chart never repeats
+  if (playing && frame === "note-highway") return <LiveNoteHighway key={frame} className={className} style={style} />;
   if (!geometry.danWindow) return art;
 
   // the art and the badge move as one, so the art's swing is CSS, not in the video
@@ -137,6 +146,12 @@ export function SupporterAvatarFrame({ frame, still: holdStill = false, round = 
       )}
     </div>
   );
+}
+
+function LiveNoteHighway({ className, style }: { className: string; style: CSSProperties }) {
+  const ref = useRef<SVGSVGElement>(null);
+  useEffect(() => (ref.current ? startNoteHighway(ref.current) : undefined), []);
+  return <svg ref={ref} aria-hidden viewBox="0 -28 184 212" className={className} style={style} />;
 }
 
 /* The card's second line: the skillset (or Overall), LN, and the keymode. */

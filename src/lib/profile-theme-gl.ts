@@ -76,6 +76,7 @@ const THEME_SPRITES: Partial<Record<SupporterProfileThemeId, string>> = {
   redtree: "/images/profile-themes/red-tree.webp",
   maple: "/images/profile-themes/maple-built.webp",
   fireflies: "/images/profile-themes/firefly-built.webp",
+  aero: "/images/profile-themes/aero-built.webp",
 };
 
 /* Geometry a theme draws over its shader, in the same canvas. */

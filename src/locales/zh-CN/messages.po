@@ -4066,6 +4066,15 @@ msgstr "管理员：用假抽卡刷满侧栏以预览动画"
 msgid "Advanced"
 msgstr "高级"
 
+#: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-profile-themes.ts
+msgid "Aero"
+msgstr "Aero"
+
+#: src/components/supporter/loadout.ts
+msgid "Aero bubble"
+msgstr "Aero 气泡"
+
 #: src/components/supporter/loadout.ts
 msgid "Aero window"
 msgstr "Aero 窗口"
@@ -8804,6 +8813,10 @@ msgstr "不计入"
 #~ msgid "Does not count for dan."
 #~ msgstr "不计入段位。"
 
+#: src/components/supporter/loadout.ts
+msgid "Dojo"
+msgstr "道场"
+
 #: src/lib/supporter-companions.ts
 msgid "Don-chan"
 msgstr "小咚"
@@ -11290,6 +11303,10 @@ msgstr "绿"
 #: src/lib/signature-style.ts
 msgid "Green"
 msgstr "绿色"
+
+#: src/components/supporter/loadout.ts
+msgid "Green hat"
+msgstr "绿帽子"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/packs.tsx
@@ -28981,8 +28998,8 @@ msgid "Wisteria"
 msgstr "紫藤"
 
 #: src/components/supporter/loadout.ts
-msgid "Witch hat"
-msgstr "女巫帽"
+#~ msgid "Witch hat"
+#~ msgstr "女巫帽"
 
 #: src/components/supporter/loadout.ts
 msgid "Witch hat and broom"

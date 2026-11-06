@@ -4054,6 +4054,15 @@ msgstr "Admin: llenar la fila con tiradas falsas para previsualizar la animació
 msgid "Advanced"
 msgstr "Avanzado"
 
+#: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-profile-themes.ts
+msgid "Aero"
+msgstr "Aero"
+
+#: src/components/supporter/loadout.ts
+msgid "Aero bubble"
+msgstr "Burbuja Aero"
+
 #: src/components/supporter/loadout.ts
 msgid "Aero window"
 msgstr "Ventana Aero"
@@ -8792,6 +8801,10 @@ msgstr "no cuenta"
 #~ msgid "Does not count for dan."
 #~ msgstr "No cuenta para dan."
 
+#: src/components/supporter/loadout.ts
+msgid "Dojo"
+msgstr "Dojo"
+
 #: src/lib/supporter-companions.ts
 msgid "Don-chan"
 msgstr "Don-chan"
@@ -11278,6 +11291,10 @@ msgstr "verde"
 #: src/lib/signature-style.ts
 msgid "Green"
 msgstr "Verde"
+
+#: src/components/supporter/loadout.ts
+msgid "Green hat"
+msgstr "Sombrero verde"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/packs.tsx
@@ -28969,8 +28986,8 @@ msgid "Wisteria"
 msgstr "Glicinia"
 
 #: src/components/supporter/loadout.ts
-msgid "Witch hat"
-msgstr "Sombrero de bruja"
+#~ msgid "Witch hat"
+#~ msgstr "Sombrero de bruja"
 
 #: src/components/supporter/loadout.ts
 msgid "Witch hat and broom"

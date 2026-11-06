@@ -7,8 +7,11 @@ stardust, witch-broom, ice-fairy, scarlet-moon, rainbow-crystal-wings, time-stop
   "af magic circle" by Masahiro Kaneko, "3d rotating crystal" by Arslan Ali,
   "Bat - Halloween" by Priyanshu Rijhwani.
 
+The witch hat is "Witch hat" by Lixaxy (Openclipart 218202, https://openclipart.org/detail/218202/witch-hat,
+CC0), recoloured green, its band and bow removed.
+
 Everything else is drawn for this site: the yin-yang orbs, the shrine ribbon, the shrine gate and
-its blossoms, the witch hat, the broom and star bullets, the snowflakes and the knives. The
+its blossoms, the broom and star bullets, the snowflakes and the knives. The
 scarlet moon is NASA's Lunar Reconnaissance Orbiter mosaic of the near side (public domain,
 NASA/GSFC/Arizona State University, Wikimedia Commons "Moon_nearside_LRO.jpg"), flattened into
 scarlet cel tones.

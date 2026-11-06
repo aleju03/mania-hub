@@ -311,6 +311,12 @@ html[data-custom-cursor="true"] * {
   background-size: 320% 100%;
   animation: frame-sheen 14s infinite;
 }
+/* the DFJK frame's hit light, as its video fades it */
+@keyframes dfjk-hit {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.dfjk-hit { animation: dfjk-hit 220ms linear forwards; }
 
 :root[data-window-active="false"] .animate-spin,
 :root[data-window-active="false"] .animate-pulse,
@@ -925,7 +931,8 @@ html[data-custom-cursor="true"] * {
 .name-tag--dither,
 .name-tag--mesh,
 .name-tag--inferno,
-.name-tag--hellfire {
+.name-tag--hellfire,
+.name-tag--aero {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1202,6 +1209,26 @@ html[data-custom-cursor="true"] * {
     transparent 59% 60.5%, #ea58aa 60.5%, #dc52bc 66.5%,
     transparent 66.5% 68.5%, #c64fd2 68.5%, #8b4dff 100%);
   filter: drop-shadow(0 0.05em 0.05em rgba(30, 0, 50, 0.7)) drop-shadow(0 0 0.25em rgba(255, 90, 170, 0.45));
+}
+
+/* Aero: glossy aqua jelly letters (Frutiger Aero). A white gloss over the
+   upper half, sky blue deepening to ocean blue below it, a cool rim, and a
+   sheen that crosses the name now and then. */
+.name-tag--aero {
+  background-image:
+    linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.85) 50%, transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.55) 40%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(180deg, #e6fcff 0%, #8ae6ff 36%, #22b2ec 54%, #0f7cc6 78%, #0a5aa0 100%);
+  background-size: 300% 100%, 100% 100%, 100% 100%;
+  background-position: 160% 0, 0 0, 0 0;
+  background-repeat: no-repeat;
+  -webkit-text-stroke: 0.02em rgba(225, 250, 255, 0.35);
+  filter: drop-shadow(0 0.05em 0.04em rgba(0, 38, 70, 0.8)) drop-shadow(0 0 0.22em rgba(80, 205, 255, 0.45));
+  animation: name-tag-aero-sheen 5s ease-in-out infinite;
+}
+@keyframes name-tag-aero-sheen {
+  0%, 62% { background-position: 160% 0, 0 0, 0 0; }
+  86%, 100% { background-position: -60% 0, 0 0, 0 0; }
 }
 
 :root[data-window-active="false"] .name-tag,

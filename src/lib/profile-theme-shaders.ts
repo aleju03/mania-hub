@@ -3135,6 +3135,112 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }
 `),
+  // Aero: Frutiger Aero, up close. Glossy green leaves beaded with water drops
+  // against a soft aqua bokeh (our own Blender render, theme-aero/
+  // build_aero_macro.py), graded down for the page. Glass bubbles with a
+  // soap-film rim (rendered there too) rise at three depths, the far ones
+  // passing behind the leaves; light ripples over the leaves as through
+  // water; everything shifts with depth under the pointer and on scroll.
+  // u_sprite (2048 x 1760): rows 0-1151 the render, 16:9; rows 1184-1759,
+  // columns 0-1023 its depth pass at half size (white near, black far);
+  // columns 1024-2047 eight bubbles in 256 px cells, 4 x 2, on black.
+  aero: shader(`
+uniform sampler2D u_sprite;
+
+const float AE_IA = 16. / 9.;
+
+vec3 aeScene(vec2 f, float lod) {
+  f = clamp(f, vec2(.001), vec2(.999, .996));
+  return textureLod(u_sprite, vec2(f.x, (1. - f.y) * 1152. / 1760.), lod).rgb;
+}
+
+float aeDepth(vec2 f, float lod) {
+  f = clamp(f, vec2(.004), vec2(.996));
+  return textureLod(u_sprite, vec2(f.x * .5, (1184. + (1. - f.y) * 576.) / 1760.), lod).r;
+}
+
+/* Bubble k (0..7) at q, the bubble's own disc running -1..1. */
+vec3 aeBubble(float k, vec2 q) {
+  if (dot(q, q) > 1.) return vec3(0.);
+  vec2 c = vec2(mod(k, 4.), floor(k / 4.));
+  vec2 g = q * .43 + .5;
+  return texture(u_sprite, vec2((1024. + (c.x + g.x) * 256.) / 2048., (1184. + (c.y + 1. - g.y) * 256.) / 1760.)).rgb;
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float aspect = u_res.x / u_res.y;
+  // cover-fit, a touch zoomed so it can drift
+  float s = max(1., aspect / AE_IA) * 1.04;
+  float halfW = aspect / (2. * s * AE_IA);
+  vec2 sc = vec2(s * AE_IA, s);
+  vec2 ctr = vec2(clamp(.55, halfW + .012, 1. - halfW - .012), .5);
+  ctr += vec2(.006 * sin(t * .05), .004 * sin(t * .041 + 1.));
+  vec2 f0 = p / sc + ctr;
+  vec2 par = pointerP() * vec2(.007, .005) + vec2(0., min(u_scroll, 1.) * .008);
+  float dp = aeDepth(f0, 2.);
+  vec2 f = f0 + par * (dp - .35);
+  vec3 col = aeScene(f, 0.);
+  float d = aeDepth(f, .5);
+
+  // light rippling over the leaves, as if through water above them
+  float leaf = smoothstep(.35, .6, d);
+  vec2 cq = f * vec2(9., 5.) + vec2(t * .05, -t * .04);
+  float caustic = pow(abs(sin(cq.x + 1.7 * noise(cq * .8 + t * .1)) * sin(cq.y + 1.3 * noise(cq * .7 - t * .08))), 3.);
+  col *= 1. + leaf * caustic * .35;
+
+  // down for the page, cooler in the shadows
+  col = col * .55;
+  col = mix(col, col * vec3(.82, 1., 1.08), .6);
+
+  // Soap bubbles rising at three depths; the far ones pass behind the leaves.
+  // Each one wobbles as it rises (its outline squashing and stretching), sways
+  // on its own slow path, bends the scene behind it like a lens, and its film
+  // colours drift.
+  for (int l = 0; l < 3; l++) {
+    float fl = float(l);
+    float gs = 3.2 - fl * .9;
+    vec2 q = p * gs;
+    q.y -= t * (.05 + .035 * fl) + u_scroll * gs * (.1 + .08 * fl);
+    vec2 id = floor(q + vec2(0., 0.));
+    // sway: each column drifts on its own slow path
+    float sway = sin(t * (.35 + .2 * hash(vec2(id.x, fl))) + q.y * 1.1 + hash(vec2(id.x, fl + 9.)) * 6.28) * .07;
+    q.x += sway;
+    id = floor(q);
+    if (hash(id + fl * 31.) < .62) continue;
+    vec2 c = id + .5 + (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .4;
+    float r = (.11 + .1 * hash(id + 3.)) * (.75 + .25 * fl);
+    float ph = hash(id + 6.) * 6.28;
+    // the wobble: a squash and stretch that turns slowly, plus a faint ripple of the rim
+    float wa = t * (1.1 + .6 * hash(id + 7.)) + ph;
+    float sq = .07 * sin(wa) + .03 * sin(wa * 2.3 + 1.);
+    float ang = .6 * sin(t * .3 + ph);
+    mat2 R = mat2(cos(ang), -sin(ang), sin(ang), cos(ang));
+    vec2 bq = R * ((q - c) / r);
+    bq *= vec2(1. + sq, 1. - sq);
+    bq = transpose(R) * bq;
+    float a = atan(bq.y, bq.x);
+    bq *= 1. + .025 * sin(a * 3. + wa * 1.7) + .015 * sin(a * 5. - wa * 2.1);
+    float rr = dot(bq, bq);
+    if (rr > 1.) continue;
+    bq.x *= hash(id + 5.) < .5 ? 1. : -1.;
+    float k = floor(hash(id + 4.) * 8.);
+    float layerDepth = .25 + .25 * fl;
+    float hidden = l == 0 ? smoothstep(layerDepth, layerDepth + .15, d) : 0.;
+    float show = (.55 + .2 * fl) * (1. - hidden);
+    // the lens: the scene behind seen slightly magnified and bent toward the rim
+    vec2 lensF = f - (bq * r / gs / sc) * (.35 + .5 * rr);
+    vec3 behind = aeScene(lensF, 1.5) * .55;
+    behind = mix(behind, behind * vec3(.82, 1., 1.08), .6);
+    col = mix(col, behind, .5 * (1. - hidden) * smoothstep(1., .85, rr));
+    // the film: the rendered bubble, its colours drifting a little
+    vec3 b = aeBubble(k, bq);
+    vec3 drift = .85 + .3 * cos(6.2832 * (t * .07 + ph * .2 + rr * .6 + vec3(0., .33, .67)));
+    col += b * drift * show;
+  }
+
+  col *= 1. - .3 * dot(uv - .5, uv - .5);
+  return col;
+}`),
 };
 
 /* The custom theme editor's yardstick for cost (custom-theme-editor-gl.ts):

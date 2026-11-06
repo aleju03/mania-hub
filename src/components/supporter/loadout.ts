@@ -205,7 +205,6 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
       { id: "course-run", label: msg`Course run` },
       { id: "stage-four-fail", label: msg`Stage 4 fail` },
       { id: "pass-stamp", label: msg`Pass stamp` },
-      { id: "black-belt", label: msg`Black belt` },
       { id: "greek-circle", label: msg`Greek circle` },
       { id: "trophy-shelf", label: msg`Trophy shelf` },
       { id: "dan-license", label: msg`Dan license` },
@@ -218,6 +217,7 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
       { id: "classic-window", label: msg`Classic window` },
       { id: "xp-window", label: msg`XP window` },
       { id: "aero-window", label: msg`Aero window` },
+      { id: "aero-bubble", label: msg`Aero bubble` },
       { id: "error-cascade", label: msg`Error cascade` },
       { id: "loading-bar", label: msg`Loading bar` },
       { id: "crt-monitor", label: msg`CRT monitor` },
@@ -280,6 +280,12 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
     entries: [{ id: "crown", label: msg`Crown` }, { id: "crown-sketch", label: msg`Sketch crown` }, { id: "crown-sketch-gold", label: msg`Gold sketch crown` }],
   },
   {
+    // a dan is a martial-arts grade first
+    key: "dojo",
+    title: msg`Dojo`,
+    entries: [{ id: "black-belt", label: msg`Black belt` }],
+  },
+  {
     key: "shrine",
     title: msg`Shrine and magic`,
     entries: [
@@ -287,7 +293,7 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
       { id: "reimu-ribbon", label: msg`Shrine ribbon` },
       { id: "hakurei-torii", label: msg`Shrine gate` },
       { id: "spell-card", label: msg`Spell card` },
-      { id: "witch-hat", label: msg`Witch hat` },
+      { id: "witch-hat", label: msg`Green hat` },
       { id: "stardust", label: msg`Stardust` },
       { id: "witch-broom", label: msg`Witch hat and broom` },
       { id: "ice-fairy", label: msg`Ice fairy` },
@@ -375,7 +381,7 @@ export const NAME_STYLE_GROUPS: { key: string; title: MessageDescriptor; styles:
     title: msg`Effects`,
     styles: ["chrome", "molten-gold", "ethereal", "pearl", "galaxy", "heatmap", "note-rain", "plasma", "ink", "caustics", "lava", "inferno", "hellfire", "dither", "mesh", "aurora", "glitch"],
   },
-  { key: "gradients", title: msg`Gradients`, styles: ["holo", "gold", "rainbow", "sunset", "ember", "frost"] },
+  { key: "gradients", title: msg`Gradients`, styles: ["holo", "gold", "rainbow", "sunset", "ember", "frost", "aero"] },
   { key: "glow", title: msg`Glow and retro`, styles: ["neon", "hit-light", "300g", "pixel", "terminal", "sticker", "plate"] },
 ];
 

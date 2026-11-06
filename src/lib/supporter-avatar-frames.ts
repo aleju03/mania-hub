@@ -67,6 +67,7 @@ const FRAME_GEOMETRY = {
   stardust: { box: [-0.8548, -0.3548, 2.1935, 2.129], overhang: [0.8427, 0, 0.2823, 0.7742] },
   storm: { box: [-0.3226, -0.6129, 1.6935, 1.8226], overhang: [0, 0.3024, 0.3468, 0] },
   wisteria: { roundStill: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2258, 0, 0.2419] },
+  "aero-bubble": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2298, 0.1774, 0.1976, 0.1815] },
   "aero-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1048, 0.2177, 0.1048, 0.121] },
   "ai-wings-1": { roundStill: true, box: [-0.7258, -0.7581, 2.6129, 1.9677], overhang: [0.7258, 0.2401, 0.7611, 0] },
   "ai-wings-2": { roundStill: true, box: [-0.7258, -0.7581, 2.6129, 1.9677], overhang: [0.7258, 0.5294, 0.7611, 0] },
@@ -78,7 +79,7 @@ const FRAME_GEOMETRY = {
   "bronze-laurel": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1129, 0.1008, 0.1331, 0.1855] },
   "bullet-board": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3347, 0.3347, 0.3347, 0.3347] },
   "cat-parade": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1573, 0.1694, 0.1532, 0.1694] },
-  "chordjack-pile": { box: [-0.2419, -0.5323, 1.4839, 1.7742], overhang: [0.0444, 0.4476, 0.0242, 0] },
+  "chordjack-pile": { box: [-0.2419, -0.5323, 1.4839, 1.7742], overhang: [0.0484, 0.4476, 0.0444, 0] },
   "classic-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0726, 0.2056, 0.0726, 0.0847] },
   "clutch-hp": { squareWindow: true, box: [-0.3065, -0.3065, 1.6129, 1.6129], overhang: [0.1169, 0.1169, 0.1169, 0.1169] },
   "combo-break": { box: [-0.2419, -0.2419, 1.4839, 1.8065], overhang: [0, 0, 0, 0.2823] },
@@ -130,7 +131,7 @@ const FRAME_GEOMETRY = {
   "neon-ears": { box: [-0.2419, -0.3387, 1.4839, 1.5806], overhang: [0, 0.2944, 0, 0] },
   "note-highway": { box: [-0.2419, -0.4677, 1.4839, 1.7097], overhang: [0, 0.3952, 0, 0] },
   "old-photo": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.6129], overhang: [0.1371, 0.2339, 0.1411, 0.3548], avatarFilter: "sepia(0.55) saturate(0.75) contrast(1.05)" },
-  "pass-stamp": { roundStill: true, box: [-0.2419, -0.2419, 1.8065, 1.8548], overhang: [0.0081, 0, 0.3185, 0.3306] },
+  "pass-stamp": { roundStill: true, box: [-0.2419, -0.2419, 1.8065, 1.8548], overhang: [0.0081, 0, 0.3226, 0.3306] },
   "pencil-boil": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2823, 0.2903, 0.3065, 0.2944] },
   "percy-check": { box: [-0.2419, -0.2419, 1.4839, 1.7258], overhang: [0.1331, 0.1371, 0.1331, 0.254] },
   "pity-counter": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.0887, 0.0887, 0.0887, 0.2016] },
@@ -149,7 +150,7 @@ const FRAME_GEOMETRY = {
   "spell-card": { box: [-0.5484, -0.5484, 2.0968, 2.0968], overhang: [0.5484, 0.5484, 0.5484, 0.5484] },
   "ssr-card": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2097, 0.1694, 0.1008, 0.3185] },
   "stage-four-fail": { box: [-0.2419, -0.5645, 1.7419, 1.9355], overhang: [0, 0.2742, 0.3065, 0.0806] },
-  "stair-roll": { box: [-0.2903, -0.2903, 1.5806, 1.5806], overhang: [0.254, 0.254, 0.254, 0.254] },
+  "stair-roll": { box: [-0.2903, -0.2903, 1.5806, 1.5806], overhang: [0.2258, 0.254, 0.2258, 0.2339] },
   "stellium-orbit": { roundStill: true, box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
   "step-pad": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.371, 0.371, 0.371, 0.371] },
   "susies-idea": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.1089, 0, 0.0968, 0.2298] },
@@ -179,7 +180,7 @@ const FRAME_GEOMETRY = {
   "wings-swept-3": { roundStill: true, box: [-0.8548, -0.7581, 2.871, 1.9677], overhang: [0.7389, 0.3992, 0.7401, 0] },
   "winter-pine": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2419, 0.2419, 0.2419] },
   "witch-broom": { box: [-0.8548, -0.7742, 2.1935, 2.5484], overhang: [0.8427, 0.2944, 0.2823, 0.7742] },
-  "witch-hat": { box: [-0.371, -0.7742, 1.8065, 1.0968], overhang: [0, 0.2944, 0.0524, 0] },
+  "witch-hat": { box: [-0.4839, -0.7742, 1.2258, 1.0968], overhang: [0.1613, 0.5685, 0, 0] },
   "xp-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0887, 0.2016, 0.0887, 0.0887] },
   "yinyang-orbs": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3427, 0.3226, 0.3427, 0.3629] },
   "zenith-orbit": { roundStill: true, box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
@@ -303,7 +304,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 60;
+const FRAME_ART_VERSION = 68;
 
 /* `round`: the still for a round avatar, where the frame has one. */
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {
