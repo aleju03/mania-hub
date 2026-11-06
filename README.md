@@ -15,6 +15,7 @@
     <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" />
     <img alt="Rust" src="https://img.shields.io/badge/Prism-Rust-B7410E?style=flat-square&logo=rust&logoColor=white" />
     <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-ff66aa?style=flat-square" />
+    <img alt="Visitors" src="https://visitor-badge.laobi.icu/badge?page_id=aleju03.mania-hub&left_text=visitors&left_color=555555&right_color=ff66aa" />
   </p>
 
   <p>
