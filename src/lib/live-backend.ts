@@ -2391,6 +2391,8 @@ export interface LivePlayerUnratedPlaysPage {
   sort: string;
   items: LivePlayerUnratedPlay[];
   total: number;
+  /** Where `items` starts; absent from a backend that cannot page. */
+  offset?: number;
   keyCounts: number[];
 }
 
@@ -2403,6 +2405,7 @@ export async function fetchLivePlayerUnratedPlaysDirect(
     /** "pp" | "msd" | "dan" rank by that number; "recent" by when each play was set. */
     sort?: "pp" | "msd" | "dan" | "recent";
     limit?: number;
+    offset?: number;
     signal?: AbortSignal;
     /** Skips the browser's cached copy (the endpoint is served with a short max-age). */
     fresh?: boolean;
@@ -2412,6 +2415,7 @@ export async function fetchLivePlayerUnratedPlaysDirect(
   if (!Number.isInteger(keyCount) || keyCount <= 0) throw new Error("Invalid key count.");
   const query = new URLSearchParams({ keys: String(keyCount), sort: options.sort ?? "msd" });
   if (Number.isInteger(options.limit) && options.limit! > 0) query.set("limit", String(options.limit));
+  if (Number.isInteger(options.offset) && options.offset! > 0) query.set("offset", String(options.offset));
   return fetchLiveJson(`/api/profiles/${userId}/unrated-plays?${query.toString()}`, {
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.fresh ? { cache: "reload" as const } : {}),
