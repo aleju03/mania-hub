@@ -25672,6 +25672,10 @@ msgstr "El marco tapa demasiado el avatar; deja el centro transparente."
 msgid "The frame has to be square, like the template."
 msgstr "El marco tiene que ser cuadrado, como la plantilla."
 
+#: src/components/packs/RevealStage.tsx
+msgid "The frost got to every card"
+msgstr "La escarcha alcanzó todas las cartas"
+
 #: src/routes/hashi.tsx
 msgid "The goals page"
 msgstr "La página de metas"

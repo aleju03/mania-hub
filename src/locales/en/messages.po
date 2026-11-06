@@ -25719,6 +25719,10 @@ msgstr "The frame covers too much of the avatar; keep the middle see-through."
 msgid "The frame has to be square, like the template."
 msgstr "The frame has to be square, like the template."
 
+#: src/components/packs/RevealStage.tsx
+msgid "The frost got to every card"
+msgstr "The frost got to every card"
+
 #: src/routes/hashi.tsx
 msgid "The goals page"
 msgstr "The goals page"

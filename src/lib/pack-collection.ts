@@ -1,3 +1,4 @@
+import type { PackSpell } from "#/lib/pack-pending";
 import type { CardMotif } from "./card-motif";
 import type { SupporterLook } from "./supporter-card-looks";
 import type { PackTeamCard } from "./team-cards";
@@ -26,6 +27,9 @@ export function serialWasPulled(card: Pick<CollectedCard, "grantedAt" | "serialF
 export interface CollectedCard {
   /* False for the exclusive milestone card, as reported by the server. */
   recyclable?: boolean;
+  /* Ember burnt or Frost froze a copy in this holding before its pack was
+     opened (server-reported, like serial). Baked into the card's face. */
+  spell?: PackSpell;
   userId: number;
   /* The key this holding lives under, when it cannot be derived from the tier:
      a card /admin/collections handed out is its own collectible ("<id>:v<n>")

@@ -1,3 +1,4 @@
+import { spellSeed } from "#/lib/pack-spell-art";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -30,7 +31,8 @@ import { playCardDraw, playCardSlice, playEternalFanfare, playFlipWhoosh, playGo
 import { EternalBurst, ETERNAL_CEREMONY_MS, ETERNAL_WINDUP_S } from "./EternalBurst";
 import { MilestoneBurst, MILESTONE_CEREMONY_MS, MILESTONE_IMPACT_S } from "./MilestoneBurst";
 import { GoatBurst } from "./GoatBurst";
-import { BurntFace } from "./BurntFace";
+import type { PackSpell } from "#/lib/pack-pending";
+import { SpellFace } from "./SpellFace";
 import { SlicedFace } from "./SlicedFace";
 import { TierBurst } from "./TierBurst";
 import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
@@ -64,9 +66,10 @@ interface RevealStageProps {
      the cards too, so the whole hand deals out at once, in halves, with none
      of the ceremony a card nobody ruined would get. */
   damage?: PackDamage | null;
-  /* Ember set the pack alight before it was opened: the whole hand deals out
-     at once, every face burnt (looks only; the cards are kept). */
-  burnt?: boolean;
+  /* Ember set the pack alight or Frost froze it before it was opened: the
+     whole hand deals out at once, every face burnt or frozen (looks only;
+     the cards are kept). */
+  spell?: PackSpell | null;
   /* The viewer asked for reveal-all in settings: the hand deals itself out
      the moment the reveal mounts, with no stack to tap through first. */
   autoRevealAll?: boolean;
@@ -386,8 +389,8 @@ interface CascadeTileProps {
   reducedMotion: boolean;
   /* The cut this card took in the pack, or null for an intact one. */
   damage?: PackDamage | null;
-  /* Ember burnt the pack: the face shows burnt (BurntFace). `seed` varies the burn. */
-  burnt?: boolean;
+  /* Ember burnt or Frost froze the pack: the face shows it (SpellFace). `seed` varies it per card. */
+  spell?: PackSpell | null;
   seed?: number;
   onLanded: () => void;
   /* Fires the moment the flip swings past edge-on and the face becomes
@@ -427,7 +430,7 @@ export function CascadeTile({
   mobile,
   reducedMotion,
   damage = null,
-  burnt = false,
+  spell = null,
   seed = 0,
   onLanded,
   onFaceVisible,
@@ -570,8 +573,8 @@ export function CascadeTile({
       <span className="break-all text-[9px] font-semibold text-osu-f1">{flipped ? username : ""}</span>
     </div>
   );
-  const burntFace = burnt ? <BurntFace seed={seed}>{face}</BurntFace> : face;
-  const faceContent = damage ? <SlicedFace damage={damage}>{burntFace}</SlicedFace> : burntFace;
+  const spellFace = spell ? <SpellFace spell={spell} seed={seed}>{face}</SpellFace> : face;
+  const faceContent = damage ? <SlicedFace damage={damage}>{spellFace}</SlicedFace> : spellFace;
 
   return (
     <div className="relative h-full w-full" style={mobile ? undefined : { perspective: 700 }}>
@@ -626,7 +629,7 @@ export function RevealStage({
   cards,
   reducedMotion,
   damage = null,
-  burnt = false,
+  spell = null,
   autoRevealAll = false,
   compactReveal = false,
   onCardRevealed,
@@ -1293,7 +1296,7 @@ export function RevealStage({
      read as the reveal-all button being pressed for you. The ref keeps
      that to one run: StrictMode's mount -> cleanup -> mount would otherwise start a
      second pass that records every pull twice. */
-  const autoDeal = damage !== null || burnt || autoRevealAll;
+  const autoDeal = damage !== null || spell !== null || autoRevealAll;
   const autoDealtRef = useRef(false);
   useLayoutEffect(() => {
     if (!autoDeal || autoDealtRef.current) return;
@@ -1500,8 +1503,8 @@ export function RevealStage({
                   mobile={mobileViewport || compactReveal}
                   reducedMotion={reducedMotion}
                   damage={damage}
-                  burnt={burnt}
-                  seed={position + 1}
+                  spell={spell}
+                  seed={spellSeed(cards[position]?.player.user.id ?? 0)}
                   onLanded={() => handleCascadeLanded(position)}
                   onFaceVisible={() => handleCascadeFaceVisible(position)}
                 />
@@ -1755,8 +1758,10 @@ export function RevealStage({
             >
               {damage ? (
                 <Trans>Every card came out in two pieces</Trans>
-              ) : burnt ? (
+              ) : spell === "burnt" ? (
                 <Trans>The fire got to every card</Trans>
+              ) : spell === "frozen" ? (
+                <Trans>The frost got to every card</Trans>
               ) : phase === "preparing" ? (
                 slowDraw ? (
                   <Trans>Warming this player up... first draws can take a moment</Trans>

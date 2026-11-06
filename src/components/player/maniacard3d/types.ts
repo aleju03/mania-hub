@@ -1,3 +1,4 @@
+import type { PackSpell } from "#/lib/pack-pending";
 import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
 import type { CardMotif } from "#/lib/card-motif";
 import type { SupporterLook } from "#/lib/supporter-card-looks";
@@ -92,6 +93,9 @@ export interface ManiaCardReadyData {
      back. Only the 3D card draws a back, so the shared front thumbnails are
      untouched. */
   serial?: { number: number; total: number | null } | null;
+  /* Ember burnt or Frost froze this copy before its pack was opened: baked
+     into the front (pack-spell-art.ts), so thumbnails carry it too. */
+  spell?: { kind: PackSpell; seed: number } | null;
 }
 
 export interface ManiaCardEmptyData {

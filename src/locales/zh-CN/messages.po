@@ -25684,6 +25684,10 @@ msgstr "头像框遮挡了太多头像；请让中间保持透明。"
 msgid "The frame has to be square, like the template."
 msgstr "头像框必须是正方形，和模板一样。"
 
+#: src/components/packs/RevealStage.tsx
+msgid "The frost got to every card"
+msgstr "寒霜冻住了每一张卡"
+
 #: src/routes/hashi.tsx
 msgid "The goals page"
 msgstr "目标页面"

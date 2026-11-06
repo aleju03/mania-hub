@@ -115,11 +115,12 @@ function cycle(laps = 1, start = Math.floor(Math.random() * RAINBOW.length)): st
 
 /* Ember's easter egg (PackStage): the blade held still on the pack long
    enough sets it alight, and a burn front spreads out over it from that spot
-   (emberBurnOverlay.ts draws the char and the glowing line). One frame of the
-   fire: tongues of flame licking up off the front (`front`, its radius in px
-   around `origin`), only where it crosses the pack, smoke rising off it now
-   and then, and embers still glowing in what has burnt. Once the front has
-   passed the whole pack (`front` null) only a low smoulder is left. */
+   (packSpellField.ts draws the char, the glowing line and the cracks still
+   glowing in the char). One frame of the fire: tongues of flame licking up
+   off the front (`front`, its radius in px around `origin`), only where it
+   crosses the pack, smoke rising off it now and then, and sparks rising off
+   what has burnt. Once the front has passed the whole pack (`front` null)
+   no flame is left: only sparks and a wisp of smoke now and then. */
 export function emberBurn(fx: BladeFx, box: PackBox, origin: { x: number; y: number }, front: number | null, scale: number) {
   const inside = (x: number, y: number) => x >= box.left && x <= box.left + box.width && y >= box.top && y <= box.top + box.height;
   const flame = (x: number, y: number, big: number) =>
@@ -135,20 +136,53 @@ export function emberBurn(fx: BladeFx, box: PackBox, origin: { x: number; y: num
       flame(x, y, 1);
       if (Math.random() < 0.05) fx.emit({ sprite: "smoke-04", color: "#2a1d18", normal: true, x, y: y - 30 * scale, vx: rand(-10, 10) * scale, vy: rand(-70, -40) * scale, size: 30 * scale, endSize: 90 * scale, life: rand(1, 1.4), alpha: 0.16, fadeIn: 0.3, rotation: rand(0, 6.28), spin: rand(-0.4, 0.4) });
     }
-  } else if (Math.random() < 0.35) {
-    // burnt through: a low flame here and there
-    const x = box.left + rand(0.08, 0.92) * box.width;
-    const y = box.top + rand(0.1, 0.95) * box.height;
-    flame(x, y, 0.6);
+  } else if (Math.random() < 0.05) {
+    // burnt through: a thin wisp of smoke off the char
+    const x = box.left + rand(0.15, 0.85) * box.width;
+    const y = box.top + rand(0.2, 0.9) * box.height;
+    fx.emit({ sprite: "smoke-04", color: "#3a2a24", normal: true, x, y, vx: rand(-6, 6) * scale, vy: rand(-40, -24) * scale, size: 16 * scale, endSize: 70 * scale, life: rand(1.6, 2.2), alpha: 0.12, fadeIn: 0.5, rotation: rand(0, 6.28), spin: rand(-0.3, 0.3) });
   }
-  // embers glowing in what has burnt
-  if (Math.random() < 0.25) {
+  // sparks rising off what has burnt: tiny, quick, flickering
+  if (Math.random() < (front === null ? 0.16 : 0.25)) {
     const reach = front ?? Math.hypot(box.width, box.height);
     const a = rand(0, Math.PI * 2);
     const r = Math.sqrt(Math.random()) * reach;
     const x = origin.x + Math.cos(a) * r;
     const y = origin.y + Math.sin(a) * r;
-    if (inside(x, y)) fx.emit({ sprite: "circle-05", color: pick(["#ffe08a", "#ffb347", "#ff7a1f"]), x, y, vx: rand(-40, 40) * scale, vy: rand(-200, -90) * scale, gravity: -30 * scale, drag: 1.3, size: rand(3, 5) * scale, endSize: 1 * scale, life: rand(0.8, 1.3), alpha: 0.85, flicker: true });
+    if (inside(x, y)) fx.emit({ sprite: "circle-05", color: pick(["#ffe08a", "#ffb347", "#ff7a1f"]), x, y, vx: rand(-30, 30) * scale, vy: rand(-170, -80) * scale, gravity: -30 * scale, drag: 1.3, wobble: 18 * scale, size: rand(1.6, 3) * scale, endSize: 0.6 * scale, life: rand(0.7, 1.2), alpha: 0.9, flicker: true });
+  }
+}
+
+/* Frost's easter egg (PackStage): the same as Ember's, in ice. One frame of
+   it: glints of frost catching on the front as it grows (`front`, its radius
+   in px around `origin`), a cold breath rising off it now and then, and fine
+   rime drifting down off what has frozen. Once the whole pack is under ice
+   (`front` null), a glint here and there. */
+export function frostFreeze(fx: BladeFx, box: PackBox, origin: { x: number; y: number }, front: number | null, scale: number) {
+  const inside = (x: number, y: number) => x >= box.left && x <= box.left + box.width && y >= box.top && y <= box.top + box.height;
+  const glint = (x: number, y: number, big: number) =>
+    fx.emit({ sprite: "star-07", color: pick(["#ffffff", "#e6f8ff", "#c4ecff"]), x, y, size: 2 * scale, endSize: rand(10, 18) * scale * big, rotation: rand(0, Math.PI), spin: rand(-0.6, 0.6), life: rand(0.35, 0.6), alpha: 0.85 });
+  if (front !== null) {
+    for (let i = 0; i < 10; i += 1) {
+      const a = rand(0, Math.PI * 2);
+      const r = front * rand(0.92, 1.04);
+      const x = origin.x + Math.cos(a) * r;
+      const y = origin.y + Math.sin(a) * r;
+      if (!inside(x, y)) continue;
+      if (Math.random() < 0.45) glint(x, y, 1);
+      if (Math.random() < 0.04) fx.emit({ sprite: "smoke-04", color: "#dff3ff", x, y, vx: rand(-8, 8) * scale, vy: rand(-36, -18) * scale, size: 24 * scale, endSize: 70 * scale, life: rand(1, 1.4), alpha: 0.12, fadeIn: 0.3, rotation: rand(0, 6.28), spin: rand(-0.3, 0.3) });
+    }
+  } else if (Math.random() < 0.12) {
+    glint(box.left + rand(0.08, 0.92) * box.width, box.top + rand(0.08, 0.92) * box.height, 0.8);
+  }
+  // rime drifting down off what has frozen
+  if (Math.random() < 0.3) {
+    const reach = front ?? Math.hypot(box.width, box.height);
+    const a = rand(0, Math.PI * 2);
+    const r = Math.sqrt(Math.random()) * reach;
+    const x = origin.x + Math.cos(a) * r;
+    const y = origin.y + Math.sin(a) * r;
+    if (inside(x, y)) fx.emit({ sprite: "circle-05", color: pick(["#ffffff", "#dff6ff"]), x, y, vx: rand(-14, 14) * scale, vy: rand(20, 50) * scale, drag: 0.6, wobble: 12 * scale, size: rand(2, 3.5) * scale, endSize: 1 * scale, life: rand(0.9, 1.5), alpha: 0.8 });
   }
 }
 
@@ -379,8 +413,10 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
         fx.emit({ sprite: pick(["spark-05", "spark-06"] as const), color: "#5aa8ff", x: p.x + 6 * scale, y: tall / 2, size: tall, aspect: 0.7, life: 0.38, alpha: 0.6, flicker: true, delay: i * 0.05 });
         fx.emit({ sprite: "star-06", color: "#cfeaff", x: p.x, y: p.y, size: 150 * scale, endSize: 40 * scale, life: 0.3, delay: i * 0.05 });
       }
-      const mid = at(0.5);
-      fx.emit({ sprite: "spark-07", color: "#bfe6ff", x: mid.x, y: mid.y, size: box.width * 0.5, aspect: 3, rotation: cutAngle(at), life: 0.35, flicker: true });
+      // the flash along the tear spans the pack and no further
+      const ends = [at(0), at(1)];
+      const span = Math.hypot(ends[1].x - ends[0].x, ends[1].y - ends[0].y) || box.width;
+      fx.emit({ sprite: "spark-07", color: "#bfe6ff", x: (ends[0].x + ends[1].x) / 2, y: (ends[0].y + ends[1].y) / 2, size: span / 3, aspect: 3, rotation: cutAngle(at), life: 0.35, flicker: true });
       for (let i = 0; i < 7; i += 1) {
         const p = at(rand(0, 1));
         fx.emit({ sprite: "spark-01", color: "#9fd4ff", x: p.x, y: p.y + rand(-14, 14) * scale, size: rand(70, 120) * scale, life: rand(0.18, 0.3), rotation: rand(0, Math.PI * 2), flicker: true, delay: rand(0, 0.2) });

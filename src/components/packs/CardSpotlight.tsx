@@ -1,3 +1,6 @@
+import type { PackSpell } from "#/lib/pack-pending";
+import { spellSeed } from "#/lib/pack-spell-art";
+import { SpellFace } from "./SpellFace";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { useSupporterSleeve } from "#/lib/use-supporter-pack-style";
 import { Link } from "@tanstack/react-router";
@@ -46,6 +49,10 @@ export interface CardSpotlightTarget {
   /* The pack run finish on this copy (or the best one the viewer holds),
      drawn by the 3D card's overlay and the sheen over the still. */
   edition?: RunEdition | null;
+  /* The still is a plain thumbnail of a burnt or frozen copy (the pack
+     summary's, which lays the look on as a SpellFace): it gets the same
+     overlay until the 3D card, which bakes the look in, takes over. */
+  spellOverStill?: PackSpell | null;
 }
 
 /* The WebGL card fills the host's height divided by the renderer's 1.05
@@ -361,12 +368,20 @@ export function CardSpotlight({
                 className="relative block h-full w-full overflow-hidden rounded-[14px]"
                 style={{ opacity: canvasReady ? 0 : 1, transition: "opacity 0.2s ease-out" }}
               >
-                <img
-                  src={hiResFallback ?? baseImage}
-                  alt={t`${card.username} maniacard`}
-                  className="h-full w-full rounded-[14px] object-cover shadow-[0_18px_48px_rgba(0,0,0,0.6)]"
-                  draggable={false}
-                />
+                {(() => {
+                  const still = (
+                    <img
+                      src={hiResFallback ?? baseImage}
+                      alt={t`${card.username} maniacard`}
+                      className="h-full w-full rounded-[14px] object-cover shadow-[0_18px_48px_rgba(0,0,0,0.6)]"
+                      draggable={false}
+                    />
+                  );
+                  // the 2D fallback is rendered from the card's data, which bakes the look in already
+                  return target?.spellOverStill && !hiResFallback ? (
+                    <SpellFace spell={target.spellOverStill} seed={spellSeed(card.userId)}>{still}</SpellFace>
+                  ) : still;
+                })()}
                 <EditionSheen edition={target?.edition} />
               </span>
             ) : (

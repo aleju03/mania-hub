@@ -20,8 +20,9 @@ import {
 } from "./packArt";
 import { createPackScene, type PackScene } from "./packScene";
 import { BladeFx, preloadSprites } from "./bladeFx";
-import { bladeLook, bladeTrailLife, cutPath, emberBurn } from "./packBlades";
-import { mountBurnOverlay, type BurnOverlay } from "./emberBurnOverlay";
+import { bladeLook, bladeTrailLife, cutPath, emberBurn, frostFreeze } from "./packBlades";
+import { createSpellField, type SpellField } from "./packSpellField";
+import type { PackSpell } from "#/lib/pack-pending";
 import { createBladeRenderer, type BladeRenderer } from "./bladeGl";
 import { moveBladeLoop, playBladeCut, playBladeRip, playBladeTick, playCardSlice, stopBladeLoop, warmBladeSounds } from "./packSfx";
 
@@ -33,12 +34,14 @@ const BIN_COUNT = 48;
 // the tear reads as a smooth curve instead of stair steps.
 const SLICES_PER_BIN = 2;
 const TEAR_COMPLETE_COVERAGE = 0.7;
-/* Ember's easter egg (burnRef): how long the blade rests on the pack before
-   it catches, how long the fire takes to cover it, and how far the pointer
-   may drift while it still counts as resting. */
+/* Ember's and Frost's easter egg (burnRef): how long the blade rests on the
+   pack before it catches (or starts to freeze), how long the fire or ice
+   takes to cover it, and how far the pointer may drift while it still
+   counts as resting. */
 const EMBER_IGNITE_MS = 4000;
 const EMBER_SPREAD_MS = 4000;
 const EMBER_STILL_PX = 12;
+const SPELL_REDRAW_MS = 30;
 /* The stroke kept for a rip to follow (cutOnScreenRef): a point at least
    this far from the last, and at most this many before it is thinned. */
 const CUT_POINT_SPACING_PX = 4;
@@ -94,7 +97,7 @@ interface PackStageProps {
   blade?: SupporterBladeId | null;
   /* Damage is non-null when the blade went through the pack's middle: the
      cards inside were cut, and the page has to deal a ruined hand. */
-  onOpened: (damage: PackDamage | null, burnt?: boolean) => void;
+  onOpened: (damage: PackDamage | null, spell?: PackSpell | null) => void;
   /* Fires the instant the slash commits and the rip starts, ~900ms before
      onOpened. The page starts the signed-in server deal off this signal, so
      the rip choreography hides the round trip instead of preceding it. */
@@ -189,13 +192,39 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   /* Ember's easter egg: the blade held still on the pack for EMBER_IGNITE_MS
      sets it alight where it rests, and the fire then spreads over the pack on
      its own (packBlades emberBurn) while the foil chars. The hand it deals
-     comes out burnt (onOpened's `burnt`; looks only). Silent on purpose. */
-  const burnRef = useRef<{ still: { x: number; y: number } | null; stillSince: number; startedAt: number | null; origin: { u: number; v: number } | null; overlay: BurnOverlay | null; crackleAt: number }>({
+     comes out burnt (onOpened's `spell`; looks only). Frost does the same in
+     ice (frostFreeze) and the hand comes out frozen. */
+  /* The char or ice is painted into the pack's own texture (packSpellField,
+     `layer`), so it tilts with the pack and goes with the torn strip.
+     `done` once the front has passed the whole pack: the layer stops
+     changing. */
+  const burnRef = useRef<{
+    still: { x: number; y: number } | null;
+    stillSince: number;
+    startedAt: number | null;
+    spell: PackSpell | null;
+    origin: { u: number; v: number } | null;
+    field: SpellField | null;
+    layer: HTMLCanvasElement | null;
+    layerVersion: number;
+    done: boolean;
+    drawnAt: number;
+    glow: number;
+    composite: { canvas: HTMLCanvasElement; base: HTMLCanvasElement; version: number } | null;
+    crackleAt: number;
+  }>({
     still: null,
     stillSince: 0,
     startedAt: null,
+    spell: null,
     origin: null,
-    overlay: null,
+    field: null,
+    layer: null,
+    layerVersion: 0,
+    done: false,
+    drawnAt: 0,
+    glow: 0,
+    composite: null,
     crackleAt: 0,
   });
   /* The rip-to-onOpened delay. Cleared on unmount: the deal now starts at the
@@ -282,9 +311,40 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     }
   };
 
+  /* The pack's front art, with Ember's char or Frost's ice on it (burnRef). */
+  const faceArt = () => {
+    const art = artCanvasRef.current;
+    const burn = burnRef.current;
+    if (!art || !burn.layer) return art;
+    if (burn.composite?.base !== art || burn.composite.version !== burn.layerVersion) {
+      const canvas = burn.composite?.canvas ?? document.createElement("canvas");
+      if (canvas.width !== PACK_ART_WIDTH) canvas.width = PACK_ART_WIDTH;
+      if (canvas.height !== PACK_ART_HEIGHT) canvas.height = PACK_ART_HEIGHT;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return art;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.clearRect(0, 0, PACK_ART_WIDTH, PACK_ART_HEIGHT);
+      ctx.drawImage(art, 0, 0, PACK_ART_WIDTH, PACK_ART_HEIGHT);
+      // on the foil only, never past its edges
+      ctx.globalCompositeOperation = "source-atop";
+      ctx.drawImage(burn.layer, 0, 0, PACK_ART_WIDTH, PACK_ART_HEIGHT);
+      // Ember's cracks, glowing as they breathe (burn.glow, set in tendBurn)
+      const cracks = burn.field?.cracks;
+      if (cracks && burn.glow > 0) {
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = burn.glow;
+        ctx.drawImage(cracks, 0, 0, PACK_ART_WIDTH, PACK_ART_HEIGHT);
+        ctx.globalAlpha = 1;
+      }
+      ctx.globalCompositeOperation = "source-over";
+      burn.composite = { canvas, base: art, version: burn.layerVersion };
+    }
+    return burn.composite.canvas;
+  };
+
   const drawFrame = () => {
     const canvas = liveCanvasRef.current;
-    const art = artCanvasRef.current;
+    const art = faceArt();
     if (!canvas || !art) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -520,11 +580,14 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   // Blade trail: while the pointer is held down anywhere on the stage, a
   // fading streak chases the cursor (on and off the pack), so the slash
   // reads as a blade before it ever touches the foil.
-  /* One frame of ember's burn (burnRef): lights it once the blade has rested
-     long enough on the pack, then spreads it. True while it burns. */
+  /* One frame of Ember's burn or Frost's freeze (burnRef): starts it once
+     the blade has rested long enough on the pack, then spreads it. True
+     while it runs. */
   const tendBurn = (now: number): boolean => {
     const burn = burnRef.current;
-    if (bladeRef.current !== "ember" || reducedMotionRef.current || !fxRef.current) return false;
+    const blade = bladeRef.current;
+    if (reducedMotionRef.current || !fxRef.current) return false;
+    if (burn.startedAt === null ? blade !== "ember" && blade !== "frost" : !burn.spell) return false;
     const pack = packRef.current;
     const rect = pack?.getBoundingClientRect();
     if (!pack || !rect || rect.width < 2) return false;
@@ -533,11 +596,16 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       const { x, y } = burn.still;
       if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return false;
       burn.startedAt = now;
+      burn.spell = blade === "frost" ? "frozen" : "burnt";
       // kept relative to the pack, so it stays put when the page scrolls
       burn.origin = { u: (x - rect.left) / rect.width, v: (y - rect.top) / rect.height };
-      burn.overlay = mountBurnOverlay(pack, { x: burn.origin.u * pack.clientWidth, y: burn.origin.v * pack.clientHeight });
+      void createSpellField(burn.spell === "frozen" ? "freeze" : "burn", burn.origin, rect.width).then((field) => {
+        burn.field = field;
+      });
     }
-    if (rippingRef.current || !burn.origin || !burn.overlay) return false;
+    // a few frames while its noise is drawn
+    if (!burn.field) return !rippingRef.current && burn.origin !== null;
+    if (rippingRef.current || !burn.origin) return false;
     const progress = Math.min(1, (now - burn.startedAt) / EMBER_SPREAD_MS);
     // slow to catch, then running: the front speeds up as it goes
     const eased = progress * progress * (3 - 2 * progress);
@@ -549,10 +617,31 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       Math.hypot((1 - burn.origin.u) * rect.width, (1 - burn.origin.v) * rect.height),
     );
     const radius = 10 + eased * (farthest / 0.8) * 1.15;
-    burn.overlay.setRadius(radius * (pack.clientWidth / rect.width));
-    const front = burn.overlay.frontAt(radius);
-    emberBurn(fxRef.current, { left: rect.left, top: rect.top, width: rect.width, height: rect.height }, origin, front > farthest ? null : front, 1);
-    if (now - burn.crackleAt > 200) {
+    const front = burn.field.frontAt(radius);
+    // ~30 redraws a second: a few ms each, and the front moves slowly
+    if (!burn.done && (now - burn.drawnAt >= SPELL_REDRAW_MS || progress >= 1)) {
+      burn.drawnAt = now;
+      burn.layer = burn.field.draw(radius);
+      burn.layerVersion += 1;
+      // past every corner, with the spikes' reach to spare
+      burn.done = progress >= 1;
+      drawFrame();
+    } else if (burn.done && burn.field.cracks && now - burn.drawnAt >= SPELL_REDRAW_MS * 2) {
+      // burnt through: only the cracks change, breathing slowly
+      burn.drawnAt = now;
+      burn.layerVersion += 1;
+      drawFrame();
+    }
+    if (burn.field.cracks) {
+      const t = (now - burn.startedAt) / 1000;
+      // two slow waves out of step, so it never settles into a plain pulse
+      const breath = 0.5 + 0.3 * Math.sin(t * 1.7) + 0.2 * Math.sin(t * 3.1 + 1.3);
+      // the cracks come up as the front passes, then breathe
+      burn.glow = Math.min(1, progress * 1.5) * (0.35 + 0.65 * breath);
+    }
+    const spread = burn.spell === "frozen" ? frostFreeze : emberBurn;
+    spread(fxRef.current, { left: rect.left, top: rect.top, width: rect.width, height: rect.height }, origin, front > farthest ? null : front, 1);
+    if (burn.spell === "burnt" && now - burn.crackleAt > 200) {
       burn.crackleAt = now;
       playBladeTick("ember", progress);
     }
@@ -793,7 +882,6 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   const triggerRip = () => {
     if (rippingRef.current) return;
     rippingRef.current = true;
-    burnRef.current.overlay?.fade();
     const damage = readDamage();
     onCutRef.current?.();
     if (damage) playCardSlice();
@@ -805,7 +893,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       rafRef.current = null;
     }
     fillUncutBins();
-    const art = artCanvasRef.current;
+    const art = faceArt();
     const back = backCanvasRef.current;
     const body = liveCanvasRef.current;
     const strip = ripStripCanvasRef.current;
@@ -825,7 +913,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     // resets the stage, and this callback firing after that would revive the
     // dead pack (see openedTimerRef).
     openedTimerRef.current = window.setTimeout(
-      () => onOpenedRef.current(damage, burnRef.current.startedAt !== null),
+      () => onOpenedRef.current(damage, burnRef.current.spell),
       reducedMotionRef.current ? 220 : 880,
     );
   };

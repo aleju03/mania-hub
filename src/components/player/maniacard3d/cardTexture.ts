@@ -7,6 +7,7 @@ import { cardMotifImageSrc, isPaintedMotif, motifCopyOpacity, type CardMotif } f
 import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilDataUrl } from "#/lib/supporter-foil-art";
 import { getCosmicTierPalette as cosmicPaletteFor, motifKeepsStarfield } from "#/lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
+import { FROST_GLAZE, rasterSpell, SPELL_TINT } from "#/lib/pack-spell-art";
 
 const FONT = "Tracker Round, Arial, sans-serif";
 /* Caveat Brush (SIL OFL, public/fonts/handwriting/), for the serial
@@ -213,6 +214,8 @@ export async function createCardTextures(
   } else {
     drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true, teamCover, foil);
   }
+  const spellDrawing = data.spell ? await rasterSpell(data.spell.kind, data.spell.seed, frontCanvas.width, frontCanvas.height) : null;
+  if (data.spell) bakeSpell(data.spell, spellDrawing, textureScale, contentCanvas ? [frontCanvas, contentCanvas] : [frontCanvas]);
   const frontTexture = toTexture(frontCanvas);
   const backTexture = toTexture(backCanvas);
   let disposed = false;
@@ -221,6 +224,8 @@ export async function createCardTextures(
     const paintBack = () => {
       if (disposed) return;
       drawBack(back, data, layout, laurel);
+      // the same ice or char from behind: mirrored, so its edges meet the front's
+      if (data.spell) bakeSpell(data.spell, spellDrawing, textureScale, [backCanvas], true);
       backTexture.needsUpdate = true;
     };
     if (options.lazyBack) {
@@ -272,6 +277,56 @@ export async function createCardTextures(
       preparedMotif?.texture.dispose();
     },
   };
+}
+
+/* Ember's burn or Frost's ice on this copy (pack-spell-art.ts): every layer
+   of a face takes the tint (and Frost's glaze over the bottom one), and the
+   drawing goes on the top one, inside the card's rounded corners. The back
+   takes it mirrored, so its edges meet the front's. */
+function bakeSpell(
+  spell: NonNullable<ManiaCardReadyData["spell"]>,
+  drawing: HTMLCanvasElement | null,
+  textureScale: number,
+  layers: HTMLCanvasElement[],
+  mirrored = false,
+) {
+  const width = layers[0].width;
+  const height = layers[0].height;
+  const withinCard = (context: CanvasRenderingContext2D, paint: () => void) => {
+    context.save();
+    context.setTransform(textureScale, 0, 0, textureScale, 0, 0);
+    clipCard(context);
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    paint();
+    context.restore();
+  };
+  layers.forEach((layer, index) => {
+    const context = getContext(layer);
+    const copy = document.createElement("canvas");
+    copy.width = width;
+    copy.height = height;
+    getContext(copy).drawImage(layer, 0, 0);
+    withinCard(context, () => {
+      context.clearRect(0, 0, width, height);
+      context.filter = SPELL_TINT[spell.kind];
+      context.drawImage(copy, 0, 0);
+      context.filter = "none";
+      if (spell.kind === "frozen" && index === 0) {
+        const glaze = context.createLinearGradient(width * 0.59, 0, width * 0.41, height);
+        for (const [at, color] of FROST_GLAZE) glaze.addColorStop(at, color);
+        context.globalCompositeOperation = "screen";
+        context.fillStyle = glaze;
+        context.fillRect(0, 0, width, height);
+      }
+    });
+  });
+  if (drawing) {
+    const top = getContext(layers[layers.length - 1]);
+    withinCard(top, () => {
+      if (mirrored) top.setTransform(-1, 0, 0, 1, width, 0);
+      top.drawImage(drawing, 0, 0, width, height);
+    });
+  }
 }
 
 function createCanvas(textureScale: number) {

@@ -1,3 +1,4 @@
+import type { PackSpell } from "#/lib/pack-pending";
 import { PACK_MAX_PLAYER_CARDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
@@ -57,6 +58,8 @@ export interface ServerPackCollectionCard {
   giftedBy?: { userId: number; username: string } | null;
   /* Who pulled the copy shown, when someone else did and gifted it on. */
   serialFrom?: { userId: number; username: string; pulledAt: number; pulled: boolean } | null;
+  /* Ember burnt or Frost froze a copy in this holding (looks only). */
+  spell?: PackSpell;
   /* A team card pinned to a showcase ("team:<id>", userId the negative team
      id), and whether the showcase's owner is on that team. */
   team?: PackTeamCard;
@@ -513,7 +516,7 @@ export interface PackPullRecordCard {
    identity always comes from the login cookie; a tampered client can only
    ever log pulls as itself, and the data is social flavor, never economy. */
 export const recordServerPackPulls = createServerFn({ method: "POST" })
-  .validator((input: { packType?: unknown; cards?: unknown; drawId?: unknown }) => {
+  .validator((input: { packType?: unknown; cards?: unknown; drawId?: unknown; spell?: unknown }) => {
     const packType =
       typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     const cards: PackPullRecordCard[] = (Array.isArray(input?.cards) ? input.cards : [])
@@ -534,7 +537,9 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
       })
       .filter((card): card is PackPullRecordCard => card !== null);
     if (!packType || cards.length === 0) throw new Error("Invalid pack pull record.");
-    return { packType, cards, drawId: typeof input.drawId === "string" ? input.drawId.slice(0, 64) : undefined };
+    // Ember burnt or Frost froze the pack: the backend checks the blade and marks the copies
+    const spell = input.spell === "burnt" || input.spell === "frozen" ? input.spell : undefined;
+    return { packType, cards, drawId: typeof input.drawId === "string" ? input.drawId.slice(0, 64) : undefined, spell };
   })
   .handler(async ({ data }): Promise<{ recorded: number; mints: PackPullMint[] } | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -558,6 +563,7 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
         drawId: data.drawId,
         packType: data.packType,
         cards: data.cards,
+        ...(data.spell ? { spell: data.spell } : {}),
       }),
     });
     if (!response.ok) throw new Error(`Pack pull record failed (${response.status}).`);

@@ -1,3 +1,4 @@
+import { spellSeed } from "#/lib/pack-spell-art";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { msg } from "@lingui/core/macro";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -161,6 +162,8 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
     // copy is shown.
     const serial = typeof shared.serial === "number" && shared.serial > 0 ? { number: shared.serial, total: shared.mintedTotal > 0 ? shared.mintedTotal : null } : null;
     if (serial && data.status === "ready") Object.assign(data, { serial });
+    // the copy Ember burnt or Frost froze
+    if (shared.card.spell && data.status === "ready") Object.assign(data, { spell: { kind: shared.card.spell, seed: spellSeed(shared.card.userId) } });
     let cancelled = false;
     // A sketch in the card's colours holds its place while the 3D card warms
     // up. The full 2D front is painted only if WebGL fails: painting it

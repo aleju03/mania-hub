@@ -1,3 +1,4 @@
+import { spellSeed } from "#/lib/pack-spell-art";
 import { useCardContextMenu } from "./useCardContextMenu";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
@@ -18,7 +19,8 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { playRecycleClink } from "./packSfx";
 import type { FlightRect, RevealedCard } from "./RevealStage";
-import { BurntFace } from "./BurntFace";
+import type { PackSpell } from "#/lib/pack-pending";
+import { SpellFace } from "./SpellFace";
 import { SlicedFace } from "./SlicedFace";
 import { rememberTeamName } from "../../lib/analytics-teams";
 import { UsernameText } from "../ui/UsernameText";
@@ -47,8 +49,8 @@ interface PackSummaryProps {
   /* Set when the pack was cut open through its middle. The hand is in halves
      and nothing in it is worth keeping, so it recycles itself on arrival. */
   damage?: PackDamage | null;
-  /* Ember burnt the pack: every face shows burnt (looks only). */
-  burnt?: boolean;
+  /* Ember burnt or Frost froze the pack: every face shows it (looks only). */
+  spell?: PackSpell | null;
   reducedMotion: boolean;
   /* Reveal-all handoff: where each card's tile sat when the reveal finished,
      keyed by card position. Present = the viewer already saw every card, so
@@ -103,6 +105,7 @@ function toSpotlightCard(
   card: RevealedCard,
   mint: { serial: number; mintedTotal: number } | undefined,
   pulledAt: number,
+  spell: PackSpell | null,
 ): CollectedCard {
   return {
     userId: card.player.user.id,
@@ -125,6 +128,7 @@ function toSpotlightCard(
     firstPulledAt: pulledAt,
     lastPulledAt: pulledAt,
     ...(mint ? { serial: mint.serial, mintedTotal: mint.mintedTotal } : {}),
+    ...(spell && !card.player.team ? { spell } : {}),
   };
 }
 
@@ -137,7 +141,7 @@ export function PackSummary({
   serials,
   onRecycleCopies,
   damage = null,
-  burnt = false,
+  spell = null,
   reducedMotion,
   flyFrom = null,
   run = null,
@@ -631,10 +635,13 @@ export function PackSummary({
                       card,
                       serials?.get(card.player.cardKey ?? packCardKey(card.player.user.id, card.tier)),
                       Date.now(),
+                      spell,
                     ),
                     thumbnail: card.thumbnail,
                     rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
                     edition: card.player.edition ?? null,
+                    // the tile's thumbnail is plain under its SpellFace; the 3D card bakes it in
+                    ...(spell && !card.player.team ? { spellOverStill: spell } : {}),
                   });
                   setLiftedPosition(position);
                 }}
@@ -726,7 +733,7 @@ export function PackSummary({
                         <UsernameText username={card.player.user.username} userId={card.player.user.id} className="text-[12px] font-semibold text-white" />
                       </div>
                     );
-                    const shown = burnt ? <BurntFace seed={position + 1}>{face}</BurntFace> : face;
+                    const shown = spell ? <SpellFace spell={spell} seed={spellSeed(card.player.user.id)}>{face}</SpellFace> : face;
                     return damage ? <SlicedFace damage={damage}>{shown}</SlicedFace> : shown;
                   })()}
                   {!isRecycled && !damage && <EditionSheen edition={card.player.edition} />}
@@ -1071,7 +1078,7 @@ export function PackSummary({
             aria-hidden="true"
           >
             {(() => {
-              const shown = burnt ? <BurntFace seed={flight.position + 1}>{face}</BurntFace> : face;
+              const shown = spell ? <SpellFace spell={spell} seed={spellSeed(cards[flight.position]?.player.user.id ?? 0)}>{face}</SpellFace> : face;
               return damage ? <SlicedFace damage={damage}>{shown}</SlicedFace> : shown;
             })()}
           </div>

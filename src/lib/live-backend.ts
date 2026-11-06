@@ -4801,6 +4801,8 @@ export interface LiveSharedPackCard {
     /* Badge text this one holding was given, printed on the card art in place
        of the tier's name. Null for every ordinary card. */
     customLabel: string | null;
+    /* Ember burnt or Frost froze a copy of it: the shared card wears it too. */
+    spell?: "burnt" | "frozen";
     /* And the image it floats in its background in place of the tier's own
        pattern, for the same reason: a shared card has to look like the card
        its owner holds. Null for every ordinary card. */
