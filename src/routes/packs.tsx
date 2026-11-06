@@ -53,6 +53,7 @@ import type { PackDamage } from "../lib/pack-damage";
 import {
   clearPendingPack,
   consumePendingPackCard,
+  effectivePackBurn,
   effectivePackDamage,
   readPendingPack,
   writePendingPack,
@@ -607,6 +608,9 @@ function PacksPage() {
      perforation: the cards were cut with it, so the reveal deals them in
      halves and the summary hands the whole ruined hand back for shards. */
   const [damage, setDamage] = useState<PackDamage | null>(null);
+  /* Ember set the pack alight before it was cut (PackStage): the hand shows
+     burnt. Looks only. */
+  const [burnt, setBurnt] = useState(false);
   const [revealed, setRevealed] = useState<RevealedCard[]>([]);
   /* Reveal-all handoff: the rects every card tile occupied when the reveal
      finished. Non-null means the viewer already saw the whole grid, so the
@@ -816,6 +820,7 @@ function PacksPage() {
     preparedPackKeyRef.current = null;
     setCards(null);
     setDamage(null);
+    setBurnt(false);
     setCutCommitted(false);
     setDealError(null);
     setPackRun(null);
@@ -836,6 +841,7 @@ function PacksPage() {
         // The one-time Eternal reward overrides the cut-pack joke: it always
         // resumes as a normal reveal and can never be auto-recycled unseen.
         setDamage(effectivePackDamage(pending.players, pending.damage));
+        setBurnt(effectivePackBurn(pending.players, pending.burnt === true));
         setPhase("reveal");
         return;
       }
@@ -853,6 +859,7 @@ function PacksPage() {
       // somebody sliced through, forgive the cut entirely so Eternal gets its
       // full ceremony and stays in the album.
       setDamage((current) => effectivePackDamage(players, current));
+      setBurnt((current) => effectivePackBurn(players, current));
       setCards(buildCardStates(players, seededScores));
       /* A pack opened straight from the summary pays here rather than at the
          slash, because there is no slash: charging only once the draw
@@ -968,8 +975,8 @@ function PacksPage() {
      one as cards flip into the wallet. */
   useEffect(() => {
     if (phase !== "reveal" || !cards) return;
-    writePendingPack(cards.map((card) => card.player), damage, drawIdRef.current);
-  }, [phase, cards, damage]);
+    writePendingPack(cards.map((card) => card.player), damage, drawIdRef.current, burnt);
+  }, [phase, cards, damage, burnt]);
 
   useEffect(() => {
     if (streakOpen) {
@@ -1005,6 +1012,7 @@ function PacksPage() {
        this same render, so the reveal would otherwise remount for one commit
        still holding the last pack's cut, and deal its ruined hand again. */
     setDamage(null);
+    setBurnt(false);
     setCutCommitted(false);
     autoOpenRef.current = false;
     // Keep the chosen pack type across packs while it stays affordable.
@@ -1022,6 +1030,7 @@ function PacksPage() {
     setSummaryFlyFrom(null);
     setSerials(null);
     setDamage(null);
+    setBurnt(false);
     setCutCommitted(false);
     autoOpenRef.current = true;
     setPhase("reveal");
@@ -1159,13 +1168,14 @@ function PacksPage() {
     if (serverDeals()) dealTriggerRef.current?.();
   };
 
-  const handleOpened = (cutDamage: PackDamage | null) => {
+  const handleOpened = (cutDamage: PackDamage | null, cutBurnt = false) => {
     /* A refused server deal reset the stage while the rip was still playing;
        this delayed callback belongs to that dead pack, and firing it would
        consume the next pack's freshly armed trigger. */
     if (packId !== packIdRef.current) return;
     const effectiveDamage = effectivePackDamage(dealtPlayersRef.current ?? [], cutDamage);
     setDamage(effectiveDamage);
+    setBurnt(effectivePackBurn(dealtPlayersRef.current ?? [], cutBurnt));
     setCutCommitted(false);
     /* Its own line in the feed, next to the open: the blade went past the foil
        and through the cards, so the whole hand came out in two pieces. */
@@ -1489,6 +1499,7 @@ function PacksPage() {
                         }
                         serials={serials}
                         damage={damage}
+                        burnt={burnt}
                         onRecycleCopies={async (entries) => {
                           await mintPassRef.current;
                           const teamEntries = entries.filter((entry) => entry.cardKey.startsWith("team:"));
@@ -1519,6 +1530,7 @@ function PacksPage() {
                         autoRevealAll={revealAllPreferred}
                         compactReveal={skipAnimations}
                         damage={damage}
+                        burnt={burnt}
                         sleeve={viewerPackStyle.sleeve}
                         onCardRevealed={(pull) => recordOpenedCard(pull, serverIsNewRef.current)}
                         onComplete={(pulls, handoff) => {

@@ -52,7 +52,7 @@ export interface BladeLook {
      blade, ice with glints, fire licking off it, a bolt (with `jitter`),
      streaks of wind, or a dark body (void, ink) laid over normally with its
      light at the edge. The strokes give its colours and widths either way. */
-  style?: "frost" | "fire" | "gale" | "void" | "ink";
+  style?: "frost" | "fire" | "gale" | "void" | "ink" | "rainbow";
   /* Thin at both ends and full in the middle, like a brush stroke (ink). */
   brush?: boolean;
   /* How far its light spreads (bloom), 1 for the standard blade. */
@@ -100,6 +100,56 @@ function leaf(fx: BladeFx, x: number, y: number, scale: number, delay: number, v
 function inkDrop(fx: BladeFx, x: number, y: number, scale: number, vx: number, vy: number, size: number, delay: number, red: boolean) {
   const spec = { x, y, vx: vx * scale, vy: vy * scale, gravity: 700 * scale, drag: 0.6, life: rand(0.6, 0.9), delay };
   fx.emit({ ...spec, sprite: "dot-01", color: red ? "#d6453d" : "#f0e4ce", normal: true, size: size * scale, endSize: size * 0.8 * scale, alpha: 1 });
+}
+
+/* The rainbow's colours, red to violet. */
+const RAINBOW = ["#ff3b3b", "#ff9a1f", "#ffe23b", "#3bd16f", "#3b9bff", "#a35bff"] as const;
+
+/* A particle's colours over its life for star power: the rainbow `laps`
+   times round, starting anywhere in it, so sparks flash through the colours. */
+function cycle(laps = 1, start = Math.floor(Math.random() * RAINBOW.length)): string[] {
+  const out: string[] = [];
+  for (let i = 0; i <= RAINBOW.length * laps; i += 1) out.push(RAINBOW[(start + i) % RAINBOW.length]);
+  return out;
+}
+
+/* Ember's easter egg (PackStage): the blade held still on the pack long
+   enough sets it alight, and a burn front spreads out over it from that spot
+   (emberBurnOverlay.ts draws the char and the glowing line). One frame of the
+   fire: tongues of flame licking up off the front (`front`, its radius in px
+   around `origin`), only where it crosses the pack, smoke rising off it now
+   and then, and embers still glowing in what has burnt. Once the front has
+   passed the whole pack (`front` null) only a low smoulder is left. */
+export function emberBurn(fx: BladeFx, box: PackBox, origin: { x: number; y: number }, front: number | null, scale: number) {
+  const inside = (x: number, y: number) => x >= box.left && x <= box.left + box.width && y >= box.top && y <= box.top + box.height;
+  const flame = (x: number, y: number, big: number) =>
+    fx.emit({ sprite: "fire-01", color: FIRE[1], ramp: FIRE.slice(1), x, y, vx: rand(-12, 12) * scale, vy: rand(-240, -140) * scale * big, gravity: -120 * scale, drag: 0.5, wobble: rand(20, 45) * scale, size: rand(20, 30) * scale * big, endSize: rand(52, 80) * scale * big, life: rand(0.45, 0.75), alpha: 0.3, rotation: rand(0, 6.28), spin: rand(-2.5, 2.5), fadeIn: 0.04 });
+  if (front !== null) {
+    // the front's length inside the pack sets how much fire there is
+    for (let i = 0; i < 32; i += 1) {
+      const a = rand(0, Math.PI * 2);
+      const r = front * rand(0.9, 1.06);
+      const x = origin.x + Math.cos(a) * r;
+      const y = origin.y + Math.sin(a) * r;
+      if (!inside(x, y)) continue;
+      flame(x, y, 1);
+      if (Math.random() < 0.05) fx.emit({ sprite: "smoke-04", color: "#2a1d18", normal: true, x, y: y - 30 * scale, vx: rand(-10, 10) * scale, vy: rand(-70, -40) * scale, size: 30 * scale, endSize: 90 * scale, life: rand(1, 1.4), alpha: 0.16, fadeIn: 0.3, rotation: rand(0, 6.28), spin: rand(-0.4, 0.4) });
+    }
+  } else if (Math.random() < 0.35) {
+    // burnt through: a low flame here and there
+    const x = box.left + rand(0.08, 0.92) * box.width;
+    const y = box.top + rand(0.1, 0.95) * box.height;
+    flame(x, y, 0.6);
+  }
+  // embers glowing in what has burnt
+  if (Math.random() < 0.25) {
+    const reach = front ?? Math.hypot(box.width, box.height);
+    const a = rand(0, Math.PI * 2);
+    const r = Math.sqrt(Math.random()) * reach;
+    const x = origin.x + Math.cos(a) * r;
+    const y = origin.y + Math.sin(a) * r;
+    if (inside(x, y)) fx.emit({ sprite: "circle-05", color: pick(["#ffe08a", "#ffb347", "#ff7a1f"]), x, y, vx: rand(-40, 40) * scale, vy: rand(-200, -90) * scale, gravity: -30 * scale, drag: 1.3, size: rand(3, 5) * scale, endSize: 1 * scale, life: rand(0.8, 1.3), alpha: 0.85, flicker: true });
+  }
 }
 
 /* The cut's angle, from where it entered the pack to where it left, kept
@@ -487,6 +537,59 @@ export const BLADE_LOOKS: Record<SupporterBladeId, BladeLook> = {
     shake: 3,
     sound: { cut: `${SOUNDS}ink-cut.mp3`, rip: `${SOUNDS}ink-rip.mp3`, loop: `${SOUNDS}ink-loop.mp3` },
   },
+  /* Rainbow: star power. One bright blade whose glow flashes through every
+     colour (bladeGl's rainbow mode), throwing off sparks that run through
+     the colours as they fly. When the pack gives, a streak along the cut you
+     made and a burst of sparks off it flash through the colours together, in
+     step, like a star. No stripes, and never several colours at once. */
+  rainbow: {
+    style: "rainbow",
+    bloom: 1.25,
+    strokes: [
+      { rgb: [255, 255, 255], alpha: 0.4, width: [6, 24] },
+      { rgb: [255, 255, 255], alpha: 0.7, width: [3, 12] },
+      { rgb: [255, 255, 255], alpha: 1, width: [1.2, 4.5] },
+    ],
+    life: 260,
+    tip: { glow: "rgba(255, 255, 255, 0.5)", core: "rgba(255, 255, 255, 1)", radius: 4.5 },
+    sprites: ["circle-05", "trace-07"],
+    trailEvery: 18,
+    trail: (fx, x, y, _dx, _dy, scale) => {
+      fx.emit({ sprite: "circle-05", color: RAINBOW[0], ramp: cycle(), x: x + rand(-6, 6) * scale, y: y + rand(-6, 6) * scale, vx: rand(-40, 40) * scale, vy: rand(-40, 40) * scale, drag: 1.5, size: rand(6, 10) * scale, endSize: 2 * scale, life: rand(0.45, 0.7) });
+    },
+    cut: (fx, x, y, scale) => {
+      for (let i = 0; i < 7; i += 1) {
+        const a = rand(0, Math.PI * 2);
+        const sp = rand(180, 420) * scale;
+        fx.emit({ sprite: "circle-05", color: RAINBOW[0], ramp: cycle(), x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 80 * scale, drag: 2.5, gravity: 220 * scale, size: rand(7, 12) * scale, endSize: 2 * scale, life: rand(0.4, 0.6), stretch: 0.5 });
+      }
+    },
+    rip: (fx, _box, _y, scale, at) => {
+      // Everything flashes through the colours together, in step, the way a
+      // star does: one start colour and one pace for the whole burst.
+      const start = Math.floor(Math.random() * RAINBOW.length);
+      const life = 0.75;
+      // a streak along the cut you made, laid piece by piece so it bends with it
+      const pieces = 16;
+      for (let i = 0; i < pieces; i += 1) {
+        const a = at(i / pieces);
+        const b = at((i + 1) / pieces);
+        const length = Math.hypot(b.x - a.x, b.y - a.y);
+        const along = Math.atan2(b.y - a.y, b.x - a.x);
+        fx.emit({ sprite: "trace-07", color: RAINBOW[start], ramp: cycle(3, start), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, size: length * 3.2, endSize: length * 3.6, aspect: (22 * scale) / (length * 3.2), rotation: along + Math.PI / 2, life, alpha: 1 });
+      }
+      // and sparks off it, in the same colour as the streak at every moment
+      for (let i = 0; i < 40; i += 1) {
+        const p = at(rand(0, 1));
+        const a = rand(0, Math.PI * 2);
+        const sp = rand(240, 620) * scale;
+        fx.emit({ sprite: "circle-05", color: RAINBOW[start], ramp: cycle(3, start), x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.75 - 60 * scale, drag: 2.2, gravity: 160 * scale, size: rand(7, 12) * scale, endSize: 2 * scale, life, stretch: 0.6 });
+      }
+      fx.flash("#ffffff", 0.08, 0.12);
+    },
+    shake: 3,
+    sound: { cut: `${SOUNDS}rainbow-cut.mp3`, rip: `${SOUNDS}rainbow-rip.mp3` },
+  },
 };
 
 export function bladeLook(blade: SupporterBladeId | null): BladeLook {
@@ -506,12 +609,20 @@ type Point = { x: number; y: number };
 /* One stroke of the streak as a single filled ribbon that tapers from tail to
    tip, so it never shows the beads that overlapping segment caps leave. Its
    fade runs along it as a gradient. */
+/* A colour of the rainbow, red at 0 round to violet at 1. */
+function hueRgb(t: number): Rgb {
+  const h = (t * 0.85) * 6;
+  const channel = (n: number) => Math.round(255 * Math.min(1, Math.max(0, Math.abs(((h + n) % 6) - 3) - 1)));
+  return [channel(0), channel(4), channel(2)];
+}
+
 function fillRibbon(
   ctx: CanvasRenderingContext2D,
   path: readonly Point[],
   width: (i: number) => number,
   alpha: (i: number) => number,
-  rgb: Rgb,
+  /* One colour, or a colour for each point along it (t 0 at the tail, 1 at the tip). */
+  rgb: Rgb | ((t: number) => Rgb),
 ) {
   const n = path.length;
   const left: Point[] = [];
@@ -526,11 +637,11 @@ function fillRibbon(
     left.push({ x: path[i].x - (dy / length) * half, y: path[i].y + (dx / length) * half });
     right.push({ x: path[i].x + (dy / length) * half, y: path[i].y - (dx / length) * half });
   }
-  const [r, g, b] = rgb;
   const gradient = ctx.createLinearGradient(path[0].x, path[0].y, path[n - 1].x, path[n - 1].y);
-  const stops = Math.min(n, 8);
+  const stops = Math.min(n, typeof rgb === "function" ? 14 : 8);
   for (let k = 0; k < stops; k += 1) {
     const i = Math.round((k / (stops - 1)) * (n - 1));
+    const [r, g, b] = typeof rgb === "function" ? rgb(k / (stops - 1)) : rgb;
     gradient.addColorStop(k / (stops - 1), `rgba(${r}, ${g}, ${b}, ${Math.max(0, alpha(i)).toFixed(3)})`);
   }
   ctx.beginPath();
@@ -624,13 +735,16 @@ export function drawBladeTrail(
         for (const fork of forks) strokePolyline(ctx, fork);
       }
     } else {
-      for (const stroke of look.strokes) {
+      for (const [index, stroke] of look.strokes.entries()) {
+        // the rainbow's glow runs through the colours along its length here
+        // (the WebGL draw cycles them over time instead); its core stays white
+        const rainbow = look.style === "rainbow" && index < look.strokes.length - 1;
         fillRibbon(
           ctx,
           points,
           (i) => (stroke.width[0] + (stroke.width[1] - stroke.width[0]) * (i / (n - 1))) * scale,
           (i) => fade(i) * stroke.alpha,
-          stroke.rgb,
+          rainbow ? hueRgb : stroke.rgb,
         );
       }
     }

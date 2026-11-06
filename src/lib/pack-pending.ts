@@ -14,6 +14,9 @@ export interface PendingPack {
   drawId?: string;
   players: PackPlayer[];
   damage: PackDamage | null;
+  /* Ember set the pack alight before it was opened: the hand shows burnt
+     (looks only, the cards are kept). */
+  burnt?: boolean;
 }
 
 /* An Eternal card overrides the cut-pack gag. The completion reward and
@@ -22,6 +25,11 @@ export interface PendingPack {
    intact and is never routed into the summary's automatic recycler. */
 export function effectivePackDamage(players: readonly PackPlayer[], damage: PackDamage | null): PackDamage | null {
   return players.some((player) => player.eternal) ? null : damage;
+}
+
+/* The same for Ember's burn: an Eternal hand always opens untouched. */
+export function effectivePackBurn(players: readonly PackPlayer[], burnt: boolean): boolean {
+  return burnt && !players.some((player) => player.eternal);
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -90,26 +98,28 @@ export function readPendingPack(): PendingPack | null {
               players: (parsed as { players?: unknown }).players,
               damage: sanitizePackDamage((parsed as { damage?: unknown }).damage),
               drawId: (parsed as { drawId?: unknown }).drawId,
+              burnt: (parsed as { burnt?: unknown }).burnt === true,
             }
           : null;
     if (!record || !Array.isArray(record.players) || record.players.length === 0) return null;
     const players = record.players.map(sanitizePlayer);
     if (players.some((player) => player === null)) return null;
     const drawId = "drawId" in record && typeof record.drawId === "string" && record.drawId.length <= 64 ? record.drawId : undefined;
-    return { players: players as PackPlayer[], damage: record.damage, ...(drawId ? { drawId } : {}) };
+    const burnt = "burnt" in record && record.burnt === true;
+    return { players: players as PackPlayer[], damage: record.damage, ...(drawId ? { drawId } : {}), ...(burnt ? { burnt } : {}) };
   } catch {
     return null;
   }
 }
 
-export function writePendingPack(players: PackPlayer[], damage: PackDamage | null = null, drawId?: string): void {
+export function writePendingPack(players: PackPlayer[], damage: PackDamage | null = null, drawId?: string, burnt = false): void {
   if (typeof window === "undefined") return;
   try {
     if (players.length === 0) {
       localStorage.removeItem(PENDING_PACK_STORAGE_KEY);
       return;
     }
-    localStorage.setItem(PENDING_PACK_STORAGE_KEY, JSON.stringify({ players, damage, ...(drawId ? { drawId } : {}) }));
+    localStorage.setItem(PENDING_PACK_STORAGE_KEY, JSON.stringify({ players, damage, ...(drawId ? { drawId } : {}), ...(burnt ? { burnt } : {}) }));
   } catch {
     // Quota or privacy mode: the reveal still works this session, the pack
     // just won't survive leaving the page.
@@ -126,7 +136,7 @@ export function consumePendingPackCard(userId: number, cardKey?: string): void {
   if (index === -1) return;
   pending.players.splice(index, 1);
   // The remainder of a cut pack is still cut.
-  writePendingPack(pending.players, pending.damage, pending.drawId);
+  writePendingPack(pending.players, pending.damage, pending.drawId, pending.burnt === true);
 }
 
 export function clearPendingPack(): void {

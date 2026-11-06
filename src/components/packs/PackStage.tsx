@@ -20,7 +20,8 @@ import {
 } from "./packArt";
 import { createPackScene, type PackScene } from "./packScene";
 import { BladeFx, preloadSprites } from "./bladeFx";
-import { bladeLook, bladeTrailLife, cutPath } from "./packBlades";
+import { bladeLook, bladeTrailLife, cutPath, emberBurn } from "./packBlades";
+import { mountBurnOverlay, type BurnOverlay } from "./emberBurnOverlay";
 import { createBladeRenderer, type BladeRenderer } from "./bladeGl";
 import { moveBladeLoop, playBladeCut, playBladeRip, playBladeTick, playCardSlice, stopBladeLoop, warmBladeSounds } from "./packSfx";
 
@@ -32,6 +33,16 @@ const BIN_COUNT = 48;
 // the tear reads as a smooth curve instead of stair steps.
 const SLICES_PER_BIN = 2;
 const TEAR_COMPLETE_COVERAGE = 0.7;
+/* Ember's easter egg (burnRef): how long the blade rests on the pack before
+   it catches, how long the fire takes to cover it, and how far the pointer
+   may drift while it still counts as resting. */
+const EMBER_IGNITE_MS = 4000;
+const EMBER_SPREAD_MS = 4000;
+const EMBER_STILL_PX = 12;
+/* The stroke kept for a rip to follow (cutOnScreenRef): a point at least
+   this far from the last, and at most this many before it is thinned. */
+const CUT_POINT_SPACING_PX = 4;
+const CUT_POINTS_MAX = 96;
 // Vertical band (fractions of pack height) where a drag counts as a slash
 // instead of a tilt. Kept tight around the perforation line (at 0.16) so the
 // pack can only be cut where the dotted line says.
@@ -83,7 +94,7 @@ interface PackStageProps {
   blade?: SupporterBladeId | null;
   /* Damage is non-null when the blade went through the pack's middle: the
      cards inside were cut, and the page has to deal a ruined hand. */
-  onOpened: (damage: PackDamage | null) => void;
+  onOpened: (damage: PackDamage | null, burnt?: boolean) => void;
   /* Fires the instant the slash commits and the rip starts, ~900ms before
      onOpened. The page starts the signed-in server deal off this signal, so
      the rip choreography hides the round trip instead of preceding it. */
@@ -175,6 +186,18 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   } | null>(null);
   const bladeHeldRef = useRef<{ pointerId: number } | null>(null);
   const rippingRef = useRef(false);
+  /* Ember's easter egg: the blade held still on the pack for EMBER_IGNITE_MS
+     sets it alight where it rests, and the fire then spreads over the pack on
+     its own (packBlades emberBurn) while the foil chars. The hand it deals
+     comes out burnt (onOpened's `burnt`; looks only). Silent on purpose. */
+  const burnRef = useRef<{ still: { x: number; y: number } | null; stillSince: number; startedAt: number | null; origin: { u: number; v: number } | null; overlay: BurnOverlay | null; crackleAt: number }>({
+    still: null,
+    stillSince: 0,
+    startedAt: null,
+    origin: null,
+    overlay: null,
+    crackleAt: 0,
+  });
   /* The rip-to-onOpened delay. Cleared on unmount: the deal now starts at the
      cut, so a refused server deal can reset the stage while the rip is still
      playing, and a stray onOpened after that would re-fire the freshly armed
@@ -497,6 +520,45 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   // Blade trail: while the pointer is held down anywhere on the stage, a
   // fading streak chases the cursor (on and off the pack), so the slash
   // reads as a blade before it ever touches the foil.
+  /* One frame of ember's burn (burnRef): lights it once the blade has rested
+     long enough on the pack, then spreads it. True while it burns. */
+  const tendBurn = (now: number): boolean => {
+    const burn = burnRef.current;
+    if (bladeRef.current !== "ember" || reducedMotionRef.current || !fxRef.current) return false;
+    const pack = packRef.current;
+    const rect = pack?.getBoundingClientRect();
+    if (!pack || !rect || rect.width < 2) return false;
+    if (burn.startedAt === null) {
+      if (!trailHeldRef.current || !burn.still || now - burn.stillSince < EMBER_IGNITE_MS) return false;
+      const { x, y } = burn.still;
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return false;
+      burn.startedAt = now;
+      // kept relative to the pack, so it stays put when the page scrolls
+      burn.origin = { u: (x - rect.left) / rect.width, v: (y - rect.top) / rect.height };
+      burn.overlay = mountBurnOverlay(pack, { x: burn.origin.u * pack.clientWidth, y: burn.origin.v * pack.clientHeight });
+    }
+    if (rippingRef.current || !burn.origin || !burn.overlay) return false;
+    const progress = Math.min(1, (now - burn.startedAt) / EMBER_SPREAD_MS);
+    // slow to catch, then running: the front speeds up as it goes
+    const eased = progress * progress * (3 - 2 * progress);
+    const origin = { x: rect.left + burn.origin.u * rect.width, y: rect.top + burn.origin.v * rect.height };
+    const farthest = Math.max(
+      Math.hypot(burn.origin.u * rect.width, burn.origin.v * rect.height),
+      Math.hypot((1 - burn.origin.u) * rect.width, burn.origin.v * rect.height),
+      Math.hypot(burn.origin.u * rect.width, (1 - burn.origin.v) * rect.height),
+      Math.hypot((1 - burn.origin.u) * rect.width, (1 - burn.origin.v) * rect.height),
+    );
+    const radius = 10 + eased * (farthest / 0.8) * 1.15;
+    burn.overlay.setRadius(radius * (pack.clientWidth / rect.width));
+    const front = burn.overlay.frontAt(radius);
+    emberBurn(fxRef.current, { left: rect.left, top: rect.top, width: rect.width, height: rect.height }, origin, front > farthest ? null : front, 1);
+    if (now - burn.crackleAt > 200) {
+      burn.crackleAt = now;
+      playBladeTick("ember", progress);
+    }
+    return true;
+  };
+
   const ensureTrailLoop = () => {
     if (trailRafRef.current !== null) return;
     const step = () => {
@@ -539,7 +601,8 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
         pixelRatio: renderScale,
       });
 
-      if (trailHeldRef.current || trailPointsRef.current.length > 0 || fx?.alive) {
+      const burning = tendBurn(now);
+      if (trailHeldRef.current || trailPointsRef.current.length > 0 || fx?.alive || burning) {
         trailRafRef.current = requestAnimationFrame(step);
       }
     };
@@ -556,11 +619,18 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       if (controlsRef.current?.contains(event.target)) return;
       trailHeldRef.current = true;
       trailCursorRef.current = { x: event.clientX, y: event.clientY };
+      burnRef.current.still = { x: event.clientX, y: event.clientY };
+      burnRef.current.stillSince = performance.now();
       trailPointsRef.current.push({ x: event.clientX, y: event.clientY, t: performance.now() });
       ensureTrailLoop();
     };
     const onMove = (event: PointerEvent) => {
       if (!trailHeldRef.current) return;
+      const burn = burnRef.current;
+      if (!burn.still || Math.hypot(event.clientX - burn.still.x, event.clientY - burn.still.y) > EMBER_STILL_PX) {
+        burn.still = { x: event.clientX, y: event.clientY };
+        burn.stillSince = performance.now();
+      }
       const before = trailCursorRef.current;
       trailCursorRef.current = { x: event.clientX, y: event.clientY };
       trailPointsRef.current.push({ x: event.clientX, y: event.clientY, t: performance.now() });
@@ -578,16 +648,36 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     const onUp = () => {
       trailHeldRef.current = false;
       trailCursorRef.current = null;
+      burnRef.current.still = null;
+    };
+    // The blade's layer is fixed to the viewport: when the page scrolls, what
+    // it threw off the pack (sparks, fire, the fading streak) moves with the page.
+    let scrollX = window.scrollX;
+    let scrollY = window.scrollY;
+    const onScroll = () => {
+      const dx = scrollX - window.scrollX;
+      const dy = scrollY - window.scrollY;
+      scrollX = window.scrollX;
+      scrollY = window.scrollY;
+      if (!dx && !dy) return;
+      fxRef.current?.shift(dx, dy);
+      for (const point of trailPointsRef.current) {
+        point.x += dx;
+        point.y += dy;
+      }
+      ensureTrailLoop();
     };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", onUp);
     document.addEventListener("pointercancel", onUp);
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
       document.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("scroll", onScroll);
       if (trailRafRef.current !== null) cancelAnimationFrame(trailRafRef.current);
       trailRafRef.current = null;
       trailHeldRef.current = false;
@@ -703,6 +793,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   const triggerRip = () => {
     if (rippingRef.current) return;
     rippingRef.current = true;
+    burnRef.current.overlay?.fade();
     const damage = readDamage();
     onCutRef.current?.();
     if (damage) playCardSlice();
@@ -734,7 +825,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     // resets the stage, and this callback firing after that would revive the
     // dead pack (see openedTimerRef).
     openedTimerRef.current = window.setTimeout(
-      () => onOpenedRef.current(damage),
+      () => onOpenedRef.current(damage, burnRef.current.startedAt !== null),
       reducedMotionRef.current ? 220 : 880,
     );
   };
@@ -788,7 +879,34 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     cut.maxX = Math.max(cut.maxX, clientX);
     cut.sumY += clientY;
     cut.count += 1;
-    if (cut.points.length < 96) cut.points.push({ x: clientX, y: clientY });
+    // the whole stroke, however slow: a point every few px, and when the list
+    // fills up, every other one is dropped so it still spans end to end
+    const last = cut.points[cut.points.length - 1];
+    if (!last || Math.hypot(clientX - last.x, clientY - last.y) >= CUT_POINT_SPACING_PX) {
+      cut.points.push({ x: clientX, y: clientY });
+      if (cut.points.length > CUT_POINTS_MAX) cut.points = cut.points.filter((_, i) => i % 2 === 0 || i === cut.points.length - 1);
+    }
+  };
+
+  /* A stroke carried on, in its own direction at each end, to the pack's left
+     and right edges (y kept on the pack). */
+  const acrossPack = (points: readonly { x: number; y: number }[], rect: DOMRect) => {
+    const first = points[0];
+    const last = points[points.length - 1];
+    const rightward = last.x >= first.x;
+    const extend = (from: { x: number; y: number }, toward: { x: number; y: number }, edgeX: number) => {
+      const dx = from.x - toward.x;
+      const slope = Math.abs(dx) > 1 ? (from.y - toward.y) / dx : 0;
+      // a steep end would fly off the pack: keep the extension gentle
+      const gentle = Math.max(-0.6, Math.min(0.6, slope));
+      const y = from.y + gentle * (edgeX - from.x);
+      return { x: edgeX, y: Math.max(rect.top, Math.min(rect.bottom, y)) };
+    };
+    const head = points[Math.min(points.length - 1, 4)];
+    const tail = points[Math.max(0, points.length - 5)];
+    const start = extend(first, head, rightward ? rect.left : rect.right);
+    const end = extend(last, tail, rightward ? rect.right : rect.left);
+    return [start, ...points, end];
   };
 
   /* The pack giving: the blade's own burst along the cut, and a shake. The
@@ -799,18 +917,15 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     const pack = packRef.current;
     const rect = pack?.getBoundingClientRect();
     if (!pack || !rect) return;
-    // on the stroke itself when it was seen; the pack's own band otherwise
+    // On the stroke itself when it was seen, carried on to both edges of the
+    // pack: it tears all the way across once enough is cut, while the stroke
+    // may have crossed only part of it. The pack's own band otherwise.
     const cut = cutOnScreenRef.current;
-    const y = cut && cut.count > 1 ? cut.sumY / cut.count : rect.top + rect.height * cutY;
-    const span = cut && cut.maxX - cut.minX > 24 ? { left: cut.minX, width: cut.maxX - cut.minX } : { left: rect.left, width: rect.width };
-    const box = { left: Math.max(rect.left, span.left), width: Math.min(rect.left + rect.width, span.left + span.width) - Math.max(rect.left, span.left), top: rect.top, height: rect.height };
-    if (box.width < 24) {
-      box.left = rect.left;
-      box.width = rect.width;
-    }
-    // the stroke's points over the pack, oldest first
-    const over = cut?.points.filter((point) => point.x >= rect.left && point.x <= rect.left + rect.width);
-    look.rip(fxRef.current, box, y, 1, cutPath(box, y, over && over.length > 1 ? over : undefined));
+    const box = { left: rect.left, width: rect.width, top: rect.top, height: rect.height };
+    const over = cut?.points.filter((point) => point.x >= rect.left && point.x <= rect.right) ?? [];
+    const path = over.length > 1 ? acrossPack(over, rect) : null;
+    const y = path ? path.reduce((sum, point) => sum + point.y, 0) / path.length : rect.top + rect.height * cutY;
+    look.rip(fxRef.current, box, y, 1, cutPath(box, y, path ?? undefined));
     bladeRendererRef.current?.renderer.impact(box.left + box.width / 2, y);
     ensureTrailLoop();
     if (look.shake) {

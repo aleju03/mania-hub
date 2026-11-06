@@ -18,6 +18,7 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { playRecycleClink } from "./packSfx";
 import type { FlightRect, RevealedCard } from "./RevealStage";
+import { BurntFace } from "./BurntFace";
 import { SlicedFace } from "./SlicedFace";
 import { rememberTeamName } from "../../lib/analytics-teams";
 import { UsernameText } from "../ui/UsernameText";
@@ -46,6 +47,8 @@ interface PackSummaryProps {
   /* Set when the pack was cut open through its middle. The hand is in halves
      and nothing in it is worth keeping, so it recycles itself on arrival. */
   damage?: PackDamage | null;
+  /* Ember burnt the pack: every face shows burnt (looks only). */
+  burnt?: boolean;
   reducedMotion: boolean;
   /* Reveal-all handoff: where each card's tile sat when the reveal finished,
      keyed by card position. Present = the viewer already saw every card, so
@@ -134,6 +137,7 @@ export function PackSummary({
   serials,
   onRecycleCopies,
   damage = null,
+  burnt = false,
   reducedMotion,
   flyFrom = null,
   run = null,
@@ -722,7 +726,8 @@ export function PackSummary({
                         <UsernameText username={card.player.user.username} userId={card.player.user.id} className="text-[12px] font-semibold text-white" />
                       </div>
                     );
-                    return damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face;
+                    const shown = burnt ? <BurntFace seed={position + 1}>{face}</BurntFace> : face;
+                    return damage ? <SlicedFace damage={damage}>{shown}</SlicedFace> : shown;
                   })()}
                   {!isRecycled && !damage && <EditionSheen edition={card.player.edition} />}
                   {selecting && !isRecycled && !card.player.milestone && (
@@ -1065,7 +1070,10 @@ export function PackSummary({
             }}
             aria-hidden="true"
           >
-            {damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face}
+            {(() => {
+              const shown = burnt ? <BurntFace seed={flight.position + 1}>{face}</BurntFace> : face;
+              return damage ? <SlicedFace damage={damage}>{shown}</SlicedFace> : shown;
+            })()}
           </div>
         );
       })}

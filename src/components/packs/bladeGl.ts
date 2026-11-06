@@ -88,7 +88,7 @@ void main() {
 const RIBBON_FS = `#version 300 es
 precision highp float;
 in vec4 v_info;
-uniform int u_mode; // 0 blade, 1 frost, 2 fire, 3 bolt, 4 gale, 5 void rim, 6 ink rim, 7 void body, 8 ink body
+uniform int u_mode; // 0 blade, 1 frost, 2 fire, 3 bolt, 4 gale, 5 void rim, 6 ink rim, 7 void body, 8 ink body, 9 rainbow
 uniform vec3 u_glow;
 uniform vec3 u_mid;
 uniform vec3 u_core;
@@ -198,6 +198,15 @@ void main() {
     // Ink's sheen: a faint glow off the wet stroke.
     float sheen = exp(-d * d * 3.0) * (1.0 - d);
     color = u_mid * sheen * 0.18;
+  } else if (u_mode == 9) {
+    // Star power: one bright blade whose glow runs through every colour,
+    // fast, the way a star flashes, the hue rippling a little along it.
+    float hue = fract(u_time * 2.4 + along * 0.002);
+    vec3 rgb = clamp(abs(mod(hue * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    float body = exp(-d * d * 7.0);
+    float halo = exp(-d * d * 2.4) * (1.0 - d);
+    float hot = smoothstep(u_coreWidth * 1.2, u_coreWidth * 0.3, d);
+    color = rgb * (halo * 0.9 + body * 1.4) + vec3(1.0) * hot * 2.2;
   } else if (u_mode == 3) {
     float bolt = exp(-d * d * 45.0);
     color = u_glow * glow * 1.2 + u_mid * bolt * 0.8 + u_core * core * 2.2;
@@ -584,7 +593,7 @@ function createGlRenderer(canvas: HTMLCanvasElement): BladeRenderer | null {
     const outer = strokes[0];
     const core = strokes[strokes.length - 1];
     const middle = strokes.length > 2 ? strokes[1] : outer;
-    const mode = look.jitter ? 3 : look.style === "frost" ? 1 : look.style === "fire" ? 2 : look.style === "gale" ? 4 : look.style === "void" ? 5 : look.style === "ink" ? 6 : 0;
+    const mode = look.jitter ? 3 : look.style === "frost" ? 1 : look.style === "fire" ? 2 : look.style === "gale" ? 4 : look.style === "void" ? 5 : look.style === "ink" ? 6 : look.style === "rainbow" ? 9 : 0;
     // void and ink are dark: after their light, their body goes over normally
     const darkMode = look.style === "void" ? 7 : look.style === "ink" ? 8 : 0;
     // The glow is the bloom's job now, so the strip only needs room for the

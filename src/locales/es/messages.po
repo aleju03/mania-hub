@@ -19493,6 +19493,7 @@ msgstr "Nube de lluvia"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/lib/pack-run.ts
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 msgid "Rainbow"
 msgstr "Arcoíris"
 
@@ -25608,6 +25609,10 @@ msgstr "La exportación se interrumpió antes de terminar."
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "The file names beatmap {0}. That is metadata inside the upload, not a verified identity."
 #~ msgstr ""
+
+#: src/components/packs/RevealStage.tsx
+msgid "The fire got to every card"
+msgstr "El fuego alcanzó todas las cartas"
 
 #: src/lib/chain-run.ts
 msgid "The first break in each row counts as a 3-trait link instead."

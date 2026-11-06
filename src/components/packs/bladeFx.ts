@@ -175,6 +175,16 @@ export class BladeFx {
     this.flashes = [];
   }
 
+  /* Moves everything already alive by dx, dy (px): the page scrolled under
+     the full-viewport layer this is drawn on, and what was thrown off the
+     pack should go with it. */
+  shift(dx: number, dy: number): void {
+    for (const p of this.particles) {
+      p.x += dx;
+      p.y += dy;
+    }
+  }
+
   /* Moves everything on to now and lays out what each particle and flash
      looks like this frame, for whichever renderer draws it. */
   frame(): { items: FxItem[]; flashes: FxFlash[] } {

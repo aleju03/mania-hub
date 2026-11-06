@@ -19532,6 +19532,7 @@ msgstr "Rain cloud"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/lib/pack-run.ts
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-pack-style.ts
 msgid "Rainbow"
 msgstr "Rainbow"
 
@@ -25655,6 +25656,10 @@ msgstr "The export was interrupted before it finished."
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "The file names beatmap {0}. That is metadata inside the upload, not a verified identity."
 #~ msgstr "The file names beatmap {0}. That is metadata inside the upload, not a verified identity."
+
+#: src/components/packs/RevealStage.tsx
+msgid "The fire got to every card"
+msgstr "The fire got to every card"
 
 #: src/lib/chain-run.ts
 msgid "The first break in each row counts as a 3-trait link instead."
