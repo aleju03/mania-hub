@@ -339,6 +339,30 @@ function isSkinReport(report: BugReport): boolean {
   return report.kind === "feedback" && (report.pagePath?.startsWith("/skins/") ?? false) && report.body.startsWith(SKIN_REPORT_PREFIX);
 }
 
+// The skin's name in the header line links to its page.
+function SkinReportText({ body, href }: { body: string; href: string }) {
+  const lineEnd = body.indexOf("\n");
+  const header = lineEnd === -1 ? body : body.slice(0, lineEnd);
+  const rest = lineEnd === -1 ? "" : body.slice(lineEnd);
+  const ownerAt = header.lastIndexOf(" (uploaded by ");
+  const nameEnd = ownerAt === -1 ? header.length : ownerAt;
+  return (
+    <>
+      {SKIN_REPORT_PREFIX}
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="font-semibold text-osu-pink-light underline-offset-2 transition-colors duration-[120ms] hover:text-white hover:underline"
+      >
+        {header.slice(SKIN_REPORT_PREFIX.length, nameEnd)}
+      </a>
+      {header.slice(nameEnd)}
+      {rest ? <MessageText text={rest} /> : null}
+    </>
+  );
+}
+
 function ContextLine({ context }: { context: BugReport["context"] }) {
   if (!context) return null;
   const userAgent = typeof context.userAgent === "string" ? context.userAgent : undefined;
@@ -772,7 +796,11 @@ function ReportCard({
           </div>
 
           <p className="mt-1.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-white [overflow-wrap:anywhere]">
-            <MessageText text={report.body} />
+            {isSkinReport(report) && report.pagePath ? (
+              <SkinReportText body={report.body} href={report.pagePath} />
+            ) : (
+              <MessageText text={report.body} />
+            )}
           </p>
           <ContextLine context={report.context} />
           <Screenshots reportId={report.id} count={report.screenshotKeys.length} />
