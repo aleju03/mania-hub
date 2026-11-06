@@ -1,3 +1,4 @@
+import { ProfilePreviewBar, useSupporterProfilePreview } from "#/components/supporter/ProfilePreviewBar";
 import { ProfileCompanion } from "../../components/supporter/Companion";
 import { builtInCompanion, type SupporterCompanion } from "../../lib/supporter-companions";
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
@@ -21,6 +22,7 @@ import {
   fetchLivePlayerRecentScoresDirect,
   fetchLivePlayerSkillsDirect,
   fetchLiveSupporterProfileLook,
+  supporterLookPreviewFor,
   fetchServerSupporterLook,
   seedLiveSupporterLook,
   peekLiveSupporterCompanion,
@@ -988,6 +990,12 @@ function PlayerDefaultRoute() {
   const { username } = Route.useParams();
   const loaderData = Route.useLoaderData();
   const location = useLocation();
+  // the viewer's own profile can wear what they tried on at /supporter
+  const viewer = useAuth().viewer;
+  const viewerIsSupporter = useViewerIsSupporter(viewer?.id);
+  const loadedUser = loaderData?.cachedSnapshot?.user;
+  const ownProfile = !!viewer && (loadedUser ? loadedUser.id === viewer.id : viewer.username.toLowerCase() === username.toLowerCase());
+  const preview = useSupporterProfilePreview(ownProfile && viewer ? viewer.id : null);
   const legacyShowCountryFlag = readLegacyShowCountryFlag(location.searchStr);
   const hasLegacyShowCountry = hasLegacyShowCountryParam(location.searchStr);
 
@@ -1008,12 +1016,16 @@ function PlayerDefaultRoute() {
   }, [hasLegacyShowCountry, legacyShowCountryFlag]);
 
   return (
-    <PlayerProfilePage
-      username={username}
-      loaderData={loaderData}
-      initialTab={getPlayerTabFromPathname(location.pathname)}
-      showCountryFlag={location.state.showPlayerCountryFlag === true || legacyShowCountryFlag}
-    />
+    <>
+      <PlayerProfilePage
+        key={preview.remountKey}
+        username={username}
+        loaderData={loaderData}
+        initialTab={getPlayerTabFromPathname(location.pathname)}
+        showCountryFlag={location.state.showPlayerCountryFlag === true || legacyShowCountryFlag}
+      />
+      {preview.previewing ? <ProfilePreviewBar supporter={viewerIsSupporter} onEnd={preview.end} /> : null}
+    </>
   );
 }
 
@@ -1238,7 +1250,8 @@ export function PlayerProfilePage({
   // The owner's own look says whether they are a supporter; the stored hint
   // only covers browsers that have been to /supporter.
   const ownerIsSupporter = supporterFrame?.userId === profileUserId && supporterFrame.supporter;
-  const canSwapStats = !!auth.viewer && auth.viewer.id === profileUserId && (viewerIsSupporter || ownerIsSupporter);
+  // not while previewing a look tried on at /supporter, which saves nothing
+  const canSwapStats = !!auth.viewer && auth.viewer.id === profileUserId && (viewerIsSupporter || ownerIsSupporter) && !supporterLookPreviewFor(profileUserId);
   const setProfileStats = (next: ProfileStatId[]) => {
     setStatsOverride({ userId: profileUserId, stats: next });
     const isDefault = next.every((entry, index) => entry === DEFAULT_PROFILE_STATS[index]);

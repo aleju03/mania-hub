@@ -4901,6 +4901,43 @@ const supporterLookCache = new Map<number, SupporterLookCacheEntry>();
    right after a save would show the old look. */
 const supporterLooksToReload = new Set<number>();
 
+/* A look tried on at /supporter and shown on the viewer's own profile
+   (supporter-preview.ts): while it is set, every read of that player's look
+   here, and their name, frame, sleeve and row in lists, wears it instead.
+   Nothing about it leaves this browser. */
+let lookPreview: { userId: number; look: Partial<SupporterProfileLook> } | null = null;
+const lookPreviewListeners = new Set<() => void>();
+
+export function setSupporterLookPreview(userId: number, look: Partial<SupporterProfileLook> | null): void {
+  const next = look && userId > 0 ? { userId, look } : null;
+  if (!next && !lookPreview) return;
+  lookPreview = next;
+  previewRowThemes = null;
+  for (const listener of lookPreviewListeners) listener();
+  for (const listener of nameStyleListeners) listener();
+}
+
+export function supporterLookPreviewFor(userId: number): Partial<SupporterProfileLook> | null {
+  return lookPreview?.userId === userId ? lookPreview.look : null;
+}
+
+export function subscribeSupporterLookPreview(listener: () => void): () => void {
+  lookPreviewListeners.add(listener);
+  return () => lookPreviewListeners.delete(listener);
+}
+
+/* The look with the preview laid over it, for the previewed player. */
+function withLookPreview(userId: number, value: SupporterProfileLook): SupporterProfileLook {
+  return lookPreview?.userId === userId ? { ...value, ...lookPreview.look } : value;
+}
+
+/* What the peek helpers read: the settled look, previewed. */
+function peekSettledLook(userId: number): SupporterProfileLook | undefined {
+  const id = Math.floor(Number(userId) || 0);
+  const settled = freshSupporterLookEntry(id)?.settled;
+  return lookPreview?.userId === id ? withLookPreview(id, settled ?? NO_SUPPORTER_LOOK) : settled;
+}
+
 function freshSupporterLookEntry(userId: number): SupporterLookCacheEntry | undefined {
   const cached = supporterLookCache.get(userId);
   return cached && Date.now() - cached.at < SUPPORTER_LOOK_TTL_MS ? cached : undefined;
@@ -4908,6 +4945,11 @@ function freshSupporterLookEntry(userId: number): SupporterLookCacheEntry | unde
 
 export function fetchLiveSupporterProfileLook(userId: number): Promise<SupporterProfileLook> {
   const id = Math.floor(Number(userId) || 0);
+  if (lookPreview?.userId === id) return fetchSupporterProfileLookUnpreviewed(id).then((value) => withLookPreview(id, value));
+  return fetchSupporterProfileLookUnpreviewed(id);
+}
+
+function fetchSupporterProfileLookUnpreviewed(id: number): Promise<SupporterProfileLook> {
   if (id <= 0 || !getLiveBackendUrl()) return Promise.resolve(NO_SUPPORTER_LOOK);
   const cached = freshSupporterLookEntry(id);
   if (cached) return cached.value;
@@ -4961,7 +5003,7 @@ export function seedLiveSupporterLook(userId: number, raw: unknown): SupporterPr
   if (id > 0 && typeof window !== "undefined" && !freshSupporterLookEntry(id)) {
     supporterLookCache.set(id, { at: Date.now(), value: Promise.resolve(value), settled: value });
   }
-  return value;
+  return withLookPreview(id, value);
 }
 
 /* The raw look for the server render, from the backend directly; null if it
@@ -4994,47 +5036,47 @@ export function forgetLiveSupporterLook(userId: number): void {
    request, so a card, avatar or name that remounts does not flash plain first.
    Undefined when not known yet. */
 export function peekLiveSupporterLook(userId: number): SupporterLook | null | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.look;
+  return peekSettledLook(userId)?.look;
 }
 
 export function peekLiveSupporterFrame(userId: number): SupporterAvatarFrameId | null | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.frame;
+  return peekSettledLook(userId)?.frame;
 }
 
 export function peekLiveSupporterNameStyle(userId: number): SupporterNameStyleId | null | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.nameStyle;
+  return peekSettledLook(userId)?.nameStyle;
 }
 
 export function peekLiveSupporterNameFont(userId: number): SupporterNameFontId | null | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.nameFont;
+  return peekSettledLook(userId)?.nameFont;
 }
 
 export function peekLiveSupporterProfileTheme(userId: number): SupporterProfileThemeId | null | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.profileTheme;
+  return peekSettledLook(userId)?.profileTheme;
 }
 
 export function peekLiveSupporterCustomTheme(userId: number): CustomTheme | null | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.customTheme;
+  return peekSettledLook(userId)?.customTheme;
 }
 
 export function peekLiveSupporterProfileThemeOptions(userId: number): ProfileThemeOptions | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.profileThemeOptions;
+  return peekSettledLook(userId)?.profileThemeOptions;
 }
 
 export function peekLiveSupporterRunStartedAt(userId: number): number | null | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.runStartedAt;
+  return peekSettledLook(userId)?.runStartedAt;
 }
 
 export function peekLiveSupporterRenewing(userId: number): boolean | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.renewing;
+  return peekSettledLook(userId)?.renewing;
 }
 
 export function peekLiveSupporterRankFire(userId: number): boolean | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.rankFire;
+  return peekSettledLook(userId)?.rankFire;
 }
 
 export function peekLiveSupporterCompanion(userId: number): SupporterCompanion | null | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.companion;
+  return peekSettledLook(userId)?.companion;
 }
 
 /* Every companion supporters submitted, newest first. */
@@ -5050,11 +5092,11 @@ export async function fetchLiveWorkshopFrames(): Promise<SubmittedFrame[]> {
 }
 
 export function peekLiveSupporterPackStyle(userId: number): SupporterPackStyle | undefined {
-  return freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled?.packStyle;
+  return peekSettledLook(userId)?.packStyle;
 }
 
 export function peekLiveSupporterProfileStats(userId: number): { stats: ProfileStatId[] | null; data: ProfileStatsData; plays: ProfilePlays | null } | undefined {
-  const settled = freshSupporterLookEntry(Math.floor(Number(userId) || 0))?.settled;
+  const settled = peekSettledLook(userId);
   return settled ? { stats: settled.profileStats, data: settled.profileStatsData, plays: settled.profilePlays } : undefined;
 }
 
@@ -5081,20 +5123,28 @@ export function subscribeSupporterNameStyles(listener: () => void): () => void {
 }
 
 export function getSupporterNameStyle(userId: number): SupporterNameStyleId | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview && "nameStyle" in preview) return preview.nameStyle ?? null;
   return nameStyleMap?.styles.get(userId) ?? null;
 }
 
 export function getSupporterNameFont(userId: number): SupporterNameFontId | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview && "nameFont" in preview) return preview.nameFont ?? null;
   return nameStyleMap?.fonts.get(userId) ?? null;
 }
 
 /* The avatar frame lists draw around this player's avatar (the same map). */
 export function getSupporterListFrame(userId: number): SupporterAvatarFrameId | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview && "frame" in preview) return preview.frame ?? null;
   return nameStyleMap?.frames.get(userId) ?? null;
 }
 
 /* The card sleeve a supporter's collection tiles wear (the same map). */
 export function getSupporterSleeve(userId: number): SupporterCardSleeveId | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview?.packStyle) return preview.packStyle.sleeve ?? null;
   return nameStyleMap?.sleeves.get(userId) ?? null;
 }
 
@@ -5104,8 +5154,20 @@ export function getSupporterSleeve(userId: number): SupporterCardSleeveId | null
 export type SupporterRowTheme = SupporterProfileThemeId | { image: string };
 const CUSTOM_ROW_URL = /^https:\/\/cdn\.mania-tracker\.com\/theme-assets\/[a-f0-9]{64}\.webp$/;
 
+// the list themes with the preview's in, rebuilt only when either changes
+let previewRowThemes: { base: ReadonlyMap<number, SupporterRowTheme> | null; themes: ReadonlyMap<number, SupporterRowTheme> } | null = null;
+
 export function getSupporterListThemes(): ReadonlyMap<number, SupporterRowTheme> | null {
-  return nameStyleMap?.themes ?? null;
+  const base = nameStyleMap?.themes ?? null;
+  if (!lookPreview || !("profileTheme" in lookPreview.look)) return base;
+  if (previewRowThemes?.base !== base) {
+    const themes = new Map(base ?? []);
+    const { profileTheme, profileThemeOptions } = lookPreview.look;
+    if (profileTheme && profileThemeOptions?.rows) themes.set(lookPreview.userId, profileTheme);
+    else themes.delete(lookPreview.userId);
+    previewRowThemes = { base, themes };
+  }
+  return previewRowThemes.themes;
 }
 
 /* After the supporter page saves a sleeve, so the viewer's own tiles update at once. */

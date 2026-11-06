@@ -1,3 +1,4 @@
+import { previewMascot, startSupporterProfilePreview } from "#/lib/supporter-preview";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { msg } from "@lingui/core/macro";
@@ -437,16 +438,52 @@ function SupporterPage() {
   const until = supporter && state?.expiresAt
     ? new Date(state.expiresAt).toLocaleDateString(i18n.locale, { month: "short", day: "numeric", year: "numeric" })
     : null;
-  const status = !viewer || !state ? null : until ? (
-    <span className="text-[12px] text-osu-l2">{t`Supporter until ${until}`}</span>
-  ) : (
-    <Link
-      to="/support"
-      hash="checkout"
-      className="inline-flex items-center gap-1.5 rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-semibold text-white transition hover:brightness-110"
+  /* The viewer's own profile wearing what is on now (a roll waiting to be
+     kept included), in this browser only: supporter-preview.ts. Someone who
+     has not supported also gets a first rank and the mascot they picked. */
+  const previewOnProfile = () => {
+    const loadout = pending ?? equipped;
+    if (!viewer || !loadout) return;
+    const mascot = supporter ? undefined : previewMascot();
+    startSupporterProfilePreview(viewer.id, {
+      look: loadout.look,
+      frame: loadout.frame,
+      nameStyle: loadout.nameStyle,
+      nameFont: loadout.nameFont,
+      profileTheme: loadout.theme,
+      profileThemeOptions: loadout.themeOptions,
+      // a built-in theme picked here takes the place of their own
+      ...(loadout.theme ? { customTheme: null } : {}),
+      packStyle: loadout.pack,
+      ...(supporter ? {} : { runStartedAt: Date.now(), companion: mascot ?? null }),
+    });
+    void navigate({ to: "/player/$username", params: { username: viewer.username } });
+  };
+  const previewButton = viewer && state && equipped ? (
+    <button
+      type="button"
+      onClick={previewOnProfile}
+      className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-white/10 px-4 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-white/15"
     >
-      {t`Become a supporter`}
-    </Link>
+      {t`Preview on my profile`}
+    </button>
+  ) : null;
+  const status = !viewer || !state ? null : until ? (
+    <span className="flex items-center gap-3">
+      {previewButton}
+      <span className="text-[12px] text-osu-l2">{t`Supporter until ${until}`}</span>
+    </span>
+  ) : (
+    <span className="flex items-center gap-2">
+      {previewButton}
+      <Link
+        to="/support"
+        hash="checkout"
+        className="inline-flex items-center gap-1.5 rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-semibold text-white transition hover:brightness-110"
+      >
+        {t`Become a supporter`}
+      </Link>
+    </span>
   );
 
   const avatar = viewer ? avatarImageSrc(viewer.avatarUrl, viewer.id) : undefined;

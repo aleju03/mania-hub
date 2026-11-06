@@ -4956,6 +4956,10 @@ msgstr "Volver a la posición del skin"
 msgid "back to skins"
 msgstr "volver a las skins"
 
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "Back to supporter"
+msgstr "Volver a supporter"
+
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "back to teams"
 #~ msgstr "volver a los equipos"
@@ -5181,6 +5185,7 @@ msgstr "Beatmaps jugados por tu país"
 msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps jugados en {countryName}"
 
+#: src/components/supporter/ProfilePreviewBar.tsx
 #: src/routes/support.tsx
 #: src/routes/supporter.tsx
 msgid "Become a supporter"
@@ -9370,6 +9375,10 @@ msgstr "Fin"
 #: src/components/replay/ReplayControls.tsx
 msgid "End here"
 msgstr "Terminar aquí"
+
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "End preview"
+msgstr "Terminar vista previa"
 
 #: src/components/packs/StreakGame.tsx
 msgid "End the run"
@@ -17299,6 +17308,10 @@ msgstr "solo tú puedes abrirlas"
 #~ msgid "Only you can open this. It is not listed anywhere and has no share link."
 #~ msgstr ""
 
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "Only you can see this"
+msgstr "Solo tú puedes ver esto"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Only you can wear it."
 msgstr ""
@@ -19050,6 +19063,10 @@ msgstr "Vista previa"
 #: src/routes/recommendations.tsx
 msgid "Preview {0} [{1}]"
 msgstr "Vista previa de {0} [{1}]"
+
+#: src/routes/supporter.tsx
+msgid "Preview on my profile"
+msgstr "Ver en mi perfil"
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Preview position"
@@ -24243,6 +24260,10 @@ msgstr "Supporter"
 #: src/components/layout/Nav.tsx
 msgid "Supporter perks"
 msgstr "Beneficios de supporter"
+
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "Supporter preview"
+msgstr "Vista previa de supporter"
 
 #: src/components/supporter/SupporterRankBadge.tsx
 #: src/routes/support.tsx

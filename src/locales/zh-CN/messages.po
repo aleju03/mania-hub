@@ -4968,6 +4968,10 @@ msgstr "回到皮肤位置"
 msgid "back to skins"
 msgstr "返回皮肤"
 
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "Back to supporter"
+msgstr "返回支持者页面"
+
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "back to teams"
 #~ msgstr "返回战队"
@@ -5193,6 +5197,7 @@ msgstr "你的国家/地区玩过的谱面"
 msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
 
+#: src/components/supporter/ProfilePreviewBar.tsx
 #: src/routes/support.tsx
 #: src/routes/supporter.tsx
 msgid "Become a supporter"
@@ -9382,6 +9387,10 @@ msgstr "结束"
 #: src/components/replay/ReplayControls.tsx
 msgid "End here"
 msgstr "在此结束"
+
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "End preview"
+msgstr "结束预览"
 
 #: src/components/packs/StreakGame.tsx
 msgid "End the run"
@@ -17311,6 +17320,10 @@ msgstr "只有你能打开这些"
 #~ msgid "Only you can open this. It is not listed anywhere and has no share link."
 #~ msgstr ""
 
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "Only you can see this"
+msgstr "只有你能看到"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Only you can wear it."
 msgstr ""
@@ -19062,6 +19075,10 @@ msgstr "预览"
 #: src/routes/recommendations.tsx
 msgid "Preview {0} [{1}]"
 msgstr "预览 {0} [{1}]"
+
+#: src/routes/supporter.tsx
+msgid "Preview on my profile"
+msgstr "在我的主页预览"
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Preview position"
@@ -24255,6 +24272,10 @@ msgstr "Supporter"
 #: src/components/layout/Nav.tsx
 msgid "Supporter perks"
 msgstr "支持者福利"
+
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "Supporter preview"
+msgstr "支持者预览"
 
 #: src/components/supporter/SupporterRankBadge.tsx
 #: src/routes/support.tsx

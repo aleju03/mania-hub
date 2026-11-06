@@ -4983,6 +4983,10 @@ msgstr "Back to skin position"
 msgid "back to skins"
 msgstr "back to skins"
 
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "Back to supporter"
+msgstr "Back to supporter"
+
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "back to teams"
 #~ msgstr "back to teams"
@@ -5208,6 +5212,7 @@ msgstr "Beatmaps played by your country"
 msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps played in {countryName}"
 
+#: src/components/supporter/ProfilePreviewBar.tsx
 #: src/routes/support.tsx
 #: src/routes/supporter.tsx
 msgid "Become a supporter"
@@ -9397,6 +9402,10 @@ msgstr "End"
 #: src/components/replay/ReplayControls.tsx
 msgid "End here"
 msgstr "End here"
+
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "End preview"
+msgstr "End preview"
 
 #: src/components/packs/StreakGame.tsx
 msgid "End the run"
@@ -17338,6 +17347,10 @@ msgstr "only you can open these"
 #~ msgid "Only you can open this. It is not listed anywhere and has no share link."
 #~ msgstr "Only you can open this. It is not listed anywhere and has no share link."
 
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "Only you can see this"
+msgstr "Only you can see this"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Only you can wear it."
 msgstr "Only you can wear it."
@@ -19089,6 +19102,10 @@ msgstr "Preview"
 #: src/routes/recommendations.tsx
 msgid "Preview {0} [{1}]"
 msgstr "Preview {0} [{1}]"
+
+#: src/routes/supporter.tsx
+msgid "Preview on my profile"
+msgstr "Preview on my profile"
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Preview position"
@@ -24290,6 +24307,10 @@ msgstr "Supporter"
 #: src/components/layout/Nav.tsx
 msgid "Supporter perks"
 msgstr "Supporter perks"
+
+#: src/components/supporter/ProfilePreviewBar.tsx
+msgid "Supporter preview"
+msgstr "Supporter preview"
 
 #: src/components/supporter/SupporterRankBadge.tsx
 #: src/routes/support.tsx

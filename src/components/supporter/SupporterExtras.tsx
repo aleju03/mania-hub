@@ -1,3 +1,4 @@
+import { previewMascot, rememberPreviewMascot } from "#/lib/supporter-preview";
 import { useEffect, useState } from "react";
 import { useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -118,7 +119,13 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
   useEffect(() => {
     let alive = true;
     void fetchLiveSupporterProfileLook(viewerId).then((value) => {
-      if (alive && value.companion) setSaved(companionId(value.companion));
+      if (!alive) return;
+      if (value.companion) setSaved(companionId(value.companion));
+      else if (!supporter) {
+        // what they picked for the profile preview, this session
+        const tried = previewMascot();
+        if (tried) setSaved(companionId(tried));
+      }
     });
     const lists = auth.isAdmin
       ? [loadAdminCompanions()]
@@ -129,7 +136,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
     return () => {
       alive = false;
     };
-  }, [viewerId, auth.isAdmin]);
+  }, [viewerId, auth.isAdmin, supporter]);
 
   const choices: Array<{ id: string; companion: SupporterCompanion }> = [
     ...BUILT_IN_COMPANIONS.map((builtIn) => ({ id: builtIn.id, companion: { builtIn } })),
@@ -140,7 +147,13 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
   const shown = find(shownId);
 
   const pick = (id: string) => {
-    if (!supporter || id === saved) return;
+    if (id === saved) return;
+    if (!supporter) {
+      // nothing saves; kept for "Preview on my profile"
+      setSaved(id);
+      rememberPreviewMascot(id === NONE ? null : find(id));
+      return;
+    }
     const before = saved;
     setSaved(id);
     setError(null);
