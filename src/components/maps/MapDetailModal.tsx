@@ -46,6 +46,8 @@ import {
   skillTiles,
 } from "./SearchCard";
 import { HoverTip } from "../ui/HoverTip";
+import { ChartLabelSection } from "./ChartLabelReport";
+import { useAuth } from "../../lib/auth-context";
 import { resolveShownMsd } from "../../lib/shown-msd";
 import { DiffTabs, InlineStats, MapDetailHeader, type DetailStars, type InlineStat } from "./MapDetailHeader";
 
@@ -604,6 +606,7 @@ export function MsdBlock({
   vibroAnalysis,
   inverse = false,
   pending = false,
+  labelReport = null,
 }: {
   entry: LiveMapSearchEntry;
   msdLn?: Record<string, number> | null;
@@ -625,9 +628,13 @@ export function MsdBlock({
   inverse?: boolean;
   // A rate is loading: the block dims.
   pending?: boolean;
+  // Lets a signed-in player report the chart as filed wrong (ChartLabelReport.tsx);
+  // the tile it files under rides along so the form can show it.
+  labelReport?: { filedTile: string | null } | null;
 }) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
+  const signedIn = useAuth().viewer != null;
   const [sectionsOpen, setSectionsOpen] = useState(false);
   // Under a rate mod the chart the play met is not the stored one, so its own
   // MSD and dan replace the 1.0x pair wholesale: a rate-adjusted MSD next to a
@@ -706,7 +713,7 @@ export function MsdBlock({
           </ul>
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-white/[0.04] px-3.5 py-2.5">
+      <div className={`relative flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-white/[0.04] px-3.5 py-2.5 ${labelReport && signedIn ? "pr-9" : ""}`}>
         {/* Verdict group: dan badge + Overall, split from the skillset grid.
             min-h keeps the row the badge's height even on diffs that have no
             dan verdict, so switching diffs doesn't resize the MSD box. */}
@@ -734,6 +741,19 @@ export function MsdBlock({
             </HoverTip>
           ))}
         </div>
+        {labelReport && (
+          <ChartLabelSection
+            context={{
+              beatmapId: entry.beatmapId,
+              rate: rateAdjusted ? rate : 1,
+              keyCount: entry.keyCount,
+              dan,
+              filedTile: labelReport.filedTile,
+              // Plays on it count for nothing at the rate shown: vibro or unrateable.
+              unrated: vibroAnalysis ? vibroAnalysis.status === "excluded" : !!entry.vibro,
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -1284,6 +1304,7 @@ export function MapDetailModal({
                       rateSecondaryDan={rateAnalysis?.secondaryDan ?? null}
                       vibroAnalysis={offCatalog || (playedInverse && !ratePending) ? rateAnalysis?.vibroAnalysis : playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
                       inverse={playedInverse}
+                      labelReport={local || playedInverse ? null : { filedTile: headerTiles[0] ?? (active.dan?.family === "ln" ? "ln" : null) }}
                     />
                   </div>
                 ) : pending || (offCatalog && ratePending) ? <PendingMsdBlock /> : null}

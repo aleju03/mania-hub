@@ -21,6 +21,7 @@ import type { ServerPackCollectionCard, ServerPackCollectionPage } from "./pack-
 import type { ReplaySpectatorTicket } from "./replay-spectator";
 import { LEADERBOARD_PAGE_SIZE, type ClearLeaderboardSnapshot, type DanLeaderboardSnapshot, type DanSide, type SkillLeaderboardSnapshot } from "./skill-leaderboards";
 import type { UnratedPlaysSnapshot } from "./unrated-plays";
+import { fetchOwnSkillPath, isOwnSkillPath } from "./skill-privacy";
 import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-event-source";
 import { parseCustomTheme, type CustomTheme } from "./custom-themes";
 import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource } from "./shared-event-source";
@@ -5353,10 +5354,27 @@ export function openLiveEventSource(country: string, options?: { observe?: boole
   return liveEventSourcePool.open(`${base}/api/live?${query.toString()}`);
 }
 
+// The signed-in player, seeded by the root layout in the browser only: a
+// player who keeps their ratings private reads their own through the bridge.
+let signedInViewerId: number | null = null;
+export function noteSignedInViewer(id: number | null): void {
+  if (typeof window !== "undefined") signedInViewerId = id;
+}
+
 async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Server is not configured.");
   const response = await fetch(`${base}${path}`, { credentials: "omit", ...init });
+  // A private player's ratings come back hidden from the anonymous read; on
+  // their own profile, ask again as them (lib/skill-privacy.ts).
+  if (response.status === 403 && signedInViewerId != null && path.startsWith(`/api/profiles/${signedInViewerId}/`) && isOwnSkillPath(path)) {
+    const own = await fetchOwnSkillPath({ data: { path } }).catch(() => null);
+    if (own?.ok) {
+      const payload = JSON.parse(own.body);
+      harvestAvatarAccents(payload);
+      return payload as T;
+    }
+  }
   // Same "Server <status>" message as the plain Error this used to throw, but
   // carrying the status and a 429's retry-after so callers like the pack draw
   // can tell a rate-limited request from a broken backend.

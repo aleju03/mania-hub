@@ -26,6 +26,7 @@
     "live-db:sync-from-vps": "npm --prefix backend run db:sync-from-vps --",
     "live-db:update": "npm --prefix backend run db:sync-from-vps -- --fresh",
     "bugs:pull": "node scripts/fetch-prod-bug-reports.mjs",
+    "label-reports:export": "node scripts/fetch-prod-label-reports.mjs",
     "companella:test-client": "node scripts/companella-test-client.mjs",
     "replay:capture-stable": "node --env-file-if-exists=.env scripts/replay-capture-stable.ts",
     "replay:compare-capture": "node --env-file-if-exists=.env scripts/replay-compare-capture.ts",

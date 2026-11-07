@@ -52,7 +52,7 @@ import { track } from "../lib/analytics";
 import { getCanonicalOrigin } from "../lib/origin";
 import { isStaleRouteModuleMessage } from "../lib/stale-route-error";
 import { DEFAULT_DESCRIPTION, SITE_FAVICON_HREF, SITE_NAME, websiteJsonLd } from "../lib/seo";
-import { activateLiveCountryOnServer, fetchLiveBackendBootstrap } from "../lib/live-backend";
+import { activateLiveCountryOnServer, fetchLiveBackendBootstrap, noteSignedInViewer } from "../lib/live-backend";
 import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live-backend";
 import { BackendOfflineScreen } from "../components/BackendOfflineScreen";
 import { seedCountryTierCache } from "../lib/use-country-warming";
@@ -591,6 +591,7 @@ function RootLayout() {
   const auth = normalizeAuth(rawAuth);
   seedClientRootSlowContext({ auth, backendStatus, countryFeatures });
   seedCountryTierCache(countryFeatures?.countries);
+  noteSignedInViewer(auth.viewer?.id ?? null);
   return (
     <LocaleContext.Provider value={locale}>
     <I18nProvider i18n={getI18n(locale)}>

@@ -18,6 +18,7 @@ import { SelectMenu } from "../ui/SelectMenu";
 import { ReplaySkinSettingsModal, loadReplaySkinSettingsModal, preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { TranslationReportForm } from "./TranslationReportForm";
 import { CompanellaGroup } from "./CompanellaGroup";
+import { SkillVisibilitySetting } from "./SkillVisibilitySetting";
 import { PanelGroup } from "./PanelGroup";
 import {
   ReplaySkinColorWheel,
@@ -1483,6 +1484,8 @@ function PreferencesPanel() {
           </ul>
         )}
       </PanelGroup>
+
+      <SkillVisibilitySetting />
     </div>
   );
 }

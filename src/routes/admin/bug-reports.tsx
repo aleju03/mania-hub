@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Ban,
   Bell,
@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 
+import { ChartLabelsBoard } from "../../components/admin/ChartLabelsBoard";
 import { Avatar } from "../../components/ui/Avatar";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import { BugReportAttachmentTiles, PendingFileTile } from "../../components/ui/BugReportAttachmentTiles";
@@ -101,6 +102,7 @@ export const Route = createFileRoute("/admin/bug-reports")({
     }
     return undefined as never;
   },
+  validateSearch: (search: Record<string, unknown>): { tab?: "labels" } => (search.tab === "labels" ? { tab: "labels" } : {}),
   component: BugReportsAdminPage,
 });
 
@@ -873,7 +875,32 @@ function ReportCard({
   );
 }
 
+/* Two boards behind one page: what players report as broken, and what they
+   report a chart as filed wrong as (the Labels tab). */
 function BugReportsAdminPage() {
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const view = tab === "labels" ? "labels" : "reports";
+  const viewSwitch = (
+    <div className="mt-2 flex w-fit rounded-md border border-osu-b3/50 bg-osu-b6/70 p-0.5">
+      {([["reports", "Reports"], ["labels", "Labels"]] as const).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => void navigate({ search: id === "labels" ? { tab: "labels" } : {}, replace: true })}
+          className={`h-[24px] cursor-pointer rounded px-2.5 text-[11px] font-semibold transition-colors duration-[120ms] ${
+            view === id ? "bg-osu-b4 text-white" : "text-osu-f1 hover:text-osu-l1"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+  return view === "labels" ? <ChartLabelsBoard viewSwitch={viewSwitch} /> : <BugReportsBoard viewSwitch={viewSwitch} />;
+}
+
+function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
   const [status, setStatus] = useState<StatusFilter>("new");
   const [kind, setKind] = useState<KindFilter>("all");
   const [searchInput, setSearchInput] = useState("");
@@ -1025,6 +1052,7 @@ function BugReportsAdminPage() {
               {counts.new} waiting{counts.total ? ` · ${counts.total} filed` : ""}
               <span className="hidden sm:inline"> · what players send from /report</span>
             </p>
+            {viewSwitch}
 
           </div>
 

@@ -104,11 +104,12 @@ export function SectionArt({ section, className }: { section: SectionArtId; clas
         );
       case "sleeve":
         return (
+          // short enough that its turned corners stay inside the box
           <g transform="rotate(14 22 18)">
-            <rect x="11" y="1" width="22" height="34" rx="2.5" fill="#cfe3f5" fillOpacity=".3" stroke="#e9f4ff" strokeWidth="1.3" />
-            <rect x="11" y="1" width="22" height="7" rx="2" fill="#e04848" />
-            <rect x="13.5" y="10" width="17" height="22" rx="1.5" fill="#6d55a8" />
-            <path d="M14.5 11l7.5 20" stroke="#fff" strokeOpacity=".45" strokeWidth="1.5" />
+            <rect x="11.5" y="3" width="21" height="30" rx="2.5" fill="#cfe3f5" fillOpacity=".3" stroke="#e9f4ff" strokeWidth="1.3" />
+            <rect x="11.5" y="3" width="21" height="6" rx="2" fill="#e04848" />
+            <rect x="14" y="10.5" width="16" height="20" rx="1.5" fill="#6d55a8" />
+            <path d="M15 11.5l6.8 18" stroke="#fff" strokeOpacity=".45" strokeWidth="1.5" />
           </g>
         );
       case "binder":

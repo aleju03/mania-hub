@@ -651,6 +651,11 @@ msgstr "{0} 已上线"
 msgid "{0} is yours"
 msgstr "{0} 归你所有"
 
+#. placeholder {0}: user.username
+#: src/routes/player/$username.tsx
+msgid "{0} keeps their skill ratings private."
+msgstr ""
+
 #. placeholder {0}: shown.rowsLeft
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "{0} left"
@@ -5776,6 +5781,7 @@ msgstr "暂时无法连接机器人，请稍后刷新。"
 
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
+#: src/components/maps/ChartLabelReport.tsx
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -7613,6 +7619,10 @@ msgstr "无法撤销这些连接。"
 msgid "Could not save that."
 msgstr "无法保存。"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Could not save that. Try again in a bit."
+msgstr ""
+
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "保存失败，请再试一次。"
@@ -7624,6 +7634,10 @@ msgstr ""
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Could not search collectors. Try again."
 msgstr "无法搜索收藏者。请重试。"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Could not send it. Try again in a bit."
+msgstr "发送失败，请稍后再试。"
 
 #: src/routes/report.tsx
 msgid "Could not send that update. Try again."
@@ -9763,6 +9777,7 @@ msgstr "所有已追踪玩家，概率相同"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/maps/UserCollectionsSection.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Everyone"
 msgstr "所有人"
@@ -10203,6 +10218,10 @@ msgstr "文件大小"
 #: src/routes/skins_.$id.tsx
 msgid "File updated"
 msgstr "文件已更新"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "filed"
+msgstr "当前"
 
 #: src/lib/bug-report-screenshots.ts
 msgid "Files have to be under 5MB."
@@ -11052,6 +11071,10 @@ msgstr "于 {dateText} 由 {giverLink} 赠送"
 #: src/components/packs/GiftInbox.tsx
 msgid "Gifts ({0})"
 msgstr "礼物（{0}）"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Gimmick"
+msgstr "整活"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Give it a name."
@@ -12117,6 +12140,10 @@ msgstr ""
 msgid "I understand I'm responsible for what I put in my themes, and that one breaking the <0>Terms</0> can be taken down."
 msgstr ""
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "I'm not sure"
+msgstr "不确定"
+
 #: src/components/supporter/loadout.ts
 msgid "Ice fairy"
 msgstr "冰之妖精"
@@ -12776,6 +12803,10 @@ msgstr "注册于 <0>{joinedValue}</0>"
 #: src/routes/news_.prism.tsx
 msgid "Joke charts"
 msgstr "整活谱"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Joke or broken"
+msgstr "恶搞或有问题"
 
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Journal"
@@ -13440,6 +13471,10 @@ msgstr "更少观看"
 msgid "level"
 msgstr "级"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Level"
+msgstr "等级"
+
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "levels"
 msgstr "级"
@@ -13651,6 +13686,10 @@ msgstr "LN"
 #: src/components/maps/MapDetailModal.tsx
 msgid "LN {0}"
 msgstr "LN {0}"
+
+#: src/components/maps/ChartLabelReport.tsx
+#~ msgid "LN {name}"
+#~ msgstr "LN {name}"
 
 #: src/lib/pattern-labels.ts
 msgid "LN All-round"
@@ -14826,6 +14865,10 @@ msgstr "计算方式"
 msgid "Metronome"
 msgstr "节拍器"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "mid"
+msgstr "中"
+
 #: src/routes/replay.tsx
 msgid "Middle lane thumb"
 msgstr "中间轨道拇指"
@@ -15728,6 +15771,10 @@ msgstr "模组使用统计包含 NM"
 msgid "no"
 msgstr "否"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "No"
+msgstr "否"
+
 #. placeholder {0}: tierLabel(state.tier)
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "No {0} cards left to lay down."
@@ -16464,6 +16511,10 @@ msgstr "没有匹配的更新。"
 msgid "No wishes yet. Choose a missing player to get started."
 msgstr "还没有心愿。选择一位尚未拥有的玩家开始吧。"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Nobody"
+msgstr ""
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Nobody above you on the roster."
 #~ msgstr "名单上没有人在你之上。"
@@ -16791,6 +16842,10 @@ msgstr "尚未解锁。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note"
 msgstr "音符"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Note (optional)"
+msgstr "备注（可选）"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note color"
@@ -17301,10 +17356,15 @@ msgstr "仅管理员可见"
 msgid "Only approve a request you started yourself. If someone sent you this link, close it."
 msgstr "只批准你自己发起的请求。如果这个链接是别人发给你的，请关闭它。"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Only at this rate"
+msgstr "仅在此倍速下"
+
 #: src/routes/discord.tsx
 msgid "Only channels with something on"
 msgstr "只显示已开启功能的频道"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "仅自己"
@@ -17391,6 +17451,10 @@ msgstr ""
 #: src/routes/discord.tsx
 msgid "Only you see the bot's replies to your commands, unless you set hidden to false."
 msgstr "机器人对你指令的回复仅你可见，除非你把 hidden 设为 false。"
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Only you see your skill ratings and dans. You are left out of the skill rankings."
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Only your best rate play on the same chart counts per ladder, rate reuploads included."
@@ -18843,6 +18907,10 @@ msgstr "每个国家/地区前 100 名的成绩会被自动记录。你还不在
 msgid "Plays from Mamestagram"
 msgstr "来自 Mamestagram 的成绩"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Plays like"
+msgstr "实际类型"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Plays list"
 msgstr "成绩列表"
@@ -19259,6 +19327,7 @@ msgstr "Prism 按乱拍为这一段评分，因为乱拍的得分高于按谱面
 msgid "privacy"
 msgstr "隐私"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
 #: src/routes/privacy.tsx
 msgid "Privacy"
 msgstr "隐私"
@@ -20805,6 +20874,10 @@ msgstr "举报 {0}"
 msgid "Report a translation"
 msgstr "反馈翻译问题"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Report a wrong label"
+msgstr "报告错误标签"
+
 #: src/routes/communities_.$id.tsx
 #: src/routes/report.tsx
 msgid "Report sent"
@@ -20841,6 +20914,10 @@ msgstr "已举报"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Reported. An admin will take a look."
 msgstr "已举报，管理员会查看。"
+
+#: src/components/maps/ChartLabelReport.tsx
+#~ msgid "Reports go into the data the models are tuned on; this chart stays as it is."
+#~ msgstr "报告会用于调整模型的数据，此谱面的结果不会因此改变。"
 
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "Representative intervals are shown for each detected pattern."
@@ -21072,6 +21149,7 @@ msgstr "撤销这个连接？它会立即停止提交。"
 msgid "rice"
 msgstr "rice"
 
+#: src/components/maps/ChartLabelReport.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Rice"
 msgstr "Rice"
@@ -22016,6 +22094,7 @@ msgstr "出售"
 msgid "Sells for {sell} shards"
 msgstr "售价 {sell} 个碎片"
 
+#: src/components/maps/ChartLabelReport.tsx
 #: src/routes/report.tsx
 msgid "Send"
 msgstr "发送"
@@ -22482,6 +22561,14 @@ msgstr "较短的排计分 x3。"
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Shot {0}"
 msgstr "截图 {0}"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Should it be rated?"
+msgstr "应该计入评分吗？"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Should plays on it count for ratings?"
+msgstr "这张谱面的成绩应该计入评分吗？"
 
 #: src/routes/recommendations.tsx
 msgid "show"
@@ -23127,6 +23214,10 @@ msgstr "技能评分等待重新计算"
 #: src/routes/player/$username.tsx
 msgid "Skill ratings are unavailable right now."
 msgstr "技能评分暂时不可用。"
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Skill ratings visible to"
+msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Skill shape: {shape}"
@@ -24085,6 +24176,10 @@ msgstr ""
 #~ msgid "Still out there ({0})"
 #~ msgstr "尚未被找到 ({0})"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+#~ msgid "Still rated, but only you see them. You leave the skill rankings, and nobody else sees your dans."
+#~ msgstr ""
+
 #. placeholder {0}: player.username
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Stop browsing {0}"
@@ -24830,6 +24925,10 @@ msgstr "谢谢！请登录，并在下方粘贴 Google 收据邮件中的订单�
 msgid "Thank you! Your supporter time is on."
 msgstr "谢谢！你的支持者时长已生效。"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Thanks, noted. Tap the flag to change your answer."
+msgstr "谢谢，已记录。点击旗帜可修改你的回答。"
+
 #: src/components/supporter/CustomThemeCredit.tsx
 #: src/routes/workshop.themes.gallery.tsx
 msgid "Thanks, the report was sent."
@@ -25093,6 +25192,10 @@ msgstr "视频超过 2 MB。"
 #: src/components/replay/ShareClipButton.tsx
 msgid "That's 10 share links today. Try again tomorrow."
 msgstr "今天已生成 10 个分享链接，请明天再试。"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "That's a lot of reports for today. Try again tomorrow."
+msgstr "今天的报告已经很多了，明天再试吧。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "That's a lot of saves in a minute. Wait a moment and save again."
@@ -27558,8 +27661,13 @@ msgid "Turn left"
 msgstr "向左旋转"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Turn off"
 msgstr "关闭"
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Turn off your skill ratings?"
+msgstr ""
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn right"
@@ -27969,6 +28077,10 @@ msgstr "最多为谱面段位 +0.1"
 msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
 msgstr "如果某技能中的通过计入段位比你在该技能最好的五次平均低五级以上，最多会排除其中三次。段位窗口会把它们标为<0>不计入</0>。"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Update"
+msgstr "更新"
+
 #. placeholder {0}: skin.name
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "update {0}"
@@ -28283,6 +28395,10 @@ msgstr "vibro"
 #: src/components/maps/SearchCard.tsx
 msgid "Vibro"
 msgstr "Vibro"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Vibro / mash"
+msgstr "Vibro / 乱打"
 
 #. placeholder {0}: rate.toFixed(2)
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -28956,6 +29072,10 @@ msgstr ""
 msgid "Who can join"
 msgstr "谁可以加入"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+#~ msgid "Who can see my skill ratings"
+#~ msgstr ""
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Who can wear it"
 msgstr ""
@@ -29105,6 +29225,10 @@ msgstr ""
 #: src/routes/recommendations.tsx
 msgid "with no mods"
 msgstr "不使用模组"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Withdraw"
+msgstr "撤回"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "within a minute"
@@ -29281,6 +29405,10 @@ msgstr ""
 #: src/lib/signature-shared.ts
 msgid "Year"
 msgstr "年"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Yes"
+msgstr "是"
 
 #: src/routes/dan-estimates.tsx
 msgid "Yes, this is saragi"
@@ -29566,6 +29694,10 @@ msgstr "你已没有这张卡片了。"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "You pick where the file is saved."
 #~ msgstr "由你选择文件保存的位置。"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "You reported this chart's label"
+msgstr "你已报告此谱面的标签"
 
 #: src/routes/recommendations.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
@@ -29975,6 +30107,14 @@ msgstr "你的成绩已经开始被记录"
 #~ msgid "Your plays are not being tracked yet"
 #~ msgstr ""
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+#~ msgid "Your plays are not rated at all and nothing shows, not even to you. Switching back rates them again from your plays."
+#~ msgstr ""
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Your plays are not rated, and nothing shows, not even to you."
+msgstr ""
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
 msgstr "你的成绩还没有被记录，因为你不在本国家/地区的前 100 名里。把自己加进追踪器，这个页面就活起来了：实时的成绩流、你的打法特征和各项记录。之后你还可以设定目标，打图时自动完成。"
@@ -29982,6 +30122,10 @@ msgstr "你的成绩还没有被记录，因为你不在本国家/地区的前 1
 #: src/components/player/FeaturedPlays.tsx
 msgid "Your plays didn't load. Try again."
 msgstr "你的游玩没有加载出来，请重试。"
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Your plays stop being rated and your ratings and dans show to nobody, you included. Turning them back on rates your plays again."
+msgstr ""
 
 #: src/routes/skins.tsx
 msgid "Your private skins"
@@ -30064,6 +30208,18 @@ msgstr "你的卡组"
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "your showcase"
 msgstr "你的展示柜"
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Your skill ratings and dans show on your profile and in the rankings."
+msgstr ""
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+#~ msgid "Your skill ratings and dans show on your profile, in rankings and everywhere else."
+#~ msgstr ""
+
+#: src/routes/player/$username.tsx
+msgid "Your skill ratings are turned off. You can turn them back on in Settings."
+msgstr ""
 
 #: src/routes/news_.companella.tsx
 #~ msgid "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."

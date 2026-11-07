@@ -40,6 +40,7 @@ import {
   peekLiveSupporterProfileStats,
   peekLiveSupporterLook,
   forgetLiveSupporterLook,
+  LiveBackendRequestError,
   type LivePlayerSkills,
   type LiveKeymodePpPlay,
   type LivePlayerKeymodePpTail,
@@ -3372,7 +3373,8 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
     return () => observer.disconnect();
   }, []);
   const [skills, setSkills] = useState<LivePlayerSkills | null>(null);
-  const [skillsError, setSkillsError] = useState(false);
+  // "hidden": the player keeps their ratings to themselves (or turned them off).
+  const [skillsError, setSkillsError] = useState<false | "failed" | "hidden">(false);
   const [selectedSkill, setSelectedSkill] = useState<{ entry: SkillAxisEntry; keyCount: number } | null>(null);
   const [selectedDan, setSelectedDan] = useState<{ side: "rc" | "ln"; keyCount: number } | null>(null);
   /* Which keymode the open panel is for; null follows the profile's own main. */
@@ -3438,8 +3440,8 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           attempts += 1;
           timer = setTimeout(() => void load(), attempts <= 12 ? 6_000 : 15_000);
         }
-      } catch {
-        if (!cancelled) setSkillsError(true);
+      } catch (error) {
+        if (!cancelled) setSkillsError(error instanceof LiveBackendRequestError && error.status === 403 ? "hidden" : "failed");
       }
     };
     void load();
@@ -3550,7 +3552,13 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           />
         </div>
       ) : null}
-      {skillsError ? (
+      {skillsError === "hidden" ? (
+        <div className="py-8 text-center text-sm text-osu-f1">
+          {auth.viewer?.id === user.id
+            ? t`Your skill ratings are turned off. You can turn them back on in Settings.`
+            : t`${user.username} keeps their skill ratings private.`}
+        </div>
+      ) : skillsError ? (
         <div className="py-8 text-center text-sm text-osu-f1">{t`Could not load skill ratings. Try again in a bit.`}</div>
       ) : !skills ? (
         /* Shaped like what lands: a keymode strip over one panel, not the

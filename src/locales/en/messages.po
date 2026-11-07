@@ -639,6 +639,11 @@ msgstr "{0} is live"
 msgid "{0} is yours"
 msgstr "{0} is yours"
 
+#. placeholder {0}: user.username
+#: src/routes/player/$username.tsx
+msgid "{0} keeps their skill ratings private."
+msgstr "{0} keeps their skill ratings private."
+
 #. placeholder {0}: shown.rowsLeft
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "{0} left"
@@ -5791,6 +5796,7 @@ msgstr "Can't reach the bot right now. Refresh in a moment."
 
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
+#: src/components/maps/ChartLabelReport.tsx
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -7628,6 +7634,10 @@ msgstr "Could not revoke the connections."
 msgid "Could not save that."
 msgstr "Could not save that."
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Could not save that. Try again in a bit."
+msgstr "Could not save that. Try again in a bit."
+
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "Could not save that. Try again."
@@ -7639,6 +7649,10 @@ msgstr "Could not save the theme."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Could not search collectors. Try again."
 msgstr "Could not search collectors. Try again."
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Could not send it. Try again in a bit."
+msgstr "Could not send it. Try again in a bit."
 
 #: src/routes/report.tsx
 msgid "Could not send that update. Try again."
@@ -9782,6 +9796,7 @@ msgstr "Every tracked player, same odds"
 
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/maps/UserCollectionsSection.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Everyone"
 msgstr "Everyone"
@@ -10222,6 +10237,10 @@ msgstr "File size"
 #: src/routes/skins_.$id.tsx
 msgid "File updated"
 msgstr "File updated"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "filed"
+msgstr "filed"
 
 #: src/lib/bug-report-screenshots.ts
 msgid "Files have to be under 5MB."
@@ -11071,6 +11090,10 @@ msgstr "Gifted on {dateText} by {giverLink}"
 #: src/components/packs/GiftInbox.tsx
 msgid "Gifts ({0})"
 msgstr "Gifts ({0})"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Gimmick"
+msgstr "Gimmick"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Give it a name."
@@ -12140,6 +12163,10 @@ msgstr "I understand"
 msgid "I understand I'm responsible for what I put in my themes, and that one breaking the <0>Terms</0> can be taken down."
 msgstr "I understand I'm responsible for what I put in my themes, and that one breaking the <0>Terms</0> can be taken down."
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "I'm not sure"
+msgstr "I'm not sure"
+
 #: src/components/supporter/loadout.ts
 msgid "Ice fairy"
 msgstr "Ice fairy"
@@ -12804,6 +12831,10 @@ msgstr "Joined <0>{joinedValue}</0>"
 msgid "Joke charts"
 msgstr "Joke charts"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Joke or broken"
+msgstr "Joke or broken"
+
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Journal"
 #~ msgstr "Journal"
@@ -13467,6 +13498,10 @@ msgstr "Less watched"
 msgid "level"
 msgstr "level"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Level"
+msgstr "Level"
+
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "levels"
 msgstr "levels"
@@ -13678,6 +13713,10 @@ msgstr "LN"
 #: src/components/maps/MapDetailModal.tsx
 msgid "LN {0}"
 msgstr "LN {0}"
+
+#: src/components/maps/ChartLabelReport.tsx
+#~ msgid "LN {name}"
+#~ msgstr "LN {name}"
 
 #: src/lib/pattern-labels.ts
 msgid "LN All-round"
@@ -14853,6 +14892,10 @@ msgstr "Method"
 msgid "Metronome"
 msgstr "Metronome"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "mid"
+msgstr "mid"
+
 #: src/routes/replay.tsx
 msgid "Middle lane thumb"
 msgstr "Middle lane thumb"
@@ -15755,6 +15798,10 @@ msgstr "NM is included in mod usage"
 msgid "no"
 msgstr "no"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "No"
+msgstr "No"
+
 #. placeholder {0}: tierLabel(state.tier)
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "No {0} cards left to lay down."
@@ -16491,6 +16538,10 @@ msgstr "No updates match."
 msgid "No wishes yet. Choose a missing player to get started."
 msgstr "No wishes yet. Choose a missing player to get started."
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Nobody"
+msgstr "Nobody"
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Nobody above you on the roster."
 #~ msgstr "Nobody above you on the roster."
@@ -16818,6 +16869,10 @@ msgstr "Not unlocked yet."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note"
 msgstr "Note"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Note (optional)"
+msgstr "Note (optional)"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note color"
@@ -17328,10 +17383,15 @@ msgstr "only admins see this"
 msgid "Only approve a request you started yourself. If someone sent you this link, close it."
 msgstr "Only approve a request you started yourself. If someone sent you this link, close it."
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Only at this rate"
+msgstr "Only at this rate"
+
 #: src/routes/discord.tsx
 msgid "Only channels with something on"
 msgstr "Only channels with something on"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "Only me"
@@ -17418,6 +17478,10 @@ msgstr "Only you can wear it."
 #: src/routes/discord.tsx
 msgid "Only you see the bot's replies to your commands, unless you set hidden to false."
 msgstr "Only you see the bot's replies to your commands, unless you set hidden to false."
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Only you see your skill ratings and dans. You are left out of the skill rankings."
+msgstr "Only you see your skill ratings and dans. You are left out of the skill rankings."
 
 #: src/routes/dan-estimates.tsx
 msgid "Only your best rate play on the same chart counts per ladder, rate reuploads included."
@@ -18870,6 +18934,10 @@ msgstr "Plays are recorded automatically for the top 100 of each country. You're
 msgid "Plays from Mamestagram"
 msgstr "Plays from Mamestagram"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Plays like"
+msgstr "Plays like"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Plays list"
 msgstr "Plays list"
@@ -19286,6 +19354,7 @@ msgstr "Prism rates this section as mashed, since that scores higher than playin
 msgid "privacy"
 msgstr "privacy"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
 #: src/routes/privacy.tsx
 msgid "Privacy"
 msgstr "Privacy"
@@ -20832,6 +20901,10 @@ msgstr "Report {0}"
 msgid "Report a translation"
 msgstr "Report a translation"
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Report a wrong label"
+msgstr "Report a wrong label"
+
 #: src/routes/communities_.$id.tsx
 #: src/routes/report.tsx
 msgid "Report sent"
@@ -20868,6 +20941,10 @@ msgstr "Reported"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Reported. An admin will take a look."
 msgstr "Reported. An admin will take a look."
+
+#: src/components/maps/ChartLabelReport.tsx
+#~ msgid "Reports go into the data the models are tuned on; this chart stays as it is."
+#~ msgstr "Reports go into the data the models are tuned on; this chart stays as it is."
 
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "Representative intervals are shown for each detected pattern."
@@ -21099,6 +21176,7 @@ msgstr "Revoke this connection? It stops submitting right away."
 msgid "rice"
 msgstr "rice"
 
+#: src/components/maps/ChartLabelReport.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Rice"
 msgstr "Rice"
@@ -22043,6 +22121,7 @@ msgstr "Sell"
 msgid "Sells for {sell} shards"
 msgstr "Sells for {sell} shards"
 
+#: src/components/maps/ChartLabelReport.tsx
 #: src/routes/report.tsx
 msgid "Send"
 msgstr "Send"
@@ -22509,6 +22588,14 @@ msgstr "Short rows score x3."
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Shot {0}"
 msgstr "Shot {0}"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Should it be rated?"
+msgstr "Should it be rated?"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Should plays on it count for ratings?"
+msgstr "Should plays on it count for ratings?"
 
 #: src/routes/recommendations.tsx
 msgid "show"
@@ -23162,6 +23249,10 @@ msgstr "Skill rating recalculation pending"
 #: src/routes/player/$username.tsx
 msgid "Skill ratings are unavailable right now."
 msgstr "Skill ratings are unavailable right now."
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Skill ratings visible to"
+msgstr "Skill ratings visible to"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Skill shape: {shape}"
@@ -24120,6 +24211,10 @@ msgstr "Still only"
 #~ msgid "Still out there ({0})"
 #~ msgstr "Still out there ({0})"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+#~ msgid "Still rated, but only you see them. You leave the skill rankings, and nobody else sees your dans."
+#~ msgstr "Still rated, but only you see them. You leave the skill rankings, and nobody else sees your dans."
+
 #. placeholder {0}: player.username
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Stop browsing {0}"
@@ -24865,6 +24960,10 @@ msgstr "Thank you! Sign in and paste the order number from Google's receipt emai
 msgid "Thank you! Your supporter time is on."
 msgstr "Thank you! Your supporter time is on."
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Thanks, noted. Tap the flag to change your answer."
+msgstr "Thanks, noted. Tap the flag to change your answer."
+
 #: src/components/supporter/CustomThemeCredit.tsx
 #: src/routes/workshop.themes.gallery.tsx
 msgid "Thanks, the report was sent."
@@ -25128,6 +25227,10 @@ msgstr "That video is over 2 MB."
 #: src/components/replay/ShareClipButton.tsx
 msgid "That's 10 share links today. Try again tomorrow."
 msgstr "That's 10 share links today. Try again tomorrow."
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "That's a lot of reports for today. Try again tomorrow."
+msgstr "That's a lot of reports for today. Try again tomorrow."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "That's a lot of saves in a minute. Wait a moment and save again."
@@ -27601,8 +27704,13 @@ msgid "Turn left"
 msgstr "Turn left"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Turn off"
 msgstr "Turn off"
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Turn off your skill ratings?"
+msgstr "Turn off your skill ratings?"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn right"
@@ -28012,6 +28120,10 @@ msgstr "up to the chart's level +0.1"
 msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
 msgstr "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
 
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Update"
+msgstr "Update"
+
 #. placeholder {0}: skin.name
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "update {0}"
@@ -28326,6 +28438,10 @@ msgstr "vibro"
 #: src/components/maps/SearchCard.tsx
 msgid "Vibro"
 msgstr "Vibro"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Vibro / mash"
+msgstr "Vibro / mash"
 
 #. placeholder {0}: rate.toFixed(2)
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -28999,6 +29115,10 @@ msgstr "Who"
 msgid "Who can join"
 msgstr "Who can join"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+#~ msgid "Who can see my skill ratings"
+#~ msgstr "Who can see my skill ratings"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Who can wear it"
 msgstr "Who can wear it"
@@ -29148,6 +29268,10 @@ msgstr "With layers"
 #: src/routes/recommendations.tsx
 msgid "with no mods"
 msgstr "with no mods"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Withdraw"
+msgstr "Withdraw"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "within a minute"
@@ -29324,6 +29448,10 @@ msgstr "Y"
 #: src/lib/signature-shared.ts
 msgid "Year"
 msgstr "Year"
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "Yes"
+msgstr "Yes"
 
 #: src/routes/dan-estimates.tsx
 msgid "Yes, this is saragi"
@@ -29609,6 +29737,10 @@ msgstr "You no longer have a copy of this card."
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "You pick where the file is saved."
 #~ msgstr "You pick where the file is saved."
+
+#: src/components/maps/ChartLabelReport.tsx
+msgid "You reported this chart's label"
+msgstr "You reported this chart's label"
 
 #: src/routes/recommendations.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
@@ -30018,6 +30150,14 @@ msgstr "Your plays are being recorded now"
 #~ msgid "Your plays are not being tracked yet"
 #~ msgstr "Your plays are not being tracked yet"
 
+#: src/components/settings/SkillVisibilitySetting.tsx
+#~ msgid "Your plays are not rated at all and nothing shows, not even to you. Switching back rates them again from your plays."
+#~ msgstr "Your plays are not rated at all and nothing shows, not even to you. Switching back rates them again from your plays."
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Your plays are not rated, and nothing shows, not even to you."
+msgstr "Your plays are not rated, and nothing shows, not even to you."
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
 msgstr "Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
@@ -30025,6 +30165,10 @@ msgstr "Your plays aren't being recorded yet because you're not in your country'
 #: src/components/player/FeaturedPlays.tsx
 msgid "Your plays didn't load. Try again."
 msgstr "Your plays didn't load. Try again."
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Your plays stop being rated and your ratings and dans show to nobody, you included. Turning them back on rates your plays again."
+msgstr "Your plays stop being rated and your ratings and dans show to nobody, you included. Turning them back on rates your plays again."
 
 #: src/routes/skins.tsx
 msgid "Your private skins"
@@ -30107,6 +30251,18 @@ msgstr "Your sets"
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "your showcase"
 msgstr "your showcase"
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Your skill ratings and dans show on your profile and in the rankings."
+msgstr "Your skill ratings and dans show on your profile and in the rankings."
+
+#: src/components/settings/SkillVisibilitySetting.tsx
+#~ msgid "Your skill ratings and dans show on your profile, in rankings and everywhere else."
+#~ msgstr "Your skill ratings and dans show on your profile, in rankings and everywhere else."
+
+#: src/routes/player/$username.tsx
+msgid "Your skill ratings are turned off. You can turn them back on in Settings."
+msgstr "Your skill ratings are turned off. You can turn them back on in Settings."
 
 #: src/routes/news_.companella.tsx
 #~ msgid "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
