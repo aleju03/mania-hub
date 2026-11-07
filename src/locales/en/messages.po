@@ -9002,12 +9002,24 @@ msgstr "Drag an .osr here, or click to browse"
 #~ msgstr "Drag cards from the tray, or switch to the brush and draw with them."
 
 #: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around, right-click one of yours to pick it up. Alt-click a pile to see every card in it."
+msgstr "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around, right-click one of yours to pick it up. Alt-click a pile to see every card in it."
+
+#: src/components/packs/collections/board/CardBoard.tsx
 #~ msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
 #~ msgstr "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
 
 #: src/components/packs/collections/board/CardBoard.tsx
-msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
-msgstr "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
+#~ msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
+#~ msgstr "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag over your cards to pick them back up."
+msgstr "Drag over your cards to pick them back up."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag over your cards to pick them back up. Right-click one of your cards to pick up just that one, with any tool."
+msgstr "Drag over your cards to pick them back up. Right-click one of your cards to pick up just that one, with any tool."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag the map's .osz here, or click to browse"
@@ -9477,6 +9489,10 @@ msgstr "Equal chance per map"
 #: src/routes/maps.tsx
 msgid "Equal chance per player"
 msgstr "Equal chance per player"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Eraser"
+msgstr "Eraser"
 
 #: src/routes/recommendations.tsx
 msgid "error"
@@ -19552,6 +19568,10 @@ msgstr "qualified"
 msgid "Qualified"
 msgstr "Qualified"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Quarter turn right"
+msgstr "Quarter turn right"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "queued"
 msgstr "queued"
@@ -27567,6 +27587,14 @@ msgstr "Turn"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Turn a feed on for the current channel (needs Manage Server)."
 #~ msgstr "Turn a feed on for the current channel (needs Manage Server)."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn as one"
+msgstr "Turn as one"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn each"
+msgstr "Turn each"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn left"

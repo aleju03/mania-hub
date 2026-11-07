@@ -384,96 +384,366 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Inferno: a field of cooled black lava running to the horizon, its cracks
-  // glowing orange and breathing hotter and cooler, the far ground lost in a
-  // red haze under a smoky sky; embers drift up out of it at three depths. The
-  // cracks run hotter under the pointer, and the field slides toward the view
-  // as the page scrolls.
+  // Inferno: a lava river winding down a basalt gorge toward the viewer, its
+  // crust cracking into drifting plates, heat haze over it and smoke lit from
+  // below; now and then it spits a spark. The pointer stirs the lava under it.
   inferno: shader(`
-/* Embers at three depths drifting up and swaying, each a hot point with a soft halo, dying as they climb. */
-vec3 embers(vec2 uv, vec2 p, float t, float sc) {
-  vec3 acc = vec3(0.);
-  for (int l = 0; l < 3; l++) {
-    float fl = float(l);
-    float s = 5. + fl * 6.;
-    vec2 e = p * s;
-    e.y -= t * (.35 + fl * .25) + sc * s * .3;
-    e.x += sin(e.y * .6 + t * .8 + fl * 2.) * .35 + (noise(vec2(e.y * .3, fl * 3.)) - .5) * .8;
-    vec2 id = floor(e);
-    vec2 c = fract(e) - .5;
-    float hh = hash(id + fl * 13.);
-    if (hh < .8) continue;
-    vec2 o = c - (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .6;
-    float d = length(o);
-    float r = max(.03, PX * s * 1.6);
-    float core = smoothstep(r, 0., d);
-    float halo = exp(-d * d / (r * r * 14.)) * .35;
-    float flick = .6 + .4 * sin(t * (3. + hash(id + 4.) * 4.) + hh * 30.);
-    float fade = smoothstep(1., .05, uv.y);
-    vec3 ec = mix(vec3(1., .42, .08), vec3(1., .82, .45), hash(id + 6.));
-    acc += ec * (core + halo) * flick * fade * (.45 + fl * .25);
-  }
-  return acc;
-}
-vec3 theme(vec2 uv, vec2 p, float t) {
-  float sc = u_scroll;
-  vec3 col = mix(vec3(.14, .03, .015), vec3(.015, .006, .008), smoothstep(-.25, .5, p.y));
-  float horizon = -.16;
-  vec2 q = vec2(p.x * 1.3, p.y * 1.4 - t * .05 - sc * .3);
-  float smoke = fbm(q * 1.4 + vec2(fbm(q + t * .03), fbm(q + 3.1)) * 1.4);
-  col = mix(col, vec3(.01, .004, .005), smoothstep(.5, .85, smoke) * .5);
-  if (p.y < horizon) {
-    float d = horizon - p.y;
-    // the ground plane: x spreads and depth shrinks toward the horizon
-    vec2 g = vec2(p.x / d, 1. / d) * .3;
-    g.y += t * .04 + sc * .5;
-    float e = voronoiEdge(g * 1.1);
-    float e2 = voronoiEdge(g * 2.9 + 4.);
-    float heat = .55 + .45 * sin(t * .8 + fbm(g * .7) * 6.);
-    heat += .6 * exp(-length(p - pointerP()) * 5.);
-    float seam = smoothstep(.08, 0., e) * heat + smoothstep(.04, 0., e2) * .3 * heat;
-    vec3 rock = vec3(.035, .018, .016) * (.5 + fbm(g * 4.) * .9);
-    vec3 lava = mix(vec3(.85, .16, .03), vec3(1., .72, .28), clamp(seam * seam, 0., 1.));
-    vec3 ground = rock + lava * seam * 1.3;
-    float fog = exp(-d * 5.);
-    col = mix(ground, col + vec3(.45, .1, .02) * .5, fog * .9);
-  }
-  col += vec3(.85, .24, .04) * exp(-abs(p.y - horizon) * 10.) * .35;
-  return col + embers(uv, p, t, sc) * .8;
-}`),
+// Inferno: a lava river in a caldera gorge. Basalt cliffs rise on both
+// sides, lit orange from below, their columns catching the glow; between them
+// a molten river winds toward the viewer under a crust that cracks into
+// plates and drifts, hottest down its middle and slowest at its banks. Heat
+// haze bends the air over it, smoke climbs into a dark sky lit from below,
+// and now and then the crust spits a spark. The pointer stirs the lava under
+// it, opening the cracks.
 
-  // Frost: snow falling in three layers, ice crystals growing in from the
-  // edges, glinting; the frost melts back around the pointer.
-  frost: shader(`
-vec3 theme(vec2 uv, vec2 p, float t) {
-  float sc = u_scroll;
-  vec3 col = mix(vec3(.022, .035, .055), vec3(.065, .095, .13), smoothstep(-.5, .5, p.y));
-  col += vec3(.08, .13, .18) * exp(-length(p - vec2(-.25, .65)) * 1.6);
-  for (int l = 0; l < 3; l++) {
-    float fl = float(l);
-    float s = 26. - fl * 6.;
-    vec2 q = p * s;
-    q.y += t * (.5 + fl * .25) - sc * s * (.15 + fl * .1);
-    q.x += sin(t * .6 + q.y * .3 + fl * 2.) * .5;
-    vec2 id = floor(q);
-    vec2 f = fract(q) - .5;
-    float h = hash(id + fl * 23.);
-    if (h < .66) continue;
-    float d = length(f - (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .6);
-    float r = .035 + .035 * hash(id + 3.);
-    float blur = PX * s * 1.5 + fl * .015;
-    col += vec3(.8, .9, 1.) * smoothstep(r + blur, r - blur * .3, d) * (.3 + fl * .2);
+const float IF_H = .32;   // the eye's height over the lava, in world units
+const float IF_W = .55;   // half the river's width
+
+// the river's middle, across, at a depth
+float ifBend(float z) { return .28 * sin(z * .22 + .6) + .14 * sin(z * .51 + 2.); }
+
+// Broken rock: angular facets, each turned its own way. Returns how lit
+// the facet under x is (by a light from below) and, in crev, how near a
+// crevice between facets is.
+float ifFacets(vec2 x, out float crev) {
+  vec2 n = floor(x), f = fract(x);
+  float m1 = 9., m2 = 9.;
+  float id = 0.;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 c = vec2(float(i), float(j));
+      ivec2 ci = ivec2(n + c);
+      vec2 r = c + vec2(ihash(ci), ihash(ci + ivec2(41, 7))) - f;
+      float d = dot(r, r);
+      if (d < m1) { m2 = m1; m1 = d; id = ihash(ci + ivec2(3, 77)); }
+      else if (d < m2) { m2 = d; }
+    }
   }
-  vec2 e = abs(uv - .5) * 2.;
-  float edge = pow(e.x, 4.) + pow(e.y, 4.);
-  vec2 fp = p + .05 * vec2(fbm(p * 5.), fbm(p * 5. + 3.));
-  float crystals = (1. - smoothstep(0., .05, voronoiEdge(fp * 8.))) * .7 + (1. - smoothstep(0., .04, voronoiEdge(fp * 19. + 4.))) * .45;
-  float mask = smoothstep(.25, 1., edge + .35 * (fbm(p * 3.5) - .5));
-  mask *= smoothstep(.04, .3, length(p - pointerP()));
-  col += vec3(.5, .72, .88) * (crystals * .45 + .08) * mask;
-  col += vec3(.9, .97, 1.) * stars(p, 55., .12, t * 2.) * mask * 1.2;
+  crev = sqrt(m2) - sqrt(m1);
+  return id;
+}
+
+// Smooth noise without a grid: octaves of value noise, each turned its own
+// way, so no square steps show up close to the eye.
+float ifSoft(vec2 x) {
+  return inoise(x) * .5 + inoise(mat2(.8, -.6, .6, .8) * x * 2.1 + 3.1) * .3
+       + inoise(mat2(-.5, -.87, .87, -.5) * x * 4.3 + 7.3) * .2;
+}
+
+// heat to colour: black crust, deep red, orange, yellow, nearly white
+vec3 ifHeat(float h) {
+  h = clamp(h, 0., 1.4);
+  vec3 c = vec3(.9, .1, .02) * smoothstep(0., .35, h);
+  c = mix(c, vec3(1., .42, .06), smoothstep(.3, .7, h));
+  c = mix(c, vec3(1., .78, .3), smoothstep(.65, 1., h));
+  return mix(c, vec3(1., .95, .75), smoothstep(1., 1.4, h));
+}
+
+// The crust: plates of dark skin, irregular and warped, with glowing cracks
+// between them, brighter in some places than others, and finer cracks
+// crazing the plates. x is across the river, y along it; returns the heat.
+float ifCrust(vec2 q, float hot) {
+  vec2 w = q + .7 * vec2(inoise(q * .45), inoise(q * .45 + 5.)) - .35;
+  vec2 n = floor(w), f = fract(w);
+  float m1 = 9., m2 = 9., id = 0.;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 c = vec2(float(i), float(j));
+      ivec2 ci = ivec2(n + c);
+      vec2 r = c + .1 + .8 * vec2(ihash(ci), ihash(ci + ivec2(13, 29))) - f;
+      float d = dot(r, r);
+      if (d < m1) { m2 = m1; m1 = d; id = ihash(ci + ivec2(5, 3)); }
+      else if (d < m2) { m2 = d; }
+    }
+  }
+  float edge = sqrt(m2) - sqrt(m1);
+  // each crack opens wider and burns brighter along some stretches
+  float open = .35 + .65 * inoise(q * 1.3 + 11.);
+  float w0 = (.012 + .07 * hot) * (.5 + open);
+  float crack = smoothstep(w0, w0 * .15, edge) * (.5 + .6 * open);
+  // the plate glows dull red near its edge, where it is thin
+  float glow = exp(-edge * (14. - 6. * hot)) * (.1 + .24 * hot) * (.4 + .6 * open);
+  // fine crazing over the plates
+  float craze = pow(1. - abs(2. * inoise(q * 3.2 + id * 20.) - 1.), 22.) * .4 * (.3 + hot);
+  // here and there a plate has broken up into open melt
+  float melt = smoothstep(.66, .86, inoise(q * .3 + 3.) + hot * .2);
+  float skin = (.015 + .025 * id) * (.6 + .8 * inoise(q * 6.));
+  return max(max(crack * (.75 + .5 * hot), melt * .95), glow + craze + skin);
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float aspect = u_res.x / u_res.y;
+  float sz = mix(.75, 1., smoothstep(.5, 1.4, aspect));
+  vec2 ptr = pointerP();
+
+  // heat haze: the air shimmers, most just over the river near the horizon
+  float h0 = .04 - u_scroll * .08;
+  float hz = exp(-abs(p.y - h0) * 6.) * exp(-abs(p.x) * 1.2);
+  vec2 x = p + (vec2(inoise(p * vec2(9., 5.) - vec2(0., t * 1.3)), inoise(p * vec2(9., 5.) + vec2(4., -t * 1.1))) - .5) * .008 * (.3 + hz);
+
+  // the far glow where the river comes round the bend, out of sight
+  float far = exp(-length((x - vec2(.02, h0)) * vec2(.9, 3.2)) * 2.6);
+
+  // ---- sky and smoke: dark, lit from below ----
+  vec3 col = mix(vec3(.05, .012, .006), vec3(.008, .003, .004), smoothstep(h0, h0 + .5, x.y));
+  vec2 sq = vec2(x.x * 1.2, x.y - t * .03 - u_scroll * .2);
+  float smoke = ifbm(sq * 1.6 + vec2(ifbm(sq * 1.1 + t * .02), ifbm(sq + 5.2)) * 1.3);
+  float lift = smoothstep(h0 + .55, h0 - .05, x.y);
+  col = mix(col, vec3(.004, .002, .002), smoothstep(.45, .8, smoke) * .7);
+  col += vec3(.5, .12, .02) * smoothstep(.4, .75, smoke) * lift * .16;
+  col += vec3(1., .35, .06) * far * .35;
+
+  // ---- the gorge: two cliffs at world x = +-cw, rising to a ragged top ----
+  float side = x.x < 0. ? -1. : 1.;
+  float cw0 = 1.5 * sz;
+  float zc = cw0 / max(abs(x.x), .02);
+  float cw = cw0 + .55 * (inoise(vec2(zc * .45, side * 5.)) - .5) + .2 * (inoise(vec2(zc * 1.7, side * 9.)) - .5);
+  zc = cw / max(abs(x.x), .02);
+  float yGround = h0 - IF_H / zc;
+  float topH = (.55 + .55 * inoise(vec2(zc * .3, side * 3.)) + .22 * inoise(vec2(zc * 1.3, side * 7.)) + .07 * inoise(vec2(zc * 5., side))) * (side < 0. ? 1. : .78);
+  float yTop = h0 + (topH - IF_H) / zc;
+  bool wall = x.y < yTop && x.y > yGround && zc < 40.;
+  if (wall) {
+    // columnar basalt: tall columns side by side, broken across by joints
+    float hgt = (x.y - h0) * zc + IF_H; // height up the wall
+    // basalt: blocks and columns broken from the cliff, taller than wide,
+    // each face lit by how it turns to the river below
+    float crev, crev2;
+    float fa = ifFacets(vec2(zc * 2.1, hgt * 1.15) + side * 9., crev);
+    float fb = ifFacets(vec2(zc * 5.5, hgt * 3.2) + side * 3., crev2);
+    float face = .3 + .7 * fa * (.65 + .35 * fb);
+    float seam = smoothstep(.05, 0., crev) * .4 + smoothstep(.04, 0., crev2) * .15;
+    float joint = 0.;
+    float rough = inoise(vec2(zc * 9., hgt * 7.)) * .5 + inoise(vec2(zc * 23., hgt * 19.)) * .25;
+    vec3 rock = vec3(.02, .013, .012) * (.5 + .8 * rough) * face;
+    // the river's light falls on it from below and fades up the wall and
+    // with distance; a band of reflected glow near the bottom
+    float glow = exp(-hgt * 1.9) * (1. / (1. + zc * .12));
+    rock += vec3(.7, .18, .03) * glow * face * (.45 + .6 * rough) * (1. - .7 * seam);
+    rock += vec3(1., .45, .1) * exp(-hgt * 7.) * .12 * face * (1. / (1. + zc * .2));
+    rock *= 1. - .45 * joint - .55 * seam;
+    // the far walls fade into the smoke
+    float fog = smoothstep(4., 26., zc);
+    rock = mix(rock, col + vec3(.25, .06, .01) * far * .4, fog);
+    // a thin lit lip along the top
+    rock += vec3(.5, .14, .03) * smoothstep(.006, 0., yTop - x.y) * exp(-zc * .08) * .5;
+    col = rock;
+  }
+
+  // ---- the floor of the gorge: banks and the river, in perspective ----
+  if (x.y < h0 && (!wall || x.y < yGround)) {
+    float d = max(h0 - x.y, 1e-4);
+    float z = IF_H / d;
+    float wx = x.x * z;
+    float rx = wx - ifBend(z);
+    // the shore wanders along the river and is ragged across it: lumps of
+    // rock reach into the melt and coves cut back into the rock
+    float bankW = IF_W + .14 * (inoise(vec2(z * 2.6, 2.)) - .5) + .06 * (inoise(vec2(z * 8., 5.)) - .5);
+    float rag = .14 * (ifSoft(vec2(wx, z) * 5.) - .5);
+    float sd = abs(rx) - bankW + rag;
+    float aa = max(z * PX * 1.5, .003);
+    float inRiver = smoothstep(aa, -aa, sd);
+    float u = clamp(rx / bankW, -1., 1.);
+    // hottest and fastest down the middle, near the pointer too
+    float stir = exp(-dot(x - ptr, x - ptr) / .03);
+    // and coolest at the shore, where the crust has thickened
+    float hot = ((1. - u * u) * .6 + .05) * (1. - .9 * smoothstep(-.25, 0., sd)) + stir * .7;
+    // the crust drifts toward the viewer: two copies half a cycle apart,
+    // each sheared by the faster middle and reset while the other shows
+    float vel = .35 * (1. - .5 * u * u);
+    float T = 5.;
+    float pa = fract(t / T), pb = fract(t / T + .5);
+    vec2 cq = vec2(rx * 4.5, z * 2.7);
+    float ca = ifCrust(cq + vec2(0., pa * T * vel * 2.7), hot);
+    float cb = ifCrust(cq + vec2(7.3, pb * T * vel * 2.7 + 3.1), hot);
+    float heat = mix(ca, cb, abs(2. * pa - 1.));
+    // detail fades with distance, into an even glow
+    float fade = smoothstep(14., 3.5, z);
+    heat = mix(.2 + .2 * hot, heat, fade);
+    vec3 lava = ifHeat(heat) * (.1 + .75 * heat) * .8;
+    // the crust itself, dark and rough between the cracks
+    lava += vec3(.03, .012, .008) * (1. - smoothstep(0., .3, heat));
+    // along the shore the crust is thick and cold: the same plates, darker
+    float cool = smoothstep(-.22, 0., sd) * fade;
+    lava *= 1. - .55 * cool;
+    float bd = max(sd, 0.);
+    // the banks: black basalt boulders with hard edges, lit only on the
+    // faces close to the melt, and that light flickers as the crust opens
+    // and closes
+    vec2 gq = vec2(wx, z) * 7.;
+    gq += .8 * vec2(ifSoft(gq * .5), ifSoft(gq * .5 + 4.)) - .4;
+    float bc1;
+    float b1 = ifFacets(gq, bc1);
+    float crevice = smoothstep(.07, 0., bc1) * fade;
+    float bh = mix(.5, b1, fade);
+    vec3 bank = vec3(.012, .008, .007) * (.7 + .5 * bh) * (1. - .5 * crevice);
+    float flick = .8 + .3 * ifSoft(vec2(z * 1.5 - t * .4, t * .6 + sign(rx) * 3.));
+    bank += vec3(.8, .22, .04) * exp(-bd * 9.) * (.25 + .75 * bh) * (1. - .8 * crevice) * .45 * flick;
+    vec3 floorC = mix(bank, lava, inRiver);
+    // distance haze: glowing smoke over the far river
+    float mist = smoothstep(3., 30., z);
+    floorC = mix(floorC, vec3(.55, .14, .03) * (.3 + .7 * far) + col * .5, mist * .85);
+    col = floorC;
+  }
+
+  // the glow hangs in the air over the river
+  col += vec3(.6, .15, .02) * exp(-abs(x.y - h0 + .02) * 9.) * .1 * smoothstep(1.2, 0., abs(x.x));
+
+  // ---- sparks: now and then the crust spits one, which arcs up and cools ----
+  float spark = 0.;
+  vec3 sparkC = vec3(0.);
+  for (int i = 0; i < 9; i++) {
+    float fi = float(i);
+    float h1 = ihash(ivec2(i, 71)), h2 = ihash(ivec2(i, 73)), h3 = ihash(ivec2(i, 79));
+    float period = 2.8 + 3. * h1;
+    float k = floor((t + h2 * 9.) / period);
+    float tau = (t + h2 * 9.) - k * period;
+    float hk = ihash(ivec2(i, int(k) + 300));
+    float life = .9 + .6 * h3;
+    if (tau > life) continue;
+    // where it leaves the river: somewhere along its near half
+    float zs = 1.2 + 4. * hk;
+    float ys = h0 - IF_H / zs;
+    float xs = (ifBend(zs) + (fract(hk * 13.7) - .5) * IF_W * 1.4) / zs;
+    float sc = 1. / zs;
+    vec2 v0 = vec2((fract(hk * 7.1) - .5) * .5, 1.1 + .7 * fract(hk * 3.3)) * sc;
+    vec2 a = vec2(0., -1.6) * sc;
+    vec2 s1 = vec2(xs, ys) + v0 * tau + .5 * a * tau * tau;
+    float tp = max(tau - .05, 0.);
+    vec2 s0 = vec2(xs, ys) + v0 * tp + .5 * a * tp * tp;
+    // a short streak from where it was a moment ago
+    vec2 ab = s1 - s0, ap = x - s0;
+    float hseg = clamp(dot(ap, ab) / max(dot(ab, ab), 1e-8), 0., 1.);
+    float dd = length(ap - ab * hseg);
+    float wdt = max(PX * 1.1, .0022 * sc * 3.);
+    float sp = smoothstep(wdt, 0., dd) * (.4 + .6 * hseg);
+    float cool = tau / life;
+    sp *= 1. - smoothstep(.6, 1., cool);
+    if (sp > spark) { spark = sp; sparkC = ifHeat(1.2 - cool); }
+  }
+  col += sparkC * spark * 1.2;
+
+  // the edges fall into shadow
+  vec2 e = (uv - .5) * 2.;
+  col *= 1. - .45 * pow(clamp(length(e * vec2(.8, 1.)) * .75, 0., 1.), 2.4);
   return col;
-}`),
+}
+`),
+
+  // Frost (Ice cavern): a scalloped glacier wall of deep blue ice, lit
+  // through from behind, icicles dripping and a beam of daylight; the pointer
+  // is a lamp behind the ice.
+  frost: shader(`
+// Ice cavern: inside a glacier cave. The ceiling and wall are blue ice
+// scalloped the way meltwater carves it, daylight coming through where the
+// ice is thin, past bubbles and old strata; icicles grow out of the ceiling's
+// edge, clear ice with freeze rings and a milky core, and now and then one lets
+// a drop fall. A beam of daylight slants in from an opening at the upper
+// right, its light shifting on the wall, ice dust glittering in it. The
+// pointer is a lamp held behind the ice.
+//
+// The still ice is drawn once, offline, by a heavier version of this shader
+// (u_sprite, frost-built.webp: the 2048 x 1152 wall on top, and below it at
+// half size how much the beam and the lamp light each point), stored as
+// square roots so the dark ice keeps its gradations. Here only what moves is
+// drawn, so a slow phone runs it.
+uniform sampler2D u_sprite;
+const float FA = 1.7778;
+// the long icicles' tips on the wall: x, y, how often each drips, when
+const vec4 FTIPS[24] = vec4[24](
+vec4(-0.8781, -0.0726, 10.223, 38.765),
+  vec4(-0.8341, -0.0265, 12.790, 35.902),
+  vec4(-0.7638, 0.0121, 12.248, 37.066),
+  vec4(-0.6349, 0.0769, 7.449, 36.241),
+  vec4(-0.4085, 0.0700, 10.747, 29.208),
+  vec4(-0.3817, 0.0857, 7.834, 25.965),
+  vec4(-0.2807, 0.1137, 5.608, 21.555),
+  vec4(-0.2019, -0.0349, 7.773, 38.193),
+  vec4(-0.1597, 0.0728, 9.717, 28.690),
+  vec4(-0.1266, 0.1223, 8.819, 22.439),
+  vec4(-0.0927, 0.1009, 8.154, 26.149),
+  vec4(0.0152, 0.0931, 8.102, 28.872),
+  vec4(0.1004, 0.0002, 12.314, 38.378),
+  vec4(0.1878, 0.1970, 5.758, 18.075),
+  vec4(0.3137, 0.0713, 11.430, 37.268),
+  vec4(0.4054, 0.1648, 6.275, 31.602),
+  vec4(0.4490, 0.0982, 8.697, 39.849),
+  vec4(0.4903, 0.2420, 10.360, 26.384),
+  vec4(0.5170, 0.2370, 7.415, 28.718),
+  vec4(0.6282, 0.2381, 8.425, 33.452),
+  vec4(0.7137, 0.2174, 12.708, 37.870),
+  vec4(0.7443, 0.2782, 10.994, 29.988),
+  vec4(0.7782, 0.3207, 10.324, 21.401),
+  vec4(0.8010, 0.2972, 6.130, 26.956));
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float aspect = u_res.x / u_res.y;
+  // the wall, cover-fitted; a narrow screen sees a window toward the right,
+  // where the opening and the longest icicles are. It leans a little with
+  // the pointer and the page.
+  float ph = max(1., aspect / FA);
+  float hw = .5 * aspect / (FA * ph);
+  float cx = clamp(.6, hw, 1. - hw);
+  vec2 ptr = pointerP();
+  vec2 f = vec2(p.x / (FA * ph), p.y / ph) + vec2(cx, .5) + ptr * .004 + vec2(0., min(u_scroll, 3.) * .006);
+  f = clamp(f, .001, .999);
+  float ty = 1. - f.y;
+  float tl = (1152. + min(ty * 576., 575.)) / 1728.;
+  vec3 col = texture(u_sprite, vec2(f.x, ty * (1152. / 1728.))).rgb;
+  vec3 lit = texture(u_sprite, vec2(f.x * .5, tl)).rgb;
+  vec3 lamp = texture(u_sprite, vec2(.5 + f.x * .5, tl)).rgb;
+  col *= col;
+  lit *= lit;
+  lamp *= lamp;
+  // the wall's own space: centred, in its heights
+  vec2 x = (f - .5) * vec2(FA, 1.);
+  float px = PX / ph;
+  vec3 pale = vec3(.75, .94, 1.);
+
+  // clouds passing over the opening dim and brighten the beam; where it
+  // lands the light shifts a little, as if through moving meltwater
+  float sky = .8 + .2 * sin(t * .21) * sin(t * .13 + 1.);
+  float rip = inoise(x * 9. + vec2(t * .3, -t * .2));
+  col += lit * sky * (.75 + .6 * rip);
+  // the lamp behind the ice
+  vec2 hp = p - ptr;
+  col += lamp * exp(-dot(hp, hp) / .04);
+
+  // the beam in the air: shafts drifting in a haze, ice dust glittering
+  vec2 bo = vec2(.33 * FA, .56);
+  vec2 bq = x - bo;
+  float along = dot(bq, vec2(-.4472, -.8944));
+  float across = dot(bq, vec2(.8944, -.4472));
+  float bw = .04 + .14 * max(along, 0.);
+  float beam = exp(-across * across / (bw * bw)) * smoothstep(-.06, .12, along) * exp(-max(along, 0.) * .9) * sky;
+  float shafts = .55 + .45 * inoise(vec2(across / bw * 3.5 + 2., t * .06));
+  float haze = .8 + .2 * inoise(vec2(along * 3. - t * .15, across * 8.));
+  float nearOpen = exp(-length(bq * vec2(.6, 1.)) * 1.3);
+  vec3 air = vec3(.16, .34, .46) * beam * 1.25 * haze * shafts + vec3(.2, .4, .5) * nearOpen * .06 * sky;
+  if (beam > .01) air += pale * stars(x + vec2(t * .006, t * .012), 80., .14, t * 3.) * beam * 2.4;
+
+  // the drops: one swells at a tip, lets go and falls
+  float drip = 0.;
+  for (int i = 0; i < 24; i++) {
+    vec4 tp = FTIPS[i];
+    if (abs(x.x - tp.x) > .008) continue;
+    float at = mod(t + tp.w, tp.z);
+    float grow = smoothstep(0., 3., at);
+    float fall = max(at - 3., 0.);
+    float dr = .0025 + .0025 * grow;
+    vec2 dq = vec2(x.x - tp.x, (x.y - tp.y + .004 * grow + 1.5 * fall * fall) * (fall > 0. ? .6 : 1.));
+    float drop = smoothstep(dr + px, dr - px, length(dq));
+    drip = max(drip, drop * (.45 + .55 * smoothstep(dr, -dr, dq.x - dq.y)));
+  }
+  air += pale * drip * (.45 + .6 * beam + .3 * nearOpen);
+
+  // the same shadows the wall was drawn with: the edges, the left, the floor
+  vec2 e = (f - .5) * 2.;
+  float shade = (1. - .55 * pow(clamp(length(e * vec2(.85, 1.)) * .75, 0., 1.), 2.4))
+    * mix(.5, 1., smoothstep(-1., .5, x.x / FA * 1.4 + .25)) * mix(.55, 1., smoothstep(-.55, -.1, x.y));
+  return col + air * shade;
+}
+`),
 
   // Note highway: an osu!mania playfield in perspective, notes streaming down
   // the lanes and lighting the keys as they land; it leans after the pointer.

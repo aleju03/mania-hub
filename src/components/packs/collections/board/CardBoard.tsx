@@ -1,5 +1,5 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { Brush, Expand, Flag, Grid3x3, Hand, Layers, Link2, LocateFixed, Minus, Plus, Redo2, RotateCcw, RotateCw, Shrink, SquareDashedMousePointer, Trash2, Undo2, X, ZoomOut } from "lucide-react";
+import { Brush, Eraser, Expand, Flag, Grid3x3, Hand, Layers, Link2, LocateFixed, Minus, Plus, Redo2, RotateCcw, RotateCw, Shrink, SquareDashedMousePointer, Trash2, Undo2, X, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "#/lib/auth-context";
 import { DEFAULT_COUNTRY_CODE } from "#/lib/country";
@@ -79,6 +79,7 @@ export function CardBoard({ at }: { at?: string }) {
   const [brushScale, setBrushScale] = useState(0.7);
   const [follow, setFollow] = useState(false);
   const [grid, setGrid] = useState(false);
+  const [turnEach, setTurnEach] = useState(false);
   /* The cards under a spot (Alt-click, or a long press), listed top first,
      and the view they were listed in: moving the view closes the list. */
   const [stack, setStack] = useState<{ cards: BoardCard[]; x: number; y: number; reach: number; w: number; h: number } | null>(null);
@@ -504,8 +505,9 @@ export function CardBoard({ at }: { at?: string }) {
     engine.brush.follow = follow;
     engine.brush.tint = tint;
     engine.brush.grid = grid;
+    engine.turnEach = turnEach;
     engine.repaint();
-  }, [engine, tool, brushScale, follow, tint, grid]);
+  }, [engine, tool, brushScale, follow, tint, grid, turnEach]);
 
   // whatever is still unsent goes out when the page is left
   useEffect(() => {
@@ -677,8 +679,15 @@ export function CardBoard({ at }: { at?: string }) {
     </>
   ) : ownSelection.length ? (
     <div className="flex items-center gap-1">
+      {ownSelection.length > 1 ? (
+        <div className="mr-1 flex rounded-lg bg-black/20 p-0.5">
+          <ToolButton active={!turnEach} onClick={() => setTurnEach(false)} label={t`Turn as one`}>{null}</ToolButton>
+          <ToolButton active={turnEach} onClick={() => setTurnEach(true)} label={t`Turn each`}>{null}</ToolButton>
+        </div>
+      ) : null}
       <IconButton label={t`Turn left`} onClick={() => engine?.nudgeSelected(-8, 0)}><RotateCcw size={15} /></IconButton>
       <IconButton label={t`Turn right`} onClick={() => engine?.nudgeSelected(8, 0)}><RotateCw size={15} /></IconButton>
+      <IconButton label={t`Quarter turn right`} onClick={() => engine?.nudgeSelected(64, 0)}><span className="text-[10px] font-bold tabular-nums">90°</span></IconButton>
       <label className="flex items-center gap-2 px-1 text-xs text-osu-f1" title={t`Size`}>
         <Minus size={13} aria-hidden />
         <input
@@ -726,13 +735,17 @@ export function CardBoard({ at }: { at?: string }) {
     </div>
   ) : (
     <span className="line-clamp-2 whitespace-normal text-xs leading-snug text-osu-f1 max-md:w-full">
-      {tool === "select"
+      {tool === "erase"
+        ? touch
+          ? t`Drag over your cards to pick them back up.`
+          : t`Drag over your cards to pick them back up. Right-click one of your cards to pick up just that one, with any tool.`
+        : tool === "select"
         ? t`Drag a box round your cards or tap them one by one, then drag one to move them all.`
         : touch && sheetTray
           ? t`Tap Cards to lay one down, tap one of yours to edit it, and hold a pile to see every card in it.`
           : touch
             ? t`Tap a card in the tray to lay it down, tap one of yours to edit it, and hold a pile to see every card in it.`
-            : t`Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it.`}
+            : t`Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around, right-click one of yours to pick it up. Alt-click a pile to see every card in it.`}
     </span>
   );
 
@@ -808,6 +821,7 @@ export function CardBoard({ at }: { at?: string }) {
               <ToolButton compact={narrow} active={tool === "move"} onClick={() => setTool("move")} label={t`Move`}><Hand size={15} /></ToolButton>
               {touch ? <ToolButton compact={narrow} active={tool === "select"} onClick={() => setTool("select")} label={t`Select`}><SquareDashedMousePointer size={15} /></ToolButton> : null}
               <ToolButton compact={narrow} active={tool === "brush"} onClick={() => setTool("brush")} label={t`Brush`}><Brush size={15} /></ToolButton>
+              <ToolButton compact={narrow} active={tool === "erase"} onClick={() => setTool("erase")} label={t`Eraser`}><Eraser size={15} /></ToolButton>
             </div>
           ) : null}
           {editing ? (

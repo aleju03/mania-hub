@@ -293,8 +293,9 @@ function shadow(lod: number, tint = 0): HTMLCanvasElement {
 /* ---------- engine ---------- */
 
 /* "select" is for touch, where a finger on empty board moves the view: with
-   it, a finger drags out a box and a tap adds a card to the selection. */
-export type BoardTool = "move" | "brush" | "select";
+   it, a finger drags out a box and a tap adds a card to the selection.
+   "erase" picks up the viewer's cards it is dragged over. */
+export type BoardTool = "move" | "brush" | "select" | "erase";
 
 export interface BoardEngineOptions {
   /* The viewer's user id when they can lay cards down, else null. */
@@ -355,6 +356,7 @@ interface Region {
 
 /* cells: on the grid, the cells this stroke has dealt into */
 type Brush = { kind: "brush"; lastX: number; lastY: number; carry: number; changes: Change[]; cells: Set<string> };
+type Erase = { kind: "erase"; lastX: number; lastY: number; changes: Change[] };
 type Gesture =
   | { kind: "pan"; startX: number; startY: number; camX: number; camY: number }
   | { kind: "drag"; cards: { card: BoardCard; before: CardState }[]; lastX: number; lastY: number; moved: boolean; lead: BoardCard; startX: number; startY: number; untap?: BoardCard }
@@ -362,6 +364,7 @@ type Gesture =
   | { kind: "turn"; card: BoardCard; before: CardState; startAngle: number; startR: number }
   | { kind: "size"; card: BoardCard; before: CardState; startDist: number; startS: number }
   | Brush
+  | Erase
   | { kind: "pinch"; dist: number; midX: number; midY: number; camX: number; camY: number; z: number };
 
 const HISTORY_LIMIT = 60;
@@ -376,6 +379,9 @@ const TURN_REACH = 22;
 
 export class BoardEngine {
   tool: BoardTool = "move";
+  /* A selection of several cards turns each card where it lies, rather than
+     the whole as one piece. */
+  turnEach = false;
   /* A finger is wider than a mouse pointer: the turn and size handles are
      drawn bigger, reach further from the card and are easier to hit. */
   private readonly coarse = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -447,6 +453,9 @@ export class BoardEngine {
   private marquee: { x0: number; y0: number; x1: number; y1: number } | null = null;
   private gesture: Gesture | null = null;
   private pointers = new Map<number, { x: number; y: number }>();
+  /* Where a right button went down: let go without dragging, and it picks up
+     the viewer's card under it; dragged, it only moved the view. */
+  private rightDown: { x: number; y: number } | null = null;
   private spaceHeld = false;
   private undoStack: Change[][] = [];
   private redoStack: Change[][] = [];
@@ -855,7 +864,8 @@ export class BoardEngine {
     cy /= cards.length || 1;
     const angle = (turn / 256) * TURN;
     const cos = Math.cos(angle), sin = Math.sin(angle);
-    const group = cards.length > 1 && turn !== 0;
+    // turned as one piece round its middle, or each card where it lies
+    const group = cards.length > 1 && turn !== 0 && !this.turnEach;
     this.commit(cards.map((card) => {
       const before = stateOf(card);
       const dx = before.x - cx, dy = before.y - cy;
@@ -1673,6 +1683,7 @@ export class BoardEngine {
     const pan = () => {
       this.gesture = { kind: "pan", startX: e.clientX, startY: e.clientY, camX: this.cam.x, camY: this.cam.y };
     };
+    if (e.button === 2) this.rightDown = { x: e.clientX, y: e.clientY };
     if (e.button === 1 || e.button === 2 || this.spaceHeld) return pan();
     const [x, y] = this.toWorld(e.clientX, e.clientY);
     // too far out to see single cards: the board only moves
@@ -1685,6 +1696,13 @@ export class BoardEngine {
       this.gesture = handle === "turn"
         ? { kind: "turn", card, before, startAngle: Math.atan2(y - card.y, x - card.x), startR: card.r }
         : { kind: "size", card, before, startDist: Math.max(4, Math.hypot(x - card.x, y - card.y)), startS: card.s };
+      return;
+    }
+    if (this.tool === "erase") {
+      this.setSelection([]);
+      const erase: Erase = { kind: "erase", lastX: x, lastY: y, changes: [] };
+      this.gesture = erase;
+      this.eraseAlong(erase, x, y);
       return;
     }
     if (this.tool === "brush") {
@@ -1805,12 +1823,18 @@ export class BoardEngine {
       case "brush":
         this.deal(gesture.lastX, gesture.lastY, x, y);
         return;
+      case "erase":
+        this.eraseAlong(gesture, x, y);
+        return;
     }
   }
 
   private up(e: PointerEvent) {
     this.pointers.delete(e.pointerId);
     this.cancelPress();
+    const right = e.button === 2 ? this.rightDown : null;
+    if (e.button === 2) this.rightDown = null;
+    if (right && Math.hypot(e.clientX - right.x, e.clientY - right.y) <= PRESS_SLOP) this.pickUpAt(e.clientX, e.clientY);
     if (this.gesture?.kind === "pinch") {
       // the finger left behind carries on as a pan, not a jump
       const rest = [...this.pointers.values()][0];
@@ -1849,7 +1873,38 @@ export class BoardEngine {
       this.endMarquee(gesture.additive);
     } else if (gesture.kind === "brush") {
       this.endStroke(gesture);
+    } else if (gesture.kind === "erase") {
+      // the cards are already off the table; this records the step
+      if (gesture.changes.length) this.remember(gesture.changes);
     }
+  }
+
+  /* A right-click: the viewer's topmost card under the pointer comes off. */
+  private pickUpAt(clientX: number, clientY: number) {
+    if (this.options.me == null || this.cam.z < TILE_ZOOM) return;
+    const [x, y] = this.toWorld(clientX, clientY);
+    const card = this.cardAt(x, y, true);
+    if (card) this.commit([{ n: card.n, before: stateOf(card), after: null }]);
+  }
+
+  /* The eraser picks up every one of the viewer's cards along its path,
+     straight away, so the stroke shows what it has taken. */
+  private eraseAlong(gesture: Erase, x: number, y: number) {
+    const dist = Math.hypot(x - gesture.lastX, y - gesture.lastY);
+    const steps = Math.max(1, Math.ceil(dist / (CARD_W * .25)));
+    for (let i = 1; i <= steps; i++) {
+      const px = gesture.lastX + ((x - gesture.lastX) * i) / steps;
+      const py = gesture.lastY + ((y - gesture.lastY) * i) / steps;
+      for (let k = 0; k < 16; k++) {
+        const card = this.cardAt(px, py, true);
+        if (!card) break;
+        const change: Change = { n: card.n, before: stateOf(card), after: null };
+        this.apply([change], false);
+        gesture.changes.push(change);
+      }
+    }
+    gesture.lastX = x;
+    gesture.lastY = y;
   }
 
   private endStroke(gesture: Brush) {

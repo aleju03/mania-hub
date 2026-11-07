@@ -8975,12 +8975,24 @@ msgstr "Arrastra un .osr aquí o haz clic para explorar"
 #~ msgstr "Arrastra cartas desde la bandeja, o cambia al pincel y dibuja con ellas."
 
 #: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around, right-click one of yours to pick it up. Alt-click a pile to see every card in it."
+msgstr ""
+
+#: src/components/packs/collections/board/CardBoard.tsx
 #~ msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around."
 #~ msgstr "Arrastra cartas desde la bandeja. Arrastra sobre el tablero para seleccionar tus cartas, clic derecho y arrastra para moverte."
 
 #: src/components/packs/collections/board/CardBoard.tsx
-msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
-msgstr "Arrastra cartas desde la bandeja. Arrastra sobre el tablero para seleccionar tus cartas, clic derecho y arrastra para moverte. Alt+clic en una pila para ver todas sus cartas."
+#~ msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around. Alt-click a pile to see every card in it."
+#~ msgstr "Arrastra cartas desde la bandeja. Arrastra sobre el tablero para seleccionar tus cartas, clic derecho y arrastra para moverte. Alt+clic en una pila para ver todas sus cartas."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag over your cards to pick them back up."
+msgstr ""
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag over your cards to pick them back up. Right-click one of your cards to pick up just that one, with any tool."
+msgstr ""
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag the map's .osz here, or click to browse"
@@ -9450,6 +9462,10 @@ msgstr "Misma probabilidad por mapa"
 #: src/routes/maps.tsx
 msgid "Equal chance per player"
 msgstr "Misma probabilidad por jugador"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Eraser"
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "error"
@@ -19513,6 +19529,10 @@ msgstr "calificado"
 msgid "Qualified"
 msgstr "Calificado"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Quarter turn right"
+msgstr ""
+
 #: src/components/player/AddScoreModal.tsx
 msgid "queued"
 msgstr "en cola"
@@ -27512,6 +27532,14 @@ msgstr ""
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Turn a feed on for the current channel (needs Manage Server)."
 #~ msgstr "Activa un feed para el canal actual (requiere Administrar servidor)."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn as one"
+msgstr ""
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Turn each"
+msgstr ""
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn left"
