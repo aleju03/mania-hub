@@ -292,7 +292,9 @@ function shadow(lod: number, tint = 0): HTMLCanvasElement {
 
 /* ---------- engine ---------- */
 
-export type BoardTool = "move" | "brush";
+/* "select" is for touch, where a finger on empty board moves the view: with
+   it, a finger drags out a box and a tap adds a card to the selection. */
+export type BoardTool = "move" | "brush" | "select";
 
 export interface BoardEngineOptions {
   /* The viewer's user id when they can lay cards down, else null. */
@@ -355,7 +357,7 @@ interface Region {
 type Brush = { kind: "brush"; lastX: number; lastY: number; carry: number; changes: Change[]; cells: Set<string> };
 type Gesture =
   | { kind: "pan"; startX: number; startY: number; camX: number; camY: number }
-  | { kind: "drag"; cards: { card: BoardCard; before: CardState }[]; lastX: number; lastY: number; moved: boolean; lead: BoardCard; startX: number; startY: number }
+  | { kind: "drag"; cards: { card: BoardCard; before: CardState }[]; lastX: number; lastY: number; moved: boolean; lead: BoardCard; startX: number; startY: number; untap?: BoardCard }
   | { kind: "marquee"; additive: boolean }
   | { kind: "turn"; card: BoardCard; before: CardState; startAngle: number; startR: number }
   | { kind: "size"; card: BoardCard; before: CardState; startDist: number; startS: number }
@@ -374,6 +376,11 @@ const TURN_REACH = 22;
 
 export class BoardEngine {
   tool: BoardTool = "move";
+  /* A finger is wider than a mouse pointer: the turn and size handles are
+     drawn bigger, reach further from the card and are easier to hit. */
+  private readonly coarse = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  private get handleRadius() { return this.coarse ? 11 : HANDLE; }
+  private get turnReach() { return this.coarse ? 36 : TURN_REACH; }
   /* The brush; its tint also colours cards laid from the tray, and with grid
      on, every card laid or moved lands upright in a cell of the snap grid. */
   brush = { scale: 0.7, follow: false, tint: 0, grid: false };
@@ -1548,16 +1555,16 @@ export class BoardEngine {
     g.roundRect(-w / 2, -h / 2, w, h, 6 * this.dpr);
     g.stroke();
     if (!mine || !handles) return;
-    const handle = HANDLE * this.dpr;
+    const handle = this.handleRadius * this.dpr;
     g.fillStyle = "#ff66ab";
     g.strokeStyle = "#fff";
     g.lineWidth = 1.5 * this.dpr;
     // turn handle above the top edge, size handle on the bottom-right corner
     g.beginPath();
     g.moveTo(0, -h / 2);
-    g.lineTo(0, -h / 2 - TURN_REACH * this.dpr);
+    g.lineTo(0, -h / 2 - this.turnReach * this.dpr);
     g.stroke();
-    for (const [x, y] of [[0, -h / 2 - TURN_REACH * this.dpr], [w / 2, h / 2]]) {
+    for (const [x, y] of [[0, -h / 2 - this.turnReach * this.dpr], [w / 2, h / 2]]) {
       g.beginPath();
       g.arc(x, y, handle, 0, TURN);
       g.fill();
@@ -1614,8 +1621,8 @@ export class BoardEngine {
     const w = CARD_W * card.sc * this.cam.z + 6;
     const h = CARD_H * card.sc * this.cam.z + 6;
     const at = (lx: number, ly: number): [number, number] => [cx + lx * card.cos - ly * card.sin, cy + lx * card.sin + ly * card.cos];
-    const near = ([x, y]: [number, number]) => Math.hypot(px - x, py - y) <= HANDLE + 6;
-    if (near(at(0, -h / 2 - TURN_REACH))) return "turn";
+    const near = ([x, y]: [number, number]) => Math.hypot(px - x, py - y) <= this.handleRadius + (this.coarse ? 14 : 6);
+    if (near(at(0, -h / 2 - this.turnReach))) return "turn";
     if (near(at(w / 2, h / 2))) return "size";
     return null;
   }
@@ -1651,7 +1658,7 @@ export class BoardEngine {
       this.openStack(e.clientX, e.clientY);
       return;
     }
-    if (e.pointerType === "touch" && this.tool !== "brush" && this.cam.z >= TILE_ZOOM) {
+    if (e.pointerType === "touch" && this.tool === "move" && this.cam.z >= TILE_ZOOM) {
       const { clientX, clientY } = e;
       this.press = {
         x: clientX,
@@ -1687,17 +1694,27 @@ export class BoardEngine {
       return;
     }
     const card = this.cardAt(x, y, true);
+    // the select tool adds to the selection the way Shift does
+    const additive = e.shiftKey || this.tool === "select";
     if (!card) {
       // an admin's click on someone else's card picks it, for taking it off
       const other = this.options.canModerate && this.cam.z >= TILE_ZOOM ? this.cardAt(x, y, false) : null;
-      if (!e.shiftKey) this.setSelection(other ? [other] : []);
-      // a mouse drags out a box to select with; a finger moves the view
-      if (e.pointerType !== "mouse") return pan();
+      if (!additive) this.setSelection(other ? [other] : []);
+      // a mouse drags out a box to select with; a finger moves the view,
+      // unless the select tool is on
+      if (e.pointerType !== "mouse" && this.tool !== "select") return pan();
       this.marquee = { x0: x, y0: y, x1: x, y1: y };
-      this.gesture = { kind: "marquee", additive: e.shiftKey };
+      this.gesture = { kind: "marquee", additive };
       return;
     }
-    if (e.shiftKey) {
+    if (additive && this.tool === "select" && this.selection.has(card)) {
+      // a tap on a selected card takes it out; a drag on it moves them all
+      const cards = this.ownSelection().map((held) => ({ card: held, before: stateOf(held) }));
+      this.lift(cards.map((held) => held.card));
+      this.gesture = { kind: "drag", cards, lastX: x, lastY: y, moved: false, lead: card, startX: x, startY: y, untap: card };
+      return;
+    }
+    if (additive) {
       // shift-click adds a card to the selection or takes it back out
       const next = new Set([...this.selection].filter((held) => held.owner === this.options.me));
       if (next.has(card)) next.delete(card);
@@ -1826,6 +1843,7 @@ export class BoardEngine {
       this.active = [];
       if (full) this.options.onRefused?.(this.refusedFor);
       if (gesture.kind !== "drag" || gesture.moved) this.commit(changes.filter((change) => change.after !== change.before));
+      else if (gesture.untap) this.setSelection([...this.selection].filter((card) => card !== gesture.untap && card.owner === this.options.me));
       else this.touch();
     } else if (gesture.kind === "marquee") {
       this.endMarquee(gesture.additive);

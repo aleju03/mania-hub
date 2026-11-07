@@ -742,6 +742,12 @@ msgstr "{0} de {1}"
 msgid "{0} of {1} albums"
 msgstr "{0} de {1} álbumes"
 
+#. placeholder {0}: formatNumber(count)
+#. placeholder {1}: formatNumber(cap)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{0} of {1} laid down"
+msgstr ""
+
 #. placeholder {0}: snapshot.countedMembers
 #. placeholder {1}: snapshot.memberCount
 #: src/components/team/TeamProfilePage.tsx
@@ -5888,6 +5894,7 @@ msgstr "Nivel de la carta"
 msgid "cards"
 msgstr "cartas"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Cards"
 msgstr "Cartas"
@@ -8951,6 +8958,10 @@ msgstr "Downscroll"
 msgid "Draft autosaves locally"
 msgstr "El borrador se guarda automáticamente en este navegador"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag a box round your cards or tap them one by one, then drag one to move them all."
+msgstr ""
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "Drag a page or swipe to flip"
 msgstr "Arrastra una página o desliza para pasarla"
@@ -10818,6 +10829,10 @@ msgstr "Play completa"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Full profile card with ranks, pp and top plays. The username is optional once you link."
 #~ msgstr "Carta de perfil completa con ranks, pp y top plays. El nombre de usuario es opcional una vez que vinculas tu cuenta."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Full screen"
+msgstr ""
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Full width"
@@ -13290,6 +13305,10 @@ msgstr "Cuero"
 #: src/components/communities/CommunityEditModal.tsx
 msgid "leave empty to keep the current one"
 msgstr "déjalo vacío para conservar el actual"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Leave full screen"
+msgstr ""
 
 #: src/routes/packs.tsx
 #~ msgid "Leave the game"
@@ -21894,6 +21913,7 @@ msgstr "Ver tus cartas"
 #~ msgstr "Para avanzar fuera del preview se necesita la canción completa."
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 msgid "Select"
 msgstr "Seleccionar"
 
@@ -24536,6 +24556,10 @@ msgstr "Quitado de la lista"
 msgid "Tap a card for {0}"
 msgstr "Toca una carta para {0}"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Tap a card in the tray to lay it down, tap one of yours to edit it, and hold a pile to see every card in it."
+msgstr ""
+
 #. placeholder {0}: chainModLook(shown.mods[modPick], i18n).name
 #: src/components/packs/run/chain/ChainTable.tsx
 #~ msgid "Tap a card in your hand for {0}"
@@ -24544,6 +24568,10 @@ msgstr "Toca una carta para {0}"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
 msgstr "Toca un keymode para alternar su etiqueta."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Tap Cards to lay one down, tap one of yours to edit it, and hold a pile to see every card in it."
+msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "tap one to preview its reply"
@@ -29660,6 +29688,10 @@ msgstr "Tu carta todavía no está lista."
 #: src/components/packs/ReleaseCopyDialog.tsx
 msgid "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
 msgstr "Tu nivel de carta se va con ella. Quien saque este número queda en nivel {carriedLevel} y tú bajas a nivel {levelLeft}."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Your cards"
+msgstr ""
 
 #. placeholder {0}: (nextPlace.current - 1) % places.length + 1
 #. placeholder {1}: places.length

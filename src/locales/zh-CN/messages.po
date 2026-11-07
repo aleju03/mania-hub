@@ -754,6 +754,12 @@ msgstr "第 {0} / {1}"
 msgid "{0} of {1} albums"
 msgstr "{1} 个卡册中的 {0} 个"
 
+#. placeholder {0}: formatNumber(count)
+#. placeholder {1}: formatNumber(cap)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{0} of {1} laid down"
+msgstr ""
+
 #. placeholder {0}: snapshot.countedMembers
 #. placeholder {1}: snapshot.memberCount
 #: src/components/team/TeamProfilePage.tsx
@@ -5900,6 +5906,7 @@ msgstr "卡片稀有度"
 msgid "cards"
 msgstr "卡片"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Cards"
 msgstr "卡片"
@@ -8963,6 +8970,10 @@ msgstr "下落式"
 msgid "Draft autosaves locally"
 msgstr "草稿会自动保存在本地"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag a box round your cards or tap them one by one, then drag one to move them all."
+msgstr ""
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "Drag a page or swipe to flip"
 msgstr "拖动书页或滑动来翻页"
@@ -10830,6 +10841,10 @@ msgstr "完整成绩"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Full profile card with ranks, pp and top plays. The username is optional once you link."
 #~ msgstr "完整的个人资料卡，包含排名、pp 和最佳成绩。关联账号后用户名可以省略。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Full screen"
+msgstr ""
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Full width"
@@ -13302,6 +13317,10 @@ msgstr "皮革"
 #: src/components/communities/CommunityEditModal.tsx
 msgid "leave empty to keep the current one"
 msgstr "留空则保留当前链接"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Leave full screen"
+msgstr ""
 
 #: src/routes/packs.tsx
 #~ msgid "Leave the game"
@@ -21906,6 +21925,7 @@ msgstr "查看你抽到的卡"
 #~ msgstr "跳转到试听片段以外的位置需要完整歌曲。"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 msgid "Select"
 msgstr "选择"
 
@@ -24548,6 +24568,10 @@ msgstr "已下架"
 msgid "Tap a card for {0}"
 msgstr "点一张卡来用 {0}"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Tap a card in the tray to lay it down, tap one of yours to edit it, and hold a pile to see every card in it."
+msgstr ""
+
 #. placeholder {0}: chainModLook(shown.mods[modPick], i18n).name
 #: src/components/packs/run/chain/ChainTable.tsx
 #~ msgid "Tap a card in your hand for {0}"
@@ -24556,6 +24580,10 @@ msgstr "点一张卡来用 {0}"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
 msgstr "点击键数即可切换它的标签。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Tap Cards to lay one down, tap one of yours to edit it, and hold a pile to see every card in it."
+msgstr ""
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "tap one to preview its reply"
@@ -29672,6 +29700,10 @@ msgstr "你的卡片还没准备好。"
 #: src/components/packs/ReleaseCopyDialog.tsx
 msgid "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
 msgstr "你的卡牌等级会随它一起转移。拿到这个编号的人会获得 {carriedLevel} 级，你会降到 {levelLeft} 级。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Your cards"
+msgstr ""
 
 #. placeholder {0}: (nextPlace.current - 1) % places.length + 1
 #. placeholder {1}: places.length

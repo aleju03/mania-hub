@@ -21,7 +21,9 @@ export const BoardMinimap = forwardRef<BoardMinimapHandle, {
   regions: () => [number, number][];
   /* The regions the viewer's own cards are in. */
   mine: () => Iterable<number>;
-}>(function BoardMinimap({ engine, regions, mine }, ref) {
+  /* Where it sits over the board. */
+  className?: string;
+}>(function BoardMinimap({ engine, regions, mine, className = "bottom-7 right-3" }, ref) {
   const { t } = useLingui();
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState(SIZE);
@@ -91,7 +93,7 @@ export const BoardMinimap = forwardRef<BoardMinimapHandle, {
       aria-label={t`Board map`}
       title={t`Board map`}
       style={{ width: size, height: size }}
-      className="absolute bottom-7 right-3 cursor-pointer rounded-md shadow-lg"
+      className={`absolute ${className} touch-none cursor-pointer rounded-md shadow-lg`}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
         jump(event);

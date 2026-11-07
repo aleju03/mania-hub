@@ -742,6 +742,12 @@ msgstr "{0} of {1}"
 msgid "{0} of {1} albums"
 msgstr "{0} of {1} albums"
 
+#. placeholder {0}: formatNumber(count)
+#. placeholder {1}: formatNumber(cap)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "{0} of {1} laid down"
+msgstr "{0} of {1} laid down"
+
 #. placeholder {0}: snapshot.countedMembers
 #. placeholder {1}: snapshot.memberCount
 #: src/components/team/TeamProfilePage.tsx
@@ -5915,6 +5921,7 @@ msgstr "Card tier"
 msgid "cards"
 msgstr "cards"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Cards"
 msgstr "Cards"
@@ -8978,6 +8985,10 @@ msgstr "Downscroll"
 msgid "Draft autosaves locally"
 msgstr "Draft autosaves locally"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Drag a box round your cards or tap them one by one, then drag one to move them all."
+msgstr "Drag a box round your cards or tap them one by one, then drag one to move them all."
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "Drag a page or swipe to flip"
 msgstr "Drag a page or swipe to flip"
@@ -10849,6 +10860,10 @@ msgstr "Full play"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Full profile card with ranks, pp and top plays. The username is optional once you link."
 #~ msgstr "Full profile card with ranks, pp and top plays. The username is optional once you link."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Full screen"
+msgstr "Full screen"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Full width"
@@ -13329,6 +13344,10 @@ msgstr "Leather"
 #: src/components/communities/CommunityEditModal.tsx
 msgid "leave empty to keep the current one"
 msgstr "leave empty to keep the current one"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Leave full screen"
+msgstr "Leave full screen"
 
 #: src/routes/packs.tsx
 #~ msgid "Leave the game"
@@ -21933,6 +21952,7 @@ msgstr "See your pulls"
 #~ msgstr "Seeking beyond the clip needs the full song."
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/board/CardBoard.tsx
 msgid "Select"
 msgstr "Select"
 
@@ -24583,6 +24603,10 @@ msgstr "Taken off the list"
 msgid "Tap a card for {0}"
 msgstr "Tap a card for {0}"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Tap a card in the tray to lay it down, tap one of yours to edit it, and hold a pile to see every card in it."
+msgstr "Tap a card in the tray to lay it down, tap one of yours to edit it, and hold a pile to see every card in it."
+
 #. placeholder {0}: chainModLook(shown.mods[modPick], i18n).name
 #: src/components/packs/run/chain/ChainTable.tsx
 #~ msgid "Tap a card in your hand for {0}"
@@ -24591,6 +24615,10 @@ msgstr "Tap a card for {0}"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
 msgstr "Tap a keymode to toggle its label."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Tap Cards to lay one down, tap one of yours to edit it, and hold a pile to see every card in it."
+msgstr "Tap Cards to lay one down, tap one of yours to edit it, and hold a pile to see every card in it."
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "tap one to preview its reply"
@@ -29715,6 +29743,10 @@ msgstr "Your card is not ready yet."
 #: src/components/packs/ReleaseCopyDialog.tsx
 msgid "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
 msgstr "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Your cards"
+msgstr "Your cards"
 
 #. placeholder {0}: (nextPlace.current - 1) % places.length + 1
 #. placeholder {1}: places.length
