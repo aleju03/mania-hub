@@ -76,23 +76,24 @@ function StarSlot({ stars }: { stars: DetailStars }) {
 
 // The modal's header, matching the map card: the cover with the key count and
 // status in its corner, the chart's strongest skillset rating bottom-right.
+// Shorter on phones so the MSD panel stays in view below it.
 export function MapDetailHeader({ entry, active, cover, stars, status, tiles, rating, onClose }: MapDetailHeaderProps) {
   return (
-    <div className="relative h-[188px] shrink-0">
+    <div className="relative h-[136px] shrink-0 sm:h-[188px]">
       {/* The cover dissolves into the panel; the title's shade fades
           with the art inside the mask, so no edge shows. */}
       <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_35%,transparent)]">
         {cover}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/20" />
       </div>
-      <div className="absolute left-4 right-14 top-3.5 flex items-center gap-2">
+      <div className="absolute left-4 right-14 top-3 flex items-center gap-2 sm:top-3.5">
         <span className="inline-flex items-center rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-extrabold leading-none tabular-nums text-white">{active.keyCount}K</span>
         {status ? <BeatmapStatusBadge status={status} /> : null}
       </div>
       <CloseButton onClose={onClose} />
       <div className="absolute inset-x-0 bottom-0 flex items-end gap-4 px-4 pb-3">
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[24px] font-extrabold leading-tight text-white drop-shadow-md">{entry.title}</h2>
+          <h2 className="truncate text-[22px] font-extrabold leading-tight sm:text-[24px] text-white drop-shadow-md">{entry.title}</h2>
           <p className="flex min-w-0 items-center gap-2.5 text-[13px] leading-tight text-white/75">
             <span className="truncate">{entry.artist}</span>
             {entry.creator ? (
@@ -102,13 +103,13 @@ export function MapDetailHeader({ entry, active, cover, stars, status, tiles, ra
               </>
             ) : null}
           </p>
-          <div className="mt-2.5 flex min-w-0 items-center gap-2.5 text-[12.5px] text-white/70">
+          <div className="mt-2 flex min-w-0 items-center gap-2.5 text-[12.5px] text-white/70 sm:mt-2.5">
             <StarSlot stars={stars} />
             <Tiles tiles={tiles} />
           </div>
         </div>
         {rating != null && rating > 0 ? (
-          <span className="shrink-0 pb-0.5 text-[34px] font-extrabold leading-none tabular-nums text-white drop-shadow-md">{rating.toFixed(1)}</span>
+          <span className="shrink-0 pb-0.5 text-[30px] font-extrabold sm:text-[34px] leading-none tabular-nums text-white drop-shadow-md">{rating.toFixed(1)}</span>
         ) : null}
       </div>
     </div>

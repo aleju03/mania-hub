@@ -890,6 +890,7 @@ export class ManiaReplayRenderer {
   private stageArtOverlayIds = new Set<ReplayOverlayId>();
   private stageArtOriginOffsets = new Map<ReplayOverlayId, { x: number; y: number }>();
   private activeOverlayPointers = new Map<number, { id: ReplayOverlayId; x: number; y: number }>();
+  private overlayPointerHandlersInstalled = false;
   private previousCanvasTouchAction = "";
   private previousCanvasTabIndex: string | null = null;
   private previousCanvasOutline = "";
@@ -1409,6 +1410,10 @@ export class ManiaReplayRenderer {
     }
 
     this.app = app;
+    // Pixi's event system sets touch-action: none on the canvas; nothing here
+    // uses Pixi pointer events, and a HUD-less preview must let a finger
+    // scroll the page.
+    if (this.hideHud) this.canvas.style.touchAction = "";
     // A GPU driver reset / VRAM pressure fires webglcontextlost; without
     // preventDefault the browser never restores the context (hard failure).
     // preventDefault opts into restoration and lets us record the event for
@@ -3077,6 +3082,11 @@ export class ManiaReplayRenderer {
   }
 
   private installOverlayPointerHandlers() {
+    // Without a HUD there are no overlays to drag (every handler bails on
+    // hideHud), and touch-action: none would stop a chart preview from
+    // scrolling the page under a finger.
+    if (this.hideHud) return;
+    this.overlayPointerHandlersInstalled = true;
     this.previousCanvasTouchAction = this.canvas.style.touchAction;
     this.canvas.style.touchAction = "none";
     this.previousCanvasTabIndex = this.canvas.getAttribute("tabindex");
@@ -3107,6 +3117,8 @@ export class ManiaReplayRenderer {
   }
 
   private removeOverlayPointerHandlers() {
+    if (!this.overlayPointerHandlersInstalled) return;
+    this.overlayPointerHandlersInstalled = false;
     this.clearTouchOverlayHold();
     this.canvas.style.touchAction = this.previousCanvasTouchAction;
     this.canvas.style.outline = this.previousCanvasOutline;

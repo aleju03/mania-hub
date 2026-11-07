@@ -534,7 +534,7 @@ function SearchCardSkeleton() {
       <div className="flex flex-col gap-3 px-3.5 pb-3 pt-2.5">
         <Skeleton className="h-3 w-3/5" />
         <div className="flex items-center gap-2 border-t border-white/5 pt-2.5">
-          <Skeleton className="h-8 w-8 rounded-lg" />
+          <Skeleton className="h-8 w-8 rounded-full" />
           <Skeleton className="h-3 w-32" />
           <span className="flex-1" />
           <Skeleton className="h-8 w-8 rounded-lg" />

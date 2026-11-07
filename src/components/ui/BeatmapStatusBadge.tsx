@@ -3,14 +3,17 @@ import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 
 // The osu! leaderboard status as the solid pill the maps pages use: green
-// RANKED, pink LOVED, grey GRAVEYARD, yellow for the rest.
+// RANKED, blue QUALIFIED, pink LOVED, grey GRAVEYARD, yellow for the rest
+// (pending and WIP), matching osu! and the maps filter chips.
 
 function beatmapStatusBadgeClass(status: string): string {
   const normalized = status.toLowerCase();
   const colorClass =
     normalized === "ranked" || normalized === "approved"
       ? "bg-[#6cf27f]"
-      : normalized === "loved"
+      : normalized === "qualified"
+        ? "bg-[#66ccff]"
+        : normalized === "loved"
         ? "bg-[#f26fa6]"
         : normalized === "graveyard"
           ? "bg-[#b3b3b3]"

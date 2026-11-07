@@ -269,8 +269,8 @@ export function useMapPreviewAudio(): MapPreviewAudio {
   };
 }
 
-// The card's play button: the same rounded square as the osu! and download
-// buttons beside it. The icon pulses while a slow load is pending; playback
+// The card's play button: a circle, so it reads as play next to the square
+// osu! and download buttons. The icon pulses while a slow load is pending; playback
 // progress lives in the player bar.
 export function MapPreviewButton({ beatmapsetId, preview }: { beatmapsetId: number; preview: MapPreviewAudio }) {
   const { t } = useLingui();
@@ -296,7 +296,7 @@ export function MapPreviewButton({ beatmapsetId, preview }: { beatmapsetId: numb
   if (preview.isUnavailable(beatmapsetId)) {
     return (
       <span
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-osu-f1/40"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.04] text-osu-f1/40"
         title={t`No preview audio`}
         aria-label={t`No preview audio`}
       >
@@ -319,7 +319,7 @@ export function MapPreviewButton({ beatmapsetId, preview }: { beatmapsetId: numb
       aria-label={playing ? t`Pause preview` : t`Play preview`}
       aria-pressed={playing}
       title={playing ? t`Pause preview` : t`Play preview`}
-      className={`grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg bg-white/[0.07] transition-colors hover:bg-white/[0.12] ${
+      className={`grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full bg-white/[0.07] transition-colors hover:bg-white/[0.12] ${
         playing || loading || paused ? "text-osu-pink-light" : "text-osu-l2 hover:text-white"
       }`}
     >
