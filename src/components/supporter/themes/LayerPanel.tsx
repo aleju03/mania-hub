@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import { Reorder } from "framer-motion";
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, ImagePlus, Plus, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Reorder, useDragControls } from "framer-motion";
+import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, GripVertical, ImagePlus, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { CUSTOM_THEME_TEXTURES } from "#custom-themes/inputs";
 import {
@@ -20,6 +20,7 @@ import {
 import { InspectorRow, InspectorSection, PanelHeader, ToolButton } from "./EditorChrome";
 import { Choice, ColorField, NumberField, Popover } from "./EditorControls";
 import { LayerIcon } from "./LayerIcons";
+import { useMediaQuery } from "../../../lib/use-media-query";
 
 /* The layer editor's panels: the stack on the left (frontmost on top, drag to
    reorder, double-click to rename, right-click for more), the pictures the
@@ -79,7 +80,8 @@ export function LayersList({ doc, onChange, selected, onSelect, onUpload, upload
   const { names, blurbs } = useLayerNames();
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number; above?: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const front = [...doc.layers].reverse();
   const full = doc.layers.length >= LAYERS_MAX;
   const pictures = layerAssets(doc);
@@ -104,8 +106,32 @@ export function LayersList({ doc, onChange, selected, onSelect, onUpload, upload
     };
   }, [menu]);
 
+  // Opens the layer menu by a point. `above` is where its bottom edge goes if
+  // it does not fit below (the top of the button that opened it).
+  const openMenu = (id: string, x: number, y: number, above?: number) => {
+    onSelect(id);
+    setMenu({ id, x: Math.max(8, Math.min(x, window.innerWidth - 184)), y, above });
+  };
+
+  // Keep the menu inside what the visitor can actually see: on a phone the
+  // browser's own bottom bar covers the end of the layout viewport, so the
+  // visual viewport is the measure, not innerHeight. A menu that would run
+  // past it opens upward instead.
+  useLayoutEffect(() => {
+    const element = menuRef.current;
+    if (!menu || !element) return;
+    const view = window.visualViewport;
+    const bottom = (view ? view.offsetTop + view.height : window.innerHeight) - 8;
+    const height = element.offsetHeight;
+    let top = menu.y;
+    if (top + height > bottom) top = menu.above !== undefined && menu.above - height >= 8 ? menu.above - height : bottom - height;
+    element.style.top = `${Math.max(8, top)}px`;
+  }, [menu]);
+
+  // On a phone the panel is short, so the list and the pictures scroll
+  // together instead of the list getting squeezed to a line between them.
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col max-md:flex-none">
       <PanelHeader title={t`Layers`}>
         <span className="mr-1 font-mono text-[10.5px] text-osu-f1/70">{doc.layers.length}/{LAYERS_MAX}</span>
         <Popover
@@ -133,7 +159,7 @@ export function LayersList({ doc, onChange, selected, onSelect, onUpload, upload
         </Popover>
       </PanelHeader>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2 max-md:flex-none max-md:overflow-visible">
         <Reorder.Group
           axis="y"
           values={front.map((layer) => layer.id)}
@@ -141,45 +167,21 @@ export function LayersList({ doc, onChange, selected, onSelect, onUpload, upload
           className="grid gap-0.5"
         >
           {front.map((layer) => (
-            <Reorder.Item
+            <LayerRow
               key={layer.id}
-              value={layer.id}
-              className={`group relative flex h-12 cursor-default items-center gap-3 rounded-lg pl-2 pr-1.5 transition-colors ${selected === layer.id ? "bg-osu-pink/[0.16] text-white" : "text-osu-l2 hover:bg-white/[0.04]"}`}
-              onPointerDown={() => onSelect(layer.id)}
-              onDoubleClick={() => setRenaming(layer.id)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                onSelect(layer.id);
-                setMenu({ id: layer.id, x: event.clientX, y: event.clientY });
+              layer={layer}
+              selected={selected === layer.id}
+              renaming={renaming === layer.id}
+              placeholder={names[layer.kind]}
+              onSelect={() => onSelect(layer.id)}
+              onRename={() => setRenaming(layer.id)}
+              onRenamed={(name) => {
+                setRenaming(null);
+                if (name !== null) onChange(patchLayer(doc, layer.id, { name }));
               }}
-            >
-              {selected === layer.id ? <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-osu-pink" /> : null}
-              <LayerThumb layer={layer} />
-              {renaming === layer.id ? (
-                <RenameInput
-                  value={layer.name}
-                  placeholder={names[layer.kind]}
-                  onDone={(name) => {
-                    setRenaming(null);
-                    if (name !== null) onChange(patchLayer(doc, layer.id, { name }));
-                  }}
-                />
-              ) : (
-                <span className={`min-w-0 flex-1 truncate text-[13px] ${layer.hidden ? "text-osu-f1/50 line-through decoration-white/20" : "font-medium"}`}>
-                  {layer.name || names[layer.kind]}
-                </span>
-              )}
-              <button
-                type="button"
-                aria-label={layer.hidden ? t`Show` : t`Hide`}
-                title={layer.hidden ? t`Show` : t`Hide`}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={() => onChange(patchLayer(doc, layer.id, { hidden: !layer.hidden }))}
-                className={`grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md transition-colors hover:bg-white/[0.08] ${layer.hidden ? "text-osu-f1" : "text-osu-f1 opacity-0 group-hover:opacity-100"}`}
-              >
-                {layer.hidden ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </Reorder.Item>
+              onToggleHidden={() => onChange(patchLayer(doc, layer.id, { hidden: !layer.hidden }))}
+              onMenu={(x, y, above) => openMenu(layer.id, x, y, above)}
+            />
           ))}
         </Reorder.Group>
         {doc.layers.length === 0 ? <p className="px-3 py-6 text-center text-[11.5px] leading-relaxed text-osu-f1">{t`No layers yet. Add one with +, or drop a picture on the stage.`}</p> : null}
@@ -230,6 +232,7 @@ export function LayersList({ doc, onChange, selected, onSelect, onUpload, upload
       {menu ? (
         <div
           className="fixed z-[60] w-44 rounded-lg border border-white/[0.08] bg-[#1c1720] p-1 shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
+          ref={menuRef}
           style={{ left: menu.x, top: menu.y }}
           onPointerDown={(event) => event.stopPropagation()}
         >
@@ -241,6 +244,7 @@ export function LayersList({ doc, onChange, selected, onSelect, onUpload, upload
             }
             setMenu(null);
           }} />
+          <MenuItem icon={<Pencil size={13} />} label={t`Rename`} onClick={() => { setRenaming(menu.id); setMenu(null); }} />
           <MenuItem icon={<ArrowUp size={13} />} label={t`Bring forward`} shortcut="]" onClick={() => { onChange(moveLayer(doc, menu.id, 1)); setMenu(null); }} />
           <MenuItem icon={<ArrowDown size={13} />} label={t`Send backward`} shortcut="[" onClick={() => { onChange(moveLayer(doc, menu.id, -1)); setMenu(null); }} />
           <MenuItem icon={<Eye size={13} />} label={doc.layers.find((layer) => layer.id === menu.id)?.hidden ? t`Show` : t`Hide`} shortcut="H" onClick={() => {
@@ -260,6 +264,84 @@ export function LayersList({ doc, onChange, selected, onSelect, onUpload, upload
   );
 }
 
+// One row of the layer list. A mouse drags the whole row to reorder; on a
+// touch screen that would swallow every scroll, so there the grip drags and a
+// menu button stands in for the right-click menu. The hide button shows on
+// hover with a mouse and always on touch.
+function LayerRow({ layer, selected, renaming, placeholder, onSelect, onRename, onRenamed, onToggleHidden, onMenu }: {
+  layer: Layer;
+  selected: boolean;
+  renaming: boolean;
+  placeholder: string;
+  onSelect: () => void;
+  onRename: () => void;
+  onRenamed: (name: string | null) => void;
+  onToggleHidden: () => void;
+  onMenu: (x: number, y: number, above?: number) => void;
+}) {
+  const { t } = useLingui();
+  const controls = useDragControls();
+  const touch = useMediaQuery("(hover: none)") === true;
+  return (
+    <Reorder.Item
+      value={layer.id}
+      dragListener={!touch}
+      dragControls={controls}
+      className={`group relative flex h-12 cursor-default items-center gap-3 rounded-lg pl-2 pr-1.5 transition-colors ${selected ? "bg-osu-pink/[0.16] text-white" : "text-osu-l2 hover:bg-white/[0.04]"}`}
+      onPointerDown={onSelect}
+      onDoubleClick={onRename}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onMenu(event.clientX, event.clientY);
+      }}
+    >
+      {selected ? <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-osu-pink" /> : null}
+      {touch ? (
+        <span
+          aria-hidden
+          onPointerDown={(event) => controls.start(event)}
+          className="-ml-1 -mr-2 grid h-10 w-6 shrink-0 touch-none place-items-center text-osu-f1/60"
+        >
+          <GripVertical size={15} />
+        </span>
+      ) : null}
+      <LayerThumb layer={layer} />
+      {renaming ? (
+        <RenameInput value={layer.name} placeholder={placeholder} onDone={onRenamed} />
+      ) : (
+        <span className={`min-w-0 flex-1 truncate text-[13px] ${layer.hidden ? "text-osu-f1/50 line-through decoration-white/20" : "font-medium"}`}>
+          {layer.name || placeholder}
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label={layer.hidden ? t`Show` : t`Hide`}
+        title={layer.hidden ? t`Show` : t`Hide`}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={onToggleHidden}
+        className={`grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md transition-colors hover:bg-white/[0.08] text-osu-f1 ${layer.hidden || touch ? "" : "opacity-0 group-hover:opacity-100"}`}
+      >
+        {layer.hidden ? <EyeOff size={15} /> : <Eye size={15} />}
+      </button>
+      {touch ? (
+        <button
+          type="button"
+          aria-label={t`Layer menu`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            onSelect();
+            const box = event.currentTarget.getBoundingClientRect();
+            onMenu(box.right - 176, box.bottom + 4, box.top - 4);
+          }}
+          className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md text-osu-f1"
+        >
+          <MoreHorizontal size={16} />
+        </button>
+      ) : null}
+    </Reorder.Item>
+  );
+}
+
 function MenuItem({ icon, label, shortcut, onClick, disabled, danger }: { icon: ReactNode; label: string; shortcut?: string; onClick: () => void; disabled?: boolean; danger?: boolean }) {
   return (
     <button
@@ -270,7 +352,7 @@ function MenuItem({ icon, label, shortcut, onClick, disabled, danger }: { icon: 
     >
       {icon}
       <span className="flex-1">{label}</span>
-      {shortcut ? <span className="font-mono text-[10px] text-osu-f1/70">{shortcut}</span> : null}
+      {shortcut ? <span className="font-mono text-[10px] text-osu-f1/70 [@media(hover:none)]:hidden">{shortcut}</span> : null}
     </button>
   );
 }

@@ -24,7 +24,7 @@ import { bladeLook, bladeTrailLife, cutPath, emberBurn, frostFreeze } from "./pa
 import { createSpellField, type SpellField } from "./packSpellField";
 import type { PackSpell } from "#/lib/pack-pending";
 import { createBladeRenderer, type BladeRenderer } from "./bladeGl";
-import { moveBladeLoop, playBladeCut, playBladeRip, playBladeTick, playCardSlice, stopBladeLoop, warmBladeSounds } from "./packSfx";
+import { moveBladeLoop, playBladeCut, playBladeRip, playBladeTick, playCardSlice, setPackBurnSound, stopBladeLoop, stopPackBurnSound, warmBladeSounds, warmPackBurnSound } from "./packSfx";
 
 // The cut is tracked in vertical columns; each cut column remembers the y
 // (as a fraction of pack height) where the blade crossed it, so the tear
@@ -177,7 +177,9 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     const look = bladeLook(blade);
     preloadSprites(look.sprites);
     warmBladeSounds(look.sound);
+    if (blade === "ember") warmPackBurnSound();
   }, [blade]);
+  useEffect(() => () => stopPackBurnSound(), []);
 
   const slashRef = useRef<{
     lastX: number;
@@ -643,7 +645,8 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     spread(fxRef.current, { left: rect.left, top: rect.top, width: rect.width, height: rect.height }, origin, front > farthest ? null : front, 1);
     if (burn.spell === "burnt" && now - burn.crackleAt > 200) {
       burn.crackleAt = now;
-      playBladeTick("ember", progress);
+      // the flame swells as the front runs, then smoulders
+      setPackBurnSound(burn.done ? 0.12 : 0.16 + 0.3 * eased);
     }
     return true;
   };
@@ -909,6 +912,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       }
     }
     setRipping(true);
+    stopPackBurnSound();
     // Held in a ref and cleared on unmount: a server deal refused mid-rip
     // resets the stage, and this callback firing after that would revive the
     // dead pack (see openedTimerRef).

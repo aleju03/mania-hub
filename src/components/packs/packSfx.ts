@@ -1029,6 +1029,24 @@ export function stopRunFireLoop(): void {
   loop.source.stop(ctx.currentTime + 1.5);
 }
 
+/* Ember's burn on a pack (PackStage): the same recorded flame as the run's
+   loop, swelling as the front spreads and dropping to a low smoulder once it
+   has burnt through. A recording on purpose: short synthesized noise blips at
+   a steady rate read as wet, fleshy smacks rather than fire. */
+export function warmPackBurnSound(): void {
+  const ctx = ensureAudio();
+  const sample = runSamples.get("fire-loop");
+  if (ctx && sample) void loadSample(ctx, sample);
+}
+
+export function setPackBurnSound(level: number): void {
+  startRunFireLoop(level);
+}
+
+export function stopPackBurnSound(): void {
+  stopRunFireLoop();
+}
+
 /* A song, a stage (its final song) or the whole run cleared. */
 export function playRunBlindCleared(kind: "song" | "stage" | "run" = "song") {
   playRunCue(kind === "run" ? "run-cleared" : kind === "stage" ? "clear-stage" : "clear-song", {

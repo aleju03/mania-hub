@@ -11647,6 +11647,10 @@ msgstr "Hide the plays the dan rules turned away"
 msgid "Hide the plays with no skill rating"
 msgstr "Hide the plays with no skill rating"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Hide the profile on top"
+msgstr "Hide the profile on top"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "hide the ScoreV2 note"
@@ -13232,6 +13236,10 @@ msgstr "Lava lamp"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Layer"
 msgstr "Layer"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Layer menu"
+msgstr "Layer menu"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "layers"
@@ -20596,6 +20604,7 @@ msgstr "Removing…"
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Rename"
 msgstr "Rename"
 
@@ -22638,6 +22647,10 @@ msgstr "Show the image at its real pixel size"
 #: src/components/replay/ReplayControls.tsx
 msgid "Show the map's storyboard behind (and over) the playfield"
 msgstr "Show the map's storyboard behind (and over) the playfield"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Show the profile on top"
+msgstr "Show the profile on top"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Show the site name on the render"

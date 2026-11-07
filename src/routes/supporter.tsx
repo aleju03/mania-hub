@@ -573,8 +573,10 @@ function SupporterPage() {
                   </p>
                 </aside>
 
-                {/* Below lg only the avatar and name stay in view; the card is too tall to. */}
-                <div className={`z-20 lg:min-h-0 ${open === "motif" || open === "foil" || open === "sleeve" ? "" : "max-lg:sticky max-lg:top-[60px]"}`}>
+                {/* Below lg only the avatar and name stay in view; the card, the
+                    test pack and the binder are too tall to, and pinned they
+                    would cover the drawer under them. */}
+                <div className={`z-20 lg:min-h-0 ${open === "motif" || open === "foil" || open === "sleeve" || open === "wrapper" || open === "blade" || open === "binder" ? "" : "max-lg:sticky max-lg:top-[60px]"}`}>
                   {shown && held ? (
                     <LoadoutStage
                       shown={shown}

@@ -11616,6 +11616,10 @@ msgstr "Ocultar las jugadas que las reglas de dan descartaron"
 msgid "Hide the plays with no skill rating"
 msgstr "Ocultar las jugadas sin rating de habilidad"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Hide the profile on top"
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "ocultar la nota sobre ScoreV2"
@@ -13192,6 +13196,10 @@ msgstr "Lámpara de lava"
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Layer"
+msgstr ""
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Layer menu"
 msgstr ""
 
 #: src/components/supporter/themes/ThemeEditor.tsx
@@ -20557,6 +20565,7 @@ msgstr "Eliminando…"
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Rename"
 msgstr "Renombrar"
 
@@ -22599,6 +22608,10 @@ msgstr "Mostrar la imagen en su tamaño real en píxeles"
 #: src/components/replay/ReplayControls.tsx
 msgid "Show the map's storyboard behind (and over) the playfield"
 msgstr "Mostrar el storyboard del mapa detrás (y encima) del playfield"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Show the profile on top"
+msgstr ""
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Show the site name on the render"

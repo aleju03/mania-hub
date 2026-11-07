@@ -93,7 +93,9 @@ export function Meter({ value, warn, bad, label }: { value: number | null; warn:
   const tone = value === null ? "bg-white/20" : value > bad ? "bg-rose-400" : value > warn ? "bg-amber-300" : "bg-emerald-400";
   const fill = value === null ? 0 : Math.min(1, value / bad);
   return (
-    <span className="inline-flex items-center gap-1.5" title={label}>
+    // The bar drops on phones so the stats fit across; the number beside it
+    // keeps its warning colour.
+    <span className="hidden items-center gap-1.5 md:inline-flex" title={label}>
       <span className="relative h-1.5 w-14 overflow-hidden rounded-full bg-white/10">
         <span className={`absolute inset-y-0 left-0 rounded-full ${tone}`} style={{ width: `${fill * 100}%` }} />
       </span>

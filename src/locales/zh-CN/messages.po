@@ -11628,6 +11628,10 @@ msgstr "隐藏被段位规则排除的成绩"
 msgid "Hide the plays with no skill rating"
 msgstr "隐藏没有技能评分的成绩"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Hide the profile on top"
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "收起 ScoreV2 说明"
@@ -13204,6 +13208,10 @@ msgstr "熔岩灯"
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Layer"
+msgstr ""
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Layer menu"
 msgstr ""
 
 #: src/components/supporter/themes/ThemeEditor.tsx
@@ -20569,6 +20577,7 @@ msgstr "正在移除…"
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/themes/LayerPanel.tsx
 msgid "Rename"
 msgstr "重命名"
 
@@ -22611,6 +22620,10 @@ msgstr "按图片真实像素尺寸显示"
 #: src/components/replay/ReplayControls.tsx
 msgid "Show the map's storyboard behind (and over) the playfield"
 msgstr "在游玩区域后面（和上面）显示谱面的故事板"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Show the profile on top"
+msgstr ""
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Show the site name on the render"

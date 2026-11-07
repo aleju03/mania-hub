@@ -877,8 +877,8 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   return (
     <div className="flex h-[calc(100dvh-60px)] flex-col bg-[color-mix(in_srgb,var(--color-osu-b6)_70%,black)] text-osu-l2">
       {/* Toolbar */}
-      <header className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-white/[0.07] bg-osu-b6 px-3">
-        <Link to="/workshop/themes" className="flex h-8 items-center gap-1 rounded-md px-2 text-[12px] font-semibold text-osu-f1 transition-colors hover:bg-white/[0.06] hover:text-white">
+      <header className="flex h-[52px] shrink-0 items-center gap-1 border-b border-white/[0.07] bg-osu-b6 px-2 md:gap-1.5 md:px-3">
+        <Link to="/workshop/themes" aria-label={t`Themes`} className="flex h-8 shrink-0 items-center gap-1 rounded-md px-1 md:px-2 text-[12px] font-semibold text-osu-f1 transition-colors hover:bg-white/[0.06] hover:text-white">
           <ChevronLeft size={16} />
           <span className="hidden md:inline">{t`Themes`}</span>
         </Link>
@@ -898,7 +898,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
             <>
               <ToolButton label={t`Undo`} shortcut="Ctrl Z" onClick={history.undo} disabled={!history.canUndo}><Undo2 size={16} /></ToolButton>
               <ToolButton label={t`Redo`} shortcut="Ctrl Shift Z" onClick={history.redo} disabled={!history.canRedo}><Redo2 size={16} /></ToolButton>
-              <ToolDivider />
+              {narrow ? null : <ToolDivider />}
             </>
           ) : null}
           {narrow ? null : (
@@ -907,11 +907,12 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
               <ToolButton label={t`Phone`} onClick={() => setPhone(true)} active={phone}><Smartphone size={16} /></ToolButton>
             </>
           )}
-          <ToolButton label={t`Profile on top`} onClick={() => setOverlay((value) => !value)} active={overlay}><PanelsTopLeft size={16} /></ToolButton>
+          {narrow ? null : <ToolButton label={t`Profile on top`} onClick={() => setOverlay((value) => !value)} active={overlay}><PanelsTopLeft size={16} /></ToolButton>}
         </div>
 
         <MoreMenu
           items={[
+            ...(narrow ? [{ label: overlay ? t`Hide the profile on top` : t`Show the profile on top`, onClick: () => setOverlay((value) => !value) }] : []),
             ...(mode === "layers" ? [{ label: t`Open as code`, onClick: () => setToCode(true) }] : [{ label: copied === "spec" ? t`Copied` : t`Copy the theme spec`, onClick: () => copy(customThemeSpec(), "spec") }]),
             { label: t`Theme spec`, href: "/workshop/themes/spec" },
             { label: t`Gallery`, href: "/workshop/themes/gallery" },
@@ -921,7 +922,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
           type="button"
           onClick={requestSave}
           disabled={saving}
-          className="ml-1 inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink px-4 md:ml-1.5 md:px-5 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-60"
+          className="ml-0.5 inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink px-3.5 md:ml-1.5 md:px-5 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-60"
         >
           {saving ? t`Saving...` : t`Save`}
         </button>
@@ -930,7 +931,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       <div className={`flex min-h-0 flex-1 ${narrow ? "flex-col" : ""}`}>
         {/* Left: layers, or the code */}
         <aside
-          className={`relative min-h-0 flex-col bg-[color-mix(in_srgb,var(--color-osu-b6)_88%,black)] ${narrow ? (phonePanel === "edit" ? "flex flex-1" : "hidden") : "flex shrink-0 border-r border-white/[0.07]"}`}
+          className={`relative min-h-0 flex-col bg-[color-mix(in_srgb,var(--color-osu-b6)_88%,black)] ${narrow ? (phonePanel === "edit" ? `flex flex-1 ${mode === "layers" ? "overflow-y-auto overscroll-contain" : ""}` : "hidden") : "flex shrink-0 border-r border-white/[0.07]"}`}
           style={narrow ? undefined : { width: mode === "layers" ? leftPanel.width : codePanel.width }}
         >
           {narrow ? null : <ResizeHandle side="right" {...(mode === "layers" ? leftPanel.handle : codePanel.handle)} />}
@@ -1129,7 +1130,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       </div>
 
       {/* Status */}
-      <footer className="flex h-8 shrink-0 items-center gap-4 overflow-x-auto whitespace-nowrap border-t border-white/[0.07] bg-[color-mix(in_srgb,var(--color-osu-b6)_80%,black)] px-3 text-[11.5px] text-osu-f1 [scrollbar-width:none] md:px-4">
+      <footer className="flex h-8 shrink-0 items-center gap-3 overflow-x-auto md:gap-4 whitespace-nowrap border-t border-white/[0.07] bg-[color-mix(in_srgb,var(--color-osu-b6)_80%,black)] px-3 text-[11.5px] text-osu-f1 [scrollbar-width:none] md:px-4">
         {mode === "code" ? (
           <>
             <button

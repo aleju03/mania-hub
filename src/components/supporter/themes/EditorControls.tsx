@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { useMediaQuery } from "../../../lib/use-media-query";
 
 /* The theme editor's own controls, drawn like the site's colour picker
    (layout/ThemePicker.tsx) instead of the browser's: a slider that can be a
@@ -209,10 +211,17 @@ export function Popover({ trigger, children, open, onOpenChange, className = "",
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  // On a phone a dropdown under its button runs off the bottom of the screen,
+  // so it opens as a sheet along the bottom edge instead, over a light shade
+  // that keeps the stage visible. Its height is 100dvh, not inset-0, so a
+  // browser bar along the bottom never covers the sheet's last rows.
+  const sheet = useMediaQuery("(max-width: 767px)") === true;
   useEffect(() => {
     if (!open) return;
     const onDown = (event: PointerEvent) => {
-      if (!ref.current?.contains(event.target as Node)) onOpenChange(false);
+      const target = event.target as Node;
+      if (!ref.current?.contains(target) && !sheetRef.current?.contains(target)) onOpenChange(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onOpenChange(false);
@@ -227,19 +236,49 @@ export function Popover({ trigger, children, open, onOpenChange, className = "",
   return (
     <div ref={ref} className="relative">
       {trigger}
-      <AnimatePresence>
-        {open ? (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.14 }}
-            className={`absolute ${align === "right" ? "right-0" : "left-0"} top-full z-40 mt-1.5 rounded-xl border border-white/[0.08] bg-osu-b5 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.55)] ${className}`}
-          >
-            {children}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      {sheet ? (
+        typeof document === "undefined" ? null : createPortal(
+          <AnimatePresence>
+            {open ? (
+              <motion.div
+                key="sheet"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.14 }}
+                className="fixed inset-x-0 top-0 z-[150] flex h-[100dvh] flex-col justify-end bg-black/35"
+              >
+                <motion.div
+                  ref={sheetRef}
+                  initial={{ y: 24 }}
+                  animate={{ y: 0 }}
+                  exit={{ y: 24 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="max-h-[70dvh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-white/[0.08] bg-osu-b5 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_rgba(0,0,0,0.55)]"
+                >
+                  <div aria-hidden className="mx-auto mb-2 mt-0.5 h-1 w-9 rounded-full bg-white/15" />
+                  {children}
+                </motion.div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>,
+          document.body,
+        )
+      ) : (
+        <AnimatePresence>
+          {open ? (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.14 }}
+              className={`absolute ${align === "right" ? "right-0" : "left-0"} top-full z-40 mt-1.5 rounded-xl border border-white/[0.08] bg-osu-b5 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.55)] ${className}`}
+            >
+              {children}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      )}
     </div>
   );
 }
