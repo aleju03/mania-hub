@@ -1128,17 +1128,15 @@ html[data-custom-cursor="true"] * {
 
 /* The 300g (MAX) judgement: the vertical rainbow the site draws MAX counts in
    (ManiaJudgementStats.ts), its stops placed from the line's centre so they
-   land on the letters the same way at any size, with a glint now and then. */
+   land on the letters the same way at any size. Still, like the judgement's
+   colours. */
 .name-tag--300g {
   background-image:
-    linear-gradient(105deg, transparent 0 44%, rgba(255, 255, 255, 0.75) 50%, transparent 56% 100%),
     linear-gradient(180deg, #9b2cff calc(50% - 0.3em), #1d65ff calc(50% - 0.15em), #41d9ff calc(50% + 0.04em),
       #4fdc3a calc(50% + 0.16em), #ffe234 calc(50% + 0.28em), #ff9a1f calc(50% + 0.4em));
-  background-size: 250% 100%, 100% 100%;
+  background-size: 100% 100%;
   background-repeat: no-repeat;
-  background-position: 150% 50%, 0 0;
   filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6));
-  animation: name-tag-glint 5s ease-in-out infinite;
 }
 
 /* A phosphor screen: scanlines through the letters and a blinking cursor. */
@@ -1211,24 +1209,32 @@ html[data-custom-cursor="true"] * {
   filter: drop-shadow(0 0.05em 0.05em rgba(30, 0, 50, 0.7)) drop-shadow(0 0 0.25em rgba(255, 90, 170, 0.45));
 }
 
-/* Aero: glossy aqua jelly letters (Frutiger Aero). A white gloss over the
-   upper half, sky blue deepening to ocean blue below it, a cool rim, and a
-   sheen that crosses the name now and then. */
+/* Aero: glossy aqua jelly letters (Frutiger Aero), half filled with water.
+   Pale glass above a waterline that sloshes along the name, deep aqua below
+   it with bubbles rising through, and a white gloss over the top. The glass
+   layer is drawn over the bubbles, so they only show in the water and vanish
+   at the surface. Every tile is in em, so a list name and the hero match;
+   one 6 s loop moves each layer a whole number of tiles, so it never jumps. */
 .name-tag--aero {
   background-image:
-    linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.85) 50%, transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.55) 40%, rgba(255, 255, 255, 0) 48%),
-    linear-gradient(180deg, #e6fcff 0%, #8ae6ff 36%, #22b2ec 54%, #0f7cc6 78%, #0a5aa0 100%);
-  background-size: 300% 100%, 100% 100%, 100% 100%;
-  background-position: 160% 0, 0 0, 0 0;
-  background-repeat: no-repeat;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.3) 34%, rgba(255, 255, 255, 0) 42%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 100' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23f4fdff'/%3E%3Cstop offset='1' stop-color='%23b9eeff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 0H120V50C90 42 90 42 60 50C30 58 30 58 0 50Z' fill='url(%23a)'/%3E%3Cpath d='M0 50C30 58 30 58 60 50C90 42 90 42 120 50' fill='none' stroke='%23fff' stroke-opacity='.95' stroke-width='3.2'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 60'%3E%3Cg fill='%23fff' fill-opacity='.16' stroke='%23fff' stroke-opacity='.85' stroke-width='1.4'%3E%3Ccircle cx='14' cy='12' r='3.6'/%3E%3Ccircle cx='46' cy='40' r='2.6'/%3E%3Ccircle cx='78' cy='18' r='4.4'/%3E%3Ccircle cx='30' cy='54' r='3'/%3E%3C/g%3E%3Cg fill='%23fff' fill-opacity='.85'%3E%3Ccircle cx='12.8' cy='10.7' r='0.9'/%3E%3Ccircle cx='45.2' cy='39.1' r='0.7'/%3E%3Ccircle cx='76.6' cy='16.4' r='1.1'/%3E%3Ccircle cx='29.0' cy='52.9' r='0.7'/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 80'%3E%3Cg fill='%23fff' fill-opacity='.16' stroke='%23fff' stroke-opacity='.65' stroke-width='1.4'%3E%3Ccircle cx='24' cy='30' r='2.4'/%3E%3Ccircle cx='70' cy='66' r='3.2'/%3E%3Ccircle cx='118' cy='44' r='2'/%3E%3Ccircle cx='96' cy='10' r='2.8'/%3E%3C/g%3E%3Cg fill='%23fff' fill-opacity='.65'%3E%3Ccircle cx='23.2' cy='29.1' r='0.7'/%3E%3Ccircle cx='69.0' cy='64.8' r='0.8'/%3E%3Ccircle cx='117.4' cy='43.3' r='0.7'/%3E%3Ccircle cx='95.1' cy='9.0' r='0.7'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(180deg, #7fe4ff 0%, #2bb8f0 45%, #1186d2 70%, #0a5aa0 100%);
+  background-size: 100% 100%, 2.4em 100%, 1.9em 1.14em, 2.66em 1.52em, 100% 100%;
+  background-repeat: no-repeat, repeat-x, repeat, repeat, no-repeat;
+  background-position: 0 0, 0 0, 0 0, 0.7em 0.3em, 0 0;
   -webkit-text-stroke: 0.02em rgba(225, 250, 255, 0.35);
   filter: drop-shadow(0 0.05em 0.04em rgba(0, 38, 70, 0.8)) drop-shadow(0 0 0.22em rgba(80, 205, 255, 0.45));
-  animation: name-tag-aero-sheen 5s ease-in-out infinite;
+  animation: name-tag-aero-water 6s linear infinite;
 }
-@keyframes name-tag-aero-sheen {
-  0%, 62% { background-position: 160% 0, 0 0, 0 0; }
-  86%, 100% { background-position: -60% 0, 0 0, 0 0; }
+@keyframes name-tag-aero-water {
+  0% { background-position: 0 0, 0 0, 0 0, 0.7em 0.3em, 0 0; }
+  25% { background-position: 0 0, -1.2em -0.04em, 0 -0.855em, 0.7em -0.46em, 0 0; }
+  50% { background-position: 0 0, -2.4em 0, 0 -1.71em, 0.7em -1.22em, 0 0; }
+  75% { background-position: 0 0, -3.6em 0.04em, 0 -2.565em, 0.7em -1.98em, 0 0; }
+  100% { background-position: 0 0, -4.8em 0, 0 -3.42em, 0.7em -2.74em, 0 0; }
 }
 
 :root[data-window-active="false"] .name-tag,
@@ -1376,10 +1382,14 @@ html[data-custom-cursor="true"] * {
   0%, 32%, 100% { filter: drop-shadow(0 0.03em 0.04em rgba(10, 0, 40, 0.7)) drop-shadow(0 0 0.12em rgba(120, 110, 255, 0.85)) drop-shadow(0 0 0.32em rgba(90, 50, 255, 0.45)); }
   10% { filter: drop-shadow(0 0.03em 0.04em rgba(10, 0, 40, 0.7)) drop-shadow(0 0 0.14em rgba(150, 170, 255, 1)) drop-shadow(0 -0.04em 0.42em rgba(100, 60, 255, 0.7)); }
 }
-/* Big fire names get room above the letters for the shader's flames. */
+/* Big fire names get room above the letters for the shader's flames, and
+   below them for the dark edge round a descender: a j's tail reached the
+   bottom of the box and its edge was cut into a flat line under it. */
 .name-tag--hero:is(.name-tag--inferno, .name-tag--hellfire) {
   padding-top: 0.8em;
   margin-top: -0.8em;
+  padding-bottom: 0.45em;
+  margin-bottom: -0.45em;
 }
 
 /* A big name waiting for its liquid-metal shader: plain metal without the CSS
@@ -1414,6 +1424,12 @@ html[data-custom-cursor="true"] * {
 }
 .name-tag--hellfire.name-tag--live {
   filter: drop-shadow(0 -0.06em 0.3em rgba(110, 90, 255, 0.5)) !important;
+}
+/* Not in a picker tile: there the name's box sits tight around it and the
+   glow came out cut along that box, a faint rectangle round the flames. */
+.name-tag-grid .name-tag--inferno.name-tag--live,
+.name-tag-grid .name-tag--hellfire.name-tag--live {
+  filter: none !important;
 }
 /* A picker tile waiting for its first still of the real look (never shown
    as the CSS stand-in): a faint pulsing outline of the name. */

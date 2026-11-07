@@ -61,11 +61,12 @@ export function UsernameText({
     if (userId) ensureSupporterNameStyles();
   }, [userId]);
 
-  if (nameStyle || nameFont) return <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} name={username} className={className} />;
+  if (nameStyle) return <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} name={username} className={className} />;
 
+  // A name font alone changes the letters, not the colour: the accent stays.
   return (
     <span
-      className={className}
+      className={`${className ?? ""}${nameFont ? ` name-font--${nameFont}` : ""}`}
       style={{ transition: "color 220ms ease-out", ...(accent ? { color: accent } : null) }}
     >
       {username}

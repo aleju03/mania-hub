@@ -258,7 +258,7 @@ export function FeaturedPlayDialog({ slotLabel, current, onSave, onReset, onClos
           {play && show ? (
             <FeaturedPlayCard entry={{ title: cleanTitle || t`Your title`, show, play }} link={false} />
           ) : (
-            <div className="grid h-[120px] place-items-center rounded-xl border border-dashed border-osu-b3/50 text-[12px] text-osu-f1">
+            <div className="grid h-[84px] place-items-center rounded-xl border border-dashed sm:h-[120px] border-osu-b3/50 text-[12px] text-osu-f1">
               {play ? t`This play has no pp, rating or dan to show.` : t`Pick a play below.`}
             </div>
           )}
@@ -300,7 +300,7 @@ export function FeaturedPlayDialog({ slotLabel, current, onSave, onReset, onClos
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1">
+          <div className="relative w-full min-w-0 sm:w-auto sm:flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
             <input
               value={query}
@@ -309,13 +309,13 @@ export function FeaturedPlayDialog({ slotLabel, current, onSave, onReset, onClos
               className="w-full rounded-lg border border-osu-b3/40 bg-osu-b6 py-2 pl-8 pr-3 text-[12.5px] text-white outline-none placeholder:text-osu-f1/60 focus:border-osu-pink/60"
             />
           </div>
-          <div className="flex rounded-lg bg-osu-b6 p-0.5">
+          <div className="flex w-full rounded-lg bg-osu-b6 p-0.5 sm:w-auto">
             {(Object.keys(SORT_LABELS) as ProfilePlaySort[]).map((key) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setSort(key)}
-                className={`cursor-pointer rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${sort === key ? "bg-osu-b3 text-white" : "text-osu-f1 hover:text-white"}`}
+                className={`flex-1 cursor-pointer whitespace-nowrap rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors sm:flex-none sm:px-2.5 ${sort === key ? "bg-osu-b3 text-white" : "text-osu-f1 hover:text-white"}`}
               >
                 {i18n._(SORT_LABELS[key])}
               </button>
@@ -329,7 +329,7 @@ export function FeaturedPlayDialog({ slotLabel, current, onSave, onReset, onClos
               key={`${choice.day}:${choice.beatmapId}`}
               type="button"
               onClick={() => choose(choice)}
-              className={`flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors ${isPicked(choice) ? "bg-osu-pink/15" : "hover:bg-osu-b3/40"}`}
+              className={`flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-left sm:gap-3 transition-colors ${isPicked(choice) ? "bg-osu-pink/15" : "hover:bg-osu-b3/40"}`}
             >
               <span className="h-9 w-14 shrink-0 overflow-hidden rounded bg-osu-b4">
                 {choice.coverUrl && <img src={choice.coverUrl} alt="" loading="lazy" className="h-full w-full object-cover" />}
@@ -337,14 +337,21 @@ export function FeaturedPlayDialog({ slotLabel, current, onSave, onReset, onClos
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[12.5px] font-semibold text-white">{choice.title}</span>
                 <span className="block truncate text-[10.5px] text-osu-f1">[{choice.version}]</span>
+                {/* A phone has no room for the columns below: the grade,
+                    accuracy and mods sit under the title instead. */}
+                <span className="mt-1 flex items-center gap-1.5 sm:hidden">
+                  <GradeImg grade={choice.rank} size={26} />
+                  <span className="text-[11px] tabular-nums text-osu-l2">{choice.accuracy != null ? formatAccuracy(choice.accuracy) : ""}</span>
+                  {choice.mods.slice(0, 2).map((mod) => <ModBadge key={mod} mod={mod} size={0.6} />)}
+                </span>
               </span>
               {/* Fixed columns, so the grade and mods line up row to row. */}
-              <span className="flex w-[56px] shrink-0 justify-end gap-1">
+              <span className="hidden w-[56px] shrink-0 justify-end gap-1 sm:flex">
                 {choice.mods.slice(0, 2).map((mod) => <ModBadge key={mod} mod={mod} size={0.72} />)}
               </span>
               {/* The grade art is twice as wide as tall: 34 wide stands as tall as the mods. */}
-              <span className="flex w-9 shrink-0 justify-center"><GradeImg grade={choice.rank} size={34} /></span>
-              <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-osu-l2">{choice.accuracy != null ? formatAccuracy(choice.accuracy) : ""}</span>
+              <span className="hidden w-9 shrink-0 justify-center sm:flex"><GradeImg grade={choice.rank} size={34} /></span>
+              <span className="hidden w-14 shrink-0 text-right text-[11px] tabular-nums text-osu-l2 sm:block">{choice.accuracy != null ? formatAccuracy(choice.accuracy) : ""}</span>
               <span className="w-12 shrink-0 text-right text-[11px] font-bold tabular-nums text-osu-pink-light">{choice.pp ? `${Math.round(choice.pp)}pp` : ""}</span>
               <span className="hidden w-[74px] shrink-0 text-right text-[10.5px] text-osu-f1 sm:block">{choice.day}</span>
             </button>

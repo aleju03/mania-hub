@@ -2591,11 +2591,12 @@ export function PlayerProfilePage({
                     box is tighter than the ink: a capital J overhangs it on the
                     left and below. The padding/-margin pair buys room on every
                     side without moving anything. */}
-                {/* A supporter's name style replaces the accent colour. */}
-                {heroNameStyle || heroNameFont ? (
+                {/* A supporter's name style replaces the accent colour; a name
+                    font alone keeps it. */}
+                {heroNameStyle ? (
                   <SupporterStyledName live nameStyle={heroNameStyle} nameFont={heroNameFont} name={user.display_name ?? user.username} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
                 ) : (
-                  <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                  <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className={`min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]${heroNameFont ? ` name-font--${heroNameFont}` : ""}`} />
                 )}
                 <SupporterRankBadge runStartedAt={heroRunStartedAt} renewing={heroRenewing} fire={heroRankFire} onFireChange={canSetRankFire ? setRankFire : undefined} className="h-6 w-6 sm:h-8 sm:w-8" />
                 {showProfileCountryFlag ? (

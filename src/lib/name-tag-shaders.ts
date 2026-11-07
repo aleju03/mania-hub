@@ -34,8 +34,11 @@ const nameLiquidMetalShader = liquidMetalFragmentShader.replace(
    letters a pixel is. `uv` runs 0..1 over the name's box with y down; `p`
    measures both axes in box heights. */
 // language=GLSL
+// highp: on phone GPUs mediump is a 16-bit float, too coarse for the hash
+// noise (it fell apart into blocks, stray specks and a faint haze over the
+// whole box); WebGL2 guarantees highp in fragment shaders.
 const PRELUDE = `#version 300 es
-precision mediump float;
+precision highp float;
 
 uniform sampler2D u_image;
 uniform float u_time;
@@ -347,6 +350,9 @@ function fireShader(style: FireStyle): string {
   const look = FIRE_LOOKS[style];
   // language=GLSL
   return `${PRELUDE}
+// the mask blurred on the CPU (fireBlurs): about mip levels 3 and 4.5
+uniform sampler2D u_blur;
+uniform sampler2D u_blurWide;
 vec3 ramp(float h) {
   h = clamp(h, 0., 1.);
   ${look.ramp}
@@ -374,15 +380,18 @@ void main() {
   float tongue = fbm(q);
   float lick = noise(vec2(p.x * 9., p.y * 6. + t * 4.));
 
-  // fuel from the letters below, read off a blurred copy of the mask (its
-  // mipmaps) so the flames rise smoothly instead of in stacked copies
+  // fuel from the letters below, read off blurred copies of the mask so the
+  // flames rise smoothly instead of in stacked copies. Blurred on the CPU,
+  // not read off mipmaps with a level bias: an Adreno phone sampled those
+  // sharp, and the flames came out as banded copies of the letter tops.
   float reach = .05;
   vec2 bend = vec2((tongue - .5) * .1 / aspect, 0.);
   float fuel = 0.;
   for (int i = 0; i < 7; i++) {
     float k = float(i);
     vec2 at = uv + bend * k * .45 + vec2(0., k * reach);
-    float g = (at.x < 0. || at.y < 0. || at.x > 1. || at.y > 1.) ? 0. : texture(u_image, at, 2.2 + k * .4).a;
+    float wide = clamp((k * .4 - .8) / 1.5, 0., 1.);
+    float g = (at.x < 0. || at.y < 0. || at.x > 1. || at.y > 1.) ? 0. : mix(texture(u_blur, at).a, texture(u_blurWide, at).a, wide);
     fuel = max(fuel, g * (1. - k / 8.));
   }
   float above = 1. - clamp(fuel * 1.7, 0., 1.);
@@ -390,6 +399,14 @@ void main() {
   float fuelVal = tongue * 1.3 + lick * .22 - .12;
   float flame = clamp((fuelVal - above * 1.05) * 3.2, 0., 1.) * step(above, .99);
   flame *= 1. - above * .35;
+  // flames only rise off the tops of the letters: the blurred fuel spreads
+  // under them too, and lit thin streaks below a j or a u
+  float overhead = 0.;
+  for (int i = 1; i <= 3; i++) {
+    vec2 at = uv - vec2(0., float(i) * .07);
+    if (at.y >= 0.) overhead = max(overhead, texture(u_image, at).a);
+  }
+  flame *= 1. - smoothstep(.1, .5, overhead);
 
   // a few sparks drifting up and fading as they climb
   vec2 sc = vec2(p.x * 7., p.y * 7. + t * 2.6);
@@ -411,7 +428,7 @@ void main() {
   // same turbulence as the flames above them, so the fire wraps the name
   // instead of standing behind it. Read off a heavily blurred mask so the
   // overlap is a soft wash, never a second copy of the letter shapes.
-  float top = body * smoothstep(0., .2, texture(u_image, uv, 3.).a - texture(u_image, uv - vec2(0., .14), 3.).a);
+  float top = body * smoothstep(0., .2, texture(u_blur, uv).a - texture(u_blur, uv - vec2(0., .14)).a);
   float front = top * smoothstep(.62, .95, fuelVal);
   bodyColor = mix(bodyColor, ramp(.5 + .3 * tongue), front * .75);
 
@@ -425,6 +442,10 @@ void main() {
   alpha = max(alpha, edgeA);
   color = mix(color, bodyColor, body);
   alpha = max(alpha, body);
+  // nothing reaches the box's edges: on some phones the blurred fuel and
+  // the outline left faint lines along them, a box round small names
+  vec2 rim = vec2(.05 / aspect, .05);
+  alpha *= smoothstep(0., rim.x, uv.x) * smoothstep(0., rim.x, 1. - uv.x) * smoothstep(0., rim.y, uv.y) * smoothstep(0., rim.y, 1. - uv.y);
   fragColor = vec4(color * alpha, alpha);
 }
 `;
@@ -532,6 +553,36 @@ function processedLiquidMetal(maskUrl: string): Promise<HTMLImageElement> {
   return image;
 }
 
+/* The fire's fuel: the mask box-filtered down by halving, the way mipmaps
+   are made, to 1/8 (about level 3) and about 1/23 (level 4.5). Small images;
+   the GPU's bilinear filter smooths them back up. */
+async function fireBlurs(image: HTMLImageElement): Promise<[HTMLImageElement, HTMLImageElement]> {
+  let source: CanvasImageSource = image;
+  let width = image.naturalWidth;
+  let height = image.naturalHeight;
+  const halve = (factor: number) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width / factor));
+    canvas.height = Math.max(1, Math.round(height / factor));
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    }
+    source = canvas;
+    width = canvas.width;
+    height = canvas.height;
+    return canvas;
+  };
+  halve(2);
+  halve(2);
+  const level3 = halve(2);
+  halve(2);
+  const level45 = halve(Math.SQRT2);
+  return Promise.all([loadImage(level3.toDataURL("image/png")), loadImage(level45.toDataURL("image/png"))]);
+}
+
 async function buildStyle(style: ShaderNameStyle, mask: { url: string; aspect: number }): Promise<Built> {
   if (style === "chrome" || style === "molten-gold") {
     const image = await processedLiquidMetal(mask.url);
@@ -558,7 +609,10 @@ async function buildStyle(style: ShaderNameStyle, mask: { url: string; aspect: n
     };
   }
   const image = await loadImage(mask.url);
-  if (isFireStyle(style)) return { shader: FIRE_SHADERS[style], uniforms: { u_image: image }, mipmaps: ["u_image"] };
+  if (isFireStyle(style)) {
+    const [blur, blurWide] = await fireBlurs(image);
+    return { shader: FIRE_SHADERS[style], uniforms: { u_image: image, u_blur: blur, u_blurWide: blurWide } };
+  }
   return { shader: style === "glitch" ? glitchShader : OWN_SHADERS[style], uniforms: { u_image: image } };
 }
 
@@ -635,7 +689,7 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
    instead of rendering every tile again; bump STILL_VERSION when a shader's
    look changes. */
 const stills = new Map<string, HTMLCanvasElement>();
-const STILL_VERSION = 1;
+const STILL_VERSION = 5;
 const STILL_PREFIX = `name-still:${STILL_VERSION}:`;
 
 function storedStill(key: string): Promise<HTMLCanvasElement | null> {
@@ -677,7 +731,23 @@ function placeStill(host: HTMLElement, source: HTMLCanvasElement): HTMLCanvasEle
   const copy = document.createElement("canvas");
   copy.width = source.width;
   copy.height = source.height;
-  copy.getContext("2d")?.drawImage(source, 0, 0);
+  const ctx = copy.getContext("2d", { willReadFrequently: true });
+  ctx?.drawImage(source, 0, 0);
+  // Clear the all-but-invisible pixels (a phone GPU's half floats and the
+  // stored WebP both leave a few): any glow on the name would trace them
+  // into a faint box round the letters.
+  if (ctx && copy.width * copy.height <= 1_500_000) {
+    const image = ctx.getImageData(0, 0, copy.width, copy.height);
+    const data = image.data;
+    let changed = false;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] !== 0 && data[i] < 10) {
+        data[i - 3] = data[i - 2] = data[i - 1] = data[i] = 0;
+        changed = true;
+      }
+    }
+    if (changed) ctx.putImageData(image, 0, 0);
+  }
   copy.style.cssText = "position:absolute;inset:0;width:100%;height:100%";
   host.appendChild(copy);
   return copy;
