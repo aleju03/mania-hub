@@ -4697,6 +4697,10 @@ msgid "Changing the keymode label failed. Try again."
 msgstr "Changing the keymode label failed. Try again."
 
 #: src/components/skins/SkinSettingsModal.tsx
+msgid "Changing the shown keymodes failed. Try again."
+msgstr "Changing the shown keymodes failed. Try again."
+
+#: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "Changing who can see this skin failed. Try again."
 
@@ -8655,6 +8659,7 @@ msgstr "Height of the exported image, in pixels"
 #~ msgstr "Held-chord Coordination"
 
 #: src/components/skins/SkinCard.tsx
+#: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "hidden"
 msgstr "hidden"
@@ -8694,6 +8699,14 @@ msgstr "Hide {0} revoked"
 #: src/routes/player/$username.tsx
 #~ msgid "Hide {0}K"
 #~ msgstr "Hide {0}K"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Hide {keys}K"
+msgstr "Hide {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide {selectedKeymode}K"
+msgstr "Hide {selectedKeymode}K"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Hide export details"
@@ -8739,6 +8752,10 @@ msgstr "Hide plays on ranked, approved and qualified charts"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
 msgstr "Hide the {0} clears"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide the keymodes with no note images"
+msgstr "Hide the keymodes with no note images"
 
 #: src/routes/dan-estimates.tsx
 msgid "hide the note"
@@ -17082,6 +17099,14 @@ msgstr "Show {hiddenCount} earlier"
 #~ msgid "Show {hiddenCount} earlier updates"
 #~ msgstr "Show {hiddenCount} earlier updates"
 
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Show {keys}K"
+msgstr "Show {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Show {selectedKeymode}K"
+msgstr "Show {selectedKeymode}K"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Show {totalLabel} maps"
 msgstr "Show {totalLabel} maps"
@@ -17260,6 +17285,10 @@ msgstr "Showing only {label}"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Showing the newest {0}."
 msgstr "Showing the newest {0}."
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Shown keymodes"
+msgstr "Shown keymodes"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
@@ -18530,6 +18559,10 @@ msgstr "Take it down for good?"
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
 msgstr "Taken down by a moderator."
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Tap a keymode to hide or show it."
+msgstr "Tap a keymode to hide or show it."
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."

@@ -4682,6 +4682,10 @@ msgid "Changing the keymode label failed. Try again."
 msgstr "修改键数标签失败。请重试。"
 
 #: src/components/skins/SkinSettingsModal.tsx
+msgid "Changing the shown keymodes failed. Try again."
+msgstr "更改显示的键数失败，请重试。"
+
+#: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "修改皮肤可见范围失败。请重试。"
 
@@ -8636,6 +8640,7 @@ msgstr "导出图片的高度，单位像素"
 #~ msgstr "多键长按协调"
 
 #: src/components/skins/SkinCard.tsx
+#: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "hidden"
 msgstr "已隐藏"
@@ -8675,6 +8680,14 @@ msgstr "隐藏 {0} 个已撤销"
 #: src/routes/player/$username.tsx
 #~ msgid "Hide {0}K"
 #~ msgstr "隐藏 {0}K"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Hide {keys}K"
+msgstr "隐藏 {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide {selectedKeymode}K"
+msgstr "隐藏 {selectedKeymode}K"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Hide export details"
@@ -8720,6 +8733,10 @@ msgstr "隐藏上架、approved 和 qualified 谱面上的成绩"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
 msgstr "隐藏 {0} 的通过记录"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide the keymodes with no note images"
+msgstr "隐藏没有音符图片的键数"
 
 #: src/routes/dan-estimates.tsx
 msgid "hide the note"
@@ -17055,6 +17072,14 @@ msgstr "查看更早的 {hiddenCount} 条"
 #~ msgid "Show {hiddenCount} earlier updates"
 #~ msgstr "显示之前的 {hiddenCount} 条更新"
 
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Show {keys}K"
+msgstr "显示 {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Show {selectedKeymode}K"
+msgstr "显示 {selectedKeymode}K"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Show {totalLabel} maps"
 msgstr "显示 {totalLabel} 个谱面"
@@ -17233,6 +17258,10 @@ msgstr "只显示 {label}"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Showing the newest {0}."
 msgstr "显示最新的 {0} 个。"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Shown keymodes"
+msgstr "显示的键数"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
@@ -18495,6 +18524,10 @@ msgstr "确定要永久下架吗？"
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
 msgstr "已被管理员下架。"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Tap a keymode to hide or show it."
+msgstr "点击键数即可隐藏或显示它。"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."

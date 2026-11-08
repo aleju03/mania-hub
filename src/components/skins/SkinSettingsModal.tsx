@@ -14,6 +14,7 @@ import {
   normalizeSkinResolution,
   removeSkinScreenshot,
   setMySkinVisibility,
+  setSkinHiddenKeymodes,
   setSkinSpecialKeymodes,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_NAME_MAX_LENGTH,
@@ -149,6 +150,17 @@ export function SkinSettingsModal({
     );
   };
 
+  const toggleHiddenKeymode = (keys: number) => {
+    const current = skin.hiddenKeymodes ?? [];
+    const next = current.includes(keys)
+      ? current.filter((entry) => entry !== keys)
+      : [...current, keys].sort((a, b) => a - b);
+    void run(
+      () => setSkinHiddenKeymodes({ data: { id: skin.id, hiddenKeymodes: next } }),
+      t`Changing the shown keymodes failed. Try again.`,
+    );
+  };
+
   const setVisibility = (visibility: SkinVisibility) => {
     if (visibility === skin.visibility) return;
     void run(
@@ -183,6 +195,7 @@ export function SkinSettingsModal({
   };
 
   const relabelable = skin.keymodes.filter((keys) => keys >= 2);
+  const shippedKeymodes = [...skin.keymodes, ...(skin.hiddenKeymodes ?? [])].sort((a, b) => a - b);
   const detailsDirty = nameDraft.trim().length > 0
     && (nameDraft.trim() !== skin.name
       || descriptionDraft.trim() !== (skin.description ?? "")
@@ -287,6 +300,41 @@ export function SkinSettingsModal({
                     )}
                   </form>
                   <p className="mt-1.5 text-[11px] text-osu-f1/70"><Trans>The link and the .osk filename stay as published.</Trans></p>
+                </SettingsRow>
+              )}
+
+              {/* Skins often ship keymodes they were never made for, which
+                  render as default-skin fallbacks. Hiding one takes it off
+                  the tags, the render strip and the keymode filter; the last
+                  shown keymode cannot be hidden. */}
+              {shippedKeymodes.length > 1 && (
+                <SettingsRow label={t`Shown keymodes`}>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {shippedKeymodes.map((keys) => {
+                      const hidden = skin.hiddenKeymodes?.includes(keys) ?? false;
+                      const lastShown = !hidden && skin.keymodes.length <= 1;
+                      return (
+                        <button
+                          key={keys}
+                          type="button"
+                          onClick={() => toggleHiddenKeymode(keys)}
+                          disabled={busy || lastShown}
+                          aria-pressed={!hidden}
+                          title={hidden ? t`Show ${keys}K` : t`Hide ${keys}K`}
+                          className={`rounded-full px-3 py-1.5 text-[12px] font-bold tabular-nums transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50 ${
+                            hidden
+                              ? "border border-osu-b3/40 text-osu-f1 line-through hover:border-osu-b3/70 hover:text-osu-l2"
+                              : "bg-osu-b3/60 text-white hover:brightness-110"
+                          }`}
+                        >
+                          {keymodeLabel(keys, skin.specialKeymodes)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-osu-f1/70">
+                    <Trans>Tap a keymode to hide or show it.</Trans>
+                  </p>
                 </SettingsRow>
               )}
 

@@ -409,8 +409,10 @@ export function SkinUpdateModal({
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
   const hero = renders.get(selectedKeymode);
   const awaitingRenders = keymodes.some((keys) => !renders.has(keys));
-  const addedKeymodes = keymodes.filter((keys) => !skin.keymodes.includes(keys));
-  const droppedKeymodes = skin.keymodes.filter((keys) => !keymodes.includes(keys));
+  // Hidden keymodes still ship, so the new build keeping them is no change.
+  const shippedKeymodes = [...skin.keymodes, ...(skin.hiddenKeymodes ?? [])];
+  const addedKeymodes = keymodes.filter((keys) => !shippedKeymodes.includes(keys));
+  const droppedKeymodes = shippedKeymodes.filter((keys) => !keymodes.includes(keys));
 
   if (typeof document === "undefined") return null;
 

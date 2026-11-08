@@ -4670,6 +4670,10 @@ msgid "Changing the keymode label failed. Try again."
 msgstr "No se pudo cambiar la etiqueta del modo de teclas. Inténtalo de nuevo."
 
 #: src/components/skins/SkinSettingsModal.tsx
+msgid "Changing the shown keymodes failed. Try again."
+msgstr "No se pudieron cambiar los keymodes visibles. Inténtalo de nuevo."
+
+#: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "No se pudo cambiar quién puede ver esta skin. Inténtalo de nuevo."
 
@@ -8624,6 +8628,7 @@ msgstr "Alto de la imagen exportada, en píxeles"
 #~ msgstr "Coordinación de acordes mantenidos"
 
 #: src/components/skins/SkinCard.tsx
+#: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "hidden"
 msgstr "oculta"
@@ -8663,6 +8668,14 @@ msgstr "Ocultar {0} revocadas"
 #: src/routes/player/$username.tsx
 #~ msgid "Hide {0}K"
 #~ msgstr "Ocultar {0}K"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Hide {keys}K"
+msgstr "Ocultar {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide {selectedKeymode}K"
+msgstr "Ocultar {selectedKeymode}K"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Hide export details"
@@ -8708,6 +8721,10 @@ msgstr "Ocultar jugadas en mapas ranked, approved y qualified"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
 msgstr "Ocultar los clears de {0}"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide the keymodes with no note images"
+msgstr "Ocultar los keymodes sin imágenes de notas"
 
 #: src/routes/dan-estimates.tsx
 msgid "hide the note"
@@ -17043,6 +17060,14 @@ msgstr "Ver {hiddenCount} anteriores"
 #~ msgid "Show {hiddenCount} earlier updates"
 #~ msgstr "Mostrar {hiddenCount} actualizaciones anteriores"
 
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Show {keys}K"
+msgstr "Mostrar {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Show {selectedKeymode}K"
+msgstr "Mostrar {selectedKeymode}K"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Show {totalLabel} maps"
 msgstr "Mostrar {totalLabel} mapas"
@@ -17221,6 +17246,10 @@ msgstr "Mostrando solo {label}"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Showing the newest {0}."
 msgstr "Mostrando los {0} más recientes."
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Shown keymodes"
+msgstr "Keymodes visibles"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
@@ -18483,6 +18512,10 @@ msgstr "¿Retirarlo definitivamente?"
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Taken down by a moderator."
 msgstr "Retirado por un moderador."
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Tap a keymode to hide or show it."
+msgstr "Toca un keymode para ocultarlo o mostrarlo."
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
