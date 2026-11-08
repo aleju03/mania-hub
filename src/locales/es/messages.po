@@ -2259,8 +2259,8 @@ msgstr "<1% de peso"
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
-msgid "▶ Watch"
-msgstr "▶ Ver"
+#~ msgid "▶ Watch"
+#~ msgstr "▶ Ver"
 
 #: src/lib/format.ts
 msgid "0h"
@@ -21786,6 +21786,9 @@ msgid "Warming this player up... first draws can take a moment"
 msgstr "Calentando a este jugador... las primeras sacadas pueden tardar un poco"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Watch"
 msgstr "Ver"
 

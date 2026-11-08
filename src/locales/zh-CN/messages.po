@@ -2271,8 +2271,8 @@ msgstr "<1% 权重"
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
-msgid "▶ Watch"
-msgstr "▶ 观看"
+#~ msgid "▶ Watch"
+#~ msgstr "▶ 观看"
 
 #: src/lib/format.ts
 msgid "0h"
@@ -21798,6 +21798,9 @@ msgid "Warming this player up... first draws can take a moment"
 msgstr "正在准备这名玩家…第一次抽卡可能要等一会儿"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Watch"
 msgstr "观看"
 

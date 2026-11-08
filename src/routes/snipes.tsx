@@ -16,6 +16,7 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
+import { PlayGlyph } from "../components/ui/PlayGlyph";
 import type { OsuScore, SnipeEvent } from "../lib/types";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHiddenUserIds, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
@@ -987,7 +988,7 @@ function SnipeRow({
                   title={t`Watch replay`}
                   aria-label={t`Watch replay`}
                 >
-                  &#9654;
+                  <PlayGlyph className="inline-block h-[9px] w-[7.5px] translate-x-[0.5px] align-middle" />
                 </button>
               )}
             </div>
@@ -1010,10 +1011,11 @@ function SnipeRow({
                 trackSnipeLink(event, "replay");
                 navigate({ to: "/replay", search: replaySearch });
               }}
-              className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
               title={t`Watch replay`}
             >
-              <Trans>&#9654; Watch</Trans>
+              <PlayGlyph className="h-[9px] w-[7.5px]" />
+              <Trans>Watch</Trans>
             </button>
           )}
           <span className="text-[10px] text-osu-f1 w-12 text-right">

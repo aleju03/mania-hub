@@ -43,6 +43,7 @@ import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
 import { ScoreVideoMark, VideoMark } from "../components/ui/CompanellaMark";
+import { PlayGlyph } from "../components/ui/PlayGlyph";
 import { TRACKER_FEED_SCORE_LIMIT, TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import type { LeanTrackerScore, OsuCovers } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
@@ -2106,7 +2107,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                   title={t`Watch replay`}
                   aria-label={t`Watch replay`}
                 >
-                  &#9654;
+                  <PlayGlyph className="inline-block h-[9px] w-[7.5px] translate-x-[0.5px] align-middle" />
                 </button>
               )}
             </div>
@@ -2137,10 +2138,11 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 e.stopPropagation();
                 navigate({ to: "/replay", search: replaySearch });
               }}
-              className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
               title={t`Watch replay`}
             >
-              <Trans>&#9654; Watch</Trans>
+              <PlayGlyph className="h-[9px] w-[7.5px]" />
+              <Trans>Watch</Trans>
             </button>
           )}
           <span className="text-[11px] text-osu-f1 w-14 text-right">
