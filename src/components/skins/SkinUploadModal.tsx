@@ -10,6 +10,7 @@ import { skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import { buildSkinAssetGroups, type SkinAssetGroup } from "../../lib/skin-asset-explorer";
+import { findSkinDeadWeightInZip, trimSkinArchive, type SkinDeadWeight } from "../../lib/skin-dead-weight";
 import { SkinAssetTiles } from "./SkinAssetExplorer";
 import { DriftTriangles } from "../ui/DriftTriangles";
 import { SkinCard } from "./SkinCard";
@@ -150,6 +151,11 @@ export function SkinUploadModal({
   // stays around so a chip can expand into the actual thumbnails.
   const [assetGroups, setAssetGroups] = useState<SkinAssetGroup[] | null>(null);
   const assetZipRef = useRef<JSZip | null>(null);
+  // Files in the picked .osk that osu! never loads, and how much leaving them
+  // out saved once the uploader did.
+  const [deadWeight, setDeadWeight] = useState<SkinDeadWeight | null>(null);
+  const [trimming, setTrimming] = useState(false);
+  const [trimmedBytes, setTrimmedBytes] = useState<number | null>(null);
   const assetUrlsRef = useRef<Map<string, string>>(new Map());
 
   const revokeAssetUrls = useCallback(() => {
@@ -400,6 +406,8 @@ export function SkinUploadModal({
     setCoverShot(null);
     setPublished(null);
     setAssetGroups(null);
+    setDeadWeight(null);
+    setTrimmedBytes(null);
     // Emptying the pool makes the next open draw a fresh one.
     setBackdropPool([]);
     backdropPoolRef.current = [];
@@ -501,10 +509,18 @@ export function SkinUploadModal({
       // Asset detection reads only the zip's central directory plus name
       // matching, so it fills in quickly after the form appears.
       setAssetGroups(null);
+      setDeadWeight(null);
+      setTrimmedBytes(null);
       revokeAssetUrls();
       assetZipRef.current = null;
       void JSZip.loadAsync(picked)
         .then((zip) => {
+          void findSkinDeadWeightInZip(zip)
+            .then((found) => {
+              // Under a megabyte is not worth a line on the form.
+              if (assetZipRef.current === zip) setDeadWeight(found.bytes >= 1024 * 1024 ? found : null);
+            })
+            .catch(() => {});
           const files = Object.values(zip.files)
             .filter((entry) => !entry.dir)
             .map((entry) => ({
@@ -625,6 +641,36 @@ export function SkinUploadModal({
     // it up, and removing the cover itself hands the card back to a keymode.
     setCoverShot((previous) => (previous == null || previous === index ? null : previous > index ? previous - 1 : previous));
   }, []);
+
+  // Swaps the picked file for a copy without the dead weight. Nothing on
+  // screen changes: the flagged files are ones osu! never loads, so the
+  // renders and the form stay as they are.
+  const trimDeadWeight = useCallback(async () => {
+    const zip = assetZipRef.current;
+    if (!zip || !file || !deadWeight || trimming) return;
+    setTrimming(true);
+    setError(null);
+    try {
+      const trimmed = await trimSkinArchive(zip, deadWeight, file);
+      const trimmedZip = await JSZip.loadAsync(trimmed);
+      setFile(trimmed);
+      oskHashRef.current = { file: trimmed, hash: hashOskFile(trimmed) };
+      revokeAssetUrls();
+      assetZipRef.current = trimmedZip;
+      setAssetGroups(buildSkinAssetGroups(Object.values(trimmedZip.files)
+        .filter((entry) => !entry.dir)
+        .map((entry) => ({
+          path: entry.name,
+          size: (entry as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 1,
+        }))));
+      setTrimmedBytes(Math.max(0, file.size - trimmed.size));
+      setDeadWeight(null);
+    } catch {
+      setError(t`Removing the unused files failed. The original file will upload instead.`);
+    } finally {
+      setTrimming(false);
+    }
+  }, [deadWeight, file, revokeAssetUrls, t, trimming]);
 
   const publish = useCallback(async () => {
     const previewEntries = [...previews.entries()].sort(([a], [b]) => a - b);
@@ -885,6 +931,10 @@ export function SkinUploadModal({
                     progress={progress}
                     onPublish={() => void publish()}
                     onRepick={() => setStep("pick")}
+                    deadWeight={deadWeight}
+                    trimming={trimming}
+                    trimmedBytes={trimmedBytes}
+                    onTrim={() => void trimDeadWeight()}
                     onDismiss={handleDismiss}
                   />
                 )}
@@ -1145,6 +1195,10 @@ function FormStep({
   onPublish,
   onRepick,
   onDismiss,
+  deadWeight,
+  trimming,
+  trimmedBytes,
+  onTrim,
 }: {
   imported: ReplaySkinImportResult | null;
   file: File | null;
@@ -1198,12 +1252,17 @@ function FormStep({
   onPublish: () => void;
   onRepick: () => void;
   onDismiss: () => void;
+  deadWeight: SkinDeadWeight | null;
+  trimming: boolean;
+  trimmedBytes: number | null;
+  onTrim: () => void;
 }) {
   const { t, i18n } = useLingui();
   const keymodes = imported?.summary.keymodes ?? [];
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
   const heroPreview = previews.get(selectedKeymode);
   const selectedHidden = hiddenKeymodes.has(selectedKeymode);
+  const removedSize = trimmedBytes != null ? formatSkinFileSize(trimmedBytes) : "";
   // Publishing needs the cover's render, which is not always the one on screen.
   const coverPreview = previews.get(coverKeymode);
   // Keymodes whose [Mania] block resolved no note images render with flat
@@ -1463,6 +1522,14 @@ function FormStep({
         />
 
         <div className="mt-auto flex flex-col gap-2.5 pt-1">
+          {deadWeight && !uploading && (
+            <SkinDeadWeightNotice deadWeight={deadWeight} trimming={trimming} onTrim={onTrim} />
+          )}
+          {removedSize && !deadWeight && (
+            <p className="text-[11.5px] text-osu-f1">
+              <Trans>Removed {removedSize} of files osu! never loads.</Trans>
+            </p>
+          )}
           {error && (
             <div className="text-[12px] font-semibold text-osu-red-light">
               {error}
@@ -1514,6 +1581,88 @@ function FormStep({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const DEAD_WEIGHT_LABELS = {
+  archive: msg`Another skin or archive inside it`,
+  leftover: msg`Editor and system files`,
+  unreferenced: msg`Files in folders skin.ini doesn't use`,
+  copy: msg`Copies of files`,
+} as const;
+
+function formatEntrySize(bytes: number): string {
+  return bytes < 100 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : formatSkinFileSize(bytes);
+}
+
+// Files in the .osk that osu! never loads: one line with what they cost, the
+// button that uploads a copy without them, and the files grouped by reason.
+function SkinDeadWeightNotice({
+  deadWeight,
+  trimming,
+  onTrim,
+}: {
+  deadWeight: SkinDeadWeight;
+  trimming: boolean;
+  onTrim: () => void;
+}) {
+  const { t, i18n } = useLingui();
+  const [expanded, setExpanded] = useState(false);
+  const size = formatSkinFileSize(deadWeight.bytes);
+  const fileCount = deadWeight.files.length;
+  const groups = (Object.keys(DEAD_WEIGHT_LABELS) as Array<keyof typeof DEAD_WEIGHT_LABELS>)
+    .map((kind) => {
+      const files = deadWeight.files.filter((entry) => entry.kind === kind);
+      return { kind, files, bytes: files.reduce((total, entry) => total + entry.bytes, 0) };
+    })
+    .filter((group) => group.files.length > 0)
+    .sort((a, b) => b.bytes - a.bytes);
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-white/[0.07] pt-2.5">
+      <p className="text-[12px] leading-snug text-osu-l2">
+        <Trans>{size} of this .osk is files osu! never loads.</Trans>
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onTrim}
+          disabled={trimming}
+          className="rounded-full bg-osu-b3/60 px-3.5 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-50"
+        >
+          {trimming ? <Trans>Removing...</Trans> : <Trans>Upload without them</Trans>}
+        </button>
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+          className="flex items-center gap-1 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
+        >
+          {t`${plural(fileCount, { one: "# file", other: "# files" })}`}
+          <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      </div>
+      {expanded && (
+        <div className="max-h-[200px] overflow-y-auto text-[11px]">
+          {groups.map((group) => (
+            <div key={group.kind} className="pb-1.5">
+              <div className="flex justify-between gap-3 py-0.5 font-bold text-osu-l2">
+                <span>{i18n._(DEAD_WEIGHT_LABELS[group.kind])}</span>
+                <span className="shrink-0 tabular-nums">{formatEntrySize(group.bytes)}</span>
+              </div>
+              <ul className="text-osu-f1">
+                {group.files.map((entry) => (
+                  <li key={entry.path} className="flex justify-between gap-3 py-px">
+                    <span className="min-w-0 truncate" title={entry.path}>{entry.path}</span>
+                    <span className="shrink-0 tabular-nums">{formatEntrySize(entry.bytes)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

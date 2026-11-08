@@ -1357,6 +1357,10 @@ msgid "{feedCount} feeds"
 msgstr "{feedCount} feeds"
 
 #: src/components/skins/SkinUploadModal.tsx
+msgid "{fileCount, plural, one {# file} other {# files}}"
+msgstr "{fileCount, plural, one {# file} other {# files}}"
+
+#: src/components/skins/SkinUploadModal.tsx
 msgid "{files} files in {groupCount} groups"
 msgstr "{files} files in {groupCount} groups"
 
@@ -1852,6 +1856,10 @@ msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} co
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 #~ msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{size} of this .osk is files osu! never loads."
+msgstr "{size} of this .osk is files osu! never loads."
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{skillsetLabel} dan"
@@ -3560,6 +3568,10 @@ msgstr "Another player already goes by that name."
 #: src/lib/replay-export/errors.ts
 msgid "Another replay video is still exporting. Finish or cancel it first."
 msgstr "Another replay video is still exporting. Finish or cancel it first."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Another skin or archive inside it"
+msgstr "Another skin or archive inside it"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -5583,6 +5595,10 @@ msgstr "Copies"
 msgid "copies in circulation"
 msgstr "copies in circulation"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Copies of files"
+msgstr "Copies of files"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -7213,6 +7229,10 @@ msgstr "Editing"
 #~ msgid "Edition crafted"
 #~ msgstr "Edition crafted"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Editor and system files"
+msgstr "Editor and system files"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
 msgstr "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
@@ -7770,6 +7790,10 @@ msgstr "File updated"
 #: src/lib/bug-report-screenshots.ts
 msgid "Files have to be under 5MB."
 msgstr "Files have to be under 5MB."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Files in folders skin.ini doesn't use"
+msgstr "Files in folders skin.ini doesn't use"
 
 #: src/components/communities/field-options.tsx
 msgid "Filipino"
@@ -15634,6 +15658,10 @@ msgstr "Remove this screenshot"
 msgid "Remove wish"
 msgstr "Remove wish"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removed {removedSize} of files osu! never loads."
+msgstr "Removed {removedSize} of files osu! never loads."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Removed imported skin hitsounds"
 msgstr "Removed imported skin hitsounds"
@@ -15645,6 +15673,14 @@ msgstr "Removes the map's scroll speed changes."
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "Removing the screenshot failed. Try again."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing the unused files failed. The original file will upload instead."
+msgstr "Removing the unused files failed. The original file will upload instead."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing..."
+msgstr "Removing..."
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Removing…"
@@ -21269,6 +21305,10 @@ msgstr "Upload another"
 #: src/routes/skins.tsx
 msgid "Upload skin"
 msgstr "Upload skin"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Upload without them"
+msgstr "Upload without them"
 
 #: src/routes/skins_.$id.tsx
 msgid "Uploaded"

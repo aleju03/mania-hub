@@ -1334,6 +1334,10 @@ msgid "{feedCount} feeds"
 msgstr "{feedCount} feeds"
 
 #: src/components/skins/SkinUploadModal.tsx
+msgid "{fileCount, plural, one {# file} other {# files}}"
+msgstr "{fileCount, plural, one {# archivo} other {# archivos}}"
+
+#: src/components/skins/SkinUploadModal.tsx
 msgid "{files} files in {groupCount} groups"
 msgstr "{files} archivos en {groupCount} grupos"
 
@@ -1829,6 +1833,10 @@ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la e
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 #~ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears de ese nivel o superior (96%+ de acc) · clic para ver los clears detrás"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{size} of this .osk is files osu! never loads."
+msgstr "{size} de este .osk son archivos que osu! nunca carga."
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{skillsetLabel} dan"
@@ -3533,6 +3541,10 @@ msgstr "Otro jugador ya usa ese nombre."
 #: src/lib/replay-export/errors.ts
 msgid "Another replay video is still exporting. Finish or cancel it first."
 msgstr "Todavía se está exportando otro video. Termínalo o cancélalo primero."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Another skin or archive inside it"
+msgstr "Otra skin o archivo comprimido dentro"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -5556,6 +5568,10 @@ msgstr "Copias"
 msgid "copies in circulation"
 msgstr "copias en circulación"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Copies of files"
+msgstr "Copias de archivos"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -7186,6 +7202,10 @@ msgstr "Editando"
 #~ msgid "Edition crafted"
 #~ msgstr "Edición creada"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Editor and system files"
+msgstr "Archivos de editores y del sistema"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
 msgstr "Los cambios quedan en este navegador. Copia el resultado y pégalo en el editor me! de <0>tu página de osu!</0>."
@@ -7739,6 +7759,10 @@ msgstr "Archivo actualizado"
 #: src/lib/bug-report-screenshots.ts
 msgid "Files have to be under 5MB."
 msgstr "Los archivos tienen que pesar menos de 5MB."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Files in folders skin.ini doesn't use"
+msgstr "Archivos en carpetas que skin.ini no usa"
 
 #: src/components/communities/field-options.tsx
 msgid "Filipino"
@@ -15595,6 +15619,10 @@ msgstr "Eliminar esta captura"
 msgid "Remove wish"
 msgstr "Quitar de deseos"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removed {removedSize} of files osu! never loads."
+msgstr "Se quitaron {removedSize} de archivos que osu! nunca carga."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Removed imported skin hitsounds"
 msgstr "Se quitaron los hitsounds del skin importado"
@@ -15606,6 +15634,14 @@ msgstr "Quita los cambios de velocidad de scroll del mapa."
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "No se pudo eliminar la captura. Inténtalo de nuevo."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing the unused files failed. The original file will upload instead."
+msgstr "No se pudieron quitar los archivos sin usar. Se subirá el archivo original."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing..."
+msgstr "Quitando..."
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Removing…"
@@ -21214,6 +21250,10 @@ msgstr "Subir otra"
 #: src/routes/skins.tsx
 msgid "Upload skin"
 msgstr "Subir skin"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Upload without them"
+msgstr "Subir sin ellos"
 
 #: src/routes/skins_.$id.tsx
 msgid "Uploaded"

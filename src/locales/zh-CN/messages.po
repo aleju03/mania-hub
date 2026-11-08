@@ -1346,6 +1346,10 @@ msgid "{feedCount} feeds"
 msgstr "{feedCount} 个推送"
 
 #: src/components/skins/SkinUploadModal.tsx
+msgid "{fileCount, plural, one {# file} other {# files}}"
+msgstr "{fileCount, plural, other {# 个文件}}"
+
+#: src/components/skins/SkinUploadModal.tsx
 msgid "{files} files in {groupCount} groups"
 msgstr "{groupCount} 组共 {files} 个文件"
 
@@ -1841,6 +1845,10 @@ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段�
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 #~ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位的最高级，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{size} of this .osk is files osu! never loads."
+msgstr "这个 .osk 中有 {size} 是 osu! 从不加载的文件。"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{skillsetLabel} dan"
@@ -3545,6 +3553,10 @@ msgstr "已有其他玩家使用这个名字。"
 #: src/lib/replay-export/errors.ts
 msgid "Another replay video is still exporting. Finish or cancel it first."
 msgstr "已有一个回放视频正在导出，请先完成或取消它。"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Another skin or archive inside it"
+msgstr "里面还有另一个皮肤或压缩包"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -5568,6 +5580,10 @@ msgstr "数量"
 msgid "copies in circulation"
 msgstr "流通中的卡片"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Copies of files"
+msgstr "文件副本"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -7198,6 +7214,10 @@ msgstr "编辑中"
 #~ msgid "Edition crafted"
 #~ msgstr "特别版制作完成"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Editor and system files"
+msgstr "编辑器和系统文件"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
 msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到<0>你的 osu! 页面</0>的 me! 编辑器中。"
@@ -7751,6 +7771,10 @@ msgstr "文件已更新"
 #: src/lib/bug-report-screenshots.ts
 msgid "Files have to be under 5MB."
 msgstr "文件需小于 5MB。"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Files in folders skin.ini doesn't use"
+msgstr "skin.ini 未使用的文件夹中的文件"
 
 #: src/components/communities/field-options.tsx
 msgid "Filipino"
@@ -15607,6 +15631,10 @@ msgstr "移除这张截图"
 msgid "Remove wish"
 msgstr "移出心愿单"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removed {removedSize} of files osu! never loads."
+msgstr "已移除 {removedSize} osu! 从不加载的文件。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Removed imported skin hitsounds"
 msgstr "已移除导入的皮肤打击音"
@@ -15618,6 +15646,14 @@ msgstr "去掉图中的流速变化。"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "移除截图失败。请重试。"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing the unused files failed. The original file will upload instead."
+msgstr "移除未使用的文件失败，将上传原始文件。"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing..."
+msgstr "正在移除..."
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Removing…"
@@ -21226,6 +21262,10 @@ msgstr "再上传一个"
 #: src/routes/skins.tsx
 msgid "Upload skin"
 msgstr "上传皮肤"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Upload without them"
+msgstr "不含这些文件上传"
 
 #: src/routes/skins_.$id.tsx
 msgid "Uploaded"
