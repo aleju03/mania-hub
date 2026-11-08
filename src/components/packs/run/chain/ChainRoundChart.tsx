@@ -15,7 +15,7 @@ export function RoundChartTag({ chart, compact = false }: { chart: ChainCard; co
   const stars = info.stars.toFixed(2);
   return (
     <div
-      className="flex min-w-0 items-center gap-2.5 rounded-[12px] border-[2.5px] p-1 pr-3 leading-none"
+      className="flex items-center gap-2.5 rounded-[12px] border-[2.5px] p-1 pr-3 leading-none"
       style={{ borderColor: KIT.cream, background: KIT.dark, boxShadow: "0 4px 0 rgba(0,0,0,0.45)" }}
       title={t`This round is set on ${chart.name} [${info.version}]. ${fits} cards score x${CHAIN_ROUND_CHART.skill}.`}
     >
@@ -26,9 +26,11 @@ export function RoundChartTag({ chart, compact = false }: { chart: ChainCard; co
         className="shrink-0 rounded-[8px] object-cover"
         style={{ width: compact ? 44 : 76, height: compact ? 28 : 44, background: "#2a2032" }}
       />
-      <div className="min-w-0">
+      {/* The box is as wide as the chips, or the title up to 320px, and the
+          title truncates past that. */}
+      <div>
         {!compact && (
-          <div className="truncate text-[14px] font-black text-[#f3e9d8]">
+          <div className="min-w-full truncate text-[14px] font-black text-[#f3e9d8]" style={{ width: "min(max-content, 320px)" }}>
             {chart.name} <span style={{ color: KIT.gold }}>[{info.version}]</span>
           </div>
         )}

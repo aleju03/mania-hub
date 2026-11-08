@@ -373,7 +373,7 @@ function LinkDetails({ link }: { link: ChainLink }) {
       </div>
       {link.fires > 1 && (
         <div className="text-[11px] text-osu-f1">
-          <Trans>Fires {link.fires} times in a hand.</Trans>
+          <Trans>Triggers {link.fires} times in a hand.</Trans>
         </div>
       )}
     </div>

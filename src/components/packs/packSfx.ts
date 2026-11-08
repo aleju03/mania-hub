@@ -838,10 +838,14 @@ const RUN_CUES = {
   "tally-line": {},
   "tally-total": {},
   "clear-song": {},
+  /* The last bar of the music (Cool Vibes) into its final hit:
+     local-notes/overjoy-sfx/cues/stage_cleared.py, not the renderer. */
   "clear-stage": {},
   "run-cleared": {},
   "run-failed": {},
   shards: {},
+  /* Two takes of Kenney's "card-shove" (CC0), cut by
+     local-notes/overjoy-sfx/cues/shop_in.py, not the renderer. */
   "shop-in": { slot: 0.45, count: 2 },
   reroll: {},
   buy: {},
@@ -863,7 +867,7 @@ export const RUN_CHAIN_TAKES = 4;
 
 /* Bumped whenever scripts/audio/pack-run-sfx.py re-renders the set, so a
    cached copy of the old file is never decoded. */
-const RUN_SAMPLES_VERSION = 8;
+const RUN_SAMPLES_VERSION = 10;
 
 const runSamples = new Map<RunCueName, SampleSlot>(
   (Object.keys(RUN_CUES) as RunCueName[]).map((name) => [
@@ -1057,4 +1061,135 @@ export function playRunBlindCleared(kind: "song" | "stage" | "run" = "song") {
 /* A failed run. */
 export function playRunOver() {
   playRunCue("run-failed", { gain: 0.9 });
+}
+
+/* Overjoy's music: "Cool Vibes" by Kevin MacLeod (incompetech.com, CC BY
+   4.0), baked into one file by local-notes/overjoy-music/sourced. It plays
+   from the song's start, then loops file time MUSIC_LOOP_START..END, a span
+   that starts and ends on the same bar; the end of the file repeats the
+   audio after the loop start, so the seam holds whether or not a decoder
+   trims the mp3's encoder delay. It sits low enough to go unnoticed, ducks
+   under a round chart's preview clip, falls silent while the tab is hidden,
+   and the player can turn it off (kept in localStorage). */
+const MUSIC_URL = "/audio/packs/run/music/cool-vibes.mp3?v=1";
+const MUSIC_LOOP_START = 17.456;
+const MUSIC_LOOP_END = 185.1345;
+const MUSIC_LEVEL = 0.2;
+const MUSIC_DUCKED = 0.04;
+const MUSIC_OFF_KEY = "overjoy-music-off";
+
+const musicSample: SampleSlot = { url: MUSIC_URL, buffer: null, load: null };
+let music: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+let musicWanted = false;
+let musicDucked = false;
+/* Ducked under a stinger cut from the music itself, until this time (ms). */
+let musicStingerUntil = 0;
+let musicStingerTimer: number | null = null;
+let musicHidden = false;
+const musicListeners = new Set<() => void>();
+/* This page's choice, which wins over storage (private mode can't write it). */
+let musicOnHere: boolean | null = null;
+
+export function isRunMusicOn(): boolean {
+  if (musicOnHere !== null) return musicOnHere;
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(MUSIC_OFF_KEY) !== "1";
+  } catch {
+    return true;
+  }
+}
+
+export function subscribeRunMusic(listener: () => void): () => void {
+  musicListeners.add(listener);
+  return () => musicListeners.delete(listener);
+}
+
+function musicTarget(): number {
+  if (!isRunMusicOn() || musicHidden) return 0.0001;
+  return musicDucked || performance.now() < musicStingerUntil ? MUSIC_DUCKED : MUSIC_LEVEL;
+}
+
+function applyMusicLevel(timeConstant = 0.4): void {
+  const ctx = context;
+  if (!ctx || !music) return;
+  music.gain.gain.cancelScheduledValues(ctx.currentTime);
+  music.gain.gain.setTargetAtTime(musicTarget(), ctx.currentTime, timeConstant);
+}
+
+function onMusicVisibility(): void {
+  musicHidden = document.visibilityState === "hidden";
+  applyMusicLevel(musicHidden ? 0.15 : 0.6);
+}
+
+/* Starts the music with a slow fade in. Safe before a gesture: on a
+   suspended context the source waits and starts with the first click. */
+export function startRunMusic(): void {
+  musicWanted = true;
+  if (music) return;
+  const ctx = ensureAudio();
+  if (!ctx || !master) return;
+  if (!musicSample.buffer) {
+    void loadSample(ctx, musicSample).then(() => {
+      if (musicWanted && !music && musicSample.buffer) startRunMusic();
+    });
+    return;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = musicSample.buffer;
+  source.loop = true;
+  source.loopStart = MUSIC_LOOP_START;
+  source.loopEnd = Math.min(musicSample.buffer.duration, MUSIC_LOOP_END);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  source.connect(gain).connect(master);
+  source.start(ctx.currentTime);
+  music = { source, gain };
+  musicHidden = document.visibilityState === "hidden";
+  document.addEventListener("visibilitychange", onMusicVisibility);
+  applyMusicLevel(1.2);
+}
+
+/* Fades the music out and releases it. */
+export function stopRunMusic(): void {
+  musicWanted = false;
+  const ctx = context;
+  const playing = music;
+  music = null;
+  document.removeEventListener("visibilitychange", onMusicVisibility);
+  if (!ctx || !playing) return;
+  playing.gain.gain.cancelScheduledValues(ctx.currentTime);
+  playing.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.3);
+  playing.source.stop(ctx.currentTime + 2);
+}
+
+/* Turns the music on or off for good (the setting outlives the run). */
+export function setRunMusicOn(on: boolean): void {
+  musicOnHere = on;
+  try {
+    if (on) window.localStorage.removeItem(MUSIC_OFF_KEY);
+    else window.localStorage.setItem(MUSIC_OFF_KEY, "1");
+  } catch {
+    // Private mode: musicOnHere still holds it for this page.
+  }
+  applyMusicLevel(on ? 0.6 : 0.2);
+  for (const listener of musicListeners) listener();
+}
+
+/* Drops the music low for `ms`, under a stinger that would clash with it. */
+export function duckRunMusicFor(ms: number): void {
+  musicStingerUntil = performance.now() + ms;
+  applyMusicLevel(0.15);
+  if (musicStingerTimer !== null) window.clearTimeout(musicStingerTimer);
+  musicStingerTimer = window.setTimeout(() => {
+    musicStingerTimer = null;
+    applyMusicLevel(0.8);
+  }, ms);
+}
+
+/* Drops the music low while a round chart's preview clip plays. */
+export function duckRunMusic(on: boolean): void {
+  if (musicDucked === on) return;
+  musicDucked = on;
+  applyMusicLevel(on ? 0.25 : 0.8);
 }

@@ -236,6 +236,18 @@ export function ChainHowTo({ open, narrow, onClose }: { open: boolean; narrow: b
                 ]}
               />
             </div>
+            {/* CC BY 4.0 attribution for the table's music (packSfx.ts). */}
+            {last && (
+              <div className="mt-4 text-[11px] font-bold text-[#f3e9d8]/45">
+                <Trans>
+                  Music: "Cool Vibes" by Kevin MacLeod (
+                  <a href="https://incompetech.com" target="_blank" rel="noreferrer" className="underline hover:text-[#f3e9d8]">
+                    incompetech.com
+                  </a>
+                  ), CC BY 4.0
+                </Trans>
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}

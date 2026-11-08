@@ -300,7 +300,7 @@ export const CHAIN_VARIANT_COPY: Record<ChainVariant, { name: string; badge: str
     badge: "RP",
     fill: "linear-gradient(135deg, #e7fff6 0%, #5eead4 45%, #0f766e 100%)",
     ink: "#8ff5dc",
-    text: msg`After it scores, the link into it fires again and it scores again.`,
+    text: msg`After it scores, the link into it triggers again and it scores again.`,
   },
   random: {
     name: "Random",
@@ -468,7 +468,7 @@ export function chainSkillEffectText(card: Pick<ChainCard, "skill" | "goat" | "t
           ? i18n._(msg`Hits twice; the link into it adds half its combo.`)
           : i18n._(msg`Hits twice; the link into it adds no combo.`);
     case "Chordjack":
-      return band === 2 ? i18n._(msg`The links into and out of it fire twice.`) : i18n._(msg`The link into it fires twice.`);
+      return band === 2 ? i18n._(msg`The links into and out of it trigger twice.`) : i18n._(msg`The link into it triggers twice.`);
     case "Tech":
       return i18n._(msg`+${pct(E.tech[band])}% points for each other skillset in the row.`);
     case "Chordstream":
@@ -517,7 +517,7 @@ export const CHAIN_SCENE_COPY: Record<ChainSceneId, { short: MessageDescriptor; 
   },
   future: {
     short: msg`3 cards sharing a trait make a hand.`,
-    text: msg`3 cards in a row that share a trait make a hand, and its links fire 3 times. Every hand after the first gives the row x${CHAIN_SCENE_NUMBERS.handRowMultiplier}.`,
+    text: msg`3 cards in a row that share a trait make a hand, and its links trigger 3 times. Every hand after the first gives the row x${CHAIN_SCENE_NUMBERS.handRowMultiplier}.`,
   },
   ascension: {
     short: msg`Rows of only 7K cards get a multiplier.`,
@@ -560,8 +560,8 @@ export const CHAIN_SCENE_COPY: Record<ChainSceneId, { short: MessageDescriptor; 
     text: msg`If the link into a card shares ${CHAIN_SCENE_NUMBERS.freedomTraits} or more traits, the card plays twice.`,
   },
   blueZenith: {
-    short: msg`4-trait links double your combo.`,
-    text: msg`A link that shares all 4 traits doubles your combo every time it fires.`,
+    short: msg`A row's first 4-trait link doubles your combo.`,
+    text: msg`The first link in a row that shares all 4 traits doubles your combo.`,
   },
   halcyon: {
     short: msg`Your combo carries between rows.`,
@@ -707,7 +707,7 @@ export function chainCardBaseText(card: Pick<ChainCard, "base" | "grown" | "eter
 /* The shop's practice, as its tile says it. */
 export function chainPracticeText(trait: ChainTrait, i18n: I18n): string {
   const word = i18n._(CHAIN_TRAIT_WORD[trait]);
-  return i18n._(msg`${word} links add +1 more each time they fire.`);
+  return i18n._(msg`${word} links add +1 more each time they trigger.`);
 }
 
 export function formatChainX(value: number): string {

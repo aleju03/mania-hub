@@ -26,6 +26,9 @@ import {
   playRunTotal,
   prefetchRunSounds,
   RUN_CHAIN_TAKES,
+  duckRunMusicFor,
+  startRunMusic,
+  stopRunMusic,
   startRunFireLoop,
   stopRunFireLoop,
 } from "../packSfx";
@@ -57,6 +60,9 @@ function otherTake(last: number, count: number): number {
 
 export const runSound = {
   prefetch: () => prefetchRunSounds(),
+  /* The quiet music loop under the whole table (packSfx owns it). */
+  musicStart: () => startRunMusic(),
+  musicStop: () => stopRunMusic(),
   /* Table */
   packOpen: () => playRunCue("pack-open", { gain: 0.8 }),
   deal: (index: number) =>
@@ -94,10 +100,13 @@ export const runSound = {
       gain: 0.7,
     }),
   tallyTotal: () => playRunCue("tally-total", { gain: 0.8 }),
-  songCleared: (kind: "song" | "stage" | "run") =>
+  songCleared: (kind: "song" | "stage" | "run") => {
+    // The stage stinger is the music's own ending: the loop steps aside for it.
+    if (kind === "stage") duckRunMusicFor(4200);
     playRunCue(kind === "run" ? "run-cleared" : kind === "stage" ? "clear-stage" : "clear-song", {
       gain: kind === "run" ? 0.9 : 0.8,
-    }),
+    });
+  },
   /* At least 3 LU under the run-cleared cue. */
   runFailed: () => playRunCue("run-failed", { gain: 0.9 }),
   /* Shop */

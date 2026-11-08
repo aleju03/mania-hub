@@ -245,6 +245,14 @@ export function ChainTable(props: ChainTableProps) {
     runSound.prefetch();
   }, []);
 
+  /* The music runs under the whole table; a scripted table (the how-to
+     demos and fixtures) stays without it. */
+  useEffect(() => {
+    if (script) return;
+    runSound.musicStart();
+    return () => runSound.musicStop();
+  }, [script]);
+
   /* The table owns the viewport while it is up. */
   useEffect(() => {
     const root = document.documentElement;
@@ -1147,6 +1155,7 @@ export function ChainTable(props: ChainTableProps) {
             roundChart={shown?.phase === "play" ? shown.roundChart : null}
             daily={daily && Boolean(shown)}
             onHelp={() => setHowTo(true)}
+            onEndRun={shown && shown.phase !== "over" && !play && !overNow ? () => void doAct({ kind: "abandon" }) : undefined}
             onSwitchMode={onMode && !guest && !play ? () => onMode(daily ? "normal" : "daily") : undefined}
             inDaily={daily}
             deck={
@@ -1504,7 +1513,7 @@ export function ChainTable(props: ChainTableProps) {
           </div>
 
           {!narrow && shown && !overNow && shown.scenes.length > 0 && (
-            <div className="absolute bottom-6 left-6 z-[4] flex flex-col gap-4">
+            <div data-chain-corner="" className="absolute bottom-6 left-6 z-[4] flex flex-col gap-4">
               {modsNode}
               {scenesNode}
             </div>

@@ -10,13 +10,22 @@ import { motion, type MotionStyle } from "framer-motion";
 export const KIT = {
   cream: "#f3e9d8",
   dark: "#120c18",
-  pink: "#ff7ab8",
+  /* The site theme's colour (--overjoy-accent), Overjoy's pink by default.
+     A CSS value: canvas drawing uses KIT_PINK_HEX. */
+  pink: "var(--overjoy-accent, #ff7ab8)",
   gold: "#ffd36b",
   blue: "#7fc4ff",
   mint: "#9df0d6",
   red: "#ff6b6b",
   dim: "rgba(243,233,216,0.3)",
 } as const;
+
+export const KIT_PINK_HEX = "#ff7ab8";
+
+/* The accent at `percent` opacity. */
+export function kitPinkAlpha(percent: number): string {
+  return `color-mix(in srgb, ${KIT.pink} ${percent}%, transparent)`;
+}
 
 export const MARKER = '"Name Permanent Marker", var(--font-sans)';
 
@@ -70,8 +79,8 @@ export function RoundMedallion({
             strokeLinecap="round"
             strokeWidth={size * 0.058}
             initial={false}
-            animate={{ stroke: index < rowsLeft ? KIT.pink : KIT.dim, opacity: index < rowsLeft ? 1 : 0.6 }}
-            style={{ filter: index < rowsLeft ? `drop-shadow(0 0 4px ${KIT.pink})` : undefined }}
+            animate={{ opacity: index < rowsLeft ? 1 : 0.6 }}
+            style={{ stroke: index < rowsLeft ? KIT.pink : KIT.dim, transition: "stroke 0.3s", filter: index < rowsLeft ? `drop-shadow(0 0 4px ${KIT.pink})` : undefined }}
           />
         ))}
         {segments(redrawsTotal, drawsR, 22).map((d, index) => (
@@ -156,7 +165,7 @@ export function ScoreBridge({
   const d = `M${p0[0]} ${p0[1]} C ${p1[0]} ${p1[1]} ${p2[0]} ${p2[1]} ${p3[0]} ${p3[1]}`;
   const band = Math.max(10, height * 0.15);
   const fill = passed ? "#ffb347" : KIT.pink;
-  const ghost = ghostPassed ? "rgba(255,179,71,0.42)" : "rgba(255,122,184,0.32)";
+  const ghost = ghostPassed ? "rgba(255,179,71,0.42)" : kitPinkAlpha(32);
   const lit = Math.max(0, Math.min(1, share)) * 100;
   const ghostLit = Math.max(lit, Math.min(1, ghostShare) * 100);
   const tick = star ? cubicAt(p0, p1, p2, p3, targetAt) : null;
@@ -187,9 +196,9 @@ export function ScoreBridge({
           strokeLinecap="round"
           pathLength={100}
           initial={false}
-          animate={{ strokeDasharray: `${lit} 100`, stroke: fill, opacity: lit > 0 ? 1 : 0 }}
+          animate={{ strokeDasharray: `${lit} 100`, opacity: lit > 0 ? 1 : 0 }}
           transition={{ type: "spring", stiffness: 160, damping: 24 }}
-          style={{ filter: `drop-shadow(0 0 7px ${fill})` }}
+          style={{ stroke: fill, transition: "stroke 0.3s", filter: `drop-shadow(0 0 7px ${fill})` }}
         />
         <use href={`#b${id}`} fill="none" stroke={KIT.cream} strokeOpacity={0.45} strokeWidth={1.5} pathLength={100} strokeDasharray="0.6 4.4" />
         {flash > 0 && (
@@ -236,13 +245,21 @@ export function ScoreBridge({
 
 /* The run's shard: the rendered gem. `turn` plays one full turn of it
    (a 36-frame sprite sheet) each time the value changes, so a shard count
-   that moves catches the light. */
+   that moves catches the light. A gem with `turn` can also be grabbed and
+   spun sideways: it coasts on the flick, slows, then settles back on its
+   front face. */
 const GEM_STILL = "/images/packs/run/gem-v1.webp";
 const GEM_TURN = "/images/packs/run/gem-turn-v1.webp";
 const GEM_FRAMES = 36;
+/* Degrees of turn per pixel dragged. */
+const GEM_DRAG = 1.6;
 
 export function KitGem({ size = 24, turn }: { size?: number; turn?: number }) {
   const [spinning, setSpinning] = useState(false);
+  /* Grabbed, or still coasting from a flick. */
+  const [held, setHeld] = useState(false);
+  const sprite = useRef<HTMLSpanElement>(null);
+  const motionRef = useRef({ angle: 0, velocity: 0, x: 0, t: 0, dragging: false, raf: 0 });
   const first = useRef(true);
   useEffect(() => {
     if (turn === undefined) return;
@@ -250,21 +267,107 @@ export function KitGem({ size = 24, turn }: { size?: number; turn?: number }) {
       first.current = false;
       return;
     }
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (held || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     setSpinning(true);
     const timer = window.setTimeout(() => setSpinning(false), 1000);
     return () => window.clearTimeout(timer);
+    // A count that moves mid-spin doesn't restart the turn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turn]);
-  if (spinning) {
-    return (
-      <span
-        aria-hidden="true"
-        className="kit-gem-turn inline-block shrink-0"
-        style={{ width: size, height: size, backgroundImage: `url(${GEM_TURN})`, backgroundSize: `${size * GEM_FRAMES}px ${size}px`, ["--gem-end" as string]: `-${size * GEM_FRAMES}px` }}
-      />
-    );
-  }
-  return <img src={GEM_STILL} alt="" aria-hidden="true" draggable={false} className="shrink-0 select-none" style={{ width: size, height: size }} />;
+  useEffect(() => () => cancelAnimationFrame(motionRef.current.raf), []);
+
+  const showFrame = () => {
+    const el = sprite.current;
+    if (!el) return;
+    const step = 360 / GEM_FRAMES;
+    const frame = (((Math.round(motionRef.current.angle / step) % GEM_FRAMES) + GEM_FRAMES) % GEM_FRAMES);
+    el.style.backgroundPosition = `-${frame * size}px 0`;
+  };
+  /* Coasts on the release speed with friction, then eases onto the nearest
+     whole turn and hands back to the still image. */
+  const coast = () => {
+    const m = motionRef.current;
+    let last = performance.now();
+    const tick = (now: number) => {
+      if (m.dragging) return;
+      const dt = Math.min(48, now - last);
+      last = now;
+      m.velocity *= Math.pow(0.94, dt / 16);
+      if (Math.abs(m.velocity) > 0.08) {
+        m.angle += m.velocity * dt;
+      } else {
+        const rest = Math.round(m.angle / 360) * 360;
+        m.angle += (rest - m.angle) * Math.min(1, dt * 0.012);
+        if (Math.abs(rest - m.angle) < 1.5) {
+          m.angle = 0;
+          m.velocity = 0;
+          setHeld(false);
+          return;
+        }
+      }
+      showFrame();
+      m.raf = requestAnimationFrame(tick);
+    };
+    m.raf = requestAnimationFrame(tick);
+  };
+
+  const sheet = { width: size, height: size, backgroundImage: `url(${GEM_TURN})`, backgroundSize: `${size * GEM_FRAMES}px ${size}px` };
+  const face = held ? (
+    <span ref={sprite} aria-hidden="true" className="inline-block shrink-0" style={sheet} />
+  ) : spinning ? (
+    <span aria-hidden="true" className="kit-gem-turn inline-block shrink-0" style={{ ...sheet, ["--gem-end" as string]: `-${size * GEM_FRAMES}px` }} />
+  ) : (
+    <img src={GEM_STILL} alt="" aria-hidden="true" draggable={false} className="shrink-0 select-none" style={{ width: size, height: size }} />
+  );
+  if (turn === undefined) return face;
+  return (
+    <span
+      className="inline-flex shrink-0 cursor-grab select-none active:cursor-grabbing"
+      style={{ touchAction: "none" }}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // A pointer the browser no longer tracks: the drag still works over the gem.
+        }
+        const m = motionRef.current;
+        cancelAnimationFrame(m.raf);
+        m.dragging = true;
+        m.velocity = 0;
+        m.x = event.clientX;
+        m.t = performance.now();
+        setSpinning(false);
+        setHeld(true);
+      }}
+      onPointerMove={(event) => {
+        const m = motionRef.current;
+        if (!m.dragging) return;
+        const now = performance.now();
+        const delta = (event.clientX - m.x) * GEM_DRAG;
+        const dt = Math.max(1, now - m.t);
+        m.velocity = m.velocity * 0.6 + (delta / dt) * 0.4;
+        m.angle += delta;
+        m.x = event.clientX;
+        m.t = now;
+        showFrame();
+      }}
+      onPointerUp={() => {
+        const m = motionRef.current;
+        if (!m.dragging) return;
+        m.dragging = false;
+        // A hold that ended without moving lets go of its speed.
+        if (performance.now() - m.t > 80) m.velocity = 0;
+        coast();
+      }}
+      onPointerCancel={() => {
+        motionRef.current.dragging = false;
+        coast();
+      }}
+    >
+      {face}
+    </span>
+  );
 }
 
 /* Button icons, drawn on a 42 x 42 grid. */
@@ -344,6 +447,10 @@ export interface ChainButtonItem {
 const PRIMARY_FACE = "/images/packs/run/button-pink-full-v1.webp";
 const PRIMARY_MIDDLE = "/images/packs/run/button-pink-mid-v1.webp";
 
+/* The render is pink (hue 333, the site default); it turns to the site
+   theme's hue, and greys with a grey theme. The cream rim barely moves. */
+const PRIMARY_TINT = "hue-rotate(calc((var(--theme-hue) - 333) * 1deg)) saturate(var(--theme-sat))";
+
 function PrimaryFace({ height }: { height: number }) {
   const cap = (side: "left" | "right") => (
     <span
@@ -359,7 +466,7 @@ function PrimaryFace({ height }: { height: number }) {
     />
   );
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute -inset-[3px] -z-10 flex">
+    <span aria-hidden="true" className="pointer-events-none absolute -inset-[3px] -z-10 flex" style={{ filter: PRIMARY_TINT }}>
       {cap("left")}
       <span className="min-w-0 flex-1" style={{ backgroundImage: `url(${PRIMARY_MIDDLE})`, backgroundSize: `auto ${height}px`, backgroundRepeat: "round no-repeat" }} />
       {cap("right")}
@@ -525,15 +632,16 @@ export function ObjectiveLine({
       <motion.div
         className="absolute inset-y-0 left-0 rounded-full"
         initial={false}
-        animate={{ width: `${ghost * 100}%`, backgroundColor: passed || ghostShare >= targetAt ? "rgba(255,179,71,0.4)" : "rgba(255,122,184,0.35)" }}
+        animate={{ width: `${ghost * 100}%` }}
         transition={{ type: "spring", stiffness: 260, damping: 30 }}
+        style={{ backgroundColor: passed || ghostShare >= targetAt ? "rgba(255,179,71,0.4)" : kitPinkAlpha(35), transitionProperty: "background-color", transitionDuration: "0.3s" }}
       />
       <motion.div
         className="absolute inset-y-0 left-0 rounded-full"
         initial={false}
-        animate={{ width: `${lit * 100}%`, backgroundColor: fill }}
+        animate={{ width: `${lit * 100}%` }}
         transition={{ type: "spring", stiffness: 160, damping: 24 }}
-        style={{ boxShadow: `0 0 10px ${fill}` }}
+        style={{ backgroundColor: fill, boxShadow: `0 0 10px ${fill}`, transitionProperty: "background-color, box-shadow", transitionDuration: "0.3s" }}
       />
       {flash > 0 && (
         <motion.div
@@ -545,7 +653,7 @@ export function ObjectiveLine({
         />
       )}
       {ghost > lit + 0.01 && (
-        <div className="absolute top-[12px] -translate-x-1/2 whitespace-nowrap leading-none" style={{ left: `${Math.min(92, Math.max(8, ghost * 100))}%`, fontFamily: MARKER, fontSize: 16, color: "rgba(255,122,184,0.85)" }}>
+        <div className="absolute top-[12px] -translate-x-1/2 whitespace-nowrap leading-none" style={{ left: `${Math.min(92, Math.max(8, ghost * 100))}%`, fontFamily: MARKER, fontSize: 16, color: kitPinkAlpha(85) }}>
           {ghostLabel}
         </div>
       )}

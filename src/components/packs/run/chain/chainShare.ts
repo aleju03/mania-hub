@@ -1,7 +1,7 @@
 import { chainIsEndless, formatChainScore, type ChainSceneId } from "#/lib/chain-run";
 import { sceneArtUrl } from "../sceneArt";
 import { SCENE_ART_ID } from "./ChainHud";
-import { KIT } from "./chainKit";
+import { KIT, KIT_PINK_HEX } from "./chainKit";
 
 /* The run's end as a picture to share: a 1080x1350 card (the 4:5 a phone's
    feed shows whole) with the run's name, how far it got, its best row and
@@ -81,7 +81,7 @@ export async function renderChainShareImage(run: ChainShareRun): Promise<Blob | 
   ctx.textBaseline = "alphabetic";
   fitText(ctx, "OVERJOY", W / 2, 170, 64, W - 200, "rgba(243,233,216,0.55)");
   fitText(ctx, run.labels.title, W / 2, 290, 120, W - 140, KIT.cream, 14);
-  fitText(ctx, run.labels.round, W / 2, 500, 190, W - 120, run.won || chainIsEndless(run.round) ? KIT.gold : KIT.pink, 20);
+  fitText(ctx, run.labels.round, W / 2, 500, 190, W - 120, run.won || chainIsEndless(run.round) ? KIT.gold : KIT_PINK_HEX, 20);
 
   // Best row and rows, side by side.
   const stat = (label: string, value: string, x: number, color: string) => {

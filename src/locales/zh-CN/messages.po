@@ -666,6 +666,24 @@ msgstr "剩 {0}"
 msgid "{0} likes"
 msgstr "{0} 个赞"
 
+#. placeholder {0}: i18n._(CHAIN_TRAIT_WORD[trait])
+#. placeholder {1}: view.levels[trait]
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "{0} links <0>+{1}</0>"
+msgstr "{0} 连线 <0>+{1}</0>"
+
+#. placeholder {0}: i18n._(CHAIN_TRAIT_WORD[trait])
+#. placeholder {1}: view.levels[trait] ?? 0
+#: src/components/packs/run/chain/ChainShop.tsx
+#~ msgid "{0} links add +{1} more each time they fire."
+#~ msgstr "{0} 连线每次触发多加 +{1}。"
+
+#. placeholder {0}: i18n._(CHAIN_TRAIT_WORD[trait])
+#. placeholder {1}: view.levels[trait] ?? 0
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "{0} links add +{1} more each time they trigger."
+msgstr "{0} 连线每次触发多加 +{1}。"
+
 #. placeholder {0}: communitySkinContext.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "{0} loaded"
@@ -2256,7 +2274,11 @@ msgid "{weeks} weeks ago"
 msgstr "{weeks} 周前"
 
 #: src/lib/chain-run.ts
-msgid "{word} links add +1 more each time they fire."
+#~ msgid "{word} links add +1 more each time they fire."
+#~ msgstr "{word} 连线每次触发多加 +1。"
+
+#: src/lib/chain-run.ts
+msgid "{word} links add +1 more each time they trigger."
 msgstr "{word} 连线每次触发多加 +1。"
 
 #: src/routes/snipes.tsx
@@ -2901,7 +2923,12 @@ msgstr "24 小时"
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.handRowMultiplier
 #: src/lib/chain-run.ts
-msgid "3 cards in a row that share a trait make a hand, and its links fire 3 times. Every hand after the first gives the row x{0}."
+#~ msgid "3 cards in a row that share a trait make a hand, and its links fire 3 times. Every hand after the first gives the row x{0}."
+#~ msgstr "连续 3 张共享一个特征的卡组成一手，它的连线触发 3 次。第一手之后的每一手让这一排 x{0}。"
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.handRowMultiplier
+#: src/lib/chain-run.ts
+msgid "3 cards in a row that share a trait make a hand, and its links trigger 3 times. Every hand after the first gives the row x{0}."
 msgstr "连续 3 张共享一个特征的卡组成一手，它的连线触发 3 次。第一手之后的每一手让这一排 x{0}。"
 
 #: src/lib/chain-run.ts
@@ -2956,8 +2983,8 @@ msgid "3D card preview is unavailable on this device."
 msgstr "此设备无法显示 3D 卡片预览。"
 
 #: src/lib/chain-run.ts
-msgid "4-trait links double your combo."
-msgstr "4 特征连线让连击翻倍。"
+#~ msgid "4-trait links double your combo."
+#~ msgstr "4 特征连线让连击翻倍。"
 
 #: src/routes/dan-estimates.tsx
 msgid "4. Your dan is the average of your skills"
@@ -3385,8 +3412,12 @@ msgid "A line about the skin"
 msgstr "一句关于皮肤的介绍"
 
 #: src/lib/chain-run.ts
-msgid "A link that shares all 4 traits doubles your combo every time it fires."
-msgstr "共享全部 4 个特征的连线每次触发都让连击翻倍。"
+#~ msgid "A link that shares all 4 traits doubles your combo every time it fires."
+#~ msgstr "共享全部 4 个特征的连线每次触发都让连击翻倍。"
+
+#: src/lib/chain-run.ts
+#~ msgid "A link that shares all 4 traits doubles your combo every time it triggers."
+#~ msgstr "共享全部 4 个特征的连线每次触发都让连击翻倍。"
 
 #: src/components/packs/GiftInbox.tsx
 msgid "A little something for you"
@@ -3554,6 +3585,10 @@ msgstr "只有 7K 卡的一排得分 x{0}，每次触发再乘 x{1}。如果你�
 #: src/lib/chain-run.ts
 msgid "A row where every card is a different rarity scores x{0}."
 msgstr "每张卡稀有度都不同的一排得分 x{0}。"
+
+#: src/lib/chain-run.ts
+msgid "A row's first 4-trait link doubles your combo."
+msgstr "每排第一条 4 特征连线让连击翻倍。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A run only counts if it was really the course. Easy, No Fail and Random disqualify it, and so does anything that slows the chart down: Half Time, Daycore, or a custom rate under 1.0x. Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are all fine, because none of them make the course easier. A pass recorded before mod data was stored cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
@@ -4105,7 +4140,11 @@ msgid "After exporting a replay video, get a link that plays it right in Discord
 msgstr "导出回放视频后，获取可在 Discord 聊天中直接播放的链接。"
 
 #: src/lib/chain-run.ts
-msgid "After it scores, the link into it fires again and it scores again."
+#~ msgid "After it scores, the link into it fires again and it scores again."
+#~ msgstr "计分后，连入它的连线再次触发，它再次计分。"
+
+#: src/lib/chain-run.ts
+msgid "After it scores, the link into it triggers again and it scores again."
 msgstr "计分后，连入它的连线再次触发，它再次计分。"
 
 #: src/components/packs/run/HandScore.tsx
@@ -6200,8 +6239,8 @@ msgid "Charms bought"
 msgstr "购买的护符"
 
 #: src/lib/pack-run.ts
-msgid "Charms fire from the last slot to the first."
-msgstr "护符从最后一个栏位向第一个栏位依次触发。"
+#~ msgid "Charms fire from the last slot to the first."
+#~ msgstr "护符从最后一个栏位向第一个栏位依次触发。"
 
 #: src/lib/pack-run.ts
 msgid "Charms give no notes."
@@ -6210,6 +6249,10 @@ msgstr "护符不提供音符。"
 #: src/lib/pack-run.ts
 msgid "Charms sold"
 msgstr "出售的护符"
+
+#: src/lib/pack-run.ts
+msgid "Charms trigger from the last slot to the first."
+msgstr "护符从最后一个栏位向第一个栏位依次触发。"
 
 #: src/components/companella/SubmissionDetail.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
@@ -6426,6 +6469,11 @@ msgstr "大叠"
 #: src/routes/news_.prism.tsx
 msgid "Chordstream"
 msgstr "胶囊"
+
+#. placeholder {0}: before.name
+#: src/components/packs/run/chain/ChainBoard.tsx
+msgid "Chordstream: scores with {0}'s base x{factor} instead of its own, because it's higher. The next Chordstream card can borrow from this one."
+msgstr "Chordstream：用 {0} 的基础分 x{factor} 代替自己的，因为更高。下一张 Chordstream 卡可以再借这张的。"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Chordstreams"
@@ -9443,9 +9491,17 @@ msgstr "在此结束"
 msgid "End preview"
 msgstr "结束预览"
 
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "End run"
+msgstr "结束本局"
+
 #: src/components/packs/StreakGame.tsx
 msgid "End the run"
 msgstr "结束本局"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "End this run here? It counts on the board at the round you reached."
+msgstr "在这里结束本局？会按你到达的轮数计入排行榜。"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "Endless round"
@@ -9784,8 +9840,8 @@ msgid "Everyone"
 msgstr "所有人"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Everyone gets the same cards today, and you only get one go at it."
-msgstr "今天所有人用的是同一套卡，你只有一次机会。"
+msgid "Everyone gets the same cards and one attempt today."
+msgstr "今天所有人用同一套卡，只有一次机会。"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 #~ msgid "Everyone plays the same cards today, on the standard deck. One try, no revive."
@@ -10439,8 +10495,8 @@ msgstr "萤火森林"
 
 #. placeholder {0}: link.fires
 #: src/components/packs/run/chain/ChainDetails.tsx
-msgid "Fires {0} times in a hand."
-msgstr "在一组三押中触发 {0} 次。"
+#~ msgid "Fires {0} times in a hand."
+#~ msgstr "在一组三押中触发 {0} 次。"
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "First {rarity}"
@@ -11859,8 +11915,13 @@ msgstr "囤积者"
 
 #. placeholder {0}: CHAIN_RULES.interestPer
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "Hold {0} shards to earn interest at the next clear."
-msgstr "持有 {0} 碎片，下次通关时就能获得利息。"
+msgid "Hold {0} shards to earn interest after the next round."
+msgstr "持有 {0} 碎片，下一轮结束后就能获得利息。"
+
+#. placeholder {0}: CHAIN_RULES.interestPer
+#: src/components/packs/run/chain/ChainShop.tsx
+#~ msgid "Hold {0} shards to earn interest at the next clear."
+#~ msgstr "持有 {0} 碎片，下次通关时就能获得利息。"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
@@ -12529,8 +12590,15 @@ msgstr "集成"
 #. placeholder {1}: CHAIN_RULES.interestPer
 #. placeholder {2}: CHAIN_RULES.interestMax
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "Interest at the next clear: <0>+{0}</0> (1 per {1} held, up to {2})"
-msgstr "下次通关的利息：<0>+{0}</0>（每持有 {1} 个得 1，最多 {2}）"
+msgid "Interest after the next round: <0>+{0}</0> (1 per {1} shards, up to {2})"
+msgstr "下一轮后的利息：<0>+{0}</0>（每 {1} 个碎片得 1，最多 {2}）"
+
+#. placeholder {0}: chainInterestFor(view.shards)
+#. placeholder {1}: CHAIN_RULES.interestPer
+#. placeholder {2}: CHAIN_RULES.interestMax
+#: src/components/packs/run/chain/ChainShop.tsx
+#~ msgid "Interest at the next clear: <0>+{0}</0> (1 per {1} held, up to {2})"
+#~ msgstr "下次通关的利息：<0>+{0}</0>（每持有 {1} 个得 1，最多 {2}）"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
@@ -12944,6 +13012,10 @@ msgstr "保留我的成绩"
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Keep one"
 msgstr "选一张保留"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Keep playing"
+msgstr "继续玩"
 
 #: src/routes/support.tsx
 #~ msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
@@ -15307,6 +15379,10 @@ msgstr "多人游戏"
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
 msgstr "音乐"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Music: \"Cool Vibes\" by Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
+msgstr "音乐：Kevin MacLeod 的《Cool Vibes》（<0>incompetech.com</0>），CC BY 4.0"
 
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Mute"
@@ -23021,8 +23097,12 @@ msgid "Sign in with osu! to see your uploads."
 msgstr "用 osu! 登录后即可看到你的上传。"
 
 #: src/components/packs/run/chain/ChainContracts.tsx
-msgid "Sign one for round {nextRound}. Meet it and it pays on the clear."
-msgstr "为第 {nextRound} 轮签一份。达成后通关即可领奖。"
+#~ msgid "Sign one for round {nextRound}. Meet it and it pays on the clear."
+#~ msgstr "为第 {nextRound} 轮签一份。达成后通关即可领奖。"
+
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Sign one for round {nextRound}. Meet it and it pays when you beat the round."
+msgstr "为第 {nextRound} 轮签一份。达成后，过了这一轮就会领奖。"
 
 #: src/components/packs/run/chain/ChainContracts.tsx
 msgid "Signed"
@@ -25851,6 +25931,10 @@ msgstr "玩家做出的第一个头像框会显示在这里。"
 msgid "The first Legendary or better card gives x{0} combo."
 msgstr "第一张 Legendary 及以上卡片 x{0} 连击。"
 
+#: src/lib/chain-run.ts
+msgid "The first link in a row that shares all 4 traits doubles your combo."
+msgstr "每排第一条共享全部 4 个特征的连线让连击翻倍。"
+
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "第一个上传的皮肤会出现在这里。"
@@ -25940,11 +26024,19 @@ msgid "The link and the .osk filename stay as published."
 msgstr "链接和 .osk 文件名保持发布时的样子。"
 
 #: src/lib/chain-run.ts
-msgid "The link into it fires twice."
+#~ msgid "The link into it fires twice."
+#~ msgstr "连入它的连锁触发两次。"
+
+#: src/lib/chain-run.ts
+msgid "The link into it triggers twice."
 msgstr "连入它的连锁触发两次。"
 
 #: src/lib/chain-run.ts
-msgid "The links into and out of it fire twice."
+#~ msgid "The links into and out of it fire twice."
+#~ msgstr "连入和连出它的连锁各触发两次。"
+
+#: src/lib/chain-run.ts
+msgid "The links into and out of it trigger twice."
 msgstr "连入和连出它的连锁各触发两次。"
 
 #: src/lib/chain-run.ts
@@ -27551,6 +27643,11 @@ msgstr "三角形"
 #~ msgid "Tries before a PB"
 #~ msgstr "刷出 PB 前的尝试次数"
 
+#. placeholder {0}: link.fires
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "Triggers {0} times in a hand."
+msgstr "在一组三押中触发 {0} 次。"
+
 #: src/lib/pack-run.ts
 msgid "Trill"
 msgstr "交互"
@@ -27664,6 +27761,14 @@ msgstr ""
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn left"
 msgstr "向左旋转"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Turn music off"
+msgstr "关闭音乐"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Turn music on"
+msgstr "开启音乐"
 
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx

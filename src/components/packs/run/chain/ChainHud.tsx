@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { LogOut } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -20,6 +20,7 @@ import {
 } from "#/lib/chain-run";
 import { RoundChartTag } from "./ChainRoundChart";
 import { punch } from "../runJuice";
+import { isRunMusicOn, setRunMusicOn, subscribeRunMusic } from "../../packSfx";
 import { runSound } from "../runSound";
 import { SceneArt, type SceneId } from "../sceneArt";
 import { Shards } from "../Shards";
@@ -245,13 +246,103 @@ export interface ChainTopBarProps {
   onSwitchMode?: () => void;
   /* The table is showing the daily run (the switch then goes back). */
   inDaily?: boolean;
+  /* Ends the run where it stands, after a confirm. */
+  onEndRun?: () => void;
+}
+
+/* Ends the run on purpose (a won run's endless rounds have no end of their
+   own): a flag that asks first. */
+function EndRunButton({ onEnd }: { onEnd: () => void }) {
+  const { t } = useLingui();
+  const [asking, setAsking] = useState(false);
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => {
+          runSound.uiTap();
+          setAsking((value) => !value);
+        }}
+        title={t`End run`}
+        aria-label={t`End run`}
+        aria-expanded={asking}
+        className="grid h-8 w-8 place-items-center rounded-full border-2 border-[#f3e9d8]/40 text-[#f3e9d8]/80 transition hover:border-[#f3e9d8] hover:text-white"
+      >
+        <svg viewBox="0 0 20 20" width={15} height={15} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M5 18V3" />
+          <path d="M5 3.5c3-1.6 5.5 1.6 9.5 0v8c-4 1.6-6.5-1.6-9.5 0" fill="currentColor" fillOpacity={0.25} />
+        </svg>
+      </button>
+      {asking && (
+        <div
+          className="absolute right-0 top-full z-[60] mt-2 w-[230px] rounded-xl border-2 p-3 text-left"
+          style={{ background: KIT.dark, borderColor: "rgba(243,233,216,0.35)", boxShadow: "0 8px 24px rgba(0,0,0,0.55)" }}
+        >
+          <div className="text-[13px] font-bold leading-snug text-[#f3e9d8]">
+            <Trans>End this run here? It counts on the board at the round you reached.</Trans>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAsking(false);
+                onEnd();
+              }}
+              className="flex-1 rounded-full px-3 py-1.5 text-[13px] font-black"
+              style={{ background: KIT.pink, color: KIT.dark }}
+            >
+              <Trans>End run</Trans>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                runSound.uiTap();
+                setAsking(false);
+              }}
+              className="flex-1 rounded-full border-2 border-[#f3e9d8]/40 px-3 py-1.5 text-[13px] font-black text-[#f3e9d8]"
+            >
+              <Trans>Keep playing</Trans>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Music on or off; the choice is kept for every later run. */
+function MusicToggle() {
+  const { t } = useLingui();
+  const on = useSyncExternalStore(subscribeRunMusic, isRunMusicOn, () => true);
+  const label = on ? t`Turn music off` : t`Turn music on`;
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        runSound.uiTap();
+        setRunMusicOn(!on);
+      }}
+      title={label}
+      aria-label={label}
+      aria-pressed={on}
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-[#f3e9d8]/40 text-[#f3e9d8]/80 transition hover:border-[#f3e9d8] hover:text-white"
+    >
+      <svg viewBox="0 0 20 20" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M8 14.5V4.5l7-1.5v9.5" />
+        <ellipse cx="5.6" cy="14.6" rx="2.4" ry="1.9" fill="currentColor" stroke="none" />
+        <ellipse cx="12.6" cy="12.8" rx="2.4" ry="1.9" fill="currentColor" stroke="none" />
+        {!on && <path d="M3 3l14 14" stroke={KIT.dark} strokeWidth={4.5} />}
+        {!on && <path d="M3 3l14 14" />}
+      </svg>
+    </button>
+  );
 }
 
 /* Across the top: the round in its medallion (rows and redraws left as its
    rings), the score bridge to the target (the flame lives under it), and
    the run's shards. */
 export function ChainTopBar(props: ChainTopBarProps) {
-  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false, roundChart = null, daily = false, onHelp, onSwitchMode, inDaily = false } = props;
+  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false, roundChart = null, daily = false, onHelp, onSwitchMode, inDaily = false, onEndRun } = props;
   const { t } = useLingui();
   const shownShards = useTicker(shards, reducedMotion);
   const stamp = (on: ChainWysiField) => (wysi?.on.includes(on) ? <WysiStamp key={`wysi-${wysi.id}-${on}`} reducedMotion={reducedMotion} /> : null);
@@ -277,6 +368,8 @@ export function ChainTopBar(props: ChainTopBarProps) {
       ?
     </button>
   ) : null;
+  const music = <MusicToggle />;
+  const endRun = onEndRun ? <EndRunButton onEnd={onEndRun} /> : null;
   const exit = (
     <button
       type="button"
@@ -338,9 +431,11 @@ export function ChainTopBar(props: ChainTopBarProps) {
           {shardsBox}
           {switchMode}
           {help}
+          {endRun}
           {exit}
         </div>
         <div className="flex items-center gap-3">
+          {music}
           {daily && dailyTag}
           {roundChart && showMeter && <RoundChartTag chart={roundChart} compact />}
           <span className="ml-auto" />
@@ -363,7 +458,9 @@ export function ChainTopBar(props: ChainTopBarProps) {
       <div className="flex items-center justify-end gap-4">
         {shardsBox}
         {switchMode}
+        {music}
         {help}
+        {endRun}
         {exit}
       </div>
     </div>

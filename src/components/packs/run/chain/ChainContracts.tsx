@@ -234,7 +234,7 @@ export function ShopContracts({
         <Trans>Contracts</Trans>
       </div>
       <div className={`mt-1 text-center font-bold text-[#f3e9d8]/55 ${narrow ? "text-[11px]" : "text-[13px]"}`}>
-        <Trans>Sign one for round {nextRound}. Meet it and it pays on the clear.</Trans>
+        <Trans>Sign one for round {nextRound}. Meet it and it pays when you beat the round.</Trans>
       </div>
       <div className={`mt-5 flex justify-center ${narrow ? "gap-1.5" : "gap-6"}`}>
         {contracts.map((contract, index) => (

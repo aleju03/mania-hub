@@ -278,7 +278,7 @@ export const BOSS_COPY: Record<BossId, { name: MessageDescriptor; text: MessageD
   constantSpeed: { name: msg`Constant Speed`, text: msg`Every pattern starts with the notes and combo of a Single.`, acronym: "CS", kind: "conversion" },
   dualStages: { name: msg`Dual Stages`, text: msg`Cards that share no country with another card score nothing.`, acronym: "DS", kind: "conversion" },
   holdOff: { name: msg`Hold Off`, text: msg`Finishes do nothing.`, acronym: "HO", kind: "conversion" },
-  invert: { name: msg`Invert`, text: msg`Charms fire from the last slot to the first.`, acronym: "IN", kind: "conversion" },
+  invert: { name: msg`Invert`, text: msg`Charms trigger from the last slot to the first.`, acronym: "IN", kind: "conversion" },
   nightcore: { name: msg`Nightcore`, text: msg`Every pack scores x${B.nightcore.early} combo except the last, which scores x${B.nightcore.last}.`, acronym: "NC", kind: "increase" },
   muted: { name: msg`Muted`, text: msg`Charms give no notes.`, acronym: "MU", kind: "conversion" },
   daycore: { name: msg`Daycore`, text: msg`Every +combo is halved.`, acronym: "DC", kind: "reduction" },

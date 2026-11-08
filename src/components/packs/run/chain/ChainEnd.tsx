@@ -144,7 +144,8 @@ export function ChainOver({
   const animate = fresh && !reducedMotion;
   useEffect(() => {
     if (!fresh) return;
-    runSound.runFailed();
+    // A won run ended on purpose isn't a loss.
+    if (!view.won) runSound.runFailed();
     onShake(0.8);
     // Once per end.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -359,7 +360,7 @@ export function ChainStart({
               <Trans>Daily run</Trans> {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
             </div>
             <div className="max-w-[380px] text-[13px] font-bold leading-snug text-[#f3e9d8]/75">
-              <Trans>Everyone gets the same cards today, and you only get one go at it.</Trans>
+              <Trans>Everyone gets the same cards and one attempt today.</Trans>
             </div>
           </div>
         )}

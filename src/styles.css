@@ -60,6 +60,9 @@
    text carry. The site keeps them near grey; a supporter profile theme turns
    it up so the panels and buttons take the theme's colour too. */
 :root { --theme-hue: 333; --theme-sat: 1; --theme-surface: 1; }
+/* Overjoy's accent: its own pink at the default hue, and the site theme's
+   colour otherwise (chainKit.tsx KIT.pink). */
+:root { --overjoy-accent: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 74%); }
 
 /* The UI Scaling setting (src/lib/ui-scale.ts). rem sizes follow the root
    font size; px sizes in this stylesheet are rewritten at build time to

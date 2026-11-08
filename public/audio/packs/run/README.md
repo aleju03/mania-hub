@@ -68,11 +68,11 @@ Unzip everything into one folder and pass it as `--kenney`.
 | `tally-line.mp3` | a tally line | low wood click, chip, marimba and celesta fifth; pitched up per line |
 | `tally-total.mp3` | the tally total | coins, chips, book thunk, E major marimba chord, glockenspiel, timpani |
 | `clear-song.mp3` | a song cleared | harp glissando into marimba and celesta, chips at the landing |
-| `clear-stage.mp3` | a stage's final song cleared | harp glissando, timpani roll, pizzicato line, string chord, crash |
+| `clear-stage.mp3` | a stage's final song cleared | the last bar of the table music, "Cool Vibes" by Kevin MacLeod (CC BY 4.0, credited with the music), into its final hit; cut by local-notes/overjoy-sfx/cues/stage_cleared.py |
 | `run-cleared.mp3` | all stages cleared | timpani swell, harp, vibraphone melody over strings and choir, crash, glockenspiel |
 | `run-failed.mp3` | a run failed | a dull wood knock at half pitch doubled a fourth further down, a riffle an octave down, a falling vibraphone line, low strings and timpani under them |
 | `shards.mp3` | shards paid | chips in the hand under a rising celesta arpeggio |
-| `shop-in.mp3` (2 takes) | a shop item dealt | paper slide, card set down, harp pluck |
+| `shop-in.mp3` (2 takes) | a shop item dealt | a card pushed onto the counter: Kenney Casino Audio "card-shove-2" and "card-shove-4" (CC0), cut by local-notes/overjoy-sfx/cues/shop_in.py rather than the renderer |
 | `reroll.mp3` | shop rerolled | riffle shuffle, chips, two wood ticks, harp run up |
 | `buy.mp3` | an item bought | coins, glass clink, book thunk, wood, marimba two notes up |
 | `sell.mp3` | a charm sold | card slide off, coins poured, chips, marimba two notes down |

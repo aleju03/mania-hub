@@ -64,3 +64,18 @@ is missing, blocked or fails to decode, so deleting one degrades the moment inst
 breaking it. `prefetchEternalFanfare` / `prefetchMilestoneFanfare` fire the moment a dealt
 hand is known to contain the card, which is what guarantees it is decoded before the reveal
 reaches it.
+
+## run/music/cool-vibes.mp3
+
+Overjoy's table music: "Cool Vibes" by Kevin MacLeod
+([incompetech.com](https://incompetech.com)), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The credit sits on the last page
+of the run's How to play.
+
+Edited into a loop (local-notes/overjoy-music/sourced, `finalloop.py`): the song plays from
+its start, then loops 17.456s to 185.1345s, two points on the same bar whose audio matches
+closely. The 0.25s before the loop end crossfades into the bars before the loop start, and
+the file ends with a second of the audio after the loop start, so a decoder that does or
+does not trim the mp3's encoder delay still loops cleanly. Raised 9 dB (about -21 LUFS,
+-4 dBFS peak) and encoded at 160 kbps; the game plays it quietly (`MUSIC_LEVEL` in
+`packSfx.ts`).

@@ -654,6 +654,24 @@ msgstr "quedan {0}"
 msgid "{0} likes"
 msgstr "{0} me gusta"
 
+#. placeholder {0}: i18n._(CHAIN_TRAIT_WORD[trait])
+#. placeholder {1}: view.levels[trait]
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "{0} links <0>+{1}</0>"
+msgstr "Enlaces de {0} <0>+{1}</0>"
+
+#. placeholder {0}: i18n._(CHAIN_TRAIT_WORD[trait])
+#. placeholder {1}: view.levels[trait] ?? 0
+#: src/components/packs/run/chain/ChainShop.tsx
+#~ msgid "{0} links add +{1} more each time they fire."
+#~ msgstr "Los enlaces de {0} suman +{1} más cada vez que se activan."
+
+#. placeholder {0}: i18n._(CHAIN_TRAIT_WORD[trait])
+#. placeholder {1}: view.levels[trait] ?? 0
+#: src/components/packs/run/chain/ChainShop.tsx
+msgid "{0} links add +{1} more each time they trigger."
+msgstr "Los enlaces de {0} suman +{1} más cada vez que se activan."
+
 #. placeholder {0}: communitySkinContext.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "{0} loaded"
@@ -2244,7 +2262,11 @@ msgid "{weeks} weeks ago"
 msgstr "hace {weeks} semanas"
 
 #: src/lib/chain-run.ts
-msgid "{word} links add +1 more each time they fire."
+#~ msgid "{word} links add +1 more each time they fire."
+#~ msgstr "Los enlaces de {word} suman +1 más cada vez que se activan."
+
+#: src/lib/chain-run.ts
+msgid "{word} links add +1 more each time they trigger."
 msgstr "Los enlaces de {word} suman +1 más cada vez que se activan."
 
 #: src/routes/snipes.tsx
@@ -2889,7 +2911,12 @@ msgstr "24 h"
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.handRowMultiplier
 #: src/lib/chain-run.ts
-msgid "3 cards in a row that share a trait make a hand, and its links fire 3 times. Every hand after the first gives the row x{0}."
+#~ msgid "3 cards in a row that share a trait make a hand, and its links fire 3 times. Every hand after the first gives the row x{0}."
+#~ msgstr "3 cartas seguidas que comparten un rasgo forman una mano, y sus enlaces se activan 3 veces. Cada mano después de la primera le da x{0} a la fila."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.handRowMultiplier
+#: src/lib/chain-run.ts
+msgid "3 cards in a row that share a trait make a hand, and its links trigger 3 times. Every hand after the first gives the row x{0}."
 msgstr "3 cartas seguidas que comparten un rasgo forman una mano, y sus enlaces se activan 3 veces. Cada mano después de la primera le da x{0} a la fila."
 
 #: src/lib/chain-run.ts
@@ -2944,8 +2971,8 @@ msgid "3D card preview is unavailable on this device."
 msgstr "La vista previa 3D de la carta no está disponible en este dispositivo."
 
 #: src/lib/chain-run.ts
-msgid "4-trait links double your combo."
-msgstr "Los enlaces de 4 rasgos duplican tu combo."
+#~ msgid "4-trait links double your combo."
+#~ msgstr "Los enlaces de 4 rasgos duplican tu combo."
 
 #: src/routes/dan-estimates.tsx
 msgid "4. Your dan is the average of your skills"
@@ -3373,8 +3400,12 @@ msgid "A line about the skin"
 msgstr "Una línea sobre la skin"
 
 #: src/lib/chain-run.ts
-msgid "A link that shares all 4 traits doubles your combo every time it fires."
-msgstr "Un enlace que comparte los 4 rasgos duplica tu combo cada vez que se activa."
+#~ msgid "A link that shares all 4 traits doubles your combo every time it fires."
+#~ msgstr "Un enlace que comparte los 4 rasgos duplica tu combo cada vez que se activa."
+
+#: src/lib/chain-run.ts
+#~ msgid "A link that shares all 4 traits doubles your combo every time it triggers."
+#~ msgstr "Un enlace que comparte los 4 rasgos duplica tu combo cada vez que se activa."
 
 #: src/components/packs/GiftInbox.tsx
 msgid "A little something for you"
@@ -3542,6 +3573,10 @@ msgstr "Una fila solo de cartas 7K puntúa x{0}, y eso sube x{1} cada vez que se
 #: src/lib/chain-run.ts
 msgid "A row where every card is a different rarity scores x{0}."
 msgstr "Una fila donde cada carta es de una rareza distinta puntúa x{0}."
+
+#: src/lib/chain-run.ts
+msgid "A row's first 4-trait link doubles your combo."
+msgstr "El primer enlace de 4 rasgos de una fila duplica tu combo."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A run only counts if it was really the course. Easy, No Fail and Random disqualify it, and so does anything that slows the chart down: Half Time, Daycore, or a custom rate under 1.0x. Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are all fine, because none of them make the course easier. A pass recorded before mod data was stored cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
@@ -4093,7 +4128,11 @@ msgid "After exporting a replay video, get a link that plays it right in Discord
 msgstr "Después de exportar un video de replay, obtén un enlace que se reproduce directo en el chat de Discord."
 
 #: src/lib/chain-run.ts
-msgid "After it scores, the link into it fires again and it scores again."
+#~ msgid "After it scores, the link into it fires again and it scores again."
+#~ msgstr "Después de puntuar, el eslabón que llega a ella se activa otra vez y vuelve a puntuar."
+
+#: src/lib/chain-run.ts
+msgid "After it scores, the link into it triggers again and it scores again."
 msgstr "Después de puntuar, el eslabón que llega a ella se activa otra vez y vuelve a puntuar."
 
 #: src/components/packs/run/HandScore.tsx
@@ -6188,8 +6227,8 @@ msgid "Charms bought"
 msgstr "Amuletos comprados"
 
 #: src/lib/pack-run.ts
-msgid "Charms fire from the last slot to the first."
-msgstr "Los amuletos se activan del último espacio al primero."
+#~ msgid "Charms fire from the last slot to the first."
+#~ msgstr "Los amuletos se activan del último espacio al primero."
 
 #: src/lib/pack-run.ts
 msgid "Charms give no notes."
@@ -6198,6 +6237,10 @@ msgstr "Los amuletos no dan notas."
 #: src/lib/pack-run.ts
 msgid "Charms sold"
 msgstr "Amuletos vendidos"
+
+#: src/lib/pack-run.ts
+msgid "Charms trigger from the last slot to the first."
+msgstr "Los amuletos se activan del último espacio al primero."
 
 #: src/components/companella/SubmissionDetail.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
@@ -6414,6 +6457,11 @@ msgstr "Chordjacks"
 #: src/routes/news_.prism.tsx
 msgid "Chordstream"
 msgstr "Chordstream"
+
+#. placeholder {0}: before.name
+#: src/components/packs/run/chain/ChainBoard.tsx
+msgid "Chordstream: scores with {0}'s base x{factor} instead of its own, because it's higher. The next Chordstream card can borrow from this one."
+msgstr "Chordstream: puntúa con la base de {0} x{factor} en vez de la suya, porque es más alta. La siguiente carta Chordstream puede tomarla prestada de esta."
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Chordstreams"
@@ -9431,9 +9479,17 @@ msgstr "Terminar aquí"
 msgid "End preview"
 msgstr "Terminar vista previa"
 
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "End run"
+msgstr "Terminar partida"
+
 #: src/components/packs/StreakGame.tsx
 msgid "End the run"
 msgstr "Terminar la racha"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "End this run here? It counts on the board at the round you reached."
+msgstr "¿Terminar la partida aquí? Cuenta en la tabla con la ronda a la que llegaste."
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "Endless round"
@@ -9772,8 +9828,8 @@ msgid "Everyone"
 msgstr "Todos"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Everyone gets the same cards today, and you only get one go at it."
-msgstr "Hoy todos juegan con las mismas cartas, y solo tienes un intento."
+msgid "Everyone gets the same cards and one attempt today."
+msgstr "Hoy todos tienen las mismas cartas y un solo intento."
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 #~ msgid "Everyone plays the same cards today, on the standard deck. One try, no revive."
@@ -10427,8 +10483,8 @@ msgstr "Bosque de luciérnagas"
 
 #. placeholder {0}: link.fires
 #: src/components/packs/run/chain/ChainDetails.tsx
-msgid "Fires {0} times in a hand."
-msgstr "Se activa {0} veces en una mano."
+#~ msgid "Fires {0} times in a hand."
+#~ msgstr "Se activa {0} veces en una mano."
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "First {rarity}"
@@ -11847,8 +11903,13 @@ msgstr "Acaparador"
 
 #. placeholder {0}: CHAIN_RULES.interestPer
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "Hold {0} shards to earn interest at the next clear."
-msgstr "Guarda {0} shards para ganar interés en la próxima ronda superada."
+msgid "Hold {0} shards to earn interest after the next round."
+msgstr "Guarda {0} shards para ganar interés después de la próxima ronda."
+
+#. placeholder {0}: CHAIN_RULES.interestPer
+#: src/components/packs/run/chain/ChainShop.tsx
+#~ msgid "Hold {0} shards to earn interest at the next clear."
+#~ msgstr "Guarda {0} shards para ganar interés en la próxima ronda superada."
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
@@ -12517,8 +12578,15 @@ msgstr "Integraciones"
 #. placeholder {1}: CHAIN_RULES.interestPer
 #. placeholder {2}: CHAIN_RULES.interestMax
 #: src/components/packs/run/chain/ChainShop.tsx
-msgid "Interest at the next clear: <0>+{0}</0> (1 per {1} held, up to {2})"
-msgstr "Interés en la próxima ronda superada: <0>+{0}</0> (1 por cada {1} guardados, hasta {2})"
+msgid "Interest after the next round: <0>+{0}</0> (1 per {1} shards, up to {2})"
+msgstr "Interés después de la próxima ronda: <0>+{0}</0> (1 por cada {1} shards, hasta {2})"
+
+#. placeholder {0}: chainInterestFor(view.shards)
+#. placeholder {1}: CHAIN_RULES.interestPer
+#. placeholder {2}: CHAIN_RULES.interestMax
+#: src/components/packs/run/chain/ChainShop.tsx
+#~ msgid "Interest at the next clear: <0>+{0}</0> (1 per {1} held, up to {2})"
+#~ msgstr "Interés en la próxima ronda superada: <0>+{0}</0> (1 por cada {1} guardados, hasta {2})"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
@@ -12932,6 +13000,10 @@ msgstr "Conservar mis jugadas"
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Keep one"
 msgstr "Quédate con una"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Keep playing"
+msgstr "Seguir jugando"
 
 #: src/routes/support.tsx
 #~ msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound."
@@ -15295,6 +15367,10 @@ msgstr "Multiplayer"
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
 msgstr "Música"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Music: \"Cool Vibes\" by Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
+msgstr "Música: \"Cool Vibes\" de Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
 
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Mute"
@@ -23009,8 +23085,12 @@ msgid "Sign in with osu! to see your uploads."
 msgstr "Inicia sesión con osu! para ver tus subidas."
 
 #: src/components/packs/run/chain/ChainContracts.tsx
-msgid "Sign one for round {nextRound}. Meet it and it pays on the clear."
-msgstr "Firma uno para la ronda {nextRound}. Si lo cumples, paga al superarla."
+#~ msgid "Sign one for round {nextRound}. Meet it and it pays on the clear."
+#~ msgstr "Firma uno para la ronda {nextRound}. Si lo cumples, paga al superarla."
+
+#: src/components/packs/run/chain/ChainContracts.tsx
+msgid "Sign one for round {nextRound}. Meet it and it pays when you beat the round."
+msgstr "Firma uno para la ronda {nextRound}. Si lo cumples, paga cuando superes la ronda."
 
 #: src/components/packs/run/chain/ChainContracts.tsx
 msgid "Signed"
@@ -25839,6 +25919,10 @@ msgstr "El primer marco que hagan los jugadores aparece aquí."
 msgid "The first Legendary or better card gives x{0} combo."
 msgstr "La primera carta Legendary o mejor da x{0} combo."
 
+#: src/lib/chain-run.ts
+msgid "The first link in a row that shares all 4 traits doubles your combo."
+msgstr "El primer enlace de una fila que comparte los 4 rasgos duplica tu combo."
+
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "La primera skin que subas aparecerá aquí."
@@ -25928,11 +26012,19 @@ msgid "The link and the .osk filename stay as published."
 msgstr "El enlace y el nombre del archivo .osk quedan como están publicados."
 
 #: src/lib/chain-run.ts
-msgid "The link into it fires twice."
+#~ msgid "The link into it fires twice."
+#~ msgstr "El enlace que llega a ella se activa dos veces."
+
+#: src/lib/chain-run.ts
+msgid "The link into it triggers twice."
 msgstr "El enlace que llega a ella se activa dos veces."
 
 #: src/lib/chain-run.ts
-msgid "The links into and out of it fire twice."
+#~ msgid "The links into and out of it fire twice."
+#~ msgstr "Los enlaces que entran y salen de ella se activan dos veces."
+
+#: src/lib/chain-run.ts
+msgid "The links into and out of it trigger twice."
 msgstr "Los enlaces que entran y salen de ella se activan dos veces."
 
 #: src/lib/chain-run.ts
@@ -27539,6 +27631,11 @@ msgstr "Triángulos"
 #~ msgid "Tries before a PB"
 #~ msgstr "Intentos antes de un PB"
 
+#. placeholder {0}: link.fires
+#: src/components/packs/run/chain/ChainDetails.tsx
+msgid "Triggers {0} times in a hand."
+msgstr "Se activa {0} veces en una mano."
+
 #: src/lib/pack-run.ts
 msgid "Trill"
 msgstr "Trill"
@@ -27652,6 +27749,14 @@ msgstr ""
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn left"
 msgstr "Girar a la izquierda"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Turn music off"
+msgstr "Quitar la música"
+
+#: src/components/packs/run/chain/ChainHud.tsx
+msgid "Turn music on"
+msgstr "Poner la música"
 
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx

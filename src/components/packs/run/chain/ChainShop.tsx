@@ -111,12 +111,35 @@ function PracticeTag({ trait, level, height }: { trait: (typeof CHAIN_TRAITS)[nu
   );
 }
 
+/* A dark halo round the offers' names and lines, so the garland's thread
+   (drawn behind them) never runs through a letter. */
+const SHOP_TEXT_HALO = "0 0 3px #120c18, 0 0 6px #120c18, 0 0 10px rgba(18,12,24,0.8)";
+
+/* Where the desktop shop's scroll box starts: under the table's title
+   (top 26, 38px marker). */
+const SHOP_TOP = 72;
+
+/* The cord the offers hang from, drawn as a thread: a thin cream strand
+   with a darker twist running along it and a soft shadow under it. */
+function Thread({ d }: { d: string }) {
+  return (
+    <g fill="none">
+      <path d={d} stroke="rgba(0,0,0,0.35)" strokeWidth={2.6} strokeLinecap="round" transform="translate(0 3)" />
+      <path d={d} stroke="#e9dcc2" strokeWidth={2} strokeLinecap="round" />
+      <path d={d} stroke="#a8946f" strokeWidth={2} strokeDasharray="1.4 2.6" />
+    </g>
+  );
+}
+
 /* Where an offer hangs from the shop's chain: a short cord and the ring the
-   garland passes through. */
-function Hanger() {
+   garland passes through. `reach` runs the cord that much further down, into
+   a charm's bail: the offer paints over it, so it shows only through the
+   bail's hole. */
+function Hanger({ reach = 0 }: { reach?: number }) {
+  const end = 30 + reach;
   return (
     <svg width={20} height={30} viewBox="0 0 20 30" className="-mb-1 shrink-0 overflow-visible" aria-hidden="true">
-      <line x1={10} y1={6} x2={10} y2={30} stroke="rgba(243,233,216,0.45)" strokeWidth={2} />
+      <Thread d={`M10 6 L10 ${end}`} />
       <circle data-hanger="" cx={10} cy={6} r={5.5} fill={KIT.dark} stroke={KIT.cream} strokeWidth={2.2} />
     </svg>
   );
@@ -174,8 +197,8 @@ function Garland({ deps }: { deps: unknown[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return (
-    <svg ref={anchorRef} className="pointer-events-none absolute left-0 top-0 overflow-visible" width={path?.w ?? 0} height={path?.h ?? 0} aria-hidden="true">
-      {path && <path d={path.d} fill="none" stroke="rgba(243,233,216,0.4)" strokeWidth={3} strokeLinecap="round" />}
+    <svg ref={anchorRef} className="pointer-events-none absolute left-0 top-0 -z-10 overflow-visible" width={path?.w ?? 0} height={path?.h ?? 0} aria-hidden="true">
+      {path && <Thread d={path.d} />}
     </svg>
   );
 }
@@ -237,6 +260,20 @@ export interface ChainShopProps {
 export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, shake, enterDelayMs = 0 }: ChainShopProps) {
   const lead = enterDelayMs / 1000;
   const { i18n, t } = useLingui();
+  /* The charms and mods in the table's bottom-left corner sit over the
+     shop; scrolled to the end, the stock's last line (the buttons) clears
+     them. */
+  const [cornerHeight, setCornerHeight] = useState(0);
+  useEffect(() => {
+    if (layout.narrow) return;
+    const corner = document.querySelector<HTMLElement>("[data-chain-corner]");
+    if (!corner) return;
+    const read = () => setCornerHeight(corner.getBoundingClientRect().height);
+    read();
+    const observer = new ResizeObserver(read);
+    observer.observe(corner);
+    return () => observer.disconnect();
+  }, [layout.narrow]);
   const [floats, pushFloat] = useShardFloats();
   const [message, setMessage] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -335,29 +372,26 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
   return (
     <div data-chain-shop="" className="absolute inset-0">
 
-      {/* Scrolls when the stock runs taller than a short phone screen. */}
-      {/* On a phone it starts under the table's title, so the stock
-          scrolls beneath it instead of over it. */}
+      {/* Scrolls when the stock runs taller than the screen. It starts under
+          the table's title, so the stock scrolls beneath it instead of over
+          it. */}
       <div
-        className={`absolute inset-x-0 bottom-0 overflow-y-auto overscroll-contain ${narrow ? "[mask-image:linear-gradient(to_bottom,transparent,black_14px)]" : ""}`}
-        style={{ top: narrow ? 40 : 0 }}
+        className="absolute inset-x-0 bottom-0 overflow-y-auto overscroll-contain [mask-image:linear-gradient(to_bottom,transparent,black_14px)]"
+        style={{ top: narrow ? 40 : SHOP_TOP }}
       >
         <motion.div
-          className="absolute inset-x-0 flex flex-col items-center pb-6"
-          style={{ top: narrow ? 0 : Math.max(20, layout.height * 0.08) }}
+          className="absolute inset-x-0 flex flex-col items-center"
+          style={{ top: narrow ? 0 : Math.max(0, Math.max(20, layout.height * 0.08) + 32 - SHOP_TOP), paddingBottom: 24 + cornerHeight }}
           initial={reducedMotion ? false : { y: 40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ ...SHOP_FEEL.panel.spring, delay: lead }}
         >
-          {/* The title is the table's (one title at a time); this keeps its
-              room (a phone's scroll box already starts under it). */}
-          {!narrow && <div aria-hidden="true" className="h-[32px] leading-none" />}
 
           {/* Packs and the scene card on offer. */}
           {/* A fixed height on a phone, so the buttons under the stock do not
               jump while it rerolls. */}
           <div
-            className={`relative mt-5 flex flex-wrap items-end justify-center ${narrow ? "content-start gap-x-4 gap-y-5" : "gap-12"}`}
+            className={`relative isolate mt-5 flex flex-wrap items-end justify-center ${narrow ? "content-start gap-x-4 gap-y-5" : "gap-12"}`}
             style={narrow ? { minHeight: 372 } : undefined}
           >
             {!narrow && <Garland deps={[rerolls, shop.offers.map((offer) => offer.sold).join(), shop.scene, layout.width]} />}
@@ -375,7 +409,7 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                   >
                     {!narrow && <Hanger />}
                     <PackOffer offer={offer} thumb={crispPackUrl(chainPackType("shop", offer)) ?? packThumbs[chainPackType("shop", offer)] ?? null} height={packHeight} reducedMotion={reducedMotion} />
-                    <div className="leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: narrow ? 14 : 19 }}>
+                    <div className="leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: narrow ? 14 : 19, textShadow: SHOP_TEXT_HALO }}>
                       {chainOfferName(offer, i18n)}
                     </div>
                     <PriceButton
@@ -401,7 +435,9 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                   exit={{ y: -80, scale: 0.5, opacity: 0, transition: { duration: 0.25 } }}
                   transition={{ ...SHOP_FEEL.deal.spring, delay: lead + (3 * SHOP_FEEL.deal.staggerMs) / 1000 }}
                 >
-                  {!narrow && <Hanger />}
+                  {/* The gap to the medallion (gap-2 less the hanger's -mb-1),
+                      then down to the middle of its bail's hole. */}
+                  {!narrow && <Hanger reach={4 + Math.round(packHeight * 0.92 * 0.135)} />}
                   <motion.div
                     ref={sceneArtRef}
                     whileHover={reducedMotion ? undefined : { rotate: 3, scale: 1.05 }}
@@ -411,7 +447,7 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                       <SceneArt id={SCENE_ART_ID[shop.scene]} size={Math.round((narrow ? 104 : packHeight * 0.92) * 0.48)} />
                     </SceneMedallion>
                   </motion.div>
-                  <div className="text-center">
+                  <div className="text-center" style={{ textShadow: SHOP_TEXT_HALO }}>
                     <div className={`font-black ${narrow ? "text-[13px]" : "text-[16px]"}`} style={{ color: CHAIN_SCENE_INK[shop.scene] }}>
                       {CHAIN_SCENE_NAMES[shop.scene]}
                     </div>
@@ -447,7 +483,7 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                 >
                   {!narrow && <Hanger />}
                   <PracticeTag trait={shop.practice.trait} level={view.levels[shop.practice.trait] ?? 0} height={narrow ? 84 : Math.round(packHeight * 0.68)} />
-                  <div className="text-center">
+                  <div className="text-center" style={{ textShadow: SHOP_TEXT_HALO }}>
                     <div className={`font-black ${narrow ? "text-[13px]" : "text-[16px]"}`} style={{ color: KIT.gold }}>
                       <Trans>Practice</Trans>
                     </div>
@@ -477,7 +513,7 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
                   >
                     {!narrow && <Hanger />}
                     <ModChip id={offer.id} size={narrow ? 76 : Math.round(packHeight * 0.58)} />
-                    <div className="text-center">
+                    <div className="text-center" style={{ textShadow: SHOP_TEXT_HALO }}>
                       <div className={`font-black ${narrow ? "text-[13px]" : "text-[16px]"}`} style={{ color: chainModLook(offer.id, i18n).ink }}>
                         {chainModLook(offer.id, i18n).name}
                       </div>
@@ -510,26 +546,29 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
           {/* The run's practice levels so far. */}
           {CHAIN_TRAITS.some((trait) => (view.levels[trait] ?? 0) > 0) && (
             <div className="mt-4 flex items-center gap-3 text-[13px] font-bold text-[#f3e9d8]/80">
+              <Trans>Practice</Trans>
               {CHAIN_TRAITS.filter((trait) => (view.levels[trait] ?? 0) > 0).map((trait, index) => (
                 <span key={trait} className="flex items-center gap-3">
                   {index > 0 && <span aria-hidden="true" className="h-3 w-px bg-[#f3e9d8]/30" />}
-                  <span>
-                    {i18n._(CHAIN_TRAIT_WORD[trait])} <span style={{ color: KIT.gold }}>+{view.levels[trait]}</span>
+                  <span title={t`${i18n._(CHAIN_TRAIT_WORD[trait])} links add +${view.levels[trait] ?? 0} more each time they trigger.`}>
+                    <Trans>
+                      {i18n._(CHAIN_TRAIT_WORD[trait])} links <span style={{ color: KIT.gold }}>+{view.levels[trait]}</span>
+                    </Trans>
                   </span>
                 </span>
               ))}
             </div>
           )}
 
-          {/* Interest at the next clear. */}
+          {/* Interest paid when the next round is beaten. */}
           <div className="mt-4 text-[13px] font-bold text-[#f3e9d8]/80">
             {chainInterestFor(view.shards) > 0 ? (
               <Trans>
-                Interest at the next clear: <span style={{ color: KIT.gold }}>+{chainInterestFor(view.shards)}</span> (1 per {CHAIN_RULES.interestPer} held, up to {CHAIN_RULES.interestMax})
+                Interest after the next round: <span style={{ color: KIT.gold }}>+{chainInterestFor(view.shards)}</span> (1 per {CHAIN_RULES.interestPer} shards, up to {CHAIN_RULES.interestMax})
               </Trans>
             ) : (
               <Trans>
-                Hold {CHAIN_RULES.interestPer} shards to earn interest at the next clear.
+                Hold {CHAIN_RULES.interestPer} shards to earn interest after the next round.
               </Trans>
             )}
           </div>

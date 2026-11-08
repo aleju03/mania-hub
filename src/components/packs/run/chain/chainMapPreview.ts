@@ -3,9 +3,11 @@
    opens, then faded out. Never looped. One clip at a time; a set without a
    preview just stays silent. A plain <audio> element: b.ppy.sh sends no
    CORS headers, so WebAudio can't decode it, and the maps page plays the
-   same URLs this way. */
+   same URLs this way. The table's music ducks under it. */
 
-const LEVEL = 0.16;
+import { duckRunMusic } from "../../packSfx";
+
+const LEVEL = 0.1;
 const FADE_IN_MS = 500;
 const FADE_OUT_MS = 1500;
 /* Fades out from here, well before the clip's own end. */
@@ -60,6 +62,7 @@ export function playMapPreview(setId: number): void {
   void el.play().then(
     () => {
       if (audio !== el) return;
+      duckRunMusic(true);
       ramp(el, LEVEL, FADE_IN_MS);
       window.setTimeout(() => audio === el && ramp(el, 0, FADE_OUT_MS, () => stopMapPreview(0)), PLAY_MS);
     },
@@ -83,6 +86,7 @@ export function stopMapPreview(ms = 500): void {
   stopWaiting();
   const el = audio;
   if (!el) return;
+  duckRunMusic(false);
   const finish = () => {
     el.pause();
     el.removeAttribute("src");

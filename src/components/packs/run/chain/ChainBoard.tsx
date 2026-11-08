@@ -3,7 +3,10 @@ import { AnimatePresence, animate, motion, useIsPresent, useMotionValue, useSpri
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   CHAIN_SCENE_INK,
+  CHAIN_SKILL_EFFECT,
   CHAIN_SKILL_WORD,
+  chainSkillBand,
+  chainSkillEffectText,
   CHAIN_TIER_COLOR,
   chainEffectSkill,
   formatChainScore,
@@ -628,6 +631,21 @@ export function ChainBoard(props: ChainBoardProps) {
           }
         }
         next = [...others.slice(0, best), ...fit, ...others.slice(best)];
+      } else if (cy >= zoneTop && cy <= zoneBottom && !press.inRow && others.length && !fit.length) {
+        // A full row: a hand card dropped on a row card takes its place, and
+        // that card goes back to the hand.
+        let best = 0;
+        let bestDistance = Infinity;
+        others.forEach((_, index) => {
+          const slot = lay.slots[index];
+          const distance = Math.hypot(slot.x + lay.cardW / 2 - cx, slot.y + (slot.h ?? lay.cardH) / 2 - cy);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = index;
+          }
+        });
+        const swapIn = group.slice(0, others.length - best);
+        next = [...others.slice(0, best), ...swapIn, ...others.slice(best + swapIn.length)];
       }
       const key = next ? next.join(",") : "";
       if (key !== press.sent) {
@@ -868,9 +886,12 @@ function SkillHints({
   preview: ChainRowResult;
   cardCombo: Record<number, number>;
 }) {
-  const { i18n } = useLingui();
+  const { i18n, t } = useLingui();
+  // Hovered, or held on a touch screen: that tag's explanation shows.
+  const [open, setOpen] = useState<number | null>(null);
   // The first pass's card events say what each card's effect does here.
   const hints = new Map<number, string>();
+  const tips = new Map<number, string>();
   for (const event of preview.events) {
     if (event.kind !== "card" || event.pass !== 0 || hints.has(event.index)) continue;
     const word = event.late
@@ -883,6 +904,15 @@ function SkillHints({
             ? `x${formatChainX(event.x)}`
             : "";
     hints.set(event.index, word);
+    const card = rowEntries[event.index]?.card;
+    const before = rowEntries[event.index - 1]?.card;
+    if (event.borrowed && card && before) {
+      const factor = CHAIN_SKILL_EFFECT.chordstream[chainSkillBand(card)];
+      tips.set(event.index, t`Chordstream: scores with ${before.name}'s base x${factor} instead of its own, because it's higher. The next Chordstream card can borrow from this one.`);
+    } else if (card) {
+      const text = chainSkillEffectText(card, i18n);
+      if (text) tips.set(event.index, text);
+    }
   }
   // Bracket pairs, left to right, as the engine pairs them.
   const brackets = rowEntries.map((entry, index) => (chainEffectSkill(entry.card) === "Bracket" ? index : -1)).filter((index) => index >= 0);
@@ -896,6 +926,7 @@ function SkillHints({
         // Once the row plays, the combo it scored at takes the spot.
         if (!word || cardCombo[index] !== undefined) return null;
         const slot = layout.slots[index];
+        const tip = tips.get(index);
         return (
           <div
             key={`hint-${entry.uid}`}
@@ -903,10 +934,25 @@ function SkillHints({
             style={{ left: slot.x, top: below(index), width: layout.cardW }}
           >
             <span
-              className="rounded-md px-1.5 py-0.5 font-black italic leading-none"
-              style={{ fontSize: layout.narrow ? 11 : 13, color: SKILL_INK, background: "rgba(143,242,183,0.12)", boxShadow: "inset 0 0 0 1px rgba(143,242,183,0.4)" }}
+              className={`relative rounded-md px-1.5 py-0.5 font-black italic leading-none ${tip ? "pointer-events-auto cursor-help" : ""}`}
+              style={{ fontSize: layout.narrow ? 11 : 13, color: SKILL_INK, background: "rgba(143,242,183,0.12)", boxShadow: "inset 0 0 0 1px rgba(143,242,183,0.4)", touchAction: "manipulation" }}
+              aria-label={tip ? `${word}: ${tip}` : undefined}
+              onPointerEnter={(event) => event.pointerType === "mouse" && setOpen(index)}
+              onPointerLeave={(event) => event.pointerType === "mouse" && setOpen((current) => (current === index ? null : current))}
+              onPointerDown={(event) => event.pointerType !== "mouse" && setOpen(index)}
+              onPointerUp={(event) => event.pointerType !== "mouse" && setOpen(null)}
+              onPointerCancel={() => setOpen(null)}
             >
               {word}
+              {tip && open === index && (
+                <span
+                  role="tooltip"
+                  className="absolute left-1/2 top-full z-[60] mt-2 w-[220px] -translate-x-1/2 rounded-lg px-3 py-2 text-left text-[12px] font-bold not-italic leading-snug"
+                  style={{ background: KIT.dark, color: KIT.cream, boxShadow: "0 0 0 1.5px rgba(143,242,183,0.5), 0 6px 18px rgba(0,0,0,0.5)" }}
+                >
+                  {tip}
+                </span>
+              )}
             </span>
           </div>
         );

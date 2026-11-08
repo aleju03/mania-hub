@@ -98,6 +98,7 @@ import { Route as CompanellaDocsRouteImport } from './routes/companella_.docs'
 import { Route as CompanellaTestCallbackRouteImport } from './routes/companella_.test-callback'
 import { Route as CompanellaUsageRouteImport } from './routes/companella_.usage'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
+import { Route as DevOverjoySoundsRouteImport } from './routes/dev.overjoy-sounds'
 import { Route as DevRecentRatingsPreviewRouteImport } from './routes/dev.recent-ratings-preview'
 import { Route as FarmHelperSplatRouteImport } from './routes/farm-helper/$'
 import { Route as GiftCodeRouteImport } from './routes/gift.$code'
@@ -598,6 +599,11 @@ const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
   path: '/dev/opt-in-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevOverjoySoundsRoute = DevOverjoySoundsRouteImport.update({
+  id: '/dev/overjoy-sounds',
+  path: '/dev/overjoy-sounds',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DevRecentRatingsPreviewRoute = DevRecentRatingsPreviewRouteImport.update({
   id: '/dev/recent-ratings-preview',
   path: '/dev/recent-ratings-preview',
@@ -971,6 +977,7 @@ export interface FileRoutesByFullPath {
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/companella/usage': typeof CompanellaUsageRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/dev/overjoy-sounds': typeof DevOverjoySoundsRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
   '/gift/$code': typeof GiftCodeRoute
@@ -1115,6 +1122,7 @@ export interface FileRoutesByTo {
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/companella/usage': typeof CompanellaUsageRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/dev/overjoy-sounds': typeof DevOverjoySoundsRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
   '/gift/$code': typeof GiftCodeRoute
@@ -1260,6 +1268,7 @@ export interface FileRoutesById {
   '/companella_/test-callback': typeof CompanellaTestCallbackRoute
   '/companella_/usage': typeof CompanellaUsageRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/dev/overjoy-sounds': typeof DevOverjoySoundsRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/farm-helper/$': typeof FarmHelperSplatRoute
   '/gift/$code': typeof GiftCodeRoute
@@ -1406,6 +1415,7 @@ export interface FileRouteTypes {
     | '/companella/test-callback'
     | '/companella/usage'
     | '/dev/opt-in-preview'
+    | '/dev/overjoy-sounds'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
     | '/gift/$code'
@@ -1550,6 +1560,7 @@ export interface FileRouteTypes {
     | '/companella/test-callback'
     | '/companella/usage'
     | '/dev/opt-in-preview'
+    | '/dev/overjoy-sounds'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
     | '/gift/$code'
@@ -1694,6 +1705,7 @@ export interface FileRouteTypes {
     | '/companella_/test-callback'
     | '/companella_/usage'
     | '/dev/opt-in-preview'
+    | '/dev/overjoy-sounds'
     | '/dev/recent-ratings-preview'
     | '/farm-helper/$'
     | '/gift/$code'
@@ -1839,6 +1851,7 @@ export interface RootRouteChildren {
   CompanellaTestCallbackRoute: typeof CompanellaTestCallbackRoute
   CompanellaUsageRoute: typeof CompanellaUsageRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
+  DevOverjoySoundsRoute: typeof DevOverjoySoundsRoute
   DevRecentRatingsPreviewRoute: typeof DevRecentRatingsPreviewRoute
   GiftCodeRoute: typeof GiftCodeRoute
   HashiAuthorizeRoute: typeof HashiAuthorizeRoute
@@ -2504,6 +2517,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevOptInPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dev/overjoy-sounds': {
+      id: '/dev/overjoy-sounds'
+      path: '/dev/overjoy-sounds'
+      fullPath: '/dev/overjoy-sounds'
+      preLoaderRoute: typeof DevOverjoySoundsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dev/recent-ratings-preview': {
       id: '/dev/recent-ratings-preview'
       path: '/dev/recent-ratings-preview'
@@ -3102,6 +3122,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompanellaTestCallbackRoute: CompanellaTestCallbackRoute,
   CompanellaUsageRoute: CompanellaUsageRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
+  DevOverjoySoundsRoute: DevOverjoySoundsRoute,
   DevRecentRatingsPreviewRoute: DevRecentRatingsPreviewRoute,
   GiftCodeRoute: GiftCodeRoute,
   HashiAuthorizeRoute: HashiAuthorizeRoute,

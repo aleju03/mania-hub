@@ -20,7 +20,7 @@ import { runSound } from "../runSound";
 import { SceneArt } from "../sceneArt";
 import { ChainCardFace } from "./ChainCardFace";
 import { SCENE_ART_ID } from "./ChainHud";
-import { KIT, MARKER, SceneMedallion } from "./chainKit";
+import { KIT, kitPinkAlpha, MARKER, SceneMedallion } from "./chainKit";
 import { ModChip } from "./ModPin";
 
 export type LoadBoard = (period: ChainBoardPeriod, user: number | null) => Promise<ChainBoardPage>;
@@ -118,7 +118,7 @@ export function BoardRows({
           onPick?.(entry);
         }}
         className={`grid w-full ${cols} items-center gap-2 border-b border-[#f3e9d8]/[0.08] text-left transition-colors ${pickable ? "cursor-pointer hover:bg-[#f3e9d8]/[0.06]" : "cursor-default"} ${compact ? "px-2.5 py-1.5 text-[13px]" : "px-3 py-2 text-[16px] sm:px-4"}`}
-        style={own ? { background: "rgba(255,122,184,0.1)" } : undefined}
+        style={own ? { background: kitPinkAlpha(10) } : undefined}
         initial={animate ? (own ? { opacity: 0, y: 50, scale: 1.08 } : { opacity: 0, x: -10 }) : false}
         animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
         transition={own ? { type: "spring", stiffness: 280, damping: 20, delay: 0.5 } : { duration: 0.2, delay: index * 0.05 }}
