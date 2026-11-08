@@ -162,7 +162,17 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
       { id: "stair-roll", label: msg`Stair roll` },
       { id: "sv-gimmick", label: msg`SV gimmick` },
       { id: "percy-check", label: msg`Percy check` },
-      { id: "hit-error", label: msg`Hit error meter` },
+      {
+        set: "hit-error",
+        label: msg`Hit error meter`,
+        chips: msg`Acc`,
+        variants: [
+          { id: "hit-error", label: "Good" },
+          { id: "hit-error-bad", label: "Bad" },
+          { id: "hit-error-reverse", label: "Reverse" },
+        ],
+        shown: 0,
+      },
       { id: "combo-break", label: msg`Combo break` },
       { id: "results-grade", label: msg`Results grade` },
       { id: "clutch-hp", label: msg`Clutch HP` },

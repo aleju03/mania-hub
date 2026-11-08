@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
+import { KeysHint } from "./KeysHint";
+
 /* The DFJK frame's secret: pressing D, F, J or K (by position, as mania binds
    them) plays its keycaps. While the viewer plays, the looping video steps
    aside for these caps, drawn exactly as the video draws them
    (local-notes/supporter-decorations/designs/dfjk-keys/page.html); a moment
-   after the last key comes up, the loop takes over again. Nothing on the
-   page says so. */
+   after the last key comes up, the loop takes over again. KeysHint shows
+   which keys, where there is a keyboard. */
 
 const CODES = ["KeyD", "KeyF", "KeyJ", "KeyK"];
 const LEGENDS = ["D", "F", "J", "K"];
@@ -19,7 +21,7 @@ function typingInto(target: EventTarget | null): boolean {
   return target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
 }
 
-export function LiveDfjkKeys({ style, children }: { style: CSSProperties; children: ReactNode }) {
+export function LiveDfjkKeys({ style, hintTop, children }: { style: CSSProperties; hintTop: string; children: ReactNode }) {
   const [down, setDown] = useState([false, false, false, false]);
   const [hits, setHits] = useState([0, 0, 0, 0]);
   const [live, setLive] = useState(false);
@@ -110,6 +112,7 @@ export function LiveDfjkKeys({ style, children }: { style: CSSProperties; childr
           })}
         </svg>
       )}
+      <KeysHint keys={LEGENDS} live={live} top={hintTop} />
     </div>
   );
 }

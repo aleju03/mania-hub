@@ -192,16 +192,6 @@ function DanLadder({ keyCount, family, filedLevel, filedTier, value, tier, onCha
           );
         })}
       </div>
-      <button
-        type="button"
-        aria-pressed={value == null}
-        onClick={() => onChange(null)}
-        className={`shrink-0 cursor-pointer self-center rounded-full px-3 py-1 text-[11px] transition-colors ${
-          value == null ? "bg-white/[0.1] text-osu-l1" : "text-osu-f1/70 hover:text-osu-l1"
-        }`}
-      >
-        {t`I'm not sure`}
-      </button>
     </div>
     {/* Every dan spans five tiers, low to high; mid until one is picked. */}
     {picked != null && (

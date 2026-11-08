@@ -7,10 +7,7 @@ stardust, witch-broom, ice-fairy, scarlet-moon, rainbow-crystal-wings, time-stop
   "af magic circle" by Masahiro Kaneko, "3d rotating crystal" by Arslan Ali,
   "Bat - Halloween" by Priyanshu Rijhwani.
 
-The witch hat is "Witch hat" by Lixaxy (Openclipart 218202, https://openclipart.org/detail/218202/witch-hat,
-CC0), recoloured green, its band and bow removed.
-
-Everything else is drawn for this site: the yin-yang orbs, the shrine ribbon, the shrine gate and
+Everything else is drawn for this site: the green hat (witch-hat), the yin-yang orbs, the shrine ribbon, the shrine gate and
 its blossoms, the broom and star bullets, the snowflakes and the knives. The
 scarlet moon is NASA's Lunar Reconnaissance Orbiter mosaic of the near side (public domain,
 NASA/GSFC/Arizona State University, Wikimedia Commons "Moon_nearside_LRO.jpg"), flattened into
@@ -27,8 +24,11 @@ Susie head icon is the game's own battle-menu sprite (DELTARUNE, © Toby Fox; vi
 Wiki's Susie_face_battlemenu.png), used as fan art, not licensed.
 
 The osu!mania frames added in October 2026 (note-highway, stair-roll, chordjack-pile, sv-gimmick,
-percy-check, hit-error, combo-break, results-grade, clutch-hp, skill-radar, seven-key) and dan frames
+percy-check, hit-error, hit-error-bad, hit-error-reverse, combo-break, results-grade, clutch-hp, skill-radar, seven-key) and dan frames
 (black-belt, greek-circle, course-run, stage-four-fail, pass-stamp, trophy-shelf, dan-license) are
 drawn for this site in code, with no game art or skin assets; the dan frames show the site's own dan
 badges. Their lettering is set in Gabarito, Noto Serif Display and Noto Serif CJK JP (all SIL Open
 Font License 1.1).
+
+The CRT monitor frame's monitor is a Blender model built and rendered for this site, with no
+external models, textures or images.

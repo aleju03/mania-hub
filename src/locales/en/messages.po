@@ -3682,6 +3682,7 @@ msgstr "About {0}x the limit: fewer fbm octaves or loop iterations would help."
 
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/supporter/loadout.ts
 #: src/routes/rankings.tsx
 #: src/routes/teams.tsx
 msgid "Acc"
@@ -12164,8 +12165,8 @@ msgid "I understand I'm responsible for what I put in my themes, and that one br
 msgstr "I understand I'm responsible for what I put in my themes, and that one breaking the <0>Terms</0> can be taken down."
 
 #: src/components/maps/ChartLabelReport.tsx
-msgid "I'm not sure"
-msgstr "I'm not sure"
+#~ msgid "I'm not sure"
+#~ msgstr "I'm not sure"
 
 #: src/components/supporter/loadout.ts
 msgid "Ice fairy"
@@ -27604,6 +27605,10 @@ msgstr "Trio"
 #: src/components/supporter/loadout.ts
 msgid "Trophy shelf"
 msgstr "Trophy shelf"
+
+#: src/components/player/KeysHint.tsx
+msgid "Try"
+msgstr "Try"
 
 #: src/routes/recommendations.tsx
 msgid "Try a different title, artist, or difficulty name."

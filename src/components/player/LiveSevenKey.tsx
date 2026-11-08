@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
+import { KeysHint } from "./KeysHint";
+
 /* The 7K board frame's secret, like DFJK's: pressing S D F Space J K L (by
    position) plays its keys. While the viewer plays, the looping video steps
    aside for the board drawn live exactly as the video draws it
@@ -159,7 +161,7 @@ function startBoard(svg: SVGSVGElement, currentHits: () => Hit[]): () => void {
   return () => cancelAnimationFrame(frame);
 }
 
-export function LiveSevenKey({ style, children }: { style: CSSProperties; children: ReactNode }) {
+export function LiveSevenKey({ style, hintTop, children }: { style: CSSProperties; hintTop: string; children: ReactNode }) {
   const [live, setLive] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const hits = useRef<Hit[]>([]);
@@ -228,6 +230,7 @@ export function LiveSevenKey({ style, children }: { style: CSSProperties; childr
     <div aria-hidden className="pointer-events-none absolute max-w-none select-none" style={style}>
       <div className="absolute inset-0" style={{ opacity: live ? 0 : 1, transition: "opacity 120ms" }}>{children}</div>
       {live && <svg ref={svgRef} viewBox="-12 0 208 204" className="absolute inset-0 h-full w-full" style={{ fontFamily: '"Inter", "DejaVu Sans", "Liberation Sans", sans-serif' }} />}
+      <KeysHint keys={["S", "D", "F", " ", "J", "K", "L"]} live={live} top={hintTop} />
     </div>
   );
 }

@@ -3671,6 +3671,7 @@ msgstr ""
 
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/supporter/loadout.ts
 #: src/routes/rankings.tsx
 #: src/routes/teams.tsx
 msgid "Acc"
@@ -12141,8 +12142,8 @@ msgid "I understand I'm responsible for what I put in my themes, and that one br
 msgstr ""
 
 #: src/components/maps/ChartLabelReport.tsx
-msgid "I'm not sure"
-msgstr "不确定"
+#~ msgid "I'm not sure"
+#~ msgstr "不确定"
 
 #: src/components/supporter/loadout.ts
 msgid "Ice fairy"
@@ -27561,6 +27562,10 @@ msgstr "三重奏"
 #: src/components/supporter/loadout.ts
 msgid "Trophy shelf"
 msgstr "奖杯架"
+
+#: src/components/player/KeysHint.tsx
+msgid "Try"
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "Try a different title, artist, or difficulty name."

@@ -87,7 +87,7 @@ const FRAME_GEOMETRY = {
   "crayon-border": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2056, 0.2016, 0.2097, 0.2056] },
   "crown-sketch": { box: [-0.2419, -0.6452, 1.5323, 1.129], overhang: [0.1411, 0.4435, 0, 0] },
   "crown-sketch-gold": { box: [-0.2419, -0.6452, 1.5323, 1.129], overhang: [0.1411, 0.4315, 0, 0] },
-  "crt-monitor": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.7419], overhang: [0.1895, 0.0968, 0.1895, 0.4556] },
+  "crt-monitor": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.7419], overhang: [0.1976, 0.1129, 0.1976, 0.4274] },
   "dan-license": { box: [-0.2419, -0.2419, 1.4839, 2.0887], overhang: [0, 0, 0, 0.6129], stillOnly: true, danWindow: [0.2636, 0.6931, 0.1793, 0.1274], swingPivot: [0.5, 0.5946], danText: [0.4755, 0.7359, 0.2649, 0.0938], sheenCard: [0.2337, 0.6274, 0.5299, 0.2413, 0.045] },
   "dan-skip-1-eta": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1048, 0.129, 0.1048, 0.1653] },
   "dan-skip-10-alpha": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1573, 0.0968, 0.121, 0.129] },
@@ -109,6 +109,8 @@ const FRAME_GEOMETRY = {
   "hanging-stellium": { box: [-0.2984, -0.2984, 1.4839, 1.4839], overhang: [0, 0.0847, 0.1008, 0] },
   "highlighter-loop": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2137, 0.1089, 0.1815, 0.1613] },
   "hit-error": { box: [-0.2419, -0.2419, 1.4839, 1.6935], overhang: [0.0202, 0, 0.0202, 0.2218] },
+  "hit-error-bad": { box: [-0.2419, -0.2419, 1.4839, 1.6935], overhang: [0.0202, 0, 0.0202, 0.2218] },
+  "hit-error-reverse": { box: [-0.2419, -0.2419, 1.4839, 1.6935], overhang: [0.0202, 0, 0.0202, 0.2218] },
   "hp-bar": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2944, 0, 0.2944, 0.2782] },
   "ice-fairy": { box: [-0.5645, -0.3548, 2.129, 1.5806], overhang: [0.5645, 0.2702, 0.5645, 0.1169] },
   "ink-plum": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0.2419, 0.2419, 0.1532] },
@@ -154,7 +156,7 @@ const FRAME_GEOMETRY = {
   "stellium-orbit": { roundStill: true, box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
   "step-pad": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.371, 0.371, 0.371, 0.371] },
   "susies-idea": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.1089, 0, 0.0968, 0.2298] },
-  "sv-gimmick": { box: [-0.2419, -0.7258, 1.4839, 1.9677], overhang: [0.0524, 0.4798, 0.0524, 0] },
+  "sv-gimmick": { box: [-0.2419, -0.7258, 1.4839, 1.9677], overhang: [0.0202, 0.4798, 0.0202, 0] },
   "taped-page": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2419, 0.25, 0.254, 0.3387] },
   "term-boot": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.5806], overhang: [0.1169, 0.1815, 0.1169, 0.3065] },
   "term-hud": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2218, 0.1815, 0.2339, 0.1734] },
@@ -180,7 +182,7 @@ const FRAME_GEOMETRY = {
   "wings-swept-3": { roundStill: true, box: [-0.8548, -0.7581, 2.871, 1.9677], overhang: [0.7389, 0.3992, 0.7401, 0] },
   "winter-pine": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2419, 0.2419, 0.2419] },
   "witch-broom": { box: [-0.8548, -0.7742, 2.1935, 2.5484], overhang: [0.8427, 0.2944, 0.2823, 0.7742] },
-  "witch-hat": { box: [-0.4839, -0.7742, 1.2258, 1.0968], overhang: [0.1613, 0.5685, 0, 0] },
+  "witch-hat": { box: [-0.4839, -0.7742, 1.4194, 1.0968], overhang: [0.254, 0.5242, 0, 0], stillOnly: true },
   "xp-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0887, 0.2016, 0.0887, 0.0887] },
   "yinyang-orbs": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3427, 0.3226, 0.3427, 0.3629] },
   "zenith-orbit": { roundStill: true, box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
@@ -304,7 +306,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 68;
+const FRAME_ART_VERSION = 72;
 
 /* `round`: the still for a round avatar, where the frame has one. */
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {

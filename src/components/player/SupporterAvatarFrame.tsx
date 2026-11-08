@@ -104,7 +104,11 @@ export function SupporterAvatarFrame({ frame, still: holdStill = false, round = 
   ) : (
     <img key={frame} src={still} alt="" aria-hidden draggable={false} loading={holdStill ? "lazy" : undefined} className={fill} style={fillStyle} />
   );
-  if (liveKeys) return frame === "seven-key" ? <LiveSevenKey style={style}>{art}</LiveSevenKey> : <LiveDfjkKeys style={style}>{art}</LiveDfjkKeys>;
+  if (liveKeys) {
+    // the keys hint sits just under the drawn art, not under the canvas
+    const hintTop = `${(((1 + geometry.overhang[3] - top) / height) * 100).toFixed(2)}%`;
+    return frame === "seven-key" ? <LiveSevenKey style={style} hintTop={hintTop}>{art}</LiveSevenKey> : <LiveDfjkKeys style={style} hintTop={hintTop}>{art}</LiveDfjkKeys>;
+  }
   // Note highway plays live, so its chart never repeats
   if (playing && frame === "note-highway") return <LiveNoteHighway key={frame} className={className} style={style} />;
   if (!geometry.danWindow) return art;
