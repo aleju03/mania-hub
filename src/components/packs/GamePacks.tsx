@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 import { CHAIN_RUN_NAME } from "#/lib/chain-run";
 import { readBestStreak } from "#/lib/streak-game";
@@ -169,8 +170,47 @@ export function GameDoodle({ kind, best, width, onOpen }: { kind: GameKind; best
 }
 
 /* The column's heading, in the game names' font and the doodles' ink. */
-function GamesHeading({ label }: { label: string }) {
-  return <div className="-mb-3 text-center text-[20px] font-black opacity-75" style={{ color: INK }}>{label}</div>;
+/* "Extra" opens and closes the games, so a player here only for packs can
+   fold them away; closed until opened, and the choice is remembered. */
+const EXTRA_OPEN_KEY = "packs-extra-open";
+
+function useExtraOpen(): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    try {
+      setOpen(window.localStorage.getItem(EXTRA_OPEN_KEY) === "1");
+    } catch {
+      // Storage unavailable: stays closed.
+    }
+  }, []);
+  return [
+    open,
+    (next) => {
+      setOpen(next);
+      try {
+        window.localStorage.setItem(EXTRA_OPEN_KEY, next ? "1" : "0");
+      } catch {
+        // Storage unavailable: holds for this page.
+      }
+    },
+  ];
+}
+
+function GamesHeading({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="mx-auto flex cursor-pointer items-center gap-1.5 text-[20px] font-black opacity-75 transition hover:opacity-100"
+      style={{ color: INK }}
+    >
+      {label}
+      <svg viewBox="0 0 12 12" width={13} height={13} aria-hidden className="transition-transform duration-200" style={{ transform: open ? "rotate(180deg)" : undefined }}>
+        <path d="M2 4.5 6 8.5 10 4.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
 }
 
 /* The two game doodles for one layout. `side` stacks them in a column right
@@ -193,6 +233,8 @@ export function GamePacks({
 }) {
   const { t } = useLingui();
   const bestStreak = useBestStreak();
+  const [open, setOpen] = useExtraOpen();
+  const heading = <GamesHeading label={t`Extra`} open={open} onToggle={() => setOpen(!open)} />;
   const width = layout === "side" ? 230 : "fluid";
   const doodles = (
     <>
@@ -208,14 +250,50 @@ export function GamePacks({
   );
   /* Side by side even on a phone, each half the width, so the pair costs one
      short row of scrolling. */
-  if (layout === "row") return <div className={`mx-auto grid items-start gap-x-6 px-4 ${chain ? "max-w-[420px] grid-cols-2" : "max-w-[210px] grid-cols-1"} ${className}`}>{doodles}</div>;
+  if (layout === "row") {
+    return (
+      <div className={`flex flex-col items-center gap-4 ${className}`}>
+        {heading}
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div
+              key="games"
+              className={`mx-auto grid w-full items-start gap-x-6 px-4 ${chain ? "max-w-[420px] grid-cols-2" : "max-w-[210px] grid-cols-1"}`}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10, transition: { duration: 0.12 } }}
+              transition={{ duration: 0.2 }}
+            >
+              {doodles}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
   /* Right of the pack, out toward the page edge on wide screens, the column
      centred on the pack's height. */
   return (
     <div className={`pointer-events-none absolute inset-x-0 top-0 ${className}`}>
-      <div className="pointer-events-auto absolute flex h-[450px] flex-col justify-center gap-7" style={{ left: "calc(50% + max(220px, 23vw))" }}>
-        <GamesHeading label={t`Extra`} />
-        {doodles}
+      {/* "Extra" holds its place at the top whether open or closed (the
+          column keeps the doodles' 230px width, so it stays centred over
+          them); the games drop in under it. */}
+      <div className="pointer-events-auto absolute flex w-[230px] flex-col items-center gap-4 pt-2" style={{ left: "calc(50% + max(220px, 23vw))" }}>
+        {heading}
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div
+              key="games"
+              className="flex flex-col gap-7"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10, transition: { duration: 0.12 } }}
+              transition={{ duration: 0.2 }}
+            >
+              {doodles}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

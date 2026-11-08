@@ -2,7 +2,8 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles, Users } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import {
   fetchLivePackPulledStats,
   fetchLivePackRecentPulls,
@@ -127,6 +128,31 @@ let feedStateRestored = false;
 let pollFeedNow: (() => void) | null = null;
 export function refreshPackPulseFeed(): void {
   pollFeedNow?.();
+}
+
+/* The newest pulls, newest first, for the compact ticker narrower pages get
+   in place of the rail (PackPulseTicker). PackPulse fills it from the same
+   poll and stream as the rail; unlike the rail nothing here expires. */
+let recentPulls: LivePackPullFeedEntry[] = [];
+const recentListeners = new Set<() => void>();
+const NO_PULLS: LivePackPullFeedEntry[] = [];
+
+function addRecentPulls(pulls: LivePackPullFeedEntry[]): void {
+  const byId = new Map(recentPulls.map((pull) => [pull.id, pull]));
+  let changed = false;
+  for (const pull of pulls) {
+    if (!pull || !Number.isFinite(pull.id) || pull.id <= 0 || byId.has(pull.id)) continue;
+    byId.set(pull.id, pull);
+    changed = true;
+  }
+  if (!changed) return;
+  recentPulls = [...byId.values()].sort((a, b) => b.pulledAt - a.pulledAt || b.id - a.id).slice(0, FEED_LIMIT);
+  for (const listener of recentListeners) listener();
+}
+
+function subscribeRecentPulls(listener: () => void): () => void {
+  recentListeners.add(listener);
+  return () => recentListeners.delete(listener);
 }
 
 /* Admin-only rail rehearsal: fake pulls pushed straight into the drip queue
@@ -264,7 +290,6 @@ function PulledStatsLine({ stats }: { stats: LivePackPulledStats }) {
 
 export function PackPulse({ viewerId, revealing = false }: { viewerId: number | null; revealing?: boolean }) {
   const { t } = useLingui();
-  const locale = useLocale();
   // Admins get the collector list (a prototype; the fun fact itself stays
   // visible to everyone) and the rail's inflow simulator.
   const isAdmin = canUseAdminFeatures(useAuth());
@@ -371,6 +396,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
       void fetchLivePackRecentPulls(FEED_LIMIT, { includeAll: true })
         .then((pulls) => {
           if (cancelled) return;
+          addRecentPulls(pulls);
           const wasSeeded = feedSeeded;
           // Marking each id seen as it is accepted also drops a duplicate id
           // inside one response, which a plain filter-then-mark would let
@@ -426,6 +452,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
     const onPackPull = (event: MessageEvent) => {
       try {
         const pull = JSON.parse(event.data) as LivePackPullFeedEntry;
+        addRecentPulls([pull]);
         if (!Number.isFinite(pull?.id) || seenPullIds.has(pull.id)) return;
         seenPullIds.add(pull.id);
         pullQueue.push(pull);
@@ -592,77 +619,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                       event on the card's durable permalink. The pull page names
                       the owner and can distinguish a new card from a duplicate.
                       A team card's permalink is keyed "team:<id>". */}
-                  {(() => {
-                    const ring = { boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` };
-                    const body = (
-                      <>
-                        {pull.team ? (
-                          pull.team.flagUrl ? (
-                            <img
-                              src={pull.team.flagUrl}
-                              alt=""
-                              className="h-4 w-8 shrink-0 rounded-[3px] object-cover"
-                              style={ring}
-                              loading="lazy"
-                              draggable={false}
-                            />
-                          ) : (
-                            <span className="h-4 w-8 shrink-0 rounded-[3px] bg-osu-b3" style={ring} />
-                          )
-                        ) : pull.cardAvatarUrl ? (
-                          <img
-                            src={pull.cardAvatarUrl}
-                            alt=""
-                            className="h-6 w-6 shrink-0 rounded-full object-cover"
-                            style={ring}
-                            loading="lazy"
-                            draggable={false}
-                          />
-                        ) : (
-                          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-osu-b3" style={ring}>
-                            <CountryFlag code={pull.cardCountryCode} size="xs" decorative />
-                          </span>
-                        )}
-                        <span className="flex min-w-0 flex-col">
-                          <span className="flex items-center gap-1 leading-tight">
-                            <UsernameText username={pull.cardUsername} userId={pull.cardUserId} className="truncate text-[11px] font-semibold text-white/90" />
-                            {pull.isFirstGlobal && (
-                              <span title={t`First time anyone pulled this card`} className="flex shrink-0">
-                                <Sparkles className="h-2.5 w-2.5 text-osu-pink" aria-label={t`first time anyone pulled this card`} />
-                              </span>
-                            )}
-                          </span>
-                          <span className="truncate text-[9px] leading-tight">
-                            {style ? (
-                              <span className="font-bold uppercase tracking-wide" style={{ color: `rgba(${accent}, 0.9)` }}>
-                                {style.label}
-                              </span>
-                            ) : (
-                              <span className="text-osu-f1/70">{t`pulled`}</span>
-                            )}
-                            {pull.pulledAt > 0 && (
-                              <span className="tabular-nums text-osu-f1/50"> · {formatPreciseTimeAgo(pull.pulledAt, now, locale)}</span>
-                            )}
-                          </span>
-                        </span>
-                      </>
-                    );
-                    const linkClass = "pointer-events-auto -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/5 hover:opacity-100";
-                    return (
-                      <Link
-                        to="/pull/$ownerId/$cardId"
-                        params={{
-                          ownerId: String(pull.ownerUserId),
-                          cardId: pull.team ? teamPackCardKey(pull.team.teamId, pull.tier ?? undefined) : String(pull.cardUserId),
-                        }}
-                        search={{ pull: pull.id }}
-                        className={linkClass}
-                        aria-label={`${pull.cardUsername} was pulled`}
-                      >
-                        {body}
-                      </Link>
-                    );
-                  })()}
+                  <PullLine pull={pull} now={now} notable={notable} accent={accent} tierLabel={style?.label ?? null} />
                 </motion.div>
               );
             })}
@@ -688,5 +645,201 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
         </div>
       )}
     </>
+  );
+}
+
+/* One pull: the card's avatar (or team flag) ringed in its tier colour, the
+   player, the tier and how long ago, linking to that pull's permalink. The
+   rail and the ticker's sheet both use it; `big` is the sheet's
+   finger-sized row. */
+function PullLine({
+  pull,
+  now,
+  notable,
+  accent,
+  tierLabel,
+  big = false,
+  plain = false,
+  onOpen,
+}: {
+  pull: LivePackPullFeedEntry;
+  now: number;
+  notable: boolean;
+  accent: string;
+  tierLabel: string | null;
+  big?: boolean;
+  /* Not a link: the ticker's button holds it. */
+  plain?: boolean;
+  onOpen?: () => void;
+}) {
+  const { t } = useLingui();
+  const locale = useLocale();
+  const ring = { boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` };
+  const avatar = big ? "h-9 w-9" : "h-6 w-6";
+  const body = (
+    <>
+      {pull.team ? (
+        pull.team.flagUrl ? (
+          <img src={pull.team.flagUrl} alt="" className={`${big ? "h-6 w-12" : "h-4 w-8"} shrink-0 rounded-[3px] object-cover`} style={ring} loading="lazy" draggable={false} />
+        ) : (
+          <span className={`${big ? "h-6 w-12" : "h-4 w-8"} shrink-0 rounded-[3px] bg-osu-b3`} style={ring} />
+        )
+      ) : pull.cardAvatarUrl ? (
+        <img src={pull.cardAvatarUrl} alt="" className={`${avatar} shrink-0 rounded-full object-cover`} style={ring} loading="lazy" draggable={false} />
+      ) : (
+        <span className={`grid ${avatar} shrink-0 place-items-center rounded-full bg-osu-b3`} style={ring}>
+          <CountryFlag code={pull.cardCountryCode} size="xs" decorative />
+        </span>
+      )}
+      <span className="flex min-w-0 flex-col">
+        <span className="flex items-center gap-1 leading-tight">
+          <UsernameText username={pull.cardUsername} userId={pull.cardUserId} className={`truncate font-semibold text-white/90 ${big ? "text-[14px]" : "text-[11px]"}`} />
+          {pull.isFirstGlobal && (
+            <span title={t`First time anyone pulled this card`} className="flex shrink-0">
+              <Sparkles className={`${big ? "h-3.5 w-3.5" : "h-2.5 w-2.5"} text-osu-pink`} aria-label={t`first time anyone pulled this card`} />
+            </span>
+          )}
+        </span>
+        <span className={`flex items-center gap-1.5 truncate leading-tight ${big ? "text-[11px]" : "text-[9px]"}`}>
+          {tierLabel ? (
+            <span className="font-bold uppercase tracking-wide" style={{ color: `rgba(${accent}, 0.9)` }}>
+              {tierLabel}
+            </span>
+          ) : (
+            <span className="text-osu-f1/70">{t`pulled`}</span>
+          )}
+          {pull.pulledAt > 0 && (
+            <>
+              <span aria-hidden="true" className="h-2 w-px bg-osu-f1/30" />
+              <span className="tabular-nums text-osu-f1/50">{formatPreciseTimeAgo(pull.pulledAt, now, locale)}</span>
+            </>
+          )}
+        </span>
+      </span>
+    </>
+  );
+  if (plain) return <span className="flex items-center gap-2">{body}</span>;
+  return (
+    <Link
+      to="/pull/$ownerId/$cardId"
+      params={{
+        ownerId: String(pull.ownerUserId),
+        cardId: pull.team ? teamPackCardKey(pull.team.teamId, pull.tier ?? undefined) : String(pull.cardUserId),
+      }}
+      search={{ pull: pull.id }}
+      onClick={onOpen}
+      className={
+        big
+          ? "flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/5"
+          : "pointer-events-auto -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/5 hover:opacity-100"
+      }
+      aria-label={`${pull.cardUsername} was pulled`}
+    >
+      {body}
+    </Link>
+  );
+}
+
+function pullLook(pull: LivePackPullFeedEntry) {
+  const style = tierStyle(pull.tier);
+  return {
+    notable: pull.isFirstGlobal || (pull.tier !== null && NOTABLE_TIERS.has(pull.tier)),
+    accent: tierAccentRgb(pull.tier),
+    tierLabel: style?.label ?? null,
+  };
+}
+
+/* Pages too narrow for the rail (phones, small windows) get the newest pull
+   on one line under the pack counts, boxless like the rail itself; tapping it opens the recent pulls as a
+   sheet from the bottom. Fed by PackPulse, which is mounted on every width. */
+export function PackPulseTicker({ className = "" }: { className?: string }) {
+  const { t } = useLingui();
+  const pulls = useSyncExternalStore(subscribeRecentPulls, () => recentPulls, () => NO_PULLS);
+  const [open, setOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  const newest = pulls[0];
+  if (!newest) return null;
+  const look = pullLook(newest);
+  return (
+    <div translate="no" className={className}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mx-auto flex max-w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 transition-colors hover:bg-white/5"
+        aria-haspopup="dialog"
+      >
+        <span className="relative flex h-1.5 w-1.5 shrink-0">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-osu-pink opacity-50" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-osu-pink" />
+        </span>
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={newest.id}
+            className="pointer-events-none flex min-w-0 items-center"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25 }}
+          >
+            <PullLine pull={newest} now={now} plain {...look} />
+          </motion.span>
+        </AnimatePresence>
+        <svg viewBox="0 0 12 12" width={12} height={12} aria-hidden className="shrink-0 text-osu-f1/60">
+          <path d="M2 7.5 6 3.5 10 7.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                key="sheet"
+                className="fixed inset-0 z-[90] flex items-end justify-center bg-black/50"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setOpen(false)}
+              >
+                <motion.div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t`recent global pulls`}
+                  className="flex max-h-[75dvh] w-full max-w-[480px] flex-col rounded-t-2xl border border-b-0 border-white/10 bg-osu-b5 pb-[env(safe-area-inset-bottom)]"
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ type: "spring", stiffness: 420, damping: 40 }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-white/20" aria-hidden="true" />
+                  <div className="flex items-center gap-2 px-4 pb-2 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-osu-f1/70">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-osu-pink opacity-50" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-osu-pink" />
+                    </span>
+                    <Trans>recent global pulls</Trans>
+                  </div>
+                  <div translate="no" className="flex flex-col overflow-y-auto overscroll-contain px-2 pb-3">
+                    {pulls.map((pull) => (
+                      <PullLine key={pull.id} pull={pull} now={now} big onOpen={() => setOpen(false)} {...pullLook(pull)} />
+                    ))}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
+    </div>
   );
 }

@@ -61,7 +61,7 @@ import {
 } from "../lib/pack-pending";
 import { mintServerPackCollectionCards, recordServerPackPulls } from "../lib/pack-wallet-sync";
 import { recycleServerPackTeamCards, releaseServerTeamPackPulls } from "../lib/pack-teams";
-import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
+import { PackPulse, PackPulseTicker, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
   drawPackPlayersFromServer,
@@ -1328,6 +1328,9 @@ function PacksPage() {
                 </div>
               </div>
             )}
+            {/* Narrower than the pulls rail (PackPulse, 1450px): the newest
+                pull on one line, opening the recent ones as a sheet. */}
+            {wallet && phase !== "reveal" && !runTableActive && <PackPulseTicker className="-mt-6 mb-7 flex justify-center px-4 min-[1450px]:hidden" />}
             {/* Temporary GOAT vote. It owns its own placement (RAIL_LAYOUT in
                 GoatPoll.tsx): once the viewport has room for a rail beside the
                 centred 960px column it floats out of flow into the right
