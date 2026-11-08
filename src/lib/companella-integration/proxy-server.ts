@@ -26,6 +26,7 @@
  *    a generic one.
  */
 
+import { getAppRateLimitClientIp } from "../app-client-ip";
 import { liveBridgeToken } from "../live-backend-tokens";
 import { COMPANELLA_NATIVE_ROUTES } from "./shared";
 
@@ -39,6 +40,8 @@ const JSON_BODY_BYTES = 64 * 1024;
  */
 const REPLAY_BODY_BYTES = 32 * MIB;
 const BEATMAP_BODY_BYTES = 32 * MIB;
+/** A bug report with the app's log: 1 MiB of log, escaped into JSON. */
+const BUG_REPORT_BODY_BYTES = 4 * MIB;
 /** One piece of an asset sent in parts; the backend allows 16 KiB. */
 const PART_BODY_BYTES = 64 * 1024;
 
@@ -61,6 +64,8 @@ interface RouteRule {
   /** OAuth endpoints answer in the OAuth error shape, not the envelope. */
   oauth: boolean;
   timeoutMs: number;
+  /** Pass the caller's address on, for a route whose anonymous use is rate-limited per address. */
+  forwardsClientIp?: boolean;
   /** Query parameters carried to the backend, by name with the values each takes; every other one is dropped. */
   query?: Readonly<Record<string, RegExp>>;
 }
@@ -78,6 +83,8 @@ const ROUTE_RULES: Record<NativeRouteId, RouteRule> = {
   submissionBeatmapPart: { maxBodyBytes: PART_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
   submissionComplete: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
   presence: { maxBodyBytes: JSON_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
+  // Signed in or not: the backend checks a token only when one is sent.
+  bugReports: { maxBodyBytes: BUG_REPORT_BODY_BYTES, requires: "nothing", oauth: false, timeoutMs: UPLOAD_TIMEOUT_MS, forwardsClientIp: true },
   chartLeaderboard: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS, query: {
     // Loose but inert: the backend answers a malformed value with a 400
     // instead of the board it would get if the value were dropped here.
@@ -246,6 +253,10 @@ export async function forwardNativeRequest(
   if (proof) headers["x-companella-dpop"] = proof;
   const idempotency = request.headers.get("idempotency-key");
   if (idempotency) headers["idempotency-key"] = idempotency;
+  if (rule.forwardsClientIp) {
+    const ip = getAppRateLimitClientIp(request);
+    if (ip !== "unknown") headers["x-forwarded-for"] = ip;
+  }
   const country = trustedEdgeCountry(request);
   if (country) headers["x-companella-country"] = country;
 

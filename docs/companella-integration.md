@@ -982,6 +982,32 @@ its presence memory is empty; an app still open starts a new one on its next
 heartbeat. Only players with "Share what I'm playing" on send presence, so only
 they are held.
 
+## Bug reports from the app
+
+`POST /api/integrations/companella/v1/bug-reports` (also on `api_base_url`)
+files a report on the admin bug board with the app's log attached, so a player
+never has to find the log file by hand. `/capabilities` advertises it as
+`bug_reports` (`max_log_bytes`, `body_chars`, `kinds`), null while the
+integration is off.
+
+Auth is optional. With the usual DPoP token and proof (any scope) the report
+belongs to that account and its replies are read on `/report`; a token that is
+sent must verify, so a stale one gets the usual 401 rather than an anonymous
+report. Without credentials it is anonymous, on the open form's per-address
+window (the proxy forwards the caller's address for this route only).
+
+```json
+{ "body": "10 to 4000 chars", "kind": "bug", "context": { "hashi": "0.1.9" }, "log": "optional, at most 1 MiB" }
+```
+
+`context` is the same flat object the site's form sends. The log is stored as
+`bug-reports/<id>/0/bridge.log` in the private bucket and recorded like any
+other attachment; a log that fails to store leaves the report standing with
+`log_attached: false`. The answer is `{ ok, id, duplicate, log_attached,
+replies_url }` (`replies_url` null for an anonymous report). Errors use the
+envelope: `400 invalid_report`, `413 payload_too_large`, `429 rate_limited` or
+`too_many_reports`. `pagePath` is always `/hashi`.
+
 ## Skill credit for regular players
 
 An active Bancho account's eligible imports count toward its public skill

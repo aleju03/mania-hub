@@ -33,7 +33,7 @@ import { ImageLightbox } from "../../components/ui/ImageLightbox";
 import { MessageText } from "../../components/ui/MessageText";
 import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
-import { describeBrowser } from "../../lib/bug-report-context";
+import { describeBrowser, describeHashiReport } from "../../lib/bug-report-context";
 import {
   filesFromClipboard,
   uploadBugReportScreenshots,
@@ -381,6 +381,40 @@ function ContextLine({ context }: { context: BugReport["context"] }) {
   );
 }
 
+/* A report sent from the Hashi app: the app's mark stands in for the avatar
+   when nobody was signed in, and sits on the avatar as a badge when someone was. */
+function HashiReporterMark({ userId }: { userId: number | null }) {
+  if (!userId) {
+    return <img src="/images/hashi-icon.png" alt="Hashi" width={30} height={30} className="h-[30px] w-[30px] flex-shrink-0 rounded-full" />;
+  }
+  return (
+    <span className="relative h-[30px] w-[30px] flex-shrink-0">
+      <Avatar userId={userId} size={30} />
+      <img
+        src="/images/hashi-icon-mark.png"
+        alt="Hashi"
+        width={16}
+        height={16}
+        className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full ring-2 ring-osu-b6"
+      />
+    </span>
+  );
+}
+
+function HashiDetailsLine({ details }: { details: string[] }) {
+  if (!details.length) return null;
+  return (
+    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-osu-f1">
+      {details.map((detail, index) => (
+        <span key={detail} className="inline-flex items-center gap-2">
+          {index > 0 ? <span aria-hidden className="h-2.5 w-px bg-white/15" /> : null}
+          {detail}
+        </span>
+      ))}
+    </p>
+  );
+}
+
 /* An owner message can be corrected in place; a reporter's cannot, so the
    pencil only appears on your own side of the thread. The stamp says "edited"
    afterwards rather than changing the words behind the reporter's back, and a
@@ -712,15 +746,18 @@ function ReportCard({
 
   const meta = STATUS_META[report.status];
   const open = !CLOSED_STATUSES.includes(report.status);
+  const hashi = describeHashiReport(report.pagePath, report.context);
 
   return (
     <article
-      className={`rounded-xl border border-osu-b3/25 border-l-2 bg-osu-b5/40 transition-opacity duration-[120ms] ${meta.edge} ${
+      className={`rounded-xl border border-osu-b3/25 border-l-2 ${hashi ? "bg-[#e8506a]/[0.06]" : "bg-osu-b5/40"} transition-opacity duration-[120ms] ${meta.edge} ${
         open ? "" : "opacity-70 hover:opacity-100"
       }`}
     >
       <div className="flex gap-3 px-3.5 pt-3.5">
-        {report.userId ? (
+        {hashi ? (
+          <HashiReporterMark userId={report.userId} />
+        ) : report.userId ? (
           <Avatar userId={report.userId} size={30} />
         ) : (
           <span className="grid h-[30px] w-[30px] flex-shrink-0 place-items-center rounded-full bg-osu-b4/60 text-osu-f1">
@@ -753,7 +790,16 @@ function ReportCard({
               <span className="text-[13px] font-bold text-osu-l2">signed out</span>
             )}
             <span className="text-[11px] text-osu-f1">{formatWhen(report.createdAt)}</span>
-            {report.pagePath ? (
+            {hashi ? (
+              <a
+                href="/hashi"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] font-semibold text-[#f39aaa] transition-colors duration-[120ms] hover:text-white"
+              >
+                Hashi {hashi.version}
+              </a>
+            ) : report.pagePath ? (
               <a
                 href={report.pagePath}
                 target="_blank"
@@ -802,7 +848,7 @@ function ReportCard({
               <MessageText text={report.body} />
             )}
           </p>
-          <ContextLine context={report.context} />
+          {hashi ? <HashiDetailsLine details={hashi.details} /> : <ContextLine context={report.context} />}
           <Screenshots reportId={report.id} count={report.screenshotKeys.length} />
         </div>
       </div>
