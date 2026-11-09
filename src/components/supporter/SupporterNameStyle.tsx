@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { isShaderNameStyle, isSolidNameStyle, solidNameColour, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
@@ -17,9 +17,21 @@ import { useWebGlSlot } from "../../lib/gl-budget";
    before the real metal); then the text turns transparent but stays for layout, selection and
    truncation. */
 
-export function SupporterStyledName({ nameStyle, nameFont = null, name, className, live = false, still = false }: {
+/* The inline part of a name's look: a solid style's colour and the outline's. */
+export function nameStyleInline(nameStyle: SupporterNameStyleId | null, outline: string | null): CSSProperties | undefined {
+  if (!outline && !isSolidNameStyle(nameStyle)) return undefined;
+  return {
+    ...(isSolidNameStyle(nameStyle) ? { color: solidNameColour(nameStyle) } : null),
+    ...(outline ? { "--name-outline": `#${outline}` } : null),
+  } as CSSProperties;
+}
+
+export function SupporterStyledName({ nameStyle, nameFont = null, outline = null, name, className, live = false, still = false }: {
   nameStyle: SupporterNameStyleId | null;
   nameFont?: SupporterNameFontId | null;
+  /* An outline round the letters in this colour (six hex digits), drawn
+     with the text, so a live shader's letters sit inside it. */
+  outline?: string | null;
   name: string;
   className?: string;
   live?: boolean;
@@ -74,7 +86,7 @@ export function SupporterStyledName({ nameStyle, nameFont = null, name, classNam
   }, [stilled, nameStyle, nameFont, name]);
 
   return (
-    <span ref={spanRef} style={isSolidNameStyle(nameStyle) ? { color: solidNameColour(nameStyle) } : undefined} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${isSolidNameStyle(nameStyle) ? "solid" : nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live || (still && isShader) ? " name-tag--hero" : ""}${shaded || stilled ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : still && isShader ? " name-tag--waiting" : ""}`}>
+    <span ref={spanRef} style={nameStyleInline(nameStyle, outline)} className={`${className ?? ""}${outline ? " name-outline" : ""}${nameStyle ? ` name-tag name-tag--${isSolidNameStyle(nameStyle) ? "solid" : nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live || (still && isShader) ? " name-tag--hero" : ""}${shaded || stilled ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : still && isShader ? " name-tag--waiting" : ""}`}>
       {name}
       {(shaded || stilled) && <span ref={hostRef} aria-hidden className="name-tag-shader" />}
     </span>

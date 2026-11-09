@@ -3,19 +3,19 @@ import { Plural, useLingui } from "@lingui/react/macro";
 
 import { SUPPORTER_DAYS_PER_DOLLAR, SUPPORTER_YEAR_DOLLARS, supporterDaysFor } from "../../lib/supporter-ranks";
 
-const MAX = 60;
+const MAX = 48;
 // marked under the slider: a month, two, five, and the year deal
-const STEPS = [5, 10, 25, 50];
+const STEPS = [4, 8, 20, 40];
 const YEAR = 365;
 
 /* How many days of supporter an amount buys, worked out before paying: the
    Ko-fi panel is a frame the page can't read the amount from. A slider picks
    the amount (the box takes anything past it); a bar shows the time against a
-   year. One payment of $50 or more is a full year per $50 (supporterDaysFor):
+   year. One payment of $40 or more is a full year per $40 (supporterDaysFor):
    the days it adds over the plain rate show in green. */
 export function SupportDaysPreview() {
   const { t } = useLingui();
-  const [raw, setRaw] = useState("5");
+  const [raw, setRaw] = useState("4");
   const amount = Number(raw);
   // whole dollars, as Ko-fi takes them
   const valid = raw !== "" && amount >= 1;
@@ -106,15 +106,15 @@ export function SupportDaysPreview() {
         </div>
       </div>
 
-      <p className="mt-3 text-[12px] leading-relaxed text-osu-f1">{t`Any amount counts, to the day, and adds to the time you have left: $5 is 30 days. Paying $50 or more at once buys a full year for every $50.`}</p>
+      <p className="mt-3 text-[12px] leading-relaxed text-osu-f1">{t`Any amount counts, to the day, and adds to the time you have left: $4 is 30 days. Paying $40 or more at once buys a full year for every $40.`}</p>
     </div>
   );
 }
 
-/* The amount slider: a soft track whose year-deal zone (from $50) is tinted
+/* The amount slider: a soft track whose year-deal zone (from $40) is tinted
    green, dots at the steps, a white thumb ringed in pink (green in that zone)
    that grows while held and shows the amount above it. Drag, click anywhere
-   on the track, or use the arrow keys (Page keys move $5). */
+   on the track, or use the arrow keys (Page keys move $4). */
 function AmountSlider({ value, onChange, label }: { value: number; onChange: (value: number) => void; label: string }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -127,7 +127,7 @@ function AmountSlider({ value, onChange, label }: { value: number; onChange: (va
     set(1 + ((event.clientX - box.left) / box.width) * (MAX - 1));
   };
   const onKey = (event: KeyboardEvent) => {
-    const by: Record<string, number> = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1, PageUp: 5, PageDown: -5 };
+    const by: Record<string, number> = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1, PageUp: 4, PageDown: -4 };
     if (event.key in by) set(value + by[event.key]);
     else if (event.key === "Home") set(1);
     else if (event.key === "End") set(MAX);
@@ -161,7 +161,7 @@ function AmountSlider({ value, onChange, label }: { value: number; onChange: (va
         {/* the rail, its year-deal zone tinted */}
         <div className="relative h-2 w-full overflow-hidden rounded-full bg-osu-b6 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]">
           <div className="absolute inset-y-0 right-0 bg-osu-green/15" style={{ left: `${bonusAt}%` }} />
-          {/* the fill: pink to $50, green past it */}
+          {/* the fill: pink to $40, green past it */}
           <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-pink to-osu-pink-light" style={{ width: `${Math.min(pct, bonusAt)}%` }} />
           {pct >= bonusAt && (
             <div className="absolute inset-y-0 bg-gradient-to-r from-osu-green to-osu-green-light" style={{ left: `${bonusAt}%`, width: `${pct - bonusAt}%` }} />

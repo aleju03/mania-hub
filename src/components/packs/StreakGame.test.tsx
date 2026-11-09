@@ -37,7 +37,7 @@ const fetchLiveStreakBoard = vi.hoisted(() => vi.fn());
 vi.mock("#/lib/use-supporter-pack-style", () => ({ useSupporterSleeve: () => null, useSupporterPackStyle: () => ({ sleeve: null, binder: null, wrapper: null, blade: null }) }));
 vi.mock("#/lib/live-backend", () => ({
   // Player names read the supporter name styles; no player here has one.
-  ensureSupporterNameStyles: () => {}, getSupporterNameStyle: () => null, getSupporterNameFont: () => null, subscribeSupporterNameStyles: () => () => {},
+  ensureSupporterNameStyles: () => {}, getSupporterNameStyle: () => null, getSupporterNameFont: () => null, getSupporterNameOutline: () => null, subscribeSupporterNameStyles: () => () => {},
   fetchLiveGlobalRankings,
   fetchLiveStreakMetrics,
   fetchLiveStreakBoard,

@@ -5,7 +5,7 @@ import { getServerLiveBackendUrl } from "./live-backend";
 import { isSupporterAvatarFrame, isWorkshopFrameId, parseFrameDan, parseWorkshopFrameArt, type FrameDan, type SupporterAvatarFrameId, type WorkshopFrameArt } from "./supporter-avatar-frames";
 import { FRAME_NAME_MAX, parseSubmittedFrames, type SubmittedFrame } from "./workshop-frames";
 import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
-import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
+import { isSupporterNameOutline, isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
 import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import { NO_PACK_STYLE, parsePackStyle, SUPPORTER_BINDERS, SUPPORTER_BLADES, SUPPORTER_CARD_SLEEVES, SUPPORTER_WRAPPERS, type SupporterPackStyle } from "./supporter-pack-style";
@@ -44,6 +44,7 @@ export interface SupporterLookState {
   /** How their name is drawn on their profile, null for plain. */
   nameStyle: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
+  nameOutline: string | null;
   /** The theme their whole profile wears, null for the site's own colours. */
   profileTheme: SupporterProfileThemeId | null;
   profileThemeOptions: ProfileThemeOptions;
@@ -55,7 +56,7 @@ export interface SupporterLookState {
   frameArt?: Record<string, WorkshopFrameArt>;
 }
 
-const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, renewing: false, patron: false, bestRank: 0, shownRank: null, rankFire: true, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
+const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, renewing: false, patron: false, bestRank: 0, shownRank: null, rankFire: true, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, nameOutline: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
 
 export async function requireViewer(): Promise<{ userId: number; username: string; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
@@ -67,7 +68,7 @@ export async function requireViewer(): Promise<{ userId: number; username: strin
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; renewing?: unknown; patron?: unknown; bestRank?: unknown; shownRank?: unknown; rankFire?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown; frameArt?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; renewing?: unknown; patron?: unknown; bestRank?: unknown; shownRank?: unknown; rankFire?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; nameOutline?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown; frameArt?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
@@ -84,6 +85,7 @@ function readState(body: unknown): SupporterLookState {
     frame: isSupporterAvatarFrame(raw.frame) ? raw.frame : null,
     nameStyle: isSupporterNameStyle(raw.nameStyle) ? raw.nameStyle : null,
     nameFont: isSupporterNameFont(raw.nameFont) ? raw.nameFont : null,
+    nameOutline: isSupporterNameOutline(raw.nameOutline) ? raw.nameOutline : null,
     profileTheme: isSupporterProfileTheme(raw.profileTheme) ? raw.profileTheme : null,
     profileThemeOptions: parseProfileThemeOptions(raw.profileThemeOptions),
     packStyle: parsePackStyle(raw.packStyle),
@@ -224,6 +226,26 @@ export const saveSupporterNameFontSetting = createServerFn({ method: "POST" })
     return readState(body);
   });
 
+export const saveSupporterNameOutlineSetting = createServerFn({ method: "POST" })
+  .validator((data: { nameOutline?: unknown }) => {
+    const nameOutline = data?.nameOutline ?? null;
+    if (nameOutline !== null && !isSupporterNameOutline(nameOutline)) throw new Error("Pick an outline colour.");
+    return { nameOutline };
+  })
+  .handler(async ({ data }): Promise<SupporterLookState> => {
+    const viewer = await requireViewer();
+    if (!viewer) return SIGNED_OUT;
+    const response = await fetch(`${viewer.base}/api/supporters/self/name-outline`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, nameOutline: data.nameOutline }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return readState(body);
+  });
+
 export const saveSupporterProfileThemeSetting = createServerFn({ method: "POST" })
   .validator((data: { profileTheme?: unknown; profileThemeOptions?: unknown }) => {
     const profileTheme = data?.profileTheme ?? null;
@@ -334,6 +356,25 @@ export const saveSupporterProfileStatsSetting = createServerFn({ method: "POST" 
     if (response.status === 403) throw new Error("Your supporter time has run out.");
     if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
     return { profileStats: parseProfileStats(body?.profileStats) };
+  });
+
+/* Sets the keymode the viewer's strongest-skill card shows (null: their main keymode). */
+export const saveSupporterProfileSkillKeysSetting = createServerFn({ method: "POST" })
+  .validator((data: { skillKeyCount?: unknown }) => {
+    const keys = data?.skillKeyCount ?? null;
+    if (keys !== null && !(Number.isInteger(keys) && (keys as number) >= 1 && (keys as number) <= 18)) throw new Error("Pick a keymode.");
+    return { skillKeyCount: keys as number | null };
+  })
+  .handler(async ({ data }): Promise<void> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/profile-stats`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, skillKeyCount: data.skillKeyCount }),
+    });
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(`Server ${response.status}`);
   });
 
 /* Sets the two plays under the viewer's profile stats, each a play the site

@@ -1945,6 +1945,22 @@ html[data-custom-cursor="true"] * {
   margin-block: -0.32em;
 }
 
+/* Under a style whose colour is clipped into the letters (and under a live
+   shader) the stroke would be the plain text colour: a white outline that
+   showed until the shader drew, which itself draws no stroke. */
+.name-tag:not(.name-tag--solid).name-font--pixelheavy {
+  -webkit-text-stroke-color: transparent;
+}
+
+/* The outline a supporter can put round their name, in their colour: a
+   stroke under the fill, so the letters keep their shape and the outline
+   grows outward. A live shader's canvas covers the fill, and the stroke's
+   outer half shows round its letters. Wins over a font's own stroke. */
+.name-outline {
+  -webkit-text-stroke: 0.14em var(--name-outline, #fff) !important;
+  paint-order: stroke fill;
+}
+
 /* Pixel Operator: a 16 px pixel face in the RPG dialogue-box style */
 .name-font--pixeloperator {
   font-family: "Name Pixel Operator", var(--font-sans, sans-serif);

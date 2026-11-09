@@ -15,7 +15,7 @@ export function SupportPlans() {
   return (
     <div className="mt-5">
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t`How to support`}>
-        <PlanCard on={plan === "monthly"} onPick={() => setPlan("monthly")} title={t`Monthly`} price={t`$5 a month`} />
+        <PlanCard on={plan === "monthly"} onPick={() => setPlan("monthly")} title={t`Monthly`} price={t`$4 a month`} />
         <PlanCard on={plan === "once"} onPick={() => setPlan("once")} title={t`One-time`} price={t`Any amount`} />
       </div>
       {plan === "monthly" ? <MonthlyPerks /> : <SupportDaysPreview />}
@@ -50,7 +50,7 @@ function MonthlyPerks() {
     t`Every supporter look, for as long as it renews.`,
     t`Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber.`,
     t`Your rank burns with a flame while your subscription renews.`,
-    t`An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up.`,
+    t`An extra gift code for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up.`,
     t`At $10 a month or more, your rank's tooltip says Gold supporter.`,
   ];
   return (

@@ -20,6 +20,8 @@ export interface Loadout {
   frame: SupporterAvatarFrameId | null;
   nameStyle: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
+  /** The outline round the name, six hex digits; null for none. Not a slot: a switch under the name styles. */
+  nameOutline: string | null;
   look: SupporterLook;
   /** Packs cosmetics: card case, binder, pack wrapper and opening blade. */
   pack: SupporterPackStyle;

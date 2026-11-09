@@ -8,7 +8,7 @@ import type { MessageDescriptor } from "@lingui/core";
    pick (profileStatsData), counted over everything the site tracked of the
    player rather than the top plays osu! lists. */
 
-export const PROFILE_STATS = ["keySplit", "mostUsedMod", "medianBpm", "ppRange", "ratio", "lnSplit", "streak", "percentile", "session"] as const;
+export const PROFILE_STATS = ["keySplit", "mostUsedMod", "medianBpm", "ppRange", "ratio", "lnSplit", "streak", "percentile", "session", "notes", "skill", "hours"] as const;
 export type ProfileStatId = (typeof PROFILE_STATS)[number];
 export const PROFILE_STAT_SLOTS = 4;
 export const DEFAULT_PROFILE_STATS: readonly ProfileStatId[] = PROFILE_STATS.slice(0, PROFILE_STAT_SLOTS);
@@ -23,6 +23,9 @@ export const PROFILE_STAT_LABELS: Record<ProfileStatId, MessageDescriptor> = {
   streak: msg`Longest streak`,
   percentile: msg`Percentile`,
   session: msg`Longest session`,
+  notes: msg`Notes hit`,
+  skill: msg`Strongest skill`,
+  hours: msg`Peak hour`,
 };
 
 export function isProfileStatId(value: unknown): value is ProfileStatId {
@@ -47,6 +50,10 @@ export interface ProfileStatsData {
   session?: { minutes: number; plays: number; startedAt: string };
   /* Their place among the players the site tracks, by pp. */
   percentile?: { rank: number; players: number };
+  /* Notes hit over every tracked play (misses left out). */
+  notes?: { hit: number; plays: number };
+  /* Plays in each hour of the day, 0 to 23, in their country's time zone. */
+  hours?: number[];
 }
 
 function countPair<K extends string>(value: unknown, keys: [K, K]): Record<K, number> | undefined {
@@ -79,6 +86,14 @@ export function parseProfileStatsData(value: unknown): ProfileStatsData {
   const rank = Number(percentile?.rank);
   const players = Number(percentile?.players);
   if (Number.isInteger(rank) && Number.isInteger(players) && rank > 0 && players >= rank) data.percentile = { rank, players };
+  const notes = raw.notes as Record<string, unknown> | undefined;
+  const hit = Number(notes?.hit);
+  const notePlays = Number(notes?.plays);
+  if (Number.isFinite(hit) && hit > 0 && Number.isFinite(notePlays) && notePlays > 0) data.notes = { hit, plays: notePlays };
+  if (Array.isArray(raw.hours) && raw.hours.length === 24 && raw.hours.every((n) => Number.isFinite(Number(n)) && Number(n) >= 0)) {
+    const hours = raw.hours.map(Number);
+    if (hours.some((n) => n > 0)) data.hours = hours;
+  }
   return data;
 }
 
@@ -95,4 +110,34 @@ export function sessionLength(minutes: number): { value: string; hours: boolean 
   if (minutes < 60) return { value: String(Math.max(1, Math.round(minutes))), hours: false };
   const hours = minutes / 60;
   return { value: (hours >= 10 ? Math.round(hours) : Math.round(hours * 10) / 10).toString(), hours: true };
+}
+
+/* "14.2M": a big count in a few characters. */
+export function compactCount(value: number): string {
+  if (value >= 1e9) return `${(value / 1e9).toFixed(value >= 1e10 ? 0 : 1).replace(/\.0$/, "")}B`;
+  if (value >= 1e6) return `${(value / 1e6).toFixed(value >= 1e7 ? 1 : 2).replace(/\.?0+$/, "")}M`;
+  if (value >= 1e4) return `${Math.round(value / 1e3)}K`;
+  return Math.round(value).toLocaleString("en-US");
+}
+
+/* The busiest hour and the three-hour stretch around it, smoothed over the
+   neighbours so one odd night does not decide it. */
+export function peakHour(hours: readonly number[]): number | null {
+  if (hours.length !== 24 || !hours.some((n) => n > 0)) return null;
+  let best = 0;
+  let bestScore = -1;
+  for (let h = 0; h < 24; h++) {
+    const score = hours[(h + 23) % 24] * 0.5 + hours[h] + hours[(h + 1) % 24] * 0.5;
+    if (score > bestScore) {
+      bestScore = score;
+      best = h;
+    }
+  }
+  return best;
+}
+
+/* "2 AM", "11 PM". */
+export function hourLabel(hour: number): string {
+  const h = ((hour % 24) + 24) % 24;
+  return `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? "AM" : "PM"}`;
 }

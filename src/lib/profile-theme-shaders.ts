@@ -3210,10 +3210,26 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   maple: shader(`
 // Autumn maple: a forest path in peak autumn, sunbeams slanting in from the
 // upper right through warm haze. The forest is a scene built and rendered in
-// Blender (u_sprite, maple-built.webp: the 2048 x 1152 render on top, its
-// depth at half size below); the beams shimmer here, and the falling leaves
-// are real geometry, drawn over this by profile-theme-maple.ts.
+// Blender (u_sprite, maple-built-2.webp: the 2048 x 1152 render on top; below
+// it at half size, its depth on the left and on the right a sway mask from
+// the same scene, white on the leaves, faint on the maple limbs, black on the
+// trunks and the ground). The crowns sway in the wind here, harder in a gust
+// every few seconds, and the near ones more; the beams shimmer, and the
+// falling leaves are real geometry, drawn over this by profile-theme-maple.ts.
 uniform sampler2D u_sprite;
+
+// The depth (x) and sway mask (y) at a point of the render.
+vec2 mpLayers(vec2 f) {
+  float y = (1184. + (1. - f.y) * 576.) / 1760.;
+  return vec2(textureLod(u_sprite, vec2(f.x * .5, y), 1.).r, textureLod(u_sprite, vec2(.5 + f.x * .5, y), 1.).r);
+}
+
+// How hard the wind blows: a light breeze, and a gust every 7 s that rises in
+// about a second and dies away over two.
+float mpGust(float t) {
+  float ph = fract(t / 7. + .3);
+  return .3 + .7 * smoothstep(0., .14, ph) * smoothstep(.5, .16, ph);
+}
 
 vec3 theme(vec2 uv, vec2 p, float t) {
   float aspect = u_res.x / u_res.y;
@@ -3228,8 +3244,33 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   float cx = clamp(.5, hw + .006, 1. - hw - .006);
   vec2 drift = vec2(sin(t * .05) * .004, cos(t * .037) * .003) + vec2(0., sc * .005) + pointerP() * .006;
   vec2 f = clamp(vec2(p.x / (1.7778 * ph), p.y / ph) / 1.05 + vec2(cx, .5) + drift, .001, .999);
+  // the wind: each crown leans downwind and springs back as the gusts pass,
+  // in slow swells that roll across the scene, with a finer flutter of the
+  // leaves on top; the near crowns move the most, the far ones barely
+  vec2 lay = mpLayers(f);
+  float g = mpGust(t);
+  float reach = lay.y * (.25 + .75 * lay.x);
+  float swell = inoise(f * vec2(3.2, 2.4) + vec2(-t * .32, t * .05)) - .5;
+  float flutter = inoise(f * vec2(26., 20.) + vec2(-t * 1.6, t * .4)) - .5;
+  vec2 wind = vec2(g * .55 + swell * (.6 + g) + flutter * .35 * (.4 + g), swell * .25 * (.6 + g) + flutter * .3);
+  // The ground, laid out in metres from the depth pass (2 m near to 70 m
+  // far, on a log scale): the canopy's moving shadow falls across it, sun
+  // spots breaking through the leaves that drift with the swell and slide
+  // downwind in a gust, and the near litter stirs as a gust passes.
+  float dist = 2. * pow(35., 1. - lay.x);
+  float ground = (1. - lay.y) * smoothstep(.62, .44, f.y) * smoothstep(34., 10., dist);
+  vec2 gq = vec2((f.x - .5) * 1.15 * dist, dist * 1.6);
+  float stir = inoise(gq * 2.2 + vec2(-t * 1.1, t * .3)) - .5;
+  f += ground * smoothstep(9., 3., dist) * g * stir * vec2(.0014, .0005);
+  f = clamp(f - wind * reach * .003, .001, .999);
   // the render fills the top 1152 of the texture's 1760 rows
   vec3 col = texture(u_sprite, vec2(f.x, (1. - f.y) * (1152. / 1760.))).rgb;
+  // and the sun flickers through the moving leaves
+  col *= 1. + reach * flutter * .16 * (.5 + g);
+  vec2 gs = gq * .8 + vec2(-t * .06 - g * .7 + swell * 1.4, t * .025 + swell * .5);
+  float spots = smoothstep(.54, .74, inoise(gs) * .62 + inoise(gs * 2.4 + 4.1) * .38);
+  col *= 1. + ground * (spots - .3) * .34;
+  col += vec3(1., .72, .4) * ground * spots * .05 * (.6 + .4 * g);
   // graded gently golden
   col = mix(vec3(dot(col, vec3(.3, .55, .15))), col, 1.06) * vec3(1.04, 1., .93);
 

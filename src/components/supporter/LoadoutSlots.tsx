@@ -187,7 +187,7 @@ function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; 
   }
   if (slot === "frame") return <FrameThumb frame={loadout.frame} avatar={avatar} size={40} />;
   if (slot === "nameStyle") {
-    return <SupporterStyledName nameStyle={loadout.nameStyle} nameFont={loadout.nameFont} name="Aa" className="p-1 -m-1 text-[19px] font-black leading-none text-white" />;
+    return <SupporterStyledName nameStyle={loadout.nameStyle} nameFont={loadout.nameFont} outline={loadout.nameOutline} name="Aa" className="p-1 -m-1 text-[19px] font-black leading-none text-white" />;
   }
   if (slot === "nameFont") {
     return <span className={`text-[19px] font-bold leading-none text-white ${loadout.nameFont ? `name-font--${loadout.nameFont}` : ""}`}>Aa</span>;
@@ -542,6 +542,8 @@ export interface DrawerProps {
   onEditCustom: () => void;
   /** The equipped theme's own switches. */
   onThemeOptions: (options: Loadout["themeOptions"]) => void;
+  /** The name's outline: previewed while `commit` is false, worn and saved when true. */
+  onNameOutline: (outline: string | null, commit: boolean) => void;
   /** Puts on one of the viewer's own themes, or takes it off with null. */
   onWearOwnTheme: (themeId: number | null) => Promise<void>;
 }
@@ -816,9 +818,9 @@ function PageTurn({ direction, label, disabled, onClick }: { direction: 1 | -1; 
 
 const NAME_CLASS = "min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[18px] font-black leading-none text-white";
 
-function NameStyleDrawer({ current, disabled, username, onTry, onPick }: DrawerProps) {
+function NameStyleDrawer({ current, disabled, username, onTry, onPick, onNameOutline }: DrawerProps) {
   const { t, i18n } = useLingui();
-  const { nameStyle, nameFont } = current;
+  const { nameStyle, nameFont, nameOutline } = current;
   const [tab, setTab] = useState(() => NAME_STYLE_GROUPS.find((g) => nameStyle && g.styles.includes(nameStyle))?.key ?? NAME_STYLE_GROUPS[0].key);
   const group = NAME_STYLE_GROUPS.find((g) => g.key === tab) ?? NAME_STYLE_GROUPS[0];
   // The tiles show a still of each style's real shader (a grid of live ones
@@ -838,13 +840,79 @@ function NameStyleDrawer({ current, disabled, username, onTry, onPick }: DrawerP
         {[null, ...group.styles].map((id) => (
           <Item key={id ?? "plain"} active={nameStyle === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("nameStyle", id)} className="items-stretch">
             <span className="flex h-12 items-center justify-center overflow-hidden rounded-md bg-osu-b6 px-3">
-              <SupporterStyledName nameStyle={id} nameFont={nameFont} name={username} live={id !== null && id === liveStyle} still className={NAME_CLASS} />
+              <SupporterStyledName nameStyle={id} nameFont={nameFont} outline={nameOutline} name={username} live={id !== null && id === liveStyle} still className={NAME_CLASS} />
             </span>
             {id ? i18n._(nameStyleLabel(id)) : t`Plain`}
           </Item>
         ))}
-        <SolidColourTile current={nameStyle} nameFont={nameFont} username={username} disabled={disabled} onTry={(value) => onTry("nameStyle", value)} onPick={(value) => onPick("nameStyle", value)} />
+        <SolidColourTile current={nameStyle} nameFont={nameFont} outline={nameOutline} username={username} disabled={disabled} onTry={(value) => onTry("nameStyle", value)} onPick={(value) => onPick("nameStyle", value)} />
       </div>
+      <NameOutlineSwitch outline={nameOutline} disabled={disabled} onChange={onNameOutline} />
+    </div>
+  );
+}
+
+const DEFAULT_OUTLINE = "ffffff";
+
+/* An outline round the name, with any style and font: a switch, and a swatch
+   that opens the browser's colour picker (previewing as it moves, saved once
+   it closes). */
+function NameOutlineSwitch({ outline, disabled, onChange }: { outline: string | null; disabled: boolean; onChange: (outline: string | null, commit: boolean) => void }) {
+  const { t } = useLingui();
+  const [colour, setColour] = useState(() => `#${outline ?? DEFAULT_OUTLINE}`);
+  useEffect(() => {
+    if (outline) setColour(`#${outline}`);
+  }, [outline]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const latest = useRef(onChange);
+  latest.current = onChange;
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const commit = () => latest.current(input.value.slice(1).toLowerCase(), true);
+    input.addEventListener("change", commit);
+    return () => input.removeEventListener("change", commit);
+  }, []);
+  const on = outline !== null;
+  // the swatch sits on the left: the browser opens its colour picker from the
+  // swatch's left edge, and at the drawer's right edge it ran off the window
+  return (
+    <div className="mt-3 flex items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={t`Outline`}
+        disabled={disabled}
+        onClick={() => onChange(on ? null : colour.slice(1).toLowerCase(), true)}
+        className="relative h-5 w-9 shrink-0 cursor-pointer rounded-full disabled:cursor-default"
+      >
+        <span className={`absolute inset-0 rounded-full transition-colors ${on ? "bg-osu-pink" : "bg-osu-b2"}`} />
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
+      </button>
+      <label className={`relative h-6 w-6 shrink-0 rounded-full ring-2 ring-white/70 ${disabled ? "opacity-50" : "cursor-pointer"}`} style={{ background: colour }} title={t`Pick a colour`}>
+        <input
+          ref={inputRef}
+          type="color"
+          value={colour}
+          disabled={disabled}
+          aria-label={t`Pick an outline colour`}
+          onChange={(event) => {
+            setColour(event.target.value);
+            onChange(event.target.value.slice(1).toLowerCase(), false);
+          }}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </label>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(on ? null : colour.slice(1).toLowerCase(), true)}
+        className="min-w-0 flex-1 cursor-pointer text-left disabled:cursor-default"
+      >
+        <span className="block text-[13px] font-semibold text-white">{t`Outline`}</span>
+        <span className="block text-[11.5px] text-osu-f1">{t`A line round your name in a colour of your choosing.`}</span>
+      </button>
     </div>
   );
 }
@@ -852,9 +920,10 @@ function NameStyleDrawer({ current, disabled, username, onTry, onPick }: DrawerP
 /* The name in one flat colour of the supporter's choosing. Clicking the tile
    wears the last colour; the swatch opens the browser's colour picker, which
    previews as it moves and saves once it closes. */
-function SolidColourTile({ current, nameFont, username, disabled, onTry, onPick }: {
+function SolidColourTile({ current, nameFont, outline, username, disabled, onTry, onPick }: {
   current: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
+  outline: string | null;
   username: string;
   disabled?: boolean;
   onTry: (value: SupporterNameStyleId | undefined) => void;
@@ -884,7 +953,7 @@ function SolidColourTile({ current, nameFont, username, disabled, onTry, onPick 
     <div className="relative">
       <Item active={isSolidNameStyle(current)} disabled={disabled} onTry={(on) => onTry(on ? style : undefined)} onPick={() => onPick(style)} className="w-full items-stretch">
         <span className="flex h-12 items-center justify-center overflow-hidden rounded-md bg-osu-b6 px-3">
-          <SupporterStyledName nameStyle={style} nameFont={nameFont} name={username} className={NAME_CLASS} />
+          <SupporterStyledName nameStyle={style} nameFont={nameFont} outline={outline} name={username} className={NAME_CLASS} />
         </span>
         {t`Solid colour`}
       </Item>
@@ -919,7 +988,7 @@ function FontDrawer({ current, disabled, username, onTry, onPick }: DrawerProps)
         {[null, ...group.fonts].map((id) => (
           <Item key={id ?? "default"} active={nameFont === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("nameFont", id)} className="items-stretch">
             <span className="flex h-12 items-center justify-center overflow-hidden rounded-md bg-osu-b6 px-3">
-              <span className={`truncate text-[20px] font-bold leading-none text-white ${id ? `name-font--${id}` : ""}`}>{username}</span>
+              <span className={`truncate px-[0.35em] -mx-[0.35em] py-[0.3em] -my-[0.3em] text-[20px] font-bold leading-none text-white ${id ? `name-font--${id}` : ""}`}>{username}</span>
             </span>
             {id ? i18n._(SUPPORTER_NAME_FONT_LABELS[id]) : t`Default`}
           </Item>
@@ -1312,7 +1381,16 @@ function ThemeDrawer({ current, disabled, avatar, username, canUpload, onTry, on
           onToggle={() => onThemeOptions({ ...current.themeOptions, rows: current.themeOptions.rows ? undefined : true })}
           title={t`Banner in lists`}
           body={t`A strip of the theme behind your row on rankings and leaderboards.`}
-          preview={<RowBannerPreview theme={current.theme} on={!!current.themeOptions.rows} avatar={avatar} username={username} nameStyle={current.nameStyle} nameFont={current.nameFont} />}
+          preview={<RowBannerPreview theme={current.theme} on={!!current.themeOptions.rows} avatar={avatar} username={username} nameStyle={current.nameStyle} nameFont={current.nameFont} nameOutline={current.nameOutline} />}
+        />
+      )}
+      {current.theme !== null && (
+        <ThemeSwitch
+          on={!!current.themeOptions.hideCover}
+          disabled={disabled}
+          onToggle={() => onThemeOptions({ ...current.themeOptions, hideCover: current.themeOptions.hideCover ? undefined : true })}
+          title={t`Hide my osu! banner`}
+          body={t`Only the theme shows behind your profile header, without your osu! banner.`}
         />
       )}
     </div>
@@ -1321,7 +1399,8 @@ function ThemeDrawer({ current, disabled, avatar, username, canUpload, onTry, on
 
 /* A ranking row as the viewer's own would show it, the theme's strip fading in
    behind its right side when the banner is on. */
-function RowBannerPreview({ theme, on, avatar, username, nameStyle, nameFont }: {
+function RowBannerPreview({ theme, on, avatar, username, nameStyle, nameFont, nameOutline = null }: {
+  nameOutline?: string | null;
   theme: SupporterProfileThemeId;
   on: boolean;
   avatar: string | undefined;
@@ -1334,7 +1413,7 @@ function RowBannerPreview({ theme, on, avatar, username, nameStyle, nameFont }: 
       <span aria-hidden className={`absolute inset-0 transition-opacity duration-300 ${on ? "opacity-100" : "opacity-0"}`} style={supporterRowBackground(theme, "strip")} />
       <span className="relative w-7 shrink-0 font-semibold text-osu-f1">#12</span>
       {avatar ? <img src={avatar} alt="" className="relative h-7 w-7 shrink-0 rounded-full bg-osu-b3 object-cover" /> : <span className="relative h-7 w-7 shrink-0 rounded-full bg-osu-b3" />}
-      <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} name={username} className="relative min-w-0 truncate text-[13.5px] font-semibold text-white" />
+      <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} outline={nameOutline} name={username} className="relative min-w-0 truncate text-[13.5px] font-semibold text-white" />
       <span className="relative ml-auto shrink-0 font-semibold text-osu-l2">12,345pp</span>
     </span>
   );

@@ -75,7 +75,7 @@ const THEME_SPRITES: Partial<Record<SupporterProfileThemeId, string>> = {
   koi: "/images/profile-themes/koi-pads.png",
   vaporwave: "/images/profile-themes/palm.png",
   redtree: "/images/profile-themes/red-tree.webp",
-  maple: "/images/profile-themes/maple-built.webp",
+  maple: "/images/profile-themes/maple-built-2.webp",
   fireflies: "/images/profile-themes/firefly-built.webp",
   aero: "/images/profile-themes/aero-built.webp",
   frost: "/images/profile-themes/frost-built.webp",

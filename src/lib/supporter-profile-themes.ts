@@ -102,11 +102,13 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
    made-up notes; `stockNotes` keeps the Note highway's own notes and blue
    instead of the owner's replay skin notes; `rows` lays a strip of the theme
    behind the owner's rows in lists (rankings, leaderboards), which is off
-   unless they turn it on. */
+   unless they turn it on; `hideCover` leaves out the owner's osu! banner,
+   which otherwise shows faintly through the theme on their profile. */
 export interface ProfileThemeOptions {
   charts?: true;
   stockNotes?: true;
   rows?: true;
+  hideCover?: true;
 }
 
 export function parseProfileThemeOptions(value: unknown): ProfileThemeOptions {
@@ -116,6 +118,7 @@ export function parseProfileThemeOptions(value: unknown): ProfileThemeOptions {
     ...(raw.charts === true ? { charts: true as const } : {}),
     ...(raw.stockNotes === true ? { stockNotes: true as const } : {}),
     ...(raw.rows === true ? { rows: true as const } : {}),
+    ...(raw.hideCover === true ? { hideCover: true as const } : {}),
   };
 }
 

@@ -115,8 +115,14 @@ export function BladeSwatch({ blade, live: wantsLive = false, className = "" }: 
           }
         } else if (!ripped) {
           ripped = true;
-          look.rip?.(fx, box, box.top + box.height * 0.3, scale, cutPath(box, box.top + box.height * 0.3));
-          renderer.impact(box.left + box.width / 2, box.top + box.height * 0.3, 0.6);
+          // the tear follows the stroke where it crossed the box, as on the
+          // pack stage, not a flat line across it
+          const u0 = (box.left / w - 0.06) / 0.88;
+          const u1 = ((box.left + box.width) / w - 0.06) / 0.88;
+          const cut = Array.from({ length: 13 }, (_, i) => pathAt(u0 + ((u1 - u0) * i) / 12, w, h));
+          const y = cut.reduce((sum, point) => sum + point.y, 0) / cut.length;
+          look.rip?.(fx, box, y, scale, cutPath(box, y, cut));
+          renderer.impact(box.left + box.width / 2, pathAt((u0 + u1) / 2, w, h).y, 0.6);
         }
         while (points.length && now - points[0].t > life) points.shift();
         renderer.draw({ look, points, now, tip: sweeping ? points[points.length - 1] ?? null : null, fx, width: w, height: h, pixelRatio: ratio, scale });

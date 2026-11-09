@@ -33,6 +33,7 @@ import {
   isLiveBackendConfigured,
   peekLiveSupporterFrame,
   peekLiveSupporterNameFont,
+  peekLiveSupporterNameOutline,
   peekLiveSupporterNameStyle,
   peekLiveSupporterProfileTheme,
   peekLiveSupporterProfileThemeOptions,
@@ -94,9 +95,9 @@ import { SupporterStyledName } from "../../components/supporter/SupporterNameSty
 import { SupporterRankBadge } from "../../components/supporter/SupporterRankBadge";
 import { ProfileThemeBackdrop } from "../../components/supporter/ProfileThemeBackdrop";
 import { CustomThemeCredit } from "../../components/supporter/CustomThemeCredit";
-import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
+import { HoursCard, LnSplitCard, NotesCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, SkillCard, SkillKeymodeChoice, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "../../lib/profile-stats";
-import { saveSupporterProfilePlaysSetting, saveSupporterProfileStatsSetting, saveSupporterRankFireSetting } from "../../lib/supporter-look-settings";
+import { saveSupporterProfilePlaysSetting, saveSupporterProfileSkillKeysSetting, saveSupporterProfileStatsSetting, saveSupporterRankFireSetting } from "../../lib/supporter-look-settings";
 import { profilePlayAsTrackedPlay, type ProfilePlayPick, type ProfilePlays } from "../../lib/profile-plays";
 import { FeaturedPlayCard, FeaturedPlayDialog, FeaturedPlayEditButton } from "../../components/player/FeaturedPlays";
 import { useViewerIsSupporter } from "../../lib/viewer-supporter";
@@ -1174,10 +1175,12 @@ export function PlayerProfilePage({
     frame: SupporterAvatarFrameId | null;
     nameStyle: SupporterNameStyleId | null;
     nameFont: SupporterNameFontId | null;
+    nameOutline: string | null;
     profileTheme: SupporterProfileThemeId | null;
     profileThemeOptions: ProfileThemeOptions;
     customTheme: CustomTheme | null;
     profileStats: ProfileStatId[] | null;
+    profileSkillKeys: number | null;
     profileStatsData: ProfileStatsData;
     profilePlays: ProfilePlays | null;
     companion: SupporterCompanion | null;
@@ -1196,7 +1199,7 @@ export function PlayerProfilePage({
     const raw = loaderData?.cachedSupporterLook;
     if (!raw || !profileUserId) return null;
     const value = seedLiveSupporterLook(profileUserId, raw);
-    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null };
+    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null };
   });
   useEffect(() => {
     if (!profileUserId) return;
@@ -1208,10 +1211,12 @@ export function PlayerProfilePage({
         frame: known,
         nameStyle: peekLiveSupporterNameStyle(profileUserId) ?? null,
         nameFont: peekLiveSupporterNameFont(profileUserId) ?? null,
+        nameOutline: peekLiveSupporterNameOutline(profileUserId) ?? null,
         profileTheme: peekLiveSupporterProfileTheme(profileUserId) ?? null,
         profileThemeOptions: peekLiveSupporterProfileThemeOptions(profileUserId) ?? {},
         customTheme: peekLiveSupporterCustomTheme(profileUserId) ?? null,
         profileStats: peekLiveSupporterProfileStats(profileUserId)?.stats ?? null,
+        profileSkillKeys: peekLiveSupporterProfileStats(profileUserId)?.skillKeys ?? null,
         profileStatsData: peekLiveSupporterProfileStats(profileUserId)?.data ?? {},
         profilePlays: peekLiveSupporterProfileStats(profileUserId)?.plays ?? null,
         companion: peekLiveSupporterCompanion(profileUserId) ?? null,
@@ -1224,7 +1229,7 @@ export function PlayerProfilePage({
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null });
     });
     return () => {
       alive = false;
@@ -1236,6 +1241,7 @@ export function PlayerProfilePage({
   const heroFrameWide = heroFrame != null && supporterFrameGeometry(heroFrame).overhang[0] + supporterFrameGeometry(heroFrame).overhang[2] >= 0.5;
   const heroNameStyle = supporterFrame?.userId === profileUserId ? supporterFrame.nameStyle : null;
   const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
+  const heroNameOutline = supporterFrame?.userId === profileUserId ? supporterFrame.nameOutline : null;
   const heroRunStartedAt = supporterFrame?.userId === profileUserId ? supporterFrame.runStartedAt : null;
   const heroRenewing = supporterFrame?.userId === profileUserId && supporterFrame.renewing;
   const heroPatron = supporterFrame?.userId === profileUserId && supporterFrame.patron;
@@ -1245,6 +1251,8 @@ export function PlayerProfilePage({
   const customTheme = supporterFrame?.userId === profileUserId ? supporterFrame.customTheme : null;
   /* What the backdrop draws: a built-in theme, or their own. */
   const themed: BackdropTheme | null = profileTheme ?? customTheme;
+  /* The owner can leave their osu! banner out from under the theme. */
+  const hideCoverUnderTheme = supporterFrame?.userId === profileUserId && !!supporterFrame.profileThemeOptions.hideCover;
   /* The four insight cards: a supporter's own pick, or the usual four. The
      owner's swaps show at once and save in the background. */
   const [statsOverride, setStatsOverride] = useState<{ userId: number; stats: ProfileStatId[] } | null>(null);
@@ -1274,6 +1282,16 @@ export function PlayerProfilePage({
           : current);
       })
       .catch(() => setStatsOverride(null));
+  };
+  /* The keymode of their strongest-skill card, picked in the stat picker. */
+  const profileSkillKeys = supporterFrame?.userId === profileUserId ? supporterFrame.profileSkillKeys : null;
+  const setProfileSkillKeys = (keys: number | null) => {
+    const before = profileSkillKeys;
+    const apply = (value: number | null) => setSupporterFrame((current) => current?.userId === profileUserId ? { ...current, profileSkillKeys: value } : current);
+    apply(keys);
+    void saveSupporterProfileSkillKeysSetting({ data: { skillKeyCount: keys } })
+      .then(() => forgetLiveSupporterLook(profileUserId))
+      .catch(() => apply(before));
   };
   /* The fire on their own renewing rank, switched from the rank's tip. */
   const canSetRankFire = !!auth.viewer && auth.viewer.id === profileUserId && heroRenewing;
@@ -2553,7 +2571,7 @@ export function PlayerProfilePage({
       {/* Under a theme the hero is see-through, so it does not isolate: the
           cover blends into the backdrop behind it as a soft grey texture. */}
       <header className={`relative overflow-hidden ${themed ? "" : "isolate bg-osu-b4"}`}>
-        {coverImage && (
+        {coverImage && !(themed && hideCoverUnderTheme) && (
           <img
             src={coverImage}
             alt=""
@@ -2601,7 +2619,7 @@ export function PlayerProfilePage({
                 {/* A supporter's name style replaces the accent colour; a name
                     font alone keeps it. */}
                 {heroNameStyle ? (
-                  <SupporterStyledName live nameStyle={heroNameStyle} nameFont={heroNameFont} name={user.display_name ?? user.username} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                  <SupporterStyledName live nameStyle={heroNameStyle} nameFont={heroNameFont} outline={heroNameOutline} name={user.display_name ?? user.username} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
                 ) : (
                   <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className={`min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]${heroNameFont ? ` name-font--${heroNameFont}` : ""}`} />
                 )}
@@ -2892,6 +2910,12 @@ export function PlayerProfilePage({
                     return <PercentileCard percentile={profileStatsData.percentile} />;
                   case "session":
                     return <SessionCard session={profileStatsData.session} />;
+                  case "notes":
+                    return <NotesCard notes={profileStatsData.notes} />;
+                  case "skill":
+                    return <SkillCard userId={profileUserId} keyCount={profileSkillKeys} />;
+                  case "hours":
+                    return <HoursCard hours={profileStatsData.hours} />;
                 }
               };
               return (
@@ -2903,7 +2927,14 @@ export function PlayerProfilePage({
                     <div key={`${slot}:${stat}`} className="group/stat relative grid">
                       {renderStatCell(stat)}
                       {canSwapStats && (
-                        <ProfileStatPicker slot={slot} slots={profileStatSlots} previews={statPreviews} renderCell={renderStatCell} onChange={setProfileStats} />
+                        <ProfileStatPicker
+                          slot={slot}
+                          slots={profileStatSlots}
+                          previews={statPreviews}
+                          renderCell={renderStatCell}
+                          onChange={setProfileStats}
+                          extra={(slots) => slots.includes("skill") ? <SkillKeymodeChoice userId={profileUserId} value={profileSkillKeys} onChange={setProfileSkillKeys} /> : null}
+                        />
                       )}
                     </div>
                   ))}

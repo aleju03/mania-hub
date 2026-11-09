@@ -64,6 +64,12 @@ export function solidNameColour(value: SolidNameStyle): string {
   return `#${value.slice(6)}`;
 }
 
+/* An outline round the name in a colour the supporter picked: six lowercase
+   hex digits, as the backend keeps it (features/supporters.ts). */
+export function isSupporterNameOutline(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{6}$/.test(value);
+}
+
 /* Styles that also run as a WebGL shader over big names (name-tag-shaders.ts). */
 export const SHADER_NAME_STYLES = [
   "chrome", "ethereal", "aurora", "glitch", "molten-gold", "pearl", "galaxy", "heatmap",

@@ -82,7 +82,7 @@ const fumo = (id: BuiltInCompanionId, name: MessageDescriptor, uid: string, faci
 export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   licensed("plush-teto", msg`Teto`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0),
   // remodelled here from the Chubby Teto plush (see LICENSES.md)
-  licensed("plush-miku", msg`Miku plush`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0, { size: 1.4, rev: 11, basedOn: true }),
+  licensed("plush-miku", msg`Miku plush`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0, { size: 1.4, rev: 12, basedOn: true }),
   licensed("plush-miku-xmas", msg`Christmas Miku`, "mannymanny", "96ec3b0993ba4f97ad961438e1872527", 0),
   { id: "blob-pink", name: msg`Pink blob`, kind: "model", url: "/models/companions/blob-pink.glb", thumb: "/models/companions/thumbs/blob-pink.webp" },
   fumo("fumo-reimu-v2", msg`Reimu fumo`, "ff926e77d0564c028bde86fd32a487c1", -1.47),

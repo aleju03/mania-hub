@@ -5,7 +5,7 @@ import { useLingui } from "@lingui/react/macro";
 import { ManiaCard3DPanel } from "../player/maniacard3d/LazyManiaCard3DPanel";
 import { SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { avatarUrlUserId } from "../ui/Avatar";
-import { LnSplitCard, PercentileCard, RatioCard, SessionCard, StreakCard } from "../player/ProfileStatCards";
+import { HoursCard, LnSplitCard, NotesCard, PercentileCard, RatioCard, SessionCard, SkillCard, StreakCard } from "../player/ProfileStatCards";
 import { ProfileThemeBackdrop, ProfileThemeSwatch } from "./ProfileThemeBackdrop";
 import { SupporterStyledName } from "./SupporterNameStyle";
 import { useFittedName } from "./useFittedName";
@@ -572,7 +572,7 @@ function BladeLoop({ blade, className }: { blade: SupporterBladeId; className: s
     <span className={`relative isolate block overflow-hidden ${className}`}>
       {moving && (
         <video
-          src={`/videos/blades/${blade}-v2.mp4`}
+          src={`/videos/blades/${blade}-v3.mp4`}
           autoPlay
           loop
           muted
@@ -671,7 +671,10 @@ const SAMPLE_STATS: Required<ProfileStatsData> = {
   streak: { longest: 41, current: 6 },
   percentile: { rank: 812, players: 24_310 },
   session: { minutes: 287, plays: 96, startedAt: "2026-09-12T19:40:00.000Z" },
+  notes: { hit: 14_230_000, plays: 18_402 },
+  hours: [52, 31, 18, 9, 4, 2, 1, 2, 4, 6, 9, 12, 15, 18, 22, 31, 44, 58, 71, 86, 98, 104, 93, 74],
 };
+const SAMPLE_SKILL = { label: "Jumpstream", color: "#6f87d8", value: 26.4, keyCount: 4, runnerUp: { label: "Stamina", value: 25.1 } };
 
 export function StatsShowcase() {
   const { t } = useLingui();
@@ -691,12 +694,15 @@ export function StatsShowcase() {
   const data = own ?? SAMPLE_STATS;
   return (
     <div>
-      <Stagger className="grid grid-cols-1 gap-px overflow-hidden rounded-xl sm:grid-cols-3 lg:grid-cols-5">
+      <Stagger className="grid grid-cols-1 gap-px overflow-hidden rounded-xl sm:grid-cols-2 lg:grid-cols-4">
         <StaggerItem lift={false} className="grid"><RatioCard ratio={data.ratio} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><LnSplitCard lnSplit={data.lnSplit} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><StreakCard streak={data.streak} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><PercentileCard percentile={data.percentile} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><SessionCard session={data.session} /></StaggerItem>
+        <StaggerItem lift={false} className="grid"><NotesCard notes={data.notes} /></StaggerItem>
+        <StaggerItem lift={false} className="grid"><SkillCard userId={own ? viewerId : null} sample={own ? undefined : SAMPLE_SKILL} /></StaggerItem>
+        <StaggerItem lift={false} className="grid"><HoursCard hours={data.hours} /></StaggerItem>
       </Stagger>
       <p className="mt-2 text-[11px] text-osu-f1">{own ? t`Your numbers.` : t`Example numbers.`}</p>
     </div>

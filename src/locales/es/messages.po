@@ -747,6 +747,11 @@ msgstr "{0} ms antes"
 msgid "{0} ms late"
 msgstr "{0} ms tarde"
 
+#. placeholder {0}: compactCount(notes.hit)
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0} notes"
+msgstr "{0} notas"
+
 #. placeholder {0}: formatPp(recs.length)
 #. placeholder {0}: index + 1
 #. placeholder {0}: spin + 1
@@ -1793,8 +1798,12 @@ msgid "{name} added to queue, come back later :)"
 msgstr "{name} se agregó a la cola, vuelve más tarde :)"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "{name} claimed your gift week. Every $5 you give brings a new code."
-msgstr "{name} reclamó tu semana de regalo. Cada $5 que das trae un código nuevo."
+msgid "{name} claimed your gift week. Every $4 you give brings a new code."
+msgstr "{name} reclamó tu semana de regalo. Cada $4 que das trae un código nuevo."
+
+#: src/components/supporter/GiftCodePanel.tsx
+#~ msgid "{name} claimed your gift week. Every $5 you give brings a new code."
+#~ msgstr "{name} reclamó tu semana de regalo. Cada $5 que das trae un código nuevo."
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -2810,16 +2819,28 @@ msgid "▶ Watch"
 msgstr "▶ Ver"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "$5 a month"
-msgstr "$5 al mes"
+msgid "$4 a month"
+msgstr "$4 al mes"
 
 #: src/routes/support.tsx
-msgid "$5 buys a month of supporter, and every tip adds more time."
-msgstr "$5 compran un mes de supporter, y cada aporte suma más tiempo."
+msgid "$4 buys a month of supporter, and every tip adds more time."
+msgstr "$4 compran un mes de supporter, y cada aporte suma más tiempo."
 
 #: src/routes/support.tsx
-msgid "$5 is a month"
-msgstr "$5 son un mes"
+msgid "$4 is a month"
+msgstr "$4 son un mes"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "$5 a month"
+#~ msgstr "$5 al mes"
+
+#: src/routes/support.tsx
+#~ msgid "$5 buys a month of supporter, and every tip adds more time."
+#~ msgstr "$5 compran un mes de supporter, y cada aporte suma más tiempo."
+
+#: src/routes/support.tsx
+#~ msgid "$5 is a month"
+#~ msgstr "$5 son un mes"
 
 #: src/lib/format.ts
 msgid "0h"
@@ -3294,6 +3315,10 @@ msgstr "Un break te deja la mitad del combo en vez de reiniciarlo, y cada break 
 msgid "A break later in the row only drops the combo back to what this card scored at."
 msgstr "Un break más adelante en la fila solo baja el combo hasta el que tenía esta carta al puntuar."
 
+#: src/routes/packs_.overjoy.$id.tsx
+msgid "A card game on maniacards."
+msgstr "Un juego de cartas con maniacards."
+
 #: src/lib/chain-run.ts
 msgid "A card's base goes up by half."
 msgstr "La base de una carta sube a la mitad más."
@@ -3434,6 +3459,10 @@ msgstr "Una luz con rayos que puede pulsar y girar"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A line about the skin"
 msgstr "Una línea sobre la skin"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "A line round your name in a colour of your choosing."
+msgstr "Una línea alrededor de tu nombre, del color que elijas."
 
 #: src/lib/chain-run.ts
 #~ msgid "A link that shares all 4 traits doubles your combo every time it fires."
@@ -3652,8 +3681,12 @@ msgid "A sixth charm slot"
 msgstr "Un sexto espacio de amuleto"
 
 #: src/routes/support.tsx
-msgid "A small figure that stands beside the numbers on your profile. Drag a 3D one to turn it around."
-msgstr "Una figurita junto a los números de tu perfil. Arrastra una en 3D para girarla."
+#~ msgid "A small figure that stands beside the numbers on your profile. Drag a 3D one to turn it around."
+#~ msgstr "Una figurita junto a los números de tu perfil. Arrastra una en 3D para girarla."
+
+#: src/routes/support.tsx
+msgid "A small figure that stands in the corner of your profile header. Drag a 3D one to turn it around."
+msgstr "Una figurita en la esquina de la cabecera de tu perfil. Arrastra una en 3D para girarla."
 
 #: src/routes/snipes.tsx
 #~ msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
@@ -4175,6 +4208,10 @@ msgstr "Después de exportar un video de replay, obtén un enlace que se reprodu
 msgid "After it scores, the link into it triggers again and it scores again."
 msgstr "Después de puntuar, el eslabón que llega a ella se activa otra vez y vuelve a puntuar."
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Afternoon player"
+msgstr "Juega de tarde"
+
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
 msgid "AGAIN"
@@ -4446,8 +4483,12 @@ msgid "An external application"
 msgstr "Una aplicación externa"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up."
-msgstr "Un código de regalo extra para un amigo cada tres meses, además del que trae cada $5. El tiempo que pase de 3 meses por adelantado se convierte en más códigos en vez de acumularse."
+msgid "An extra gift code for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
+msgstr "Un código de regalo extra para un amigo cada tres meses, además del que trae cada $4. El tiempo que pase de 3 meses por adelantado se convierte en más códigos en vez de acumularse."
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up."
+#~ msgstr "Un código de regalo extra para un amigo cada tres meses, además del que trae cada $5. El tiempo que pase de 3 meses por adelantado se convierte en más códigos en vez de acumularse."
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "An image of your own floats on every copy of your card, in anyone's collection."
@@ -4564,8 +4605,12 @@ msgid "Any amount"
 msgstr "Cualquier monto"
 
 #: src/components/supporter/SupportDaysPreview.tsx
-msgid "Any amount counts, to the day, and adds to the time you have left: $5 is 30 days. Paying $50 or more at once buys a full year for every $50."
-msgstr "Cualquier monto cuenta, calculado al día, y se suma al tiempo que te queda: $5 son 30 días. Si pagas $50 o más de una vez, cada $50 te da un año completo."
+msgid "Any amount counts, to the day, and adds to the time you have left: $4 is 30 days. Paying $40 or more at once buys a full year for every $40."
+msgstr "Cualquier monto cuenta, calculado al día, y se suma al tiempo que te queda: $4 son 30 días. Si pagas $40 o más de una vez, cada $40 te da un año completo."
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "Any amount counts, to the day, and adds to the time you have left: $5 is 30 days. Paying $50 or more at once buys a full year for every $50."
+#~ msgstr "Cualquier monto cuenta, calculado al día, y se suma al tiempo que te queda: $5 son 30 días. Si pagas $50 o más de una vez, cada $50 te da un año completo."
 
 #: src/components/supporter/SupportDaysPreview.tsx
 #~ msgid "Any amount counts, to the day, and adds to the time you have left."
@@ -5436,6 +5481,7 @@ msgstr "mejor ronda"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Best row"
 msgstr "Mejor fila"
 
@@ -8414,6 +8460,7 @@ msgstr "Checo"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Daily"
 msgstr "Diaria"
 
@@ -9436,6 +9483,10 @@ msgstr "No se registraron cambios anteriores."
 msgid "Early"
 msgstr "Early"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Early bird"
+msgstr "Madrugador"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Early/late meter with the real hit windows."
 msgstr "Medidor de early/late con las ventanas de acierto reales."
@@ -9592,8 +9643,13 @@ msgstr "¿Terminar la partida aquí? Cuenta en la tabla con la ronda a la que ll
 msgid "Endless round"
 msgstr "Ronda infinita"
 
-#: src/components/packs/run/chain/ChainEnd.tsx
+#. placeholder {0}: share.round
+#: src/routes/packs_.overjoy.$id.tsx
+#~ msgid "Endless round {0}"
+#~ msgstr ""
+
 #: src/components/packs/run/chain/ChainHud.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Endless round {round}"
 msgstr "Ronda infinita {round}"
 
@@ -9714,6 +9770,10 @@ msgstr "Europa, Centroamérica, Francia"
 msgid "Even with those safeguards, data may be delayed, incomplete, stale, or unavailable."
 msgstr "Incluso con esas salvaguardas, los datos pueden estar retrasados, incompletos, desactualizados o no disponibles."
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Evening player"
+msgstr "Juega de noche"
+
 #: src/lib/pack-run.ts
 msgid "Every +combo is halved."
 msgstr "Todo +combo se reduce a la mitad."
@@ -9723,8 +9783,12 @@ msgstr "Todo +combo se reduce a la mitad."
 #~ msgstr "Cada $3 que das, en un pago o en varios, te dan un código de un solo uso que le regala a otra persona una semana de supporter."
 
 #: src/routes/support.tsx
-msgid "Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
-msgstr "Cada $5 que das, en un pago o en varios, te dan un código de un solo uso que le regala a otra persona una semana de supporter. Una suscripción mensual te da un código extra cada tres meses."
+msgid "Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+msgstr "Cada $4 que das, en un pago o en varios, te dan un código de un solo uso que le regala a otra persona una semana de supporter. Una suscripción mensual te da un código extra cada tres meses."
+
+#: src/routes/support.tsx
+#~ msgid "Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+#~ msgstr "Cada $5 que das, en un pago o en varios, te dan un código de un solo uso que le regala a otra persona una semana de supporter. Una suscripción mensual te da un código extra cada tres meses."
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "every card"
@@ -11819,6 +11883,10 @@ msgstr "Ocultar detalles de la exportación"
 msgid "Hide it from everyone else, instead of showing it with no way in"
 msgstr "Ocultarlo para todos los demás, en vez de mostrarlo sin forma de entrar"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Hide my osu! banner"
+msgstr "Ocultar mi banner de osu!"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide players"
 msgstr "Ocultar jugadores"
@@ -12457,8 +12525,8 @@ msgid "Image or GIF"
 msgstr "Imagen o GIF"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Image saved"
-msgstr "Imagen guardada"
+#~ msgid "Image saved"
+#~ msgstr "Imagen guardada"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Image upload failed."
@@ -12545,6 +12613,18 @@ msgstr "Importando… {0}%"
 #: src/routes/recommendations.tsx
 msgid "improve"
 msgstr "mejorar"
+
+#. placeholder {0}: skill.keyCount
+#: src/components/player/ProfileStatCards.tsx
+msgid "In {0}K"
+msgstr "En {0}K"
+
+#. placeholder {0}: skill.keyCount
+#. placeholder {1}: skill.runnerUp.label
+#. placeholder {2}: skill.runnerUp.value.toFixed(1)
+#: src/components/player/ProfileStatCards.tsx
+msgid "In {0}K, ahead of {1} {2}"
+msgstr "En {0}K, por delante de {1} {2}"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "in {days}d {restHours}h"
@@ -13767,6 +13847,7 @@ msgstr "Enlazar un perfil de servidor privado"
 msgid "Link a row"
 msgstr "Enlaza una fila"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Link copied"
@@ -14535,9 +14616,14 @@ msgstr "Solo jugadores main de 4K"
 msgid "Main 7K players only"
 msgstr "Solo jugadores main de 7K"
 
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/SkillMainKeymodeSetting.tsx
 msgid "Main keymode"
 msgstr "Modo de teclas principal"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Main keymode follows the one your Skills tab opens on."
+msgstr "Modo de teclas principal sigue el que abre tu pestaña de Skills."
 
 #: src/routes/workshop.index.tsx
 msgid "Make"
@@ -15353,6 +15439,10 @@ msgstr "Más estadísticas"
 msgid "More watched"
 msgstr "Más vistas"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Morning player"
+msgstr "Juega de mañana"
+
 #. placeholder {0}: formatHour(peakHour)
 #: src/components/me/MyDataPanel.tsx
 msgid "Most active around <0>{0}</0>"
@@ -15984,6 +16074,10 @@ msgstr "El objetivo de la próxima ronda es {0}% menor."
 #: src/routes/recommendations.tsx
 msgid "next tier"
 msgstr "siguiente nivel"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Night owl"
+msgstr "Búho nocturno"
 
 #: src/lib/pack-run.ts
 msgid "Nightcore"
@@ -17110,6 +17204,7 @@ msgid "Notebook"
 msgstr "Cuaderno"
 
 #: src/components/packs/run/HandScore.tsx
+#: src/components/player/ProfileStatCards.tsx
 #: src/routes/skins.tsx
 msgid "notes"
 msgstr "notas"
@@ -17120,6 +17215,11 @@ msgstr "notas"
 #: src/routes/skins_.$id.tsx
 msgid "Notes"
 msgstr "Notas"
+
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Notes hit"
+msgstr "Notas acertadas"
 
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Notes take the colour of the pattern Prism files their row under, and hold bodies are drawn faint. The strip under the controls is each half second's demand, coloured by its main pattern, or LN where holds make up as much of its notes as on a chart Prism rates LN."
@@ -17518,8 +17618,12 @@ msgid "Once you connect Companella to your account, it sends every mania play yo
 msgstr "Cuando conectas Companella a tu cuenta, envía cada play de mania que terminas, con su replay. Esas plays salen en la pestaña Recientes de tu perfil y en el tracker con el ícono de Companella. Si osu! también tiene la play, sale una sola vez."
 
 #: src/routes/support.tsx
-msgid "One code per $5"
-msgstr "Un código por cada $5"
+msgid "One code per $4"
+msgstr "Un código por cada $4"
+
+#: src/routes/support.tsx
+#~ msgid "One code per $5"
+#~ msgstr "Un código por cada $5"
 
 #. placeholder {0}: shown.toLocaleString("en-US")
 #: src/components/packs/GiftSpareDialog.tsx
@@ -17661,6 +17765,10 @@ msgstr "Solo participa el top 100 global."
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Only the last few opens of each collector are kept, or the link is wrong."
 #~ msgstr "Solo se guardan las últimas aperturas de cada coleccionista, o el enlace está mal."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Only the theme shows behind your profile header, without your osu! banner."
+msgstr "Solo el tema se ve detrás de la cabecera de tu perfil, sin tu banner de osu!."
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -18186,6 +18294,7 @@ msgid "Out of time."
 msgstr "Se acabó el tiempo."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/lib/supporter-name-fonts.ts
 msgid "Outline"
 msgstr "Contorno"
@@ -18217,6 +18326,11 @@ msgstr "Fuera de la ventana de mejores clears de este promedio"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Outside this average's weighted window"
 #~ msgstr "Fuera de la ventana ponderada de este promedio"
+
+#. placeholder {0}: formatNumber(notes.plays)
+#: src/components/player/ProfileStatCards.tsx
+msgid "Over {0} tracked plays"
+msgstr "En {0} plays registradas"
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
 #: src/components/packs/run/chain/ChainTable.tsx
@@ -18583,6 +18697,11 @@ msgstr "Paga"
 msgid "Peak"
 msgstr "Peak"
 
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Peak hour"
+msgstr "Hora pico"
+
 #: src/lib/pack-run.ts
 msgid "Peak Performance"
 msgstr "Máximo rendimiento"
@@ -18735,6 +18854,10 @@ msgstr "Elige un monto en Ko-fi. Para que el tiempo llegue a tu cuenta, haz una 
 #: src/routes/support.tsx
 #~ msgid "Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you."
 #~ msgstr "Elige un monto en Ko-fi. Usa tu usuario de osu! como nombre ahí, o escribe osu: y tu usuario como mensaje, para que el tiempo cuente para ti."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Pick an outline colour"
+msgstr "Elige el color del contorno"
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Pick another file"
@@ -18932,6 +19055,10 @@ msgstr "Juégala en una fila de 6 sin romper y cada carta Stamina de tu mazo gan
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Play my top plays"
 msgstr "Reproducir mis top plays"
+
+#: src/routes/packs_.overjoy.$id.tsx
+msgid "Play Overjoy"
+msgstr "Jugar Overjoy"
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Play preview"
@@ -20364,8 +20491,12 @@ msgstr "Llega al objetivo de la ronda en {0} filas o menos. Superarla paga shard
 #~ msgstr "Llega al objetivo de la ronda en {0} filas o menos. Superarla paga shards: más por las filas que sobren, por pasarte mucho, y 1 por cada {1} que ya tengas. Gástalos en la tienda en packs, cartas de escena, práctica y mods. Cada tercera ronda es de jefe, con un giro que se muestra en la tienda antes."
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Reached round {round} in Overjoy, best row {best}. {link}"
-msgstr "Llegué a la ronda {round} en Overjoy, mejor fila {best}. {link}"
+msgid "Reached round {round} in Overjoy, best row {best}."
+msgstr "Llegué a la ronda {round} en Overjoy, mejor fila {best}."
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+#~ msgid "Reached round {round} in Overjoy, best row {best}. {link}"
+#~ msgstr "Llegué a la ronda {round} en Overjoy, mejor fila {best}. {link}"
 
 #: src/routes/dan-estimates.tsx
 msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
@@ -21536,13 +21667,18 @@ msgstr "estimación aproximada, puede variar"
 msgid "Round"
 msgstr "Ronda"
 
+#. placeholder {0}: share.round
+#: src/routes/packs_.overjoy.$id.tsx
+#~ msgid "Round {0}"
+#~ msgstr ""
+
 #. placeholder {0}: aftermath.round
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Round {0} cleared"
 msgstr "Ronda {0} superada"
 
-#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Round {round}"
 msgstr "Ronda {round}"
 
@@ -21575,6 +21711,7 @@ msgstr "Fila"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Rows"
 msgstr "Filas"
 
@@ -21630,11 +21767,13 @@ msgid "Run info"
 msgstr "Info de la partida"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Run over"
 msgstr "Fin de la partida"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Run won"
 msgstr "Partida ganada"
 
@@ -24596,6 +24735,15 @@ msgstr "Los enlaces fuertes hacen que las cartas se jueguen dos veces."
 msgid "Strongest in <0>{0}</0>"
 msgstr "Más fuerte en <0>{0}</0>"
 
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Strongest skill"
+msgstr "Skill más fuerte"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Strongest skill keymode"
+msgstr "Modo de teclas de la skill más fuerte"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
 msgid "Style"
@@ -24850,8 +24998,12 @@ msgid "Swap any element for another image from {0}, or click it in the preview t
 msgstr "Cambia cualquier elemento por otra imagen de {0}, o haz clic en él en la vista previa para encontrar su fila. El arte de notas y teclas se dibuja con el estilo Bars; los elementos borrados vuelven a formas planas."
 
 #: src/routes/support.tsx
-msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak or percentile among tracked players."
-msgstr "Cambia cualquiera de las cuatro tarjetas bajo tu perfil por tu ratio, reparto rice / LN, racha más larga o percentil entre los jugadores contados."
+#~ msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak or percentile among tracked players."
+#~ msgstr "Cambia cualquiera de las cuatro tarjetas bajo tu perfil por tu ratio, reparto rice / LN, racha más larga o percentil entre los jugadores contados."
+
+#: src/routes/support.tsx
+msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak, percentile among tracked players, notes hit, strongest skill or the hour you play most."
+msgstr "Cambia cualquiera de las cuatro tarjetas bajo tu perfil por tu ratio, reparto rice / LN, racha más larga, percentil entre los jugadores registrados, notas acertadas, skill más fuerte o la hora en que más juegas."
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
@@ -27289,6 +27441,10 @@ msgstr "Esta run"
 msgid "This run already used its revive."
 msgstr "Ya usaste el revivir de esta partida."
 
+#: src/routes/packs_.overjoy.$id.tsx
+msgid "This run is gone, or the link is wrong."
+msgstr "Esta partida ya no está, o el enlace está mal."
+
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "This run was played before runs kept their builds."
 msgstr "Esta partida se jugó antes de que se guardara con qué se armó."
@@ -29584,8 +29740,12 @@ msgid "Without a binder, your collection shows as the usual grid."
 msgstr "Sin carpeta, tu colección se ve en la cuadrícula de siempre."
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Won an Overjoy run and reached round {round}, best row {best}. {link}"
-msgstr "Gané una partida de Overjoy y llegué a la ronda {round}, mejor fila {best}. {link}"
+msgid "Won an Overjoy run and reached round {round}, best row {best}."
+msgstr "Gané una partida de Overjoy y llegué a la ronda {round}, mejor fila {best}."
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+#~ msgid "Won an Overjoy run and reached round {round}, best row {best}. {link}"
+#~ msgstr "Gané una partida de Overjoy y llegué a la ronda {round}, mejor fila {best}. {link}"
 
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
@@ -30342,8 +30502,12 @@ msgid "Your frames"
 msgstr "Tus marcos"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "Your gift week was claimed. Every $5 you give brings a new code."
-msgstr "Ya reclamaron tu semana de regalo. Cada $5 que das trae un código nuevo."
+msgid "Your gift week was claimed. Every $4 you give brings a new code."
+msgstr "Ya reclamaron tu semana de regalo. Cada $4 que das trae un código nuevo."
+
+#: src/components/supporter/GiftCodePanel.tsx
+#~ msgid "Your gift week was claimed. Every $5 you give brings a new code."
+#~ msgstr "Ya reclamaron tu semana de regalo. Cada $5 que das trae un código nuevo."
 
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx
@@ -30427,6 +30591,10 @@ msgstr "Tus números."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your only copy. It leaves your collection when they accept."
 msgstr "Tu única copia. Sale de tu colección cuando la acepte."
+
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Your osu! profile banner no longer shows faintly through the theme."
+#~ msgstr "El banner de tu perfil de osu! ya no se ve tenue a través del tema."
 
 #: src/routes/dan-estimates.tsx
 msgid "Your osu! top plays, everything recorded while you were tracked, and any score links you added, keeping your best play on each chart at each rate. Charts flagged as vibro are left out. A rate nobody has rated a chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to count."

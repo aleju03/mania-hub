@@ -4,10 +4,10 @@ import { useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 
-import { LnSplitCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, StatPreviewCell, StreakCard, useExtraStatPreviews } from "#/components/player/ProfileStatCards";
+import { HoursCard, LnSplitCard, NotesCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, SkillCard, SkillKeymodeChoice, StatPreviewCell, StreakCard, useExtraStatPreviews } from "#/components/player/ProfileStatCards";
 import { fetchLiveSubmittedCompanions, fetchLiveSupporterProfileLook, forgetLiveSupporterLook } from "#/lib/live-backend";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "#/lib/profile-stats";
-import { fetchOwnSupporterCompanions, saveSupporterCompanionSetting, saveSupporterProfileStatsSetting, submitSupporterCompanion } from "#/lib/supporter-look-settings";
+import { fetchOwnSupporterCompanions, saveSupporterCompanionSetting, saveSupporterProfileSkillKeysSetting, saveSupporterProfileStatsSetting, submitSupporterCompanion } from "#/lib/supporter-look-settings";
 import { deleteAdminCompanion, loadAdminCompanions, setAdminCompanionListed } from "#/lib/admin-supporters";
 import { BUILT_IN_COMPANIONS, builtInCompanion, COMPANION_NAME_MAX, companionId, type SubmittedCompanion, type SupporterCompanion } from "#/lib/supporter-companions";
 import { useAuth } from "#/lib/auth-context";
@@ -28,6 +28,7 @@ export function ProfileStatsSection({ viewerId, supporter }: { viewerId: number;
   const { t } = useLingui();
   const [stats, setStats] = useState<readonly ProfileStatId[]>(DEFAULT_PROFILE_STATS);
   const [data, setData] = useState<ProfileStatsData>({});
+  const [skillKeys, setSkillKeys] = useState<number | null>(null);
   const [error, setError] = useState(false);
   const previews = useExtraStatPreviews(data);
 
@@ -37,6 +38,7 @@ export function ProfileStatsSection({ viewerId, supporter }: { viewerId: number;
       if (!alive) return;
       setStats(value.profileStats ?? DEFAULT_PROFILE_STATS);
       setData(value.profileStatsData);
+      setSkillKeys(value.profileSkillKeys);
     });
     return () => {
       alive = false;
@@ -52,9 +54,25 @@ export function ProfileStatsSection({ viewerId, supporter }: { viewerId: number;
       case "streak": return <StreakCard streak={data.streak} />;
       case "percentile": return <PercentileCard percentile={data.percentile} />;
       case "session": return <SessionCard session={data.session} />;
+      case "notes": return <NotesCard notes={data.notes} />;
+      case "skill": return <SkillCard userId={viewerId} keyCount={skillKeys} />;
+      case "hours": return <HoursCard hours={data.hours} />;
       default: return <StatPreviewCell stat={stat} preview={previews[stat] ?? t`On your profile`} />;
     }
   };
+
+  const changeSkillKeys = (keys: number | null) => {
+    const before = skillKeys;
+    setSkillKeys(keys);
+    setError(false);
+    saveSupporterProfileSkillKeysSetting({ data: { skillKeyCount: keys } })
+      .then(() => forgetLiveSupporterLook(viewerId))
+      .catch(() => {
+        setSkillKeys(before);
+        setError(true);
+      });
+  };
+  const skillExtra = (slots: readonly ProfileStatId[]) => slots.includes("skill") ? <SkillKeymodeChoice userId={viewerId} value={skillKeys} onChange={changeSkillKeys} /> : null;
 
   const change = (next: ProfileStatId[]) => {
     const before = stats;
@@ -85,6 +103,7 @@ export function ProfileStatsSection({ viewerId, supporter }: { viewerId: number;
             previews={previews}
             renderCell={renderCell}
             onChange={change}
+            extra={skillExtra}
             disabled={!supporter}
           />
         ))}

@@ -24,7 +24,7 @@ import { searchPlayers, searchPlayersOnOsu } from "../../../lib/player-search";
 import { SUPPORTER_RANKS } from "../../../lib/supporter-ranks";
 
 /* The Supporters tab of /admin/players (backend features/supporters.ts). The wall is every
- * supporter, the ring around each avatar the time they have left ($5 buys 30
+ * supporter, the ring around each avatar the time they have left ($4 buys 30
  * days; a full ring is 90 days or more). Click an avatar to add time. Below it,
  * donations the webhooks could not link wait in Needs linking: pick the player
  * and the card moves onto the wall. A Ko-fi CSV can be dropped anywhere on the

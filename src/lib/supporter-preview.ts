@@ -12,7 +12,7 @@ const KEY = "supporter-profile-preview:v1";
 /* Only the parts tried on: the rest of the profile keeps its own look. */
 export type SupporterPreviewLook = Partial<Pick<
   SupporterProfileLook,
-  "look" | "frame" | "nameStyle" | "nameFont" | "profileTheme" | "profileThemeOptions" | "customTheme" | "packStyle" | "companion" | "runStartedAt"
+  "look" | "frame" | "nameStyle" | "nameFont" | "nameOutline" | "profileTheme" | "profileThemeOptions" | "customTheme" | "packStyle" | "companion" | "runStartedAt"
 >>;
 
 interface StoredPreview {

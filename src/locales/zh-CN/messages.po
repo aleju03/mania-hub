@@ -759,6 +759,11 @@ msgstr "早 {0} ms"
 msgid "{0} ms late"
 msgstr "晚 {0} ms"
 
+#. placeholder {0}: compactCount(notes.hit)
+#: src/components/player/ProfileStatCards.tsx
+msgid "{0} notes"
+msgstr "{0} 个音符"
+
 #. placeholder {0}: formatPp(recs.length)
 #. placeholder {0}: index + 1
 #. placeholder {0}: spin + 1
@@ -1805,8 +1810,12 @@ msgid "{name} added to queue, come back later :)"
 msgstr "{name} 已加入队列，稍后再来看看吧 :)"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "{name} claimed your gift week. Every $5 you give brings a new code."
-msgstr "{name} 领取了你赠送的一周。你每支持 $5 就会获得一个新兑换码。"
+msgid "{name} claimed your gift week. Every $4 you give brings a new code."
+msgstr "{name} 领取了你赠送的一周。你每支持 $4 就会获得一个新兑换码。"
+
+#: src/components/supporter/GiftCodePanel.tsx
+#~ msgid "{name} claimed your gift week. Every $5 you give brings a new code."
+#~ msgstr "{name} 领取了你赠送的一周。你每支持 $5 就会获得一个新兑换码。"
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -2822,16 +2831,28 @@ msgid "▶ Watch"
 msgstr "▶ 观看"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "$5 a month"
-msgstr "每月 $5"
+msgid "$4 a month"
+msgstr "每月 $4"
 
 #: src/routes/support.tsx
-msgid "$5 buys a month of supporter, and every tip adds more time."
-msgstr "$5 可购买一个月的支持者时长，每次打赏都会累加时间。"
+msgid "$4 buys a month of supporter, and every tip adds more time."
+msgstr "$4 可购买一个月的支持者时长，每次打赏都会累加时间。"
 
 #: src/routes/support.tsx
-msgid "$5 is a month"
-msgstr "$5 即一个月"
+msgid "$4 is a month"
+msgstr "$4 即一个月"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "$5 a month"
+#~ msgstr "每月 $5"
+
+#: src/routes/support.tsx
+#~ msgid "$5 buys a month of supporter, and every tip adds more time."
+#~ msgstr "$5 可购买一个月的支持者时长，每次打赏都会累加时间。"
+
+#: src/routes/support.tsx
+#~ msgid "$5 is a month"
+#~ msgstr "$5 即一个月"
 
 #: src/lib/format.ts
 msgid "0h"
@@ -3306,6 +3327,10 @@ msgstr "断连只让连击减半而不是清零，每次断连让这一排 x{0}�
 msgid "A break later in the row only drops the combo back to what this card scored at."
 msgstr "这一排后面断连时，连击只会回到这张卡计分时的连击。"
 
+#: src/routes/packs_.overjoy.$id.tsx
+msgid "A card game on maniacards."
+msgstr "用 maniacard 玩的卡牌游戏。"
+
 #: src/lib/chain-run.ts
 msgid "A card's base goes up by half."
 msgstr "一张卡的基础分提高一半。"
@@ -3446,6 +3471,10 @@ msgstr "带光线的光源，可以脉动和旋转"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A line about the skin"
 msgstr "一句关于皮肤的介绍"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "A line round your name in a colour of your choosing."
+msgstr "在你的名字外加一圈你选择颜色的描边。"
 
 #: src/lib/chain-run.ts
 #~ msgid "A link that shares all 4 traits doubles your combo every time it fires."
@@ -3664,8 +3693,12 @@ msgid "A sixth charm slot"
 msgstr "第六个护符栏位"
 
 #: src/routes/support.tsx
-msgid "A small figure that stands beside the numbers on your profile. Drag a 3D one to turn it around."
-msgstr "站在你个人资料数据旁的小人偶。拖动 3D 的可以转动它。"
+#~ msgid "A small figure that stands beside the numbers on your profile. Drag a 3D one to turn it around."
+#~ msgstr "站在你个人资料数据旁的小人偶。拖动 3D 的可以转动它。"
+
+#: src/routes/support.tsx
+msgid "A small figure that stands in the corner of your profile header. Drag a 3D one to turn it around."
+msgstr "站在你个人资料头部角落的小人偶。拖动 3D 的可以转动它。"
 
 #: src/routes/snipes.tsx
 #~ msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
@@ -4187,6 +4220,10 @@ msgstr "导出回放视频后，获取可在 Discord 聊天中直接播放的链
 msgid "After it scores, the link into it triggers again and it scores again."
 msgstr "计分后，连入它的连线再次触发，它再次计分。"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Afternoon player"
+msgstr "午后玩家"
+
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
 msgid "AGAIN"
@@ -4458,8 +4495,12 @@ msgid "An external application"
 msgstr "一个外部应用"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up."
-msgstr "除了每 $5 送的兑换码，每满三个月还会额外送你一个兑换码给朋友。预存超过 3 个月的时长会转换成更多兑换码，不会继续累积。"
+msgid "An extra gift code for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
+msgstr "除了每 $4 送的兑换码，每满三个月还会额外送你一个兑换码给朋友。预存超过 3 个月的时长会转换成更多兑换码，不会继续累积。"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up."
+#~ msgstr "除了每 $5 送的兑换码，每满三个月还会额外送你一个兑换码给朋友。预存超过 3 个月的时长会转换成更多兑换码，不会继续累积。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "An image of your own floats on every copy of your card, in anyone's collection."
@@ -4576,8 +4617,12 @@ msgid "Any amount"
 msgstr "任意金额"
 
 #: src/components/supporter/SupportDaysPreview.tsx
-msgid "Any amount counts, to the day, and adds to the time you have left: $5 is 30 days. Paying $50 or more at once buys a full year for every $50."
-msgstr "任意金额都按天折算，并累加到你剩余的时长上：$5 等于 30 天。一次支付 $50 或以上，每 $50 可获得整整一年。"
+msgid "Any amount counts, to the day, and adds to the time you have left: $4 is 30 days. Paying $40 or more at once buys a full year for every $40."
+msgstr "任意金额都按天折算，并累加到你剩余的时长上：$4 等于 30 天。一次支付 $40 或以上，每 $40 可获得整整一年。"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "Any amount counts, to the day, and adds to the time you have left: $5 is 30 days. Paying $50 or more at once buys a full year for every $50."
+#~ msgstr "任意金额都按天折算，并累加到你剩余的时长上：$5 等于 30 天。一次支付 $50 或以上，每 $50 可获得整整一年。"
 
 #: src/components/supporter/SupportDaysPreview.tsx
 #~ msgid "Any amount counts, to the day, and adds to the time you have left."
@@ -5448,6 +5493,7 @@ msgstr "最佳回合"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Best row"
 msgstr "最佳排"
 
@@ -8426,6 +8472,7 @@ msgstr "捷克语"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Daily"
 msgstr "每日"
 
@@ -9448,6 +9495,10 @@ msgstr "更早的变化未被记录。"
 msgid "Early"
 msgstr "偏早"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Early bird"
+msgstr "早起玩家"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Early/late meter with the real hit windows."
 msgstr "显示偏早/偏晚的偏移条，使用真实判定区间。"
@@ -9604,8 +9655,13 @@ msgstr "在这里结束本局？会按你到达的轮数计入排行榜。"
 msgid "Endless round"
 msgstr "无尽轮"
 
-#: src/components/packs/run/chain/ChainEnd.tsx
+#. placeholder {0}: share.round
+#: src/routes/packs_.overjoy.$id.tsx
+#~ msgid "Endless round {0}"
+#~ msgstr ""
+
 #: src/components/packs/run/chain/ChainHud.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Endless round {round}"
 msgstr "无尽第 {round} 轮"
 
@@ -9726,6 +9782,10 @@ msgstr "欧洲、中美洲、法国"
 msgid "Even with those safeguards, data may be delayed, incomplete, stale, or unavailable."
 msgstr "即便有这些防护措施，数据仍可能出现延迟、不完整、过期或不可用的情况。"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Evening player"
+msgstr "傍晚玩家"
+
 #: src/lib/pack-run.ts
 msgid "Every +combo is halved."
 msgstr "所有 +连击 减半。"
@@ -9735,8 +9795,12 @@ msgstr "所有 +连击 减半。"
 #~ msgstr "你每支持 $3（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。"
 
 #: src/routes/support.tsx
-msgid "Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
-msgstr "你每支持 $5（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。按月订阅每满三个月还会额外送一个兑换码。"
+msgid "Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+msgstr "你每支持 $4（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。按月订阅每满三个月还会额外送一个兑换码。"
+
+#: src/routes/support.tsx
+#~ msgid "Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+#~ msgstr "你每支持 $5（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。按月订阅每满三个月还会额外送一个兑换码。"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "every card"
@@ -11831,6 +11895,10 @@ msgstr "隐藏导出详情"
 msgid "Hide it from everyone else, instead of showing it with no way in"
 msgstr "对其他人隐藏，而不是显示出来却进不去"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Hide my osu! banner"
+msgstr "隐藏我的 osu! 横幅"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide players"
 msgstr "隐藏玩家"
@@ -12469,8 +12537,8 @@ msgid "Image or GIF"
 msgstr "图片或 GIF"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Image saved"
-msgstr "图片已保存"
+#~ msgid "Image saved"
+#~ msgstr "图片已保存"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Image upload failed."
@@ -12557,6 +12625,18 @@ msgstr "导入中… {0}%"
 #: src/routes/recommendations.tsx
 msgid "improve"
 msgstr "可提升"
+
+#. placeholder {0}: skill.keyCount
+#: src/components/player/ProfileStatCards.tsx
+msgid "In {0}K"
+msgstr "{0}K 中"
+
+#. placeholder {0}: skill.keyCount
+#. placeholder {1}: skill.runnerUp.label
+#. placeholder {2}: skill.runnerUp.value.toFixed(1)
+#: src/components/player/ProfileStatCards.tsx
+msgid "In {0}K, ahead of {1} {2}"
+msgstr "{0}K 中，领先 {1} {2}"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "in {days}d {restHours}h"
@@ -13779,6 +13859,7 @@ msgstr "关联私服个人资料"
 msgid "Link a row"
 msgstr "连成一行"
 
+#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Link copied"
@@ -14547,9 +14628,14 @@ msgstr "仅 4K 主玩家"
 msgid "Main 7K players only"
 msgstr "仅 7K 主玩家"
 
+#: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/SkillMainKeymodeSetting.tsx
 msgid "Main keymode"
 msgstr "主键数"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Main keymode follows the one your Skills tab opens on."
+msgstr "主键数跟随你的技能页默认打开的键数。"
 
 #: src/routes/workshop.index.tsx
 msgid "Make"
@@ -15365,6 +15451,10 @@ msgstr "更多数据"
 msgid "More watched"
 msgstr "更多观看"
 
+#: src/components/player/ProfileStatCards.tsx
+msgid "Morning player"
+msgstr "上午玩家"
+
 #. placeholder {0}: formatHour(peakHour)
 #: src/components/me/MyDataPanel.tsx
 msgid "Most active around <0>{0}</0>"
@@ -15996,6 +16086,10 @@ msgstr "下一回合的目标降低 {0}%。"
 #: src/routes/recommendations.tsx
 msgid "next tier"
 msgstr "下一阶段"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Night owl"
+msgstr "夜猫子"
 
 #: src/lib/pack-run.ts
 msgid "Nightcore"
@@ -17122,6 +17216,7 @@ msgid "Notebook"
 msgstr "笔记体"
 
 #: src/components/packs/run/HandScore.tsx
+#: src/components/player/ProfileStatCards.tsx
 #: src/routes/skins.tsx
 msgid "notes"
 msgstr "音符"
@@ -17132,6 +17227,11 @@ msgstr "音符"
 #: src/routes/skins_.$id.tsx
 msgid "Notes"
 msgstr "音符"
+
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Notes hit"
+msgstr "命中音符"
 
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Notes take the colour of the pattern Prism files their row under, and hold bodies are drawn faint. The strip under the controls is each half second's demand, coloured by its main pattern, or LN where holds make up as much of its notes as on a chart Prism rates LN."
@@ -17530,8 +17630,12 @@ msgid "Once you connect Companella to your account, it sends every mania play yo
 msgstr "把 Companella 连接到你的账号后，它会上传你完成的每一局 mania 成绩，并附带回放。这些成绩会带着 Companella 图标显示在你个人资料的最近标签页和追踪器中。osu! 也收录的成绩只显示一次。"
 
 #: src/routes/support.tsx
-msgid "One code per $5"
-msgstr "每 $5 一个兑换码"
+msgid "One code per $4"
+msgstr "每 $4 一个兑换码"
+
+#: src/routes/support.tsx
+#~ msgid "One code per $5"
+#~ msgstr "每 $5 一个兑换码"
 
 #. placeholder {0}: shown.toLocaleString("en-US")
 #: src/components/packs/GiftSpareDialog.tsx
@@ -17673,6 +17777,10 @@ msgstr "只有全球前 100 名参与。"
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Only the last few opens of each collector are kept, or the link is wrong."
 #~ msgstr "每位收藏者只保留最近几次开包，或者链接有误。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Only the theme shows behind your profile header, without your osu! banner."
+msgstr "个人资料头部背后只显示主题，不显示你的 osu! 横幅。"
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -18198,6 +18306,7 @@ msgid "Out of time."
 msgstr "时间到。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/lib/supporter-name-fonts.ts
 msgid "Outline"
 msgstr "描边"
@@ -18229,6 +18338,11 @@ msgstr "不在这个平均值的最佳通过范围内"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Outside this average's weighted window"
 #~ msgstr "超出本次平均的加权窗口"
+
+#. placeholder {0}: formatNumber(notes.plays)
+#: src/components/player/ProfileStatCards.tsx
+msgid "Over {0} tracked plays"
+msgstr "共 {0} 次记录的游玩"
 
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
 #: src/components/packs/run/chain/ChainTable.tsx
@@ -18595,6 +18709,11 @@ msgstr "奖励"
 msgid "Peak"
 msgstr "最高"
 
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Peak hour"
+msgstr "高峰时段"
+
 #: src/lib/pack-run.ts
 msgid "Peak Performance"
 msgstr "巅峰状态"
@@ -18747,6 +18866,10 @@ msgstr "在 Ko-fi 上选择金额。为了让时长加到你的账号上，请�
 #: src/routes/support.tsx
 #~ msgid "Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you."
 #~ msgstr "在 Ko-fi 上选择金额。请用你的 osu! 用户名作为名字，或在留言中写 osu: 加上你的用户名，这样时长才会算在你身上。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Pick an outline colour"
+msgstr "选择描边颜色"
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Pick another file"
@@ -18944,6 +19067,10 @@ msgstr "把它放进一行 6 张且不断的连线里，牌组中每张 Stamina 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Play my top plays"
 msgstr "播放我的最佳成绩"
+
+#: src/routes/packs_.overjoy.$id.tsx
+msgid "Play Overjoy"
+msgstr "玩 Overjoy"
 
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Play preview"
@@ -20376,8 +20503,12 @@ msgstr "在 {0} 行内达到回合目标。通关会给碎片：剩余的行、�
 #~ msgstr "在 {0} 行内达到回合目标。通关会给碎片：剩余的行、大幅超出目标都会多给，已持有的每 {1} 个碎片再给 1 个。在商店里用它们买卡包、场景卡、练习和 mod。每第三回合是 Boss 回合，规则变化会提前在商店显示。"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Reached round {round} in Overjoy, best row {best}. {link}"
-msgstr "在 Overjoy 打到第 {round} 轮，最佳一排 {best}。{link}"
+msgid "Reached round {round} in Overjoy, best row {best}."
+msgstr "在 Overjoy 打到第 {round} 轮，最佳一排 {best}。"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+#~ msgid "Reached round {round} in Overjoy, best row {best}. {link}"
+#~ msgstr "在 Overjoy 打到第 {round} 轮，最佳一排 {best}。{link}"
 
 #: src/routes/dan-estimates.tsx
 msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
@@ -21548,13 +21679,18 @@ msgstr "粗略估算，可能有偏差"
 msgid "Round"
 msgstr "回合"
 
+#. placeholder {0}: share.round
+#: src/routes/packs_.overjoy.$id.tsx
+#~ msgid "Round {0}"
+#~ msgstr ""
+
 #. placeholder {0}: aftermath.round
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Round {0} cleared"
 msgstr "第 {0} 回合通过"
 
-#: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHud.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Round {round}"
 msgstr "第 {round} 轮"
 
@@ -21587,6 +21723,7 @@ msgstr "排"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Rows"
 msgstr "排数"
 
@@ -21642,11 +21779,13 @@ msgid "Run info"
 msgstr "挑战信息"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Run over"
 msgstr "本局结束"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/routes/packs_.overjoy.$id.tsx
 msgid "Run won"
 msgstr "本局胜利"
 
@@ -24608,6 +24747,15 @@ msgstr "强连线让卡打两次。"
 msgid "Strongest in <0>{0}</0>"
 msgstr "最强项是 <0>{0}</0>"
 
+#: src/components/player/ProfileStatCards.tsx
+#: src/lib/profile-stats.ts
+msgid "Strongest skill"
+msgstr "最强技能"
+
+#: src/components/player/ProfileStatCards.tsx
+msgid "Strongest skill keymode"
+msgstr "最强技能的键数"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
 msgid "Style"
@@ -24862,8 +25010,12 @@ msgid "Swap any element for another image from {0}, or click it in the preview t
 msgstr "把任意元素替换成 {0} 里的其他图片，或在预览里点击它来定位对应的行。音符和按键图片会以长条样式绘制；清空的元素会退回纯色形状。"
 
 #: src/routes/support.tsx
-msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak or percentile among tracked players."
-msgstr "可将个人资料下方的四张数据卡换成你的 ratio、rice / LN 占比、最长连续天数或在已追踪玩家中的百分位。"
+#~ msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak or percentile among tracked players."
+#~ msgstr "可将个人资料下方的四张数据卡换成你的 ratio、rice / LN 占比、最长连续天数或在已追踪玩家中的百分位。"
+
+#: src/routes/support.tsx
+msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak, percentile among tracked players, notes hit, strongest skill or the hour you play most."
+msgstr "把个人资料下方四张卡片中的任意一张换成你的比例、Rice / LN 占比、最长连续天数、在记录玩家中的百分位、命中音符、最强技能或你最常游玩的时段。"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
@@ -27301,6 +27453,10 @@ msgstr "这次成绩"
 msgid "This run already used its revive."
 msgstr "本局已用过复活。"
 
+#: src/routes/packs_.overjoy.$id.tsx
+msgid "This run is gone, or the link is wrong."
+msgstr "这局已经不在了，或者链接有误。"
+
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "This run was played before runs kept their builds."
 msgstr "这局打的时候还没有保存构筑。"
@@ -29596,8 +29752,12 @@ msgid "Without a binder, your collection shows as the usual grid."
 msgstr "不用卡册时，你的收藏按平常的网格显示。"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
-msgid "Won an Overjoy run and reached round {round}, best row {best}. {link}"
-msgstr "赢下一局 Overjoy，打到第 {round} 轮，最佳一排 {best}。{link}"
+msgid "Won an Overjoy run and reached round {round}, best row {best}."
+msgstr "赢下一局 Overjoy，打到第 {round} 轮，最佳一排 {best}。"
+
+#: src/components/packs/run/chain/ChainEnd.tsx
+#~ msgid "Won an Overjoy run and reached round {round}, best row {best}. {link}"
+#~ msgstr "赢下一局 Overjoy，打到第 {round} 轮，最佳一排 {best}。{link}"
 
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
@@ -30354,8 +30514,12 @@ msgid "Your frames"
 msgstr "你的头像框"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "Your gift week was claimed. Every $5 you give brings a new code."
-msgstr "你赠送的一周已被领取。你每支持 $5 就会获得一个新兑换码。"
+msgid "Your gift week was claimed. Every $4 you give brings a new code."
+msgstr "你赠送的一周已被领取。你每支持 $4 就会获得一个新兑换码。"
+
+#: src/components/supporter/GiftCodePanel.tsx
+#~ msgid "Your gift week was claimed. Every $5 you give brings a new code."
+#~ msgstr "你赠送的一周已被领取。你每支持 $5 就会获得一个新兑换码。"
 
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx
@@ -30439,6 +30603,10 @@ msgstr "你的数据。"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your only copy. It leaves your collection when they accept."
 msgstr "这是你唯一的一张。对方接受后它会离开你的收藏。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Your osu! profile banner no longer shows faintly through the theme."
+#~ msgstr "你的 osu! 个人资料横幅不再隐约透过主题显示。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Your osu! top plays, everything recorded while you were tracked, and any score links you added, keeping your best play on each chart at each rate. Charts flagged as vibro are left out. A rate nobody has rated a chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to count."

@@ -2,10 +2,15 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
+import { msg } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 
 import { formatNumber } from "#/lib/format";
 import { useBodyScrollLock } from "#/lib/use-body-scroll-lock";
-import { DEFAULT_PROFILE_STATS, formatTopPercent, PROFILE_STAT_LABELS, PROFILE_STATS, sessionLength, type ProfileStatId, type ProfileStatsData } from "#/lib/profile-stats";
+import { compactCount, DEFAULT_PROFILE_STATS, formatTopPercent, hourLabel, peakHour, PROFILE_STAT_LABELS, PROFILE_STATS, sessionLength, type ProfileStatId, type ProfileStatsData } from "#/lib/profile-stats";
+import { fetchLivePlayerSkillsDirect } from "#/lib/live-backend";
+import { qualifyingSkillModes, skillModeEntries, withMainKeymodeFirst } from "#/lib/skill-axes";
+import { SelectMenu } from "#/components/ui/SelectMenu";
 import { INSIGHT_CELL_CLASS, INSIGHT_LABEL_CLASS } from "./ProfileParts";
 
 /* The insight cards a supporter can swap in for the usual four
@@ -142,6 +147,186 @@ export function SessionCard({ session }: { session: ProfileStatsData["session"] 
   );
 }
 
+export function NotesCard({ notes }: { notes: ProfileStatsData["notes"] }) {
+  const { t } = useLingui();
+  return (
+    <StatCell label={t`Notes hit`}>
+      {notes ? (
+        <>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-[26px] font-black leading-none tabular-nums text-white">{compactCount(notes.hit)}</span>
+            <span className="text-[11px] font-semibold text-osu-f1">{t`notes`}</span>
+          </div>
+          <div className="mt-auto pt-2.5 text-[11px] tabular-nums text-osu-f1">
+            <Trans>Over {formatNumber(notes.plays)} tracked plays</Trans>
+          </div>
+        </>
+      ) : <Empty />}
+    </StatCell>
+  );
+}
+
+/* What kind of player the busiest hour makes them. */
+function hourKind(hour: number): MessageDescriptor {
+  if (hour < 5) return msg`Night owl`;
+  if (hour < 9) return msg`Early bird`;
+  if (hour < 12) return msg`Morning player`;
+  if (hour < 18) return msg`Afternoon player`;
+  if (hour < 22) return msg`Evening player`;
+  return msg`Night owl`;
+}
+
+export function HoursCard({ hours }: { hours: ProfileStatsData["hours"] }) {
+  const { t, i18n } = useLingui();
+  const peak = hours ? peakHour(hours) : null;
+  const max = hours ? Math.max(...hours) : 0;
+  return (
+    <StatCell label={t`Peak hour`}>
+      {hours && peak != null && max > 0 ? (
+        <>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-[26px] font-black leading-none tabular-nums text-white">{hourLabel(peak)}</span>
+            <span className="text-[11px] font-semibold text-osu-pink-light">{i18n._(hourKind(peak))}</span>
+          </div>
+          {/* the day from midnight to midnight, one bar an hour */}
+          <div className="mt-auto flex h-9 w-full items-end gap-px pt-2.5" aria-hidden>
+            {hours.map((count, hour) => (
+              <span
+                key={hour}
+                className={`flex-1 rounded-[1px] ${hour === peak ? "bg-osu-pink-light" : "bg-osu-f1/45"}`}
+                style={{ height: `${Math.max(8, (count / max) * 100)}%` }}
+              />
+            ))}
+          </div>
+        </>
+      ) : <Empty />}
+    </StatCell>
+  );
+}
+
+/* Their best skill, from the same public read as their Skills tab, so
+   hiding their ratings hides this too: in the keymode they chose for the
+   card, or else the one their Skills tab opens on. */
+export interface StrongestSkill {
+  label: string;
+  color: string;
+  value: number;
+  keyCount: number;
+  runnerUp: { label: string; value: number } | null;
+}
+
+type RatedModes = ReturnType<typeof qualifyingSkillModes>;
+
+/* One read of a player's skills shared by every card and picker that wants
+   it, kept for a minute: the card on the profile, the same card again in the
+   stat picker, and the picker's keymode menu. */
+const ratedModesCache = new Map<number, { at: number; value?: RatedModes | null; promise: Promise<RatedModes | null> }>();
+const RATED_MODES_TTL_MS = 60_000;
+
+function loadRatedModes(userId: number) {
+  const cached = ratedModesCache.get(userId);
+  if (cached && Date.now() - cached.at < RATED_MODES_TTL_MS) return cached;
+  const entry: { at: number; value?: RatedModes | null; promise: Promise<RatedModes | null> } = {
+    at: Date.now(),
+    promise: fetchLivePlayerSkillsDirect(userId)
+      .then((skills) => withMainKeymodeFirst(qualifyingSkillModes(skills), skills?.mainKeyCount ?? null))
+      .catch(() => null)
+      .then((modes) => {
+        entry.value = modes;
+        return modes;
+      }),
+  };
+  ratedModesCache.set(userId, entry);
+  return entry;
+}
+
+/* The keymodes they are rated in, main keymode first; undefined while loading. */
+export function useRatedSkillModes(userId: number | null | undefined): RatedModes | null | undefined {
+  const [state, setState] = useState<{ userId: number; modes: RatedModes | null } | null>(() => {
+    const ready = userId ? ratedModesCache.get(userId) : undefined;
+    return userId && ready && ready.value !== undefined ? { userId, modes: ready.value } : null;
+  });
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    const entry = loadRatedModes(userId);
+    if (entry.value !== undefined) setState({ userId, modes: entry.value });
+    else void entry.promise.then((modes) => {
+      if (alive) setState({ userId, modes });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+  return state && state.userId === userId ? state.modes : undefined;
+}
+
+export function useStrongestSkill(userId: number | null | undefined, keyCount: number | null = null): StrongestSkill | null | undefined {
+  const { i18n } = useLingui();
+  const modes = useRatedSkillModes(userId);
+  if (modes === undefined) return undefined;
+  const mode = modes?.find((entry) => entry.keyCount === keyCount) ?? modes?.[0];
+  const [top, next] = mode ? skillModeEntries(mode) : [];
+  if (!mode || !top) return null;
+  return { label: i18n._(top.labelMsg), color: top.color, value: top.value, keyCount: mode.keyCount, runnerUp: next ? { label: i18n._(next.labelMsg), value: next.value } : null };
+}
+
+/* `sample` draws made-up numbers instead (the /support page's example);
+   `keyCount` is the keymode the owner picked for it. */
+export function SkillCard({ userId, keyCount = null, sample }: { userId: number | null | undefined; keyCount?: number | null; sample?: StrongestSkill }) {
+  const { t } = useLingui();
+  const fetched = useStrongestSkill(sample ? null : userId, keyCount);
+  const skill = sample ?? fetched;
+  return (
+    <StatCell label={t`Strongest skill`}>
+      {skill ? (
+        <>
+          <div className="mt-2 flex min-w-0 items-baseline gap-1.5">
+            <span className="truncate text-[22px] font-black leading-none" style={{ color: skill.color }}>{skill.label}</span>
+            <span className="shrink-0 text-[15px] font-black tabular-nums text-white">{skill.value.toFixed(1)}</span>
+          </div>
+          <div className="mt-auto truncate pt-2.5 text-[11px] tabular-nums text-osu-f1">
+            {skill.runnerUp
+              ? <Trans>In {skill.keyCount}K, ahead of {skill.runnerUp.label} {skill.runnerUp.value.toFixed(1)}</Trans>
+              : <Trans>In {skill.keyCount}K</Trans>}
+          </div>
+        </>
+      ) : skill === undefined ? (
+        <>
+          <div className="mt-2 h-[22px] w-32 animate-pulse rounded bg-osu-b3/60" />
+          <div className="mt-auto h-3 w-40 animate-pulse rounded bg-osu-b3/40" />
+        </>
+      ) : <Empty />}
+    </StatCell>
+  );
+}
+
+/* The owner's pick of keymode for the strongest-skill card, shown in the
+   stat picker while that card is in a slot. */
+export function SkillKeymodeChoice({ userId, value, onChange }: { userId: number; value: number | null; onChange: (keys: number | null) => void }) {
+  const { t } = useLingui();
+  const modes = useRatedSkillModes(userId);
+  const keys = (modes ?? []).map((mode) => mode.keyCount).sort((a, b) => a - b);
+  if (keys.length < 2 && value == null) return null;
+  const shown = value != null && !keys.includes(value) ? [...keys, value].sort((a, b) => a - b) : keys;
+  return (
+    <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-osu-b4 px-4 py-3">
+      <div className="min-w-0">
+        <div className="text-[12.5px] font-semibold text-white">{t`Strongest skill keymode`}</div>
+        <div className="text-[11px] text-osu-f1">{t`Main keymode follows the one your Skills tab opens on.`}</div>
+      </div>
+      <SelectMenu
+        value={value == null ? "main" : String(value)}
+        align="right"
+        className="shrink-0 whitespace-nowrap"
+        ariaLabel={t`Strongest skill keymode`}
+        options={[{ value: "main", label: t`Main keymode` }, ...shown.map((keyCount) => ({ value: String(keyCount), label: `${keyCount}K` }))]}
+        onChange={(next) => onChange(next === "main" ? null : Number(next))}
+      />
+    </div>
+  );
+}
+
 /* A stat with nothing to draw it from here (the /supporter page has no
    profile insights): its name and what it would show. */
 export function StatPreviewCell({ stat, preview }: { stat: ProfileStatId; preview: string | null | undefined }) {
@@ -156,7 +341,8 @@ export function StatPreviewCell({ stat, preview }: { stat: ProfileStatId; previe
 /* What the extra stats would show, as one line each. */
 export function useExtraStatPreviews(data: ProfileStatsData): Partial<Record<ProfileStatId, string | null>> {
   const { t } = useLingui();
-  const { ratio, lnSplit, streak, percentile, session } = data;
+  const { ratio, lnSplit, streak, percentile, session, notes, hours } = data;
+  const peak = hours ? peakHour(hours) : null;
   const lnTotal = lnSplit ? lnSplit.ln + lnSplit.rice : 0;
   const top = percentile ? formatTopPercent(percentile.rank, percentile.players) : null;
   return {
@@ -164,6 +350,8 @@ export function useExtraStatPreviews(data: ProfileStatsData): Partial<Record<Pro
     lnSplit: lnSplit && lnTotal > 0 ? t`${Math.round((lnSplit.ln / lnTotal) * 100)}% LN` : null,
     streak: streak ? t`${streak.longest} days` : null,
     percentile: top ? t`top ${top}%` : null,
+    notes: notes ? t`${compactCount(notes.hit)} notes` : null,
+    hours: peak != null ? hourLabel(peak) : null,
     session: session ? (() => {
       const length = sessionLength(session.minutes);
       return length.hours ? t`${length.value} hours` : t`${length.value} min`;
@@ -195,12 +383,14 @@ function placeStat(slots: readonly ProfileStatId[], slot: number, stat: ProfileS
    the slot being changed before anything is picked; picking it puts it
    there (swapping places if it already sits in another slot) and saves.
    A card can also be dragged onto any slot, and the slots onto each other. */
-export function ProfileStatGallery({ slots, initialSlot, renderCell, onChange, onClose }: {
+export function ProfileStatGallery({ slots, initialSlot, renderCell, onChange, onClose, extra }: {
   slots: readonly ProfileStatId[];
   initialSlot: number;
   renderCell: (stat: ProfileStatId) => ReactNode;
   onChange: (next: ProfileStatId[]) => void;
   onClose: () => void;
+  /* Settings of the cards in the slots, under them (the skill card's keymode). */
+  extra?: (slots: readonly ProfileStatId[]) => ReactNode;
 }) {
   const { t } = useLingui();
   useBodyScrollLock(true);
@@ -382,6 +572,8 @@ export function ProfileStatGallery({ slots, initialSlot, renderCell, onChange, o
           })}
         </div>
 
+        {extra?.(slots)}
+
         <div className="mt-5 text-[9px] font-semibold uppercase tracking-[0.18em] text-osu-f1">{t`Every stat`}</div>
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4" onPointerLeave={() => setHovered(null)}>
           {PROFILE_STATS.map((stat) => {
@@ -442,12 +634,13 @@ export function ProfileStatGallery({ slots, initialSlot, renderCell, onChange, o
 /* The owner's way into the gallery: a small button in a profile card's
    corner (dim until the card is pointed at), or a full-width row naming the
    stat on the /supporter page. */
-export function ProfileStatPicker({ slot, slots, previews, renderCell, onChange, variant = "corner", disabled = false }: {
+export function ProfileStatPicker({ slot, slots, previews, renderCell, onChange, extra, variant = "corner", disabled = false }: {
   slot: number;
   slots: readonly ProfileStatId[];
   previews: Partial<Record<ProfileStatId, string | null>>;
   renderCell: (stat: ProfileStatId) => ReactNode;
   onChange: (next: ProfileStatId[]) => void;
+  extra?: (slots: readonly ProfileStatId[]) => ReactNode;
   /** "corner" sits in a profile card's corner; "field" is a full-width row naming the stat (the /supporter page). */
   variant?: "corner" | "field";
   disabled?: boolean;
@@ -481,7 +674,7 @@ export function ProfileStatPicker({ slot, slots, previews, renderCell, onChange,
         </button>
       )}
       <AnimatePresence>
-        {open && <ProfileStatGallery slots={slots} initialSlot={slot} renderCell={renderCell} onChange={onChange} onClose={() => setOpen(false)} />}
+        {open && <ProfileStatGallery slots={slots} initialSlot={slot} renderCell={renderCell} onChange={onChange} extra={extra} onClose={() => setOpen(false)} />}
       </AnimatePresence>
     </>
   );

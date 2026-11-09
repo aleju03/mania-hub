@@ -9,7 +9,7 @@ import { isSupporterAvatarFrame, parseFrameDan, parseWorkshopFrameArt, registerW
 import { parseSubmittedFrames, type SubmittedFrame } from "./workshop-frames";
 import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
 import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
-import { isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
+import { isSupporterNameOutline, isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
 import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
@@ -4884,12 +4884,16 @@ export interface SupporterProfileLook {
   frame: SupporterAvatarFrameId | null;
   nameStyle: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
+  /* The outline round their name, six hex digits; null for none. */
+  nameOutline: string | null;
   profileTheme: SupporterProfileThemeId | null;
   profileThemeOptions: ProfileThemeOptions;
   /* Their own theme, when they wear one instead of a built-in (profileTheme is then null). */
   customTheme: CustomTheme | null;
   /* The supporter's four insight cards, null for the usual four. */
   profileStats: ProfileStatId[] | null;
+  /* The keymode their strongest-skill card shows; null follows their main keymode. */
+  profileSkillKeys: number | null;
   profileStatsData: ProfileStatsData;
   /* Plays they put in place of the newest and oldest top play, null for those two. */
   profilePlays: ProfilePlays | null;
@@ -4900,7 +4904,7 @@ export interface SupporterProfileLook {
   /* The figure beside their profile's numbers, null for none. */
   companion: SupporterCompanion | null;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, patron: false, shownRank: null, rankFire: true, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, patron: false, shownRank: null, rankFire: true, frame: null, nameStyle: null, nameFont: null, nameOutline: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileSkillKeys: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4996,10 +5000,12 @@ export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
     frame: isSupporterAvatarFrame(body.frame) ? body.frame : null,
     nameStyle: isSupporterNameStyle(body.nameStyle) ? body.nameStyle : null,
     nameFont: isSupporterNameFont(body.nameFont) ? body.nameFont : null,
+    nameOutline: isSupporterNameOutline(body.nameOutline) ? body.nameOutline : null,
     profileTheme: isSupporterProfileTheme(body.profileTheme) ? body.profileTheme : null,
     profileThemeOptions: parseProfileThemeOptions(body.profileThemeOptions),
     customTheme: parseCustomTheme(body.customTheme),
     profileStats: parseProfileStats(body.profileStats),
+    profileSkillKeys: Number.isInteger(body.profileSkillKeys) && Number(body.profileSkillKeys) >= 1 && Number(body.profileSkillKeys) <= 18 ? Number(body.profileSkillKeys) : null,
     profileStatsData: parseProfileStatsData(body.profileStatsData),
     profilePlays: parseProfilePlays(body.profilePlays),
     packStyle: parsePackStyle(body.packStyle),
@@ -5065,6 +5071,10 @@ export function peekLiveSupporterNameFont(userId: number): SupporterNameFontId |
   return peekSettledLook(userId)?.nameFont;
 }
 
+export function peekLiveSupporterNameOutline(userId: number): string | null | undefined {
+  return peekSettledLook(userId)?.nameOutline;
+}
+
 export function peekLiveSupporterProfileTheme(userId: number): SupporterProfileThemeId | null | undefined {
   return peekSettledLook(userId)?.profileTheme;
 }
@@ -5109,9 +5119,9 @@ export function peekLiveSupporterPackStyle(userId: number): SupporterPackStyle |
   return peekSettledLook(userId)?.packStyle;
 }
 
-export function peekLiveSupporterProfileStats(userId: number): { stats: ProfileStatId[] | null; data: ProfileStatsData; plays: ProfilePlays | null } | undefined {
+export function peekLiveSupporterProfileStats(userId: number): { stats: ProfileStatId[] | null; skillKeys: number | null; data: ProfileStatsData; plays: ProfilePlays | null } | undefined {
   const settled = peekSettledLook(userId);
-  return settled ? { stats: settled.profileStats, data: settled.profileStatsData, plays: settled.profilePlays } : undefined;
+  return settled ? { stats: settled.profileStats, skillKeys: settled.profileSkillKeys, data: settled.profileStatsData, plays: settled.profilePlays } : undefined;
 }
 
 /* Every active supporter's name tag style and name font, for names in lists. One
@@ -5122,6 +5132,7 @@ let nameStyleMap: {
   at: number;
   styles: Map<number, SupporterNameStyleId>;
   fonts: Map<number, SupporterNameFontId>;
+  outlines?: Map<number, string>;
   frames: Map<number, SupporterAvatarFrameId>;
   sleeves: Map<number, SupporterCardSleeveId>;
   themes: Map<number, SupporterRowTheme>;
@@ -5140,6 +5151,22 @@ export function getSupporterNameStyle(userId: number): SupporterNameStyleId | nu
   const preview = supporterLookPreviewFor(userId);
   if (preview && "nameStyle" in preview) return preview.nameStyle ?? null;
   return nameStyleMap?.styles.get(userId) ?? null;
+}
+
+export function getSupporterNameOutline(userId: number): string | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview && "nameOutline" in preview) return preview.nameOutline ?? null;
+  return nameStyleMap?.outlines?.get(userId) ?? null;
+}
+
+/* After the supporter page saves an outline, so the viewer's own name updates at once. */
+export function setSupporterNameOutlineLocally(userId: number, outline: string | null): void {
+  const outlines = new Map(nameStyleMap?.outlines ?? []);
+  if (outline) outlines.set(userId, outline);
+  else outlines.delete(userId);
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
+  nameStyleMapReload = true;
+  for (const listener of nameStyleListeners) listener();
 }
 
 export function getSupporterNameFont(userId: number): SupporterNameFontId | null {
@@ -5189,7 +5216,7 @@ export function setSupporterSleeveLocally(userId: number, sleeve: SupporterCardS
   const sleeves = new Map(nameStyleMap?.sleeves ?? []);
   if (sleeve) sleeves.set(userId, sleeve);
   else sleeves.delete(userId);
-  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames: nameStyleMap?.frames ?? new Map(), sleeves, themes: nameStyleMap?.themes ?? new Map() };
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines: nameStyleMap?.outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves, themes: nameStyleMap?.themes ?? new Map() };
   nameStyleMapReload = true;
   for (const listener of nameStyleListeners) listener();
 }
@@ -5200,13 +5227,15 @@ export function ensureSupporterNameStyles(): void {
   nameStyleMapInflight = true;
   const reload = nameStyleMapReload;
   nameStyleMapReload = false;
-  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown>; customRows?: Record<string, unknown>; frameArt?: unknown }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
+  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; outlines?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown>; customRows?: Record<string, unknown>; frameArt?: unknown }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
     .then((body) => {
       registerWorkshopFrames(parseWorkshopFrameArt(body?.frameArt));
       const styles = new Map<number, SupporterNameStyleId>();
       for (const [id, style] of Object.entries(body?.styles ?? {})) if (isSupporterNameStyle(style)) styles.set(Number(id), style);
       const fonts = new Map<number, SupporterNameFontId>();
       for (const [id, font] of Object.entries(body?.fonts ?? {})) if (isSupporterNameFont(font)) fonts.set(Number(id), font);
+      const outlines = new Map<number, string>();
+      for (const [id, outline] of Object.entries(body?.outlines ?? {})) if (isSupporterNameOutline(outline)) outlines.set(Number(id), outline);
       const frames = new Map<number, SupporterAvatarFrameId>();
       for (const [id, frame] of Object.entries(body?.frames ?? {})) if (isSupporterAvatarFrame(frame)) frames.set(Number(id), frame);
       const sleeves = new Map<number, SupporterCardSleeveId>();
@@ -5214,7 +5243,7 @@ export function ensureSupporterNameStyles(): void {
       const themes = new Map<number, SupporterRowTheme>();
       for (const [id, theme] of Object.entries(body?.themes ?? {})) if (isSupporterProfileTheme(theme)) themes.set(Number(id), theme);
       for (const [id, url] of Object.entries(body?.customRows ?? {})) if (typeof url === "string" && CUSTOM_ROW_URL.test(url)) themes.set(Number(id), { image: url });
-      nameStyleMap = { at: Date.now(), styles, fonts, frames, sleeves, themes };
+      nameStyleMap = { at: Date.now(), styles, fonts, outlines, frames, sleeves, themes };
       for (const listener of nameStyleListeners) listener();
     })
     .catch(() => {})
@@ -5229,7 +5258,7 @@ export function setSupporterFrameLocally(userId: number, frame: SupporterAvatarF
   const frames = new Map(nameStyleMap?.frames ?? []);
   if (frame) frames.set(userId, frame);
   else frames.delete(userId);
-  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames, sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines: nameStyleMap?.outlines, frames, sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
   nameStyleMapReload = true;
   for (const listener of nameStyleListeners) listener();
 }
@@ -5239,7 +5268,7 @@ export function setSupporterThemeLocally(userId: number, theme: SupporterRowThem
   const themes = new Map(nameStyleMap?.themes ?? []);
   if (theme) themes.set(userId, theme);
   else themes.delete(userId);
-  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes };
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines: nameStyleMap?.outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes };
   nameStyleMapReload = true;
   for (const listener of nameStyleListeners) listener();
 }
@@ -5255,7 +5284,7 @@ export function setSupporterNameStyleLocally(userId: number, style: SupporterNam
     if (font) fonts.set(userId, font);
     else fonts.delete(userId);
   }
-  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles, fonts, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles, fonts, outlines: nameStyleMap?.outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
   nameStyleMapReload = true;
   for (const listener of nameStyleListeners) listener();
 }

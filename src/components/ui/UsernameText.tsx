@@ -1,7 +1,7 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore, type CSSProperties } from "react";
 import { getAvatarAccentStoreKey } from "../../lib/avatar-accent";
 import { requestAvatarAccent } from "../../lib/avatar-accent-harvest";
-import { ensureSupporterNameStyles, getSupporterNameFont, getSupporterNameStyle, subscribeSupporterNameStyles } from "../../lib/live-backend";
+import { ensureSupporterNameStyles, getSupporterNameFont, getSupporterNameOutline, getSupporterNameStyle, subscribeSupporterNameStyles } from "../../lib/live-backend";
 import { SupporterStyledName } from "../supporter/SupporterNameStyle";
 import { avatarUrlUserId } from "./Avatar";
 import { useHydrated } from "../../lib/use-hydrated";
@@ -57,17 +57,22 @@ export function UsernameText({
     () => (hydrated && userId ? getSupporterNameFont(userId) : null),
     () => null,
   );
+  const nameOutline = useSyncExternalStore(
+    subscribeSupporterNameStyles,
+    () => (hydrated && userId ? getSupporterNameOutline(userId) : null),
+    () => null,
+  );
   useEffect(() => {
     if (userId) ensureSupporterNameStyles();
   }, [userId]);
 
-  if (nameStyle) return <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} name={username} className={className} />;
+  if (nameStyle) return <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} outline={nameOutline} name={username} className={className} />;
 
   // A name font alone changes the letters, not the colour: the accent stays.
   return (
     <span
-      className={`${className ?? ""}${nameFont ? ` name-font--${nameFont}` : ""}`}
-      style={{ transition: "color 220ms ease-out", ...(accent ? { color: accent } : null) }}
+      className={`${className ?? ""}${nameFont ? ` name-font--${nameFont}` : ""}${nameOutline ? " name-outline" : ""}`}
+      style={{ transition: "color 220ms ease-out", ...(accent ? { color: accent } : null), ...(nameOutline ? { "--name-outline": `#${nameOutline}` } : null) } as CSSProperties}
     >
       {username}
     </span>

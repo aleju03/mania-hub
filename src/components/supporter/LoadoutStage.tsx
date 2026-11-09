@@ -69,7 +69,7 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
 }) {
   const { t } = useLingui();
   const reduced = useReducedMotion();
-  const { theme, frame, nameStyle, nameFont } = shown;
+  const { theme, frame, nameStyle, nameFont, nameOutline } = shown;
   // While the pointer sweeps a drawer the frame shows its still and the name its CSS look.
   const frameSettled = useIsSettled(frame ?? "", 350);
   const nameSettled = useIsSettled(`${nameStyle}|${nameFont}`, 300);
@@ -102,8 +102,8 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
               and plate size to the name. */}
           <motion.div key={`name-${pop}`} {...landing} className="flex min-w-0 flex-1 sm:mt-2 sm:w-full sm:flex-none">
             <div ref={nameBoxRef} className="flex w-full min-w-0 justify-start sm:justify-center">
-              {nameStyle || nameFont ? (
-                <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} name={username} className={NAME_CLASS} live={!spinning && nameSettled} />
+              {nameStyle || nameFont || nameOutline ? (
+                <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} outline={nameOutline} name={username} className={NAME_CLASS} live={!spinning && nameSettled} />
               ) : (
                 <span className={NAME_CLASS}>{username}</span>
               )}

@@ -42,6 +42,7 @@ import {
   forgetLiveSupporterLook,
   setSupporterFrameLocally,
   setSupporterThemeLocally,
+  setSupporterNameOutlineLocally,
   setSupporterNameStyleLocally,
   setSupporterSleeveLocally,
   type LivePackCardSnapshot,
@@ -57,6 +58,7 @@ import {
   saveSupporterFrameSetting,
   saveSupporterLookSetting,
   saveSupporterNameFontSetting,
+  saveSupporterNameOutlineSetting,
   saveSupporterNameStyleSetting,
   saveSupporterPackStyleSetting,
   saveSupporterProfileThemeSetting,
@@ -128,7 +130,7 @@ export const Route = createFileRoute("/supporter")({
 });
 
 function loadoutOf(state: SupporterLookState): Loadout {
-  return { theme: state.profileTheme, themeOptions: state.profileThemeOptions, frame: state.frame, nameStyle: state.nameStyle, nameFont: state.nameFont, look: state.look ?? DEFAULT_LOOK, pack: state.packStyle };
+  return { theme: state.profileTheme, themeOptions: state.profileThemeOptions, frame: state.frame, nameStyle: state.nameStyle, nameFont: state.nameFont, nameOutline: state.nameOutline, look: state.look ?? DEFAULT_LOOK, pack: state.packStyle };
 }
 
 function SupporterPage() {
@@ -177,7 +179,7 @@ function SupporterPage() {
         saved.current = loadoutOf(next);
         setEquipped(loadoutOf(next));
       })
-      .catch(() => alive && setEquipped({ theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE }));
+      .catch(() => alive && setEquipped({ theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, nameOutline: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE }));
     fetchLivePackCardSnapshotDirect(String(viewer.id))
       .then((next) => alive && setCard(next))
       .catch(() => alive && setCard(null));
@@ -219,6 +221,7 @@ function SupporterPage() {
         if (next.frame !== before.frame) latest = await saveSupporterFrameSetting({ data: { frame: next.frame } });
         if (next.nameStyle !== before.nameStyle) latest = await saveSupporterNameStyleSetting({ data: { nameStyle: next.nameStyle } });
         if (next.nameFont !== before.nameFont) latest = await saveSupporterNameFontSetting({ data: { nameFont: next.nameFont } });
+        if (next.nameOutline !== before.nameOutline) latest = await saveSupporterNameOutlineSetting({ data: { nameOutline: next.nameOutline } });
         if (!sameLook(next.look, before.look)) latest = await saveSupporterLookSetting({ data: next.look });
         if (next.pack.sleeve !== before.pack.sleeve || next.pack.binder !== before.pack.binder || next.pack.wrapper !== before.pack.wrapper || next.pack.blade !== before.pack.blade) {
           latest = await saveSupporterPackStyleSetting({ data: { packStyle: next.pack } });
@@ -231,6 +234,7 @@ function SupporterPage() {
           setSupporterFrameLocally(viewer.id, latest.frame);
           setSupporterThemeLocally(viewer.id, latest.profileThemeOptions.rows ? latest.profileTheme : null);
           setSupporterNameStyleLocally(viewer.id, latest.nameStyle, latest.nameFont);
+          setSupporterNameOutlineLocally(viewer.id, latest.nameOutline);
         }
       } catch (cause) {
         if (latest) saved.current = loadoutOf(latest);
@@ -290,6 +294,23 @@ function SupporterPage() {
   };
 
   /* A theme's own switches go in with the theme, waiting with a roll like any pick. */
+  /* The name's outline: `commit` false only previews it (the colour picker
+     moving), true wears and saves it. */
+  const [outlinePreview, setOutlinePreview] = useState<string | null | undefined>(undefined);
+  const setNameOutline = (nameOutline: string | null, commit: boolean) => {
+    if (!equipped) return;
+    if (!commit) {
+      setOutlinePreview(nameOutline);
+      return;
+    }
+    setOutlinePreview(undefined);
+    if (pending) {
+      setPending({ ...pending, nameOutline });
+      return;
+    }
+    equip({ ...equipped, nameOutline });
+  };
+
   const setThemeOptions = (themeOptions: Loadout["themeOptions"]) => {
     if (!equipped) return;
     if (pending) {
@@ -388,7 +409,7 @@ function SupporterPage() {
   };
 
   /* Everything back to bare, waiting like a roll, so Keep saves it and Undo takes it back. */
-  const BARE: Loadout = { theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE };
+  const BARE: Loadout = { theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, nameOutline: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE };
   const clearAll = () => {
     if (!equipped || spinning) return;
     setHover(null);
@@ -396,7 +417,7 @@ function SupporterPage() {
     setPending(BARE);
     setPop((n) => n + 1);
   };
-  const bare = !!equipped && equipped.theme === null && equipped.frame === null && equipped.nameStyle === null && equipped.nameFont === null && sameLook(equipped.look, DEFAULT_LOOK)
+  const bare = !!equipped && equipped.theme === null && equipped.frame === null && equipped.nameStyle === null && equipped.nameFont === null && equipped.nameOutline === null && sameLook(equipped.look, DEFAULT_LOOK)
     && !equipped.pack.sleeve && !equipped.pack.binder && !equipped.pack.wrapper && !equipped.pack.blade;
 
   const undo = () => {
@@ -419,7 +440,8 @@ function SupporterPage() {
   });
 
   const held = pending ?? equipped;
-  const shown = reel ?? (held && hover ? withSlot(held, hover.slot, hover.value, custom) : held);
+  const hovered = reel ?? (held && hover ? withSlot(held, hover.slot, hover.value, custom) : held);
+  const shown = hovered && outlinePreview !== undefined ? { ...hovered, nameOutline: outlinePreview } : hovered;
   const viewerKeys = useMemo(() => mainKeymode(card?.bestScores), [card]);
   const highwayNotes = useHighwayNotes(viewer?.id, viewerKeys, (shown?.theme === "highway" && !shown.themeOptions.stockNotes) || shown?.theme === "judgements");
   const highwayChart = useHighwayChart(viewer?.id, card?.bestScores, highwayNotes?.lanes ?? viewerKeys ?? 4, shown?.theme === "highway" && !!shown.themeOptions.charts);
@@ -438,8 +460,8 @@ function SupporterPage() {
 
   /* Stable handlers for the drawer, so a hover (which re-renders the page)
      does not re-render every tile in it. */
-  const latest = useRef({ pick, upload, editCustom, setThemeOptions, wearOwnTheme });
-  latest.current = { pick, upload, editCustom, setThemeOptions, wearOwnTheme };
+  const latest = useRef({ pick, upload, editCustom, setThemeOptions, setNameOutline, wearOwnTheme });
+  latest.current = { pick, upload, editCustom, setThemeOptions, setNameOutline, wearOwnTheme };
   /* Leaving a tile waits a moment before the preview goes back, so crossing
      the gap to the next tile swaps straight to it instead of flashing what's
      equipped in between. */
@@ -463,6 +485,7 @@ function SupporterPage() {
   const onUpload = useCallback((file: File) => void latest.current.upload(file), []);
   const onEditCustom = useCallback(() => latest.current.editCustom(), []);
   const onThemeOptions = useCallback((options: Loadout["themeOptions"]) => latest.current.setThemeOptions(options), []);
+  const onNameOutline = useCallback((outline: string | null, commit: boolean) => latest.current.setNameOutline(outline, commit), []);
   const onWearOwnTheme = useCallback((themeId: number | null) => latest.current.wearOwnTheme(themeId), []);
 
   const giftFrom = state?.giftFrom ?? null;
@@ -481,6 +504,7 @@ function SupporterPage() {
       frame: loadout.frame,
       nameStyle: loadout.nameStyle,
       nameFont: loadout.nameFont,
+      nameOutline: loadout.nameOutline,
       profileTheme: loadout.theme,
       profileThemeOptions: loadout.themeOptions,
       // a built-in theme picked here takes the place of their own
@@ -666,6 +690,7 @@ function SupporterPage() {
                         onUpload={onUpload}
                         onEditCustom={onEditCustom}
                         onThemeOptions={onThemeOptions}
+                        onNameOutline={onNameOutline}
                         onWearOwnTheme={onWearOwnTheme}
                       />
                       {error && <div className="mt-3 text-[12px] text-osu-red-light">{error}</div>}

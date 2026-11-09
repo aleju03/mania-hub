@@ -379,11 +379,22 @@ export function createMapleLeaves(gl: WebGL2RenderingContext): ThemeOverlay | nu
         // the page scrolling carries the near ones off faster than the far
         const parallax = 0.25 + 0.6 * (1 - (p.depth - 1.5) / (FAR_Z - 1.5));
         const sway = Math.sin(time * p.swayF + p.phase);
-        const y = wrap(p.y0 * halfH * 2 - time * p.fall + push * 0.12 + scroll * halfH * 2 * parallax, halfH * 2) - halfH;
-        // the close ones keep to the right half, clear of the name
-        const x = i < NEAR_LEAVES
-          ? halfW * (0.15 + 0.75 * wrap(p.x0 + (time * p.drift + push * 0.25) / halfW, 1)) + sway * p.swayA
-          : wrap(p.x0 * halfW * 2 + time * p.drift + push * 0.55 + sway * p.swayA, halfW * 2) - halfW;
+        const span = halfH * 2;
+        const fallen = p.y0 * span - time * p.fall + push * 0.12 + scroll * span * parallax;
+        const y = wrap(fallen, span) - halfH;
+        let x: number;
+        if (i < NEAR_LEAVES) {
+          // The close ones keep to the right half, clear of the name. Each
+          // fall starts somewhere new, picked when it wraps back to the top
+          // out of sight; within a fall it only drifts and is carried on by
+          // the gusts, so it never jumps across the screen in view.
+          const lap = Math.floor(fallen / span);
+          const across = 1 - (y + halfH) / span;
+          const [pushAtTop] = gustAt(time - (across * span) / p.fall - p.x0 * 0.9);
+          x = halfW * (0.15 + 0.5 * rand(i * 101 + lap * 7919 + 5)) + across * span * p.drift * 2.5 + (push - pushAtTop) * 0.25 + sway * p.swayA;
+        } else {
+          x = wrap(p.x0 * halfW * 2 + time * p.drift + push * 0.55 + sway * p.swayA, halfW * 2) - halfW;
+        }
         const z = -p.depth;
         // a steady tumble that quickens in the gust, and a rock that follows
         // the sway the way a falling leaf tips into each swing
