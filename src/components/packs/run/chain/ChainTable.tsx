@@ -1045,10 +1045,15 @@ export function ChainTable(props: ChainTableProps) {
   const roomHeat = entering ? 1 : overNow ? 0 : fire ? 1 : play && heat === "fire" ? 0.85 : play && heat === "mod" ? 0.45 : 0;
   const shards = shardOverride ?? shown?.shards ?? 0;
   const showRound = Boolean(shown && shown.round > 0 && shown.phase !== "over");
+  /* The shop's contracts and buttons run about 720 px wide, centred; the
+     corner's names reach 280 px in. Narrower than this, the corner keeps
+     only its medallions. */
+  const SHOP_FULL_CORNER = 1320;
   const scenesNode = shown ? (
     <ChainScenes
       scenes={shown.scenes}
       compact={narrow}
+      slim={!narrow && shown.phase === "shop" && box.width < SHOP_FULL_CORNER}
       ascension={shown.ascension}
       startCombo={shown.startCombo}
       onSell={shown.phase === "shop" ? (id) => void sell(id) : undefined}

@@ -481,6 +481,7 @@ function sceneBadge(scene: ChainSceneHeld, ascension: number, startCombo: number
 function SceneItem({
   scene,
   compact,
+  slim,
   ascension,
   startCombo,
   onSell,
@@ -488,6 +489,7 @@ function SceneItem({
 }: {
   scene: ChainSceneHeld;
   compact: boolean;
+  slim: boolean;
   ascension: number;
   startCombo: number;
   onSell: ((id: ChainSceneId) => void) | null;
@@ -497,11 +499,11 @@ function SceneItem({
   const content = () => ({ kind: "scene" as const, scene, ascension, startCombo, ...(onSell ? { sell: CHAIN_RULES.sceneSell } : {}) });
   const details = useChainDetailsTrigger(content);
   const badge = sceneBadge(scene, ascension, startCombo);
-  const art = compact ? 50 : 72;
+  const art = compact ? 50 : slim ? 64 : 72;
   return (
     <motion.div
       layout
-      className={`flex items-center ${compact ? "flex-col gap-1" : "gap-3"}`}
+      className={`flex items-center ${compact || slim ? "flex-col gap-1" : "gap-3"}`}
       initial={{ opacity: 0, scale: 0.6 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.4, transition: { duration: 0.25 } }}
@@ -516,7 +518,7 @@ function SceneItem({
         onPointerDown={details.onPointerDown}
         onPointerUp={details.onPointerUp}
         onClick={(event) => {
-          if (compact) {
+          if (compact || slim) {
             const rect = event.currentTarget.getBoundingClientRect();
             details.onPointerLeave();
             showChainDetails(content(), rect);
@@ -537,7 +539,17 @@ function SceneItem({
           </span>
         )}
       </div>
-      {!compact && (
+      {slim && onSell && (
+        <button
+          type="button"
+          disabled={sellDisabled}
+          onClick={() => onSell(scene.id)}
+          className="mt-0.5 inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-[12px] font-bold text-white transition hover:brightness-125 disabled:opacity-40"
+        >
+          <Trans>Sell</Trans> <Shards value={CHAIN_RULES.sceneSell} sign />
+        </button>
+      )}
+      {!compact && !slim && (
         <div className="min-w-0">
           <div className="truncate text-[14px] font-black" style={{ color: CHAIN_SCENE_INK[scene.id] }}>
             {CHAIN_SCENE_NAMES[scene.id]}
@@ -574,10 +586,13 @@ function SceneItem({
 
 /* The held scene cards as a small group: name and one line each, the full
    rule on hover. A corner of the table on desktop, a strip in the bar on
-   phones. In the shop each one can be sold. */
+   phones. In the shop each one can be sold. Slim (a shop too narrow for
+   the names beside it) keeps only the medallions and their Sell, the rule
+   on hover or tap. */
 export function ChainScenes({
   scenes,
   compact,
+  slim = false,
   ascension,
   startCombo,
   onSell,
@@ -585,6 +600,7 @@ export function ChainScenes({
 }: {
   scenes: ChainSceneHeld[];
   compact: boolean;
+  slim?: boolean;
   ascension: number;
   startCombo: number;
   onSell?: (id: ChainSceneId) => void;
@@ -592,13 +608,14 @@ export function ChainScenes({
 }) {
   useEffect(() => runSound.prefetch(), []);
   return (
-    <div className={compact ? "flex items-start gap-2" : "flex w-[240px] flex-col gap-3"}>
+    <div className={compact ? "flex items-start gap-2" : slim ? "flex flex-col items-center gap-3" : "flex w-[240px] flex-col gap-3"}>
       <AnimatePresence initial={false}>
         {scenes.map((scene) => (
           <SceneItem
             key={scene.id}
             scene={scene}
             compact={compact}
+            slim={slim}
             ascension={ascension}
             startCombo={startCombo}
             onSell={onSell ?? null}
