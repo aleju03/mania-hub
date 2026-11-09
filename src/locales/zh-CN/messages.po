@@ -20068,13 +20068,18 @@ msgstr "把这段代码放到你的 Mamestagram 个人页面上，然后点击�
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx
-msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (a second skillset only matches another second skillset). Keymode counts too, but only on top of another match."
-msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家（或地区）、稀有度、段位或 skillset（第二 skillset 只和另一个第二 skillset 相配）时就会相连。键数也算，但只能和其他相同特征一起算。"
+#~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (a second skillset only matches another second skillset). Keymode counts too, but only on top of another match."
+#~ msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家（或地区）、稀有度、段位或 skillset（第二 skillset 只和另一个第二 skillset 相配）时就会相连。键数也算，但只能和其他相同特征一起算。"
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx
 #~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (either of a player's two). Keymode counts too, but only on top of another match."
 #~ msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家（或地区）、稀有度、段位或 skillset（玩家两个 skillset 中任一个）时就会相连。键数也算，但只能和其他相同特征一起算。"
+
+#. placeholder {0}: CHAIN_RULES.rowMax
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a dan or a skillset (a second skillset only matches another second skillset). Rarity, region and keymode count too, but one of them alone is not a link: the pair has to share something else as well."
+msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家、段位或 skillset（第二 skillset 只和另一个第二 skillset 相配）时就会相连。稀有度、地区和键数也算，但只有其中一项相同不会相连：两张卡还得有别的相同特征。"
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx

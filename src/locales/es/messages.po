@@ -20056,13 +20056,18 @@ msgstr "Pon este código en tu userpage de Mamestagram y luego presiona Verifica
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx
-msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (a second skillset only matches another second skillset). Keymode counts too, but only on top of another match."
-msgstr "Pon hasta {0} cartas en una fila. Dos cartas juntas se enlazan si comparten país (o región), rareza, dan o skillset (un segundo skillset solo coincide con otro segundo skillset). El keymode también cuenta, pero solo junto con otra coincidencia."
+#~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (a second skillset only matches another second skillset). Keymode counts too, but only on top of another match."
+#~ msgstr "Pon hasta {0} cartas en una fila. Dos cartas juntas se enlazan si comparten país (o región), rareza, dan o skillset (un segundo skillset solo coincide con otro segundo skillset). El keymode también cuenta, pero solo junto con otra coincidencia."
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx
 #~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a skillset (either of a player's two). Keymode counts too, but only on top of another match."
 #~ msgstr "Pon hasta {0} cartas en una fila. Dos cartas juntas se enlazan si comparten país (o región), rareza, dan o skillset (cualquiera de los dos de un jugador). El keymode también cuenta, pero solo junto con otra coincidencia."
+
+#. placeholder {0}: CHAIN_RULES.rowMax
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a dan or a skillset (a second skillset only matches another second skillset). Rarity, region and keymode count too, but one of them alone is not a link: the pair has to share something else as well."
+msgstr "Pon hasta {0} cartas en una fila. Dos cartas juntas se enlazan si comparten país, dan o skillset (un segundo skillset solo coincide con otro segundo skillset). La rareza, la región y el keymode también cuentan, pero uno solo no enlaza: el par tiene que compartir algo más."
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx

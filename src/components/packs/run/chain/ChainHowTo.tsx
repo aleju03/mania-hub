@@ -90,8 +90,8 @@ export function ChainHowTo({ open, narrow, onClose }: { open: boolean; narrow: b
       title: <Trans>Link a row</Trans>,
       body: (
         <Trans>
-          Put up to {CHAIN_RULES.rowMax} cards in a row. Two cards side by side link when they share a country (or a region), a rarity, a dan or a
-          skillset (a second skillset only matches another second skillset). Keymode counts too, but only on top of another match.
+          Put up to {CHAIN_RULES.rowMax} cards in a row. Two cards side by side link when they share a country, a dan or a skillset (a second
+          skillset only matches another second skillset). Rarity, region and keymode count too, but one of them alone is not a link: the pair has to share something else as well.
         </Trans>
       ),
       art: (
