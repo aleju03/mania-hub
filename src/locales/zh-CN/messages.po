@@ -2627,8 +2627,12 @@ msgid "<0/> foils"
 msgstr "<0/> 种闪膜"
 
 #: src/routes/support.tsx
-msgid "<0/> frames"
-msgstr "<0/> 个头像框"
+#~ msgid "<0/> frames"
+#~ msgstr "<0/> 个头像框"
+
+#: src/routes/support.tsx
+msgid "<0/> frames, or your own"
+msgstr "<0/> 个头像框，或用你自己的"
 
 #: src/routes/support.tsx
 msgid "<0/> ranks"
@@ -2639,8 +2643,12 @@ msgid "<0/> styles, <1/> fonts"
 msgstr "<0/> 种样式，<1/> 种字体"
 
 #: src/routes/support.tsx
-msgid "<0/> themes"
-msgstr "<0/> 个主题"
+#~ msgid "<0/> themes"
+#~ msgstr "<0/> 个主题"
+
+#: src/routes/support.tsx
+msgid "<0/> themes, or your own"
+msgstr "<0/> 个主题，或用你自己的"
 
 #: src/routes/support.tsx
 msgid "<0/> to pick, or your own"
@@ -8718,6 +8726,7 @@ msgstr "深海"
 msgid "default"
 msgstr "默认"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Default"
 msgstr "默认"
@@ -9106,6 +9115,7 @@ msgstr "圆点"
 msgid "Double Tap"
 msgstr "双击"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Double Time"
 msgstr "Double Time"
@@ -11685,6 +11695,7 @@ msgstr "减半"
 #~ msgid "half a year"
 #~ msgstr ""
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Half Time"
 msgstr "Half Time"
@@ -12192,6 +12203,7 @@ msgstr "长条"
 msgid "Hold notes don't need their release timed."
 msgstr "长条的放手不需要掐准时机。"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Hold Off"
 msgstr "Hold Off"
@@ -12916,6 +12928,7 @@ msgstr "谱面 ID 无效。"
 msgid "Inverse"
 msgstr "反键"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Invert"
 msgstr "Invert"
@@ -15413,6 +15426,7 @@ msgstr "审核"
 #~ msgid "mods"
 #~ msgstr "模组"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -16714,6 +16728,7 @@ msgstr "本回合没有剩余重抽次数。"
 msgid "No regions found"
 msgstr "未找到区域"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "No Release"
 msgstr "无放手"
@@ -18161,6 +18176,14 @@ msgstr "选填"
 #: src/routes/workshop.themes.index.tsx
 msgid "or"
 msgstr "或"
+
+#: src/routes/support.tsx
+msgid "Or <0>draw a frame of your own</0> and submit it for everyone to wear."
+msgstr "也可以<0>自己画一个头像框</0>并提交，供所有人使用。"
+
+#: src/routes/support.tsx
+msgid "Or <0>write a theme of your own</0>, or wear one another player shared."
+msgstr "也可以<0>自己写一个主题</0>，或使用其他玩家分享的主题。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "or paste a Shadertoy shader as it is"
@@ -24832,8 +24855,8 @@ msgstr "存储尚未配置，配置好之前上传都会失败。"
 #~ msgstr ""
 
 #: src/components/supporter/loadout.ts
-msgid "Storm"
-msgstr "风暴"
+#~ msgid "Storm"
+#~ msgstr "风暴"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx

@@ -118,7 +118,7 @@ function SectionNav() {
 /* Each section hydrates in its own Suspense boundary (nothing in them
    suspends), so React hydrates the page a section at a time and lets a
    scroll through in between, rather than in one long task. */
-function Perk({ id, title, count, body, children }: { id: string; title: string; count: ReactNode; body: string; children: ReactNode }) {
+function Perk({ id, title, count, body, more, children }: { id: string; title: string; count: ReactNode; body: string; /** A second line under the body, for a way to make your own. */ more?: ReactNode; children: ReactNode }) {
   return (
     <Suspense fallback={null}>
     <section id={id} className="scroll-mt-[76px] border-t border-white/[0.07] pt-8">
@@ -129,6 +129,7 @@ function Perk({ id, title, count, body, children }: { id: string; title: string;
           <span className="text-[13px] font-semibold text-osu-pink-light">{count}</span>
         </div>
         <p className="mt-1.5 text-[14px] leading-relaxed text-osu-l2">{body}</p>
+        {more ? <p className="mt-1 text-[14px] leading-relaxed text-osu-l2 [&_a]:font-semibold [&_a]:text-osu-pink-light hover:[&_a]:underline">{more}</p> : null}
       </div>
       <Reveal delay={0.08}>{children}</Reveal>
       </Reveal>
@@ -237,13 +238,20 @@ function SupportPage() {
             <Perk
               id="themes"
               title={t`Profile themes`}
-              count={<Trans><CountUp value={SUPPORTER_PROFILE_THEMES.length} /> themes</Trans>}
+              count={<Trans><CountUp value={SUPPORTER_PROFILE_THEMES.length} /> themes, or your own</Trans>}
               body={t`Your whole profile takes on a theme, with a living backdrop behind it and the site's colours shifted to match.`}
+              more={<Trans>Or <Link to="/workshop/themes">write a theme of your own</Link>, or wear one another player shared.</Trans>}
             >
               <ThemesShowcase />
             </Perk>
 
-            <Perk id="frames" title={t`Avatar frames`} count={<Trans><CountUp value={SUPPORTER_AVATAR_FRAMES.length} /> frames</Trans>} body={t`A frame around your avatar on your profile.`}>
+            <Perk
+              id="frames"
+              title={t`Avatar frames`}
+              count={<Trans><CountUp value={SUPPORTER_AVATAR_FRAMES.length} /> frames, or your own</Trans>}
+              body={t`A frame around your avatar on your profile.`}
+              more={<Trans>Or <Link to="/workshop/frames">draw a frame of your own</Link> and submit it for everyone to wear.</Trans>}
+            >
               <FramesShowcase />
             </Perk>
 

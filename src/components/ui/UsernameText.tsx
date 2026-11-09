@@ -4,6 +4,7 @@ import { requestAvatarAccent } from "../../lib/avatar-accent-harvest";
 import { ensureSupporterNameStyles, getSupporterNameFont, getSupporterNameOutline, getSupporterNameStyle, subscribeSupporterNameStyles } from "../../lib/live-backend";
 import { SupporterStyledName } from "../supporter/SupporterNameStyle";
 import { nameOutlineInline } from "../../lib/supporter-name-styles";
+import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { avatarUrlUserId } from "./Avatar";
 import { useHydrated } from "../../lib/use-hydrated";
 import { useAppStore } from "../../store";
@@ -21,6 +22,7 @@ export function UsernameText({
   avatarUrl,
   userId: userIdProp,
   accent: accentProp,
+  nameTag,
   className,
 }: {
   username: string;
@@ -29,6 +31,9 @@ export function UsernameText({
   userId?: number | string | null;
   /** Accent carried inline by the caller's data; skips the store and the backend lookup. */
   accent?: string | null;
+  /** The player's own look, when the caller has it and it has no name style
+      (their profile): the shared map, which can be a minute behind, is left unread. */
+  nameTag?: { font: SupporterNameFontId | null; outline: string | null };
   className?: string;
 }) {
   const accentKey = avatarUrl ? getAvatarAccentStoreKey(avatarUrl) : null;
@@ -47,18 +52,18 @@ export function UsernameText({
     if (!accent && avatarUrl) requestAvatarAccent(avatarUrl);
   }, [accent, avatarUrl]);
 
-  const userId = Number(userIdProp) > 0 ? Number(userIdProp) : avatarUrlUserId(avatarUrl);
+  const userId = nameTag ? null : Number(userIdProp) > 0 ? Number(userIdProp) : avatarUrlUserId(avatarUrl);
   const nameStyle = useSyncExternalStore(
     subscribeSupporterNameStyles,
     () => (hydrated && userId ? getSupporterNameStyle(userId) : null),
     () => null,
   );
-  const nameFont = useSyncExternalStore(
+  const mapFont = useSyncExternalStore(
     subscribeSupporterNameStyles,
     () => (hydrated && userId ? getSupporterNameFont(userId) : null),
     () => null,
   );
-  const nameOutline = useSyncExternalStore(
+  const mapOutline = useSyncExternalStore(
     subscribeSupporterNameStyles,
     () => (hydrated && userId ? getSupporterNameOutline(userId) : null),
     () => null,
@@ -66,6 +71,8 @@ export function UsernameText({
   useEffect(() => {
     if (userId) ensureSupporterNameStyles();
   }, [userId]);
+  const nameFont = nameTag ? nameTag.font : mapFont;
+  const nameOutline = nameTag ? nameTag.outline : mapOutline;
 
   if (nameStyle) return <SupporterStyledName nameStyle={nameStyle} nameFont={nameFont} outline={nameOutline} name={username} className={className} />;
 

@@ -298,7 +298,7 @@ export function ThemesShowcase() {
 /* Hand-picked, a page of eight at a time, the strongest first. One of each
    set (wings, LN holds, dan skips), so a page never shows the same idea twice. */
 const SHOWN_FRAME_PAGES: SupporterAvatarFrameId[][] = [
-  ["crown", "spell-card", "crt-monitor", "wings-pink-3", "sakura", "ssr-card", "storm", "hakurei-torii"],
+  ["crown", "spell-card", "crt-monitor", "wings-pink-3", "sakura", "ssr-card", "paint-canvas", "hakurei-torii"],
   ["term-window", "wash-ring", "step-pad", "light-wings-3", "autumn-maple", "ln-hold-9", "reimu-ribbon", "old-photo"],
   ["scratch-deck", "zenith-orbit", "time-stop-knives", "rail-pass", "wings-gold-3", "knob-lasers", "margin-doodles", "scarlet-moon"],
   ["winter-pine", "five-star-pull", "dan-skip-5-gamma", "delta-crest", "wings-feather-3", "ice-fairy", "aero-window", "witch-hat"],

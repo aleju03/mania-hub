@@ -2615,8 +2615,12 @@ msgid "<0/> foils"
 msgstr "<0/> foils"
 
 #: src/routes/support.tsx
-msgid "<0/> frames"
-msgstr "<0/> marcos"
+#~ msgid "<0/> frames"
+#~ msgstr "<0/> marcos"
+
+#: src/routes/support.tsx
+msgid "<0/> frames, or your own"
+msgstr "<0/> marcos, o el tuyo"
 
 #: src/routes/support.tsx
 msgid "<0/> ranks"
@@ -2627,8 +2631,12 @@ msgid "<0/> styles, <1/> fonts"
 msgstr "<0/> estilos, <1/> fuentes"
 
 #: src/routes/support.tsx
-msgid "<0/> themes"
-msgstr "<0/> temas"
+#~ msgid "<0/> themes"
+#~ msgstr "<0/> temas"
+
+#: src/routes/support.tsx
+msgid "<0/> themes, or your own"
+msgstr "<0/> temas, o el tuyo"
 
 #: src/routes/support.tsx
 msgid "<0/> to pick, or your own"
@@ -8706,6 +8714,7 @@ msgstr "Mar profundo"
 msgid "default"
 msgstr "predeterminado"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Default"
 msgstr "Predeterminado"
@@ -9094,6 +9103,7 @@ msgstr "Puntos"
 msgid "Double Tap"
 msgstr "Doble toque"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Double Time"
 msgstr "Double Time"
@@ -11673,6 +11683,7 @@ msgstr "MITAD"
 #~ msgid "half a year"
 #~ msgstr ""
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Half Time"
 msgstr "Half Time"
@@ -12180,6 +12191,7 @@ msgstr "Hold Note"
 msgid "Hold notes don't need their release timed."
 msgstr "No hace falta soltar las hold notes a tiempo."
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Hold Off"
 msgstr "Hold Off"
@@ -12904,6 +12916,7 @@ msgstr "ID de beatmap no válido."
 msgid "Inverse"
 msgstr "Inverse"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Invert"
 msgstr "Invert"
@@ -15401,6 +15414,7 @@ msgstr "moderación"
 #~ msgid "mods"
 #~ msgstr "mods"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -16702,6 +16716,7 @@ msgstr "No quedan cambios esta ronda."
 msgid "No regions found"
 msgstr "No se encontraron regiones"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "No Release"
 msgstr "No Release"
@@ -18149,6 +18164,14 @@ msgstr "opcional"
 #: src/routes/workshop.themes.index.tsx
 msgid "or"
 msgstr "o"
+
+#: src/routes/support.tsx
+msgid "Or <0>draw a frame of your own</0> and submit it for everyone to wear."
+msgstr "O <0>dibuja tu propio marco</0> y súbelo para que cualquiera lo use."
+
+#: src/routes/support.tsx
+msgid "Or <0>write a theme of your own</0>, or wear one another player shared."
+msgstr "O <0>programa tu propio tema</0>, o usa uno que haya compartido otro jugador."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "or paste a Shadertoy shader as it is"
@@ -24820,8 +24843,8 @@ msgstr "El almacenamiento no está configurado, así que las subidas van a falla
 #~ msgstr ""
 
 #: src/components/supporter/loadout.ts
-msgid "Storm"
-msgstr "Tormenta"
+#~ msgid "Storm"
+#~ msgstr "Tormenta"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx

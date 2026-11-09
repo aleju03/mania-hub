@@ -2638,8 +2638,12 @@ msgid "<0/> foils"
 msgstr "<0/> foils"
 
 #: src/routes/support.tsx
-msgid "<0/> frames"
-msgstr "<0/> frames"
+#~ msgid "<0/> frames"
+#~ msgstr "<0/> frames"
+
+#: src/routes/support.tsx
+msgid "<0/> frames, or your own"
+msgstr "<0/> frames, or your own"
 
 #: src/routes/support.tsx
 msgid "<0/> ranks"
@@ -2650,8 +2654,12 @@ msgid "<0/> styles, <1/> fonts"
 msgstr "<0/> styles, <1/> fonts"
 
 #: src/routes/support.tsx
-msgid "<0/> themes"
-msgstr "<0/> themes"
+#~ msgid "<0/> themes"
+#~ msgstr "<0/> themes"
+
+#: src/routes/support.tsx
+msgid "<0/> themes, or your own"
+msgstr "<0/> themes, or your own"
 
 #: src/routes/support.tsx
 msgid "<0/> to pick, or your own"
@@ -8733,6 +8741,7 @@ msgstr "Deep sea"
 msgid "default"
 msgstr "default"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Default"
 msgstr "Default"
@@ -9121,6 +9130,7 @@ msgstr "Dots"
 msgid "Double Tap"
 msgstr "Double Tap"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Double Time"
 msgstr "Double Time"
@@ -11708,6 +11718,7 @@ msgstr "HALF"
 #~ msgid "half a year"
 #~ msgstr "half a year"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Half Time"
 msgstr "Half Time"
@@ -12215,6 +12226,7 @@ msgstr "Hold Note"
 msgid "Hold notes don't need their release timed."
 msgstr "Hold notes don't need their release timed."
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Hold Off"
 msgstr "Hold Off"
@@ -12947,6 +12959,7 @@ msgstr "Invalid beatmap id."
 msgid "Inverse"
 msgstr "Inverse"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Invert"
 msgstr "Invert"
@@ -15444,6 +15457,7 @@ msgstr "moderation"
 #~ msgid "mods"
 #~ msgstr "mods"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -16745,6 +16759,7 @@ msgstr "No redraws left this round."
 msgid "No regions found"
 msgstr "No regions found"
 
+#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "No Release"
 msgstr "No Release"
@@ -18192,6 +18207,14 @@ msgstr "optional"
 #: src/routes/workshop.themes.index.tsx
 msgid "or"
 msgstr "or"
+
+#: src/routes/support.tsx
+msgid "Or <0>draw a frame of your own</0> and submit it for everyone to wear."
+msgstr "Or <0>draw a frame of your own</0> and submit it for everyone to wear."
+
+#: src/routes/support.tsx
+msgid "Or <0>write a theme of your own</0>, or wear one another player shared."
+msgstr "Or <0>write a theme of your own</0>, or wear one another player shared."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "or paste a Shadertoy shader as it is"
@@ -24871,8 +24894,8 @@ msgstr "Storage is not configured, so uploads will fail until it is."
 #~ msgstr "Stored, but not rated:"
 
 #: src/components/supporter/loadout.ts
-msgid "Storm"
-msgstr "Storm"
+#~ msgid "Storm"
+#~ msgstr "Storm"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
