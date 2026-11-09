@@ -3593,6 +3593,10 @@ msgstr "Cualquier imagen, GIF o video, desde un enlace o un archivo."
 #~ msgid "Any picture, GIF, video or web page, from a link or a file."
 #~ msgstr "Cualquier imagen, GIF, video o página web, desde un enlace o un archivo."
 
+#: src/routes/discord.tsx
+msgid "Any top play"
+msgstr "Cualquier top play"
+
 #: src/routes/skins.tsx
 msgid "anyone"
 msgstr "cualquiera"
@@ -8190,6 +8194,10 @@ msgstr "viernes"
 msgid "Friends"
 msgstr "Amigos"
 
+#: src/routes/discord.tsx
+msgid "From"
+msgstr "Desde"
+
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
 #: src/components/me/GoalsPanel.tsx
@@ -10873,7 +10881,6 @@ msgstr "Mania Tracker es un sitio comunitario de osu!mania construido en torno a
 msgid "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
 msgstr "Mania Tracker es un proyecto no oficial de fans de la comunidad para jugadores de osu!mania. No está afiliado a ppy Pty Ltd ni al equipo de osu!, ni cuenta con su respaldo, patrocinio o aprobación."
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 msgid "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 msgstr "Estimación LN de Mania Tracker: precisión al soltar, coordinación con dedos mantenidos y recuperación. Un modelo independiente junto a MinaCalc."
@@ -20649,6 +20656,10 @@ msgstr "Top {GLOBAL_ALBUM_CAP}"
 msgid "Top {GLOBAL_ALBUM_CAP} players"
 msgstr "Top {GLOBAL_ALBUM_CAP} jugadores"
 
+#: src/routes/discord.tsx
+msgid "Top {n} of the keymode"
+msgstr "Top {n} del modo de teclas"
+
 #: src/lib/packs.ts
 msgid "Top 10%, new cards first"
 msgstr "Top 10%, cartas nuevas primero"
@@ -20708,6 +20719,10 @@ msgstr "Top plays"
 msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "Mejores jugadas"
+
+#: src/routes/discord.tsx
+msgid "Top plays in"
+msgstr "Top plays en"
 
 #: src/components/player/InsightModals.tsx
 msgid "top pp"

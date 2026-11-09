@@ -3620,6 +3620,10 @@ msgstr "Any picture, GIF or video, from a link or a file."
 #~ msgid "Any picture, GIF, video or web page, from a link or a file."
 #~ msgstr "Any picture, GIF, video or web page, from a link or a file."
 
+#: src/routes/discord.tsx
+msgid "Any top play"
+msgstr "Any top play"
+
 #: src/routes/skins.tsx
 msgid "anyone"
 msgstr "anyone"
@@ -8221,6 +8225,10 @@ msgstr "Fridays"
 msgid "Friends"
 msgstr "Friends"
 
+#: src/routes/discord.tsx
+msgid "From"
+msgstr "From"
+
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
 #: src/components/me/GoalsPanel.tsx
@@ -10912,7 +10920,6 @@ msgstr "Mania Tracker is an osu!mania community site built around public osu! da
 msgid "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
 msgstr "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 msgid "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 msgstr "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
@@ -20704,6 +20711,10 @@ msgstr "Top {GLOBAL_ALBUM_CAP}"
 msgid "Top {GLOBAL_ALBUM_CAP} players"
 msgstr "Top {GLOBAL_ALBUM_CAP} players"
 
+#: src/routes/discord.tsx
+msgid "Top {n} of the keymode"
+msgstr "Top {n} of the keymode"
+
 #: src/lib/packs.ts
 msgid "Top 10%, new cards first"
 msgstr "Top 10%, new cards first"
@@ -20763,6 +20774,10 @@ msgstr "Top plays"
 msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "Top plays"
+
+#: src/routes/discord.tsx
+msgid "Top plays in"
+msgstr "Top plays in"
 
 #: src/components/player/InsightModals.tsx
 msgid "top pp"

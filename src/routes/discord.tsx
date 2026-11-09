@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
@@ -291,6 +291,71 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
   );
 }
 
+const FILTER_KEYS = [4, 5, 6, 7, 8, 9, 10];
+const KEYMODE_TOP_CHOICES = [0, 100, 50];
+
+// Which top plays a channel posts: keymodes, a cut to the player's best N of
+// that keymode, and a pp floor.
+function TopPlayFilters({ sub, disabled, onSave }: {
+  sub: BotServer["subscriptions"][number];
+  disabled: boolean;
+  onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number }) => void;
+}) {
+  const keys = sub.keys ?? [];
+  const keymodeTop = sub.keymodeTop ?? 0;
+  const [minPpDraft, setMinPpDraft] = useState(sub.minPp ? String(sub.minPp) : "");
+  useEffect(() => setMinPpDraft(sub.minPp ? String(sub.minPp) : ""), [sub.minPp]);
+  const draftPp = Math.max(0, Math.floor(Number(minPpDraft) || 0));
+  const save = (next: Partial<{ minPp: number; keys: number[]; keymodeTop: number }>) =>
+    onSave({ minPp: sub.minPp, keys, keymodeTop, ...next });
+  const chip = (active: boolean) =>
+    `rounded-md px-2 py-0.5 text-[12px] font-semibold disabled:opacity-40 ${active ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:brightness-110"}`;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-3 text-[12px] text-osu-f1">
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1"><Trans>Top plays in</Trans></span>
+        <button type="button" disabled={disabled} className={chip(keys.length === 0)} onClick={() => save({ keys: [] })}><Trans>All keys</Trans></button>
+        {FILTER_KEYS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            disabled={disabled}
+            className={chip(keys.includes(k))}
+            onClick={() => save({ keys: keys.includes(k) ? keys.filter((v) => v !== k) : [...keys, k].sort((a, b) => a - b) })}
+          >
+            {k}K
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        {KEYMODE_TOP_CHOICES.map((n) => (
+          <button key={n} type="button" disabled={disabled} className={chip(keymodeTop === n)} onClick={() => save({ keymodeTop: n })}>
+            {n === 0 ? <Trans>Any top play</Trans> : <Trans>Top {n} of the keymode</Trans>}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span><Trans>From</Trans></span>
+        <input
+          value={minPpDraft}
+          inputMode="numeric"
+          onChange={(event) => setMinPpDraft(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+          onKeyDown={(event) => { if (event.key === "Enter" && draftPp !== sub.minPp) save({ minPp: draftPp }); }}
+          placeholder="0"
+          className="w-14 rounded-md bg-osu-b5 px-2 py-0.5 text-[12px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
+        />
+        <span>pp</span>
+        {draftPp !== sub.minPp ? (
+          <button type="button" disabled={disabled} onClick={() => save({ minPp: draftPp })} className="rounded-md bg-osu-b3 px-2 py-0.5 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-40">
+            <Trans>Save</Trans>
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 // --- Servers -----------------------------------------------------------------
 
 function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; inviteUrl: string | null }) {
@@ -438,8 +503,11 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                 </tr>
               </thead>
               <tbody>
-                {channels.map((channel) => (
-                  <tr key={channel.id} className="border-t border-white/[0.05]">
+                {channels.map((channel) => {
+                  const topPlays = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === "top_play");
+                  return (
+                  <Fragment key={channel.id}>
+                  <tr className="border-t border-white/[0.05]">
                     <td className="py-1.5 pr-3 text-white">
                       <span className="text-osu-f1">#</span>{channel.name}
                       {channel.category ? <span className="ml-2 text-[11px] text-osu-f1">{channel.category}</span> : null}
@@ -465,7 +533,20 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                       </td>
                     ) : null}
                   </tr>
-                ))}
+                  {topPlays ? (
+                    <tr>
+                      <td colSpan={1 + feedTypes.length + (autoDanAvailable ? 1 : 0)} className="pb-2.5 pt-0.5">
+                        <TopPlayFilters
+                          sub={topPlays}
+                          disabled={busy}
+                          onSave={(filters) => void apply({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
+                  </Fragment>
+                  );
+                })}
               </tbody>
             </table>
             {channels.length === 0 ? <p className="py-2 text-[13px] text-osu-f1"><Trans>No channel has a feed yet.</Trans></p> : null}

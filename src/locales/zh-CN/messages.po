@@ -3605,6 +3605,10 @@ msgstr "任意图片、GIF 或视频，来自链接或文件。"
 #~ msgid "Any picture, GIF, video or web page, from a link or a file."
 #~ msgstr "任意图片、GIF、视频或网页，来自链接或文件。"
 
+#: src/routes/discord.tsx
+msgid "Any top play"
+msgstr "任意最佳成绩"
+
 #: src/routes/skins.tsx
 msgid "anyone"
 msgstr "所有人"
@@ -8202,6 +8206,10 @@ msgstr "周五"
 msgid "Friends"
 msgstr "好友"
 
+#: src/routes/discord.tsx
+msgid "From"
+msgstr "不低于"
+
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
 #: src/components/me/GoalsPanel.tsx
@@ -10885,7 +10893,6 @@ msgstr "Mania Tracker 是一个 osu!mania 社区网站，围绕公开的 osu! �
 msgid "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
 msgstr "Mania Tracker 是一个面向 osu!mania 玩家的非官方社区同人项目。它与 ppy Pty Ltd 或 osu! 团队没有从属关系，也未获得其背书、赞助或批准。"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 msgid "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 msgstr "Mania Tracker LN 估算：放手时机、保持按键时的手指协调，以及放手后再次按键的衔接。与 MinaCalc 并行的独立模型。"
@@ -20661,6 +20668,10 @@ msgstr "前 {GLOBAL_ALBUM_CAP} 名"
 msgid "Top {GLOBAL_ALBUM_CAP} players"
 msgstr "前 {GLOBAL_ALBUM_CAP} 名玩家"
 
+#: src/routes/discord.tsx
+msgid "Top {n} of the keymode"
+msgstr "该键数前 {n}"
+
 #: src/lib/packs.ts
 msgid "Top 10%, new cards first"
 msgstr "前 10%，新卡优先"
@@ -20720,6 +20731,10 @@ msgstr "最佳成绩"
 msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "最佳成绩"
+
+#: src/routes/discord.tsx
+msgid "Top plays in"
+msgstr "最佳成绩键数"
 
 #: src/components/player/InsightModals.tsx
 msgid "top pp"
