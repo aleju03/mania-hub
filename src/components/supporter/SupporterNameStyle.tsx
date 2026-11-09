@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
-import { isShaderNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { isShaderNameStyle, isSolidNameStyle, solidNameColour, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { useWebGlSlot } from "../../lib/gl-budget";
 
 /* A supporter's name in their name tag style and/or name font. One element whose look comes
@@ -74,7 +74,7 @@ export function SupporterStyledName({ nameStyle, nameFont = null, name, classNam
   }, [stilled, nameStyle, nameFont, name]);
 
   return (
-    <span ref={spanRef} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live || (still && isShader) ? " name-tag--hero" : ""}${shaded || stilled ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : still && isShader ? " name-tag--waiting" : ""}`}>
+    <span ref={spanRef} style={isSolidNameStyle(nameStyle) ? { color: solidNameColour(nameStyle) } : undefined} className={`${className ?? ""}${nameStyle ? ` name-tag name-tag--${isSolidNameStyle(nameStyle) ? "solid" : nameStyle}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live || (still && isShader) ? " name-tag--hero" : ""}${shaded || stilled ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : still && isShader ? " name-tag--waiting" : ""}`}>
       {name}
       {(shaded || stilled) && <span ref={hostRef} aria-hidden className="name-tag-shader" />}
     </span>

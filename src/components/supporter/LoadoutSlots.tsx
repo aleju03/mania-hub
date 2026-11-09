@@ -14,7 +14,7 @@ import {
   type SupporterAvatarFrameId,
 } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
-import { SUPPORTER_NAME_STYLE_LABELS, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { DEFAULT_SOLID_COLOUR, isSolidNameStyle, nameStyleLabel, solidNameColour, solidNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "./SupporterNameStyle";
 import { announceFrameDanPicked, frameDanName, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
@@ -118,7 +118,7 @@ function useSlotName() {
       const name = FRAME_NAMES.get(value as SupporterAvatarFrameId);
       return name ? `${i18n._(name.label)}${name.variant ? ` ${name.variant}` : ""}` : value;
     }
-    if (slot === "nameStyle") return value ? i18n._(SUPPORTER_NAME_STYLE_LABELS[value as SupporterNameStyleId]) : t`Plain`;
+    if (slot === "nameStyle") return value ? i18n._(nameStyleLabel(value as SupporterNameStyleId)) : t`Plain`;
     if (slot === "nameFont") return value ? i18n._(SUPPORTER_NAME_FONT_LABELS[value as SupporterNameFontId]) : t`Default`;
     if (slot === "motif") return value === "custom" ? t`Your image` : t`No art`;
     if (slot === "sleeve") return value ? i18n._(SUPPORTER_CARD_SLEEVE_LABELS[value as SupporterCardSleeveId]) : t`No sleeve`;
@@ -797,10 +797,68 @@ function NameStyleDrawer({ current, disabled, username, onTry, onPick }: DrawerP
             <span className="flex h-12 items-center justify-center overflow-hidden rounded-md bg-osu-b6 px-3">
               <SupporterStyledName nameStyle={id} nameFont={nameFont} name={username} live={id !== null && id === liveStyle} still className={NAME_CLASS} />
             </span>
-            {id ? i18n._(SUPPORTER_NAME_STYLE_LABELS[id]) : t`Plain`}
+            {id ? i18n._(nameStyleLabel(id)) : t`Plain`}
           </Item>
         ))}
+        <SolidColourTile current={nameStyle} nameFont={nameFont} username={username} disabled={disabled} onTry={(value) => onTry("nameStyle", value)} onPick={(value) => onPick("nameStyle", value)} />
       </div>
+    </div>
+  );
+}
+
+/* The name in one flat colour of the supporter's choosing. Clicking the tile
+   wears the last colour; the swatch opens the browser's colour picker, which
+   previews as it moves and saves once it closes. */
+function SolidColourTile({ current, nameFont, username, disabled, onTry, onPick }: {
+  current: SupporterNameStyleId | null;
+  nameFont: SupporterNameFontId | null;
+  username: string;
+  disabled?: boolean;
+  onTry: (value: SupporterNameStyleId | undefined) => void;
+  onPick: (value: SupporterNameStyleId) => void;
+}) {
+  const { t } = useLingui();
+  const [colour, setColour] = useState(() => (isSolidNameStyle(current) ? solidNameColour(current) : DEFAULT_SOLID_COLOUR));
+  useEffect(() => {
+    if (isSolidNameStyle(current)) setColour(solidNameColour(current));
+  }, [current]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const latest = useRef({ onPick, onTry });
+  latest.current = { onPick, onTry };
+  // the native "change" fires once the picker closes: that is when it saves
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const commit = () => {
+      latest.current.onTry(undefined);
+      latest.current.onPick(solidNameStyle(input.value));
+    };
+    input.addEventListener("change", commit);
+    return () => input.removeEventListener("change", commit);
+  }, []);
+  const style = solidNameStyle(colour);
+  return (
+    <div className="relative">
+      <Item active={isSolidNameStyle(current)} disabled={disabled} onTry={(on) => onTry(on ? style : undefined)} onPick={() => onPick(style)} className="w-full items-stretch">
+        <span className="flex h-12 items-center justify-center overflow-hidden rounded-md bg-osu-b6 px-3">
+          <SupporterStyledName nameStyle={style} nameFont={nameFont} name={username} className={NAME_CLASS} />
+        </span>
+        {t`Solid colour`}
+      </Item>
+      <label className={`absolute bottom-1.5 right-2 h-4 w-4 rounded-full ring-2 ring-white/70 ${disabled ? "" : "cursor-pointer"}`} style={{ background: colour }} title={t`Pick a colour`}>
+        <input
+          ref={inputRef}
+          type="color"
+          value={colour}
+          disabled={disabled}
+          aria-label={t`Pick a colour`}
+          onChange={(event) => {
+            setColour(event.target.value);
+            onTry(solidNameStyle(event.target.value));
+          }}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </label>
     </div>
   );
 }

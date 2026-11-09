@@ -1185,6 +1185,8 @@ export function PlayerProfilePage({
     runStartedAt: number | null;
     /* A monthly subscription renews them, marked on the rank. */
     renewing: boolean;
+    patron: boolean;
+    shownRank: number | null;
     /* Whether that rank shows its fire; the supporter can turn it off. */
     rankFire: boolean;
     /* Only an active supporter has a card look. */
@@ -1194,7 +1196,7 @@ export function PlayerProfilePage({
     const raw = loaderData?.cachedSupporterLook;
     if (!raw || !profileUserId) return null;
     const value = seedLiveSupporterLook(profileUserId, raw);
-    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, rankFire: value.rankFire, supporter: value.look !== null };
+    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null };
   });
   useEffect(() => {
     if (!profileUserId) return;
@@ -1215,12 +1217,14 @@ export function PlayerProfilePage({
         companion: peekLiveSupporterCompanion(profileUserId) ?? null,
         runStartedAt: peekLiveSupporterRunStartedAt(profileUserId) ?? null,
         renewing: peekLiveSupporterRenewing(profileUserId) ?? false,
+        patron: false,
+        shownRank: null,
         rankFire: peekLiveSupporterRankFire(profileUserId) ?? true,
         supporter: peekLiveSupporterLook(profileUserId) != null,
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, rankFire: value.rankFire, supporter: value.look !== null });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null });
     });
     return () => {
       alive = false;
@@ -1234,6 +1238,8 @@ export function PlayerProfilePage({
   const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
   const heroRunStartedAt = supporterFrame?.userId === profileUserId ? supporterFrame.runStartedAt : null;
   const heroRenewing = supporterFrame?.userId === profileUserId && supporterFrame.renewing;
+  const heroPatron = supporterFrame?.userId === profileUserId && supporterFrame.patron;
+  const heroShownRank = supporterFrame?.userId === profileUserId ? supporterFrame.shownRank : null;
   const heroRankFire = supporterFrame?.userId === profileUserId ? supporterFrame.rankFire : true;
   const profileTheme = supporterFrame?.userId === profileUserId ? supporterFrame.profileTheme : null;
   const customTheme = supporterFrame?.userId === profileUserId ? supporterFrame.customTheme : null;
@@ -2599,7 +2605,7 @@ export function PlayerProfilePage({
                 ) : (
                   <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className={`min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]${heroNameFont ? ` name-font--${heroNameFont}` : ""}`} />
                 )}
-                <SupporterRankBadge runStartedAt={heroRunStartedAt} renewing={heroRenewing} fire={heroRankFire} onFireChange={canSetRankFire ? setRankFire : undefined} className="h-6 w-6 sm:h-8 sm:w-8" />
+                <SupporterRankBadge runStartedAt={heroRunStartedAt} renewing={heroRenewing} patron={heroPatron} shownRank={heroShownRank} fire={heroRankFire} onFireChange={canSetRankFire ? setRankFire : undefined} className="h-6 w-6 sm:h-8 sm:w-8" />
                 {showProfileCountryFlag ? (
                   <Link
                     to="/"

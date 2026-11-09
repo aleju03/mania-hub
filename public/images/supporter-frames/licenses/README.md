@@ -32,3 +32,6 @@ Font License 1.1).
 
 The CRT monitor frame's monitor is a Blender model built and rendered for this site, with no
 external models, textures or images.
+The clouds in the Rain cloud and Storm frames and the snow in the Fairy lights frame are Blender
+renders made for this site. Storm's lightning bolt is "Striking Lightning Bolt Against Black Sky" by
+Anshu Kumar (Pexels 33137441, Pexels License).

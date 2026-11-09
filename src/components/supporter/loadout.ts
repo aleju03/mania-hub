@@ -396,7 +396,7 @@ export const NAME_STYLE_GROUPS: { key: string; title: MessageDescriptor; styles:
 ];
 
 export const NAME_FONT_GROUPS: { key: string; title: MessageDescriptor; fonts: SupporterNameFontId[] }[] = [
-  { key: "game", title: msg`Game and tech`, fonts: ["pixel", "silkscreen", "vt323", "majormono", "orbitron", "audiowide", "michroma", "zendots", "rubikglitch", "pixelify", "jersey", "doto", "tektur", "monocraft"] },
+  { key: "game", title: msg`Game and tech`, fonts: ["pixel", "silkscreen", "vt323", "majormono", "orbitron", "audiowide", "michroma", "zendots", "rubikglitch", "pixelify", "jersey", "doto", "tektur", "monocraft", "pixeloperator", "pixelheavy"] },
   { key: "bold", title: msg`Bold`, fonts: ["unbounded", "bungee", "russo", "blackops", "bebas", "monoton", "delagothic", "rubikmono", "climatecrisis"] },
   { key: "fun", title: msg`Fun`, fonts: ["righteous", "bangers", "luckiest", "shrikhand", "creepster", "fredoka", "bagel", "rampart"] },
   { key: "hand", title: msg`Handwritten`, fonts: ["marker", "rocksalt", "pacifico", "lobster", "caveat", "sedgwick", "yellowtail", "greatvibes"] },

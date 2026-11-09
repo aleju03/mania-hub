@@ -61,6 +61,7 @@ import {
   saveSupporterPackStyleSetting,
   saveSupporterProfileThemeSetting,
   saveSupporterRankFireSetting,
+  saveSupporterRankShownSetting,
   type SupporterLookState,
 } from "../lib/supporter-look-settings";
 
@@ -471,7 +472,10 @@ function SupporterPage() {
   const status = !viewer || !state ? null : until ? (
     <span className="flex items-center gap-3">
       {previewButton}
-      <span className="text-[12px] text-osu-l2">{t`Supporter until ${until}`}</span>
+      {/* a subscription keeps going: an end date months away would only ask why they still pay */}
+      <span className="text-[12px] text-osu-l2">
+        {state.renewing ? (state.patron ? t`Patron, renews every month` : t`Renews every month`) : t`Supporter until ${until}`}
+      </span>
     </span>
   ) : (
     <span className="flex items-center gap-2">
@@ -669,7 +673,29 @@ function SupporterPage() {
                           <p className="mt-1 text-[13px] text-osu-l2">
                             {t`Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks.`}
                           </p>
-                          {state.runStartedAt != null ? <SupporterRankLadder runStartedAt={state.runStartedAt} renewing={state.renewing} fire={state.rankFire} /> : null}
+                          {state.runStartedAt != null ? (
+                            <SupporterRankLadder
+                              runStartedAt={state.runStartedAt}
+                              renewing={state.renewing}
+                              fire={state.rankFire}
+                              bestRank={state.bestRank}
+                              shownRank={state.shownRank}
+                              onShow={(rank) => {
+                                const before = state.shownRank;
+                                setState((current) => (current ? { ...current, shownRank: rank } : current));
+                                saveSupporterRankShownSetting({ data: { rank } })
+                                  .then(() => forgetLiveSupporterLook(viewer.id))
+                                  .catch(() => setState((current) => (current ? { ...current, shownRank: before } : current)));
+                              }}
+                            />
+                          ) : null}
+                          {state.renewing ? (
+                            <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
+                              {state.patron
+                                ? t`You're a Patron. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends.`
+                                : t`Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends.`}
+                            </p>
+                          ) : null}
                           {state.runStartedAt != null && state.renewing ? (
                             <RankFireSwitch viewerId={viewer.id} on={state.rankFire} onChange={(rankFire) => setState((current) => (current ? { ...current, rankFire } : current))} />
                           ) : null}

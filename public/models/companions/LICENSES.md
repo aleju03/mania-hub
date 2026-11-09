@@ -24,11 +24,14 @@ re-encoded as WebP at most 1024 px.
 | fumo-satori.glb | DAsh9986 | https://sketchfab.com/3d-models/19bb1a2fad344a639f18f57449cae11d |
 | fumo-koishi.glb | 203Null | https://sketchfab.com/3d-models/37a56b489b5c4440bbabb7b7777036f6 |
 | fumo-marisa.glb | 203Null | https://sketchfab.com/3d-models/7dea820bf4884ecc8f2c31a085b07428 |
-| plush-miku.glb | revsworks | https://sketchfab.com/3d-models/22e25b5fbd444102a175c088e14eb541 |
+| plush-miku.glb | certified birdbrain | https://sketchfab.com/3d-models/207990ca9c44482b8ff34140d8db3119 |
+| plush-miku-xmas.glb | mannymanny | https://sketchfab.com/3d-models/96ec3b0993ba4f97ad961438e1872527 |
 | plush-teto.glb | certified birdbrain | https://sketchfab.com/3d-models/207990ca9c44482b8ff34140d8db3119 |
 | plush-black-cat.glb | dro | https://sketchfab.com/3d-models/0a81d050ac2c4f2c9adce8b640af1eeb |
 | maneki-neko.glb | Rice & Soy Sauce | https://sketchfab.com/3d-models/50b5d360717c442c971b3db0576606c4 |
 | cat-maxwell.glb | Zhuier | https://sketchfab.com/3d-models/4175776146ba4550a8dd643363b7b0aa |
+
+plush-miku.glb is remodelled here from the Chubby Teto plush above: its texture recoloured to Miku's teal (dark charcoal on the boots), the drill twintails, hair curl and a stray tail piece removed, and long twintails and hair ties modelled in Blender (~/Projects/foundry/designs/miku-plush/build.py).
 
 blob-pink.glb is the site's own model, built by local-notes/companions/blob/make_blob.py.
 leek.glb is the site's own model, made in Blender (~/Projects/3d-modelling/leek); its cel shading is drawn by src/lib/companion-toon.ts from the materials' toon extras.

@@ -1546,6 +1546,20 @@ html[data-custom-cursor="true"] * {
 }
 
 @font-face {
+  font-family: "Name Silkscreen Heavy";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/silkscreenheavy.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Pixel Operator";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/pixeloperator.woff2") format("woff2");
+}
+@font-face {
   font-family: "Name Monocraft";
   font-weight: 700;
   font-style: normal;
@@ -1915,6 +1929,32 @@ html[data-custom-cursor="true"] * {
      margin so the layout does not move */
   padding-block: 0.5em;
   margin-block: -0.5em;
+}
+
+/* Heavy pixel: Silkscreen Bold drawn thicker with a stroke in its own colour,
+   for a chunky game-title look (a gradient name keeps a transparent stroke) */
+.name-font--pixelheavy {
+  font-family: "Name Silkscreen Heavy", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: 0.08em;
+  -webkit-text-stroke: 0.06em currentColor;
+  paint-order: stroke fill;
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+
+/* Pixel Operator: a 16 px pixel face in the RPG dialogue-box style */
+.name-font--pixeloperator {
+  font-family: "Name Pixel Operator", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.52;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: none;
+  padding-block: 0.32em;
+  margin-block: -0.32em;
 }
 
 .name-font--monocraft {
@@ -2997,3 +3037,9 @@ html[data-custom-cursor="true"] * {
 /* Overjoy's shard gem: one turn of its 36-frame sprite sheet. */
 .kit-gem-turn { animation: kit-gem-turn 1s steps(36) 1 forwards; }
 @keyframes kit-gem-turn { from { background-position: 0 0; } to { background-position: var(--gem-end) 0; } }
+
+/* Solid colour name style: the supporter's own colour (set inline), flat */
+.name-tag--solid {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}

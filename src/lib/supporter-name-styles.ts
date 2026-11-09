@@ -41,7 +41,28 @@ export const SUPPORTER_NAME_STYLES = [
   "aero",
 ] as const;
 
-export type SupporterNameStyleId = (typeof SUPPORTER_NAME_STYLES)[number];
+type BuiltInNameStyleId = (typeof SUPPORTER_NAME_STYLES)[number];
+/* A solid colour of the supporter's choosing: "solid-" and six lowercase hex
+   digits, stored in the same column as the named styles. */
+export type SolidNameStyle = `solid-${string}`;
+export type SupporterNameStyleId = BuiltInNameStyleId | SolidNameStyle;
+
+const SOLID_NAME_STYLE = /^solid-[0-9a-f]{6}$/;
+export const DEFAULT_SOLID_COLOUR = "#ff66aa";
+
+export function isSolidNameStyle(value: unknown): value is SolidNameStyle {
+  return typeof value === "string" && SOLID_NAME_STYLE.test(value);
+}
+
+/** "#AABBCC" or "aabbcc" to the stored style id. */
+export function solidNameStyle(hex: string): SolidNameStyle {
+  const clean = hex.replace(/^#/, "").toLowerCase();
+  return `solid-${/^[0-9a-f]{6}$/.test(clean) ? clean : DEFAULT_SOLID_COLOUR.slice(1)}`;
+}
+
+export function solidNameColour(value: SolidNameStyle): string {
+  return `#${value.slice(6)}`;
+}
 
 /* Styles that also run as a WebGL shader over big names (name-tag-shaders.ts). */
 export const SHADER_NAME_STYLES = [
@@ -56,10 +77,14 @@ export function isShaderNameStyle(value: SupporterNameStyleId): value is ShaderN
 }
 
 export function isSupporterNameStyle(value: unknown): value is SupporterNameStyleId {
-  return typeof value === "string" && (SUPPORTER_NAME_STYLES as readonly string[]).includes(value);
+  return typeof value === "string" && ((SUPPORTER_NAME_STYLES as readonly string[]).includes(value) || SOLID_NAME_STYLE.test(value));
 }
 
-export const SUPPORTER_NAME_STYLE_LABELS: Record<SupporterNameStyleId, MessageDescriptor> = {
+export function nameStyleLabel(id: SupporterNameStyleId): MessageDescriptor {
+  return isSolidNameStyle(id) ? msg`Solid colour` : SUPPORTER_NAME_STYLE_LABELS[id];
+}
+
+export const SUPPORTER_NAME_STYLE_LABELS: Record<BuiltInNameStyleId, MessageDescriptor> = {
   holo: msg`Holo`,
   chrome: msg`Chrome`,
   neon: msg`Neon`,

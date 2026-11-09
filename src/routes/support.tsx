@@ -7,7 +7,8 @@ import type { MessageDescriptor } from "@lingui/core";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { SupportCheckout } from "../components/supporter/SupportCheckout";
-import { SupportDaysPreview } from "../components/supporter/SupportDaysPreview";
+import { KofiNameSteps } from "../components/supporter/KofiNameSteps";
+import { SupportPlans } from "../components/supporter/SupportPlans";
 import {
   CardShowcase,
   ClipShowcase,
@@ -343,10 +344,8 @@ function SupportPage() {
               <Reveal className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
                 <div>
                   <h2 className="text-[22px] font-bold text-white">{t`Support`}</h2>
-                  <p className="mt-1.5 text-[14px] leading-relaxed text-osu-l2">
-                    {t`Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you.`}
-                  </p>
-                  <SupportDaysPreview />
+                  <KofiNameSteps />
+                  <SupportPlans />
                 </div>
                 <SupportCheckout />
               </Reveal>

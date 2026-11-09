@@ -28,6 +28,12 @@ export interface SupporterLookState {
   runStartedAt: number | null;
   /** A monthly subscription keeps their time renewing. */
   renewing: boolean;
+  /** A renewing supporter whose subscription is $10 or more a payment. */
+  patron: boolean;
+  /** The highest rank (0 Amber .. 11 Holo) they ever reached: every rank up to it is unlocked. */
+  bestRank: number;
+  /** The unlocked rank they show instead of the current one; null for the current one. */
+  shownRank: number | null;
   /** Whether their renewing rank shows its fire; they can turn it off. */
   rankFire: boolean;
   look: SupporterLook | null;
@@ -49,7 +55,7 @@ export interface SupporterLookState {
   frameArt?: Record<string, WorkshopFrameArt>;
 }
 
-const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, renewing: false, rankFire: true, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
+const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, renewing: false, patron: false, bestRank: 0, shownRank: null, rankFire: true, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
 
 export async function requireViewer(): Promise<{ userId: number; username: string; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
@@ -61,7 +67,7 @@ export async function requireViewer(): Promise<{ userId: number; username: strin
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; renewing?: unknown; rankFire?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown; frameArt?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; renewing?: unknown; patron?: unknown; bestRank?: unknown; shownRank?: unknown; rankFire?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown; frameArt?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
@@ -69,6 +75,9 @@ function readState(body: unknown): SupporterLookState {
     expiresAt: typeof raw.expiresAt === "number" && Number.isFinite(raw.expiresAt) ? raw.expiresAt : null,
     runStartedAt: raw.supporter === true && typeof raw.runStartedAt === "number" && Number.isFinite(raw.runStartedAt) ? raw.runStartedAt : null,
     renewing: raw.supporter === true && raw.renewing === true,
+    patron: raw.supporter === true && raw.renewing === true && raw.patron === true,
+    bestRank: raw.supporter === true && Number.isInteger(raw.bestRank) ? Number(raw.bestRank) : 0,
+    shownRank: raw.supporter === true && Number.isInteger(raw.shownRank) ? Number(raw.shownRank) : null,
     rankFire: raw.rankFire !== false,
     look: parseSupporterLook(raw.look),
     custom: custom?.motif === "custom" && custom.url ? { url: custom.url, scale: custom.scale ?? 1, opacity: custom.opacity ?? 0.85 } : null,
@@ -258,6 +267,28 @@ export const saveSupporterPackStyleSetting = createServerFn({ method: "POST" })
     if (response.status === 403) throw new Error("Your supporter time has run out.");
     if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
     return readState(body);
+  });
+
+/* Picks which of the viewer's unlocked ranks they show; null shows the
+   current one. Answers with what was stored. */
+export const saveSupporterRankShownSetting = createServerFn({ method: "POST" })
+  .validator((data: { rank?: unknown }) => {
+    const rank = data?.rank ?? null;
+    if (rank !== null && !(Number.isInteger(rank) && (rank as number) >= 0 && (rank as number) < 12)) throw new Error("Pick a rank.");
+    return { rank: rank as number | null };
+  })
+  .handler(async ({ data }): Promise<{ shownRank: number | null }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/rank-shown`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, rank: data.rank }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown; shownRank?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return { shownRank: Number.isInteger(body?.shownRank) ? Number(body!.shownRank) : null };
   });
 
 /* Turns the fire on the viewer's renewing rank off or back on. Answers with

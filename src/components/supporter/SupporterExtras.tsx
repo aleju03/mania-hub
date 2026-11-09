@@ -1,5 +1,5 @@
 import { previewMascot, rememberPreviewMascot } from "#/lib/supporter-preview";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
@@ -109,6 +109,15 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
   const auth = useAuth();
   const [saved, setSaved] = useState<string>(NONE);
   const [hovered, setHovered] = useState<string | null>(null);
+  // a tile takes the preview only once the pointer rests on it, so crossing
+  // other tiles on the way to the preview (to drag it) leaves it alone
+  const hoverTimer = useRef(0);
+  const pointAt = (id: string) => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHovered(id), 140);
+  };
+  const pointAway = () => window.clearTimeout(hoverTimer.current);
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
   const [submitted, setSubmitted] = useState<SubmittedCompanion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -211,8 +220,11 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
     <section>
       <h2 className="text-[13px] font-semibold text-white">{t`Mascot`}</h2>
       <p className="mt-1 text-[12px] text-osu-f1">{t`A figure that stands beside your profile's numbers. Drag a 3D one to turn it.`}</p>
-      {/* the preview keeps the last one pointed at, so it can be dragged */}
-      <div className="mt-3 grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)]" onMouseLeave={() => setHovered(null)}>
+      {/* the preview keeps the last one rested on, so it can be dragged */}
+      <div className="mt-3 grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)]" onMouseLeave={() => {
+        pointAway();
+        setHovered(null);
+      }}>
         <div className="flex flex-col items-center rounded-xl bg-osu-b6/60 p-3 ring-1 ring-inset ring-white/[0.05]">
           <div className="relative h-[150px] w-[120px]">
             {shown && (
@@ -255,7 +267,8 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
               type="button"
               aria-label={t`No mascot`}
               disabled={!supporter}
-              onMouseEnter={() => setHovered(NONE)}
+              onMouseEnter={() => pointAt(NONE)}
+              onMouseLeave={pointAway}
               onFocus={() => setHovered(NONE)}
               onClick={() => pick(NONE)}
               className={tile(saved === NONE)}
@@ -268,7 +281,8 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
                 type="button"
                 disabled={!supporter}
                 aria-label={"builtIn" in choice.companion ? i18n._(choice.companion.builtIn.name) : choice.companion.submitted.name}
-                onMouseEnter={() => setHovered(choice.id)}
+                onMouseEnter={() => pointAt(choice.id)}
+                onMouseLeave={pointAway}
                 onFocus={() => setHovered(choice.id)}
                 onClick={() => pick(choice.id)}
                 className={tile(saved === choice.id)}

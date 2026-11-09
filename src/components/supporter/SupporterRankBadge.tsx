@@ -80,15 +80,17 @@ function RankGem({ rank, renewing, className }: { rank: SupporterRankDef; renewi
    isn't active (`runStartedAt` null). A renewing rank burns unless its
    supporter turned the fire off (`fire` false); the tip still says it renews.
    On their own profile (`onFireChange` set) the tip holds that switch, so it
-   stays open while the pointer or focus is inside it. */
-export function SupporterRankBadge({ runStartedAt, renewing = false, fire = true, onFireChange, className = "h-7 w-7" }: { runStartedAt: number | null; renewing?: boolean; fire?: boolean; onFireChange?: (fire: boolean) => void; className?: string }) {
+   stays open while the pointer or focus is inside it. A Patron (a renewing
+   subscription of $10 or more) is named in the tip. */
+export function SupporterRankBadge({ runStartedAt, renewing = false, patron = false, shownRank = null, fire = true, onFireChange, className = "h-7 w-7" }: { runStartedAt: number | null; renewing?: boolean; patron?: boolean; /* an earlier rank they chose to show */ shownRank?: number | null; fire?: boolean; onFireChange?: (fire: boolean) => void; className?: string }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
   if (runStartedAt == null) return null;
   const rank = supporterRank(runStartedAt);
+  const gem = shownRank != null && SUPPORTER_RANKS[shownRank] ? SUPPORTER_RANKS[shownRank] : rank.def;
   const name = rank.def.name;
   const inARow = t`${name}, ${plural(rank.months, { one: "# month", other: "# months" })} in a row`;
-  const label = renewing ? `${inARow}. ${t`Renews every month`}` : inARow;
+  const label = `${inARow}${renewing ? `. ${t`Renews every month`}` : ""}${patron ? `. ${t`Patron`}` : ""}`;
   const fireSwitch = renewing && onFireChange ? onFireChange : undefined;
   return (
     <span
@@ -106,15 +108,15 @@ export function SupporterRankBadge({ runStartedAt, renewing = false, fire = true
         aria-label={label}
         onClick={() => setOpen((value) => !value)}
       >
-        <RankGem rank={rank.def} renewing={renewing && fire} className={className} />
+        <RankGem rank={gem} renewing={renewing && fire} className={className} />
       </button>
       {/* only while open: the day count would differ between the server render and hydration */}
-      {open ? <RankTip rank={rank} name={name} renewing={renewing} fire={fire} onFireChange={fireSwitch} /> : null}
+      {open ? <RankTip rank={rank} name={name} renewing={renewing} patron={patron} shown={gem === rank.def ? null : gem} fire={fire} onFireChange={fireSwitch} /> : null}
     </span>
   );
 }
 
-function RankTip({ rank, name, renewing, fire, onFireChange }: { rank: ReturnType<typeof supporterRank>; name: string; renewing: boolean; fire: boolean; onFireChange?: (fire: boolean) => void }) {
+function RankTip({ rank, name, renewing, patron, shown, fire, onFireChange }: { rank: ReturnType<typeof supporterRank>; name: string; renewing: boolean; patron: boolean; shown: SupporterRankDef | null; fire: boolean; onFireChange?: (fire: boolean) => void }) {
   const { t } = useLingui();
   const months = rank.months;
   const next = rank.nextAt == null ? null : SUPPORTER_RANKS[rank.index + 1];
@@ -137,6 +139,12 @@ function RankTip({ rank, name, renewing, fire, onFireChange }: { rank: ReturnTyp
           {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
         </span>
         {renewing ? <span className="block text-white/60">{t`Renews every month`}</span> : null}
+        {shown ? (
+          <span className="block text-white/60">
+            {t`Showing`} <span className="font-semibold" style={{ color: shown.accent }}>{shown.name}</span>
+          </span>
+        ) : null}
+        {patron ? <span className="block font-semibold text-[#ffd56b]">{t`Patron`}</span> : null}
         {onFireChange ? (
           <label className="mt-2 flex cursor-pointer items-center gap-2 border-t border-white/10 pt-2 text-white/80">
             <Switch checked={fire} onChange={onFireChange} label={t`Show the fire on your rank`} />
@@ -151,13 +159,24 @@ function RankTip({ rank, name, renewing, fire, onFireChange }: { rank: ReturnTyp
 /* All twelve ranks in a row on /supporter: the ones reached in colour, the
    current one larger, the rest still to come faded. Client-only (the page
    loads the viewer's state after mount), so the day count is safe here. */
-export function SupporterRankLadder({ runStartedAt, renewing = false, fire = true }: { runStartedAt: number; renewing?: boolean; fire?: boolean }) {
+export function SupporterRankLadder({ runStartedAt, renewing = false, fire = true, bestRank, shownRank = null, onShow }: {
+  runStartedAt: number;
+  renewing?: boolean;
+  fire?: boolean;
+  /* The highest rank ever reached: gems up to it are unlocked and, with
+     `onShow`, can be picked to show instead of the current one. */
+  bestRank?: number;
+  shownRank?: number | null;
+  onShow?: (rank: number | null) => void;
+}) {
   const { t } = useLingui();
   const rank = supporterRank(runStartedAt);
   const name = rank.def.name;
   const next = rank.nextAt == null ? null : SUPPORTER_RANKS[rank.index + 1];
   const nextName = next ? next.name : "";
   const days = rank.nextAt == null ? 0 : Math.max(1, Math.ceil((rank.nextAt - Date.now()) / DAY_MS));
+  const unlocked = Math.max(rank.index, bestRank ?? rank.index);
+  const shown = shownRank != null && shownRank <= unlocked ? shownRank : rank.index;
   return (
     <div className="mt-4">
       <p className="text-[13px] text-osu-l2">
@@ -174,12 +193,35 @@ export function SupporterRankLadder({ runStartedAt, renewing = false, fire = tru
         ) : null}
       </p>
       <ol className="mt-2 flex items-center gap-1 sm:gap-1.5" aria-label={t`Supporter ranks`}>
-        {SUPPORTER_RANKS.map((def, i) => (
-          <li key={def.id} title={def.name} className={i > rank.index ? "opacity-25 grayscale transition-[opacity,filter] duration-200 hover:opacity-100 hover:grayscale-0" : undefined}>
-            <RankGem rank={def} renewing={renewing && fire && i === rank.index} className={i === rank.index ? "h-8 w-8 sm:h-9 sm:w-9" : "h-5 w-5 sm:h-6 sm:w-6"} />
-          </li>
-        ))}
+        {SUPPORTER_RANKS.map((def, i) => {
+          const open = i <= unlocked;
+          const gem = (
+            <RankGem rank={def} renewing={renewing && fire && i === shown} className={i === shown ? "h-8 w-8 sm:h-9 sm:w-9" : "h-5 w-5 sm:h-6 sm:w-6"} />
+          );
+          return (
+            <li key={def.id} title={def.name} className={open ? undefined : "opacity-25 grayscale transition-[opacity,filter] duration-200 hover:opacity-100 hover:grayscale-0"}>
+              {open && onShow ? (
+                <button
+                  type="button"
+                  aria-pressed={i === shown}
+                  aria-label={t`Show ${def.name}`}
+                  onClick={() => onShow(i === rank.index ? null : i)}
+                  className="cursor-pointer rounded-md transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink-light"
+                >
+                  {gem}
+                </button>
+              ) : gem}
+            </li>
+          );
+        })}
       </ol>
+      {onShow && unlocked > 0 ? (
+        <p className="mt-1.5 text-[12px] text-osu-f1">
+          {shown !== rank.index
+            ? t`Showing ${SUPPORTER_RANKS[shown].name} on your profile. Pick ${name} to go back to your current rank.`
+            : t`Every rank you have reached stays yours. Pick one to show it on your profile instead.`}
+        </p>
+      ) : null}
     </div>
   );
 }

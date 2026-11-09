@@ -23,6 +23,7 @@ export const SUPPORTER_COMPANION_IDS = [
   "fumo-marisa",
   "leek",
   "plush-miku",
+  "plush-miku-xmas",
   "plush-teto",
   "fairy-white",
   "fairy-red",
@@ -65,12 +66,12 @@ const sketchfab = (author: string, uid: string) => ({ author, url: `https://sket
 
 /* A licensed Sketchfab model. The scans face every which way, so each gets the
    turn that faces it front; plush and fabric ones are drawn matte. */
-const licensed = (id: BuiltInCompanionId, name: MessageDescriptor, author: string, uid: string, facing: number, { matte = true, size }: { matte?: boolean; size?: number } = {}): BuiltInCompanion => ({
+const licensed = (id: BuiltInCompanionId, name: MessageDescriptor, author: string, uid: string, facing: number, { matte = true, size, rev }: { matte?: boolean; size?: number; /* bumped when the files change under the same id */ rev?: number } = {}): BuiltInCompanion => ({
   id,
   name,
   kind: "model",
-  url: `/models/companions/${id}.glb`,
-  thumb: `/models/companions/thumbs/${id}.webp`,
+  url: `/models/companions/${id}.glb${rev ? `?v=${rev}` : ""}`,
+  thumb: `/models/companions/thumbs/${id}.webp${rev ? `?v=${rev}` : ""}`,
   facing,
   matte,
   size,
@@ -79,7 +80,10 @@ const licensed = (id: BuiltInCompanionId, name: MessageDescriptor, author: strin
 const fumo = (id: BuiltInCompanionId, name: MessageDescriptor, uid: string, facing: number, size?: number) => licensed(id, name, "Renafox", uid, facing, { size });
 
 export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
-  { id: "sahur-keycap", name: msg`Tung tung sahur keycap`, kind: "keycap" },
+  licensed("plush-teto", msg`Teto`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0),
+  // remodelled here from the Chubby Teto plush (see LICENSES.md)
+  licensed("plush-miku", msg`Miku plush`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0, { size: 1.4, rev: 11 }),
+  licensed("plush-miku-xmas", msg`Christmas Miku`, "mannymanny", "96ec3b0993ba4f97ad961438e1872527", 0),
   { id: "blob-pink", name: msg`Pink blob`, kind: "model", url: "/models/companions/blob-pink.glb", thumb: "/models/companions/thumbs/blob-pink.webp" },
   fumo("fumo-reimu-v2", msg`Reimu fumo`, "ff926e77d0564c028bde86fd32a487c1", -1.47),
   fumo("fumo-cirno", msg`Cirno fumo`, "efd2a7f4dbf048c1a18438db7f86c4b9", 2.06),
@@ -92,8 +96,6 @@ export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   licensed("fumo-koishi", msg`Koishi fumo`, "203Null", "37a56b489b5c4440bbabb7b7777036f6", 0, { size: 1.2 }),
   licensed("fumo-marisa", msg`Marisa fumo`, "203Null", "7dea820bf4884ecc8f2c31a085b07428", 3.14, { size: 1.4 }),
   { id: "leek", name: msg`Leek`, kind: "model", url: "/models/companions/leek.glb", thumb: "/models/companions/thumbs/leek.webp" },
-  licensed("plush-miku", msg`Miku plush`, "revsworks", "22e25b5fbd444102a175c088e14eb541", 0),
-  licensed("plush-teto", msg`Chubby Teto`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0),
   { id: "fairy-white", name: msg`White fairy`, kind: "model", url: "/models/companions/fairy-white.glb", thumb: "/models/companions/thumbs/fairy-white.webp" },
   { id: "fairy-red", name: msg`Red fairy`, kind: "model", url: "/models/companions/fairy-red.glb", thumb: "/models/companions/thumbs/fairy-red.webp" },
   { id: "fairy-blue", name: msg`Blue fairy`, kind: "model", url: "/models/companions/fairy-blue.glb", thumb: "/models/companions/thumbs/fairy-blue.webp" },
@@ -104,6 +106,7 @@ export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   licensed("cat-maxwell", msg`Maxwell the cat`, "Zhuier", "4175776146ba4550a8dd643363b7b0aa", 0.75),
   { id: "makiba", name: msg`Makiba`, kind: "model", url: "/models/companions/makiba.glb", thumb: "/models/companions/thumbs/makiba.webp", facing: -0.3 },
   { id: "makiba-chubby", name: msg`Chubby Makiba`, kind: "model", url: "/models/companions/makiba-chubby.glb", thumb: "/models/companions/thumbs/makiba-chubby.webp", facing: -0.3 },
+  { id: "sahur-keycap", name: msg`Tung tung sahur keycap`, kind: "keycap" },
 ];
 
 export interface SubmittedCompanion {

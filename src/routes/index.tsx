@@ -776,7 +776,7 @@ function HomePage() {
                         navigate({ to: "/player/$username", params: { username: entry.user.username } });
                       }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
-                      <Avatar url={entry.user.avatar_url} size={30} />
+                      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} framed />
                       <span className="flex min-w-0 flex-1 items-center gap-1.5">
                         <UsernameText
                           username={entry.user.username}
@@ -798,7 +798,7 @@ function HomePage() {
                         navigate({ to: "/player/$username", params: { username: entry.user.username } });
                       }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
-                      <Avatar url={entry.user.avatar_url} size={30} />
+                      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} framed />
                       <span className="flex min-w-0 flex-1 items-center gap-1.5">
                         <UsernameText
                           username={entry.user.username}
@@ -889,7 +889,7 @@ function HomePage() {
                   </div>
                   <div className="mt-3 flex items-center justify-center gap-2 max-w-full">
                     <GradeImg grade={p.score.displayRank} size={18} />
-                    <Avatar url={p.user.avatar_url} size={24} />
+                    <Avatar url={p.user.avatar_url} size={24} framed />
                     <UsernameText
                       username={p.user.username}
                       avatarUrl={p.user.avatar_url}
@@ -947,7 +947,7 @@ function HomePage() {
                     ...(boardScope ? { state: showPlayerCountryFlagState } : {}),
                   })}>
                     <GradeImg grade={s.displayRank} size={22} />
-                  <Avatar url={s.user.avatar_url} size={26} />
+                  <Avatar url={s.user.avatar_url} userId={s.user.id} size={26} framed />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <div className="glow-room text-xs truncate">

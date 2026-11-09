@@ -76,14 +76,19 @@ function fit(model: Object3D): number {
   return Math.max(size.x, size.z) / Math.max(size.y, 1e-6);
 }
 
-function frame(camera: PerspectiveCamera, aspect: number, spread: number) {
+function frame(camera: PerspectiveCamera, aspect: number, spread: number, onFloor = true) {
   camera.aspect = aspect;
   const half = (FOV * Math.PI) / 360;
   // far enough back to fit its height, and its width as it turns
   const byHeight = 0.58 / Math.tan(half);
   const byWidth = (Math.max(spread, 0.4) * 0.62) / (Math.tan(half) * aspect);
-  camera.position.set(0, 0.52, Math.max(byHeight, byWidth));
-  camera.lookAt(0, 0.48, 0);
+  const distance = Math.max(byHeight, byWidth);
+  // backing off for a wide one widens the view; aim higher with it, so the
+  // floor stays where it is near the bottom and it doesn't float mid-box
+  // (list tiles keep it centred)
+  const reach = onFloor ? distance / byHeight : 1;
+  camera.position.set(0, 0.52 * reach, distance);
+  camera.lookAt(0, 0.48 * reach, 0);
   camera.updateProjectionMatrix();
 }
 
@@ -327,7 +332,7 @@ export function companionThumbnail(url: string, facing = 0, matte = false): Prom
     turntable.rotation.y = facing;
     scene.add(turntable);
     const camera = new PerspectiveCamera(FOV, 1, 0.05, 20);
-    frame(camera, 1, fit(model));
+    frame(camera, 1, fit(model), false);
     thumbRenderer.render(scene, camera);
     const still = document.createElement("canvas");
     still.width = THUMB_SIZE;

@@ -1318,6 +1318,10 @@ msgstr "{ariaLabel} 最小值"
 msgid "{ariaLabel} range"
 msgstr "{ariaLabel}区间"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "{bonus, plural, one {+# bonus day} other {+# bonus days}}"
+#~ msgstr ""
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "{cap} rates per chart"
 msgstr "每张谱面 {cap} 个倍速"
@@ -1558,6 +1562,10 @@ msgstr "{dupeCount, plural, other {重复}}"
 msgid "{error}. Press Enter or click to try replay #{scoreId}."
 msgstr "{error}。按回车或点击重试回放 #{scoreId}。"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "{extra, plural, one {+# day} other {+# days}}"
+#~ msgstr ""
+
 #: src/routes/discord.tsx
 msgid "{feedCount} feeds"
 msgstr "{feedCount} 个推送"
@@ -1773,6 +1781,10 @@ msgstr "{mod}：占 {pct}% 的成绩"
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "{months, plural, one {# month} other {# months}} in a row"
 msgstr "连续 {months, plural, other {# 个月}}"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "{months, plural, one {about # month} other {about # months}}"
+msgstr ""
 
 #: src/lib/changelog.ts
 #: src/lib/format.ts
@@ -2145,6 +2157,10 @@ msgstr "{stars} 星"
 #: src/routes/maps.tsx
 msgid "{stars}★ · mapped by {0}"
 msgstr "{stars}★ · 谱师 {0}"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "{stepDays, plural, one {# day} other {# days}}"
+#~ msgstr ""
 
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "{target} packs opened"
@@ -2805,6 +2821,10 @@ msgstr "<1% 权重"
 msgid "▶ Watch"
 msgstr "▶ 观看"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "$5 a month"
+msgstr ""
+
 #: src/routes/support.tsx
 msgid "$5 buys a month of supporter, and every tip adds more time."
 msgstr "$5 可购买一个月的支持者时长，每次打赏都会累加时间。"
@@ -2862,6 +2882,10 @@ msgstr "每张谱面 1 个倍速"
 #: src/routes/workshop.themes.index.tsx
 msgid "1 wearing it"
 msgstr "1 人在用"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "1 year"
+msgstr ""
 
 #: src/routes/news_.prism.tsx
 msgid "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
@@ -3398,6 +3422,18 @@ msgstr "正在根据最新成绩重新计算评分，这些数字稍后可能会
 msgid "A full row of {0} cards with no breaks scores x{1}."
 msgstr "满 {0} 张且没有断连的一排得分 x{1}。"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "a full year"
+msgstr ""
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "A gift code for a friend every third month. Time past 3 months ahead turns into more codes instead of piling up."
+#~ msgstr ""
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "A gift code for a friend with every $5, and an extra one every third month. Time past 3 months ahead turns into more codes instead of piling up."
+#~ msgstr ""
+
 #: src/components/packs/GiftInbox.tsx
 msgid "A gift from"
 msgstr "礼物来自"
@@ -3703,6 +3739,10 @@ msgstr "关于"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "About {0}x the limit: fewer fbm octaves or loop iterations would help."
 msgstr ""
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "about {months} months"
+#~ msgstr ""
 
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -4417,6 +4457,10 @@ msgstr "一个外部应用"
 msgid "An external application"
 msgstr "一个外部应用"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up."
+msgstr ""
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "An image of your own floats on every copy of your card, in anyone's collection."
 msgstr ""
@@ -4527,9 +4571,25 @@ msgstr "不限"
 msgid "Any"
 msgstr "不限"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Any amount"
+msgstr ""
+
 #: src/components/supporter/SupportDaysPreview.tsx
-msgid "Any amount counts, to the day, and adds to the time you have left."
-msgstr "任何金额都按天计算，并叠加到你的剩余时间上。"
+msgid "Any amount counts, to the day, and adds to the time you have left: $5 is 30 days. Paying $50 or more at once buys a full year for every $50."
+msgstr ""
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "Any amount counts, to the day, and adds to the time you have left."
+#~ msgstr "任何金额都按天计算，并叠加到你的剩余时间上。"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "Any amount counts, to the day, and adds to the time you have left. Over $10, each payment buys bonus days: $15 is 100 days, $25 half a year, $50 a full year."
+#~ msgstr ""
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "Any amount counts, to the day, and adds to the time you have left. Over $10, each payment buys bonus days."
+#~ msgstr ""
 
 #: src/routes/support.tsx
 msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
@@ -4793,6 +4853,14 @@ msgstr "未锁定宽高比"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Assets"
 msgstr "素材"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "At $10 a month or more, you're a Patron."
+#~ msgstr ""
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "At $10 a month or more, your rank's tooltip calls you a Patron, so people can see you give a little extra."
+msgstr ""
 
 #: src/lib/pack-run.ts
 msgid "At least one card has a finish."
@@ -5505,6 +5573,10 @@ msgstr "榜单位置 <0>#{0}</0>"
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "加粗"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "bonus"
+#~ msgstr ""
 
 #: src/components/packs/WishlistLine.tsx
 msgid "Bonus chance per eligible pack: {chance}"
@@ -6479,6 +6551,10 @@ msgstr "Chordstream：用 {0} 的基础分 x{factor} 代替自己的，因为更
 msgid "Chordstreams"
 msgstr "胶囊"
 
+#: src/lib/supporter-companions.ts
+msgid "Christmas Miku"
+msgstr ""
+
 #: src/lib/pack-run.ts
 #: src/lib/supporter-name-styles.ts
 msgid "Chrome"
@@ -6495,8 +6571,8 @@ msgid "Chubby Makiba"
 msgstr "胖胖 Makiba"
 
 #: src/lib/supporter-companions.ts
-msgid "Chubby Teto"
-msgstr "胖胖重音Teto"
+#~ msgid "Chubby Teto"
+#~ msgstr "胖胖重音Teto"
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -7353,6 +7429,7 @@ msgstr "坐标"
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ShareClipButton.tsx
+#: src/components/supporter/KofiNameSteps.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/workshop.themes.spec.tsx
 msgid "Copied"
@@ -7379,6 +7456,7 @@ msgstr ""
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/replay/ShareClipButton.tsx
+#: src/components/supporter/KofiNameSteps.tsx
 #: src/components/ui/MessageText.tsx
 msgid "Copy"
 msgstr "复制"
@@ -9758,6 +9836,10 @@ msgstr "每种键型都以单项的音符和连击起步。"
 #~ msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and normally filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
 #~ msgstr "每一次达标通过都会落到四个技能中的一个，而整个估算就是用这四个搭起来的。4K 这边是叠、技、速度和耐力，取自成绩本身的 MSD 技能项评分，通常按谱面上最强的那一项归类：叠（JackSpeed 和 Chordjack）、技（Technical 和 Jumpstream）、速度（Stream）、耐力（Handstream 和 Stamina）。"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Every rank you have reached stays yours. Pick one to show it on your profile instead."
+msgstr ""
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Every rate of a chart"
 msgstr "谱面的所有倍速"
@@ -9823,6 +9905,10 @@ msgstr "全部数据"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
 #~ msgstr "上面每一步都是本站在猜。通过一个段位课题不是猜：有一条及格线，而你过了。所以只要本站看到这么一次，你在那一侧的估算<0>就不会低于你通过的那个课题</0>，不管技能平均下来是多少。打过 EXTRA-EPSILON，你就读作 epsilon，哪怕你的技能平均下来只到 delta。"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Every supporter look, for as long as it renews."
+msgstr ""
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Every tier"
@@ -10733,6 +10819,10 @@ msgstr "针对被封禁或已删除的账号"
 #~ msgid "For Discord embeds"
 #~ msgstr "用于 Discord 嵌入"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "for paying a year at once"
+msgstr ""
+
 #: src/components/companella/SecurityActivity.tsx
 msgid "For review"
 msgstr "待审核"
@@ -11444,6 +11534,10 @@ msgstr "随机猜一个"
 msgid "HALF"
 msgstr "减半"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "half a year"
+#~ msgstr ""
+
 #: src/lib/pack-run.ts
 msgid "Half Time"
 msgstr "Half Time"
@@ -11610,6 +11704,10 @@ msgstr "热力图"
 #: src/lib/supporter-name-fonts.ts
 msgid "Heavy"
 msgstr "粗体"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Heavy pixel"
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
@@ -12127,6 +12225,10 @@ msgstr "玩法说明"
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "How to play {0} of {1}"
 msgstr "玩法说明 {0}/{1}"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "How to support"
+msgstr ""
 
 #: src/routes/workshop.themes.spec.tsx
 msgid "How to write the code for your own profile theme."
@@ -15133,6 +15235,10 @@ msgstr "Monocraft"
 msgid "Month {month}"
 msgstr "第 {month} 个月"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Monthly"
+msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "more"
 msgstr "更多"
@@ -17331,6 +17437,10 @@ msgstr "在低 OD 谱面上，判定区间很宽，以固定节拍按下所有�
 msgid "On Showcase"
 msgstr "已展示"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
+msgstr ""
+
 #: src/components/player/LivePresence.tsx
 msgid "On the results screen"
 msgstr "查看结算中"
@@ -17416,6 +17526,10 @@ msgstr "单一技能，不细分"
 #: src/components/supporter/SupportShowcase.tsx
 msgid "One week of supporter"
 msgstr "一周支持者"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "One-time"
+msgstr ""
 
 #: src/routes/communities_.$id.tsx
 msgid "online"
@@ -17777,6 +17891,10 @@ msgstr "开包特效"
 #~ msgid "Opens packs without the shuffle, flips and celebrations"
 #~ msgstr ""
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Operator"
+msgstr ""
+
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 msgid "optional"
@@ -17817,6 +17935,10 @@ msgstr "也可以在你的支持者页面上传自己的（3D 模型或图片都
 #: src/routes/recommendations.tsx
 msgid "or someone else"
 msgstr "或其他玩家"
+
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "Or write this as the message:"
+msgstr ""
 
 #: src/components/layout/ThemePicker.tsx
 msgid "orange"
@@ -18336,6 +18458,14 @@ msgstr "可以粘贴、拖入或选择截图，或任何小于 5MB 的文件。"
 msgid "Patriot"
 msgstr "爱国者"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Patron"
+msgstr ""
+
+#: src/routes/supporter.tsx
+msgid "Patron, renews every month"
+msgstr ""
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "pattern"
 msgstr "键型"
@@ -18518,6 +18648,7 @@ msgid "Pick {0}"
 msgstr "选择 {0}"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Pick a colour"
 msgstr "选择颜色"
 
@@ -18549,9 +18680,13 @@ msgstr "先选一格再选卡片，或者把卡片拖到格子里。"
 msgid "Pick a target above. Progress updates as your mania plays land."
 msgstr "在上面选一个目标，你的 mania 成绩一落地进度就会更新。"
 
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "Pick an amount on Ko-fi. So the time reaches your account, do one of these there:"
+msgstr ""
+
 #: src/routes/support.tsx
-msgid "Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you."
-msgstr "在 Ko-fi 上选择金额。请用你的 osu! 用户名作为名字，或在留言中写 osu: 加上你的用户名，这样时长才会算在你身上。"
+#~ msgid "Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you."
+#~ msgstr "在 Ko-fi 上选择金额。请用你的 osu! 用户名作为名字，或在留言中写 osu: 加上你的用户名，这样时长才会算在你身上。"
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Pick another file"
@@ -19662,6 +19797,10 @@ msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家（或地区）�
 #~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
 #~ msgstr "一行最多放 {0} 张卡。相邻两张卡共享国家、稀有度或 skillset 时就会相连。键数也算，但只能和其他相同特征一起算。"
 
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "Put your osu! username as your name:"
+msgstr ""
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
 msgstr "px"
@@ -20349,6 +20488,10 @@ msgstr "推荐需要玩家的前 200 成绩，而这个账号从未在这里加�
 msgid "Recommendations need the server"
 msgstr "推荐需要服务器"
 
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Recommended"
+#~ msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "recommended maps"
 msgstr "推荐谱面"
@@ -20791,6 +20934,7 @@ msgid "Rendering the {selectedKeymode}K playfield..."
 msgstr "正在渲染 {selectedKeymode}K 游玩区域…"
 
 #: src/components/supporter/SupporterRankBadge.tsx
+#: src/routes/supporter.tsx
 msgid "Renews every month"
 msgstr "每月自动续订"
 
@@ -22656,7 +22800,9 @@ msgstr "显示"
 msgid "Show"
 msgstr "显示"
 
+#. placeholder {0}: def.name
 #. placeholder {0}: item.label
+#: src/components/supporter/SupporterRankBadge.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Show {0}"
 msgstr "显示 {0}"
@@ -22853,6 +22999,10 @@ msgstr "展示柜"
 #~ msgid "showcases"
 #~ msgstr "展示柜"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Showing"
+msgstr ""
+
 #. placeholder {0}: shown.toLocaleString("en-US")
 #. placeholder {1}: total.toLocaleString("en-US")
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -22871,6 +23021,11 @@ msgstr "显示 {1} 张图片中的 {0} 张。缩小搜索范围可以看到其�
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Showing {0} of {1}, {2} hidden by filters"
 msgstr "显示 {1} 条中的 {0} 条，{2} 条被筛选隐藏"
+
+#. placeholder {0}: SUPPORTER_RANKS[shown].name
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Showing {0} on your profile. Pick {name} to go back to your current rank."
+msgstr ""
 
 #: src/components/player/BestScoresControls.tsx
 #~ msgid "Showing {grade} plays"
@@ -23603,6 +23758,11 @@ msgstr ""
 #: src/lib/signature-style.ts
 msgid "Solid"
 msgstr "纯色"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#: src/lib/supporter-name-styles.ts
+msgid "Solid colour"
+msgstr ""
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Some cards could not be laid down."
@@ -24949,6 +25109,10 @@ msgstr "测试客户端"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Test key cleared."
 msgstr "测试密钥已清除。"
+
+#: src/lib/supporter-companions.ts
+msgid "Teto"
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Text"
@@ -27883,6 +28047,14 @@ msgstr "输入区间：40-60、50+、<30"
 msgid "Type a range: 8-9, 8.5+, <7"
 msgstr "输入区间：8-9、8.5+、<7"
 
+#: src/components/supporter/KofiNameSteps.tsx
+#~ msgid "Type osu, a colon, then your osu! username, like the example. A space after the colon is fine either way."
+#~ msgstr ""
+
+#: src/components/supporter/KofiNameSteps.tsx
+#~ msgid "Type osu, a colon, then your username. A space after the colon is fine either way."
+#~ msgstr ""
+
 #. placeholder {0}: activity.typicalSession
 #: src/components/player/ActivityPanel.tsx
 msgid "Typical session <0>{0} plays</0>"
@@ -29829,6 +30001,14 @@ msgstr "你在连对 {streak} 次后收手了。"
 msgid "You'll edit the code its layers make. There's no going back to layers for this theme."
 msgstr ""
 
+#: src/routes/supporter.tsx
+#~ msgid "You're a Patron: your rank carries the gold mark. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+#~ msgstr ""
+
+#: src/routes/supporter.tsx
+msgid "You're a Patron. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+msgstr ""
+
 #: src/routes/gift.$code.tsx
 msgid "You're a supporter until {until}."
 msgstr "你的支持者身份到期：{until}。"
@@ -30185,6 +30365,10 @@ msgstr "这是你唯一的一张。对方接受后它会离开你的收藏。"
 msgid "Your osu! top plays, everything recorded while you were tracked, and any score links you added, keeping your best play on each chart at each rate. Charts flagged as vibro are left out. A rate nobody has rated a chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to count."
 msgstr "你的 osu! 最佳成绩、被追踪期间记录的所有成绩，以及你添加的成绩链接，每张谱面每个倍速只保留你最好的一次。被标记为 vibro 的谱面不计入。某张谱面在某个倍速下还没有评级时，会在你的估算第一次需要它时计算，所以少见倍速的成绩可能要过一会儿才会计入。"
 
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "your osu! username"
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it, broken down by skill. The whole population is on the <0>Dan tab of the rankings page</0>, per country and per keymode."
 #~ msgstr "你自己的估算在玩家页的技能标签里。点那里的任意段位标记，就能看到背后的通过记录，按技能分开。全体玩家的情况在<0>排行榜页面的段位标签</0>，可以按国家/地区和键数查看。"
@@ -30244,6 +30428,14 @@ msgstr "你的私有皮肤"
 #: src/routes/skins.tsx
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "你的私有皮肤在上方的架子上，你发布的皮肤会出现在这里。"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Your rank burns with a flame while your subscription renews."
+msgstr ""
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "your rating"
@@ -30340,6 +30532,10 @@ msgstr ""
 msgid "Your skin"
 msgstr "你的皮肤"
 
+#: src/routes/supporter.tsx
+msgid "Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+msgstr ""
+
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Your support keeps the servers running and gives me the time to keep building the site."
 msgstr "你的支持让服务器继续运行，也让我有时间继续开发这个网站。"
@@ -30408,6 +30604,10 @@ msgstr "整个个人资料都会采用这个主题：配色，以及页面背后
 #: src/components/packs/WishlistLine.tsx
 msgid "Your wishlist"
 msgstr "你的心愿单"
+
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "YourName"
+msgstr ""
 
 #: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/workshop.index.tsx

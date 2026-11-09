@@ -13,6 +13,17 @@ export const SUPPORTER_RANK_MONTH_MS = 30 * DAY_MS;
 /* $5 buys 30 days, prorated (backend features/supporters.ts, SUPPORTER_DAYS_PER_CENT). */
 export const SUPPORTER_DAYS_PER_DOLLAR = 6;
 
+/* One payment of $50 or more buys a year for every $50; anything less is the
+   plain rate (backend features/supporters.ts, supporterDaysForCents, decides). */
+export const SUPPORTER_YEAR_DOLLARS = 50;
+
+/** Days one payment of `dollars` buys. */
+export function supporterDaysFor(dollars: number): number {
+  if (!(dollars > 0)) return 0;
+  if (dollars < SUPPORTER_YEAR_DOLLARS) return dollars * SUPPORTER_DAYS_PER_DOLLAR;
+  return (dollars / SUPPORTER_YEAR_DOLLARS) * 365;
+}
+
 export interface SupporterRankDef {
   id: string;
   /* Gem names stay in English in every language. */

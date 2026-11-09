@@ -1329,6 +1329,10 @@ msgstr "{ariaLabel} minimum"
 msgid "{ariaLabel} range"
 msgstr "{ariaLabel} range"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "{bonus, plural, one {+# bonus day} other {+# bonus days}}"
+#~ msgstr "{bonus, plural, one {+# bonus day} other {+# bonus days}}"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "{cap} rates per chart"
 msgstr "{cap} rates per chart"
@@ -1569,6 +1573,10 @@ msgstr "{dupeCount, plural, one {duplicate} other {duplicates}}"
 msgid "{error}. Press Enter or click to try replay #{scoreId}."
 msgstr "{error}. Press Enter or click to try replay #{scoreId}."
 
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "{extra, plural, one {+# day} other {+# days}}"
+#~ msgstr "{extra, plural, one {+# day} other {+# days}}"
+
 #: src/routes/discord.tsx
 msgid "{feedCount} feeds"
 msgstr "{feedCount} feeds"
@@ -1784,6 +1792,10 @@ msgstr "{mod}: {pct}% of plays"
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "{months, plural, one {# month} other {# months}} in a row"
 msgstr "{months, plural, one {# month} other {# months}} in a row"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "{months, plural, one {about # month} other {about # months}}"
+msgstr "{months, plural, one {about # month} other {about # months}}"
 
 #: src/lib/changelog.ts
 #: src/lib/format.ts
@@ -2156,6 +2168,10 @@ msgstr "{stars} stars"
 #: src/routes/maps.tsx
 msgid "{stars}★ · mapped by {0}"
 msgstr "{stars}★ · mapped by {0}"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "{stepDays, plural, one {# day} other {# days}}"
+#~ msgstr "{stepDays, plural, one {# day} other {# days}}"
 
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "{target} packs opened"
@@ -2816,6 +2832,10 @@ msgstr "<1% weight"
 msgid "▶ Watch"
 msgstr "▶ Watch"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "$5 a month"
+msgstr "$5 a month"
+
 #: src/routes/support.tsx
 msgid "$5 buys a month of supporter, and every tip adds more time."
 msgstr "$5 buys a month of supporter, and every tip adds more time."
@@ -2873,6 +2893,10 @@ msgstr "1 rate per chart"
 #: src/routes/workshop.themes.index.tsx
 msgid "1 wearing it"
 msgstr "1 wearing it"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "1 year"
+msgstr "1 year"
 
 #: src/routes/news_.prism.tsx
 msgid "1,632 ranked and loved 6K-8K charts now have an LN number, and LN charts are the ones whose ratings moved the most."
@@ -3409,6 +3433,18 @@ msgstr "A fresh rating is being computed from the latest plays; these numbers ma
 msgid "A full row of {0} cards with no breaks scores x{1}."
 msgstr "A full row of {0} cards with no breaks scores x{1}."
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "a full year"
+msgstr "a full year"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "A gift code for a friend every third month. Time past 3 months ahead turns into more codes instead of piling up."
+#~ msgstr "A gift code for a friend every third month. Time past 3 months ahead turns into more codes instead of piling up."
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "A gift code for a friend with every $5, and an extra one every third month. Time past 3 months ahead turns into more codes instead of piling up."
+#~ msgstr "A gift code for a friend with every $5, and an extra one every third month. Time past 3 months ahead turns into more codes instead of piling up."
+
 #: src/components/packs/GiftInbox.tsx
 msgid "A gift from"
 msgstr "A gift from"
@@ -3714,6 +3750,10 @@ msgstr "About"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "About {0}x the limit: fewer fbm octaves or loop iterations would help."
 msgstr "About {0}x the limit: fewer fbm octaves or loop iterations would help."
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "about {months} months"
+#~ msgstr "about {months} months"
 
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -4432,6 +4472,10 @@ msgstr "an external application"
 msgid "An external application"
 msgstr "An external application"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up."
+msgstr "An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up."
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "An image of your own floats on every copy of your card, in anyone's collection."
 msgstr "An image of your own floats on every copy of your card, in anyone's collection."
@@ -4542,9 +4586,25 @@ msgstr "any"
 msgid "Any"
 msgstr "Any"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Any amount"
+msgstr "Any amount"
+
 #: src/components/supporter/SupportDaysPreview.tsx
-msgid "Any amount counts, to the day, and adds to the time you have left."
-msgstr "Any amount counts, to the day, and adds to the time you have left."
+msgid "Any amount counts, to the day, and adds to the time you have left: $5 is 30 days. Paying $50 or more at once buys a full year for every $50."
+msgstr "Any amount counts, to the day, and adds to the time you have left: $5 is 30 days. Paying $50 or more at once buys a full year for every $50."
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "Any amount counts, to the day, and adds to the time you have left."
+#~ msgstr "Any amount counts, to the day, and adds to the time you have left."
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "Any amount counts, to the day, and adds to the time you have left. Over $10, each payment buys bonus days: $15 is 100 days, $25 half a year, $50 a full year."
+#~ msgstr "Any amount counts, to the day, and adds to the time you have left. Over $10, each payment buys bonus days: $15 is 100 days, $25 half a year, $50 a full year."
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "Any amount counts, to the day, and adds to the time you have left. Over $10, each payment buys bonus days."
+#~ msgstr "Any amount counts, to the day, and adds to the time you have left. Over $10, each payment buys bonus days."
 
 #: src/routes/support.tsx
 msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
@@ -4808,6 +4868,14 @@ msgstr "Aspect ratio unlocked"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Assets"
 msgstr "Assets"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "At $10 a month or more, you're a Patron."
+#~ msgstr "At $10 a month or more, you're a Patron."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "At $10 a month or more, your rank's tooltip calls you a Patron, so people can see you give a little extra."
+msgstr "At $10 a month or more, your rank's tooltip calls you a Patron, so people can see you give a little extra."
 
 #: src/lib/pack-run.ts
 msgid "At least one card has a finish."
@@ -5520,6 +5588,10 @@ msgstr "Board spot <0>#{0}</0>"
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "Bold"
+
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "bonus"
+#~ msgstr "bonus"
 
 #: src/components/packs/WishlistLine.tsx
 msgid "Bonus chance per eligible pack: {chance}"
@@ -6494,6 +6566,10 @@ msgstr "Chordstream: scores with {0}'s base x{factor} instead of its own, becaus
 msgid "Chordstreams"
 msgstr "Chordstreams"
 
+#: src/lib/supporter-companions.ts
+msgid "Christmas Miku"
+msgstr "Christmas Miku"
+
 #: src/lib/pack-run.ts
 #: src/lib/supporter-name-styles.ts
 msgid "Chrome"
@@ -6510,8 +6586,8 @@ msgid "Chubby Makiba"
 msgstr "Chubby Makiba"
 
 #: src/lib/supporter-companions.ts
-msgid "Chubby Teto"
-msgstr "Chubby Teto"
+#~ msgid "Chubby Teto"
+#~ msgstr "Chubby Teto"
 
 #: src/routes/skins.tsx
 msgid "circles"
@@ -7368,6 +7444,7 @@ msgstr "Coordinates"
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ShareClipButton.tsx
+#: src/components/supporter/KofiNameSteps.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/workshop.themes.spec.tsx
 msgid "Copied"
@@ -7394,6 +7471,7 @@ msgstr "Copies of it drift across your card behind everything printed on it, on 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/replay/ShareClipButton.tsx
+#: src/components/supporter/KofiNameSteps.tsx
 #: src/components/ui/MessageText.tsx
 msgid "Copy"
 msgstr "Copy"
@@ -9777,6 +9855,10 @@ msgstr "Every pattern starts with the notes and combo of a Single."
 #~ msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and normally filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
 #~ msgstr "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and normally filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Every rank you have reached stays yours. Pick one to show it on your profile instead."
+msgstr "Every rank you have reached stays yours. Pick one to show it on your profile instead."
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Every rate of a chart"
 msgstr "Every rate of a chart"
@@ -9842,6 +9924,10 @@ msgstr "Every stat"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
 #~ msgstr "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Every supporter look, for as long as it renews."
+msgstr "Every supporter look, for as long as it renews."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Every tier"
@@ -10756,6 +10842,10 @@ msgstr "for banned or deleted"
 #~ msgid "For Discord embeds"
 #~ msgstr "For Discord embeds"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+msgid "for paying a year at once"
+msgstr "for paying a year at once"
+
 #: src/components/companella/SecurityActivity.tsx
 msgid "For review"
 msgstr "For review"
@@ -11467,6 +11557,10 @@ msgstr "Guess at random"
 msgid "HALF"
 msgstr "HALF"
 
+#: src/components/supporter/SupportDaysPreview.tsx
+#~ msgid "half a year"
+#~ msgstr "half a year"
+
 #: src/lib/pack-run.ts
 msgid "Half Time"
 msgstr "Half Time"
@@ -11633,6 +11727,10 @@ msgstr "Heatmap"
 #: src/lib/supporter-name-fonts.ts
 msgid "Heavy"
 msgstr "Heavy"
+
+#: src/lib/supporter-name-fonts.ts
+msgid "Heavy pixel"
+msgstr "Heavy pixel"
 
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
@@ -12154,6 +12252,10 @@ msgstr "How to play"
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "How to play {0} of {1}"
 msgstr "How to play {0} of {1}"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "How to support"
+msgstr "How to support"
 
 #: src/routes/workshop.themes.spec.tsx
 msgid "How to write the code for your own profile theme."
@@ -15164,6 +15266,10 @@ msgstr "Monocraft"
 msgid "Month {month}"
 msgstr "Month {month}"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Monthly"
+msgstr "Monthly"
+
 #: src/components/layout/Nav.tsx
 msgid "more"
 msgstr "more"
@@ -17362,6 +17468,10 @@ msgstr "On low OD charts the hit windows are wide enough that pressing every key
 msgid "On Showcase"
 msgstr "On Showcase"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
+msgstr "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
+
 #: src/components/player/LivePresence.tsx
 msgid "On the results screen"
 msgstr "On the results screen"
@@ -17447,6 +17557,10 @@ msgstr "one skill, no split"
 #: src/components/supporter/SupportShowcase.tsx
 msgid "One week of supporter"
 msgstr "One week of supporter"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "One-time"
+msgstr "One-time"
 
 #: src/routes/communities_.$id.tsx
 msgid "online"
@@ -17808,6 +17922,10 @@ msgstr "Openings"
 #~ msgid "Opens packs without the shuffle, flips and celebrations"
 #~ msgstr "Opens packs without the shuffle, flips and celebrations"
 
+#: src/lib/supporter-name-fonts.ts
+msgid "Operator"
+msgstr "Operator"
+
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 msgid "optional"
@@ -17848,6 +17966,10 @@ msgstr "Or send in your own (can be 3D model or image) from your supporter page.
 #: src/routes/recommendations.tsx
 msgid "or someone else"
 msgstr "or someone else"
+
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "Or write this as the message:"
+msgstr "Or write this as the message:"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "orange"
@@ -18367,6 +18489,14 @@ msgstr "Paste, drop or pick a screenshot or any file under 5MB."
 msgid "Patriot"
 msgstr "Patriot"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Patron"
+msgstr "Patron"
+
+#: src/routes/supporter.tsx
+msgid "Patron, renews every month"
+msgstr "Patron, renews every month"
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "pattern"
 msgstr "pattern"
@@ -18549,6 +18679,7 @@ msgid "Pick {0}"
 msgstr "Pick {0}"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/LoadoutSlots.tsx
 msgid "Pick a colour"
 msgstr "Pick a colour"
 
@@ -18580,9 +18711,13 @@ msgstr "Pick a slot, then the card to put in it, or drag a card onto a slot."
 msgid "Pick a target above. Progress updates as your mania plays land."
 msgstr "Pick a target above. Progress updates as your mania plays land."
 
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "Pick an amount on Ko-fi. So the time reaches your account, do one of these there:"
+msgstr "Pick an amount on Ko-fi. So the time reaches your account, do one of these there:"
+
 #: src/routes/support.tsx
-msgid "Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you."
-msgstr "Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you."
+#~ msgid "Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you."
+#~ msgstr "Pick an amount on Ko-fi. Use your osu! username as your name there, or write osu: and your username as the message, so the time counts for you."
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Pick another file"
@@ -19693,6 +19828,10 @@ msgstr "Put up to {0} cards in a row. Two cards side by side link when they shar
 #~ msgid "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
 #~ msgstr "Put up to {0} cards in a row. Two cards side by side link when they share a country, a rarity or a skillset. Keymode counts too, but only on top of another match."
 
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "Put your osu! username as your name:"
+msgstr "Put your osu! username as your name:"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "px"
 msgstr "px"
@@ -20380,6 +20519,10 @@ msgstr "Recommendations need a player's top 200, and this account has never been
 msgid "Recommendations need the server"
 msgstr "Recommendations need the server"
 
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Recommended"
+#~ msgstr "Recommended"
+
 #: src/components/layout/Nav.tsx
 msgid "recommended maps"
 msgstr "recommended maps"
@@ -20822,6 +20965,7 @@ msgid "Rendering the {selectedKeymode}K playfield..."
 msgstr "Rendering the {selectedKeymode}K playfield..."
 
 #: src/components/supporter/SupporterRankBadge.tsx
+#: src/routes/supporter.tsx
 msgid "Renews every month"
 msgstr "Renews every month"
 
@@ -22687,7 +22831,9 @@ msgstr "show"
 msgid "Show"
 msgstr "Show"
 
+#. placeholder {0}: def.name
 #. placeholder {0}: item.label
+#: src/components/supporter/SupporterRankBadge.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Show {0}"
 msgstr "Show {0}"
@@ -22884,6 +23030,10 @@ msgstr "Showcase"
 #~ msgid "showcases"
 #~ msgstr "showcases"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Showing"
+msgstr "Showing"
+
 #. placeholder {0}: shown.toLocaleString("en-US")
 #. placeholder {1}: total.toLocaleString("en-US")
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -22902,6 +23052,11 @@ msgstr "Showing {0} of {1} images. Refine your search to see the rest."
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Showing {0} of {1}, {2} hidden by filters"
 msgstr "Showing {0} of {1}, {2} hidden by filters"
+
+#. placeholder {0}: SUPPORTER_RANKS[shown].name
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Showing {0} on your profile. Pick {name} to go back to your current rank."
+msgstr "Showing {0} on your profile. Pick {name} to go back to your current rank."
 
 #: src/components/player/BestScoresControls.tsx
 #~ msgid "Showing {grade} plays"
@@ -23642,6 +23797,11 @@ msgstr "Softness"
 #: src/lib/signature-style.ts
 msgid "Solid"
 msgstr "Solid"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#: src/lib/supporter-name-styles.ts
+msgid "Solid colour"
+msgstr "Solid colour"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Some cards could not be laid down."
@@ -24988,6 +25148,10 @@ msgstr "Test client"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Test key cleared."
 msgstr "Test key cleared."
+
+#: src/lib/supporter-companions.ts
+msgid "Teto"
+msgstr "Teto"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Text"
@@ -27930,6 +28094,14 @@ msgstr "Type a range: 40-60, 50+, <30"
 msgid "Type a range: 8-9, 8.5+, <7"
 msgstr "Type a range: 8-9, 8.5+, <7"
 
+#: src/components/supporter/KofiNameSteps.tsx
+#~ msgid "Type osu, a colon, then your osu! username, like the example. A space after the colon is fine either way."
+#~ msgstr "Type osu, a colon, then your osu! username, like the example. A space after the colon is fine either way."
+
+#: src/components/supporter/KofiNameSteps.tsx
+#~ msgid "Type osu, a colon, then your username. A space after the colon is fine either way."
+#~ msgstr "Type osu, a colon, then your username. A space after the colon is fine either way."
+
 #. placeholder {0}: activity.typicalSession
 #: src/components/player/ActivityPanel.tsx
 msgid "Typical session <0>{0} plays</0>"
@@ -29876,6 +30048,14 @@ msgstr "You stopped at {streak} in a row."
 msgid "You'll edit the code its layers make. There's no going back to layers for this theme."
 msgstr "You'll edit the code its layers make. There's no going back to layers for this theme."
 
+#: src/routes/supporter.tsx
+#~ msgid "You're a Patron: your rank carries the gold mark. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+#~ msgstr "You're a Patron: your rank carries the gold mark. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+
+#: src/routes/supporter.tsx
+msgid "You're a Patron. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+msgstr "You're a Patron. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+
 #: src/routes/gift.$code.tsx
 msgid "You're a supporter until {until}."
 msgstr "You're a supporter until {until}."
@@ -30232,6 +30412,10 @@ msgstr "Your only copy. It leaves your collection when they accept."
 msgid "Your osu! top plays, everything recorded while you were tracked, and any score links you added, keeping your best play on each chart at each rate. Charts flagged as vibro are left out. A rate nobody has rated a chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to count."
 msgstr "Your osu! top plays, everything recorded while you were tracked, and any score links you added, keeping your best play on each chart at each rate. Charts flagged as vibro are left out. A rate nobody has rated a chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to count."
 
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "your osu! username"
+msgstr "your osu! username"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it, broken down by skill. The whole population is on the <0>Dan tab of the rankings page</0>, per country and per keymode."
 #~ msgstr "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it, broken down by skill. The whole population is on the <0>Dan tab of the rankings page</0>, per country and per keymode."
@@ -30291,6 +30475,14 @@ msgstr "Your private skins"
 #: src/routes/skins.tsx
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "Your private skins are on the shelf above; anything you publish lands here."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Your rank burns with a flame while your subscription renews."
+msgstr "Your rank burns with a flame while your subscription renews."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."
+msgstr "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."
 
 #: src/routes/recommendations.tsx
 msgid "your rating"
@@ -30387,6 +30579,10 @@ msgstr "Your skill ratings are turned off. You can turn them back on in Settings
 msgid "Your skin"
 msgstr "Your skin"
 
+#: src/routes/supporter.tsx
+msgid "Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+msgstr "Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Your support keeps the servers running and gives me the time to keep building the site."
 msgstr "Your support keeps the servers running and gives me the time to keep building the site."
@@ -30455,6 +30651,10 @@ msgstr "Your whole profile takes on the theme: its colours, and a living backdro
 #: src/components/packs/WishlistLine.tsx
 msgid "Your wishlist"
 msgstr "Your wishlist"
+
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "YourName"
+msgstr "YourName"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/workshop.index.tsx

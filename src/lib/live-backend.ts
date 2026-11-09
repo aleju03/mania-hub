@@ -4868,6 +4868,10 @@ export interface SupporterProfileLook {
   runStartedAt: number | null;
   /* A monthly subscription keeps their time renewing. */
   renewing: boolean;
+  /* A renewing supporter whose subscription is $10 or more a payment. */
+  patron: boolean;
+  /* An earlier rank they chose to show instead of the current one (0 Amber .. 11 Holo). */
+  shownRank: number | null;
   /* Whether that renewing rank shows its fire; the supporter can turn it off. */
   rankFire: boolean;
   frame: SupporterAvatarFrameId | null;
@@ -4889,7 +4893,7 @@ export interface SupporterProfileLook {
   /* The figure beside their profile's numbers, null for none. */
   companion: SupporterCompanion | null;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, rankFire: true, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, patron: false, shownRank: null, rankFire: true, frame: null, nameStyle: null, nameFont: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -4979,6 +4983,8 @@ export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
     look: parseSupporterLook(body.look ?? null),
     runStartedAt: typeof body.runStartedAt === "number" && Number.isFinite(body.runStartedAt) ? body.runStartedAt : null,
     renewing: body.renewing === true,
+    patron: body.renewing === true && body.patron === true,
+    shownRank: Number.isInteger(body.shownRank) && Number(body.shownRank) >= 0 && Number(body.shownRank) < 12 ? Number(body.shownRank) : null,
     rankFire: body.rankFire !== false,
     frame: isSupporterAvatarFrame(body.frame) ? body.frame : null,
     nameStyle: isSupporterNameStyle(body.nameStyle) ? body.nameStyle : null,

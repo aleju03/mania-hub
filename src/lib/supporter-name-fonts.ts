@@ -54,6 +54,8 @@ export const SUPPORTER_NAME_FONTS = [
   "uncial",
   "limelight",
   "monocraft",
+  "pixeloperator",
+  "pixelheavy",
 ] as const;
 
 export type SupporterNameFontId = (typeof SUPPORTER_NAME_FONTS)[number];
@@ -109,4 +111,6 @@ export const SUPPORTER_NAME_FONT_LABELS: Record<SupporterNameFontId, MessageDesc
   uncial: msg`Celtic`,
   limelight: msg`Art deco`,
   monocraft: msg`Monocraft`,
+  pixeloperator: msg`Operator`,
+  pixelheavy: msg`Heavy pixel`,
 };

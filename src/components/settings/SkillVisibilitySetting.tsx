@@ -60,6 +60,7 @@ export function SkillVisibilitySetting() {
         <SelectMenu
           value={visibility ?? "public"}
           align="right"
+          className="shrink-0 whitespace-nowrap"
           disabled={visibility == null || saving}
           ariaLabel={t`Skill ratings visible to`}
           options={[

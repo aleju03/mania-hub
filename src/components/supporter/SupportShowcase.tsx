@@ -26,7 +26,7 @@ import { BUILT_IN_COMPANIONS, type SupporterCompanion } from "../../lib/supporte
 import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_FOIL_LABELS, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
-import { SUPPORTER_NAME_STYLE_LABELS, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { nameStyleLabel, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import {
   profileThemeStyle,
   SUPPORTER_PROFILE_THEME_LABELS,
@@ -226,7 +226,7 @@ export function HeroStage() {
         <span>{frameName ? `${i18n._(frameName.label)}${frameName.variant ? ` ${frameName.variant}` : ""}` : look.frame}</span>
         <span aria-hidden className="h-2.5 w-px bg-white/30" />
         <span>
-          {i18n._(SUPPORTER_NAME_STYLE_LABELS[look.nameStyle])}
+          {i18n._(nameStyleLabel(look.nameStyle))}
           {look.nameFont ? `, ${i18n._(SUPPORTER_NAME_FONT_LABELS[look.nameFont])}` : ""}
         </span>
       </div>
@@ -381,7 +381,7 @@ export function NamesShowcase() {
         <StaggerItem key={style} lift={false} className="flex items-center justify-between gap-4 py-2.5" onPointerEnter={() => setHovered(style)} onPointerLeave={() => setHovered(null)}>
           <SupporterStyledName nameStyle={style} nameFont={font} name={you.name} live={near && (!lowEnd || hovered === style)} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[30px]" />
           <span className="shrink-0 text-right text-[11px] text-osu-f1">
-            {i18n._(SUPPORTER_NAME_STYLE_LABELS[style])}
+            {i18n._(nameStyleLabel(style))}
             {font ? `, ${i18n._(SUPPORTER_NAME_FONT_LABELS[font])}` : ""}
           </span>
         </StaggerItem>

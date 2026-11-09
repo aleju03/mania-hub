@@ -20,7 +20,9 @@ interface FrameGeometry {
   squareWindow?: true;
   /* Its art passes behind the avatar through a hole cut to the rounded
      square, so a round avatar would show the cut; lists use {id}-round.png,
-     the same still with a round hole (foundry/lib/still-round.mjs). */
+     the same still with a round hole (foundry/lib/still-round.mjs). Also
+     for art that rests on the avatar's edge (the green hat), redrawn to sit
+     on a circle. */
   roundStill?: true;
   /* Shown as the still PNG only, never the looping video. */
   stillOnly?: boolean;
@@ -65,7 +67,7 @@ const FRAME_GEOMETRY = {
   crown: { box: [-0.2419, -0.6452, 1.5323, 1.0484], overhang: [0.1935, 0.4516, 0, 0] },
   sakura: { box: [-0.4355, -0.4194, 1.629, 1.6613], overhang: [0.3589, 0.3387, 0.1935, 0.2016] },
   stardust: { box: [-0.8548, -0.3548, 2.1935, 2.129], overhang: [0.8427, 0, 0.2823, 0.7742] },
-  storm: { box: [-0.3226, -0.6129, 1.6935, 1.8226], overhang: [0, 0.3024, 0.3468, 0] },
+  storm: { box: [-0.3226, -0.6129, 1.6935, 1.8226], overhang: [0, 0.4194, 0.3468, 0] },
   wisteria: { roundStill: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2258, 0, 0.2419] },
   "aero-bubble": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2298, 0.1774, 0.1976, 0.1815] },
   "aero-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1048, 0.2177, 0.1048, 0.121] },
@@ -99,7 +101,7 @@ const FRAME_GEOMETRY = {
   "disc-bounce": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0, 0, 0] },
   "disc-bounce-7k": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0, 0, 0] },
   "error-cascade": { box: [-0.2419, -0.2419, 1.6129, 1.4839], overhang: [0, 0.1815, 0.3387, 0] },
-  "fairy-lights": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0927, 0.0565, 0.0927, 0] },
+  "fairy-lights": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0927, 0.0766, 0.0927, 0] },
   "five-star-pull": { box: [-0.4032, -0.3226, 1.8065, 1.6935], overhang: [0.3508, 0, 0.3589, 0.1532] },
   "gamma-orbit": { box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.246, 0, 0.254, 0] },
   "greek-circle": { box: [-0.5081, -0.5565, 2.0161, 2.0726], overhang: [0.2621, 0.3105, 0.2621, 0.2742] },
@@ -139,7 +141,7 @@ const FRAME_GEOMETRY = {
   "pity-counter": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.0887, 0.0887, 0.0887, 0.2016] },
   "pixel-hearts": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0.0968, 0, 0] },
   "rail-pass": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.1331, 0.3306, 0.1331, 0.1411] },
-  "rain-cloud": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0.2016, 0.2419, 0.0202] },
+  "rain-cloud": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0.2056, 0.2339, 0.0202] },
   "rainbow-crystal-wings": { box: [-0.6774, -0.2903, 2.3548, 1.3548], overhang: [0.621, 0.0605, 0.629, 0] },
   "reimu-ribbon": { box: [0.0806, -0.5161, 1.4194, 1.0484], overhang: [0, 0.3669, 0.3548, 0] },
   "results-grade": { squareWindow: true, box: [-0.3145, -0.3145, 1.7742, 1.7419], overhang: [0.1089, 0.1089, 0.3347, 0.2863], stillOnly: true },
@@ -182,7 +184,7 @@ const FRAME_GEOMETRY = {
   "wings-swept-3": { roundStill: true, box: [-0.8548, -0.7581, 2.871, 1.9677], overhang: [0.7389, 0.3992, 0.7401, 0] },
   "winter-pine": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2419, 0.2419, 0.2419] },
   "witch-broom": { box: [-0.8548, -0.7742, 2.1935, 2.5484], overhang: [0.8427, 0.2944, 0.2823, 0.7742] },
-  "witch-hat": { box: [-0.4839, -0.7742, 1.4194, 1.0968], overhang: [0.254, 0.5242, 0, 0], stillOnly: true },
+  "witch-hat": { roundStill: true, box: [-0.4839, -0.7742, 1.4194, 1.0968], overhang: [0.254, 0.5242, 0, 0], stillOnly: true },
   "xp-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0887, 0.2016, 0.0887, 0.0887] },
   "yinyang-orbs": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3427, 0.3226, 0.3427, 0.3629] },
   "zenith-orbit": { roundStill: true, box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
@@ -306,7 +308,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 72;
+const FRAME_ART_VERSION = 74;
 
 /* `round`: the still for a round avatar, where the frame has one. */
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {
