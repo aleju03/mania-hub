@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plural, useLingui } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { fetchLiveMapScores, type LiveMapScoreEntry, type LiveMapScoresSnapshot, type LiveMapSearchEntry } from "../../lib/live-backend";
+import { fetchLiveMapScores, type LiveMapBoard, type LiveMapScoreEntry, type LiveMapScoresSnapshot, type LiveMapSearchEntry } from "../../lib/live-backend";
 import { formatAccuracy, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { getManiaGradeFromAccuracy } from "../../lib/score";
 import { useLocale } from "../../lib/locale-context";
@@ -45,6 +45,20 @@ export function pendingFriendsBoard(): number {
     return 0;
   }
 }
+
+// A mod board as the picker's value: "" for the usual board, else "dt:IN,HO".
+function boardKey(board: LiveMapBoard): string {
+  return board.speed === "usual" && board.mods.length === 0 ? "" : `${board.speed}:${board.mods.join(",")}`;
+}
+
+function boardOfKey(key: string): LiveMapBoard {
+  if (!key) return { speed: "usual", mods: [] };
+  const [speed, mods = ""] = key.split(":");
+  return { speed: speed === "dt" || speed === "ht" ? speed : "usual", mods: mods.split(",").filter(Boolean) };
+}
+
+// The rate a DT or HT play shows when it is not the mod's own.
+const OWN_RATES: Record<string, number> = { DT: 1.5, NC: 1.5, HT: 0.75, DC: 0.75 };
 
 function clearFriendBoards(): void {
   for (const key of boardCache.keys()) if (key.includes(`:${FRIENDS}:`)) boardCache.delete(key);
@@ -95,7 +109,8 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
   const [friendsBusy, setFriendsBusy] = useState(false);
   const [queryInput, setQueryInput] = useState("");
   const [name, setName] = useState("");
-  const cacheKey = `${beatmapId}:${viewerId ?? ""}:${country}:${name}`;
+  const [modBoard, setModBoard] = useState("");
+  const cacheKey = `${beatmapId}:${viewerId ?? ""}:${country}:${name}:${modBoard}`;
   // Tagged with its filters: a new filter keeps the old rows up until its own arrive.
   const [loaded, setLoaded] = useState<{ key: string; snapshot: LiveMapScoresSnapshot } | null>(() => {
     const snapshot = cachedBoard(cacheKey);
@@ -105,6 +120,8 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
   const current = loaded?.key === cacheKey;
   // The country list comes with the unfiltered board and stays while a filter is on.
   const [countries, setCountries] = useState<Array<{ code: string; count: number }>>(() => cachedBoard(cacheKey)?.countries ?? []);
+  // So does the list of the chart's mod boards.
+  const [boards, setBoards] = useState<NonNullable<LiveMapScoresSnapshot["boards"]>>(() => cachedBoard(cacheKey)?.boards ?? []);
   const [error, setError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -131,9 +148,10 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
   }, [beatmapId, viewerId]);
 
   const friends = country === FRIENDS;
+  const picked = boardOfKey(modBoard);
   const fetchPage = (offset: number) => friends
-    ? getMyFriendsMapScores({ data: { beatmapId, offset, name } })
-    : fetchLiveMapScores(beatmapId, viewerId, { offset, country, name });
+    ? getMyFriendsMapScores({ data: { beatmapId, offset, name, speed: picked.speed, mods: picked.mods.join(",") } })
+    : fetchLiveMapScores(beatmapId, viewerId, { offset, country, name, board: picked });
 
   useEffect(() => {
     const timer = setTimeout(() => setName(queryInput.trim()), 250);
@@ -147,6 +165,7 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
     if (cached) {
       setLoaded({ key: cacheKey, snapshot: cached });
       if (cached.countries) setCountries(cached.countries);
+      if (cached.boards) setBoards(cached.boards);
       return;
     }
     // The friends board waits for the list; without one it is the sign-in note.
@@ -158,6 +177,7 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
         if (cancelled) return;
         setLoaded({ key: cacheKey, snapshot });
         if (snapshot.countries) setCountries(snapshot.countries);
+        if (snapshot.boards) setBoards(snapshot.boards);
       })
       .catch(() => {
         if (!cancelled) setError(true);
@@ -167,24 +187,28 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
     };
     // fetchPage reads only the values listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [beatmapId, cacheKey, viewerId, country, name, friendSync]);
+  }, [beatmapId, cacheKey, viewerId, country, name, modBoard, friendSync]);
 
   // A board opened on a filter (back from the friends sign-in) still needs the
-  // country list, which only the unfiltered board carries; it also warms that board.
+  // country and mod board lists, which only the unfiltered board carries; it
+  // also warms that board.
   const needCountries = countries.length === 0 && (country !== "" || name !== "");
   useEffect(() => {
     if (!needCountries) return;
-    const key = `${beatmapId}:${viewerId ?? ""}::`;
+    const key = `${beatmapId}:${viewerId ?? ""}:::`;
     const cached = cachedBoard(key);
     if (cached?.countries) {
       setCountries(cached.countries);
+      if (cached.boards) setBoards(cached.boards);
       return;
     }
     let cancelled = false;
     fetchLiveMapScores(beatmapId, viewerId)
       .then((snapshot) => {
         boardCache.set(key, { snapshot, at: Date.now() });
-        if (!cancelled && snapshot.countries) setCountries(snapshot.countries);
+        if (cancelled) return;
+        if (snapshot.countries) setCountries(snapshot.countries);
+        if (snapshot.boards) setBoards(snapshot.boards);
       })
       .catch(() => {});
     return () => {
@@ -220,6 +244,28 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
       ...countries.filter((entry) => entry !== own).map(({ code, count }) => option(code, count, t`Countries`)),
     ];
   }, [countries, viewerCountry, viewerId, locale, t]);
+
+  // The usual board first, then DT, HT and the note-mod boards, each with its
+  // badges and the players on it. A board the list no longer has (a stale
+  // cache) stays selectable while it is the one shown.
+  const boardOptions = useMemo<SelectMenuOption<string>[]>(() => {
+    const names: Record<string, string> = { dt: t`Double Time`, ht: t`Half Time`, IN: t`Invert`, HO: t`Hold Off`, NR: t`No Release` };
+    const badges = (entry: LiveMapBoard) => [...(entry.speed === "usual" ? [] : [entry.speed.toUpperCase()]), ...entry.mods];
+    const listed = boards.some((entry) => boardKey(entry) === modBoard) ? boards : [...boards, { ...boardOfKey(modBoard), count: 0 }];
+    return listed.map((entry) => {
+      const parts = [...(entry.speed === "usual" ? [] : [names[entry.speed]]), ...entry.mods.map((mod) => names[mod] ?? mod)];
+      const label = parts.length ? parts.join(" + ") : t`Default`;
+      return {
+        value: boardKey(entry),
+        label: entry.count > 0 ? `${label} (${entry.count})` : label,
+        leading: badges(entry).length ? (
+          <span className="flex items-center gap-0.5">
+            {badges(entry).map((mod) => <ModBadge key={mod} mod={mod} size={0.5} plain />)}
+          </span>
+        ) : undefined,
+      };
+    });
+  }, [boards, modBoard, t]);
 
   const loadMore = () => {
     if (!board || !current || loadingMore) return;
@@ -262,7 +308,7 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
       .finally(() => setFriendsBusy(false));
   };
 
-  const filtered = country !== "" || name !== "";
+  const filtered = country !== "" || name !== "" || modBoard !== "";
   // Up from the first frame, so the search row never pops in; only a board
   // known to be empty goes without it.
   const emptyBoard = current && board != null && board.entries.length === 0 && !filtered;
@@ -287,6 +333,17 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
           align="right"
           searchable
           searchPlaceholder={t`Search countries`}
+          translucent
+        />
+      ) : null}
+      {/* Mod boards: DT and HT at any rate, and the note mods, each its own board. */}
+      {boardOptions.length > 1 ? (
+        <SelectMenu
+          value={modBoard}
+          options={boardOptions}
+          onChange={setModBoard}
+          ariaLabel={t`Mods`}
+          align="right"
           translucent
         />
       ) : null}
@@ -457,7 +514,13 @@ function MapScoreRow({ entry, own, onOpen }: { entry: LiveMapScoreEntry; own: bo
         {entry.companella ? (entry.companella.video ? <VideoMark video={entry.companella.video} className="h-[15px] w-[15px]" /> : null)
           : <ScoreVideoMark ids={[entry.soloScoreId, entry.scoreId]} className="h-[15px] w-[15px]" />}
         {entry.mods.map((mod) => (
-          <ModBadge key={mod} mod={mod} size={0.55} />
+          <ModBadge
+            key={mod}
+            mod={mod}
+            size={0.75}
+            // A custom rate on the DT and HT boards shows on its badge.
+            rate={OWN_RATES[mod] != null && entry.rate != null && Math.abs(entry.rate - OWN_RATES[mod]) > 1e-6 ? entry.rate : undefined}
+          />
         ))}
       </span>
       <span className="flex items-center gap-2">

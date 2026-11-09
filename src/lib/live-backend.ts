@@ -388,8 +388,21 @@ export interface LiveMapScoreEntry {
   isLazer: boolean;
   hasReplay: boolean;
   playedAt: string | null;
+  /** The speed the play ran at: 1, 1.5, 0.75 or a custom rate on the DT and HT boards. */
+  rate?: number;
   /** Set on a play sent through an app (Companella, Hashi) instead of osu!; scoreId is then the feed's negative id. */
   companella?: { importId: string; replay: boolean; app?: string; video?: string };
+}
+
+/**
+ * One mod board of a chart. `usual` is the Scores tab's own mix (nomod, DT
+ * and HT at their own rates, with HR, HD, NF and the like); `dt` and `ht` hold
+ * those plays at any rate; `mods` are the note mods (IN, HO, NR) the board's
+ * plays all carry.
+ */
+export interface LiveMapBoard {
+  speed: "usual" | "dt" | "ht";
+  mods: string[];
 }
 
 export interface LiveMapScoresSnapshot {
@@ -400,6 +413,8 @@ export interface LiveMapScoresSnapshot {
   self: LiveMapScoreEntry | null;
   /** Players per country on the whole board, on the unfiltered first page only. */
   countries?: Array<{ code: string; count: number }>;
+  /** The chart's boards with a player on each, on the unfiltered first page only. */
+  boards?: Array<LiveMapBoard & { count: number }>;
 }
 
 export type LiveMapsRefreshProgressStatus = "queued" | "running" | "done" | "failed";
@@ -3091,14 +3106,22 @@ export async function fetchLiveSnipeBoard(
 export async function fetchLiveMapScores(
   beatmapId: number,
   userId?: number | null,
-  options: { offset?: number; country?: string; name?: string } = {},
+  options: { offset?: number; country?: string; name?: string; board?: LiveMapBoard } = {},
 ): Promise<LiveMapScoresSnapshot> {
   const query = new URLSearchParams({ beatmap: String(beatmapId) });
   if (userId != null && userId > 0) query.set("user", String(userId));
   if (options.offset) query.set("offset", String(options.offset));
   if (options.country) query.set("country", options.country);
   if (options.name) query.set("q", options.name);
+  setMapBoardQuery(query, options.board);
   return fetchLiveJson(`/api/snapshots/map-scores?${query.toString()}`);
+}
+
+/** Adds a mod board's `speed` and `mods` to a map-scores query; the usual board adds nothing. */
+export function setMapBoardQuery(query: URLSearchParams, board: LiveMapBoard | undefined): void {
+  if (!board) return;
+  if (board.speed !== "usual") query.set("speed", board.speed);
+  if (board.mods.length) query.set("mods", board.mods.join(","));
 }
 
 // The Random tab draws server-side: the filters travel with the request and the
