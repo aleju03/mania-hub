@@ -264,6 +264,7 @@ function countryStyle(cc: string, image: HTMLImageElement | null): PackArtStyle 
 /* ------------------------------------------------------------ cache */
 
 const urls = new Map<string, string>();
+const styles = new Map<string, PackArtStyle>();
 const accents = new Map<string, Rgb>();
 const pending = new Map<string, Promise<string | null>>();
 
@@ -374,6 +375,7 @@ export function loadChainPackArt(art: ChainPackArt): Promise<string | null> {
     job = loadFlag(cc).then((image) => {
       const style = countryStyle(cc, image);
       accents.set(key, style.accent);
+      styles.set(key, style);
       const url = draw(style) ?? (image ? draw(countryStyle(cc, null)) : null);
       if (url) urls.set(key, url);
       pending.delete(key);
@@ -407,6 +409,45 @@ export function useChainPackArt(art: ChainPackArt | null): string | null {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return url;
+}
+
+/* The wrapper's print now if it is ready (a country pack's needs its flag
+   first), else null. One object per wrapper, so it can key an effect. */
+function chainPackStyleNow(art: ChainPackArt): PackArtStyle | null {
+  if (typeof document === "undefined") return null;
+  const key = chainPackArtKey(art);
+  const known = styles.get(key);
+  if (known) return known;
+  if (art.reason === "shop" && art.offer?.kind === "country" && art.offer.cc) return null;
+  const style = plainStyle(art);
+  styles.set(key, style);
+  return style;
+}
+
+/* The wrapper as the 3D pack prints it (PackStage's artStyle): the same print
+   the flat wrapper is made from, without the pouch drawn round it. */
+export function useChainPackStyle(art: ChainPackArt | null): PackArtStyle | null {
+  const key = art ? chainPackArtKey(art) : "";
+  const [style, setStyle] = useState<PackArtStyle | null>(() => (art ? chainPackStyleNow(art) : null));
+  useEffect(() => {
+    if (!art) {
+      setStyle(null);
+      return;
+    }
+    const now = chainPackStyleNow(art);
+    setStyle(now);
+    if (now) return;
+    let live = true;
+    void loadChainPackArt(art).then(() => {
+      if (live) setStyle(styles.get(key) ?? null);
+    });
+    return () => {
+      live = false;
+    };
+    // Keyed on the wrapper, not the object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return style;
 }
 
 /* The pack's accent for the table's glow and tear: a country pack's flag

@@ -30,6 +30,7 @@ import {
   type ChainRunMode,
 } from "#/lib/chain-run";
 import type { PackTypeId } from "#/lib/packs";
+import type { SupporterBladeId } from "#/lib/supporter-pack-style";
 import { getCachedCardBackDataUrl } from "../../packArt";
 import { PaintBackdrop } from "./PaintBackdrop";
 import { takeChainEntryOrigin } from "./chainEntry";
@@ -92,6 +93,8 @@ export interface ChainTableProps {
   /* Signed in: the player's own run or the daily run, and the switch. */
   mode?: ChainRunMode;
   onMode?: (mode: ChainRunMode) => void;
+  /* The viewer's own blade (a supporter's pick), for cutting packs open. */
+  blade?: SupporterBladeId | null;
 }
 
 interface PlayState {
@@ -160,7 +163,7 @@ function useBoardBox() {
    owns the run; this replays what it answers and keeps only the row being
    arranged. */
 export function ChainTable(props: ChainTableProps) {
-  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, loadSheet, onExit, script, guest = false, mode = "normal", onMode } = props;
+  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, loadSheet, onExit, script, guest = false, mode = "normal", onMode, blade = null } = props;
   const daily = mode === "daily";
   const { i18n, t } = useLingui();
   const [boxRef, box] = useBoardBox();
@@ -1333,6 +1336,7 @@ export function ChainTable(props: ChainTableProps) {
 
             {layout && shown && needsRoundPack && (
               <ChainPackStage
+                  blade={blade}
                 key={`round-${roundKey(shown, keyScope)}`}
                 layout={layout}
                 title={chainPackName({ reason: "round" }, shown.round, i18n)}
@@ -1361,6 +1365,7 @@ export function ChainTable(props: ChainTableProps) {
 
             {layout && shown && stagePack && (
               <ChainPackStage
+                  blade={blade}
                 key={`pack-${packKeyRef.current}`}
                 layout={layout}
                 title={stagePack.reason === "round" ? t`Keep one` : chainPackName(stagePack, shown.round, i18n)}

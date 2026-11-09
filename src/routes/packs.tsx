@@ -1249,6 +1249,7 @@ function PacksPage() {
           // The own run and the daily run are separate tables: switching
           // starts the other one fresh, with nothing of this one on screen.
           key={auth.viewer ? chainMode : "guest"}
+          blade={viewerPackStyle.blade}
           view={chainApi.view}
           best={chainApi.best}
           busy={chainApi.busy}

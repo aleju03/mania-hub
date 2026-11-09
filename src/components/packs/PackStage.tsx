@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import type { SupporterBladeId, SupporterWrapperId } from "#/lib/supporter-pack-style";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { createPortal } from "react-dom";
 import { Trans } from "@lingui/react/macro";
 import { packDamageFromCut, type PackDamage } from "#/lib/pack-damage";
 import type { PackTypeDef } from "#/lib/packs";
@@ -17,6 +18,7 @@ import {
   PACK_MAX_RIP_STRIP_FRACTION,
   PACK_RIP_STRIP_FRACTION,
   PACK_TEAR_FRACTION,
+  type PackArtStyle,
 } from "./packArt";
 import { createPackScene, type PackScene } from "./packScene";
 import { BladeFx, preloadSprites } from "./bladeFx";
@@ -89,6 +91,12 @@ const TRAIL_MAX_POINTS = 36;
 const TRAIL_PIXEL_BUDGET = 2_500_000;
 const TRAIL_MAX_SCALE = 1.5;
 const TRAIL_MIN_SCALE = 0.5;
+/* A press that lets go this close to where it landed, this soon, is a tap
+   (tapToOpen). */
+const TAP_SLOP_PX = 10;
+const TAP_MAX_MS = 600;
+// How long an asked-for opening (openTick) waits for the 3D pack to be up.
+const OPEN_WAIT_MS = 1500;
 
 interface PackStageProps {
   /* The viewer's own wrapper (a supporter's pick): the pack is printed on it. */
@@ -112,6 +120,31 @@ interface PackStageProps {
   /* Drawn in the gap between the pack and the hint (the 4K | 7K toggle), so
      showing it never moves the shelf. Taps on it never start the blade. */
   controls?: ReactNode;
+  /* The game table's pack (Overjoy). The wrapper printed on it, in place of a
+     pack type's. */
+  artStyle?: PackArtStyle;
+  /* Only the pack, filling its positioned parent and centred in it: no ground
+     shadow, controls or caption, and a press anywhere in that parent starts
+     the blade. */
+  bare?: boolean;
+  /* The pack's width in px (the page's own size when omitted). */
+  width?: number;
+  /* The blade only cuts at the perforation: a stroke through the body does
+     nothing, so the cards inside are never damaged. */
+  seamOnly?: boolean;
+  /* A tap on the pack opens it along the perforation. */
+  tapToOpen?: boolean;
+  /* Raised to open the pack without a cut (a pack that opens by itself, the
+     keyboard). It waits for the 3D pack to be on screen. */
+  openTick?: number;
+  /* False when the host plays its own opening sound. */
+  ripSound?: boolean;
+  /* The rip-to-onOpened delay, when the host wants its cards out sooner. */
+  openedAfterMs?: number;
+  /* The pack's own element, for a host that measures it. */
+  hostRef?: Ref<HTMLDivElement>;
+  /* WebGL is not available, so no pack will ever show. */
+  onUnavailable?: () => void;
 }
 
 function random01(value: number) {
@@ -123,7 +156,26 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, controls, wrapper = null, blade = null }: PackStageProps) {
+export function PackStage({
+  onOpened,
+  onCut,
+  onGrab,
+  reducedMotion,
+  packType,
+  controls,
+  wrapper = null,
+  blade = null,
+  artStyle,
+  bare = false,
+  width,
+  seamOnly = false,
+  tapToOpen = false,
+  openTick = 0,
+  ripSound = true,
+  openedAfterMs,
+  hostRef,
+  onUnavailable,
+}: PackStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
   // The blade effect below subscribes once ([] deps), so it reads the latest
@@ -133,11 +185,21 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   const onGrabRef = useRef(onGrab);
   const onCutRef = useRef(onCut);
   const onOpenedRef = useRef(onOpened);
+  const onUnavailableRef = useRef(onUnavailable);
   useEffect(() => {
     onGrabRef.current = onGrab;
     onCutRef.current = onCut;
     onOpenedRef.current = onOpened;
-  }, [onGrab, onCut, onOpened]);
+    onUnavailableRef.current = onUnavailable;
+  }, [onGrab, onCut, onOpened, onUnavailable]);
+  // Read by the pointer handlers, which subscribe once.
+  const optionsRef = useRef({ seamOnly, tapToOpen, ripSound, openedAfterMs });
+  optionsRef.current = { seamOnly, tapToOpen, ripSound, openedAfterMs };
+  /* Where and when the held press landed, and whether on the pack (tapToOpen). */
+  const tapRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // The trail canvas of a bare stage is portalled to the body (see the render).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const packRef = useRef<HTMLDivElement | null>(null);
   // Offscreen 2D canvas the cut renders into; the 3D scene shows it as the
   // front texture of the pack mesh.
@@ -514,7 +576,8 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       sceneRef.current = scene;
       setSceneReady(true);
     }).catch(() => {
-      // WebGL unavailable; the placeholder stays.
+      // WebGL unavailable; the placeholder stays, unless the host has a stand-in.
+      if (!cancelled) onUnavailableRef.current?.();
     });
     const onResize = () => sceneRef.current?.resize();
     window.addEventListener("resize", onResize);
@@ -562,7 +625,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   }, [reducedMotion, sceneReady]);
 
   useEffect(() => {
-    const nextStyle = { ...(packType ? packArtStyleFor(packType) : DEFAULT_PACK_ART_STYLE), wrapper };
+    const nextStyle = { ...(artStyle ?? (packType ? packArtStyleFor(packType) : DEFAULT_PACK_ART_STYLE)), wrapper };
     const next = getCachedPackFrontCanvas(nextStyle);
     setArtReady(true);
     // A per-frame blend redraws and uploads a 600x1000 texture for the whole
@@ -577,7 +640,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       paintPackBackCanvas(back, nextStyle.accent, wrapper);
       sceneRef.current?.markBackArtDirty();
     }
-  }, [packType, sceneReady, wrapper]);
+  }, [artStyle, packType, sceneReady, wrapper]);
 
   // Blade trail: while the pointer is held down anywhere on the stage, a
   // fading streak chases the cursor (on and off the pack), so the slash
@@ -888,7 +951,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     const damage = readDamage();
     onCutRef.current?.();
     if (damage) playCardSlice();
-    else playBladeRip(bladeRef.current, bladeLook(bladeRef.current).sound);
+    else if (optionsRef.current.ripSound) playBladeRip(bladeRef.current, bladeLook(bladeRef.current).sound);
     spawnBurst(damage ? 0.55 : 0.16);
     slashRef.current = null;
     if (rafRef.current !== null) {
@@ -918,9 +981,30 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     // dead pack (see openedTimerRef).
     openedTimerRef.current = window.setTimeout(
       () => onOpenedRef.current(damage, burnRef.current.spell),
-      reducedMotionRef.current ? 220 : 880,
+      reducedMotionRef.current ? 220 : (optionsRef.current.openedAfterMs ?? 880),
     );
   };
+
+  /* An opening the host asked for (openTick). It waits for the pack to be on
+     screen, so the rip is seen, but not forever. */
+  const openedTickRef = useRef(0);
+  useEffect(() => {
+    if (openTick <= openedTickRef.current) {
+      openedTickRef.current = openTick;
+      return;
+    }
+    const open = () => {
+      openedTickRef.current = openTick;
+      triggerRip();
+    };
+    if (sceneReady && artReady) {
+      open();
+      return;
+    }
+    const timer = window.setTimeout(open, OPEN_WAIT_MS);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openTick, sceneReady, artReady]);
 
   const setCutSpan = (xa: number, yaFrac: number, xb: number, ybFrac: number, deep: boolean) => {
     const binA = clampNumber(Math.floor((xa / PACK_ART_WIDTH) * BIN_COUNT), 0, BIN_COUNT - 1);
@@ -1056,7 +1140,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
     const slash = slashRef.current;
     if (!slash) {
       const seam = ny >= TEAR_BAND_TOP && ny <= TEAR_BAND_BOTTOM;
-      const deep = ny >= DEEP_BAND_TOP && ny <= DEEP_BAND_BOTTOM;
+      const deep = !optionsRef.current.seamOnly && ny >= DEEP_BAND_TOP && ny <= DEEP_BAND_BOTTOM;
       if (!seam && !deep) return;
       // Horizontal slack so a swipe that starts off the pack still bites.
       if (point.u < -0.2 || point.u > 1.2) return;
@@ -1099,6 +1183,9 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       if (controlsRef.current?.contains(event.target)) return;
       onGrabRef.current?.();
       bladeHeldRef.current = { pointerId: event.pointerId };
+      const rect = packRef.current?.getBoundingClientRect();
+      const onPack = rect && event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      tapRef.current = onPack ? { x: event.clientX, y: event.clientY, t: event.timeStamp } : null;
       cutAtPoint(event.clientX, event.clientY);
     };
     // the blade's speed, for a sound that follows it (ink's brush)
@@ -1120,6 +1207,18 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       stopBladeLoop();
       bladeHeldRef.current = null;
       slashRef.current = null;
+      const tap = tapRef.current;
+      tapRef.current = null;
+      if (
+        optionsRef.current.tapToOpen &&
+        tap &&
+        event.type === "pointerup" &&
+        event.timeStamp - tap.t <= TAP_MAX_MS &&
+        Math.hypot(event.clientX - tap.x, event.clientY - tap.y) <= TAP_SLOP_PX
+      ) {
+        triggerRip();
+        return;
+      }
       ensureLoop();
     };
     document.addEventListener("pointerdown", onDown);
@@ -1139,24 +1238,41 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
   return (
     // pan-y: vertical swipes still scroll the page on touch, horizontal
     // swipes are the blade and never turn into a scroll.
-    <div ref={stageRef} className="flex flex-col items-center" style={{ touchAction: "pan-y" }}>
-      {/* Blade trail overlay, viewport-sized so the streak runs off the pack */}
-      {!reducedMotion && (
-        <canvas
-          ref={trailCanvasRef}
-          className="pointer-events-none fixed inset-0 z-30 h-full w-full"
-          aria-hidden="true"
-        />
-      )}
+    <div
+      ref={stageRef}
+      className={bare ? "absolute inset-0 flex flex-col items-center justify-center" : "flex flex-col items-center"}
+      style={{ touchAction: "pan-y" }}
+    >
+      {/* Blade trail overlay, viewport-sized so the streak runs off the pack.
+          A bare stage sits inside a table that moves (transforms make their
+          own frame for fixed children), so its overlay goes to the body. */}
+      {!reducedMotion &&
+        (bare ? (
+          mounted &&
+          createPortal(
+            <canvas ref={trailCanvasRef} className="pointer-events-none fixed inset-0 z-[200] h-full w-full" aria-hidden="true" />,
+            document.body,
+          )
+        ) : (
+          <canvas
+            ref={trailCanvasRef}
+            className="pointer-events-none fixed inset-0 z-30 h-full w-full"
+            aria-hidden="true"
+          />
+        ))}
       {/* Host for the 3D pack; the scene's canvas overflows it on purpose so
           the tilted pack and the torn strip never clip */}
       <div
-        ref={packRef}
+        ref={(element) => {
+          packRef.current = element;
+          if (typeof hostRef === "function") hostRef(element);
+          else if (hostRef) hostRef.current = element;
+        }}
         className="relative select-none"
         style={{
           // Narrower than the old squat pack: the 0.6 aspect makes it taller,
           // so this keeps roughly the same on-screen height.
-          width: "min(270px, 66vw)",
+          width: width ?? "min(270px, 66vw)",
           aspectRatio: `${PACK_ASPECT}`,
           touchAction: "none",
         }}
@@ -1165,6 +1281,8 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
       >
         {!(artReady && sceneReady) && <div className="absolute inset-0 rounded-xl bg-osu-b4/50 animate-pulse" />}
       </div>
+      {!bare && (
+        <>
       {/* The gap under the floating pack: its ground shadow, and the controls
           laid over it, so the stage is the same height with or without them */}
       <div className="relative flex h-14 w-full flex-col items-center">
@@ -1201,6 +1319,8 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, co
               : <Trans>Hold and drag across the dotted line</Trans>}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

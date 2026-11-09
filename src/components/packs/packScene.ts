@@ -421,6 +421,7 @@ export class PackScene {
   private reducedMotion: boolean;
   private windowActive = true;
   private frameId: number | null = null;
+  private stillId: number | null = null;
   private lastRenderedAt = 0;
   private disposed = false;
   private rip: { startedAt: number | null } | null = null;
@@ -482,6 +483,17 @@ export class PackScene {
     if (this.disposed) return;
     this.frontTexture.needsUpdate = true;
     this.start();
+    this.still();
+  }
+
+  /* Paused (the window is in the background): one frame still goes out, so
+     new art is on the pack rather than a blank until the window is back. */
+  private still() {
+    if (this.disposed || this.windowActive || this.stillId !== null) return;
+    this.stillId = requestAnimationFrame(() => {
+      this.stillId = null;
+      if (!this.disposed && !this.windowActive) this.renderer.render(this.scene, this.camera);
+    });
   }
 
   /* The back foil is tinted per pack type too, so switching type repaints the
@@ -490,6 +502,7 @@ export class PackScene {
     if (this.disposed) return;
     this.backTexture.needsUpdate = true;
     this.start();
+    this.still();
   }
 
   setTiltTarget(xDeg: number, yDeg: number) {
@@ -508,9 +521,12 @@ export class PackScene {
     this.windowActive = active;
     if (active) {
       this.start();
-    } else if (this.frameId !== null) {
-      cancelAnimationFrame(this.frameId);
-      this.frameId = null;
+    } else {
+      if (this.frameId !== null) {
+        cancelAnimationFrame(this.frameId);
+        this.frameId = null;
+      }
+      this.still();
     }
   }
 
@@ -608,6 +624,8 @@ export class PackScene {
     this.core.onLost = null;
     if (this.frameId !== null) cancelAnimationFrame(this.frameId);
     this.frameId = null;
+    if (this.stillId !== null) cancelAnimationFrame(this.stillId);
+    this.stillId = null;
     this.renderer.domElement.remove();
     this.packGroup.remove(this.stripMesh);
     // Hand the shared mesh back on the core's own geometry before this

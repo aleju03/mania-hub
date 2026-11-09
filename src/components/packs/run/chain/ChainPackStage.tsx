@@ -11,7 +11,9 @@ import {
   type ChainPackReason,
 } from "#/lib/chain-run";
 import { PACK_TYPES, type PackTypeId } from "#/lib/packs";
-import { PACK_TEAR_FRACTION } from "../../packArt";
+import type { SupporterBladeId } from "#/lib/supporter-pack-style";
+import { PACK_ASPECT, PACK_TEAR_FRACTION } from "../../packArt";
+import { PackStage } from "../../PackStage";
 import { RUN_FEEL } from "../runFeel";
 import type { PackLook } from "../RunTable";
 import { ChainPack } from "./ChainPack";
@@ -25,7 +27,7 @@ import { playEternalFanfare, playGoatFanfare, prefetchEternalFanfare } from "../
 import { useChainDetailsTrigger } from "./ChainDetails";
 import { CHAIN_FEEL } from "./chainFeel";
 import type { BoardLayout } from "./chainLayout";
-import { chainPackArtAccent, useChainPackArt, type ChainPackArt } from "./chainPackArt";
+import { chainPackArtAccent, useChainPackArt, useChainPackStyle, type ChainPackArt } from "./chainPackArt";
 
 /* A GOAT's flip: the biggest ceremony on the stage, with the maniacard GOAT's glow. */
 const GOAT_CEREMONY = 8;
@@ -92,6 +94,8 @@ export interface ChainPackStageProps {
   /* The table draws the title (one at a time across surfaces). */
   showTitle?: boolean;
   onStageChange?: (stage: StageName) => void;
+  /* The viewer's own blade (a supporter's pick), for the cut. */
+  blade?: SupporterBladeId | null;
 }
 
 export type StageName = "sealed" | "charging" | "dealing" | "flipping" | "open" | "leaving" | "gone";
@@ -315,6 +319,7 @@ export function ChainPackStage(props: ChainPackStageProps) {
     quick = false,
     showTitle = true,
     onStageChange,
+    blade = null,
   } = props;
   const { t } = useLingui();
   const [stage, setStageState] = useState<StageName>(sealed ? "sealed" : instant ? "open" : "dealing");
@@ -339,7 +344,18 @@ export function ChainPackStage(props: ChainPackStageProps) {
   const [flash, setFlash] = useState<Record<number, number>>({});
   const [deckBump, setDeckBump] = useState(0);
   const [buttonShudderX, buttonShudder] = useShudder(reducedMotion);
-  const packRef = useRef<HTMLButtonElement>(null);
+  const packRef = useRef<HTMLElement | null>(null);
+  /* The sealed pack is the site's 3D pack: it tilts under the pointer and
+     opens to a blade across its perforation, or to a tap. `flat` is the
+     stand-in where WebGL is missing. */
+  const [flat, setFlat] = useState(false);
+  const flatRef = useRef(flat);
+  flatRef.current = flat;
+  // Raised to have the 3D pack open itself (PackStage's openTick).
+  const [openTick, setOpenTick] = useState(0);
+  // A refused deal puts a fresh pack on the table.
+  const [packEpoch, setPackEpoch] = useState(0);
+  const dealRef = useRef<Promise<ChainCard[] | null> | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const mountedRef = useRef(true);
@@ -444,8 +460,44 @@ export function ChainPackStage(props: ChainPackStageProps) {
     [instant, reducedMotion, setStage, shake],
   );
 
+  /* The 3D pack's cut has committed (a blade, a tap, or openTick): the deal
+     starts under the rip. */
+  const cut = useCallback(() => {
+    if (stageRef.current !== "sealed") return;
+    setStage("charging");
+    setLook("charging");
+    // A supporter's blade brings its own rip.
+    if (!blade) runSound.packOpen();
+    shake(RUN_FEEL.pack.burstShake);
+    dealRef.current = Promise.resolve()
+      .then(onOpen)
+      .catch(() => null);
+  }, [blade, onOpen, setStage, shake]);
+
+  /* The rip has played: the cards come out, or the pack is refused. */
+  const opened = useCallback(async () => {
+    const dealt = await (dealRef.current ?? Promise.resolve(null));
+    dealRef.current = null;
+    if (!mountedRef.current) return;
+    // The next pack on this stage starts sealed.
+    setOpenTick(0);
+    if (!dealt || dealt.length === 0) {
+      setLook("idle");
+      setStage("sealed");
+      runSound.refuse();
+      setPackEpoch((value) => value + 1);
+      return;
+    }
+    setLook("torn");
+    void reveal(dealt);
+  }, [reveal, setStage]);
+
   const tear = useCallback(async () => {
     if (stageRef.current !== "sealed") return;
+    if (!flatRef.current) {
+      setOpenTick((value) => value + 1);
+      return;
+    }
     setStage("charging");
     setLook("charging");
     // The build: the pack shudders harder until it tears.
@@ -586,7 +638,8 @@ export function ChainPackStage(props: ChainPackStageProps) {
   useEffect(() => {
     if (!auto && !(autoTear && stage === "sealed")) return;
     if (stage === "sealed") {
-      const timer = window.setTimeout(() => void tear(), autoTear ? 120 : 420);
+      // The 3D pack is seen sealed for a beat before it opens itself.
+      const timer = window.setTimeout(() => void tear(), flat ? (autoTear ? 120 : 420) : quick ? 200 : 420);
       return () => window.clearTimeout(timer);
     }
     if (stage === "open" && mode === "keep" && cards) {
@@ -599,14 +652,16 @@ export function ChainPackStage(props: ChainPackStageProps) {
       return () => timers.forEach((timer) => window.clearTimeout(timer));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, autoTear, stage]);
+  }, [auto, autoTear, flat, stage]);
   useEffect(() => {
     if (!auto || stage !== "open" || mode !== "keep" || !cards || selected.length !== Math.min(keep, cards.filter((card) => !card.eternal).length)) return;
     const timer = window.setTimeout(() => void confirm(), 320);
     return () => window.clearTimeout(timer);
   }, [auto, cards, confirm, keep, mode, selected.length, stage]);
 
-  const artUrl = useChainPackArt(art);
+  const artUrl = useChainPackArt(flat ? art : null);
+  const packStyle = useChainPackStyle(art);
+  const packTypeDef = PACK_TYPES.find((type) => type.id === packType);
   const accent = art ? chainPackArtAccent(art) : PACK_TYPES.find((type) => type.id === packType)?.accent ?? { r: 255, g: 102, b: 170 };
   // A country pack waits for its own wrapper rather than showing another's.
   const packArtUrl = artUrl ?? (art?.offer?.kind === "country" ? null : crispPackUrl(packType) ?? packThumb);
@@ -640,7 +695,7 @@ export function ChainPackStage(props: ChainPackStageProps) {
         )}
       </AnimatePresence>
 
-      {showPack && (
+      {showPack && flat && (
         <div className="absolute inset-0 grid place-items-center">
           <ChainPack
             thumb={packArtUrl}
@@ -651,9 +706,50 @@ export function ChainPackStage(props: ChainPackStageProps) {
             disabled={stage !== "sealed"}
             reducedMotion={reducedMotion}
             onOpen={() => void tear()}
-            packRef={packRef}
+            packRef={(element) => {
+              packRef.current = element;
+            }}
           />
         </div>
+      )}
+      {/* A country pack waits for its own wrapper rather than showing another's. */}
+      {showPack && !flat && (packStyle || !art) && (
+        <motion.div
+          key={packEpoch}
+          className="absolute inset-0"
+          initial={reducedMotion ? false : { y: 70, opacity: 0, scale: 0.92 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          transition={{ type: "spring", stiffness: 520, damping: 26 }}
+        >
+          <PackStage
+            bare
+            seamOnly
+            tapToOpen
+            width={Math.round(packHeight * PACK_ASPECT)}
+            artStyle={packStyle ?? undefined}
+            packType={packTypeDef}
+            blade={blade}
+            ripSound={blade !== null}
+            openTick={openTick}
+            openedAfterMs={quick ? 560 : undefined}
+            reducedMotion={reducedMotion}
+            onCut={cut}
+            onOpened={() => void opened()}
+            onUnavailable={() => setFlat(true)}
+            hostRef={(element) => {
+              packRef.current = element;
+            }}
+          />
+          {/* The keyboard's way in; it shows when it has the focus. */}
+          <button
+            type="button"
+            disabled={stage !== "sealed"}
+            onClick={() => void tear()}
+            className="sr-only rounded-full bg-osu-pink px-5 py-2 text-[14px] font-black text-[#120f1a] focus-visible:not-sr-only focus-visible:absolute focus-visible:bottom-6 focus-visible:left-1/2 focus-visible:-translate-x-1/2"
+          >
+            {t`Open the pack`}
+          </button>
+        </motion.div>
       )}
 
       {cards &&
