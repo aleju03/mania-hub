@@ -20543,7 +20543,7 @@ msgstr "Time left"
 msgid "Time played"
 msgstr "Time played"
 
-#. placeholder {0}: Math.round(active.bpm)
+#. placeholder {0}: Math.round(active.bpm * playRate)
 #: src/components/maps/MapDetailModal.tsx
 msgid "timed at {0}"
 msgstr "timed at {0}"
@@ -21859,8 +21859,11 @@ msgstr "Watch"
 msgid "Watch osu!mania replays in your browser."
 msgstr "Watch osu!mania replays in your browser."
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ScorePlayDetailModal.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/StableResultsScreen.tsx
 #: src/routes/snipes.tsx

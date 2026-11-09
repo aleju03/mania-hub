@@ -5,6 +5,8 @@ import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, isLocalChartId, typ
 import type { MapsFavouriteBeatmapset, OsuScore } from "../../lib/types";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
+import { PlayGlyph } from "../ui/PlayGlyph";
+import { Link } from "@tanstack/react-router";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { invertManiaOsuText } from "#dan/invert-mod";
@@ -1524,6 +1526,16 @@ export function MapDetailModal({
                         {t`Open in osu!`}
                       </a>
                     </>
+                  ) : null}
+                  {play?.scoreId != null && play.score?.hasReplay === true ? (
+                    <Link
+                      to="/replay"
+                      search={{ scoreId: play.scoreId, beatmapsetId: setKnown ? entry.beatmapsetId : undefined }}
+                      className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:justify-start sm:px-3"
+                    >
+                      <PlayGlyph className="h-[10px] w-[8.5px]" />
+                      {t`Watch replay`}
+                    </Link>
                   ) : null}
                   <button
                     type="button"

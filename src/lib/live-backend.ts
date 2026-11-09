@@ -22,6 +22,8 @@ export interface LivePlayerSkillScoreDetails {
   totalScore: number | null;
   rank: string | null;
   scoreUrl: string | null;
+  /** Whether osu! keeps the replay; absent or null when unknown. */
+  hasReplay?: boolean | null;
 }
 
 export interface LivePlayerSkillPlay {

@@ -21,7 +21,7 @@ import { skillPlayShareLink } from "../../lib/skill-play-share";
 // The cohort is fetched once, cached briefly, filtered in memory, and revealed
 // 50 rows at a time. Controls that only rearrange or narrow it never wait on a
 // round trip; changing the actual subject (keymode/skill/side) loads a new one.
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Ban, ChevronDown, Clock, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
@@ -57,6 +57,8 @@ import {
 import { getManiaGradeFromAccuracy } from "#/lib/score";
 import { MapDetailModal, accuracyCurrencyLabel, type MapDetailPlayContext } from "#/components/maps/MapDetailModal";
 import { DanMark } from "./DanMark";
+import { Link } from "@tanstack/react-router";
+import { PlayGlyph } from "#/components/ui/PlayGlyph";
 import {
   SKILL_PLAYS_RATE_CAPS,
   readSkillPlaysPrefs,
@@ -1067,6 +1069,7 @@ function MsdPlaysList({
           ? () => setVisibleLimit((current) => Math.min(filtered.length, current + PLAYS_REVEAL_STEP))
           : null}
         loadingMore={false}
+        replaySlot={items.some(playHasReplay)}
       >
         {items.map((play, index) => play.ratingExcluded && play.ratingExclusionReason === "pending_calibration" ? (
           <PendingPlayRow
@@ -1318,6 +1321,7 @@ function DanPlaysList({
           ? () => setVisibleLimit((current) => Math.min(rows.length, current + PLAYS_REVEAL_STEP))
           : null}
         loadingMore={false}
+        replaySlot={visibleRows.some((row) => playHasReplay(row.play))}
       >
         {visibleRows.map((row, index) => {
           const key = `${row.kind}:${rowKey(row.play, index)}`;
@@ -1789,6 +1793,7 @@ function UnratedPlaysList({
           ? () => setVisibleLimit((current) => Math.min(filtered.length, current + PLAYS_REVEAL_STEP))
           : null}
         loadingMore={false}
+        replaySlot={items.some((item) => playHasReplay(item.play))}
       >
         {items.map((item, index) => (
           <PlayRow
@@ -1906,6 +1911,7 @@ function PlayRow({
 }) {
   const { t, i18n } = useLingui();
   const locale = useLocale();
+  const replaySlot = useContext(ReplaySlotContext);
   // osu!'s own status colors, from the same table the maps grid draws, so a
   // green chip means the same thing on both surfaces.
   const status = play.beatmapStatus ? beatmapStatusPill(play.beatmapStatus) : null;
@@ -1978,10 +1984,31 @@ function PlayRow({
       </div>
     </button>
     {trailing}
+    {playHasReplay(play) ? (
+      <Link
+        to="/replay"
+        search={{ scoreId: play.scoreId!, beatmapsetId: play.beatmapsetId ?? undefined }}
+        title={t`Watch replay`}
+        aria-label={t`Watch replay`}
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-osu-pink/20 text-osu-pink-light transition-colors hover:bg-osu-pink/30"
+      >
+        <PlayGlyph className="h-[10px] w-[8.5px] translate-x-[0.5px]" />
+      </Link>
+    ) : replaySlot ? (
+      <span aria-hidden="true" className="h-7 w-7 shrink-0" />
+    ) : null}
     </div>
     {footer}
     </div>
   );
+}
+
+// Whether the list's rows keep a slot for the replay button at their right
+// edge, so the rating column lines up whether or not a row has a replay.
+const ReplaySlotContext = createContext(false);
+
+function playHasReplay(play: LivePlayerSkillPlay): boolean {
+  return play.scoreId != null && play.score?.hasReplay === true;
 }
 
 function ListShell({
@@ -1995,6 +2022,7 @@ function ListShell({
   hidden,
   onShowMore,
   loadingMore,
+  replaySlot = false,
   children,
 }: {
   /** No rows to show yet: draw the skeleton. */
@@ -2009,6 +2037,8 @@ function ListShell({
   hidden: number;
   onShowMore: (() => void) | null;
   loadingMore: boolean;
+  /** Some row in the list has a replay, so every row keeps the button's slot. */
+  replaySlot?: boolean;
   children: ReactNode;
 }) {
   const { t } = useLingui();
@@ -2046,7 +2076,7 @@ function ListShell({
     <div ref={listRef} className="space-y-3">
       {/* Dimmed, not replaced: the rows are still the answer, just not yet
           the answer to the question that was asked half a second ago. */}
-      <div aria-busy={busy} className={`space-y-1.5 transition-opacity ${busy ? "opacity-50" : ""}`}>{children}</div>
+      <div aria-busy={busy} className={`space-y-1.5 transition-opacity ${busy ? "opacity-50" : ""}`}><ReplaySlotContext.Provider value={replaySlot}>{children}</ReplaySlotContext.Provider></div>
       {error ? (
         <div className="rounded-lg border border-osu-red-light/20 bg-osu-red-light/5 px-3 py-2 text-center text-[11px] text-osu-red-light">
           {error}
