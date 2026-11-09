@@ -35,3 +35,6 @@ external models, textures or images.
 The clouds in the Rain cloud and Storm frames and the snow in the Fairy lights frame are Blender
 renders made for this site. Storm's lightning bolt is "Striking Lightning Bolt Against Black Sky" by
 Anshu Kumar (Pexels 33137441, Pexels License).
+
+The Desktop icon, Paint canvas, Paperclip, Blue screen and Pipes frames (November 2026) are drawn for
+this site in code, with no operating system artwork, icons, logos or screenshots.

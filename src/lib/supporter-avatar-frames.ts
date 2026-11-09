@@ -26,6 +26,9 @@ interface FrameGeometry {
   roundStill?: true;
   /* Shown as the still PNG only, never the looping video. */
   stillOnly?: boolean;
+  /* Drawn live instead of from its files, because it carries the wearer's own
+     name as a label (LiveDesktopIcon in SupporterAvatarFrame.tsx). */
+  nameLabel?: true;
   /* Where the wearer's own dan badge sits on the art, [left, top, width, height]
      as fractions of the art's canvas, for a frame that shows it. */
   danWindow?: readonly [number, number, number, number];
@@ -78,6 +81,7 @@ const FRAME_GEOMETRY = {
   "azimuth-orbit": { box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.246, 0.3266, 0.254, 0.2298] },
   "battle-buttons": { box: [-0.4677, -0.371, 1.9355, 1.7419], overhang: [0.4395, 0, 0.4395, 0.254] },
   "black-belt": { box: [-0.3065, -0.2419, 1.6129, 1.8548], overhang: [0.0887, 0, 0.0887, 0.4355] },
+  "blue-screen": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.5806], overhang: [0.0887, 0.2056, 0.0887, 0.3185] },
   "bronze-laurel": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1129, 0.1008, 0.1331, 0.1855] },
   "bullet-board": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3347, 0.3347, 0.3347, 0.3347] },
   "cat-parade": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1573, 0.1694, 0.1532, 0.1694] },
@@ -96,6 +100,7 @@ const FRAME_GEOMETRY = {
   "dan-skip-5-gamma": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.129, 0.129, 0.125, 0.1895] },
   "dan-skip-alpha-kappa": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1089, 0.1048, 0.1169, 0.125] },
   "delta-crest": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1734, 0.1653, 0.1774, 0.1855] },
+  "desktop-icon": { nameLabel: true, box: [-0.2419, -0.2419, 1.4839, 1.5806], overhang: [0, 0, 0, 0.2097] },
   "dfjk-keys": { box: [-0.2419, -0.2419, 1.4839, 1.5806], overhang: [0, 0, 0, 0.1411] },
   "dialogue-box": { box: [-0.371, -0.371, 1.7419, 1.8871], overhang: [0.2621, 0, 0.2621, 0.4879] },
   "disc-bounce": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0, 0, 0] },
@@ -135,9 +140,12 @@ const FRAME_GEOMETRY = {
   "neon-ears": { box: [-0.2419, -0.3387, 1.4839, 1.5806], overhang: [0, 0.2944, 0, 0] },
   "note-highway": { box: [-0.2419, -0.4677, 1.4839, 1.7097], overhang: [0, 0.3952, 0, 0] },
   "old-photo": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.6129], overhang: [0.1371, 0.2339, 0.1411, 0.3548], avatarFilter: "sepia(0.55) saturate(0.75) contrast(1.05)" },
+  "paint-canvas": { squareWindow: true, box: [-0.2903, -0.2419, 1.5323, 1.5323], overhang: [0.25, 0.0685, 0.0887, 0.254] },
+  paperclip: { box: [-0.2419, -0.2419, 1.6613, 1.5323], overhang: [0, 0, 0.3226, 0.1855] },
   "pass-stamp": { roundStill: true, box: [-0.2419, -0.2419, 1.8065, 1.8548], overhang: [0.0081, 0, 0.3226, 0.3306] },
   "pencil-boil": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2823, 0.2903, 0.3065, 0.2944] },
   "percy-check": { box: [-0.2419, -0.2419, 1.4839, 1.7258], overhang: [0.1331, 0.1371, 0.1331, 0.254] },
+  pipes: { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1815, 0.1694, 0.1815, 0.1935] },
   "pity-counter": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.0887, 0.0887, 0.0887, 0.2016] },
   "pixel-hearts": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0.0968, 0, 0] },
   "rail-pass": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.1331, 0.3306, 0.1331, 0.1411] },
@@ -183,7 +191,7 @@ const FRAME_GEOMETRY = {
   "wings-swept-2": { box: [-0.8548, -0.7581, 2.871, 1.9677], overhang: [0.7389, 0.1728, 0.7401, 0] },
   "wings-swept-3": { roundStill: true, box: [-0.8548, -0.7581, 2.871, 1.9677], overhang: [0.7389, 0.3992, 0.7401, 0] },
   "winter-pine": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2419, 0.2419, 0.2419] },
-  "witch-broom": { box: [-0.8548, -0.7742, 2.1935, 2.5484], overhang: [0.8427, 0.2944, 0.2823, 0.7742] },
+  "witch-broom": { box: [-0.7419, -0.7419, 2.129, 2.129], overhang: [0.6694, 0.6169, 0.2823, 0.3185] },
   "witch-hat": { roundStill: true, box: [-0.4839, -0.7742, 1.4194, 1.0968], overhang: [0.254, 0.5242, 0, 0], stillOnly: true },
   "xp-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0887, 0.2016, 0.0887, 0.0887] },
   "yinyang-orbs": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3427, 0.3226, 0.3427, 0.3629] },
@@ -308,7 +316,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 74;
+const FRAME_ART_VERSION = 76;
 
 /* `round`: the still for a round avatar, where the frame has one. */
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {

@@ -5646,6 +5646,10 @@ msgstr "Blue"
 msgid "Blue fairy"
 msgstr "Blue fairy"
 
+#: src/components/supporter/loadout.ts
+msgid "Blue screen"
+msgstr "Blue screen"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
 msgstr "Blur"
@@ -8866,6 +8870,10 @@ msgstr "Deselect {0}"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Desktop"
 msgstr "Desktop"
+
+#: src/components/supporter/loadout.ts
+msgid "Desktop icon"
+msgstr "Desktop icon"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Detected in the .osk"
@@ -18089,6 +18097,7 @@ msgstr "Open the day modal with simulated busy-day data"
 #~ msgstr "Open the in-browser replay viewer for a score."
 
 #: src/components/packs/run/chain/ChainPack.tsx
+#: src/components/packs/run/chain/ChainPackStage.tsx
 #: src/components/packs/run/RunTable.tsx
 msgid "Open the pack"
 msgstr "Open the pack"
@@ -18609,6 +18618,10 @@ msgstr "Page scroll"
 msgid "Paid with Google already?"
 msgstr "Paid with Google already?"
 
+#: src/components/supporter/loadout.ts
+msgid "Paint canvas"
+msgstr "Paint canvas"
+
 #. placeholder {0}: pct(E.bracket[band])
 #: src/lib/chain-run.ts
 msgid "Pairs with the next Bracket: the cards between score +{0}% from each."
@@ -18621,6 +18634,11 @@ msgstr "Pan across"
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Pan down"
 msgstr "Pan down"
+
+#: src/components/supporter/loadout.ts
+#: src/lib/supporter-companions.ts
+msgid "Paperclip"
+msgstr "Paperclip"
 
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
@@ -19108,6 +19126,10 @@ msgstr "Pink wings"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Pinned"
 msgstr "Pinned"
+
+#: src/components/supporter/loadout.ts
+msgid "Pipes"
+msgstr "Pipes"
 
 #: src/components/supporter/loadout.ts
 msgid "Pity counter"
@@ -27270,6 +27292,10 @@ msgstr "They're already a GOAT."
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "They're removed from your tracked plays, recent plays and activity on this site."
 msgstr "They're removed from your tracked plays, recent plays and activity on this site."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Thickness"
+msgstr "Thickness"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Thin mono"

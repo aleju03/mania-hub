@@ -53,6 +53,27 @@ function useFrameDan(frame: SupporterAvatarFrameId, userId: number | null | unde
   return dan?.userId === userId ? dan.dan : null;
 }
 
+/* The name a name-label frame prints: the one handed in, else the wearer's
+   (`userId`), else a sample. Null while theirs is still on its way. */
+function useFrameName(frame: SupporterAvatarFrameId, userId: number | null | undefined, name: string | null | undefined): string | null {
+  const wants = Boolean(supporterFrameGeometry(frame).nameLabel) && !name;
+  const [found, setFound] = useState<{ userId: number; name: string | null } | null>(null);
+  useEffect(() => {
+    if (!wants || !userId) return;
+    let alive = true;
+    void fetchLiveSupporterProfileLook(userId).then((value) => {
+      if (alive) setFound({ userId, name: value.username });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [wants, userId]);
+  if (name) return name;
+  if (!wants) return null;
+  if (!userId) return "player";
+  return found?.userId === userId ? found.name : null;
+}
+
 function canPlayAlphaVideo(): boolean {
   const ua = navigator.userAgent;
   const webKitOnly = /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg\//.test(ua);
@@ -61,10 +82,11 @@ function canPlayAlphaVideo(): boolean {
   return document.createElement("video").canPlayType('video/webm; codecs="vp9"') !== "";
 }
 
-export function SupporterAvatarFrame({ frame, still: holdStill = false, round = false, userId }: { frame: SupporterAvatarFrameId; still?: boolean; /* drawn round, as lists do */ round?: boolean; userId?: number | null }) {
+export function SupporterAvatarFrame({ frame, still: holdStill = false, round = false, userId, name }: { frame: SupporterAvatarFrameId; still?: boolean; /* drawn round, as lists do */ round?: boolean; userId?: number | null; /* the wearer's name, where the caller has it (saves a name-label frame asking) */ name?: string | null }) {
   const [animate, setAnimate] = useState(false);
   useEffect(() => setAnimate(canPlayAlphaVideo()), []);
   const dan = useFrameDan(frame, userId);
+  const label = useFrameName(frame, userId, name);
   const { i18n } = useLingui();
   // a workshop frame draws once its art has arrived with some payload
   useSyncExternalStore(subscribeWorkshopFrames, workshopFramesVersion, () => 0);
@@ -82,6 +104,7 @@ export function SupporterAvatarFrame({ frame, still: holdStill = false, round = 
   const still = supporterFrameSrc(frame, "still", { round });
 
   const playing = animate && !holdStill;
+  if (geometry.nameLabel) return <LiveDesktopIcon name={label} playing={playing} className={className} style={style} />;
   // the DFJK keycaps and the 7K board also answer the viewer's own keys (LiveDfjkKeys, LiveSevenKey)
   const liveKeys = playing && (frame === "dfjk-keys" || frame === "seven-key");
   const wrapped = Boolean(geometry.danWindow) || liveKeys;
@@ -156,6 +179,73 @@ function LiveNoteHighway({ className, style }: { className: string; style: CSSPr
   const ref = useRef<SVGSVGElement>(null);
   useEffect(() => (ref.current ? startNoteHighway(ref.current) : undefined), []);
   return <svg ref={ref} aria-hidden viewBox="0 -28 184 212" className={className} style={style} />;
+}
+
+/* The Desktop icon frame's shortcut arrow, an 11 x 11 pixel box at 2.5 units a
+   pixel with its corner at (30, 126.5), and the selection dither over it. */
+const SHORTCUT_ARROW = ["...#####.", "....####.", ".....###.", "....##.#.", "...##....", "..##.....", "..##....."]
+  .flatMap((row, y) => [...row].map((cell, x) => (cell === "#" ? `M${32.5 + x * 2.5},${131.5 + y * 2.5}h2.5v2.5h-2.5z` : "")))
+  .join("");
+const SHORTCUT_DITHER = Array.from({ length: 18 * 18 }, (_, i) => [i % 18, Math.floor(i / 18)])
+  .filter(([x, y]) => (x + y) % 2 === 0)
+  .map(([x, y]) => `M${32.5 + x * 1.25},${129 + y * 1.25}h1.25v1.25h-1.25z`)
+  .join("");
+/* The label is never wider than the avatar; a longer name is squeezed to fit. */
+const DESKTOP_LABEL_MAX = 116;
+
+/* The Desktop icon frame, drawn live because its label is the wearer's name:
+   a shortcut arrow on the avatar's corner and the name on a plate under it.
+   Playing, a rubber band drags across and selects it (the clock is in
+   styles.css); at rest it stays selected. The design it follows is
+   foundry/designs/desktop-icon. */
+function LiveDesktopIcon({ name, playing, className, style }: { name: string | null; playing: boolean; className: string; style: CSSProperties }) {
+  const text = useRef<SVGTextElement>(null);
+  const [measured, setMeasured] = useState<{ name: string; width: number } | null>(null);
+  useEffect(() => {
+    const width = name ? text.current?.getComputedTextLength() : 0;
+    if (name && width) setMeasured({ name, width });
+  }, [name]);
+  // until it is measured, a guess from the letter count
+  const natural = name ? (measured?.name === name ? measured.width : name.length * 6.6) : 0;
+  const width = Math.min(DESKTOP_LABEL_MAX, natural);
+  const plate = Math.round(width) + 8;
+  const left = Math.round(92 - plate / 2);
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 184 196"
+      className={`${className} ${playing ? "desktop-icon-live" : ""}`}
+      style={{ ...style, filter: "drop-shadow(0 1px 1.2px rgb(0 0 0 / 0.5))" }}
+    >
+      <rect x="30" y="126.5" width="27.5" height="27.5" fill="#000" />
+      <rect x="32.5" y="129" width="22.5" height="22.5" fill="#fff" />
+      <path d={SHORTCUT_ARROW} fill="#000" />
+      <path className="desktop-icon-mark" d={SHORTCUT_DITHER} fill="#000080" />
+      {name && (
+        <>
+          <rect className="desktop-icon-plate" x={left} y="161" width={plate} height="18" fill="#000080" />
+          <text
+            ref={text}
+            x={left + plate / 2}
+            y="174.4"
+            fontSize="13"
+            textAnchor="middle"
+            fill="#fff"
+            fontFamily='Arial, "Liberation Sans", Helvetica, sans-serif'
+            textLength={natural > DESKTOP_LABEL_MAX ? DESKTOP_LABEL_MAX : undefined}
+            lengthAdjust="spacingAndGlyphs"
+          >
+            {name}
+          </text>
+          <rect className="desktop-icon-mark" x={left + 0.5} y="161.5" width={plate - 1} height="17" fill="none" stroke="#ffff7f" strokeDasharray="1 1" />
+        </>
+      )}
+      <g className="desktop-icon-band" fill="none">
+        <rect x="14.5" y="14.5" width="156" height="172" stroke="#fff" vectorEffect="non-scaling-stroke" />
+        <rect x="14.5" y="14.5" width="156" height="172" stroke="#000" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
+      </g>
+    </svg>
+  );
 }
 
 /* The card's second line: the skillset (or Overall), LN, and the keymode. */

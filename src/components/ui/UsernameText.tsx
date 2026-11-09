@@ -3,6 +3,7 @@ import { getAvatarAccentStoreKey } from "../../lib/avatar-accent";
 import { requestAvatarAccent } from "../../lib/avatar-accent-harvest";
 import { ensureSupporterNameStyles, getSupporterNameFont, getSupporterNameOutline, getSupporterNameStyle, subscribeSupporterNameStyles } from "../../lib/live-backend";
 import { SupporterStyledName } from "../supporter/SupporterNameStyle";
+import { nameOutlineInline } from "../../lib/supporter-name-styles";
 import { avatarUrlUserId } from "./Avatar";
 import { useHydrated } from "../../lib/use-hydrated";
 import { useAppStore } from "../../store";
@@ -72,7 +73,7 @@ export function UsernameText({
   return (
     <span
       className={`${className ?? ""}${nameFont ? ` name-font--${nameFont}` : ""}${nameOutline ? " name-outline" : ""}`}
-      style={{ transition: "color 220ms ease-out", ...(accent ? { color: accent } : null), ...(nameOutline ? { "--name-outline": `#${nameOutline}` } : null) } as CSSProperties}
+      style={{ transition: "color 220ms ease-out", ...(accent ? { color: accent } : null), ...(nameOutline ? nameOutlineInline(nameOutline) : null) } as CSSProperties}
     >
       {username}
     </span>

@@ -5631,6 +5631,10 @@ msgstr "蓝色"
 msgid "Blue fairy"
 msgstr "蓝色妖精"
 
+#: src/components/supporter/loadout.ts
+msgid "Blue screen"
+msgstr "蓝屏"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
 msgstr "模糊"
@@ -8851,6 +8855,10 @@ msgstr "取消选择 {0}"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Desktop"
 msgstr "电脑"
+
+#: src/components/supporter/loadout.ts
+msgid "Desktop icon"
+msgstr "桌面图标"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Detected in the .osk"
@@ -18058,6 +18066,7 @@ msgstr "用模拟的高强度数据打开当天弹窗"
 #~ msgstr "在浏览器里打开某个成绩的回放播放器。"
 
 #: src/components/packs/run/chain/ChainPack.tsx
+#: src/components/packs/run/chain/ChainPackStage.tsx
 #: src/components/packs/run/RunTable.tsx
 msgid "Open the pack"
 msgstr "开启卡包"
@@ -18578,6 +18587,10 @@ msgstr "页面滚动"
 msgid "Paid with Google already?"
 msgstr "已经用 Google 付款了？"
 
+#: src/components/supporter/loadout.ts
+msgid "Paint canvas"
+msgstr "画图画布"
+
 #. placeholder {0}: pct(E.bracket[band])
 #: src/lib/chain-run.ts
 msgid "Pairs with the next Bracket: the cards between score +{0}% from each."
@@ -18590,6 +18603,11 @@ msgstr "横向平移"
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Pan down"
 msgstr "纵向平移"
+
+#: src/components/supporter/loadout.ts
+#: src/lib/supporter-companions.ts
+msgid "Paperclip"
+msgstr "回形针"
 
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
@@ -19077,6 +19095,10 @@ msgstr "粉色翅膀"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Pinned"
 msgstr "已置顶"
+
+#: src/components/supporter/loadout.ts
+msgid "Pipes"
+msgstr "管道"
 
 #: src/components/supporter/loadout.ts
 msgid "Pity counter"
@@ -27223,6 +27245,10 @@ msgstr "他们已经是 GOAT 了。"
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "They're removed from your tracked plays, recent plays and activity on this site."
 msgstr "它们会从本站你的追踪成绩、最近成绩和活动中移除。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Thickness"
+msgstr "粗细"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Thin mono"

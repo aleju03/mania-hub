@@ -79,7 +79,7 @@ function StarSlot({ stars }: { stars: DetailStars }) {
 // Shorter on phones so the MSD panel stays in view below it.
 export function MapDetailHeader({ entry, active, cover, stars, status, tiles, rating, onClose }: MapDetailHeaderProps) {
   return (
-    <div className="relative h-[136px] shrink-0 sm:h-[188px]">
+    <div className="relative h-[136px] shrink-0 sm:h-[164px]">
       {/* The cover dissolves into the panel; the title's shade fades
           with the art inside the mask, so no edge shows. */}
       <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_35%,transparent)]">

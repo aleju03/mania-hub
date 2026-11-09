@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
-import { isShaderNameStyle, isSolidNameStyle, solidNameColour, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { isShaderNameStyle, isSolidNameStyle, nameOutlineInline, solidNameColour, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { useWebGlSlot } from "../../lib/gl-budget";
 
 /* A supporter's name in their name tag style and/or name font. One element whose look comes
@@ -22,7 +22,7 @@ export function nameStyleInline(nameStyle: SupporterNameStyleId | null, outline:
   if (!outline && !isSolidNameStyle(nameStyle)) return undefined;
   return {
     ...(isSolidNameStyle(nameStyle) ? { color: solidNameColour(nameStyle) } : null),
-    ...(outline ? { "--name-outline": `#${outline}` } : null),
+    ...(outline ? nameOutlineInline(outline) : null),
   } as CSSProperties;
 }
 

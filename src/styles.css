@@ -314,6 +314,34 @@ html[data-custom-cursor="true"] * {
   background-size: 320% 100%;
   animation: frame-sheen 14s infinite;
 }
+/* The Desktop icon frame (LiveDesktopIcon), on one 6 s clock: a rubber band
+   drags across, the label and the shortcut arrow take the selection as it
+   lets go, and they drop it again near the end. At rest it stays selected. */
+@keyframes desktop-icon-plate {
+  0% { fill: #008080; }
+  28.3% { fill: #000080; }
+  85% { fill: #008080; }
+}
+@keyframes desktop-icon-mark {
+  0% { opacity: 0; }
+  28.3% { opacity: 1; }
+  85% { opacity: 0; }
+}
+@keyframes desktop-icon-band {
+  0% { visibility: hidden; }
+  15% { visibility: visible; }
+  28.3% { visibility: hidden; }
+}
+@keyframes desktop-icon-drag {
+  0%, 15% { transform: scale(0.01); animation-timing-function: cubic-bezier(0.4, 0, 0.3, 1); }
+  26.3%, 100% { transform: scale(1); }
+}
+.desktop-icon-band { visibility: hidden; }
+.desktop-icon-band rect { transform-box: fill-box; transform-origin: 0 0; }
+.desktop-icon-live .desktop-icon-plate { animation: desktop-icon-plate 6s step-end infinite; }
+.desktop-icon-live .desktop-icon-mark { animation: desktop-icon-mark 6s step-end infinite; }
+.desktop-icon-live .desktop-icon-band { animation: desktop-icon-band 6s step-end infinite; }
+.desktop-icon-live .desktop-icon-band rect { animation: desktop-icon-drag 6s infinite; }
 /* the DFJK frame's hit light, as its video fades it */
 @keyframes dfjk-hit {
   from { opacity: 1; }
@@ -1955,10 +1983,13 @@ html[data-custom-cursor="true"] * {
 /* The outline a supporter can put round their name, in their colour: a
    stroke under the fill, so the letters keep their shape and the outline
    grows outward. A live shader's canvas covers the fill, and the stroke's
-   outer half shows round its letters. Wins over a font's own stroke. */
+   outer half shows round its letters. Wins over a font's own stroke. Its
+   width is the supporter's pick (nameOutlineInline), and its corners are
+   rounded: mitred ones grew spikes off a script font's sharp turns. */
 .name-outline {
-  -webkit-text-stroke: 0.14em var(--name-outline, #fff) !important;
+  -webkit-text-stroke: var(--name-outline-width, 0.14em) var(--name-outline, #fff) !important;
   paint-order: stroke fill;
+  stroke-linejoin: round;
 }
 
 /* Pixel Operator: a 16 px pixel face in the RPG dialogue-box style */

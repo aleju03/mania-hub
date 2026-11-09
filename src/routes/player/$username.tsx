@@ -2608,7 +2608,7 @@ export function PlayerProfilePage({
                   loading="lazy"
                 />
               </button>
-              {heroFrame && <SupporterAvatarFrame frame={heroFrame} userId={profileUserId} />}
+              {heroFrame && <SupporterAvatarFrame frame={heroFrame} userId={profileUserId} name={user.username} />}
             </div>
             <div className={`min-w-0 flex-1 basis-[11rem] ${heroFrameWide ? "max-sm:contents" : ""}`}>
               <h1 className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 ${heroFrameWide ? "max-sm:min-w-auto max-sm:max-w-full max-sm:flex-1 max-sm:basis-0" : ""}`}>

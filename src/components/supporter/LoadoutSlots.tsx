@@ -14,7 +14,7 @@ import {
   type SupporterAvatarFrameId,
 } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
-import { DEFAULT_SOLID_COLOUR, isSolidNameStyle, nameStyleLabel, solidNameColour, solidNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { DEFAULT_SOLID_COLOUR, isSolidNameStyle, NAME_OUTLINE_THICKEST, nameOutlineThickness, nameOutlineValue, nameStyleLabel, solidNameColour, solidNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "./SupporterNameStyle";
 import { announceFrameDanPicked, frameDanName, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
@@ -854,22 +854,26 @@ function NameStyleDrawer({ current, disabled, username, onTry, onPick, onNameOut
 
 const DEFAULT_OUTLINE = "ffffff";
 
-/* An outline round the name, with any style and font: a switch, and a swatch
+/* An outline round the name, with any style and font: a switch, a swatch
    that opens the browser's colour picker (previewing as it moves, saved once
-   it closes). */
+   it closes), and how thick the line is. */
 function NameOutlineSwitch({ outline, disabled, onChange }: { outline: string | null; disabled: boolean; onChange: (outline: string | null, commit: boolean) => void }) {
   const { t } = useLingui();
-  const [colour, setColour] = useState(() => `#${outline ?? DEFAULT_OUTLINE}`);
+  const [colour, setColour] = useState(() => `#${(outline ?? DEFAULT_OUTLINE).slice(0, 6)}`);
+  const [thickness, setThickness] = useState(() => (outline ? nameOutlineThickness(outline) : NAME_OUTLINE_THICKEST));
   useEffect(() => {
-    if (outline) setColour(`#${outline}`);
+    if (!outline) return;
+    setColour(`#${outline.slice(0, 6)}`);
+    setThickness(nameOutlineThickness(outline));
   }, [outline]);
+  const value = (hex: string, level = thickness) => nameOutlineValue(hex.slice(1).toLowerCase(), level);
   const inputRef = useRef<HTMLInputElement>(null);
-  const latest = useRef(onChange);
-  latest.current = onChange;
+  const latest = useRef({ onChange, value });
+  latest.current = { onChange, value };
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
-    const commit = () => latest.current(input.value.slice(1).toLowerCase(), true);
+    const commit = () => latest.current.onChange(latest.current.value(input.value), true);
     input.addEventListener("change", commit);
     return () => input.removeEventListener("change", commit);
   }, []);
@@ -877,42 +881,63 @@ function NameOutlineSwitch({ outline, disabled, onChange }: { outline: string | 
   // the swatch sits on the left: the browser opens its colour picker from the
   // swatch's left edge, and at the drawer's right edge it ran off the window
   return (
-    <div className="mt-3 flex items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label={t`Outline`}
-        disabled={disabled}
-        onClick={() => onChange(on ? null : colour.slice(1).toLowerCase(), true)}
-        className="relative h-5 w-9 shrink-0 cursor-pointer rounded-full disabled:cursor-default"
-      >
-        <span className={`absolute inset-0 rounded-full transition-colors ${on ? "bg-osu-pink" : "bg-osu-b2"}`} />
-        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
-      </button>
-      <label className={`relative h-6 w-6 shrink-0 rounded-full ring-2 ring-white/70 ${disabled ? "opacity-50" : "cursor-pointer"}`} style={{ background: colour }} title={t`Pick a colour`}>
-        <input
-          ref={inputRef}
-          type="color"
-          value={colour}
+    <div className="mt-3 rounded-lg bg-osu-b4 px-3 py-2.5">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={t`Outline`}
           disabled={disabled}
-          aria-label={t`Pick an outline colour`}
-          onChange={(event) => {
-            setColour(event.target.value);
-            onChange(event.target.value.slice(1).toLowerCase(), false);
-          }}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </label>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onChange(on ? null : colour.slice(1).toLowerCase(), true)}
-        className="min-w-0 flex-1 cursor-pointer text-left disabled:cursor-default"
-      >
-        <span className="block text-[13px] font-semibold text-white">{t`Outline`}</span>
-        <span className="block text-[11.5px] text-osu-f1">{t`A line round your name in a colour of your choosing.`}</span>
-      </button>
+          onClick={() => onChange(on ? null : value(colour), true)}
+          className="relative h-5 w-9 shrink-0 cursor-pointer rounded-full disabled:cursor-default"
+        >
+          <span className={`absolute inset-0 rounded-full transition-colors ${on ? "bg-osu-pink" : "bg-osu-b2"}`} />
+          <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
+        </button>
+        <label className={`relative h-6 w-6 shrink-0 rounded-full ring-2 ring-white/70 ${disabled ? "opacity-50" : "cursor-pointer"}`} style={{ background: colour }} title={t`Pick a colour`}>
+          <input
+            ref={inputRef}
+            type="color"
+            value={colour}
+            disabled={disabled}
+            aria-label={t`Pick an outline colour`}
+            onChange={(event) => {
+              setColour(event.target.value);
+              onChange(value(event.target.value), false);
+            }}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(on ? null : value(colour), true)}
+          className="min-w-0 flex-1 cursor-pointer text-left disabled:cursor-default"
+        >
+          <span className="block text-[13px] font-semibold text-white">{t`Outline`}</span>
+          <span className="block text-[11.5px] text-osu-f1">{t`A line round your name in a colour of your choosing.`}</span>
+        </button>
+      </div>
+      {on && (
+        <label className="mt-2.5 flex items-center gap-3">
+          <span className="shrink-0 text-[11.5px] font-semibold text-osu-f1">{t`Thickness`}</span>
+          <input
+            type="range"
+            min={1}
+            max={NAME_OUTLINE_THICKEST}
+            step={1}
+            value={thickness}
+            disabled={disabled}
+            onChange={(event) => {
+              const level = Number(event.currentTarget.value);
+              setThickness(level);
+              onChange(value(colour, level), true);
+            }}
+            className="h-1.5 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-osu-b3/50 accent-osu-pink disabled:cursor-default"
+          />
+        </label>
+      )}
     </div>
   );
 }

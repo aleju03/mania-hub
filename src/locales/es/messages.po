@@ -4226,7 +4226,7 @@ msgstr "Después de puntuar, el eslabón que llega a ella se activa otra vez y v
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Afternoon player"
-msgstr "Juega de tarde"
+msgstr "Jugador de tarde"
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
@@ -5618,6 +5618,10 @@ msgstr "Azul"
 #: src/lib/supporter-companions.ts
 msgid "Blue fairy"
 msgstr "Hada azul"
+
+#: src/components/supporter/loadout.ts
+msgid "Blue screen"
+msgstr "Pantallazo azul"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Blur"
@@ -8840,6 +8844,10 @@ msgstr "Deseleccionar {0}"
 msgid "Desktop"
 msgstr "Escritorio"
 
+#: src/components/supporter/loadout.ts
+msgid "Desktop icon"
+msgstr "Icono de escritorio"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Detected in the .osk"
 msgstr "Detectado en el .osk"
@@ -9796,7 +9804,7 @@ msgstr "Incluso con esas salvaguardas, los datos pueden estar retrasados, incomp
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Evening player"
-msgstr "Juega de noche"
+msgstr "Jugador nocturno"
 
 #: src/lib/pack-run.ts
 msgid "Every +combo is halved."
@@ -15505,7 +15513,7 @@ msgstr "Más vistas"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Morning player"
-msgstr "Juega de mañana"
+msgstr "Jugador mañanero"
 
 #. placeholder {0}: formatHour(peakHour)
 #: src/components/me/MyDataPanel.tsx
@@ -18046,6 +18054,7 @@ msgstr "Abre el modal del día con datos simulados de un día ocupado"
 #~ msgstr "Abre el visor de replays en el navegador para un score."
 
 #: src/components/packs/run/chain/ChainPack.tsx
+#: src/components/packs/run/chain/ChainPackStage.tsx
 #: src/components/packs/run/RunTable.tsx
 msgid "Open the pack"
 msgstr "Abrir el pack"
@@ -18566,6 +18575,10 @@ msgstr "Scroll de la página"
 msgid "Paid with Google already?"
 msgstr "¿Ya pagaste con Google?"
 
+#: src/components/supporter/loadout.ts
+msgid "Paint canvas"
+msgstr "Lienzo de Paint"
+
 #. placeholder {0}: pct(E.bracket[band])
 #: src/lib/chain-run.ts
 msgid "Pairs with the next Bracket: the cards between score +{0}% from each."
@@ -18578,6 +18591,11 @@ msgstr "Mover en horizontal"
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Pan down"
 msgstr "Mover en vertical"
+
+#: src/components/supporter/loadout.ts
+#: src/lib/supporter-companions.ts
+msgid "Paperclip"
+msgstr "Clip"
 
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
@@ -19065,6 +19083,10 @@ msgstr "Alas rosas"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Pinned"
 msgstr "Fijados"
+
+#: src/components/supporter/loadout.ts
+msgid "Pipes"
+msgstr "Tuberías"
 
 #: src/components/supporter/loadout.ts
 msgid "Pity counter"
@@ -27212,6 +27234,10 @@ msgstr "Ya es un GOAT."
 msgid "They're removed from your tracked plays, recent plays and activity on this site."
 msgstr "Se eliminan de tus jugadas trackeadas, jugadas recientes y actividad en este sitio."
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Thickness"
+msgstr "Grosor"
+
 #: src/lib/supporter-name-fonts.ts
 msgid "Thin mono"
 msgstr "Mono fina"
@@ -30832,7 +30858,7 @@ msgstr "La pestaña Skills de tu perfil se abre en el modo de teclas con más pl
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "Your rank burns with a flame while your subscription renews."
-msgstr "Tu rango arde en llamas mientras tu suscripción se renueve."
+msgstr "Fuego en tu rango, mientras se siga renovando."
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."

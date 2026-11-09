@@ -65,9 +65,30 @@ export function solidNameColour(value: SolidNameStyle): string {
 }
 
 /* An outline round the name in a colour the supporter picked: six lowercase
-   hex digits, as the backend keeps it (features/supporters.ts). */
+   hex digits, as the backend keeps it (features/supporters.ts), then one digit
+   for a thinner line (1 the thinnest, to 3). With none it is the full width,
+   which every outline had before there was a choice. */
 export function isSupporterNameOutline(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{6}$/.test(value);
+  return typeof value === "string" && /^[0-9a-f]{6}[1-3]?$/.test(value);
+}
+
+/* The line's width at each thickness, 1 to 4 (the full width). */
+const NAME_OUTLINE_WIDTHS = ["0.04em", "0.07em", "0.105em", "0.14em"] as const;
+export const NAME_OUTLINE_THICKEST = NAME_OUTLINE_WIDTHS.length;
+
+export function nameOutlineThickness(outline: string): number {
+  return outline.length > 6 ? Number(outline[6]) : NAME_OUTLINE_THICKEST;
+}
+
+/* The value kept for a colour (six hex digits, any trailing thickness dropped) at a thickness. */
+export function nameOutlineValue(colour: string, thickness: number): string {
+  const level = Math.min(NAME_OUTLINE_THICKEST, Math.max(1, Math.round(thickness)));
+  return `${colour.slice(0, 6)}${level === NAME_OUTLINE_THICKEST ? "" : level}`;
+}
+
+/* The custom properties `.name-outline` (styles.css) draws the line from. */
+export function nameOutlineInline(outline: string): Record<string, string> {
+  return { "--name-outline": `#${outline.slice(0, 6)}`, "--name-outline-width": NAME_OUTLINE_WIDTHS[nameOutlineThickness(outline) - 1] };
 }
 
 /* Styles that also run as a WebGL shader over big names (name-tag-shaders.ts). */

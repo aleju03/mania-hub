@@ -1767,12 +1767,18 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
-  // Bullet hell: a boss fight with no boss in it. A smoky glow
-  // where it would hang turns from violet to deep blue to the red of its
-  // roar, light streaming out from behind it; six-pointed star bullets drift
-  // past, the far ones smeared into scanlines, the near ones circling the
-  // empty middle; now and then a flurry of white shards falls; the red SOUL
-  // keeps dodging. All drawn here.
+  // Bullet hell: a boss fight with no boss in it. A smoky glow turns from
+  // violet to deep blue to the red of a roar, light streaming out of a
+  // white-hot point in its middle (no figure there: one was tried and read as
+  // an eye). Star bullets drift past, the far ones smeared into scanlines,
+  // the near ones leaving the light one by one (they used to circle it,
+  // which looked like a carousel round an empty point); now and then a flurry of
+  // white shards falls; the red SOUL keeps dodging. All drawn here.
+  // The bullets follow the fight they nod to: upright stars, much wider than
+  // tall, ONE thick outline round a darker middle with a white diamond at the
+  // heart, and a small barb standing off each of the four side points (ten
+  // tips in all). No second outline inside and no spin: thin crossed lines
+  // turning on the spot read as a different, unrelated symbol.
   knightfight: shader(`
 float hexagram(vec2 p, float r) {
   const vec4 k = vec4(-.5, .8660254, .5773503, 1.7320508);
@@ -1783,13 +1789,24 @@ float hexagram(vec2 p, float r) {
   return length(p) * sign(p.y);
 }
 
-/* A star bullet: a six-pointed outline with a diamond in the middle; 0..1 coverage. */
-float starBullet(vec2 q, float r) {
+/* A star bullet (its tips reach 2r up and down, 2.4r sideways): x = the
+   thick outline, y = the darker middle inside it, z = the diamond at its heart. */
+vec3 starParts(vec2 q, float r) {
+  // the barb on each side point: a small spike off its flat edge, the same in all four corners
+  vec2 a = abs(q) / r;
+  float barb = step(.9, a.y) * step(.86 * (a.y - 1.) - .36 * (a.x - 1.1), 0.) * step(0., .2 * (a.y - 1.) - .36 * (a.x - 1.84));
+  q.x /= 1.4;
   float d = hexagram(q, r);
-  float rim = step(abs(d + r * .12), r * .11);
-  float inner = step(abs(hexagram(q, r * .62) + r * .07), r * .06);
-  float core = step(abs(q.x) + abs(q.y), r * .2);
-  return max(max(rim, inner * .8), core);
+  float rim = max(step(abs(d + r * .15), r * .15), barb);
+  float inside = step(d, -r * .3);
+  float core = step(abs(q.x) * 1.15 + abs(q.y), r * .4);
+  return vec3(rim, inside, core);
+}
+
+/* The same as one coverage, for the far ones: the outline and the diamond. */
+float starBullet(vec2 q, float r) {
+  vec3 s = starParts(q, r);
+  return max(s.x, s.z);
 }
 
 vec3 theme(vec2 uv, vec2 p, float t) {
@@ -1813,7 +1830,11 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   // light streaming out from behind it
   float ang = atan(d.y, d.x);
   float rays = pow(.5 + .5 * sin(ang * 11. + noise(vec2(ang * 3., t * .3)) * 4.), 5.) * exp(-length(d) * 3.2);
-  col += mix(tint, pale, .5) * rays * .35 * smoothstep(.02, .16, length(d));
+  col += mix(tint, pale, .5) * rays * .35 * smoothstep(0., .07, length(d));
+  // the point it streams from: a small white-hot core and a thin flare across it
+  float dl = length(d * vec2(.9, 1.));
+  col += pale * (exp(-dl * 26.) * .85 + exp(-dl * 9.) * .22);
+  col += pale * exp(-abs(d.y) * 90.) * exp(-abs(d.x) * 7.) * .3;
   // far star bullets, smeared sideways into scanlines
   for (int l = 0; l < 2; l++) {
     float fl = float(l);
@@ -1828,22 +1849,38 @@ vec3 theme(vec2 uv, vec2 p, float t) {
       if (hash(id + fl * 7.) < .72) continue;
       vec2 c = (id + .5 + (vec2(hash(id + 1.), hash(id + 2.)) - .5) * .5) * cell;
       float r = cell * (.15 + .08 * hash(id + 5.));
-      if (length(q - c) > r * 2.8) continue;
-      vec2 s = rot(t * (.2 + .3 * hash(id + 3.)) * (hash(id + 4.) > .5 ? 1. : -1.)) * (q - c);
+      if (length(q - c) > r * 3.3) continue;
+      vec2 s = q - c;
       for (int k = 0; k < 4; k++) smear = max(smear, starBullet(s + vec2(float(k) * r * .22, 0.), r) * (1. - float(k) * .25));
     }
     float scan = step(.5, fract(gl_FragCoord.y / 3.));
     col = mix(col, pale * .8, smear * scan * (.22 + fl * .1));
   }
-  // nearer star bullets circling the Knight, crisp, on a pixel grid
   vec2 pp = (floor(p * 210.) + .5) / 210.;
-  for (int i = 0; i < 6; i++) {
+  // nearer star bullets streaming out of the light, crisp. Each of the
+  // fourteen keeps its own clock and, every time it leaves, draws a new
+  // heading, curl, reach and size (and sometimes sits a turn out), so no two
+  // passes match and nothing lines up into a ring: rings of eight on one
+  // clock read as a predictable pattern. They grow as they come and fade
+  // before the edge. On a finer grid than the shards and the SOUL (the barbs
+  // need the pixels), and light, not solid: the outline lets the glow through
+  // and the middle is only a shade darker than what is behind it.
+  vec2 ps = (floor(p * 330.) + .5) / 330.;
+  for (int i = 0; i < 14; i++) {
     float fi = float(i);
-    float a = t * (.25 + .05 * fi) + fi * 1.047;
-    float rad = .2 + .08 * sin(t * .4 + fi * 2.);
-    vec2 c = kp + vec2(cos(a) * rad * 1.5, sin(a) * rad);
-    float b = starBullet(rot(t * .8 + fi) * (pp - c), .028 + .006 * sin(fi * 3.));
-    col = mix(col, pale, b * .85);
+    float cyc = t / (7. + 6. * hash(vec2(fi, 3.))) + hash(vec2(fi, 5.)) * 9.;
+    float n = floor(cyc), u = fract(cyc);
+    if (hash(vec2(fi + 40., n)) < .22) continue;
+    float h1 = hash(vec2(fi, n)), h2 = hash(vec2(fi + 9., n)), h3 = hash(vec2(n, fi + 21.));
+    float a = h1 * 6.2832 + (h2 - .5) * 1.8 * u;
+    vec2 c = kp + vec2(cos(a) * 1.35, sin(a)) * (.03 + pow(u, .8 + .5 * h2) * (.7 + .5 * h3));
+    float r = (.011 + .02 * u) * (.75 + .6 * h3);
+    vec2 sd = ps - c;
+    if (abs(sd.x) > r * 2.6 || abs(sd.y) > r * 2.2) continue;
+    vec3 b = starParts(sd, r) * smoothstep(.02, .12, u) * (1. - smoothstep(.72, 1., u));
+    col = mix(col, col * .55, b.y * .7);
+    col = mix(col, pale, b.x * .62);
+    col = mix(col, mix(pale, vec3(1.), .6), b.z * .85);
   }
   // now and then a flurry of white shards falls through
   float fz = mod(t, 30.);
