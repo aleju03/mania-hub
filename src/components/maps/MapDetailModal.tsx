@@ -799,7 +799,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <HoverTip key={name} className="flex flex-col" tip={name.startsWith("LN") && !usesPrism(entry.keyCount) ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTip(i18n, name, entry.keyCount, msd)}>
+            <HoverTip key={name} className="flex flex-col" tip={halvesTip(i18n, name, entry.keyCount, msd)}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 || floored.has(name) ? "text-osu-f1/45" : "text-osu-l2"
