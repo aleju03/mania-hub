@@ -342,6 +342,14 @@ html[data-custom-cursor="true"] * {
 .desktop-icon-live .desktop-icon-mark { animation: desktop-icon-mark 6s step-end infinite; }
 .desktop-icon-live .desktop-icon-band { animation: desktop-icon-band 6s step-end infinite; }
 .desktop-icon-live .desktop-icon-band rect { animation: desktop-icon-drag 6s infinite; }
+/* A judgement over the Note highway's playfield (HighwayPlayHud): it pops in and fades. */
+@keyframes highway-judge {
+  0% { transform: translateX(-50%) scale(1.3); opacity: 1; }
+  20% { transform: translateX(-50%) scale(1); }
+  65% { opacity: 1; }
+  100% { transform: translateX(-50%) scale(1); opacity: 0; }
+}
+.highway-judge { animation: highway-judge 600ms ease-out forwards; }
 /* the DFJK frame's hit light, as its video fades it */
 @keyframes dfjk-hit {
   from { opacity: 1; }

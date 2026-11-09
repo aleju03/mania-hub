@@ -172,6 +172,22 @@ export function rgbToHueSat([r, g, b]: [number, number, number]): { hue: number;
   return { hue: Math.round((hue * 60 + 360) % 360), sat: Math.min(1, sat) };
 }
 
+/* A visitor playing the Note highway (use-highway-play.ts fills it, the
+   renderer reads it every frame): which keys are down, and what they hit. */
+export interface HighwayPlay {
+  /** Notes answer the keys instead of lighting them on their own. */
+  on: boolean;
+  /** The backdrop's clock: its seconds are (performance.now() - epoch) / 1000. Set by the renderer; null where it holds one still frame. */
+  epoch: number | null;
+  /** Per lane: the key is held. */
+  down: boolean[];
+  /** Per lane: when the key last went down and when it last hit a note, in the backdrop's seconds; -1 for never. */
+  pressedAt: number[];
+  hitAt: number[];
+  /** Per lane: the start (ms into the chart's loop) of the last note hit, which is gone from the lane; -1 for none. */
+  hitUntil: number[];
+}
+
 /* A real chart section for the Note highway (use-highway-chart.ts builds it).
    Times are in ms from the section's start. */
 export interface HighwayChart {

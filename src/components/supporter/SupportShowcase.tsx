@@ -162,12 +162,16 @@ interface HeroLook {
   nameFont: SupporterNameFontId | null;
 }
 
+/* Looks whose theme, frame and name belong together at a glance (each was
+   judged on a capture of this stage, not picked from the lists). */
 const HERO_LOOKS: HeroLook[] = [
+  { theme: "maple", frame: "autumn-maple", nameStyle: "ember", nameFont: "cinzel" },
+  { theme: "aero", frame: "aero-bubble", nameStyle: "aero", nameFont: "righteous" },
   { theme: "cosmos", frame: "stellium-orbit", nameStyle: "galaxy", nameFont: "orbitron" },
-  { theme: "sakura", frame: "sakura", nameStyle: "pearl", nameFont: "pacifico" },
+  { theme: "fireflies", frame: "fairy-lights", nameStyle: "gold", nameFont: "lobster" },
+  { theme: "vaporwave", frame: "xp-window", nameStyle: "holo", nameFont: "audiowide" },
+  { theme: "sakura", frame: "sakura", nameStyle: "solid-ffd6e7", nameFont: "playfair" },
   { theme: "terminal", frame: "term-window", nameStyle: "terminal", nameFont: "vt323" },
-  { theme: "synthwave", frame: "neon-ears", nameStyle: "neon", nameFont: "monoton" },
-  { theme: "aurora", frame: "halo-cyan", nameStyle: "aurora", nameFont: null },
 ];
 
 /* [top, sides, bottom] in avatar widths: the most any hero frame reaches past the avatar. */

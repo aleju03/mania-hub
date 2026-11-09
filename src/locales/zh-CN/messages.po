@@ -6312,6 +6312,10 @@ msgstr "更换{0}"
 #~ msgid "Change in v26"
 #~ msgstr "v26 中的变化"
 
+#: src/components/supporter/HighwayPlayHud.tsx
+msgid "change keys"
+msgstr "更改按键"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
 msgstr "更换谱面"
@@ -19221,6 +19225,10 @@ msgstr "游玩时长"
 msgid "Play Time"
 msgstr "游玩时长"
 
+#: src/components/supporter/HighwayPlayHud.tsx
+msgid "Play with"
+msgstr "按键游玩"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Play worth at least"
 msgstr "单个成绩至少"
@@ -19687,6 +19695,10 @@ msgstr "正在准备上传。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Preset name"
 msgstr "预设名称"
+
+#: src/components/supporter/HighwayPlayHud.tsx
+msgid "Press {lanes} keys, left to right"
+msgstr "从左到右按下 {lanes} 个键"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Press {pasteKey}"

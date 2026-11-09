@@ -6327,6 +6327,10 @@ msgstr "Change {0}"
 #~ msgid "Change in v26"
 #~ msgstr "Change in v26"
 
+#: src/components/supporter/HighwayPlayHud.tsx
+msgid "change keys"
+msgstr "change keys"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Change map"
 msgstr "Change map"
@@ -19252,6 +19256,10 @@ msgstr "Play time"
 msgid "Play Time"
 msgstr "Play Time"
 
+#: src/components/supporter/HighwayPlayHud.tsx
+msgid "Play with"
+msgstr "Play with"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Play worth at least"
 msgstr "Play worth at least"
@@ -19718,6 +19726,10 @@ msgstr "Preparing the upload."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Preset name"
 msgstr "Preset name"
+
+#: src/components/supporter/HighwayPlayHud.tsx
+msgid "Press {lanes} keys, left to right"
+msgstr "Press {lanes} keys, left to right"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Press {pasteKey}"

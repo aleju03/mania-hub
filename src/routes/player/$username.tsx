@@ -103,6 +103,8 @@ import { FeaturedPlayCard, FeaturedPlayDialog, FeaturedPlayEditButton } from "..
 import { useViewerIsSupporter } from "../../lib/viewer-supporter";
 import { useHighwayNotes } from "../../components/supporter/use-highway-notes";
 import { useHighwayChart } from "../../components/supporter/use-highway-chart";
+import { useHighwayPlay } from "../../components/supporter/use-highway-play";
+import { HighwayPlayHud } from "../../components/supporter/HighwayPlayHud";
 import { PROFILE_THEME_LOOKS, profileThemeStyle, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
 import { CUSTOM_THEME_COVER, customThemeStyle, type CustomTheme } from "../../lib/custom-themes";
 import type { BackdropTheme } from "../../lib/profile-theme-gl";
@@ -1357,6 +1359,9 @@ export function PlayerProfilePage({
   // and, when they switched it on, their best play's chart in that keymode
   const highwayCharts = profileTheme === "highway" && supporterFrame?.userId === profileUserId && !!supporterFrame.profileThemeOptions.charts;
   const highwayChart = useHighwayChart(profileUserId, best, highwayNotes?.lanes ?? mainKeys ?? 4, highwayCharts);
+  // a visitor can play it with their own keys (the lanes the backdrop draws: the skin's, the chart's, or four)
+  const highwayLanes = highwayNotes?.lanes ?? highwayChart?.lanes ?? 4;
+  const highwayPlay = useHighwayPlay({ active: profileTheme === "highway", lanes: highwayLanes, chart: highwayChart });
   /* Recent follows Best there: the stored osu! plays stay hidden and only the
      account's Companella imports show, in the same list as anyone's. */
   const shownRecent = useMemo(
@@ -2348,8 +2353,11 @@ export function PlayerProfilePage({
     <div className={themed ? "relative flex-1 overflow-clip" : "flex-1"} style={customTheme && !profileTheme ? customThemeStyle(customTheme) : profileThemeStyle(profileTheme, highwayNotes)}>
       {themed && (
         <div aria-hidden className="pointer-events-none sticky top-0 h-0">
-          <ProfileThemeBackdrop theme={themed} notes={highwayNotes} chart={highwayChart} scroll className="absolute inset-x-0 top-0 h-screen" />
+          <ProfileThemeBackdrop theme={themed} notes={highwayNotes} chart={highwayPlay.chart} play={highwayPlay.play} scroll className="absolute inset-x-0 top-0 h-screen" />
         </div>
+      )}
+      {themed && profileTheme === "highway" && (
+        <HighwayPlayHud playing={highwayPlay.playing} hud={highwayPlay.hud} keys={highwayPlay.keys} lanes={highwayLanes} binding={highwayPlay.binding} onChangeKeys={highwayPlay.startBinding} />
       )}
       {/* Avatar modal */}
       <AnimatePresence>

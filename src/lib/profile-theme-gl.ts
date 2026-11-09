@@ -4,7 +4,7 @@ import { mirrorGlCanvas } from "./gl-mirror";
 import { createSakuraPetals, type ThemeOverlay } from "./profile-theme-petals";
 import { createMapleLeaves } from "./profile-theme-maple";
 import { PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
-import { HIGHWAY_MAX_LANES, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "./supporter-profile-themes";
+import { HIGHWAY_MAX_LANES, type HighwayChart, type HighwayNotes, type HighwayPlay, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { takeGpuSlot } from "./gpu-queue";
 import { corsImageUrl } from "./cors-image-url";
 
@@ -63,6 +63,11 @@ interface Compiled {
   chartPeriod: WebGLUniformLocation | null;
   chartBucket: WebGLUniformLocation | null;
   chartLaneEnd: WebGLUniformLocation | null;
+  play: WebGLUniformLocation | null;
+  keyDown: WebGLUniformLocation | null;
+  pressAge: WebGLUniformLocation | null;
+  hitAge: WebGLUniformLocation | null;
+  hitUntil: WebGLUniformLocation | null;
   judgements: WebGLUniformLocation | null;
   sprite: WebGLUniformLocation | null;
   textures: (WebGLUniformLocation | null)[];
@@ -364,6 +369,11 @@ class ThemeContext {
         chartPeriod: gl.getUniformLocation(program, "u_chartPeriod"),
         chartBucket: gl.getUniformLocation(program, "u_chartBucket"),
         chartLaneEnd: gl.getUniformLocation(program, "u_chartLaneEnd"),
+        play: gl.getUniformLocation(program, "u_play"),
+        keyDown: gl.getUniformLocation(program, "u_keyDown"),
+        pressAge: gl.getUniformLocation(program, "u_pressAge"),
+        hitAge: gl.getUniformLocation(program, "u_hitAge"),
+        hitUntil: gl.getUniformLocation(program, "u_hitUntil"),
         judgements: gl.getUniformLocation(program, "u_judgements"),
         sprite: gl.getUniformLocation(program, "u_sprite"),
         textures: Array.from({ length: CUSTOM_THEME_TEXTURES }, (_, index) => gl.getUniformLocation(program, `u_tex${index}`)),
@@ -407,7 +417,7 @@ class ThemeContext {
     return this.overlays.get(theme) ?? null;
   }
 
-  draw(theme: BackdropTheme, width: number, height: number, time: number, pointer: [number, number], scroll: number, notes: HighwayNotes | null = null, chart: HighwayChart | null = null): boolean {
+  draw(theme: BackdropTheme, width: number, height: number, time: number, pointer: [number, number], scroll: number, notes: HighwayNotes | null = null, chart: HighwayChart | null = null, play: HighwayPlay | null = null): boolean {
     const compiled = this.compiled(theme);
     if (!compiled) return false;
     const { gl } = this;
@@ -438,6 +448,25 @@ class ThemeContext {
       const laneEnd = new Float32Array(HIGHWAY_MAX_LANES);
       playing?.laneEnd.forEach((end, lane) => (laneEnd[lane] = end));
       gl.uniform1fv(compiled.chartLaneEnd, laneEnd);
+      // a visitor playing it: their keys light the lanes and the notes they hit go
+      const played = play?.on && playing ? play : null;
+      const keyDown = new Float32Array(HIGHWAY_MAX_LANES);
+      const pressAge = new Float32Array(HIGHWAY_MAX_LANES).fill(99);
+      const hitAge = new Float32Array(HIGHWAY_MAX_LANES).fill(99);
+      const hitUntil = new Float32Array(HIGHWAY_MAX_LANES).fill(-1);
+      if (played) {
+        for (let lane = 0; lane < Math.min(HIGHWAY_MAX_LANES, played.down.length); lane += 1) {
+          keyDown[lane] = played.down[lane] ? 1 : 0;
+          if (played.pressedAt[lane] >= 0) pressAge[lane] = Math.max(0, time - played.pressedAt[lane]);
+          if (played.hitAt[lane] >= 0) hitAge[lane] = Math.max(0, time - played.hitAt[lane]);
+          hitUntil[lane] = played.hitUntil[lane];
+        }
+      }
+      gl.uniform1f(compiled.play, played ? 1 : 0);
+      gl.uniform1fv(compiled.keyDown, keyDown);
+      gl.uniform1fv(compiled.pressAge, pressAge);
+      gl.uniform1fv(compiled.hitAge, hitAge);
+      gl.uniform1fv(compiled.hitUntil, hitUntil);
       gl.uniform1f(compiled.noteArt, art ? 1 : 0);
       gl.uniform1f(compiled.noteColors, notes ? 1 : 0);
       gl.uniform1fv(compiled.noteAspect, aspects);
@@ -601,6 +630,8 @@ export interface ProfileBackdrop {
   setTheme(theme: BackdropTheme): void;
   setNotes(notes: HighwayNotes | null): void;
   setChart(chart: HighwayChart | null): void;
+  /** A visitor playing the Note highway; the renderer gives it its clock. */
+  setPlay(play: HighwayPlay | null): void;
   dispose(): void;
 }
 
@@ -632,6 +663,7 @@ export function mountProfileBackdrop(
   let theme = initial;
   let notes: HighwayNotes | null = null;
   let chart: HighwayChart | null = null;
+  let play: HighwayPlay | null = null;
   let frame = 0;
   let last = 0;
   let visible = true;
@@ -729,7 +761,7 @@ export function mountProfileBackdrop(
       giveUp(theme);
       return;
     }
-    const drew = context.draw(theme, canvas.width, canvas.height, time, pointer, scrolled, notes, chart);
+    const drew = context.draw(theme, canvas.width, canvas.height, time, pointer, scrolled, notes, chart, play);
     mirror.copy();
     if (drew && !shown) {
       shown = true;
@@ -854,6 +886,11 @@ export function mountProfileBackdrop(
       if (next === chart) return;
       chart = next;
       if (still && !stillFrame) renderStill();
+    },
+    setPlay(next) {
+      play = next;
+      // one still frame has no clock to play against
+      if (next) next.epoch = still ? null : start;
     },
     dispose() {
       disposed = true;

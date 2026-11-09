@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { PROFILE_THEME_LOOKS, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
+import { PROFILE_THEME_LOOKS, type HighwayChart, type HighwayNotes, type HighwayPlay, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
 import { customThemeKey, hideBrokenImage, isCustomThemeBadHere } from "../../lib/custom-themes";
 import type { BackdropTheme, ProfileBackdrop } from "../../lib/profile-theme-gl";
 import { queueGpuWork } from "../../lib/gpu-queue";
@@ -11,12 +11,14 @@ import { useWebGlSlot } from "../../lib/gl-budget";
    from one theme to the next by keeping the canvas and swapping its program.
    A supporter's own theme shows its still instead when it may only show that,
    has crashed on this device, or proves too slow here. */
-export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll = false, maxPixels, className }: {
+export function ProfileThemeBackdrop({ theme, notes = null, chart = null, play = null, scroll = false, maxPixels, className }: {
   theme: BackdropTheme;
   /** A player's replay skin notes, for the Note highway. */
   notes?: HighwayNotes | null;
   /** A real chart for the Note highway to play. */
   chart?: HighwayChart | null;
+  /** A visitor playing the Note highway (use-highway-play.ts). */
+  play?: HighwayPlay | null;
   /** Follow the page's scroll, for a backdrop behind a whole page. */
   scroll?: boolean;
   maxPixels?: number;
@@ -30,6 +32,8 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
   notesRef.current = notes;
   const chartRef = useRef(chart);
   chartRef.current = chart;
+  const playRef = useRef(play);
+  playRef.current = play;
   // a context only while it holds a slot (gl-budget.ts); the flat colour shows otherwise
   const glSlot = useWebGlSlot(hostRef);
   /* The custom theme revision that fell back to its still here, if any. */
@@ -56,6 +60,7 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
         backdropRef.current = mountProfileBackdrop(host, themeRef.current, { scroll, maxPixels, onFallback: (fallen) => setFellBack(customThemeKey(fallen)) });
         backdropRef.current?.setNotes(notesRef.current);
         backdropRef.current?.setChart(chartRef.current);
+        backdropRef.current?.setPlay(playRef.current);
       });
     });
     return () => {
@@ -77,6 +82,10 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, scroll
   useEffect(() => {
     backdropRef.current?.setChart(chart);
   }, [chart]);
+
+  useEffect(() => {
+    backdropRef.current?.setPlay(play);
+  }, [play]);
 
   const base = custom ? custom.look.base : PROFILE_THEME_LOOKS[theme as SupporterProfileThemeId].base;
   return (

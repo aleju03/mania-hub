@@ -17,7 +17,8 @@ import type { HighwayChart } from "../../lib/supporter-profile-themes";
      lane still sounding at the bucket's start, so a pixel finds its note in
      a step or two however long the chart. */
 
-const SECTION_MS = 24_000;
+export const HIGHWAY_SECTION_MS = 24_000;
+const SECTION_MS = HIGHWAY_SECTION_MS;
 const LOOP_GAP_MS = 1_500;
 const BUCKET_MS = 100;
 const NOTES_WIDTH = 1024;
@@ -40,7 +41,7 @@ export function mainKeymode(scores: readonly ChartScore[] | null | undefined): n
   return best;
 }
 
-function buildChart(notes: { column: number; time: number; endTime: number }[], lanes: number, start: number, key: string): HighwayChart | null {
+export function buildHighwayChart(notes: { column: number; time: number; endTime: number }[], lanes: number, start: number, key: string): HighwayChart | null {
   const end = start + SECTION_MS;
   const perLane: { time: number; endTime: number }[][] = Array.from({ length: lanes }, () => []);
   for (const note of notes) {
@@ -95,7 +96,7 @@ export async function loadHighwayChart(scores: readonly ChartScore[], lanes: num
       if (beatmap.keyCount !== lanes || beatmap.notes.length === 0) continue;
       // The densest stretch, judged over the section's own length.
       const start = findDensestPreviewStartTime(beatmap);
-      const chart = buildChart(beatmap.notes, lanes, start, `${score.beatmap.id}:${start}`);
+      const chart = buildHighwayChart(beatmap.notes, lanes, start, `${score.beatmap.id}:${start}`);
       if (chart) return chart;
     } catch {
       // try the next play

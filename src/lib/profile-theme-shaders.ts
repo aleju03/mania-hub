@@ -770,6 +770,14 @@ uniform sampler2D u_chartIndex;
 uniform float u_chartPeriod;
 uniform vec2 u_chartBucket;
 uniform float u_chartLaneEnd[10];
+// A visitor playing the chart (use-highway-play.ts): per lane, the key held,
+// seconds since it went down and since it hit a note, and the start of the
+// last note it hit, which is gone from the lane.
+uniform float u_play;
+uniform float u_keyDown[10];
+uniform float u_pressAge[10];
+uniform float u_hitAge[10];
+uniform float u_hitUntil[10];
 
 float noteAt(float lane, float n, float lanes) {
   return step(clamp(1. - 2. / lanes, .5, .8), hash(vec2(lane * 7.1 + 1., n)));
@@ -829,6 +837,8 @@ vec3 theme(vec2 uv, vec2 p, float t) {
         if (note.x <= now) age = min(age, now < note.y ? 0. : (now - note.y) / 1000.);
       }
       hit = exp(-age * 7.);
+      // played: the keys light when the visitor presses them, not when a note lands
+      if (u_play > .5) hit = max(u_keyDown[li] * .75, exp(-u_pressAge[li] * 9.));
       if (s >= 0.) {
         float halfMs = half_ / speed * 1000.;
         float tp = now + s / speed * 1000.;
@@ -842,7 +852,9 @@ vec3 theme(vec2 uv, vec2 p, float t) {
             vec2 note = texelFetch(u_chartNotes, ivec2(int(mod(idx, 1024.)), int(idx / 1024.)), 0).rg;
             if (note.x - tp > halfMs) break;
             float off = (tp - note.x) / 1000. * speed;
-            if (abs(off) < abs(headAt)) headAt = off;
+            // a note the visitor already hit (a little early, so it is still above the line) is gone
+            bool gone = u_play > .5 && note.x <= u_hitUntil[li] && note.x > now - 400.;
+            if (!gone && abs(off) < abs(headAt)) headAt = off;
             if (note.y > note.x + 1. && tp >= note.x && tp <= note.y) held = 1.;
           }
         }
@@ -862,6 +874,8 @@ vec3 theme(vec2 uv, vec2 p, float t) {
     }
     // the last note this lane hit lights the key and the lane above it
     col += noteCol * hit * exp(-max(s, 0.) * 2.2) * .35;
+    // a hit bursts on the judgement line
+    if (u_play > .5) col += mix(noteCol, vec3(1.), .55) * exp(-u_hitAge[li] * 11.) * exp(-abs(s) * 7.) * step(abs(lx), .47) * .9;
     // a hold's body, then the head over it
     col = mix(col, mix(noteCol, A, .3) * .55 * (.6 + .4 * fog), held * step(abs(lx), .36) * fog);
     float inside = step(abs(headAt), half_);
