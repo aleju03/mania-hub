@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useInView, useReducedMotion, type Variants } f
 import type { MessageDescriptor } from "@lingui/core";
 
 import { PageHeader } from "../components/layout/PageHeader";
-import { SupportCheckout } from "../components/supporter/SupportCheckout";
+import { SupportCheckout, SupportMethodSteps, useSupportMethods, type SupportMethod } from "../components/supporter/SupportCheckout";
 import { KofiNameSteps } from "../components/supporter/KofiNameSteps";
 import { SupportPlans } from "../components/supporter/SupportPlans";
 import {
@@ -185,10 +185,14 @@ function FloatingSupportButton({ heroRef }: { heroRef: RefObject<HTMLDivElement 
 
 function SupportPage() {
   const { t } = useLingui();
+  // how to pay: the visitor's pick, else the one their country fits
+  const { methods: payMethods, initial: initialPayMethod } = useSupportMethods();
+  const [pickedMethod, setPickedMethod] = useState<SupportMethod | null>(null);
+  const payMethod = pickedMethod && payMethods.includes(pickedMethod) ? pickedMethod : initialPayMethod;
   const reduced = useReducedMotion();
   const heroRef = useRef<HTMLDivElement>(null);
   const steps = [
-    { title: t`Tip on Ko-fi`, body: t`Use your osu! username as your name there, so the time lands on your account.` },
+    { title: t`Pick how to pay`, body: t`Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account.` },
     { title: t`$4 is a month`, body: t`Any amount works and is counted to the day. Every tip adds to the time you have left.` },
     { title: t`Set it up`, body: t`Pick your look on the supporter page. It saves as you go.` },
   ];
@@ -344,10 +348,10 @@ function SupportPage() {
               <Reveal className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
                 <div>
                   <h2 className="text-[22px] font-bold text-white">{t`Support`}</h2>
-                  <KofiNameSteps />
+                  {payMethod ? <SupportMethodSteps method={payMethod} /> : <KofiNameSteps />}
                   <SupportPlans />
                 </div>
-                <SupportCheckout />
+                <SupportCheckout methods={payMethods} method={payMethod} onMethod={setPickedMethod} />
               </Reveal>
             </section>
           </div>

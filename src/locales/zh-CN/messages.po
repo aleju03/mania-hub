@@ -3632,6 +3632,10 @@ msgstr "显示玩家正在游玩谱面的个人资料"
 msgid "A rating is not supported for this chart or mod combination."
 msgstr "此谱面或模组组合暂不支持评级。"
 
+#: src/routes/terms.tsx
+msgid "A refund, whether made on request, through the platform itself or by a chargeback, removes the supporter time the payment bought."
+msgstr "无论是应请求退款、通过支付平台本身退款还是拒付，都会扣除该笔付款购买的支持者时长。"
+
 #: src/routes/workshop.themes.gallery.tsx
 msgid "a remix"
 msgstr "改编作品"
@@ -4182,6 +4186,14 @@ msgstr "调整你的图片"
 msgid "Admin: flood the rail with fake pulls to preview the animation"
 msgstr "管理员：用假抽卡刷满侧栏以预览动画"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Admins only: the supporter membership on lava.top is not up yet."
+msgstr "仅管理员可见：lava.top 上的支持者会员尚未上线。"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Admins only: the supporter product on lava.top is not up yet."
+#~ msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Advanced"
 msgstr "高级"
@@ -4198,6 +4210,10 @@ msgstr "Aero 气泡"
 #: src/components/supporter/loadout.ts
 msgid "Aero window"
 msgstr "Aero 窗口"
+
+#: src/routes/terms.tsx
+#~ msgid "After 14 days, payments are not refunded, except where the law where you live says otherwise. A chargeback or a refund made through the platform itself also removes the time the payment bought."
+#~ msgstr "超过 14 天的付款不予退款，除非你所在地的法律另有规定。拒付或通过支付平台本身发起的退款，同样会扣除该笔付款购买的时长。"
 
 #: src/lib/chain-run.ts
 msgid "After a row scores, it plays again from the first card and keeps its combo."
@@ -5948,8 +5964,8 @@ msgid "Calligraphy"
 msgstr "书法体"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Can't pay with Ko-fi? You can tip through lava.top."
-msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
+#~ msgid "Can't pay with Ko-fi? You can tip through lava.top."
+#~ msgstr "无法使用 Ko-fi 付款？可以通过 lava.top 打赏。"
 
 #: src/routes/discord.tsx
 msgid "Can't reach the bot right now. Refresh in a moment."
@@ -6068,6 +6084,10 @@ msgstr "卡牌等级 {level}：已获得 {copies} 张，下一级需要 {next} �
 msgid "Card levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
 msgstr "{0} 拥有过的所有卡牌的等级总和。一张卡牌拥有过的副本数每翻一倍就升一级，已回收的副本也计算在内。"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Card or PayPal"
+msgstr "银行卡或 PayPal"
+
 #: src/routes/packs.tsx
 msgid "Card Packs"
 msgstr "卡包"
@@ -6154,6 +6174,10 @@ msgstr "全球前 1,000 名的卡片 +{0} 音符。"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Cards keep their tier colour"
 msgstr "卡牌保留其稀有度颜色"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Cards or Apple Pay"
+msgstr "银行卡或 Apple Pay"
 
 #: src/lib/pack-run.ts
 msgid "Cards score only once."
@@ -11535,6 +11559,10 @@ msgstr "黄金时刻"
 msgid "Gone in {hoursLeft}h"
 msgstr "{hoursLeft} 小时后删除"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Google Pay"
+msgstr "Google Pay"
+
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "Got it"
 msgstr "知道了"
@@ -12334,6 +12362,10 @@ msgstr "有多少与你水平相近的玩家打过它"
 msgid "How recommendations work"
 msgstr "推荐是如何生成的"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "How to pay"
+msgstr "支付方式"
+
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "抽取方式"
@@ -12494,12 +12526,16 @@ msgid "If you are restricted, you can keep submitting plays this way, and your p
 msgstr "如果你被限制了，你仍可以通过这种方式继续上传成绩，并用与 osu! 相同的算法根据其中 ranked 图的成绩计算你的 pp，所以你仍会出现在排行榜上。不过，作弊仍然可能让你被 Mania Tracker 封禁。"
 
 #: src/routes/privacy.tsx
-msgid "If you donate through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, plus the name and message you gave. These are kept privately to link supporter status to your osu! account and are not shown publicly."
-msgstr "如果你通过 Ko-fi 或 lava.top 捐助，本站会收到付款的金额、币种和日期，以及你填写的名字和留言。这些信息会被私下保存，用于将支持者身份关联到你的 osu! 账号，不会公开显示。"
+#~ msgid "If you donate through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, plus the name and message you gave. These are kept privately to link supporter status to your osu! account and are not shown publicly."
+#~ msgstr "如果你通过 Ko-fi 或 lava.top 捐助，本站会收到付款的金额、币种和日期，以及你填写的名字和留言。这些信息会被私下保存，用于将支持者身份关联到你的 osu! 账号，不会公开显示。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
 msgstr "如果你本地有这张谱面，把它的 .osz 拖进来，回放就用你的副本播放。"
+
+#: src/routes/privacy.tsx
+msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgstr "如果你通过 Ko-fi、Google 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及你邮箱地址的加密形式（绝不是地址本身），用于识别重复付款或退款。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
 
 #: src/routes/privacy.tsx
 msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -13396,6 +13432,18 @@ msgstr "旋钮激光"
 #~ msgid "Ko-fi page"
 #~ msgstr "Ko-fi 主页"
 
+#: src/routes/support.tsx
+#~ msgid "Ko-fi takes cards and PayPal, lava.top takes cards from Russia. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi 支持银行卡和 PayPal，lava.top 支持俄罗斯银行卡。按照支付旁边的步骤操作，时长就会记到你的账号上。"
+
+#: src/routes/support.tsx
+#~ msgid "Ko-fi takes cards and PayPal, lava.top takes ruble cards. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi 支持银行卡和 PayPal，lava.top 支持卢布银行卡。按照支付旁边的步骤操作，时长就会记到你的账号上。"
+
+#: src/routes/support.tsx
+msgid "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+msgstr "Ko-fi 支持银行卡和 PayPal。按照支付旁边的步骤操作，时长就会记到你的账号上。"
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
 msgstr "锦鲤池"
@@ -13577,6 +13625,14 @@ msgstr "拉脱维亚语"
 #: src/lib/supporter-name-styles.ts
 msgid "Lava lamp"
 msgstr "熔岩灯"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "lava.top opens in a new tab to pay."
+msgstr "lava.top 会在新标签页中打开以完成支付。"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "lava.top opens in a new tab, where you pick the amount."
+#~ msgstr "lava.top 会在新标签页中打开，你可以在那里选择金额。"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
@@ -14771,6 +14827,14 @@ msgstr "Mania Tracker 是一个 osu!mania 社区网站，围绕公开的 osu! �
 #: src/routes/terms.tsx
 msgid "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
 msgstr "Mania Tracker 是一个面向 osu!mania 玩家的非官方社区同人项目。它与 ppy Pty Ltd 或 osu! 团队没有从属关系，也未获得其背书、赞助或批准。"
+
+#: src/routes/terms.tsx
+#~ msgid "Mania Tracker is made and run by one person, aleju03 on osu!. For anything about the site, payments, refunds or your data, email <0>contact@mania-tracker.com</0>."
+#~ msgstr "Mania Tracker 由一个人制作和运营，即 osu! 上的 aleju03。关于网站、付款、退款或你的数据的任何问题，请发邮件至 <0>contact@mania-tracker.com</0>。"
+
+#: src/routes/terms.tsx
+#~ msgid "Mania Tracker is made and run by one person, aleju03. For anything about the site, payments, refunds or your data, email <0>contact@mania-tracker.com</0>."
+#~ msgstr "Mania Tracker 由一个人制作和运营：aleju03。关于网站、付款、退款或你的数据的任何问题，请发邮件至 <0>contact@mania-tracker.com</0>。"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillBreakdown.tsx
@@ -17371,6 +17435,11 @@ msgstr "通知我"
 msgid "Notifying"
 msgstr "已开启通知"
 
+#: src/routes/privacy.tsx
+#: src/routes/terms.tsx
+msgid "November 9, 2026"
+msgstr "2026 年 11 月 9 日"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "now"
 msgstr "当前"
@@ -17415,12 +17484,12 @@ msgid "Obtained on {dateText}"
 msgstr "获得于 {dateText}"
 
 #: src/routes/terms.tsx
-msgid "October 26, 2026"
-msgstr "2026年10月26日"
+#~ msgid "October 26, 2026"
+#~ msgstr "2026年10月26日"
 
 #: src/routes/privacy.tsx
-msgid "October 9, 2026"
-msgstr "2026年10月9日"
+#~ msgid "October 9, 2026"
+#~ msgstr "2026年10月9日"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
@@ -17941,6 +18010,10 @@ msgstr "在 osu! 客户端中打开"
 msgid "Open in the BBCode editor"
 msgstr "在 BBCode 编辑器中打开"
 
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Open lava.top and pick an amount. The link carries your account, so your supporter time reaches it on its own."
+#~ msgstr "打开 lava.top 并选择金额。链接带有你的账号，支持者时长会自动记到你的账号上。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open link"
 msgstr "打开链接"
@@ -18081,12 +18154,12 @@ msgid "or paste a Shadertoy shader as it is"
 msgstr "或直接粘贴 Shadertoy 着色器"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Or pay with Google. Sign in first so it counts toward your account."
-msgstr "也可以用 Google 支付。请先登录，这样才会计入你的账号。"
+#~ msgid "Or pay with Google. Sign in first so it counts toward your account."
+#~ msgstr "也可以用 Google 支付。请先登录，这样才会计入你的账号。"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Or pay with Google. Your supporter time starts right away."
-msgstr "也可以用 Google 支付，支持者时长立即生效。"
+#~ msgid "Or pay with Google. Your supporter time starts right away."
+#~ msgstr "也可以用 Google 支付，支持者时长立即生效。"
 
 #: src/routes/recommendations.tsx
 msgid "or pick someone else"
@@ -18699,6 +18772,22 @@ msgstr "暂停试听"
 msgid "Paused: still frame"
 msgstr "已暂停：静帧"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pay on lava.top"
+msgstr "在 lava.top 支付"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pay on lava.top. The link carries your account, so your supporter time reaches it on its own."
+msgstr "在 lava.top 支付。链接带有你的账号，支持者时长会自动记到你的账号上。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pay with Google here. Your supporter time starts as soon as the payment goes through."
+msgstr "在这里用 Google 支付。付款完成后，你的支持者时长立即开始。"
+
+#: src/routes/terms.tsx
+msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+msgstr "付款通过 Ko-fi、Google 或 lava.top 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
+
 #: src/components/packs/run/chain/ChainContracts.tsx
 msgid "Pays"
 msgstr "奖励"
@@ -18859,6 +18948,10 @@ msgstr "先选一格再选卡片，或者把卡片拖到格子里。"
 msgid "Pick a target above. Progress updates as your mania plays land."
 msgstr "在上面选一个目标，你的 mania 成绩一落地进度就会更新。"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pick an amount in Google's checkout."
+msgstr "在 Google 的结账页面选择金额。"
+
 #: src/components/supporter/KofiNameSteps.tsx
 msgid "Pick an amount on Ko-fi. So the time reaches your account, do one of these there:"
 msgstr "在 Ko-fi 上选择金额。为了让时长加到你的账号上，请在那里完成以下任意一项："
@@ -18890,6 +18983,10 @@ msgstr "请同时选择 .osr 和它所游玩的 .osu。"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Pick five cards of the same rarity. They leave your collection and you get one card of the rarity above."
 #~ msgstr "选择五张同一稀有度的卡。它们会离开你的收藏册，换来一张高一级稀有度的卡。"
+
+#: src/routes/support.tsx
+msgid "Pick how to pay"
+msgstr "选择支付方式"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Pick it back up"
@@ -20830,6 +20927,10 @@ msgstr "刷新中..."
 msgid "Refund"
 msgstr "退款"
 
+#: src/routes/terms.tsx
+msgid "Refunds"
+msgstr "退款"
+
 #: src/lib/chain-run.ts
 msgid "Region"
 msgstr "地区"
@@ -21750,6 +21851,10 @@ msgstr "只有 7K 卡的一排有倍率。"
 msgid "Rows start at combo {startCombo}"
 msgstr "每排以 {startCombo} 连击 开始"
 
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Ruble cards"
+#~ msgstr "卢布银行卡"
+
 #: src/routes/snipes.tsx
 msgid "Rules"
 msgstr "规则"
@@ -21796,6 +21901,10 @@ msgstr "本局胜利！之后进入无尽模式"
 #: src/components/communities/field-options.tsx
 msgid "Russian"
 msgstr "俄语"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Russian cards"
+#~ msgstr "俄罗斯银行卡"
 
 #: src/components/supporter/loadout.ts
 #: src/lib/supporter-profile-themes.ts
@@ -22520,8 +22629,12 @@ msgid "Send"
 msgstr "发送"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Send a tip"
-msgstr "打赏"
+#~ msgid "Send a tip"
+#~ msgstr "打赏"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Send a tip on lava.top"
+#~ msgstr "在 lava.top 打赏"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Send backward"
@@ -23365,6 +23478,22 @@ msgstr "请重新登录以发送礼物。"
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in and runs like that pay shards."
 msgstr "登录后，这样的连胜就能赚碎片。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first so it counts toward your account."
+msgstr "请先登录，这样才会记到你的账号上。"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Sign in first, then open lava.top: the link carries your account, so your supporter time reaches it."
+#~ msgstr "请先登录，再打开 lava.top：链接带有你的账号，支持者时长会记到你的账号上。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then pay on lava.top: the link carries your account, so your supporter time reaches it."
+msgstr "请先登录，再在 lava.top 支付：链接带有你的账号，支持者时长会记到你的账号上。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then pay with Google here, so your supporter time reaches your account."
+msgstr "请先登录，再在这里用 Google 支付，这样支持者时长才会记到你的账号上。"
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Sign in to connect {appName}"
@@ -24911,8 +25040,24 @@ msgid "Supporter sections"
 msgstr "支持者栏目"
 
 #: src/routes/terms.tsx
+msgid "Supporter Status And Payments"
+msgstr "支持者身份与付款"
+
+#: src/routes/terms.tsx
+msgid "Supporter status is bought as time on your osu! account: $4 buys 30 days, any other amount buys time in proportion to the day, and one payment of $40 or more buys a full year for every $40. A payment adds to the time you have left, and the status ends when the time runs out. Supporter time is tied to the account it was paid for and cannot be moved to another, except through the gift codes the site hands out."
+msgstr "支持者身份以 osu! 账号上的时长购买：$4 可购买 30 天，其他金额按天折算，一次支付 $40 或以上，每 $40 可获得整整一年。每次付款都会累加到剩余时长上，时长用完后身份结束。支持者时长绑定在付款对应的账号上，不能转给其他账号，网站发放的礼物兑换码除外。"
+
+#: src/routes/terms.tsx
+msgid "Supporter status is optional. It unlocks cosmetic extras on the site, such as profile themes, avatar frames, name styles and mascots, and changes nothing about rankings, scores or ratings. The extras on offer may change over time."
+msgstr "支持者身份是可选的。它会解锁网站上的外观类内容，例如个人资料主题、头像框、名字样式和吉祥物，不会改变排名、成绩或评分。提供的内容可能会随时间变化。"
+
+#: src/routes/terms.tsx
 msgid "Supporter Themes And Uploads"
 msgstr "支持者主题与上传内容"
+
+#: src/routes/terms.tsx
+msgid "Supporter time starts as soon as a payment goes through, so payments are final. A payment made twice or by mistake is refunded: email <0>contact@mania-tracker.com</0> with the date of the payment and the platform you paid through, and the refund goes back through that platform. Refund rights the law where you live gives you also apply."
+msgstr "支持者时长在付款完成后立即开始，因此付款不可退款。重复付款或误付的款项会退还：请发邮件至 <0>contact@mania-tracker.com</0>，注明付款日期和所用平台，退款会通过该平台退回。你所在地法律赋予的退款权利同样适用。"
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 #: src/routes/supporter.tsx
@@ -27664,8 +27809,8 @@ msgid "Tiny"
 msgstr "极小"
 
 #: src/routes/support.tsx
-msgid "Tip on Ko-fi"
-msgstr "在 Ko-fi 上打赏"
+#~ msgid "Tip on Ko-fi"
+#~ msgstr "在 Ko-fi 上打赏"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "title"
@@ -28817,8 +28962,8 @@ msgid "Use this screenshot as the card cover"
 msgstr "把这张截图设为卡片封面"
 
 #: src/routes/support.tsx
-msgid "Use your osu! username as your name there, so the time lands on your account."
-msgstr "请用你的 osu! 用户名作为名字，这样时长会加到你的账号上。"
+#~ msgid "Use your osu! username as your name there, so the time lands on your account."
+#~ msgstr "请用你的 osu! 用户名作为名字，这样时长会加到你的账号上。"
 
 #: src/routes/discord.tsx
 msgid "Used by /skills and /farm when you don't pick one."
@@ -29605,6 +29750,10 @@ msgstr "谁在刷这张"
 msgid "Who has your card"
 msgstr "谁拥有你的卡片"
 
+#: src/routes/terms.tsx
+#~ msgid "Who Runs Mania Tracker"
+#~ msgstr "谁在运营 Mania Tracker"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Who the server is for, what happens in it, when it is busy. Line breaks are kept."
 msgstr "服务器面向哪些人、里面在做什么、什么时候热闹。换行会保留。"
@@ -30014,6 +30163,10 @@ msgstr "你也可以用这种方式上传使用 ScoreV2 和 Hard Rock 的成绩�
 #: src/routes/news_.companella.tsx
 #~ msgid "You can also submit ScoreV2 and Hard Rock plays through Companella."
 #~ msgstr "你也可以通过 Companella 上传使用 ScoreV2 和 Hard Rock 的成绩。"
+
+#: src/routes/terms.tsx
+#~ msgid "You can ask for a full refund of any payment within 14 days of making it. Email <0>contact@mania-tracker.com</0> with the date of the payment and the platform you paid through. The refund goes back through that platform, and the supporter time the payment bought is removed from your account."
+#~ msgstr "你可以在付款后 14 天内申请全额退款。请发邮件至 <0>contact@mania-tracker.com</0>，注明付款日期和所用平台。退款会通过该平台退回，该笔付款购买的支持者时长会从你的账号中扣除。"
 
 #: src/components/player/DisplayNameEditor.tsx
 msgid "You can change it once a week. Your profile link keeps your osu! name."

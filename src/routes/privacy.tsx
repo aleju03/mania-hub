@@ -19,7 +19,7 @@ export const Route = createFileRoute("/privacy")({
 function PrivacyPage() {
   const { t } = useLingui();
   return (
-    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`October 9, 2026`}>
+    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`November 9, 2026`}>
       <LegalSection title={t`Overview`}>
         <LegalParagraph>
           <Trans>
@@ -58,9 +58,11 @@ function PrivacyPage() {
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
-            If you donate through Ko-fi or lava.top, the site receives the amount, currency, and date
-            of the payment, plus the name and message you gave. These are kept privately to
-            link supporter status to your osu! account and are not shown publicly.
+            If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and
+            date of the payment, the name and message you gave, and a scrambled form of your email
+            address (never the address itself), used to recognise a repeat payment or a refund.
+            These are kept privately to link supporter status to your osu! account and are not
+            shown publicly. Your card and bank details stay with the payment platform.
           </Trans>
         </LegalParagraph>
         <LegalParagraph>

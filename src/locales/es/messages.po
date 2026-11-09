@@ -3620,6 +3620,10 @@ msgstr "Un perfil mostrando el mapa que su jugador está jugando"
 msgid "A rating is not supported for this chart or mod combination."
 msgstr "No se admite una valoración para este mapa o combinación de mods."
 
+#: src/routes/terms.tsx
+msgid "A refund, whether made on request, through the platform itself or by a chargeback, removes the supporter time the payment bought."
+msgstr "Un reembolso, ya sea a pedido, desde la propia plataforma o por un contracargo, quita el tiempo de supporter que compró el pago."
+
 #: src/routes/workshop.themes.gallery.tsx
 msgid "a remix"
 msgstr "un remix"
@@ -4170,6 +4174,14 @@ msgstr "Ajustar tu imagen"
 msgid "Admin: flood the rail with fake pulls to preview the animation"
 msgstr "Admin: llenar la fila con tiradas falsas para previsualizar la animación"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Admins only: the supporter membership on lava.top is not up yet."
+msgstr "Solo admins: la membresía de supporter en lava.top todavía no existe."
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Admins only: the supporter product on lava.top is not up yet."
+#~ msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Advanced"
 msgstr "Avanzado"
@@ -4186,6 +4198,10 @@ msgstr "Burbuja Aero"
 #: src/components/supporter/loadout.ts
 msgid "Aero window"
 msgstr "Ventana Aero"
+
+#: src/routes/terms.tsx
+#~ msgid "After 14 days, payments are not refunded, except where the law where you live says otherwise. A chargeback or a refund made through the platform itself also removes the time the payment bought."
+#~ msgstr "Pasados 14 días, los pagos no se reembolsan, salvo donde la ley de tu país diga otra cosa. Un contracargo o un reembolso hecho desde la propia plataforma también quita el tiempo que compró el pago."
 
 #: src/lib/chain-run.ts
 msgid "After a row scores, it plays again from the first card and keeps its combo."
@@ -5936,8 +5952,8 @@ msgid "Calligraphy"
 msgstr "Caligrafía"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Can't pay with Ko-fi? You can tip through lava.top."
-msgstr "¿No puedes pagar con Ko-fi? Puedes dejar una propina por lava.top."
+#~ msgid "Can't pay with Ko-fi? You can tip through lava.top."
+#~ msgstr "¿No puedes pagar con Ko-fi? Puedes dejar una propina por lava.top."
 
 #: src/routes/discord.tsx
 msgid "Can't reach the bot right now. Refresh in a moment."
@@ -6056,6 +6072,10 @@ msgstr "Nivel de carta {level}: {copies} copias tenidas, el siguiente a las {nex
 msgid "Card levels added up over every card {0} has held. A card gains a level each time the copies held of it double, recycled copies included."
 msgstr "Niveles de carta sumados en todas las cartas que ha tenido {0}. Una carta sube un nivel cada vez que se duplican las copias que se han tenido de ella, contando las recicladas."
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Card or PayPal"
+msgstr "Tarjeta o PayPal"
+
 #: src/routes/packs.tsx
 msgid "Card Packs"
 msgstr "Packs de cartas"
@@ -6142,6 +6162,10 @@ msgstr "Las cartas del top 1,000 global dan +{0} notas."
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Cards keep their tier colour"
 msgstr "Las cartas mantienen el color de su tier"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Cards or Apple Pay"
+msgstr "Tarjetas o Apple Pay"
 
 #: src/lib/pack-run.ts
 msgid "Cards score only once."
@@ -11523,6 +11547,10 @@ msgstr "Hora dorada"
 msgid "Gone in {hoursLeft}h"
 msgstr "Desaparece en {hoursLeft} h"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Google Pay"
+msgstr "Google Pay"
+
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "Got it"
 msgstr "¡Listo!"
@@ -12322,6 +12350,10 @@ msgstr "cuántos jugadores cerca de ti lo tienen"
 msgid "How recommendations work"
 msgstr "Cómo funcionan las recomendaciones"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "How to pay"
+msgstr "Cómo pagar"
+
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "Cómo elegir"
@@ -12482,12 +12514,16 @@ msgid "If you are restricted, you can keep submitting plays this way, and your p
 msgstr "Si estás restringido, puedes seguir enviando plays de esta forma, y tu pp se calcula con las de mapas rankeados de la misma forma que lo calcula osu!, así que sigues saliendo en los rankings. Eso sí, si haces trampa te pueden banear de Mania Tracker."
 
 #: src/routes/privacy.tsx
-msgid "If you donate through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, plus the name and message you gave. These are kept privately to link supporter status to your osu! account and are not shown publicly."
-msgstr "Si donas a través de Ko-fi o lava.top, el sitio recibe el monto, la moneda y la fecha del pago, además del nombre y el mensaje que diste. Se guardan de forma privada para vincular el estado de supporter a tu cuenta de osu! y no se muestran públicamente."
+#~ msgid "If you donate through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, plus the name and message you gave. These are kept privately to link supporter status to your osu! account and are not shown publicly."
+#~ msgstr "Si donas a través de Ko-fi o lava.top, el sitio recibe el monto, la moneda y la fecha del pago, además del nombre y el mensaje que diste. Se guardan de forma privada para vincular el estado de supporter a tu cuenta de osu! y no se muestran públicamente."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
 msgstr "Si tienes el mapa, suelta su .osz aquí y el replay se reproduce desde tu copia."
+
+#: src/routes/privacy.tsx
+msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgstr "Si pagas con Ko-fi, Google o lava.top, el sitio recibe el monto, la moneda y la fecha del pago, el nombre y el mensaje que diste, y una forma cifrada de tu correo (nunca el correo en sí), que sirve para reconocer un pago repetido o un reembolso. Se guardan en privado para vincular el estado de supporter a tu cuenta de osu! y no se muestran públicamente. Los datos de tu tarjeta y banco se quedan en la plataforma de pago."
 
 #: src/routes/privacy.tsx
 msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -13384,6 +13420,18 @@ msgstr "Láseres de perilla"
 #~ msgid "Ko-fi page"
 #~ msgstr "página de Ko-fi"
 
+#: src/routes/support.tsx
+#~ msgid "Ko-fi takes cards and PayPal, lava.top takes cards from Russia. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi acepta tarjetas y PayPal, lava.top acepta tarjetas de Rusia. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
+
+#: src/routes/support.tsx
+#~ msgid "Ko-fi takes cards and PayPal, lava.top takes ruble cards. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi acepta tarjetas y PayPal, lava.top acepta tarjetas en rublos. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
+
+#: src/routes/support.tsx
+msgid "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+msgstr "Ko-fi acepta tarjetas y PayPal. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
 msgstr "Estanque de koi"
@@ -13565,6 +13613,14 @@ msgstr "Letón"
 #: src/lib/supporter-name-styles.ts
 msgid "Lava lamp"
 msgstr "Lámpara de lava"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "lava.top opens in a new tab to pay."
+msgstr "lava.top se abre en otra pestaña para pagar."
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "lava.top opens in a new tab, where you pick the amount."
+#~ msgstr "lava.top se abre en otra pestaña, donde eliges el monto."
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
@@ -14759,6 +14815,14 @@ msgstr "Mania Tracker es un sitio comunitario de osu!mania construido en torno a
 #: src/routes/terms.tsx
 msgid "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
 msgstr "Mania Tracker es un proyecto no oficial de fans de la comunidad para jugadores de osu!mania. No está afiliado a ppy Pty Ltd ni al equipo de osu!, ni cuenta con su respaldo, patrocinio o aprobación."
+
+#: src/routes/terms.tsx
+#~ msgid "Mania Tracker is made and run by one person, aleju03 on osu!. For anything about the site, payments, refunds or your data, email <0>contact@mania-tracker.com</0>."
+#~ msgstr "Mania Tracker lo hace y lo mantiene una sola persona, aleju03 en osu!. Para cualquier cosa sobre el sitio, los pagos, los reembolsos o tus datos, escribe a <0>contact@mania-tracker.com</0>."
+
+#: src/routes/terms.tsx
+#~ msgid "Mania Tracker is made and run by one person, aleju03. For anything about the site, payments, refunds or your data, email <0>contact@mania-tracker.com</0>."
+#~ msgstr "Mania Tracker lo hace y lo mantiene una sola persona, aleju03. Para cualquier cosa sobre el sitio, los pagos, los reembolsos o tus datos, escribe a <0>contact@mania-tracker.com</0>."
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillBreakdown.tsx
@@ -17359,6 +17423,11 @@ msgstr "Avisarme"
 msgid "Notifying"
 msgstr "Avisos activos"
 
+#: src/routes/privacy.tsx
+#: src/routes/terms.tsx
+msgid "November 9, 2026"
+msgstr "9 de noviembre de 2026"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "now"
 msgstr "ahora"
@@ -17403,12 +17472,12 @@ msgid "Obtained on {dateText}"
 msgstr "Obtenida el {dateText}"
 
 #: src/routes/terms.tsx
-msgid "October 26, 2026"
-msgstr "26 de octubre de 2026"
+#~ msgid "October 26, 2026"
+#~ msgstr "26 de octubre de 2026"
 
 #: src/routes/privacy.tsx
-msgid "October 9, 2026"
-msgstr "9 de octubre de 2026"
+#~ msgid "October 9, 2026"
+#~ msgstr "9 de octubre de 2026"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
@@ -17929,6 +17998,10 @@ msgstr "Abrir en el cliente de osu!"
 msgid "Open in the BBCode editor"
 msgstr "Abrir en el editor de BBCode"
 
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Open lava.top and pick an amount. The link carries your account, so your supporter time reaches it on its own."
+#~ msgstr "Abre lava.top y elige un monto. El link lleva tu cuenta, así que tu tiempo de supporter le llega solo."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open link"
 msgstr "Abrir enlace"
@@ -18069,12 +18142,12 @@ msgid "or paste a Shadertoy shader as it is"
 msgstr "o pega un shader de Shadertoy tal cual"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Or pay with Google. Sign in first so it counts toward your account."
-msgstr "O paga con Google. Inicia sesión primero para que cuente en tu cuenta."
+#~ msgid "Or pay with Google. Sign in first so it counts toward your account."
+#~ msgstr "O paga con Google. Inicia sesión primero para que cuente en tu cuenta."
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Or pay with Google. Your supporter time starts right away."
-msgstr "O paga con Google. Tu tiempo de supporter empieza al instante."
+#~ msgid "Or pay with Google. Your supporter time starts right away."
+#~ msgstr "O paga con Google. Tu tiempo de supporter empieza al instante."
 
 #: src/routes/recommendations.tsx
 msgid "or pick someone else"
@@ -18687,6 +18760,22 @@ msgstr "Pausar preview"
 msgid "Paused: still frame"
 msgstr "En pausa: imagen fija"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pay on lava.top"
+msgstr "Pagar en lava.top"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pay on lava.top. The link carries your account, so your supporter time reaches it on its own."
+msgstr "Paga en lava.top. El link lleva tu cuenta, así que tu tiempo de supporter le llega solo."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pay with Google here. Your supporter time starts as soon as the payment goes through."
+msgstr "Paga con Google aquí. Tu tiempo de supporter empieza apenas se procese el pago."
+
+#: src/routes/terms.tsx
+msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+msgstr "Los pagos pasan por Ko-fi, Google o lava.top, que los procesan bajo sus propios términos. Mania Tracker nunca ve los datos de tu tarjeta o banco. Una suscripción mensual se renueva sola hasta que la canceles en la plataforma donde la empezaste; cancelar detiene el siguiente pago, y el tiempo ya pagado se mantiene hasta que se acabe."
+
 #: src/components/packs/run/chain/ChainContracts.tsx
 msgid "Pays"
 msgstr "Paga"
@@ -18847,6 +18936,10 @@ msgstr "Elige un lugar y luego la tarjeta que va ahí, o arrastra una tarjeta a 
 msgid "Pick a target above. Progress updates as your mania plays land."
 msgstr "Elige una meta arriba. El progreso se actualiza conforme llegan tus plays de mania."
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pick an amount in Google's checkout."
+msgstr "Elige un monto en el pago de Google."
+
 #: src/components/supporter/KofiNameSteps.tsx
 msgid "Pick an amount on Ko-fi. So the time reaches your account, do one of these there:"
 msgstr "Elige un monto en Ko-fi. Para que el tiempo llegue a tu cuenta, haz una de estas cosas ahí:"
@@ -18878,6 +18971,10 @@ msgstr "Elige un .osr y el .osu en el que se jugó."
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Pick five cards of the same rarity. They leave your collection and you get one card of the rarity above."
 #~ msgstr "Elige cinco cartas de la misma rareza. Salen de tu colección y recibes una carta de la rareza superior."
+
+#: src/routes/support.tsx
+msgid "Pick how to pay"
+msgstr "Elige cómo pagar"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Pick it back up"
@@ -20818,6 +20915,10 @@ msgstr "Actualizando..."
 msgid "Refund"
 msgstr "Reembolso"
 
+#: src/routes/terms.tsx
+msgid "Refunds"
+msgstr "Reembolsos"
+
 #: src/lib/chain-run.ts
 msgid "Region"
 msgstr "Región"
@@ -21738,6 +21839,10 @@ msgstr "Las filas solo de 7K tienen multiplicador."
 msgid "Rows start at combo {startCombo}"
 msgstr "Las filas empiezan con {startCombo} de combo"
 
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Ruble cards"
+#~ msgstr "Tarjetas en rublos"
+
 #: src/routes/snipes.tsx
 msgid "Rules"
 msgstr "Reglas"
@@ -21784,6 +21889,10 @@ msgstr "¡Partida ganada! Desde aquí es infinita"
 #: src/components/communities/field-options.tsx
 msgid "Russian"
 msgstr "Ruso"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Russian cards"
+#~ msgstr "Tarjetas rusas"
 
 #: src/components/supporter/loadout.ts
 #: src/lib/supporter-profile-themes.ts
@@ -22508,8 +22617,12 @@ msgid "Send"
 msgstr "Enviar"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Send a tip"
-msgstr "Enviar una propina"
+#~ msgid "Send a tip"
+#~ msgstr "Enviar una propina"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Send a tip on lava.top"
+#~ msgstr "Enviar un aporte en lava.top"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Send backward"
@@ -23353,6 +23466,22 @@ msgstr "Inicia sesión de nuevo para enviar un regalo."
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in and runs like that pay shards."
 msgstr "Inicia sesión y rachas así pagan fragmentos."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first so it counts toward your account."
+msgstr "Inicia sesión primero para que cuente en tu cuenta."
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Sign in first, then open lava.top: the link carries your account, so your supporter time reaches it."
+#~ msgstr "Inicia sesión primero y luego abre lava.top: el link lleva tu cuenta, así que tu tiempo de supporter le llega."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then pay on lava.top: the link carries your account, so your supporter time reaches it."
+msgstr "Inicia sesión primero y luego paga en lava.top: el link lleva tu cuenta, así que tu tiempo de supporter le llega."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then pay with Google here, so your supporter time reaches your account."
+msgstr "Inicia sesión primero y luego paga con Google aquí, para que tu tiempo de supporter llegue a tu cuenta."
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Sign in to connect {appName}"
@@ -24899,8 +25028,24 @@ msgid "Supporter sections"
 msgstr "Secciones de supporter"
 
 #: src/routes/terms.tsx
+msgid "Supporter Status And Payments"
+msgstr "Estado de supporter y pagos"
+
+#: src/routes/terms.tsx
+msgid "Supporter status is bought as time on your osu! account: $4 buys 30 days, any other amount buys time in proportion to the day, and one payment of $40 or more buys a full year for every $40. A payment adds to the time you have left, and the status ends when the time runs out. Supporter time is tied to the account it was paid for and cannot be moved to another, except through the gift codes the site hands out."
+msgstr "El estado de supporter se compra como tiempo en tu cuenta de osu!: $4 compran 30 días, cualquier otro monto compra tiempo proporcional al día, y un solo pago de $40 o más compra un año completo por cada $40. Un pago se suma al tiempo que te queda, y el estado termina cuando se acaba el tiempo. El tiempo de supporter queda ligado a la cuenta para la que se pagó y no se puede pasar a otra, salvo con los códigos de regalo que da el sitio."
+
+#: src/routes/terms.tsx
+msgid "Supporter status is optional. It unlocks cosmetic extras on the site, such as profile themes, avatar frames, name styles and mascots, and changes nothing about rankings, scores or ratings. The extras on offer may change over time."
+msgstr "El estado de supporter es opcional. Desbloquea extras cosméticos en el sitio, como temas de perfil, marcos de avatar, estilos de nombre y mascotas, y no cambia nada de rankings, scores ni ratings. Los extras que se ofrecen pueden cambiar con el tiempo."
+
+#: src/routes/terms.tsx
 msgid "Supporter Themes And Uploads"
 msgstr "Temas y archivos de supporters"
+
+#: src/routes/terms.tsx
+msgid "Supporter time starts as soon as a payment goes through, so payments are final. A payment made twice or by mistake is refunded: email <0>contact@mania-tracker.com</0> with the date of the payment and the platform you paid through, and the refund goes back through that platform. Refund rights the law where you live gives you also apply."
+msgstr "El tiempo de supporter empieza apenas se procesa el pago, así que los pagos son finales. Un pago hecho dos veces o por error se reembolsa: escribe a <0>contact@mania-tracker.com</0> con la fecha del pago y la plataforma con la que pagaste, y el reembolso vuelve por esa plataforma. También aplican los derechos de reembolso que te dé la ley de tu país."
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 #: src/routes/supporter.tsx
@@ -27652,8 +27797,8 @@ msgid "Tiny"
 msgstr "Diminuto"
 
 #: src/routes/support.tsx
-msgid "Tip on Ko-fi"
-msgstr "Aporta en Ko-fi"
+#~ msgid "Tip on Ko-fi"
+#~ msgstr "Aporta en Ko-fi"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "title"
@@ -28805,8 +28950,8 @@ msgid "Use this screenshot as the card cover"
 msgstr "Usar esta captura como portada de la carta"
 
 #: src/routes/support.tsx
-msgid "Use your osu! username as your name there, so the time lands on your account."
-msgstr "Usa tu usuario de osu! como nombre ahí, para que el tiempo llegue a tu cuenta."
+#~ msgid "Use your osu! username as your name there, so the time lands on your account."
+#~ msgstr "Usa tu usuario de osu! como nombre ahí, para que el tiempo llegue a tu cuenta."
 
 #: src/routes/discord.tsx
 msgid "Used by /skills and /farm when you don't pick one."
@@ -29593,6 +29738,10 @@ msgstr "Quién farmea este mapa"
 msgid "Who has your card"
 msgstr "Quién tiene tu carta"
 
+#: src/routes/terms.tsx
+#~ msgid "Who Runs Mania Tracker"
+#~ msgstr "Quién hace Mania Tracker"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Who the server is for, what happens in it, when it is busy. Line breaks are kept."
 msgstr "Para quién es el servidor, qué pasa en él, cuándo está activo. Los saltos de línea se conservan."
@@ -30002,6 +30151,10 @@ msgstr "También puedes enviar plays con ScoreV2 y Hard Rock de esta manera."
 #: src/routes/news_.companella.tsx
 #~ msgid "You can also submit ScoreV2 and Hard Rock plays through Companella."
 #~ msgstr "También puedes enviar partidas con ScoreV2 y Hard Rock a través de Companella."
+
+#: src/routes/terms.tsx
+#~ msgid "You can ask for a full refund of any payment within 14 days of making it. Email <0>contact@mania-tracker.com</0> with the date of the payment and the platform you paid through. The refund goes back through that platform, and the supporter time the payment bought is removed from your account."
+#~ msgstr "Puedes pedir el reembolso completo de cualquier pago dentro de los 14 días siguientes a hacerlo. Escribe a <0>contact@mania-tracker.com</0> con la fecha del pago y la plataforma con la que pagaste. El reembolso vuelve por esa plataforma, y el tiempo de supporter que compró el pago se quita de tu cuenta."
 
 #: src/components/player/DisplayNameEditor.tsx
 msgid "You can change it once a week. Your profile link keeps your osu! name."
