@@ -13793,6 +13793,10 @@ msgstr "Clear"
 #~ msgid "Passes"
 #~ msgstr "Passes"
 
+#: src/routes/dan-estimates.tsx
+msgid "Passes in a skill are left out when they credit more than five levels below the average of your best five in it, as long as four passes are left. The dan window marks them <0>not counted</0>."
+msgstr "Los pases de un skill quedan fuera cuando acreditan más de cinco niveles por debajo del promedio de tus mejores cinco en él, siempre que queden cuatro pases. La ventana de dan los marca como <0>no cuenta</0>."
+
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
 msgstr "Pasar a varios jugadores con un mismo score cuenta como un solo snipe, contra el que estaba más arriba."
@@ -21187,8 +21191,8 @@ msgstr "hasta el nivel del chart +0.1"
 #~ msgstr "Hasta tres pases de una habilidad quedan fuera de su promedio cuando acreditan más de cinco niveles por debajo del promedio de tus cinco mejores en ella. Siguen apareciendo en la ventana de dan, marcados como <0>no cuenta</0>."
 
 #: src/routes/dan-estimates.tsx
-msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
-msgstr "Hasta tres pases de un skill quedan fuera cuando acreditan más de cinco niveles por debajo del promedio de tus mejores cinco en él. La ventana de dan los marca como <0>no cuenta</0>."
+#~ msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
+#~ msgstr "Hasta tres pases de un skill quedan fuera cuando acreditan más de cinco niveles por debajo del promedio de tus mejores cinco en él. La ventana de dan los marca como <0>no cuenta</0>."
 
 #. placeholder {0}: skin.name
 #: src/components/skins/SkinUpdateModal.tsx

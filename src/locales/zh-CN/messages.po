@@ -13805,6 +13805,10 @@ msgstr "通过线"
 #~ msgid "Passes"
 #~ msgstr "通过"
 
+#: src/routes/dan-estimates.tsx
+msgid "Passes in a skill are left out when they credit more than five levels below the average of your best five in it, as long as four passes are left. The dan window marks them <0>not counted</0>."
+msgstr "如果某技能中的通过计入段位比你在该技能最好的五次平均低五级以上，就会被排除，但至少保留四次。段位窗口会把它们标为<0>不计入</0>。"
+
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
 msgstr "一个成绩超过多名玩家只算一次狙击，对象是其中排名最高的玩家。"
@@ -21199,8 +21203,8 @@ msgstr "最多为谱面段位 +0.1"
 #~ msgstr "一项技能中最多三个通过会被排除在其平均之外，条件是它们计入的段位比你在该技能最好的五个通过的平均低五个以上。它们仍会出现在段位窗口中，标记为<0>不计入</0>。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
-msgstr "如果某技能中的通过计入段位比你在该技能最好的五次平均低五级以上，最多会排除其中三次。段位窗口会把它们标为<0>不计入</0>。"
+#~ msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
+#~ msgstr "如果某技能中的通过计入段位比你在该技能最好的五次平均低五级以上，最多会排除其中三次。段位窗口会把它们标为<0>不计入</0>。"
 
 #. placeholder {0}: skin.name
 #: src/components/skins/SkinUpdateModal.tsx

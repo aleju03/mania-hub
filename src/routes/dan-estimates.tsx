@@ -437,8 +437,9 @@ function DanEstimatesPage() {
               </Li>
               <Li>
                 <Trans>
-                  Up to three passes in a skill are left out when they credit more than five levels
-                  below the average of your best five in it. The dan window marks them <B>not counted</B>.
+                  Passes in a skill are left out when they credit more than five levels below the
+                  average of your best five in it, as long as four passes are left. The dan window
+                  marks them <B>not counted</B>.
                 </Trans>
               </Li>
               <Li>
