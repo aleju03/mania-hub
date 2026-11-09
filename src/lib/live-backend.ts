@@ -4056,12 +4056,13 @@ export type LiveScoreSubmissionFailure =
   | "beatmap_not_found"
   | "chart_outdated"
   | "chart_unavailable"
-  | "unsupported_mods";
+  | "unsupported_mods"
+  | "rate_unknown";
 
 const SCORE_SUBMISSION_FAILURES = new Set<LiveScoreSubmissionFailure>([
   "invalid_link", "score_not_found", "not_mania", "not_owned", "not_passed",
   "player_untracked", "player_not_found", "osu_unavailable",
-  "mames_not_linked", "mames_unavailable", "beatmap_not_found", "chart_outdated", "chart_unavailable", "unsupported_mods",
+  "mames_not_linked", "mames_unavailable", "beatmap_not_found", "chart_outdated", "chart_unavailable", "unsupported_mods", "rate_unknown",
 ]);
 
 export interface LiveScoreSubmissionPlay {

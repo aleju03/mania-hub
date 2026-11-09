@@ -34,6 +34,7 @@ const UNRATED_TEXT: Record<string, string> = {
   column_rewriting_mod: "Random is not rated",
   key_conversion_mod: "Key conversion mods are not rated",
   unsupported_mod: "This mod is not rated",
+  rate_unknown: "Mamestagram doesn't say which rate this play was at",
   unknown_mod_bits: "The replay has mods the site does not know",
 };
 

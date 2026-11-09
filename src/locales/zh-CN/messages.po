@@ -10819,6 +10819,10 @@ msgstr "马来语"
 msgid "Mamestagram didn't answer. Try again later."
 msgstr "Mamestagram 没有响应，请稍后再试。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Mamestagram doesn't say which rate that play was at, so it can't be added."
+msgstr "Mamestagram 没有提供这次游玩的倍速，因此无法添加。"
+
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Manage"
 msgstr "管理"

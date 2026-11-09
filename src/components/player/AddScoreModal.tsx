@@ -230,6 +230,8 @@ export function AddScoreModal({
         return t`The chart's file couldn't be fetched. Try again in a minute.`;
       case "unsupported_mods":
         return t`Plays with those mods can't be added.`;
+      case "rate_unknown":
+        return t`Mamestagram doesn't say which rate that play was at, so it can't be added.`;
     }
   };
 

@@ -10846,6 +10846,10 @@ msgstr "Malay"
 msgid "Mamestagram didn't answer. Try again later."
 msgstr "Mamestagram didn't answer. Try again later."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Mamestagram doesn't say which rate that play was at, so it can't be added."
+msgstr "Mamestagram doesn't say which rate that play was at, so it can't be added."
+
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Manage"
 msgstr "Manage"
