@@ -28,6 +28,7 @@ import { bridgeAuthHeaders } from "../../lib/live-backend-tokens";
 import { parsePackCardKey } from "../../lib/pack-collection";
 import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCountryScope } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
+import { OVERJOY_RUN_OG_LAYOUT, renderOverjoyRunOg } from "../../lib/og-overjoy-run";
 import {
   getDisplayedAccuracy,
   getDisplayedRank,
@@ -5213,6 +5214,18 @@ export const Route = createFileRoute("/api/og")({
               );
             } catch (err) {
               if (!isOgFallbackError(err)) console.warn("[og] collection render failed, falling back", err);
+            }
+          }
+        }
+
+        // An Overjoy run's share link. A share never changes once made.
+        if (kind === "overjoy-run") {
+          const shareId = (url.searchParams.get("id") ?? "").trim();
+          if (/^[a-zA-Z0-9]{6,16}$/.test(shareId)) {
+            try {
+              return await serveOg(request, `overjoy-run:${shareId}:l${OVERJOY_RUN_OG_LAYOUT}:v${version}`, () => renderOverjoyRunOg(request, shareId));
+            } catch (err) {
+              if (!isOgFallbackError(err)) console.warn("[og] overjoy run render failed, falling back", err);
             }
           }
         }

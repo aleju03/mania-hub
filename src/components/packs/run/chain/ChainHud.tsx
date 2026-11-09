@@ -22,34 +22,14 @@ import { RoundChartTag } from "./ChainRoundChart";
 import { punch } from "../runJuice";
 import { isRunMusicOn, setRunMusicOn, subscribeRunMusic } from "../../packSfx";
 import { runSound } from "../runSound";
-import { SceneArt, type SceneId } from "../sceneArt";
+import { SCENE_ART_ID, SceneArt } from "../sceneArt";
 import { Shards } from "../Shards";
 import { useTicker } from "../shopMotion";
 import { showChainDetails, useChainDetailsTrigger } from "./ChainDetails";
 import { WysiDigits, WysiStamp } from "./Wysi";
 import { KIT, KitGem, MARKER, ObjectiveLine, SceneMedallion } from "./chainKit";
 
-export const SCENE_ART_ID: Record<ChainSceneId, SceneId> = {
-  makiba: "makiba",
-  mario: "marioPaint",
-  duplicity: "duplicity",
-  echoes: "echoes",
-  tree: "tree",
-  forgotten: "onceForgotten",
-  future: "futureDominators",
-  ascension: "ascension",
-  aiae: "aiae",
-  scatteredFaith: "scatteredFaith",
-  foolMoon: "foolMoon",
-  moonGate: "moonGate",
-  lostRequiem: "lostRequiem",
-  purplePalace: "purplePalace",
-  galaxy: "galaxyCollapse",
-  sidetracked: "sidetrackedDay",
-  freedomDive: "freedomDive",
-  blueZenith: "blueZenith",
-  halcyon: "halcyon",
-};
+export { SCENE_ART_ID };
 
 /* HUD pieces that come and go with the round fade out instead of
    vanishing in one frame. */

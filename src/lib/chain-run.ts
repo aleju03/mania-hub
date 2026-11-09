@@ -208,6 +208,52 @@ export const actOnOwnChainRun = createServerFn({ method: "POST" })
     return { status: "ok", result: body.result, run: body.run, rev: body.rev, best: body.best ?? null };
   });
 
+/* ---------------------------------------------------------------- shares */
+
+/* A finished run as its share link shows it (the backend's ChainRunShare). */
+export interface ChainRunShare {
+  id: string;
+  userId: number;
+  username: string;
+  daily: boolean;
+  won: boolean;
+  round: number;
+  bestRow: number;
+  rows: number;
+  scenes: ChainSceneId[];
+  bestRowCards: ChainCard[];
+  createdAt: number;
+}
+
+/* The share link id of the viewer's finished run (the same id however often
+   it is shared); null for a guest, a run still going, or no backend. */
+export const shareOwnChainRun = createServerFn({ method: "POST" })
+  .validator((mode: ChainRunMode | undefined) => cleanMode(mode))
+  .handler(async ({ data: mode }): Promise<{ id: string } | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await chainTarget(mode);
+    if (!target) return null;
+    const url = new URL(target.url);
+    url.pathname = `${url.pathname}/share`;
+    const response = await fetch(url, { method: "POST", headers: target.headers });
+    if (!response.ok) return null;
+    const body = (await response.json().catch(() => null)) as { id?: unknown } | null;
+    return typeof body?.id === "string" ? { id: body.id } : null;
+  });
+
+/* A run's share, for its page; null when the link is wrong. */
+export const fetchChainRunShare = createServerFn({ method: "GET" })
+  .validator((id: string) => String(id ?? "").slice(0, 32))
+  .handler(async ({ data: id }): Promise<ChainRunShare | null> => {
+    if (!/^[a-zA-Z0-9]{6,16}$/.test(id)) return null;
+    const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
+    if (!base) return null;
+    const response = await fetch(`${base}/api/chain-run/share/${id}`);
+    if (!response.ok) return null;
+    return (await response.json()) as ChainRunShare;
+  });
+
 /* ------------------------------------------------------------------ copy */
 
 /* The game's name, shown on the /packs game pack and the table. The owner

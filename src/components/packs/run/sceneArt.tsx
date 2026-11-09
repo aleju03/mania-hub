@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import type { ChainSceneId } from "#/lib/chain-run";
 
 /* Scene card art for the pack run, in the linocut stamp style of the charm
    directions: one ink colour per card printed on a pale paper chip, rough
@@ -1097,3 +1098,26 @@ export function SceneArt({ id, size = 220, className }: { id: SceneId; size?: nu
   const html = sceneMarkup(id).replaceAll("§", `${uid}-`);
   return <svg viewBox="0 0 128 128" width={size} height={size} aria-hidden="true" className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
+
+/* Which art each chain run scene card wears. */
+export const SCENE_ART_ID: Record<ChainSceneId, SceneId> = {
+  makiba: "makiba",
+  mario: "marioPaint",
+  duplicity: "duplicity",
+  echoes: "echoes",
+  tree: "tree",
+  forgotten: "onceForgotten",
+  future: "futureDominators",
+  ascension: "ascension",
+  aiae: "aiae",
+  scatteredFaith: "scatteredFaith",
+  foolMoon: "foolMoon",
+  moonGate: "moonGate",
+  lostRequiem: "lostRequiem",
+  purplePalace: "purplePalace",
+  galaxy: "galaxyCollapse",
+  sidetracked: "sidetrackedDay",
+  freedomDive: "freedomDive",
+  blueZenith: "blueZenith",
+  halcyon: "halcyon",
+};

@@ -123,6 +123,7 @@ import { Route as ApiCompanellaUsageRouteImport } from './routes/api/companella/
 import { Route as ClipMediaIdFileRouteImport } from './routes/clip-media/$id/$file'
 import { Route as CompanellaDocsOpenapiDotyamlRouteImport } from './routes/companella_.docs_.openapi[.]yaml'
 import { Route as CompanellaDocsReferenceClientDotmjsRouteImport } from './routes/companella_.docs_.reference-client[.]mjs'
+import { Route as PacksOverjoyIdRouteImport } from './routes/packs_.overjoy.$id'
 import { Route as PlayerUsernameAboutRouteImport } from './routes/player/$username/about'
 import { Route as PlayerUsernameActivityRouteImport } from './routes/player/$username/activity'
 import { Route as PlayerUsernameManiacardRouteImport } from './routes/player/$username/maniacard'
@@ -726,6 +727,11 @@ const CompanellaDocsReferenceClientDotmjsRoute =
     path: '/companella/docs/reference-client.mjs',
     getParentRoute: () => rootRouteImport,
   } as any)
+const PacksOverjoyIdRoute = PacksOverjoyIdRouteImport.update({
+  id: '/packs_/overjoy/$id',
+  path: '/packs/overjoy/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlayerUsernameAboutRoute = PlayerUsernameAboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -1002,6 +1008,7 @@ export interface FileRoutesByFullPath {
   '/clip-media/$id/$file': typeof ClipMediaIdFileRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
+  '/packs/overjoy/$id': typeof PacksOverjoyIdRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
@@ -1147,6 +1154,7 @@ export interface FileRoutesByTo {
   '/clip-media/$id/$file': typeof ClipMediaIdFileRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
+  '/packs/overjoy/$id': typeof PacksOverjoyIdRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
@@ -1293,6 +1301,7 @@ export interface FileRoutesById {
   '/clip-media/$id/$file': typeof ClipMediaIdFileRoute
   '/companella_/docs_/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella_/docs_/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
+  '/packs_/overjoy/$id': typeof PacksOverjoyIdRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
@@ -1440,6 +1449,7 @@ export interface FileRouteTypes {
     | '/clip-media/$id/$file'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
+    | '/packs/overjoy/$id'
     | '/player/$username/about'
     | '/player/$username/activity'
     | '/player/$username/maniacard'
@@ -1585,6 +1595,7 @@ export interface FileRouteTypes {
     | '/clip-media/$id/$file'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
+    | '/packs/overjoy/$id'
     | '/player/$username/about'
     | '/player/$username/activity'
     | '/player/$username/maniacard'
@@ -1730,6 +1741,7 @@ export interface FileRouteTypes {
     | '/clip-media/$id/$file'
     | '/companella_/docs_/openapi.yaml'
     | '/companella_/docs_/reference-client.mjs'
+    | '/packs_/overjoy/$id'
     | '/player/$username/about'
     | '/player/$username/activity'
     | '/player/$username/maniacard'
@@ -1875,6 +1887,7 @@ export interface RootRouteChildren {
   ClipMediaIdFileRoute: typeof ClipMediaIdFileRoute
   CompanellaDocsOpenapiDotyamlRoute: typeof CompanellaDocsOpenapiDotyamlRoute
   CompanellaDocsReferenceClientDotmjsRoute: typeof CompanellaDocsReferenceClientDotmjsRoute
+  PacksOverjoyIdRoute: typeof PacksOverjoyIdRoute
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
   SupporterThemesSplatRoute: typeof SupporterThemesSplatRoute
   VideosIdFilenameRoute: typeof VideosIdFilenameRoute
@@ -2692,6 +2705,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CompanellaDocsReferenceClientDotmjsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/packs_/overjoy/$id': {
+      id: '/packs_/overjoy/$id'
+      path: '/packs/overjoy/$id'
+      fullPath: '/packs/overjoy/$id'
+      preLoaderRoute: typeof PacksOverjoyIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/player/$username/about': {
       id: '/player/$username/about'
       path: '/about'
@@ -3147,6 +3167,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompanellaDocsOpenapiDotyamlRoute: CompanellaDocsOpenapiDotyamlRoute,
   CompanellaDocsReferenceClientDotmjsRoute:
     CompanellaDocsReferenceClientDotmjsRoute,
+  PacksOverjoyIdRoute: PacksOverjoyIdRoute,
   PullOwnerIdCardIdRoute: PullOwnerIdCardIdRoute,
   SupporterThemesSplatRoute: SupporterThemesSplatRoute,
   VideosIdFilenameRoute: VideosIdFilenameRoute,

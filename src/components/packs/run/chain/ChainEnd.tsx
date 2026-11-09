@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { CHAIN_RULES, CHAIN_RUN_NAME, CHAIN_SCENE_NAMES, chainIsEndless, formatChainScore, type ChainBoardEntry, type ChainRunView } from "#/lib/chain-run";
+import { CHAIN_RULES, CHAIN_RUN_NAME, CHAIN_SCENE_NAMES, formatChainScore, type ChainBoardEntry, type ChainRunView } from "#/lib/chain-run";
 import { PACK_ASPECT } from "../../packArt";
 import { runSound } from "../runSound";
 import { SceneArt } from "../sceneArt";
 import { SCENE_ART_ID } from "./ChainHud";
 import { ChainButtons, KIT, MARKER, SceneMedallion } from "./chainKit";
-import { shareChainRun } from "./chainShare";
+import { shareChainRunLink } from "./chainShare";
 import { BoardPanel, type LoadBoard, type LoadSheet } from "./ChainBoardPanel";
 import { chainHowToSeen } from "./ChainHowTo";
 import { prepareRewardedAd, type RewardedAd } from "#/lib/rewarded-ad";
@@ -152,7 +152,7 @@ export function ChainOver({
   }, []);
   const over = view.over;
   const round = over?.round ?? view.round;
-  const [shareState, setShareState] = useState<"idle" | "busy" | "saved">("idle");
+  const [shareState, setShareState] = useState<"idle" | "busy" | "copied">("idle");
   const mine: ChainBoardEntry = best ?? { rank: 0, userId: -1, username: "", round, bestRow: view.bestRow, rows: view.totalRows, finished: true, updatedAt: 0 };
   const stat = (label: React.ReactNode, value: string, ink: string, delay: number) => (
     <motion.div
@@ -232,37 +232,18 @@ export function ChainOver({
               {
                 key: "share",
                 title: t`Share this run`,
-                label: shareState === "saved" ? <Trans>Image saved</Trans> : <Trans>Share run</Trans>,
+                label: shareState === "copied" ? <Trans>Link copied</Trans> : <Trans>Share run</Trans>,
                 disabled: shareState === "busy",
                 icon: narrow ? <IconShareCard /> : undefined,
                 onClick: async () => {
                   runSound.uiTap();
                   setShareState("busy");
                   const best = formatChainScore(view.bestRow);
-                  const link = `${window.location.origin}/packs`;
-                  const caption = view.won
-                    ? t`Won an Overjoy run and reached round ${round}, best row ${best}. ${link}`
-                    : t`Reached round ${round} in Overjoy, best row ${best}. ${link}`;
-                  const outcome = await shareChainRun(
-                    {
-                      won: view.won,
-                      round,
-                      bestRow: view.bestRow,
-                      rows: view.totalRows,
-                      scenes: view.scenes.map((scene) => scene.id),
-                      username: mine.username,
-                      labels: {
-                        title: view.won ? t`Run won` : t`Run over`,
-                        round: chainIsEndless(round) ? t`Endless round ${round}` : t`Round ${round}`,
-                        bestRow: t`Best row`,
-                        rows: t`Rows`,
-                        footer: link.replace(/^https?:\/\//, ""),
-                      },
-                    },
-                    caption,
+                  const outcome = await shareChainRunLink(daily ? "daily" : "normal", () =>
+                    view.won ? t`Won an Overjoy run and reached round ${round}, best row ${best}.` : t`Reached round ${round} in Overjoy, best row ${best}.`,
                   );
-                  setShareState(outcome === "saved" ? "saved" : "idle");
-                  if (outcome === "saved") window.setTimeout(() => setShareState("idle"), 2400);
+                  setShareState(outcome === "copied" ? "copied" : "idle");
+                  if (outcome === "copied") window.setTimeout(() => setShareState("idle"), 2400);
                 },
               },
               {

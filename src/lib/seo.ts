@@ -100,6 +100,11 @@ export function pullOgImagePath(ownerId: number, cardKey: string | number): stri
   return kindOgImagePath("pull", { owner: String(ownerId), card: String(cardKey) });
 }
 
+/* An Overjoy run's share link: the run's card, 1200x630. */
+export function overjoyRunOgImagePath(shareId: string): string {
+  return kindOgImagePath("overjoy-run", { id: shareId });
+}
+
 export const DEFAULT_OG_IMAGE_PATH = ogImagePath();
 
 export type MetaEntry =
