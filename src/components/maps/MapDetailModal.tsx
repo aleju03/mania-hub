@@ -307,11 +307,11 @@ function Stat({ label, value, badge }: { label: string; value: string; badge?: s
 // gimmick timing (a set timed at 999 as a joke) and long off-tempo intros
 // misreport the tempo the notes run at. When the note-weighted tempo the chart
 // analysis stored disagrees by more than rounding, it takes the stat and the
-// timed figure becomes the footnote.
-function realBpm(bpm: number, noteBpm: number | null | undefined): string | null {
+// timed figure becomes the footnote. Both are at the rate the modal reads the chart at.
+function realBpm(bpm: number, noteBpm: number | null | undefined, rate: number): string | null {
   if (noteBpm == null || !(noteBpm > 0) || !(bpm > 0)) return null;
   if (Math.abs(noteBpm - bpm) / bpm < 0.03) return null;
-  return String(Math.round(noteBpm * 100) / 100);
+  return String(Math.round(noteBpm * rate * 100) / 100);
 }
 
 // A Stat whose value the stub does not carry yet: the label is already true, so
@@ -833,14 +833,16 @@ interface ClusterGroup {
   mixed: boolean;
 }
 
-function groupClusters(clusters: LiveChartAnalysisCluster[]): ClusterGroup[] {
+// The clusters come from the 1.0x analysis; a rate plays every section at
+// that multiple of its BPM.
+function groupClusters(clusters: LiveChartAnalysisCluster[], rate: number): ClusterGroup[] {
   const groups = new Map<string, ClusterGroup>();
   for (const cluster of clusters) {
     const name = clusterPatternName(cluster);
     // BPM 0 is the analyzer's "no meaningful tempo" pool (inverse windows, LN
     // tail gaps); it renders as the name alone and must not drag a real
     // sibling's range down to "0-247bpm".
-    const bpm = Math.round(cluster.bpm);
+    const bpm = Math.round(cluster.bpm * rate);
     const existing = groups.get(name);
     if (existing) {
       if (bpm > 0) {
@@ -860,10 +862,10 @@ function groupClusters(clusters: LiveChartAnalysisCluster[]): ClusterGroup[] {
 // Jacky WC, 4K says Jumpstream / Rolls / ...). These are composition, not
 // difficulty, so the value per pattern is the BPM it runs at. One inline row,
 // importance-ordered with the dominant pattern tinted; no box of its own.
-function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetail | null; pending: boolean }) {
+function ClustersBlock({ analysis, pending, rate = 1 }: { analysis: LiveChartAnalysisDetail | null; pending: boolean; rate?: number }) {
   const { t } = useLingui();
   const groups =
-    analysis && analysis.status === "ready" && analysis.clusters.length > 0 ? groupClusters(analysis.clusters) : [];
+    analysis && analysis.status === "ready" && analysis.clusters.length > 0 ? groupClusters(analysis.clusters, rate) : [];
   // Done loading and genuinely nothing to show: collapse the row entirely.
   if (!pending && groups.length === 0) return null;
   // Fixed single-line height on desktop so the async result landing (or a diff
@@ -975,7 +977,6 @@ export function MapDetailModal({
   // The diff the score was set on, whatever the picker is pointing at: the
   // score tab is about that one chart and nothing else in the set.
   const playDiff = play ? diffs.find((diff) => diff.beatmapId === play.beatmapId) ?? entry : null;
-  const realBpmStat = active ? realBpm(active.bpm, active.noteBpm) : null;
 
   // A local chart (negative id) is one osu! does not have: an app sent a play
   // on it and the card is built from the chart itself, so everything osu!
@@ -1075,6 +1076,8 @@ export function MapDetailModal({
     return () => window.removeEventListener("resize", release);
   }, [pinnedTop]);
   const playRate = playedRate === 1 ? modRate : playedRate;
+  // BPM and length as the chart plays at that rate.
+  const realBpmStat = active ? realBpm(active.bpm, active.noteBpm, playRate) : null;
   const ratePercent = Math.round(playRate * 100);
   // 1.5x is the one rate the catalog already carries (the DT sweep), and it
   // rides on the detail entry, so the common DT/NC play needs no request at all.
@@ -1336,8 +1339,8 @@ export function MapDetailModal({
                   <div className="flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:grid-cols-4 sm:gap-2">
                     {fileStats ? (
                       <>
-                        <Stat label={t`BPM`} value={String(Math.round(fileStats.bpm))} />
-                        <Stat label={t`Length`} value={formatDuration(fileStats.length)} />
+                        <Stat label={t`BPM`} value={String(Math.round(fileStats.bpm * playRate))} />
+                        <Stat label={t`Length`} value={formatDuration(Math.round(fileStats.length / playRate))} />
                         <Stat label={t`LN notes`} value={formatNumber(fileStats.lnCount)} />
                         <Stat label={t`OD`} value={fileStats.od.toFixed(1)} />
                       </>
@@ -1349,8 +1352,8 @@ export function MapDetailModal({
                   <div className={`flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:gap-2 ${local ? "sm:grid-cols-4" : "sm:grid-cols-5"}`}>
                     {numbersKnown ? (
                       <>
-                        <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm))} />
-                        <Stat label={t`Length`} value={formatDuration(active.length)} />
+                        <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm * playRate))} />
+                        <Stat label={t`Length`} value={formatDuration(Math.round(active.length / playRate))} />
                         {local ? null : <Stat label={t`Plays`} value={formatNumber(active.playCount)} />}
                         <Stat label={t`LN notes`} value={formatNumber((starsKey != null ? inverseLnCountByKey[starsKey] : undefined) ?? active.lnCount)} />
                         {active.od == null && analysisPending ? (
@@ -1367,7 +1370,7 @@ export function MapDetailModal({
                         stat on a phone, and giving one cell a second line leaves
                         the rest of the row with a gap under their values. */}
                     {numbersKnown && realBpmStat ? (
-                      <span className="w-full col-span-full -mt-1 text-[10px] text-osu-f1/70">{t`timed at ${Math.round(active.bpm)}`}</span>
+                      <span className="w-full col-span-full -mt-1 text-[10px] text-osu-f1/70">{t`timed at ${Math.round(active.bpm * playRate)}`}</span>
                     ) : null}
                   </div>
                 ) : null}
@@ -1405,7 +1408,7 @@ export function MapDetailModal({
                     />
                   </div>
                 ) : pending || (offCatalog && ratePending) ? <PendingMsdBlock /> : null}
-                <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
+                <ClustersBlock analysis={activeAnalysis} pending={analysisPending} rate={playRate} />
 
                 {/* The card's filled primary chip (the index's family verdict)
                     then the analyzer's outlined subfamily attributes (bracket,
