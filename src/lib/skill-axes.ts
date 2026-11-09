@@ -190,6 +190,13 @@ export function qualifyingSkillModes(skills: MyDataSkillBreakdown | null): MyDat
     || mode.dan?.rc != null || mode.dan?.ln != null);
 }
 
+/* The player's chosen keymode moved to the front, the rest in their order;
+   unchanged when there is no choice or it has no ratings to show. */
+export function withMainKeymodeFirst<T extends { keyCount: number }>(modes: T[], mainKeyCount: number | null): T[] {
+  const index = mainKeyCount == null ? -1 : modes.findIndex((mode) => mode.keyCount === mainKeyCount);
+  return index <= 0 ? modes : [modes[index], ...modes.slice(0, index), ...modes.slice(index + 1)];
+}
+
 /* The keymodes whose dan on one side has a skillset breakdown, the ones the
    dan render's skillset layouts can draw. 4K LN's skillsets carry no dan of
    their own (its headline averages clears), and some ladders have none. */

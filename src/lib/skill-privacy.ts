@@ -91,3 +91,44 @@ export const fetchOwnSkillPath = createServerFn({ method: "GET" })
       return { ok: false, status: 502 };
     }
   });
+
+/* The keymode the signed-in player's Skills tab opens on (live-backend
+   features/skill-main-keymode.ts); null is automatic. */
+export const getMySkillMainKeymode = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ ok: true; keyCount: number | null } | { ok: false }> => {
+    await noStore();
+    const id = await viewerId();
+    const base = backendBase();
+    if (!id || !base) return { ok: false };
+    try {
+      const response = await fetch(`${base}/api/session/skill-main-keymode?userId=${id}`, { headers: bridgeAuthHeaders() });
+      const body = (await response.json().catch(() => null)) as { keyCount?: number | null } | null;
+      return response.ok && body && "keyCount" in body ? { ok: true, keyCount: body.keyCount ?? null } : { ok: false };
+    } catch {
+      return { ok: false };
+    }
+  },
+);
+
+export const setMySkillMainKeymode = createServerFn({ method: "POST" })
+  .validator((data: { keyCount?: unknown }) => {
+    const keys = Number(data?.keyCount);
+    return { keyCount: data?.keyCount != null && Number.isInteger(keys) && keys >= 1 && keys <= 18 ? keys : null };
+  })
+  .handler(async ({ data }): Promise<{ ok: true; keyCount: number | null } | { ok: false }> => {
+    await noStore();
+    const id = await viewerId();
+    const base = backendBase();
+    if (!id || !base) return { ok: false };
+    try {
+      const response = await fetch(`${base}/api/session/skill-main-keymode`, {
+        method: "POST",
+        headers: bridgeAuthHeaders(true),
+        body: JSON.stringify({ userId: id, keyCount: data.keyCount }),
+      });
+      const body = (await response.json().catch(() => null)) as { keyCount?: number | null } | null;
+      return response.ok && body && "keyCount" in body ? { ok: true, keyCount: body.keyCount ?? null } : { ok: false };
+    } catch {
+      return { ok: false };
+    }
+  });

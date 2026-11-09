@@ -4962,6 +4962,10 @@ msgstr "自动"
 #~ msgid "Auto packs"
 #~ msgstr "自动谱包"
 
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+msgid "Automatic"
+msgstr "自动"
+
 #: src/routes/dan-estimates.tsx
 msgid "Automatic tracking began on June 9, 2026. Older scores count if they are still in your osu! top plays, and any missing pass with an osu! score link can be added from the Skills tab on your profile. Sessions with no score on a ranked, qualified or loved chart are not recorded at all. <0>Why that is</0>"
 msgstr "自动追踪从 2026 年 6 月 9 日开始。更早的成绩只要还在你的 osu! 最佳成绩里就会计入，缺失的通过只要有 osu! 成绩链接，都可以在个人资料的技能页添加。没有在 ranked、qualified 或 loved 谱面上留下任何成绩的游玩时段完全不会被记录。<0>原因</0>"
@@ -7760,6 +7764,7 @@ msgstr "无法撤销这些连接。"
 msgid "Could not save that."
 msgstr "无法保存。"
 
+#: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Could not save that. Try again in a bit."
 msgstr "保存失败，请稍后再试。"
@@ -14512,6 +14517,10 @@ msgstr "仅 4K 主玩家"
 #: src/lib/packs.ts
 msgid "Main 7K players only"
 msgstr "仅 7K 主玩家"
+
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+msgid "Main keymode"
+msgstr "主键数"
 
 #: src/routes/workshop.index.tsx
 msgid "Make"
@@ -23497,6 +23506,7 @@ msgstr "仅技能提升"
 msgid "skills"
 msgstr "技能"
 
+#: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/dan-estimates.tsx
@@ -30463,6 +30473,14 @@ msgstr "你的私有皮肤"
 #: src/routes/skins.tsx
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "你的私有皮肤在上方的架子上，你发布的皮肤会出现在这里。"
+
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+msgid "Your profile's Skills tab opens on {keyCount}K."
+msgstr "你的个人资料「技能」页默认显示 {keyCount}K。"
+
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+msgid "Your profile's Skills tab opens on the keymode with the most rated plays."
+msgstr "你的个人资料「技能」页默认显示有评分成绩最多的键数。"
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "Your rank burns with a flame while your subscription renews."

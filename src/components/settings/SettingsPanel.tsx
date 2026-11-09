@@ -18,6 +18,7 @@ import { SelectMenu } from "../ui/SelectMenu";
 import { ReplaySkinSettingsModal, loadReplaySkinSettingsModal, preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { TranslationReportForm } from "./TranslationReportForm";
 import { CompanellaGroup } from "./CompanellaGroup";
+import { SkillMainKeymodeSetting } from "./SkillMainKeymodeSetting";
 import { SkillVisibilitySetting } from "./SkillVisibilitySetting";
 import { PanelGroup } from "./PanelGroup";
 import {
@@ -1484,6 +1485,8 @@ function PreferencesPanel() {
           </ul>
         )}
       </PanelGroup>
+
+      <SkillMainKeymodeSetting />
 
       <SkillVisibilitySetting />
     </div>

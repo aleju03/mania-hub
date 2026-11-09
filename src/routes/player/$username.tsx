@@ -81,7 +81,7 @@ import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel, preloadManiaCard3DPanel } from "../../components/player/maniacard3d/LazyManiaCard3DPanel";
 import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
 import { SkillBreakdownBody, SkillModePanel, SkillModeOption } from "../../components/player/SkillBreakdown";
-import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
+import { qualifyingSkillModes, withMainKeymodeFirst, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
 import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
@@ -3469,11 +3469,11 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
     setCourseScore(null);
   }, [noDans]);
 
-  const modes = qualifyingSkillModes(skills);
+  const modes = withMainKeymodeFirst(qualifyingSkillModes(skills), skills?.mainKeyCount ?? null);
   /* `modes` arrives ranked by rated plays, most first, and the strip keeps
      that order: the keymode someone plays leads, and its panel is the one that
      opens. Keycount order would put a profile's 4K first whether they play it
-     or not. */
+     or not. A keymode the player picked in Settings leads instead. */
   const skillModeStrip = modes;
   const activeSkillMode = modes.find((mode) => mode.keyCount === skillModeKey) ?? modes[0] ?? null;
   const view = noDans && skillsView === "dan" ? "ratings" : skillsView;

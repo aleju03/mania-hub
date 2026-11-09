@@ -2118,6 +2118,13 @@ export async function fetchLivePlayerSkillsDirect(userId: number): Promise<LiveP
   return fetchLiveJson(`/api/profiles/${userId}/skills`);
 }
 
+/* Refetches past the browser's 60-second copy, so a change the player just
+   made to how their skills show is what their profile loads next. */
+export async function refreshLivePlayerSkillsDirect(userId: number): Promise<LivePlayerSkills> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  return fetchLiveJson(`/api/profiles/${userId}/skills`, { cache: "reload" });
+}
+
 export interface LivePlayerSkillHistorySnapshot {
   ratings: Record<string, number>;
   dan: Record<"rc" | "ln", { label: string; beyondTable: boolean } | null>;

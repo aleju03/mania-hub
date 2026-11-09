@@ -168,6 +168,9 @@ export interface MyDataSkillBreakdown {
   // saw the osu! top-200, so loved and graveyard plays are absent by design.
   // Absent on older backend payloads.
   tracked?: boolean;
+  // The keymode the player picked to lead their Skills tab; null or absent
+  // is automatic (most rated plays first).
+  mainKeyCount?: number | null;
 }
 
 export interface MyDataBeatmapRef {

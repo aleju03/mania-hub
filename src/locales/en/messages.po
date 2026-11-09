@@ -4977,6 +4977,10 @@ msgstr "Auto"
 #~ msgid "Auto packs"
 #~ msgstr "Auto packs"
 
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+msgid "Automatic"
+msgstr "Automatic"
+
 #: src/routes/dan-estimates.tsx
 msgid "Automatic tracking began on June 9, 2026. Older scores count if they are still in your osu! top plays, and any missing pass with an osu! score link can be added from the Skills tab on your profile. Sessions with no score on a ranked, qualified or loved chart are not recorded at all. <0>Why that is</0>"
 msgstr "Automatic tracking began on June 9, 2026. Older scores count if they are still in your osu! top plays, and any missing pass with an osu! score link can be added from the Skills tab on your profile. Sessions with no score on a ranked, qualified or loved chart are not recorded at all. <0>Why that is</0>"
@@ -7775,6 +7779,7 @@ msgstr "Could not revoke the connections."
 msgid "Could not save that."
 msgstr "Could not save that."
 
+#: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Could not save that. Try again in a bit."
 msgstr "Could not save that. Try again in a bit."
@@ -14543,6 +14548,10 @@ msgstr "Main 4K players only"
 #: src/lib/packs.ts
 msgid "Main 7K players only"
 msgstr "Main 7K players only"
+
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+msgid "Main keymode"
+msgstr "Main keymode"
 
 #: src/routes/workshop.index.tsx
 msgid "Make"
@@ -23536,6 +23545,7 @@ msgstr "skillboost only"
 msgid "skills"
 msgstr "skills"
 
+#: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/dan-estimates.tsx
@@ -30510,6 +30520,14 @@ msgstr "Your private skins"
 #: src/routes/skins.tsx
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "Your private skins are on the shelf above; anything you publish lands here."
+
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+msgid "Your profile's Skills tab opens on {keyCount}K."
+msgstr "Your profile's Skills tab opens on {keyCount}K."
+
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+msgid "Your profile's Skills tab opens on the keymode with the most rated plays."
+msgstr "Your profile's Skills tab opens on the keymode with the most rated plays."
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "Your rank burns with a flame while your subscription renews."
