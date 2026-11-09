@@ -474,7 +474,7 @@ function SupporterPage() {
       {previewButton}
       {/* a subscription keeps going: an end date months away would only ask why they still pay */}
       <span className="text-[12px] text-osu-l2">
-        {state.renewing ? (state.patron ? t`Patron, renews every month` : t`Renews every month`) : t`Supporter until ${until}`}
+        {state.renewing ? (state.patron ? t`Gold supporter, renews every month` : t`Renews every month`) : t`Supporter until ${until}`}
       </span>
     </span>
   ) : (
@@ -692,7 +692,7 @@ function SupporterPage() {
                           {state.renewing ? (
                             <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
                               {state.patron
-                                ? t`You're a Patron. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends.`
+                                ? t`You're a Gold supporter. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends.`
                                 : t`Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends.`}
                             </p>
                           ) : null}

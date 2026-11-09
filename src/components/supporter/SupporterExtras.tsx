@@ -237,7 +237,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
           <p className="mt-2 max-w-full truncate text-center text-[12px] font-semibold text-osu-l2">{shownName}</p>
           {credit && (
             <a href={credit.url} target="_blank" rel="noreferrer" className="mt-0.5 text-center text-[10.5px] leading-tight text-osu-f1 hover:text-white">
-              {t`Model by ${credit.author}`}
+              {credit.basedOn ? t`Based on a model by ${credit.author}` : t`Model by ${credit.author}`}
             </a>
           )}
           {by && (

@@ -80,17 +80,21 @@ function RankGem({ rank, renewing, className }: { rank: SupporterRankDef; renewi
    isn't active (`runStartedAt` null). A renewing rank burns unless its
    supporter turned the fire off (`fire` false); the tip still says it renews.
    On their own profile (`onFireChange` set) the tip holds that switch, so it
-   stays open while the pointer or focus is inside it. A Patron (a renewing
+   stays open while the pointer or focus is inside it. A Gold supporter (a renewing
    subscription of $10 or more) is named in the tip. */
-export function SupporterRankBadge({ runStartedAt, renewing = false, patron = false, shownRank = null, fire = true, onFireChange, className = "h-7 w-7" }: { runStartedAt: number | null; renewing?: boolean; patron?: boolean; /* an earlier rank they chose to show */ shownRank?: number | null; fire?: boolean; onFireChange?: (fire: boolean) => void; className?: string }) {
+export function SupporterRankBadge({ runStartedAt, renewing = false, patron = false, shownRank = null, own = false, fire = true, onFireChange, className = "h-7 w-7" }: { runStartedAt: number | null; renewing?: boolean; patron?: boolean; /* an earlier rank they chose to show */ shownRank?: number | null; /* the viewer's own badge: only they are told which rank it shows */ own?: boolean; fire?: boolean; onFireChange?: (fire: boolean) => void; className?: string }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
   if (runStartedAt == null) return null;
   const rank = supporterRank(runStartedAt);
   const gem = shownRank != null && SUPPORTER_RANKS[shownRank] ? SUPPORTER_RANKS[shownRank] : rank.def;
-  const name = rank.def.name;
-  const inARow = t`${name}, ${plural(rank.months, { one: "# month", other: "# months" })} in a row`;
-  const label = `${inARow}${renewing ? `. ${t`Renews every month`}` : ""}${patron ? `. ${t`Patron`}` : ""}`;
+  /* Visitors see the gem shown, named as shown; only the owner hears it is an
+     earlier rank and how far the next one is. */
+  const earlier = gem !== rank.def;
+  const headline = own ? rank.def : gem;
+  const name = headline.name;
+  const inARow = `${name}. ${t`Supporter for ${plural(rank.months, { one: "# month", other: "# months" })} in a row`}`;
+  const label = `${inARow}${renewing ? `. ${t`Renews every month`}` : ""}${patron ? `. ${t`Gold supporter`}` : ""}`;
   const fireSwitch = renewing && onFireChange ? onFireChange : undefined;
   return (
     <span
@@ -111,12 +115,12 @@ export function SupporterRankBadge({ runStartedAt, renewing = false, patron = fa
         <RankGem rank={gem} renewing={renewing && fire} className={className} />
       </button>
       {/* only while open: the day count would differ between the server render and hydration */}
-      {open ? <RankTip rank={rank} name={name} renewing={renewing} patron={patron} shown={gem === rank.def ? null : gem} fire={fire} onFireChange={fireSwitch} /> : null}
+      {open ? <RankTip rank={rank} headline={headline} showNext={own || !earlier} patron={patron} shown={own && earlier ? gem : null} fire={fire} onFireChange={fireSwitch} /> : null}
     </span>
   );
 }
 
-function RankTip({ rank, name, renewing, patron, shown, fire, onFireChange }: { rank: ReturnType<typeof supporterRank>; name: string; renewing: boolean; patron: boolean; shown: SupporterRankDef | null; fire: boolean; onFireChange?: (fire: boolean) => void }) {
+function RankTip({ rank, headline, showNext, patron, shown, fire, onFireChange }: { rank: ReturnType<typeof supporterRank>; headline: SupporterRankDef; showNext: boolean; patron: boolean; shown: SupporterRankDef | null; fire: boolean; onFireChange?: (fire: boolean) => void }) {
   const { t } = useLingui();
   const months = rank.months;
   const next = rank.nextAt == null ? null : SUPPORTER_RANKS[rank.index + 1];
@@ -130,21 +134,19 @@ function RankTip({ rank, name, renewing, patron, shown, fire, onFireChange }: { 
       className={`absolute left-1/2 top-full z-30 w-max max-w-[16rem] -translate-x-1/2 pt-2 ${onFireChange ? "" : "pointer-events-none"}`}
     >
       <span className="block rounded-lg border border-white/10 bg-black/90 px-3 py-2 text-left text-[13px] font-normal leading-snug text-white shadow-xl">
-        <span className="block">
-          <span className="font-semibold" style={{ color: rank.def.accent }}>{name}</span>
-          {" "}
-          {t`${plural(months, { one: "# month", other: "# months" })} in a row`}
-        </span>
-        <span className="block text-white/60">
-          {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
-        </span>
-        {renewing ? <span className="block text-white/60">{t`Renews every month`}</span> : null}
+        <span className="block font-semibold" style={{ color: headline.accent }}>{headline.name}</span>
+        <span className="block">{t`Supporter for ${plural(months, { one: "# month", other: "# months" })} in a row`}</span>
+        {showNext ? (
+          <span className="block text-white/60">
+            {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
+          </span>
+        ) : null}
         {shown ? (
           <span className="block text-white/60">
             {t`Showing`} <span className="font-semibold" style={{ color: shown.accent }}>{shown.name}</span>
           </span>
         ) : null}
-        {patron ? <span className="block font-semibold text-[#ffd56b]">{t`Patron`}</span> : null}
+        {patron ? <span className="block font-semibold text-[#ffd56b]">{t`Gold supporter`}</span> : null}
         {onFireChange ? (
           <label className="mt-2 flex cursor-pointer items-center gap-2 border-t border-white/10 pt-2 text-white/80">
             <Switch checked={fire} onChange={onFireChange} label={t`Show the fire on your rank`} />
@@ -181,8 +183,8 @@ export function SupporterRankLadder({ runStartedAt, renewing = false, fire = tru
     <div className="mt-4">
       <p className="text-[13px] text-osu-l2">
         <span className="font-semibold" style={{ color: rank.def.accent }}>{name}</span>
-        {" "}
-        {t`${plural(rank.months, { one: "# month", other: "# months" })} in a row`}
+        <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
+        {t`Supporter for ${plural(rank.months, { one: "# month", other: "# months" })} in a row`}
         <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
         {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
         {renewing ? (

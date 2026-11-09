@@ -154,7 +154,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
 
   const [phone, setPhone] = useState(false);
   const [overlay, setOverlay] = useState(false);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const playStart = useRef(0);
   const playheadRef = useRef<HTMLDivElement>(null);
   const clockRef = useRef<HTMLSpanElement>(null);

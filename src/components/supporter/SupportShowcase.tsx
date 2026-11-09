@@ -436,7 +436,7 @@ export function CompanionsShowcase() {
           <div className="truncate text-[14px] font-semibold text-white">{label(shown)}</div>
           {credit ? (
             <a href={credit.url} target="_blank" rel="noreferrer" className="text-[11px] text-osu-f1 hover:text-white">
-              {t`Model by ${credit.author}`}
+              {credit.basedOn ? t`Based on a model by ${credit.author}` : t`Model by ${credit.author}`}
             </a>
           ) : "submitted" in shown ? (
             <div className="truncate text-[11px] text-osu-f1">{t`Sent in by ${shown.submitted.submittedBy.username}`}</div>

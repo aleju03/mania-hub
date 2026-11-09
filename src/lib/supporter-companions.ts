@@ -55,7 +55,7 @@ export interface BuiltInCompanion {
   thumb?: string;
   /* The artist, linked to the model's page (which carries its licence; the
      full notices are in public/models/companions/LICENSES.md). */
-  credit?: { author: string; url: string };
+  credit?: { author: string; url: string; /* remodelled here from their model */ basedOn?: boolean };
   /* How tall it stands next to a plain fumo, which fills its box: a hat that
      rises above the rest makes it taller, and its canvas grows past the box
      to fit, so every fumo's body is drawn the same size. */
@@ -66,7 +66,7 @@ const sketchfab = (author: string, uid: string) => ({ author, url: `https://sket
 
 /* A licensed Sketchfab model. The scans face every which way, so each gets the
    turn that faces it front; plush and fabric ones are drawn matte. */
-const licensed = (id: BuiltInCompanionId, name: MessageDescriptor, author: string, uid: string, facing: number, { matte = true, size, rev }: { matte?: boolean; size?: number; /* bumped when the files change under the same id */ rev?: number } = {}): BuiltInCompanion => ({
+const licensed = (id: BuiltInCompanionId, name: MessageDescriptor, author: string, uid: string, facing: number, { matte = true, size, rev, basedOn }: { matte?: boolean; size?: number; /* bumped when the files change under the same id */ rev?: number; basedOn?: boolean } = {}): BuiltInCompanion => ({
   id,
   name,
   kind: "model",
@@ -75,14 +75,14 @@ const licensed = (id: BuiltInCompanionId, name: MessageDescriptor, author: strin
   facing,
   matte,
   size,
-  credit: sketchfab(author, uid),
+  credit: { ...sketchfab(author, uid), ...(basedOn ? { basedOn } : {}) },
 });
 const fumo = (id: BuiltInCompanionId, name: MessageDescriptor, uid: string, facing: number, size?: number) => licensed(id, name, "Renafox", uid, facing, { size });
 
 export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   licensed("plush-teto", msg`Teto`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0),
   // remodelled here from the Chubby Teto plush (see LICENSES.md)
-  licensed("plush-miku", msg`Miku plush`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0, { size: 1.4, rev: 11 }),
+  licensed("plush-miku", msg`Miku plush`, "certified birdbrain", "207990ca9c44482b8ff34140d8db3119", 0, { size: 1.4, rev: 11, basedOn: true }),
   licensed("plush-miku-xmas", msg`Christmas Miku`, "mannymanny", "96ec3b0993ba4f97ad961438e1872527", 0),
   { id: "blob-pink", name: msg`Pink blob`, kind: "model", url: "/models/companions/blob-pink.glb", thumb: "/models/companions/thumbs/blob-pink.webp" },
   fumo("fumo-reimu-v2", msg`Reimu fumo`, "ff926e77d0564c028bde86fd32a487c1", -1.47),

@@ -2605,7 +2605,7 @@ export function PlayerProfilePage({
                 ) : (
                   <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className={`min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]${heroNameFont ? ` name-font--${heroNameFont}` : ""}`} />
                 )}
-                <SupporterRankBadge runStartedAt={heroRunStartedAt} renewing={heroRenewing} patron={heroPatron} shownRank={heroShownRank} fire={heroRankFire} onFireChange={canSetRankFire ? setRankFire : undefined} className="h-6 w-6 sm:h-8 sm:w-8" />
+                <SupporterRankBadge runStartedAt={heroRunStartedAt} renewing={heroRenewing} patron={heroPatron} shownRank={heroShownRank} own={!!auth.viewer && auth.viewer.id === profileUserId} fire={heroRankFire} onFireChange={canSetRankFire ? setRankFire : undefined} className="h-6 w-6 sm:h-8 sm:w-8" />
                 {showProfileCountryFlag ? (
                   <Link
                     to="/"

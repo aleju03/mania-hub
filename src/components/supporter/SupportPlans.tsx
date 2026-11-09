@@ -51,7 +51,7 @@ function MonthlyPerks() {
     t`Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber.`,
     t`Your rank burns with a flame while your subscription renews.`,
     t`An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up.`,
-    t`At $10 a month or more, your rank's tooltip calls you a Patron, so people can see you give a little extra.`,
+    t`At $10 a month or more, your rank's tooltip says Gold supporter.`,
   ];
   return (
     <div className="mt-3 rounded-xl bg-osu-b4 p-4 ring-1 ring-inset ring-white/[0.06]">

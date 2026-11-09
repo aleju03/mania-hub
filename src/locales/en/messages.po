@@ -215,8 +215,8 @@ msgstr "{0, plural, one {# member} other {# members}}"
 
 #. placeholder {0}: rank.months
 #: src/components/supporter/SupporterRankBadge.tsx
-msgid "{0, plural, one {# month} other {# months}} in a row"
-msgstr "{0, plural, one {# month} other {# months}} in a row"
+#~ msgid "{0, plural, one {# month} other {# months}} in a row"
+#~ msgstr "{0, plural, one {# month} other {# months}} in a row"
 
 #. placeholder {0}: visibleSnapshot?.belowGainFloorCount ?? 0
 #: src/routes/recommendations.tsx
@@ -1790,8 +1790,8 @@ msgid "{mod}: {pct}% of plays"
 msgstr "{mod}: {pct}% of plays"
 
 #: src/components/supporter/SupporterRankBadge.tsx
-msgid "{months, plural, one {# month} other {# months}} in a row"
-msgstr "{months, plural, one {# month} other {# months}} in a row"
+#~ msgid "{months, plural, one {# month} other {# months}} in a row"
+#~ msgstr "{months, plural, one {# month} other {# months}} in a row"
 
 #: src/components/supporter/SupportDaysPreview.tsx
 msgid "{months, plural, one {about # month} other {about # months}}"
@@ -1865,8 +1865,8 @@ msgstr "{name} pack"
 
 #. placeholder {0}: rank.months
 #: src/components/supporter/SupporterRankBadge.tsx
-msgid "{name}, {0, plural, one {# month} other {# months}} in a row"
-msgstr "{name}, {0, plural, one {# month} other {# months}} in a row"
+#~ msgid "{name}, {0, plural, one {# month} other {# months}} in a row"
+#~ msgstr "{name}, {0, plural, one {# month} other {# months}} in a row"
 
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "{name}'s {packName} pack"
@@ -4874,8 +4874,16 @@ msgstr "Assets"
 #~ msgstr "At $10 a month or more, you're a Patron."
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "At $10 a month or more, your rank's tooltip calls you a Patron, so people can see you give a little extra."
-msgstr "At $10 a month or more, your rank's tooltip calls you a Patron, so people can see you give a little extra."
+#~ msgid "At $10 a month or more, your rank's tooltip calls you a Patron, so people can see you give a little extra."
+#~ msgstr "At $10 a month or more, your rank's tooltip calls you a Patron, so people can see you give a little extra."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "At $10 a month or more, your rank's tooltip says Gold supporter."
+msgstr "At $10 a month or more, your rank's tooltip says Gold supporter."
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "At $10 a month or more, your rank's tooltip says Patron."
+#~ msgstr "At $10 a month or more, your rank's tooltip says Patron."
 
 #: src/lib/pack-run.ts
 msgid "At least one card has a finish."
@@ -5245,6 +5253,12 @@ msgstr "Base tap color used for any column without a per-column override."
 #: src/lib/chain-run.ts
 msgid "Base x{0} while the row has no break before it, else x{1}."
 msgstr "Base x{0} while the row has no break before it, else x{1}."
+
+#. placeholder {0}: credit.author
+#: src/components/supporter/SupporterExtras.tsx
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Based on a model by {0}"
+msgstr "Based on a model by {0}"
 
 #: src/routes/recommendations.tsx
 msgid "based on what players near the same pp are farming:"
@@ -11438,6 +11452,14 @@ msgstr "Gold pack"
 #: src/components/supporter/loadout.ts
 msgid "Gold sketch crown"
 msgstr "Gold sketch crown"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Gold supporter"
+msgstr "Gold supporter"
+
+#: src/routes/supporter.tsx
+msgid "Gold supporter, renews every month"
+msgstr "Gold supporter, renews every month"
 
 #: src/components/supporter/loadout.ts
 msgid "Gold wings"
@@ -18490,12 +18512,12 @@ msgid "Patriot"
 msgstr "Patriot"
 
 #: src/components/supporter/SupporterRankBadge.tsx
-msgid "Patron"
-msgstr "Patron"
+#~ msgid "Patron"
+#~ msgstr "Patron"
 
 #: src/routes/supporter.tsx
-msgid "Patron, renews every month"
-msgstr "Patron, renews every month"
+#~ msgid "Patron, renews every month"
+#~ msgstr "Patron, renews every month"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "pattern"
@@ -24714,6 +24736,15 @@ msgstr "supporter"
 msgid "Supporter"
 msgstr "Supporter"
 
+#. placeholder {0}: rank.months
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Supporter for {0, plural, one {# month} other {# months}} in a row"
+msgstr "Supporter for {0, plural, one {# month} other {# months}} in a row"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Supporter for {months, plural, one {# month} other {# months}} in a row"
+msgstr "Supporter for {months, plural, one {# month} other {# months}} in a row"
+
 #: src/components/layout/Nav.tsx
 msgid "Supporter perks"
 msgstr "Supporter perks"
@@ -30049,12 +30080,16 @@ msgid "You'll edit the code its layers make. There's no going back to layers for
 msgstr "You'll edit the code its layers make. There's no going back to layers for this theme."
 
 #: src/routes/supporter.tsx
+msgid "You're a Gold supporter. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+msgstr "You're a Gold supporter. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+
+#: src/routes/supporter.tsx
 #~ msgid "You're a Patron: your rank carries the gold mark. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
 #~ msgstr "You're a Patron: your rank carries the gold mark. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
 
 #: src/routes/supporter.tsx
-msgid "You're a Patron. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
-msgstr "You're a Patron. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+#~ msgid "You're a Patron. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
+#~ msgstr "You're a Patron. Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
 
 #: src/routes/gift.$code.tsx
 msgid "You're a supporter until {until}."
