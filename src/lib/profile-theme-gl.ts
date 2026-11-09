@@ -6,6 +6,7 @@ import { createMapleLeaves } from "./profile-theme-maple";
 import { PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_SHADERS, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
 import { HIGHWAY_MAX_LANES, type HighwayChart, type HighwayNotes, type SupporterProfileThemeId } from "./supporter-profile-themes";
 import { takeGpuSlot } from "./gpu-queue";
+import { corsImageUrl } from "./cors-image-url";
 
 /* Runs the profile theme backdrops (profile-theme-shaders.ts). Loaded on
    demand, the first time a themed profile or the theme drawer shows.
@@ -204,7 +205,7 @@ class ThemeContext {
           this.images.set(url, { texture, width: image.naturalWidth, height: image.naturalHeight });
           this.onImageLoaded?.();
         };
-        image.src = url;
+        image.src = corsImageUrl(url);
       }
       const loaded = url ? this.images.get(url) : null;
       gl.activeTexture(gl.TEXTURE0 + CUSTOM_TEXTURE_UNIT + index);

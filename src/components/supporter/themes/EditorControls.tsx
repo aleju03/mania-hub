@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMediaQuery } from "../../../lib/use-media-query";
@@ -217,6 +217,25 @@ export function Popover({ trigger, children, open, onOpenChange, className = "",
   // that keeps the stage visible. Its height is 100dvh, not inset-0, so a
   // browser bar along the bottom never covers the sheet's last rows.
   const sheet = useMediaQuery("(max-width: 767px)") === true;
+  /* A dropdown wider than the room on its side (a narrow window, a button
+     near the edge) slides back inside the window instead of running off it. */
+  const dropRef = useRef<HTMLDivElement>(null);
+  const [nudge, setNudge] = useState(0);
+  useLayoutEffect(() => {
+    if (!open || sheet) {
+      setNudge(0);
+      return;
+    }
+    const drop = dropRef.current;
+    if (!drop) return;
+    const margin = 8;
+    const rect = drop.getBoundingClientRect();
+    const left = rect.left - nudge;
+    const right = rect.right - nudge;
+    setNudge(left < margin ? margin - left : right > window.innerWidth - margin ? Math.max(margin - left, window.innerWidth - margin - right) : 0);
+    // measured once per opening; the nudge itself must not re-run it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sheet]);
   useEffect(() => {
     if (!open) return;
     const onDown = (event: PointerEvent) => {
@@ -268,6 +287,8 @@ export function Popover({ trigger, children, open, onOpenChange, className = "",
         <AnimatePresence>
           {open ? (
             <motion.div
+              ref={dropRef}
+              style={nudge ? { marginLeft: nudge, marginRight: -nudge } : undefined}
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}

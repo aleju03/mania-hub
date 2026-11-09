@@ -10409,6 +10409,10 @@ msgstr "在下面填入{label}的成绩"
 msgid "Fill the playfield with a solid black background"
 msgstr "把游玩区域背景填成纯黑"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Fills the stage and holds still, in place of the background."
+msgstr "铺满画布并保持静止，替换原有背景。"
+
 #. placeholder {0}: player.username
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Filter {0}'s runs..."
@@ -10773,6 +10777,10 @@ msgstr "纯色"
 msgid "Flat backdrop tinted with the skin's accent"
 msgstr "使用皮肤主色调的纯色背景"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Flip"
+msgstr "翻转"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Flip direction"
@@ -10782,8 +10790,16 @@ msgstr "反转排序方向"
 msgid "Flip horizontal"
 msgstr "水平翻转"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Flip horizontally"
+msgstr "水平翻转"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Flip vertical"
+msgstr "垂直翻转"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Flip vertically"
 msgstr "垂直翻转"
 
 #: src/lib/replay-overlays.ts
@@ -12052,6 +12068,10 @@ msgstr "持有 {0} 碎片，下一轮结束后就能获得利息。"
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
 msgstr "按住 <0>C</0> 并移动光标即可画出烟雾，就像在 osu! 游戏中画图一样。它会自行消散。"
 
+#: src/components/supporter/themes/LayerHandles.tsx
+msgid "Hold Alt to resize from the opposite corner"
+msgstr "按住 Alt 以对角为基准缩放"
+
 #: src/components/packs/PackStage.tsx
 msgid "Hold and drag across the dotted line"
 msgstr "按住并沿虚线拖动"
@@ -12067,6 +12087,14 @@ msgstr "长条的放手不需要掐准时机。"
 #: src/lib/pack-run.ts
 msgid "Hold Off"
 msgstr "Hold Off"
+
+#: src/components/supporter/themes/LayerHandles.tsx
+msgid "Hold Shift to move along one axis"
+msgstr "按住 Shift 只沿一个方向移动"
+
+#: src/components/supporter/themes/LayerHandles.tsx
+msgid "Hold Shift to turn in 15° steps"
+msgstr "按住 Shift 以 15° 为步长旋转"
 
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "hold to delete"
@@ -12151,6 +12179,7 @@ msgstr "主场"
 msgid "Honorary roster"
 msgstr "荣誉名单"
 
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/replay-overlays.ts
 msgid "Horizontal"
 msgstr "横向"
@@ -28592,6 +28621,10 @@ msgstr "把 {selectedKeymode}K 用作卡片封面"
 msgid "Use 3 to 15 letters, numbers, spaces, or - _ [ ]."
 msgstr "使用 3 到 15 个字母、数字、空格或 - _ [ ]。"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Use as background"
+msgstr "设为背景"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Use as the {slotLabelLower} run"
 msgstr "用作{slotLabelLower}的成绩"
@@ -28701,6 +28734,7 @@ msgstr "已认证通过"
 msgid "Verify"
 msgstr "验证"
 
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/replay-overlays.ts
 msgid "Vertical"
 msgstr "纵向"

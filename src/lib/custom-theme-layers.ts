@@ -64,6 +64,9 @@ export interface ImageLayer extends LayerBase {
   sway: number;
   swaySpeed: number;
   brightness: number;
+  /** Mirrored left to right / top to bottom, about its own axes. */
+  flipX: boolean;
+  flipY: boolean;
 }
 
 export type ParticleShape = "dot" | "soft" | "ring" | "streak" | "image";
@@ -156,7 +159,7 @@ export function newLayer(kind: LayerKind, name: string): Layer {
     case "background":
       return { ...base, kind, fill: "linear", color: "#0b0a1f", color2: "#2a1240", angle: 90, image: null, zoom: 1, x: 0, y: 0, brightness: 1 };
     case "image":
-      return { ...base, kind, image: null, x: 0, y: 0, size: 0.5, angle: 0, spin: 0, sway: 0.01, swaySpeed: 0.6, brightness: 1, follow: 0.3 };
+      return { ...base, kind, image: null, x: 0, y: 0, size: 0.5, angle: 0, spin: 0, sway: 0.01, swaySpeed: 0.6, brightness: 1, flipX: false, flipY: false, follow: 0.3 };
     case "particles":
       return { ...base, kind, shape: "soft", image: null, color: "#ffd9f0", color2: "#9fd8ff", amount: 0.35, scale: 9, size: 0.18, sizeVariety: 0.6, speed: 0.04, direction: 270, wander: 0.4, twinkle: 0.3, depth: 0.15, follow: 0.15 };
     case "fog":
@@ -225,7 +228,7 @@ export function parseLayerDoc(value: unknown): LayerDoc | null {
         layers.push({ ...base, kind, fill: pick(r.fill, ["solid", "linear", "radial", "image"] as const, "linear"), color: c("color"), color2: c("color2"), angle: n("angle", 0, 360), image: image(r.image), zoom: n("zoom", 1, 4), x: n("x", -1, 1), y: n("y", -1, 1), brightness: n("brightness", 0, 1.5) });
         break;
       case "image":
-        layers.push({ ...base, kind, image: image(r.image), x: n("x", -2, 2), y: n("y", -1.5, 1.5), size: n("size", 0.02, 3), angle: n("angle", -360, 360), spin: n("spin", -1, 1), sway: n("sway", 0, 0.2), swaySpeed: n("swaySpeed", 0, 3), brightness: n("brightness", 0, 1.5) });
+        layers.push({ ...base, kind, image: image(r.image), x: n("x", -2, 2), y: n("y", -1.5, 1.5), size: n("size", 0.02, 3), angle: n("angle", -360, 360), spin: n("spin", -1, 1), sway: n("sway", 0, 0.2), swaySpeed: n("swaySpeed", 0, 3), brightness: n("brightness", 0, 1.5), flipX: r.flipX === true, flipY: r.flipY === true });
         break;
       case "particles":
         layers.push({ ...base, kind, shape: pick(r.shape, PARTICLE_SHAPES, "soft"), image: image(r.image), color: c("color"), color2: c("color2"), amount: n("amount", 0, 1), scale: n("scale", 2, 40), size: n("size", 0.02, 0.45), sizeVariety: n("sizeVariety", 0, 1), speed: n("speed", 0, 0.6), direction: n("direction", 0, 360), wander: n("wander", 0, 1), twinkle: n("twinkle", 0, 1) });
@@ -311,9 +314,14 @@ const HELPERS = `vec3 _lyr_blend(vec3 base, vec3 c, float a, int mode) {
   return mix(base, c, a);
 }
 
-vec4 _lyr_image(sampler2D tex, vec2 q) {
+vec4 _lyr_image(sampler2D tex, vec2 size, vec2 q) {
   vec2 inside = step(vec2(0.), q) * step(q, vec2(1.));
-  vec4 s = texture(tex, vec2(q.x, 1. - q.y));
+  vec2 uv = vec2(q.x, 1. - q.y);
+  vec2 dx = dFdx(uv);
+  vec2 dy = dFdy(uv);
+  // textures repeat: stay half a texel in, or the far edge bleeds in
+  vec2 edge = max(.5 / max(size, vec2(1.)), .5 * max(abs(dx), abs(dy)));
+  vec4 s = textureGrad(tex, clamp(uv, edge, 1. - edge), dx, dy);
   return vec4(s.rgb / max(s.a, .001), s.a * inside.x * inside.y);
 }
 `;
@@ -338,7 +346,7 @@ function layerBody(layer: Layer, e: Emitter, assets: string[], index: number): s
     vec2 tuv = vec2(q.x / screen, q.y) + .5;
     float cover = screen / (ts.x / ts.y);
     if (cover > 1.) tuv.y = (tuv.y - .5) / cover + .5; else tuv.x = (tuv.x - .5) * cover + .5;
-    vec4 s = _lyr_image(${tex}, clamp(tuv, 0., 1.));
+    vec4 s = _lyr_image(${tex}, ts, clamp(tuv, 0., 1.));
     c = s.rgb * ${e.num(layer.brightness)};
     a = 1.;
 `;
@@ -359,7 +367,7 @@ function layerBody(layer: Layer, e: Emitter, assets: string[], index: number): s
     vec2 centre = ${e.vec2(layer.x, layer.y)} + vec2(sin(t * speed), sin(t * speed * .7 + 1.3)) * ${e.num(layer.sway)};
     vec2 q = rot(${e.radians(layer.angle)} + t * ${e.num(layer.spin * Math.PI * 2)}) * (lp - centre);
     float h = ${e.num(layer.size)};
-    vec4 s = _lyr_image(${tex}, vec2(q.x / (h * ${sizeOf}.x / max(${sizeOf}.y, 1.)), q.y / h) + .5);
+    vec4 s = _lyr_image(${tex}, ${sizeOf}, vec2(${layer.flipX ? "-" : ""}q.x / (h * ${sizeOf}.x / max(${sizeOf}.y, 1.)), ${layer.flipY ? "-" : ""}q.y / h) + .5);
     c = s.rgb * ${e.num(layer.brightness)};
     a = s.a;
 `;
@@ -388,7 +396,7 @@ function layerBody(layer: Layer, e: Emitter, assets: string[], index: number): s
       vec2 o = (vec2(hash(id + 1.3), hash(id + 2.7)) - .5) * 2. * room;
       o += vec2(sin(t * (.4 + h) + h * 30.), cos(t * (.3 + h) + h * 17.)) * room * ${e.num(layer.wander)};
       float d = length(f - o) / max(size, .001);
-${tex ? `      vec4 s = _lyr_image(${tex}, rot(h * 6.28 + t * (h - .5)) * (f - o) / (size * 2.) + .5);
+${tex ? `      vec4 s = _lyr_image(${tex}, ${tex.replace("u_tex", "u_texSize")}, rot(h * 6.28 + t * (h - .5)) * (f - o) / (size * 2.) + .5);
       float shapeA = s.a;
       vec3 tint = s.rgb;` : `      float shapeA = ${shape};
       vec3 tint = vec3(1.);`}

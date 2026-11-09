@@ -52,6 +52,9 @@ export function PanelHeader({ title, children }: { title: string; children?: Rea
 
 export function InspectorSection({ title, children, defaultOpen = true, right }: { title: string; children: ReactNode; defaultOpen?: boolean; right?: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
+  // clipped only while it folds or unfolds, so a colour picker or a menu
+  // inside can open past the section's edge
+  const [settled, setSettled] = useState(true);
   return (
     <section className="border-b border-white/[0.06]">
       <div className="flex h-11 items-center pr-3">
@@ -68,7 +71,9 @@ export function InspectorSection({ title, children, defaultOpen = true, right }:
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="overflow-hidden"
+            onAnimationStart={() => setSettled(false)}
+            onAnimationComplete={() => setSettled(true)}
+            className={settled ? "" : "overflow-hidden"}
           >
             <div className="grid gap-1.5 px-4 pb-4">{children}</div>
           </motion.div>

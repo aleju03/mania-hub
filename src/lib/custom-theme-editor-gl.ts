@@ -1,6 +1,7 @@
 import { CUSTOM_THEME_INPUTS, CUSTOM_THEME_TEXTURES } from "#custom-themes/inputs";
 import { COST_REFERENCE_SHADER, PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_VERTEX } from "./profile-theme-shaders";
 import type { SupporterProfileThemeId } from "./supporter-profile-themes";
+import { corsImageUrl } from "./cors-image-url";
 
 /* The theme editor's own WebGL: one canvas that previews the author's theme,
    compiles their code to find the driver's errors on their own lines, times
@@ -193,7 +194,7 @@ export class ThemeEditorGl {
         gl.activeTexture(gl.TEXTURE0);
         this.images.set(url, { texture, width: image.naturalWidth, height: image.naturalHeight });
       };
-      image.src = url;
+      image.src = corsImageUrl(url);
     }
   }
 

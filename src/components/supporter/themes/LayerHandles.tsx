@@ -45,7 +45,12 @@ function useAspect(url: string | null): number {
 }
 
 /* A drag that reports the pointer in the overlay's own pixels. */
-function startDrag(event: ReactPointerEvent, host: HTMLElement, onMove: (x: number, y: number) => void) {
+/* Modifier keys held during a drag, read on every move so pressing one
+   mid-drag takes effect: Shift constrains (one axis, 15° turns), Alt resizes
+   from the opposite corner instead of the centre. */
+type DragKeys = { shift: boolean; alt: boolean };
+
+function startDrag(event: ReactPointerEvent, host: HTMLElement, onMove: (x: number, y: number, keys: DragKeys) => void) {
   event.preventDefault();
   event.stopPropagation();
   const target = event.currentTarget as HTMLElement;
@@ -56,7 +61,7 @@ function startDrag(event: ReactPointerEvent, host: HTMLElement, onMove: (x: numb
   }
   const move = (moveEvent: PointerEvent) => {
     const rect = host.getBoundingClientRect();
-    onMove(moveEvent.clientX - rect.left, moveEvent.clientY - rect.top);
+    onMove(moveEvent.clientX - rect.left, moveEvent.clientY - rect.top, { shift: moveEvent.shiftKey, alt: moveEvent.altKey });
   };
   const end = () => {
     target.removeEventListener("pointermove", move);
@@ -68,11 +73,13 @@ function startDrag(event: ReactPointerEvent, host: HTMLElement, onMove: (x: numb
   target.addEventListener("pointercancel", end);
 }
 
-export function LayerHandles({ doc, selected, onSelect, onPatch }: {
+export function LayerHandles({ doc, selected, onSelect, onPatch, onMenu }: {
   doc: LayerDoc;
   selected: string | null;
   onSelect: (id: string) => void;
   onPatch: Patch;
+  /* Right-click on a picture: the layer menu at the pointer. */
+  onMenu?: (id: string, x: number, y: number) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const box = useBox(hostRef);
@@ -100,7 +107,7 @@ export function LayerHandles({ doc, selected, onSelect, onPatch }: {
     >
       {box.height > 0
         ? doc.layers.map((layer) => (layer.kind === "image" && layer.image && !layer.hidden ? (
-          <ImageHandle key={layer.id} layer={layer} picked={layer.id === selected} host={hostRef} toPx={toPx} toP={toP} height={box.height} onSelect={onSelect} onPatch={onPatch} />
+          <ImageHandle key={layer.id} layer={layer} picked={layer.id === selected} host={hostRef} toPx={toPx} toP={toP} height={box.height} onSelect={onSelect} onPatch={onPatch} onMenu={onMenu} />
         ) : null))
         : null}
       {current?.kind === "glow" && box.height > 0 ? <GlowHandle layer={current} host={hostRef} toPx={toPx} toP={toP} height={box.height} onPatch={onPatch} /> : null}
@@ -111,7 +118,7 @@ export function LayerHandles({ doc, selected, onSelect, onPatch }: {
 
 type Convert = (x: number, y: number) => readonly [number, number];
 
-function ImageHandle({ layer, picked, host, toPx, toP, height, onSelect, onPatch }: {
+function ImageHandle({ layer, picked, host, toPx, toP, height, onSelect, onPatch, onMenu }: {
   layer: Extract<Layer, { kind: "image" }>;
   picked: boolean;
   host: React.RefObject<HTMLDivElement | null>;
@@ -120,6 +127,7 @@ function ImageHandle({ layer, picked, host, toPx, toP, height, onSelect, onPatch
   height: number;
   onSelect: (id: string) => void;
   onPatch: Patch;
+  onMenu?: (id: string, x: number, y: number) => void;
 }) {
   const { t } = useLingui();
   const aspect = useAspect(layer.image);
@@ -128,17 +136,32 @@ function ImageHandle({ layer, picked, host, toPx, toP, height, onSelect, onPatch
   const w = h * aspect;
   return (
     <div
+      title={picked ? t`Hold Shift to move along one axis` : undefined}
       className={`pointer-events-auto absolute cursor-move ${picked ? "outline outline-1 outline-white/90" : "hover:outline hover:outline-1 hover:outline-white/40"}`}
       style={{ left: cx - w / 2, top: cy - h / 2, width: w, height: h, transform: `rotate(${-layer.angle}deg)` }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onSelect(layer.id);
+        onMenu?.(layer.id, event.clientX, event.clientY);
+      }}
       onPointerDown={(event) => {
         if (!host.current) return;
         onSelect(layer.id);
+        // only the main button drags; a right-click opens the menu
+        if (event.button !== 0) return;
         const rect = host.current.getBoundingClientRect();
         const [startX, startY] = toP(event.clientX - rect.left, event.clientY - rect.top);
         const from = { x: layer.x, y: layer.y };
-        startDrag(event, host.current, (px, py) => {
+        startDrag(event, host.current, (px, py, keys) => {
           const [x, y] = toP(px, py);
-          onPatch(layer.id, { x: from.x + x - startX, y: from.y + y - startY });
+          let dx = x - startX;
+          let dy = y - startY;
+          // Shift keeps the move on whichever axis it has gone further along
+          if (keys.shift) {
+            if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+            else dx = 0;
+          }
+          onPatch(layer.id, { x: from.x + dx, y: from.y + dy });
         });
       }}
     >
@@ -147,12 +170,31 @@ function ImageHandle({ layer, picked, host, toPx, toP, height, onSelect, onPatch
           <span
             role="slider"
             aria-label={t`Size`}
+            title={t`Hold Alt to resize from the opposite corner`}
             className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-[2px] bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
             onPointerDown={(event) => {
               if (!host.current) return;
-              startDrag(event, host.current, (px, py) => {
-                const distance = Math.hypot(px - cx, py - cy);
-                onPatch(layer.id, { size: Math.max(0.02, Math.min(3, (2 * distance) / (height * Math.sqrt(aspect * aspect + 1)))) });
+              const perDiagonal = height * Math.sqrt(aspect * aspect + 1);
+              const clampSize = (size: number) => Math.max(0.02, Math.min(3, size));
+              // the corners at the drag's start, turned with the picture
+              const turn = (-layer.angle * Math.PI) / 180;
+              const corner = (x: number, y: number) => [x * Math.cos(turn) - y * Math.sin(turn), x * Math.sin(turn) + y * Math.cos(turn)] as const;
+              const [offX, offY] = corner(-w / 2, -h / 2);
+              const anchorX = cx + offX;
+              const anchorY = cy + offY;
+              const diagonal = Math.hypot(w, h) || 1;
+              const alongX = -2 * offX / diagonal;
+              const alongY = -2 * offY / diagonal;
+              startDrag(event, host.current, (px, py, keys) => {
+                if (!keys.alt) {
+                  onPatch(layer.id, { size: clampSize((2 * Math.hypot(px - cx, py - cy)) / perDiagonal) });
+                  return;
+                }
+                // Alt: the opposite corner stays put and the centre follows
+                const size = clampSize(((px - anchorX) * alongX + (py - anchorY) * alongY) / perDiagonal);
+                const reach = size * perDiagonal;
+                const [x, y] = toP(anchorX + alongX * reach / 2, anchorY + alongY * reach / 2);
+                onPatch(layer.id, { size, x, y });
               });
             }}
           />
@@ -160,13 +202,18 @@ function ImageHandle({ layer, picked, host, toPx, toP, height, onSelect, onPatch
           <span
             role="slider"
             aria-label={t`Turn`}
+            title={t`Hold Shift to turn in 15° steps`}
             className="absolute -top-8 left-1/2 h-3.5 w-3.5 -translate-x-1/2 cursor-grab rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
             onPointerDown={(event) => {
               if (!host.current) return;
-              startDrag(event, host.current, (px, py) => {
+              startDrag(event, host.current, (px, py, keys) => {
                 let angle = (Math.atan2(cy - py, px - cx) * 180) / Math.PI - 90;
                 if (angle < -180) angle += 360;
-                // settles on the quarter turns
+                // Shift turns in 15° steps; otherwise it settles on the quarter turns
+                if (keys.shift) {
+                  onPatch(layer.id, { angle: Math.round(angle / 15) * 15 });
+                  return;
+                }
                 const snapped = Math.round(angle / 90) * 90;
                 onPatch(layer.id, { angle: Math.abs(angle - snapped) < 4 ? snapped : Math.round(angle) });
               });

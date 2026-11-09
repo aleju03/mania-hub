@@ -10397,6 +10397,10 @@ msgstr "Completa la jugada {label} de abajo"
 msgid "Fill the playfield with a solid black background"
 msgstr "Llena el playfield con un fondo negro sólido"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Fills the stage and holds still, in place of the background."
+msgstr "Llena el lienzo y se queda quieta, en lugar del fondo."
+
 #. placeholder {0}: player.username
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Filter {0}'s runs..."
@@ -10761,6 +10765,10 @@ msgstr "plano"
 msgid "Flat backdrop tinted with the skin's accent"
 msgstr "Fondo plano teñido con el color de acento de la skin"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Flip"
+msgstr "Voltear"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Flip direction"
@@ -10770,8 +10778,16 @@ msgstr "Invertir orden"
 msgid "Flip horizontal"
 msgstr "Voltear horizontalmente"
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Flip horizontally"
+msgstr "Voltear horizontalmente"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Flip vertical"
+msgstr "Voltear verticalmente"
+
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Flip vertically"
 msgstr "Voltear verticalmente"
 
 #: src/lib/replay-overlays.ts
@@ -12040,6 +12056,10 @@ msgstr "Guarda {0} shards para ganar interés después de la próxima ronda."
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
 msgstr "Mantén presionada <0>C</0> y mueve el cursor para dibujar humo, igual que al dibujar a mitad de una play en osu!. Se desvanece solo."
 
+#: src/components/supporter/themes/LayerHandles.tsx
+msgid "Hold Alt to resize from the opposite corner"
+msgstr "Mantén Alt para cambiar el tamaño desde la esquina opuesta"
+
 #: src/components/packs/PackStage.tsx
 msgid "Hold and drag across the dotted line"
 msgstr "Mantén presionado y arrastra sobre la línea punteada"
@@ -12055,6 +12075,14 @@ msgstr "No hace falta soltar las hold notes a tiempo."
 #: src/lib/pack-run.ts
 msgid "Hold Off"
 msgstr "Hold Off"
+
+#: src/components/supporter/themes/LayerHandles.tsx
+msgid "Hold Shift to move along one axis"
+msgstr "Mantén Shift para mover sobre un solo eje"
+
+#: src/components/supporter/themes/LayerHandles.tsx
+msgid "Hold Shift to turn in 15° steps"
+msgstr "Mantén Shift para rotar de 15° en 15°"
 
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "hold to delete"
@@ -12139,6 +12167,7 @@ msgstr "En casa"
 msgid "Honorary roster"
 msgstr "Plantel honorífico"
 
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/replay-overlays.ts
 msgid "Horizontal"
 msgstr "Horizontal"
@@ -28580,6 +28609,10 @@ msgstr "Usar {selectedKeymode}K como portada de la carta"
 msgid "Use 3 to 15 letters, numbers, spaces, or - _ [ ]."
 msgstr "Usa de 3 a 15 letras, números, espacios o - _ [ ]."
 
+#: src/components/supporter/themes/LayerPanel.tsx
+msgid "Use as background"
+msgstr "Usar como fondo"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Use as the {slotLabelLower} run"
 msgstr "Usar como la run {slotLabelLower}"
@@ -28689,6 +28722,7 @@ msgstr "Clear verificado"
 msgid "Verify"
 msgstr "Verificar"
 
+#: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/replay-overlays.ts
 msgid "Vertical"
 msgstr "Vertical"

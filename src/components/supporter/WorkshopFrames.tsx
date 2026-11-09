@@ -22,6 +22,7 @@ import {
   submitWorkshopFrame,
 } from "../../lib/supporter-look-settings";
 import { FRAME_NAME_MAX, registerSubmittedFrames, type SubmittedFrame } from "../../lib/workshop-frames";
+import { fitPictureForUpload } from "../../lib/fit-picture-for-upload";
 
 /* The workshop's frame maker (/workshop/frames). A supporter draws on the
    template, picks the still (and, if they like, a looping WebM and a round
@@ -93,7 +94,8 @@ async function measurePicture(file: File, round: boolean): Promise<{ overhang: [
   return { overhang: [reach(I - x0), reach(I - y0), reach(x1 + 1 - (I + A)), reach(y1 + 1 - (I + A))] };
 }
 
-async function upload(kind: "still" | "video" | "round", file: File): Promise<{ url: string; overhang?: [number, number, number, number] }> {
+async function upload(kind: "still" | "video" | "round", original: File): Promise<{ url: string; overhang?: [number, number, number, number] }> {
+  const file = kind === "video" ? original : await fitPictureForUpload(original);
   const response = await fetch(`/api/supporter-frame?kind=${kind}`, { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file });
   const reply = await response.json().catch(() => null) as { url?: unknown; overhang?: unknown; error?: unknown } | null;
   if (!response.ok || typeof reply?.url !== "string") throw new Error(typeof reply?.error === "string" ? reply.error : `Upload failed (${response.status})`);

@@ -42,9 +42,10 @@ import { InspectorRow, InspectorSection, Meter, StatusDot, ToolButton, ToolDivid
 import { BasePad, Choice, HUE_STRIP, Popover, Slider, strengthStrip } from "./EditorControls";
 import { RowFramer } from "./RowFramer";
 import { LayerHandles } from "./LayerHandles";
-import { duplicateLayer, LayerInspector, LayersList, moveLayer, patchLayer, useLayerNames } from "./LayerPanel";
+import { backgroundLayer, duplicateLayer, LayerInspector, LayersList, moveLayer, patchLayer, useLayerNames } from "./LayerPanel";
 import { StartPicker } from "./StartPicker";
 import { ThemeCodeEditor, type ThemeCodeEditorHandle } from "./ThemeCodeEditor";
+import { fitPictureForUpload } from "../../../lib/fit-picture-for-upload";
 
 /* The code theme editor (/workshop/themes/$themeId): the author's GLSL on
    the left, checked as they type by the same checker the backend runs on
@@ -168,7 +169,9 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   const savedSnapshot = useRef<string | null>(null);
   const pendingSnapshot = useRef(start.themeId !== null);
   const [scroll, setScroll] = useState(0);
-  const [moment, setMoment] = useState(4);
+  const [moment, setMoment] = useState(0);
+  /* The layer menu, opened by a right-click on a picture on the stage. */
+  const [stageMenu, setStageMenu] = useState<{ id: string; x: number; y: number; at: number } | null>(null);
   const [framing, setFraming] = useState<RowFraming>({ zoom: 1.4, x: 0.6, y: 0.45 });
   const [rowSource, setRowSource] = useState<{ url: string; width: number; height: number } | null>(null);
   const [filmstrip, setFilmstrip] = useState<string[]>([]);
@@ -489,7 +492,8 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
     });
   };
 
-  const upload = async (blob: Blob, kind: "texture" | "still" | "row"): Promise<string> => {
+  const upload = async (original: Blob, kind: "texture" | "still" | "row"): Promise<string> => {
+    const blob = await fitPictureForUpload(original);
     const response = await fetch(`/api/supporter-theme-asset?kind=${kind}`, { method: "POST", headers: { "content-type": blob.type || "application/octet-stream" }, body: blob });
     const body = await response.json().catch(() => null) as { url?: unknown; error?: unknown } | null;
     if (!response.ok || typeof body?.url !== "string") throw new Error(typeof body?.error === "string" ? body.error : t`Could not upload that image.`);
@@ -543,7 +547,16 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
     }
     const url = await uploadLayerImage(file);
     if (!url) return;
-    const layer = newLayer("image", file.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 40) || layerNames.image);
+    const name = file.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 40);
+    // The first picture into a theme with no background becomes it; later
+    // ones are pictures on top, which can still be made the background.
+    if (!doc.layers.some((entry) => entry.kind === "background")) {
+      const background = backgroundLayer(url, name || layerNames.background);
+      setDoc((current) => current && { ...current, layers: [background, ...current.layers] });
+      setSelectedLayer(background.id);
+      return;
+    }
+    const layer = newLayer("image", name || layerNames.image);
     if (layer.kind === "image") layer.image = url;
     setDoc((current) => current && { ...current, layers: [...current.layers, layer] });
     setSelectedLayer(layer.id);
@@ -939,6 +952,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
             <LayersList
               doc={doc}
               onChange={setDoc}
+              stageMenu={stageMenu}
               selected={selectedLayer}
               onSelect={setSelectedLayer}
               onUpload={uploadLayerImage}
@@ -1031,7 +1045,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
                 onPointerDown={() => setSelectedLayer(null)}
               />
               {overlay ? <MockProfile phone={phone} look={look} /> : null}
-              {mode === "layers" && doc && !overlay ? <LayerHandles doc={doc} selected={selectedLayer} onSelect={setSelectedLayer} onPatch={updateLayer} /> : null}
+              {mode === "layers" && doc && !overlay ? <LayerHandles doc={doc} selected={selectedLayer} onSelect={setSelectedLayer} onPatch={updateLayer} onMenu={(id, x, y) => setStageMenu({ id, x, y, at: Date.now() })} /> : null}
               {tooHeavyLive ? (
                 <div className="absolute inset-0 grid place-items-center bg-black/75 p-6 text-center text-[12.5px] text-osu-l2">
                   {t`Too heavy to run live: even a tiny frame takes too long. Lighten the loops or the fbm calls.`}

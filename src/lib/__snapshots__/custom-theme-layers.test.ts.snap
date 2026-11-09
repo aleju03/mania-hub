@@ -10,9 +10,14 @@ vec3 _lyr_blend(vec3 base, vec3 c, float a, int mode) {
   return mix(base, c, a);
 }
 
-vec4 _lyr_image(sampler2D tex, vec2 q) {
+vec4 _lyr_image(sampler2D tex, vec2 size, vec2 q) {
   vec2 inside = step(vec2(0.), q) * step(q, vec2(1.));
-  vec4 s = texture(tex, vec2(q.x, 1. - q.y));
+  vec2 uv = vec2(q.x, 1. - q.y);
+  vec2 dx = dFdx(uv);
+  vec2 dy = dFdy(uv);
+  // textures repeat: stay half a texel in, or the far edge bleeds in
+  vec2 edge = max(.5 / max(size, vec2(1.)), .5 * max(abs(dx), abs(dy)));
+  vec4 s = textureGrad(tex, clamp(uv, edge, 1. - edge), dx, dy);
   return vec4(s.rgb / max(s.a, .001), s.a * inside.x * inside.y);
 }
 

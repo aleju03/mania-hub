@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
@@ -65,6 +65,8 @@ import {
   type SlotValue,
 } from "./loadout";
 import { scaledPx } from "#/lib/ui-scale-values";
+import { hideBrokenImage } from "../../lib/custom-themes";
+import { fetchOwnCustomThemes, type CustomThemeSummary, type OwnCustomThemes } from "../../lib/supporter-custom-themes";
 
 /* The right side of the /supporter loadout: the six slots, each showing what
    it holds, and under them the drawer of the open slot. Pointing at an item
@@ -105,12 +107,48 @@ export function FoilCard({ foil, className, still }: { foil: SupporterFoilId; cl
   );
 }
 
+/* --- The viewer's own themes ---------------------------------------------- */
+
+/* Their workshop themes, read once per page and shared by the slot row and
+   the theme drawer, so a worn one is named (and pictured) in both. */
+let ownThemes: OwnCustomThemes | null = null;
+let ownThemesLoading = false;
+const ownThemeListeners = new Set<() => void>();
+function setOwnThemes(next: OwnCustomThemes | null) {
+  ownThemes = next;
+  for (const listener of ownThemeListeners) listener();
+}
+function useOwnThemes(enabled: boolean): OwnCustomThemes | null {
+  const value = useSyncExternalStore(
+    (listener) => {
+      ownThemeListeners.add(listener);
+      return () => ownThemeListeners.delete(listener);
+    },
+    () => ownThemes,
+    () => null,
+  );
+  useEffect(() => {
+    if (!enabled || ownThemes || ownThemesLoading) return;
+    ownThemesLoading = true;
+    fetchOwnCustomThemes().then(setOwnThemes).catch(() => {}).finally(() => {
+      ownThemesLoading = false;
+    });
+  }, [enabled]);
+  return value;
+}
+/* The own theme on, when no built-in is: the page reads a worn own theme back as none. */
+function wornOwnTheme(theme: SlotValue | null): CustomThemeSummary | null {
+  if (theme || !ownThemes?.worn) return null;
+  const worn = ownThemes.worn.themeId;
+  return ownThemes.themes.find((entry) => entry.id === worn) ?? null;
+}
+
 /* --- Slot rows ----------------------------------------------------------- */
 
 function useSlotName() {
   const { t, i18n } = useLingui();
   return (slot: SlotId, value: SlotValue): string => {
-    if (slot === "theme") return value ? i18n._(SUPPORTER_PROFILE_THEME_LABELS[value as SupporterProfileThemeId]) : t`Site colours`;
+    if (slot === "theme") return value ? i18n._(SUPPORTER_PROFILE_THEME_LABELS[value as SupporterProfileThemeId]) : wornOwnTheme(value)?.name ?? t`Site colours`;
     if (slot === "frame") {
       if (!value) return t`No frame`;
       const made = workshopFrameName(value as SupporterAvatarFrameId);
@@ -141,8 +179,10 @@ function NoArt({ className }: { className?: string }) {
 
 function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; avatar: string | undefined }) {
   if (slot === "theme") {
+    const own = wornOwnTheme(loadout.theme);
     return loadout.theme
       ? <ProfileThemeSwatch key={loadout.theme} theme={loadout.theme} still className="h-12 w-12" />
+      : own?.stillUrl ? <img src={own.stillUrl} alt="" onError={hideBrokenImage} className="h-12 w-12 object-cover" draggable={false} />
       : <SiteColours className="h-5 w-5" />;
   }
   if (slot === "frame") return <FrameThumb frame={loadout.frame} avatar={avatar} size={40} />;
@@ -242,6 +282,7 @@ export function SupporterNav({ shown, section, onSection, locks, spinning, tryin
 }) {
   const { t, i18n } = useLingui();
   const slotName = useSlotName();
+  useOwnThemes(supporter);
   const reduced = useReducedMotion();
   const label = (id: SupporterSection) => i18n._(isSlotSection(id) ? SLOT_LABELS[id] : SECTION_LABELS[id]);
   const groups: { title: string; ids: readonly SupporterSection[] }[] = [
@@ -501,6 +542,8 @@ export interface DrawerProps {
   onEditCustom: () => void;
   /** The equipped theme's own switches. */
   onThemeOptions: (options: Loadout["themeOptions"]) => void;
+  /** Puts on one of the viewer's own themes, or takes it off with null. */
+  onWearOwnTheme: (themeId: number | null) => Promise<void>;
 }
 
 /* Memoised: the page re-renders on every hover, and the drawer's props hold still through one. */
@@ -1180,8 +1223,19 @@ function OwnThemeIcon({ className }: { className: string }) {
   );
 }
 
-function ThemeDrawer({ current, disabled, avatar, username, onTry, onPick, onThemeOptions }: DrawerProps) {
+function ThemeDrawer({ current, disabled, avatar, username, canUpload, onTry, onPick, onThemeOptions, onWearOwnTheme }: DrawerProps) {
   const { t, i18n } = useLingui();
+  /* The viewer's own themes (the workshop's), live ones only, next to the
+     built-ins so they are put on from the same place. */
+  const own = useOwnThemes(canUpload);
+  const ownLive = (own?.themes ?? []).filter((theme) => theme.state === "live" && theme.liveRevision != null);
+  // a worn own theme leaves no built-in picked (the page reads it back as none)
+  const wornOwn = current.theme === null ? own?.worn?.themeId ?? null : null;
+  const wearOwn = (themeId: number | null) => {
+    void onWearOwnTheme(themeId).then(() => {
+      if (ownThemes) setOwnThemes({ ...ownThemes, worn: themeId === null ? null : { themeId, rows: false } });
+    });
+  };
   /* Only the theme under the pointer moves; the rest hold a still frame. Every
      live swatch is a full shader pass plus a copy off the GPU each frame, and
      twenty of them at once is what made this page crawl. */
@@ -1204,7 +1258,7 @@ function ThemeDrawer({ current, disabled, avatar, username, onTry, onPick, onThe
     <div>
       <p className="mb-3 text-[12px] text-osu-f1">{t`Your whole profile takes on the theme: its colours, and a living backdrop behind the page.`}</p>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-2">
-        <Item active={current.theme === null} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("theme", null)} className="items-stretch">
+        <Item active={current.theme === null && wornOwn === null} disabled={disabled} onTry={tryOn(null)} onPick={() => (wornOwn !== null ? wearOwn(null) : onPick("theme", null))} className="items-stretch">
           <span className="grid aspect-[16/10] w-full place-items-center rounded-md bg-osu-b6">
             <SiteColours className="h-6 w-6" />
           </span>
@@ -1214,6 +1268,16 @@ function ThemeDrawer({ current, disabled, avatar, username, onTry, onPick, onThe
           <Item key={id} active={current.theme === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("theme", id)} className="items-stretch">
             <ProfileThemeSwatch theme={id} still={moving !== id} className="aspect-[16/10] w-full rounded-md" />
             <span className="w-full truncate text-center">{i18n._(SUPPORTER_PROFILE_THEME_LABELS[id])}</span>
+          </Item>
+        ))}
+        {ownLive.map((theme) => (
+          <Item key={`own-${theme.id}`} active={wornOwn === theme.id} disabled={disabled} onTry={() => {}} onPick={() => wearOwn(theme.id)} className="items-stretch">
+            {theme.stillUrl ? (
+              <img src={theme.stillUrl} alt="" onError={hideBrokenImage} className="aspect-[16/10] w-full rounded-md bg-osu-b6 object-cover" draggable={false} />
+            ) : (
+              <span className="grid aspect-[16/10] w-full place-items-center rounded-md bg-osu-b6"><OwnThemeIcon className="h-6 w-6 text-osu-pink-light" /></span>
+            )}
+            <span className="w-full truncate text-center">{theme.name}</span>
           </Item>
         ))}
         <Link to="/workshop/themes" className={`${tile(false)} items-stretch`}>

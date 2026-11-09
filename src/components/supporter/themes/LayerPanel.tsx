@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { Reorder, useDragControls } from "framer-motion";
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, GripVertical, ImagePlus, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, FlipHorizontal2, FlipVertical2, GripVertical, ImagePlus, MoreHorizontal, Pencil, Plus, Trash2, Wallpaper } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { CUSTOM_THEME_TEXTURES } from "#custom-themes/inputs";
@@ -55,6 +55,21 @@ export function duplicateLayer(doc: LayerDoc, id: string): { doc: LayerDoc; id: 
   return { doc: { ...doc, layers: [...doc.layers.slice(0, at + 1), copy, ...doc.layers.slice(at + 1)] }, id: copy.id };
 }
 
+/* A picture as the theme's backdrop: a Background layer filled with it,
+   covering the stage and holding still, at the bottom of the stack. */
+export function backgroundLayer(image: string, name: string, id?: string): Layer {
+  const layer = newLayer("background", name);
+  return { ...layer, ...(id ? { id } : {}), fill: "image", image } as Layer;
+}
+
+/* An image layer's picture becomes the background in its place (same id, so
+   it stays picked), replacing any background there was. */
+export function makeBackground(doc: LayerDoc, id: string): LayerDoc {
+  const layer = doc.layers.find((entry) => entry.id === id);
+  if (!layer || layer.kind !== "image" || !layer.image) return doc;
+  return { ...doc, layers: [backgroundLayer(layer.image, layer.name, id), ...doc.layers.filter((entry) => entry.id !== id && entry.kind !== "background")] };
+}
+
 /* Up is toward the front. */
 export function moveLayer(doc: LayerDoc, id: string, direction: 1 | -1): LayerDoc {
   const at = doc.layers.findIndex((layer) => layer.id === id);
@@ -67,11 +82,13 @@ export function moveLayer(doc: LayerDoc, id: string, direction: 1 | -1): LayerDo
 
 /* --- The stack --------------------------------------------------------------- */
 
-export function LayersList({ doc, onChange, selected, onSelect, onUpload, uploading, canUpload }: {
+export function LayersList({ doc, onChange, selected, onSelect, onUpload, uploading, canUpload, stageMenu }: {
   doc: LayerDoc;
   onChange: (doc: LayerDoc) => void;
   selected: string | null;
   onSelect: (id: string | null) => void;
+  /* A right-click on a picture on the stage opens this same menu there. */
+  stageMenu?: { id: string; x: number; y: number; at: number } | null;
   onUpload: (file: File) => Promise<string | null>;
   uploading: boolean;
   canUpload: boolean;
@@ -112,6 +129,12 @@ export function LayersList({ doc, onChange, selected, onSelect, onUpload, upload
     onSelect(id);
     setMenu({ id, x: Math.max(8, Math.min(x, window.innerWidth - 184)), y, above });
   };
+  useEffect(() => {
+    if (stageMenu) openMenu(stageMenu.id, stageMenu.x, stageMenu.y);
+    // only a new right-click opens it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageMenu?.at]);
+  const menuLayer = menu ? doc.layers.find((layer) => layer.id === menu.id) ?? null : null;
 
   // Keep the menu inside what the visitor can actually see: on a phone the
   // browser's own bottom bar covers the end of the layout viewport, so the
@@ -245,6 +268,13 @@ export function LayersList({ doc, onChange, selected, onSelect, onUpload, upload
             setMenu(null);
           }} />
           <MenuItem icon={<Pencil size={13} />} label={t`Rename`} onClick={() => { setRenaming(menu.id); setMenu(null); }} />
+          {menuLayer?.kind === "image" ? (
+            <>
+              <MenuItem icon={<FlipHorizontal2 size={13} />} label={t`Flip horizontally`} onClick={() => { onChange(patchLayer(doc, menuLayer.id, { flipX: !menuLayer.flipX })); setMenu(null); }} />
+              <MenuItem icon={<FlipVertical2 size={13} />} label={t`Flip vertically`} onClick={() => { onChange(patchLayer(doc, menuLayer.id, { flipY: !menuLayer.flipY })); setMenu(null); }} />
+              <MenuItem icon={<Wallpaper size={13} />} label={t`Use as background`} disabled={!menuLayer.image} onClick={() => { onChange(makeBackground(doc, menuLayer.id)); setMenu(null); }} />
+            </>
+          ) : null}
           <MenuItem icon={<ArrowUp size={13} />} label={t`Bring forward`} shortcut="]" onClick={() => { onChange(moveLayer(doc, menu.id, 1)); setMenu(null); }} />
           <MenuItem icon={<ArrowDown size={13} />} label={t`Send backward`} shortcut="[" onClick={() => { onChange(moveLayer(doc, menu.id, -1)); setMenu(null); }} />
           <MenuItem icon={<Eye size={13} />} label={doc.layers.find((layer) => layer.id === menu.id)?.hidden ? t`Show` : t`Hide`} shortcut="H" onClick={() => {
@@ -376,7 +406,7 @@ function RenameInput({ value, placeholder, onDone }: { value: string; placeholde
         if (event.key === "Escape") onDone(null);
         event.stopPropagation();
       }}
-      className="h-7 min-w-0 flex-1 rounded bg-black/40 px-1.5 text-[12.5px] text-white ring-1 ring-osu-pink/60 focus:outline-none"
+      className="h-7 w-0 min-w-0 flex-1 rounded bg-black/40 px-1.5 text-[12.5px] text-white ring-1 ring-osu-pink/60 focus:outline-none"
     />
   );
 }
@@ -428,15 +458,16 @@ export function LayerInspector({ doc, selected, onChange, onUpload, uploading, c
           <div className="text-[11.5px] text-osu-f1">{names[layer.kind]}</div>
         </div>
       </div>
-      <LayerSettings layer={layer} doc={doc} onPatch={(patch) => onChange(patchLayer(doc, layer.id, patch))} onUpload={onUpload} uploading={uploading} canUpload={canUpload} />
+      <LayerSettings layer={layer} doc={doc} onPatch={(patch) => onChange(patchLayer(doc, layer.id, patch))} onMakeBackground={() => onChange(makeBackground(doc, layer.id))} onUpload={onUpload} uploading={uploading} canUpload={canUpload} />
     </div>
   );
 }
 
-function LayerSettings({ layer, doc, onPatch, onUpload, uploading, canUpload }: {
+function LayerSettings({ layer, doc, onPatch, onMakeBackground, onUpload, uploading, canUpload }: {
   layer: Layer;
   doc: LayerDoc;
   onPatch: (patch: Partial<Layer>) => void;
+  onMakeBackground: () => void;
   onUpload: (file: File) => Promise<string | null>;
   uploading: boolean;
   canUpload: boolean;
@@ -494,12 +525,42 @@ function LayerSettings({ layer, doc, onPatch, onUpload, uploading, canUpload }: 
     case "image":
       sections = (
         <>
-          <InspectorSection title={t`Picture`}>{picture}{n("brightness", t`Brightness`, 0, 1.5, 0.01, pct)}</InspectorSection>
+          <InspectorSection title={t`Picture`}>
+            {picture}
+            {n("brightness", t`Brightness`, 0, 1.5, 0.01, pct)}
+            <button
+              type="button"
+              onClick={onMakeBackground}
+              disabled={!("image" in layer && layer.image)}
+              className="w-full cursor-pointer rounded-lg bg-white/[0.06] px-3 py-2 text-left text-[12.5px] font-semibold text-osu-l1 transition-colors hover:bg-white/[0.1] disabled:cursor-default disabled:opacity-40"
+            >
+              {t`Use as background`}
+              <span className="block text-[11px] font-normal text-osu-f1">{t`Fills the stage and holds still, in place of the background.`}</span>
+            </button>
+          </InspectorSection>
           <InspectorSection title={t`Transform`}>
             {n("x", t`X`, -2, 2, 0.001, { scale: 100, decimals: 1 })}
             {n("y", t`Y`, -1.5, 1.5, 0.001, { scale: 100, decimals: 1 })}
             {n("size", t`Size`, 0.02, 3, 0.005, pct)}
             {n("angle", t`Rotation`, -180, 180, 1, deg)}
+            {layer.kind === "image" ? (
+              <InspectorRow label={t`Flip`}>
+                <div className="flex gap-1.5">
+                  {([["flipX", t`Horizontal`, <FlipHorizontal2 key="x" size={14} />], ["flipY", t`Vertical`, <FlipVertical2 key="y" size={14} />]] as const).map(([key, label, icon]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={layer[key]}
+                      onClick={() => onPatch({ [key]: !layer[key] } as Partial<Layer>)}
+                      className={`flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md text-[12px] font-semibold transition-colors ${layer[key] ? "bg-osu-pink/20 text-white ring-1 ring-inset ring-osu-pink/60" : "bg-white/[0.06] text-osu-l2 hover:bg-white/[0.1] hover:text-white"}`}
+                    >
+                      {icon}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </InspectorRow>
+            ) : null}
           </InspectorSection>
           <InspectorSection title={t`Motion`}>
             {n("spin", t`Spin`, -0.5, 0.5, 0.005, { unit: "/s", decimals: 3 })}
@@ -620,7 +681,7 @@ function ImagePick({ value, doc, onChange, onUpload, uploading, canUpload }: {
   const users = value ? doc.layers.filter((layer) => "image" in layer && layer.image === value).length : 0;
   const room = used.length < CUSTOM_THEME_TEXTURES || (value !== null && used.includes(value) && users === 1);
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5 py-0.5">
       {used.map((url) => (
         <button
           key={url}

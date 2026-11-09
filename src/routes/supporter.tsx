@@ -64,6 +64,7 @@ import {
   saveSupporterRankShownSetting,
   type SupporterLookState,
 } from "../lib/supporter-look-settings";
+import { wearCustomTheme } from "../lib/supporter-custom-themes";
 
 /* Supporter perks as a loadout: the theme of the viewer's whole profile, the
    frame around their avatar, the style and font of their name, and the art
@@ -241,6 +242,34 @@ function SupporterPage() {
     });
   };
 
+  /* One of the viewer's own themes on (or off, with null). It is stored apart
+     from the built-ins, so the saved look is read back afterwards: a worn own
+     theme leaves no built-in picked. */
+  const wearOwnTheme = (themeId: number | null) => new Promise<void>((resolve) => {
+    if (!supporter || !viewer) {
+      resolve();
+      return;
+    }
+    setError(null);
+    saveChain.current = saveChain.current.then(async () => {
+      setBusy(true);
+      try {
+        await wearCustomTheme({ data: { themeId, rows: false } });
+        const latest = await fetchSupporterLookState();
+        setState(latest);
+        saved.current = loadoutOf(latest);
+        setEquipped(saved.current);
+        forgetLiveSupporterLook(viewer.id);
+        setSupporterThemeLocally(viewer.id, null);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : t`Could not save that.`);
+      } finally {
+        setBusy(false);
+        resolve();
+      }
+    });
+  });
+
   const equip = (next: Loadout) => {
     setError(null);
     setEquipped(next);
@@ -409,8 +438,8 @@ function SupporterPage() {
 
   /* Stable handlers for the drawer, so a hover (which re-renders the page)
      does not re-render every tile in it. */
-  const latest = useRef({ pick, upload, editCustom, setThemeOptions });
-  latest.current = { pick, upload, editCustom, setThemeOptions };
+  const latest = useRef({ pick, upload, editCustom, setThemeOptions, wearOwnTheme });
+  latest.current = { pick, upload, editCustom, setThemeOptions, wearOwnTheme };
   /* Leaving a tile waits a moment before the preview goes back, so crossing
      the gap to the next tile swaps straight to it instead of flashing what's
      equipped in between. */
@@ -434,6 +463,7 @@ function SupporterPage() {
   const onUpload = useCallback((file: File) => void latest.current.upload(file), []);
   const onEditCustom = useCallback(() => latest.current.editCustom(), []);
   const onThemeOptions = useCallback((options: Loadout["themeOptions"]) => latest.current.setThemeOptions(options), []);
+  const onWearOwnTheme = useCallback((themeId: number | null) => latest.current.wearOwnTheme(themeId), []);
 
   const giftFrom = state?.giftFrom ?? null;
   const until = supporter && state?.expiresAt
@@ -601,7 +631,7 @@ function SupporterPage() {
                   )}
                 </div>
 
-                <div className="scroll-slim min-w-0 lg:-mx-2 lg:-mt-2 lg:min-h-0 lg:overflow-y-auto lg:px-2 lg:pt-2">
+                <div className="scroll-slim min-w-0 lg:-mx-2 lg:-my-2 lg:min-h-0 lg:overflow-y-auto lg:p-2">
                   {shown && (
                     <div className="mb-4 xl:hidden">
                       <SupporterNav
@@ -636,6 +666,7 @@ function SupporterPage() {
                         onUpload={onUpload}
                         onEditCustom={onEditCustom}
                         onThemeOptions={onThemeOptions}
+                        onWearOwnTheme={onWearOwnTheme}
                       />
                       {error && <div className="mt-3 text-[12px] text-osu-red-light">{error}</div>}
                       <AnimatePresence>
