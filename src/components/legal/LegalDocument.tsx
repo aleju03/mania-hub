@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { useLocation } from "@tanstack/react-router";
 import { Trans } from "@lingui/react/macro";
 
 type LegalDocumentProps = {
@@ -27,9 +28,21 @@ export function LegalDocument({ eyebrow, title, updatedAt, children }: LegalDocu
   );
 }
 
-export function LegalSection({ title, children }: { title: string; children: ReactNode }) {
+/* A section a link can point at (/terms#id): arriving there scrolls to it and
+   lights it up for a moment, so the part that matters is plain to see. */
+export function LegalSection({ id, title, children }: { id?: string; title: string; children: ReactNode }) {
+  const ref = useRef<HTMLElement>(null);
+  const hash = useLocation({ select: (location) => location.hash });
+  useEffect(() => {
+    const section = ref.current;
+    if (!id || hash !== id || !section) return;
+    section.scrollIntoView({ block: "start" });
+    section.classList.remove("legal-target");
+    void section.offsetWidth; // restart the glow on a second visit
+    section.classList.add("legal-target");
+  }, [id, hash]);
   return (
-    <section className="space-y-3">
+    <section ref={ref} id={id} className="scroll-mt-24 space-y-3 rounded-lg">
       <h2 className="text-lg font-bold text-white">{title}</h2>
       {children}
     </section>

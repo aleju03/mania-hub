@@ -5,8 +5,7 @@ import { useEffect, useState } from "react";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { WorkshopTitle } from "../components/supporter/WorkshopTitle";
-import { Popover } from "../components/supporter/themes/EditorControls";
-import { LayerIcon } from "../components/supporter/themes/LayerIcons";
+import { NewThemeChooser } from "../components/supporter/themes/NewThemeChooser";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { useAuth } from "../lib/auth-context";
 import { hideBrokenImage } from "../lib/custom-themes";
@@ -88,7 +87,7 @@ function OwnThemesPage() {
       {header}
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-5">
         <p className="mb-5 max-w-[720px] text-[12.5px] text-osu-l2">
-          {t`Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it.`}
+          {t`Build a theme from layers with no code, or write its shader yourself. Save drafts as you go, and publish it when it's ready.`}
         </p>
         {own?.disabled ? (
           <p className="mb-4 rounded-lg bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-200">{t`Custom themes are switched off for now: profiles show their stills, and saving waits.`}</p>
@@ -110,32 +109,39 @@ function OwnThemesPage() {
             {own.themes.map((theme) => {
               const wearing = worn?.themeId === theme.id;
               const taken = theme.state === "taken_down";
+              // only ever a draft: nothing to wear or share until it's published
+              const unpublished = theme.liveRevision === null;
               return (
                 <article key={theme.id} className="overflow-hidden rounded-xl bg-osu-b4">
                   <div className="relative aspect-[1200/630] bg-osu-b6" style={theme.look ? { backgroundColor: theme.look.base } : undefined}>
-                    {theme.stillUrl ? <img src={theme.stillUrl} alt="" className="h-full w-full object-cover" loading="lazy" onError={hideBrokenImage} /> : null}
+                    {theme.stillUrl ? <img src={theme.stillUrl} alt="" className="h-full w-full object-cover" loading="lazy" onError={hideBrokenImage} /> : unpublished ? (
+                      <span className="absolute inset-0 grid place-items-center text-[12px] text-osu-f1">{t`Not published yet`}</span>
+                    ) : null}
                     {wearing ? <span className="absolute left-2 top-2 rounded-md bg-osu-pink px-1.5 py-0.5 text-[11px] font-semibold text-white">{t`Wearing`}</span> : null}
                   </div>
                   <div className="p-3">
                     <div className="flex items-center gap-2">
-                      <h3 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-white">{theme.name}</h3>
+                      <h3 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-white">{theme.name || t`Untitled theme`}</h3>
                       <StatePill theme={theme} />
                     </div>
-                    {theme.visibility === "gallery" && !taken ? (
+                    {theme.visibility === "gallery" && !taken && !unpublished ? (
                       <p className="mt-0.5 text-[11.5px] text-osu-f1">{theme.wearers === 1 ? t`1 wearing it` : t`${theme.wearers} wearing it`}</p>
+                    ) : null}
+                    {theme.draftAt !== null && !unpublished && !taken ? (
+                      <p className="mt-0.5 text-[11.5px] text-amber-200/80">{t`Has a draft you haven't published`}</p>
                     ) : null}
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
                       {!taken ? (
                         <Link to="/workshop/themes/$themeId" params={{ themeId: String(theme.id) }} className={BUTTON}>{t`Edit`}</Link>
                       ) : null}
-                      {!taken && theme.state === "live" ? (
+                      {!taken && !unpublished && theme.state === "live" ? (
                         wearing ? (
                           <button type="button" disabled={busy !== null} onClick={() => void act(theme.id, () => wearCustomTheme({ data: { themeId: null } }))} className={BUTTON}>{t`Take off`}</button>
                         ) : (
                           <button type="button" disabled={busy !== null} onClick={() => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: worn?.rows ?? false } }))} className={BUTTON}>{t`Wear`}</button>
                         )
                       ) : null}
-                      {!taken ? (
+                      {!taken && !unpublished ? (
                         <button
                           type="button"
                           disabled={busy !== null}
@@ -168,7 +174,7 @@ function OwnThemesPage() {
       </div>
       {deleting ? (
         <ConfirmModal
-          title={t`Delete ${deleting.name}?`}
+          title={deleting.name ? t`Delete ${deleting.name}?` : t`Delete this theme?`}
           body={deleting.visibility === "gallery" ? t`It leaves your list, your profile and the gallery. Anyone already wearing it keeps it.` : t`It leaves your list and your profile.`}
           confirmLabel={t`Delete`}
           cancelLabel={t`Cancel`}
@@ -184,46 +190,19 @@ function OwnThemesPage() {
 /* New theme: built from layers (no code) or written as code. */
 function NewThemeButton() {
   const { t } = useLingui();
-  const [open, setOpen] = useState(false);
-  const choices = [
-    { mode: "layers" as const, title: t`With layers`, blurb: t`Stack a background, your pictures, particles, fog and light. No code.`, icon: <LayerIcon kind="image" className="h-6 w-6" /> },
-    { mode: "code" as const, title: t`With code`, blurb: t`Write the shader yourself, start from a built-in theme, or paste a Shadertoy one.`, icon: <span className="font-mono text-[15px] font-bold">{"{ }"}</span> },
-  ];
   return (
-    <Popover
-      open={open}
-      onOpenChange={setOpen}
+    <NewThemeChooser
       align="right"
-      className="w-[min(320px,calc(100vw-2rem))]"
-      trigger={
+      trigger={(toggle) => (
         <button
           type="button"
-          onClick={() => setOpen((value) => !value)}
+          onClick={toggle}
           className="inline-flex h-8 cursor-pointer items-center rounded-full bg-osu-pink px-4 text-[12px] font-semibold text-white transition hover:brightness-110"
         >
           {t`New theme`}
         </button>
-      }
-    >
-      <div className="grid gap-1">
-        {choices.map((choice) => (
-          <Link
-            key={choice.mode}
-            to="/workshop/themes/$themeId"
-            params={{ themeId: "new" }}
-            search={{ mode: choice.mode }}
-            onClick={() => setOpen(false)}
-            className="flex items-start gap-3 rounded-lg p-2.5 transition-colors hover:bg-osu-b3"
-          >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-osu-b6 text-osu-pink-light">{choice.icon}</span>
-            <span>
-              <span className="block text-[13px] font-semibold text-white">{choice.title}</span>
-              <span className="block text-[11.5px] text-osu-f1">{choice.blurb}</span>
-            </span>
-          </Link>
-        ))}
-      </div>
-    </Popover>
+      )}
+    />
   );
 }
 
@@ -232,6 +211,7 @@ const BUTTON = "inline-flex h-7 cursor-pointer items-center rounded-lg bg-osu-b3
 function StatePill({ theme }: { theme: CustomThemeSummary }) {
   const { t } = useLingui();
   if (theme.state === "taken_down") return <span className="rounded-md bg-rose-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-rose-300">{t`Taken down`}</span>;
+  if (theme.liveRevision === null) return <span className="rounded-md bg-osu-b3/60 px-1.5 py-0.5 text-[11px] font-semibold text-osu-f1">{t`Draft`}</span>;
   if (theme.state === "auto_hidden") return <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300" title={t`It crashed on several visitors' devices, so it shows its still until it's looked at.`}>{t`Still only`}</span>;
   return (
     <span className="rounded-md bg-osu-b3/60 px-1.5 py-0.5 text-[11px] font-semibold text-osu-f1">

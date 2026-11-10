@@ -322,7 +322,6 @@ export function WorkshopFrames() {
                 ? t`Supporters submit frames to everyone's picker, with their name on them, and wear them on their profile.`
                 : t`It goes into everyone's picker right away, with your name on it.`}
             </p>
-            <p className="mt-1 text-[11.5px] text-osu-f1">{t`No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine.`}</p>
           </Step>
           {error ? <p className="text-[12.5px] text-osu-red-light">{error}</p> : null}
           {notice ? <p className="text-[12.5px] text-emerald-300">{notice}</p> : null}

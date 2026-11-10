@@ -87,7 +87,7 @@ function TermsPage() {
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title={t`Supporter Themes And Uploads`}>
+      <LegalSection id="supporter-uploads" title={t`Supporter Themes And Uploads`}>
         <LegalParagraph>
           <Trans>
             Supporters can upload images and make their own profile themes, including shader code

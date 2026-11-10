@@ -251,6 +251,19 @@ html[data-custom-cursor="true"] * {
   box-shadow: none;
 }
 
+/* A /terms#section link's section, lit for a moment on arrival. The glow is a
+   box-shadow, so it reaches past the text without moving it. */
+@keyframes legal-target {
+  0%, 35% {
+    background: color-mix(in srgb, var(--color-osu-pink) 10%, transparent);
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--color-osu-pink) 10%, transparent);
+  }
+}
+.legal-target { animation: legal-target 2.6s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .legal-target { animation-duration: 4s; animation-timing-function: steps(1, end); }
+}
+
 @keyframes detail-in {
   from { opacity: 0; transform: translateY(-6px); }
 }

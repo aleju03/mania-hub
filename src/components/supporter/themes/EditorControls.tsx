@@ -221,9 +221,12 @@ export function Popover({ trigger, children, open, onOpenChange, className = "",
      near the edge) slides back inside the window instead of running off it. */
   const dropRef = useRef<HTMLDivElement>(null);
   const [nudge, setNudge] = useState(0);
+  /* One near the bottom of the page opens upward when there's room above. */
+  const [up, setUp] = useState(false);
   useLayoutEffect(() => {
     if (!open || sheet) {
       setNudge(0);
+      setUp(false);
       return;
     }
     const drop = dropRef.current;
@@ -233,6 +236,8 @@ export function Popover({ trigger, children, open, onOpenChange, className = "",
     const left = rect.left - nudge;
     const right = rect.right - nudge;
     setNudge(left < margin ? margin - left : right > window.innerWidth - margin ? Math.max(margin - left, window.innerWidth - margin - right) : 0);
+    const above = (ref.current?.getBoundingClientRect().top ?? 0) - rect.height - 12;
+    setUp(rect.bottom > window.innerHeight - margin && above > margin);
     // measured once per opening; the nudge itself must not re-run it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sheet]);
@@ -287,13 +292,15 @@ export function Popover({ trigger, children, open, onOpenChange, className = "",
         <AnimatePresence>
           {open ? (
             <motion.div
+              // remounts when it flips, so it slides out of the trigger's side
+              key={up ? "up" : "down"}
               ref={dropRef}
               style={nudge ? { marginLeft: nudge, marginRight: -nudge } : undefined}
-              initial={{ opacity: 0, y: -4 }}
+              initial={{ opacity: 0, y: up ? 4 : -4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
+              exit={{ opacity: 0, y: up ? 4 : -4 }}
               transition={{ duration: 0.14 }}
-              className={`absolute ${align === "right" ? "right-0" : "left-0"} top-full z-40 mt-1.5 rounded-xl border border-white/[0.08] bg-osu-b5 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.55)] ${className}`}
+              className={`absolute ${align === "right" ? "right-0" : "left-0"} ${up ? "bottom-full mb-1.5" : "top-full mt-1.5"} z-40 rounded-xl border border-white/[0.08] bg-osu-b5 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.55)] ${className}`}
             >
               {children}
             </motion.div>

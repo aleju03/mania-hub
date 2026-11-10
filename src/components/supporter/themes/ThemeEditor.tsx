@@ -29,7 +29,9 @@ import {
   fetchGalleryCustomTheme,
   fetchOwnCustomTheme,
   fetchOwnCustomThemes,
+  discardOwnCustomThemeDraft,
   saveOwnCustomTheme,
+  saveOwnCustomThemeDraft,
   type CustomThemeLook,
   type CustomThemeVisibility,
 } from "../../../lib/supporter-custom-themes";
@@ -179,6 +181,12 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
   const [rowPreview, setRowPreview] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
+  /* Published: it has a live revision. A draft sits over it (or stands alone)
+     until the next publish, and nobody sees it but its author in here. */
+  const [published, setPublished] = useState(false);
+  const [draftAt, setDraftAt] = useState<number | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const [status, setStatus] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [uploading, setUploading] = useState<number | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -219,7 +227,10 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
             setLook(draft.look);
             lookTouched.current = true;
           }
-          setRights(true);
+          setPublished(draft.liveRevision !== null);
+          setDraftAt(draft.draftAt);
+          // ticked once, at its first publish
+          setRights(draft.liveRevision !== null);
         })
         .catch((cause: unknown) => alive && setLoadError(cause instanceof Error ? cause.message : String(cause)))
         .finally(() => alive && setLoading(false));
@@ -620,7 +631,9 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         if (result.errors.length) setProblems(result.errors.map((error) => ({ line: error.line, snippet: error.snippet, message: error.message })));
         throw new Error(saveErrorText(result.error));
       }
-      setStatus({ tone: "good", text: visibility === "gallery" ? t`Saved. It's live, and in the gallery.` : t`Saved. It's live on your list.` });
+      setStatus({ tone: "good", text: visibility === "gallery" ? t`Published, and in the gallery.` : t`Published. Wear it from your themes.` });
+      setPublished(true);
+      setDraftAt(null);
       if (themeId === null) {
         setThemeId(result.theme.id);
         onCreated?.(result.theme.id);
@@ -632,6 +645,53 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  /* Keeps where the theme is, checked for nothing: broken code and a missing
+     name included. A new theme's first draft gives it its page. */
+  const saveDraft = async (): Promise<boolean> => {
+    if (savingDraft || saving) return false;
+    if (supporter === false) {
+      setStatus({ tone: "bad", text: t`Only supporters can save themes. Everything here works as a preview.` });
+      return false;
+    }
+    setSavingDraft(true);
+    setStatus(null);
+    try {
+      const result = await saveOwnCustomThemeDraft({
+        data: {
+          themeId, name: name.trim(), visibility, credits, remixedFrom, source: code, assets, look,
+          ...(mode === "layers" && doc ? { kind: "layers" as const, layers: doc, generatorVersion: LAYER_GENERATOR_VERSION } : { kind: "code" as const }),
+        },
+      });
+      if (!result.ok) throw new Error(saveErrorText(result.error));
+      setDraftAt(result.draftAt);
+      setStatus({ tone: "good", text: published ? t`Draft saved. Your profile and the gallery keep what's published.` : t`Draft saved. Publish it when it's ready.` });
+      if (themeId === null) {
+        setThemeId(result.themeId);
+        onCreated?.(result.themeId);
+        void navigate({ to: "/workshop/themes/$themeId", params: { themeId: String(result.themeId) }, replace: true });
+      }
+      return true;
+    } catch (cause) {
+      setStatus({ tone: "bad", text: cause instanceof Error ? cause.message : String(cause) });
+      return false;
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  /* Throws the draft away: back to what's published, or, for a theme that
+     never was, to the themes page. */
+  const discardDraft = async () => {
+    if (themeId === null) return;
+    try {
+      await discardOwnCustomThemeDraft({ data: { themeId } });
+      if (published) window.location.reload();
+      else void navigate({ to: "/workshop/themes" });
+    } catch (cause) {
+      setStatus({ tone: "bad", text: cause instanceof Error ? cause.message : String(cause) });
     }
   };
 
@@ -685,16 +745,15 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
 
   const snapshot = `${code}|${name}|${visibility}|${credits}|${look.hue}|${look.sat}|${look.base}`;
   useEffect(() => {
-    if (pendingSnapshot.current && !loading && !checking && compiledOk) {
+    if (pendingSnapshot.current && !loading && !checking && (compiledOk || problems.length > 0)) {
       savedSnapshot.current = snapshot;
       pendingSnapshot.current = false;
     }
-  }, [snapshot, loading, checking, compiledOk]);
+  }, [snapshot, loading, checking, compiledOk, problems.length]);
   const dirty = savedSnapshot.current !== snapshot;
 
   const requestSave = () => {
-    if (themeId === null || !name.trim() || !rights || blockers.length) setSaveOpen(true);
-    else void save().then((ok) => {
+    void saveDraft().then((ok) => {
       if (ok) savedSnapshot.current = snapshot;
     });
   };
@@ -904,7 +963,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
           className="h-9 min-w-0 flex-1 rounded-lg bg-transparent px-2 md:w-56 md:flex-none md:px-2.5 text-[14px] font-semibold text-white placeholder:text-osu-f1 hover:bg-white/[0.04] focus:bg-black/30 focus:outline-none"
         />
         <span className="hidden rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1 md:inline">{mode === "layers" ? t`Layers` : format === "shadertoy" ? "Shadertoy" : t`Code`}</span>
-        <span className="ml-2 hidden text-[11.5px] text-osu-f1 md:inline">{saving ? t`Saving...` : themeId === null ? t`Not saved yet` : dirty ? t`Unsaved changes` : t`Saved`}</span>
+        <span className="ml-2 hidden text-[11.5px] text-osu-f1 md:inline">{saving ? t`Publishing...` : savingDraft ? t`Saving...` : themeId === null ? t`Not saved yet` : dirty ? t`Unsaved changes` : draftAt !== null ? (published ? t`Draft saved, not published` : t`Draft`) : t`Published`}</span>
 
         <div className="flex shrink-0 items-center gap-0.5 md:mx-auto">
           {mode === "layers" ? (
@@ -929,15 +988,25 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
             ...(mode === "layers" ? [{ label: t`Open as code`, onClick: () => setToCode(true) }] : [{ label: copied === "spec" ? t`Copied` : t`Copy the theme spec`, onClick: () => copy(customThemeSpec(), "spec") }]),
             { label: t`Theme spec`, href: "/workshop/themes/spec" },
             { label: t`Gallery`, href: "/workshop/themes/gallery" },
+            ...(themeId !== null && draftAt !== null ? [{ label: t`Discard draft`, onClick: () => setDiscarding(true) }] : []),
           ]}
         />
         <button
           type="button"
           onClick={requestSave}
-          disabled={saving}
-          className="ml-0.5 inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink px-3.5 md:ml-1.5 md:px-5 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-60"
+          disabled={saving || savingDraft}
+          title="Ctrl S"
+          className="ml-0.5 inline-flex h-9 shrink-0 cursor-pointer items-center rounded-lg px-3 md:ml-1.5 md:px-3.5 text-[13px] font-semibold text-osu-l2 ring-1 ring-inset ring-white/[0.12] transition hover:bg-white/[0.06] hover:text-white disabled:cursor-default disabled:opacity-60"
         >
-          {saving ? t`Saving...` : t`Save`}
+          {savingDraft ? t`Saving...` : t`Save draft`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setSaveOpen(true)}
+          disabled={saving || savingDraft}
+          className="ml-1 inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink px-3.5 md:ml-1.5 md:px-5 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-60"
+        >
+          {saving ? t`Publishing...` : t`Publish`}
         </button>
       </header>
 
@@ -1221,6 +1290,16 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
           onClose={() => setToCode(false)}
         />
       ) : null}
+      {discarding ? (
+        <ConfirmModal
+          title={t`Discard this draft?`}
+          body={published ? t`The theme goes back to what's published.` : t`It was never published, so the theme is deleted.`}
+          confirmLabel={t`Discard`}
+          cancelLabel={t`Cancel`}
+          onConfirm={() => void discardDraft()}
+          onClose={() => setDiscarding(false)}
+        />
+      ) : null}
       {replacing ? (
         <ConfirmModal
           title={t`Replace your code?`}
@@ -1477,11 +1556,15 @@ function SaveDialog({ name, onName, visibility, onVisibility, credits, onCredits
   }, [onClose]);
   const ready = name.trim() && rights && issues.length === 0;
   return createPortal(
-    <div className="fixed inset-0 z-[140] grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label={t`Save theme`} onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-[140] grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label={t`Publish theme`} onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
       <div className="w-full max-w-[420px] overflow-hidden rounded-xl border border-white/[0.08] bg-[color-mix(in_srgb,var(--color-osu-b5)_50%,var(--color-osu-b6))] shadow-[0_24px_80px_rgba(0,0,0,0.7)]">
         <div className="border-b border-white/[0.07] px-5 py-4">
-          <h2 className="text-[15px] font-bold text-white">{t`Save theme`}</h2>
-          <p className="mt-0.5 text-[12px] text-osu-f1">{t`It goes live as soon as it's saved.`}</p>
+          <h2 className="text-[15px] font-bold text-white">{t`Publish theme`}</h2>
+          <p className="mt-0.5 text-[12px] text-osu-f1">
+            {visibility === "gallery"
+              ? t`It goes into the gallery. Everyone wearing it gets what you publish, never your drafts.`
+              : t`It goes on your profile whenever you wear it, and stays out of the gallery.`}
+          </p>
         </div>
         <div className="grid gap-4 px-5 py-4">
           <label className="grid gap-1.5">
@@ -1508,9 +1591,8 @@ function SaveDialog({ name, onName, visibility, onVisibility, credits, onCredits
             <span>
               <Trans>
                 I understand I'm responsible for what I put in my themes, and that one breaking the{" "}
-                <Link to="/terms" className="text-osu-f1 underline underline-offset-2 hover:text-white">Terms</Link> can be taken down.
+                <Link to="/terms" hash="supporter-uploads" target="_blank" rel="noopener" className="text-osu-f1 underline underline-offset-2 hover:text-white">Terms</Link> can be taken down.
               </Trans>
-              <span className="mt-1 block text-osu-f1">{t`No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine.`}</span>
             </span>
           </div>
           {issues.length ? (
@@ -1522,7 +1604,7 @@ function SaveDialog({ name, onName, visibility, onVisibility, credits, onCredits
         <div className="flex justify-end gap-2 border-t border-white/[0.07] px-5 py-3">
           <button type="button" onClick={onClose} className="h-9 cursor-pointer rounded-lg px-3.5 text-[12.5px] font-semibold text-osu-l2 hover:bg-white/[0.06] hover:text-white">{t`Cancel`}</button>
           <button type="button" disabled={!ready || saving} onClick={onSave} className="h-9 cursor-pointer rounded-lg bg-osu-pink px-4 text-[12.5px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-45">
-            {saving ? t`Saving...` : t`Save and put it live`}
+            {saving ? t`Publishing...` : t`Publish`}
           </button>
         </div>
       </div>

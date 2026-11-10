@@ -5908,8 +5908,12 @@ msgid "Bugs and feedback"
 msgstr "问题与建议"
 
 #: src/routes/workshop.themes.index.tsx
-msgid "Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it."
-msgstr "用图层搭建主题，无需代码；也可以自己编写着色器。保存后立即生效。"
+#~ msgid "Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it."
+#~ msgstr "用图层搭建主题，无需代码；也可以自己编写着色器。保存后立即生效。"
+
+#: src/routes/workshop.themes.index.tsx
+msgid "Build a theme from layers with no code, or write its shader yourself. Save drafts as you go, and publish it when it's ready."
+msgstr "用图层无需代码就能做主题，也可以自己写着色器。随时保存草稿，准备好后再发布。"
 
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "Build the combo"
@@ -8820,6 +8824,10 @@ msgstr "删除皮肤"
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
 msgstr "删除这条导入的成绩？它的回放会被移除，预览会重新计算。"
 
+#: src/routes/workshop.themes.index.tsx
+msgid "Delete this theme?"
+msgstr "删除这个主题？"
+
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Delete this upload"
@@ -8948,9 +8956,18 @@ msgstr "方向"
 msgid "Direction & long notes"
 msgstr "方向与长条"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Discard"
+msgstr "丢弃"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Discard draft"
 msgstr "丢弃草稿"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Discard this draft?"
+msgstr "丢弃这份草稿？"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "disconnect"
@@ -9241,10 +9258,27 @@ msgstr "下载量"
 msgid "Downscroll"
 msgstr "下落式"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/workshop.themes.index.tsx
+msgid "Draft"
+msgstr "草稿"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Draft autosaves locally"
 msgstr "草稿会自动保存在本地"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Draft saved, not published"
+msgstr "草稿已保存，未发布"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Draft saved. Publish it when it's ready."
+msgstr "草稿已保存。准备好后再发布。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Draft saved. Your profile and the gallery keep what's published."
+msgstr "草稿已保存。你的主页和画廊仍显示已发布的版本。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag a box round your cards or tap them one by one, then drag one to move them all."
@@ -11825,6 +11859,10 @@ msgstr "此处无法使用硬件编码。“更小文件”会使用 CPU。"
 msgid "Harmful, hateful or a scam"
 msgstr "有害、仇恨内容或诈骗"
 
+#: src/routes/workshop.themes.index.tsx
+msgid "Has a draft you haven't published"
+msgstr "有尚未发布的草稿"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Has its own backdrop"
 msgstr "自带背景"
@@ -13039,8 +13077,20 @@ msgid "It goes into everyone's picker right away, with your name on it."
 msgstr "它会立即进入所有人的选择器，并署上你的名字。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "It goes live as soon as it's saved."
-msgstr "保存后立即生效。"
+#~ msgid "It goes into the gallery as soon as it's saved, and every later save updates it for everyone wearing it."
+#~ msgstr "保存后立即进入画廊，之后每次保存都会为所有佩戴者更新。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It goes into the gallery. Everyone wearing it gets what you publish, never your drafts."
+msgstr "它会进入画廊。佩戴者只会看到你发布的版本，不会看到草稿。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "It goes live as soon as it's saved."
+#~ msgstr "保存后立即生效。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It goes on your profile whenever you wear it, and stays out of the gallery."
+msgstr "你佩戴时会显示在你的主页上，不会进入画廊。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It is not a ranking either. Two players a step apart on the dan leaderboard are not meaningfully apart, and anyone who never farms accuracy will read lower than they play."
@@ -13117,6 +13167,10 @@ msgstr "未经许可使用了我的作品"
 #: src/routes/discord.tsx
 msgid "It was linked by typing a username. Connect Discord here to confirm it is you."
 msgstr "该绑定是通过输入用户名完成的。在这里连接 Discord 以确认是你本人。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It was never published, so the theme is deleted."
+msgstr "它从未发布过，因此主题会被删除。"
 
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
@@ -13407,6 +13461,10 @@ msgstr "保留 {0} 张"
 #: src/components/replay/ReplayControls.tsx
 msgid "Keeps the layout you're watching."
 msgstr "保留当前观看时的布局。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Kept for you, nobody else sees it"
+#~ msgstr "仅为你保存，其他人看不到"
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -16884,8 +16942,8 @@ msgstr "未找到卡组。"
 #: src/components/supporter/SupporterExtras.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine."
-msgstr "不得包含色情或血腥内容、仇恨言论，以及政治或宗教信息。单独使用国家旗帜没问题。"
+#~ msgid "No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine."
+#~ msgstr "不得包含色情或血腥内容、仇恨言论，以及政治或宗教信息。单独使用国家旗帜没问题。"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "No skill ratings for this team's members yet."
@@ -17295,6 +17353,10 @@ msgstr "暂无计划"
 #: src/components/me/GoalsPanel.tsx
 msgid "not played yet"
 msgstr "还没打过"
+
+#: src/routes/workshop.themes.index.tsx
+msgid "Not published yet"
+msgstr "尚未发布"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "not rated"
@@ -17983,6 +18045,10 @@ msgstr "只有你能打开这些"
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Only you can open this. It is not listed anywhere and has no share link."
 #~ msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Only you can see it. It shows on your profile only once you wear it."
+#~ msgstr "只有你能看到。佩戴后才会显示在你的主页上。"
 
 #: src/components/supporter/ProfilePreviewBar.tsx
 msgid "Only you can see this"
@@ -20128,13 +20194,37 @@ msgstr "点"
 msgid "public"
 msgstr "公开"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Publish"
+msgstr "发布"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Publish theme"
+msgstr "发布主题"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "published"
 msgstr "已发布"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Published"
+msgstr "已发布"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Published, and in the gallery."
+msgstr "已发布，并已进入画廊。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Published. Wear it from your themes."
+msgstr "已发布。可在你的主题中佩戴。"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Publishing."
 msgstr "正在发布。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Publishing..."
+msgstr "发布中..."
 
 #: src/components/packs/GiftSpareDialog.tsx
 #~ msgid "Pull this card while signed in before gifting a spare."
@@ -22104,14 +22194,17 @@ msgstr "周六"
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
-#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/discord.tsx
 msgid "Save"
 msgstr "保存"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Save and put it live"
-msgstr "保存并上线"
+#~ msgid "Save and publish"
+#~ msgstr "保存并发布"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Save and put it live"
+#~ msgstr "保存并上线"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "Save binder"
@@ -22125,6 +22218,10 @@ msgstr "保存更改"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save changes for everyone"
 msgstr "保存改动，对所有人生效"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Save draft"
+msgstr "保存草稿"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "Save folder"
@@ -22147,8 +22244,8 @@ msgid "Save showcase"
 msgstr "保存展示柜"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Save theme"
-msgstr "保存主题"
+#~ msgid "Save theme"
+#~ msgstr "保存主题"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save this editor version as the skin everyone sees on your replays"
@@ -22168,7 +22265,6 @@ msgstr "已保存"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/replay/ReplayExportPanel.tsx
-#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Saved"
 msgstr "已保存"
 
@@ -22185,12 +22281,20 @@ msgid "Saved in this browser only. <0><1/>Log in with osu!</0> to sync your coll
 msgstr "仅保存在这个浏览器里。<0><1/>用 osu! 登录</0>即可在多设备间同步收藏册。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Saved. It's live on your list."
-msgstr "已保存，已在你的列表中生效。"
+#~ msgid "Saved to your themes."
+#~ msgstr "已保存到你的主题。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Saved. It's live, and in the gallery."
-msgstr "已保存，已生效并发布到画廊。"
+#~ msgid "Saved. It's in the gallery."
+#~ msgstr "已保存，已进入画廊。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Saved. It's live on your list."
+#~ msgstr "已保存，已在你的列表中生效。"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Saved. It's live, and in the gallery."
+#~ msgstr "已保存，已生效并发布到画廊。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saves the current draft as-is; everyone watching your replays sees it"
@@ -24618,7 +24722,7 @@ msgstr "stable 公式准确率（95%）"
 msgid "Stable-formula acc (96%)"
 msgstr "stable 公式准确率（96%）"
 
-#: src/routes/workshop.themes.index.tsx
+#: src/components/supporter/themes/NewThemeChooser.tsx
 msgid "Stack a background, your pictures, particles, fog and light. No code."
 msgstr "叠加背景、你的图片、粒子、雾和光，无需代码。"
 
@@ -27194,6 +27298,10 @@ msgstr "每开一包，目标提高 {0}%。"
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
 msgstr "测试客户端把签名密钥保存在这个浏览器里，令牌只保存在内存中，所以刷新页面后需要重新连接。它提交的所有内容都会标记为测试数据，并在一周后自动删除。"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The theme goes back to what's published."
+msgstr "主题会恢复为已发布的版本。"
+
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The third copy ever pulled"
 msgstr "史上第三份被抽到的"
@@ -28901,6 +29009,7 @@ msgstr "未上传"
 #~ msgstr "无标题谱面"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Untitled theme"
 msgstr "未命名主题"
 
@@ -30063,7 +30172,7 @@ msgstr "女巫帽与扫帚"
 msgid "with {mods}"
 msgstr "使用 {mods}"
 
-#: src/routes/workshop.themes.index.tsx
+#: src/components/supporter/themes/NewThemeChooser.tsx
 msgid "With code"
 msgstr "用代码"
 
@@ -30083,7 +30192,7 @@ msgstr "用代码"
 msgid "With fewer than two rated skills, your dan is the average of your 20 best passes overall."
 msgstr "已评定的技能少于两个时，你的段位是你全部通过中最好的 20 次的平均。"
 
-#: src/routes/workshop.themes.index.tsx
+#: src/components/supporter/themes/NewThemeChooser.tsx
 msgid "With layers"
 msgstr "用图层"
 
@@ -30172,7 +30281,7 @@ msgstr "在 BBCode 编辑器里写一段"
 msgid "Write something first."
 msgstr "请先填写内容。"
 
-#: src/routes/workshop.themes.index.tsx
+#: src/components/supporter/themes/NewThemeChooser.tsx
 msgid "Write the shader yourself, start from a built-in theme, or paste a Shadertoy one."
 msgstr "自己编写着色器，从内置主题开始，或粘贴一个 Shadertoy 着色器。"
 

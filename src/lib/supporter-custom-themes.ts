@@ -37,8 +37,11 @@ export interface CustomThemeSummary {
   createdAt: number;
   updatedAt: number;
   publishedAt: number | null;
+  /** When the author last saved a draft not yet published; null without one. */
+  draftAt: number | null;
 }
 
+/* What the editor opens: the author's draft when they have one, else their latest revision. */
 export interface CustomThemeDraft extends CustomThemeSummary {
   kind: "code" | "layers";
   source: string;
@@ -119,7 +122,7 @@ export const fetchOwnCustomTheme = createServerFn({ method: "GET" })
     return ((await response.json()) as { theme: CustomThemeDraft }).theme;
   });
 
-/* Saves a new revision, live at once. A refusal comes back as a value, not a
+/* Publishes: a new revision, live at once, and the draft cleared. A refusal comes back as a value, not a
    throw, so the checker's errors reach the editor intact. */
 export const saveOwnCustomTheme = createServerFn({ method: "POST" })
   .validator((data: CustomThemeSaveInput) => data)
@@ -136,6 +139,52 @@ export const saveOwnCustomTheme = createServerFn({ method: "POST" })
       return { ok: false, error: failure.error, errors: failure.errors ?? [] };
     }
     return { ok: true, theme: ((await response.json()) as { theme: CustomThemeDraft }).theme };
+  });
+
+/* The editor's unpublished state, kept to come back to. Nothing in it is
+   checked or goes live; a new theme's first draft makes the theme. */
+export interface CustomThemeDraftInput {
+  themeId: number | null;
+  name: string;
+  visibility: CustomThemeVisibility;
+  credits: string;
+  remixedFrom: number | null;
+  kind: "code" | "layers";
+  source: string;
+  layers?: LayerDoc;
+  generatorVersion?: number;
+  assets: string[];
+  look: CustomThemeLook;
+}
+
+export const saveOwnCustomThemeDraft = createServerFn({ method: "POST" })
+  .validator((data: CustomThemeDraftInput) => data)
+  .handler(async ({ data }): Promise<{ ok: true; themeId: number; draftAt: number } | { ok: false; error: string }> => {
+    const viewer = await requireViewer();
+    if (!viewer) return { ok: false, error: "signed_out" };
+    const response = await fetch(`${viewer.base}/api/supporters/self/themes/draft`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ ...data, userId: viewer.userId }),
+    });
+    if (!response.ok) return { ok: false, error: (await readError(response)).error };
+    const body = (await response.json()) as { themeId: number; draftAt: number };
+    return { ok: true, themeId: body.themeId, draftAt: body.draftAt };
+  });
+
+/* Throws the draft away: a published theme goes back to what's live, one
+   that was only ever a draft is deleted. */
+export const discardOwnCustomThemeDraft = createServerFn({ method: "POST" })
+  .validator((data: { themeId?: unknown }) => ({ themeId: readThemeId(data?.themeId) }))
+  .handler(async ({ data }): Promise<void> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error(SIGNED_OUT);
+    const response = await fetch(`${viewer.base}/api/supporters/self/themes/draft/discard`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, ...data }),
+    });
+    if (!response.ok) throw new Error((await readError(response)).error);
   });
 
 export const setOwnCustomThemeVisibility = createServerFn({ method: "POST" })

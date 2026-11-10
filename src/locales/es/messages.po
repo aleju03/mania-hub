@@ -5896,8 +5896,12 @@ msgid "Bugs and feedback"
 msgstr "Bugs y sugerencias"
 
 #: src/routes/workshop.themes.index.tsx
-msgid "Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it."
-msgstr "Arma un tema con capas sin código, o escribe tú mismo su shader. Se publica apenas lo guardas."
+#~ msgid "Build a theme from layers with no code, or write its shader yourself. It goes live as soon as you save it."
+#~ msgstr "Arma un tema con capas sin código, o escribe tú mismo su shader. Se publica apenas lo guardas."
+
+#: src/routes/workshop.themes.index.tsx
+msgid "Build a theme from layers with no code, or write its shader yourself. Save drafts as you go, and publish it when it's ready."
+msgstr "Arma un tema con capas sin código, o escribe tú su shader. Guarda borradores mientras avanzas y publícalo cuando esté listo."
 
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "Build the combo"
@@ -8808,6 +8812,10 @@ msgstr "Eliminar skin"
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
 msgstr "¿Borrar esta play importada? Se elimina su replay y la vista previa se recalcula."
 
+#: src/routes/workshop.themes.index.tsx
+msgid "Delete this theme?"
+msgstr "¿Borrar este tema?"
+
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Delete this upload"
@@ -8936,9 +8944,18 @@ msgstr "Dirección"
 msgid "Direction & long notes"
 msgstr "Dirección y notas largas"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Discard"
+msgstr "Descartar"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Discard draft"
 msgstr "Descartar borrador"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Discard this draft?"
+msgstr "¿Descartar este borrador?"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "disconnect"
@@ -9229,10 +9246,27 @@ msgstr "Descargas"
 msgid "Downscroll"
 msgstr "Downscroll"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/workshop.themes.index.tsx
+msgid "Draft"
+msgstr "Borrador"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Draft autosaves locally"
 msgstr "El borrador se guarda automáticamente en este navegador"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Draft saved, not published"
+msgstr "Borrador guardado, sin publicar"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Draft saved. Publish it when it's ready."
+msgstr "Borrador guardado. Publícalo cuando esté listo."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Draft saved. Your profile and the gallery keep what's published."
+msgstr "Borrador guardado. Tu perfil y la galería mantienen lo publicado."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag a box round your cards or tap them one by one, then drag one to move them all."
@@ -11813,6 +11847,10 @@ msgstr "La codificación por hardware no está disponible aquí. Archivo más pe
 msgid "Harmful, hateful or a scam"
 msgstr "Dañino, ofensivo o una estafa"
 
+#: src/routes/workshop.themes.index.tsx
+msgid "Has a draft you haven't published"
+msgstr "Tiene un borrador sin publicar"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Has its own backdrop"
 msgstr "Tiene su propio fondo"
@@ -13027,8 +13065,20 @@ msgid "It goes into everyone's picker right away, with your name on it."
 msgstr "Entra de una vez al selector de todos, con tu nombre."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "It goes live as soon as it's saved."
-msgstr "Se publica apenas se guarda."
+#~ msgid "It goes into the gallery as soon as it's saved, and every later save updates it for everyone wearing it."
+#~ msgstr "Entra a la galería apenas lo guardes, y cada vez que lo vuelvas a guardar se actualiza para todos los que lo usan."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It goes into the gallery. Everyone wearing it gets what you publish, never your drafts."
+msgstr "Entra a la galería. Quienes lo usan ven lo que publiques, nunca tus borradores."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "It goes live as soon as it's saved."
+#~ msgstr "Se publica apenas se guarda."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It goes on your profile whenever you wear it, and stays out of the gallery."
+msgstr "Aparece en tu perfil cuando lo usas, y no entra a la galería."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It is not a ranking either. Two players a step apart on the dan leaderboard are not meaningfully apart, and anyone who never farms accuracy will read lower than they play."
@@ -13105,6 +13155,10 @@ msgstr "Usa mi trabajo sin permiso"
 #: src/routes/discord.tsx
 msgid "It was linked by typing a username. Connect Discord here to confirm it is you."
 msgstr "Se vinculó escribiendo un nombre de usuario. Conecta Discord aquí para confirmar que eres tú."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "It was never published, so the theme is deleted."
+msgstr "Nunca se publicó, así que el tema se borra."
 
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
@@ -13395,6 +13449,10 @@ msgstr "Guarda {0}"
 #: src/components/replay/ReplayControls.tsx
 msgid "Keeps the layout you're watching."
 msgstr "Conserva el layout que estás viendo."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Kept for you, nobody else sees it"
+#~ msgstr "Guardado para ti, nadie más lo ve"
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -16872,8 +16930,8 @@ msgstr "No se encontraron conjuntos."
 #: src/components/supporter/SupporterExtras.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine."
-msgstr "Nada de contenido sexual o gráfico, odio, ni mensajes políticos o religiosos. La bandera de un país por sí sola está bien."
+#~ msgid "No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine."
+#~ msgstr "Nada de contenido sexual o gráfico, odio, ni mensajes políticos o religiosos. La bandera de un país por sí sola está bien."
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "No skill ratings for this team's members yet."
@@ -17283,6 +17341,10 @@ msgstr "no planeado"
 #: src/components/me/GoalsPanel.tsx
 msgid "not played yet"
 msgstr "aún sin jugar"
+
+#: src/routes/workshop.themes.index.tsx
+msgid "Not published yet"
+msgstr "Sin publicar todavía"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "not rated"
@@ -17971,6 +18033,10 @@ msgstr "solo tú puedes abrirlas"
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Only you can open this. It is not listed anywhere and has no share link."
 #~ msgstr ""
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Only you can see it. It shows on your profile only once you wear it."
+#~ msgstr "Solo tú lo ves. Aparece en tu perfil solo cuando lo usas."
 
 #: src/components/supporter/ProfilePreviewBar.tsx
 msgid "Only you can see this"
@@ -20116,13 +20182,37 @@ msgstr "pts"
 msgid "public"
 msgstr "público"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Publish"
+msgstr "Publicar"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Publish theme"
+msgstr "Publicar tema"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "published"
 msgstr "publicado"
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Published"
+msgstr "Publicado"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Published, and in the gallery."
+msgstr "Publicado, y en la galería."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Published. Wear it from your themes."
+msgstr "Publicado. Úsalo desde tus temas."
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Publishing."
 msgstr "Publicando."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Publishing..."
+msgstr "Publicando..."
 
 #: src/components/packs/GiftSpareDialog.tsx
 #~ msgid "Pull this card while signed in before gifting a spare."
@@ -22092,14 +22182,17 @@ msgstr "sábados"
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
-#: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/discord.tsx
 msgid "Save"
 msgstr "Guardar"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Save and put it live"
-msgstr "Guardar y publicar"
+#~ msgid "Save and publish"
+#~ msgstr "Guardar y publicar"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Save and put it live"
+#~ msgstr "Guardar y publicar"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "Save binder"
@@ -22113,6 +22206,10 @@ msgstr "Guardar cambios"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save changes for everyone"
 msgstr "Guardar cambios para todos"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Save draft"
+msgstr "Guardar borrador"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "Save folder"
@@ -22135,8 +22232,8 @@ msgid "Save showcase"
 msgstr "Guardar showcase"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Save theme"
-msgstr "Guardar tema"
+#~ msgid "Save theme"
+#~ msgstr "Guardar tema"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save this editor version as the skin everyone sees on your replays"
@@ -22156,7 +22253,6 @@ msgstr "guardado"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/replay/ReplayExportPanel.tsx
-#: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Saved"
 msgstr "Guardado"
 
@@ -22173,12 +22269,20 @@ msgid "Saved in this browser only. <0><1/>Log in with osu!</0> to sync your coll
 msgstr "Se guarda solo en este navegador. <0><1/>Inicia sesión con osu!</0> para sincronizar tu colección entre dispositivos."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Saved. It's live on your list."
-msgstr "Guardado. Ya está publicado en tu lista."
+#~ msgid "Saved to your themes."
+#~ msgstr "Guardado en tus temas."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Saved. It's live, and in the gallery."
-msgstr "Guardado. Ya está publicado y en la galería."
+#~ msgid "Saved. It's in the gallery."
+#~ msgstr "Guardado. Está en la galería."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Saved. It's live on your list."
+#~ msgstr "Guardado. Ya está publicado en tu lista."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Saved. It's live, and in the gallery."
+#~ msgstr "Guardado. Ya está publicado y en la galería."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saves the current draft as-is; everyone watching your replays sees it"
@@ -24606,7 +24710,7 @@ msgstr "Acc con fórmula de stable (95%)"
 msgid "Stable-formula acc (96%)"
 msgstr "Acc con fórmula de stable (96%)"
 
-#: src/routes/workshop.themes.index.tsx
+#: src/components/supporter/themes/NewThemeChooser.tsx
 msgid "Stack a background, your pictures, particles, fog and light. No code."
 msgstr "Apila un fondo, tus imágenes, partículas, niebla y luz. Sin código."
 
@@ -27182,6 +27286,10 @@ msgstr "El objetivo sube {0}% después de cada pack."
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
 msgstr "El cliente de prueba guarda su clave de firma en este navegador y sus tokens solo en memoria, así que al recargar la página hay que conectar de nuevo. Todo lo que envía queda marcado como prueba y se borra solo después de una semana."
 
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "The theme goes back to what's published."
+msgstr "El tema vuelve a lo publicado."
+
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The third copy ever pulled"
 msgstr "La tercera copia que se sacó"
@@ -28889,6 +28997,7 @@ msgstr "no subidos"
 #~ msgstr "Chart sin título"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Untitled theme"
 msgstr "Tema sin título"
 
@@ -30051,7 +30160,7 @@ msgstr "Sombrero y escoba de bruja"
 msgid "with {mods}"
 msgstr "con {mods}"
 
-#: src/routes/workshop.themes.index.tsx
+#: src/components/supporter/themes/NewThemeChooser.tsx
 msgid "With code"
 msgstr "Con código"
 
@@ -30071,7 +30180,7 @@ msgstr "Con código"
 msgid "With fewer than two rated skills, your dan is the average of your 20 best passes overall."
 msgstr "Con menos de dos skills calificados, tu dan es el promedio de tus 20 mejores pases en general."
 
-#: src/routes/workshop.themes.index.tsx
+#: src/components/supporter/themes/NewThemeChooser.tsx
 msgid "With layers"
 msgstr "Con capas"
 
@@ -30160,7 +30269,7 @@ msgstr "Escribe uno en el editor de BBCode"
 msgid "Write something first."
 msgstr "Escribe algo primero."
 
-#: src/routes/workshop.themes.index.tsx
+#: src/components/supporter/themes/NewThemeChooser.tsx
 msgid "Write the shader yourself, start from a built-in theme, or paste a Shadertoy one."
 msgstr "Escribe el shader tú mismo, empieza desde un tema integrado o pega uno de Shadertoy."
 

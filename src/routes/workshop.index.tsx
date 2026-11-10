@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { ProfileThemeBackdrop } from "../components/supporter/ProfileThemeBackdrop";
+import { NewThemeChooser } from "../components/supporter/themes/NewThemeChooser";
 import { frameOverhangMargins, SupporterAvatarFrame } from "../components/player/SupporterAvatarFrame";
 import { avatarImageSrc } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
@@ -134,7 +135,7 @@ function Rail() {
       <Link to="/workshop/themes/gallery" className={item}>{t`Themes`}</Link>
       <div className={`${heading} max-md:hidden`}>{t`Make`}</div>
       <Link to="/workshop/frames" className={`${item} max-md:shrink-0`}>{t`Make a frame`}</Link>
-      <Link to="/workshop/themes/$themeId" params={{ themeId: "new" }} search={{ mode: "layers" }} className={`${item} max-md:shrink-0`}>{t`Make a theme`}</Link>
+      <NewThemeChooser trigger={(toggle) => <button type="button" onClick={toggle} className={`${item} w-full cursor-pointer text-left max-md:shrink-0`}>{t`Make a theme`}</button>} />
       <div className={`${heading} max-md:hidden`}>{t`Yours`}</div>
       <Link to="/workshop/frames" hash="yours" className={`${item} max-md:shrink-0`}>{t`Your frames`}</Link>
       <Link to="/workshop/themes" className={`${item} max-md:shrink-0`}>{t`Your themes`}</Link>
@@ -268,9 +269,10 @@ function MakeTile({ to, title, body, art }: { to: "frames" | "themes"; title: st
     </>
   );
   const className = "flex items-center gap-5 rounded-xl border-[1.5px] border-dashed border-osu-pink/40 bg-osu-b4 px-5 py-4 transition hover:border-osu-pink/70 hover:brightness-110";
+  // a theme starts from layers or from code, so its tile asks which
   return to === "frames"
     ? <Link to="/workshop/frames" className={className}>{inner}</Link>
-    : <Link to="/workshop/themes/$themeId" params={{ themeId: "new" }} search={{ mode: "layers" }} className={className}>{inner}</Link>;
+    : <NewThemeChooser trigger={(toggle) => <button type="button" onClick={toggle} className={`${className} h-full w-full cursor-pointer text-left`}>{inner}</button>} />;
 }
 
 /* The viewer's avatar `size` px wide wearing a frame, with room for the frame's art. */
