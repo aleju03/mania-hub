@@ -1323,14 +1323,28 @@ up by id or username with where its imports stand.
   `listInstallations` leaves it off the player's own connection list.
   `usage.ts` counts only Companella's client id, so these plays never reach
   `/companella/usage`. Rows carry no app mark.
-- **Staging.** Each file's header names its chart by md5; the chart has to be
-  in the import pool or the site's own `.osu` cache (no osu! call). A play on
-  a chart the site lacks is skipped and listed as such. Otherwise it becomes a
+- **Staging.** Each file's header names its chart by md5, looked for in the
+  import pool and the site's own `.osu` cache (no osu! call while staging).
+  When found, it becomes a
   normal submission (`manual_import`, idempotency key from the replay's
   sha256, so the same file dropped again answers "already imported") with its
   replay stored, left in `awaiting_assets` for 30 days. The incomplete cap and
   the byte budgets do not apply to this path. An unfinished submission keeps
   its replay referenced, so the artifact sweeps leave it alone.
+- **Map lookup.** A play whose chart the site has no file for waits in
+  `companella_replay_import_lookups` (the replay base64 in the row, cleared
+  once the row settles) and answers "looking up map".
+  `companella_replay_import_map_lookup` rides the `osu-file-cache` lane below
+  the file prefetches, pauses with the other osu! API jobs, and settles 5
+  replays per link: it asks osu! for the map by md5 (`/beatmaps/lookup`), stores
+  a native mania map's row and `.osu` file as manual entries do, and stages the
+  play for the feeder. A convert settles as `converted_map` without a download,
+  an md5 osu! does not know (a rate edit, a BMS convert, an older revision of an
+  updated map) as `map_not_on_osu`, and 5 failed attempts as `lookup_failed`;
+  a 429 ends the link and the next waits a minute. The account's progress lists
+  the settled ones by file name. The same file dropped again answers from its
+  row and asks osu! again only after 7 days. Looking an account up restarts a
+  chain that stopped, e.g. while osu! API jobs were off.
 - **Feeding.** `companella_replay_import_feed` rides the `companella` lane and
   completes up to 16 plays per account at a time, enqueued at priority 1 so a
   player's live imports (priority 2) go first. It runs every 10 seconds while

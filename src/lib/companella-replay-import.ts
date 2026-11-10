@@ -14,6 +14,11 @@ export interface ReplayImportAccount {
 }
 
 export interface ReplayImportProgress {
+  /** Replays whose map is being looked up on osu! by its hash. */
+  lookingUp?: number;
+  /** Replays the lookup could not import, by file name (newest first, capped). */
+  unmatched?: Array<{ name: string; reason: string }>;
+  unmatchedTotal?: number;
   waiting: number;
   processing: number;
   imported: number;
@@ -24,6 +29,7 @@ export interface ReplayImportProgress {
 
 export type ReplayImportFileResult =
   | { name: string; status: "staged" | "already_imported"; submissionId: string }
+  | { name: string; status: "awaiting_map" }
   | { name: string; status: "skipped"; reason: string; detail?: string };
 
 async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
