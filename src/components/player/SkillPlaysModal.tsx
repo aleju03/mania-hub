@@ -1,5 +1,4 @@
 import { skillPlayShareLink } from "../../lib/skill-play-share";
-import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -18,7 +17,7 @@ import { msdSkillsetMeta } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { ModBadge } from "../ui/ModBadge";
 import { MapDetailModal } from "../maps/MapDetailModal";
-import { PlayGlyph } from "../ui/PlayGlyph";
+import { ReplayCoverLink } from "../ui/ReplayCoverLink";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
 
@@ -139,7 +138,6 @@ export function SkillPlaysModal({
 }: SkillPlaysModalProps) {
   const { t } = useLingui();
   const [items, setItems] = useState<LivePlayerSkillPlay[]>([]);
-  const replaySlot = items.some((play) => play.scoreId != null && play.score?.hasReplay === true);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -338,7 +336,6 @@ export function SkillPlaysModal({
                       color={color}
                       onOpen={() => openDetail(play)}
                       onPrefetch={() => prefetchLiveMapSearchEntry(play.beatmapId)}
-                      replaySlot={replaySlot}
                     />
                   ))}
                 </div>
@@ -404,10 +401,7 @@ function SkillPlayRow({
   color,
   onOpen,
   onPrefetch,
-  replaySlot,
 }: {
-  /** Some row in the list has a replay, so this one keeps the button's slot. */
-  replaySlot: boolean;
   play: LivePlayerSkillPlay;
   position: number;
   axis: string;
@@ -450,9 +444,10 @@ function SkillPlayRow({
       className: "max-sm:hidden",
     });
   }
-  // The replay link sits beside the row's button rather than inside it.
+  // The replay link sits over the cover, beside the row's button rather than
+  // inside it: left offsets are the button padding + position + gap.
   return (
-    <div className="group flex w-full min-w-0 items-center gap-2 border-t border-white/[0.07] pr-2 transition-colors first:border-t-0 hover:bg-osu-b4 sm:gap-3 sm:pr-3">
+    <div className="group relative flex w-full min-w-0 items-center gap-2 border-t border-white/[0.07] pr-2 transition-colors first:border-t-0 hover:bg-osu-b4 sm:gap-3 sm:pr-3">
     <button
       type="button"
       onClick={onOpen}
@@ -505,17 +500,11 @@ function SkillPlayRow({
       </span>
     </button>
     {play.scoreId != null && play.score?.hasReplay === true ? (
-      <Link
-        to="/replay"
-        search={{ scoreId: play.scoreId, beatmapsetId: play.beatmapsetId ?? undefined }}
-        title={t`Watch replay`}
-        aria-label={t`Watch replay`}
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-osu-pink/20 text-osu-pink-light transition-colors hover:bg-osu-pink/30"
-      >
-        <PlayGlyph className="h-[10px] w-[8.5px] translate-x-[0.5px]" />
-      </Link>
-    ) : replaySlot ? (
-      <span aria-hidden="true" className="h-7 w-7 shrink-0" />
+      <ReplayCoverLink
+        scoreId={play.scoreId}
+        beatmapsetId={play.beatmapsetId}
+        className="left-10 h-10 w-16 sm:left-12 sm:h-11 sm:w-[4.5rem]"
+      />
     ) : null}
     </div>
   );

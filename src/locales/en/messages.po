@@ -21881,10 +21881,9 @@ msgstr "Watch osu!mania replays in your browser."
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ScorePlayDetailModal.tsx
 #: src/components/player/ScoreRows.tsx
-#: src/components/player/SkillPlaysExplorer.tsx
-#: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/StableResultsScreen.tsx
+#: src/components/ui/ReplayCoverLink.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
