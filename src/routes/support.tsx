@@ -240,7 +240,7 @@ function SupportPage() {
               title={t`Profile themes`}
               count={<Trans><CountUp value={SUPPORTER_PROFILE_THEMES.length} /> themes, or your own</Trans>}
               body={t`Your whole profile takes on a theme, with a living backdrop behind it and the site's colours shifted to match.`}
-              more={<Trans>Or <Link to="/workshop/themes">write a theme of your own</Link>, or wear one another player shared.</Trans>}
+              more={<Trans>Or <Link to="/workshop/themes">create a theme of your own</Link>, or wear one another player shared.</Trans>}
             >
               <ThemesShowcase />
             </Perk>

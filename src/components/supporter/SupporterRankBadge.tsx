@@ -35,7 +35,7 @@ export function SupporterRankIcon({ rank, className }: { rank: SupporterRankDef;
    (lib/rank-fire.ts): the fire canvas sits behind the gem, the licks over its
    face are screened on top. Still under reduced motion, and while the page
    has no WebGL slot to spare, a soft glow in the rank's colour stands in. */
-function RankGem({ rank, renewing, className }: { rank: SupporterRankDef; renewing: boolean; className?: string }) {
+export function RankGem({ rank, renewing, className }: { rank: SupporterRankDef; renewing: boolean; className?: string }) {
   const hostRef = useRef<HTMLSpanElement>(null);
   const backRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLCanvasElement>(null);

@@ -2744,6 +2744,10 @@ msgstr "<0>#{global}</0> global"
 msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
 msgstr "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
 
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "<0>$4</0><1>a month</1>"
+#~ msgstr "<0>$4</0><1>a month</1>"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "<0>4K LN</0> goes through that same analyser's LN table, with a small model of our own filling in the easy charts that sit below where the table starts."
 #~ msgstr "<0>4K LN</0> goes through that same analyser's LN table, with a small model of our own filling in the easy charts that sit below where the table starts."
@@ -2852,6 +2856,10 @@ msgstr "▶ Watch"
 #: src/components/supporter/SupportPlans.tsx
 msgid "$4 a month"
 msgstr "$4 a month"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "$4 a month, with a burning rank and extra gift codes."
+#~ msgstr "$4 a month, with a burning rank and extra gift codes."
 
 #: src/routes/support.tsx
 msgid "$4 buys a month of supporter, and every tip adds more time."
@@ -3442,6 +3450,10 @@ msgstr "A figure that stands beside your profile's numbers. Pick one from the li
 #: src/routes/hashi.tsx
 msgid "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
 msgstr "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "A flame on your gem while your subscription renews."
+msgstr "A flame on your gem while your subscription renews."
 
 #: src/lib/pack-run.ts
 msgid "A fourth charm slot"
@@ -4534,8 +4546,8 @@ msgid "An external application"
 msgstr "An external application"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "An extra gift code for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
-msgstr "An extra gift code for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
+#~ msgid "An extra gift code for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
+#~ msgstr "An extra gift code for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
 
 #: src/components/supporter/SupportPlans.tsx
 #~ msgid "An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up."
@@ -4678,6 +4690,14 @@ msgstr "Any amount counts, to the day, and adds to the time you have left: $4 is
 #: src/routes/support.tsx
 msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
 msgstr "Any amount works and is counted to the day. Every tip adds to the time you have left."
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Any amount. $4 is a month, $40 a full year."
+#~ msgstr "Any amount. $4 is a month, $40 a full year."
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Any amount. $4 is a month, $40 a full year. No flame, no extra gift codes."
+#~ msgstr "Any amount. $4 is a month, $40 a full year. No flame, no extra gift codes."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Any card"
@@ -4947,8 +4967,8 @@ msgstr "Assets"
 #~ msgstr "At $10 a month or more, your rank's tooltip calls you a Patron, so people can see you give a little extra."
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "At $10 a month or more, your rank's tooltip says Gold supporter."
-msgstr "At $10 a month or more, your rank's tooltip says Gold supporter."
+#~ msgid "At $10 a month or more, your rank's tooltip says Gold supporter."
+#~ msgstr "At $10 a month or more, your rank's tooltip says Gold supporter."
 
 #: src/components/supporter/SupportPlans.tsx
 #~ msgid "At $10 a month or more, your rank's tooltip says Patron."
@@ -10062,8 +10082,16 @@ msgstr "Every stat"
 #~ msgstr "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Every supporter look, for as long as it renews."
-msgstr "Every supporter look, for as long as it renews."
+msgid "Every supporter look"
+msgstr "Every supporter look"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Every supporter look, and a rank that keeps climbing."
+#~ msgstr "Every supporter look, and a rank that keeps climbing."
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Every supporter look, for as long as it renews."
+#~ msgstr "Every supporter look, for as long as it renews."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Every tier"
@@ -10219,6 +10247,10 @@ msgstr "External application"
 #: src/components/packs/GamePacks.tsx
 msgid "Extra"
 msgstr "Extra"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Extra gift codes"
+msgstr "Extra gift codes"
 
 #: src/lib/pack-run.ts
 msgid "Extra Key"
@@ -11089,6 +11121,10 @@ msgstr "frames"
 msgid "Frames"
 msgstr "Frames"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Frames, themes, name styles and card looks, for as long as it renews."
+msgstr "Frames, themes, name styles and card looks, for as long as it renews."
+
 #: src/components/packs/run/RunShop.tsx
 #: src/routes/packs.tsx
 msgid "free"
@@ -11410,6 +11446,10 @@ msgstr "Give it a name."
 msgid "Give the collection a title."
 msgstr "Give the collection a title."
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Give the email you'll pay with, then pay on lava.top. The payment finds your account by that email, so your supporter time reaches it on its own."
+msgstr "Give the email you'll pay with, then pay on lava.top. The payment finds your account by that email, so your supporter time reaches it on its own."
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "Give the folder a name."
 #~ msgstr "Give the folder a name."
@@ -11592,6 +11632,7 @@ msgid "Gold sketch crown"
 msgstr "Gold sketch crown"
 
 #: src/components/supporter/SupporterRankBadge.tsx
+#: src/components/supporter/SupportPlans.tsx
 msgid "Gold supporter"
 msgstr "Gold supporter"
 
@@ -12599,8 +12640,16 @@ msgid "If you have the map, drop its .osz here and the replay plays from your co
 msgstr "If you have the map, drop its .osz here and the replay plays from your copy."
 
 #: src/routes/privacy.tsx
-msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
-msgstr "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgstr "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+
+#: src/routes/privacy.tsx
+#~ msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same scrambled way, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+#~ msgstr "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same scrambled way, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+
+#: src/routes/privacy.tsx
+#~ msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+#~ msgstr "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
 
 #: src/routes/privacy.tsx
 msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -12819,6 +12868,10 @@ msgstr "In this slot"
 #: src/components/packs/album/AlbumView.tsx
 msgid "In your collection."
 msgstr "In your collection."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "In your rank's tooltip, at $10 a month or more."
+msgstr "In your rank's tooltip, at $10 a month or more."
 
 #: src/routes/skins.tsx
 msgid "includes"
@@ -13697,8 +13750,12 @@ msgid "Lava lamp"
 msgstr "Lava lamp"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "lava.top opens in a new tab to pay."
-msgstr "lava.top opens in a new tab to pay."
+msgid "lava.top asks for your email when you pay. Type the same one here, so the payment reaches your account."
+msgstr "lava.top asks for your email when you pay. Type the same one here, so the payment reaches your account."
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "lava.top opens in a new tab to pay."
+#~ msgstr "lava.top opens in a new tab to pay."
 
 #: src/components/supporter/SupportCheckout.tsx
 #~ msgid "lava.top opens in a new tab, where you pick the amount."
@@ -17791,9 +17848,17 @@ msgstr "One copy for a friend. You keep {remaining}."
 #~ msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 #~ msgstr "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "One for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
+msgstr "One for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
+
 #: src/lib/pack-run.ts
 msgid "One free reroll per shop"
 msgstr "One free reroll per shop"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "One gem up for every month in a row. If it lapses, it starts again at Amber."
+msgstr "One gem up for every month in a row. If it lapses, it starts again at Amber."
 
 #: src/lib/pack-run.ts
 msgid "One more charm slot until this stage ends, when any charm past your slots is sold."
@@ -17843,6 +17908,10 @@ msgstr "online"
 #: src/routes/player/$username.tsx
 msgid "Online"
 msgstr "Online"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Only a scrambled form of it is kept, never the address itself."
+#~ msgstr "Only a scrambled form of it is kept, never the address itself."
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "only admins see this"
@@ -18223,16 +18292,24 @@ msgid "or"
 msgstr "or"
 
 #: src/routes/support.tsx
+msgid "Or <0>create a theme of your own</0>, or wear one another player shared."
+msgstr "Or <0>create a theme of your own</0>, or wear one another player shared."
+
+#: src/routes/support.tsx
 msgid "Or <0>draw a frame of your own</0> and submit it for everyone to wear."
 msgstr "Or <0>draw a frame of your own</0> and submit it for everyone to wear."
 
 #: src/routes/support.tsx
-msgid "Or <0>write a theme of your own</0>, or wear one another player shared."
-msgstr "Or <0>write a theme of your own</0>, or wear one another player shared."
+#~ msgid "Or <0>write a theme of your own</0>, or wear one another player shared."
+#~ msgstr "Or <0>write a theme of your own</0>, or wear one another player shared."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "or paste a Shadertoy shader as it is"
 msgstr "or paste a Shadertoy shader as it is"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Or pay once"
+#~ msgstr "Or pay once"
 
 #: src/components/supporter/SupportCheckout.tsx
 #~ msgid "Or pay with Google. Sign in first so it counts toward your account."
@@ -18871,8 +18948,8 @@ msgid "Pay on lava.top"
 msgstr "Pay on lava.top"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Pay on lava.top. The link carries your account, so your supporter time reaches it on its own."
-msgstr "Pay on lava.top. The link carries your account, so your supporter time reaches it on its own."
+#~ msgid "Pay on lava.top. The link carries your account, so your supporter time reaches it on its own."
+#~ msgstr "Pay on lava.top. The link carries your account, so your supporter time reaches it on its own."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Pay with Google here. Your supporter time starts as soon as the payment goes through."
@@ -20333,6 +20410,10 @@ msgstr "Rank is set by {0} top mania plays: mostly pp standing, plus control, sp
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Rank is set by the cards of the team's strongest members."
 msgstr "Rank is set by the cards of the team's strongest members."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Rank on fire"
+msgstr "Rank on fire"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Rank trajectory"
@@ -22629,6 +22710,10 @@ msgstr "See all {0}"
 #~ msgid "See the board as a globe"
 #~ msgstr "See the board as a globe"
 
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "See the days"
+#~ msgstr "See the days"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See the score"
 msgstr "See the score"
@@ -22644,6 +22729,10 @@ msgstr "See this play judged with {otherLabel} windows and LN rules"
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "See this run"
 msgstr "See this run"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "See what it gets"
+#~ msgstr "See what it gets"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See which plays are waiting"
@@ -23607,12 +23696,16 @@ msgid "Sign in first so it counts toward your account."
 msgstr "Sign in first so it counts toward your account."
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
+msgstr "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
+
+#: src/components/supporter/SupportCheckout.tsx
 #~ msgid "Sign in first, then open lava.top: the link carries your account, so your supporter time reaches it."
 #~ msgstr "Sign in first, then open lava.top: the link carries your account, so your supporter time reaches it."
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Sign in first, then pay on lava.top: the link carries your account, so your supporter time reaches it."
-msgstr "Sign in first, then pay on lava.top: the link carries your account, so your supporter time reaches it."
+#~ msgid "Sign in first, then pay on lava.top: the link carries your account, so your supporter time reaches it."
+#~ msgstr "Sign in first, then pay on lava.top: the link carries your account, so your supporter time reaches it."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then pay with Google here, so your supporter time reaches your account."
@@ -26493,6 +26586,14 @@ msgstr "The draw pool could not be read just now. Try again in a moment."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The editor already holds {0}"
 msgstr "The editor already holds {0}"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "The email itself is never saved, only a code made from it to match the payment."
+msgstr "The email itself is never saved, only a code made from it to match the payment."
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "The email you'll pay with, so the payment finds your account"
+#~ msgstr "The email you'll pay with, so the payment finds your account"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. 6K stops at 9th, and its LN ladder carries on through Terra, Celestial, Mystery, Nihility and Finish."
@@ -30973,12 +31074,12 @@ msgid "Your profile's Skills tab opens on the keymode with the most rated plays.
 msgstr "Your profile's Skills tab opens on the keymode with the most rated plays."
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Your rank burns with a flame while your subscription renews."
-msgstr "Your rank burns with a flame while your subscription renews."
+#~ msgid "Your rank burns with a flame while your subscription renews."
+#~ msgstr "Your rank burns with a flame while your subscription renews."
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."
-msgstr "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."
+#~ msgid "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."
+#~ msgstr "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."
 
 #: src/routes/recommendations.tsx
 msgid "your rating"

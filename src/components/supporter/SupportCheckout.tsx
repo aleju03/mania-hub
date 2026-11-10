@@ -8,7 +8,7 @@ import { useAuth } from "../../lib/auth-context";
 import { track } from "../../lib/analytics";
 import { readEdgeCountry } from "../../lib/country-cookie";
 import { GOOGLE_RRM_PUBLICATION_ID, startGoogleContributions } from "../../lib/google-contributions";
-import { claimGoogleContribution, claimLavaPayments } from "../../lib/supporter-look-settings";
+import { claimGoogleContribution, claimLavaPayments, rememberLavaEmail } from "../../lib/supporter-look-settings";
 import { useNearView } from "./SupportMotion";
 import { KofiNameSteps } from "./KofiNameSteps";
 
@@ -28,9 +28,10 @@ const LAVA_MEMBERSHIP_URL: string | null = "https://app.lava.top/products/603971
 const LAVA_PAGE_URL = "https://app.lava.top/mania-tracker";
 const LAVA_FOR_EVERYONE = true;
 
-// A signed-in visitor's link carries their osu! id, which lava.top hands
-// back on the webhook so the purchase counts toward their supporter time
-// (backend features/donations.ts, LAVA_UTM_PREFIX).
+// lava.top's payment webhook names the buyer by email only (its docs list no
+// UTM tags on it), so a signed-in visitor gives the email they will pay with
+// first (LavaPay) and the payment links by it. The link still carries their
+// osu! id, read if lava.top ever sends it back (backend LAVA_UTM_PREFIX).
 function lavaUrl(viewerId: number | null | undefined): string {
   const base = LAVA_MEMBERSHIP_URL ?? LAVA_PAGE_URL;
   if (!viewerId) return base;
@@ -112,6 +113,68 @@ function GoogleContribution({ viewerId }: { viewerId: number | null | undefined 
         </form>
       ) : null}
     </div>
+  );
+}
+
+/* The signed-in way to pay on lava.top: the email they will pay with goes to
+   the backend first, then lava.top opens. The tab is opened inside the click
+   and pointed at lava.top once the email is saved, so no popup blocker
+   stops it. */
+function LavaPay({ viewerId }: { viewerId: number }) {
+  const { t } = useLingui();
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="flex w-full max-w-[360px] flex-col items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!email.trim() || busy) return;
+        const tab = window.open("", "_blank");
+        setBusy(true);
+        setError(null);
+        rememberLavaEmail({ data: { email: email.trim() } })
+          .then(() => {
+            track("support_lava_open");
+            const url = lavaUrl(viewerId);
+            if (tab) {
+              tab.opener = null;
+              tab.location.href = url;
+            } else {
+              window.location.href = url;
+            }
+          })
+          .catch((reason: unknown) => {
+            tab?.close();
+            setError(reason instanceof Error ? reason.message : String(reason));
+          })
+          .finally(() => setBusy(false));
+      }}
+    >
+      <label htmlFor="lava-pay-email" className="max-w-[320px] text-[12px] text-osu-f1">{t`lava.top asks for your email when you pay. Type the same one here, so the payment reaches your account.`}</label>
+      <input
+        id="lava-pay-email"
+        type="email"
+        autoComplete="email"
+        required
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        placeholder={t`Email`}
+        maxLength={254}
+        className="h-8 w-full rounded-md bg-osu-b5 px-2.5 text-[12.5px] text-white outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-osu-f1 focus:ring-osu-pink/60"
+      />
+      <button
+        type="submit"
+        disabled={busy}
+        className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-osu-pink px-5 py-2.5 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-50"
+      >
+        {t`Pay on lava.top`}
+        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+      <p className="text-[11px] text-osu-f1">{t`The email itself is never saved, only a code made from it to match the payment.`}</p>
+      {error && <p className="text-[12px] text-osu-red-light">{error}</p>}
+    </form>
   );
 }
 
@@ -239,8 +302,8 @@ export function SupportMethodSteps({ method }: { method: SupportMethod }) {
           ? t`Pay with Google here. Your supporter time starts as soon as the payment goes through.`
           : t`Sign in first, then pay with Google here, so your supporter time reaches your account.`
         : signedIn
-          ? t`Pay on lava.top. The link carries your account, so your supporter time reaches it on its own.`
-          : t`Sign in first, then pay on lava.top: the link carries your account, so your supporter time reaches it.`}
+          ? t`Give the email you'll pay with, then pay on lava.top. The payment finds your account by that email, so your supporter time reaches it on its own.`
+          : t`Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account.`}
     </p>
   );
 }
@@ -292,18 +355,26 @@ export function SupportCheckout({ methods, method, onMethod }: { methods: Suppor
       </div>}
       {method === "lava" ? (
         <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-          <p className="max-w-[300px] text-[12.5px] text-osu-f1">{viewerId ? t`lava.top opens in a new tab to pay.` : t`Sign in first so it counts toward your account.`}</p>
-          <a
-            href={lavaUrl(viewerId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => track("support_lava_open")}
-            className="inline-flex items-center gap-1.5 rounded-full bg-osu-pink px-5 py-2.5 text-[13px] font-semibold text-white transition hover:brightness-110"
-          >
-            {t`Pay on lava.top`}
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-          </a>
-          {viewerId ? <LavaClaim /> : null}
+          {viewerId ? (
+            <>
+              <LavaPay viewerId={viewerId} />
+              <LavaClaim />
+            </>
+          ) : (
+            <>
+              <p className="max-w-[300px] text-[12.5px] text-osu-f1">{t`Sign in first so it counts toward your account.`}</p>
+              <a
+                href={lavaUrl(viewerId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => track("support_lava_open")}
+                className="inline-flex items-center gap-1.5 rounded-full bg-osu-pink px-5 py-2.5 text-[13px] font-semibold text-white transition hover:brightness-110"
+              >
+                {t`Pay on lava.top`}
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            </>
+          )}
         </div>
       ) : null}
       {method === "google" ? <GoogleContribution viewerId={viewerId} /> : null}

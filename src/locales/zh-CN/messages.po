@@ -2733,6 +2733,10 @@ msgstr "全球 <0>#{global}</0>"
 msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
 msgstr "<0>+pp</0> 是你达到目标分数后的预计收益，已按你当前的最佳成绩加权。"
 
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "<0>$4</0><1>a month</1>"
+#~ msgstr "<0>$4</0><1>每月</1>"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "<0>4K LN</0> goes through that same analyser's LN table, with a small model of our own filling in the easy charts that sit below where the table starts."
 #~ msgstr "<0>4K LN</0> 走的是同一个分析器的 LN 表，表的起点以下那些简单谱面由我们自己的一个小模型补上。"
@@ -2841,6 +2845,10 @@ msgstr "▶ 观看"
 #: src/components/supporter/SupportPlans.tsx
 msgid "$4 a month"
 msgstr "每月 $4"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "$4 a month, with a burning rank and extra gift codes."
+#~ msgstr "每月 $4，段位燃起火焰，还有额外的兑换码。"
 
 #: src/routes/support.tsx
 msgid "$4 buys a month of supporter, and every tip adds more time."
@@ -3431,6 +3439,10 @@ msgstr "站在你个人资料数据旁的小伙伴。从列表里挑一个，或
 #: src/routes/hashi.tsx
 msgid "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
 msgstr "Hashi 中一局已完成游玩的分析，被做成在 osu! 中打开的练习谱面"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "A flame on your gem while your subscription renews."
+msgstr "订阅续期期间，你的宝石会燃起火焰。"
 
 #: src/lib/pack-run.ts
 msgid "A fourth charm slot"
@@ -4519,8 +4531,8 @@ msgid "An external application"
 msgstr "一个外部应用"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "An extra gift code for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
-msgstr "除了每 $4 送的兑换码，每满三个月还会额外送你一个兑换码给朋友。预存超过 3 个月的时长会转换成更多兑换码，不会继续累积。"
+#~ msgid "An extra gift code for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
+#~ msgstr "除了每 $4 送的兑换码，每满三个月还会额外送你一个兑换码给朋友。预存超过 3 个月的时长会转换成更多兑换码，不会继续累积。"
 
 #: src/components/supporter/SupportPlans.tsx
 #~ msgid "An extra gift code for a friend every third month, on top of the one every $5 brings. Time past 3 months ahead turns into more codes instead of piling up."
@@ -4663,6 +4675,14 @@ msgstr "任意金额都按天折算，并累加到你剩余的时长上：$4 等
 #: src/routes/support.tsx
 msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
 msgstr "任何金额都可以，按天折算。每次打赏都会加到你剩余的时长上。"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Any amount. $4 is a month, $40 a full year."
+#~ msgstr "金额随意。$4 是一个月，$40 是一整年。"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Any amount. $4 is a month, $40 a full year. No flame, no extra gift codes."
+#~ msgstr "金额随意。$4 是一个月，$40 是一整年。没有火焰，也没有额外的兑换码。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Any card"
@@ -4932,8 +4952,8 @@ msgstr "素材"
 #~ msgstr "每月 $10 或以上，你的段位提示会标注你为赞助人，让大家知道你多出了一份力。"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "At $10 a month or more, your rank's tooltip says Gold supporter."
-msgstr "每月 $10 或以上，你的段位提示会显示「金牌支持者」。"
+#~ msgid "At $10 a month or more, your rank's tooltip says Gold supporter."
+#~ msgstr "每月 $10 或以上，你的段位提示会显示「金牌支持者」。"
 
 #: src/components/supporter/SupportPlans.tsx
 #~ msgid "At $10 a month or more, your rank's tooltip says Patron."
@@ -10043,8 +10063,16 @@ msgstr "全部数据"
 #~ msgstr "上面每一步都是本站在猜。通过一个段位课题不是猜：有一条及格线，而你过了。所以只要本站看到这么一次，你在那一侧的估算<0>就不会低于你通过的那个课题</0>，不管技能平均下来是多少。打过 EXTRA-EPSILON，你就读作 epsilon，哪怕你的技能平均下来只到 delta。"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Every supporter look, for as long as it renews."
-msgstr "订阅续期期间，所有支持者外观任你使用。"
+msgid "Every supporter look"
+msgstr "全部支持者外观"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Every supporter look, and a rank that keeps climbing."
+#~ msgstr "全部支持者外观，还有不断上升的段位。"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Every supporter look, for as long as it renews."
+#~ msgstr "订阅续期期间，所有支持者外观任你使用。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Every tier"
@@ -10196,6 +10224,10 @@ msgstr "外部应用"
 #: src/components/packs/GamePacks.tsx
 msgid "Extra"
 msgstr "额外"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Extra gift codes"
+msgstr "额外的兑换码"
 
 #: src/lib/pack-run.ts
 msgid "Extra Key"
@@ -11066,6 +11098,10 @@ msgstr "帧"
 msgid "Frames"
 msgstr "头像框"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Frames, themes, name styles and card looks, for as long as it renews."
+msgstr "头像框、主题、名字样式和卡牌外观，订阅续期期间一直可用。"
+
 #: src/components/packs/run/RunShop.tsx
 #: src/routes/packs.tsx
 msgid "free"
@@ -11387,6 +11423,10 @@ msgstr "给它起个名字。"
 msgid "Give the collection a title."
 msgstr "给收藏夹起个标题。"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Give the email you'll pay with, then pay on lava.top. The payment finds your account by that email, so your supporter time reaches it on its own."
+msgstr "填写你将用来付款的邮箱，然后在 lava.top 付款。付款会通过这个邮箱找到你的账号，支持者时长会自动记到你的账号上。"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "Give the folder a name."
 #~ msgstr "给文件夹起个名字。"
@@ -11569,6 +11609,7 @@ msgid "Gold sketch crown"
 msgstr "金色手绘王冠"
 
 #: src/components/supporter/SupporterRankBadge.tsx
+#: src/components/supporter/SupportPlans.tsx
 msgid "Gold supporter"
 msgstr "金牌支持者"
 
@@ -12568,8 +12609,16 @@ msgid "If you have the map, drop its .osz here and the replay plays from your co
 msgstr "如果你本地有这张谱面，把它的 .osz 拖进来，回放就用你的副本播放。"
 
 #: src/routes/privacy.tsx
-msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
-msgstr "如果你通过 Ko-fi、Google 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及你邮箱地址的加密形式（绝不是地址本身），用于识别重复付款或退款。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
+msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgstr "如果你通过 Ko-fi、Google 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
+
+#: src/routes/privacy.tsx
+#~ msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same scrambled way, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+#~ msgstr "如果你通过 Ko-fi、Google 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及你邮箱地址的加密形式（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也以同样的加密形式保存，只用于把那笔付款关联到你的账号。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
+
+#: src/routes/privacy.tsx
+#~ msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+#~ msgstr "如果你通过 Ko-fi、Google 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及你邮箱地址的加密形式（绝不是地址本身），用于识别重复付款或退款。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
 
 #: src/routes/privacy.tsx
 msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -12788,6 +12837,10 @@ msgstr "在这一格"
 #: src/components/packs/album/AlbumView.tsx
 msgid "In your collection."
 msgstr "已在你的收藏册中。"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "In your rank's tooltip, at $10 a month or more."
+msgstr "每月 $10 或以上时，显示在你的段位提示里。"
 
 #: src/routes/skins.tsx
 msgid "includes"
@@ -13666,8 +13719,12 @@ msgid "Lava lamp"
 msgstr "熔岩灯"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "lava.top opens in a new tab to pay."
-msgstr "lava.top 会在新标签页中打开以完成支付。"
+msgid "lava.top asks for your email when you pay. Type the same one here, so the payment reaches your account."
+msgstr "lava.top 会在付款时要求填写邮箱。在这里填写同一个邮箱，付款就会记到你的账号上。"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "lava.top opens in a new tab to pay."
+#~ msgstr "lava.top 会在新标签页中打开以完成支付。"
 
 #: src/components/supporter/SupportCheckout.tsx
 #~ msgid "lava.top opens in a new tab, where you pick the amount."
@@ -17760,9 +17817,17 @@ msgstr "送一份给朋友，你还保留 {remaining} 份。"
 #~ msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 #~ msgstr "一个段位的跨度很大，所以每个段位又分成五档。一张谱面可以是 7--、7-、7、7+ 或 7++，从 7 段最简单的一端排到最难的一端。这些后缀只是段位内部的排序，没有别的意思。"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "One for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
+msgstr "除了每 $4 送的兑换码，每满三个月还会额外送一个给朋友。预存超过 3 个月的时长会转换成更多兑换码，不会继续累积。"
+
 #: src/lib/pack-run.ts
 msgid "One free reroll per shop"
 msgstr "每次商店免费刷新一次"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "One gem up for every month in a row. If it lapses, it starts again at Amber."
+msgstr "每连续一个月升一级宝石。一旦中断，会从 Amber 重新开始。"
 
 #: src/lib/pack-run.ts
 msgid "One more charm slot until this stage ends, when any charm past your slots is sold."
@@ -17812,6 +17877,10 @@ msgstr "在线"
 #: src/routes/player/$username.tsx
 msgid "Online"
 msgstr "在线"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Only a scrambled form of it is kept, never the address itself."
+#~ msgstr "只会保存它的加密形式，绝不保存地址本身。"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "only admins see this"
@@ -18192,16 +18261,24 @@ msgid "or"
 msgstr "或"
 
 #: src/routes/support.tsx
+msgid "Or <0>create a theme of your own</0>, or wear one another player shared."
+msgstr "也可以<0>自己创建一个主题</0>，或使用其他玩家分享的主题。"
+
+#: src/routes/support.tsx
 msgid "Or <0>draw a frame of your own</0> and submit it for everyone to wear."
 msgstr "也可以<0>自己画一个头像框</0>并提交，供所有人使用。"
 
 #: src/routes/support.tsx
-msgid "Or <0>write a theme of your own</0>, or wear one another player shared."
-msgstr "也可以<0>自己写一个主题</0>，或使用其他玩家分享的主题。"
+#~ msgid "Or <0>write a theme of your own</0>, or wear one another player shared."
+#~ msgstr "也可以<0>自己写一个主题</0>，或使用其他玩家分享的主题。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "or paste a Shadertoy shader as it is"
 msgstr "或直接粘贴 Shadertoy 着色器"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Or pay once"
+#~ msgstr "或者一次性支付"
 
 #: src/components/supporter/SupportCheckout.tsx
 #~ msgid "Or pay with Google. Sign in first so it counts toward your account."
@@ -18840,8 +18917,8 @@ msgid "Pay on lava.top"
 msgstr "在 lava.top 支付"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Pay on lava.top. The link carries your account, so your supporter time reaches it on its own."
-msgstr "在 lava.top 支付。链接带有你的账号，支持者时长会自动记到你的账号上。"
+#~ msgid "Pay on lava.top. The link carries your account, so your supporter time reaches it on its own."
+#~ msgstr "在 lava.top 支付。链接带有你的账号，支持者时长会自动记到你的账号上。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Pay with Google here. Your supporter time starts as soon as the payment goes through."
@@ -20302,6 +20379,10 @@ msgstr "卡片评级由 {0} 最佳 mania 成绩决定：以 pp 排名为主，�
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Rank is set by the cards of the team's strongest members."
 msgstr "卡片评级由战队中最强成员的卡片决定。"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Rank on fire"
+msgstr "燃烧的段位"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Rank trajectory"
@@ -22598,6 +22679,10 @@ msgstr "查看全部 {0} 个"
 #~ msgid "See the board as a globe"
 #~ msgstr "以地球仪查看展板"
 
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "See the days"
+#~ msgstr "查看天数"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See the score"
 msgstr "查看这次成绩"
@@ -22613,6 +22698,10 @@ msgstr "看看这个成绩按 {otherLabel} 的判定区间和长条规则会是�
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "See this run"
 msgstr "查看这局"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "See what it gets"
+#~ msgstr "查看包含内容"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See which plays are waiting"
@@ -23568,12 +23657,16 @@ msgid "Sign in first so it counts toward your account."
 msgstr "请先登录，这样才会记到你的账号上。"
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
+msgstr "先登录，再填写你将用来付款的邮箱并在 lava.top 付款，这样支持者时长就会记到你的账号上。"
+
+#: src/components/supporter/SupportCheckout.tsx
 #~ msgid "Sign in first, then open lava.top: the link carries your account, so your supporter time reaches it."
 #~ msgstr "请先登录，再打开 lava.top：链接带有你的账号，支持者时长会记到你的账号上。"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Sign in first, then pay on lava.top: the link carries your account, so your supporter time reaches it."
-msgstr "请先登录，再在 lava.top 支付：链接带有你的账号，支持者时长会记到你的账号上。"
+#~ msgid "Sign in first, then pay on lava.top: the link carries your account, so your supporter time reaches it."
+#~ msgstr "请先登录，再在 lava.top 支付：链接带有你的账号，支持者时长会记到你的账号上。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then pay with Google here, so your supporter time reaches your account."
@@ -26454,6 +26547,14 @@ msgstr "现在无法读取卡池。请稍后再试。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The editor already holds {0}"
 msgstr "编辑器里已经是 {0} 了"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "The email itself is never saved, only a code made from it to match the payment."
+msgstr "邮箱本身绝不会被保存，只保存由它生成的一串代码，用来找到这笔付款。"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "The email you'll pay with, so the payment finds your account"
+#~ msgstr "你将用来付款的邮箱，这样付款能找到你的账号"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. 6K stops at 9th, and its LN ladder carries on through Terra, Celestial, Mystery, Nihility and Finish."
@@ -30926,12 +31027,12 @@ msgid "Your profile's Skills tab opens on the keymode with the most rated plays.
 msgstr "你的个人资料「技能」页默认显示有评分成绩最多的键数。"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Your rank burns with a flame while your subscription renews."
-msgstr "订阅续期期间，你的段位会燃起火焰。"
+#~ msgid "Your rank burns with a flame while your subscription renews."
+#~ msgstr "订阅续期期间，你的段位会燃起火焰。"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."
-msgstr "每连续一个月，你的段位就升一级宝石，一直升到镭射。一旦中断，会从琥珀重新开始。"
+#~ msgid "Your rank climbs a gem for every month in a row, all the way to Holo. If it lapses, it starts again at Amber."
+#~ msgstr "每连续一个月，你的段位就升一级宝石，一直升到镭射。一旦中断，会从琥珀重新开始。"
 
 #: src/routes/recommendations.tsx
 msgid "your rating"
