@@ -11614,8 +11614,8 @@ msgid "Golden hour"
 msgstr "Hora dorada"
 
 #: src/routes/clip.$id.tsx
-msgid "Gone in {hoursLeft}h"
-msgstr "Desaparece en {hoursLeft} h"
+#~ msgid "Gone in {hoursLeft}h"
+#~ msgstr "Desaparece en {hoursLeft} h"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Google Pay"
@@ -27448,6 +27448,10 @@ msgstr "Este navegador no puede guardar el archivo de video."
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "This browser has no WebGL2, so the preview can't run here."
 msgstr "Este navegador no tiene WebGL2, así que la vista previa no puede funcionar aquí."
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "This browser wouldn't save to the file you picked, so the video is a download instead."
+msgstr "Este navegador no dejó guardar en el archivo que elegiste, así que el video queda como descarga."
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "This can't be undone."

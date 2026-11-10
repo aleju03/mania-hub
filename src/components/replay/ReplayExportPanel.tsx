@@ -138,6 +138,9 @@ export function ReplayExportPanel() {
                 {job.warnings.includes("audio-decode-skipped") && (
                   <div className="text-osu-yellow">{t`Some hitsound samples couldn't be decoded and were left out.`}</div>
                 )}
+                {job.warnings.includes("file-save-fallback") && (
+                  <div className="text-osu-yellow">{t`This browser wouldn't save to the file you picked, so the video is a download instead.`}</div>
+                )}
                 {job.warnings.includes("container-fallback") && (
                   <div className="text-osu-yellow">{t`MP4 isn't available here, so the file is WebM.`}</div>
                 )}

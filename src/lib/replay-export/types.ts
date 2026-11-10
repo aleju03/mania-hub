@@ -39,7 +39,10 @@ export const ACTIVE_EXPORT_PHASES: ReadonlySet<ReplayExportPhase> = new Set<Repl
 export type ReplayExportWarningCode =
   | "audio-decode-skipped"
   | "hidden-while-exporting"
-  | "container-fallback";
+  | "container-fallback"
+  /* The picked file could not be written, so the video was built in memory
+     and is offered as a download instead (runners/local.ts). */
+  | "file-save-fallback";
 
 /**
  * What the UI subscribes to. Deliberately free of Blobs, handles, renderers,

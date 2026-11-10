@@ -7,7 +7,6 @@ import { UsernameText } from "../components/ui/UsernameText";
 import { getI18n } from "../lib/i18n";
 import { absoluteUrl, pageSeo } from "../lib/seo";
 import { getSharedClip, sharedClipMediaPath, sharedClipPath, SHARED_CLIP_TTL_HOURS } from "../lib/shared-clips";
-import { useHydrated } from "../lib/use-hydrated";
 
 /* A supporter's shared replay clip (lib/shared-clips.ts). The page carries
    og:video tags, so a link pasted in Discord plays the clip inline; opened
@@ -63,7 +62,6 @@ export const Route = createFileRoute("/clip/$id")({
 function ClipPage() {
   const { t } = useLingui();
   const lookup = Route.useLoaderData();
-  const hydrated = useHydrated();
 
   if (lookup.state !== "ready") {
     return (
@@ -82,7 +80,6 @@ function ClipPage() {
   }
 
   const { clip } = lookup;
-  const hoursLeft = Math.max(1, Math.ceil((clip.expiresAt - Date.now()) / 3_600_000));
   return (
     <div className="flex-1 bg-osu-b5">
       <PageHeader iconSrc="/images/icons/supporter-heart.svg" title={t`clip`} />
@@ -107,7 +104,6 @@ function ClipPage() {
                   <UsernameText username={clip.ownerUsername} userId={clip.ownerUserId} className="font-semibold" />
                 </Link>
               </Trans>
-              {hydrated && <span className="ml-2 border-l border-osu-b3/60 pl-2">{t`Gone in ${hoursLeft}h`}</span>}
             </div>
           </div>
           {clip.replayPath && (

@@ -11626,8 +11626,8 @@ msgid "Golden hour"
 msgstr "黄金时刻"
 
 #: src/routes/clip.$id.tsx
-msgid "Gone in {hoursLeft}h"
-msgstr "{hoursLeft} 小时后删除"
+#~ msgid "Gone in {hoursLeft}h"
+#~ msgstr "{hoursLeft} 小时后删除"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Google Pay"
@@ -27460,6 +27460,10 @@ msgstr "此浏览器无法保存视频文件。"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "This browser has no WebGL2, so the preview can't run here."
 msgstr "这个浏览器不支持 WebGL2，无法在这里运行预览。"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "This browser wouldn't save to the file you picked, so the video is a download instead."
+msgstr "这个浏览器无法保存到你选择的文件，所以视频改为下载。"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "This can't be undone."
