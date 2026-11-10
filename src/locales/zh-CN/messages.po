@@ -16881,6 +16881,12 @@ msgstr "还没有服务器"
 msgid "No sets found."
 msgstr "未找到卡组。"
 
+#: src/components/supporter/SupporterExtras.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine."
+msgstr "不得包含色情或血腥内容、仇恨言论，以及政治或宗教信息。单独使用国家旗帜没问题。"
+
 #: src/components/team/TeamProfilePage.tsx
 msgid "No skill ratings for this team's members yet."
 msgstr "这个战队的成员还没有技能评分。"
@@ -27562,6 +27568,10 @@ msgstr "这个连接请求已经处理过了。"
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "这个国家/地区的加入名额已满。请稍后再来。"
+
+#: src/routes/terms.tsx
+msgid "This covers themes, avatar frames, companions and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
+msgstr "这适用于主题、头像框、小伙伴以及所有图片。它们都不得包含色情或血腥内容、仇恨或骚扰，以及政治或宗教信息，例如口号、政党或运动的标志，或战争与冲突的画面。单独使用国家旗帜没问题。"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."

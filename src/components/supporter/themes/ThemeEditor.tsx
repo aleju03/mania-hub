@@ -1510,6 +1510,7 @@ function SaveDialog({ name, onName, visibility, onVisibility, credits, onCredits
                 I understand I'm responsible for what I put in my themes, and that one breaking the{" "}
                 <Link to="/terms" className="text-osu-f1 underline underline-offset-2 hover:text-white">Terms</Link> can be taken down.
               </Trans>
+              <span className="mt-1 block text-osu-f1">{t`No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine.`}</span>
             </span>
           </div>
           {issues.length ? (

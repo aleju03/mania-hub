@@ -325,6 +325,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
               <p className="text-[12px] leading-snug text-osu-f1">
                 {t`A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it.`}
               </p>
+              <p className="mt-1 text-[12px] leading-snug text-osu-f1">{t`No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine.`}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <label className="cursor-pointer rounded-lg bg-osu-b4 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-osu-b3">
                   {draftFile ? draftFile.name : t`Choose a file`}

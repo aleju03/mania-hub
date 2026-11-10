@@ -16912,6 +16912,12 @@ msgstr "No servers yet"
 msgid "No sets found."
 msgstr "No sets found."
 
+#: src/components/supporter/SupporterExtras.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine."
+msgstr "No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine."
+
 #: src/components/team/TeamProfilePage.tsx
 msgid "No skill ratings for this team's members yet."
 msgstr "No skill ratings for this team's members yet."
@@ -27609,6 +27615,10 @@ msgstr "This connection request has already been answered."
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "This country's opt-in list is full right now. Check back later."
+
+#: src/routes/terms.tsx
+msgid "This covers themes, avatar frames, companions and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
+msgstr "This covers themes, avatar frames, companions and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."

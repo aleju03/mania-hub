@@ -31,6 +31,16 @@ export function SupporterRankIcon({ rank, className }: { rank: SupporterRankDef;
   );
 }
 
+/* The supporter mark in the text colour: the hexagon outlined, the heart filled. */
+export function SupporterMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="-3 -3 106 106" fill="none" className={className} aria-hidden="true">
+      <path d={HEX} stroke="currentColor" strokeWidth="7" />
+      <path d={HEART} fill="currentColor" />
+    </svg>
+  );
+}
+
 /* The rank gem, burning when a monthly subscription keeps it renewing
    (lib/rank-fire.ts): the fire canvas sits behind the gem, the licks over its
    face are screened on top. Still under reduced motion, and while the page

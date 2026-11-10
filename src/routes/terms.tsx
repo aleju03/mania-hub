@@ -97,6 +97,14 @@ function TermsPage() {
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
+            This covers themes, avatar frames, companions and every image. None of them may carry
+            sexual or graphic content, hate or harassment, or political or religious messaging, such
+            as slogans, symbols of parties or movements, or imagery of wars and conflicts. A
+            country's flag on its own is fine.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
             To report a theme, use Report under the profile wearing it. A theme or image that infringes someone's rights or breaks these terms is taken
             down, and a supporter who keeps uploading such content loses the ability to make
             themes.

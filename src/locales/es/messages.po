@@ -16869,6 +16869,12 @@ msgstr "Aún no hay servidores"
 msgid "No sets found."
 msgstr "No se encontraron conjuntos."
 
+#: src/components/supporter/SupporterExtras.tsx
+#: src/components/supporter/themes/ThemeEditor.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "No sexual or graphic content, hate, or political or religious messaging. A country's flag on its own is fine."
+msgstr "Nada de contenido sexual o gráfico, odio, ni mensajes políticos o religiosos. La bandera de un país por sí sola está bien."
+
 #: src/components/team/TeamProfilePage.tsx
 msgid "No skill ratings for this team's members yet."
 msgstr "Todavía no hay ratings de skills para los miembros de este equipo."
@@ -27550,6 +27556,10 @@ msgstr "Esta solicitud de conexión ya fue respondida."
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "La lista de este país está llena por ahora. Vuelve más tarde."
+
+#: src/routes/terms.tsx
+msgid "This covers themes, avatar frames, companions and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
+msgstr "Esto aplica a temas, marcos de avatar, compañeros y cualquier imagen. Ninguno puede tener contenido sexual o gráfico, odio o acoso, ni mensajes políticos o religiosos, como eslóganes, símbolos de partidos o movimientos, o imágenes de guerras y conflictos. La bandera de un país por sí sola está bien."
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."

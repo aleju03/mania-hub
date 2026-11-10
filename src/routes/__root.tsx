@@ -1,6 +1,5 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Coffee } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { ChangelogModal } from "../components/layout/ChangelogModal";
@@ -12,6 +11,7 @@ import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { StaleBuildNotice } from "../components/layout/StaleBuildNotice";
 import { GoalToasts } from "../components/me/GoalToasts";
 import { SupporterWelcome } from "../components/supporter/SupporterWelcome";
+import { SupporterMark } from "../components/supporter/SupporterRankBadge";
 import { TrackingToasts } from "../components/me/TrackingToasts";
 import { ReplayExportPanel } from "../components/replay/ReplayExportPanel";
 import { AuthContext } from "../lib/auth-context";
@@ -536,7 +536,7 @@ function SupportFooterLink() {
       onClick={() => track("support_page_open")}
       className="inline-flex items-center gap-1 rounded-full border border-osu-pink/25 bg-osu-pink/10 px-2 py-0.5 text-[10px] font-semibold text-osu-pink-light/80 hover:bg-osu-pink/20 hover:text-osu-pink-light transition-colors"
     >
-      <Coffee className="h-3 w-3" />
+      <SupporterMark className="h-3 w-3" />
       {i._(msg`support`)}
     </Link>
   );
