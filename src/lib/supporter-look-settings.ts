@@ -619,9 +619,6 @@ export const claimGoogleContribution = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ expiresAt: number | null }> => {
     const viewer = await requireViewer();
     if (!viewer) throw new Error("Log in first.");
-    // admins only, as the checkout is (SupportCheckout.tsx), until a real payment has gone through it
-    const { requireTrueAdminAccess } = await import("./auth-server");
-    await requireTrueAdminAccess("Google contributions");
     const response = await fetch(`${viewer.base}/api/supporters/self/google-claim`, {
       method: "POST",
       headers: bridgeAuthHeaders(true),
