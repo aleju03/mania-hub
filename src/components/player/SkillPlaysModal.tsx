@@ -17,7 +17,7 @@ import { msdSkillsetMeta } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { ModBadge } from "../ui/ModBadge";
 import { MapDetailModal } from "../maps/MapDetailModal";
-import { ReplayCoverLink } from "../ui/ReplayCoverLink";
+import { ReplayChip } from "../ui/ReplayChip";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
 
@@ -444,16 +444,13 @@ function SkillPlayRow({
       className: "max-sm:hidden",
     });
   }
-  // The replay link sits over the cover, beside the row's button rather than
-  // inside it: left offsets are the button padding + position + gap.
   return (
-    <div className="group relative flex w-full min-w-0 items-center gap-2 border-t border-white/[0.07] pr-2 transition-colors first:border-t-0 hover:bg-osu-b4 sm:gap-3 sm:pr-3">
     <button
       type="button"
       onClick={onOpen}
       onPointerEnter={onPrefetch}
       onFocus={onPrefetch}
-      className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-2.5 pl-2 text-left sm:gap-4 sm:pl-3"
+      className="group flex w-full min-w-0 cursor-pointer items-center gap-3 border-t border-white/[0.07] px-2 py-2.5 text-left transition-colors first:border-t-0 hover:bg-osu-b4 sm:gap-4 sm:px-3"
       title={t`View map details`}
     >
       <span className="w-5 shrink-0 text-right text-[12px] tabular-nums text-osu-f1">{position}</span>
@@ -475,6 +472,9 @@ function SkillPlayRow({
             <span className="ml-1.5 text-[11px] font-normal text-osu-f1">[{play.version}]</span>
           </span>
           <span className="flex shrink-0 items-center"><PlayModBadges play={play} size={0.75} /></span>
+          {play.scoreId != null && play.score?.hasReplay === true ? (
+            <ReplayChip scoreId={play.scoreId} beatmapsetId={play.beatmapsetId} className="shrink-0 text-[10px]" />
+          ) : null}
         </div>
         <div className="mt-1 flex min-w-0 items-center text-[11px] text-osu-f1">
           {meta.map((item, index) => (
@@ -499,14 +499,6 @@ function SkillPlayRow({
         {play.rating.toFixed(2)}
       </span>
     </button>
-    {play.scoreId != null && play.score?.hasReplay === true ? (
-      <ReplayCoverLink
-        scoreId={play.scoreId}
-        beatmapsetId={play.beatmapsetId}
-        className="left-10 h-10 w-16 sm:left-12 sm:h-11 sm:w-[4.5rem]"
-      />
-    ) : null}
-    </div>
   );
 }
 

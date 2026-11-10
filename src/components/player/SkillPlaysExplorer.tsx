@@ -57,7 +57,7 @@ import {
 import { getManiaGradeFromAccuracy } from "#/lib/score";
 import { MapDetailModal, accuracyCurrencyLabel, type MapDetailPlayContext } from "#/components/maps/MapDetailModal";
 import { DanMark } from "./DanMark";
-import { ReplayCoverLink } from "#/components/ui/ReplayCoverLink";
+import { ReplayChip } from "#/components/ui/ReplayChip";
 import {
   SKILL_PLAYS_RATE_CAPS,
   readSkillPlaysPrefs,
@@ -1919,7 +1919,7 @@ function PlayRow({
         dimmed ? "opacity-60" : ""
       }`}
     >
-    <div className="relative flex min-w-0 items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3">
+    <div className="flex min-w-0 items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3">
     <button
       type="button"
       onClick={onOpen}
@@ -1956,6 +1956,7 @@ function PlayRow({
             <span className={`rounded px-1 py-0.5 font-bold ${status.className}`}>{i18n._(status.label)}</span>
           ) : null}
           <PlayModBadges play={play} />
+          {playHasReplay(play) ? <ReplayChip scoreId={play.scoreId!} beatmapsetId={play.beatmapsetId} /> : null}
           {play.playedAt ? (
             <span className="hidden sm:inline" title={formatTimeAgoTooltip(play.playedAt, locale)}>
               {formatTimeAgo(play.playedAt, locale)}
@@ -1979,14 +1980,6 @@ function PlayRow({
       </div>
     </button>
     {trailing}
-    {/* Over the cover: left offsets are the row padding + position + gap. */}
-    {playHasReplay(play) ? (
-      <ReplayCoverLink
-        scoreId={play.scoreId!}
-        beatmapsetId={play.beatmapsetId}
-        className="left-10 h-10 w-16 sm:left-13 sm:h-12 sm:w-20"
-      />
-    ) : null}
     </div>
     {footer}
     </div>

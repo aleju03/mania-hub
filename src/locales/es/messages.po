@@ -15727,6 +15727,7 @@ msgstr "Reemplaza el cursor del mouse por uno estilo osu! en todo el sitio. Solo
 
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayCoverFallback.tsx
+#: src/components/ui/ReplayChip.tsx
 msgid "Replay"
 msgstr "Replay"
 
@@ -21828,7 +21829,7 @@ msgstr "Mira replays de osu!mania en tu navegador."
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/StableResultsScreen.tsx
-#: src/components/ui/ReplayCoverLink.tsx
+#: src/components/ui/ReplayChip.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx

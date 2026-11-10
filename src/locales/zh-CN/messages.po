@@ -15739,6 +15739,7 @@ msgstr "在全站将鼠标光标替换为 osu! 风格光标。仅桌面端。"
 
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayCoverFallback.tsx
+#: src/components/ui/ReplayChip.tsx
 msgid "Replay"
 msgstr "回放"
 
@@ -21840,7 +21841,7 @@ msgstr "在浏览器中观看 osu!mania 回放。"
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/StableResultsScreen.tsx
-#: src/components/ui/ReplayCoverLink.tsx
+#: src/components/ui/ReplayChip.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
