@@ -21,7 +21,7 @@ import { formatGiftCode } from "./GiftCodePanel";
 import { Stagger, StaggerItem, useLowEndDevice, useNearView } from "./SupportMotion";
 import { useAuth } from "../../lib/auth-context";
 import { isScrolling, queueGpuWork } from "../../lib/gpu-queue";
-import { fetchLivePackCardSnapshotDirect, fetchLiveSubmittedCompanions, fetchLiveSupporterProfileLook, type LivePackCardSnapshot } from "../../lib/live-backend";
+import { fetchLivePackCardSnapshotDirect, fetchLiveSubmittedCompanions, type LivePackCardSnapshot } from "../../lib/live-backend";
 import { BUILT_IN_COMPANIONS, type SupporterCompanion } from "../../lib/supporter-companions";
 import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_FOIL_LABELS, SUPPORTER_FOILS, type SupporterFoilId } from "../../lib/supporter-foils";
@@ -680,22 +680,11 @@ const SAMPLE_STATS: Required<ProfileStatsData> = {
 };
 const SAMPLE_SKILL = { label: "Jumpstream", color: "#6f87d8", value: 26.4, keyCount: 4, runnerUp: { label: "Stamina", value: 25.1 } };
 
+/* The eight cards on example numbers for everyone: a visitor's own would
+   cost a profile request per page view, for a preview. */
 export function StatsShowcase() {
   const { t } = useLingui();
-  const viewerId = useAuth().viewer?.id ?? null;
-  const [own, setOwn] = useState<ProfileStatsData | null>(null);
-  useEffect(() => {
-    if (!viewerId) return;
-    let alive = true;
-    void fetchLiveSupporterProfileLook(viewerId).then((look) => {
-      const data = look.profileStatsData;
-      if (alive && data.ratio && data.lnSplit && data.streak && data.percentile) setOwn(data);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [viewerId]);
-  const data = own ?? SAMPLE_STATS;
+  const data = SAMPLE_STATS;
   return (
     <div>
       <Stagger className="grid grid-cols-1 gap-px overflow-hidden rounded-xl sm:grid-cols-2 lg:grid-cols-4">
@@ -705,10 +694,10 @@ export function StatsShowcase() {
         <StaggerItem lift={false} className="grid"><PercentileCard percentile={data.percentile} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><SessionCard session={data.session} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><NotesCard notes={data.notes} /></StaggerItem>
-        <StaggerItem lift={false} className="grid"><SkillCard userId={own ? viewerId : null} sample={own ? undefined : SAMPLE_SKILL} /></StaggerItem>
+        <StaggerItem lift={false} className="grid"><SkillCard userId={null} sample={SAMPLE_SKILL} /></StaggerItem>
         <StaggerItem lift={false} className="grid"><HoursCard hours={data.hours} /></StaggerItem>
       </Stagger>
-      <p className="mt-2 text-[11px] text-osu-f1">{own ? t`Your numbers.` : t`Example numbers.`}</p>
+      <p className="mt-2 text-[11px] text-osu-f1">{t`Example numbers.`}</p>
     </div>
   );
 }

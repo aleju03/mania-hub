@@ -30935,8 +30935,8 @@ msgid "Your next pack is plain."
 msgstr "下一个卡包是普通卡包。"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Your numbers."
-msgstr "你的数据。"
+#~ msgid "Your numbers."
+#~ msgstr "你的数据。"
 
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Your official rating has not been computed yet, so the comparison below is incomplete."

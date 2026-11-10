@@ -30982,8 +30982,8 @@ msgid "Your next pack is plain."
 msgstr "Your next pack is plain."
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Your numbers."
-msgstr "Your numbers."
+#~ msgid "Your numbers."
+#~ msgstr "Your numbers."
 
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Your official rating has not been computed yet, so the comparison below is incomplete."
