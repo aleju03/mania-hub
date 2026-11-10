@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion, stagger, useAnimate, useReducedMotion } from "framer-motion";
 import { Bell, BellRing, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 
-import { UPDATES, WIP, type ChangelogUpdate } from "#/data/changelog";
+import { CELEBRATIONS, UPDATES, WIP, type ChangelogUpdate } from "#/data/changelog";
 import {
   changelogKind,
   formatReleaseAge,
@@ -18,6 +18,8 @@ import { useLocale } from "#/lib/locale-context";
 import type { AppLocale } from "#/lib/locale";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useAppStore, useChangelogNotify } from "#/store";
+
+const ChangelogCelebration = lazy(() => import("./ChangelogCelebration"));
 
 const DAYS = groupUpdatesByDay(UPDATES);
 const NEWEST_DATE = DAYS[0]?.date ?? "";
@@ -496,6 +498,11 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
             <div ref={detailRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-white/[0.07] px-5 pb-8 pt-5 md:px-8 md:pt-6">
               {current ? (
                 <>
+                  {CELEBRATIONS[current.date] && !needle ? (
+                    <Suspense fallback={<div className="mb-6 h-24 sm:h-32" />}>
+                      <ChangelogCelebration celebration={CELEBRATIONS[current.date]} />
+                    </Suspense>
+                  ) : null}
                   <div className="flex items-baseline gap-2 text-[12px] text-osu-f1">
                     <span suppressHydrationWarning>{formatReleaseAge(current.date, Date.now(), locale)}</span>
                     {current.date === NEWEST_DATE ? (
@@ -536,7 +543,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                                 {update.more?.map((part) => (
                                   <div key={part.text}>
                                     <p className="py-1.5 text-[14.5px] leading-relaxed text-osu-c2/90">{part.text}</p>
-                                    {picture(part.image)}
+                                    {part.image ? picture(part.image) : null}
                                   </div>
                                 ))}
                               </>

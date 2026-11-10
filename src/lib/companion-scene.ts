@@ -127,7 +127,10 @@ export interface CompanionScene {
   dispose(): void;
 }
 
-export function mountCompanionScene(host: HTMLElement, url: string, { facing: initialFacing = 0, matte = false, onReady }: { facing?: number; matte?: boolean; onReady?: () => void } = {}): CompanionScene {
+/* `spin` turns the model on its own, in radians a second, back to after a drag
+   like the front it otherwise settles to; reduced motion keeps it still. The
+   turn runs on the page's clock, so two models with the same spin turn in step. */
+export function mountCompanionScene(host: HTMLElement, url: string, { facing: initialFacing = 0, matte = false, spin = 0, onReady }: { facing?: number; matte?: boolean; spin?: number; onReady?: () => void } = {}): CompanionScene {
   const renderer = new WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
   // Drawn at twice the screen's density (up to 3) and scaled down by the
   // browser, like the list stills: at a companion's size a scan's packed UV
@@ -182,6 +185,7 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
   let dragging: { id: number; x: number; at: number } | null = null;
   let releasedAt = -1e9;
   const start = performance.now();
+  const spinAt = (now: number) => (still ? 0 : (spin * now) / 1000);
 
   const resize = () => {
     const width = host.clientWidth, height = host.clientHeight;
@@ -198,8 +202,8 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
       velocity *= 0.93;
       // after a moment at rest it turns back to face front, swaying a little
       const settle = Math.min(1, Math.max(0, (now - releasedAt - 1400) / 1600));
-      const sway = still ? 0 : Math.sin((now - start) / 1700) * IDLE_SWAY;
-      const home = facing + sway;
+      const sway = still || spin ? 0 : Math.sin((now - start) / 1700) * IDLE_SWAY;
+      const home = facing + sway + spinAt(now);
       // the nearest turn that faces front, so it never unwinds whole spins
       const target = home + Math.round((yaw - home) / (Math.PI * 2)) * Math.PI * 2;
       if (Math.abs(velocity) < 0.002) yaw += (target - yaw) * 0.05 * settle;
@@ -268,7 +272,7 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
       motion = companionMotion(loaded);
       turntable.add(loaded);
       facing = nextFacing;
-      yaw = nextFacing;
+      yaw = nextFacing + spinAt(performance.now());
       velocity = 0;
       onShow?.();
       resize();

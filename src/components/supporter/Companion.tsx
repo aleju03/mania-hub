@@ -12,11 +12,11 @@ import { TungTungSahurKeycap } from "../player/TungTungSahurKeycap";
    pressable drawing, a model in a small 3D canvas that turns sideways when
    dragged, an image with a slow bob. Each fills the box it is given. */
 
-function ModelCompanion({ url, facing, matte, size = 1, label }: { url: string; facing?: number; matte?: boolean; size?: number; label: string }) {
+function ModelCompanion({ url, facing, matte, size = 1, spin, label }: { url: string; facing?: number; matte?: boolean; size?: number; spin?: number; label: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<CompanionScene | null>(null);
-  const modelRef = useRef({ url, facing, matte });
-  modelRef.current = { url, facing, matte };
+  const modelRef = useRef({ url, facing, matte, spin });
+  modelRef.current = { url, facing, matte, spin };
   const glSlot = useWebGlSlot(hostRef);
   // one canvas for as long as this stays a model; it waits for a quiet moment to start
   useEffect(() => {
@@ -28,8 +28,8 @@ function ModelCompanion({ url, facing, matte, size = 1, label }: { url: string; 
       if (cancelled) return;
       unqueue = queueGpuWork(() => {
         if (cancelled) return;
-        const { url: first, facing: turn, matte: flat } = modelRef.current;
-        sceneRef.current = mountCompanionScene(host, first, { facing: turn, matte: flat });
+        const { url: first, facing: turn, matte: flat, spin: turning } = modelRef.current;
+        sceneRef.current = mountCompanionScene(host, first, { facing: turn, matte: flat, spin: turning });
       });
     });
     return () => {
@@ -70,7 +70,8 @@ function ImageCompanion({ url, label }: { url: string; label: string }) {
   );
 }
 
-export function CompanionFigure({ companion }: { companion: SupporterCompanion }) {
+/** `spin` keeps a model turning on its own, in radians a second (negative turns it the other way). */
+export function CompanionFigure({ companion, spin }: { companion: SupporterCompanion; spin?: number }) {
   const { i18n } = useLingui();
   if ("builtIn" in companion) {
     const entry = companion.builtIn;
@@ -82,7 +83,7 @@ export function CompanionFigure({ companion }: { companion: SupporterCompanion }
         </div>
       );
     }
-    return <ModelCompanion url={entry.url!} facing={entry.facing} matte={entry.matte} size={entry.size} label={i18n._(entry.name)} />;
+    return <ModelCompanion url={entry.url!} facing={entry.facing} matte={entry.matte} size={entry.size} spin={spin} label={i18n._(entry.name)} />;
   }
   const entry = companion.submitted;
   return entry.kind === "model"
