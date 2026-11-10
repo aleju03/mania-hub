@@ -88,7 +88,7 @@ function ThemeGalleryPage() {
                   <p className="mt-0.5 flex items-center gap-2 text-[11.5px] text-osu-f1">
                     <span className="truncate">{t`by ${theme.author.username}`}</span>
                     <span aria-hidden className="h-3 w-px shrink-0 bg-white/15" />
-                    <span className="shrink-0">{theme.wearers === 1 ? t`1 wearing it` : t`${theme.wearers} wearing it`}</span>
+                    <span className="shrink-0">{theme.wearers === 1 ? t`1 using it` : t`${theme.wearers} using it`}</span>
                   </p>
                 </div>
               </button>
@@ -173,7 +173,7 @@ function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; 
           <div className="flex flex-wrap items-center gap-2">
             {supporter && theme ? (
               <button type="button" disabled={wearing} onClick={() => void wear()} className="h-9 cursor-pointer rounded-full bg-osu-pink px-4 text-[12.5px] font-semibold text-white transition hover:brightness-110 disabled:opacity-60">
-                {t`Wear it`}
+                {t`Use it`}
               </button>
             ) : null}
             {theme ? (
@@ -196,7 +196,7 @@ function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; 
             </button>
           </div>
           {!supporter && auth.viewer && theme ? (
-            <p className="w-full text-[11.5px] text-osu-f1">{t`Wearing a theme from the gallery is for supporters. Anyone can remix one to try it in the editor.`}</p>
+            <p className="w-full text-[11.5px] text-osu-f1">{t`Using a theme from the gallery is for supporters. Anyone can remix one to try it in the editor.`}</p>
           ) : null}
         </div>
       </div>

@@ -1092,8 +1092,15 @@ msgstr "{0} a favor · {1} en contra"
 #: src/routes/workshop.index.tsx
 #: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
-msgid "{0} wearing it"
+msgid "{0} using it"
 msgstr "{0} lo usan"
+
+#. placeholder {0}: theme.wearers
+#: src/routes/workshop.index.tsx
+#: src/routes/workshop.themes.gallery.tsx
+#: src/routes/workshop.themes.index.tsx
+#~ msgid "{0} wearing it"
+#~ msgstr "{0} lo usan"
 
 #. placeholder {0}: playerPeakMember.username
 #. placeholder {1}: formatDate(playerPeak.updated_at, "UTC", locale)
@@ -2905,8 +2912,14 @@ msgstr "1 velocidad por mapa"
 #: src/routes/workshop.index.tsx
 #: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
-msgid "1 wearing it"
+msgid "1 using it"
 msgstr "1 lo usa"
+
+#: src/routes/workshop.index.tsx
+#: src/routes/workshop.themes.gallery.tsx
+#: src/routes/workshop.themes.index.tsx
+#~ msgid "1 wearing it"
+#~ msgstr "1 lo usa"
 
 #: src/components/supporter/SupportDaysPreview.tsx
 msgid "1 year"
@@ -12860,6 +12873,10 @@ msgstr "En el menú principal"
 msgid "In this slot"
 msgstr "En este lugar"
 
+#: src/routes/workshop.themes.index.tsx
+msgid "In use"
+msgstr "En uso"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "In your collection."
 msgstr "En tu colección."
@@ -13069,16 +13086,24 @@ msgstr "Entra de una vez al selector de todos, con tu nombre."
 #~ msgstr "Entra a la galería apenas lo guardes, y cada vez que lo vuelvas a guardar se actualiza para todos los que lo usan."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "It goes into the gallery. Everyone wearing it gets what you publish, never your drafts."
+msgid "It goes into the gallery. Everyone using it gets what you publish, never your drafts."
 msgstr "Entra a la galería. Quienes lo usan ven lo que publiques, nunca tus borradores."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "It goes into the gallery. Everyone wearing it gets what you publish, never your drafts."
+#~ msgstr "Entra a la galería. Quienes lo usan ven lo que publiques, nunca tus borradores."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #~ msgid "It goes live as soon as it's saved."
 #~ msgstr "Se publica apenas se guarda."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "It goes on your profile whenever you wear it, and stays out of the gallery."
+msgid "It goes on your profile whenever you use it, and stays out of the gallery."
 msgstr "Aparece en tu perfil cuando lo usas, y no entra a la galería."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "It goes on your profile whenever you wear it, and stays out of the gallery."
+#~ msgstr "Aparece en tu perfil cuando lo usas, y no entra a la galería."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It is not a ranking either. Two players a step apart on the dan leaderboard are not meaningfully apart, and anyone who never farms accuracy will read lower than they play."
@@ -13093,8 +13118,12 @@ msgid "It leaves your list and your profile."
 msgstr "Sale de tu lista y de tu perfil."
 
 #: src/routes/workshop.themes.index.tsx
-msgid "It leaves your list, your profile and the gallery. Anyone already wearing it keeps it."
-msgstr "Sale de tu lista, de tu perfil y de la galería. Quien ya lo usa lo conserva."
+msgid "It leaves your list, your profile and the gallery. Anyone already using it keeps it."
+msgstr "Sale de tu lista, tu perfil y la galería. Quienes ya lo usan lo conservan."
+
+#: src/routes/workshop.themes.index.tsx
+#~ msgid "It leaves your list, your profile and the gallery. Anyone already wearing it keeps it."
+#~ msgstr "Sale de tu lista, de tu perfil y de la galería. Quien ya lo usa lo conserva."
 
 #: src/routes/skins_.$id.tsx
 msgid "It may have been removed by its uploader."
@@ -18043,8 +18072,12 @@ msgid "Only you can see this"
 msgstr "Solo tú puedes ver esto"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Only you can wear it."
+msgid "Only you can use it."
 msgstr "Solo tú puedes usarlo."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Only you can wear it."
+#~ msgstr "Solo tú puedes usarlo."
 
 #: src/routes/discord.tsx
 msgid "Only you see the bot's replies to your commands, unless you set hidden to false."
@@ -18532,12 +18565,20 @@ msgid "Other rules"
 msgstr "Otras reglas"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Other supporters can wear it and remix it."
+msgid "Other supporters can use it and remix it."
 msgstr "Otros supporters pueden usarlo y remixearlo."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Others can wear and remix it"
+#~ msgid "Other supporters can wear it and remix it."
+#~ msgstr "Otros supporters pueden usarlo y remixearlo."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Others can use and remix it"
 msgstr "Otros pueden usarlo y remixearlo"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Others can wear and remix it"
+#~ msgstr "Otros pueden usarlo y remixearlo"
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -20203,8 +20244,12 @@ msgid "Published, and in the gallery."
 msgstr "Publicado, y en la galería."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Published. Wear it from your themes."
+msgid "Published. Use it from your themes."
 msgstr "Publicado. Úsalo desde tus temas."
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Published. Wear it from your themes."
+#~ msgstr "Publicado. Úsalo desde tus temas."
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Publishing."
@@ -25051,6 +25096,10 @@ msgstr "Dejar de trackear"
 #~ msgid "Stop tracking your plays?"
 #~ msgstr "¿Dejar de trackear tus jugadas?"
 
+#: src/routes/workshop.themes.index.tsx
+msgid "Stop using"
+msgstr "Dejar de usar"
+
 #: src/components/packs/run/RunEnd.tsx
 msgid "Stopped at"
 msgstr "Terminó en"
@@ -25505,7 +25554,6 @@ msgid "Take it down for good?"
 msgstr "¿Retirarlo definitivamente?"
 
 #: src/components/supporter/WorkshopFrames.tsx
-#: src/routes/workshop.themes.index.tsx
 msgid "Take off"
 msgstr "Quitar"
 
@@ -29202,6 +29250,10 @@ msgstr "UR"
 msgid "URL"
 msgstr "URL"
 
+#: src/routes/workshop.themes.index.tsx
+msgid "Use"
+msgstr "Usar"
+
 #. placeholder {0}: look.name
 #: src/components/packs/run/chain/ChainMods.tsx
 msgid "Use {0}"
@@ -29237,6 +29289,10 @@ msgstr "Usar base"
 #: src/routes/skins_.$id.tsx
 msgid "Use for my replays"
 msgstr "Usar en mis replays"
+
+#: src/routes/workshop.themes.gallery.tsx
+msgid "Use it"
+msgstr "Usarlo"
 
 #. placeholder {0}: candidate.setId
 #: src/components/skins/SkinBackdropPicker.tsx
@@ -29294,6 +29350,10 @@ msgstr "Nombre de usuario"
 #: src/routes/recommendations.tsx
 msgid "username..."
 msgstr "usuario..."
+
+#: src/routes/workshop.themes.gallery.tsx
+msgid "Using a theme from the gallery is for supporters. Anyone can remix one to try it in the editor."
+msgstr "Usar un tema de la galería es para supporters. Cualquiera puede remixear uno para probarlo en el editor."
 
 #: src/components/prism/PrismClip.tsx
 #~ msgid "v25"
@@ -29806,21 +29866,20 @@ msgid "We have no run by {0} on this map. Paste a link to their score to use it.
 msgstr "No tenemos ninguna run de {0} en este mapa. Pega el link de su score para usarla."
 
 #: src/components/supporter/WorkshopFrames.tsx
-#: src/routes/workshop.themes.index.tsx
 msgid "Wear"
 msgstr "Usar"
 
 #: src/routes/workshop.themes.gallery.tsx
-msgid "Wear it"
-msgstr "Usarlo"
+#~ msgid "Wear it"
+#~ msgstr "Usarlo"
 
 #: src/routes/workshop.themes.index.tsx
-msgid "Wearing"
-msgstr "En uso"
+#~ msgid "Wearing"
+#~ msgstr "En uso"
 
 #: src/routes/workshop.themes.gallery.tsx
-msgid "Wearing a theme from the gallery is for supporters. Anyone can remix one to try it in the editor."
-msgstr "Usar un tema de la galería es para supporters. Cualquiera puede remixear uno para probarlo en el editor."
+#~ msgid "Wearing a theme from the gallery is for supporters. Anyone can remix one to try it in the editor."
+#~ msgstr "Usar un tema de la galería es para supporters. Cualquiera puede remixear uno para probarlo en el editor."
 
 #: src/lib/replay-overlays.ts
 #~ msgid "Web page"
@@ -30035,8 +30094,12 @@ msgstr "Quién puede unirse"
 #~ msgstr ""
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Who can wear it"
+msgid "Who can use it"
 msgstr "Quién puede usarlo"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+#~ msgid "Who can wear it"
+#~ msgstr "Quién puede usarlo"
 
 #: src/routes/recommendations.tsx
 msgid "who farms this"

@@ -631,7 +631,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         if (result.errors.length) setProblems(result.errors.map((error) => ({ line: error.line, snippet: error.snippet, message: error.message })));
         throw new Error(saveErrorText(result.error));
       }
-      setStatus({ tone: "good", text: visibility === "gallery" ? t`Published, and in the gallery.` : t`Published. Wear it from your themes.` });
+      setStatus({ tone: "good", text: visibility === "gallery" ? t`Published, and in the gallery.` : t`Published. Use it from your themes.` });
       setPublished(true);
       setDraftAt(null);
       if (themeId === null) {
@@ -935,7 +935,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         <InspectorRow label={t`Who`}>
           <Choice value={visibility} onChange={setVisibility} options={[{ id: "private", label: t`Just me` }, { id: "gallery", label: t`Gallery` }]} />
         </InspectorRow>
-        <p className="mb-1 text-[11px] text-osu-f1">{visibility === "gallery" ? t`Other supporters can wear it and remix it.` : t`Only you can wear it.`}</p>
+        <p className="mb-1 text-[11px] text-osu-f1">{visibility === "gallery" ? t`Other supporters can use it and remix it.` : t`Only you can use it.`}</p>
         <input
           value={credits}
           onChange={(event) => setCredits(event.target.value.slice(0, 300))}
@@ -1562,8 +1562,8 @@ function SaveDialog({ name, onName, visibility, onVisibility, credits, onCredits
           <h2 className="text-[15px] font-bold text-white">{t`Publish theme`}</h2>
           <p className="mt-0.5 text-[12px] text-osu-f1">
             {visibility === "gallery"
-              ? t`It goes into the gallery. Everyone wearing it gets what you publish, never your drafts.`
-              : t`It goes on your profile whenever you wear it, and stays out of the gallery.`}
+              ? t`It goes into the gallery. Everyone using it gets what you publish, never your drafts.`
+              : t`It goes on your profile whenever you use it, and stays out of the gallery.`}
           </p>
         </div>
         <div className="grid gap-4 px-5 py-4">
@@ -1572,9 +1572,9 @@ function SaveDialog({ name, onName, visibility, onVisibility, credits, onCredits
             <input autoFocus value={name} onChange={(event) => onName(event.target.value.slice(0, 40))} placeholder={t`What it's called`} className="h-9 rounded-lg bg-black/30 px-3 text-[13px] text-white ring-1 ring-white/10 placeholder:text-osu-f1 focus:outline-none focus:ring-osu-pink/60" />
           </label>
           <div className="grid gap-1.5">
-            <span className="text-[11.5px] font-semibold text-osu-l2">{t`Who can wear it`}</span>
+            <span className="text-[11.5px] font-semibold text-osu-l2">{t`Who can use it`}</span>
             <div className="grid grid-cols-2 gap-2">
-              {([["private", t`Just me`, t`Only on your profile`], ["gallery", t`Gallery`, t`Others can wear and remix it`]] as const).map(([id, title, blurb]) => (
+              {([["private", t`Just me`, t`Only on your profile`], ["gallery", t`Gallery`, t`Others can use and remix it`]] as const).map(([id, title, blurb]) => (
                 <button key={id} type="button" onClick={() => onVisibility(id)} className={`cursor-pointer rounded-lg p-2.5 text-left ring-1 transition-colors ${visibility === id ? "bg-osu-pink/[0.12] ring-osu-pink/70" : "bg-black/20 ring-white/[0.08] hover:ring-white/20"}`}>
                   <span className="block text-[12.5px] font-semibold text-white">{title}</span>
                   <span className="block text-[11px] text-osu-f1">{blurb}</span>

@@ -105,7 +105,7 @@ function WorkshopPage() {
               {shownThemes.slice(0, 5).map((theme) => (
                 <Link key={theme.id} to="/workshop/themes/gallery" className="overflow-hidden rounded-xl bg-osu-b4 transition hover:brightness-110">
                   <img src={theme.stillUrl ?? undefined} alt="" loading="lazy" onError={hideBrokenImage} className="block aspect-video w-full bg-osu-b6 object-cover" />
-                  <Caption name={theme.name} by={theme.author.username} extra={theme.wearers > 0 ? (theme.wearers === 1 ? t`1 wearing it` : t`${theme.wearers} wearing it`) : null} />
+                  <Caption name={theme.name} by={theme.author.username} extra={theme.wearers > 0 ? (theme.wearers === 1 ? t`1 using it` : t`${theme.wearers} using it`) : null} />
                 </Link>
               ))}
             </Shelf>

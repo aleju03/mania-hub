@@ -117,7 +117,7 @@ function OwnThemesPage() {
                     {theme.stillUrl ? <img src={theme.stillUrl} alt="" className="h-full w-full object-cover" loading="lazy" onError={hideBrokenImage} /> : unpublished ? (
                       <span className="absolute inset-0 grid place-items-center text-[12px] text-osu-f1">{t`Not published yet`}</span>
                     ) : null}
-                    {wearing ? <span className="absolute left-2 top-2 rounded-md bg-osu-pink px-1.5 py-0.5 text-[11px] font-semibold text-white">{t`Wearing`}</span> : null}
+                    {wearing ? <span className="absolute left-2 top-2 rounded-md bg-osu-pink px-1.5 py-0.5 text-[11px] font-semibold text-white">{t`In use`}</span> : null}
                   </div>
                   <div className="p-3">
                     <div className="flex items-center gap-2">
@@ -125,7 +125,7 @@ function OwnThemesPage() {
                       <StatePill theme={theme} />
                     </div>
                     {theme.visibility === "gallery" && !taken && !unpublished ? (
-                      <p className="mt-0.5 text-[11.5px] text-osu-f1">{theme.wearers === 1 ? t`1 wearing it` : t`${theme.wearers} wearing it`}</p>
+                      <p className="mt-0.5 text-[11.5px] text-osu-f1">{theme.wearers === 1 ? t`1 using it` : t`${theme.wearers} using it`}</p>
                     ) : null}
                     {theme.draftAt !== null && !unpublished && !taken ? (
                       <p className="mt-0.5 text-[11.5px] text-amber-200/80">{t`Has a draft you haven't published`}</p>
@@ -136,9 +136,9 @@ function OwnThemesPage() {
                       ) : null}
                       {!taken && !unpublished && theme.state === "live" ? (
                         wearing ? (
-                          <button type="button" disabled={busy !== null} onClick={() => void act(theme.id, () => wearCustomTheme({ data: { themeId: null } }))} className={BUTTON}>{t`Take off`}</button>
+                          <button type="button" disabled={busy !== null} onClick={() => void act(theme.id, () => wearCustomTheme({ data: { themeId: null } }))} className={BUTTON}>{t`Stop using`}</button>
                         ) : (
-                          <button type="button" disabled={busy !== null} onClick={() => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: worn?.rows ?? false } }))} className={BUTTON}>{t`Wear`}</button>
+                          <button type="button" disabled={busy !== null} onClick={() => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: worn?.rows ?? false } }))} className={BUTTON}>{t`Use`}</button>
                         )
                       ) : null}
                       {!taken && !unpublished ? (
@@ -175,7 +175,7 @@ function OwnThemesPage() {
       {deleting ? (
         <ConfirmModal
           title={deleting.name ? t`Delete ${deleting.name}?` : t`Delete this theme?`}
-          body={deleting.visibility === "gallery" ? t`It leaves your list, your profile and the gallery. Anyone already wearing it keeps it.` : t`It leaves your list and your profile.`}
+          body={deleting.visibility === "gallery" ? t`It leaves your list, your profile and the gallery. Anyone already using it keeps it.` : t`It leaves your list and your profile.`}
           confirmLabel={t`Delete`}
           cancelLabel={t`Cancel`}
           danger

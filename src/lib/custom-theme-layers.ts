@@ -319,8 +319,11 @@ vec4 _lyr_image(sampler2D tex, vec2 size, vec2 q) {
   vec2 uv = vec2(q.x, 1. - q.y);
   vec2 dx = dFdx(uv);
   vec2 dy = dFdy(uv);
-  // textures repeat: stay half a texel in, or the far edge bleeds in
-  vec2 edge = max(.5 / max(size, vec2(1.)), .5 * max(abs(dx), abs(dy)));
+  // Textures repeat, so a sample near an edge blends in the far edge: a dark
+  // line along a transparent side, flickering as the layer moves. Stay half a
+  // texel in on the coarser of the two mip levels filtering mixes, which is
+  // about one screen pixel's footprint.
+  vec2 edge = max(.5 / max(size, vec2(1.)), max(abs(dx), abs(dy)));
   vec4 s = textureGrad(tex, clamp(uv, edge, 1. - edge), dx, dy);
   return vec4(s.rgb / max(s.a, .001), s.a * inside.x * inside.y);
 }
