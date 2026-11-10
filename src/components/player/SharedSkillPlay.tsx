@@ -57,7 +57,7 @@ export function SharedSkillPlay({ userId, username }: { userId: number; username
           ratingColor: axis.color,
           dan: side && clear ? {
             chartRating: clear.chartDan, chartLabel: clear.chartDanLabel,
-            creditedRating: clear.creditedDan, creditedLabel: clear.creditedDanLabel,
+            creditedRating: clear.creditedDan, creditedLabel: clear.creditedDanLabel, courseCredit: clear.credential != null,
             accuracy: clear.clearAccuracy, currency: clear.currency, family: side,
           } : side && rejected ? {
             chartRating: rejected.chartDan, chartLabel: rejected.chartDanLabel,

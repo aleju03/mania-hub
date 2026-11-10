@@ -214,9 +214,13 @@ export function normalizeReplayParsedPayload(data: unknown): { scoreId: number; 
   };
 }
 
-export function normalizeScorePayload(data: unknown): { scoreId: number; mode?: string } {
+export function normalizeScorePayload(data: unknown): { scoreId: number; mode?: string; cacheOnly?: boolean } {
   const input = asInputRecord(data);
   const mode = input.mode == null || input.mode === "" ? "mania" : String(input.mode);
   if (!REPLAY_MODES.has(mode)) throw new Error("Invalid score mode.");
-  return { scoreId: parseOsuScoreId(input.scoreId, "score id"), mode };
+  return {
+    scoreId: parseOsuScoreId(input.scoreId, "score id"),
+    mode,
+    ...(input.cacheOnly === true ? { cacheOnly: true } : {}),
+  };
 }

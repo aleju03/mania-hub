@@ -25,6 +25,7 @@ import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { SortArrow } from "../components/ui/SortArrow";
 import { Pagination } from "../components/ui/Pagination";
+import { PlayGlyph } from "../components/ui/PlayGlyph";
 import { PpGainsRail } from "../components/top-plays/PpGainsRail";
 import type { CountryTopPlay } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
@@ -912,7 +913,7 @@ function PopOffsPage() {
                                 title={t`Watch replay`}
                                 aria-label={t`Watch replay`}
                               >
-                                &#9654;
+                                <PlayGlyph className="inline-block h-[9px] w-[7.5px] translate-x-[0.5px] align-middle" />
                               </button>
                             )}
                           </div>
@@ -938,9 +939,10 @@ function PopOffsPage() {
                               e.stopPropagation();
                               navigate({ to: "/replay", search: getReplaySearch(p.score.id, p.score.beatmapset?.id) });
                             }}
-                            className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
                           >
-                            <Trans>▶ Watch</Trans>
+                            <PlayGlyph className="h-[9px] w-[7.5px]" />
+                            <Trans>Watch</Trans>
                           </button>
                         )}
                         <span className="text-[11px] text-osu-f1 w-16 text-right" title={formatTimeAgoTooltip(p.time, locale)}>

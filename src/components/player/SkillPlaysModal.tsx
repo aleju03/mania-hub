@@ -17,6 +17,7 @@ import { msdSkillsetMeta } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { ModBadge } from "../ui/ModBadge";
 import { MapDetailModal } from "../maps/MapDetailModal";
+import { ReplayChip } from "../ui/ReplayChip";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
 
@@ -471,6 +472,9 @@ function SkillPlayRow({
             <span className="ml-1.5 text-[11px] font-normal text-osu-f1">[{play.version}]</span>
           </span>
           <span className="flex shrink-0 items-center"><PlayModBadges play={play} size={0.75} /></span>
+          {play.scoreId != null && play.score?.hasReplay === true ? (
+            <ReplayChip scoreId={play.scoreId} beatmapsetId={play.beatmapsetId} className="shrink-0 text-[10px]" />
+          ) : null}
         </div>
         <div className="mt-1 flex min-w-0 items-center text-[11px] text-osu-f1">
           {meta.map((item, index) => (

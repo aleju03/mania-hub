@@ -984,6 +984,32 @@ its presence memory is empty; an app still open starts a new one on its next
 heartbeat. Only players with "Share what I'm playing" on send presence, so only
 they are held.
 
+## Bug reports from the app
+
+`POST /api/integrations/companella/v1/bug-reports` (also on `api_base_url`)
+files a report on the admin bug board with the app's log attached, so a player
+never has to find the log file by hand. `/capabilities` advertises it as
+`bug_reports` (`max_log_bytes`, `body_chars`, `kinds`), null while the
+integration is off.
+
+Auth is optional. With the usual DPoP token and proof (any scope) the report
+belongs to that account and its replies are read on `/report`; a token that is
+sent must verify, so a stale one gets the usual 401 rather than an anonymous
+report. Without credentials it is anonymous, on the open form's per-address
+window (the proxy forwards the caller's address for this route only).
+
+```json
+{ "body": "10 to 4000 chars", "kind": "bug", "context": { "hashi": "0.1.9" }, "log": "optional, at most 1 MiB" }
+```
+
+`context` is the same flat object the site's form sends. The log is stored as
+`bug-reports/<id>/0/bridge.log` in the private bucket and recorded like any
+other attachment; a log that fails to store leaves the report standing with
+`log_attached: false`. The answer is `{ ok, id, duplicate, log_attached,
+replies_url }` (`replies_url` null for an anonymous report). Errors use the
+envelope: `400 invalid_report`, `413 payload_too_large`, `429 rate_limited` or
+`too_many_reports`. `pagePath` is always `/hashi`.
+
 ## Skill credit for regular players
 
 An active Bancho account's eligible imports count toward its public skill
@@ -1067,7 +1093,15 @@ verdict at that rate. Families are drawn per player at read time: that
 player's local charts sharing a topology, head or tail key are one family,
 `local:<smallest sha>`, so a reupload with a few extra notes falls under the
 ordinary two-per-family MSD rule and the Dan family rule instead of filling
-new slots. An upload never joins an official family.
+new slots. A group whose charts are near copies of one official chart (any
+speed, at most the padding allowance of notes changed, moved, added or
+removed: `nearCopyFamily` in `rate-copy-speed.ts`) takes that chart's family
+key instead, so a play on an edit and a play on the official chart count once.
+The key is looked up when the chart is analysed and stored on its analysis row
+(`near_family_key` at `NEAR_FAMILY_VERSION`); the backfill's `near` phase
+fills it for charts analysed before, and queues the owners' merges when it
+moves. It only groups plays: the chart is still rated from its own analysis,
+and an upload never joins the official family index.
 
 The Skills plays list, Dan evidence and restricted profiles read the chart's
 own title, artist, creator and difficulty name, the art of the set the file
@@ -1301,14 +1335,28 @@ up by id or username with where its imports stand.
   `listInstallations` leaves it off the player's own connection list.
   `usage.ts` counts only Companella's client id, so these plays never reach
   `/companella/usage`. Rows carry no app mark.
-- **Staging.** Each file's header names its chart by md5; the chart has to be
-  in the import pool or the site's own `.osu` cache (no osu! call). A play on
-  a chart the site lacks is skipped and listed as such. Otherwise it becomes a
+- **Staging.** Each file's header names its chart by md5, looked for in the
+  import pool and the site's own `.osu` cache (no osu! call while staging).
+  When found, it becomes a
   normal submission (`manual_import`, idempotency key from the replay's
   sha256, so the same file dropped again answers "already imported") with its
   replay stored, left in `awaiting_assets` for 30 days. The incomplete cap and
   the byte budgets do not apply to this path. An unfinished submission keeps
   its replay referenced, so the artifact sweeps leave it alone.
+- **Map lookup.** A play whose chart the site has no file for waits in
+  `companella_replay_import_lookups` (the replay base64 in the row, cleared
+  once the row settles) and answers "looking up map".
+  `companella_replay_import_map_lookup` rides the `osu-file-cache` lane below
+  the file prefetches, pauses with the other osu! API jobs, and settles 5
+  replays per link: it asks osu! for the map by md5 (`/beatmaps/lookup`), stores
+  a native mania map's row and `.osu` file as manual entries do, and stages the
+  play for the feeder. A convert settles as `converted_map` without a download,
+  an md5 osu! does not know (a rate edit, a BMS convert, an older revision of an
+  updated map) as `map_not_on_osu`, and 5 failed attempts as `lookup_failed`;
+  a 429 ends the link and the next waits a minute. The account's progress lists
+  the settled ones by file name. The same file dropped again answers from its
+  row and asks osu! again only after 7 days. Looking an account up restarts a
+  chain that stopped, e.g. while osu! API jobs were off.
 - **Feeding.** `companella_replay_import_feed` rides the `companella` lane and
   completes up to 16 plays per account at a time, enqueued at priority 1 so a
   player's live imports (priority 2) go first. It runs every 10 seconds while

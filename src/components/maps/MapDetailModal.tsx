@@ -6,6 +6,8 @@ import type { MapsFavouriteBeatmapset, OsuScore } from "../../lib/types";
 import { formatDuration, formatNumber, intlLocaleTag } from "../../lib/format";
 import { useLocale } from "../../lib/locale-context";
 import { OsuLogo } from "../ui/OsuLogo";
+import { PlayGlyph } from "../ui/PlayGlyph";
+import { Link } from "@tanstack/react-router";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { invertManiaOsuText } from "#dan/invert-mod";
@@ -121,6 +123,8 @@ export interface MapDetailPlayContext {
     chartLabel: string | null;
     creditedRating?: number;
     creditedLabel?: string;
+    /** A practice course set creditedRating, not the accuracy curve. */
+    courseCredit?: boolean;
     accuracy: number | null;
     /** The formula `accuracy` is written in, when it is not the one the score screen shows. */
     currency?: "stable" | "v2" | null;
@@ -225,6 +229,7 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
               landed={play.dan.creditedRating ?? null}
               landedLabel={play.dan.creditedLabel ? shownDanLabel(play.dan.creditedLabel, entry?.keyCount ?? 4, play.dan.family) : null}
               rejected={rejected}
+              courseCredit={play.dan.courseCredit}
               formatLabel={(label) => shownDanLabel(label, entry?.keyCount ?? 4, play.dan?.family)}
             />
           </div>
@@ -298,11 +303,11 @@ export function accuracyCurrencyLabel(currency: "stable" | "v2"): string {
 // gimmick timing (a set timed at 999 as a joke) and long off-tempo intros
 // misreport the tempo the notes run at. When the note-weighted tempo the chart
 // analysis stored disagrees by more than rounding, it takes the stat and the
-// timed figure becomes the footnote.
-function realBpm(bpm: number, noteBpm: number | null | undefined): string | null {
+// timed figure becomes the footnote. Both are at the rate the modal reads the chart at.
+function realBpm(bpm: number, noteBpm: number | null | undefined, rate: number): string | null {
   if (noteBpm == null || !(noteBpm > 0) || !(bpm > 0)) return null;
   if (Math.abs(noteBpm - bpm) / bpm < 0.03) return null;
-  return String(Math.round(noteBpm * 100) / 100);
+  return String(Math.round(noteBpm * rate * 100) / 100);
 }
 
 // The MSD strip's frame while the entry is in flight. Every play in a skill
@@ -523,7 +528,7 @@ type DanBadgeVerdict = { label: string; family: string };
 
 // isUnrateableExclusion in #dan/vibro-sections, kept here so the modal does not
 // pull the detector into the client bundle.
-const UNRATEABLE_REASONS: ReadonlySet<string> = new Set(["jumptrill", "stacked_heads", "flam_chords", "mash"]);
+const UNRATEABLE_REASONS: ReadonlySet<string> = new Set(["jumptrill", "stacked_heads", "flam_chords", "mash", "quads_only"]);
 function isUnrateableExclusion(analysis: VibroAnalysis): boolean {
   const reasons = Object.keys(analysis.reasonShares ?? {});
   return analysis.status === "excluded" && reasons.length > 0
@@ -727,7 +732,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <HoverTip key={name} className="flex flex-col" tip={name.startsWith("LN") && !usesPrism(entry.keyCount) ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : halvesTip(i18n, name, entry.keyCount, msd)}>
+            <HoverTip key={name} className="flex flex-col" tip={halvesTip(i18n, name, entry.keyCount, msd)}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 || floored.has(name) ? "text-osu-f1/45" : "text-osu-l2"
@@ -776,14 +781,16 @@ interface ClusterGroup {
   mixed: boolean;
 }
 
-function groupClusters(clusters: LiveChartAnalysisCluster[]): ClusterGroup[] {
+// The clusters come from the 1.0x analysis; a rate plays every section at
+// that multiple of its BPM.
+function groupClusters(clusters: LiveChartAnalysisCluster[], rate: number): ClusterGroup[] {
   const groups = new Map<string, ClusterGroup>();
   for (const cluster of clusters) {
     const name = clusterPatternName(cluster);
     // BPM 0 is the analyzer's "no meaningful tempo" pool (inverse windows, LN
     // tail gaps); it renders as the name alone and must not drag a real
     // sibling's range down to "0-247bpm".
-    const bpm = Math.round(cluster.bpm);
+    const bpm = Math.round(cluster.bpm * rate);
     const existing = groups.get(name);
     if (existing) {
       if (bpm > 0) {
@@ -803,10 +810,10 @@ function groupClusters(clusters: LiveChartAnalysisCluster[]): ClusterGroup[] {
 // Jacky WC, 4K says Jumpstream / Rolls / ...). These are composition, not
 // difficulty, so the value per pattern is the BPM it runs at. One inline row,
 // importance-ordered with the dominant pattern tinted; no box of its own.
-function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetail | null; pending: boolean }) {
+function ClustersBlock({ analysis, pending, rate = 1 }: { analysis: LiveChartAnalysisDetail | null; pending: boolean; rate?: number }) {
   const { t } = useLingui();
   const groups =
-    analysis && analysis.status === "ready" && analysis.clusters.length > 0 ? groupClusters(analysis.clusters) : [];
+    analysis && analysis.status === "ready" && analysis.clusters.length > 0 ? groupClusters(analysis.clusters, rate) : [];
   // Done loading and genuinely nothing to show: collapse the row entirely.
   if (!pending && groups.length === 0) return null;
   // Fixed single-line height on desktop so the async result landing (or a diff
@@ -920,7 +927,6 @@ export function MapDetailModal({
   // The diff the score was set on, whatever the picker is pointing at: the
   // score tab is about that one chart and nothing else in the set.
   const playDiff = play ? diffs.find((diff) => diff.beatmapId === play.beatmapId) ?? entry : null;
-  const realBpmStat = active ? realBpm(active.bpm, active.noteBpm) : null;
 
   // A local chart (negative id) is one osu! does not have: an app sent a play
   // on it and the card is built from the chart itself, so everything osu!
@@ -1027,6 +1033,8 @@ export function MapDetailModal({
     return () => window.removeEventListener("resize", release);
   }, [pinnedTop]);
   const playRate = playedRate === 1 ? modRate : playedRate;
+  // BPM and length as the chart plays at that rate.
+  const realBpmStat = active ? realBpm(active.bpm, active.noteBpm, playRate) : null;
   const ratePercent = Math.round(playRate * 100);
   // 1.5x is the one rate the catalog already carries (the DT sweep), and it
   // rides on the detail entry, so the common DT/NC play needs no request at all.
@@ -1155,14 +1163,14 @@ export function MapDetailModal({
   const headerStatus = active && numbersKnown && !local ? active.status : null;
   const inlineStats: InlineStat[] = !active ? [] : fileStats || fileStatsPending
     ? [
-      { key: "bpm", value: fileStats ? String(Math.round(fileStats.bpm)) : null, label: t`BPM` },
-      { key: "length", value: fileStats ? formatDuration(fileStats.length) : null },
+      { key: "bpm", value: fileStats ? String(Math.round(fileStats.bpm * playRate)) : null, label: t`BPM` },
+      { key: "length", value: fileStats ? formatDuration(Math.round(fileStats.length / playRate)) : null },
       { key: "ln", value: fileStats ? formatNumber(fileStats.lnCount) : null, label: t`Long Notes` },
       { key: "od", value: fileStats ? fileStats.od.toFixed(1) : null, label: t`OD`, labelFirst: true },
     ]
     : [
-      { key: "bpm", value: numbersKnown ? realBpmStat ?? String(Math.round(active.bpm)) : null, label: t`BPM` },
-      { key: "length", value: numbersKnown ? formatDuration(active.length) : null },
+      { key: "bpm", value: numbersKnown ? realBpmStat ?? String(Math.round(active.bpm * playRate)) : null, label: t`BPM` },
+      { key: "length", value: numbersKnown ? formatDuration(Math.round(active.length / playRate)) : null },
       ...(local ? [] : [{ key: "plays", value: numbersKnown ? compactPlays(active.playCount) : null, label: t`plays` }]),
       {
         key: "ln",
@@ -1276,7 +1284,7 @@ export function MapDetailModal({
                   <InlineStats
                     stats={inlineStats}
                     // The osu! timing figure, when the note-weighted tempo took the BPM.
-                    note={numbersKnown && !fileStats && !fileStatsPending && realBpmStat ? t`timed at ${Math.round(active.bpm)}` : undefined}
+                    note={numbersKnown && !fileStats && !fileStatsPending && realBpmStat ? t`timed at ${Math.round(active.bpm * playRate)}` : undefined}
                   />
                 ) : null}
 
@@ -1308,7 +1316,7 @@ export function MapDetailModal({
                     />
                   </div>
                 ) : pending || (offCatalog && ratePending) ? <PendingMsdBlock /> : null}
-                <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
+                <ClustersBlock analysis={activeAnalysis} pending={analysisPending} rate={playRate} />
 
                 {/* The card's filled primary chip (the index's family verdict)
                     then the analyzer's outlined subfamily attributes (bracket,
@@ -1424,6 +1432,16 @@ export function MapDetailModal({
                         {t`Open in osu!`}
                       </a>
                     </>
+                  ) : null}
+                  {play?.scoreId != null && play.score?.hasReplay === true ? (
+                    <Link
+                      to="/replay"
+                      search={{ scoreId: play.scoreId, beatmapsetId: setKnown ? entry.beatmapsetId : undefined }}
+                      className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:justify-start sm:px-3"
+                    >
+                      <PlayGlyph className="h-[10px] w-[8.5px]" />
+                      {t`Watch replay`}
+                    </Link>
                   ) : null}
                   <button
                     type="button"

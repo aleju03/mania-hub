@@ -35,6 +35,7 @@ import { getManiaJudgementStats } from "../ui/ManiaJudgementStats";
 import { ModBadge } from "../ui/ModBadge";
 import { ScoreModBadge } from "../ui/ScoreModBadge";
 import { DanBadge } from "../ui/DanBadge";
+import { PlayGlyph } from "../ui/PlayGlyph";
 import { RecentPlayRatingCells } from "./RecentPlayRatingCells";
 import type { RecentPlayRatingView } from "./recent-play-ratings";
 import { useNoDans } from "../../store";
@@ -233,7 +234,7 @@ export function TrackedScoreRow({
                   aria-label={t`Watch replay`}
                   className="pointer-events-auto inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-osu-pink/20 text-[9px] font-semibold leading-none text-osu-pink-light transition-colors hover:bg-osu-pink/30"
                 >
-                  <span aria-hidden="true">&#9654;</span>
+                  <PlayGlyph className="h-[9px] w-[7.5px] translate-x-[0.5px]" />
                 </Link>
               )}
             </div>
@@ -404,7 +405,7 @@ export function ScoreRow({
                 aria-label={t`Watch replay`}
                 className="pointer-events-auto inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-osu-pink/20 text-[9px] font-semibold leading-none text-osu-pink-light transition-colors hover:bg-osu-pink/30"
               >
-                <span aria-hidden="true">&#9654;</span>
+                <PlayGlyph className="h-[9px] w-[7.5px] translate-x-[0.5px]" />
               </Link>
             )}
           </div>

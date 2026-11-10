@@ -1571,6 +1571,10 @@ msgid "{feedCount} feeds"
 msgstr "{feedCount} feeds"
 
 #: src/components/skins/SkinUploadModal.tsx
+msgid "{fileCount, plural, one {# file} other {# files}}"
+msgstr "{fileCount, plural, one {# archivo} other {# archivos}}"
+
+#: src/components/skins/SkinUploadModal.tsx
 msgid "{files} files in {groupCount} groups"
 msgstr "{files} archivos en {groupCount} grupos"
 
@@ -2085,6 +2089,10 @@ msgstr "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 msgid "{shards} shards"
 msgstr "{shards} fragmentos"
 
+#: src/components/maps/DanProgressRail.tsx
+msgid "{shiftText} for accuracy"
+msgstr "{shiftText} por precisión"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, one {# captura} other {# capturas}}"
@@ -2128,6 +2136,10 @@ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la e
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 #~ msgstr "Estimación de dan {sideLabel}: por encima de {chip}, donde termina la escala {sideLabel} de {keys}K, con {clears} clears de ese nivel o superior (96%+ de acc) · clic para ver los clears detrás"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{size} of this .osk is files osu! never loads."
+msgstr "{size} de este .osk son archivos que osu! nunca carga."
 
 #: src/lib/chain-run.ts
 msgid "{skill} pack"
@@ -2834,8 +2846,8 @@ msgstr "<1% de peso"
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
-msgid "▶ Watch"
-msgstr "▶ Ver"
+#~ msgid "▶ Watch"
+#~ msgstr "▶ Ver"
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "$4 a month"
@@ -4626,6 +4638,10 @@ msgstr "Otro jugador ya usa ese nombre."
 msgid "Another replay video is still exporting. Finish or cancel it first."
 msgstr "Todavía se está exportando otro video. Termínalo o cancélalo primero."
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Another skin or archive inside it"
+msgstr "Otra skin o archivo comprimido dentro"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/recommendations.tsx
@@ -4717,6 +4733,10 @@ msgstr "Cualquier imagen, GIF o video, desde un enlace o un archivo."
 #: src/components/player/FeaturedPlays.tsx
 msgid "Any play the site tracked of you, under a title of your own, in place of your {slotLabel}."
 msgstr "Cualquier play tuyo que el sitio haya registrado, con un título tuyo, en lugar de tu {slotLabel}."
+
+#: src/routes/discord.tsx
+msgid "Any top play"
+msgstr "Cualquier top play"
 
 #: src/routes/skins.tsx
 msgid "anyone"
@@ -6415,6 +6435,10 @@ msgid "Changing the keymode label failed. Try again."
 msgstr "No se pudo cambiar la etiqueta del modo de teclas. Inténtalo de nuevo."
 
 #: src/components/skins/SkinSettingsModal.tsx
+msgid "Changing the shown keymodes failed. Try again."
+msgstr "No se pudieron cambiar los keymodes visibles. Inténtalo de nuevo."
+
+#: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "No se pudo cambiar quién puede ver esta skin. Inténtalo de nuevo."
 
@@ -6487,13 +6511,13 @@ msgid "Chart edited after this play"
 msgstr "Chart editado después de este play"
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate"
-msgstr "Estimación del mapa"
+#~ msgid "Chart estimate"
+#~ msgstr "Estimación del mapa"
 
 #. placeholder {0}: formatDanValue(chart)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate: {0}"
-msgstr "Estimación del mapa: {0}"
+#~ msgid "Chart estimate: {0}"
+#~ msgstr "Estimación del mapa: {0}"
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Chart file"
@@ -6824,6 +6848,7 @@ msgstr "Quitar filtro de jugador"
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/routes/maps.tsx
@@ -7576,6 +7601,10 @@ msgstr "Copias"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "copies in circulation"
 msgstr "copias en circulación"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Copies of files"
+msgstr "Copias de archivos"
 
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "Copies of it drift across your card behind everything printed on it, on every copy of the card."
@@ -9458,8 +9487,12 @@ msgid "Duplicates"
 msgstr "Duplicadas"
 
 #: src/routes/privacy.tsx
-msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
-msgstr "Las proyecciones públicas duraderas, como las clasificaciones, los mapas, los top plays, los snipes, los datos de perfil en caché y los agregados históricos, pueden conservarse más tiempo porque son lo que el sitio usa para ofrecer esas funciones. Los objetivos y las colecciones de sobres de cartas se conservan mientras tu cuenta use esas funciones."
+#~ msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
+#~ msgstr "Las proyecciones públicas duraderas, como las clasificaciones, los mapas, los top plays, los snipes, los datos de perfil en caché y los agregados históricos, pueden conservarse más tiempo porque son lo que el sitio usa para ofrecer esas funciones. Los objetivos y las colecciones de sobres de cartas se conservan mientras tu cuenta use esas funciones."
+
+#: src/routes/privacy.tsx
+msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals, card pack collections, skins, collections, uploaded replays, and friends lists are kept until you delete them or ask for them to be deleted."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Dutch"
@@ -9698,6 +9731,10 @@ msgstr "Editando"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Edition crafted"
 #~ msgstr "Edición creada"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Editor and system files"
+msgstr "Archivos de editores y del sistema"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
@@ -10573,6 +10610,10 @@ msgstr "actual"
 msgid "Files have to be under 5MB."
 msgstr "Los archivos tienen que pesar menos de 5MB."
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Files in folders skin.ini doesn't use"
+msgstr "Archivos en carpetas que skin.ini no usa"
+
 #: src/components/communities/field-options.tsx
 msgid "Filipino"
 msgstr "Filipino"
@@ -11171,6 +11212,7 @@ msgid "Friends"
 msgstr "Amigos"
 
 #: src/components/supporter/themes/LayerPanel.tsx
+#: src/routes/discord.tsx
 msgid "From"
 msgstr "Desde"
 
@@ -11986,6 +12028,7 @@ msgid "Hex HUD"
 msgstr "HUD hexagonal"
 
 #: src/components/skins/SkinCard.tsx
+#: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "hidden"
 msgstr "oculta"
@@ -12027,6 +12070,14 @@ msgstr "Ocultar {0} revocadas"
 #: src/routes/player/$username.tsx
 #~ msgid "Hide {0}K"
 #~ msgstr "Ocultar {0}K"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Hide {keys}K"
+msgstr "Ocultar {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide {selectedKeymode}K"
+msgstr "Ocultar {selectedKeymode}K"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Hide export details"
@@ -12076,6 +12127,10 @@ msgstr "Ocultar jugadas en mapas ranked, approved y qualified"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
 msgstr "Ocultar los clears de {0}"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide the keymodes with no note images"
+msgstr "Ocultar los keymodes sin imágenes de notas"
 
 #: src/routes/dan-estimates.tsx
 msgid "hide the note"
@@ -12648,6 +12703,14 @@ msgid "If you have the map, drop its .osz here and the replay plays from your co
 msgstr "Si tienes el mapa, suelta su .osz aquí y el replay se reproduce desde tu copia."
 
 #: src/routes/privacy.tsx
+msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept. If you link your Discord account to the Discord bot, the site stores your Discord user ID with your osu! account and your bot settings. If you connect Companella, the site stores the scores and charts you choose to send and the device you approved."
+#~ msgstr ""
+
+#: src/routes/privacy.tsx
 msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
 msgstr "Si pagas con Ko-fi, Google o lava.top, el sitio recibe el monto, la moneda y la fecha del pago, el nombre y el mensaje que diste, y un código hecho a partir de tu correo (nunca el correo en sí), que sirve para reconocer un pago repetido o un reembolso. Un correo que escribas en la página de Support antes de pagar en lava.top se guarda igual, como código, solo para vincular ese pago a tu cuenta. Se guardan en privado para vincular el estado de supporter a tu cuenta de osu! y no se muestran públicamente. Los datos de tu tarjeta y banco se quedan en la plataforma de pago."
 
@@ -12660,8 +12723,12 @@ msgstr "Si pagas con Ko-fi, Google o lava.top, el sitio recibe el monto, la mone
 #~ msgstr "Si pagas con Ko-fi, Google o lava.top, el sitio recibe el monto, la moneda y la fecha del pago, el nombre y el mensaje que diste, y una forma cifrada de tu correo (nunca el correo en sí), que sirve para reconocer un pago repetido o un reembolso. Se guardan en privado para vincular el estado de supporter a tu cuenta de osu! y no se muestran públicamente. Los datos de tu tarjeta y banco se quedan en la plataforma de pago."
 
 #: src/routes/privacy.tsx
-msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
-msgstr "Si inicias sesión con osu!, el sitio recibe los datos de la cuenta de osu! que permiten los scopes de OAuth identify y public, como el ID de usuario, el nombre de usuario, la URL del avatar y el país, y guarda un registro de cuándo inició sesión tu cuenta. El sitio guarda una cookie de sesión firmada y HTTP-only para poder reconocerte mientras la sesión esté activa."
+#~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+#~ msgstr "Si inicias sesión con osu!, el sitio recibe los datos de la cuenta de osu! que permiten los scopes de OAuth identify y public, como el ID de usuario, el nombre de usuario, la URL del avatar y el país, y guarda un registro de cuándo inició sesión tu cuenta. El sitio guarda una cookie de sesión firmada y HTTP-only para poder reconocerte mientras la sesión esté activa."
+
+#: src/routes/privacy.tsx
+msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps the first and last time your account signed in and its country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgstr ""
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -13394,6 +13461,10 @@ msgstr "jumpstream, calentamiento, ..."
 #: src/lib/pack-run.ts
 msgid "Jumptrill"
 msgstr "Jumptrill"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Jumptrill chart. This play counts toward skill ratings but not toward dan."
+msgstr "Mapa de jumptrill. Este play cuenta para el rating de skillsets, pero no para el de dan."
 
 #: src/routes/legal.tsx
 msgid "June 16, 2026"
@@ -14933,6 +15004,10 @@ msgstr "Malayo"
 msgid "Mamestagram didn't answer. Try again later."
 msgstr "Mamestagram no respondió. Intenta más tarde."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Mamestagram doesn't say which rate that play was at, so it can't be added."
+msgstr "Mamestagram no dice a qué rate fue esa play, así que no se puede agregar."
+
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Manage"
 msgstr "Administrar"
@@ -14967,8 +15042,16 @@ msgid "Mania Tracker"
 msgstr "Mania Tracker"
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
-msgstr "Mania Tracker cuenta las vistas de página y el uso de funciones con su propia analítica de origen, almacenada en el propio servidor del sitio. Los eventos se envían a través del propio endpoint del sitio y pueden incluir la ruta visitada, el país seleccionado, el referente, el idioma del navegador, el tamaño de pantalla y el contexto de la ruta, como un jugador, una puntuación, un conjunto de mapas o una pestaña de mapas que se ha visto. Los eventos se conservan durante 90 días y luego se eliminan."
+msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
+#~ msgstr "Mania Tracker cuenta las vistas de página y el uso de funciones con su propia analítica de origen, almacenada en el propio servidor del sitio. Los eventos se envían a través del propio endpoint del sitio y pueden incluir la ruta visitada, el país seleccionado, el referente, el idioma del navegador, el tamaño de pantalla y el contexto de la ruta, como un jugador, una puntuación, un conjunto de mapas o una pestaña de mapas que se ha visto. Los eventos se conservan durante 90 días y luego se eliminan."
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for up to 10 years."
+#~ msgstr ""
 
 #: src/routes/terms.tsx
 msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -14979,8 +15062,12 @@ msgstr "Mania Tracker muestra metadatos públicos, proyecciones en caché y vist
 #~ msgstr "Mania Tracker muestra metadatos públicos, proyecciones en caché y vistas derivadas de la comunidad como referencia. Para informar de un error, usa el formulario <0>Reportar un error</0> del sitio. Si eres propietario de contenido mostrado en el sitio y tienes algún asunto de atribución, retirada o datos, escribe a <1>contact@mania-tracker.com</1> o contacta con el responsable a través del perfil público de osu! enlazado en el pie de página."
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
-msgstr "Mania Tracker no vende datos personales. Los datos pueden ser tratados por los proveedores de servicios que se usan para operar el sitio, incluidos los de alojamiento, almacenamiento, analítica, servicios de la API de osu! y servicios comunitarios de datos de puntuaciones. Los datos públicos de osu! pueden almacenarse en caché y volver a mostrarse como parte de las funciones comunitarias del sitio."
+msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and beatmap download mirrors. Public osu! data may be cached and re-displayed as part of the site's community features."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
+#~ msgstr "Mania Tracker no vende datos personales. Los datos pueden ser tratados por los proveedores de servicios que se usan para operar el sitio, incluidos los de alojamiento, almacenamiento, analítica, servicios de la API de osu! y servicios comunitarios de datos de puntuaciones. Los datos públicos de osu! pueden almacenarse en caché y volver a mostrarse como parte de las funciones comunitarias del sitio."
 
 #: src/routes/terms.tsx
 msgid "Mania Tracker is a community project built on external data sources, so rankings, score views, snipes, top plays, maps, farm-helper suggestions, replay views, dan estimates, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect. Features may change, break, or be removed."
@@ -15007,7 +15094,6 @@ msgstr "Mania Tracker es un proyecto no oficial de fans de la comunidad para jug
 #~ msgid "Mania Tracker is made and run by one person, aleju03. For anything about the site, payments, refunds or your data, email <0>contact@mania-tracker.com</0>."
 #~ msgstr "Mania Tracker lo hace y lo mantiene una sola persona, aleju03. Para cualquier cosa sobre el sitio, los pagos, los reembolsos o tus datos, escribe a <0>contact@mania-tracker.com</0>."
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 msgid "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 msgstr "Estimación LN de Mania Tracker: precisión al soltar, coordinación con dedos mantenidos y recuperación. Un modelo independiente junto a MinaCalc."
@@ -15021,8 +15107,12 @@ msgid "Mania Tracker uses public and authenticated osu! API data, locally cached
 msgstr "Mania Tracker usa datos públicos y autenticados de la API de osu!, datos en caché local, proyecciones del servidor y servicios comunitarios de datos como <0>osu! score cache</0>."
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
-msgstr "Mania Tracker usa metadatos públicos de perfil, puntuaciones, mapas, conjuntos de mapas, clasificaciones y replays de osu!, además de servicios comunitarios de datos como osu! score cache, para construir clasificaciones, vistas del tracker, mapas, snipes, top plays, sugerencias del asistente de farmeo, perfiles y vistas de replays."
+msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+#~ msgstr "Mania Tracker usa metadatos públicos de perfil, puntuaciones, mapas, conjuntos de mapas, clasificaciones y replays de osu!, además de servicios comunitarios de datos como osu! score cache, para construir clasificaciones, vistas del tracker, mapas, snipes, top plays, sugerencias del asistente de farmeo, perfiles y vistas de replays."
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "mania-note art not tied to a keymode block"
@@ -15071,6 +15161,7 @@ msgstr "MANIERA [7K] Masterpiece en 1:29. Las filas moradas son Bracket, las nar
 msgid "map"
 msgstr "mapa"
 
+#: src/components/maps/DanProgressRail.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Map"
@@ -15121,6 +15212,11 @@ msgstr "Forma del mapa"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "mapa no disponible"
+
+#. placeholder {0}: formatDanValue(chart)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Map: {0}"
+msgstr "Mapa: {0}"
 
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/replay.tsx
@@ -17618,6 +17714,9 @@ msgstr "Avisarme"
 msgid "Notifying"
 msgstr "Avisos activos"
 
+#~ msgid "November 5, 2026"
+#~ msgstr ""
+
 #: src/routes/privacy.tsx
 #: src/routes/terms.tsx
 msgid "November 9, 2026"
@@ -18881,6 +18980,10 @@ msgstr "Sello de aprobado"
 #: src/components/player/ActivityPanel.tsx
 #~ msgid "Passes"
 #~ msgstr "Passes"
+
+#: src/routes/dan-estimates.tsx
+msgid "Passes in a skill are left out when they credit more than five levels below the average of your best five in it, as long as four passes are left. The dan window marks them <0>not counted</0>."
+msgstr "Los pases de un skill quedan fuera cuando acreditan más de cinco niveles por debajo del promedio de tus mejores cinco en él, siempre que queden cuatro pases. La ventana de dan los marca como <0>no cuenta</0>."
 
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
@@ -21472,6 +21575,10 @@ msgstr "Eliminar esta captura"
 msgid "Remove wish"
 msgstr "Quitar de deseos"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removed {removedSize} of files osu! never loads."
+msgstr "Se quitaron {removedSize} de archivos que osu! nunca carga."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Removed imported skin hitsounds"
 msgstr "Se quitaron los hitsounds del skin importado"
@@ -21483,6 +21590,14 @@ msgstr "Quita los cambios de velocidad de scroll del mapa."
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "No se pudo eliminar la captura. Inténtalo de nuevo."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing the unused files failed. The original file will upload instead."
+msgstr "No se pudieron quitar los archivos sin usar. Se subirá el archivo original."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing..."
+msgstr "Quitando..."
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Removing…"
@@ -21580,6 +21695,7 @@ msgstr "Reemplaza el cursor del mouse por uno estilo osu! en todo el sitio. Solo
 
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayCoverFallback.tsx
+#: src/components/ui/ReplayChip.tsx
 #: src/lib/pack-run.ts
 msgid "Replay"
 msgstr "Replay"
@@ -22685,6 +22801,7 @@ msgstr "Buscar idiomas"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Search maps"
 msgstr "Buscar mapas"
 
@@ -22697,6 +22814,7 @@ msgid "Search maps, players, uploaders or mods..."
 msgstr "Busca mapas, jugadores, usuarios o mods..."
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "search maps..."
 msgstr "buscar mapas..."
 
@@ -23477,6 +23595,14 @@ msgstr "Ver {hiddenCount} anteriores"
 #~ msgid "Show {hiddenCount} earlier updates"
 #~ msgstr "Mostrar {hiddenCount} actualizaciones anteriores"
 
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Show {keys}K"
+msgstr "Mostrar {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Show {selectedKeymode}K"
+msgstr "Mostrar {selectedKeymode}K"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Show {totalLabel} maps"
 msgstr "Mostrar {totalLabel} mapas"
@@ -23679,6 +23805,10 @@ msgstr "Mostrando solo {label}"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Showing the newest {0}."
 msgstr "Mostrando los {0} más recientes."
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Shown keymodes"
+msgstr "Keymodes visibles"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
@@ -24446,8 +24576,20 @@ msgstr "Puede que algunos ya conozcan Companella, una app de escritorio para osu
 #~ msgstr "Puede que algunos ya conozcan Companella. Si no, es una app de escritorio para osu! (<0>erdbee.re</0>) y es la que envía tus partidas acá. Solo funciona con osu!stable, así que las partidas de lazer no se pueden enviar así."
 
 #: src/routes/privacy.tsx
-msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
-msgstr "Algunas funciones con sesión iniciada almacenan datos en el servidor, asociados a tu ID de usuario de osu!: los objetivos que creas (tipo de objetivo, meta, progreso y estado), tu cartera y colección de sobres de cartas (cartas obtenidas y momentos en que se sacaron) y tus decisiones de inclusión o exclusión del roster. El panel de My Stats no almacena nada adicional; solo te muestra datos que el sitio ya tiene sobre tu cuenta."
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr "Algunas funciones con sesión iniciada almacenan datos en el servidor, asociados a tu ID de usuario de osu!: los objetivos que creas (tipo de objetivo, meta, progreso y estado), tu cartera y colección de sobres de cartas (cartas obtenidas y momentos en que se sacaron) y tus decisiones de inclusión o exclusión del roster. El panel de My Stats no almacena nada adicional; solo te muestra datos que el sitio ya tiene sobre tu cuenta."
+
+#: src/routes/privacy.tsx
+msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, the display name and about text a restricted account can set, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile settings such as your display name and about text, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Some skillset practice packs are checked the same way the courses are. Clearing one of their charts at its ladder's bar sets that skill's dan outright, without the four passes a skill normally needs. For example, clearing <0>Volcanic ~ Delta ~</0> sets your 4K speed dan to <1>delta</1>."
@@ -25622,6 +25764,10 @@ msgstr "Toca una carta de la bandeja para ponerla, toca una de las tuyas para ed
 #: src/components/packs/run/chain/ChainTable.tsx
 #~ msgid "Tap a card in your hand for {0}"
 #~ msgstr "Toca una carta de tu mano para {0}"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Tap a keymode to hide or show it."
+msgstr "Toca un keymode para ocultarlo o mostrarlo."
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
@@ -28126,7 +28272,7 @@ msgstr "Tiempo jugado"
 msgid "Time-stop knives"
 msgstr "Cuchillos de tiempo detenido"
 
-#. placeholder {0}: Math.round(active.bpm)
+#. placeholder {0}: Math.round(active.bpm * playRate)
 #: src/components/maps/MapDetailModal.tsx
 msgid "timed at {0}"
 msgstr "timing a {0}"
@@ -28202,8 +28348,12 @@ msgid "to make your own profile themes."
 msgstr "para crear tus propios temas de perfil."
 
 #: src/routes/privacy.tsx
-msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
-msgstr "Para prevenir el abuso, el servidor cuenta las peticiones por dirección IP con fines de limitación de tasa y limita las conexiones en vivo simultáneas por IP. Estos contadores existen solo en memoria: el backend no escribe direcciones IP ni user agents en su base de datos ni en sus registros. Los proveedores de alojamiento conservan registros de peticiones estándar, y el servidor registra detalles operativos como la actividad de los trabajos, las llamadas a la API de osu! de origen y los errores para monitorizar el estado del servicio."
+#~ msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+#~ msgstr "Para prevenir el abuso, el servidor cuenta las peticiones por dirección IP con fines de limitación de tasa y limita las conexiones en vivo simultáneas por IP. Estos contadores existen solo en memoria: el backend no escribe direcciones IP ni user agents en su base de datos ni en sus registros. Los proveedores de alojamiento conservan registros de peticiones estándar, y el servidor registra detalles operativos como la actividad de los trabajos, las llamadas a la API de osu! de origen y los errores para monitorizar el estado del servicio."
+
+#: src/routes/privacy.tsx
+msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses to its database or logs. The server's request logs keep a shortened IP address with the last part removed and no user agent, for up to 90 days. Cloudflare, which sits in front of the site, keeps its own request logs. The server also records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+msgstr ""
 
 #: src/routes/privacy.tsx
 msgid "To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -28332,6 +28482,10 @@ msgstr "Top {GLOBAL_ALBUM_CAP}"
 msgid "Top {GLOBAL_ALBUM_CAP} players"
 msgstr "Top {GLOBAL_ALBUM_CAP} jugadores"
 
+#: src/routes/discord.tsx
+msgid "Top {n} of the keymode"
+msgstr "Top {n} del modo de teclas"
+
 #: src/components/player/ProfileStatCards.tsx
 msgid "top {top}%"
 msgstr "top {top}%"
@@ -28395,6 +28549,10 @@ msgstr "Top plays"
 msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "Mejores jugadas"
+
+#: src/routes/discord.tsx
+msgid "Top plays in"
+msgstr "Top plays en"
 
 #: src/components/player/InsightModals.tsx
 msgid "top pp"
@@ -29007,9 +29165,9 @@ msgstr "Mapa no calificable. Este play no cuenta para el rating de skill ni de d
 msgid "Unrated"
 msgstr "Sin clasificar"
 
-#: src/routes/player/$username.tsx
-#~ msgid "Unrated plays"
-#~ msgstr "Jugadas sin clasificar"
+#: src/components/me/MyDataPanel.tsx
+msgid "Unrated plays"
+msgstr "Jugadas sin clasificar"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"
@@ -29075,8 +29233,8 @@ msgstr "hasta el nivel del chart +0.1"
 #~ msgstr "Hasta tres pases de una habilidad quedan fuera de su promedio cuando acreditan más de cinco niveles por debajo del promedio de tus cinco mejores en ella. Siguen apareciendo en la ventana de dan, marcados como <0>no cuenta</0>."
 
 #: src/routes/dan-estimates.tsx
-msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
-msgstr "Hasta tres pases de un skill quedan fuera cuando acreditan más de cinco niveles por debajo del promedio de tus mejores cinco en él. La ventana de dan los marca como <0>no cuenta</0>."
+#~ msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
+#~ msgstr "Hasta tres pases de un skill quedan fuera cuando acreditan más de cinco niveles por debajo del promedio de tus mejores cinco en él. La ventana de dan los marca como <0>no cuenta</0>."
 
 #: src/components/maps/ChartLabelReport.tsx
 msgid "Update"
@@ -29166,6 +29324,10 @@ msgstr "Subir skin"
 #~ msgid "Upload the picture"
 #~ msgstr "Sube la imagen"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Upload without them"
+msgstr "Subir sin ellos"
+
 #: src/routes/skins_.$id.tsx
 msgid "Uploaded"
 msgstr "Subida"
@@ -29191,6 +29353,10 @@ msgstr "subida por <0>{0}</0>"
 #: src/routes/replay_.community.tsx
 #~ msgid "Uploaded by the Community ({total})"
 #~ msgstr "Subidos por la comunidad ({total})"
+
+#: src/routes/privacy.tsx
+msgid "Uploaded replays are unlisted, not private: anyone with the link can watch them. Private skins are shown only to you. If you like a skin without signing in, the site stores a random browser ID and a salted hash of your network, not your IP address."
+msgstr ""
 
 #: src/routes/skins.tsx
 msgid "uploader"
@@ -29775,6 +29941,9 @@ msgid "Warming this player up... first draws can take a moment"
 msgstr "Calentando a este jugador... las primeras sacadas pueden tardar un poco"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Watch"
 msgstr "Ver"
 
@@ -29790,10 +29959,12 @@ msgstr "Ver un anuncio para revivir"
 msgid "Watch osu!mania replays in your browser."
 msgstr "Mira replays de osu!mania en tu navegador."
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ScorePlayDetailModal.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/StableResultsScreen.tsx
+#: src/components/ui/ReplayChip.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -30026,6 +30197,10 @@ msgstr "Cuándo entró cada carta a tu colección"
 #: src/components/me/MyDataPanel.tsx
 msgid "When you play"
 msgstr "Cuando juegas"
+
+#: src/routes/privacy.tsx
+msgid "When you send a bug report, feedback, or a translation report, the site stores your message, the page you were on, any screenshots, replies in the thread, and your osu! account if you are signed in. Bug reports also include your browser user agent, screen size, language, and country."
+msgstr ""
 
 #: src/routes/communities.tsx
 msgid "where"
@@ -30947,13 +31122,13 @@ msgid "Your country isn't tracked yet, so there's nothing to record your plays a
 msgstr "Tu país aún no está en el tracker, así que no hay nada contra lo que registrar tus plays."
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit"
-msgstr "Tu crédito"
+#~ msgid "Your credit"
+#~ msgstr "Tu crédito"
 
 #. placeholder {0}: formatDanValue(landedValue)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit: {0}"
-msgstr "Tu crédito: {0}"
+#~ msgid "Your credit: {0}"
+#~ msgstr "Tu crédito: {0}"
 
 #: src/routes/recommendations.tsx
 msgid "your dan"
@@ -31151,6 +31326,15 @@ msgstr "Tu pase"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
 #~ msgstr "Tu panel personal: ranks, pp, totales de actividad y progreso de metas."
+
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play"
+msgstr "Tu jugada"
+
+#. placeholder {0}: formatDanValue(landedValue)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play: {0}"
+msgstr "Tu jugada: {0}"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Your plays"

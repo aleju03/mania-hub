@@ -26,7 +26,7 @@ it("headlines the LN value on a 4K LN chart when it is the hardest axis", () => 
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} /></I18nProvider>);
   expect(headline()).toBe("22.29");
   fireEvent.mouseEnter(screen.getByText("22.29", { selector: "span:not(.text-\\[18px\\])" }).parentElement!);
-  expect(screen.getByRole("tooltip").textContent).toBe("Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.");
+  expect(screen.queryByRole("tooltip")).toBeNull();
 });
 
 it("shows only one LN MSD even when cached values contain Dan family ratings", () => {

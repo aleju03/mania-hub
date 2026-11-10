@@ -60,6 +60,7 @@ export function DanProgressRail({
   landed,
   landedLabel,
   rejected = false,
+  courseCredit = false,
   formatLabel,
 }: {
   context: DanScaleContext;
@@ -69,6 +70,8 @@ export function DanProgressRail({
   landedLabel?: string | null;
   /** The clear credits nothing, so there is no landed level to draw. */
   rejected?: boolean;
+  /** A practice course set the credit outright, so the gap is not accuracy. */
+  courseCredit?: boolean;
   /** Applies the reader's label preference (whole dans) to the hover readout. */
   formatLabel?: (label: string) => string;
 }) {
@@ -80,6 +83,11 @@ export function DanProgressRail({
   const at = (value: number) => Math.min(1, Math.max(0, (value - range.lo) / span));
   const bands = Array.from({ length: span }, (_, index) => Math.ceil(range.lo) + index);
   const landedBand = landedValue != null ? Math.round(landedValue) : chart != null ? Math.round(chart) : null;
+  // Read off the two printed values so the line always matches them.
+  const shift = chart != null && landedValue != null && !courseCredit
+    ? Math.round(landedValue * 100) - Math.round(chart * 100)
+    : 0;
+  const shiftText = `${shift > 0 ? "+" : "\u2212"}${(Math.abs(shift) / 100).toFixed(2)}`;
   const accent = (landedLabel ? danTierColor(danTierSuffix(landedLabel)) : null) ?? "var(--color-osu-pink)";
   const readValue = (event: React.PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -104,7 +112,7 @@ export function DanProgressRail({
         <div className="flex min-w-0 flex-col gap-1.5">
           <span className="flex items-center gap-1.5 text-[9px] text-osu-f1/70">
             <span className="h-1.5 w-1.5 rotate-45 border border-osu-l2" aria-hidden="true" />
-            <Trans>Chart estimate</Trans>
+            <Trans>Map</Trans>
           </span>
           <span className="text-[25px] font-bold leading-none tabular-nums text-osu-l2">{chart != null ? formatDanValue(chart) : "—"}</span>
           <span className="text-[11px] font-semibold text-osu-f1/70">{danDisplayLabel(chartLabel) ?? "—"}</span>
@@ -113,11 +121,14 @@ export function DanProgressRail({
         <div className="flex min-w-0 flex-col gap-1.5">
           <span className="flex items-center gap-1.5 text-[9px] text-osu-f1/70">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: landedValue != null ? accent : "currentColor" }} aria-hidden="true" />
-            <Trans>Your credit</Trans>
+            <Trans>Your play</Trans>
           </span>
           <span className="text-[25px] font-bold leading-none tabular-nums" style={{ color: landedValue != null ? accent : "var(--color-osu-f1)" }}>{landedValue != null ? formatDanValue(landedValue) : "—"}</span>
           <span className="text-[11px] font-semibold text-osu-l1">{landedValue != null ? danDisplayLabel(landedLabel) ?? "—" : rejected ? t`No dan credit` : "—"}</span>
         </div>
+        {shift !== 0 && (
+          <span className="col-start-3 -mt-1 whitespace-nowrap text-[11px] tabular-nums text-osu-f1/70">{t`${shiftText} for accuracy`}</span>
+        )}
       </div>
       <div className="flex min-h-[136px] flex-1 justify-center gap-3 border-t border-white/5 pt-3">
         <div className="relative flex flex-1 justify-center gap-3" onPointerMove={readValue} onPointerLeave={() => setHover(null)}>
@@ -161,7 +172,7 @@ export function DanProgressRail({
             {chart != null && (
               <span
                 data-testid="dan-chart-marker"
-                title={t`Chart estimate: ${formatDanValue(chart)}`}
+                title={t`Map: ${formatDanValue(chart)}`}
                 className="absolute left-1/4 h-2 w-2 -translate-x-1/2 translate-y-1/2 rotate-45 border border-osu-l2 bg-osu-b4"
                 style={{ bottom: `${at(chart) * 100}%` }}
               />
@@ -169,7 +180,7 @@ export function DanProgressRail({
             {landedValue != null && (
               <span
                 data-testid="dan-credit-marker"
-                title={t`Your credit: ${formatDanValue(landedValue)}`}
+                title={t`Your play: ${formatDanValue(landedValue)}`}
                 className="absolute left-3/4 h-3 w-3 -translate-x-1/2 translate-y-1/2 rounded-full border border-white/25"
                 style={{ bottom: `${at(landedValue) * 100}%`, background: accent }}
               />

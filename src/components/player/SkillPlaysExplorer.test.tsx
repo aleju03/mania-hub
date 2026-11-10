@@ -319,6 +319,74 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     await waitFor(() => expect(screen.queryByText("Best 2")).toBeNull());
   });
 
+  it("narrows the list to maps matching every word of the search", async () => {
+    fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {
+      const order = options.sort === "recent" ? "Recent" : "Best";
+      return Promise.resolve({
+        items: [
+          { ...play(1, order), artist: "Camellia", version: "Insane" },
+          { ...play(2, order), artist: "Camellia", version: "Hard" },
+          { ...play(3, order), artist: "Other", version: "Insane" },
+        ],
+        total: 3,
+        unfilteredTotal: 3,
+        limit: 200,
+        offset: 0,
+      });
+    });
+
+    render(
+      <I18nProvider i18n={getI18n("en")}>
+        <SkillPlaysExplorer userId={246810} username="player" modes={[mode]} view="msd" />
+      </I18nProvider>,
+    );
+
+    await screen.findByText("Best 1");
+    fireEvent.change(screen.getByRole("textbox", { name: "Search maps" }), { target: { value: "camellia insane" } });
+    await waitFor(() => expect(screen.queryByText("Best 2")).toBeNull());
+    expect(screen.getByText("Best 1")).toBeTruthy();
+    expect(screen.queryByText("Best 3")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(await screen.findByText("Best 3")).toBeTruthy();
+  });
+
+  it("searches every Dan clear, not just the best 200 the list opens with", async () => {
+    const clear = (index: number) => ({
+      play: { ...play(index, "Best"), title: index === 230 ? "Jumpstream Collection 3" : `Best ${index}` },
+      chartDan: 5, chartDanLabel: "5", creditedDan: 5, creditedDanLabel: "5",
+      clearAccuracy: 0.97, skillsets: ["stamina"], countsTowardDan: true,
+    });
+    fetchDanEvidence.mockImplementation((_: number, __: number, ___: string, options: { offset?: number }) => {
+      const offset = options.offset ?? 0;
+      const clears = Array.from({ length: Math.min(200, 250 - offset) }, (_, i) => clear(offset + i + 1));
+      return Promise.resolve({ clears, rejected: [], totalClears: 250 });
+    });
+    render(<I18nProvider i18n={getI18n("en")}>
+      <SkillPlaysExplorer userId={41019} username="player" modes={[mode]} view="dan" />
+    </I18nProvider>);
+    await waitFor(() => expect(fetchDanEvidence).toHaveBeenCalled());
+    fireEvent.change(screen.getByRole("textbox", { name: "Search maps" }), { target: { value: "jumpstream collection" } });
+    expect(await screen.findByText("Jumpstream Collection 3", undefined, { timeout: 5000 })).toBeTruthy();
+    expect(fetchDanEvidence.mock.calls.some(([, , , options]) => options?.offset === 200)).toBe(true);
+  }, 30_000);
+
+  it("searches every MSD play, not just the first 200", async () => {
+    fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { offset?: number }) => {
+      const offset = options.offset ?? 0;
+      const items = Array.from({ length: Math.min(200, 230 - offset) }, (_, i) => {
+        const index = offset + i + 1;
+        return { ...play(index, "Best"), title: index === 215 ? "Jumpstream Collection 3" : `Best ${index}` };
+      });
+      return Promise.resolve({ items, total: 230, unfilteredTotal: 230, limit: 200, offset });
+    });
+    render(<I18nProvider i18n={getI18n("en")}>
+      <SkillPlaysExplorer userId={41021} username="player" modes={[mode]} view="msd" />
+    </I18nProvider>);
+    await waitFor(() => expect(fetchSkillPlays).toHaveBeenCalled());
+    fireEvent.change(screen.getByRole("textbox", { name: "Search maps" }), { target: { value: "jumpstream collection" } });
+    expect(await screen.findByText("Jumpstream Collection 3", undefined, { timeout: 5000 })).toBeTruthy();
+  }, 30_000);
+
   // Rendering and querying 60 rich rows can exceed 10s on a CPU-capped VPS.
   it("reveals 50 at a time and filters or swaps a prefetched order without another request", async () => {
     fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {

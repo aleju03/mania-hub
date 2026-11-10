@@ -100,25 +100,62 @@ fn resolve_companella<T: CompanellaGate>(
     Ok(Resolved { first, classify_input, companella })
 }
 
+/// The highest Companella dan of the chart at the rates just below, so a
+/// higher rate never rates lower.
+///
+/// Each of those rates is a whole estimate of its own and none uses another's
+/// work, so they run at the same time: the first on this thread, the others on
+/// threads of their own, each with its own context (whose caches are
+/// single-threaded). Their results are then taken in order, as one after the
+/// other: the first error wins, and of equal dans the first.
 fn companella_rc_floor(ctx: &ChartContext, input: &ClassifyInput) -> Result<Option<RcFloor>, Unported> {
     let rate = rate_or_one(input.rate);
+    let rates: Vec<f64> = COMPANELLA_RATE_FLOOR_STEPS
+        .iter()
+        .map(|step| jsmath::round((rate - step) * 100.0) / 100.0)
+        .take_while(|&lower_rate| lower_rate >= COMPANELLA_RATE_FLOOR_MIN_RATE)
+        .collect();
+    let Some((&first, rest)) = rates.split_first() else { return Ok(None) };
+
+    let (text, map, parsed, up) = (ctx.osu_text, ctx.map, ctx.parsed, ctx.up);
+    let floors: Vec<Result<Option<RcFloor>, Unported>> = std::thread::scope(|scope| {
+        let others: Vec<_> = rest
+            .iter()
+            .map(|&lower_rate| {
+                scope.spawn(move || {
+                    let mut ctx = ChartContext::new(text, map, parsed);
+                    ctx.up = up;
+                    companella_floor_at(&ctx, input, lower_rate)
+                })
+            })
+            .collect();
+        let first = companella_floor_at(ctx, input, first);
+        std::iter::once(first)
+            .chain(others.into_iter().map(|other| other.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))))
+            .collect()
+    });
+
     let mut floor: Option<RcFloor> = None;
-    for step in COMPANELLA_RATE_FLOOR_STEPS {
-        let lower_rate = jsmath::round((rate - step) * 100.0) / 100.0;
-        if lower_rate < COMPANELLA_RATE_FLOOR_MIN_RATE {
-            break;
-        }
-        let probe = ClassifyInput { rate: Some(lower_rate), marathon_msd_values: None, companella: None, rc_floor: None, ..input.clone() };
-        let lower = resolve_companella(ctx, &probe, classify_chart_rc, None, None)?;
-        let Some(companella) = lower.companella else { continue };
-        let refined = classify_chart_rc(ctx, &ClassifyInput { companella: Some(companella), ..lower.classify_input })?;
-        if let Some((source, raw, raw_dan)) = refined.rc {
-            if source == "leoblack-companella" && raw_dan > floor.as_ref().map_or(f64::NEG_INFINITY, |f| f.numeric) {
-                floor = Some(RcFloor { text: raw, numeric: raw_dan });
+    for candidate in floors {
+        if let Some(candidate) = candidate? {
+            if candidate.numeric > floor.as_ref().map_or(f64::NEG_INFINITY, |f| f.numeric) {
+                floor = Some(candidate);
             }
         }
     }
     Ok(floor)
+}
+
+/// The Companella dan of the chart at `lower_rate`, if Companella rates it.
+fn companella_floor_at(ctx: &ChartContext, input: &ClassifyInput, lower_rate: f64) -> Result<Option<RcFloor>, Unported> {
+    let probe = ClassifyInput { rate: Some(lower_rate), marathon_msd_values: None, companella: None, rc_floor: None, ..input.clone() };
+    let lower = resolve_companella(ctx, &probe, classify_chart_rc, None, None)?;
+    let Some(companella) = lower.companella else { return Ok(None) };
+    let refined = classify_chart_rc(ctx, &ClassifyInput { companella: Some(companella), ..lower.classify_input })?;
+    Ok(match refined.rc {
+        Some((source, raw, raw_dan)) if source == "leoblack-companella" => Some(RcFloor { text: raw, numeric: raw_dan }),
+        _ => None,
+    })
 }
 
 pub fn classify_chart_with_companella(

@@ -28,7 +28,7 @@ A play goes through `player/skill-ratings.ts`: its accuracy becomes a Wife3 goal
 
 ## Prism
 
-Prism 0.26 rates 6K, 7K and 8K charts, the keymodes MinaCalc was never built for. Its numbers are on the MSD scale and in MinaCalc's skillset slots.
+Prism 0.26 rates 6K, 7K and 8K charts, the keymodes MinaCalc was never built for. Its numbers are on the MSD scale and in MinaCalc's skillset slots. It is still under development and will become much more accurate in the future.
 
 It is a Cargo workspace (`cargo build --release` in `prism/`):
 

@@ -11,6 +11,7 @@ Which charts and plays player ratings leave out, and why. Thresholds and the cor
   - **adjusted**: the proven sections are cut from the calculator input (no timestamp stitching) and the rest is rated with a conservative retained-note goal (all original accuracy loss goes to the remaining notes; dan clear accuracy uses the same adjustment). The original accuracy stays beside `vibroAdjustment`.
   - **excluded** (vibro): kept out of player ratings and stored in `plays_json.vibroExcluded` (`chart_vibro` for the base chart, `rate_vibro` for the played rate).
   - **unrateable** (`jumptrill`, `stacked_heads`, `flam_chords`, read by `isUnrateableExclusion`; `map_search_index.vibro = 2`): nothing in the chart is past a human hand, the rating just cannot follow it. Players see "unrateable", not vibro.
+  - **rated jumptrill** (4K only, `isRatedJumptrill`, `RateVibroCheck.jumptrill`): a chart the jumptrill rule alone excludes whose bursts are written as jumps (90% of burst notes in same-row hand jumps). MinaCalc reads the jumps that are played, so the play is rated in full and stored with `jumptrill: true`; the dan clear rules refuse it (`jumptrill` reject). A jumptrill written as a roll or stream stays unrateable. Companella imports keep the old behaviour: unrated on any jumptrill chart.
 - A flagged chart keeps its MSD; only player ratings skip it.
 
 ## Code
@@ -29,7 +30,7 @@ Which charts and plays player ratings leave out, and why. Thresholds and the cor
 - **Quad body** (`scanQuadBody`): charts whose notes sit largely in quad runs lose all of them.
 - **Locked hands** (`locked_hands`): rows of one-hand jumps and quads where each row shares a hand with the one before, so each hand jacks as a unit. A jumptrill alternates hands every row and never qualifies.
 - **Fast trill** (`fast_trill`): long two-finger trills past human speed, removed on their own.
-- **Jumptrill** (`jumptrill`, unrateable): charts built from jumptrills.
+- **Jumptrill** (`jumptrill`): charts built from jumptrills. Unrateable, except that on 4K one written as jumps is rated without dan credit (above).
 - **Hammered chords** and **one-finger body** (`scanHammeredChords`, `scanOneFingerBody`): charts made of short pieces (repeated chords, one-finger runs handed between columns).
 - **Jack streams and fixed fingers** (`scanRepeatedJackStreams`, `scanRepeatedPairs`, `scanFixedFingerWindows`, `scanIsolatedJacks`): sustained streams of short fixed-shape jacks, long single-finger runs under sparse accompaniment, and fixed-finger windows tracked through chord accents. A busy finger under dense changing chords is not isolated-jack evidence, and doubles, triples or slower short jacks do not qualify.
 - **Fast rolls**, **extreme density**, and **sustained density** (`sustained_density`): ten seconds of four-finger density past the line excludes the chart whatever its coverage.

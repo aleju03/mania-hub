@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import JSZip from "jszip";
-import { Check, ChevronDown, Copy, Star, Upload, X } from "lucide-react";
+import { Check, ChevronDown, Copy, Eye, EyeOff, Star, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -10,6 +10,7 @@ import { skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import { buildSkinAssetGroups, type SkinAssetGroup } from "../../lib/skin-asset-explorer";
+import { findSkinDeadWeightInZip, trimSkinArchive, type SkinDeadWeight } from "../../lib/skin-dead-weight";
 import { SkinAssetTiles } from "./SkinAssetExplorer";
 import { DriftTriangles } from "../ui/DriftTriangles";
 import { SkinCard } from "./SkinCard";
@@ -111,6 +112,18 @@ export function SkinUploadModal({
   // keymode being viewed: clicking through the previews used to retarget the
   // cover, so looking at 1K published a 1K card.
   const [coverKeymode, setCoverKeymode] = useState(4);
+  // Keymodes the uploader chose not to show, usually blocks with no note art
+  // of their own. They still render and upload, so showing one later from
+  // the skin settings is instant.
+  const [hiddenKeymodes, setHiddenKeymodes] = useState<Set<number>>(new Set());
+  // At least one keymode stays shown, and a hidden render cannot front the
+  // card, so the cover moves to 4K or the first shown keymode.
+  const updateHiddenKeymodes = (next: Set<number>) => {
+    const shown = (imported?.summary.keymodes ?? []).filter((keys) => !next.has(keys));
+    if (shown.length === 0) return;
+    if (next.has(coverKeymode)) setCoverKeymode(shown.includes(4) ? 4 : shown[0]);
+    setHiddenKeymodes(next);
+  };
   // One rendered playfield per keymode; the selected keymode is the cover.
   const [previews, setPreviews] = useState<Map<number, RenderedPreview>>(new Map());
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -138,6 +151,11 @@ export function SkinUploadModal({
   // stays around so a chip can expand into the actual thumbnails.
   const [assetGroups, setAssetGroups] = useState<SkinAssetGroup[] | null>(null);
   const assetZipRef = useRef<JSZip | null>(null);
+  // Files in the picked .osk that osu! never loads, and how much leaving them
+  // out saved once the uploader did.
+  const [deadWeight, setDeadWeight] = useState<SkinDeadWeight | null>(null);
+  const [trimming, setTrimming] = useState(false);
+  const [trimmedBytes, setTrimmedBytes] = useState<number | null>(null);
   const assetUrlsRef = useRef<Map<string, string>>(new Map());
 
   const revokeAssetUrls = useCallback(() => {
@@ -388,6 +406,8 @@ export function SkinUploadModal({
     setCoverShot(null);
     setPublished(null);
     setAssetGroups(null);
+    setDeadWeight(null);
+    setTrimmedBytes(null);
     // Emptying the pool makes the next open draw a fresh one.
     setBackdropPool([]);
     backdropPoolRef.current = [];
@@ -475,6 +495,7 @@ export function SkinUploadModal({
       const defaultKeymode = keymodes.includes(4) ? 4 : keymodes[0] ?? 4;
       setSelectedKeymode(defaultKeymode);
       setCoverKeymode(defaultKeymode);
+      setHiddenKeymodes(new Set());
       previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
       previewUrlsRef.current = [];
       setPreviews(new Map());
@@ -488,10 +509,18 @@ export function SkinUploadModal({
       // Asset detection reads only the zip's central directory plus name
       // matching, so it fills in quickly after the form appears.
       setAssetGroups(null);
+      setDeadWeight(null);
+      setTrimmedBytes(null);
       revokeAssetUrls();
       assetZipRef.current = null;
       void JSZip.loadAsync(picked)
         .then((zip) => {
+          void findSkinDeadWeightInZip(zip)
+            .then((found) => {
+              // Under a megabyte is not worth a line on the form.
+              if (assetZipRef.current === zip) setDeadWeight(found.bytes >= 1024 * 1024 ? found : null);
+            })
+            .catch(() => {});
           const files = Object.values(zip.files)
             .filter((entry) => !entry.dir)
             .map((entry) => ({
@@ -613,6 +642,36 @@ export function SkinUploadModal({
     setCoverShot((previous) => (previous == null || previous === index ? null : previous > index ? previous - 1 : previous));
   }, []);
 
+  // Swaps the picked file for a copy without the dead weight. Nothing on
+  // screen changes: the flagged files are ones osu! never loads, so the
+  // renders and the form stay as they are.
+  const trimDeadWeight = useCallback(async () => {
+    const zip = assetZipRef.current;
+    if (!zip || !file || !deadWeight || trimming) return;
+    setTrimming(true);
+    setError(null);
+    try {
+      const trimmed = await trimSkinArchive(zip, deadWeight, file);
+      const trimmedZip = await JSZip.loadAsync(trimmed);
+      setFile(trimmed);
+      oskHashRef.current = { file: trimmed, hash: hashOskFile(trimmed) };
+      revokeAssetUrls();
+      assetZipRef.current = trimmedZip;
+      setAssetGroups(buildSkinAssetGroups(Object.values(trimmedZip.files)
+        .filter((entry) => !entry.dir)
+        .map((entry) => ({
+          path: entry.name,
+          size: (entry as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 1,
+        }))));
+      setTrimmedBytes(Math.max(0, file.size - trimmed.size));
+      setDeadWeight(null);
+    } catch {
+      setError(t`Removing the unused files failed. The original file will upload instead.`);
+    } finally {
+      setTrimming(false);
+    }
+  }, [deadWeight, file, revokeAssetUrls, t, trimming]);
+
   const publish = useCallback(async () => {
     const previewEntries = [...previews.entries()].sort(([a], [b]) => a - b);
     if (!file || previewEntries.length === 0 || !previews.get(coverKeymode)) return;
@@ -732,6 +791,7 @@ export function SkinUploadModal({
             pattern: patterns.get(keys) ?? null,
           },
         })),
+        [...hiddenKeymodes].sort((a, b) => a - b),
       );
       track("skin_upload_published", skinEventProperties(skin));
       markSkinsListStale();
@@ -759,7 +819,7 @@ export function SkinUploadModal({
       }
       setStep("form");
     }
-  }, [file, name, author, description, resolution, visibility, onPublished, previews, screenshots, coverKeymode, coverShot, backdropFor, patterns, t, i18n]);
+  }, [file, name, author, description, resolution, visibility, onPublished, previews, screenshots, coverKeymode, coverShot, hiddenKeymodes, backdropFor, patterns, t, i18n]);
 
   const uploading = step === "uploading";
 
@@ -835,6 +895,14 @@ export function SkinUploadModal({
                     resolveAssetUrl={resolveAssetUrl}
                     selectedKeymode={selectedKeymode}
                     setSelectedKeymode={setSelectedKeymode}
+                    hiddenKeymodes={hiddenKeymodes}
+                    toggleHiddenKeymode={(keys) => {
+                      const next = new Set(hiddenKeymodes);
+                      if (next.has(keys)) next.delete(keys);
+                      else next.add(keys);
+                      updateHiddenKeymodes(next);
+                    }}
+                    hideKeymodes={(keys) => updateHiddenKeymodes(new Set([...hiddenKeymodes, ...keys]))}
                     coverKeymode={coverKeymode}
                     setCoverKeymode={(keys) => {
                       setCoverKeymode(keys);
@@ -863,6 +931,10 @@ export function SkinUploadModal({
                     progress={progress}
                     onPublish={() => void publish()}
                     onRepick={() => setStep("pick")}
+                    deadWeight={deadWeight}
+                    trimming={trimming}
+                    trimmedBytes={trimmedBytes}
+                    onTrim={() => void trimDeadWeight()}
                     onDismiss={handleDismiss}
                   />
                 )}
@@ -1096,6 +1168,9 @@ function FormStep({
   resolveAssetUrl,
   selectedKeymode,
   setSelectedKeymode,
+  hiddenKeymodes,
+  toggleHiddenKeymode,
+  hideKeymodes,
   coverKeymode,
   setCoverKeymode,
   name,
@@ -1120,6 +1195,10 @@ function FormStep({
   onPublish,
   onRepick,
   onDismiss,
+  deadWeight,
+  trimming,
+  trimmedBytes,
+  onTrim,
 }: {
   imported: ReplaySkinImportResult | null;
   file: File | null;
@@ -1143,6 +1222,9 @@ function FormStep({
   resolveAssetUrl: (path: string) => Promise<string | null>;
   selectedKeymode: number;
   setSelectedKeymode: (keys: number) => void;
+  hiddenKeymodes: Set<number>;
+  toggleHiddenKeymode: (keys: number) => void;
+  hideKeymodes: (keys: number[]) => void;
   coverKeymode: number;
   setCoverKeymode: (keys: number) => void;
   name: string;
@@ -1170,11 +1252,17 @@ function FormStep({
   onPublish: () => void;
   onRepick: () => void;
   onDismiss: () => void;
+  deadWeight: SkinDeadWeight | null;
+  trimming: boolean;
+  trimmedBytes: number | null;
+  onTrim: () => void;
 }) {
   const { t, i18n } = useLingui();
   const keymodes = imported?.summary.keymodes ?? [];
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
   const heroPreview = previews.get(selectedKeymode);
+  const selectedHidden = hiddenKeymodes.has(selectedKeymode);
+  const removedSize = trimmedBytes != null ? formatSkinFileSize(trimmedBytes) : "";
   // Publishing needs the cover's render, which is not always the one on screen.
   const coverPreview = previews.get(coverKeymode);
   // Keymodes whose [Mania] block resolved no note images render with flat
@@ -1189,6 +1277,7 @@ function FormStep({
     }
     return missing;
   }, [imported]);
+  const shownWithoutNoteArt = keymodes.filter((keys) => keymodesWithoutNoteArt.has(keys) && !hiddenKeymodes.has(keys));
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -1214,22 +1303,35 @@ function FormStep({
             screenshot outranks all of them, so the star moves down there. */}
         <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
           <span className="text-osu-f1"><Trans>Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span></Trans></span>
-          {selectedKeymode === coverKeymode && coverShot == null ? (
-            <span className="flex items-center gap-1 font-bold text-osu-pink">
-              <Star size={11} aria-hidden="true" />
-              <Trans>card cover</Trans>
-            </span>
-          ) : (
-            <button
-              type="button"
-              disabled={uploading}
-              onClick={() => setCoverKeymode(selectedKeymode)}
-              className="flex items-center gap-1 font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default"
-            >
-              <Star size={11} aria-hidden="true" />
-              <Trans>Use {selectedKeymode}K as the card cover</Trans>
-            </button>
-          )}
+          <span className="flex items-center gap-3">
+            {keymodes.length > 1 && (
+              <button
+                type="button"
+                disabled={uploading || (!selectedHidden && keymodes.length - hiddenKeymodes.size <= 1)}
+                onClick={() => toggleHiddenKeymode(selectedKeymode)}
+                className="flex items-center gap-1 font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default disabled:opacity-50"
+              >
+                {selectedHidden ? <Eye size={11} aria-hidden="true" /> : <EyeOff size={11} aria-hidden="true" />}
+                {selectedHidden ? <Trans>Show {selectedKeymode}K</Trans> : <Trans>Hide {selectedKeymode}K</Trans>}
+              </button>
+            )}
+            {selectedHidden ? null : selectedKeymode === coverKeymode && coverShot == null ? (
+              <span className="flex items-center gap-1 font-bold text-osu-pink">
+                <Star size={11} aria-hidden="true" />
+                <Trans>card cover</Trans>
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => setCoverKeymode(selectedKeymode)}
+                className="flex items-center gap-1 font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default"
+              >
+                <Star size={11} aria-hidden="true" />
+                <Trans>Use {selectedKeymode}K as the card cover</Trans>
+              </button>
+            )}
+          </span>
         </div>
         {/* Every keymode read from the skin, rendered with the skin's own
             notes; the starred one is what the browse card shows. */}
@@ -1239,6 +1341,7 @@ function FormStep({
             const selected = selectedKeymode === keys;
             const isCover = coverKeymode === keys && coverShot == null;
             const missingNoteArt = keymodesWithoutNoteArt.has(keys);
+            const hidden = hiddenKeymodes.has(keys);
             return (
               <button
                 key={keys}
@@ -1253,7 +1356,7 @@ function FormStep({
               >
                 <div className="aspect-video w-full bg-osu-b4">
                   {preview ? (
-                    <img src={preview.url} alt={t`${keys}K thumbnail`} className="h-full w-full object-cover" />
+                    <img src={preview.url} alt={t`${keys}K thumbnail`} className={`h-full w-full object-cover ${hidden ? "opacity-30" : ""}`} />
                   ) : (
                     <div className="flex h-full items-center justify-center text-[10px] text-osu-f1/60"><Trans>rendering</Trans></div>
                   )}
@@ -1266,16 +1369,31 @@ function FormStep({
                   {overriddenKeymodes.has(keys) && (
                     <span className={selected ? "text-white/80" : "text-osu-f1/70"} title={t`Has its own backdrop`} aria-hidden="true">*</span>
                   )}
-                  {missingNoteArt && <span className={selected ? "text-white/80" : "text-osu-yellow"} aria-hidden="true">!</span>}
+                  {missingNoteArt && !hidden && <span className={selected ? "text-white/80" : "text-osu-yellow"} aria-hidden="true">!</span>}
+                  {hidden && <EyeOff size={9} className={selected ? "text-white/80" : "text-osu-f1"} aria-label={t`hidden`} />}
                 </div>
               </button>
             );
           })}
         </div>
-        {keymodesWithoutNoteArt.has(selectedKeymode) && (
+        {keymodesWithoutNoteArt.has(selectedKeymode) && !selectedHidden && (
           <p className="mt-2 text-[11px] font-semibold text-osu-yellow">
             <Trans>The {selectedKeymode}K block resolves no note images, so this preview uses flat colours.</Trans>
           </p>
+        )}
+        {/* One click for the usual case: a skin made for one or two keymodes
+            whose other blocks all fall back to flat colours. Offered only
+            while some keymode with its own note images stays shown. */}
+        {shownWithoutNoteArt.length > 0 && keymodes.some((keys) => !keymodesWithoutNoteArt.has(keys)) && (
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => hideKeymodes(shownWithoutNoteArt)}
+            className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default"
+          >
+            <EyeOff size={11} aria-hidden="true" />
+            <Trans>Hide the keymodes with no note images</Trans>
+          </button>
         )}
 
         {/* The backdrop behind the field, and the notes on it: a pattern is cut
@@ -1404,6 +1522,14 @@ function FormStep({
         />
 
         <div className="mt-auto flex flex-col gap-2.5 pt-1">
+          {deadWeight && !uploading && (
+            <SkinDeadWeightNotice deadWeight={deadWeight} trimming={trimming} onTrim={onTrim} />
+          )}
+          {removedSize && !deadWeight && (
+            <p className="text-[11.5px] text-osu-f1">
+              <Trans>Removed {removedSize} of files osu! never loads.</Trans>
+            </p>
+          )}
           {error && (
             <div className="text-[12px] font-semibold text-osu-red-light">
               {error}
@@ -1455,6 +1581,88 @@ function FormStep({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const DEAD_WEIGHT_LABELS = {
+  archive: msg`Another skin or archive inside it`,
+  leftover: msg`Editor and system files`,
+  unreferenced: msg`Files in folders skin.ini doesn't use`,
+  copy: msg`Copies of files`,
+} as const;
+
+function formatEntrySize(bytes: number): string {
+  return bytes < 100 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : formatSkinFileSize(bytes);
+}
+
+// Files in the .osk that osu! never loads: one line with what they cost, the
+// button that uploads a copy without them, and the files grouped by reason.
+function SkinDeadWeightNotice({
+  deadWeight,
+  trimming,
+  onTrim,
+}: {
+  deadWeight: SkinDeadWeight;
+  trimming: boolean;
+  onTrim: () => void;
+}) {
+  const { t, i18n } = useLingui();
+  const [expanded, setExpanded] = useState(false);
+  const size = formatSkinFileSize(deadWeight.bytes);
+  const fileCount = deadWeight.files.length;
+  const groups = (Object.keys(DEAD_WEIGHT_LABELS) as Array<keyof typeof DEAD_WEIGHT_LABELS>)
+    .map((kind) => {
+      const files = deadWeight.files.filter((entry) => entry.kind === kind);
+      return { kind, files, bytes: files.reduce((total, entry) => total + entry.bytes, 0) };
+    })
+    .filter((group) => group.files.length > 0)
+    .sort((a, b) => b.bytes - a.bytes);
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-white/[0.07] pt-2.5">
+      <p className="text-[12px] leading-snug text-osu-l2">
+        <Trans>{size} of this .osk is files osu! never loads.</Trans>
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onTrim}
+          disabled={trimming}
+          className="rounded-full bg-osu-b3/60 px-3.5 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-50"
+        >
+          {trimming ? <Trans>Removing...</Trans> : <Trans>Upload without them</Trans>}
+        </button>
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+          className="flex items-center gap-1 text-[11.5px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
+        >
+          {t`${plural(fileCount, { one: "# file", other: "# files" })}`}
+          <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      </div>
+      {expanded && (
+        <div className="max-h-[200px] overflow-y-auto text-[11px]">
+          {groups.map((group) => (
+            <div key={group.kind} className="pb-1.5">
+              <div className="flex justify-between gap-3 py-0.5 font-bold text-osu-l2">
+                <span>{i18n._(DEAD_WEIGHT_LABELS[group.kind])}</span>
+                <span className="shrink-0 tabular-nums">{formatEntrySize(group.bytes)}</span>
+              </div>
+              <ul className="text-osu-f1">
+                {group.files.map((entry) => (
+                  <li key={entry.path} className="flex justify-between gap-3 py-px">
+                    <span className="min-w-0 truncate" title={entry.path}>{entry.path}</span>
+                    <span className="shrink-0 tabular-nums">{formatEntrySize(entry.bytes)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -22,7 +22,7 @@ import { skillPlayShareLink } from "../../lib/skill-play-share";
 // 50 rows at a time. Controls that only rearrange or narrow it never wait on a
 // round trip; changing the actual subject (keymode/skill/side) loads a new one.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Ban, ChevronDown, Clock, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Ban, ChevronDown, Clock, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerDanEvidenceDirect,
@@ -32,6 +32,7 @@ import {
   peekLiveMapSearchEntry,
   prefetchLiveMapSearchEntry,
   type LiveMapSearchEntry,
+  type LivePlayerDanEvidence,
   type LivePlayerDanEvidencePlay,
   fetchLivePlayerUnratedPlaysDirect,
   type LivePlayerDanPendingPlay,
@@ -56,6 +57,7 @@ import {
 import { getManiaGradeFromAccuracy } from "#/lib/score";
 import { MapDetailModal, accuracyCurrencyLabel, type MapDetailPlayContext } from "#/components/maps/MapDetailModal";
 import { DanMark } from "./DanMark";
+import { ReplayChip } from "#/components/ui/ReplayChip";
 import {
   SKILL_PLAYS_RATE_CAPS,
   readSkillPlaysPrefs,
@@ -162,14 +164,35 @@ function loadMsdCohort(
       ...(sort === "recent" ? { includeRejected: true } : {}),
       ...(options.fresh ? { fresh: true } : {}),
     });
-    if (sort !== "recent") return page.items.slice(0, PLAYS_COHORT_SIZE);
-    // The unrated plays have no number to rank by, so only Recent has a place
-    // for them: merged by date with the rated ones, same as the dan list.
-    const rejected = (page.rejected ?? []).map((play) => ({ ...play, ratingExcluded: true as const }));
-    return [...page.items, ...rejected]
-      .sort((left, right) => compareByPlayedAt(left.playedAt, right.playedAt) || left.beatmapId - right.beatmapId)
-      .slice(0, PLAYS_COHORT_SIZE);
+    return msdRowsFrom(page.items, page.rejected, sort).slice(0, PLAYS_COHORT_SIZE);
   });
+}
+
+// Every rated play, for a search: the cohort above holds the first 200.
+function loadMsdSearchCohort(userId: number, keyCount: number, axis: string, sort: "rating" | "recent"): Promise<LivePlayerSkillPlay[]> {
+  return loadCachedCohort(msdCohortCache, `${msdCohortKey(userId, keyCount, axis, sort)}:all`, async () => {
+    const first = await fetchLivePlayerSkillPlaysDirect(userId, keyCount, axis, {
+      limit: PLAYS_COHORT_SIZE,
+      offset: 0,
+      sort,
+      ...(sort === "recent" ? { includeRejected: true } : {}),
+    });
+    const items = [...first.items];
+    for (let offset = PLAYS_COHORT_SIZE; offset < first.total; offset += PLAYS_COHORT_SIZE) {
+      const page = await fetchLivePlayerSkillPlaysDirect(userId, keyCount, axis, { limit: PLAYS_COHORT_SIZE, offset, sort });
+      items.push(...page.items);
+      if (page.items.length < PLAYS_COHORT_SIZE) break;
+    }
+    return msdRowsFrom(items, first.rejected, sort);
+  });
+}
+
+function msdRowsFrom(items: LivePlayerSkillPlay[], rejected: LivePlayerSkillPlay[] | undefined, sort: "rating" | "recent"): LivePlayerSkillPlay[] {
+  if (sort !== "recent") return items;
+  // The unrated plays have no number to rank by, so only Recent has a place
+  // for them: merged by date with the rated ones, same as the dan list.
+  return [...items, ...(rejected ?? []).map((play) => ({ ...play, ratingExcluded: true as const }))]
+    .sort((left, right) => compareByPlayedAt(left.playedAt, right.playedAt) || left.beatmapId - right.beatmapId);
 }
 
 /** Newest first; a play with no stored timestamp sorts last, never to the top. */
@@ -216,25 +239,50 @@ function loadDanCohort(
       sort,
       ...(options.fresh ? { fresh: true } : {}),
     });
-    const rows: DanRow[] = [
-      ...payload.clears.map((clear): DanRow => ({ kind: "clear", play: clear.play, dan: clear.creditedDan, clear })),
-      ...(sort === "recent" ? payload.rejected ?? [] : []).map((rejected): DanRow => ({
-        kind: "rejected",
-        play: rejected.play,
-        dan: rejected.chartDan,
-        rejected,
-      })),
-      // Recent is where a player looks for the play they just set. A play the
-      // rating has not reached yet shows there as waiting, not as missing.
-      ...(sort === "recent" ? payload.pending ?? [] : []).map((pending): DanRow => ({
-        kind: "pending",
-        play: pending.play,
-        dan: null,
-        pending,
-      })),
-    ];
-    return rows.sort((left, right) => compareDanRows(sort, left, right)).slice(0, PLAYS_COHORT_SIZE);
+    return danRowsFrom(payload, sort).slice(0, PLAYS_COHORT_SIZE);
   });
+}
+
+// Every clear, for a search: the cohort above holds the best 200, and a map
+// further down could never be found. Read a page at a time, only while a
+// search is open.
+function loadDanSearchCohort(userId: number, keyCount: number, side: "rc" | "ln", sort: "rating" | "recent"): Promise<DanRow[]> {
+  return loadCachedCohort(danCohortCache, `${danCohortKey(userId, keyCount, side, sort)}:all`, async () => {
+    const first = await fetchLivePlayerDanEvidenceDirect(userId, keyCount, side, {
+      limit: PLAYS_COHORT_SIZE,
+      includeRejected: true,
+      rejectedLimit: PLAYS_COHORT_SIZE,
+      sort,
+    });
+    const clears = [...first.clears];
+    for (let offset = PLAYS_COHORT_SIZE; offset < first.totalClears; offset += PLAYS_COHORT_SIZE) {
+      const page = await fetchLivePlayerDanEvidenceDirect(userId, keyCount, side, { limit: PLAYS_COHORT_SIZE, offset, sort });
+      clears.push(...page.clears);
+      if (page.clears.length < PLAYS_COHORT_SIZE) break;
+    }
+    return danRowsFrom({ ...first, clears }, sort);
+  });
+}
+
+function danRowsFrom(payload: LivePlayerDanEvidence, sort: "rating" | "recent"): DanRow[] {
+  const rows: DanRow[] = [
+    ...payload.clears.map((clear): DanRow => ({ kind: "clear", play: clear.play, dan: clear.creditedDan, clear })),
+    ...(sort === "recent" ? payload.rejected ?? [] : []).map((rejected): DanRow => ({
+      kind: "rejected",
+      play: rejected.play,
+      dan: rejected.chartDan,
+      rejected,
+    })),
+    // Recent is where a player looks for the play they just set. A play the
+    // rating has not reached yet shows there as waiting, not as missing.
+    ...(sort === "recent" ? payload.pending ?? [] : []).map((pending): DanRow => ({
+      kind: "pending",
+      play: pending.play,
+      dan: null,
+      pending,
+    })),
+  ];
+  return rows.sort((left, right) => compareDanRows(sort, left, right));
 }
 
 function oppositeSort(sort: "rating" | "recent"): "rating" | "recent" {
@@ -262,6 +310,41 @@ function loadUnratedCohort(
     });
     return page.items.slice(0, PLAYS_COHORT_SIZE);
   });
+}
+
+// Every unrated play, for a search: the cohort above holds the first 200. A
+// backend that cannot page answers without an offset, and the first page stands.
+function loadUnratedSearchCohort(userId: number, keyCount: number, unratedSort: UnratedSortKey, sort: "rating" | "recent"): Promise<LivePlayerUnratedPlay[]> {
+  return loadCachedCohort(unratedCohortCache, `${unratedCohortKey(userId, keyCount, unratedSort, sort)}:all`, async () => {
+    const order = sort === "recent" ? "recent" : unratedSort;
+    const first = await fetchLivePlayerUnratedPlaysDirect(userId, keyCount, { sort: order, limit: PLAYS_COHORT_SIZE });
+    const items = [...first.items];
+    for (let offset = PLAYS_COHORT_SIZE; first.offset === 0 && offset < first.total; offset += PLAYS_COHORT_SIZE) {
+      const page = await fetchLivePlayerUnratedPlaysDirect(userId, keyCount, { sort: order, limit: PLAYS_COHORT_SIZE, offset });
+      if (page.offset !== offset) break;
+      items.push(...page.items);
+      if (page.items.length < PLAYS_COHORT_SIZE) break;
+    }
+    return items;
+  });
+}
+
+// A search reads every play of a list, not just the cohort it opens with:
+// the rows to narrow while a search is open, null otherwise or until loaded.
+function useSearchRows<T>(query: string, cacheKey: string, load: () => Promise<T[]>): T[] | null {
+  const searching = query.trim() !== "";
+  const [state, setState] = useState<{ key: string; rows: T[] } | null>(null);
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useEffect(() => {
+    if (!searching) return;
+    let cancelled = false;
+    loadRef.current()
+      .then((rows) => { if (!cancelled) setState({ key: cacheKey, rows }); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [cacheKey, searching]);
+  return searching && state?.key === cacheKey ? state.rows : null;
 }
 
 /** Warm the view a pointer or keyboard focus is about to open. */
@@ -334,6 +417,8 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   const [modFilter, setModFilter] = useState<ModFilterState>({});
   // Not stored either, for the same reason.
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>({});
+  // Not stored either: a search is about one visit.
+  const [searchQuery, setSearchQuery] = useState("");
   const [cohortGrades, setCohortGrades] = useState<string[]>([]);
   // Reported by whichever list is mounted, from the cohort it actually holds,
   // so no chip is offered for a mod nothing in view was played with.
@@ -592,6 +677,27 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
       {/* How the list is arranged, pushed to the end of the row. It shares
           the dan and unrated rows, and drops under the longer skill list. */}
       <div className="ml-auto flex items-center gap-1.5">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-osu-f1" aria-hidden="true" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.currentTarget.value)}
+            placeholder={t`search maps...`}
+            aria-label={t`Search maps`}
+            className={`h-[26px] w-32 pl-7 pr-6 text-[12px] text-white outline-none transition-shadow placeholder:text-osu-f1/70 focus:ring-osu-pink/40 sm:w-40 ${CONTROL_TRACK_CLASS}`}
+          />
+          {searchQuery ? (
+            <button
+              type="button"
+              aria-label={t`Clear search`}
+              onClick={() => setSearchQuery("")}
+              className="absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-osu-f1 transition-colors hover:text-white"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          ) : null}
+        </div>
         <Segmented
           ariaLabel={t`Order`}
           value={sort}
@@ -722,6 +828,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
           showRejected={showRejected}
           modFilter={modFilter}
           gradeFilter={gradeFilter}
+          query={searchQuery}
           refreshNonce={refreshNonce}
           onAvailableMods={handleAvailableMods}
           onAvailableGrades={handleAvailableGrades}
@@ -741,6 +848,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
           maxPerChart={maxPerChart}
           modFilter={modFilter}
           gradeFilter={gradeFilter}
+          query={searchQuery}
           refreshNonce={refreshNonce}
           onAvailableMods={handleAvailableMods}
           onAvailableGrades={handleAvailableGrades}
@@ -761,6 +869,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
           showRejected={showRejected}
           modFilter={modFilter}
           gradeFilter={gradeFilter}
+          query={searchQuery}
           refreshNonce={refreshNonce}
           onAvailableMods={handleAvailableMods}
           onAvailableGrades={handleAvailableGrades}
@@ -819,6 +928,7 @@ function MsdPlaysList({
   showRejected,
   modFilter,
   gradeFilter,
+  query,
   refreshNonce,
   onAvailableMods,
   onAvailableGrades,
@@ -839,6 +949,8 @@ function MsdPlaysList({
   showRejected: boolean;
   modFilter: ModFilterState;
   gradeFilter: GradeFilter;
+  /** The map search, matched against title, artist, difficulty and mapper. */
+  query: string;
   /** Bumped by the toolbar's refresh; a change fetches past every cache. */
   refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
@@ -902,7 +1014,7 @@ function MsdPlaysList({
   }, [axis, cacheKey, keyCount, listIdentity, onSettled, refreshNonce, sort, userId]);
 
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, showRejected, modKey, gradeFilter]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, showRejected, modKey, gradeFilter, query]);
 
   // The chips on offer come from the whole cohort, not from what the other
   // filters left, so narrowing by mod never removes the chip that would undo it.
@@ -917,9 +1029,12 @@ function MsdPlaysList({
   const grades = useMemo(() => cohortGradeKeys(cohort), [cohort]);
   useEffect(() => { onAvailableGrades(grades); }, [grades, onAvailableGrades]);
 
+  const searchRows = useSearchRows(query, cacheKey, () => loadMsdSearchCohort(userId, keyCount, axis, sort));
   const filtered = useMemo(() => {
     const seenPerChart = new Map<number, number>();
-    return cohort.filter((play) => {
+    const tokens = searchTokens(query);
+    return (searchRows ?? cohort).filter((play) => {
+      if (!matchesPlaySearch(play, tokens)) return false;
       // A play still analyzing is waiting, not turned away: the toggle that
       // hides refusals leaves it in place.
       if (!showRejected && play.ratingExcluded && play.ratingExclusionReason !== "pending_calibration") return false;
@@ -933,7 +1048,7 @@ function MsdPlaysList({
       }
       return true;
     });
-  }, [cohort, gradeFilter, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, modFilter, showRejected]);
+  }, [cohort, gradeFilter, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, modFilter, query, searchRows, showRejected]);
   const items = filtered.slice(0, visibleLimit);
 
   const axisLabel = i18n._(axisMeta.labelMsg);
@@ -948,7 +1063,7 @@ function MsdPlaysList({
         emptyTitle={t`No plays match these filters`}
         shown={items.length}
         total={filtered.length}
-        hidden={cohort.length - filtered.length}
+        hidden={(searchRows ?? cohort).length - filtered.length}
         onShowMore={items.length < filtered.length
           ? () => setVisibleLimit((current) => Math.min(filtered.length, current + PLAYS_REVEAL_STEP))
           : null}
@@ -1075,6 +1190,7 @@ function DanPlaysList({
   showRejected,
   modFilter,
   gradeFilter,
+  query,
   refreshNonce,
   onAvailableMods,
   onAvailableGrades,
@@ -1093,6 +1209,8 @@ function DanPlaysList({
   showRejected: boolean;
   modFilter: ModFilterState;
   gradeFilter: GradeFilter;
+  /** The map search, matched against title, artist, difficulty and mapper. */
+  query: string;
   /** Bumped by the toolbar's refresh; a change fetches past every cache. */
   refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
@@ -1148,8 +1266,10 @@ function DanPlaysList({
     return () => { cancelled = true; };
   }, [cacheKey, keyCount, listIdentity, onSettled, refreshNonce, side, sort, userId]);
 
+  const searchRows = useSearchRows(query, cacheKey, () => loadDanSearchCohort(userId, keyCount, side, sort));
+
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, showRejected, modKey, gradeFilter]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, showRejected, modKey, gradeFilter, query]);
 
   const cohortMods = useMemo(
     () => relevantModFilterKeys(cohort.flatMap((row) => {
@@ -1165,7 +1285,10 @@ function DanPlaysList({
   const { rows, hidden } = useMemo(() => {
     const seenPerChart = new Map<number, number>();
     const kept: DanRow[] = [];
-    for (const row of cohort) {
+    const tokens = searchTokens(query);
+    const source = searchRows ?? cohort;
+    for (const row of source) {
+      if (!matchesPlaySearch(row.play, tokens)) continue;
       if (!showRejected && row.kind === "rejected") continue;
       if (hiddenByChart(row.play, { hideRanked, hideGraveyard, hideLoved, hideLocal })) continue;
       if (!matchesPlayModFilter(row.play, modFilter)) continue;
@@ -1177,8 +1300,8 @@ function DanPlaysList({
       }
       kept.push(row);
     }
-    return { rows: kept, hidden: cohort.length - kept.length };
-  }, [cohort, gradeFilter, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, showRejected, modFilter]);
+    return { rows: kept, hidden: source.length - kept.length };
+  }, [cohort, gradeFilter, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, showRejected, modFilter, query, searchRows]);
   const visibleRows = rows.slice(0, visibleLimit);
 
   return (
@@ -1209,6 +1332,7 @@ function DanPlaysList({
               chartLabel: row.clear.chartDanLabel,
               creditedRating: row.clear.creditedDan,
               creditedLabel: row.clear.creditedDanLabel,
+              courseCredit: row.clear.credential != null,
               accuracy: row.clear.clearAccuracy,
               currency: row.clear.currency,
               family: side,
@@ -1397,6 +1521,8 @@ function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
             : t`This play was judged at a lower OD than a dan clear has to be played at.`)
           : rejected.reason === "ez_windows"
             ? t`Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on.`
+            : rejected.reason === "jumptrill"
+              ? t`Jumptrill chart. This play counts toward skill ratings but not toward dan.`
             : rejected.reason === "chart_ineligible"
               ? t`This chart is not built in a way a dan level can be read off a clear of it.`
               : rejected.reason === "chart_unanalyzed"
@@ -1547,6 +1673,7 @@ function UnratedPlaysList({
   maxPerChart,
   modFilter,
   gradeFilter,
+  query,
   refreshNonce,
   onAvailableMods,
   onAvailableGrades,
@@ -1564,6 +1691,8 @@ function UnratedPlaysList({
   maxPerChart: number;
   modFilter: ModFilterState;
   gradeFilter: GradeFilter;
+  /** The map search, matched against title, artist, difficulty and mapper. */
+  query: string;
   /** Bumped by the toolbar's refresh; a change fetches past every cache. */
   refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
@@ -1616,7 +1745,7 @@ function UnratedPlaysList({
   }, [cacheKey, keyCount, listIdentity, onSettled, refreshNonce, sort, unratedSort, userId]);
 
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, modKey, gradeFilter]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, modKey, gradeFilter, query]);
 
   const cohortMods = useMemo(
     () => relevantModFilterKeys(cohort.flatMap((item) => {
@@ -1629,9 +1758,12 @@ function UnratedPlaysList({
   const grades = useMemo(() => cohortGradeKeys(cohort.map((item) => item.play)), [cohort]);
   useEffect(() => { onAvailableGrades(grades); }, [grades, onAvailableGrades]);
 
+  const searchRows = useSearchRows(query, cacheKey, () => loadUnratedSearchCohort(userId, keyCount, unratedSort, sort));
   const filtered = useMemo(() => {
     const seenPerChart = new Map<number, number>();
-    return cohort.filter((item) => {
+    const tokens = searchTokens(query);
+    return (searchRows ?? cohort).filter((item) => {
+      if (!matchesPlaySearch(item.play, tokens)) return false;
       if (hiddenByChart(item.play, { hideRanked, hideGraveyard, hideLoved, hideLocal })) return false;
       if (!matchesPlayModFilter(item.play, modFilter)) return false;
       if (!matchesPlayGradeFilter(item.play, gradeFilter)) return false;
@@ -1642,7 +1774,7 @@ function UnratedPlaysList({
       }
       return true;
     });
-  }, [cohort, gradeFilter, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, modFilter]);
+  }, [cohort, gradeFilter, hideGraveyard, hideLocal, hideLoved, hideRanked, maxPerChart, modFilter, query, searchRows]);
   const items = filtered.slice(0, visibleLimit);
 
   return (
@@ -1655,7 +1787,7 @@ function UnratedPlaysList({
         emptyTitle={cohort.length === 0 ? t`No unrated plays on this keymode` : t`No plays match these filters`}
         shown={items.length}
         total={filtered.length}
-        hidden={cohort.length - filtered.length}
+        hidden={(searchRows ?? cohort).length - filtered.length}
         onShowMore={items.length < filtered.length
           ? () => setVisibleLimit((current) => Math.min(filtered.length, current + PLAYS_REVEAL_STEP))
           : null}
@@ -1813,8 +1945,8 @@ function PlayRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-xs font-semibold text-white sm:text-sm">{play.title}</span>
-          <span className="hidden shrink-0 truncate text-[10px] text-osu-f1 md:inline">[{play.version}]</span>
+          <span className="min-w-0 truncate text-xs font-semibold text-white sm:text-sm">{play.title}</span>
+          <span className="hidden min-w-0 shrink-[3] truncate text-[10px] text-osu-f1 md:inline">[{play.version}]</span>
         </div>
         <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-osu-f1 sm:text-[10px]">
           <span className="max-w-44 truncate">
@@ -1826,6 +1958,7 @@ function PlayRow({
             <span className={`rounded px-1 py-0.5 font-bold ${status.className}`}>{i18n._(status.label)}</span>
           ) : null}
           <PlayModBadges play={play} />
+          {playHasReplay(play) ? <ReplayChip scoreId={play.scoreId!} beatmapsetId={play.beatmapsetId} /> : null}
           {play.playedAt ? (
             <span className="hidden sm:inline" title={formatTimeAgoTooltip(play.playedAt, locale)}>
               {formatTimeAgo(play.playedAt, locale)}
@@ -1853,6 +1986,10 @@ function PlayRow({
     {footer}
     </div>
   );
+}
+
+function playHasReplay(play: LivePlayerSkillPlay): boolean {
+  return play.scoreId != null && play.score?.hasReplay === true;
 }
 
 function ListShell({
@@ -2247,6 +2384,20 @@ function matchesPlayModFilter(play: LivePlayerSkillPlay, modFilter: ModFilterSta
   // Unknown historical mods cannot satisfy a required chip. They remain when
   // a chip is only being excluded because there is no evidence they used it.
   return !Object.values(modFilter).includes("include");
+}
+
+function searchTokens(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+/** Every word of the search has to appear somewhere in the chart's names. */
+function matchesPlaySearch(
+  play: Pick<LivePlayerSkillPlay, "artist" | "title" | "version" | "creator" | "beatmapId">,
+  tokens: string[],
+): boolean {
+  if (tokens.length === 0) return true;
+  const haystack = `${play.artist} ${play.title} ${play.version} ${play.creator ?? ""} ${play.beatmapId}`.toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
 }
 
 /** The grade the row's accuracy earns, null when the play kept no accuracy. */

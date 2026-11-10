@@ -194,7 +194,7 @@ export function MyDataPanel() {
   const viewer = auth.viewer;
   const noDans = useNoDans();
   // Keep the feed tab and its pagination intact while exploring skill plays.
-  const [skillPlaysView, setSkillPlaysView] = useState<"msd" | "dan" | null>(null);
+  const [skillPlaysView, setSkillPlaysView] = useState<"msd" | "dan" | "unrated" | null>(null);
 
   /* The viewer's supporter frame, name style and name font, as their profile wears them. */
   const [look, setLook] = useState<{ frame: SupporterAvatarFrameId | null; nameStyle: SupporterNameStyleId | null; nameFont: SupporterNameFontId | null; profileTheme: SupporterProfileThemeId | null; customTheme: CustomTheme | null } | null>(null);
@@ -688,6 +688,7 @@ export function MyDataPanel() {
                     <>
                       <FeedTab active={activeSkillPlaysView === "msd"} onClick={() => setSkillPlaysView("msd")}>{t`Rated plays`}</FeedTab>
                       {!noDans ? <FeedTab active={activeSkillPlaysView === "dan"} onClick={() => setSkillPlaysView("dan")}>{t`Dan plays`}</FeedTab> : null}
+                      <FeedTab active={activeSkillPlaysView === "unrated"} onClick={() => setSkillPlaysView("unrated")}>{t`Unrated plays`}</FeedTab>
                     </>
                   ) : null}
                   {canRemovePlays && !activeSkillPlaysView && feedTab === "tracked" && trackedTotal > 0 ? (

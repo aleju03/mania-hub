@@ -1583,6 +1583,10 @@ msgid "{feedCount} feeds"
 msgstr "{feedCount} 个推送"
 
 #: src/components/skins/SkinUploadModal.tsx
+msgid "{fileCount, plural, one {# file} other {# files}}"
+msgstr "{fileCount, plural, other {# 个文件}}"
+
+#: src/components/skins/SkinUploadModal.tsx
 msgid "{files} files in {groupCount} groups"
 msgstr "{groupCount} 组共 {files} 个文件"
 
@@ -2097,6 +2101,10 @@ msgstr "{sessionPlays, plural, other {{1} 次游玩}}"
 msgid "{shards} shards"
 msgstr "{shards} 碎片"
 
+#: src/components/maps/DanProgressRail.tsx
+msgid "{shiftText} for accuracy"
+msgstr "准确率 {shiftText}"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, other {# 张截图}}"
@@ -2140,6 +2148,10 @@ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段�
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 #~ msgstr "{sideLabel} 段位估算：高于 {chip}，即 {keys}K {sideLabel} 段位的最高级，有 {clears} 次达到或超过该段位的通过(准确率 96% 以上) · 点击查看这些通过记录"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{size} of this .osk is files osu! never loads."
+msgstr "这个 .osk 中有 {size} 是 osu! 从不加载的文件。"
 
 #: src/lib/chain-run.ts
 msgid "{skill} pack"
@@ -2846,8 +2858,8 @@ msgstr "<1% 权重"
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
-msgid "▶ Watch"
-msgstr "▶ 观看"
+#~ msgid "▶ Watch"
+#~ msgstr "▶ 观看"
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "$4 a month"
@@ -4638,6 +4650,10 @@ msgstr "已有其他玩家使用这个名字。"
 msgid "Another replay video is still exporting. Finish or cancel it first."
 msgstr "已有一个回放视频正在导出，请先完成或取消它。"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Another skin or archive inside it"
+msgstr "里面还有另一个皮肤或压缩包"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/recommendations.tsx
@@ -4729,6 +4745,10 @@ msgstr "任意图片、GIF 或视频，来自链接或文件。"
 #: src/components/player/FeaturedPlays.tsx
 msgid "Any play the site tracked of you, under a title of your own, in place of your {slotLabel}."
 msgstr "用本站记录过的任意一次游玩，配上你自己的标题，替换你的{slotLabel}。"
+
+#: src/routes/discord.tsx
+msgid "Any top play"
+msgstr "任意最佳成绩"
 
 #: src/routes/skins.tsx
 msgid "anyone"
@@ -6427,6 +6447,10 @@ msgid "Changing the keymode label failed. Try again."
 msgstr "修改键数标签失败。请重试。"
 
 #: src/components/skins/SkinSettingsModal.tsx
+msgid "Changing the shown keymodes failed. Try again."
+msgstr "更改显示的键数失败，请重试。"
+
+#: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "修改皮肤可见范围失败。请重试。"
 
@@ -6499,13 +6523,13 @@ msgid "Chart edited after this play"
 msgstr "谱面在此成绩之后被修改"
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate"
-msgstr "谱面估计"
+#~ msgid "Chart estimate"
+#~ msgstr "谱面估计"
 
 #. placeholder {0}: formatDanValue(chart)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate: {0}"
-msgstr "谱面估计值：{0}"
+#~ msgid "Chart estimate: {0}"
+#~ msgstr "谱面估计值：{0}"
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Chart file"
@@ -6836,6 +6860,7 @@ msgstr "清除玩家筛选"
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/routes/maps.tsx
@@ -7588,6 +7613,10 @@ msgstr "数量"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "copies in circulation"
 msgstr "流通中的卡片"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Copies of files"
+msgstr "文件副本"
 
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "Copies of it drift across your card behind everything printed on it, on every copy of the card."
@@ -9470,8 +9499,12 @@ msgid "Duplicates"
 msgstr "重复"
 
 #: src/routes/privacy.tsx
-msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
-msgstr "持久的公开投影数据，例如排名、谱面、最佳成绩、狙击、缓存的个人资料数据和历史汇总，可能会保留更久，因为本站正是靠它们来提供这些功能。目标和卡包收藏会在你的账号使用相应功能期间保留。"
+#~ msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
+#~ msgstr "持久的公开投影数据，例如排名、谱面、最佳成绩、狙击、缓存的个人资料数据和历史汇总，可能会保留更久，因为本站正是靠它们来提供这些功能。目标和卡包收藏会在你的账号使用相应功能期间保留。"
+
+#: src/routes/privacy.tsx
+msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals, card pack collections, skins, collections, uploaded replays, and friends lists are kept until you delete them or ask for them to be deleted."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Dutch"
@@ -9710,6 +9743,10 @@ msgstr "编辑中"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Edition crafted"
 #~ msgstr "特别版制作完成"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Editor and system files"
+msgstr "编辑器和系统文件"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
@@ -10585,6 +10622,10 @@ msgstr "当前"
 msgid "Files have to be under 5MB."
 msgstr "文件需小于 5MB。"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Files in folders skin.ini doesn't use"
+msgstr "skin.ini 未使用的文件夹中的文件"
+
 #: src/components/communities/field-options.tsx
 msgid "Filipino"
 msgstr "菲律宾语"
@@ -11183,8 +11224,9 @@ msgid "Friends"
 msgstr "好友"
 
 #: src/components/supporter/themes/LayerPanel.tsx
+#: src/routes/discord.tsx
 msgid "From"
-msgstr "起始色"
+msgstr "从"
 
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
@@ -11998,6 +12040,7 @@ msgid "Hex HUD"
 msgstr "六边形 HUD"
 
 #: src/components/skins/SkinCard.tsx
+#: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "hidden"
 msgstr "已隐藏"
@@ -12039,6 +12082,14 @@ msgstr "隐藏 {0} 个已撤销"
 #: src/routes/player/$username.tsx
 #~ msgid "Hide {0}K"
 #~ msgstr "隐藏 {0}K"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Hide {keys}K"
+msgstr "隐藏 {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide {selectedKeymode}K"
+msgstr "隐藏 {selectedKeymode}K"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Hide export details"
@@ -12088,6 +12139,10 @@ msgstr "隐藏上架、approved 和 qualified 谱面上的成绩"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
 msgstr "隐藏 {0} 的通过记录"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide the keymodes with no note images"
+msgstr "隐藏没有音符图片的键数"
 
 #: src/routes/dan-estimates.tsx
 msgid "hide the note"
@@ -12660,6 +12715,14 @@ msgid "If you have the map, drop its .osz here and the replay plays from your co
 msgstr "如果你本地有这张谱面，把它的 .osz 拖进来，回放就用你的副本播放。"
 
 #: src/routes/privacy.tsx
+msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept. If you link your Discord account to the Discord bot, the site stores your Discord user ID with your osu! account and your bot settings. If you connect Companella, the site stores the scores and charts you choose to send and the device you approved."
+#~ msgstr ""
+
+#: src/routes/privacy.tsx
 msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
 msgstr "如果你通过 Ko-fi、Google 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
 
@@ -12672,8 +12735,12 @@ msgstr "如果你通过 Ko-fi、Google 或 lava.top 付款，本站会收到付�
 #~ msgstr "如果你通过 Ko-fi、Google 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及你邮箱地址的加密形式（绝不是地址本身），用于识别重复付款或退款。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
 
 #: src/routes/privacy.tsx
-msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
-msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区，并记录你的账号何时登录过。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
+#~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+#~ msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区，并记录你的账号何时登录过。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
+
+#: src/routes/privacy.tsx
+msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps the first and last time your account signed in and its country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgstr ""
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -13406,6 +13473,10 @@ msgstr "jumpstream、热手、……"
 #: src/lib/pack-run.ts
 msgid "Jumptrill"
 msgstr "对拍"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Jumptrill chart. This play counts toward skill ratings but not toward dan."
+msgstr "对拍谱面。此成绩计入技能评分，但不计入段位评分。"
 
 #: src/routes/legal.tsx
 msgid "June 16, 2026"
@@ -14945,6 +15016,10 @@ msgstr "马来语"
 msgid "Mamestagram didn't answer. Try again later."
 msgstr "Mamestagram 没有响应，请稍后再试。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Mamestagram doesn't say which rate that play was at, so it can't be added."
+msgstr "Mamestagram 没有提供这次游玩的倍速，因此无法添加。"
+
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Manage"
 msgstr "管理"
@@ -14979,8 +15054,16 @@ msgid "Mania Tracker"
 msgstr "Mania Tracker"
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
-msgstr "Mania Tracker 用自己的第一方分析来统计页面访问和功能使用情况，数据存在本站自己的服务器上。事件通过本站自己的接口发送，可能包含访问的路由、所选国家/地区、来源页、浏览器语言、屏幕尺寸，以及路由上下文，例如所查看的玩家、成绩、谱面集或谱面标签页。事件保留 90 天后删除。"
+msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
+#~ msgstr "Mania Tracker 用自己的第一方分析来统计页面访问和功能使用情况，数据存在本站自己的服务器上。事件通过本站自己的接口发送，可能包含访问的路由、所选国家/地区、来源页、浏览器语言、屏幕尺寸，以及路由上下文，例如所查看的玩家、成绩、谱面集或谱面标签页。事件保留 90 天后删除。"
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for up to 10 years."
+#~ msgstr ""
 
 #: src/routes/terms.tsx
 msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -14991,8 +15074,12 @@ msgstr "Mania Tracker 展示公开的元数据、缓存的投影数据和衍生�
 #~ msgstr "Mania Tracker 展示公开的元数据、缓存的投影数据和衍生的社区视图，供参考之用。要反馈 bug，请使用站内的 <0>反馈 bug</0> 表单。如果本站展示的内容归你所有，且你有署名、下架或数据方面的问题，请发邮件至 <1>contact@mania-tracker.com</1>，或通过页脚链接的公开 osu! 个人资料联系维护者。"
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
-msgstr "Mania Tracker 不出售个人数据。数据可能会由运营本站所用的服务提供商处理，包括托管、存储、分析、osu! API 服务和社区成绩数据服务。公开的 osu! 数据可能会被缓存并作为本站社区功能的一部分重新展示。"
+msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and beatmap download mirrors. Public osu! data may be cached and re-displayed as part of the site's community features."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
+#~ msgstr "Mania Tracker 不出售个人数据。数据可能会由运营本站所用的服务提供商处理，包括托管、存储、分析、osu! API 服务和社区成绩数据服务。公开的 osu! 数据可能会被缓存并作为本站社区功能的一部分重新展示。"
 
 #: src/routes/terms.tsx
 msgid "Mania Tracker is a community project built on external data sources, so rankings, score views, snipes, top plays, maps, farm-helper suggestions, replay views, dan estimates, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect. Features may change, break, or be removed."
@@ -15019,7 +15106,6 @@ msgstr "Mania Tracker 是一个面向 osu!mania 玩家的非官方社区同人�
 #~ msgid "Mania Tracker is made and run by one person, aleju03. For anything about the site, payments, refunds or your data, email <0>contact@mania-tracker.com</0>."
 #~ msgstr "Mania Tracker 由一个人制作和运营：aleju03。关于网站、付款、退款或你的数据的任何问题，请发邮件至 <0>contact@mania-tracker.com</0>。"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 msgid "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 msgstr "Mania Tracker LN 估算：放手时机、保持按键时的手指协调，以及放手后再次按键的衔接。与 MinaCalc 并行的独立模型。"
@@ -15033,8 +15119,12 @@ msgid "Mania Tracker uses public and authenticated osu! API data, locally cached
 msgstr "Mania Tracker 使用公开和已授权的 osu! API 数据、本地缓存数据、服务器投影数据，以及 <0>osu! score cache</0> 等社区数据服务。"
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
-msgstr "Mania Tracker 使用公开的 osu! 个人资料、成绩、谱面、谱面集、排名和回放的元数据，以及 osu! score cache 等社区数据服务，来构建排名、追踪器视图、谱面、狙击、最佳成绩、刷图助手推荐、个人资料和回放视图。"
+msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+#~ msgstr "Mania Tracker 使用公开的 osu! 个人资料、成绩、谱面、谱面集、排名和回放的元数据，以及 osu! score cache 等社区数据服务，来构建排名、追踪器视图、谱面、狙击、最佳成绩、刷图助手推荐、个人资料和回放视图。"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "mania-note art not tied to a keymode block"
@@ -15083,6 +15173,7 @@ msgstr "MANIERA [7K] Masterpiece 的 1:29。紫色的行是衩，橙色的行是
 msgid "map"
 msgstr "谱面"
 
+#: src/components/maps/DanProgressRail.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Map"
@@ -15133,6 +15224,11 @@ msgstr "谱面构成"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "谱面不可用"
+
+#. placeholder {0}: formatDanValue(chart)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Map: {0}"
+msgstr "谱面：{0}"
 
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/replay.tsx
@@ -17630,6 +17726,9 @@ msgstr "通知我"
 msgid "Notifying"
 msgstr "已开启通知"
 
+#~ msgid "November 5, 2026"
+#~ msgstr ""
+
 #: src/routes/privacy.tsx
 #: src/routes/terms.tsx
 msgid "November 9, 2026"
@@ -18893,6 +18992,10 @@ msgstr "合格印章"
 #: src/components/player/ActivityPanel.tsx
 #~ msgid "Passes"
 #~ msgstr "通过"
+
+#: src/routes/dan-estimates.tsx
+msgid "Passes in a skill are left out when they credit more than five levels below the average of your best five in it, as long as four passes are left. The dan window marks them <0>not counted</0>."
+msgstr "如果某技能中的通过计入段位比你在该技能最好的五次平均低五级以上，就会被排除，但至少保留四次。段位窗口会把它们标为<0>不计入</0>。"
 
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
@@ -21484,6 +21587,10 @@ msgstr "移除这张截图"
 msgid "Remove wish"
 msgstr "移出心愿单"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removed {removedSize} of files osu! never loads."
+msgstr "已移除 {removedSize} osu! 从不加载的文件。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Removed imported skin hitsounds"
 msgstr "已移除导入的皮肤打击音"
@@ -21495,6 +21602,14 @@ msgstr "去掉图中的流速变化。"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "移除截图失败。请重试。"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing the unused files failed. The original file will upload instead."
+msgstr "移除未使用的文件失败，将上传原始文件。"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing..."
+msgstr "正在移除..."
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Removing…"
@@ -21592,6 +21707,7 @@ msgstr "在全站将鼠标光标替换为 osu! 风格光标。仅桌面端。"
 
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayCoverFallback.tsx
+#: src/components/ui/ReplayChip.tsx
 #: src/lib/pack-run.ts
 msgid "Replay"
 msgstr "回放"
@@ -22697,6 +22813,7 @@ msgstr "搜索语言"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Search maps"
 msgstr "搜索谱面"
 
@@ -22709,6 +22826,7 @@ msgid "Search maps, players, uploaders or mods..."
 msgstr "搜索谱面、玩家、上传者或模组..."
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "search maps..."
 msgstr "搜索谱面…"
 
@@ -23489,6 +23607,14 @@ msgstr "查看更早的 {hiddenCount} 条"
 #~ msgid "Show {hiddenCount} earlier updates"
 #~ msgstr "显示之前的 {hiddenCount} 条更新"
 
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Show {keys}K"
+msgstr "显示 {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Show {selectedKeymode}K"
+msgstr "显示 {selectedKeymode}K"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Show {totalLabel} maps"
 msgstr "显示 {totalLabel} 个谱面"
@@ -23691,6 +23817,10 @@ msgstr "只显示 {label}"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Showing the newest {0}."
 msgstr "显示最新的 {0} 个。"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Shown keymodes"
+msgstr "显示的键数"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
@@ -24458,8 +24588,20 @@ msgstr "有些人可能已经知道 Companella，它是一款 osu! 桌面应用�
 #~ msgstr "有些人可能已经听说过 Companella。如果还没有：它是一款 osu! 桌面应用（<0>erdbee.re</0>），你的成绩就是通过它上传到这里的。它只支持 osu!stable，lazer 的成绩无法通过这种方式上传。"
 
 #: src/routes/privacy.tsx
-msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
-msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、指标、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽取时间），以及名册的加入或退出选择。My Stats 面板不会额外存储任何东西；它只是向你展示本站已经掌握的、关于你账号的数据。"
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、指标、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽取时间），以及名册的加入或退出选择。My Stats 面板不会额外存储任何东西；它只是向你展示本站已经掌握的、关于你账号的数据。"
+
+#: src/routes/privacy.tsx
+msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, the display name and about text a restricted account can set, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr ""
+
+#: src/routes/privacy.tsx
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile settings such as your display name and about text, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Some skillset practice packs are checked the same way the courses are. Clearing one of their charts at its ladder's bar sets that skill's dan outright, without the four passes a skill normally needs. For example, clearing <0>Volcanic ~ Delta ~</0> sets your 4K speed dan to <1>delta</1>."
@@ -25634,6 +25776,10 @@ msgstr "点卡牌栏中的卡牌即可放下，点你的卡牌可以编辑，长
 #: src/components/packs/run/chain/ChainTable.tsx
 #~ msgid "Tap a card in your hand for {0}"
 #~ msgstr "点一张手牌来用 {0}"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Tap a keymode to hide or show it."
+msgstr "点击键数即可隐藏或显示它。"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
@@ -28138,7 +28284,7 @@ msgstr "游玩时长"
 msgid "Time-stop knives"
 msgstr "时停飞刀"
 
-#. placeholder {0}: Math.round(active.bpm)
+#. placeholder {0}: Math.round(active.bpm * playRate)
 #: src/components/maps/MapDetailModal.tsx
 msgid "timed at {0}"
 msgstr "标注 {0}"
@@ -28214,8 +28360,12 @@ msgid "to make your own profile themes."
 msgstr "以制作你自己的个人资料主题。"
 
 #: src/routes/privacy.tsx
-msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
-msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"
+#~ msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+#~ msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"
+
+#: src/routes/privacy.tsx
+msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses to its database or logs. The server's request logs keep a shortened IP address with the last part removed and no user agent, for up to 90 days. Cloudflare, which sits in front of the site, keeps its own request logs. The server also records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+msgstr ""
 
 #: src/routes/privacy.tsx
 msgid "To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -28344,6 +28494,10 @@ msgstr "前 {GLOBAL_ALBUM_CAP} 名"
 msgid "Top {GLOBAL_ALBUM_CAP} players"
 msgstr "前 {GLOBAL_ALBUM_CAP} 名玩家"
 
+#: src/routes/discord.tsx
+msgid "Top {n} of the keymode"
+msgstr "该键数前 {n}"
+
 #: src/components/player/ProfileStatCards.tsx
 msgid "top {top}%"
 msgstr "前 {top}%"
@@ -28407,6 +28561,10 @@ msgstr "最佳成绩"
 msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "最佳成绩"
+
+#: src/routes/discord.tsx
+msgid "Top plays in"
+msgstr "最佳成绩键数"
 
 #: src/components/player/InsightModals.tsx
 msgid "top pp"
@@ -29019,9 +29177,9 @@ msgstr "无法评分的谱面。此成绩不计入技能或段位评分。"
 msgid "Unrated"
 msgstr "未评分"
 
-#: src/routes/player/$username.tsx
-#~ msgid "Unrated plays"
-#~ msgstr "未评分成绩"
+#: src/components/me/MyDataPanel.tsx
+msgid "Unrated plays"
+msgstr "未评分成绩"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"
@@ -29087,8 +29245,8 @@ msgstr "最多为谱面段位 +0.1"
 #~ msgstr "一项技能中最多三个通过会被排除在其平均之外，条件是它们计入的段位比你在该技能最好的五个通过的平均低五个以上。它们仍会出现在段位窗口中，标记为<0>不计入</0>。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
-msgstr "如果某技能中的通过计入段位比你在该技能最好的五次平均低五级以上，最多会排除其中三次。段位窗口会把它们标为<0>不计入</0>。"
+#~ msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
+#~ msgstr "如果某技能中的通过计入段位比你在该技能最好的五次平均低五级以上，最多会排除其中三次。段位窗口会把它们标为<0>不计入</0>。"
 
 #: src/components/maps/ChartLabelReport.tsx
 msgid "Update"
@@ -29178,6 +29336,10 @@ msgstr "上传皮肤"
 #~ msgid "Upload the picture"
 #~ msgstr "上传图片"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Upload without them"
+msgstr "不含这些文件上传"
+
 #: src/routes/skins_.$id.tsx
 msgid "Uploaded"
 msgstr "上传于"
@@ -29203,6 +29365,10 @@ msgstr "由 <0>{0}</0> 上传"
 #: src/routes/replay_.community.tsx
 #~ msgid "Uploaded by the Community ({total})"
 #~ msgstr "社区上传（{total}）"
+
+#: src/routes/privacy.tsx
+msgid "Uploaded replays are unlisted, not private: anyone with the link can watch them. Private skins are shown only to you. If you like a skin without signing in, the site stores a random browser ID and a salted hash of your network, not your IP address."
+msgstr ""
 
 #: src/routes/skins.tsx
 msgid "uploader"
@@ -29787,6 +29953,9 @@ msgid "Warming this player up... first draws can take a moment"
 msgstr "正在准备这名玩家…第一次抽卡可能要等一会儿"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Watch"
 msgstr "观看"
 
@@ -29802,10 +29971,12 @@ msgstr "看广告复活"
 msgid "Watch osu!mania replays in your browser."
 msgstr "在浏览器中观看 osu!mania 回放。"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ScorePlayDetailModal.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/StableResultsScreen.tsx
+#: src/components/ui/ReplayChip.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -30038,6 +30209,10 @@ msgstr "每张卡片最初加入你收藏册的时间"
 #: src/components/me/MyDataPanel.tsx
 msgid "When you play"
 msgstr "你什么时候打图"
+
+#: src/routes/privacy.tsx
+msgid "When you send a bug report, feedback, or a translation report, the site stores your message, the page you were on, any screenshots, replies in the thread, and your osu! account if you are signed in. Bug reports also include your browser user agent, screen size, language, and country."
+msgstr ""
 
 #: src/routes/communities.tsx
 msgid "where"
@@ -30959,13 +31134,13 @@ msgid "Your country isn't tracked yet, so there's nothing to record your plays a
 msgstr "你的国家/地区还没有被追踪，所以没有地方记录你的成绩。"
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit"
-msgstr "你的计入值"
+#~ msgid "Your credit"
+#~ msgstr "你的计入值"
 
 #. placeholder {0}: formatDanValue(landedValue)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit: {0}"
-msgstr "你的计入值：{0}"
+#~ msgid "Your credit: {0}"
+#~ msgstr "你的计入值：{0}"
 
 #: src/routes/recommendations.tsx
 msgid "your dan"
@@ -31163,6 +31338,15 @@ msgstr "你的通过"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
 #~ msgstr "你的个人面板：排名、pp、活跃统计和目标进度。"
+
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play"
+msgstr "你的成绩"
+
+#. placeholder {0}: formatDanValue(landedValue)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play: {0}"
+msgstr "你的成绩：{0}"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Your plays"

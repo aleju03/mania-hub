@@ -652,6 +652,11 @@ impl<V> JsObject<V> {
     }
 }
 
+/// The CPU time the calling thread has used, in seconds.
+///
+/// Linux only: Windows has no `clock_gettime`, so with it there the crate
+/// didn't link, and macOS numbers `CLOCK_THREAD_CPUTIME_ID` 16, not 3.
+#[cfg(target_os = "linux")]
 pub fn thread_cpu_seconds() -> f64 {
     #[repr(C)]
     struct Timespec {

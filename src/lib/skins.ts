@@ -63,6 +63,10 @@ export interface SkinSummary {
   // first or last column marks the scratch lane). Optional because summaries
   // cached before the field existed lack it.
   specialKeymodes?: number[];
+  // Keymodes the .osk ships that the owner hid (usually default-skin
+  // fallbacks); never in keymodes, and their renders are not in previews.
+  // Optional because summaries cached before the field existed lack it.
+  hiddenKeymodes?: number[];
   accentColor: string | null;
   // Archive traits the backend analyzed out of the .osk, each null (or
   // missing, on summaries cached before they existed) when unknown: whether
@@ -854,6 +858,47 @@ export const setSkinSpecialKeymodes = createServerFn({ method: "POST" })
     }
   });
 
+// Hides keymodes the .osk ships but the skin is not made for (blocks that fall
+// back to default notes). The backend keeps at least one shown, and keeps the
+// hidden renders so showing a keymode again is instant. Same permissions as
+// setSkinSpecialKeymodes.
+export const setSkinHiddenKeymodes = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; hiddenKeymodes?: unknown }) => {
+    const id = typeof data.id === "string" ? data.id.trim() : "";
+    const hiddenKeymodes = Array.isArray(data.hiddenKeymodes)
+      ? data.hiddenKeymodes.map((entry) => Math.round(Number(entry)))
+      : null;
+    if (!id || id.length > 64 || !hiddenKeymodes || hiddenKeymodes.length > 10
+      || hiddenKeymodes.some((keys) => !Number.isInteger(keys) || keys < 1 || keys > 10)) {
+      throw new Error("Invalid keymodes request.");
+    }
+    return { id, hiddenKeymodes };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/hidden-keymodes`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({
+          userId: cfg.userId,
+          id: data.id,
+          hiddenKeymodes: data.hiddenKeymodes,
+          asAdmin: cfg.isAdmin,
+          asKeymodeModerator: !cfg.isAdmin && canModerateSkinKeymodes(cfg.userId),
+        }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
+      if (!response.ok || !body?.ok || !body.skin) return { ok: false };
+      return { ok: true, skin: body.skin };
+    } catch {
+      return { ok: false };
+    }
+  });
+
 // Retitles an already published skin and rewrites its description. The URL slug
 // is not rebuilt: it was assigned at publish time and is what shared links point
 // at. Leaving description out keeps the stored one; an empty string clears it.
@@ -1583,6 +1628,8 @@ export async function finishSkinUpload(
   id: string,
   token: string,
   recipes: SkinPreviewRecipeUpdate[] = [],
+  // Keymodes the uploader chose not to show; they still ship in the .osk.
+  hiddenKeymodes: number[] = [],
 ): Promise<SkinSummary> {
   const base = getLiveBackendUrl();
   if (!base) throw new SkinUploadError("unavailable", "Server is not configured.");
@@ -1591,7 +1638,7 @@ export async function finishSkinUpload(
     method: "POST",
     credentials: "omit",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ recipes }),
+    body: JSON.stringify(hiddenKeymodes.length > 0 ? { recipes, hiddenKeymodes } : { recipes }),
   });
   const body = (await response.json().catch(() => null)) as
     | { ok?: boolean; skin?: SkinSummary; error?: string; retryAfterMs?: number }

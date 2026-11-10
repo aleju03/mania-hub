@@ -288,9 +288,10 @@ export const submitCommunityBeatmap = createServerFn({ method: "POST" })
 
 export const getScore = createServerFn({ method: "GET" })
   .validator(normalizeScorePayload)
-  .handler(async ({ data }: { data: { scoreId: number; mode?: string } }) => {
+  .handler(async ({ data }: { data: { scoreId: number; mode?: string; cacheOnly?: boolean } }) => {
     edgeCache(300, 1800);
     const mode = data.mode ?? "mania";
+    const cacheOnly = data.cacheOnly === true;
     let firstError: unknown = null;
 
     for (const endpointKind of getScoreEndpointOrder(data.scoreId)) {
@@ -299,6 +300,7 @@ export const getScore = createServerFn({ method: "GET" })
           const modernScore = await osuFetch<OsuScore>(`/scores/${data.scoreId}`, undefined, {
             caller: "getScore:modern",
             cacheTtlMs: SCORE_LOOKUP_CACHE_TTL,
+            cacheOnly,
             expectedStatuses: [404],
           });
           // The unified /scores/{id} namespace overlaps stable's per-mode
@@ -313,7 +315,7 @@ export const getScore = createServerFn({ method: "GET" })
         const legacyScore = await osuFetch<OsuScore>(
           `/scores/${mode}/${data.scoreId}`,
           undefined,
-          { caller: "getScore:legacy", cacheTtlMs: SCORE_LOOKUP_CACHE_TTL, expectedStatuses: [404] },
+          { caller: "getScore:legacy", cacheTtlMs: SCORE_LOOKUP_CACHE_TTL, cacheOnly, expectedStatuses: [404] },
         );
         const resolvedMode = legacyScore.beatmap?.mode ?? mode;
         if (resolvedMode === mode) return legacyScore;

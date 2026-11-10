@@ -1594,6 +1594,10 @@ msgid "{feedCount} feeds"
 msgstr "{feedCount} feeds"
 
 #: src/components/skins/SkinUploadModal.tsx
+msgid "{fileCount, plural, one {# file} other {# files}}"
+msgstr "{fileCount, plural, one {# file} other {# files}}"
+
+#: src/components/skins/SkinUploadModal.tsx
 msgid "{files} files in {groupCount} groups"
 msgstr "{files} files in {groupCount} groups"
 
@@ -2108,6 +2112,10 @@ msgstr "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 msgid "{shards} shards"
 msgstr "{shards} shards"
 
+#: src/components/maps/DanProgressRail.tsx
+msgid "{shiftText} for accuracy"
+msgstr "{shiftText} for accuracy"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{shotCount, plural, one {# screenshot} other {# screenshots}}"
 msgstr "{shotCount, plural, one {# screenshot} other {# screenshots}}"
@@ -2151,6 +2159,10 @@ msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} co
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
 #~ msgstr "{sideLabel} dan estimate: above {chip}, where the {keys}K {sideLabel} course ladder ends, with {clears} passes at or above it (96%+ accuracy) · click for the clears behind it"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{size} of this .osk is files osu! never loads."
+msgstr "{size} of this .osk is files osu! never loads."
 
 #: src/lib/chain-run.ts
 msgid "{skill} pack"
@@ -2857,8 +2869,8 @@ msgstr "<1% weight"
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
-msgid "▶ Watch"
-msgstr "▶ Watch"
+#~ msgid "▶ Watch"
+#~ msgstr "▶ Watch"
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "$4 a month"
@@ -4653,6 +4665,10 @@ msgstr "Another player already goes by that name."
 msgid "Another replay video is still exporting. Finish or cancel it first."
 msgstr "Another replay video is still exporting. Finish or cancel it first."
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Another skin or archive inside it"
+msgstr "Another skin or archive inside it"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/recommendations.tsx
@@ -4744,6 +4760,10 @@ msgstr "Any picture, GIF or video, from a link or a file."
 #: src/components/player/FeaturedPlays.tsx
 msgid "Any play the site tracked of you, under a title of your own, in place of your {slotLabel}."
 msgstr "Any play the site tracked of you, under a title of your own, in place of your {slotLabel}."
+
+#: src/routes/discord.tsx
+msgid "Any top play"
+msgstr "Any top play"
 
 #: src/routes/skins.tsx
 msgid "anyone"
@@ -6442,6 +6462,10 @@ msgid "Changing the keymode label failed. Try again."
 msgstr "Changing the keymode label failed. Try again."
 
 #: src/components/skins/SkinSettingsModal.tsx
+msgid "Changing the shown keymodes failed. Try again."
+msgstr "Changing the shown keymodes failed. Try again."
+
+#: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing who can see this skin failed. Try again."
 msgstr "Changing who can see this skin failed. Try again."
 
@@ -6514,13 +6538,13 @@ msgid "Chart edited after this play"
 msgstr "Chart edited after this play"
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate"
-msgstr "Chart estimate"
+#~ msgid "Chart estimate"
+#~ msgstr "Chart estimate"
 
 #. placeholder {0}: formatDanValue(chart)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Chart estimate: {0}"
-msgstr "Chart estimate: {0}"
+#~ msgid "Chart estimate: {0}"
+#~ msgstr "Chart estimate: {0}"
 
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Chart file"
@@ -6851,6 +6875,7 @@ msgstr "Clear player filter"
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/routes/maps.tsx
@@ -7603,6 +7628,10 @@ msgstr "Copies"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "copies in circulation"
 msgstr "copies in circulation"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Copies of files"
+msgstr "Copies of files"
 
 #: src/components/supporter/CustomArtDialog.tsx
 msgid "Copies of it drift across your card behind everything printed on it, on every copy of the card."
@@ -9485,8 +9514,12 @@ msgid "Duplicates"
 msgstr "Duplicates"
 
 #: src/routes/privacy.tsx
-msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
-msgstr "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
+#~ msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
+#~ msgstr "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals and card pack collections are kept while your account uses those features."
+
+#: src/routes/privacy.tsx
+msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals, card pack collections, skins, collections, uploaded replays, and friends lists are kept until you delete them or ask for them to be deleted."
+msgstr "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals, card pack collections, skins, collections, uploaded replays, and friends lists are kept until you delete them or ask for them to be deleted."
 
 #: src/components/communities/field-options.tsx
 msgid "Dutch"
@@ -9725,6 +9758,10 @@ msgstr "Editing"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Edition crafted"
 #~ msgstr "Edition crafted"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Editor and system files"
+msgstr "Editor and system files"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
@@ -10608,6 +10645,10 @@ msgstr "filed"
 msgid "Files have to be under 5MB."
 msgstr "Files have to be under 5MB."
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Files in folders skin.ini doesn't use"
+msgstr "Files in folders skin.ini doesn't use"
+
 #: src/components/communities/field-options.tsx
 msgid "Filipino"
 msgstr "Filipino"
@@ -11206,6 +11247,7 @@ msgid "Friends"
 msgstr "Friends"
 
 #: src/components/supporter/themes/LayerPanel.tsx
+#: src/routes/discord.tsx
 msgid "From"
 msgstr "From"
 
@@ -12021,6 +12063,7 @@ msgid "Hex HUD"
 msgstr "Hex HUD"
 
 #: src/components/skins/SkinCard.tsx
+#: src/components/skins/SkinUploadModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "hidden"
 msgstr "hidden"
@@ -12062,6 +12105,14 @@ msgstr "Hide {0} revoked"
 #: src/routes/player/$username.tsx
 #~ msgid "Hide {0}K"
 #~ msgstr "Hide {0}K"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Hide {keys}K"
+msgstr "Hide {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide {selectedKeymode}K"
+msgstr "Hide {selectedKeymode}K"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Hide export details"
@@ -12111,6 +12162,10 @@ msgstr "Hide plays on ranked, approved and qualified charts"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
 msgstr "Hide the {0} clears"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Hide the keymodes with no note images"
+msgstr "Hide the keymodes with no note images"
 
 #: src/routes/dan-estimates.tsx
 msgid "hide the note"
@@ -12691,6 +12746,14 @@ msgid "If you have the map, drop its .osz here and the replay plays from your co
 msgstr "If you have the map, drop its .osz here and the replay plays from your copy."
 
 #: src/routes/privacy.tsx
+msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept."
+msgstr "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept."
+
+#: src/routes/privacy.tsx
+#~ msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept. If you link your Discord account to the Discord bot, the site stores your Discord user ID with your osu! account and your bot settings. If you connect Companella, the site stores the scores and charts you choose to send and the device you approved."
+#~ msgstr "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept. If you link your Discord account to the Discord bot, the site stores your Discord user ID with your osu! account and your bot settings. If you connect Companella, the site stores the scores and charts you choose to send and the device you approved."
+
+#: src/routes/privacy.tsx
 msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
 msgstr "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
 
@@ -12703,8 +12766,12 @@ msgstr "If you pay through Ko-fi, Google or lava.top, the site receives the amou
 #~ msgstr "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a scrambled form of your email address (never the address itself), used to recognise a repeat payment or a refund. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
 
 #: src/routes/privacy.tsx
-msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
-msgstr "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+#~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+#~ msgstr "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+
+#: src/routes/privacy.tsx
+msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps the first and last time your account signed in and its country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgstr "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps the first and last time your account signed in and its country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -13437,6 +13504,10 @@ msgstr "jumpstream, warmup, ..."
 #: src/lib/pack-run.ts
 msgid "Jumptrill"
 msgstr "Jumptrill"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Jumptrill chart. This play counts toward skill ratings but not toward dan."
+msgstr "Jumptrill chart. This play counts toward skill ratings but not toward dan."
 
 #: src/routes/legal.tsx
 msgid "June 16, 2026"
@@ -14976,6 +15047,10 @@ msgstr "Malay"
 msgid "Mamestagram didn't answer. Try again later."
 msgstr "Mamestagram didn't answer. Try again later."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Mamestagram doesn't say which rate that play was at, so it can't be added."
+msgstr "Mamestagram doesn't say which rate that play was at, so it can't be added."
+
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Manage"
 msgstr "Manage"
@@ -15010,8 +15085,16 @@ msgid "Mania Tracker"
 msgstr "Mania Tracker"
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
-msgstr "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
+msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab."
+msgstr "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab."
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
+#~ msgstr "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for up to 10 years."
+#~ msgstr "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for up to 10 years."
 
 #: src/routes/terms.tsx
 msgid "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -15022,8 +15105,12 @@ msgstr "Mania Tracker displays public metadata, cached projections, and derived 
 #~ msgstr "Mania Tracker displays public metadata, cached projections, and derived community views for reference. To report a bug, use the <0>Report a bug</0> form on the site. If you own content shown on the site and have an attribution, takedown, or data concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
-msgstr "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
+msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and beatmap download mirrors. Public osu! data may be cached and re-displayed as part of the site's community features."
+msgstr "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and beatmap download mirrors. Public osu! data may be cached and re-displayed as part of the site's community features."
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
+#~ msgstr "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
 
 #: src/routes/terms.tsx
 msgid "Mania Tracker is a community project built on external data sources, so rankings, score views, snipes, top plays, maps, farm-helper suggestions, replay views, dan estimates, and other generated surfaces may be delayed, incomplete, unavailable, or incorrect. Features may change, break, or be removed."
@@ -15050,7 +15137,6 @@ msgstr "Mania Tracker is an unofficial community fan project for osu!mania playe
 #~ msgid "Mania Tracker is made and run by one person, aleju03. For anything about the site, payments, refunds or your data, email <0>contact@mania-tracker.com</0>."
 #~ msgstr "Mania Tracker is made and run by one person, aleju03. For anything about the site, payments, refunds or your data, email <0>contact@mania-tracker.com</0>."
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 msgid "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 msgstr "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
@@ -15064,8 +15150,12 @@ msgid "Mania Tracker uses public and authenticated osu! API data, locally cached
 msgstr "Mania Tracker uses public and authenticated osu! API data, locally cached data, server projections, and community data services such as <0>osu! score cache</0>."
 
 #: src/routes/privacy.tsx
-msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
-msgstr "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+msgstr "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+
+#: src/routes/privacy.tsx
+#~ msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
+#~ msgstr "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "mania-note art not tied to a keymode block"
@@ -15114,6 +15204,7 @@ msgstr "MANIERA [7K] Masterpiece at 1:29. Purple rows are Bracket, orange rows a
 msgid "map"
 msgstr "map"
 
+#: src/components/maps/DanProgressRail.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Map"
@@ -15164,6 +15255,11 @@ msgstr "Map shape"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "map unavailable"
+
+#. placeholder {0}: formatDanValue(chart)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Map: {0}"
+msgstr "Map: {0}"
 
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/routes/replay.tsx
@@ -17661,6 +17757,9 @@ msgstr "Notify me"
 msgid "Notifying"
 msgstr "Notifying"
 
+#~ msgid "November 5, 2026"
+#~ msgstr "November 5, 2026"
+
 #: src/routes/privacy.tsx
 #: src/routes/terms.tsx
 msgid "November 9, 2026"
@@ -18924,6 +19023,10 @@ msgstr "Pass stamp"
 #: src/components/player/ActivityPanel.tsx
 #~ msgid "Passes"
 #~ msgstr "Passes"
+
+#: src/routes/dan-estimates.tsx
+msgid "Passes in a skill are left out when they credit more than five levels below the average of your best five in it, as long as four passes are left. The dan window marks them <0>not counted</0>."
+msgstr "Passes in a skill are left out when they credit more than five levels below the average of your best five in it, as long as four passes are left. The dan window marks them <0>not counted</0>."
 
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
@@ -21515,6 +21618,10 @@ msgstr "Remove this screenshot"
 msgid "Remove wish"
 msgstr "Remove wish"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removed {removedSize} of files osu! never loads."
+msgstr "Removed {removedSize} of files osu! never loads."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Removed imported skin hitsounds"
 msgstr "Removed imported skin hitsounds"
@@ -21526,6 +21633,14 @@ msgstr "Removes the map's scroll speed changes."
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "Removing the screenshot failed. Try again."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing the unused files failed. The original file will upload instead."
+msgstr "Removing the unused files failed. The original file will upload instead."
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Removing..."
+msgstr "Removing..."
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Removing…"
@@ -21623,6 +21738,7 @@ msgstr "Replaces the mouse cursor with an osu!-style cursor across the site. Des
 
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayCoverFallback.tsx
+#: src/components/ui/ReplayChip.tsx
 #: src/lib/pack-run.ts
 msgid "Replay"
 msgstr "Replay"
@@ -22728,6 +22844,7 @@ msgstr "Search languages"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Search maps"
 msgstr "Search maps"
 
@@ -22740,6 +22857,7 @@ msgid "Search maps, players, uploaders or mods..."
 msgstr "Search maps, players, uploaders or mods..."
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "search maps..."
 msgstr "search maps..."
 
@@ -23520,6 +23638,14 @@ msgstr "Show {hiddenCount} earlier"
 #~ msgid "Show {hiddenCount} earlier updates"
 #~ msgstr "Show {hiddenCount} earlier updates"
 
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Show {keys}K"
+msgstr "Show {keys}K"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Show {selectedKeymode}K"
+msgstr "Show {selectedKeymode}K"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "Show {totalLabel} maps"
 msgstr "Show {totalLabel} maps"
@@ -23722,6 +23848,10 @@ msgstr "Showing only {label}"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Showing the newest {0}."
 msgstr "Showing the newest {0}."
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Shown keymodes"
+msgstr "Shown keymodes"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/replay.tsx
@@ -24497,8 +24627,20 @@ msgstr "Some of you might already know Companella, a desktop app for osu! (<0>er
 #~ msgstr "Some of you might've heard about Companella already. If not, it's a desktop app for osu! (<0>erdbee.re</0>), and it's what sends your plays here. It only works with osu!stable, so lazer plays can't be submitted this way."
 
 #: src/routes/privacy.tsx
-msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
-msgstr "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+
+#: src/routes/privacy.tsx
+msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+msgstr "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+
+#: src/routes/privacy.tsx
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, the display name and about text a restricted account can set, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, the display name and about text a restricted account can set, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+
+#: src/routes/privacy.tsx
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile settings such as your display name and about text, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile settings such as your display name and about text, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Some skillset practice packs are checked the same way the courses are. Clearing one of their charts at its ladder's bar sets that skill's dan outright, without the four passes a skill normally needs. For example, clearing <0>Volcanic ~ Delta ~</0> sets your 4K speed dan to <1>delta</1>."
@@ -25673,6 +25815,10 @@ msgstr "Tap a card in the tray to lay it down, tap one of yours to edit it, and 
 #: src/components/packs/run/chain/ChainTable.tsx
 #~ msgid "Tap a card in your hand for {0}"
 #~ msgstr "Tap a card in your hand for {0}"
+
+#: src/components/skins/SkinSettingsModal.tsx
+msgid "Tap a keymode to hide or show it."
+msgstr "Tap a keymode to hide or show it."
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Tap a keymode to toggle its label."
@@ -28185,7 +28331,7 @@ msgstr "Time played"
 msgid "Time-stop knives"
 msgstr "Time-stop knives"
 
-#. placeholder {0}: Math.round(active.bpm)
+#. placeholder {0}: Math.round(active.bpm * playRate)
 #: src/components/maps/MapDetailModal.tsx
 msgid "timed at {0}"
 msgstr "timed at {0}"
@@ -28261,8 +28407,12 @@ msgid "to make your own profile themes."
 msgstr "to make your own profile themes."
 
 #: src/routes/privacy.tsx
-msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
-msgstr "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+#~ msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+#~ msgstr "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+
+#: src/routes/privacy.tsx
+msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses to its database or logs. The server's request logs keep a shortened IP address with the last part removed and no user agent, for up to 90 days. Cloudflare, which sits in front of the site, keeps its own request logs. The server also records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
+msgstr "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses to its database or logs. The server's request logs keep a shortened IP address with the last part removed and no user agent, for up to 90 days. Cloudflare, which sits in front of the site, keeps its own request logs. The server also records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
 
 #: src/routes/privacy.tsx
 msgid "To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -28391,6 +28541,10 @@ msgstr "Top {GLOBAL_ALBUM_CAP}"
 msgid "Top {GLOBAL_ALBUM_CAP} players"
 msgstr "Top {GLOBAL_ALBUM_CAP} players"
 
+#: src/routes/discord.tsx
+msgid "Top {n} of the keymode"
+msgstr "Top {n} of the keymode"
+
 #: src/components/player/ProfileStatCards.tsx
 msgid "top {top}%"
 msgstr "top {top}%"
@@ -28454,6 +28608,10 @@ msgstr "Top plays"
 msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "Top plays"
+
+#: src/routes/discord.tsx
+msgid "Top plays in"
+msgstr "Top plays in"
 
 #: src/components/player/InsightModals.tsx
 msgid "top pp"
@@ -29066,9 +29224,9 @@ msgstr "Unrateable chart. This play does not count toward skill or dan ratings."
 msgid "Unrated"
 msgstr "Unrated"
 
-#: src/routes/player/$username.tsx
-#~ msgid "Unrated plays"
-#~ msgstr "Unrated plays"
+#: src/components/me/MyDataPanel.tsx
+msgid "Unrated plays"
+msgstr "Unrated plays"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"
@@ -29134,8 +29292,8 @@ msgstr "up to the chart's level +0.1"
 #~ msgstr "Up to three passes in a skill are left out of its average when they credit more than five levels below the average of your best five in it. They still show in the dan window, marked <0>not counted</0>."
 
 #: src/routes/dan-estimates.tsx
-msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
-msgstr "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
+#~ msgid "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
+#~ msgstr "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
 
 #: src/components/maps/ChartLabelReport.tsx
 msgid "Update"
@@ -29225,6 +29383,10 @@ msgstr "Upload skin"
 #~ msgid "Upload the picture"
 #~ msgstr "Upload the picture"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Upload without them"
+msgstr "Upload without them"
+
 #: src/routes/skins_.$id.tsx
 msgid "Uploaded"
 msgstr "Uploaded"
@@ -29250,6 +29412,10 @@ msgstr "uploaded by <0>{0}</0>"
 #: src/routes/replay_.community.tsx
 #~ msgid "Uploaded by the Community ({total})"
 #~ msgstr "Uploaded by the Community ({total})"
+
+#: src/routes/privacy.tsx
+msgid "Uploaded replays are unlisted, not private: anyone with the link can watch them. Private skins are shown only to you. If you like a skin without signing in, the site stores a random browser ID and a salted hash of your network, not your IP address."
+msgstr "Uploaded replays are unlisted, not private: anyone with the link can watch them. Private skins are shown only to you. If you like a skin without signing in, the site stores a random browser ID and a salted hash of your network, not your IP address."
 
 #: src/routes/skins.tsx
 msgid "uploader"
@@ -29834,6 +30000,9 @@ msgid "Warming this player up... first draws can take a moment"
 msgstr "Warming this player up... first draws can take a moment"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/snipes.tsx
+#: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Watch"
 msgstr "Watch"
 
@@ -29849,10 +30018,12 @@ msgstr "Watch an ad to revive"
 msgid "Watch osu!mania replays in your browser."
 msgstr "Watch osu!mania replays in your browser."
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/ScorePlayDetailModal.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/LazerResultsScreen.tsx
 #: src/components/replay/StableResultsScreen.tsx
+#: src/components/ui/ReplayChip.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -30085,6 +30256,10 @@ msgstr "When each card first joined your collection"
 #: src/components/me/MyDataPanel.tsx
 msgid "When you play"
 msgstr "When you play"
+
+#: src/routes/privacy.tsx
+msgid "When you send a bug report, feedback, or a translation report, the site stores your message, the page you were on, any screenshots, replies in the thread, and your osu! account if you are signed in. Bug reports also include your browser user agent, screen size, language, and country."
+msgstr "When you send a bug report, feedback, or a translation report, the site stores your message, the page you were on, any screenshots, replies in the thread, and your osu! account if you are signed in. Bug reports also include your browser user agent, screen size, language, and country."
 
 #: src/routes/communities.tsx
 msgid "where"
@@ -31006,13 +31181,13 @@ msgid "Your country isn't tracked yet, so there's nothing to record your plays a
 msgstr "Your country isn't tracked yet, so there's nothing to record your plays against."
 
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit"
-msgstr "Your credit"
+#~ msgid "Your credit"
+#~ msgstr "Your credit"
 
 #. placeholder {0}: formatDanValue(landedValue)
 #: src/components/maps/DanProgressRail.tsx
-msgid "Your credit: {0}"
-msgstr "Your credit: {0}"
+#~ msgid "Your credit: {0}"
+#~ msgstr "Your credit: {0}"
 
 #: src/routes/recommendations.tsx
 msgid "your dan"
@@ -31210,6 +31385,15 @@ msgstr "Your pass"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Your personal dashboard: ranks, pp, activity totals and goal progress."
 #~ msgstr "Your personal dashboard: ranks, pp, activity totals and goal progress."
+
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play"
+msgstr "Your play"
+
+#. placeholder {0}: formatDanValue(landedValue)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your play: {0}"
+msgstr "Your play: {0}"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Your plays"

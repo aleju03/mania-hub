@@ -140,6 +140,7 @@ import { Route as WorkshopThemesSpecRouteImport } from './routes/workshop.themes
 import { Route as ApiAuthDiscordCallbackRouteImport } from './routes/api/auth/discord/callback'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
 import { Route as ApiSignatureTokenVariantRouteImport } from './routes/api/signature/$token/$variant'
+import { Route as ApiIntegrationsCompanellaV1BugReportsRouteImport } from './routes/api/integrations/companella/v1/bug-reports'
 import { Route as ApiIntegrationsCompanellaV1CapabilitiesRouteImport } from './routes/api/integrations/companella/v1/capabilities'
 import { Route as ApiIntegrationsCompanellaV1MeRouteImport } from './routes/api/integrations/companella/v1/me'
 import { Route as ApiIntegrationsCompanellaV1PresenceRouteImport } from './routes/api/integrations/companella/v1/presence'
@@ -814,6 +815,12 @@ const ApiSignatureTokenVariantRoute =
     path: '/api/signature/$token/$variant',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiIntegrationsCompanellaV1BugReportsRoute =
+  ApiIntegrationsCompanellaV1BugReportsRouteImport.update({
+    id: '/api/integrations/companella/v1/bug-reports',
+    path: '/api/integrations/companella/v1/bug-reports',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiIntegrationsCompanellaV1CapabilitiesRoute =
   ApiIntegrationsCompanellaV1CapabilitiesRouteImport.update({
     id: '/api/integrations/companella/v1/capabilities',
@@ -1025,6 +1032,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
+  '/api/integrations/companella/v1/bug-reports': typeof ApiIntegrationsCompanellaV1BugReportsRoute
   '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
   '/api/integrations/companella/v1/me': typeof ApiIntegrationsCompanellaV1MeRoute
   '/api/integrations/companella/v1/presence': typeof ApiIntegrationsCompanellaV1PresenceRoute
@@ -1171,6 +1179,7 @@ export interface FileRoutesByTo {
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
+  '/api/integrations/companella/v1/bug-reports': typeof ApiIntegrationsCompanellaV1BugReportsRoute
   '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
   '/api/integrations/companella/v1/me': typeof ApiIntegrationsCompanellaV1MeRoute
   '/api/integrations/companella/v1/presence': typeof ApiIntegrationsCompanellaV1PresenceRoute
@@ -1318,6 +1327,7 @@ export interface FileRoutesById {
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
+  '/api/integrations/companella/v1/bug-reports': typeof ApiIntegrationsCompanellaV1BugReportsRoute
   '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
   '/api/integrations/companella/v1/me': typeof ApiIntegrationsCompanellaV1MeRoute
   '/api/integrations/companella/v1/presence': typeof ApiIntegrationsCompanellaV1PresenceRoute
@@ -1466,6 +1476,7 @@ export interface FileRouteTypes {
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
     | '/api/signature/$token/$variant'
+    | '/api/integrations/companella/v1/bug-reports'
     | '/api/integrations/companella/v1/capabilities'
     | '/api/integrations/companella/v1/me'
     | '/api/integrations/companella/v1/presence'
@@ -1612,6 +1623,7 @@ export interface FileRouteTypes {
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
     | '/api/signature/$token/$variant'
+    | '/api/integrations/companella/v1/bug-reports'
     | '/api/integrations/companella/v1/capabilities'
     | '/api/integrations/companella/v1/me'
     | '/api/integrations/companella/v1/presence'
@@ -1758,6 +1770,7 @@ export interface FileRouteTypes {
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
     | '/api/signature/$token/$variant'
+    | '/api/integrations/companella/v1/bug-reports'
     | '/api/integrations/companella/v1/capabilities'
     | '/api/integrations/companella/v1/me'
     | '/api/integrations/companella/v1/presence'
@@ -1896,6 +1909,7 @@ export interface RootRouteChildren {
   WorkshopThemesSpecRoute: typeof WorkshopThemesSpecRoute
   WorkshopThemesIndexRoute: typeof WorkshopThemesIndexRoute
   ApiSignatureTokenVariantRoute: typeof ApiSignatureTokenVariantRoute
+  ApiIntegrationsCompanellaV1BugReportsRoute: typeof ApiIntegrationsCompanellaV1BugReportsRoute
   ApiIntegrationsCompanellaV1CapabilitiesRoute: typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
   ApiIntegrationsCompanellaV1MeRoute: typeof ApiIntegrationsCompanellaV1MeRoute
   ApiIntegrationsCompanellaV1PresenceRoute: typeof ApiIntegrationsCompanellaV1PresenceRoute
@@ -2824,6 +2838,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSignatureTokenVariantRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/integrations/companella/v1/bug-reports': {
+      id: '/api/integrations/companella/v1/bug-reports'
+      path: '/api/integrations/companella/v1/bug-reports'
+      fullPath: '/api/integrations/companella/v1/bug-reports'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1BugReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/integrations/companella/v1/capabilities': {
       id: '/api/integrations/companella/v1/capabilities'
       path: '/api/integrations/companella/v1/capabilities'
@@ -3176,6 +3197,8 @@ const rootRouteChildren: RootRouteChildren = {
   WorkshopThemesSpecRoute: WorkshopThemesSpecRoute,
   WorkshopThemesIndexRoute: WorkshopThemesIndexRoute,
   ApiSignatureTokenVariantRoute: ApiSignatureTokenVariantRoute,
+  ApiIntegrationsCompanellaV1BugReportsRoute:
+    ApiIntegrationsCompanellaV1BugReportsRoute,
   ApiIntegrationsCompanellaV1CapabilitiesRoute:
     ApiIntegrationsCompanellaV1CapabilitiesRoute,
   ApiIntegrationsCompanellaV1MeRoute: ApiIntegrationsCompanellaV1MeRoute,

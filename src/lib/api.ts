@@ -292,6 +292,9 @@ export type OsuFetchOptions = {
   // this way). GET-JSON requests only.
   cacheTtlMs?: number;
   staleMs?: number;
+  // Answer from the proxy's response cache only (404 on a miss), never calling osu!. For requests
+  // anyone can drive with fresh ids, such as server renders, so they can't drain the API budget.
+  cacheOnly?: boolean;
   // Statuses that are normal caller outcomes rather than API problems (404 for
   // a deleted score or restricted user): still thrown, but not reported to
   // analytics as osu_api_error.
@@ -481,7 +484,7 @@ async function fetchLiveBackendOsu(
   params: Record<string, string | number | undefined> | undefined,
   caller: string,
   kind: "json" | "binary",
-  cache?: { cacheTtlMs?: number; staleMs?: number },
+  cache?: { cacheTtlMs?: number; staleMs?: number; cacheOnly?: boolean },
 ): Promise<Response> {
   const base = getServerLiveBackendUrl();
   return fetchWithTimeout(
@@ -495,6 +498,7 @@ async function fetchLiveBackendOsu(
         caller,
         kind,
         ...(cache?.cacheTtlMs ? { cacheTtlMs: cache.cacheTtlMs, staleMs: cache.staleMs } : {}),
+        ...(cache?.cacheOnly ? { cacheOnly: true } : {}),
       }),
     },
     LIVE_BACKEND_OSU_TIMEOUT_MS,

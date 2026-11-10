@@ -31,10 +31,26 @@ it("names the credited level and the chart estimate", () => {
   </I18nProvider>);
   expect(screen.getByText("Beta++")).toBeTruthy();
   expect(screen.getByText("12.88")).toBeTruthy();
-  expect(screen.getByText("Your credit")).toBeTruthy();
+  expect(screen.getByText("Your play")).toBeTruthy();
   expect(screen.getByText("Beta+")).toBeTruthy();
   expect(screen.getByText("12.73")).toBeTruthy();
-  expect(screen.getByText("Chart estimate")).toBeTruthy();
+  expect(screen.getByText("Map")).toBeTruthy();
+  expect(screen.getByText("+0.15 for accuracy")).toBeTruthy();
+});
+
+it("prints an accuracy penalty with a minus sign", () => {
+  render(<I18nProvider i18n={getI18n("en")}>
+    <DanProgressRail context="reform" chart={10.1} landed={9.59} />
+  </I18nProvider>);
+  expect(screen.getByText("\u22120.51 for accuracy")).toBeTruthy();
+});
+
+it("leaves the accuracy line off a course credit and an unchanged clear", () => {
+  render(<I18nProvider i18n={getI18n("en")}>
+    <DanProgressRail context="reform" chart={10.1} landed={11} courseCredit />
+    <DanProgressRail context="reform" chart={10.1} landed={10.1} />
+  </I18nProvider>);
+  expect(screen.queryByText(/for accuracy/)).toBeNull();
 });
 
 it("says a rejected clear credits nothing and draws no landed mark", () => {
@@ -43,6 +59,7 @@ it("says a rejected clear credits nothing and draws no landed mark", () => {
   </I18nProvider>);
   expect(screen.getByText("No dan credit")).toBeTruthy();
   expect(screen.queryByText("12.88")).toBeNull();
+  expect(screen.queryByText(/for accuracy/)).toBeNull();
   expect(screen.queryByTestId("dan-credit-connector")).toBeNull();
 });
 

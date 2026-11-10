@@ -34,6 +34,8 @@ export interface LivePlayerSkillScoreDetails {
   totalScore: number | null;
   rank: string | null;
   scoreUrl: string | null;
+  /** Whether osu! keeps the replay; absent or null when unknown. */
+  hasReplay?: boolean | null;
 }
 
 export interface LivePlayerSkillPlay {
@@ -106,6 +108,7 @@ export interface LivePlayerSkillPlaysPage {
 export type LiveDanRejectReason =
   | "chart_unanalyzed"
   | "chart_ineligible"
+  | "jumptrill"
   | "chart_vibro"
   | "rate_vibro"
   | "low_od"
@@ -2347,6 +2350,8 @@ export interface LivePlayerUnratedPlaysPage {
   sort: string;
   items: LivePlayerUnratedPlay[];
   total: number;
+  /** Where `items` starts; absent from a backend that cannot page. */
+  offset?: number;
   keyCounts: number[];
 }
 
@@ -2359,6 +2364,7 @@ export async function fetchLivePlayerUnratedPlaysDirect(
     /** "pp" | "msd" | "dan" rank by that number; "recent" by when each play was set. */
     sort?: "pp" | "msd" | "dan" | "recent";
     limit?: number;
+    offset?: number;
     signal?: AbortSignal;
     /** Skips the browser's cached copy (the endpoint is served with a short max-age). */
     fresh?: boolean;
@@ -2368,6 +2374,7 @@ export async function fetchLivePlayerUnratedPlaysDirect(
   if (!Number.isInteger(keyCount) || keyCount <= 0) throw new Error("Invalid key count.");
   const query = new URLSearchParams({ keys: String(keyCount), sort: options.sort ?? "msd" });
   if (Number.isInteger(options.limit) && options.limit! > 0) query.set("limit", String(options.limit));
+  if (Number.isInteger(options.offset) && options.offset! > 0) query.set("offset", String(options.offset));
   return fetchLiveJson(`/api/profiles/${userId}/unrated-plays?${query.toString()}`, {
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.fresh ? { cache: "reload" as const } : {}),
@@ -4014,12 +4021,13 @@ export type LiveScoreSubmissionFailure =
   | "beatmap_not_found"
   | "chart_outdated"
   | "chart_unavailable"
-  | "unsupported_mods";
+  | "unsupported_mods"
+  | "rate_unknown";
 
 const SCORE_SUBMISSION_FAILURES = new Set<LiveScoreSubmissionFailure>([
   "invalid_link", "score_not_found", "not_mania", "not_owned", "not_passed",
   "player_untracked", "player_not_found", "osu_unavailable",
-  "mames_not_linked", "mames_unavailable", "beatmap_not_found", "chart_outdated", "chart_unavailable", "unsupported_mods",
+  "mames_not_linked", "mames_unavailable", "beatmap_not_found", "chart_outdated", "chart_unavailable", "unsupported_mods", "rate_unknown",
 ]);
 
 export interface LiveScoreSubmissionPlay {

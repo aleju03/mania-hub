@@ -23,6 +23,8 @@ const POLL_MS = 5_000;
 
 const SKIP_LABELS: Record<string, string> = {
   chart_missing: "map file not on the site",
+  map_not_on_osu: "map not on osu!",
+  lookup_failed: "osu! lookup failed",
   not_mania: "not osu!mania",
   converted_map: "osu!standard map played as a convert",
   not_a_replay: "not a replay",
@@ -35,6 +37,7 @@ interface UploadState {
   sent: number;
   staged: number;
   already: number;
+  lookingUp: number;
   skipped: Array<{ name: string; reason: string }>;
   failed: number;
   running: boolean;
@@ -120,7 +123,7 @@ export function CompanellaImportPanel() {
       .finally(() => setLooking(false));
   };
 
-  const pending = (progress?.waiting ?? 0) + (progress?.processing ?? 0);
+  const pending = (progress?.waiting ?? 0) + (progress?.processing ?? 0) + (progress?.lookingUp ?? 0);
   useEffect(() => {
     if (!account || (pending === 0 && !upload?.running)) return;
     const timer = window.setInterval(() => { void refresh(String(account.userId)).catch(() => {}); }, POLL_MS);
@@ -137,7 +140,7 @@ export function CompanellaImportPanel() {
   const start = async () => {
     if (!account || selected.length === 0) return;
     const batches = batchesOf(selected);
-    const state: UploadState = { total: selected.length, sent: 0, staged: 0, already: 0, skipped: [], failed: 0, running: true };
+    const state: UploadState = { total: selected.length, sent: 0, staged: 0, already: 0, lookingUp: 0, skipped: [], failed: 0, running: true };
     setUpload({ ...state });
     let next = 0;
     const worker = async () => {
@@ -149,6 +152,7 @@ export function CompanellaImportPanel() {
           for (const result of results) {
             if (result.status === "staged") state.staged += 1;
             else if (result.status === "already_imported") state.already += 1;
+            else if (result.status === "awaiting_map") state.lookingUp += 1;
             else if (result.status === "skipped") state.skipped.push({ name: result.name, reason: SKIP_LABELS[result.reason] ?? result.reason });
           }
         } catch {
@@ -251,16 +255,23 @@ export function CompanellaImportPanel() {
 }
 
 function ProgressLine({ progress }: { progress: ReplayImportProgress }) {
-  const total = progress.waiting + progress.processing + progress.imported + progress.rejected + progress.expired;
+  // A backend from before the map lookup sends none of its fields.
+  const lookingUp = progress.lookingUp ?? 0;
+  const unmatched = progress.unmatched ?? [];
+  const unmatchedTotal = progress.unmatchedTotal ?? 0;
+  const total = progress.waiting + progress.processing + progress.imported + progress.rejected + progress.expired
+    + lookingUp + unmatchedTotal;
   if (total === 0) return <p className="text-[12px] text-osu-f1">No replays imported for this player yet.</p>;
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
         <Stat label="imported" value={progress.imported} className="text-white" />
+        {lookingUp > 0 ? <Stat label="looking up map" value={lookingUp} className="text-osu-l2" /> : null}
         <Stat label="waiting" value={progress.waiting} className="text-osu-l2" />
         <Stat label="processing" value={progress.processing} className="text-osu-l2" />
         <Stat label="rejected" value={progress.rejected} className={progress.rejected > 0 ? "text-osu-red-light" : "text-osu-l2"} />
         {progress.expired > 0 ? <Stat label="expired" value={progress.expired} className="text-osu-l2" /> : null}
+        {unmatchedTotal > 0 ? <Stat label="map not found" value={unmatchedTotal} className="text-amber-300" /> : null}
       </div>
       {progress.rejections.length > 0 ? (
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[11px] text-osu-f1">
@@ -269,6 +280,20 @@ function ProgressLine({ progress }: { progress: ReplayImportProgress }) {
           ))}
         </div>
       ) : null}
+      {unmatched.length > 0 ? <FileReasons files={unmatched.map((file) => ({ name: file.name, reason: SKIP_LABELS[file.reason] ?? file.reason }))} /> : null}
+    </div>
+  );
+}
+
+function FileReasons({ files }: { files: Array<{ name: string; reason: string }> }) {
+  return (
+    <div className="max-h-[320px] overflow-y-auto">
+      {files.map((file, index) => (
+        <div key={`${file.name}:${index}`} className="flex items-baseline justify-between gap-4 py-0.5 text-[11px]">
+          <span className="min-w-0 truncate font-mono text-osu-l2">{file.name}</span>
+          <span className="flex-shrink-0 text-osu-f1">{file.reason}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -287,19 +312,11 @@ function UploadSummary({ upload }: { upload: UploadState }) {
       <div className="flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
         <Stat label="queued" value={upload.staged} className="text-white" />
         <Stat label="already imported" value={upload.already} className="text-osu-l2" />
+        {upload.lookingUp > 0 ? <Stat label="looking up map" value={upload.lookingUp} className="text-osu-l2" /> : null}
         <Stat label="skipped" value={upload.skipped.length} className={upload.skipped.length > 0 ? "text-amber-300" : "text-osu-l2"} />
         {upload.failed > 0 ? <Stat label="failed to upload" value={upload.failed} className="text-osu-red-light" /> : null}
       </div>
-      {upload.skipped.length > 0 ? (
-        <div className="max-h-[320px] overflow-y-auto">
-          {upload.skipped.map((file) => (
-            <div key={file.name} className="flex items-baseline justify-between gap-4 py-0.5 text-[11px]">
-              <span className="min-w-0 truncate font-mono text-osu-l2">{file.name}</span>
-              <span className="flex-shrink-0 text-osu-f1">{file.reason}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {upload.skipped.length > 0 ? <FileReasons files={upload.skipped} /> : null}
     </div>
   );
 }

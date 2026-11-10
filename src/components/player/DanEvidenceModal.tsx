@@ -331,6 +331,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
       chartLabel: run?.chartDanLabel ?? credential.level,
       creditedRating: credential.rawDan,
       creditedLabel: credential.label,
+      courseCredit: true,
       accuracy: credential.accuracy,
       ...(credential.displayedAccuracy != null ? { currency: credential.currency } : {}),
       family: side,
@@ -800,6 +801,7 @@ function clearDan(clear: LivePlayerDanEvidencePlay, side: "rc" | "ln"): DetailDa
     chartLabel: clear.chartDanLabel,
     creditedRating: clear.creditedDan,
     creditedLabel: clear.creditedDanLabel,
+    courseCredit: clear.credential != null,
     accuracy: clear.clearAccuracy,
     family: side,
   };
