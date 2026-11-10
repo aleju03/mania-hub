@@ -246,10 +246,11 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
   }, [countries, viewerCountry, viewerId, locale, t]);
 
   // The usual board first, then DT, HT and the note-mod boards, each with its
-  // badges and the players on it. A board the list no longer has (a stale
+  // badges and the players on it. The speed boards name both of their mods,
+  // since Nightcore plays sit on Double Time's and Daycore ones on Half Time's. A board the list no longer has (a stale
   // cache) stays selectable while it is the one shown.
   const boardOptions = useMemo<SelectMenuOption<string>[]>(() => {
-    const names: Record<string, string> = { dt: t`Double Time`, ht: t`Half Time`, IN: t`Invert`, HO: t`Hold Off`, NR: t`No Release` };
+    const names: Record<string, string> = { dt: t`Double Time / Nightcore`, ht: t`Half Time / Daycore`, IN: t`Invert`, HO: t`Hold Off`, NR: t`No Release` };
     const badges = (entry: LiveMapBoard) => [...(entry.speed === "usual" ? [] : [entry.speed.toUpperCase()]), ...entry.mods];
     const listed = boards.some((entry) => boardKey(entry) === modBoard) ? boards : [...boards, { ...boardOfKey(modBoard), count: 0 }];
     return listed.map((entry) => {

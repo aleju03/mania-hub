@@ -974,8 +974,11 @@ export function ChainTable(props: ChainTableProps) {
       // The pack's cards already dealt with their sound out of the pack; the
       // flight into the hand is one soft move, not a second deal.
       runSound.charmMove();
+      // The deck's cards get their way in now, in the render that mounts the
+      // hand, and leave the pile once the pack's cards are off. Given later,
+      // they were already lying in the hand when their deal sounded.
       const deckCards = shown.hand.filter((entry) => !entry.pack).map((entry) => entry.uid);
-      window.setTimeout(() => enterFromDeck(deckCards, 0), reducedMotion ? 0 : roundPackCards.length * CHAIN_FEEL.pack.joinStaggerMs + 120);
+      enterFromDeck(deckCards, roundPackCards.length * CHAIN_FEEL.pack.joinStaggerMs + 120);
       window.setTimeout(() => signal("round:dealt"), reducedMotion ? 0 : 1400);
     },
     [boxRef, enterFromDeck, keyScope, layout, reducedMotion, roundPackCards, shown, signal],

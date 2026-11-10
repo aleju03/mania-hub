@@ -9,9 +9,10 @@ import { duckRunMusic } from "../../packSfx";
 
 const LEVEL = 0.1;
 const FADE_IN_MS = 500;
-const FADE_OUT_MS = 1500;
-/* Fades out from here, well before the clip's own end. */
-const PLAY_MS = 4500;
+const FADE_OUT_MS = 1200;
+/* Fades out from here, well before the clip's own end: 4 seconds heard in
+   all (6 read as too long for a round's opening). */
+const PLAY_MS = 2800;
 
 let audio: HTMLAudioElement | null = null;
 let timer: number | null = null;

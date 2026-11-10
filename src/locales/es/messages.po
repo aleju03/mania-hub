@@ -9103,10 +9103,13 @@ msgstr "Puntos"
 msgid "Double Tap"
 msgstr "Doble toque"
 
-#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Double Time"
 msgstr "Double Time"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Double Time / Nightcore"
+msgstr "Double Time / Nightcore"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "Double Time stars"
@@ -11683,10 +11686,13 @@ msgstr "MITAD"
 #~ msgid "half a year"
 #~ msgstr ""
 
-#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Half Time"
 msgstr "Half Time"
+
+#: src/components/maps/MapScoresBoard.tsx
+msgid "Half Time / Daycore"
+msgstr "Half Time / Daycore"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "Half Time stars"
