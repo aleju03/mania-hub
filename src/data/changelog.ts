@@ -91,6 +91,19 @@ export const UPDATES: ChangelogUpdate[] = [
   },
   {
     date: "2026-11-09",
+    text: "There's now a Discord bot. Add it to a server or to your own Discord account from the new Discord page.",
+    bold: "Discord bot",
+    kind: "new",
+    to: "/discord",
+    more: [
+      { text: "/profile, /recent, /top, /skills and /maniacard show a player's plays, dans and skill ratings. /map shows a chart's dan, rating and skillsets at any rate, and /compare shows your best score on the last map posted in the channel." },
+      { text: "/farm finds maps likely to give pp, /challenge picks a random map near your dan with the accuracy you need to clear it, and /rankings shows a country's or the world's rankings." },
+      { text: "Channels can follow top plays, new farm maps and this changelog, set up on the Discord page." },
+      { text: "Link your osu! account with /link or on the Discord page, so commands work without typing a name." },
+    ],
+  },
+  {
+    date: "2026-11-09",
     text: "Added a new minigame on the Packs page called Overjoy, a card game where you link cards into rows to beat each round's score.",
     bold: "Overjoy",
     kind: "new",

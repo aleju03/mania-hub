@@ -32,11 +32,14 @@ const KIND_DOT: Record<ChangelogKind, string> = {
 
 /** Oldest first, so the strip reads left to right like time does. */
 const STRIP = [...DAYS].reverse();
-const BIGGEST_DAY = Math.max(1, ...DAYS.map((day) => day.updates.length));
+/** A bar counts every line a day printed, an update's extra lines included,
+    so one big release reads as big as it is. */
+const lineCount = (update: (typeof DAYS)[number]["updates"][number]) => 1 + (update.more?.length ?? 0);
+const BIGGEST_DAY = Math.max(1, ...DAYS.map((day) => day.updates.reduce((sum, update) => sum + lineCount(update), 0)));
 const KIND_COUNTS = new Map(
   DAYS.map((day) => [
     day.date,
-    KINDS.map((kind) => day.updates.filter((update) => changelogKind(update) === kind).length),
+    KINDS.map((kind) => day.updates.reduce((sum, update) => sum + (changelogKind(update) === kind ? lineCount(update) : 0), 0)),
   ]),
 );
 
