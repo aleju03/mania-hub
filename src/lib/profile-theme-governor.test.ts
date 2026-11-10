@@ -20,6 +20,23 @@ describe("ResolutionGovernor", () => {
     expect(governor.scale).toBe(1);
   });
 
+  it("catches up quickly from a start-up guess that frames show was too low", () => {
+    const governor = new ResolutionGovernor();
+    governor.start(0.12);
+    run(governor, 16.7, 90 + 30 * 5);
+    expect(governor.scale).toBe(1);
+  });
+
+  it("climbs slowly again once a guessed start has run slow", () => {
+    const governor = new ResolutionGovernor();
+    governor.start(0.5);
+    run(governor, 16.7, 90);
+    run(governor, 40, 30);
+    const dropped = governor.scale;
+    run(governor, 16.7, 30 * 5);
+    expect(governor.scale).toBe(dropped);
+  });
+
   it("judges nothing while the page is still loading", () => {
     const governor = new ResolutionGovernor();
     run(governor, 40, 90);

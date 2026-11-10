@@ -533,6 +533,8 @@ export class ResolutionGovernor {
   private retryWindows = RETRY_WINDOWS;
   /* Where it held before trying above its ceiling, while the try is on. */
   private beforeTry: number | null = null;
+  /* The scale came from the start-up probe's guess, and no window has run slow since. */
+  private guessed = false;
 
   /* Returns true when the scale changed. */
   frame(gapMs: number): boolean {
@@ -550,6 +552,7 @@ export class ResolutionGovernor {
     const median = this.gaps.sort((a, b) => a - b)[GOVERNOR_WINDOW >> 1];
     this.gaps.length = 0;
     if (median > SLOW_FRAME_MS) {
+      this.guessed = false;
       this.fastWindows = 0;
       if (this.beforeTry !== null) {
         this.scale = this.ceiling = this.beforeTry;
@@ -576,10 +579,11 @@ export class ResolutionGovernor {
       return false;
     }
     if (this.scale < this.ceiling) {
-      if (this.fastWindows < CLIMB_WINDOWS) return false;
+      // below where the probe guessed, with nothing slow seen yet: catch up quickly
+      if (!this.guessed && this.fastWindows < CLIMB_WINDOWS) return false;
       this.fastWindows = 0;
       this.starved = false;
-      this.scale = Math.min(this.ceiling, this.scale * 1.25);
+      this.scale = Math.min(this.ceiling, this.scale * (this.guessed ? 1.6 : 1.25));
       return true;
     }
     if (this.ceiling < 1 && this.fastWindows >= this.retryWindows) {
@@ -597,6 +601,7 @@ export class ResolutionGovernor {
   start(scale: number) {
     this.scale = Math.max(MIN_PIXEL_SCALE, Math.min(1, scale));
     this.ceiling = 1;
+    this.guessed = this.scale < 1;
   }
 }
 
@@ -619,6 +624,13 @@ const STARVED_FRAME_MS = 31;
 const PROBE_WIDTH = 96;
 const PROBE_HEIGHT = 54;
 const PROBE_FRAMES = 2;
+/* A custom theme fast that small is timed again this many times wider and
+   taller before its full-size cost is guessed: at 96x54 a frame's fixed cost
+   (the draw, the wait for the GPU) outweighs its pixels, and scaled up ~200
+   times it made every theme look heavy, so even a light one started blurry. */
+const PROBE_GROW = 4;
+/* Fast enough at the small size to try the bigger one, ms. */
+const PROBE_GROW_MS = 4;
 /* Slower than this even that small (a fraction of a phone's worth of pixels): it shows its still. */
 const PROBE_GIVE_UP_MS = 40;
 /* The frame time it should start at once full size, ms. */
@@ -674,8 +686,8 @@ export function mountProfileBackdrop(
   let client: [number, number] | null = null;
   let governor = new ResolutionGovernor();
   /* A custom or heavy theme's timed first frames: how many drawn so far, and the slowest. */
-  const probing = (next: BackdropTheme) => (typeof next !== "string" || (heavyTheme(next) && !still) ? { frames: 0, worst: 0 } : null);
-  let probe: { frames: number; worst: number } | null = probing(initial);
+  const probing = (next: BackdropTheme) => (typeof next !== "string" || (heavyTheme(next) && !still) ? { frames: 0, worst: 0, grown: false } : null);
+  let probe: { frames: number; worst: number; grown: boolean } | null = probing(initial);
   let gaveUp = false;
   /* When the current custom theme first drew full size (0 until then, and for a built-in). */
   let customShownAt = 0;
@@ -704,8 +716,9 @@ export function mountProfileBackdrop(
     const custom = typeof probed === "string" ? null : probed;
     const full = Math.min(maxPixels, host.clientWidth * host.clientHeight * (window.devicePixelRatio || 1) ** 2);
     const share = custom ? 0 : Math.sqrt((full * MIN_PIXEL_SCALE) / Math.max(1, host.clientWidth * host.clientHeight));
-    const width = custom ? PROBE_WIDTH : Math.max(1, Math.round(host.clientWidth * share));
-    const height = custom ? PROBE_HEIGHT : Math.max(1, Math.round(host.clientHeight * share));
+    const grow = probe.grown ? PROBE_GROW : 1;
+    const width = custom ? PROBE_WIDTH * grow : Math.max(1, Math.round(host.clientWidth * share));
+    const height = custom ? PROBE_HEIGHT * grow : Math.max(1, Math.round(host.clientHeight * share));
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
@@ -724,6 +737,10 @@ export function mountProfileBackdrop(
     if (probe.frames <= PROBE_FRAMES) return false;
     if (custom && probe.worst > PROBE_GIVE_UP_MS) {
       giveUp(custom, true);
+      return false;
+    }
+    if (custom && !probe.grown && probe.worst <= PROBE_GROW_MS && PROBE_WIDTH * PROBE_HEIGHT * PROBE_GROW ** 2 < full) {
+      probe = { frames: 0, worst: 0, grown: true };
       return false;
     }
     const estimate = probe.worst * (full / (width * height));

@@ -90,7 +90,10 @@ export function ProfileThemeBackdrop({ theme, notes = null, chart = null, play =
   const base = custom ? custom.look.base : PROFILE_THEME_LOOKS[theme as SupporterProfileThemeId].base;
   return (
     <div ref={hostRef} aria-hidden className={className} style={{ backgroundColor: base }}>
-      {stillOnly && <img src={custom.stillUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" onError={hideBrokenImage} />}
+      {/* A custom theme's still sits under the live canvas, which fades in over
+          it once its first full-size frame is drawn: no blank wait while the
+          program compiles, its pictures load and its cost is measured. */}
+      {custom && <img src={custom.stillUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" onError={hideBrokenImage} />}
     </div>
   );
 }
