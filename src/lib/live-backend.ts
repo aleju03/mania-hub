@@ -96,6 +96,7 @@ export interface LivePlayerSkillPlaysPage {
 export type LiveDanRejectReason =
   | "chart_unanalyzed"
   | "chart_ineligible"
+  | "jumptrill"
   | "chart_vibro"
   | "rate_vibro"
   | "low_od"

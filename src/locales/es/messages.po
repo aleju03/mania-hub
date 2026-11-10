@@ -9666,6 +9666,10 @@ msgstr "Jumpstream"
 msgid "jumpstream, warmup, ..."
 msgstr "jumpstream, calentamiento, ..."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Jumptrill chart. This play counts toward skill ratings but not toward dan."
+msgstr "Mapa de jumptrill. Este play cuenta para el rating de skillsets, pero no para el de dan."
+
 #: src/routes/legal.tsx
 msgid "June 16, 2026"
 msgstr "16 de junio de 2026"

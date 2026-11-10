@@ -9678,6 +9678,10 @@ msgstr "双押切"
 msgid "jumpstream, warmup, ..."
 msgstr "jumpstream、热手、……"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Jumptrill chart. This play counts toward skill ratings but not toward dan."
+msgstr "对拍谱面。此成绩计入技能评分，但不计入段位评分。"
+
 #: src/routes/legal.tsx
 msgid "June 16, 2026"
 msgstr "2026年6月16日"

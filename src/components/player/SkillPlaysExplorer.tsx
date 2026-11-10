@@ -1521,6 +1521,8 @@ function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
             : t`This play was judged at a lower OD than a dan clear has to be played at.`)
           : rejected.reason === "ez_windows"
             ? t`Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on.`
+            : rejected.reason === "jumptrill"
+              ? t`Jumptrill chart. This play counts toward skill ratings but not toward dan.`
             : rejected.reason === "chart_ineligible"
               ? t`This chart is not built in a way a dan level can be read off a clear of it.`
               : rejected.reason === "chart_unanalyzed"
