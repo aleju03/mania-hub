@@ -4210,8 +4210,8 @@ msgid "Admin: flood the rail with fake pulls to preview the animation"
 msgstr "Admin: flood the rail with fake pulls to preview the animation"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Admins only: the supporter membership on lava.top is not up yet."
-msgstr "Admins only: the supporter membership on lava.top is not up yet."
+#~ msgid "Admins only: the supporter membership on lava.top is not up yet."
+#~ msgstr "Admins only: the supporter membership on lava.top is not up yet."
 
 #: src/components/supporter/SupportCheckout.tsx
 #~ msgid "Admins only: the supporter product on lava.top is not up yet."
@@ -6203,8 +6203,8 @@ msgid "Cards keep their tier colour"
 msgstr "Cards keep their tier colour"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Cards or Apple Pay"
-msgstr "Cards or Apple Pay"
+#~ msgid "Cards or Apple Pay"
+#~ msgstr "Cards or Apple Pay"
 
 #: src/lib/pack-run.ts
 msgid "Cards score only once."
@@ -9681,6 +9681,10 @@ msgstr "Either restarting or under maintenance. Try again later."
 #: src/lib/packs.ts
 msgid "Elite"
 msgstr "Elite"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Email"
+msgstr "Email"
 
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
@@ -13503,8 +13507,12 @@ msgstr "Knob lasers"
 #~ msgstr "Ko-fi takes cards and PayPal, lava.top takes ruble cards. The step beside the checkout makes sure the time lands on your account."
 
 #: src/routes/support.tsx
-msgid "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
-msgstr "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+#~ msgid "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+
+#: src/routes/support.tsx
+msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+msgstr "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
@@ -18648,6 +18656,10 @@ msgid "Page scroll"
 msgstr "Page scroll"
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Paid on lava.top already? Enter the email you paid with."
+msgstr "Paid on lava.top already? Enter the email you paid with."
+
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Paid with Google already?"
 msgstr "Paid with Google already?"
 
@@ -18869,6 +18881,10 @@ msgstr "Pay with Google here. Your supporter time starts as soon as the payment 
 #: src/routes/terms.tsx
 msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
 msgstr "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "PayPal"
+msgstr "PayPal"
 
 #: src/components/packs/run/chain/ChainContracts.tsx
 msgid "Pays"

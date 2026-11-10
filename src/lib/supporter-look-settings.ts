@@ -632,6 +632,33 @@ export const claimGoogleContribution = createServerFn({ method: "POST" })
     return { expiresAt: typeof body.expiresAt === "number" ? body.expiresAt : null };
   });
 
+const LAVA_CLAIM_ERRORS: Record<string, string> = {
+  invalid_email: "That doesn't look like an email.",
+  not_found: "No unclaimed lava.top payment from that email. Payments can take a minute to arrive.",
+  too_many_tries: "That's five tries today; try again tomorrow.",
+};
+
+/* lava.top payments the viewer made outside the Support page's link, named by
+   the email they paid with: each unclaimed one from it becomes theirs. */
+export const claimLavaPayments = createServerFn({ method: "POST" })
+  .validator((data: { email?: unknown }) => {
+    const email = typeof data?.email === "string" ? data.email.trim() : "";
+    if (!email || email.length > 254 || !email.includes("@")) throw new Error(LAVA_CLAIM_ERRORS.invalid_email);
+    return { email };
+  })
+  .handler(async ({ data }): Promise<{ expiresAt: number | null }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/lava-claim`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, username: viewer.username, email: data.email }),
+    });
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; expiresAt?: unknown } | null;
+    if (!response.ok || body?.ok !== true) throw new Error(LAVA_CLAIM_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
+    return { expiresAt: typeof body.expiresAt === "number" ? body.expiresAt : null };
+  });
+
 const FRAME_ERRORS: Record<string, string> = {
   not_supporter: "Your supporter time has run out.",
   too_many_submissions: "That's five frames today; try again tomorrow.",

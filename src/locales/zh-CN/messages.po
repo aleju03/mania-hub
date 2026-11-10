@@ -4195,8 +4195,8 @@ msgid "Admin: flood the rail with fake pulls to preview the animation"
 msgstr "管理员：用假抽卡刷满侧栏以预览动画"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Admins only: the supporter membership on lava.top is not up yet."
-msgstr "仅管理员可见：lava.top 上的支持者会员尚未上线。"
+#~ msgid "Admins only: the supporter membership on lava.top is not up yet."
+#~ msgstr "仅管理员可见：lava.top 上的支持者会员尚未上线。"
 
 #: src/components/supporter/SupportCheckout.tsx
 #~ msgid "Admins only: the supporter product on lava.top is not up yet."
@@ -6188,8 +6188,8 @@ msgid "Cards keep their tier colour"
 msgstr "卡牌保留其稀有度颜色"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Cards or Apple Pay"
-msgstr "银行卡或 Apple Pay"
+#~ msgid "Cards or Apple Pay"
+#~ msgstr "银行卡或 Apple Pay"
 
 #: src/lib/pack-run.ts
 msgid "Cards score only once."
@@ -9666,6 +9666,10 @@ msgstr "正在重启或维护中。请稍后再试。"
 #: src/lib/packs.ts
 msgid "Elite"
 msgstr "精英"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Email"
+msgstr "邮箱"
 
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
@@ -13472,8 +13476,12 @@ msgstr "旋钮激光"
 #~ msgstr "Ko-fi 支持银行卡和 PayPal，lava.top 支持卢布银行卡。按照支付旁边的步骤操作，时长就会记到你的账号上。"
 
 #: src/routes/support.tsx
-msgid "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
-msgstr "Ko-fi 支持银行卡和 PayPal。按照支付旁边的步骤操作，时长就会记到你的账号上。"
+#~ msgid "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi 支持银行卡和 PayPal。按照支付旁边的步骤操作，时长就会记到你的账号上。"
+
+#: src/routes/support.tsx
+msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+msgstr "Ko-fi 支持 PayPal，lava.top 支持银行卡和 PayPal。按照支付旁边的步骤操作，时长就会记到你的账号上。"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
@@ -18617,6 +18625,10 @@ msgid "Page scroll"
 msgstr "页面滚动"
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Paid on lava.top already? Enter the email you paid with."
+msgstr "已经在 lava.top 付款了？输入你付款时用的邮箱。"
+
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Paid with Google already?"
 msgstr "已经用 Google 付款了？"
 
@@ -18838,6 +18850,10 @@ msgstr "在这里用 Google 支付。付款完成后，你的支持者时长立�
 #: src/routes/terms.tsx
 msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
 msgstr "付款通过 Ko-fi、Google 或 lava.top 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "PayPal"
+msgstr "PayPal"
 
 #: src/components/packs/run/chain/ChainContracts.tsx
 msgid "Pays"

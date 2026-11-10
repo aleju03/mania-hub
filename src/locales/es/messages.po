@@ -4183,8 +4183,8 @@ msgid "Admin: flood the rail with fake pulls to preview the animation"
 msgstr "Admin: llenar la fila con tiradas falsas para previsualizar la animación"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Admins only: the supporter membership on lava.top is not up yet."
-msgstr "Solo admins: la membresía de supporter en lava.top todavía no existe."
+#~ msgid "Admins only: the supporter membership on lava.top is not up yet."
+#~ msgstr "Solo admins: la membresía de supporter en lava.top todavía no existe."
 
 #: src/components/supporter/SupportCheckout.tsx
 #~ msgid "Admins only: the supporter product on lava.top is not up yet."
@@ -6176,8 +6176,8 @@ msgid "Cards keep their tier colour"
 msgstr "Las cartas mantienen el color de su tier"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Cards or Apple Pay"
-msgstr "Tarjetas o Apple Pay"
+#~ msgid "Cards or Apple Pay"
+#~ msgstr "Tarjetas o Apple Pay"
 
 #: src/lib/pack-run.ts
 msgid "Cards score only once."
@@ -9654,6 +9654,10 @@ msgstr "Se está reiniciando o está en mantenimiento. Inténtalo de nuevo más 
 #: src/lib/packs.ts
 msgid "Elite"
 msgstr "Élite"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Email"
+msgstr "Email"
 
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
@@ -13460,8 +13464,12 @@ msgstr "Láseres de perilla"
 #~ msgstr "Ko-fi acepta tarjetas y PayPal, lava.top acepta tarjetas en rublos. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
 
 #: src/routes/support.tsx
-msgid "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
-msgstr "Ko-fi acepta tarjetas y PayPal. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
+#~ msgid "Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi acepta tarjetas y PayPal. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
+
+#: src/routes/support.tsx
+msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+msgstr "Ko-fi acepta PayPal, lava.top acepta tarjetas y PayPal. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
@@ -18605,6 +18613,10 @@ msgid "Page scroll"
 msgstr "Scroll de la página"
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Paid on lava.top already? Enter the email you paid with."
+msgstr "¿Ya pagaste en lava.top? Pon el email con el que pagaste."
+
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Paid with Google already?"
 msgstr "¿Ya pagaste con Google?"
 
@@ -18826,6 +18838,10 @@ msgstr "Paga con Google aquí. Tu tiempo de supporter empieza apenas se procese 
 #: src/routes/terms.tsx
 msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
 msgstr "Los pagos pasan por Ko-fi, Google o lava.top, que los procesan bajo sus propios términos. Mania Tracker nunca ve los datos de tu tarjeta o banco. Una suscripción mensual se renueva sola hasta que la canceles en la plataforma donde la empezaste; cancelar detiene el siguiente pago, y el tiempo ya pagado se mantiene hasta que se acabe."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "PayPal"
+msgstr "PayPal"
 
 #: src/components/packs/run/chain/ChainContracts.tsx
 msgid "Pays"

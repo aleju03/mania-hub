@@ -42,6 +42,7 @@ const METHOD_LABEL: Record<DonationLinkMethod, string> = {
   manual: "linked by hand",
   unlinked: "unlinked by hand",
   claim: "claimed by them",
+  email_claim: "claimed by email",
 };
 
 const PROVIDER_LABEL: Record<string, string> = { kofi: "Ko-fi", lava: "lava.top", google: "Google" };

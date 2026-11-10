@@ -10,7 +10,7 @@ import { parseSubmittedFrames } from "./workshop-frames";
    supporter list, and the owner's link, unlink, grant, Ko-fi CSV import and
    Google contributor export import actions. */
 
-export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked" | "claim";
+export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked" | "claim" | "email_claim";
 
 export interface AdminDonationRow {
   provider: string;

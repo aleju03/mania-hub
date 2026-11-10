@@ -193,7 +193,7 @@ function SupportPage() {
   const reduced = useReducedMotion();
   const heroRef = useRef<HTMLDivElement>(null);
   const steps = [
-    { title: t`Pick how to pay`, body: t`Ko-fi takes cards and PayPal. The step beside the checkout makes sure the time lands on your account.` },
+    { title: t`Pick how to pay`, body: t`Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account.` },
     { title: t`$4 is a month`, body: t`Any amount works and is counted to the day. Every tip adds to the time you have left.` },
     { title: t`Set it up`, body: t`Pick your look on the supporter page. It saves as you go.` },
   ];
