@@ -75,11 +75,16 @@ const OG_CACHE_HEADER = "public, max-age=86400, s-maxage=2592000, stale-while-re
 // frontend server, multiple seconds per image. The CDN caches each URL for a day,
 // but every miss/revalidation re-renders from scratch. We back that with an R2
 // cache keyed by the card identity and server-owned OG version so a miss becomes
-// a fast object read. Request query params must not expand R2 key cardinality.
+// a fast object read. Request query params must not expand R2 key cardinality
+// (the maniacard pp stamp only reaches a key when it matches the player's pp).
 
 function ogImageResponse(buffer: Buffer): Response {
   return pngResponse(buffer, OG_CACHE_HEADER);
 }
+
+/* A render that must not be stored in R2 (or kept long by a CDN) sets this
+   header; renderAndStoreOg strips it and serves the image uncached. */
+const OG_NO_STORE_HEADER = "x-og-no-store";
 
 function scheduleOgStore(cacheKey: string, buffer: Buffer): void {
   scheduleDetached(putOgImage(cacheKey, buffer));
@@ -115,6 +120,7 @@ async function renderAndStoreOg(cacheKey: string, render: () => Promise<Response
     const response = await render();
     if (!response.ok) return response;
     const buffer = Buffer.from(await response.arrayBuffer());
+    if (response.headers.has(OG_NO_STORE_HEADER)) return pngResponse(buffer, "public, max-age=300");
     scheduleOgStore(cacheKey, buffer);
     return ogImageResponse(buffer);
   }).finally(() => {
@@ -124,8 +130,13 @@ async function renderAndStoreOg(cacheKey: string, render: () => Promise<Response
   return (await attempt).clone();
 }
 
-async function serveOg(request: Request, cacheKey: string, render: () => Promise<Response>): Promise<Response> {
-  const cached = await getCachedOgImage(cacheKey);
+async function serveOg(
+  request: Request,
+  cacheKey: string,
+  render: () => Promise<Response>,
+  options: { ttlMs?: number } = {},
+): Promise<Response> {
+  const cached = await getCachedOgImage(cacheKey, options.ttlMs);
   if (cached) return ogImageResponse(cached);
 
   const defaultKey = defaultOgCacheKey();
@@ -1527,7 +1538,18 @@ async function fetchManiacardSnapshot(base: string, key: string): Promise<Maniac
   return (await response.json()) as ManiacardSnapshot;
 }
 
-async function renderManiacardOg(request: Request, rawUsername: string): Promise<Response> {
+/* A maniacard URL may carry `pp=<rounded pp>` (the Discord bot adds it), so a
+   player whose top plays changed gets a new URL and a new R2 entry. A stamped
+   entry can then live as long as the og/ lifecycle rule keeps it. */
+const MANIACARD_STAMPED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function maniacardPpStamp(raw: string | null | undefined): number | null {
+  const trimmed = raw?.trim() ?? "";
+  if (!/^\d{1,6}$/.test(trimmed)) return null;
+  return Number(trimmed);
+}
+
+async function renderManiacardOg(request: Request, rawUsername: string, ppStamp: number | null = null): Promise<Response> {
   const username = rawUsername.trim().slice(0, 64);
   const base = getServerLiveBackendUrl();
   if (!base) throw new OgFallbackError("live backend not configured");
@@ -1560,6 +1582,10 @@ async function renderManiacardOg(request: Request, rawUsername: string): Promise
   );
 
   response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  // A stamp that is not the player's pp would mint a key per made-up number;
+  // still show the card, but keep it out of R2.
+  const pp = user.statistics?.pp;
+  if (ppStamp != null && (pp == null || Math.round(pp) !== ppStamp)) response.headers.set(OG_NO_STORE_HEADER, "1");
   return response;
 }
 
@@ -5165,11 +5191,13 @@ export const Route = createFileRoute("/api/og")({
         if (kind === "maniacard") {
           const username = ogUsernameKey(url.searchParams.get("username"));
           if (!username) return new Response("Missing username", { status: 400 });
+          const ppStamp = maniacardPpStamp(url.searchParams.get("pp"));
           try {
             return await serveOg(
               request,
-              `maniacard:${username}:v${version}`,
-              () => renderManiacardOg(request, username),
+              ppStamp == null ? `maniacard:${username}:v${version}` : `maniacard:${username}:pp${ppStamp}:v${version}`,
+              () => renderManiacardOg(request, username, ppStamp),
+              ppStamp == null ? {} : { ttlMs: MANIACARD_STAMPED_TTL_MS },
             );
           } catch (err) {
             if (!isOgFallbackError(err)) console.warn("[og] maniacard render failed, falling back", err);

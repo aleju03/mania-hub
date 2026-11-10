@@ -1208,7 +1208,7 @@ function getOgImageStorageKey(cacheKey: string): string {
   return `${OG_IMAGE_CACHE_PREFIX}${hash}.png`;
 }
 
-export async function getCachedOgImage(cacheKey: string): Promise<Buffer | null> {
+export async function getCachedOgImage(cacheKey: string, ttlMs?: number): Promise<Buffer | null> {
   const r2 = getClient();
   if (!r2) return null;
 
@@ -1222,8 +1222,9 @@ export async function getCachedOgImage(cacheKey: string): Promise<Buffer | null>
     }));
     const lastModified = head.LastModified ? head.LastModified.getTime() : 0;
     // Treat aged entries as a miss so the caller re-renders and overwrites,
-    // keeping the card's stats roughly as fresh as the CDN's daily TTL.
-    if (!lastModified || Date.now() - lastModified > getOgImageCacheTtlMs()) {
+    // keeping the card's stats roughly as fresh as the CDN's daily TTL. A key
+    // that already names its data's version passes a longer ttlMs.
+    if (!lastModified || Date.now() - lastModified > (ttlMs ?? getOgImageCacheTtlMs())) {
       return null;
     }
 
