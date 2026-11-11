@@ -2889,6 +2889,10 @@ msgstr "1 archivo"
 #~ msgid "1 clear"
 #~ msgstr "1 clear"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "1 day"
+msgstr "1 día"
+
 #: src/components/maps/SearchCard.tsx
 msgid "1 diff"
 msgstr "1 diff"
@@ -3017,6 +3021,7 @@ msgstr "3 días"
 msgid "3. Passes are sorted into skills"
 msgstr "3. Los pases se reparten en skills"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 msgid "30 days"
@@ -3162,6 +3167,7 @@ msgstr "Los charts y plays de 6K, 7K y 8K ahora se califican con Prism, una calc
 msgid "6K/7K LN"
 msgstr "6K/7K LN"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 msgid "7 days"
@@ -4535,6 +4541,15 @@ msgstr "Cantidad"
 msgid "Amount in dollars"
 msgstr "Monto en dólares"
 
+#. placeholder {0}: formatDate(new Date(until).toISOString(), "UTC", locale)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "An admin has stopped you from laying cards on the board until {0}."
+msgstr "Un admin te bloqueó de poner cartas en el tablero hasta el {0}."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "An admin has stopped you from laying cards on the board."
+msgstr "Un admin te bloqueó de poner cartas en el tablero."
+
 #: src/lib/chain-run.ts
 msgid "An Eternal never leaves."
 msgstr "Una Eternal nunca se va."
@@ -5293,6 +5308,14 @@ msgstr "Insignia"
 msgid "Balance bar"
 msgstr "Barra de equilibrio"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Ban from the board"
+msgstr "Banear del tablero"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Ban…"
+#~ msgstr "Banear…"
+
 #: src/components/player/InsightModals.tsx
 msgid "Bands"
 msgstr "Bandas"
@@ -5300,6 +5323,10 @@ msgstr "Bandas"
 #: src/components/packs/GoatPoll.tsx
 msgid "banned · proof"
 msgstr "baneado · prueba"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Banned from the board."
+msgstr "Baneado del tablero."
 
 #: src/lib/signature-shared.ts
 msgid "Banner"
@@ -5704,6 +5731,10 @@ msgstr "Desenfoque"
 #: src/routes/packs_.collections.tsx
 msgid "Board"
 msgstr "Tablero"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Board bans"
+msgstr "Baneos del tablero"
 
 #: src/components/packs/collections/board/BoardMinimap.tsx
 msgid "Board map"
@@ -11092,6 +11123,14 @@ msgstr "Fuente"
 msgid "for"
 msgstr "para"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "for {days} days"
+msgstr "por {days} días"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "for a day"
+msgstr "por un día"
+
 #: src/routes/legal.tsx
 msgid "For attribution, takedown, privacy, or data concerns, contact the maintainer through the public osu! profile linked in the site footer."
 msgstr "Para asuntos de atribución, retirada de contenido, privacidad o datos, contacta con el responsable a través del perfil público de osu! enlazado en el pie de página del sitio."
@@ -11103,6 +11142,14 @@ msgstr "para baneados o eliminados"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "For Discord embeds"
 #~ msgstr "Para embeds de Discord"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "for good"
+msgstr "para siempre"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "For good"
+msgstr "Para siempre"
 
 #: src/components/supporter/SupportDaysPreview.tsx
 msgid "for paying a year at once"
@@ -14116,6 +14163,10 @@ msgstr "Nivel"
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "levels"
 msgstr "niveles"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Lift"
+msgstr "Quitar"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "light"
@@ -17300,6 +17351,10 @@ msgstr "Aquí no hay nadie llamado \"{debounced}\"."
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Nobody holds an exclusive card yet."
 msgstr "Nadie tiene una carta exclusiva todavía."
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Nobody is banned."
+msgstr "No hay nadie baneado."
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nobody we track has a scored run on this map. Search a player, or paste a score link."
@@ -25746,6 +25801,11 @@ msgstr "etiquetas"
 msgid "Tags"
 msgstr "Etiquetas"
 
+#. placeholder {0}: selected.ownerName || selected.owner
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Take all of {0}'s cards off and stop them laying cards {length}?"
+msgstr "¿Quitar todas las cartas de {0} y bloquearle poner cartas {length}?"
+
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Take all their cards off"
 msgstr "Quitar todas sus cartas"
@@ -29305,6 +29365,11 @@ msgstr "Unstable Rate: {0}"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "unsubmitted"
 msgstr "no subidos"
+
+#. placeholder {0}: formatDate(new Date(entry.until).toISOString(), "UTC", locale)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "until {0}"
+msgstr "hasta el {0}"
 
 #: src/routes/teams.tsx
 #~ msgid "Until someone opens a team's page, its pp only counts tracked members."

@@ -2901,6 +2901,10 @@ msgstr "1 个附件"
 #~ msgid "1 clear"
 #~ msgstr "1 次通过"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "1 day"
+msgstr "1 天"
+
 #: src/components/maps/SearchCard.tsx
 msgid "1 diff"
 msgstr "1 个难度"
@@ -3029,6 +3033,7 @@ msgstr "3 天"
 msgid "3. Passes are sorted into skills"
 msgstr "3. 通过会被分到各个技能"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 msgid "30 days"
@@ -3174,6 +3179,7 @@ msgstr "6K、7K 和 8K 的谱面和成绩现在由 Prism 评分，这是一个�
 msgid "6K/7K LN"
 msgstr "6K/7K LN"
 
+#: src/components/packs/collections/board/CardBoard.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 msgid "7 days"
@@ -4547,6 +4553,15 @@ msgstr "数量"
 msgid "Amount in dollars"
 msgstr "金额（美元）"
 
+#. placeholder {0}: formatDate(new Date(until).toISOString(), "UTC", locale)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "An admin has stopped you from laying cards on the board until {0}."
+msgstr "管理员已禁止你在展板上放置卡牌，直到 {0}。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "An admin has stopped you from laying cards on the board."
+msgstr "管理员已禁止你在展板上放置卡牌。"
+
 #: src/lib/chain-run.ts
 msgid "An Eternal never leaves."
 msgstr "Eternal 永远不会离开。"
@@ -5305,6 +5320,14 @@ msgstr "徽章"
 msgid "Balance bar"
 msgstr "平衡条"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Ban from the board"
+msgstr "禁止使用展板"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+#~ msgid "Ban…"
+#~ msgstr "封禁…"
+
 #: src/components/player/InsightModals.tsx
 msgid "Bands"
 msgstr "区间"
@@ -5312,6 +5335,10 @@ msgstr "区间"
 #: src/components/packs/GoatPoll.tsx
 msgid "banned · proof"
 msgstr "已封禁 · 证据"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Banned from the board."
+msgstr "已禁止使用展板。"
 
 #: src/lib/signature-shared.ts
 msgid "Banner"
@@ -5716,6 +5743,10 @@ msgstr "模糊"
 #: src/routes/packs_.collections.tsx
 msgid "Board"
 msgstr "展板"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Board bans"
+msgstr "展板封禁"
 
 #: src/components/packs/collections/board/BoardMinimap.tsx
 msgid "Board map"
@@ -11104,6 +11135,14 @@ msgstr "字体"
 msgid "for"
 msgstr "为"
 
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "for {days} days"
+msgstr "{days} 天"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "for a day"
+msgstr "1 天"
+
 #: src/routes/legal.tsx
 msgid "For attribution, takedown, privacy, or data concerns, contact the maintainer through the public osu! profile linked in the site footer."
 msgstr "如有署名、下架、隐私或数据方面的问题，请通过页脚链接的公开 osu! 个人资料联系维护者。"
@@ -11115,6 +11154,14 @@ msgstr "针对被封禁或已删除的账号"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "For Discord embeds"
 #~ msgstr "用于 Discord 嵌入"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "for good"
+msgstr "永久"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "For good"
+msgstr "永久"
 
 #: src/components/supporter/SupportDaysPreview.tsx
 msgid "for paying a year at once"
@@ -14128,6 +14175,10 @@ msgstr "等级"
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "levels"
 msgstr "级"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Lift"
+msgstr "解除"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "light"
@@ -17312,6 +17363,10 @@ msgstr "这里没有叫「{debounced}」的人。"
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Nobody holds an exclusive card yet."
 msgstr "还没有人持有专属卡。"
+
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Nobody is banned."
+msgstr "没有被封禁的人。"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nobody we track has a scored run on this map. Search a player, or paste a score link."
@@ -25758,6 +25813,11 @@ msgstr "标签"
 msgid "Tags"
 msgstr "标签"
 
+#. placeholder {0}: selected.ownerName || selected.owner
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "Take all of {0}'s cards off and stop them laying cards {length}?"
+msgstr "移除 {0} 的所有卡牌，并禁止其放置卡牌（{length}）？"
+
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Take all their cards off"
 msgstr "移除其全部卡牌"
@@ -29317,6 +29377,11 @@ msgstr "UR：{0}"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "unsubmitted"
 msgstr "未上传"
+
+#. placeholder {0}: formatDate(new Date(entry.until).toISOString(), "UTC", locale)
+#: src/components/packs/collections/board/CardBoard.tsx
+msgid "until {0}"
+msgstr "直到 {0}"
 
 #: src/routes/teams.tsx
 #~ msgid "Until someone opens a team's page, its pp only counts tracked members."

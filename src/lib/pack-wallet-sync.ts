@@ -417,6 +417,8 @@ export interface PackBoardSaveResult {
   /* Cards the save took off for forming a forbidden shape. */
   forbidden: number;
   regions: [number, number][];
+  /* Set while an admin has barred the player: when it ends, 0 for never. */
+  bannedUntil?: number;
 }
 
 export const sendPackBoardOps = createServerFn({ method: "POST" })
@@ -435,18 +437,67 @@ export const sendPackBoardOps = createServerFn({ method: "POST" })
   });
 
 /* The collectors with drawings fresh today who have the viewer among their
-   osu! friends, and so let them add to those drawings. */
-export const fetchPackBoardFriendOf = createServerFn({ method: "GET" }).handler(async (): Promise<number[]> => {
+   osu! friends, and so let them add to those drawings. Also the viewer's own
+   board ban, when there is one (when it ends, 0 for never). */
+export const fetchPackBoardFriendOf = createServerFn({ method: "GET" }).handler(async (): Promise<{ owners: number[]; bannedUntil: number | null }> => {
   const { setResponseHeader } = await import("@tanstack/react-start/server");
   setResponseHeader("Cache-Control", "private, no-store");
+  const none = { owners: [], bannedUntil: null };
   const target = await getSyncTarget();
-  if (!target) return [];
+  if (!target) return none;
   const url = target.url.replace(/\/api\/pack-wallet\/(\d+)$/, "/api/pack-collection/$1/board");
   const response = await fetch(url, { headers: target.headers }).catch(() => null);
-  if (!response?.ok) return [];
-  const body = (await response.json().catch(() => ({}))) as { owners?: unknown };
-  return Array.isArray(body.owners) ? body.owners.filter((id): id is number => Number.isInteger(id)) : [];
+  if (!response?.ok) return none;
+  const body = (await response.json().catch(() => ({}))) as { owners?: unknown; bannedUntil?: unknown };
+  return {
+    owners: Array.isArray(body.owners) ? body.owners.filter((id): id is number => Number.isInteger(id)) : [],
+    bannedUntil: typeof body.bannedUntil === "number" ? body.bannedUntil : null,
+  };
 });
+
+/* Board bans (admin): bars a player from laying cards for 1, 7 or 30 days,
+   or for good (days null), taking all their cards off; or lifts a bar. */
+export interface PackBoardBan {
+  userId: number;
+  username: string;
+  /* When it ends, 0 for never. */
+  until: number;
+  bannedAt: number;
+}
+
+async function packBoardBansRequest(init?: RequestInit): Promise<Response | null> {
+  const { requireTrueAdminAccess } = await import("./auth-server");
+  await requireTrueAdminAccess("Manage card board bans");
+  const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
+  if (!base) return null;
+  return fetch(`${base}/api/admin/pack-board/bans`, {
+    ...init,
+    headers: { "content-type": "application/json", ...(process.env.LIVE_ADMIN_TOKEN ? { authorization: `Bearer ${process.env.LIVE_ADMIN_TOKEN}` } : {}) },
+  });
+}
+
+export const fetchPackBoardBans = createServerFn({ method: "GET" }).handler(async (): Promise<PackBoardBan[]> => {
+  const { setResponseHeader } = await import("@tanstack/react-start/server");
+  setResponseHeader("Cache-Control", "private, no-store");
+  const response = await packBoardBansRequest();
+  if (!response?.ok) return [];
+  const body = (await response.json().catch(() => ({}))) as { bans?: PackBoardBan[] };
+  return Array.isArray(body.bans) ? body.bans : [];
+});
+
+export const setPackBoardBan = createServerFn({ method: "POST" })
+  .validator((input: { ownerUserId: number; days?: number | null; lift?: boolean }) => ({
+    ownerUserId: Math.floor(Number(input?.ownerUserId) || 0),
+    days: input?.days == null ? null : Math.floor(Number(input.days) || 0),
+    lift: input?.lift === true,
+  }))
+  .handler(async ({ data }): Promise<boolean> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    if (data.ownerUserId <= 0) return false;
+    const response = await packBoardBansRequest({ method: "POST", body: JSON.stringify(data.lift ? { ownerUserId: data.ownerUserId, lift: true } : { ownerUserId: data.ownerUserId, days: data.days }) });
+    return Boolean(response?.ok);
+  });
 
 /* Moderation: takes one card (n) or every card of a collector off the board.
    True-admin only, server-side like every admin call. */

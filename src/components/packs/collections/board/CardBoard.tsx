@@ -1,9 +1,10 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { Brush, Eraser, Expand, Flag, Grid3x3, Hand, Layers, Link2, LocateFixed, Minus, Plus, Redo2, RotateCcw, RotateCw, Shrink, SquareDashedMousePointer, Trash2, Undo2, X, ZoomOut } from "lucide-react";
+import { Ban, Brush, Eraser, Expand, Flag, Grid3x3, Hand, Layers, Link2, LocateFixed, Minus, Plus, Redo2, RotateCcw, RotateCw, Shrink, SquareDashedMousePointer, Trash2, Undo2, X, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "#/lib/auth-context";
 import { DEFAULT_COUNTRY_CODE } from "#/lib/country";
-import { formatNumber } from "#/lib/format";
+import { formatDate, formatNumber } from "#/lib/format";
+import { useLocale } from "#/lib/locale-context";
 import { useMediaQuery } from "#/lib/use-media-query";
 import {
   fetchLivePackBoardOverview,
@@ -15,7 +16,7 @@ import {
 } from "#/lib/live-backend";
 import { submitBugReport } from "#/lib/bug-reports";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
-import { fetchPackBoardFriendOf, removePackBoardCards, sendPackBoardOps } from "#/lib/pack-wallet-sync";
+import { fetchPackBoardBans, fetchPackBoardFriendOf, removePackBoardCards, sendPackBoardOps, setPackBoardBan, type PackBoardBan } from "#/lib/pack-wallet-sync";
 import { BoardFaces } from "./boardFaces";
 import { BoardMinimap, type BoardMinimapHandle } from "./BoardMinimap";
 import { BoardEngine, TINTS, cardPaint, makeCard, regionOf, tierPaint, type BoardCard, type BoardCardFace, type BoardOp, type BoardTool } from "./boardEngine";
@@ -68,6 +69,7 @@ export function CardBoard({ at }: { at?: string }) {
   const auth = useAuth();
   const me = auth.viewer?.id ?? null;
   const admin = auth.isAdmin;
+  const locale = useLocale();
 
   const [inventory, setInventory] = useState<InventoryRow[] | null>(null);
   const [cap, setCap] = useState(0);
@@ -90,6 +92,15 @@ export function CardBoard({ at }: { at?: string }) {
   const [history, setHistory] = useState({ undo: false, redo: false });
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [notice, setNotice] = useState<string | null>(null);
+  /* The viewer's board ban: when it ends, 0 for never, null for none. */
+  const [bannedUntil, setBannedUntil] = useState<number | null>(null);
+  /* Admins: the bans list, open or not. */
+  const [bans, setBans] = useState<PackBoardBan[] | null>(null);
+  /* The ban length menu, open under its button (fixed: the toolbar scrolls
+     sideways and would clip it). */
+  const [banMenu, setBanMenu] = useState<{ left: number; top: number } | null>(null);
+  // it belongs to the selected card
+  useEffect(() => setBanMenu(null), [selection]);
   const [far, setFar] = useState(false);
   /* The colour cards are laid down in (TINTS, 1-based), 0 for their tier's. */
   const [tint, setTint] = useState(0);
@@ -226,7 +237,9 @@ export function CardBoard({ at }: { at?: string }) {
       refreshStats();
       setCap(result.cap);
       publishUsage();
-      if (result.forbidden) setNotice(t`That shape isn't allowed on the board.`);
+      setBannedUntil(result.bannedUntil ?? null);
+      if (result.bannedUntil !== undefined) setNotice(banText(result.bannedUntil));
+      else if (result.forbidden) setNotice(t`That shape isn't allowed on the board.`);
       else if (result.full) setNotice(t`This part of the board is full. Try further out.`);
       else if (result.protected) setNotice(t`Drawings are protected from other players for their first day.`);
       else if (result.slow) setNotice(t`Slow down a little.`);
@@ -451,7 +464,14 @@ export function CardBoard({ at }: { at?: string }) {
           }
           engine.setNextN(owner.cards.reduce((max, [n]) => Math.max(max, n), 0) + 1);
           // whose fresh drawings this viewer may add to (their osu! friends' lists)
-          void fetchPackBoardFriendOf().then((owners) => live && engine.setFriendOf(owners)).catch(() => {});
+          // and whether an admin has barred them from laying cards
+          void fetchPackBoardFriendOf()
+            .then(({ owners, bannedUntil }) => {
+              if (!live) return;
+              engine.setFriendOf(owners);
+              setBannedUntil(bannedUntil);
+            })
+            .catch(() => {});
           setCap(owner.cap);
           setInventory(owner.inventory);
           publishUsage();
@@ -587,6 +607,35 @@ export function CardBoard({ at }: { at?: string }) {
     const url = `${window.location.origin}/packs/collections?tab=board&at=${spot}`;
     const ok = await navigator.clipboard?.writeText(url).then(() => true, () => false);
     setNotice(ok ? t`Link copied.` : url);
+  };
+
+  const banText = (until: number) =>
+    until === 0
+      ? t`An admin has stopped you from laying cards on the board.`
+      : t`An admin has stopped you from laying cards on the board until ${formatDate(new Date(until).toISOString(), "UTC", locale)}.`;
+
+  /* Admins: bars the selected card's owner (taking all their cards off), or
+     lifts a bar from the list. */
+  const ban = async (days: number | null) => {
+    const selected = selection[0];
+    if (!selected) return;
+    const length = days === null ? t`for good` : days === 1 ? t`for a day` : t`for ${days} days`;
+    if (!window.confirm(t`Take all of ${selected.ownerName || selected.owner}'s cards off and stop them laying cards ${length}?`)) return;
+    const ok = await setPackBoardBan({ data: { ownerUserId: selected.owner, days } }).catch(() => false);
+    setNotice(ok ? t`Banned from the board.` : t`That did not go through.`);
+    if (ok && bans) setBans(await fetchPackBoardBans().catch(() => bans));
+  };
+  const toggleBans = async () => {
+    if (bans) {
+      setBans(null);
+      return;
+    }
+    setBans(await fetchPackBoardBans().catch(() => []));
+  };
+  const lift = async (userId: number) => {
+    const ok = await setPackBoardBan({ data: { ownerUserId: userId, lift: true } }).catch(() => false);
+    if (ok) setBans((list) => (list ? list.filter((entry) => entry.userId !== userId) : list));
+    else setNotice(t`That did not go through.`);
   };
 
   const moderate = async (all: boolean) => {
@@ -732,7 +781,41 @@ export function CardBoard({ at }: { at?: string }) {
       <span className="max-w-48 truncate text-osu-f1">{otherSelected.ownerName}</span>
       <button type="button" onClick={() => void moderate(false)} className="rounded-md bg-red-500/15 px-2 py-1 font-semibold text-red-200 hover:bg-red-500/25">{t`Take this card off`}</button>
       <button type="button" onClick={() => void moderate(true)} className="rounded-md bg-red-500/15 px-2 py-1 font-semibold text-red-200 hover:bg-red-500/25">{t`Take all their cards off`}</button>
+      <span>
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={banMenu !== null}
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setBanMenu((open) => (open ? null : { left: rect.left, top: rect.bottom + 4 }));
+          }}
+          className="rounded-md bg-red-500/15 px-2 py-1 font-semibold text-red-200 hover:bg-red-500/25"
+        >
+          {t`Ban from the board`}
+        </button>
+        {banMenu ? (
+          <span role="menu" style={{ left: banMenu.left, top: banMenu.top }} className="fixed z-[60] flex w-36 flex-col rounded-lg border border-white/10 bg-osu-b5/95 p-1 shadow-2xl backdrop-blur">
+            {([[1, t`1 day`], [7, t`7 days`], [30, t`30 days`], [null, t`For good`]] as const).map(([days, label]) => (
+              <button
+                key={label}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setBanMenu(null);
+                  void ban(days);
+                }}
+                className="rounded px-2 py-1.5 text-left text-white hover:bg-white/10"
+              >
+                {label}
+              </button>
+            ))}
+          </span>
+        ) : null}
+      </span>
     </div>
+  ) : editing && bannedUntil !== null ? (
+    <span className="line-clamp-2 whitespace-normal text-xs leading-snug text-red-200 max-md:w-full">{banText(bannedUntil)}</span>
   ) : (
     <span className="line-clamp-2 whitespace-normal text-xs leading-snug text-osu-f1 max-md:w-full">
       {tool === "erase"
@@ -753,6 +836,7 @@ export function CardBoard({ at }: { at?: string }) {
     <>
       {editing ? <IconButton float={narrow} label={t`Go to your cards`} disabled={count === 0} onClick={goToMine}><LocateFixed size={15} /></IconButton> : null}
       <IconButton float={narrow} label={t`See the whole board`} onClick={() => engine?.fit()}><ZoomOut size={15} /></IconButton>
+      {admin ? <IconButton float={narrow} label={t`Board bans`} onClick={() => void toggleBans()}><Ban size={15} /></IconButton> : null}
       <IconButton float={narrow} label={t`Copy a link to this spot`} onClick={() => void copySpot()}><Link2 size={15} /></IconButton>
       <IconButton float={narrow} label={full ? t`Leave full screen` : t`Full screen`} onClick={() => setFull((on) => !on)}>{full ? <Shrink size={15} /> : <Expand size={15} />}</IconButton>
     </>
@@ -955,6 +1039,27 @@ export function CardBoard({ at }: { at?: string }) {
           )}
           {far && editing && !notice ? (
             <div className="pointer-events-none absolute left-1/2 top-9 max-w-[70%] -translate-x-1/2 rounded-lg bg-black/70 px-3 py-1.5 text-center text-xs text-white">{t`Zoom in to lay cards down.`}</div>
+          ) : null}
+          {bans ? (
+            <div className="absolute right-2 top-12 z-30 max-h-[60%] w-72 overflow-y-auto rounded-lg border border-white/10 bg-osu-b5/95 p-2 text-xs shadow-2xl backdrop-blur">
+              <div className="mb-1.5 flex items-center justify-between px-1">
+                <span className="font-semibold text-white">{t`Board bans`}</span>
+                <button type="button" aria-label={t`Close`} onClick={() => setBans(null)} className="flex h-6 w-6 items-center justify-center rounded text-osu-f1 hover:bg-white/10 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+              {bans.length === 0 ? (
+                <p className="px-1 py-2 text-osu-f1">{t`Nobody is banned.`}</p>
+              ) : (
+                bans.map((entry) => (
+                  <div key={entry.userId} className="flex items-center gap-2 rounded px-1 py-1 hover:bg-white/5">
+                    <span className="min-w-0 flex-1 truncate text-white">{entry.username}</span>
+                    <span className="shrink-0 text-osu-f1">{entry.until === 0 ? t`for good` : t`until ${formatDate(new Date(entry.until).toISOString(), "UTC", locale)}`}</span>
+                    <button type="button" onClick={() => void lift(entry.userId)} className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-semibold text-white hover:bg-white/20">{t`Lift`}</button>
+                  </div>
+                ))
+              )}
+            </div>
           ) : null}
           {notice ? (
             <div className={`pointer-events-none absolute left-1/2 z-20 max-w-[80%] -translate-x-1/2 rounded-lg bg-black/80 px-3 py-1.5 text-center text-xs text-white ${sheetTray ? "top-9" : "bottom-3"}`}>{notice}</div>
