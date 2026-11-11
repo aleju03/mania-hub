@@ -108,6 +108,14 @@ function DiscordButton({ component, handlers }: { component: DiscordComponentJso
       </a>
     );
   }
+  // Without a click handler (a static preview) the button is only a picture.
+  if (!handlers.onButton) {
+    return (
+      <span className={`${className} cursor-default ${component.disabled ? "opacity-50" : ""}`} style={style}>
+        {inner}
+      </span>
+    );
+  }
   return (
     <button
       type="button"
