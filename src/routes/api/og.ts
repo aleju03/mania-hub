@@ -1,5 +1,5 @@
 import { ImageResponse } from "../../lib/og-image-response";
-import { getDanImageSrc } from "../../lib/dan-images";
+import { getDanTierImageSrc } from "../../lib/dan-images";
 import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
 import type { ReactNode } from "react";
@@ -1740,9 +1740,10 @@ async function renderPulledCardOg(
 // ---------------------------------------------------------------------------
 
 // The emblem a keymode's ladder uses, from the same rules as the site's badges
-// (4K Reform and 4K LN, 6K and 7K sets; no art for the other keymodes).
+// (4K Reform and 4K LN, 6K and 7K sets; no art for the other keymodes). A
+// label with a tier ("gamma++", "7-") picks the drawing with its marks.
 function danEmblemAssetPath(label: string, family: string, keyCount: number | null): string | null {
-  return getDanImageSrc(label, family === "ln" ? "ln" : family, keyCount ?? undefined);
+  return getDanTierImageSrc(label, family === "ln" ? "ln" : family, keyCount ?? undefined);
 }
 
 // Rasterizes the emblem for Discord, which shows no SVG. Transparent, sized to
@@ -1752,7 +1753,7 @@ async function renderDanEmblemOg(request: Request, label: string, family: string
   const assetPath = danEmblemAssetPath(label, family, keyCount);
   if (!assetPath) throw new OgFallbackError(`no dan emblem for ${keyCount ?? 4}K ${family}/${label}`);
   const assetUrl = new URL(assetPath, getAssetOrigin(request)).toString();
-  if (!assetPath.endsWith(".svg")) {
+  if (!assetPath.split("?")[0]!.endsWith(".svg")) {
     return new Response(null, { status: 302, headers: { Location: assetUrl, "Cache-Control": OG_CACHE_HEADER } });
   }
   const assetResponse = await fetch(assetUrl);
@@ -5252,7 +5253,7 @@ export const Route = createFileRoute("/api/og")({
 
         // Dan emblem thumbnail for the /dan command (rasterizes an svg emblem).
         if (kind === "dan-emblem") {
-          const label = (url.searchParams.get("label") ?? "").trim().toLowerCase().replace(/[+-]+$/, "").slice(0, 12);
+          const label = (url.searchParams.get("label") ?? "").trim().toLowerCase().slice(0, 14);
           const family = (url.searchParams.get("family") ?? "").trim().toLowerCase().slice(0, 16);
           const rawKeys = Number(url.searchParams.get("keys"));
           const keyCount = Number.isInteger(rawKeys) && rawKeys > 0 && rawKeys <= 18 ? rawKeys : null;
