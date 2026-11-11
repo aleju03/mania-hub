@@ -7898,6 +7898,11 @@ msgstr "Could not load this leaderboard."
 msgid "Could not load this score."
 msgstr "Could not load this score."
 
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Could not load this. Close and reopen settings to try again."
+msgstr "Could not load this. Close and reopen settings to try again."
+
 #: src/components/packs/ReleaseCopyDialog.tsx
 msgid "Could not load your copies. Close and try again."
 msgstr "Could not load your copies. Close and try again."
@@ -14815,6 +14820,8 @@ msgstr "Loading..."
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
 #: src/routes/player/$username.tsx
 msgid "Loading…"
 msgstr "Loading…"

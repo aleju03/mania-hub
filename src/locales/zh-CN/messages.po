@@ -7883,6 +7883,11 @@ msgstr "无法加载该排行榜。"
 msgid "Could not load this score."
 msgstr "无法加载此成绩。"
 
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Could not load this. Close and reopen settings to try again."
+msgstr "加载失败。关闭并重新打开设置再试一次。"
+
 #: src/components/packs/ReleaseCopyDialog.tsx
 msgid "Could not load your copies. Close and try again."
 msgstr "无法读取你的副本。请关闭后重试。"
@@ -14784,6 +14789,8 @@ msgstr "加载中..."
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
 #: src/routes/player/$username.tsx
 msgid "Loading…"
 msgstr "加载中…"

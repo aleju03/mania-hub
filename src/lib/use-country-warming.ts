@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { activateLiveCountry, isLiveBackendConfigured, type LiveCountryActivation, type LiveCountryFeature, type LiveCountryFeatureTier } from "./live-backend";
 import { isGlobalScope } from "./country";
 import { getRegionDef } from "./regions";
+import { useHydrated } from "./use-hydrated";
 
 const POLL_INTERVAL_MS = 6_000;
 const COUNTRY_TIER_CACHE_KEY = "mania-hub-country-feature-tiers-v1";
@@ -62,6 +63,12 @@ function initialFeatureTier(normalizedCountry: string): LiveCountryFeatureTier |
   return tierCache.get(normalizedCountry) ?? null;
 }
 
+/* What the server renders: it has no tier cache (that lives in this
+   browser's localStorage), so a region reads "live" and a country unknown. */
+function serverFeatureTier(normalizedCountry: string): LiveCountryFeatureTier | null {
+  return getRegionDef(normalizedCountry) ? "live" : null;
+}
+
 export interface CountryWarmingState {
   /** True while the server is still building this country's first roster. */
   warming: boolean;
@@ -91,6 +98,9 @@ export function useCountryWarming(country: string): CountryWarmingState {
     () => initialFeatureTier(normalizedCountry),
   );
   const warmingFromCache = liveBackendEnabled && warmingCache.has(normalizedCountry);
+  // The caches are this browser's: the hydration render shows what the
+  // server rendered, and the cached tier joins on the next render.
+  const hydrated = useHydrated();
   const setWarming = (value: boolean) => {
     setCachedCountryWarming(normalizedCountry, value);
     setWarmingState(value);
@@ -154,6 +164,7 @@ export function useCountryWarming(country: string): CountryWarmingState {
     };
   }, [liveBackendEnabled, normalizedCountry]);
 
+  if (!hydrated) return { warming: false, checking, featureTier: serverFeatureTier(normalizedCountry) };
   return { warming: warming || warmingFromCache, checking, featureTier };
 }
 

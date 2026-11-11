@@ -11,6 +11,8 @@ import { PanelGroup } from "./PanelGroup";
 /* Before the player's own ratings load (or when they are hidden from the
    public read), the keymodes anyone is rated in. */
 const FALLBACK_KEY_COUNTS = [4, 5, 6, 7, 8, 9, 10];
+/* Waits before each retry of the first read, ms. */
+const LOAD_RETRIES_MS = [1_500, 4_000, 10_000];
 
 /* Which keymode the signed-in player's profile Skills tab opens on, for
    everyone who visits it. Automatic leads with the keymode they have the most
@@ -22,15 +24,25 @@ export function SkillMainKeymodeSetting() {
   const [rated, setRated] = useState<number[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (viewerId == null) return;
     let cancelled = false;
-    void getMySkillMainKeymode()
-      .then((result) => {
-        if (!cancelled && result.ok) setKeyCount(result.keyCount);
-      })
-      .catch(() => {});
+    let timer = 0;
+    // A failed read (the backend restarting, a blip) tries again a few times
+    // before saying so, rather than leaving the menu greyed out.
+    const attempt = (tries: number) => {
+      void getMySkillMainKeymode()
+        .catch(() => ({ ok: false as const }))
+        .then((result) => {
+          if (cancelled) return;
+          if (result.ok) setKeyCount(result.keyCount);
+          else if (tries < LOAD_RETRIES_MS.length) timer = window.setTimeout(() => attempt(tries + 1), LOAD_RETRIES_MS[tries]);
+          else setLoadFailed(true);
+        });
+    };
+    attempt(0);
     void fetchLivePlayerSkillsDirect(viewerId)
       .then((skills) => {
         // the keymodes the profile shows a panel for
@@ -40,6 +52,7 @@ export function SkillMainKeymodeSetting() {
       .catch(() => {});
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [viewerId]);
 
@@ -61,6 +74,10 @@ export function SkillMainKeymodeSetting() {
   const shown = keyCount != null && !keys.includes(keyCount) ? [...keys, keyCount].sort((a, b) => a - b) : keys;
   const detail = failed
     ? t`Could not save that. Try again in a bit.`
+    : keyCount === undefined
+      ? loadFailed
+        ? t`Could not load this. Close and reopen settings to try again.`
+        : t`Loading…`
     : keyCount != null
       ? t`Your profile's Skills tab opens on ${keyCount}K.`
       : t`Your profile's Skills tab opens on the keymode with the most rated plays.`;
@@ -70,7 +87,7 @@ export function SkillMainKeymodeSetting() {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[12px] font-semibold text-osu-l1">{t`Main keymode`}</div>
-          <div className={`text-[11px] ${failed ? "text-osu-red" : "text-osu-f1"}`}>{detail}</div>
+          <div className={`text-[11px] ${failed || loadFailed ? "text-osu-red" : "text-osu-f1"}`}>{detail}</div>
         </div>
         <SelectMenu
           value={keyCount == null ? "auto" : String(keyCount)}

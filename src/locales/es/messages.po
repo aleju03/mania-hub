@@ -7871,6 +7871,11 @@ msgstr "No se pudo cargar este ranking."
 msgid "Could not load this score."
 msgstr "No se pudo cargar esta puntuación."
 
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
+msgid "Could not load this. Close and reopen settings to try again."
+msgstr "No se pudo cargar. Cierra y vuelve a abrir los ajustes para intentarlo de nuevo."
+
 #: src/components/packs/ReleaseCopyDialog.tsx
 msgid "Could not load your copies. Close and try again."
 msgstr "No se pudieron cargar tus copias. Cierra e inténtalo de nuevo."
@@ -14772,6 +14777,8 @@ msgstr "Cargando..."
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/settings/SkillMainKeymodeSetting.tsx
+#: src/components/settings/SkillVisibilitySetting.tsx
 #: src/routes/player/$username.tsx
 msgid "Loading…"
 msgstr "Cargando…"

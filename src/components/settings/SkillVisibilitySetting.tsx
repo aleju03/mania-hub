@@ -10,6 +10,9 @@ import { PanelGroup } from "./PanelGroup";
 /* Who may see the signed-in player's skill ratings and dans: one ordinary row
    at the foot of Preferences, the line under its name saying what the current
    choice does. Turning ratings off asks first. */
+/* Waits before each retry of the first read, ms. */
+const LOAD_RETRIES_MS = [1_500, 4_000, 10_000];
+
 export function SkillVisibilitySetting() {
   const { t } = useLingui();
   const viewerId = useAuth().viewer?.id ?? null;
@@ -17,17 +20,28 @@ export function SkillVisibilitySetting() {
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
+  // A failed read (the backend restarting, a blip) tries again a few times
+  // before saying so, rather than leaving the menu greyed out.
   useEffect(() => {
     if (viewerId == null) return;
     let cancelled = false;
-    void getMySkillVisibility()
-      .then((result) => {
-        if (!cancelled && result.ok) setVisibility(result.visibility);
-      })
-      .catch(() => {});
+    let timer = 0;
+    const attempt = (tries: number) => {
+      void getMySkillVisibility()
+        .catch(() => ({ ok: false as const }))
+        .then((result) => {
+          if (cancelled) return;
+          if (result.ok) setVisibility(result.visibility);
+          else if (tries < LOAD_RETRIES_MS.length) timer = window.setTimeout(() => attempt(tries + 1), LOAD_RETRIES_MS[tries]);
+          else setLoadFailed(true);
+        });
+    };
+    attempt(0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [viewerId]);
 
@@ -44,6 +58,10 @@ export function SkillVisibilitySetting() {
 
   const detail = failed
     ? t`Could not save that. Try again in a bit.`
+    : visibility == null
+      ? loadFailed
+        ? t`Could not load this. Close and reopen settings to try again.`
+        : t`Loading…`
     : visibility === "private"
       ? t`Only you see your skill ratings and dans. You are left out of the skill rankings.`
       : visibility === "off"
@@ -55,7 +73,7 @@ export function SkillVisibilitySetting() {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[12px] font-semibold text-osu-l1">{t`Skill ratings visible to`}</div>
-          <div className={`text-[11px] ${failed ? "text-osu-red" : "text-osu-f1"}`}>{detail}</div>
+          <div className={`text-[11px] ${failed || loadFailed ? "text-osu-red" : "text-osu-f1"}`}>{detail}</div>
         </div>
         <SelectMenu
           value={visibility ?? "public"}
