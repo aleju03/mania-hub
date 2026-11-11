@@ -92,11 +92,6 @@ function DiscordToolPage() {
           <PageHeader
             iconSrc="/images/icons/chat.svg"
             title="maniabot"
-            right={(
-              <span className="rounded bg-osu-yellow/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-osu-yellow">
-                <Trans>dev preview</Trans>
-              </span>
-            )}
           />
 
           <DiscordTabs />
@@ -191,7 +186,16 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
     }
   }, [onChange]);
 
-  if (!account) return <Panel title={<Trans>Your account</Trans>}><div className="h-10" /></Panel>;
+  if (!account) {
+    return (
+      <Panel title={<Trans>Your account</Trans>}>
+        <div className="flex animate-pulse items-center gap-3">
+          <span className="h-10 w-10 rounded-full bg-osu-b4" />
+          <span className="h-3.5 w-72 max-w-[60%] rounded bg-osu-b4" />
+        </div>
+      </Panel>
+    );
+  }
 
   if (!account.signedIn) {
     return (
@@ -483,7 +487,8 @@ function FeedPlayerPicker({ players, onChange }: { players: BotFeedPlayer[]; onC
 // --- Servers -----------------------------------------------------------------
 
 function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; inviteUrl: string | null }) {
-  const [data, setData] = useState<BotServers | null>(null);
+  // undefined while loading, null when the request failed.
+  const [data, setData] = useState<BotServers | null | undefined>(undefined);
   const [showOthers, setShowOthers] = useState(false);
   // A verified link stands in for a Discord connection in this browser.
   const connected = Boolean(account?.connection || account?.links.some((link) => link.verified));
@@ -499,7 +504,7 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
     if (connected && needsDiscord) load();
   }, [connected, needsDiscord, load]);
 
-  if (!account?.signedIn) return null;
+  if (account && !account.signedIn) return null;
 
   const servers = data?.ok && data.available ? data.servers : [];
   const withBot = servers.filter((server) => server.botPresent);
@@ -518,7 +523,9 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
 
   return (
     <Panel title={<Trans>Your servers</Trans>}>
-      {!connected || data?.error === "no_discord" ? (
+      {!account || data === undefined ? (
+        <ServerSkeleton />
+      ) : !connected || data?.error === "no_discord" ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="min-w-0 flex-1 text-[14px] text-osu-l2"><Trans>Connect Discord to set up feeds in servers where you have Manage Server.</Trans></p>
           <a href={connectHref()} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold text-white hover:brightness-110" style={{ backgroundColor: BLURPLE }}>
@@ -526,9 +533,7 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
             <Trans>Connect Discord</Trans>
           </a>
         </div>
-      ) : !data ? (
-        <div className="h-10" />
-      ) : !data.ok || !data.available ? (
+      ) : !data || !data.ok || !data.available ? (
         <p className="text-[14px] text-osu-f1"><Trans>Server settings aren't available right now.</Trans></p>
       ) : data.servers.length === 0 ? (
         <p className="text-[14px] text-osu-f1"><Trans>You don't manage any Discord servers.</Trans></p>
@@ -552,6 +557,22 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
         </div>
       )}
     </Panel>
+  );
+}
+
+function ServerSkeleton() {
+  return (
+    <div className="animate-pulse space-y-2">
+      {[0, 1].map((row) => (
+        <div key={row} className="flex items-center gap-3 rounded-xl bg-osu-b4 p-3">
+          <span className="h-9 w-9 rounded-full bg-osu-b3" />
+          <div className="flex-1 space-y-2">
+            <span className="block h-3.5 w-40 rounded bg-osu-b3" />
+            <span className="block h-3 w-20 rounded bg-osu-b3" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -740,6 +761,21 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
 
 // --- Previews ----------------------------------------------------------------
 
+// The shape of an embed while its preview renders.
+function PreviewSkeleton() {
+  return (
+    <div className="mt-1 flex max-w-[520px] animate-pulse overflow-hidden rounded" style={{ backgroundColor: DISCORD.embed }}>
+      <span className="w-1 shrink-0" style={{ backgroundColor: DISCORD.muted }} />
+      <div className="flex-1 space-y-3 p-4">
+        <span className="block h-4 w-32 rounded bg-white/10" />
+        <span className="block h-4 w-64 max-w-full rounded bg-white/10" />
+        <span className="block h-3 w-48 max-w-full rounded bg-white/[0.07]" />
+        <span className="block h-3 w-56 max-w-full rounded bg-white/[0.07]" />
+      </div>
+    </div>
+  );
+}
+
 const PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "profile", label: msg`/profile` },
   { id: "skills", label: msg`/skills` },
@@ -790,7 +826,7 @@ function PreviewPanel({ initialProfile }: { initialProfile: DiscordMessageJson |
               <span className="rounded-[3px] px-1 text-[10px] font-semibold leading-[15px] text-white" style={{ backgroundColor: BLURPLE }}>APP</span>
             </div>
             <div className="mt-1 min-h-[120px]">
-              {message === undefined ? null : message ? (
+              {message === undefined ? <PreviewSkeleton /> : message ? (
                 <DiscordMessageBodyView body={message} />
               ) : (
                 <p className="text-[14px]" style={{ color: DISCORD.muted }}><Trans>This preview isn't available right now.</Trans></p>

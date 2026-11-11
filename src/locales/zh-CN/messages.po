@@ -6657,8 +6657,8 @@ msgid "Detected sections"
 msgstr "检测到的片段"
 
 #: src/routes/discord.tsx
-msgid "dev preview"
-msgstr "开发预览"
+#~ msgid "dev preview"
+#~ msgstr "开发预览"
 
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"

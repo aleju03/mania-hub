@@ -6645,8 +6645,8 @@ msgid "Detected sections"
 msgstr "Secciones detectadas"
 
 #: src/routes/discord.tsx
-msgid "dev preview"
-msgstr "vista previa de desarrollo"
+#~ msgid "dev preview"
+#~ msgstr "vista previa de desarrollo"
 
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
