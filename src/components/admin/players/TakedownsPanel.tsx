@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ConfirmModal } from "../../ui/ConfirmModal";
 import { Skeleton } from "../../ui/LoadingSkeleton";
 import { SearchInput } from "../../ui/SearchInput";
-import { formatNumber, formatTimeAgo } from "../../../lib/format";
+import { formatDate, formatNumber, formatTimeAgo } from "../../../lib/format";
 import { searchPlayers, searchPlayersOnOsu } from "../../../lib/player-search";
 import {
   listOwnerTakedowns,
@@ -164,6 +164,7 @@ export function TakedownsPanel() {
                   <div className="text-[11px] text-osu-f1">
                     #{user.userId} · <span title={user.takenDownAt}>{formatTimeAgo(user.takenDownAt)}</span>
                     {user.held ? " · hidden, data kept" : ""}
+                    {user.selfScope ? ` · asked by the player${user.held && user.finalizeAfter ? `, deletes ${formatDate(user.finalizeAfter)}` : ""}` : ""}
                     {user.companellaBlocked ? " · Companella blocked by the takedown" : ""}
                   </div>
                 </div>

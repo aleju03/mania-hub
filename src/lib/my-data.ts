@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
+import type { SelfDeletionStatus } from "./self-deletion";
 import type { LeanTrackerScore } from "./types";
 import { liveBridgeToken } from "./live-backend-tokens";
 
@@ -206,6 +207,10 @@ export interface MyDataSummary {
   countryRank: number | null;
   tracked: boolean;
   rankedMember: boolean;
+  /** When they stopped tracking themselves (tracking_opt_outs); null while tracked or never opted in. */
+  trackingStoppedAt: string | null;
+  /** A profile deletion they asked for from My Stats. */
+  selfDeletion: SelfDeletionStatus | null;
   trackedCountries: string[];
   totalScores: number;
   passedScores: number;

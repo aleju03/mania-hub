@@ -13,6 +13,7 @@ export function RosterOptInCard({
   description,
   onTracked,
   performAction,
+  actionLabel,
 }: {
   // Both default to the generic wording below; a caller that passes its own
   // copy owns translating it (the dev preview route deliberately does not).
@@ -21,6 +22,7 @@ export function RosterOptInCard({
   onTracked?: () => void;
   // Dev previews inject a fake action so the card can be exercised without touching the backend.
   performAction?: () => Promise<RosterSelfTrackResult>;
+  actionLabel?: string;
 }) {
   const { t } = useLingui();
   const [status, setStatus] = useState<"idle" | "pending" | "done" | "error">("idle");
@@ -74,7 +76,7 @@ export function RosterOptInCard({
         disabled={status === "pending"}
         className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-osu-pink/40 bg-osu-pink/15 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white cursor-pointer disabled:opacity-60 disabled:cursor-default"
       >
-        {status === "pending" ? t`Adding you…` : t`Track my plays`}
+        {status === "pending" ? t`Adding you…` : actionLabel ?? t`Track my plays`}
       </button>
       {message ? <div className="mt-3 text-[12px] text-osu-f1">{message}</div> : null}
     </div>

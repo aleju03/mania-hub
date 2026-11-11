@@ -5877,6 +5877,10 @@ msgstr "Could not submit that. Try again."
 msgid "Couldn't build recommendations"
 msgstr "Couldn't build recommendations"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't cancel right now. Try again in a moment."
+msgstr "Couldn't cancel right now. Try again in a moment."
+
 #: src/routes/packs.tsx
 msgid "Couldn't deal a pack"
 msgstr "Couldn't deal a pack"
@@ -5893,6 +5897,10 @@ msgstr "Couldn't delete that upload; try again."
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "Couldn't delete this collection."
 msgstr "Couldn't delete this collection."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't delete your profile right now. Try again in a moment."
+msgstr "Couldn't delete your profile right now. Try again in a moment."
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Couldn't export the image."
@@ -6610,6 +6618,11 @@ msgstr "Delete image"
 msgid "Delete imagemap"
 msgstr "Delete imagemap"
 
+#: src/components/me/MyDataPanel.tsx
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Delete my profile"
+msgstr "Delete my profile"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Delete preset"
 msgstr "Delete preset"
@@ -6640,6 +6653,10 @@ msgstr "Deleted {0}"
 #: src/components/replay/ReplayInfo.tsx
 msgid "Deleting"
 msgstr "Deleting"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Deleting…"
+msgstr "Deleting…"
 
 #. placeholder {0}: explanation.sections.length
 #: src/components/prism/PrismVisualizer.tsx
@@ -6707,6 +6724,10 @@ msgstr "Difficulty"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Difficulty radar chart"
 msgstr "Difficulty radar chart"
+
+#: src/routes/discord.tsx
+#~ msgid "Direct messages"
+#~ msgstr "Direct messages"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Direction"
@@ -8989,6 +9010,10 @@ msgstr "Hold notes don't need their release timed."
 msgid "hold to delete"
 msgstr "hold to delete"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to delete my profile"
+msgstr "Hold to delete my profile"
+
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "Hold to delete this collection"
 msgstr "Hold to delete this collection"
@@ -9600,6 +9625,10 @@ msgstr "It was linked by typing a username. Connect Discord here to confirm it i
 msgid "It's already in your collection."
 msgstr "It's already in your collection."
 
+#: src/components/me/MyDataPanel.tsx
+msgid "It's too late to cancel."
+msgstr "It's too late to cancel."
+
 #: src/components/communities/field-options.tsx
 msgid "Italian"
 msgstr "Italian"
@@ -9766,6 +9795,10 @@ msgstr "Keep it"
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Keep my plays"
 msgstr "Keep my plays"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Keep my profile"
+msgstr "Keep my profile"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
@@ -11308,6 +11341,10 @@ msgstr "Members"
 msgid "Message"
 msgstr "Message"
 
+#: src/routes/discord.tsx
+#~ msgid "Messages from the bot"
+#~ msgstr "Messages from the bot"
+
 #: src/lib/replay-overlays.ts
 msgid "Meters"
 msgstr "Meters"
@@ -11685,6 +11722,10 @@ msgstr "my stats"
 msgid "My Stats"
 msgstr "My Stats"
 
+#: src/routes/discord.tsx
+#~ msgid "My top plays"
+#~ msgstr "My top plays"
+
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "N/A"
 msgstr "N/A"
@@ -11819,6 +11860,14 @@ msgstr "New invite link"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "New link"
 msgstr "New link"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "New plays aren't recorded."
+msgstr "New plays aren't recorded."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "New plays aren't recorded. The plays recorded before stay on your profile."
+msgstr "New plays aren't recorded. The plays recorded before stay on your profile."
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "New plays stop being recorded."
@@ -15692,6 +15741,10 @@ msgstr "remove listing"
 msgid "Remove my {count, plural, one {# play} other {# plays}}"
 msgstr "Remove my {count, plural, one {# play} other {# plays}}"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Remove my {playCount, plural, one {# play} other {# plays}}"
+msgstr "Remove my {playCount, plural, one {# play} other {# plays}}"
+
 #: src/components/me/MeScoreRow.tsx
 msgid "Remove play"
 msgstr "Remove play"
@@ -16004,6 +16057,10 @@ msgstr "Resizing image..."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Restored an unsaved draft from this browser."
 msgstr "Restored an unsaved draft from this browser."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Restoring…"
+msgstr "Restoring…"
 
 #: src/routes/player/$username.tsx
 msgid "Restricted on osu!"
@@ -18405,10 +18462,13 @@ msgstr "Stop sharing this one"
 msgid "stop sim"
 msgstr "stop sim"
 
-#: src/components/me/MyDataPanel.tsx
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stop tracking"
 msgstr "Stop tracking"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Stop tracking or delete"
+msgstr "Stop tracking or delete"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Stop tracking your plays?"
@@ -20891,6 +20951,10 @@ msgstr "tournaments, mapping, casual"
 msgid "Track my plays"
 msgstr "Track my plays"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Track my plays again"
+msgstr "Track my plays again"
+
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Track pp and accuracy goals and how close each one is."
 #~ msgstr "Track pp and accuracy goals and how close each one is."
@@ -22098,6 +22162,10 @@ msgstr "What seems wrong?"
 #~ msgid "What the number is not"
 #~ msgstr "What the number is not"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "What to do"
+msgstr "What to do"
+
 #: src/routes/report.tsx
 msgid "What would you add or change?"
 msgstr "What would you add or change?"
@@ -22145,6 +22213,10 @@ msgstr "When I get sniped"
 #: src/routes/news_.companella.tsx
 #~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
 #~ msgstr "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
+
+#: src/routes/privacy.tsx
+msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."
+msgstr "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
@@ -22609,6 +22681,10 @@ msgstr "You sit at {yourPp}pp while players near you average {median}pp, so ther
 msgid "You stopped at {streak} in a row."
 msgstr "You stopped at {streak} in a row."
 
+#: src/components/me/MyDataPanel.tsx
+msgid "You stopped tracking on {stoppedOn}"
+msgstr "You stopped tracking on {stoppedOn}"
+
 #: src/routes/replay_.community.tsx
 msgid "You're all caught up."
 msgstr "You're all caught up."
@@ -22896,6 +22972,26 @@ msgstr "Your private skins"
 #: src/routes/skins.tsx
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "Your private skins are on the shelf above; anything you publish lands here."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your profile is being deleted."
+msgstr "Your profile is being deleted."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your profile is hidden and gets deleted on {deletesOn}."
+msgstr "Your profile is hidden and gets deleted on {deletesOn}."
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile is hidden now and deleted on {deleteProfileOn}. You can cancel from this page until then."
+msgstr "Your profile is hidden now and deleted on {deleteProfileOn}. You can cancel from this page until then."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your profile was deleted."
+msgstr "Your profile was deleted."
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile, plays and stats on this site are deleted. Your packs, skins, uploaded replays and map collections stay."
+msgstr "Your profile, plays and stats on this site are deleted. Your packs, skins, uploaded replays and map collections stay."
 
 #: src/routes/recommendations.tsx
 msgid "your rating"

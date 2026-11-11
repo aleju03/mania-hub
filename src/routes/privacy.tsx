@@ -166,6 +166,21 @@ function PrivacyPage() {
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
+            When signed in, you can stop tracking or delete your profile from{' '}
+            <a
+              href="/my-stats"
+              className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
+            >
+              My Stats
+            </a>
+            . Stopping tracking records nothing new and keeps what was already recorded. Deleting
+            your profile hides it right away and deletes your plays, stats and profile history 7
+            days later, unless you cancel before then. Your packs, skins, uploaded replays and
+            collections stay.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
             To report a bug or send feedback, use the{' '}
             <a
               href="/report"

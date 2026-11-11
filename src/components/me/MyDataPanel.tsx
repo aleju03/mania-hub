@@ -49,8 +49,11 @@ import { ModBadge } from "../ui/ModBadge";
 import { RosterOptInCard } from "./RosterOptInCard";
 import { RemovalPill, RemovePlaysSheet, type RemovePlaysSheetKind } from "./RemovePlaysSheet";
 import { removeSelfFromRoster } from "../../lib/roster-self-track";
+import { cancelSelfDeletion, requestSelfDeletion, type SelfDeletionStatus } from "../../lib/self-deletion";
+import { formatDate } from "../../lib/format";
+import { useLocale } from "../../lib/locale-context";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { msg } from "@lingui/core/macro";
+import { msg, plural } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 
 const DAY_NAMES: MessageDescriptor[] = [
@@ -207,6 +210,9 @@ export function MyDataPanel() {
   const [removalSheet, setRemovalSheet] = useState<RemovePlaysSheetKind | null>(null);
   const [removalBusy, setRemovalBusy] = useState(false);
   const [removalError, setRemovalError] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const locale = useLocale();
 
   const applyTrackedPage = useCallback((page: MyDataPage<MyDataTrackedPlay>) => {
     setFeed(page.items);
@@ -362,8 +368,40 @@ export function MyDataPanel() {
 
   // "Remove all" ignores the feed filters, so it counts every tracked play.
   const allTrackedCount = Math.max(summary?.totalScores ?? 0, trackedTotal);
-  // Only self-added players: the top 100 is tracked whether it asked or not.
+  // Only self-added players: the top 100 is tracked whether it asked or not,
+  // until it stops tracking itself, after which its plays feed nothing.
   const canRemovePlays = summary?.tracked === true && summary.rankedMember === false;
+  const selfDeletion = summary?.selfDeletion ?? null;
+  // Shown in the sheet before anything runs; the backend's own deadline is what the banner shows after.
+  const deleteProfileOn = formatDate(new Date(Date.now() + SELF_DELETION_DAYS * 86_400_000).toISOString(), "UTC", locale);
+
+  const runDeleteProfile = useCallback(async () => {
+    setRemovalBusy(true);
+    setRemovalError(null);
+    const result = await requestSelfDeletion({ data: { scope: "profile" } }).catch(() => null);
+    setRemovalBusy(false);
+    if (!result?.ok) {
+      setRemovalError(t`Couldn't delete your profile right now. Try again in a moment.`);
+      return;
+    }
+    setRemovalSheet(null);
+    await load({ quiet: true });
+  }, [load, t]);
+
+  const runCancelDeletion = useCallback(async () => {
+    setCancelBusy(true);
+    setCancelError(null);
+    const result = await cancelSelfDeletion().catch(() => null);
+    setCancelBusy(false);
+    if (!result?.ok) {
+      setCancelError(result?.ok === false && result.error !== "unavailable"
+        ? t`It's too late to cancel.`
+        : t`Couldn't cancel right now. Try again in a moment.`);
+      if (result?.ok === false && result.error !== "unavailable") await load({ quiet: true });
+      return;
+    }
+    await load({ quiet: true });
+  }, [load, t]);
 
   // Untrack first, so no new play lands between the removal and the opt-out.
   const runStopTracking = useCallback(async (removePlays: boolean) => {
@@ -565,6 +603,15 @@ export function MyDataPanel() {
 
   return (
     <PageShell>
+      {selfDeletion ? (
+        <SelfDeletionNotice
+          status={selfDeletion}
+          deletesOn={formatDate(selfDeletion.finalizeAfter, "UTC", locale)}
+          busy={cancelBusy}
+          error={cancelError}
+          onCancel={() => void runCancelDeletion()}
+        />
+      ) : null}
       <div className="relative overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
         {summary?.coverUrl ? (
           <>
@@ -616,11 +663,32 @@ export function MyDataPanel() {
 
       {!tracked ? (
         <>
-          <RosterOptInCard
-            description={t`Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play.`}
-            onTracked={load}
-          />
+          {selfDeletion ? null : summary?.trackingStoppedAt ? (
+            <TrackingStoppedCard
+              stoppedOn={formatDate(summary.trackingStoppedAt, "UTC", locale)}
+              playCount={summary.totalScores}
+              onRemovePlays={() => openRemovalSheet("all")}
+              onTracked={load}
+            />
+          ) : (
+            <RosterOptInCard
+              description={t`Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play.`}
+              onTracked={load}
+            />
+          )}
           {removalError ? <div className="text-center text-[12px] text-osu-red-light">{removalError}</div> : null}
+          {summary && !selfDeletion ? (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                disabled={removalBusy}
+                onClick={() => openRemovalSheet("stop")}
+                className="px-2 py-2 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light disabled:cursor-default disabled:opacity-50"
+              >
+                {t`Delete my profile`}
+              </button>
+            </div>
+          ) : null}
         </>
       ) : (
         <>
@@ -790,7 +858,7 @@ export function MyDataPanel() {
             <Link to="/goals" className="inline-flex items-center rounded-lg border border-osu-b3/40 bg-osu-b5/60 px-3.5 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:border-osu-pink/40 hover:bg-osu-pink/10 hover:text-osu-pink-light">
               {summary?.goalsOpen ? t`Goals (${summary.goalsOpen} open)` : t`Goals`}
             </Link>
-            {canRemovePlays ? (
+            {summary && !selfDeletion ? (
               <button
                 type="button"
                 disabled={removalBusy}
@@ -800,7 +868,7 @@ export function MyDataPanel() {
                 }}
                 className="ml-auto px-2 py-2 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light disabled:cursor-default disabled:opacity-50"
               >
-                {t`Stop tracking`}
+                {t`Stop tracking or delete`}
               </button>
             ) : null}
           </div>
@@ -818,6 +886,9 @@ export function MyDataPanel() {
           error={removalError}
           onRemove={() => void runRemoval(removalSheet === "all")}
           onStopTracking={(removePlays) => void runStopTracking(removePlays)}
+          canStopTracking={tracked}
+          deleteProfileOn={deleteProfileOn}
+          onDeleteProfile={() => void runDeleteProfile()}
           onClose={() => {
             setRemovalSheet(null);
             // A failed removal after tracking went off still leaves the page on the old state.
@@ -826,6 +897,76 @@ export function MyDataPanel() {
         />
       ) : null}
     </PageShell>
+  );
+}
+
+const SELF_DELETION_DAYS = 7;
+
+function SelfDeletionNotice({ status, deletesOn, busy, error, onCancel }: {
+  status: SelfDeletionStatus;
+  deletesOn: string;
+  busy: boolean;
+  error: string | null;
+  onCancel: () => void;
+}) {
+  const { t } = useLingui();
+  // Past the deadline the sweep may already be deleting; the backend refuses a cancel then.
+  const deadlineAhead = status.cancellable && Date.parse(status.finalizeAfter) > Date.now();
+  return (
+    <div className="rounded-xl bg-osu-b4 px-4 py-3.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1 text-[13px] text-osu-l2">
+          {status.finalized
+            ? t`Your profile was deleted.`
+            : deadlineAhead
+            ? t`Your profile is hidden and gets deleted on ${deletesOn}.`
+            : t`Your profile is being deleted.`}
+        </div>
+        {status.finalized || !deadlineAhead ? null : (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="shrink-0 rounded-lg bg-osu-b3 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:brightness-110 cursor-pointer disabled:cursor-default disabled:opacity-60"
+          >
+            {busy ? t`Restoring…` : t`Keep my profile`}
+          </button>
+        )}
+      </div>
+      {error ? <div className="mt-2 text-[12px] text-osu-red-light">{error}</div> : null}
+    </div>
+  );
+}
+
+function TrackingStoppedCard({ stoppedOn, playCount, onRemovePlays, onTracked }: {
+  stoppedOn: string;
+  playCount: number;
+  onRemovePlays: () => void;
+  onTracked: () => void;
+}) {
+  const { t } = useLingui();
+  return (
+    <>
+      <RosterOptInCard
+        title={t`You stopped tracking on ${stoppedOn}`}
+        description={playCount > 0
+          ? t`New plays aren't recorded. The plays recorded before stay on your profile.`
+          : t`New plays aren't recorded.`}
+        actionLabel={t`Track my plays again`}
+        onTracked={onTracked}
+      />
+      {playCount > 0 ? (
+        <div className="-mt-1 flex justify-center">
+          <button
+            type="button"
+            onClick={onRemovePlays}
+            className="px-2 py-1 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light"
+          >
+            {t`Remove my ${plural(playCount, { one: "# play", other: "# plays" })}`}
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -1168,23 +1309,25 @@ function RhythmChart({ byHour, peakHour, peakDay }: { byHour: number[]; peakHour
           </button>
         ))}
       </div>
-      <div className="mt-2 text-[12px] text-osu-l2">
+      {/* Both lines share one grid cell, so the card keeps the taller one's
+          height: the summary wraps in longer languages and the hour readout
+          does not, and swapping them on hover moved everything below. */}
+      <div className="mt-2 grid text-[12px] text-osu-l2 [&>*]:col-start-1 [&>*]:row-start-1">
+        <div className={hovered != null ? "invisible" : undefined} aria-hidden={hovered != null}>
+          {peakHour != null ? (
+            <Trans>Most active around <span className="font-semibold text-white">{formatHour(peakHour)}</span></Trans>
+          ) : null}
+          {peakDay != null ? (
+            <Trans>, mostly on <span className="font-semibold text-white">{i18n._(DAY_NAMES[peakDay])}</span></Trans>
+          ) : null}
+        </div>
         {hovered != null ? (
-          <>
+          <div>
             <span className="font-semibold text-white">{formatHour(hovered)}</span>
             {" "}&middot; <Plural value={byHour[hovered]} one="# play" other="# plays" />
             {total > 0 ? <span className="text-osu-f1"> ({Math.round((byHour[hovered] / total) * 100)}%)</span> : null}
-          </>
-        ) : (
-          <>
-            {peakHour != null ? (
-              <Trans>Most active around <span className="font-semibold text-white">{formatHour(peakHour)}</span></Trans>
-            ) : null}
-            {peakDay != null ? (
-              <Trans>, mostly on <span className="font-semibold text-white">{i18n._(DAY_NAMES[peakDay])}</span></Trans>
-            ) : null}
-          </>
-        )}
+          </div>
+        ) : null}
       </div>
     </div>
   );

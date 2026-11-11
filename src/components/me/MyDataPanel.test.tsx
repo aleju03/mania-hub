@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   explorer: vi.fn(),
   remove: vi.fn(),
   stopTracking: vi.fn(),
+  requestDeletion: vi.fn(),
+  cancelDeletion: vi.fn(),
 }));
 
 vi.mock("../../lib/auth-context", () => ({ useAuth: () => ({ viewer: mocks.viewer }) }));
@@ -35,6 +37,7 @@ vi.mock("../../lib/my-data", () => ({
   MY_DATA_PAGE_SIZE: 50,
 }));
 vi.mock("../../lib/roster-self-track", () => ({ removeSelfFromRoster: mocks.stopTracking }));
+vi.mock("../../lib/self-deletion", () => ({ requestSelfDeletion: mocks.requestDeletion, cancelSelfDeletion: mocks.cancelDeletion }));
 vi.mock("../../lib/live-backend", () => ({ openLiveEventSource: () => null }));
 vi.mock("../layout/PageHeader", () => ({ PageHeader: () => null }));
 vi.mock("../ui/Avatar", () => ({ Avatar: () => null }));
@@ -71,7 +74,7 @@ const readySkills: MyDataSkillBreakdown = {
 };
 const summary: MyDataSummary = {
   userId: 123, username: "player", avatarUrl: null, coverUrl: null, countryCode: "CR",
-  pp: null, globalRank: null, countryRank: null, tracked: true, rankedMember: true,
+  pp: null, globalRank: null, countryRank: null, tracked: true, rankedMember: true, trackingStoppedAt: null, selfDeletion: null,
   trackedCountries: ["CR"], totalScores: 0, passedScores: 0, activeDays: 0, sessions: 0,
   firstTrackedDay: null, lastTrackedDay: null, topPlayCount: 0,
   highlights: { topPlay: null, biggestDay: null, longestStreak: 0, longestStreakRange: null, ppGainedTracked: 0 },
@@ -220,7 +223,7 @@ it("stops tracking and removes the recorded plays when the player picks that bef
   mocks.stopTracking.mockResolvedValue({ ok: true, status: "removed", country: "CR" });
   mocks.remove.mockResolvedValue({ ok: true, removed: 2 });
   render(panel());
-  fireEvent.click(await screen.findByRole("button", { name: "Stop tracking" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Stop tracking or delete" }));
   fireEvent.click(screen.getByRole("radio", { name: "Remove my 2 plays" }));
   await hold("Hold to stop tracking");
   await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith({ data: { all: true } }));
@@ -235,14 +238,14 @@ it("keeps the recorded plays by default when a player stops tracking", async () 
   });
   mocks.stopTracking.mockResolvedValue({ ok: true, status: "removed", country: "CR" });
   render(panel());
-  fireEvent.click(await screen.findByRole("button", { name: "Stop tracking" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Stop tracking or delete" }));
   await hold("Hold to stop tracking");
   await waitFor(() => expect(mocks.dashboard).toHaveBeenCalledTimes(2));
   expect(mocks.stopTracking).toHaveBeenCalledTimes(1);
   expect(mocks.remove).not.toHaveBeenCalled();
 });
 
-it("offers no removal to a player tracked through the top 100", async () => {
+it("lets a top-100 player stop tracking but not pick plays to remove while tracked", async () => {
   mocks.dashboard.mockResolvedValue({
     ...dashboard,
     summary: { ...summary, rankedMember: true, totalScores: 1 },
@@ -252,5 +255,35 @@ it("offers no removal to a player tracked through the top 100", async () => {
   await screen.findByRole("button", { name: "MSD plays" });
   expect(screen.queryByRole("button", { name: "select official:1" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Remove all" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Stop tracking" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Stop tracking or delete" })).toBeTruthy();
+});
+
+it("deletes the profile only after the player picks it and holds", async () => {
+  mocks.dashboard.mockResolvedValue({
+    ...dashboard,
+    summary: { ...summary, rankedMember: false, totalScores: 1 },
+    trackedPage: { items: [trackedPlay("official:1")], total: 1, limit: 50, offset: 0 },
+  });
+  mocks.requestDeletion.mockResolvedValue({ ok: true, status: { scope: "profile", requestedAt: "", finalizeAfter: "2026-11-18T00:00:00Z", finalized: false, cancellable: true } });
+  render(panel());
+  fireEvent.click(await screen.findByRole("button", { name: "Stop tracking or delete" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Delete my profile" }));
+  await hold("Hold to delete my profile");
+  await waitFor(() => expect(mocks.requestDeletion).toHaveBeenCalledWith({ data: { scope: "profile" } }));
+  expect(mocks.stopTracking).not.toHaveBeenCalled();
+  expect(mocks.remove).not.toHaveBeenCalled();
+});
+
+it("shows a pending deletion with a way to keep the profile", async () => {
+  mocks.dashboard.mockResolvedValue({
+    ...dashboard,
+    summary: { ...summary, tracked: false, selfDeletion: { scope: "profile", requestedAt: "", finalizeAfter: "2099-11-18T00:00:00Z", finalized: false, cancellable: true } },
+  });
+  mocks.cancelDeletion.mockResolvedValue({ ok: true, status: null });
+  render(panel());
+  expect(await screen.findByText("Your profile is hidden and gets deleted on November 18, 2099.")).toBeTruthy();
+  expect(screen.queryByText("Opt in")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Delete my profile" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Keep my profile" }));
+  await waitFor(() => expect(mocks.cancelDeletion).toHaveBeenCalledTimes(1));
 });

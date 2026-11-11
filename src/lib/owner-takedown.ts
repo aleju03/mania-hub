@@ -52,6 +52,10 @@ export interface TakenDownUser {
   takenDownAt: string;
   companellaBlocked: boolean;
   held: boolean;
+  /** Asked for by the player from My Stats; null for an admin takedown. */
+  selfScope?: string | null;
+  /** When the self-deletion sweep finishes it. */
+  finalizeAfter?: string | null;
 }
 
 const UPLOAD_PAGE_SIZE = 50;
@@ -230,7 +234,7 @@ async function deleteOwnedUploads(userId: number): Promise<{ deleted: number; fa
 
 /* This instance's memory copy of the osu! profile; the other instance's
    expires on its own within minutes (USER_CACHE_TTL). */
-async function forgetUser(userId: number, username: string): Promise<void> {
+export async function forgetUser(userId: number, username: string): Promise<void> {
   const { invalidatePersistentCache } = await import("./api");
   const { getUserCacheKey } = await import("./osu/users");
   const { USER_CACHE_VERSION } = await import("./osu/constants");

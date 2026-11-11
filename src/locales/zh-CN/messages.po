@@ -5862,6 +5862,10 @@ msgstr "提交失败，请再试一次。"
 msgid "Couldn't build recommendations"
 msgstr "无法生成推荐"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't cancel right now. Try again in a moment."
+msgstr "暂时无法取消，请稍后再试。"
+
 #: src/routes/packs.tsx
 msgid "Couldn't deal a pack"
 msgstr "无法发放卡包"
@@ -5878,6 +5882,10 @@ msgstr "无法删除这个上传，请重试。"
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "Couldn't delete this collection."
 msgstr "无法删除这个收藏夹。"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't delete your profile right now. Try again in a moment."
+msgstr "暂时无法删除你的资料，请稍后再试。"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Couldn't export the image."
@@ -6595,6 +6603,11 @@ msgstr "删除图片"
 msgid "Delete imagemap"
 msgstr "删除 imagemap"
 
+#: src/components/me/MyDataPanel.tsx
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Delete my profile"
+msgstr "删除我的资料"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Delete preset"
 msgstr "删除预设"
@@ -6625,6 +6638,10 @@ msgstr "已删除 {0}"
 #: src/components/replay/ReplayInfo.tsx
 msgid "Deleting"
 msgstr "删除中"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Deleting…"
+msgstr "正在删除…"
 
 #. placeholder {0}: explanation.sections.length
 #: src/components/prism/PrismVisualizer.tsx
@@ -6692,6 +6709,10 @@ msgstr "难度"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Difficulty radar chart"
 msgstr "难度雷达图"
+
+#: src/routes/discord.tsx
+#~ msgid "Direct messages"
+#~ msgstr "私信"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Direction"
@@ -7054,7 +7075,7 @@ msgstr "重复"
 
 #: src/routes/privacy.tsx
 msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals, card pack collections, skins, collections, uploaded replays, and friends lists are kept until you delete them or ask for them to be deleted."
-msgstr ""
+msgstr "排行榜、谱面、最佳成绩、Snipe、缓存的资料数据和历史汇总等长期公开数据可能会保存更久，因为本站要用它们来提供这些功能。目标、卡包收藏、皮肤、合集、上传的回放和好友列表会一直保存，直到你删除它们或要求删除。"
 
 #: src/components/communities/field-options.tsx
 msgid "Dutch"
@@ -8970,6 +8991,10 @@ msgstr "长条的放手不需要掐准时机。"
 msgid "hold to delete"
 msgstr "长按删除"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to delete my profile"
+msgstr "按住以删除我的资料"
+
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "Hold to delete this collection"
 msgstr "长按以删除这个收藏夹"
@@ -9193,7 +9218,7 @@ msgstr "如果你本地有这张谱面，把它的 .osz 拖进来，回放就用
 
 #: src/routes/privacy.tsx
 msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept."
-msgstr ""
+msgstr "如果你加载 osu! 好友，本站会用 friends.read 权限重新登录一次，读取一次你的好友列表，并保存好友的 osu! 用户 ID。访问令牌不会被保存。"
 
 #: src/routes/privacy.tsx
 #~ msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept. If you link your Discord account to the Discord bot, the site stores your Discord user ID with your osu! account and your bot settings. If you connect Companella, the site stores the scores and charts you choose to send and the device you approved."
@@ -9205,7 +9230,7 @@ msgstr ""
 
 #: src/routes/privacy.tsx
 msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps the first and last time your account signed in and its country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
-msgstr ""
+msgstr "如果你使用 osu! 登录，本站会收到 identify 和 public OAuth 权限允许的 osu! 账户信息，例如用户 ID、用户名、头像 URL 和国家/地区，并记录你的账户首次和最近一次登录的时间及其国家/地区。本站会保存一个签名的 HTTP-only 会话 Cookie，以便在会话有效期间识别你。"
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -9573,6 +9598,10 @@ msgstr "该绑定是通过输入用户名完成的。在这里连接 Discord 以
 msgid "It's already in your collection."
 msgstr "已经在你的收藏里了。"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "It's too late to cancel."
+msgstr "已经来不及取消了。"
+
 #: src/components/communities/field-options.tsx
 msgid "Italian"
 msgstr "意大利语"
@@ -9739,6 +9768,10 @@ msgstr "保留"
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Keep my plays"
 msgstr "保留我的成绩"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Keep my profile"
+msgstr "保留我的资料"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
@@ -10892,7 +10925,7 @@ msgstr "Mania Tracker"
 
 #: src/routes/privacy.tsx
 msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab."
-msgstr ""
+msgstr "Mania Tracker 使用自有的第一方统计来记录页面浏览和功能使用情况，数据保存在本站自己的服务器上。事件通过本站自己的接口发送，可能包含访问的页面、所选国家/地区、来源页面、浏览器语言、屏幕尺寸，以及页面上下文，例如正在查看的玩家、成绩、谱面集或谱面标签页。"
 
 #: src/routes/privacy.tsx
 #~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
@@ -10912,7 +10945,7 @@ msgstr "Mania Tracker 展示公开的元数据、缓存的投影数据和衍生�
 
 #: src/routes/privacy.tsx
 msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and beatmap download mirrors. Public osu! data may be cached and re-displayed as part of the site's community features."
-msgstr ""
+msgstr "Mania Tracker 不出售个人数据。数据可能由运营本站所用的服务提供商处理，包括托管、存储、统计、osu! API 服务和谱面下载镜像。公开的 osu! 数据可能会被缓存，并作为本站社区功能的一部分再次展示。"
 
 #: src/routes/privacy.tsx
 #~ msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
@@ -10949,7 +10982,7 @@ msgstr "Mania Tracker 使用公开和已授权的 osu! API 数据、本地缓存
 
 #: src/routes/privacy.tsx
 msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
-msgstr ""
+msgstr "Mania Tracker 使用公开的 osu! 资料、成绩、谱面、谱面集、排名和回放元数据来生成排行榜、追踪器、谱面、Snipe、最佳成绩、刷分助手推荐、玩家资料和回放查看。"
 
 #: src/routes/privacy.tsx
 #~ msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
@@ -11280,6 +11313,10 @@ msgstr "成员"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Message"
 msgstr "留言"
+
+#: src/routes/discord.tsx
+#~ msgid "Messages from the bot"
+#~ msgstr "机器人发来的消息"
 
 #: src/lib/replay-overlays.ts
 msgid "Meters"
@@ -11658,6 +11695,10 @@ msgstr "我的数据"
 msgid "My Stats"
 msgstr "我的数据"
 
+#: src/routes/discord.tsx
+#~ msgid "My top plays"
+#~ msgstr "我的 top plays"
+
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "N/A"
 msgstr "无"
@@ -11792,6 +11833,14 @@ msgstr "新的邀请链接"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "New link"
 msgstr "新链接"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "New plays aren't recorded."
+msgstr "新成绩不会被记录。"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "New plays aren't recorded. The plays recorded before stay on your profile."
+msgstr "新成绩不会被记录。之前记录的成绩仍保留在你的资料中。"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "New plays stop being recorded."
@@ -15665,6 +15714,10 @@ msgstr "移除收录"
 msgid "Remove my {count, plural, one {# play} other {# plays}}"
 msgstr "移除我的 {count} 个成绩"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Remove my {playCount, plural, one {# play} other {# plays}}"
+msgstr "移除我的 {playCount} 个成绩"
+
 #: src/components/me/MeScoreRow.tsx
 msgid "Remove play"
 msgstr "移除成绩"
@@ -15977,6 +16030,10 @@ msgstr "正在缩放图片…"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Restored an unsaved draft from this browser."
 msgstr "已从此浏览器恢复未保存的草稿。"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Restoring…"
+msgstr "正在恢复…"
 
 #: src/routes/player/$username.tsx
 msgid "Restricted on osu!"
@@ -18370,10 +18427,13 @@ msgstr "停止分享这一张"
 msgid "stop sim"
 msgstr "停止模拟"
 
-#: src/components/me/MyDataPanel.tsx
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stop tracking"
 msgstr "停止追踪"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Stop tracking or delete"
+msgstr "停止追踪或删除"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Stop tracking your plays?"
@@ -20641,7 +20701,7 @@ msgstr "{keyCount}K 评分"
 
 #: src/routes/privacy.tsx
 msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses to its database or logs. The server's request logs keep a shortened IP address with the last part removed and no user agent, for up to 90 days. Cloudflare, which sits in front of the site, keeps its own request logs. The server also records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
-msgstr ""
+msgstr "为防止滥用，服务器会按 IP 地址统计请求次数以进行限流，并限制每个 IP 的并发实时连接数。这些计数只保存在内存中：后端不会把 IP 地址写入数据库或日志。服务器的请求日志会保存去掉最后一段的缩短 IP 地址，不含 User Agent，最长保存 90 天。位于本站前端的 Cloudflare 会保留自己的请求日志。服务器还会记录任务运行、对 osu! API 的调用和错误等运行信息，用于监控服务状态。"
 
 #: src/routes/privacy.tsx
 msgid "To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -20847,6 +20907,10 @@ msgstr "比赛、制谱、休闲"
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "Track my plays"
 msgstr "追踪我的成绩"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Track my plays again"
+msgstr "重新追踪我的成绩"
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Track pp and accuracy goals and how close each one is."
@@ -21396,7 +21460,7 @@ msgstr "由 <0>{0}</0> 上传"
 
 #: src/routes/privacy.tsx
 msgid "Uploaded replays are unlisted, not private: anyone with the link can watch them. Private skins are shown only to you. If you like a skin without signing in, the site stores a random browser ID and a salted hash of your network, not your IP address."
-msgstr ""
+msgstr "上传的回放不会公开列出，但并非私密：任何拿到链接的人都可以观看。私密皮肤只对你可见。如果你在未登录时点赞皮肤，本站会保存一个随机浏览器 ID 和你网络的加盐哈希，而不是你的 IP 地址。"
 
 #: src/routes/skins.tsx
 msgid "uploader"
@@ -22055,6 +22119,10 @@ msgstr "哪里看起来不对？"
 #~ msgid "What the number is not"
 #~ msgstr "这个数字不是什么"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "What to do"
+msgstr "操作"
+
 #: src/routes/report.tsx
 msgid "What would you add or change?"
 msgstr "你想增加或修改什么？"
@@ -22103,6 +22171,10 @@ msgstr "被 snipe 时"
 #~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
 #~ msgstr "当 osu! 也有同一局成绩时，你的技能评分会直接读取回放中的击打时机，而不是根据判定数量来估算。"
 
+#: src/routes/privacy.tsx
+msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."
+msgstr "登录后，你可以在<0>我的数据</0>中停止追踪或删除你的资料。停止追踪后不会再记录新内容，已记录的内容会保留。删除资料后，资料会立即隐藏，你的成绩、统计和资料历史会在 7 天后删除，在此之前可以取消。你的卡包、皮肤、上传的回放和合集会保留。"
+
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
 #~ msgstr "有人打出新的最佳成绩时，会自动发到你的频道，附带完整信息。"
@@ -22121,7 +22193,7 @@ msgstr "你什么时候打图"
 
 #: src/routes/privacy.tsx
 msgid "When you send a bug report, feedback, or a translation report, the site stores your message, the page you were on, any screenshots, replies in the thread, and your osu! account if you are signed in. Bug reports also include your browser user agent, screen size, language, and country."
-msgstr ""
+msgstr "当你发送错误报告、反馈或翻译报告时，本站会保存你的消息、你当时所在的页面、截图、该讨论串中的回复，以及你登录时的 osu! 账户。错误报告还会包含你的浏览器 User Agent、屏幕尺寸、语言和国家/地区。"
 
 #: src/routes/communities.tsx
 msgid "where"
@@ -22566,6 +22638,10 @@ msgstr "你是 {yourPp}pp，而水平相近的玩家平均 {median}pp，所以�
 msgid "You stopped at {streak} in a row."
 msgstr "你在连对 {streak} 次后收手了。"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "You stopped tracking on {stoppedOn}"
+msgstr "你已于 {stoppedOn} 停止追踪"
+
 #: src/routes/replay_.community.tsx
 msgid "You're all caught up."
 msgstr "已浏览全部回放。"
@@ -22853,6 +22929,26 @@ msgstr "你的私有皮肤"
 #: src/routes/skins.tsx
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "你的私有皮肤在上方的架子上，你发布的皮肤会出现在这里。"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your profile is being deleted."
+msgstr "你的资料正在删除。"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your profile is hidden and gets deleted on {deletesOn}."
+msgstr "你的资料已隐藏，将于 {deletesOn} 删除。"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile is hidden now and deleted on {deleteProfileOn}. You can cancel from this page until then."
+msgstr "你的资料会立即隐藏，并于 {deleteProfileOn} 删除。在此之前可以在本页取消。"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your profile was deleted."
+msgstr "你的资料已删除。"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile, plays and stats on this site are deleted. Your packs, skins, uploaded replays and map collections stay."
+msgstr "你在本站的资料、成绩和统计会被删除。你的卡包、皮肤、上传的回放和谱面合集会保留。"
 
 #: src/routes/recommendations.tsx
 msgid "your rating"

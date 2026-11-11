@@ -5850,6 +5850,10 @@ msgstr "No se pudo enviar. Inténtalo de nuevo."
 msgid "Couldn't build recommendations"
 msgstr "No se pudieron generar recomendaciones"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't cancel right now. Try again in a moment."
+msgstr "No se pudo cancelar en este momento. Inténtalo de nuevo en un momento."
+
 #: src/routes/packs.tsx
 msgid "Couldn't deal a pack"
 msgstr "No se pudo repartir un pack"
@@ -5866,6 +5870,10 @@ msgstr "No se pudo eliminar esa subida; inténtalo de nuevo."
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "Couldn't delete this collection."
 msgstr "No se pudo eliminar esta colección."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't delete your profile right now. Try again in a moment."
+msgstr "No se pudo borrar tu perfil en este momento. Inténtalo de nuevo en un momento."
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Couldn't export the image."
@@ -6583,6 +6591,11 @@ msgstr "Eliminar imagen"
 msgid "Delete imagemap"
 msgstr "Eliminar imagemap"
 
+#: src/components/me/MyDataPanel.tsx
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Delete my profile"
+msgstr "Borrar mi perfil"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Delete preset"
 msgstr "Eliminar preset"
@@ -6613,6 +6626,10 @@ msgstr "Eliminado {0}"
 #: src/components/replay/ReplayInfo.tsx
 msgid "Deleting"
 msgstr "Eliminando"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Deleting…"
+msgstr "Borrando…"
 
 #. placeholder {0}: explanation.sections.length
 #: src/components/prism/PrismVisualizer.tsx
@@ -6680,6 +6697,10 @@ msgstr "Dificultad"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Difficulty radar chart"
 msgstr "Gráfico de radar de dificultad"
+
+#: src/routes/discord.tsx
+#~ msgid "Direct messages"
+#~ msgstr "Mensajes directos"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Direction"
@@ -7042,7 +7063,7 @@ msgstr "Duplicadas"
 
 #: src/routes/privacy.tsx
 msgid "Durable public projections such as rankings, maps, top plays, snipes, cached profile data, and historical aggregates may be kept longer because they are what the site uses to serve those features. Goals, card pack collections, skins, collections, uploaded replays, and friends lists are kept until you delete them or ask for them to be deleted."
-msgstr ""
+msgstr "Las proyecciones públicas duraderas, como rankings, mapas, top plays, snipes, datos de perfil en caché y agregados históricos, pueden guardarse por más tiempo porque son lo que el sitio usa para dar esas funciones. Los goals, las colecciones de packs, las skins, las colecciones, los replays subidos y las listas de amigos se guardan hasta que los borres o pidas que se borren."
 
 #: src/components/communities/field-options.tsx
 msgid "Dutch"
@@ -8958,6 +8979,10 @@ msgstr "No hace falta soltar las hold notes a tiempo."
 msgid "hold to delete"
 msgstr "mantén para eliminar"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to delete my profile"
+msgstr "Mantén para borrar mi perfil"
+
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "Hold to delete this collection"
 msgstr "Mantén pulsado para eliminar esta colección"
@@ -9181,7 +9206,7 @@ msgstr "Si tienes el mapa, suelta su .osz aquí y el replay se reproduce desde t
 
 #: src/routes/privacy.tsx
 msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept."
-msgstr ""
+msgstr "Si cargas tus amigos de osu!, el sitio vuelve a iniciar tu sesión con el scope friends.read, lee tu lista de amigos una vez y guarda los IDs de usuario de osu! de tus amigos. El token de acceso no se guarda."
 
 #: src/routes/privacy.tsx
 #~ msgid "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept. If you link your Discord account to the Discord bot, the site stores your Discord user ID with your osu! account and your bot settings. If you connect Companella, the site stores the scores and charts you choose to send and the device you approved."
@@ -9193,7 +9218,7 @@ msgstr ""
 
 #: src/routes/privacy.tsx
 msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps the first and last time your account signed in and its country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
-msgstr ""
+msgstr "Si inicias sesión con osu!, el sitio recibe los datos de la cuenta de osu! que permiten los scopes OAuth identify y public, como el ID de usuario, el nombre, la URL del avatar y el país, y guarda la primera y la última vez que tu cuenta inició sesión y su país. El sitio guarda una cookie de sesión firmada y HTTP-only para reconocerte mientras la sesión está activa."
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -9561,6 +9586,10 @@ msgstr "Se vinculó escribiendo un nombre de usuario. Conecta Discord aquí para
 msgid "It's already in your collection."
 msgstr "Ya está en tu colección."
 
+#: src/components/me/MyDataPanel.tsx
+msgid "It's too late to cancel."
+msgstr "Ya es tarde para cancelar."
+
 #: src/components/communities/field-options.tsx
 msgid "Italian"
 msgstr "Italiano"
@@ -9727,6 +9756,10 @@ msgstr "Conservarlo"
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Keep my plays"
 msgstr "Conservar mis jugadas"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Keep my profile"
+msgstr "Conservar mi perfil"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
@@ -10880,7 +10913,7 @@ msgstr "Mania Tracker"
 
 #: src/routes/privacy.tsx
 msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab."
-msgstr ""
+msgstr "Mania Tracker cuenta las visitas a páginas y el uso de funciones con su propia analítica, guardada en el servidor del propio sitio. Los eventos se envían por un endpoint del propio sitio y pueden incluir la ruta visitada, el país seleccionado, el referrer, el idioma del navegador, el tamaño de pantalla y el contexto de la ruta, como un jugador, score, beatmapset o pestaña de mapas que estás viendo."
 
 #: src/routes/privacy.tsx
 #~ msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab. Events are kept for 90 days and then deleted."
@@ -10900,7 +10933,7 @@ msgstr "Mania Tracker muestra metadatos públicos, proyecciones en caché y vist
 
 #: src/routes/privacy.tsx
 msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and beatmap download mirrors. Public osu! data may be cached and re-displayed as part of the site's community features."
-msgstr ""
+msgstr "Mania Tracker no vende datos personales. Los datos pueden ser procesados por proveedores de servicios que se usan para operar el sitio, como hosting, almacenamiento, analítica, servicios de la API de osu! y mirrors de descarga de beatmaps. Los datos públicos de osu! pueden guardarse en caché y mostrarse de nuevo como parte de las funciones comunitarias del sitio."
 
 #: src/routes/privacy.tsx
 #~ msgid "Mania Tracker does not sell personal data. Data may be processed by service providers used to run the site, including hosting, storage, analytics, osu! API services, and community score-data services. Public osu! data may be cached and re-displayed as part of the site's community features."
@@ -10937,7 +10970,7 @@ msgstr "Mania Tracker usa datos públicos y autenticados de la API de osu!, dato
 
 #: src/routes/privacy.tsx
 msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
-msgstr ""
+msgstr "Mania Tracker usa datos públicos de osu! de perfiles, scores, beatmaps, beatmapsets, rankings y replays para armar los rankings, el tracker, los mapas, los snipes, las top plays, las sugerencias del farm helper, los perfiles y el visor de replays."
 
 #: src/routes/privacy.tsx
 #~ msgid "Mania Tracker uses public osu! profile, score, beatmap, beatmapset, ranking, and replay metadata, plus community data services such as osu! score cache, to build rankings, tracker views, maps, snipes, top plays, farm-helper suggestions, profiles, and replay views."
@@ -11268,6 +11301,10 @@ msgstr "Miembros"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Message"
 msgstr "Mensaje"
+
+#: src/routes/discord.tsx
+#~ msgid "Messages from the bot"
+#~ msgstr "Mensajes del bot"
 
 #: src/lib/replay-overlays.ts
 msgid "Meters"
@@ -11646,6 +11683,10 @@ msgstr "mis estadísticas"
 msgid "My Stats"
 msgstr "Mis estadísticas"
 
+#: src/routes/discord.tsx
+#~ msgid "My top plays"
+#~ msgstr "Mis top plays"
+
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "N/A"
 msgstr "N/D"
@@ -11780,6 +11821,14 @@ msgstr "Nuevo enlace de invitación"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "New link"
 msgstr "Nuevo enlace"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "New plays aren't recorded."
+msgstr "Tus jugadas nuevas no se registran."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "New plays aren't recorded. The plays recorded before stay on your profile."
+msgstr "Tus jugadas nuevas no se registran. Las que ya se registraron siguen en tu perfil."
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "New plays stop being recorded."
@@ -15653,6 +15702,10 @@ msgstr "eliminar el listado"
 msgid "Remove my {count, plural, one {# play} other {# plays}}"
 msgstr "Eliminar {count, plural, one {mi # jugada} other {mis # jugadas}}"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Remove my {playCount, plural, one {# play} other {# plays}}"
+msgstr "Eliminar {playCount, plural, one {mi # jugada} other {mis # jugadas}}"
+
 #: src/components/me/MeScoreRow.tsx
 msgid "Remove play"
 msgstr "Eliminar jugada"
@@ -15965,6 +16018,10 @@ msgstr "Redimensionando imagen..."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Restored an unsaved draft from this browser."
 msgstr "Se restauró un borrador sin guardar de este navegador."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Restoring…"
+msgstr "Restaurando…"
 
 #: src/routes/player/$username.tsx
 msgid "Restricted on osu!"
@@ -18358,10 +18415,13 @@ msgstr "Dejar de compartir este"
 msgid "stop sim"
 msgstr "parar sim"
 
-#: src/components/me/MyDataPanel.tsx
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stop tracking"
 msgstr "Dejar de trackear"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Stop tracking or delete"
+msgstr "Dejar de trackear o borrar"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Stop tracking your plays?"
@@ -20629,7 +20689,7 @@ msgstr "al nivel de {keyCount}K"
 
 #: src/routes/privacy.tsx
 msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses to its database or logs. The server's request logs keep a shortened IP address with the last part removed and no user agent, for up to 90 days. Cloudflare, which sits in front of the site, keeps its own request logs. The server also records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
-msgstr ""
+msgstr "Para evitar abusos, el servidor cuenta las solicitudes por dirección IP para limitar la frecuencia y limita las conexiones en vivo simultáneas por IP. Estos contadores viven solo en memoria: el backend no escribe direcciones IP en su base de datos ni en sus logs. Los logs de solicitudes del servidor guardan una dirección IP acortada, sin su última parte y sin user agent, por hasta 90 días. Cloudflare, que está delante del sitio, guarda sus propios logs de solicitudes. El servidor también registra detalles operativos, como la actividad de los jobs, las llamadas a la API de osu! y los errores, para vigilar que el servicio funcione bien."
 
 #: src/routes/privacy.tsx
 msgid "To report a bug or send feedback, use the <0>Bugs and feedback</0> form on the site. For privacy, deletion, attribution, takedown, or any other concern, email <1>contact@mania-tracker.com</1> or contact the maintainer through the public osu! profile linked in the footer."
@@ -20835,6 +20895,10 @@ msgstr "torneos, mapping, casual"
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "Track my plays"
 msgstr "Seguir mis plays"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Track my plays again"
+msgstr "Volver a seguir mis plays"
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Track pp and accuracy goals and how close each one is."
@@ -21384,7 +21448,7 @@ msgstr "subida por <0>{0}</0>"
 
 #: src/routes/privacy.tsx
 msgid "Uploaded replays are unlisted, not private: anyone with the link can watch them. Private skins are shown only to you. If you like a skin without signing in, the site stores a random browser ID and a salted hash of your network, not your IP address."
-msgstr ""
+msgstr "Los replays subidos no están listados, pero no son privados: cualquiera con el enlace puede verlos. Las skins privadas solo se te muestran a ti. Si le das like a una skin sin iniciar sesión, el sitio guarda un ID aleatorio del navegador y un hash con sal de tu red, no tu dirección IP."
 
 #: src/routes/skins.tsx
 msgid "uploader"
@@ -22043,6 +22107,10 @@ msgstr "¿Qué parece estar mal?"
 #~ msgid "What the number is not"
 #~ msgstr "Lo que el número no es"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "What to do"
+msgstr "Qué hacer"
+
 #: src/routes/report.tsx
 msgid "What would you add or change?"
 msgstr "¿Qué agregarías o cambiarías?"
@@ -22091,6 +22159,10 @@ msgstr "Cuando me snipean"
 #~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
 #~ msgstr "Cuando osu! tiene la misma partida, tus ratings de skill leen tu timing desde el replay en vez de estimarlo a partir de tus judgements."
 
+#: src/routes/privacy.tsx
+msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."
+msgstr "Con la sesión iniciada, puedes dejar de trackear o borrar tu perfil desde <0>Mis estadísticas</0>. Al dejar de trackear no se registra nada nuevo y se queda lo que ya estaba registrado. Al borrar tu perfil se oculta de una vez y tus jugadas, stats e historial del perfil se borran 7 días después, a menos que lo canceles antes. Tus packs, skins, replays subidos y colecciones se quedan."
+
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
 #~ msgstr "Cuando alguien consigue un nuevo top play, llega a tu canal automáticamente, con todo el detalle."
@@ -22109,7 +22181,7 @@ msgstr "Cuando juegas"
 
 #: src/routes/privacy.tsx
 msgid "When you send a bug report, feedback, or a translation report, the site stores your message, the page you were on, any screenshots, replies in the thread, and your osu! account if you are signed in. Bug reports also include your browser user agent, screen size, language, and country."
-msgstr ""
+msgstr "Cuando envías un reporte de bug, feedback o un reporte de traducción, el sitio guarda tu mensaje, la página en la que estabas, las capturas de pantalla, las respuestas del hilo y tu cuenta de osu! si iniciaste sesión. Los reportes de bugs también incluyen el user agent de tu navegador, el tamaño de pantalla, el idioma y el país."
 
 #: src/routes/communities.tsx
 msgid "where"
@@ -22554,6 +22626,10 @@ msgstr "Estás en {yourPp}pp mientras los jugadores cerca de ti promedian {media
 msgid "You stopped at {streak} in a row."
 msgstr "Te detuviste en {streak} seguidos."
 
+#: src/components/me/MyDataPanel.tsx
+msgid "You stopped tracking on {stoppedOn}"
+msgstr "Dejaste de trackear el {stoppedOn}"
+
 #: src/routes/replay_.community.tsx
 msgid "You're all caught up."
 msgstr "Ya has visto todas las repeticiones."
@@ -22841,6 +22917,26 @@ msgstr "Tus skins privadas"
 #: src/routes/skins.tsx
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "Tus skins privadas están en el estante de arriba; todo lo que publiques aparece aquí."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your profile is being deleted."
+msgstr "Tu perfil se está borrando."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your profile is hidden and gets deleted on {deletesOn}."
+msgstr "Tu perfil está oculto y se borra el {deletesOn}."
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile is hidden now and deleted on {deleteProfileOn}. You can cancel from this page until then."
+msgstr "Tu perfil se oculta ya y se borra el {deleteProfileOn}. Puedes cancelarlo desde esta página hasta entonces."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your profile was deleted."
+msgstr "Tu perfil se borró."
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile, plays and stats on this site are deleted. Your packs, skins, uploaded replays and map collections stay."
+msgstr "Se borran tu perfil, tus jugadas y tus stats en este sitio. Tus packs, skins, replays subidos y colecciones de mapas se quedan."
 
 #: src/routes/recommendations.tsx
 msgid "your rating"
