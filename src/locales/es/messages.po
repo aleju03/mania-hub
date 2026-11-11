@@ -5341,7 +5341,6 @@ msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps jugados en {countryName}"
 
 #: src/components/supporter/ProfilePreviewBar.tsx
-#: src/routes/discord.tsx
 #: src/routes/support.tsx
 #: src/routes/supporter.tsx
 msgid "Become a supporter"
@@ -7310,8 +7309,12 @@ msgid "Connect Discord"
 msgstr "Conectar Discord"
 
 #: src/routes/discord.tsx
-msgid "Connect Discord here and link it to get messages."
-msgstr "Conecta Discord aquí y vincúlalo para recibir mensajes."
+msgid "Connect Discord above to set up feeds in servers where you have Manage Server."
+msgstr "Conecta Discord arriba para configurar feeds en servidores donde tienes Gestionar servidor."
+
+#: src/routes/discord.tsx
+#~ msgid "Connect Discord here and link it to get messages."
+#~ msgstr "Conecta Discord aquí y vincúlalo para recibir mensajes."
 
 #: src/routes/discord.tsx
 msgid "Connect Discord to set up feeds in servers where you have Manage Server."
@@ -11291,6 +11294,10 @@ msgstr "Alemán"
 msgid "Get {grade} {speed} on {map}"
 msgstr "Consigue {grade} {speed} en {map}"
 
+#: src/routes/discord.tsx
+msgid "Get a DM when you finish a goal or someone pulls your card, plus a recap of your week."
+msgstr "Recibe un DM cuando completas una meta o alguien saca tu carta, y un resumen de tu semana."
+
 #: src/components/replay/ShareClipButton.tsx
 msgid "Get a share link"
 msgstr "Obtener enlace para compartir"
@@ -14026,8 +14033,16 @@ msgstr "Enlace copiado."
 #~ msgstr "Vincula Discord y maniabot te escribe cuando te hacen snipe, completas una meta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o alguien saca tu carta, y además te manda un resumen de tu semana. Cada uno se activa por separado, en inglés, español o chino."
 
 #: src/routes/support.tsx
-msgid "Link Discord and pick which ones maniabot sends you: when you get sniped, finish a goal, a player you follow sets a top play, a new farm map at your level gets ranked, someone pulls your card, and a recap of your week. In English, Spanish or Chinese."
-msgstr "Vincula Discord y elige cuáles te manda maniabot: cuando te hacen snipe, completas una meta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel, alguien saca tu carta, y un resumen de tu semana. En inglés, español o chino."
+msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+msgstr "Vincula Discord y elige cuáles te manda maniabot: cuando completas una meta, alguien saca tu carta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o te hacen snipe, y un resumen de tu semana."
+
+#: src/routes/support.tsx
+#~ msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week. In English, Spanish or Chinese."
+#~ msgstr "Vincula Discord y elige cuáles te manda maniabot: cuando completas una meta, alguien saca tu carta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o te hacen snipe, y un resumen de tu semana. En inglés, español o chino."
+
+#: src/routes/support.tsx
+#~ msgid "Link Discord and pick which ones maniabot sends you: when you get sniped, finish a goal, a player you follow sets a top play, a new farm map at your level gets ranked, someone pulls your card, and a recap of your week. In English, Spanish or Chinese."
+#~ msgstr "Vincula Discord y elige cuáles te manda maniabot: cuando te hacen snipe, completas una meta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel, alguien saca tu carta, y un resumen de tu semana. En inglés, español o chino."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "link text"
@@ -18232,8 +18247,12 @@ msgid "Optional"
 msgstr "Opcionales"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Optional Discord DMs when you get sniped, finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
-msgstr "DMs opcionales en Discord cuando te hacen snipe, completas una meta o alguien saca tu carta, y un resumen semanal. Apagados hasta que los actives desde la página del bot de Discord."
+msgid "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
+msgstr "DMs opcionales en Discord cuando completas una meta o alguien saca tu carta, y un resumen semanal. Apagados hasta que los actives desde la página del bot de Discord."
+
+#: src/components/supporter/SupporterExtras.tsx
+#~ msgid "Optional Discord DMs when you get sniped, finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
+#~ msgstr "DMs opcionales en Discord cuando te hacen snipe, completas una meta o alguien saca tu carta, y un resumen semanal. Apagados hasta que los actives desde la página del bot de Discord."
 
 #: src/routes/report.tsx
 #~ msgid "Optional follow-up"
@@ -22703,6 +22722,10 @@ msgstr "Ver esta partida"
 #~ msgid "See what it gets"
 #~ msgstr "Ver qué trae"
 
+#: src/routes/discord.tsx
+msgid "See what supporters get"
+msgstr "Mira lo que tienen los supporters"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See which plays are waiting"
 msgstr "Ver qué plays están esperando"
@@ -24240,6 +24263,10 @@ msgstr "No se registran snipes para {name}"
 #~ msgid "Snipes don't apply to Global"
 #~ msgstr "Los snipes no aplican a Global"
 
+#: src/routes/discord.tsx
+#~ msgid "Snipes, goals, card pulls and a weekly recap, sent to you on Discord."
+#~ msgstr "Snipes, metas, cartas sacadas y un resumen semanal, por DM en Discord."
+
 #: src/lib/pack-run.ts
 msgid "Snowball"
 msgstr "Bola de nieve"
@@ -25244,6 +25271,10 @@ msgstr "Supporter hasta el {until}"
 msgid "Supporters"
 msgstr "Supporters"
 
+#: src/routes/discord.tsx
+#~ msgid "Supporters can get DMs from the bot when they get sniped, finish a goal, a player they follow sets a top play, a new farm map at their level gets ranked or someone pulls their card, plus a weekly recap. Each one is optional."
+#~ msgstr "Los supporters pueden recibir DMs del bot cuando les hacen snipe, completan una meta, un jugador que siguen hace una mejor jugada, rankean un mapa nuevo para farmear a su nivel o alguien saca su carta, y además un resumen semanal. Cada uno es opcional."
+
 #: src/routes/terms.tsx
 msgid "Supporters can upload images and make their own profile themes, including shader code others can see and use. Whoever uploads or writes them is responsible for them and must have the right to share them. They go live without review."
 msgstr "Los supporters pueden subir imágenes y crear sus propios temas de perfil, incluido código de shaders que otros pueden ver y usar. Quien los sube o escribe es responsable de ellos y debe tener derecho a compartirlos. Se publican sin revisión."
@@ -26139,6 +26170,18 @@ msgstr "No se pudo cargar el tablero."
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "The board is not answering right now."
 msgstr "El leaderboard no responde en este momento."
+
+#: src/routes/discord.tsx
+msgid "The bot can DM you when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, plus a weekly recap. Confirm your Discord account above first, so it knows the account is yours."
+msgstr "El bot te puede escribir por DM cuando completas una meta, alguien saca tu carta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o te hacen snipe, y además manda un resumen semanal. Primero confirma tu cuenta de Discord arriba, para que sepa que la cuenta es tuya."
+
+#: src/routes/discord.tsx
+#~ msgid "The bot can DM you when you get sniped, finish a goal, a player you follow sets a top play, a new farm map at your level gets ranked or someone pulls your card, plus a weekly recap. Confirm your Discord account above first, so it knows the account is yours."
+#~ msgstr "El bot te puede escribir por DM cuando te hacen snipe, completas una meta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o alguien saca tu carta, y además manda un resumen semanal. Primero confirma tu cuenta de Discord arriba, para que sepa que la cuenta es tuya."
+
+#: src/routes/discord.tsx
+#~ msgid "The bot can DM you when you get sniped, finish a goal, a player you follow sets a top play, a new farm map at your level gets ranked or someone pulls your card, plus a weekly recap. Connect Discord here first, so it knows the account is yours."
+#~ msgstr "El bot te puede escribir por DM cuando te hacen snipe, completas una meta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o alguien saca tu carta, y además manda un resumen semanal. Primero conecta Discord aquí, para que sepa que la cuenta es tuya."
 
 #: src/routes/discord.tsx
 msgid "The bot isn't in this server"

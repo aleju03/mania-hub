@@ -373,7 +373,7 @@ const PERKS: { id: PerkId; title: MessageDescriptor; body: MessageDescriptor }[]
   { id: "plays", title: msg`Your own plays`, body: msg`Put any play the site tracked of you under your profile stats, with a title of your own and its pp, rating or dan.` },
   { id: "companion", title: msg`Mascot`, body: msg`A figure that stands beside your profile's numbers. Pick one from the list, or submit your own.` },
   { id: "clips", title: msg`Video share links`, body: msg`After exporting a replay video, get a link that plays it right in Discord chat.` },
-  { id: "dms", title: msg`DMs from the bot`, body: msg`Optional Discord DMs when you get sniped, finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page.` },
+  { id: "dms", title: msg`DMs from the bot`, body: msg`Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page.` },
   { id: "gift", title: msg`A week for a friend`, body: msg`A one-time code that gives someone else a week of supporter.` },
 ];
 

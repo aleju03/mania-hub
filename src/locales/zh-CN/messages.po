@@ -5353,7 +5353,6 @@ msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
 
 #: src/components/supporter/ProfilePreviewBar.tsx
-#: src/routes/discord.tsx
 #: src/routes/support.tsx
 #: src/routes/supporter.tsx
 msgid "Become a supporter"
@@ -7322,8 +7321,12 @@ msgid "Connect Discord"
 msgstr "连接 Discord"
 
 #: src/routes/discord.tsx
-msgid "Connect Discord here and link it to get messages."
-msgstr "在这里连接并绑定 Discord 即可收到消息。"
+msgid "Connect Discord above to set up feeds in servers where you have Manage Server."
+msgstr "在上方连接 Discord，即可在你拥有“管理服务器”权限的服务器中设置推送。"
+
+#: src/routes/discord.tsx
+#~ msgid "Connect Discord here and link it to get messages."
+#~ msgstr "在这里连接并绑定 Discord 即可收到消息。"
 
 #: src/routes/discord.tsx
 msgid "Connect Discord to set up feeds in servers where you have Manage Server."
@@ -11303,6 +11306,10 @@ msgstr "德语"
 msgid "Get {grade} {speed} on {map}"
 msgstr "在 {map} 上以 {speed} 拿到 {grade}"
 
+#: src/routes/discord.tsx
+msgid "Get a DM when you finish a goal or someone pulls your card, plus a recap of your week."
+msgstr "完成目标或有人抽到你的卡片时收到私信，还有每周回顾。"
+
 #: src/components/replay/ShareClipButton.tsx
 msgid "Get a share link"
 msgstr "获取分享链接"
@@ -14038,8 +14045,16 @@ msgstr "链接已复制。"
 #~ msgstr "绑定 Discord 后，maniabot 会在你被狙击、完成目标、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或有人抽到你的卡片时私信你，还会发来每周回顾。每一项都可以单独开关，支持英文、西班牙文和中文。"
 
 #: src/routes/support.tsx
-msgid "Link Discord and pick which ones maniabot sends you: when you get sniped, finish a goal, a player you follow sets a top play, a new farm map at your level gets ranked, someone pulls your card, and a recap of your week. In English, Spanish or Chinese."
-msgstr "绑定 Discord 后，选择 maniabot 给你发哪些私信：被狙击、完成目标、关注的玩家打出最佳成绩、上架了适合你水平的刷分图、有人抽到你的卡片，以及每周回顾。支持英文、西班牙文和中文。"
+msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+msgstr "绑定 Discord 后，选择 maniabot 给你发哪些私信：完成目标、有人抽到你的卡片、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或你被狙击，以及每周回顾。"
+
+#: src/routes/support.tsx
+#~ msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week. In English, Spanish or Chinese."
+#~ msgstr "绑定 Discord 后，选择 maniabot 给你发哪些私信：完成目标、有人抽到你的卡片、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或你被狙击，以及每周回顾。支持英文、西班牙文和中文。"
+
+#: src/routes/support.tsx
+#~ msgid "Link Discord and pick which ones maniabot sends you: when you get sniped, finish a goal, a player you follow sets a top play, a new farm map at your level gets ranked, someone pulls your card, and a recap of your week. In English, Spanish or Chinese."
+#~ msgstr "绑定 Discord 后，选择 maniabot 给你发哪些私信：被狙击、完成目标、关注的玩家打出最佳成绩、上架了适合你水平的刷分图、有人抽到你的卡片，以及每周回顾。支持英文、西班牙文和中文。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "link text"
@@ -18244,8 +18259,12 @@ msgid "Optional"
 msgstr "可选"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Optional Discord DMs when you get sniped, finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
-msgstr "可选的 Discord 私信：被狙击、完成目标或有人抽到你的卡片时通知你，还有每周回顾。默认关闭，可在 Discord 机器人页面开启。"
+msgid "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
+msgstr "可选的 Discord 私信：完成目标或有人抽到你的卡片时通知你，还有每周回顾。默认关闭，可在 Discord 机器人页面开启。"
+
+#: src/components/supporter/SupporterExtras.tsx
+#~ msgid "Optional Discord DMs when you get sniped, finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
+#~ msgstr "可选的 Discord 私信：被狙击、完成目标或有人抽到你的卡片时通知你，还有每周回顾。默认关闭，可在 Discord 机器人页面开启。"
 
 #: src/routes/report.tsx
 #~ msgid "Optional follow-up"
@@ -22715,6 +22734,10 @@ msgstr "查看这局"
 #~ msgid "See what it gets"
 #~ msgstr "查看包含内容"
 
+#: src/routes/discord.tsx
+msgid "See what supporters get"
+msgstr "看看支持者能获得什么"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "See which plays are waiting"
 msgstr "查看哪些成绩在等待"
@@ -24252,6 +24275,10 @@ msgstr "{name} 未开启狙击追踪"
 #~ msgid "Snipes don't apply to Global"
 #~ msgstr "狙击不适用于全球视图"
 
+#: src/routes/discord.tsx
+#~ msgid "Snipes, goals, card pulls and a weekly recap, sent to you on Discord."
+#~ msgstr "狙击、目标、卡片被抽到和每周回顾，通过 Discord 私信发给你。"
+
 #: src/lib/pack-run.ts
 msgid "Snowball"
 msgstr "滚雪球"
@@ -25256,6 +25283,10 @@ msgstr "支持者到期：{until}"
 msgid "Supporters"
 msgstr "支持者"
 
+#: src/routes/discord.tsx
+#~ msgid "Supporters can get DMs from the bot when they get sniped, finish a goal, a player they follow sets a top play, a new farm map at their level gets ranked or someone pulls their card, plus a weekly recap. Each one is optional."
+#~ msgstr "支持者可以在被狙击、完成目标、关注的玩家打出最佳成绩、上架了适合自己水平的刷分图或有人抽到自己的卡片时收到机器人的私信，还有每周回顾。每一项都是可选的。"
+
 #: src/routes/terms.tsx
 msgid "Supporters can upload images and make their own profile themes, including shader code others can see and use. Whoever uploads or writes them is responsible for them and must have the right to share them. They go live without review."
 msgstr "支持者可以上传图片并制作自己的个人资料主题，包括其他人可以查看和使用的着色器代码。上传或编写者需对其负责，并且必须有权分享。它们无需审核即会上线。"
@@ -26151,6 +26182,18 @@ msgstr "无法加载展板。"
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "The board is not answering right now."
 msgstr "排行榜暂时没有响应。"
+
+#: src/routes/discord.tsx
+msgid "The bot can DM you when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, plus a weekly recap. Confirm your Discord account above first, so it knows the account is yours."
+msgstr "机器人可以在你完成目标、有人抽到你的卡片、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或你被狙击时私信你，还有每周回顾。请先在上方确认你的 Discord 账号，让它知道这个账号是你的。"
+
+#: src/routes/discord.tsx
+#~ msgid "The bot can DM you when you get sniped, finish a goal, a player you follow sets a top play, a new farm map at your level gets ranked or someone pulls your card, plus a weekly recap. Confirm your Discord account above first, so it knows the account is yours."
+#~ msgstr "机器人可以在你被狙击、完成目标、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或有人抽到你的卡片时私信你，还有每周回顾。请先在上方确认你的 Discord 账号，让它知道这个账号是你的。"
+
+#: src/routes/discord.tsx
+#~ msgid "The bot can DM you when you get sniped, finish a goal, a player you follow sets a top play, a new farm map at your level gets ranked or someone pulls your card, plus a weekly recap. Connect Discord here first, so it knows the account is yours."
+#~ msgstr "机器人可以在你被狙击、完成目标、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或有人抽到你的卡片时私信你，还有每周回顾。请先在这里连接 Discord，让它确认这个账号是你的。"
 
 #: src/routes/discord.tsx
 msgid "The bot isn't in this server"

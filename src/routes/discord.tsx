@@ -319,50 +319,68 @@ function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; a
   };
   const blocked = testResult === "blocked" || (testResult == null && alerts.failedAt != null);
 
+  // A perk they don't have: one quiet line among the settings, not a pitch.
+  if (!alerts.supporter) {
+    return (
+      <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-white/[0.07] pt-4 text-[12px] text-osu-f1">
+        <span className="text-[13px] font-semibold text-white"><Trans>DMs from the bot</Trans></span>
+        <span className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[11px] font-semibold text-osu-pink-light"><Trans>Supporters</Trans></span>
+        <span><Trans>Get a DM when you finish a goal or someone pulls your card, plus a recap of your week.</Trans></span>
+        <Link to="/support" hash="bot-dms" className="font-semibold text-osu-pink-light hover:underline">
+          <Trans>See what supporters get</Trans>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-4 border-t border-white/[0.07] pt-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-semibold text-white"><Trans>DMs from the bot</Trans></span>
         <span className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[11px] font-semibold text-osu-pink-light"><Trans>Supporters</Trans></span>
         <div className="flex-1" />
-        {!alerts.supporter ? (
-          <Link to="/support" hash="bot-dms" className="rounded-lg bg-osu-pink px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110">
-            <Trans>Become a supporter</Trans>
-          </Link>
-        ) : verified ? (
+        {usable ? (
           <button type="button" disabled={busy} onClick={() => void test()} className="rounded-lg bg-osu-b3 px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-50">
             <Trans>Send a test message</Trans>
           </button>
         ) : null}
       </div>
-      <div className={`flex flex-wrap gap-x-6 gap-y-2 ${usable ? "" : "opacity-50"}`}>
-        <Toggle checked={alerts.snipes} disabled={busy || !usable} onChange={(on) => void save({ snipes: on })} label={<Trans>When I get sniped</Trans>} />
-        <Toggle checked={alerts.goals} disabled={busy || !usable} onChange={(on) => void save({ goals: on })} label={<Trans>Goals I complete</Trans>} />
-        <Toggle checked={alerts.newMaps} disabled={busy || !usable} onChange={(on) => void save({ newMaps: on })} label={<Trans>New farm maps at my level</Trans>} />
-        <Toggle checked={alerts.cardPulls} disabled={busy || !usable} onChange={(on) => void save({ cardPulls: on })} label={<Trans>When someone pulls my card</Trans>} />
-        <Toggle checked={alerts.weeklyRecap} disabled={busy || !usable} onChange={(on) => void save({ weeklyRecap: on })} label={<Trans>Weekly recap</Trans>} />
+      {usable ? null : (
+        // A supporter with nothing to switch yet: what the DMs are, and the one
+        // step left, which Your account above has the button for.
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+          <p className="min-w-0 max-w-[620px] flex-1 text-[13px] leading-relaxed text-osu-l2">
+            <Trans>The bot can DM you when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, plus a weekly recap. Confirm your Discord account above first, so it knows the account is yours.</Trans>
+          </p>
+        </div>
+      )}
+      {usable ? <>
+      <div className="flex flex-wrap gap-x-6 gap-y-2">
+        <Toggle checked={alerts.goals} disabled={busy} onChange={(on) => void save({ goals: on })} label={<Trans>Goals I complete</Trans>} />
+        <Toggle checked={alerts.newMaps} disabled={busy} onChange={(on) => void save({ newMaps: on })} label={<Trans>New farm maps at my level</Trans>} />
+        <Toggle checked={alerts.cardPulls} disabled={busy} onChange={(on) => void save({ cardPulls: on })} label={<Trans>When someone pulls my card</Trans>} />
+        <Toggle checked={alerts.snipes} disabled={busy} onChange={(on) => void save({ snipes: on })} label={<Trans>When I get sniped</Trans>} />
+        <Toggle checked={alerts.weeklyRecap} disabled={busy} onChange={(on) => void save({ weeklyRecap: on })} label={<Trans>Weekly recap</Trans>} />
       </div>
-      <div className={`mt-3 flex flex-wrap items-center gap-2 text-[12px] text-osu-f1 ${usable ? "" : "opacity-50"}`}>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-osu-f1">
         <span className="mr-1"><Trans>Language</Trans></span>
         <Segmented
           value={alerts.locale}
-          disabled={busy || !usable}
+          disabled={busy}
           options={DM_LANGUAGES}
           onChange={(value) => void save({ dmLocale: value })}
         />
       </div>
-      <div className={`mt-3 text-[12px] text-osu-f1 ${usable ? "" : "opacity-50"}`}>
+      <div className="mt-3 text-[12px] text-osu-f1">
         <FeedPlayerPicker
           players={alerts.follows}
-          disabled={busy || !usable}
+          disabled={busy}
           label={<Trans>Top plays from</Trans>}
           emptyLabel={<Trans>Nobody</Trans>}
           onChange={(next) => void save({ follows: next.map((player) => player.id) })}
         />
       </div>
-      {alerts.supporter && !verified ? (
-        <p className="mt-3 text-[12px] text-osu-f1"><Trans>Connect Discord here and link it to get messages.</Trans></p>
-      ) : null}
+      </> : null}
       {saveFailed ? <p className="mt-3 text-[12px] text-rose-300"><Trans>That didn't save. Try again.</Trans></p> : null}
       {testResult === "sent" ? <p className="mt-3 text-[12px] text-emerald-300"><Trans>Sent. Check your DMs on Discord.</Trans></p> : null}
       {testResult && testResult !== "sent" && testResult !== "blocked" ? (
@@ -634,13 +652,18 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
       {!account || data === undefined ? (
         <ServerSkeleton />
       ) : !connected || data?.error === "no_discord" ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="min-w-0 flex-1 text-[14px] text-osu-l2"><Trans>Connect Discord to set up feeds in servers where you have Manage Server.</Trans></p>
-          <a href={connectHref()} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold text-white hover:brightness-110" style={{ backgroundColor: BLURPLE }}>
-            <DiscordLogo className="h-4 w-4" />
-            <Trans>Connect Discord</Trans>
-          </a>
-        </div>
+        // Your account above already shows the button when it has one.
+        !account.connection && !account.links[0]?.verified ? (
+          <p className="text-[14px] text-osu-l2"><Trans>Connect Discord above to set up feeds in servers where you have Manage Server.</Trans></p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="min-w-0 flex-1 text-[14px] text-osu-l2"><Trans>Connect Discord to set up feeds in servers where you have Manage Server.</Trans></p>
+            <a href={connectHref()} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold text-white hover:brightness-110" style={{ backgroundColor: BLURPLE }}>
+              <DiscordLogo className="h-4 w-4" />
+              <Trans>Connect Discord</Trans>
+            </a>
+          </div>
+        )
       ) : !data || !data.ok || !data.available ? (
         <p className="text-[14px] text-osu-f1"><Trans>Server settings aren't available right now.</Trans></p>
       ) : data.servers.length === 0 ? (
