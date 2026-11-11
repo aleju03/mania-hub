@@ -105,13 +105,24 @@ export function ProfileCompanion({ companion }: { companion: SupporterCompanion 
   );
 }
 
-/* The keycap at rest, both halves, for a tile (the real one is a button). */
+const KEYCAP_BASE = "/images/easter-eggs/tung-tung-sahur-keycap-base.webp";
+const KEYCAP_TOP = "/images/easter-eggs/tung-tung-sahur-keycap-top.webp";
+/* The top at rest as the live keycap places it (TungTungSahurKeycap: 3.25px
+   left and 4px down in its 72x128 box), in shares of this box. */
+const KEYCAP_TOP_CLASS = "absolute inset-x-0 bottom-[31.9%] mx-auto w-[78%] -translate-x-[5.8%] object-contain";
+
+/* The keycap at rest, layered like the real one (a button): the top sits in
+   the base, which covers it again below its rim, with the arm and the right
+   edge drawn over that. */
 function KeycapStill({ className }: { className?: string }) {
   return (
     <span className={`relative block ${className ?? ""}`}>
       <span className="absolute inset-y-0 left-1/2 aspect-[9/16] -translate-x-1/2">
-        <img src="/images/easter-eggs/tung-tung-sahur-keycap-base.webp" alt="" className="absolute inset-x-0 bottom-0 mx-auto w-[61%] object-contain" />
-        <img src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp" alt="" className="absolute inset-x-0 bottom-[38%] mx-auto w-[78%] -translate-x-[3%] object-contain" />
+        <img src={KEYCAP_BASE} alt="" draggable={false} className="absolute inset-x-0 bottom-0 mx-auto w-[61%] object-contain" />
+        <img src={KEYCAP_TOP} alt="" draggable={false} className={KEYCAP_TOP_CLASS} />
+        <img src={KEYCAP_BASE} alt="" draggable={false} className="absolute inset-x-0 bottom-0 mx-auto w-[61%] object-contain" style={{ clipPath: "inset(12% 0 0 0)" }} />
+        <img src={KEYCAP_TOP} alt="" draggable={false} className={KEYCAP_TOP_CLASS} style={{ clipPath: "inset(0 70% 0 0)" }} />
+        <img src={KEYCAP_TOP} alt="" draggable={false} className={KEYCAP_TOP_CLASS} style={{ clipPath: "inset(0 0 0 84%)" }} />
       </span>
     </span>
   );

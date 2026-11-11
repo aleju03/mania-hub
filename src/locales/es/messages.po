@@ -2284,24 +2284,32 @@ msgid "{years}y ago"
 msgstr "hace {years}y"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**+214pp**  now 10,026pp"
-msgstr "**+214pp**  ahora 10,026pp"
+#~ msgid "**+214pp**  now 10,026pp"
+#~ msgstr "**+214pp**  ahora 10,026pp"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**1** goal completed"
-msgstr "**1** meta completada"
+#~ msgid "**1** goal completed"
+#~ msgstr "**1** meta completada"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**186** plays"
-msgstr "**186** plays"
+#~ msgid "**186** plays"
+#~ msgstr "**186** plays"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**4** new top plays"
-msgstr "**4** mejores jugadas nuevas"
+msgid "**186** plays  **4** new top plays  **1** goal completed"
+msgstr "**186** plays  **4** top plays nuevas  **1** meta completada"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**A player** pulled your card"
-msgstr "**Un jugador** sacó tu carta"
+#~ msgid "**4** new top plays"
+#~ msgstr "**4** mejores jugadas nuevas"
+
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "**A player** pulled your card"
+#~ msgstr "**Un jugador** sacó tu carta"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "**ExamplePlayer** pulled your card"
+msgstr "**ExamplePlayer** sacó tu carta"
 
 #: src/routes/discord.tsx
 msgid "/challenge"
@@ -3267,8 +3275,12 @@ msgid "97%, on ScoreV2 accuracy"
 msgstr "97%, con acc de ScoreV2"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
-msgstr "Un modelo .glb (hasta 100.000 triángulos, con las texturas adentro) o una imagen, de hasta 10 MB. Aparece en tu perfil al instante. Cuando se revise, puede sumarse a esta lista para todos, con tu nombre."
+#~ msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
+#~ msgstr "Un modelo .glb (hasta 100.000 triángulos, con las texturas adentro) o una imagen, de hasta 10 MB. Aparece en tu perfil al instante. Cuando se revise, puede sumarse a esta lista para todos, con tu nombre."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A .glb model (up to 100,000 triangles, textures inside it), an image or a GIF, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
+msgstr "Un modelo .glb (hasta 100.000 triángulos, con las texturas adentro), una imagen o un GIF, de hasta 10 MB. Aparece en tu perfil al instante. Cuando se revise, puede sumarse a esta lista para todos, con tu nombre."
 
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
@@ -5423,6 +5435,10 @@ msgstr "mejor {best}%"
 #: src/components/me/GoalsPanel.tsx
 msgid "best {best}pp"
 msgstr "mejor {best}pp"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Best **412pp** on Example Song [Hard]"
+msgstr "Mejor play: **412pp** en Example Song [Hard]"
 
 #: src/lib/pack-run.ts
 msgid "Best card"
@@ -8176,6 +8192,10 @@ msgstr "Tapa"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, general, tech, inverse and release on 7K LN, and all-round, technical, walls and speed on 4K LN. 6K has none for now."
 #~ msgstr "Cubiertas: jack, tech, speed y stamina en 4K regular, jack, tech, speed y stream en 7K regular, general, tech, inverse y release en 7K LN, y all-round, technical, walls y speed en 4K LN. 6K no tiene por ahora."
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "CR **#31**  up 2 from #33"
+msgstr "CR **#31**  subiste 2 desde el #33"
 
 #: src/lib/supporter-foils.ts
 msgid "Cracked ice"
@@ -17544,6 +17564,10 @@ msgstr "ahora"
 msgid "now {now}"
 msgstr "ahora {now}"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "now **10,026pp**"
+msgstr "ahora **10,026pp**"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "now #{nowRank}"
 msgstr "ahora #{nowRank}"
@@ -18295,16 +18319,20 @@ msgid "or pick someone else"
 msgstr "o elige a alguien más"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Or send in your own (can be 3D model or image) from your supporter page."
-msgstr "O sube el tuyo (puede ser un modelo 3D o una imagen) desde tu página de supporter."
-
-#: src/components/supporter/SupportShowcase.tsx
 #~ msgid "Or send in your own 3D model or image from your supporter page."
 #~ msgstr "O sube tu propio modelo 3D o imagen desde tu página de supporter."
 
 #: src/routes/recommendations.tsx
 msgid "or someone else"
 msgstr "o alguien más"
+
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "Or upload one yourself (a 3D model or an image) from your supporter page."
+#~ msgstr "O sube uno tú mismo (un modelo 3D o una imagen) desde tu página de supporter."
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Or upload one yourself (a 3D model, an image or a GIF) from your supporter page."
+msgstr "O sube uno tú mismo (un modelo 3D, una imagen o un GIF) desde tu página de supporter."
 
 #: src/components/supporter/KofiNameSteps.tsx
 msgid "Or write this as the message:"
@@ -23012,6 +23040,10 @@ msgstr "Set {index}"
 msgid "set {span} ago"
 msgstr "creado hace {span}"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Set 23 days ago"
+msgstr "Creada hace 23 días"
+
 #. placeholder {0}: formatDetailedTimeAgo(recentPlayAt, locale)
 #: src/routes/player/$username.tsx
 msgid "Set a play {0}"
@@ -27296,9 +27328,9 @@ msgstr "La votación acaba de cerrar."
 msgid "The week is yours."
 msgstr "La semana es tuya."
 
-#: src/routes/packs_.open.$token.tsx
-#~ msgid "Their collection"
-#~ msgstr "Su colección"
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Their collection"
+msgstr "Su colección"
 
 #: src/components/packs/CardCollectors.tsx
 msgid "Their copy"

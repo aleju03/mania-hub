@@ -401,8 +401,9 @@ export function NamesShowcase() {
 
 /* Submitted ones shown after the site's own, newest first. */
 const SHOWN_SUBMITTED = 8;
-/* The site's own models; the keycap stays a /supporter pick. */
-export const SHOWCASE_COMPANIONS = BUILT_IN_COMPANIONS.filter((entry) => entry.kind === "model");
+/* The site's own, the keycap tucked in after the paperclip rather than at an end. */
+export const SHOWCASE_COMPANIONS = BUILT_IN_COMPANIONS.filter((entry) => entry.kind === "model").flatMap((entry) =>
+  entry.id === "paperclip" ? [entry, ...BUILT_IN_COMPANIONS.filter((other) => other.kind === "keycap")] : [entry]);
 
 /* One companion standing on a stretch of the profile's rail, live (drag a
    model to turn it), and the rest as stills to tap through: the site's own,
@@ -465,7 +466,7 @@ export function CompanionsShowcase() {
             </button>
           ))}
         </div>
-        <p className="mt-3 text-[12px] text-osu-f1">{t`Or send in your own (can be 3D model or image) from your supporter page.`}</p>
+        <p className="mt-3 text-[12px] text-osu-f1">{t`Or upload one yourself (a 3D model, an image or a GIF) from your supporter page.`}</p>
       </div>
     </div>
   );
@@ -750,18 +751,21 @@ export function ClipShowcase() {
 const DM_GREEN = 0x88da20;
 const DM_PINK = 0xff66ab;
 
+const dmText = (content: string): DiscordComponentJson => ({ type: 10, content });
+// a link button without its url, so the preview draws it but it goes nowhere
+const dmLink = (label: string): DiscordComponentJson => ({ type: 2, style: 5, label });
+
 /* A DM in the bot's own layout (backend discord/dm-alerts.ts, weekly-recap.ts):
-   a container with the accent strip, its lines, and a link button. */
-function dmMessage(accent: number, lines: string[], button: string): DiscordMessageJson {
+   a container with the accent strip, text beside a thumbnail, then the rest. */
+function dmMessage(accent: number, lines: string[], image: string, rest: DiscordComponentJson[]): DiscordMessageJson {
   return {
     flags: FLAG_COMPONENTS_V2,
     components: [{
       type: 17,
       accent_color: accent,
       components: [
-        ...lines.map((content): DiscordComponentJson => (content === "---" ? { type: 14, divider: true, spacing: 1 } : { type: 10, content })),
-        { type: 14, divider: false, spacing: 2 },
-        { type: 1, components: [{ type: 2, style: 5, label: button, url: "https://mania-tracker.com" }] },
+        { type: 9, components: lines.map(dmText), accessory: { type: 11, media: { url: image } } },
+        ...rest,
       ],
     }],
   };
@@ -772,15 +776,26 @@ function dmMessage(accent: number, lines: string[], button: string): DiscordMess
 export function BotDmShowcase() {
   const { t } = useLingui();
   const reduced = useReducedMotion();
+  const you = useShowcaseViewer();
+  // the viewer's own card, as the bot attaches it; the site logo when signed out
+  const cardImage = you.id ? `/api/og?kind=maniacard&username=${encodeURIComponent(you.name)}` : you.avatar;
   const messages = [
-    dmMessage(DM_GREEN, [`-# ${t`Goal completed`}`, `**${t`Reach 10,000 total pp`}**`], t`Your goals`),
-    dmMessage(DM_GREEN, [t`**A player** pulled your card`, `-# Legendary  ${t`the first copy anyone has pulled`}`], t`Packs`),
+    dmMessage(DM_GREEN, [`-# ${t`Goal completed`}`, `### ${t`Reach 10,000 total pp`}`, `-# ${t`Set 23 days ago`}`], you.avatar, [
+      { type: 1, components: [dmLink(t`Your goals`)] },
+    ]),
+    dmMessage(DM_GREEN, [t`**ExamplePlayer** pulled your card`, `-# ${t`the first copy anyone has pulled`}`], cardImage, [
+      { type: 1, components: [dmLink(t`Their collection`), dmLink(t`Packs`)] },
+    ]),
     dmMessage(DM_PINK, [
       `-# ${t`Your week  Nov 3 to Nov 9`}`,
-      `${t`**+214pp**  now 10,026pp`}\n${t`Global **#4,108**  up 312 from #4,420`}`,
-      "---",
-      `${t`**186** plays`}\n${t`**4** new top plays`}\n${t`**1** goal completed`}\n${t`Your card was pulled **12** times`}`,
-    ], t`Your profile`),
+      "## +214pp",
+      `${t`now **10,026pp**`}\n${t`Global **#4,108**  up 312 from #4,420`}\n${t`CR **#31**  up 2 from #33`}`,
+    ], you.avatar, [
+      { type: 14, divider: true, spacing: 1 },
+      dmText(`${t`**186** plays  **4** new top plays  **1** goal completed`}\n${t`Best **412pp** on Example Song [Hard]`}\n${t`Your card was pulled **12** times`}`),
+      { type: 14, divider: false, spacing: 2 },
+      { type: 1, components: [dmLink(t`Your profile`)] },
+    ]),
   ];
   return (
     <div>

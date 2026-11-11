@@ -2296,24 +2296,32 @@ msgid "{years}y ago"
 msgstr "{years} 年前"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**+214pp**  now 10,026pp"
-msgstr "**+214pp**  现在 10,026pp"
+#~ msgid "**+214pp**  now 10,026pp"
+#~ msgstr "**+214pp**  现在 10,026pp"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**1** goal completed"
-msgstr "完成了 **1** 个目标"
+#~ msgid "**1** goal completed"
+#~ msgstr "完成了 **1** 个目标"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**186** plays"
-msgstr "**186** 次游玩"
+#~ msgid "**186** plays"
+#~ msgstr "**186** 次游玩"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**4** new top plays"
-msgstr "**4** 个新的最佳成绩"
+msgid "**186** plays  **4** new top plays  **1** goal completed"
+msgstr "**186** 次游玩  **4** 个新的最佳成绩  完成 **1** 个目标"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**A player** pulled your card"
-msgstr "**一名玩家** 抽到了你的卡片"
+#~ msgid "**4** new top plays"
+#~ msgstr "**4** 个新的最佳成绩"
+
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "**A player** pulled your card"
+#~ msgstr "**一名玩家** 抽到了你的卡片"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "**ExamplePlayer** pulled your card"
+msgstr "**ExamplePlayer** 抽到了你的卡片"
 
 #: src/routes/discord.tsx
 msgid "/challenge"
@@ -3279,8 +3287,12 @@ msgid "97%, on ScoreV2 accuracy"
 msgstr "97%，按 ScoreV2 准确率"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
-msgstr "一个 .glb 模型（最多 100,000 个三角面，贴图需内嵌）或一张图片，最大 10 MB。提交后会立即显示在你的个人资料上。审核通过后，可能会加入这个列表供所有人使用，并署上你的名字。"
+#~ msgid "A .glb model (up to 100,000 triangles, textures inside it) or an image, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
+#~ msgstr "一个 .glb 模型（最多 100,000 个三角面，贴图需内嵌）或一张图片，最大 10 MB。提交后会立即显示在你的个人资料上。审核通过后，可能会加入这个列表供所有人使用，并署上你的名字。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "A .glb model (up to 100,000 triangles, textures inside it), an image or a GIF, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
+msgstr "一个 .glb 模型（最多 100,000 个三角面，贴图需内嵌）、一张图片或一个 GIF，最大 10 MB。提交后会立即显示在你的个人资料上。审核通过后，可能会加入这个列表供所有人使用，并署上你的名字。"
 
 #. placeholder {0}: formatDan(clear.chartDanLabel)
 #. placeholder {1}: formatDan(clear.creditedDanLabel)
@@ -5435,6 +5447,10 @@ msgstr "最好 {best}%"
 #: src/components/me/GoalsPanel.tsx
 msgid "best {best}pp"
 msgstr "最好 {best}pp"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Best **412pp** on Example Song [Hard]"
+msgstr "最佳 **412pp**，Example Song [Hard]"
 
 #: src/lib/pack-run.ts
 msgid "Best card"
@@ -8188,6 +8204,10 @@ msgstr "Cover"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, general, tech, inverse and release on 7K LN, and all-round, technical, walls and speed on 4K LN. 6K has none for now."
 #~ msgstr "覆盖范围：4K 常规的叠、技、速度和耐力，7K 常规的叠、技、速度和切，7K LN 的综合、技、反键和放手，以及 4K LN 的全能、技、条墙和速度。6K 目前没有。"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "CR **#31**  up 2 from #33"
+msgstr "CR **#31**  上升 2 名（原 #33）"
 
 #: src/lib/supporter-foils.ts
 msgid "Cracked ice"
@@ -17556,6 +17576,10 @@ msgstr "当前"
 msgid "now {now}"
 msgstr "当前 {now}"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "now **10,026pp**"
+msgstr "现在 **10,026pp**"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "now #{nowRank}"
 msgstr "当前第 {nowRank} 名"
@@ -18307,16 +18331,20 @@ msgid "or pick someone else"
 msgstr "或选择其他玩家"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Or send in your own (can be 3D model or image) from your supporter page."
-msgstr "也可以在你的支持者页面上传自己的（3D 模型或图片都行）。"
-
-#: src/components/supporter/SupportShowcase.tsx
 #~ msgid "Or send in your own 3D model or image from your supporter page."
 #~ msgstr "也可以在你的支持者页面上传自己的 3D 模型或图片。"
 
 #: src/routes/recommendations.tsx
 msgid "or someone else"
 msgstr "或其他玩家"
+
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "Or upload one yourself (a 3D model or an image) from your supporter page."
+#~ msgstr "也可以在你的支持者页面自己上传一个（3D 模型或图片都行）。"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Or upload one yourself (a 3D model, an image or a GIF) from your supporter page."
+msgstr "也可以在你的支持者页面自己上传一个（3D 模型、图片或 GIF 都行）。"
 
 #: src/components/supporter/KofiNameSteps.tsx
 msgid "Or write this as the message:"
@@ -23024,6 +23052,10 @@ msgstr "第 {index} 组"
 msgid "set {span} ago"
 msgstr "{span}前打出"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Set 23 days ago"
+msgstr "23 天前设定"
+
 #. placeholder {0}: formatDetailedTimeAgo(recentPlayAt, locale)
 #: src/routes/player/$username.tsx
 msgid "Set a play {0}"
@@ -27308,9 +27340,9 @@ msgstr "投票刚刚结束。"
 msgid "The week is yours."
 msgstr "这一周归你了。"
 
-#: src/routes/packs_.open.$token.tsx
-#~ msgid "Their collection"
-#~ msgstr "TA 的收藏册"
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Their collection"
+msgstr "TA 的收藏册"
 
 #: src/components/packs/CardCollectors.tsx
 msgid "Their copy"

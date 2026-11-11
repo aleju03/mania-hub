@@ -2,8 +2,8 @@
 // supporter submits, a 3D model (.glb) or an image. Kept out of the route file
 // so it can be tested with plain Request objects.
 //
-// An image is never stored as sent: decoded, flattened to its first frame,
-// fitted inside 512px and re-encoded as WebP. A model is stored as sent once
+// An image is never stored as sent: decoded, fitted inside 512px and
+// re-encoded as WebP, an animated one with all its frames. A model is stored as sent once
 // checkGlb passes it (self-contained binary glTF, no codec the site lacks, a
 // triangle cap). Both go into the public bucket under companions/, content
 // addressed; the backend only accepts a submission whose URL has that shape.
@@ -42,13 +42,16 @@ async function isActiveSupporter(userId: number): Promise<boolean> {
   return body?.supporter === true;
 }
 
-/* First frame, upright, fitted inside the output square, WebP with alpha. */
+/* Upright, fitted inside the output square, WebP with alpha. An animated GIF
+   or WebP keeps every frame and its timing, so it plays wherever it shows. */
 export async function convertCompanionImage(buffer: Buffer): Promise<Buffer> {
   const sharp = (await import("sharp")).default;
-  return sharp(buffer, { animated: false, limitInputPixels: 40_000_000 })
-    .rotate()
+  const { pages = 1 } = await sharp(buffer, { limitInputPixels: 40_000_000 }).metadata();
+  const animated = pages > 1;
+  const image = sharp(buffer, { animated, limitInputPixels: 40_000_000 });
+  return (animated ? image : image.rotate())
     .resize(IMAGE_SIZE, IMAGE_SIZE, { fit: "inside", withoutEnlargement: true })
-    .webp({ quality: 88, alphaQuality: 90 })
+    .webp({ quality: animated ? 80 : 88, alphaQuality: 90 })
     .toBuffer();
 }
 
