@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown, Plus, X } from "lucide-react";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DiscordTabs } from "../components/discord/DiscordTabs";
@@ -545,7 +545,7 @@ function FeedPlayerPicker({ players, onChange, label, emptyLabel, disabled = fal
       <span className="mr-1">{label ?? <Trans>Players</Trans>}</span>
       {players.length === 0 ? <span className="text-osu-l2">{emptyLabel ?? <Trans>Everyone</Trans>}</span> : null}
       {players.map((player) => (
-        <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-osu-b5 py-0.5 pl-1 pr-1.5 text-[12px] font-semibold text-white">
+        <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.07] py-1 pl-1.5 pr-2 text-[13px] font-semibold text-white">
           {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
           {player.username}
           <button
@@ -561,6 +561,7 @@ function FeedPlayerPicker({ players, onChange, label, emptyLabel, disabled = fal
       ))}
       {players.length < MAX_FEED_PLAYERS && !disabled ? (
         <div className="relative">
+          <Plus className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-l2" />
           <input
             value={query}
             onChange={(event) => { setQuery(event.target.value.slice(0, 30)); setOpen(true); }}
@@ -568,7 +569,7 @@ function FeedPlayerPicker({ players, onChange, label, emptyLabel, disabled = fal
             onBlur={() => setTimeout(() => setOpen(false), 150)}
             onKeyDown={(event) => { if (event.key === "Enter" && options[0]) add(options[0]); }}
             placeholder={t`Add a player`}
-            className="w-36 rounded-md bg-osu-b5 px-2 py-0.5 text-[12px] text-white outline-none placeholder:text-osu-f1 focus:ring-1 focus:ring-osu-pink/60"
+            className="w-40 rounded-md bg-white/[0.07] py-1 pl-7 pr-2 text-[13px] text-white outline-none transition-colors placeholder:font-semibold placeholder:text-osu-l2 hover:bg-white/[0.1] focus:bg-white/[0.1] focus:ring-1 focus:ring-osu-pink/60"
           />
           {open && options.length ? (
             <div className="absolute left-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-lg bg-osu-b3 py-1 shadow-lg">
