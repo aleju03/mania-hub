@@ -505,6 +505,7 @@ export function ChainButtons({ items, compact = false, big = false }: { items: C
       <motion.button
         key={item.key}
         type="button"
+        data-chain-button={item.key}
         title={item.title}
         aria-label={item.title}
         disabled={item.disabled}

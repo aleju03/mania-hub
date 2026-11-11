@@ -3677,6 +3677,10 @@ msgstr "显示玩家正在游玩谱面的个人资料"
 msgid "A rating is not supported for this chart or mod combination."
 msgstr "此谱面或模组组合暂不支持评级。"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "A real run starts by picking cards from three packs, and goes on for 12 rounds, with a shop between them where your shards buy packs, scene cards and mods."
+msgstr "正式挑战从三个卡包中挑卡开始，一共 12 个回合，回合之间有商店，可以用碎片购买卡包、场景卡和模组。"
+
 #: src/routes/terms.tsx
 msgid "A refund, whether made on request, through the platform itself or by a chargeback, removes the supporter time the payment bought."
 msgstr "无论是应请求退款、通过支付平台本身退款还是拒付，都会扣除该笔付款购买的支持者时长。"
@@ -5175,6 +5179,7 @@ msgstr "返回"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/packs/run/chain/ChainHowTo.tsx
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -5474,6 +5479,14 @@ msgstr "成为支持者"
 #: src/components/prism/PrismUpdates.tsx
 msgid "Before v26, letting go of a long note counted the same no matter what the rest of your hand was doing. Now a release counts for less when that hand isn't pressing or letting go of anything else around the same time. This mostly lowers slow charts made of long holds."
 msgstr "在 v26 之前，不管同一只手的其他手指在做什么，长条放手的难度都一样。现在，如果这只手在放手前后没有按下或松开别的键，这次放手的难度就会降低。受影响最大的是由长条组成的慢速谱面。"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Before you build your own row: a shared keymode or rarity alone doesn't link."
+msgstr "排之前先记住：只共享键数或稀有度不算连线。"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Before you build your own row: on {name}, {main} is the main skillset and {second} the second one. {second} only links with another card's second skillset, and a shared keymode or rarity alone doesn't link."
+msgstr "排之前先记住：在 {name} 上，{main} 是主技能组，{second} 是第二技能组。{second} 只能和别的卡的第二技能组相连；只共享键数或稀有度不算连线。"
 
 #: src/lib/pack-run.ts
 msgid "Beginner"
@@ -6942,6 +6955,10 @@ msgstr "以 {courseAccuracy} 通过了 {courseName}。"
 #: src/routes/rankings.tsx
 msgid "Clears"
 msgstr "通过"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Clears pay shards to spend in the shop. Skip it this time."
+msgstr "通过回合会获得碎片，可以在商店里花。这次先跳过。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
@@ -9596,6 +9613,10 @@ msgstr "每张练习谱面都带一个目标，要在原速下打到你在谱面
 msgid "Each release in a passage, labelled with the share of its v25 cost it keeps in v26"
 msgstr "一段中的每次放手，标注其在 v26 中保留的 v25 难度比例"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Each round has a score to reach, and 3 rows to reach it. This one needs {target}."
+msgstr "每个回合都有一个目标分数，你有 3 排来达到它。这一回合需要 {target}。"
+
 #: src/lib/chain-run.ts
 msgid "Each row starts with the combo the last row ended on. A break still resets it."
 msgstr "每排从上一排结束时的连击开始。断连仍会清零。"
@@ -10797,6 +10818,10 @@ msgstr "卡面"
 #: src/lib/chain-run.ts
 msgid "Finish at {0}x the target or more."
 msgstr "以目标的 {0} 倍或更高结束。"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Finish the round with rows of your own."
+msgstr "用你自己排的排来完成这一回合。"
 
 #: src/lib/pack-run.ts
 msgid "Finishes are three times as likely."
@@ -13982,6 +14007,10 @@ msgstr "排行榜和你的个人资料"
 msgid "Leather"
 msgstr "皮革"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Leave"
+msgstr "离开"
+
 #: src/components/communities/CommunityEditModal.tsx
 msgid "leave empty to keep the current one"
 msgstr "留空则保留当前链接"
@@ -16313,6 +16342,7 @@ msgstr "最新的最佳成绩"
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/GiftInbox.tsx
 #: src/components/packs/run/chain/ChainHowTo.tsx
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/components/ui/Pagination.tsx
 msgid "Next"
@@ -17750,6 +17780,14 @@ msgstr "当前 {now}"
 msgid "now #{nowRank}"
 msgstr "当前第 {nowRank} 名"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+#~ msgid "Now build a row yourself from cards that share something, and play it. A pair that shares nothing breaks the combo."
+#~ msgstr ""
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Now build a row yourself: line up cards that share a country, a dan or a skillset, and play it. A pair that shares none of them breaks the combo."
+msgstr "现在自己排一排：把国家、段位或技能组相同的卡排在一起，然后打出。两张卡什么都不共享就会断掉连击。"
+
 #. placeholder {0}: formatChainX(ascension)
 #. placeholder {0}: formatChainX(chainSceneMultiplier({ scenes: [scene] }, scene.id))
 #: src/components/packs/run/chain/ChainDetails.tsx
@@ -18701,6 +18739,10 @@ msgstr "其他人可以使用和改编"
 msgid "Out of {0} copies numbered so far."
 msgstr "目前共编号 {0} 份。"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Out of rows"
+msgstr "排数用完了"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Out of that pool, a play counts as a clear if it passed at or above the accuracy the real course asks for. Each ladder sets its own bar, so the site uses each ladder's:"
 #~ msgstr "在这个池子里，一个成绩要达到或超过真实课题要求的准确率才算通过。每张段位表自己定这条线，所以本站按各自的来："
@@ -19545,6 +19587,14 @@ msgstr "开始第 {0} 回合"
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Play row"
 msgstr "打出这一排"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Play the row. Each card scores its number times the combo."
+msgstr "打出这一排。每张卡的得分是它的数字乘以连击。"
+
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Play the tutorial"
+msgstr "玩教程"
 
 #: src/routes/recommendations.tsx
 msgid "play this"
@@ -21300,6 +21350,10 @@ msgstr "重抽"
 msgid "Redraw ({0} left)"
 msgstr "重抽（剩 {0}）"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Redraw swaps the cards in the row for new ones from your deck."
+msgstr "重抽会把这一排的卡换成你牌组里的新卡。"
+
 #: src/lib/chain-run.ts
 msgid "Redraws"
 msgstr "重抽次数"
@@ -22235,6 +22289,10 @@ msgstr "第 {round} 回合卡包"
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "Round cleared"
 msgstr "回合通过"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Round cleared. Keep one of these cards for your deck."
+msgstr "回合通过。从这些卡里留一张放进你的牌组。"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Rounded"
@@ -24403,6 +24461,10 @@ msgstr "跳过动画"
 msgid "Skip to the score"
 msgstr "跳到分数"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Skip tutorial"
+msgstr "跳过教程"
+
 #: src/lib/pack-run.ts
 msgid "Skipping songs is not available yet."
 msgstr "暂不支持跳过曲目。"
@@ -25053,6 +25115,7 @@ msgid "Start"
 msgstr "开始"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "Start a run"
 msgstr "开始挑战"
 
@@ -25797,6 +25860,10 @@ msgstr "点「卡片」放下一张，点你的卡牌可以编辑，长按卡堆
 msgid "Tap the stack or drag the top card to draw"
 msgstr "点击卡堆，或拖走最上面的卡片来抽卡"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "Tap this card to put it in the row."
+msgstr "点这张卡，把它放进这一排。"
+
 #: src/components/supporter/loadout.ts
 msgid "Taped page"
 msgstr "胶带纸页"
@@ -26297,6 +26364,10 @@ msgstr "一分钟内保存次数太多了，请稍等片刻再保存。"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
 #~ msgstr "这超出了此浏览器一次能导出的长度。请选择更短的范围或更低的预设。"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "That's Overjoy"
+msgstr "这就是 Overjoy"
 
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
@@ -27280,6 +27351,10 @@ msgstr "反馈已提交，但至少有一个文件没能上传。"
 #~ msgid "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
 #~ msgstr ""
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "The round ran out of rows before the target. Try it again: line up cards that share more."
+msgstr "排数用完了，还没达到目标。再试一次：把共享更多特征的卡排在一起。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "the same 96% and 95%"
 #~ msgstr "同样是 96% 和 95%"
@@ -27528,6 +27603,10 @@ msgstr "最高段位"
 msgid "The tracked player pool is too small to play right now."
 msgstr "已追踪的玩家池太小，现在还玩不了。"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "The tutorial can't load right now. Try again in a moment."
+msgstr "教程暂时无法加载，请稍后再试。"
+
 #: src/components/replay/ShareClipButton.tsx
 msgid "The upload didn't go through."
 msgstr "上传失败。"
@@ -27667,6 +27746,10 @@ msgstr "还有一个多押练习器，练同一只手上的两个键。它会显
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "这些估算都不是真正的段位通过，这里的玩家都没有接受过段位课题认定。取而代之的是，每张谱面都会得到自己的段位，再根据你已经通过的谱面推算你的水平。因此，每个估算段位前都会带「~」，排行榜也因此只被称作粗略排序。"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "These fit the map, and share a skillset, so they link too. Build a row with them and play it."
+msgstr "这些卡符合地图，而且技能组相同，所以也能连上。用它们排一排并打出。"
+
 #. placeholder {0}: forgeTierLabel(forgeSelection.targetTier)
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "These five become one {0} card."
@@ -27691,6 +27774,14 @@ msgstr "这两个成绩来自不同谱面。并排观看需要同一张谱面的
 #: src/components/replay/ReplayControls.tsx
 msgid "These settings exceed this browser's export limit. Choose a shorter range, lower preset, or lower bitrate."
 msgstr "这些设置超出了此浏览器的导出限制。请缩短片段、降低分辨率或降低码率。"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+#~ msgid "These two aren't {fits}. Put them in the row."
+#~ msgstr "这两张不是 {fits}。把它们放进这一排。"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "These two don't fit the map. Put them in the row to swap them out."
+msgstr "这两张不符合地图。把它们放进这一排，换掉它们。"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "These two share nothing."
@@ -27784,6 +27875,10 @@ msgstr "这个浏览器无法保存到你选择的文件，所以视频改为下
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "This card already wears that finish."
 #~ msgstr "这张卡片已经使用该外观。"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "This card is from the same country, so the two link. Put it next."
+msgstr "这张卡来自同一个国家，所以两张能连上。把它放在旁边。"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "This card is no longer available. Refresh your collection."
@@ -27982,6 +28077,10 @@ msgstr "本月"
 msgid "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
 msgstr "这个较早的 {selectedKeymode}K 预览是在保存渲染选项之前生成的。第一次重新渲染需要重新选择背景和键型，之后的编辑会保留这两项。"
 
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "This one shares a skillset and a dan with the last card. The more two cards share, the more the combo goes up."
+msgstr "这张和上一张的技能组、段位都相同。两张卡共享得越多，连击涨得越多。"
+
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "This open is gone"
 #~ msgstr "这次开包已不存在"
@@ -28093,6 +28192,10 @@ msgstr "这个请求已经处理过了，请从应用中重新发起连接。"
 #: src/components/packs/run/chain/ChainRoundChart.tsx
 msgid "This round is set on {0} [{1}]. {fits} cards score x{2}."
 msgstr "本回合的谱面是 {0} [{1}]。{fits} 卡得分 x{2}。"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+msgid "This round is set on a map. {fits} cards score x1.25."
+msgstr "这一回合设在一张地图上。{fits} 卡得分 x1.25。"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -28730,6 +28833,7 @@ msgstr "试试更大的范围，或稍后再来。"
 
 #: src/components/BackendOfflineScreen.tsx
 #: src/components/packs/GiftSpareDialog.tsx
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryGraph.tsx
@@ -28863,6 +28967,10 @@ msgstr "把音符变成填满其间空隙的长条。"
 msgid "Turntable"
 msgstr "唱盘"
 
+#: src/components/packs/run/chain/ChainHowTo.tsx
+msgid "Tutorial"
+msgstr "教程"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Twenty is enough that a few lucky passes cannot carry it. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 #~ msgstr "20 次足够多，几次运气好的通过撑不起来。达标通过不足 20 次时，就取你现有的求平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
@@ -28902,6 +29010,10 @@ msgstr "两个国家/地区各两张卡片。"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account."
 #~ msgstr "两名玩家并排对比：pp 与排名、最好成绩以及 4K/7K 构成，最后是 pp 差距。省略第一个用户名就用你关联的账号来对比。"
+
+#: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
+#~ msgid "Two rules before you build your own row: a shared keymode or rarity alone doesn't link, and a second skillset (the one after the bar) only links with another second skillset."
+#~ msgstr "排之前有两条规则：只共享键数或稀有度不算连线；第二技能组（竖线后面那个）只能和另一张卡的第二技能组相连。"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Type"

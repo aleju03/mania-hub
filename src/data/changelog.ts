@@ -48,25 +48,25 @@ export const WIP: string[] = [];
 /** A heading over one release day's updates, for the milestone the update
     celebrates, with a spinning mascot on each side. */
 export interface ChangelogCelebration {
-  /** The words before the numbers. */
-  lead: string;
-  /** The number it was going to be, struck through. */
-  was: string;
-  /** The number reached, and what it counts. */
-  now: string;
+  /** The heading as it was first written, e.g. "WE REACHED 10K USERS!!". */
+  title: string;
+  /** The word in the title the aside follows. */
+  asideAfter: string;
+  /** A quiet note in brackets after it: the number reached since. */
+  aside: string;
   /** The line under it. */
   line: string;
 }
 
 /** Keyed by the release day the heading sits over. */
 export const CELEBRATIONS: Record<string, ChangelogCelebration> = {
-  "2026-11-09": { lead: "WE REACHED", was: "10K", now: "12K USERS!!", line: "Here's a big update to celebrate :D" },
+  "2026-11-09": { title: "WE REACHED 10K USERS!!", asideAfter: "10K", aside: "now 12K", line: "Here's a big update to celebrate :D" },
 };
 
 export const UPDATES: ChangelogUpdate[] = [
   {
     date: "2026-11-09",
-    text: "There's now a supporter status that unlocks cosmetics for your profile, your name and your cards.",
+    text: "Dedicated to everyone who supported even when there were no perks in return, there's now a supporter status that unlocks cosmetics for your profile, your name and your cards.",
     bold: "supporter status",
     kind: "new",
     to: "/support",
@@ -87,19 +87,6 @@ export const UPDATES: ChangelogUpdate[] = [
     more: [
       { text: "Themes are built from layers like pictures, particles, fog and stars, or written in GLSL. A Shadertoy shader can be pasted in." },
       { text: "The gallery has the themes other supporters made." },
-    ],
-  },
-  {
-    date: "2026-11-09",
-    text: "There's now a Discord bot. Add it to a server or to your own Discord account from the new Discord page.",
-    bold: "Discord bot",
-    kind: "new",
-    to: "/discord",
-    more: [
-      { text: "/profile, /recent, /top, /skills and /maniacard show a player's plays, dans and skill ratings. /map shows a chart's dan, rating and skillsets at any rate, and /compare shows your best score on the last map posted in the channel." },
-      { text: "/farm finds maps likely to give pp, /challenge picks a random map near your dan with the accuracy you need to clear it, and /rankings shows a country's or the world's rankings." },
-      { text: "Channels can follow top plays, new farm maps and this changelog, set up on the Discord page." },
-      { text: "Link your osu! account with /link or on the Discord page, so commands work without typing a name." },
     ],
   },
   {
@@ -126,6 +113,19 @@ export const UPDATES: ChangelogUpdate[] = [
     image: { src: "/images/changelog/2026-11-09-board-cards.webp", alt: "Cards laid on the Board, with the tools above and your cards on the right", width: 640, height: 348 },
     more: [
       { text: "A brush lays your cards along your stroke, and Snap to grid helps with pixel art." },
+    ],
+  },
+  {
+    date: "2026-11-09",
+    text: "There's also a Discord bot. Add it to a server or to your own Discord account from the new Discord page.",
+    bold: "Discord bot",
+    kind: "new",
+    to: "/discord",
+    more: [
+      { text: "/profile, /recent, /top, /skills and /maniacard show a player's plays, dans and skill ratings. /map shows a chart's dan, rating and skillsets at any rate, and /compare shows your best score on the last map posted in the channel." },
+      { text: "/farm finds maps likely to give pp, /challenge picks a random map near your dan with the accuracy you need to clear it, and /rankings shows a country's or the world's rankings." },
+      { text: "Channels can follow top plays, new farm maps and this changelog, set up on the Discord page." },
+      { text: "Link your osu! account with /link or on the Discord page, so commands work without typing a name." },
     ],
   },
   { date: "2026-11-09", text: "Every copy of a card has its own number. A gifted copy keeps its number and who pulled it.", kind: "new", to: "/packs", image: { src: "/images/changelog/2026-11-09-card-back-number.webp", alt: "The back of a card with its copy number, 1 of 1558", width: 240, height: 356 } },

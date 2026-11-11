@@ -72,7 +72,7 @@ function Face({ card, lit, width, playedCover }: { card: ChainCard; lit?: string
   );
 }
 
-export function ChainHowTo({ open, narrow, onClose }: { open: boolean; narrow: boolean; onClose: () => void }) {
+export function ChainHowTo({ open, narrow, onClose, onTutorial }: { open: boolean; narrow: boolean; onClose: () => void; onTutorial?: () => void }) {
   const { t } = useLingui();
   const [page, setPage] = useState(0);
   const w = narrow ? 74 : 120;
@@ -221,7 +221,9 @@ export function ChainHowTo({ open, narrow, onClose }: { open: boolean; narrow: b
                 items={[
                   ...(page > 0
                     ? [{ key: "back", label: <Trans>Back</Trans>, title: t`Back`, onClick: () => { runSound.uiTap(); setPage(page - 1); } }]
-                    : []),
+                    : onTutorial
+                      ? [{ key: "tutorial", label: <Trans>Tutorial</Trans>, title: t`Play the tutorial`, onClick: () => { runSound.uiTap(); onClose(); onTutorial(); } }]
+                      : []),
                   {
                     key: "next",
                     primary: true,

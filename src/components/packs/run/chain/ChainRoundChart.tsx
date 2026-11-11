@@ -15,6 +15,7 @@ export function RoundChartTag({ chart, compact = false }: { chart: ChainCard; co
   const stars = info.stars.toFixed(2);
   return (
     <div
+      data-chain-round-chart=""
       className="flex items-center gap-2.5 rounded-[12px] border-[2.5px] p-1 pr-3 leading-none"
       style={{ borderColor: KIT.cream, background: KIT.dark, boxShadow: "0 4px 0 rgba(0,0,0,0.45)" }}
       title={t`This round is set on ${chart.name} [${info.version}]. ${fits} cards score x${CHAIN_ROUND_CHART.skill}.`}

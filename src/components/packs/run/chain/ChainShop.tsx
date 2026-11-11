@@ -320,7 +320,7 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
     if (!outcome.ok) {
       shudder();
       runSound.refuse();
-      if (outcome.error !== "stale") {
+      if (outcome.error !== "stale" && outcome.error !== "coach") {
         setMessage(chainRefusalMessage(outcome.error ?? "failed", i18n));
         window.setTimeout(() => setMessage(null), SHOP_FEEL.messageMs);
       }
@@ -360,7 +360,7 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
     const outcome = await act({ kind: "sign", index });
     signsInFlight.current -= 1;
     if (signsInFlight.current === 0) setSignedNow(null);
-    if (!outcome.ok && outcome.error !== "stale") {
+    if (!outcome.ok && outcome.error !== "stale" && outcome.error !== "coach") {
       runSound.refuse();
       setMessage(chainRefusalMessage(outcome.error ?? "failed", i18n));
       window.setTimeout(() => setMessage(null), SHOP_FEEL.messageMs);

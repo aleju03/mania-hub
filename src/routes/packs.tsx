@@ -26,6 +26,7 @@ import { PackStage } from "../components/packs/PackStage";
 import { StreakGame } from "../components/packs/StreakGame";
 import { PackSummary } from "../components/packs/PackSummary";
 import { ChainTable } from "../components/packs/run/chain/ChainTable";
+import { ChainTutorial } from "../components/packs/run/chain/tutorial/ChainTutorial";
 import { useGuestChainRun } from "../components/packs/run/chain/useGuestChainRun";
 import { useChainRun } from "../components/packs/run/chain/useChainRun";
 import { usePackRun } from "../components/packs/run/usePackRun";
@@ -681,6 +682,8 @@ function PacksPage() {
      signed-out visitor plays a guest run in the browser. */
   /* The player's own run, or the daily run (same cards for everyone that day). */
   const [chainMode, setChainMode] = useState<ChainRunMode>("normal");
+  /* Overjoy's tutorial, in place of the run while it plays. */
+  const [chainTutorial, setChainTutorial] = useState(false);
   // a met Wallet contract pays the pack wallet on the server
   const ownChainApi = useChainRun(Boolean(auth.viewer) && isLiveBackendConfigured(), chainMode, walletApi.refreshServerWallet);
   const guestChainApi = useGuestChainRun(!auth.viewer && isLiveBackendConfigured());
@@ -1242,10 +1245,21 @@ function PacksPage() {
       {/* WebKit can flash missing backing-store tiles when transformed descendants
           animate below overflow:clip. The open-pack sequence owns several such
           transitions, so let the viewport own clipping until it returns home. */}
-      {runTableActive && (
+      {runTableActive && chainTutorial && (
+        <div className="ui-scale-fixed contents">
+          <ChainTutorial
+            reducedMotion={reducedMotion}
+            packThumbs={packThumbs}
+            onExit={() => setChainTutorial(false)}
+            onPlay={() => setChainTutorial(false)}
+          />
+        </div>
+      )}
+      {runTableActive && !chainTutorial && (
         // The game lays itself out at fixed sizes, so UI Scaling leaves it at 1x.
         <div className="ui-scale-fixed contents">
         <ChainTable
+          onTutorial={() => setChainTutorial(true)}
           // The own run and the daily run are separate tables: switching
           // starts the other one fresh, with nothing of this one on screen.
           key={auth.viewer ? chainMode : "guest"}

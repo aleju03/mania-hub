@@ -22,7 +22,12 @@ import type { ChainActOutcome, ChainRunApi } from "./useChainRun";
    the browser on a slice of the pool and kept in localStorage. Nothing of it
    reaches the server, so it pays no prizes and stands on no board. */
 
-const STORAGE_KEY = "mania-hub-overjoy-guest-v1";
+/* Two keys: the run (rewritten on every action, a few KB) and the cards it
+   deals from (a few hundred KB, rewritten only when a new run takes its
+   roster). v1 kept both in one key and rewrote it all on every action. */
+const RUN_KEY = "mania-hub-overjoy-guest-v2";
+const POOL_KEY = "mania-hub-overjoy-guest-pool-v2";
+const LEGACY_KEY = "mania-hub-overjoy-guest-v1";
 const GUEST_NAME = msg`You`;
 
 interface Saved {
@@ -37,29 +42,72 @@ interface Saved {
   lastRunNo: number;
 }
 
-function readSaved(): Saved | null {
+type SavedRun = Pick<Saved, "state" | "best" | "lastRunNo">;
+/* The cards, tagged with the run they were saved for. */
+type SavedPool = Pick<Saved, "cards" | "goats" | "charts"> & { runNo: number };
+
+const list = (value: unknown): ChainCard[] => (Array.isArray(value) ? (value as ChainCard[]) : []);
+
+function readKey(key: string): Record<string, unknown> | null {
+  const raw = window.localStorage.getItem(key);
+  return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+}
+
+function writeKey(key: string, value: unknown): boolean {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<Saved>;
-    return {
-      state: parsed.state ? normalizeChainRunState(parsed.state) : null,
-      cards: Array.isArray(parsed.cards) ? parsed.cards : [],
-      goats: Array.isArray(parsed.goats) ? parsed.goats : [],
-      charts: Array.isArray(parsed.charts) ? parsed.charts : [],
-      best: parsed.best ?? null,
-      lastRunNo: Number(parsed.lastRunNo) || 0,
-    };
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
-    return null;
+    // A full or blocked storage only loses the run on reload.
+    return false;
   }
 }
 
-function writeSaved(saved: Saved): void {
+function writePool(saved: Saved): boolean {
+  const pool: SavedPool = { cards: saved.cards, goats: saved.goats, charts: saved.charts ?? [], runNo: saved.state?.runNo ?? 0 };
+  return writeKey(POOL_KEY, pool);
+}
+
+function writeRun(saved: Saved): void {
+  const run: SavedRun = { state: saved.state, best: saved.best, lastRunNo: saved.lastRunNo };
+  writeKey(RUN_KEY, run);
+}
+
+function readSaved(): Saved | null {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    const legacy = readKey(LEGACY_KEY);
+    if (legacy) {
+      // A v1 save moves to the two keys once.
+      const moved: Saved = {
+        state: legacy.state ? normalizeChainRunState(legacy.state) : null,
+        cards: list(legacy.cards),
+        goats: list(legacy.goats),
+        charts: list(legacy.charts),
+        best: (legacy.best as Saved["best"]) ?? null,
+        lastRunNo: Number(legacy.lastRunNo) || 0,
+      };
+      if (writePool(moved)) {
+        writeRun(moved);
+        window.localStorage.removeItem(LEGACY_KEY);
+      }
+      return moved;
+    }
+    const run = readKey(RUN_KEY);
+    if (!run) return null;
+    const state = run.state ? normalizeChainRunState(run.state) : null;
+    const pool = readKey(POOL_KEY);
+    // Cards saved for another run don't belong to this one.
+    const ours = pool && state && Number(pool.runNo) === state.runNo ? pool : null;
+    return {
+      state,
+      cards: list(ours?.cards),
+      goats: list(ours?.goats),
+      charts: list(ours?.charts),
+      best: (run.best as Saved["best"]) ?? null,
+      lastRunNo: Number(run.lastRunNo) || 0,
+    };
   } catch {
-    // A full or blocked storage only loses the run on reload.
+    return null;
   }
 }
 
@@ -135,6 +183,7 @@ export function useGuestChainRun(enabled: boolean): ChainRunApi {
     const applied = applyChainAction(saved.state, action, { pool, seed: randomSeed(), now, lastRunNo: saved.lastRunNo });
     if (!applied.ok) return { ok: false, error: applied.error, view: saved.state ? chainRunView(saved.state) : null };
     const state = applied.state;
+    const newPool = action.kind === "start" && pool !== null;
     if (action.kind === "start" && pool) {
       poolRef.current = buildChainPool(rosterOf(state, pool), [...pool.goats], [...pool.charts]);
     }
@@ -155,7 +204,10 @@ export function useGuestChainRun(enabled: boolean): ChainRunApi {
       lastRunNo: Math.max(saved.lastRunNo, state.runNo),
     };
     savedRef.current = next;
-    writeSaved(next);
+    // The cards only change when a run starts. They are tagged with the run,
+    // so a reload never plays this run on another run's cards.
+    if (newPool) writePool(next);
+    writeRun(next);
     const nextView = chainRunView(state);
     setView(nextView);
     setSavedBest(best);

@@ -75,6 +75,17 @@ export interface ChainTableScript {
   /* The run's end plays its moment on mount. */
   fresh?: boolean;
   onSignal?: (signal: string) => void;
+  /* Play the table's music, as an unscripted table does. */
+  music?: boolean;
+}
+
+/* A guide steering the table (the tutorial): which row changes and actions
+   it allows right now. Refused ones do not happen. */
+export interface ChainCoach {
+  allowRow?: (next: readonly number[]) => boolean;
+  allowAct?: (action: ChainAction) => boolean;
+  /* The row as laid out, after every change. */
+  onRow?: (row: readonly number[]) => void;
 }
 
 export interface ChainTableProps {
@@ -95,6 +106,9 @@ export interface ChainTableProps {
   onMode?: (mode: ChainRunMode) => void;
   /* The viewer's own blade (a supporter's pick), for cutting packs open. */
   blade?: SupporterBladeId | null;
+  coach?: ChainCoach;
+  /* Opens the tutorial (from how to play). */
+  onTutorial?: () => void;
 }
 
 interface PlayState {
@@ -163,7 +177,10 @@ function useBoardBox() {
    owns the run; this replays what it answers and keeps only the row being
    arranged. */
 export function ChainTable(props: ChainTableProps) {
-  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, loadSheet, onExit, script, guest = false, mode = "normal", onMode, blade = null } = props;
+  const { view, best, busy, act, reducedMotion, packThumbs, loadBoard, loadSheet, onExit, script, guest = false, mode = "normal", onMode, blade = null, coach, onTutorial } = props;
+  const coachRef = useRef(coach);
+  coachRef.current = coach;
+  const rowAllowed = (next: readonly number[]) => !coachRef.current?.allowRow || coachRef.current.allowRow(next);
   const daily = mode === "daily";
   const { i18n, t } = useLingui();
   const [boxRef, box] = useBoardBox();
@@ -251,7 +268,7 @@ export function ChainTable(props: ChainTableProps) {
   /* The music runs under the whole table; a scripted table (the how-to
      demos and fixtures) stays without it. */
   useEffect(() => {
-    if (script) return;
+    if (script && !script.music) return;
     runSound.musicStart();
     return () => runSound.musicStop();
   }, [script]);
@@ -335,8 +352,12 @@ export function ChainTable(props: ChainTableProps) {
 
   const doAct = useCallback(
     async (action: ChainAction): Promise<ChainActOutcome> => {
+      if (coachRef.current?.allowAct && !coachRef.current.allowAct(action)) {
+        runSound.refuse();
+        return { ok: false, error: "coach", view: null };
+      }
       const outcome = await act(action);
-      if (!outcome.ok && outcome.error !== "stale") flash(chainRefusalMessage(outcome.error, i18n));
+      if (!outcome.ok && outcome.error !== "stale" && outcome.error !== "coach") flash(chainRefusalMessage(outcome.error, i18n));
       if (outcome.ok && outcome.result.wysi && outcome.result.kind !== "playRow") stampWysi(outcome.result.wysi);
       return outcome;
     },
@@ -479,7 +500,7 @@ export function ChainTable(props: ChainTableProps) {
       hideChainDetails();
       setRowUids((current) => {
         if (current.includes(uid)) return current;
-        if (current.length >= CHAIN_RULES.rowMax) {
+        if (current.length >= CHAIN_RULES.rowMax || !rowAllowed([...current, uid])) {
           runSound.refuse();
           return current;
         }
@@ -491,8 +512,15 @@ export function ChainTable(props: ChainTableProps) {
   );
   const toHand = useCallback((uid: number) => {
     hideChainDetails();
-    runSound.uiTap();
-    setRowUids((current) => current.filter((value) => value !== uid));
+    setRowUids((current) => {
+      const next = current.filter((value) => value !== uid);
+      if (!rowAllowed(next)) {
+        runSound.refuse();
+        return current;
+      }
+      runSound.uiTap();
+      return next;
+    });
   }, []);
   const dragRowRef = useRef<number[] | null>(null);
   const onDragRow = useCallback((row: number[] | null) => {
@@ -501,6 +529,9 @@ export function ChainTable(props: ChainTableProps) {
   }, []);
   const rowUidsRef = useRef(rowUids);
   rowUidsRef.current = rowUids;
+  useEffect(() => {
+    coachRef.current?.onRow?.(rowUids);
+  }, [rowUids]);
   /* Picks only live while arranging, and only for cards still in hand. */
   useEffect(() => {
     if (!arranging) {
@@ -513,7 +544,9 @@ export function ChainTable(props: ChainTableProps) {
   }, [arranging, handEntries]);
   const onDragEnd = useCallback(
     (uids: number[], handIndex: number | null) => {
-      const proposed = dragRowRef.current;
+      const dragged = dragRowRef.current;
+      const proposed = dragged && rowAllowed(dragged) ? dragged : null;
+      if (dragged && !proposed) runSound.refuse();
       dragRowRef.current = null;
       setDragRow(null);
       if (proposed) setRowUids(proposed);
@@ -602,6 +635,11 @@ export function ChainTable(props: ChainTableProps) {
     if (!group.length) return;
     hideChainDetails();
     const row = rowUidsRef.current;
+    const wanted = row.includes(group[0]) ? row.filter((uid) => !group.includes(uid)) : [...row, ...group.slice(0, Math.max(0, CHAIN_RULES.rowMax - row.length))];
+    if (!rowAllowed(wanted)) {
+      runSound.refuse();
+      return;
+    }
     if (row.includes(group[0])) {
       setRowUids(row.filter((uid) => !group.includes(uid)));
       setSelected([]);
@@ -653,6 +691,11 @@ export function ChainTable(props: ChainTableProps) {
         playShudder();
         runSound.refuse();
       }
+      return;
+    }
+    if (coachRef.current?.allowAct && !coachRef.current.allowAct({ kind: "playRow", uids: rowUids })) {
+      playShudder();
+      runSound.refuse();
       return;
     }
     hideChainDetails();
@@ -990,6 +1033,10 @@ export function ChainTable(props: ChainTableProps) {
 
   const shopAct = useCallback(
     async (action: ChainAction): Promise<ShopActResult> => {
+      if (coachRef.current?.allowAct && !coachRef.current.allowAct(action)) {
+        runSound.refuse();
+        return { ok: false, error: "coach" };
+      }
       const outcome = await act(action);
       return outcome.ok ? { ok: true, result: outcome.result } : { ok: false, error: outcome.error };
     },
@@ -1177,7 +1224,7 @@ export function ChainTable(props: ChainTableProps) {
           />
 
           <div ref={boxRef} className="relative min-h-0 flex-1">
-            <ChainHowTo open={howTo} narrow={narrow} onClose={() => setHowTo(false)} />
+            <ChainHowTo open={howTo} narrow={narrow} onClose={() => setHowTo(false)} onTutorial={onTutorial} />
             <AnimatePresence>
               {growPops.map((pop) => (
                 <motion.div

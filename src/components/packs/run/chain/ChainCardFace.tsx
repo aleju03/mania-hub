@@ -27,7 +27,8 @@ const SKILL_TEXT_W: Record<ChainCard["skill"], number> = {
   Chordstream: 13.4, Bracket: 40.5, Delay: 28.4,
 };
 /* The short skill codes a phone hand card falls back to. */
-const SKILL_CODE: Record<ChainCard["skill"], [string, number]> = {
+/* A skillset's short code on the face, and its width at the face's size. */
+export const SKILL_CODE: Record<ChainCard["skill"], [string, number]> = {
   Stream: ["Str", 14.7], Jumpstream: ["JS", 11.6], Handstream: ["HS", 14.7], Stamina: ["Sta", 15.3],
   Jack: ["Jk", 11.6], Chordjack: ["CJ", 13.4], Tech: ["Tec", 16.1], Speed: ["Spd", 18.4],
   Chordstream: ["CS", 13.4], Bracket: ["Brk", 18.4], Delay: ["Dly", 17.2],

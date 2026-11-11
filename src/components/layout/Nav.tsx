@@ -672,10 +672,11 @@ export function Nav() {
       {/* osu!-style dim behind an open nav dropdown: a band only as tall as the
           menu, dark under the navbar and fading to transparent, capped by a
           themed accent line marking its end. Sits below the header (z-50) so the
-          bar and dropdown stay bright. */}
+          bar and dropdown stay bright, and above the full-viewport game tables
+          (z-40) so it blurs them too. */}
       <div
         ref={dimRef}
-        className={`fixed inset-x-0 top-[60px] z-40 bg-gradient-to-b from-black/25 via-black/40 to-black/55 backdrop-blur-md transition-opacity duration-150 ${
+        className={`fixed inset-x-0 top-[60px] z-[45] bg-gradient-to-b from-black/25 via-black/40 to-black/55 backdrop-blur-md transition-opacity duration-150 ${
           openGroup ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         style={{ height: dimHeight }}
