@@ -435,18 +435,29 @@ function DynamicRendersAdminPage() {
                       looking at twice. Each thumbnail still opens the source. */}
                   {row.customImageUrls.length > 0 ? (
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <RowThumbnails userId={row.userId} count={row.customImageUrls.length} />
+                      <RowThumbnails key={row.customImageUrls.join("\n")} userId={row.userId} count={row.customImageUrls.length} />
                       <div className="flex flex-col gap-0.5">
                         {row.customImageUrls.map((url) => (
-                          <a
-                            key={url}
-                            href={url}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="max-w-[380px] truncate text-[11px] text-osu-l2 underline decoration-osu-b3 hover:text-white"
-                          >
-                            {url}
-                          </a>
+                          <div key={url} className="flex min-w-0 items-center gap-2">
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="max-w-[380px] truncate text-[11px] text-osu-l2 underline decoration-osu-b3 hover:text-white"
+                            >
+                              {url}
+                            </a>
+                            {/* One bad picture among several: drop just that one. */}
+                            {row.customImageUrls.length > 1 ? (
+                              <button
+                                disabled={busy === row.userId}
+                                onClick={() => void act(row.userId, () => clearSignatureImages({ data: { userId: row.userId, imageUrl: url } }))}
+                                className="flex-shrink-0 px-1.5 py-0.5 rounded bg-osu-b4/60 border border-osu-b3/30 text-[10px] text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 cursor-pointer"
+                              >
+                                Clear this
+                              </button>
+                            ) : null}
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -459,7 +470,7 @@ function DynamicRendersAdminPage() {
                         onClick={() => void act(row.userId, () => clearSignatureImages({ data: { userId: row.userId } }))}
                         className="px-2.5 py-1 rounded-md bg-osu-b4/60 border border-osu-b3/30 text-[11px] text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 cursor-pointer"
                       >
-                        Clear image
+                        {row.customImageUrls.length > 1 ? "Clear all images" : "Clear image"}
                       </button>
                     ) : null}
                     <button

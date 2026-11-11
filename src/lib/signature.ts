@@ -441,11 +441,12 @@ export const setSignatureBlocked = createServerFn({ method: "POST" })
 
 /** The proportionate one: drop the picture, leave the signature working. */
 export const clearSignatureImages = createServerFn({ method: "POST" })
-  .validator((input: { userId: number }) => input)
+  .validator((input: { userId: number; imageUrl?: string }) => input)
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     const response = await adminSignatureRequest("/api/admin/signatures/clear-images", {
       method: "POST",
-      body: { userId: data.userId },
+      // Without an imageUrl every picture goes; with one, only that one.
+      body: { userId: data.userId, imageUrl: data.imageUrl },
     });
     if (!response?.ok) return { ok: false };
     const body = await response.json().catch(() => null) as { purge?: SignaturePurgeTarget | null } | null;
