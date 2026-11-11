@@ -710,15 +710,20 @@ export function RevealStage({
   // Warm the avatar cache while the cards are still face-down: the texture
   // pipeline fetches each avatar on first draw, and a fresh pack is mostly
   // new players. Same crossOrigin mode as the texture loader so the cached
-  // response stays reusable for canvas work.
+  // response stays reusable for canvas work. A team card also draws its
+  // team's header, and a cold one is a proxy fetch + resize; left to the
+  // draw, those fetches run one at a time inside the paint queue.
   useEffect(() => {
     for (const card of cards) {
-      const src = card.player.team ? teamCardFace(card.player.team).flagUrl : maniaCardAvatarUrl(card.player.user);
-      if (!src) continue;
-      const image = new Image();
-      image.crossOrigin = "anonymous";
-      image.referrerPolicy = "no-referrer";
-      image.src = src;
+      const face = card.player.team ? teamCardFace(card.player.team) : null;
+      const sources = face ? [face.flagUrl, face.coverUrl] : [maniaCardAvatarUrl(card.player.user)];
+      for (const src of sources) {
+        if (!src) continue;
+        const image = new Image();
+        image.crossOrigin = "anonymous";
+        image.referrerPolicy = "no-referrer";
+        image.src = src;
+      }
     }
   }, [cards]);
 
