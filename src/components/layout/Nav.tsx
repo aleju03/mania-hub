@@ -369,8 +369,11 @@ export function Nav() {
     // Measured from the band's own top, which is the navbar's height at the
     // current UI scale.
     const bandTop = dimRef.current?.getBoundingClientRect().top ?? 60;
-    setDimHeight(Math.max(0, Math.ceil(el.getBoundingClientRect().bottom - bandTop) + 22));
-  }, [openGroup]);
+    // An open Discord flyout can reach below the menu's last row.
+    const flyout = el.querySelector("[data-nav-flyout]");
+    const bottom = Math.max(el.getBoundingClientRect().bottom, flyout?.getBoundingClientRect().bottom ?? 0);
+    setDimHeight(Math.max(0, Math.ceil(bottom - bandTop) + 22));
+  }, [openGroup, discordBranchOpen]);
 
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const selectedIsRegion = isRegionScope(selectedCountry);
@@ -833,7 +836,7 @@ export function Nav() {
                           return (
                             <div
                               key={leaf.id}
-                              className="flex flex-col items-start"
+                              className="relative self-start"
                               onMouseEnter={() => setDiscordBranchOpen(true)}
                               onMouseLeave={() => setDiscordBranchOpen(false)}
                               onFocus={() => setDiscordBranchOpen(true)}
@@ -849,12 +852,11 @@ export function Nav() {
                                 {i18n._(navLabel(leaf.id))}
                                 <ChevronRight className="h-3.5 w-3.5 opacity-70" strokeWidth={2.5} />
                               </Link>
-                              {/* Bot and Servers branch off past the menu's right edge
-                                  (the menu is the positioned parent), ending on this
-                                  row so they stay inside the dimmed band. The row is
-                                  full width so the pointer can cross to them. */}
+                              {/* Bot and Servers branch off right next to the
+                                  Discord row and run downward; the dim band grows
+                                  to cover them. */}
                               {discordBranchOpen ? (
-                              <div className="absolute bottom-2 left-full flex flex-col" role="menu">
+                              <div data-nav-flyout className="absolute left-full top-0 -ml-2 flex flex-col" role="menu">
                                 {DISCORD_BRANCHES.map((branch) => (
                                   <Link
                                     key={branch.to}
