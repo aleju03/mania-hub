@@ -67,7 +67,15 @@ function formatDay(ms: number): string {
  * and a url that no longer resolves shows as a gap instead of a broken image.
  * Per row rather than in the list response: most rows have no picture, and one
  * unreachable host must not hold up the whole page. */
-function RowThumbnails({ userId, count }: { userId: number; count: number }) {
+function RowThumbnails({ userId, count, onClear, disabled }: {
+  userId: number;
+  count: number;
+  /* Set when the row has several pictures, so one can go and the rest stay.
+     It sits under its own thumbnail: the urls are too long to share a line
+     with a button on a phone. */
+  onClear?: (url: string) => void;
+  disabled?: boolean;
+}) {
   const [previews, setPreviews] = useState<Array<{ url: string; dataUrl: string | null }> | null>(null);
 
   useEffect(() => {
@@ -92,26 +100,36 @@ function RowThumbnails({ userId, count }: { userId: number; count: number }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {previews.map((preview) => (
-        <a
-          key={preview.url}
-          href={preview.url}
-          target="_blank"
-          rel="noreferrer noopener"
-          title={preview.url}
-          className="block"
-        >
-          {preview.dataUrl ? (
-            <img
-              src={preview.dataUrl}
-              alt=""
-              className="h-[36px] w-[64px] rounded border border-osu-b3/40 object-cover"
-            />
-          ) : (
-            <span className="flex h-[36px] w-[64px] items-center justify-center rounded border border-osu-b3/40 bg-osu-b4/50 text-[9px] text-osu-f1">
-              no image
-            </span>
-          )}
-        </a>
+        <div key={preview.url} className="flex flex-col items-stretch gap-1">
+          <a
+            href={preview.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            title={preview.url}
+            className="block"
+          >
+            {preview.dataUrl ? (
+              <img
+                src={preview.dataUrl}
+                alt=""
+                className="h-[36px] w-[64px] rounded border border-osu-b3/40 object-cover"
+              />
+            ) : (
+              <span className="flex h-[36px] w-[64px] items-center justify-center rounded border border-osu-b3/40 bg-osu-b4/50 text-[9px] text-osu-f1">
+                no image
+              </span>
+            )}
+          </a>
+          {onClear ? (
+            <button
+              disabled={disabled}
+              onClick={() => onClear(preview.url)}
+              className="rounded bg-osu-b4/60 border border-osu-b3/30 py-0.5 text-[10px] text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 cursor-pointer"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
       ))}
     </div>
   );
@@ -435,29 +453,26 @@ function DynamicRendersAdminPage() {
                       looking at twice. Each thumbnail still opens the source. */}
                   {row.customImageUrls.length > 0 ? (
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <RowThumbnails key={row.customImageUrls.join("\n")} userId={row.userId} count={row.customImageUrls.length} />
-                      <div className="flex flex-col gap-0.5">
+                      <RowThumbnails
+                        key={row.customImageUrls.join("\n")}
+                        userId={row.userId}
+                        count={row.customImageUrls.length}
+                        disabled={busy === row.userId}
+                        onClear={row.customImageUrls.length > 1
+                          ? (url) => void act(row.userId, () => clearSignatureImages({ data: { userId: row.userId, imageUrl: url } }))
+                          : undefined}
+                      />
+                      <div className="flex min-w-0 max-w-full flex-col gap-0.5">
                         {row.customImageUrls.map((url) => (
-                          <div key={url} className="flex min-w-0 items-center gap-2">
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              className="max-w-[380px] truncate text-[11px] text-osu-l2 underline decoration-osu-b3 hover:text-white"
-                            >
-                              {url}
-                            </a>
-                            {/* One bad picture among several: drop just that one. */}
-                            {row.customImageUrls.length > 1 ? (
-                              <button
-                                disabled={busy === row.userId}
-                                onClick={() => void act(row.userId, () => clearSignatureImages({ data: { userId: row.userId, imageUrl: url } }))}
-                                className="flex-shrink-0 px-1.5 py-0.5 rounded bg-osu-b4/60 border border-osu-b3/30 text-[10px] text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 cursor-pointer"
-                              >
-                                Clear this
-                              </button>
-                            ) : null}
-                          </div>
+                          <a
+                            key={url}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="max-w-[380px] truncate text-[11px] text-osu-l2 underline decoration-osu-b3 hover:text-white"
+                          >
+                            {url}
+                          </a>
                         ))}
                       </div>
                     </div>
