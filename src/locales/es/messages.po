@@ -4157,6 +4157,10 @@ msgstr "Beatmaps jugados por tu país"
 msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps jugados en {countryName}"
 
+#: src/routes/discord.tsx
+msgid "Become a supporter"
+msgstr "Hacerse supporter"
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "Before v26, letting go of a long note counted the same no matter what the rest of your hand was doing. Now a release counts for less when that hand isn't pressing or letting go of anything else around the same time. This mostly lowers slow charts made of long holds."
 msgstr "Antes de v26, soltar una nota larga contaba igual sin importar lo que hiciera el resto de tu mano. Ahora un release cuenta menos cuando esa mano no está presionando ni soltando nada más al mismo tiempo. Esto baja sobre todo los charts lentos hechos de holds largos."
@@ -5466,6 +5470,10 @@ msgid "Connect Discord"
 msgstr "Conectar Discord"
 
 #: src/routes/discord.tsx
+msgid "Connect Discord here and link it to get messages."
+msgstr "Conecta Discord aquí y vincúlalo para recibir mensajes."
+
+#: src/routes/discord.tsx
 msgid "Connect Discord to set up feeds in servers where you have Manage Server."
 msgstr "Conecta Discord para configurar los feeds en los servidores donde tienes Gestionar servidor."
 
@@ -6705,6 +6713,10 @@ msgstr "Bot de Discord"
 msgid "Discord did not finish connecting. Try again."
 msgstr "Discord no terminó de conectarse. Inténtalo de nuevo."
 
+#: src/routes/discord.tsx
+msgid "Discord didn't let the bot message you. It needs to share a server with you, with DMs from that server turned on."
+msgstr "Discord no dejó que el bot te escribiera. Tiene que compartir un server contigo, con los DMs de ese server activados."
+
 #: src/components/communities/field-options.tsx
 msgid "Discord does not recognise that invite. Check it is still valid."
 msgstr "Discord no reconoce esa invitación. Verifica que siga siendo válida."
@@ -6736,6 +6748,10 @@ msgstr "Descartar"
 #: src/routes/skins.tsx
 msgid "display"
 msgstr "resolución"
+
+#: src/routes/discord.tsx
+msgid "DMs from the bot"
+msgstr "DMs del bot"
 
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
@@ -8456,6 +8472,10 @@ msgstr "Metas"
 #: src/components/me/MyDataPanel.tsx
 msgid "Goals ({0} open)"
 msgstr "Metas ({0} abiertas)"
+
+#: src/routes/discord.tsx
+msgid "Goals I complete"
+msgstr "Metas que completo"
 
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "GOAT holders"
@@ -11733,6 +11753,10 @@ msgstr "Nueva colección"
 msgid "New farm maps"
 msgstr "Mapas nuevos para farmear"
 
+#: src/routes/discord.tsx
+msgid "New farm maps at my level"
+msgstr "Mapas nuevos para farmear de mi nivel"
+
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
 #~ msgstr "Nuevos mapas de farm, publicados automáticamente en cualquier canal que haya usado /subscribe feed:new maps."
@@ -12507,6 +12531,10 @@ msgstr "Ninguna novedad coincide."
 msgid "No wishes yet. Choose a missing player to get started."
 msgstr "Aún no tienes deseos. Elige un jugador que te falte para empezar."
 
+#: src/routes/discord.tsx
+msgid "Nobody"
+msgstr "Nadie"
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Nobody above you on the roster."
 #~ msgstr "Nadie está por encima de ti en la lista."
@@ -12938,8 +12966,12 @@ msgid "Notifying"
 msgstr "Avisos activos"
 
 #: src/routes/privacy.tsx
-msgid "November 5, 2026"
-msgstr ""
+msgid "November 11, 2026"
+msgstr "11 de noviembre de 2026"
+
+#: src/routes/privacy.tsx
+#~ msgid "November 5, 2026"
+#~ msgstr ""
 
 #: src/components/player/ActivityPanel.tsx
 msgid "now"
@@ -16721,6 +16753,10 @@ msgstr "selecciona texto o escríbelo aquí"
 msgid "Send"
 msgstr "Enviar"
 
+#: src/routes/discord.tsx
+msgid "Send a test message"
+msgstr "Enviar un mensaje de prueba"
+
 #: src/routes/__root.tsx
 msgid "Send a tip"
 msgstr "Enviar una propina"
@@ -16813,6 +16849,10 @@ msgstr "Te regaló una carta."
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Sent, thanks."
 msgstr "Enviado, gracias."
+
+#: src/routes/discord.tsx
+msgid "Sent. Check your DMs on Discord."
+msgstr "Enviado. Revisa tus DMs en Discord."
 
 #: src/routes/privacy.tsx
 #~ msgid "September 24, 2026"
@@ -17892,8 +17932,12 @@ msgstr "Puede que algunos ya conozcan Companella, una app de escritorio para osu
 #~ msgstr "Algunas funciones con sesión iniciada almacenan datos en el servidor, asociados a tu ID de usuario de osu!: los objetivos que creas (tipo de objetivo, meta, progreso y estado), tu cartera y colección de sobres de cartas (cartas obtenidas y momentos en que se sacaron) y tus decisiones de inclusión o exclusión del roster. El panel de My Stats no almacena nada adicional; solo te muestra datos que el sitio ya tiene sobre tu cuenta."
 
 #: src/routes/privacy.tsx
-msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
-msgstr ""
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr ""
+
+#: src/routes/privacy.tsx
+msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, maniabot direct message choices and the players you follow there, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+msgstr "Algunas funciones con sesión iniciada guardan datos en el servidor, ligados a tu ID de usuario de osu!: los goals que creas (tipo, meta, progreso y estado), tu billetera y colección de packs (cartas sacadas y cuándo), tus decisiones de entrar o salir del roster, las skins que subes y te gustan, las colecciones de mapas, los replays que subes, los enlaces de tu perfil a otros servidores, los votos en la encuesta GOAT, tus opciones de mensajes directos de maniabot y los jugadores que sigues ahí, y el feedback del farm helper. El panel de Mis estadísticas no guarda nada extra; solo te muestra datos que el sitio ya tiene de tu cuenta."
 
 #: src/routes/privacy.tsx
 #~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, the display name and about text a restricted account can set, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -18472,6 +18516,10 @@ msgstr "Apoya a mania-tracker"
 #~ msgid "Supporter"
 #~ msgstr "Supporter"
 
+#: src/routes/discord.tsx
+msgid "Supporters"
+msgstr "Supporters"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
 #~ msgstr "¿seguro?"
@@ -18791,6 +18839,10 @@ msgstr "No se guardó. Inténtalo de nuevo."
 #: src/routes/discord.tsx
 msgid "That didn't save. Try again."
 msgstr "No se guardó. Inténtalo de nuevo."
+
+#: src/routes/discord.tsx
+msgid "That didn't send. Try again."
+msgstr "No se envió. Intenta de nuevo."
 
 #: src/components/communities/field-options.tsx
 msgid "That does not look like a Discord invite link."
@@ -20747,6 +20799,10 @@ msgid "Top plays"
 msgstr "Mejores jugadas"
 
 #: src/routes/discord.tsx
+msgid "Top plays from"
+msgstr "Top plays de"
+
+#: src/routes/discord.tsx
 msgid "Top plays in"
 msgstr "Top plays en"
 
@@ -21946,6 +22002,10 @@ msgstr "Miércoles"
 msgid "Weekly bars"
 msgstr "Barras semanales"
 
+#: src/routes/discord.tsx
+msgid "Weekly recap"
+msgstr "Resumen semanal"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "Tipo de mapas, dificultad y orden recomendado para jugarlos."
@@ -22023,6 +22083,10 @@ msgstr "¿Qué problema tiene esta skin?"
 msgid "When each card first joined your collection"
 msgstr "Cuándo entró cada carta a tu colección"
 
+#: src/routes/discord.tsx
+msgid "When I get sniped"
+msgstr "Cuando me snipean"
+
 #: src/routes/news_.companella.tsx
 #~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
 #~ msgstr "Cuando osu! tiene la misma partida, tus ratings de skill leen tu timing desde el replay en vez de estimarlo a partir de tus judgements."
@@ -22034,6 +22098,10 @@ msgstr "Cuándo entró cada carta a tu colección"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "When someone overtakes a country leaderboard score, the snipe lands in your channel."
 #~ msgstr "Cuando alguien supera un score del leaderboard de un país, el snipe llega a tu canal."
+
+#: src/routes/discord.tsx
+msgid "When someone pulls my card"
+msgstr "Cuando alguien saca mi carta"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "When you play"

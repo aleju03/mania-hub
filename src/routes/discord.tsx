@@ -13,10 +13,14 @@ import {
   fetchBotPreview,
   fetchBotServers,
   linkBotAccount,
+  saveBotAlerts,
   saveBotPreferences,
+  testBotAlerts,
   unlinkBotAccount,
   updateBotServer,
   type BotAccount,
+  type BotAlerts,
+  type BotAlertsPatch,
   type BotFeedPlayer,
   type BotServer,
   type BotServerChange,
@@ -27,6 +31,7 @@ import { Panel } from "../components/companella/primitives";
 import { DiscordMessageBodyView, type DiscordMessageJson } from "../components/discord/message/DiscordMessageView";
 import { DISCORD } from "../components/discord/message/discord-markdown";
 import { pageSeo } from "../lib/seo";
+import { KOFI_PAGE_URL } from "../lib/support-links";
 
 export const Route = createFileRoute("/discord")({
   head: ({ match }) => {
@@ -270,7 +275,88 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
           </div>
         </div>
       ) : null}
+
+      {account.alerts ? <DmAlertsSection account={account} alerts={account.alerts} onChange={onChange} /> : null}
     </Panel>
+  );
+}
+
+// Supporter DMs: the bot messages the viewer's verified Discord link.
+function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; alerts: BotAlerts; onChange: (account: BotAccount) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const verified = account.links.some((link) => link.verified);
+  const usable = alerts.supporter && verified;
+
+  const save = async (patch: BotAlertsPatch) => {
+    setBusy(true);
+    setSaveFailed(false);
+    try {
+      onChange(await saveBotAlerts({ data: patch }));
+    } catch {
+      setSaveFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const test = async () => {
+    setBusy(true);
+    setTestResult(null);
+    try {
+      const { result, account: next } = await testBotAlerts();
+      setTestResult(result);
+      onChange(next);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const blocked = testResult === "blocked" || (testResult == null && alerts.failedAt != null);
+
+  return (
+    <div className="mt-4 border-t border-white/[0.07] pt-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-semibold text-white"><Trans>DMs from the bot</Trans></span>
+        <span className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[11px] font-semibold text-osu-pink-light"><Trans>Supporters</Trans></span>
+        <div className="flex-1" />
+        {!alerts.supporter ? (
+          <a href={KOFI_PAGE_URL} target="_blank" rel="noreferrer" className="rounded-lg bg-osu-pink px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110">
+            <Trans>Become a supporter</Trans>
+          </a>
+        ) : verified ? (
+          <button type="button" disabled={busy} onClick={() => void test()} className="rounded-lg bg-osu-b3 px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-50">
+            <Trans>Send a test message</Trans>
+          </button>
+        ) : null}
+      </div>
+      <div className={`flex flex-wrap gap-x-6 gap-y-2 ${usable ? "" : "opacity-50"}`}>
+        <Toggle checked={alerts.snipes} disabled={busy || !usable} onChange={(on) => void save({ snipes: on })} label={<Trans>When I get sniped</Trans>} />
+        <Toggle checked={alerts.goals} disabled={busy || !usable} onChange={(on) => void save({ goals: on })} label={<Trans>Goals I complete</Trans>} />
+        <Toggle checked={alerts.newMaps} disabled={busy || !usable} onChange={(on) => void save({ newMaps: on })} label={<Trans>New farm maps at my level</Trans>} />
+        <Toggle checked={alerts.cardPulls} disabled={busy || !usable} onChange={(on) => void save({ cardPulls: on })} label={<Trans>When someone pulls my card</Trans>} />
+        <Toggle checked={alerts.weeklyRecap} disabled={busy || !usable} onChange={(on) => void save({ weeklyRecap: on })} label={<Trans>Weekly recap</Trans>} />
+      </div>
+      <div className={`mt-3 text-[12px] text-osu-f1 ${usable ? "" : "opacity-50"}`}>
+        <FeedPlayerPicker
+          players={alerts.follows}
+          disabled={busy || !usable}
+          label={<Trans>Top plays from</Trans>}
+          emptyLabel={<Trans>Nobody</Trans>}
+          onChange={(next) => void save({ follows: next.map((player) => player.id) })}
+        />
+      </div>
+      {alerts.supporter && !verified ? (
+        <p className="mt-3 text-[12px] text-osu-f1"><Trans>Connect Discord here and link it to get messages.</Trans></p>
+      ) : null}
+      {saveFailed ? <p className="mt-3 text-[12px] text-rose-300"><Trans>That didn't save. Try again.</Trans></p> : null}
+      {testResult === "sent" ? <p className="mt-3 text-[12px] text-emerald-300"><Trans>Sent. Check your DMs on Discord.</Trans></p> : null}
+      {testResult && testResult !== "sent" && testResult !== "blocked" ? (
+        <p className="mt-3 text-[12px] text-rose-300"><Trans>That didn't send. Try again.</Trans></p>
+      ) : null}
+      {blocked ? (
+        <p className="mt-3 text-[12px] text-rose-300"><Trans>Discord didn't let the bot message you. It needs to share a server with you, with DMs from that server turned on.</Trans></p>
+      ) : null}
+    </div>
   );
 }
 
@@ -403,7 +489,13 @@ const MAX_FEED_PLAYERS = 50;
 
 // The players a top-play feed is limited to, picked from players the site
 // tracks. Empty means everyone in the feed's country.
-function FeedPlayerPicker({ players, onChange }: { players: BotFeedPlayer[]; onChange: (players: BotFeedPlayer[]) => void }) {
+function FeedPlayerPicker({ players, onChange, label, emptyLabel, disabled = false }: {
+  players: BotFeedPlayer[];
+  onChange: (players: BotFeedPlayer[]) => void;
+  label?: ReactNode;
+  emptyLabel?: ReactNode;
+  disabled?: boolean;
+}) {
   const { t } = useLingui();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LiveUserSearchEntry[]>([]);
@@ -434,8 +526,8 @@ function FeedPlayerPicker({ players, onChange }: { players: BotFeedPlayer[]; onC
 
   return (
     <div className="flex w-full flex-wrap items-center gap-1.5">
-      <span className="mr-1"><Trans>Players</Trans></span>
-      {players.length === 0 ? <span className="text-osu-l2"><Trans>Everyone</Trans></span> : null}
+      <span className="mr-1">{label ?? <Trans>Players</Trans>}</span>
+      {players.length === 0 ? <span className="text-osu-l2">{emptyLabel ?? <Trans>Everyone</Trans>}</span> : null}
       {players.map((player) => (
         <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-osu-b5 py-0.5 pl-1 pr-1.5 text-[12px] font-semibold text-white">
           {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
@@ -443,14 +535,15 @@ function FeedPlayerPicker({ players, onChange }: { players: BotFeedPlayer[]; onC
           <button
             type="button"
             aria-label={t`Remove ${player.username}`}
+            disabled={disabled}
             onClick={() => onChange(players.filter((p) => p.id !== player.id))}
-            className="text-osu-f1 hover:text-white"
+            className="text-osu-f1 hover:text-white disabled:opacity-40"
           >
             <X className="h-3 w-3" />
           </button>
         </span>
       ))}
-      {players.length < MAX_FEED_PLAYERS ? (
+      {players.length < MAX_FEED_PLAYERS && !disabled ? (
         <div className="relative">
           <input
             value={query}

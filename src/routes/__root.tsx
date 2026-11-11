@@ -61,6 +61,7 @@ import { seedCountryTierCache } from "../lib/use-country-warming";
 import { isWindowActive, subscribeWindowActivity } from "../lib/window-activity";
 import { reapplyThemeToDom, useChangelogNotify } from "../store";
 import appCss from "../styles.css?url";
+import { KOFI_PAGE_URL } from "../lib/support-links";
 
 /* Origin is resolved through a configured canonical URL first, then through
    allowlisted request hosts. That keeps SEO URLs stable without trusting
@@ -524,7 +525,6 @@ function NotFoundPage() {
   );
 }
 
-const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 const LAVA_TIP_URL = "https://app.lava.top/mania-tracker?tabId=donate";
 
 // A signed-in visitor's tip link carries their osu! id, which lava.top hands

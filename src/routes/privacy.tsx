@@ -19,7 +19,7 @@ export const Route = createFileRoute("/privacy")({
 function PrivacyPage() {
   const { t } = useLingui();
   return (
-    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`November 5, 2026`}>
+    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`November 11, 2026`}>
       <LegalSection title={t`Overview`}>
         <LegalParagraph>
           <Trans>
@@ -53,7 +53,8 @@ function PrivacyPage() {
             create (goal type, target, progress, and status), your card pack wallet and collection
             (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and
             like, map collections, replays you upload, profile links to other servers, GOAT poll
-            votes, and farm-helper feedback. The My Stats dashboard does
+            votes, maniabot direct message choices and the players you follow there, and
+            farm-helper feedback. The My Stats dashboard does
             not store anything extra; it only shows you data the site already holds about your
             account.
           </Trans>

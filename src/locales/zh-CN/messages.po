@@ -4169,6 +4169,10 @@ msgstr "你的国家/地区玩过的谱面"
 msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
 
+#: src/routes/discord.tsx
+msgid "Become a supporter"
+msgstr "成为支持者"
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "Before v26, letting go of a long note counted the same no matter what the rest of your hand was doing. Now a release counts for less when that hand isn't pressing or letting go of anything else around the same time. This mostly lowers slow charts made of long holds."
 msgstr "在 v26 之前，不管同一只手的其他手指在做什么，长条放手的难度都一样。现在，如果这只手在放手前后没有按下或松开别的键，这次放手的难度就会降低。受影响最大的是由长条组成的慢速谱面。"
@@ -5478,6 +5482,10 @@ msgid "Connect Discord"
 msgstr "连接 Discord"
 
 #: src/routes/discord.tsx
+msgid "Connect Discord here and link it to get messages."
+msgstr "在这里连接并绑定 Discord 即可收到消息。"
+
+#: src/routes/discord.tsx
 msgid "Connect Discord to set up feeds in servers where you have Manage Server."
 msgstr "连接 Discord 后，可以为你拥有管理服务器权限的服务器设置推送。"
 
@@ -6717,6 +6725,10 @@ msgstr "Discord 机器人"
 msgid "Discord did not finish connecting. Try again."
 msgstr "Discord 关联未完成。请重试。"
 
+#: src/routes/discord.tsx
+msgid "Discord didn't let the bot message you. It needs to share a server with you, with DMs from that server turned on."
+msgstr "Discord 不允许机器人给你发消息。机器人需要和你在同一个服务器，并且你需要开启该服务器的私信。"
+
 #: src/components/communities/field-options.tsx
 msgid "Discord does not recognise that invite. Check it is still valid."
 msgstr "Discord 不认识这个邀请链接。请确认它仍然有效。"
@@ -6748,6 +6760,10 @@ msgstr "关闭"
 #: src/routes/skins.tsx
 msgid "display"
 msgstr "显示"
+
+#: src/routes/discord.tsx
+msgid "DMs from the bot"
+msgstr "机器人私信"
 
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or fewer 7K top plays than {shown}?"
@@ -8468,6 +8484,10 @@ msgstr "目标"
 #: src/components/me/MyDataPanel.tsx
 msgid "Goals ({0} open)"
 msgstr "目标（{0} 个进行中）"
+
+#: src/routes/discord.tsx
+msgid "Goals I complete"
+msgstr "完成的目标"
 
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "GOAT holders"
@@ -11745,6 +11765,10 @@ msgstr "新建收藏夹"
 msgid "New farm maps"
 msgstr "新的刷分图"
 
+#: src/routes/discord.tsx
+msgid "New farm maps at my level"
+msgstr "适合我水平的新的刷分图"
+
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
 #~ msgstr "新的刷分谱面，会自动发到运行过 /subscribe feed:new maps 的频道。"
@@ -12519,6 +12543,10 @@ msgstr "没有匹配的更新。"
 msgid "No wishes yet. Choose a missing player to get started."
 msgstr "还没有心愿。选择一位尚未拥有的玩家开始吧。"
 
+#: src/routes/discord.tsx
+msgid "Nobody"
+msgstr "无"
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Nobody above you on the roster."
 #~ msgstr "名单上没有人在你之上。"
@@ -12950,8 +12978,12 @@ msgid "Notifying"
 msgstr "已开启通知"
 
 #: src/routes/privacy.tsx
-msgid "November 5, 2026"
-msgstr ""
+msgid "November 11, 2026"
+msgstr "2026 年 11 月 11 日"
+
+#: src/routes/privacy.tsx
+#~ msgid "November 5, 2026"
+#~ msgstr ""
 
 #: src/components/player/ActivityPanel.tsx
 msgid "now"
@@ -16733,6 +16765,10 @@ msgstr "选中文字，或直接在这里输入"
 msgid "Send"
 msgstr "发送"
 
+#: src/routes/discord.tsx
+msgid "Send a test message"
+msgstr "发送测试消息"
+
 #: src/routes/__root.tsx
 msgid "Send a tip"
 msgstr "打赏"
@@ -16825,6 +16861,10 @@ msgstr "送给你一张卡片。"
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Sent, thanks."
 msgstr "已提交，谢谢。"
+
+#: src/routes/discord.tsx
+msgid "Sent. Check your DMs on Discord."
+msgstr "已发送。请查看 Discord 私信。"
 
 #: src/routes/privacy.tsx
 #~ msgid "September 24, 2026"
@@ -17904,8 +17944,12 @@ msgstr "有些人可能已经知道 Companella，它是一款 osu! 桌面应用�
 #~ msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、指标、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽取时间），以及名册的加入或退出选择。My Stats 面板不会额外存储任何东西；它只是向你展示本站已经掌握的、关于你账号的数据。"
 
 #: src/routes/privacy.tsx
-msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
-msgstr ""
+#~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+#~ msgstr ""
+
+#: src/routes/privacy.tsx
+msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, GOAT poll votes, maniabot direct message choices and the players you follow there, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
+msgstr "部分登录后才能使用的功能会在服务器上保存与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、目标值、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽卡时间）、加入或退出名单的选择、你上传和点赞的皮肤、谱面合集、你上传的回放、个人资料中指向其他服务器的链接、GOAT 投票、maniabot 私信设置及你在其中关注的玩家，以及刷分助手反馈。我的数据面板不会额外保存任何内容，只会向你展示本站已有的关于你账户的数据。"
 
 #: src/routes/privacy.tsx
 #~ msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and like, map collections, replays you upload, profile links to other servers, the display name and about text a restricted account can set, GOAT poll votes, and farm-helper feedback. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -18484,6 +18528,10 @@ msgstr "支持 mania-tracker"
 #~ msgid "Supporter"
 #~ msgstr "Supporter"
 
+#: src/routes/discord.tsx
+msgid "Supporters"
+msgstr "支持者"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
 #~ msgstr "确定？"
@@ -18803,6 +18851,10 @@ msgstr "保存失败，请重试。"
 #: src/routes/discord.tsx
 msgid "That didn't save. Try again."
 msgstr "未能保存，请重试。"
+
+#: src/routes/discord.tsx
+msgid "That didn't send. Try again."
+msgstr "发送失败，请重试。"
 
 #: src/components/communities/field-options.tsx
 msgid "That does not look like a Discord invite link."
@@ -20759,6 +20811,10 @@ msgid "Top plays"
 msgstr "最佳成绩"
 
 #: src/routes/discord.tsx
+msgid "Top plays from"
+msgstr "以下玩家的 top plays"
+
+#: src/routes/discord.tsx
 msgid "Top plays in"
 msgstr "最佳成绩键数"
 
@@ -21958,6 +22014,10 @@ msgstr "周三"
 msgid "Weekly bars"
 msgstr "每周柱状图"
 
+#: src/routes/discord.tsx
+msgid "Weekly recap"
+msgstr "每周回顾"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或推荐游玩顺序。"
@@ -22035,6 +22095,10 @@ msgstr "这个皮肤有什么问题？"
 msgid "When each card first joined your collection"
 msgstr "每张卡片最初加入你收藏册的时间"
 
+#: src/routes/discord.tsx
+msgid "When I get sniped"
+msgstr "被 snipe 时"
+
 #: src/routes/news_.companella.tsx
 #~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
 #~ msgstr "当 osu! 也有同一局成绩时，你的技能评分会直接读取回放中的击打时机，而不是根据判定数量来估算。"
@@ -22046,6 +22110,10 @@ msgstr "每张卡片最初加入你收藏册的时间"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "When someone overtakes a country leaderboard score, the snipe lands in your channel."
 #~ msgstr "有人超越国家/地区排行榜上的成绩时，这次狙击会发到你的频道。"
+
+#: src/routes/discord.tsx
+msgid "When someone pulls my card"
+msgstr "有人抽到我的卡时"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "When you play"
