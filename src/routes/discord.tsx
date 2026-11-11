@@ -48,9 +48,22 @@ export const Route = createFileRoute("/discord")({
     }
     return undefined as never;
   },
-  loader: async () => fetchDiscordPublicInfo(),
+  // The /profile preview loads with the page, so it is there on first paint.
+  // A slow render is left to the client rather than holding the page.
+  loader: async () => {
+    const [info, profilePreview] = await Promise.all([
+      fetchDiscordPublicInfo(),
+      Promise.race([
+        fetchBotPreview({ data: { view: "profile" } }).then((result) => result.message).catch(() => null),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), PRELOAD_PREVIEW_TIMEOUT_MS)),
+      ]),
+    ]);
+    return { info, profilePreview };
+  },
   component: DiscordToolPage,
 });
+
+const PRELOAD_PREVIEW_TIMEOUT_MS = 1500;
 
 const BLURPLE = DISCORD_BLURPLE;
 
@@ -65,7 +78,7 @@ const SLATE = {
 const HERO_ART_SOURCE: string | null = "https://www.pixiv.net/en/artworks/83835856";
 
 function DiscordToolPage() {
-  const info = Route.useLoaderData();
+  const { info, profilePreview } = Route.useLoaderData();
   const [account, setAccount] = useState<BotAccount | null>(null);
 
   useEffect(() => {
@@ -92,7 +105,7 @@ function DiscordToolPage() {
             <Hero info={info} />
             {info.configured ? <AccountPanel account={account} onChange={setAccount} /> : null}
             {info.configured ? <ServersPanel account={account} inviteUrl={info.inviteUrl} /> : null}
-            {info.configured ? <PreviewPanel /> : null}
+            {info.configured ? <PreviewPanel initialProfile={profilePreview} /> : null}
             {info.configured ? <CommandsPanel commands={info.commands} /> : null}
           </div>
         </div>
@@ -475,10 +488,16 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
   // A verified link stands in for a Discord connection in this browser.
   const connected = Boolean(account?.connection || account?.links.some((link) => link.verified));
 
-  useEffect(() => {
-    if (!connected) return;
+  // Fetched alongside the account rather than after it, then again only if
+  // Discord gets connected or linked during the visit.
+  const load = useCallback(() => {
     void fetchBotServers().then(setData).catch(() => setData(null));
-  }, [connected]);
+  }, []);
+  useEffect(load, [load]);
+  const needsDiscord = data?.error === "no_discord";
+  useEffect(() => {
+    if (connected && needsDiscord) load();
+  }, [connected, needsDiscord, load]);
 
   if (!account?.signedIn) return null;
 
@@ -729,10 +748,10 @@ const PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "help", label: msg`/help` },
 ];
 
-function PreviewPanel() {
+function PreviewPanel({ initialProfile }: { initialProfile: DiscordMessageJson | null }) {
   const { i18n } = useLingui();
   const [view, setView] = useState("profile");
-  const [messages, setMessages] = useState<Record<string, DiscordMessageJson | null | undefined>>({});
+  const [messages, setMessages] = useState<Record<string, DiscordMessageJson | null | undefined>>(() => (initialProfile ? { profile: initialProfile } : {}));
 
   useEffect(() => {
     if (messages[view] !== undefined) return;
