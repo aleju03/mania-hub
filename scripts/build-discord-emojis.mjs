@@ -1,4 +1,4 @@
-// Rasterizes the osu! grade pills and mod glyphs into PNG emoji assets the
+// Rasterizes the osu! grade pills, mod glyphs and skill bar segments into PNG emoji assets the
 // Discord bot uploads as custom application emojis (see
 // backend/src/discord/emojis.ts). Discord only accepts raster emoji
 // (PNG/GIF/JPEG, <=256KB), so the source SVGs are baked here once and the
@@ -218,6 +218,50 @@ async function buildHit(def) {
   return sharp(svg, { density: 300 }).resize(w, h).png().toBuffer();
 }
 
+// Skill bar segments (emoji name `b<colour>_<l|m|r><1-4>`, plus the shared
+// empties `b0_m` and `b0_r`): square pieces that sit side by side as one bar. A
+// left cap, middles and a right cap, each filled in quarters. Colour code ->
+// the skillset colour the site uses (src/lib/skill-axes.ts); the codes mirror
+// BAR_COLOR_CODES in backend/src/discord/emojis.ts.
+const BARS = {
+  st: "#8f6bd8", // Stream
+  js: "#6f87d8", // Jumpstream / Chordstream
+  hs: "#b06bc0", // Handstream / Bracket
+  sm: "#ad6b5d", // Stamina
+  jk: "#c66f84", // Jackspeed
+  cj: "#c59a5c", // Chordjack / Jack
+  tc: "#83a86f", // Technical
+  sp: "#5fb8c9", // Delay
+  ln: "#f07474", // LN
+};
+const BAR_H = 60; // the strip's height on the 128px square
+const BAR_TRACK = "rgba(128,132,142,0.34)"; // reads on dark and light themes
+
+function barShape(kind) {
+  const y = (SIZE - BAR_H) / 2;
+  const round = BAR_H / 2;
+  const tight = 8;
+  const left = kind === "l" ? round : tight;
+  const right = kind === "r" ? round : tight;
+  return (
+    `M${left},${y} H${SIZE - right} A${right},${right} 0 0 1 ${SIZE},${y + right} V${y + BAR_H - right} ` +
+    `A${right},${right} 0 0 1 ${SIZE - right},${y + BAR_H} H${left} A${left},${left} 0 0 1 0,${y + BAR_H - left} ` +
+    `V${y + left} A${left},${left} 0 0 1 ${left},${y} Z`
+  );
+}
+
+async function buildBar(kind, quarters, color) {
+  const shape = barShape(kind);
+  const svg = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}">` +
+      `<clipPath id="c"><path d="${shape}"/></clipPath>` +
+      `<path d="${shape}" fill="${BAR_TRACK}"/>` +
+      (quarters > 0 ? `<rect x="0" y="0" width="${(SIZE * quarters) / 4}" height="${SIZE}" fill="${color}" clip-path="url(#c)"/>` : "") +
+      `</svg>`,
+  );
+  return sharp(svg).png().toBuffer();
+}
+
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
   let count = 0;
@@ -236,6 +280,18 @@ async function main() {
     const png = await buildHit(def);
     await writeFile(join(OUT_DIR, `hit_${name}.png`), png);
     count += 1;
+  }
+  for (const kind of ["m", "r"]) {
+    await writeFile(join(OUT_DIR, `b0_${kind}.png`), await buildBar(kind, 0, null));
+    count += 1;
+  }
+  for (const [code, color] of Object.entries(BARS)) {
+    for (const kind of ["l", "m", "r"]) {
+      for (let quarters = 1; quarters <= 4; quarters++) {
+        await writeFile(join(OUT_DIR, `b${code}_${kind}${quarters}.png`), await buildBar(kind, quarters, color));
+        count += 1;
+      }
+    }
   }
   console.log(`Wrote ${count} emoji PNGs to ${OUT_DIR}`);
 }
