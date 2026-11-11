@@ -37,8 +37,14 @@ export interface BotServer {
   iconUrl: string | null;
   botPresent: boolean;
   channels: BotChannel[];
-  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number }>;
+  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[] }>;
   settings: { defaultCountry: string | null; autoDanChannels: string[] };
+}
+
+export interface BotFeedPlayer {
+  id: number;
+  username: string;
+  avatarUrl: string | null;
 }
 
 export interface BotServers {
@@ -54,7 +60,7 @@ export interface BotServers {
 export interface BotServerChange {
   defaultCountry?: string | null;
   feed?: { channelId: string; feedType: string; on: boolean; country?: string };
-  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number };
+  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[] };
   autoDan?: { channelId: string; on: boolean };
 }
 

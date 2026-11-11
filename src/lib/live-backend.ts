@@ -3655,11 +3655,13 @@ export interface LiveUserSearchEntry {
   avatarAccent?: string | null;
 }
 
-export async function fetchLiveUserSearch(query: string, limit?: number): Promise<LiveUserSearchEntry[]> {
+// `tracked` keeps to players on a tracked country roster.
+export async function fetchLiveUserSearch(query: string, limit?: number, options: { tracked?: boolean } = {}): Promise<LiveUserSearchEntry[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
   const params = new URLSearchParams({ q: trimmed });
   if (limit != null) params.set("limit", String(limit));
+  if (options.tracked) params.set("tracked", "1");
   const response = await fetchLiveJson<{ users?: LiveUserSearchEntry[] }>(`/api/users/search?${params.toString()}`);
   return response?.users ?? [];
 }

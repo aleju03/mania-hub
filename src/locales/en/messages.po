@@ -233,6 +233,11 @@ msgstr "{0, plural, one {# play this site tracked below your top 200 counts here
 msgid "{0, plural, one {# play} other {# plays}}"
 msgstr "{0, plural, one {# play} other {# plays}}"
 
+#. placeholder {0}: sub.players.length
+#: src/routes/discord.tsx
+msgid "{0, plural, one {# player} other {# players}}"
+msgstr "{0, plural, one {# player} other {# players}}"
+
 #. placeholder {0}: replayableScores.length
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{0, plural, one {# replay available} other {# replays available}}"
@@ -3146,6 +3151,10 @@ msgstr "Add a missing score"
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Add a play for {username}"
 #~ msgstr "Add a play for {username}"
+
+#: src/routes/discord.tsx
+msgid "Add a player"
+msgstr "Add a player"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Add a screenshot"
@@ -7453,6 +7462,7 @@ msgstr "Every tracked player, same odds"
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/routes/discord.tsx
 msgid "Everyone"
 msgstr "Everyone"
 
@@ -14268,6 +14278,7 @@ msgstr "players"
 #: src/components/packs/SetsView.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 msgid "Players"
 msgstr "Players"
@@ -15560,8 +15571,10 @@ msgstr "remove"
 msgid "Remove"
 msgstr "Remove"
 
+#. placeholder {0}: player.username
 #. placeholder {0}: server.name
 #: src/components/player/ServerLinks.tsx
+#: src/routes/discord.tsx
 msgid "Remove {0}"
 msgstr "Remove {0}"
 

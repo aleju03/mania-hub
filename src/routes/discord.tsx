@@ -1,13 +1,13 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DiscordTabs } from "../components/discord/DiscordTabs";
 import { canUseDevFeatures } from "../lib/auth-shared";
-import { fetchDiscordPublicInfo, type DiscordPublicInfo } from "../lib/live-backend";
+import { fetchDiscordPublicInfo, fetchLiveUserSearch, type DiscordPublicInfo, type LiveUserSearchEntry } from "../lib/live-backend";
 import {
   fetchBotAccount,
   fetchBotPreview,
@@ -17,6 +17,7 @@ import {
   unlinkBotAccount,
   updateBotServer,
   type BotAccount,
+  type BotFeedPlayer,
   type BotServer,
   type BotServerChange,
   type BotServers,
@@ -295,33 +296,53 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
 const FILTER_KEYS = [4, 5, 6, 7, 8, 9, 10];
 const KEYMODE_TOP_CHOICES = [0, 100, 50];
 
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[] };
+
+function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
+  return { minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [] };
+}
+
 // Which top plays a channel posts: keymodes, a cut to the player's best N of
-// that keymode, and a pp floor.
-function TopPlayFilters({ sub, disabled, onSave }: {
+// that keymode, a pp floor and a player list. Changes show at once and save in
+// order behind the scenes, since each save waits on Discord for a few seconds.
+function TopPlayFilters({ sub, onSave }: {
   sub: BotServer["subscriptions"][number];
-  disabled: boolean;
-  onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number }) => void;
+  onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number; players: number[] }) => Promise<boolean>;
 }) {
-  const keys = sub.keys ?? [];
-  const keymodeTop = sub.keymodeTop ?? 0;
+  const [filters, setFilters] = useState(() => filtersOf(sub));
+  const pending = useRef(0);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  useEffect(() => {
+    if (pending.current === 0) setFilters(filtersOf(sub));
+  }, [sub]);
   const [minPpDraft, setMinPpDraft] = useState(sub.minPp ? String(sub.minPp) : "");
   useEffect(() => setMinPpDraft(sub.minPp ? String(sub.minPp) : ""), [sub.minPp]);
   const draftPp = Math.max(0, Math.floor(Number(minPpDraft) || 0));
-  const save = (next: Partial<{ minPp: number; keys: number[]; keymodeTop: number }>) =>
-    onSave({ minPp: sub.minPp, keys, keymodeTop, ...next });
-  const chip = (active: boolean) =>
-    `rounded-md px-2 py-0.5 text-[12px] font-semibold disabled:opacity-40 ${active ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:brightness-110"}`;
+
+  const save = (patch: Partial<TopPlayFilterState>) => {
+    const next = { ...filters, ...patch };
+    setFilters(next);
+    pending.current++;
+    queue.current = queue.current
+      .then(() => onSave({ minPp: next.minPp, keys: next.keys, keymodeTop: next.keymodeTop, players: next.players.map((p) => p.id) }))
+      .then((ok) => {
+        pending.current--;
+        if (!ok && pending.current === 0) setFilters(filtersOf(sub));
+      });
+  };
+  const chip = (active: boolean, interactive = true) =>
+    `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
+  const { keys, keymodeTop, players } = filters;
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-3 text-[12px] text-osu-f1">
       <div className="flex flex-wrap items-center gap-1">
         <span className="mr-1"><Trans>Top plays in</Trans></span>
-        <button type="button" disabled={disabled} className={chip(keys.length === 0)} onClick={() => save({ keys: [] })}><Trans>All keys</Trans></button>
+        <button type="button" className={chip(keys.length === 0, keys.length > 0)} onClick={() => { if (keys.length) save({ keys: [] }); }}><Trans>All keys</Trans></button>
         {FILTER_KEYS.map((k) => (
           <button
             key={k}
             type="button"
-            disabled={disabled}
             className={chip(keys.includes(k))}
             onClick={() => save({ keys: keys.includes(k) ? keys.filter((v) => v !== k) : [...keys, k].sort((a, b) => a - b) })}
           >
@@ -331,7 +352,7 @@ function TopPlayFilters({ sub, disabled, onSave }: {
       </div>
       <div className="flex flex-wrap items-center gap-1">
         {KEYMODE_TOP_CHOICES.map((n) => (
-          <button key={n} type="button" disabled={disabled} className={chip(keymodeTop === n)} onClick={() => save({ keymodeTop: n })}>
+          <button key={n} type="button" className={chip(keymodeTop === n, keymodeTop !== n)} onClick={() => { if (keymodeTop !== n) save({ keymodeTop: n }); }}>
             {n === 0 ? <Trans>Any top play</Trans> : <Trans>Top {n} of the keymode</Trans>}
           </button>
         ))}
@@ -342,17 +363,106 @@ function TopPlayFilters({ sub, disabled, onSave }: {
           value={minPpDraft}
           inputMode="numeric"
           onChange={(event) => setMinPpDraft(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
-          onKeyDown={(event) => { if (event.key === "Enter" && draftPp !== sub.minPp) save({ minPp: draftPp }); }}
+          onKeyDown={(event) => { if (event.key === "Enter" && draftPp !== filters.minPp) save({ minPp: draftPp }); }}
           placeholder="0"
           className="w-14 rounded-md bg-osu-b5 px-2 py-0.5 text-[12px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
         />
         <span>pp</span>
-        {draftPp !== sub.minPp ? (
-          <button type="button" disabled={disabled} onClick={() => save({ minPp: draftPp })} className="rounded-md bg-osu-b3 px-2 py-0.5 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-40">
+        {draftPp !== filters.minPp ? (
+          <button type="button" onClick={() => save({ minPp: draftPp })} className="rounded-md bg-osu-b3 px-2 py-0.5 text-[12px] font-semibold text-white hover:brightness-110">
             <Trans>Save</Trans>
           </button>
         ) : null}
       </div>
+      <FeedPlayerPicker
+        players={players}
+        onChange={(next) => save({ players: next })}
+      />
+    </div>
+  );
+}
+
+const MAX_FEED_PLAYERS = 50;
+
+// The players a top-play feed is limited to, picked from players the site
+// tracks. Empty means everyone in the feed's country.
+function FeedPlayerPicker({ players, onChange }: { players: BotFeedPlayer[]; onChange: (players: BotFeedPlayer[]) => void }) {
+  const { t } = useLingui();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<LiveUserSearchEntry[]>([]);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void fetchLiveUserSearch(trimmed, 8, { tracked: true })
+        .then((users) => { if (!cancelled) setResults(users); })
+        .catch(() => { if (!cancelled) setResults([]); });
+    }, 200);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [query]);
+
+  const chosen = new Set(players.map((p) => p.id));
+  const options = results.filter((user) => !chosen.has(user.id));
+  const add = (user: LiveUserSearchEntry) => {
+    onChange([...players, { id: user.id, username: user.username, avatarUrl: user.avatarUrl || null }]);
+    setQuery("");
+    setResults([]);
+  };
+
+  return (
+    <div className="flex w-full flex-wrap items-center gap-1.5">
+      <span className="mr-1"><Trans>Players</Trans></span>
+      {players.length === 0 ? <span className="text-osu-l2"><Trans>Everyone</Trans></span> : null}
+      {players.map((player) => (
+        <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-osu-b5 py-0.5 pl-1 pr-1.5 text-[12px] font-semibold text-white">
+          {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
+          {player.username}
+          <button
+            type="button"
+            aria-label={t`Remove ${player.username}`}
+            onClick={() => onChange(players.filter((p) => p.id !== player.id))}
+            className="text-osu-f1 hover:text-white"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      {players.length < MAX_FEED_PLAYERS ? (
+        <div className="relative">
+          <input
+            value={query}
+            onChange={(event) => { setQuery(event.target.value.slice(0, 30)); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onKeyDown={(event) => { if (event.key === "Enter" && options[0]) add(options[0]); }}
+            placeholder={t`Add a player`}
+            className="w-36 rounded-md bg-osu-b5 px-2 py-0.5 text-[12px] text-white outline-none placeholder:text-osu-f1 focus:ring-1 focus:ring-osu-pink/60"
+          />
+          {open && options.length ? (
+            <div className="absolute left-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-lg bg-osu-b3 py-1 shadow-lg">
+              {options.map((user) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => add(user)}
+                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] text-white hover:bg-osu-b4"
+                >
+                  {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-5 w-5 rounded-full" /> : null}
+                  <span className="min-w-0 flex-1 truncate">{user.username}</span>
+                  {user.countryCode ? <span className="text-[11px] text-osu-f1">{user.countryCode}</span> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -460,6 +570,18 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
     }
   }, [onServer, server.id]);
 
+  // Filter saves don't lock the panel: the filter row shows its change at once.
+  const saveFilters = useCallback(async (change: BotServerChange) => {
+    setError(null);
+    const result = await updateBotServer({ data: { guildId: server.id, change } }).catch(() => null);
+    if (result?.ok && result.server) {
+      onServer(result.server);
+      return true;
+    }
+    setError(result?.error ?? "failed");
+    return false;
+  }, [onServer, server.id]);
+
   const activeChannels = useMemo(() => new Set([
     ...server.subscriptions.map((sub) => sub.channelId),
     ...server.settings.autoDanChannels,
@@ -539,7 +661,11 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                         <td key={feed} className="px-2 py-1.5 text-center">
                           <div className="inline-flex items-center gap-1.5">
                             <Toggle checked={Boolean(sub)} disabled={busy} onChange={(on) => void apply({ feed: { channelId: channel.id, feedType: feed, on, country } })} />
-                            {sub && feed === "top_play" ? <span className="text-[11px] text-osu-f1">{sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country}</span> : null}
+                            {sub && feed === "top_play" ? (
+                              <span className="text-[11px] text-osu-f1">
+                                {sub.players?.length ? <Plural value={sub.players.length} one="# player" other="# players" /> : sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country}
+                              </span>
+                            ) : null}
                           </div>
                         </td>
                       );
@@ -559,8 +685,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                       <td colSpan={1 + feedTypes.length + (autoDanAvailable ? 1 : 0)} className="pb-2.5 pt-0.5">
                         <TopPlayFilters
                           sub={topPlays}
-                          disabled={busy}
-                          onSave={(filters) => void apply({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
+                          onSave={(filters) => saveFilters({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
                         />
                       </td>
                     </tr>

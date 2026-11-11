@@ -245,6 +245,11 @@ msgstr "{0, plural, other {本站记录的 # 个低于你前 200 名的成绩也
 msgid "{0, plural, one {# play} other {# plays}}"
 msgstr "{0, plural, other {# 次游玩}}"
 
+#. placeholder {0}: sub.players.length
+#: src/routes/discord.tsx
+msgid "{0, plural, one {# player} other {# players}}"
+msgstr "{0, plural, other {# 名玩家}}"
+
 #. placeholder {0}: replayableScores.length
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{0, plural, one {# replay available} other {# replays available}}"
@@ -3131,6 +3136,10 @@ msgstr "添加缺失的成绩"
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Add a play for {username}"
 #~ msgstr "为 {username} 添加成绩"
+
+#: src/routes/discord.tsx
+msgid "Add a player"
+msgstr "添加玩家"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 msgid "Add a screenshot"
@@ -7434,6 +7443,7 @@ msgstr "所有已追踪玩家，概率相同"
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/routes/discord.tsx
 msgid "Everyone"
 msgstr "所有人"
 
@@ -14241,6 +14251,7 @@ msgstr "玩家"
 #: src/components/packs/SetsView.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 msgid "Players"
 msgstr "玩家"
@@ -15533,8 +15544,10 @@ msgstr "移除"
 msgid "Remove"
 msgstr "移除"
 
+#. placeholder {0}: player.username
 #. placeholder {0}: server.name
 #: src/components/player/ServerLinks.tsx
+#: src/routes/discord.tsx
 msgid "Remove {0}"
 msgstr "移除 {0}"
 
