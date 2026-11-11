@@ -3213,6 +3213,10 @@ msgstr "添加{label}的成绩"
 msgid "Add the bot"
 msgstr "添加机器人"
 
+#: src/routes/discord.tsx
+msgid "Add the bot to another server"
+msgstr "将机器人添加到其他服务器"
+
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Add the text that reads wrong."
 msgstr "请填写有问题的文本。"

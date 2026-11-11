@@ -2,6 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
+import { ChevronDown } from "lucide-react";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DiscordTabs } from "../components/discord/DiscordTabs";
@@ -360,6 +361,7 @@ function TopPlayFilters({ sub, disabled, onSave }: {
 
 function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; inviteUrl: string | null }) {
   const [data, setData] = useState<BotServers | null>(null);
+  const [showOthers, setShowOthers] = useState(false);
   // A verified link stands in for a Discord connection in this browser.
   const connected = Boolean(account?.connection || account?.links.some((link) => link.verified));
 
@@ -369,6 +371,21 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
   }, [connected]);
 
   if (!account?.signedIn) return null;
+
+  const servers = data?.ok && data.available ? data.servers : [];
+  const withBot = servers.filter((server) => server.botPresent);
+  const withoutBot = servers.filter((server) => !server.botPresent);
+  const renderRow = (server: BotServer) => (
+    <ServerRow
+      key={server.id}
+      server={server}
+      feedTypes={data!.feedTypes}
+      autoDanAvailable={data!.autoDanAvailable}
+      fallbackCountry={data!.defaultCountry}
+      inviteUrl={inviteUrl}
+      onServer={(next) => setData((current) => current ? { ...current, servers: current.servers.map((s) => s.id === next.id ? next : s) } : current)}
+    />
+  );
 
   return (
     <Panel title={<Trans>Your servers</Trans>}>
@@ -388,17 +405,21 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
         <p className="text-[14px] text-osu-f1"><Trans>You don't manage any Discord servers.</Trans></p>
       ) : (
         <div className="space-y-2">
-          {data.servers.map((server) => (
-            <ServerRow
-              key={server.id}
-              server={server}
-              feedTypes={data.feedTypes}
-              autoDanAvailable={data.autoDanAvailable}
-              fallbackCountry={data.defaultCountry}
-              inviteUrl={inviteUrl}
-              onServer={(next) => setData((current) => current ? { ...current, servers: current.servers.map((s) => s.id === next.id ? next : s) } : current)}
-            />
-          ))}
+          {withBot.map(renderRow)}
+          {withoutBot.length ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowOthers((value) => !value)}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold text-osu-l2 hover:bg-osu-b4"
+              >
+                <ChevronDown className={`h-4 w-4 transition-transform ${showOthers ? "rotate-180" : ""}`} />
+                <Trans>Add the bot to another server</Trans>
+                <span className="text-osu-f1">{withoutBot.length}</span>
+              </button>
+              {showOthers ? withoutBot.map(renderRow) : null}
+            </>
+          ) : null}
         </div>
       )}
     </Panel>

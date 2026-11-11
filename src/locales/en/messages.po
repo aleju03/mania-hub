@@ -3228,6 +3228,10 @@ msgstr "Add the {label} run"
 msgid "Add the bot"
 msgstr "Add the bot"
 
+#: src/routes/discord.tsx
+msgid "Add the bot to another server"
+msgstr "Add the bot to another server"
+
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Add the text that reads wrong."
 msgstr "Add the text that reads wrong."
