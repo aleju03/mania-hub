@@ -1,21 +1,27 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Trans, useLingui } from "@lingui/react/macro";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
+import { ChevronDown, X } from "lucide-react";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DiscordTabs } from "../components/discord/DiscordTabs";
 import { canUseDevFeatures } from "../lib/auth-shared";
-import { fetchDiscordPublicInfo, type DiscordPublicInfo } from "../lib/live-backend";
+import { fetchDiscordPublicInfo, fetchLiveUserSearch, type DiscordPublicInfo, type LiveUserSearchEntry } from "../lib/live-backend";
 import {
   fetchBotAccount,
   fetchBotPreview,
   fetchBotServers,
   linkBotAccount,
+  saveBotAlerts,
   saveBotPreferences,
+  testBotAlerts,
   unlinkBotAccount,
   updateBotServer,
   type BotAccount,
+  type BotAlerts,
+  type BotAlertsPatch,
+  type BotFeedPlayer,
   type BotServer,
   type BotServerChange,
   type BotServers,
@@ -46,9 +52,22 @@ export const Route = createFileRoute("/discord")({
     }
     return undefined as never;
   },
-  loader: async () => fetchDiscordPublicInfo(),
+  // The /profile preview loads with the page, so it is there on first paint.
+  // A slow render is left to the client rather than holding the page.
+  loader: async () => {
+    const [info, profilePreview] = await Promise.all([
+      fetchDiscordPublicInfo(),
+      Promise.race([
+        fetchBotPreview({ data: { view: "profile" } }).then((result) => result.message).catch(() => null),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), PRELOAD_PREVIEW_TIMEOUT_MS)),
+      ]),
+    ]);
+    return { info, profilePreview };
+  },
   component: DiscordToolPage,
 });
+
+const PRELOAD_PREVIEW_TIMEOUT_MS = 1500;
 
 const BLURPLE = DISCORD_BLURPLE;
 
@@ -63,7 +82,7 @@ const SLATE = {
 const HERO_ART_SOURCE: string | null = "https://www.pixiv.net/en/artworks/83835856";
 
 function DiscordToolPage() {
-  const info = Route.useLoaderData();
+  const { info, profilePreview } = Route.useLoaderData();
   const [account, setAccount] = useState<BotAccount | null>(null);
 
   useEffect(() => {
@@ -77,11 +96,6 @@ function DiscordToolPage() {
           <PageHeader
             iconSrc="/images/icons/chat.svg"
             title="maniabot"
-            right={(
-              <span className="rounded bg-osu-yellow/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-osu-yellow">
-                <Trans>dev preview</Trans>
-              </span>
-            )}
           />
 
           <DiscordTabs />
@@ -90,7 +104,7 @@ function DiscordToolPage() {
             <Hero info={info} />
             {info.configured ? <AccountPanel account={account} onChange={setAccount} /> : null}
             {info.configured ? <ServersPanel account={account} inviteUrl={info.inviteUrl} /> : null}
-            {info.configured ? <PreviewPanel /> : null}
+            {info.configured ? <PreviewPanel initialProfile={profilePreview} /> : null}
             {info.configured ? <CommandsPanel commands={info.commands} /> : null}
           </div>
         </div>
@@ -176,7 +190,16 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
     }
   }, [onChange]);
 
-  if (!account) return <Panel title={<Trans>Your account</Trans>}><div className="h-10" /></Panel>;
+  if (!account) {
+    return (
+      <Panel title={<Trans>Your account</Trans>}>
+        <div className="flex animate-pulse items-center gap-3">
+          <span className="h-10 w-10 rounded-full bg-osu-b4" />
+          <span className="h-3.5 w-72 max-w-[60%] rounded bg-osu-b4" />
+        </div>
+      </Panel>
+    );
+  }
 
   if (!account.signedIn) {
     return (
@@ -251,7 +274,104 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
           </div>
         </div>
       ) : null}
+
+      {account.alerts ? <DmAlertsSection account={account} alerts={account.alerts} onChange={onChange} /> : null}
     </Panel>
+  );
+}
+
+// Each language named in itself, as the site's language menu does.
+const DM_LANGUAGES: Array<{ value: string; label: ReactNode }> = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Español" },
+  { value: "zh-CN", label: "中文（简体）" },
+];
+
+// Supporter DMs: the bot messages the viewer's verified Discord link.
+function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; alerts: BotAlerts; onChange: (account: BotAccount) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const verified = account.links.some((link) => link.verified);
+  const usable = alerts.supporter && verified;
+
+  const save = async (patch: BotAlertsPatch) => {
+    setBusy(true);
+    setSaveFailed(false);
+    try {
+      onChange(await saveBotAlerts({ data: patch }));
+    } catch {
+      setSaveFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const test = async () => {
+    setBusy(true);
+    setTestResult(null);
+    try {
+      const { result, account: next } = await testBotAlerts();
+      setTestResult(result);
+      onChange(next);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const blocked = testResult === "blocked" || (testResult == null && alerts.failedAt != null);
+
+  return (
+    <div className="mt-4 border-t border-white/[0.07] pt-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-semibold text-white"><Trans>DMs from the bot</Trans></span>
+        <span className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[11px] font-semibold text-osu-pink-light"><Trans>Supporters</Trans></span>
+        <div className="flex-1" />
+        {!alerts.supporter ? (
+          <Link to="/support" hash="bot-dms" className="rounded-lg bg-osu-pink px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110">
+            <Trans>Become a supporter</Trans>
+          </Link>
+        ) : verified ? (
+          <button type="button" disabled={busy} onClick={() => void test()} className="rounded-lg bg-osu-b3 px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-50">
+            <Trans>Send a test message</Trans>
+          </button>
+        ) : null}
+      </div>
+      <div className={`flex flex-wrap gap-x-6 gap-y-2 ${usable ? "" : "opacity-50"}`}>
+        <Toggle checked={alerts.snipes} disabled={busy || !usable} onChange={(on) => void save({ snipes: on })} label={<Trans>When I get sniped</Trans>} />
+        <Toggle checked={alerts.goals} disabled={busy || !usable} onChange={(on) => void save({ goals: on })} label={<Trans>Goals I complete</Trans>} />
+        <Toggle checked={alerts.newMaps} disabled={busy || !usable} onChange={(on) => void save({ newMaps: on })} label={<Trans>New farm maps at my level</Trans>} />
+        <Toggle checked={alerts.cardPulls} disabled={busy || !usable} onChange={(on) => void save({ cardPulls: on })} label={<Trans>When someone pulls my card</Trans>} />
+        <Toggle checked={alerts.weeklyRecap} disabled={busy || !usable} onChange={(on) => void save({ weeklyRecap: on })} label={<Trans>Weekly recap</Trans>} />
+      </div>
+      <div className={`mt-3 flex flex-wrap items-center gap-2 text-[12px] text-osu-f1 ${usable ? "" : "opacity-50"}`}>
+        <span className="mr-1"><Trans>Language</Trans></span>
+        <Segmented
+          value={alerts.locale}
+          disabled={busy || !usable}
+          options={DM_LANGUAGES}
+          onChange={(value) => void save({ dmLocale: value })}
+        />
+      </div>
+      <div className={`mt-3 text-[12px] text-osu-f1 ${usable ? "" : "opacity-50"}`}>
+        <FeedPlayerPicker
+          players={alerts.follows}
+          disabled={busy || !usable}
+          label={<Trans>Top plays from</Trans>}
+          emptyLabel={<Trans>Nobody</Trans>}
+          onChange={(next) => void save({ follows: next.map((player) => player.id) })}
+        />
+      </div>
+      {alerts.supporter && !verified ? (
+        <p className="mt-3 text-[12px] text-osu-f1"><Trans>Connect Discord here and link it to get messages.</Trans></p>
+      ) : null}
+      {saveFailed ? <p className="mt-3 text-[12px] text-rose-300"><Trans>That didn't save. Try again.</Trans></p> : null}
+      {testResult === "sent" ? <p className="mt-3 text-[12px] text-emerald-300"><Trans>Sent. Check your DMs on Discord.</Trans></p> : null}
+      {testResult && testResult !== "sent" && testResult !== "blocked" ? (
+        <p className="mt-3 text-[12px] text-rose-300"><Trans>That didn't send. Try again.</Trans></p>
+      ) : null}
+      {blocked ? (
+        <p className="mt-3 text-[12px] text-rose-300"><Trans>Discord didn't let the bot message you. It needs to share a server with you, with DMs from that server turned on.</Trans></p>
+      ) : null}
+    </div>
   );
 }
 
@@ -294,33 +414,53 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
 const FILTER_KEYS = [4, 5, 6, 7, 8, 9, 10];
 const KEYMODE_TOP_CHOICES = [0, 100, 50];
 
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[] };
+
+function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
+  return { minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [] };
+}
+
 // Which top plays a channel posts: keymodes, a cut to the player's best N of
-// that keymode, and a pp floor.
-function TopPlayFilters({ sub, disabled, onSave }: {
+// that keymode, a pp floor and a player list. Changes show at once and save in
+// order behind the scenes, since each save waits on Discord for a few seconds.
+function TopPlayFilters({ sub, onSave }: {
   sub: BotServer["subscriptions"][number];
-  disabled: boolean;
-  onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number }) => void;
+  onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number; players: number[] }) => Promise<boolean>;
 }) {
-  const keys = sub.keys ?? [];
-  const keymodeTop = sub.keymodeTop ?? 0;
+  const [filters, setFilters] = useState(() => filtersOf(sub));
+  const pending = useRef(0);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  useEffect(() => {
+    if (pending.current === 0) setFilters(filtersOf(sub));
+  }, [sub]);
   const [minPpDraft, setMinPpDraft] = useState(sub.minPp ? String(sub.minPp) : "");
   useEffect(() => setMinPpDraft(sub.minPp ? String(sub.minPp) : ""), [sub.minPp]);
   const draftPp = Math.max(0, Math.floor(Number(minPpDraft) || 0));
-  const save = (next: Partial<{ minPp: number; keys: number[]; keymodeTop: number }>) =>
-    onSave({ minPp: sub.minPp, keys, keymodeTop, ...next });
-  const chip = (active: boolean) =>
-    `rounded-md px-2 py-0.5 text-[12px] font-semibold disabled:opacity-40 ${active ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:brightness-110"}`;
+
+  const save = (patch: Partial<TopPlayFilterState>) => {
+    const next = { ...filters, ...patch };
+    setFilters(next);
+    pending.current++;
+    queue.current = queue.current
+      .then(() => onSave({ minPp: next.minPp, keys: next.keys, keymodeTop: next.keymodeTop, players: next.players.map((p) => p.id) }))
+      .then((ok) => {
+        pending.current--;
+        if (!ok && pending.current === 0) setFilters(filtersOf(sub));
+      });
+  };
+  const chip = (active: boolean, interactive = true) =>
+    `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
+  const { keys, keymodeTop, players } = filters;
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-3 text-[12px] text-osu-f1">
       <div className="flex flex-wrap items-center gap-1">
         <span className="mr-1"><Trans>Top plays in</Trans></span>
-        <button type="button" disabled={disabled} className={chip(keys.length === 0)} onClick={() => save({ keys: [] })}><Trans>All keys</Trans></button>
+        <button type="button" className={chip(keys.length === 0, keys.length > 0)} onClick={() => { if (keys.length) save({ keys: [] }); }}><Trans>All keys</Trans></button>
         {FILTER_KEYS.map((k) => (
           <button
             key={k}
             type="button"
-            disabled={disabled}
             className={chip(keys.includes(k))}
             onClick={() => save({ keys: keys.includes(k) ? keys.filter((v) => v !== k) : [...keys, k].sort((a, b) => a - b) })}
           >
@@ -330,7 +470,7 @@ function TopPlayFilters({ sub, disabled, onSave }: {
       </div>
       <div className="flex flex-wrap items-center gap-1">
         {KEYMODE_TOP_CHOICES.map((n) => (
-          <button key={n} type="button" disabled={disabled} className={chip(keymodeTop === n)} onClick={() => save({ keymodeTop: n })}>
+          <button key={n} type="button" className={chip(keymodeTop === n, keymodeTop !== n)} onClick={() => { if (keymodeTop !== n) save({ keymodeTop: n }); }}>
             {n === 0 ? <Trans>Any top play</Trans> : <Trans>Top {n} of the keymode</Trans>}
           </button>
         ))}
@@ -341,17 +481,113 @@ function TopPlayFilters({ sub, disabled, onSave }: {
           value={minPpDraft}
           inputMode="numeric"
           onChange={(event) => setMinPpDraft(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
-          onKeyDown={(event) => { if (event.key === "Enter" && draftPp !== sub.minPp) save({ minPp: draftPp }); }}
+          onKeyDown={(event) => { if (event.key === "Enter" && draftPp !== filters.minPp) save({ minPp: draftPp }); }}
           placeholder="0"
           className="w-14 rounded-md bg-osu-b5 px-2 py-0.5 text-[12px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
         />
         <span>pp</span>
-        {draftPp !== sub.minPp ? (
-          <button type="button" disabled={disabled} onClick={() => save({ minPp: draftPp })} className="rounded-md bg-osu-b3 px-2 py-0.5 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-40">
+        {draftPp !== filters.minPp ? (
+          <button type="button" onClick={() => save({ minPp: draftPp })} className="rounded-md bg-osu-b3 px-2 py-0.5 text-[12px] font-semibold text-white hover:brightness-110">
             <Trans>Save</Trans>
           </button>
         ) : null}
       </div>
+      <FeedPlayerPicker
+        players={players}
+        onChange={(next) => save({ players: next })}
+      />
+    </div>
+  );
+}
+
+const MAX_FEED_PLAYERS = 50;
+
+// The players a top-play feed is limited to, picked from players the site
+// tracks. Empty means everyone in the feed's country.
+function FeedPlayerPicker({ players, onChange, label, emptyLabel, disabled = false }: {
+  players: BotFeedPlayer[];
+  onChange: (players: BotFeedPlayer[]) => void;
+  label?: ReactNode;
+  emptyLabel?: ReactNode;
+  disabled?: boolean;
+}) {
+  const { t } = useLingui();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<LiveUserSearchEntry[]>([]);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void fetchLiveUserSearch(trimmed, 8, { tracked: true })
+        .then((users) => { if (!cancelled) setResults(users); })
+        .catch(() => { if (!cancelled) setResults([]); });
+    }, 200);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [query]);
+
+  const chosen = new Set(players.map((p) => p.id));
+  const options = results.filter((user) => !chosen.has(user.id));
+  const add = (user: LiveUserSearchEntry) => {
+    onChange([...players, { id: user.id, username: user.username, avatarUrl: user.avatarUrl || null }]);
+    setQuery("");
+    setResults([]);
+  };
+
+  return (
+    <div className="flex w-full flex-wrap items-center gap-1.5">
+      <span className="mr-1">{label ?? <Trans>Players</Trans>}</span>
+      {players.length === 0 ? <span className="text-osu-l2">{emptyLabel ?? <Trans>Everyone</Trans>}</span> : null}
+      {players.map((player) => (
+        <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-osu-b5 py-0.5 pl-1 pr-1.5 text-[12px] font-semibold text-white">
+          {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
+          {player.username}
+          <button
+            type="button"
+            aria-label={t`Remove ${player.username}`}
+            disabled={disabled}
+            onClick={() => onChange(players.filter((p) => p.id !== player.id))}
+            className="text-osu-f1 hover:text-white disabled:opacity-40"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      {players.length < MAX_FEED_PLAYERS && !disabled ? (
+        <div className="relative">
+          <input
+            value={query}
+            onChange={(event) => { setQuery(event.target.value.slice(0, 30)); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onKeyDown={(event) => { if (event.key === "Enter" && options[0]) add(options[0]); }}
+            placeholder={t`Add a player`}
+            className="w-36 rounded-md bg-osu-b5 px-2 py-0.5 text-[12px] text-white outline-none placeholder:text-osu-f1 focus:ring-1 focus:ring-osu-pink/60"
+          />
+          {open && options.length ? (
+            <div className="absolute left-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-lg bg-osu-b3 py-1 shadow-lg">
+              {options.map((user) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => add(user)}
+                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] text-white hover:bg-osu-b4"
+                >
+                  {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-5 w-5 rounded-full" /> : null}
+                  <span className="min-w-0 flex-1 truncate">{user.username}</span>
+                  {user.countryCode ? <span className="text-[11px] text-osu-f1">{user.countryCode}</span> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -359,20 +595,45 @@ function TopPlayFilters({ sub, disabled, onSave }: {
 // --- Servers -----------------------------------------------------------------
 
 function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; inviteUrl: string | null }) {
-  const [data, setData] = useState<BotServers | null>(null);
+  // undefined while loading, null when the request failed.
+  const [data, setData] = useState<BotServers | null | undefined>(undefined);
+  const [showOthers, setShowOthers] = useState(false);
   // A verified link stands in for a Discord connection in this browser.
   const connected = Boolean(account?.connection || account?.links.some((link) => link.verified));
 
-  useEffect(() => {
-    if (!connected) return;
+  // Fetched alongside the account rather than after it, then again only if
+  // Discord gets connected or linked during the visit.
+  const load = useCallback(() => {
     void fetchBotServers().then(setData).catch(() => setData(null));
-  }, [connected]);
+  }, []);
+  useEffect(load, [load]);
+  const needsDiscord = data?.error === "no_discord";
+  useEffect(() => {
+    if (connected && needsDiscord) load();
+  }, [connected, needsDiscord, load]);
 
-  if (!account?.signedIn) return null;
+  if (account && !account.signedIn) return null;
+
+  const servers = data?.ok && data.available ? data.servers : [];
+  const withBot = servers.filter((server) => server.botPresent);
+  const withoutBot = servers.filter((server) => !server.botPresent);
+  const renderRow = (server: BotServer) => (
+    <ServerRow
+      key={server.id}
+      server={server}
+      feedTypes={data!.feedTypes}
+      autoDanAvailable={data!.autoDanAvailable}
+      fallbackCountry={data!.defaultCountry}
+      inviteUrl={inviteUrl}
+      onServer={(next) => setData((current) => current ? { ...current, servers: current.servers.map((s) => s.id === next.id ? next : s) } : current)}
+    />
+  );
 
   return (
     <Panel title={<Trans>Your servers</Trans>}>
-      {!connected || data?.error === "no_discord" ? (
+      {!account || data === undefined ? (
+        <ServerSkeleton />
+      ) : !connected || data?.error === "no_discord" ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="min-w-0 flex-1 text-[14px] text-osu-l2"><Trans>Connect Discord to set up feeds in servers where you have Manage Server.</Trans></p>
           <a href={connectHref()} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold text-white hover:brightness-110" style={{ backgroundColor: BLURPLE }}>
@@ -380,28 +641,46 @@ function ServersPanel({ account, inviteUrl }: { account: BotAccount | null; invi
             <Trans>Connect Discord</Trans>
           </a>
         </div>
-      ) : !data ? (
-        <div className="h-10" />
-      ) : !data.ok || !data.available ? (
+      ) : !data || !data.ok || !data.available ? (
         <p className="text-[14px] text-osu-f1"><Trans>Server settings aren't available right now.</Trans></p>
       ) : data.servers.length === 0 ? (
         <p className="text-[14px] text-osu-f1"><Trans>You don't manage any Discord servers.</Trans></p>
       ) : (
         <div className="space-y-2">
-          {data.servers.map((server) => (
-            <ServerRow
-              key={server.id}
-              server={server}
-              feedTypes={data.feedTypes}
-              autoDanAvailable={data.autoDanAvailable}
-              fallbackCountry={data.defaultCountry}
-              inviteUrl={inviteUrl}
-              onServer={(next) => setData((current) => current ? { ...current, servers: current.servers.map((s) => s.id === next.id ? next : s) } : current)}
-            />
-          ))}
+          {withBot.map(renderRow)}
+          {withoutBot.length ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowOthers((value) => !value)}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold text-osu-l2 hover:bg-osu-b4"
+              >
+                <ChevronDown className={`h-4 w-4 transition-transform ${showOthers ? "rotate-180" : ""}`} />
+                <Trans>Add the bot to another server</Trans>
+                <span className="text-osu-f1">{withoutBot.length}</span>
+              </button>
+              {showOthers ? withoutBot.map(renderRow) : null}
+            </>
+          ) : null}
         </div>
       )}
     </Panel>
+  );
+}
+
+function ServerSkeleton() {
+  return (
+    <div className="animate-pulse space-y-2">
+      {[0, 1].map((row) => (
+        <div key={row} className="flex items-center gap-3 rounded-xl bg-osu-b4 p-3">
+          <span className="h-9 w-9 rounded-full bg-osu-b3" />
+          <div className="flex-1 space-y-2">
+            <span className="block h-3.5 w-40 rounded bg-osu-b3" />
+            <span className="block h-3 w-20 rounded bg-osu-b3" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -437,6 +716,18 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
     } finally {
       setBusy(false);
     }
+  }, [onServer, server.id]);
+
+  // Filter saves don't lock the panel: the filter row shows its change at once.
+  const saveFilters = useCallback(async (change: BotServerChange) => {
+    setError(null);
+    const result = await updateBotServer({ data: { guildId: server.id, change } }).catch(() => null);
+    if (result?.ok && result.server) {
+      onServer(result.server);
+      return true;
+    }
+    setError(result?.error ?? "failed");
+    return false;
   }, [onServer, server.id]);
 
   const activeChannels = useMemo(() => new Set([
@@ -518,7 +809,11 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                         <td key={feed} className="px-2 py-1.5 text-center">
                           <div className="inline-flex items-center gap-1.5">
                             <Toggle checked={Boolean(sub)} disabled={busy} onChange={(on) => void apply({ feed: { channelId: channel.id, feedType: feed, on, country } })} />
-                            {sub && feed === "top_play" ? <span className="text-[11px] text-osu-f1">{sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country}</span> : null}
+                            {sub && feed === "top_play" ? (
+                              <span className="text-[11px] text-osu-f1">
+                                {sub.players?.length ? <Plural value={sub.players.length} one="# player" other="# players" /> : sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country}
+                              </span>
+                            ) : null}
                           </div>
                         </td>
                       );
@@ -538,8 +833,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                       <td colSpan={1 + feedTypes.length + (autoDanAvailable ? 1 : 0)} className="pb-2.5 pt-0.5">
                         <TopPlayFilters
                           sub={topPlays}
-                          disabled={busy}
-                          onSave={(filters) => void apply({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
+                          onSave={(filters) => saveFilters({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
                         />
                       </td>
                     </tr>
@@ -575,6 +869,21 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
 
 // --- Previews ----------------------------------------------------------------
 
+// The shape of an embed while its preview renders.
+function PreviewSkeleton() {
+  return (
+    <div className="mt-1 flex max-w-[520px] animate-pulse overflow-hidden rounded" style={{ backgroundColor: DISCORD.embed }}>
+      <span className="w-1 shrink-0" style={{ backgroundColor: DISCORD.muted }} />
+      <div className="flex-1 space-y-3 p-4">
+        <span className="block h-4 w-32 rounded bg-white/10" />
+        <span className="block h-4 w-64 max-w-full rounded bg-white/10" />
+        <span className="block h-3 w-48 max-w-full rounded bg-white/[0.07]" />
+        <span className="block h-3 w-56 max-w-full rounded bg-white/[0.07]" />
+      </div>
+    </div>
+  );
+}
+
 const PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "profile", label: msg`/profile` },
   { id: "skills", label: msg`/skills` },
@@ -583,10 +892,10 @@ const PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "help", label: msg`/help` },
 ];
 
-function PreviewPanel() {
+function PreviewPanel({ initialProfile }: { initialProfile: DiscordMessageJson | null }) {
   const { i18n } = useLingui();
   const [view, setView] = useState("profile");
-  const [messages, setMessages] = useState<Record<string, DiscordMessageJson | null | undefined>>({});
+  const [messages, setMessages] = useState<Record<string, DiscordMessageJson | null | undefined>>(() => (initialProfile ? { profile: initialProfile } : {}));
 
   useEffect(() => {
     if (messages[view] !== undefined) return;
@@ -625,7 +934,7 @@ function PreviewPanel() {
               <span className="rounded-[3px] px-1 text-[10px] font-semibold leading-[15px] text-white" style={{ backgroundColor: BLURPLE }}>APP</span>
             </div>
             <div className="mt-1 min-h-[120px]">
-              {message === undefined ? null : message ? (
+              {message === undefined ? <PreviewSkeleton /> : message ? (
                 <DiscordMessageBodyView body={message} />
               ) : (
                 <p className="text-[14px]" style={{ color: DISCORD.muted }}><Trans>This preview isn't available right now.</Trans></p>

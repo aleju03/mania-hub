@@ -10,6 +10,7 @@ import { SupportCheckout, SupportMethodSteps, useSupportMethods, type SupportMet
 import { KofiNameSteps } from "../components/supporter/KofiNameSteps";
 import { SupportPlans } from "../components/supporter/SupportPlans";
 import {
+  BotDmShowcase,
   CardShowcase,
   ClipShowcase,
   FramesShowcase,
@@ -43,7 +44,7 @@ export const Route = createFileRoute("/support")({
     return {
       meta: [
         { title: i18n._(msg`Support`) },
-        { name: "description", content: i18n._(msg`Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats and video share links.`) },
+        { name: "description", content: i18n._(msg`Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats, video share links and DMs from the Discord bot.`) },
       ],
     };
   },
@@ -60,6 +61,7 @@ const SECTIONS: { id: string; label: MessageDescriptor }[] = [
   { id: "packs", label: msg`Packs` },
   { id: "stats", label: msg`Profile stats` },
   { id: "sharing", label: msg`Video share links` },
+  { id: "bot-dms", label: msg`Bot DMs` },
   { id: "gift", label: msg`A week for a friend` },
   { id: "ranks", label: msg`Supporter ranks` },
   { id: "how", label: msg`How it works` },
@@ -307,6 +309,16 @@ function SupportPage() {
               body={t`After exporting a replay video, get a link that plays it right in Discord chat.`}
             >
               <ClipShowcase />
+            </Perk>
+
+            <Perk
+              id="bot-dms"
+              title={t`DMs from the bot`}
+              count={t`Optional`}
+              body={t`Link Discord and pick which ones maniabot sends you: when you get sniped, finish a goal, a player you follow sets a top play, a new farm map at your level gets ranked, someone pulls your card, and a recap of your week. In English, Spanish or Chinese.`}
+              more={<Trans>Turn them on from the <Link to="/discord">Discord bot page</Link>.</Trans>}
+            >
+              <BotDmShowcase />
             </Perk>
 
             <Perk

@@ -3619,11 +3619,13 @@ export interface LiveUserSearchEntry {
   avatarAccent?: string | null;
 }
 
-export async function fetchLiveUserSearch(query: string, limit?: number): Promise<LiveUserSearchEntry[]> {
+// `tracked` keeps to players on a tracked country roster.
+export async function fetchLiveUserSearch(query: string, limit?: number, options: { tracked?: boolean } = {}): Promise<LiveUserSearchEntry[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
   const params = new URLSearchParams({ q: trimmed });
   if (limit != null) params.set("limit", String(limit));
+  if (options.tracked) params.set("tracked", "1");
   const response = await fetchLiveJson<{ users?: LiveUserSearchEntry[] }>(`/api/users/search?${params.toString()}`);
   return response?.users ?? [];
 }
@@ -5174,6 +5176,29 @@ let nameStyleMap: {
 let nameStyleMapInflight = false;
 // set after a local save, so the next fetch skips the HTTP cache (max-age 60)
 let nameStyleMapReload = false;
+/* The same, across a page reload: the browser's copy of the map stays fresh
+   for a minute, so a reload right after a save would bring the old look
+   back. The save's time is kept for a little longer than that. */
+const NAME_STYLE_SAVED_AT_KEY = "mania-hub-look-saved-at";
+const NAME_STYLE_SAVED_WINDOW_MS = 90_000;
+
+function markNameStyleMapStale(): void {
+  nameStyleMapReload = true;
+  try {
+    window.localStorage.setItem(NAME_STYLE_SAVED_AT_KEY, String(Date.now()));
+  } catch {
+    // storage blocked: this page's flag still covers it
+  }
+}
+
+function lookSavedRecently(): boolean {
+  try {
+    const at = Number(window.localStorage.getItem(NAME_STYLE_SAVED_AT_KEY));
+    return Number.isFinite(at) && Date.now() - at < NAME_STYLE_SAVED_WINDOW_MS;
+  } catch {
+    return false;
+  }
+}
 const nameStyleListeners = new Set<() => void>();
 
 export function subscribeSupporterNameStyles(listener: () => void): () => void {
@@ -5199,7 +5224,7 @@ export function setSupporterNameOutlineLocally(userId: number, outline: string |
   if (outline) outlines.set(userId, outline);
   else outlines.delete(userId);
   nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
-  nameStyleMapReload = true;
+  markNameStyleMapStale();
   for (const listener of nameStyleListeners) listener();
 }
 
@@ -5251,7 +5276,7 @@ export function setSupporterSleeveLocally(userId: number, sleeve: SupporterCardS
   if (sleeve) sleeves.set(userId, sleeve);
   else sleeves.delete(userId);
   nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines: nameStyleMap?.outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves, themes: nameStyleMap?.themes ?? new Map() };
-  nameStyleMapReload = true;
+  markNameStyleMapStale();
   for (const listener of nameStyleListeners) listener();
 }
 
@@ -5259,9 +5284,10 @@ export function ensureSupporterNameStyles(): void {
   if (nameStyleMapInflight || !getLiveBackendUrl()) return;
   if (nameStyleMap && Date.now() - nameStyleMap.at < NAME_STYLE_MAP_TTL_MS) return;
   nameStyleMapInflight = true;
-  const reload = nameStyleMapReload;
+  const reload = nameStyleMapReload || lookSavedRecently();
   nameStyleMapReload = false;
-  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; outlines?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown>; customRows?: Record<string, unknown>; frameArt?: unknown }>("/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
+  // a new URL too, so no cache between here and the backend answers it
+  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; outlines?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown>; customRows?: Record<string, unknown>; frameArt?: unknown }>(reload ? `/api/supporters/name-styles?fresh=${Date.now()}` : "/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
     .then((body) => {
       registerWorkshopFrames(parseWorkshopFrameArt(body?.frameArt));
       const styles = new Map<number, SupporterNameStyleId>();
@@ -5293,7 +5319,7 @@ export function setSupporterFrameLocally(userId: number, frame: SupporterAvatarF
   if (frame) frames.set(userId, frame);
   else frames.delete(userId);
   nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines: nameStyleMap?.outlines, frames, sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
-  nameStyleMapReload = true;
+  markNameStyleMapStale();
   for (const listener of nameStyleListeners) listener();
 }
 
@@ -5303,7 +5329,7 @@ export function setSupporterThemeLocally(userId: number, theme: SupporterRowThem
   if (theme) themes.set(userId, theme);
   else themes.delete(userId);
   nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines: nameStyleMap?.outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes };
-  nameStyleMapReload = true;
+  markNameStyleMapStale();
   for (const listener of nameStyleListeners) listener();
 }
 
@@ -5319,7 +5345,7 @@ export function setSupporterNameStyleLocally(userId: number, style: SupporterNam
     else fonts.delete(userId);
   }
   nameStyleMap = { at: nameStyleMap?.at ?? 0, styles, fonts, outlines: nameStyleMap?.outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
-  nameStyleMapReload = true;
+  markNameStyleMapStale();
   for (const listener of nameStyleListeners) listener();
 }
 

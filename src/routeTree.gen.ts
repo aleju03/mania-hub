@@ -120,6 +120,7 @@ import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as ApiCompanellaChartRouteImport } from './routes/api/companella/chart'
 import { Route as ApiCompanellaReplayRouteImport } from './routes/api/companella/replay'
 import { Route as ApiCompanellaUsageRouteImport } from './routes/api/companella/usage'
+import { Route as ApiInternalAccountDeletionRouteImport } from './routes/api/internal/account-deletion'
 import { Route as ClipMediaIdFileRouteImport } from './routes/clip-media/$id/$file'
 import { Route as CompanellaDocsOpenapiDotyamlRouteImport } from './routes/companella_.docs_.openapi[.]yaml'
 import { Route as CompanellaDocsReferenceClientDotmjsRouteImport } from './routes/companella_.docs_.reference-client[.]mjs'
@@ -711,6 +712,12 @@ const ApiCompanellaUsageRoute = ApiCompanellaUsageRouteImport.update({
   path: '/api/companella/usage',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiInternalAccountDeletionRoute =
+  ApiInternalAccountDeletionRouteImport.update({
+    id: '/api/internal/account-deletion',
+    path: '/api/internal/account-deletion',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ClipMediaIdFileRoute = ClipMediaIdFileRouteImport.update({
   id: '/clip-media/$id/$file',
   path: '/clip-media/$id/$file',
@@ -1012,6 +1019,7 @@ export interface FileRoutesByFullPath {
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
+  '/api/internal/account-deletion': typeof ApiInternalAccountDeletionRoute
   '/clip-media/$id/$file': typeof ClipMediaIdFileRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
@@ -1159,6 +1167,7 @@ export interface FileRoutesByTo {
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
+  '/api/internal/account-deletion': typeof ApiInternalAccountDeletionRoute
   '/clip-media/$id/$file': typeof ClipMediaIdFileRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
@@ -1307,6 +1316,7 @@ export interface FileRoutesById {
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
+  '/api/internal/account-deletion': typeof ApiInternalAccountDeletionRoute
   '/clip-media/$id/$file': typeof ClipMediaIdFileRoute
   '/companella_/docs_/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella_/docs_/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
@@ -1456,6 +1466,7 @@ export interface FileRouteTypes {
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
+    | '/api/internal/account-deletion'
     | '/clip-media/$id/$file'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
@@ -1603,6 +1614,7 @@ export interface FileRouteTypes {
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
+    | '/api/internal/account-deletion'
     | '/clip-media/$id/$file'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
@@ -1750,6 +1762,7 @@ export interface FileRouteTypes {
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
+    | '/api/internal/account-deletion'
     | '/clip-media/$id/$file'
     | '/companella_/docs_/openapi.yaml'
     | '/companella_/docs_/reference-client.mjs'
@@ -1897,6 +1910,7 @@ export interface RootRouteChildren {
   ApiCompanellaChartRoute: typeof ApiCompanellaChartRoute
   ApiCompanellaReplayRoute: typeof ApiCompanellaReplayRoute
   ApiCompanellaUsageRoute: typeof ApiCompanellaUsageRoute
+  ApiInternalAccountDeletionRoute: typeof ApiInternalAccountDeletionRoute
   ClipMediaIdFileRoute: typeof ClipMediaIdFileRoute
   CompanellaDocsOpenapiDotyamlRoute: typeof CompanellaDocsOpenapiDotyamlRoute
   CompanellaDocsReferenceClientDotmjsRoute: typeof CompanellaDocsReferenceClientDotmjsRoute
@@ -2698,6 +2712,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCompanellaUsageRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/internal/account-deletion': {
+      id: '/api/internal/account-deletion'
+      path: '/api/internal/account-deletion'
+      fullPath: '/api/internal/account-deletion'
+      preLoaderRoute: typeof ApiInternalAccountDeletionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/clip-media/$id/$file': {
       id: '/clip-media/$id/$file'
       path: '/clip-media/$id/$file'
@@ -3184,6 +3205,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCompanellaChartRoute: ApiCompanellaChartRoute,
   ApiCompanellaReplayRoute: ApiCompanellaReplayRoute,
   ApiCompanellaUsageRoute: ApiCompanellaUsageRoute,
+  ApiInternalAccountDeletionRoute: ApiInternalAccountDeletionRoute,
   ClipMediaIdFileRoute: ClipMediaIdFileRoute,
   CompanellaDocsOpenapiDotyamlRoute: CompanellaDocsOpenapiDotyamlRoute,
   CompanellaDocsReferenceClientDotmjsRoute:

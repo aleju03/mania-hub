@@ -361,7 +361,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
   );
 }
 
-type PerkId = "theme" | "frame" | "name" | "card" | "packs" | "stats" | "plays" | "companion" | "clips" | "gift";
+type PerkId = "theme" | "frame" | "name" | "card" | "packs" | "stats" | "plays" | "companion" | "clips" | "dms" | "gift";
 
 const PERKS: { id: PerkId; title: MessageDescriptor; body: MessageDescriptor }[] = [
   { id: "theme", title: msg`Profile theme`, body: msg`Your whole profile takes on a theme, with a living backdrop behind it.` },
@@ -373,6 +373,7 @@ const PERKS: { id: PerkId; title: MessageDescriptor; body: MessageDescriptor }[]
   { id: "plays", title: msg`Your own plays`, body: msg`Put any play the site tracked of you under your profile stats, with a title of your own and its pp, rating or dan.` },
   { id: "companion", title: msg`Mascot`, body: msg`A figure that stands beside your profile's numbers. Pick one from the list, or submit your own.` },
   { id: "clips", title: msg`Video share links`, body: msg`After exporting a replay video, get a link that plays it right in Discord chat.` },
+  { id: "dms", title: msg`DMs from the bot`, body: msg`Optional Discord DMs when you get sniped, finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page.` },
   { id: "gift", title: msg`A week for a friend`, body: msg`A one-time code that gives someone else a week of supporter.` },
 ];
 
@@ -430,6 +431,8 @@ function PerkArt({ id, avatar }: { id: PerkId; avatar: string | undefined }) {
       );
     case "companion":
       return <CompanionThumb companion={{ builtIn: builtInCompanion("fumo-cirno")! }} className="h-[50px] w-[50px]" />;
+    case "dms":
+      return <img src="/images/discord/bot-avatar.png" alt="" width={40} height={40} className="h-[40px] w-[40px] rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.5)]" />;
     case "clips":
       return (
         <svg viewBox="0 0 44 30" aria-hidden className="w-[44px]">

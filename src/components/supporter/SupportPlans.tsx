@@ -91,7 +91,7 @@ function MonthlyPerks({ index }: { index: number }) {
         <p className="mt-0.5 text-center text-[11.5px] leading-snug text-osu-f1">{t`One gem up for every month in a row. If it lapses, it starts again at Amber.`}</p>
       </div>
       <ul className="px-4 py-1">
-        <PerkRow art={<RankGem rank={rank} renewing className="h-7 w-7" />} title={t`Rank on fire`} body={t`A flame on your gem while your subscription renews.`} />
+        <PerkRow art={<RankGem rank={rank} renewing className="h-7 w-7" />} title={t`Rank on fire`} body={t`Your rank badge burns for as long as you stay subscribed.`} />
         <PerkRow art={<FrameThumb frame="autumn-maple" avatar={you.avatar} size={40} />} title={t`Every supporter look`} body={t`Frames, themes, name styles and card looks, for as long as it renews.`} />
         <PerkRow art={<TicketMark />} title={t`Extra gift codes`} body={t`One for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up.`} />
         <PerkRow art={<SupporterRankIcon rank={GOLD} className="h-8 w-8" />} title={t`Gold supporter`} body={t`In your rank's tooltip, at $10 a month or more.`} />

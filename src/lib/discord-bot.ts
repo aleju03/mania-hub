@@ -23,7 +23,26 @@ export interface BotAccount {
   connection: { discordUserId: string; discordUsername: string; discordAvatarUrl: string | null } | null;
   links: Array<{ discordUserId: string; osuUsername: string; verified: boolean }>;
   settings: BotPreferences | null;
+  alerts: BotAlerts | null;
 }
+
+// Supporter DMs: what the bot messages the viewer's verified Discord link about.
+export interface BotAlerts {
+  supporter: boolean;
+  snipes: boolean;
+  goals: boolean;
+  newMaps: boolean;
+  cardPulls: boolean;
+  weeklyRecap: boolean;
+  follows: BotFeedPlayer[];
+  // When Discord last refused a DM to the viewer.
+  failedAt: string | null;
+  // The DM language; until picked (localeChosen) it follows the site's.
+  locale: string;
+  localeChosen: boolean;
+}
+
+export type BotAlertsPatch = Partial<Pick<BotAlerts, "snipes" | "goals" | "newMaps" | "cardPulls" | "weeklyRecap">> & { follows?: number[]; dmLocale?: string };
 
 export interface BotChannel {
   id: string;
@@ -37,8 +56,14 @@ export interface BotServer {
   iconUrl: string | null;
   botPresent: boolean;
   channels: BotChannel[];
-  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number }>;
+  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[] }>;
   settings: { defaultCountry: string | null; autoDanChannels: string[] };
+}
+
+export interface BotFeedPlayer {
+  id: number;
+  username: string;
+  avatarUrl: string | null;
 }
 
 export interface BotServers {
@@ -54,7 +79,7 @@ export interface BotServers {
 export interface BotServerChange {
   defaultCountry?: string | null;
   feed?: { channelId: string; feedType: string; on: boolean; country?: string };
-  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number };
+  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[] };
   autoDan?: { channelId: string; on: boolean };
 }
 
@@ -75,6 +100,15 @@ async function noStore(): Promise<void> {
 async function viewer() {
   const { readCurrentAuth } = await import("./auth-server");
   return (await readCurrentAuth()).viewer ?? null;
+}
+
+// The site language, which the backend keeps so supporter DMs are written in it.
+async function siteLocale(): Promise<string> {
+  const { getCookie } = await import("@tanstack/react-start/server");
+  const { LOCALE_COOKIE_NAME } = await import("./locale-cookie");
+  const { normalizeLocale } = await import("./locale");
+  const raw = getCookie(LOCALE_COOKIE_NAME);
+  return (raw && normalizeLocale(decodeURIComponent(raw))) || "en";
 }
 
 async function connection(osuUserId: number) {
@@ -99,12 +133,12 @@ async function readAccount(viewerId: number, signedIn: boolean, viewerUsername?:
   const { isDiscordOAuthConfigured } = await import("./discord-auth-server");
   const link = signedIn ? await connection(viewerId) : null;
   let account = signedIn
-    ? await post<{ links?: BotAccount["links"]; settings?: BotPreferences | null }>("/api/discord/account", { viewerId })
+    ? await post<AccountBody>("/api/discord/account", { viewerId, locale: await siteLocale() })
     : null;
   // A link typed in /link for the Discord account just connected here is now
   // proven, so it is confirmed without another click.
   if (link && viewerUsername && account?.links?.some((entry) => entry.discordUserId === link.discordUserId && !entry.verified)) {
-    account = await post<{ links?: BotAccount["links"]; settings?: BotPreferences | null }>("/api/discord/account/link", {
+    account = await post<AccountBody>("/api/discord/account/link", {
       viewerId,
       viewerUsername,
       countryCode: countryCode ?? null,
@@ -117,8 +151,41 @@ async function readAccount(viewerId: number, signedIn: boolean, viewerUsername?:
     connection: link ? { discordUserId: link.discordUserId, discordUsername: link.discordUsername, discordAvatarUrl: link.discordAvatarUrl } : null,
     links: account?.links ?? [],
     settings: account?.settings ?? null,
+    alerts: account?.alerts ?? null,
   };
 }
+
+type AccountBody = { links?: BotAccount["links"]; settings?: BotPreferences | null; alerts?: BotAlerts | null };
+
+export const saveBotAlerts = createServerFn({ method: "POST" })
+  .validator((data: BotAlertsPatch) => {
+    const patch: BotAlertsPatch = {};
+    if (typeof data?.snipes === "boolean") patch.snipes = data.snipes;
+    if (typeof data?.goals === "boolean") patch.goals = data.goals;
+    if (typeof data?.newMaps === "boolean") patch.newMaps = data.newMaps;
+    if (typeof data?.cardPulls === "boolean") patch.cardPulls = data.cardPulls;
+    if (typeof data?.weeklyRecap === "boolean") patch.weeklyRecap = data.weeklyRecap;
+    if (data?.dmLocale === "en" || data?.dmLocale === "es" || data?.dmLocale === "zh-CN") patch.dmLocale = data.dmLocale;
+    if (Array.isArray(data?.follows)) patch.follows = data.follows.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0).slice(0, 50);
+    return patch;
+  })
+  .handler(async ({ data }): Promise<BotAccount> => {
+    await noStore();
+    const me = await viewer();
+    if (!me) return readAccount(0, false);
+    // Refused (no longer a supporter) or unreachable: the page says it didn't save.
+    if (!await post("/api/discord/account/alerts", { viewerId: me.id, locale: await siteLocale(), ...data })) throw new Error("save_failed");
+    return readAccount(me.id, true);
+  });
+
+/** Sends the viewer a test DM; `result` says whether Discord let it through. */
+export const testBotAlerts = createServerFn({ method: "POST" }).handler(async (): Promise<{ result: string; account: BotAccount }> => {
+  await noStore();
+  const me = await viewer();
+  if (!me) return { result: "failed", account: await readAccount(0, false) };
+  const body = await post<{ result?: string }>("/api/discord/account/alerts/test", { viewerId: me.id, locale: await siteLocale() });
+  return { result: body?.result ?? "failed", account: await readAccount(me.id, true) };
+});
 
 export const fetchBotAccount = createServerFn({ method: "GET" }).handler(async (): Promise<BotAccount> => {
   await noStore();

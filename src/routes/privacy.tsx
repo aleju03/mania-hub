@@ -19,7 +19,7 @@ export const Route = createFileRoute("/privacy")({
 function PrivacyPage() {
   const { t } = useLingui();
   return (
-    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`November 9, 2026`}>
+    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`November 11, 2026`}>
       <LegalSection title={t`Overview`}>
         <LegalParagraph>
           <Trans>
@@ -53,7 +53,8 @@ function PrivacyPage() {
             create (goal type, target, progress, and status), your card pack wallet and collection
             (pulled cards and pull times), roster opt-in or opt-out choices, skins you upload and
             like, map collections, replays you upload, profile links to other servers, GOAT poll
-            votes, and farm-helper feedback. The My Stats dashboard does
+            votes, maniabot direct message choices and the players you follow there, and
+            farm-helper feedback. The My Stats dashboard does
             not store anything extra; it only shows you data the site already holds about your
             account.
           </Trans>
@@ -165,6 +166,23 @@ function PrivacyPage() {
             to serve those features. Goals, card pack collections, skins, collections, uploaded
             replays, and friends lists are kept until you delete them or ask for them to be
             deleted.
+          </Trans>
+        </LegalParagraph>
+        <LegalParagraph>
+          <Trans>
+            When signed in, you can stop tracking or delete your profile from{' '}
+            <a
+              href="/my-stats"
+              className="text-osu-pink-light underline underline-offset-2 hover:text-white transition-colors"
+            >
+              My Stats
+            </a>
+            . Stopping tracking records nothing new and keeps what was already recorded. Deleting
+            your profile hides it right away and deletes your plays, stats and profile history 7
+            days later, unless you cancel before then. Your packs, skins, uploaded replays and
+            collections stay. Deleting everything also deletes those, along with your goals,
+            Discord link and supporter status. Cards of you that other players pulled stay with
+            them.
           </Trans>
         </LegalParagraph>
         <LegalParagraph>

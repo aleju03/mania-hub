@@ -31,7 +31,7 @@ const menu = (binders: LivePackBinder[], cardKeys = ["9999"], cardCount = cardKe
 beforeEach(() => { vi.clearAllMocks(); });
 afterEach(cleanup);
 
-it("shows one set at a time with all its cards, and switches sets", async () => {
+it("shows one set at a time with every card on one page, and switches sets", async () => {
   api.list.mockResolvedValue([binder(1, BINDER_MAX_CARDS), binder(2)]);
   await act(async () => { wrap(<SetsView syncStatus="synced" />); });
   await screen.findByRole("region", { name: "Set 1" });

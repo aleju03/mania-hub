@@ -634,14 +634,22 @@ const LAVA_CLAIM_ERRORS: Record<string, string> = {
   not_found: "No unclaimed lava.top payment from that email. Payments can take a minute to arrive.",
   too_many_tries: "That's five tries today; try again tomorrow.",
 };
+const KOFI_CLAIM_ERRORS: Record<string, string> = {
+  ...LAVA_CLAIM_ERRORS,
+  not_found: "No unclaimed Ko-fi payment from that email. Payments can take a minute to arrive.",
+};
 
-/* lava.top payments the viewer made outside the Support page's link, named by
-   the email they paid with: each unclaimed one from it becomes theirs. */
-export const claimLavaPayments = createServerFn({ method: "POST" })
-  .validator((data: { email?: unknown }) => {
+export type PaymentClaimProvider = "lava" | "kofi";
+
+/* Payments the viewer made that reached no account, named by the email they
+   paid with: a lava.top one made outside the Support page's link, or a Ko-fi
+   one whose name and message matched no osu! username. Each unclaimed one of
+   that provider from the email becomes theirs. */
+export const claimPayments = createServerFn({ method: "POST" })
+  .validator((data: { email?: unknown; provider?: unknown }) => {
     const email = typeof data?.email === "string" ? data.email.trim() : "";
     if (!email || email.length > 254 || !email.includes("@")) throw new Error(LAVA_CLAIM_ERRORS.invalid_email);
-    return { email };
+    return { email, provider: (data?.provider === "kofi" ? "kofi" : "lava") as PaymentClaimProvider };
   })
   .handler(async ({ data }): Promise<{ expiresAt: number | null }> => {
     const viewer = await requireViewer();
@@ -649,10 +657,11 @@ export const claimLavaPayments = createServerFn({ method: "POST" })
     const response = await fetch(`${viewer.base}/api/supporters/self/lava-claim`, {
       method: "POST",
       headers: bridgeAuthHeaders(true),
-      body: JSON.stringify({ userId: viewer.userId, username: viewer.username, email: data.email }),
+      body: JSON.stringify({ userId: viewer.userId, username: viewer.username, email: data.email, provider: data.provider }),
     });
     const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; expiresAt?: unknown } | null;
-    if (!response.ok || body?.ok !== true) throw new Error(LAVA_CLAIM_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
+    const errors = data.provider === "kofi" ? KOFI_CLAIM_ERRORS : LAVA_CLAIM_ERRORS;
+    if (!response.ok || body?.ok !== true) throw new Error(errors[String(body?.error)] ?? `Server ${response.status}`);
     return { expiresAt: typeof body.expiresAt === "number" ? body.expiresAt : null };
   });
 

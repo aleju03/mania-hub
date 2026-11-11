@@ -8,7 +8,7 @@ import { useAuth } from "../../lib/auth-context";
 import { track } from "../../lib/analytics";
 import { readEdgeCountry } from "../../lib/country-cookie";
 import { GOOGLE_RRM_PUBLICATION_ID, startGoogleContributions } from "../../lib/google-contributions";
-import { claimGoogleContribution, claimLavaPayments, rememberLavaEmail } from "../../lib/supporter-look-settings";
+import { claimGoogleContribution, claimPayments, rememberLavaEmail, type PaymentClaimProvider } from "../../lib/supporter-look-settings";
 import { useNearView } from "./SupportMotion";
 import { KofiNameSteps } from "./KofiNameSteps";
 
@@ -178,10 +178,10 @@ function LavaPay({ viewerId }: { viewerId: number }) {
   );
 }
 
-/* A lava.top payment made outside the button's link (opened the lava.top
-   page directly, or paid signed out) arrives with no account on it; the buyer
-   names it here by the email they paid with. */
-function LavaClaim() {
+/* A payment that reached no account (lava.top paid outside the button's
+   link or signed out, Ko-fi under a name and message that match no osu!
+   username); the payer names it here by the email they paid with. */
+function PaymentClaim({ provider }: { provider: PaymentClaimProvider }) {
   const { t } = useLingui();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -194,20 +194,22 @@ function LavaClaim() {
         if (!email.trim()) return;
         setBusy(true);
         setStatus(null);
-        claimLavaPayments({ data: { email: email.trim() } })
+        claimPayments({ data: { email: email.trim(), provider } })
           .then(() => {
             setStatus({ ok: true, text: t`Thank you! Your supporter time is on.` });
             setEmail("");
-            track("support_lava_claimed");
+            track(provider === "kofi" ? "support_kofi_claimed" : "support_lava_claimed");
           })
           .catch((error: unknown) => setStatus({ ok: false, text: error instanceof Error ? error.message : String(error) }))
           .finally(() => setBusy(false));
       }}
     >
-      <label htmlFor="lava-email" className="text-[11.5px] text-osu-f1">{t`Paid on lava.top already? Enter the email you paid with.`}</label>
+      <label htmlFor={`${provider}-email`} className="text-[11.5px] text-osu-f1">
+        {provider === "kofi" ? t`Paid on Ko-fi and it didn't count? Enter the email you paid with.` : t`Paid on lava.top already? Enter the email you paid with.`}
+      </label>
       <div className="flex items-center gap-2">
         <input
-          id="lava-email"
+          id={`${provider}-email`}
           type="email"
           autoComplete="email"
           value={email}
@@ -359,7 +361,7 @@ export function SupportCheckout({ methods, method, onMethod }: { methods: Suppor
           {viewerId ? (
             <>
               <LavaPay viewerId={viewerId} />
-              <LavaClaim />
+              <PaymentClaim provider="lava" />
             </>
           ) : (
             <>
@@ -393,6 +395,11 @@ export function SupportCheckout({ methods, method, onMethod }: { methods: Suppor
         ) : (
           <div className="h-[600px] bg-[#f9f9f9]/5" />
         )}
+        {viewerId && method !== null ? (
+          <div className="flex justify-center border-t border-white/[0.07] px-4 py-4">
+            <PaymentClaim provider="kofi" />
+          </div>
+        ) : null}
       </div>
     </div>
   );
