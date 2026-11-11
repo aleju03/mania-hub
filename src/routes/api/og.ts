@@ -1735,8 +1735,7 @@ async function renderPulledCardOg(
 // ---------------------------------------------------------------------------
 // Dan emblem: a single rasterized dan logo, used as the /dan command thumbnail.
 // Discord cannot render the SVG emblems, so this route fetches the asset and
-// re-emits it as a PNG over a soft family-tinted tile. (webp emblems are linked
-// directly by the bot and never reach here.)
+// re-emits it as a square transparent PNG.
 // ---------------------------------------------------------------------------
 
 // The emblem a keymode's ladder uses, from the same rules as the site's badges
@@ -1746,34 +1745,24 @@ function danEmblemAssetPath(label: string, family: string, keyCount: number | nu
   return getDanTierImageSrc(label, family === "ln" ? "ln" : family, keyCount ?? undefined);
 }
 
-// Rasterizes the emblem for Discord, which shows no SVG. Transparent, sized to
-// the artwork's own proportions, so it sits on the message like the badge does
-// on the site. Raster emblems (the 4K greek tiers) are served as they are.
+// Rasterizes the emblem for Discord, which shows no SVG. Transparent and always
+// square: Discord crops a thumbnail to a square, which cut the tier marks off
+// the wider tier drawings, so those are fitted inside the square instead.
+const DAN_EMBLEM_SIZE = 384;
+
 async function renderDanEmblemOg(request: Request, label: string, family: string, keyCount: number | null): Promise<Response> {
   const assetPath = danEmblemAssetPath(label, family, keyCount);
   if (!assetPath) throw new OgFallbackError(`no dan emblem for ${keyCount ?? 4}K ${family}/${label}`);
-  const assetUrl = new URL(assetPath, getAssetOrigin(request)).toString();
-  if (!assetPath.split("?")[0]!.endsWith(".svg")) {
-    return new Response(null, { status: 302, headers: { Location: assetUrl, "Cache-Control": OG_CACHE_HEADER } });
-  }
-  const assetResponse = await fetch(assetUrl);
+  const assetResponse = await fetch(new URL(assetPath, getAssetOrigin(request)).toString());
   if (!assetResponse.ok) throw new OgFallbackError(`dan emblem ${assetResponse.status}`);
-  const svg = await assetResponse.text();
-  const viewBox = /viewBox\s*=\s*"[\d.\-]+[\s,]+[\d.\-]+[\s,]+([\d.]+)[\s,]+([\d.]+)"/.exec(svg);
-  const aspect = viewBox && Number(viewBox[2]) > 0 ? Math.min(3, Math.max(0.33, Number(viewBox[1]) / Number(viewBox[2]))) : 1;
-  const height = 256;
-  const width = Math.round(height * aspect);
-  const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
-  const response = new ImageResponse(
-    h(
-      "div",
-      { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" } },
-      [h("img", { key: "emblem", src: dataUrl, style: { width: `${width}px`, height: `${height}px`, objectFit: "contain" } })],
-    ),
-    { width, height },
-  );
-  response.headers.set("Cache-Control", OG_CACHE_HEADER);
-  return response;
+  const source = Buffer.from(await assetResponse.arrayBuffer());
+  const { default: sharp } = await import("sharp");
+  const isSvg = assetPath.split("?")[0]!.endsWith(".svg");
+  const png = await sharp(source, isSvg ? { density: 300 } : undefined)
+    .resize(DAN_EMBLEM_SIZE, DAN_EMBLEM_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+  return new Response(new Uint8Array(png), { headers: { "Content-Type": "image/png", "Cache-Control": OG_CACHE_HEADER } });
 }
 
 /* Polaroid card primitive used by both home and rankings OGs. Renders an
@@ -5261,7 +5250,7 @@ export const Route = createFileRoute("/api/og")({
             try {
               return await serveOg(
                 request,
-                `dan-emblem:${keyCount ?? 4}k:${family}:${label}:clear:v${version}`,
+                `dan-emblem:${keyCount ?? 4}k:${family}:${label}:square:v${version}`,
                 () => renderDanEmblemOg(request, label, family, keyCount),
               );
             } catch (err) {
